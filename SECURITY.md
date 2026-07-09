@@ -4,9 +4,9 @@
 
 If you discover a security vulnerability in eggfetch, please report it privately. Do not open a public GitHub issue.
 
-Email: **security@eggstack.dev**
+Email: **dbowman91@proton.me**
 
-Note: this email is a placeholder until the project has a permanent hosting location with a confirmed security contact. Deliverability is not yet guaranteed. If you do not receive a response within a reasonable window, please open a non-security issue on GitHub referencing the report.
+PGP encryption is preferred but not required. If you do not receive an acknowledgement within a reasonable window, follow up on a non-security GitHub issue referencing the report.
 
 ## Supported Versions
 
