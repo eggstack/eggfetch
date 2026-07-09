@@ -10,6 +10,14 @@
 //! - **Read**: time to wait for response headers and each response body chunk.
 //! - **Total**: wall-clock cap across the entire request lifecycle.
 //!
+//! # Enforcement
+//!
+//! Only the **Pool** and **Total** phases are individually enforced via
+//! `tokio::time::timeout`. The Connect, Write, and Read phases are
+//! configured but not independently enforced — hyper-util's legacy client
+//! API does not expose per-phase hooks. The total timeout provides the
+//! wall-clock guarantee. This is a documented limitation.
+//!
 //! When a scalar timeout is provided (e.g. `Timeout::from_secs(5)`), it
 //! applies to pool, connect, write, and read phases. The total timeout is
 //! not set by scalar constructors unless explicitly specified.
@@ -51,7 +59,14 @@ impl std::fmt::Display for TimeoutPhase {
 ///
 /// Each field is optional. When `None`, the corresponding phase has no
 /// timeout. When a field is `Some(duration)`, the phase will fail with
-/// [`Error::Timeout`] if it exceeds the given duration.
+/// [`crate::Error::Timeout`] if it exceeds the given duration.
+///
+/// # Enforcement
+///
+/// Only `pool` and `total` are individually enforced. The `connect`,
+/// `write`, and `read` fields are stored and merged but not independently
+/// enforced (hyper-util limitation). See the module-level documentation
+/// for details.
 ///
 /// # Default
 ///
@@ -316,5 +331,50 @@ mod tests {
         assert_eq!(TimeoutPhase::Write.to_string(), "write");
         assert_eq!(TimeoutPhase::Read.to_string(), "read");
         assert_eq!(TimeoutPhase::Total.to_string(), "total");
+    }
+
+    #[test]
+    fn timeout_merge_empty_override_preserves_client() {
+        let client = Timeout {
+            pool: Some(Duration::from_secs(1)),
+            connect: Some(Duration::from_secs(2)),
+            write: Some(Duration::from_secs(3)),
+            read: Some(Duration::from_secs(4)),
+            total: Some(Duration::from_secs(5)),
+        };
+        let merged = client.merge(Some(Timeout::default()));
+        assert_eq!(merged.pool, Some(Duration::from_secs(1)));
+        assert_eq!(merged.connect, Some(Duration::from_secs(2)));
+        assert_eq!(merged.write, Some(Duration::from_secs(3)));
+        assert_eq!(merged.read, Some(Duration::from_secs(4)));
+        assert_eq!(merged.total, Some(Duration::from_secs(5)));
+    }
+
+    #[test]
+    fn timeout_builder_matches_from_secs_for_phases() {
+        let scalar = Timeout::from_secs(5);
+        let builder = Timeout::builder()
+            .pool(Duration::from_secs(5))
+            .connect(Duration::from_secs(5))
+            .write(Duration::from_secs(5))
+            .read(Duration::from_secs(5))
+            .build();
+        assert_eq!(scalar.pool, builder.pool);
+        assert_eq!(scalar.connect, builder.connect);
+        assert_eq!(scalar.write, builder.write);
+        assert_eq!(scalar.read, builder.read);
+        assert_eq!(scalar.total, builder.total);
+    }
+
+    #[test]
+    fn timeout_merge_request_overrides_total() {
+        let client = Timeout::from_secs(10);
+        let request = Timeout {
+            total: Some(Duration::from_secs(60)),
+            ..Timeout::default()
+        };
+        let merged = client.merge(Some(request));
+        assert_eq!(merged.total, Some(Duration::from_secs(60)));
+        assert_eq!(merged.pool, Some(Duration::from_secs(10)));
     }
 }

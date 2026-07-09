@@ -904,3 +904,73 @@ async fn stream_request_body_bytes() {
         .unwrap();
     assert_eq!(resp.status().as_u16(), 200);
 }
+
+// ---------------------------------------------------------------------------
+// 11. Hardening / correctness tests
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn request_stream_body_fully_buffered_before_send() {
+    let server = TestServer::start(&TestServerConfig {
+        consume_body: true,
+        ..Default::default()
+    });
+    let client = Client::new();
+
+    let chunks = vec![
+        Ok(Bytes::from("chunk1-")),
+        Ok(Bytes::from("chunk2-")),
+        Ok(Bytes::from("chunk3")),
+    ];
+    let stream = Box::pin(futures_util::stream::iter(chunks));
+    let body = RequestBody::from_stream(stream, None);
+
+    // Prove the stream body is fully buffered before hitting the network:
+    // the test server echoes 200 only if it can parse Content-Length and
+    // read the full body. A partial send would fail or produce a short read.
+    let resp = client
+        .post(&server.url())
+        .unwrap()
+        .body(body)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status().as_u16(), 200);
+}
+
+#[test]
+fn url_fragment_is_preserved_in_request() {
+    let client = Client::new();
+    let req = client
+        .get("https://example.com/path#fragment")
+        .unwrap()
+        .build()
+        .unwrap();
+    // url::Url preserves the fragment in its string representation.
+    let url_str = req.url().to_string();
+    assert!(
+        url_str.contains("#fragment"),
+        "fragment lost from URL: {url_str}"
+    );
+}
+
+#[test]
+fn header_name_with_carriage_return_rejected() {
+    let mut headers = Headers::new();
+    let result = headers.insert("X-Test\r", "value");
+    assert!(result.is_err());
+}
+
+#[test]
+fn header_value_with_carriage_return_rejected() {
+    let mut headers = Headers::new();
+    let result = headers.insert("X-Test", "value\r");
+    assert!(result.is_err());
+}
+
+#[test]
+fn header_value_with_newline_rejected() {
+    let mut headers = Headers::new();
+    let result = headers.insert("X-Test", "value\n");
+    assert!(result.is_err());
+}

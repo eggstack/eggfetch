@@ -51,7 +51,7 @@ Tests live next to the code they cover, using `#[cfg(test)] mod tests` blocks wi
 cargo test --workspace --all-features
 ```
 
-Prefer small, focused tests that exercise one behavior. The workspace currently has skeletal tests that verify compilation and basic construction. As the project grows, tests should cover protocol correctness, edge cases, and error paths.
+Prefer small, focused tests that exercise one behavior. The workspace has ~160 tests covering construction, streaming, timeouts, pools, headers, and integration scenarios. As the project grows, tests should cover protocol correctness, edge cases, and error paths.
 
 ## Dependencies
 
@@ -85,7 +85,7 @@ proxy = []
 tracing = []
 ```
 
-None of these features are implemented yet. They represent intended capability, not current behavior. See `docs/architecture/feature-flags.md` for details.
+The `http1` and `tls-rustls` features are implemented and wired to real dependency features (default). The remaining features represent intended capability, not current behavior. See `docs/architecture/feature-flags.md` for details.
 
 ## Compatibility Expectations
 

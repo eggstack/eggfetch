@@ -19,8 +19,10 @@
 //!
 //! - **Empty**: no body sent.
 //! - **Bytes**: a fixed-size byte buffer with known length.
-//! - **Stream**: an async stream of bytes with potentially unknown length.
-//!   Uses chunked transfer encoding for HTTP/1.1 when length is unknown.
+//! - **Stream**: an async stream of bytes. **Buffered before sending**:
+//!   the entire stream is collected into a single `Bytes` buffer via
+//!   `into_hyper_body()` before any bytes touch the network. Full
+//!   pipe-through streaming uploads are deferred to a later milestone.
 
 use std::pin::Pin;
 
@@ -40,8 +42,9 @@ pub type BoxBytesStream = Pin<Box<dyn Stream<Item = Result<Bytes>> + Send>>;
 /// Request body.
 ///
 /// Supports empty bodies, fixed-size byte buffers, and async streams.
-/// Streams may have unknown length, in which case the engine uses chunked
-/// transfer encoding for HTTP/1.1.
+/// **Stream bodies are fully buffered before sending**: `into_hyper_body()`
+/// drains the stream into a single `Full<Bytes>` buffer. There is no
+/// pipe-through streaming upload in the current implementation.
 #[derive(Default)]
 pub enum RequestBody {
     /// Empty body.
@@ -51,8 +54,9 @@ pub enum RequestBody {
     Bytes(Bytes),
     /// Async stream body.
     ///
-    /// The `Option<usize>` is the known length, if available. When `None`,
-    /// the engine uses chunked transfer encoding.
+    /// The `Option<usize>` is the known length, if available. The stream
+    /// is fully buffered into a `Full<Bytes>` before sending; the length
+    /// hint is not currently used for transfer encoding decisions.
     Stream {
         /// The stream of body chunks.
         stream: BoxBytesStream,
@@ -480,6 +484,51 @@ mod tests {
     async fn request_body_empty_into_bytes() {
         let body = RequestBody::Empty;
         let bytes = body.into_bytes().await.unwrap();
+        assert!(bytes.is_empty());
+    }
+
+    #[tokio::test]
+    async fn response_body_buffered_double_bytes_returns_empty() {
+        let mut body = ResponseBody::buffered(Bytes::from("data"));
+        let first = body.bytes().await.unwrap();
+        assert_eq!(first, "data");
+        let second = body.bytes().await.unwrap();
+        assert!(second.is_empty());
+    }
+
+    #[tokio::test]
+    async fn response_body_buffered_text_invalid_utf8() {
+        let mut body = ResponseBody::buffered(Bytes::from(vec![0xFF, 0xFE]));
+        let err = body.text().await;
+        assert!(err.is_err());
+    }
+
+    #[tokio::test]
+    async fn response_body_streaming_bytes_then_stream_returns_empty() {
+        let stream = Box::pin(futures_util::stream::iter(vec![Ok(Bytes::from("x"))]));
+        let mut body = ResponseBody::streaming(stream);
+        let _ = body.bytes().await.unwrap();
+        let mut stream = body.bytes_stream().unwrap();
+        let chunk = stream.next().await.unwrap().unwrap();
+        assert!(chunk.is_empty());
+        assert!(stream.next().await.is_none());
+    }
+
+    #[tokio::test]
+    async fn response_body_consumed_is_empty() {
+        let body = ResponseBody::Consumed;
+        assert!(body.is_empty());
+        assert_eq!(body.len(), Some(0));
+    }
+
+    #[tokio::test]
+    async fn response_body_buffered_bytes_stream_then_bytes_returns_empty() {
+        let mut body = ResponseBody::buffered(Bytes::from("data"));
+        let mut stream = body.bytes_stream().unwrap();
+        let chunk = stream.next().await.unwrap().unwrap();
+        assert_eq!(chunk, "data");
+        assert!(stream.next().await.is_none());
+        let bytes = body.bytes().await.unwrap();
         assert!(bytes.is_empty());
     }
 }

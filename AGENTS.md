@@ -61,7 +61,7 @@ Prefer small, focused tests colocated with the module under test. Use `#[cfg(tes
 cargo test --workspace --all-features
 ```
 
-The current tests are skeletal and verify compilation and basic construction.
+The workspace has ~160 tests covering construction, streaming, timeouts, pools, headers, and integration scenarios.
 
 ## Working Style
 

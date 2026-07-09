@@ -4,13 +4,15 @@ eggfetch follows a conservative dependency policy. Every dependency must have an
 
 ## Current Posture
 
-At Milestone C, eggfetch-core has the following direct dependencies:
+As of Milestone E, eggfetch-core has the following direct dependencies:
 
 - **bytes** -- efficient byte buffer types for request and response bodies.
-- **dashmap** -- concurrent hash map for connection pool waiter tracking.
+- **dashmap** -- concurrent hash map for per-host pool semaphore storage.
+- **futures-core** -- `Stream` trait definition.
+- **futures-util** -- `StreamExt` for stream combinators.
 - **http** -- standard HTTP types (`Method`, `StatusCode`, `HeaderMap`, `Uri`).
 - **http-body** -- body trait abstraction.
-- **http-body-util** -- body combinators for http-body.
+- **http-body-util** -- body combinators for http-body (`Full`, `Empty`).
 - **hyper** -- HTTP/1.1 protocol implementation.
 - **hyper-util** -- high-level client utilities built on hyper.
 - **hyper-rustls** -- TLS integration via rustls.

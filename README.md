@@ -131,6 +131,11 @@ docs/
 plans/
   ROADMAP.md             full milestone roadmap
   milestone-a-repository-foundation.md
+  milestone-b-core-http-engine.md
+  milestone-c-connection-management.md
+  milestone-d-timeout-system.md
+  milestone-e-streaming-foundation.md
+  hardening-correctness-before-python.md
 ```
 
 ## Development

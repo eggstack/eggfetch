@@ -33,13 +33,23 @@ pub struct PoolConfig {
 ///
 /// Intended for internal use and testing. All counters are atomically
 /// updated and may be read concurrently.
+///
+/// # Current State
+///
+/// Only `acquisition_waits` and `acquisition_cancellations` are
+/// actively incremented. The `connections_opened`, `connections_reused`,
+/// and `idle_connections_closed` counters are declared but not yet
+/// wired — actual connection management is handled by hyper's internal
+/// pool, which does not expose these events. These fields will be
+/// populated when the pool layer gains direct connection lifecycle
+/// visibility.
 #[derive(Debug, Default)]
 pub struct PoolMetrics {
-    /// Total number of new connections opened.
+    /// Total number of new connections opened. **Skeletal**: not yet incremented.
     pub connections_opened: AtomicUsize,
-    /// Total number of times an existing connection was reused.
+    /// Total number of times an existing connection was reused. **Skeletal**: not yet incremented.
     pub connections_reused: AtomicUsize,
-    /// Total number of idle connections that were closed (timeout or eviction).
+    /// Total number of idle connections that were closed (timeout or eviction). **Skeletal**: not yet incremented.
     pub idle_connections_closed: AtomicUsize,
     /// Total number of times an acquire call had to wait for a permit.
     pub acquisition_waits: AtomicUsize,
@@ -327,5 +337,29 @@ mod tests {
         let pool2 = pool.clone();
         // Both share the same inner state.
         assert!(std::ptr::eq(&*pool.inner, &*pool2.inner));
+    }
+
+    #[test]
+    fn pool_metrics_skeletal_fields_are_zero() {
+        let pool = Pool::new(PoolConfig::default());
+        let m = pool.metrics();
+        assert_eq!(m.connections_opened.load(Ordering::Relaxed), 0);
+        assert_eq!(m.connections_reused.load(Ordering::Relaxed), 0);
+        assert_eq!(m.idle_connections_closed.load(Ordering::Relaxed), 0);
+    }
+
+    #[tokio::test]
+    async fn acquire_per_host_limit_separate_hosts() {
+        let config = PoolConfig {
+            max_connections_per_host: Some(1),
+            ..Default::default()
+        };
+        let pool = Pool::new(config);
+        let g1 = pool.acquire(Some("host-a")).await;
+        let g2 = pool.acquire(Some("host-b")).await;
+        assert!(g1.host().is_some());
+        assert!(g2.host().is_some());
+        drop(g1);
+        drop(g2);
     }
 }
