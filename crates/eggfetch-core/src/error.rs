@@ -60,6 +60,10 @@ pub enum Error {
     /// The requested feature is not yet supported.
     #[error("unsupported: {0}")]
     Unsupported(String),
+
+    /// Connection pool acquisition failed or was cancelled.
+    #[error("pool error: {0}")]
+    Pool(String),
 }
 
 impl Error {
@@ -80,6 +84,7 @@ impl Error {
             Self::HyperClient(_) => "hyper_client",
             Self::Io(_) => "io",
             Self::Unsupported(_) => "unsupported",
+            Self::Pool(_) => "pool",
         }
     }
 }

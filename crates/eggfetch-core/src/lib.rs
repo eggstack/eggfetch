@@ -29,6 +29,7 @@ pub mod body;
 pub mod client;
 pub mod error;
 pub mod headers;
+pub mod pool;
 pub mod request;
 pub mod response;
 
@@ -37,5 +38,6 @@ pub use client::{Client, ClientBuilder};
 pub use error::{Error, Result};
 pub use headers::Headers;
 pub use http::Method;
+pub use pool::{Pool, PoolConfig};
 pub use request::{Request, RequestBuilder};
 pub use response::Response;

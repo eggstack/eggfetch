@@ -74,13 +74,13 @@ Enables Zstandard decompression of response bodies.
 ### cookies
 
 **Status:** planned, not implemented.
-**Milestone:** after connection management (C).
+**Milestone:** H (response compatibility surface).
 Enables cookie jar support for persistent cookies across requests.
 
 ### proxy
 
 **Status:** planned, not implemented.
-**Milestone:** after connection management (C).
+**Milestone:** I (request builder compatibility surface).
 Enables HTTP and HTTPS proxy support. SOCKS proxy support is a later addition.
 
 ### tracing

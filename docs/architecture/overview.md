@@ -1,6 +1,6 @@
 # Architecture Overview
 
-This document describes the architecture of eggfetch. Milestone B is complete: the core crate executes real HTTP requests over HTTPS.
+This document describes the architecture of eggfetch. Milestone C is complete: the core crate provides connection pooling, idle timeout, and HTTP/1.1 keep-alive reuse on top of the Milestone B HTTP engine.
 
 ## Three-Crate Workspace
 
@@ -67,4 +67,4 @@ These crates do not exist yet. They will be added when the core engine is stable
 
 ## Current State
 
-Milestone B is complete. The core crate provides a working async HTTP client with HTTPS support, request/response modeling, headers, query parameters, byte bodies, and a structured error type. The CLI and Python crates remain stubs. Connection pooling, timeouts, streaming, and advanced features are planned for subsequent milestones.
+Milestone C is complete. The core crate provides a working async HTTP client with HTTPS support, request/response modeling, headers, query parameters, byte bodies, connection pooling (max connections per host, idle timeout), HTTP/1.1 keep-alive reuse, and a structured error type. The CLI and Python crates remain stubs. Streaming, timeouts, and advanced features are planned for subsequent milestones.

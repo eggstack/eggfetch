@@ -4,10 +4,12 @@ use bytes::Bytes;
 use http::Method;
 use hyper_util::rt::TokioExecutor;
 use std::sync::Arc;
+use std::time::Duration;
 
 use crate::body::ResponseBody;
 use crate::error::{Error, Result};
 use crate::headers::Headers;
+use crate::pool::{Pool, PoolConfig, PoolMetrics};
 use crate::request::Request;
 use crate::request::RequestBuilder;
 use crate::response::Response;
@@ -40,6 +42,7 @@ impl std::fmt::Debug for Client {
 struct ClientInner {
     hyper_client: HyperClient,
     config: ClientConfig,
+    pool: Pool,
 }
 
 impl Client {
@@ -128,6 +131,12 @@ impl Client {
         Ok(RequestBuilder::new(self.clone(), method, parsed))
     }
 
+    /// Returns a reference to the connection pool metrics.
+    #[must_use]
+    pub fn pool_metrics(&self) -> &PoolMetrics {
+        self.inner.pool.metrics()
+    }
+
     /// Send a request and return the response.
     ///
     /// # Errors
@@ -141,6 +150,12 @@ impl Client {
             .as_str()
             .parse()
             .map_err(|e| Error::InvalidUrl(format!("failed to convert url to URI: {e}")))?;
+
+        // Extract host from URL for pool slot acquisition.
+        let host = url.host_str().map(str::to_owned);
+
+        // Acquire a pool slot. The guard is held for the duration of the request.
+        let _guard = self.inner.pool.acquire(host.as_deref()).await;
 
         let mut http_request = http::Request::builder()
             .method(method)
@@ -208,6 +223,7 @@ impl Default for Client {
 pub struct ClientBuilder {
     default_headers: Headers,
     user_agent: Option<String>,
+    pool_config: PoolConfig,
 }
 
 impl ClientBuilder {
@@ -217,6 +233,7 @@ impl ClientBuilder {
         Self {
             default_headers: Headers::new(),
             user_agent: None,
+            pool_config: PoolConfig::default(),
         }
     }
 
@@ -237,6 +254,41 @@ impl ClientBuilder {
         self
     }
 
+    /// Set the maximum number of idle (unused) connections in the pool.
+    #[must_use]
+    pub fn max_idle_connections(mut self, max: usize) -> Self {
+        self.pool_config.max_idle_connections = Some(max);
+        self
+    }
+
+    /// Set the maximum number of idle connections per individual host.
+    #[must_use]
+    pub fn max_idle_connections_per_host(mut self, max: usize) -> Self {
+        self.pool_config.max_idle_connections_per_host = Some(max);
+        self
+    }
+
+    /// Set the maximum total number of concurrent connections.
+    #[must_use]
+    pub fn max_connections(mut self, max: usize) -> Self {
+        self.pool_config.max_connections = Some(max);
+        self
+    }
+
+    /// Set the maximum number of concurrent connections per individual host.
+    #[must_use]
+    pub fn max_connections_per_host(mut self, max: usize) -> Self {
+        self.pool_config.max_connections_per_host = Some(max);
+        self
+    }
+
+    /// Set the duration after which idle connections are closed.
+    #[must_use]
+    pub fn idle_timeout(mut self, timeout: Duration) -> Self {
+        self.pool_config.idle_timeout = Some(timeout);
+        self
+    }
+
     /// Build the client.
     ///
     /// # Panics
@@ -248,22 +300,28 @@ impl ClientBuilder {
         let https = hyper_rustls::HttpsConnectorBuilder::new()
             .with_native_roots()
             .expect("failed to load native roots")
-            .https_only()
+            .https_or_http()
             .enable_http1()
             .build();
 
-        let hyper_client: HyperClient =
-            hyper_util::client::legacy::Client::builder(TokioExecutor::new()).build(https);
+        let mut builder = hyper_util::client::legacy::Client::builder(TokioExecutor::new());
+        if let Some(timeout) = self.pool_config.idle_timeout {
+            builder.pool_idle_timeout(timeout);
+        }
+        let hyper_client: HyperClient = builder.build(https);
 
         let config = ClientConfig {
             default_headers: self.default_headers,
             user_agent: self.user_agent,
         };
 
+        let pool = Pool::new(self.pool_config);
+
         Client {
             inner: Arc::new(ClientInner {
                 hyper_client,
                 config,
+                pool,
             }),
         }
     }

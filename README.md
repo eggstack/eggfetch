@@ -2,8 +2,8 @@
 
 eggfetch is a Rust-native HTTP client engine with Python bindings and a CLI tool. The core is async-first: a Rust engine built on tokio and hyper provides connection pooling, timeouts, TLS, and streaming. The Python bindings expose both sync and async APIs; the sync API blocks on the async engine while releasing the GIL, and the async API integrates with asyncio. There is exactly one networking implementation, living entirely in Rust.
 
-> **Status: Milestone B complete / core HTTP engine.**
-> The workspace builds, passes lints, and executes real HTTP requests. `eggfetch-core` provides an async `Client`, `Request`/`RequestBuilder`/`Response`, headers, query parameters, byte bodies, HTTPS via rustls, buffered responses, and an error taxonomy. CLI and Python crates remain stubs.
+> **Status: Milestone C complete / connection management.**
+> The workspace builds, passes lints, and executes real HTTP requests. `eggfetch-core` provides an async `Client`, `Request`/`RequestBuilder`/`Response`, headers, query parameters, byte bodies, HTTPS via rustls, buffered responses, connection pooling (max connections per host, idle timeout), and a structured error taxonomy. CLI and Python crates remain stubs.
 
 ## Architecture
 
@@ -75,6 +75,16 @@ The core HTTP engine is implemented with the following capabilities:
 - **HTTPS** -- TLS via rustls (default feature `tls-rustls`).
 - **Error taxonomy** -- structured `Error` enum covering network, HTTP, timeout, and builder errors.
 
+### Milestone C: Connection Management (complete)
+
+Connection pooling and reuse is implemented with the following capabilities:
+
+- **Connection pooling** -- HTTP/1.1 keep-alive connection reuse via hyper-util's built-in pool.
+- **Max connections per host** -- configurable limit via `PoolConfig::max_connections`.
+- **Idle timeout** -- connections closed after a configurable idle period via `PoolConfig::idle_timeout`.
+- **Pool metrics** -- `PoolMetrics` exposed via `Client::pool_metrics()` and `ClientBuilder::pool_metrics()`.
+- **Graceful degradation** -- waiter cancellation support without deadlocks.
+
 ## Repository Layout
 
 ```text
@@ -90,7 +100,7 @@ rustfmt.toml             max_width 100
 .clippy.toml             pedantic clippy config
 .github/workflows/ci.yml CI pipeline
 crates/
-  eggfetch-core/         async HTTP engine (Milestone B complete)
+  eggfetch-core/         async HTTP engine (Milestone C complete)
   eggfetch-cli/          CLI binary (stub)
   eggfetch-python/       Python bindings (stub)
 docs/
@@ -125,3 +135,4 @@ eggfetch is dual-licensed under [MIT](LICENSE-MIT) and [Apache License, Version 
 - [plans/ROADMAP.md](plans/ROADMAP.md) -- full project roadmap, milestone sequence, correctness priorities, and release criteria.
 - [plans/milestone-a-repository-foundation.md](plans/milestone-a-repository-foundation.md) -- the plan for Milestone A (workspace foundation, linting, CI, documentation).
 - [plans/milestone-b-core-http-engine.md](plans/milestone-b-core-http-engine.md) -- the plan for Milestone B (core request/response model and HTTP engine).
+- [plans/milestone-c-connection-management.md](plans/milestone-c-connection-management.md) -- the plan for Milestone C (connection pooling and management).
