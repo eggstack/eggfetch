@@ -29,6 +29,7 @@ These are small, well-audited crates with minimal transitive trees. They are the
 Features that are not core to HTTP/1.1 client behavior are optional and feature-gated:
 
 - **pyo3**, **pyo3-async-runtimes** -- Python bindings (eggfetch-python crate only).
+- **encoding_rs** -- charset decoding for non-UTF-8 responses (eggfetch-python crate only).
 - **clap** -- CLI argument parsing (eggfetch-cli crate only).
 - **serde**, **serde_json** -- JSON serialization (behind the `json` feature).
 - **compression crates** -- gzip, brotli, zstd (behind `compression-*` features).

@@ -2,8 +2,8 @@
 
 eggfetch is a Rust-native HTTP client engine with Python bindings and a CLI tool. The core is async-first: a Rust engine built on tokio and hyper provides connection pooling, timeouts, TLS, and streaming. The Python bindings expose both sync and async APIs; the sync API blocks on the async engine while releasing the GIL, and the async API integrates with asyncio. There is exactly one networking implementation, living entirely in Rust.
 
-> **Status: Milestone G complete / Python async API.**
-> The workspace builds, passes lints, and executes real HTTP requests. `eggfetch-core` provides an async `Client`, `Request`/`RequestBuilder`/`Response`, headers, query parameters, streaming request/response bodies, HTTPS via rustls, connection pooling (max connections per host, idle timeout), phase-aware timeout system (pool, connect, write, read, total), and a structured error taxonomy. The Python package `eggfetch` exposes sync helpers (`get`, `post`, etc.), a `Client` with context manager support, an `AsyncClient` with `async with` and `await` support, buffered responses, case-insensitive headers, and a structured exception hierarchy. CLI crate remains a stub.
+> **Status: Milestone H complete / Response compatibility surface.**
+> The workspace builds, passes lints, and executes real HTTP requests. `eggfetch-core` provides an async `Client`, `Request`/`RequestBuilder`/`Response`, headers, query parameters, streaming request/response bodies, HTTPS via rustls, connection pooling (max connections per host, idle timeout), phase-aware timeout system (pool, connect, write, read, total), and a structured error taxonomy. The Python package `eggfetch` exposes sync helpers (`get`, `post`, etc.), a `Client` with context manager support, an `AsyncClient` with `async with` and `await` support, buffered responses with requests/httpx-compatible properties (`status_code`, `reason_phrase`, `headers`, `url`, `content`, `text`, `encoding`, `http_version`, `history`), status helpers (`is_informational`, `is_success`, `is_redirect`, `is_client_error`, `is_server_error`, `is_error`), methods (`json()`, `raise_for_status()`, `iter_bytes()`, `iter_text()`, `iter_lines()`, `close()`/`aclose()`), charset-aware text decoding via `encoding_rs`, multi-value header support (`Headers.get_list()`), case-insensitive headers, and a structured exception hierarchy. CLI crate remains a stub.
 
 ## Architecture
 
@@ -146,11 +146,26 @@ Async Python API over the async Rust core via pyo3-async-runtimes:
 - **Cancellation** -- cancelling an in-flight request cleans up without resource leaks.
 - **Reuses sync response wrappers** -- `PyResponse`, `PyHeaders`, exception hierarchy shared with sync API.
 
-### Current limitations (Milestone G)
+### Milestone H: Response Compatibility Surface (complete)
 
-- No redirects, cookies, auth, files, JSON body, streaming response iteration.
+Requests/HTTPX-compatible Response surface in Python:
+
+- **Response properties** -- `status_code`, `reason_phrase`, `headers`, `url`, `content`, `text`, `encoding`, `http_version`, `history` (placeholder).
+- **Status helpers** -- `is_informational`, `is_success`, `is_redirect`, `is_client_error`, `is_server_error`, `is_error` (all `#[getter]` returning `bool`).
+- **JSON** -- `json(**kwargs)` delegates to Python's `json.loads` with kwargs passthrough.
+- **Streaming iterators** -- `iter_bytes(chunk_size)`, `iter_text(chunk_size)`, `iter_lines()` return Python iterators over buffered content. Async equivalents: `aiter_bytes`, `aiter_text`, `aiter_lines`.
+- **Close** -- `close()` and `aclose()` (no-ops for buffered responses).
+- **Text decoding** -- charset-aware decoding: explicit `encoding` kwarg > Content-Type charset > UTF-8 fallback. Uses `encoding_rs` for non-UTF-8 charsets.
+- **Headers.get_list()** -- returns all values for a multi-value header as a list.
+- **Improved repr** -- `<Response [200 OK]>` format.
+- **Improved raise_for_status()** -- includes reason phrase in error message.
+
+### Current limitations (Milestone H)
+
+- No redirects, cookies, auth, files, JSON body.
 - No `follow_redirects`, `stream`, `proxies`, `verify`, or `cert` kwargs.
 - `connect` timeout is accepted but not independently enforced (use `total` as backstop).
+- Streaming iterators return one-shot iterators over buffered content (no true network streaming iteration yet).
 - Trio/AnyIO support deferred to a later milestone.
 
 ## Repository Layout
@@ -170,7 +185,7 @@ rustfmt.toml             max_width 100
 crates/
   eggfetch-core/         async HTTP engine (Milestone E complete)
   eggfetch-cli/          CLI binary (stub)
-  eggfetch-python/       Python bindings (Milestone F complete)
+  eggfetch-python/       Python bindings (Milestone H complete)
     src/                 Rust adapter modules (PyO3)
     python/eggfetch/     Python package (__init__.py)
     tests/               Python tests
@@ -229,3 +244,4 @@ eggfetch is dual-licensed under [MIT](LICENSE-MIT) and [Apache License, Version 
 - [plans/milestone-d-timeout-system.md](plans/milestone-d-timeout-system.md) -- the plan for Milestone D (timeout system).
 - [plans/milestone-e-streaming-foundation.md](plans/milestone-e-streaming-foundation.md) -- the plan for Milestone E (streaming foundation).
 - [plans/milestone-f-python-sync-api.md](plans/milestone-f-python-sync-api.md) -- the plan for Milestone F (Python sync API).
+- [plans/milestone-h-response-compatibility.md](plans/milestone-h-response-compatibility.md) -- the plan for Milestone H (response compatibility surface).

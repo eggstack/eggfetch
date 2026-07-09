@@ -74,7 +74,7 @@ Enables Zstandard decompression of response bodies.
 ### cookies
 
 **Status:** planned, not implemented.
-**Milestone:** H (response compatibility surface).
+**Milestone:** J (redirect engine) or later.
 Enables cookie jar support for persistent cookies across requests.
 
 ### proxy

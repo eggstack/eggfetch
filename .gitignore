@@ -4,3 +4,8 @@ Cargo.lock.bak
 .idea/
 .vscode/
 .DS_Store
+__pycache__/
+*.pyc
+*.so
+*.dylib
+*.pyd

@@ -108,9 +108,9 @@ Introduce PyO3/maturin packaging and expose `request`, `get`, `post`, `put`, `pa
 
 Expose `AsyncClient`, awaitable requests, async context managers, and async response streaming targeting `asyncio` first.
 
-### Milestone H: Response compatibility surface
+### Milestone H: Response compatibility surface (complete)
 
-Add Python-facing `status_code`, `headers`, `content`, `text`, `json()`, `raise_for_status()`, `iter_bytes()`, `iter_text()`, `iter_lines()`, and response history.
+Add Python-facing `status_code`, `headers`, `content`, `text`, `json()`, `raise_for_status()`, `iter_bytes()`, `iter_text()`, `iter_lines()`, and response history. Implemented: reason_phrase, http_version, encoding, status helpers (is_informational, is_success, is_redirect, is_client_error, is_server_error, is_error), charset-aware text decoding, multi-value header support (get_list), close/aclose, improved repr.
 
 ### Milestone I: Request builder compatibility surface
 

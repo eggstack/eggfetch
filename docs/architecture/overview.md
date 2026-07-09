@@ -1,6 +1,6 @@
 # Architecture Overview
 
-This document describes the architecture of eggfetch. Milestone G is complete: the core crate provides protocol-neutral streaming for request and response bodies, and the Python crate exposes both sync and async APIs over the async Rust core via PyO3/maturin.
+This document describes the architecture of eggfetch. Milestone H is complete: the core crate provides protocol-neutral streaming for request and response bodies, and the Python crate exposes both sync and async APIs over the async Rust core via PyO3/maturin, with a requests/httpx-compatible response surface.
 
 The post-E hardening pass landed true streaming request bodies, per-chunk read/write timeouts, pool permits tied to the full response body lifecycle, and origin-keyed pool limits.
 
@@ -150,6 +150,22 @@ Key design decisions:
 - **Pre-resolved futures for context manager**: `__aenter__` and `__aexit__` return pre-resolved `asyncio.Future` objects rather than using `future_into_py`, which would attempt to start a nested runtime.
 - **Cancellation safety**: cancelling an in-flight request drops the Rust future cleanly; pool permits are released via RAII `PoolGuard`.
 
+## Response Compatibility Surface (Milestone H)
+
+The Python `PyResponse` type presents a requests/httpx-compatible surface over the buffered response data:
+
+- **Properties**: `status_code`, `reason_phrase`, `headers`, `url`, `content`, `text`, `encoding`, `http_version`, `history` (placeholder).
+- **Status helpers**: `is_informational` (1xx), `is_success` (2xx), `is_redirect` (3xx), `is_client_error` (4xx), `is_server_error` (5xx), `is_error` (4xx+5xx).
+- **JSON**: `json(**kwargs)` delegates to Python's `json.loads`.
+- **Iterators**: `iter_bytes(chunk_size)`, `iter_text(chunk_size)`, `iter_lines()` return Python iterators over buffered content. Async equivalents: `aiter_bytes`, `aiter_text`, `aiter_lines`.
+- **Close**: `close()` and `aclose()` are no-ops for buffered responses.
+- **Text decoding**: explicit `encoding` kwarg > Content-Type charset > UTF-8 fallback. Uses `encoding_rs` for non-UTF-8 charsets; `.text` uses lossy decode with replacement characters.
+- **Headers.get_list()**: returns all values for a multi-value header as a list.
+- **Repr**: `<Response [200 OK]>` format.
+- **raise_for_status()**: raises `HTTPStatusError` for 4xx/5xx with reason phrase in message.
+
+All response data is buffered at creation time. Streaming iteration returns Python iterators over the cached chunks. True network streaming iteration (consuming chunks as they arrive) is deferred to a later milestone when `client.stream()` is implemented.
+
 ## Future Crates
 
 The project may later add:
@@ -162,4 +178,4 @@ These crates do not exist yet. They will be added when the core engine is stable
 
 ## Current State
 
-Milestone G is complete. The core crate provides a working async HTTP client with HTTPS support, request/response modeling, headers, query parameters, streaming request/response bodies, connection pooling, phase-aware timeouts (pool, connect, write, read, total), and a structured error type with timeout phase identification. The Python crate exposes sync and async APIs with top-level helpers, `Client` and `AsyncClient` classes, buffered responses, case-insensitive headers, and a structured exception hierarchy. The CLI crate remains a stub. Redirects, advanced features, and streaming response iteration are planned for subsequent milestones.
+Milestone H is complete. The core crate provides a working async HTTP client with HTTPS support, request/response modeling, headers, query parameters, streaming request/response bodies, connection pooling, phase-aware timeouts (pool, connect, write, read, total), and a structured error type with timeout phase identification. The Python crate exposes sync and async APIs with top-level helpers, `Client` and `AsyncClient` classes, requests/httpx-compatible response properties (`status_code`, `reason_phrase`, `headers`, `url`, `content`, `text`, `encoding`, `http_version`, `history`), status helpers (`is_informational`, `is_success`, `is_redirect`, `is_client_error`, `is_server_error`, `is_error`), methods (`json()`, `raise_for_status()`, `iter_bytes()`, `iter_text()`, `iter_lines()`, `close()`/`aclose()`), charset-aware text decoding, multi-value header support, case-insensitive headers, and a structured exception hierarchy. The CLI crate remains a stub. Redirects, advanced features, and true streaming response iteration are planned for subsequent milestones.

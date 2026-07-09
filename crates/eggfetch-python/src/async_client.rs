@@ -124,9 +124,22 @@ impl PyAsyncClient {
             let status = response.status().as_u16();
             let headers = crate::headers::PyHeaders::from_header_map(response.headers().clone());
             let url = response.url().to_string();
+            let reason_phrase = response
+                .status()
+                .canonical_reason()
+                .unwrap_or("")
+                .to_string();
+            let http_version = crate::response::version_to_string(response.version());
+            let encoding = crate::response::extract_charset(response.headers());
             let content = response.bytes().await.map_err(map_err)?;
             Ok(crate::response::PyResponse::from_parts(
-                status, headers, url, content,
+                status,
+                headers,
+                url,
+                content,
+                reason_phrase,
+                http_version,
+                encoding,
             ))
         })
     }

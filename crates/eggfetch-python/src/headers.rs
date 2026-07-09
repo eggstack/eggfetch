@@ -102,6 +102,23 @@ impl PyHeaders {
         })
     }
 
+    /// Get all values for a header name (case-insensitive).
+    ///
+    /// Returns a list of strings, one per occurrence of the header.
+    /// Raises `ValueError` if the header name is invalid.
+    fn get_list(&self, name: &str) -> PyResult<Vec<String>> {
+        let header_name = http::header::HeaderName::from_bytes(name.as_bytes()).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("Invalid header name: {e}"))
+        })?;
+        let values: Vec<String> = self
+            .inner
+            .get_all(&header_name)
+            .iter()
+            .map(|v| String::from_utf8_lossy(v.as_bytes()).to_string())
+            .collect();
+        Ok(values)
+    }
+
     /// String representation for debugging.
     fn __repr__(&self) -> String {
         let pairs: Vec<String> = self
