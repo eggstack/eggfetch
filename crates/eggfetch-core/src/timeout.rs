@@ -6,17 +6,26 @@
 //! - **Pool**: time waiting for a connection slot from the pool.
 //! - **Connect**: time to establish the TCP connection and TLS handshake
 //!   (including DNS resolution).
-//! - **Write**: time to send request headers and body to the peer.
-//! - **Read**: time to wait for response headers and each response body chunk.
+//! - **Write**: time for the request body producer to yield each chunk.
+//!   Only applies to streamed request bodies; buffered bodies complete
+//!   synchronously.
+//! - **Read**: time to wait for response headers and each response body
+//!   chunk. The deadline resets on every chunk arrival.
 //! - **Total**: wall-clock cap across the entire request lifecycle.
 //!
 //! # Enforcement
 //!
-//! Only the **Pool** and **Total** phases are individually enforced via
-//! `tokio::time::timeout`. The Connect, Write, and Read phases are
-//! configured but not independently enforced — hyper-util's legacy client
-//! API does not expose per-phase hooks. The total timeout provides the
-//! wall-clock guarantee. This is a documented limitation.
+//! - **Pool** and **Total** are enforced with `tokio::time::timeout`.
+//! - **Read** is enforced by a per-chunk wrapper stream that fires
+//!   `Error::Timeout { phase: Read }` if no chunk arrives within the
+//!   configured duration. The deadline resets on every chunk.
+//! - **Write** is enforced by a per-chunk wrapper stream that fires
+//!   `Error::Timeout { phase: Write }` if the producer does not yield
+//!   the next chunk within the configured duration. The deadline resets
+//!   on every chunk.
+//! - **Connect** is accepted and merged but not independently enforced
+//!   because hyper-util's legacy client does not expose a connect-phase
+//!   deadline. Use `total` as a backstop.
 //!
 //! When a scalar timeout is provided (e.g. `Timeout::from_secs(5)`), it
 //! applies to pool, connect, write, and read phases. The total timeout is
@@ -63,10 +72,19 @@ impl std::fmt::Display for TimeoutPhase {
 ///
 /// # Enforcement
 ///
-/// Only `pool` and `total` are individually enforced. The `connect`,
-/// `write`, and `read` fields are stored and merged but not independently
-/// enforced (hyper-util limitation). See the module-level documentation
-/// for details.
+/// - `pool`: enforced via `tokio::time::timeout` around the pool acquire.
+/// - `read`: enforced per chunk by a wrapper stream that fires
+///   `Error::Timeout { phase: Read }` when no data arrives within the
+///   configured duration. Resets on every chunk arrival.
+/// - `write`: enforced per chunk by a wrapper stream that fires
+///   `Error::Timeout { phase: Write }` when the request body producer
+///   does not yield a chunk within the configured duration. Resets on
+///   every chunk delivery. Only applies to streamed request bodies;
+///   buffered bodies complete synchronously.
+/// - `total`: enforced via `tokio::time::timeout` around the full send.
+/// - `connect`: accepted and merged but not independently enforced;
+///   hyper-util does not expose a per-connect deadline.
+///   `total` should be used as a backstop.
 ///
 /// # Default
 ///
@@ -94,10 +112,12 @@ pub struct Timeout {
     pub pool: Option<Duration>,
     /// Time allowed to establish TCP connection and TLS handshake.
     /// Includes DNS resolution when performed as part of connect.
+    /// Accepted but not independently enforced; `total` is the backstop.
     pub connect: Option<Duration>,
-    /// Time allowed to send request headers and body.
+    /// Time allowed for the request body producer to yield each chunk.
+    /// Only applies to streamed request bodies.
     pub write: Option<Duration>,
-    /// Time allowed to wait for response headers or a body chunk.
+    /// Time allowed between response body chunks. Resets on every chunk.
     pub read: Option<Duration>,
     /// Optional wall-clock cap across the entire request lifecycle.
     pub total: Option<Duration>,

@@ -92,8 +92,11 @@ Phase-aware timeout behavior is implemented with the following capabilities:
 - **Timeout configuration** -- `Timeout` type with per-phase durations (pool, connect, write, read, total).
 - **Client-level timeouts** -- set via `ClientBuilder::timeout()`.
 - **Request-level timeouts** -- set via `RequestBuilder::timeout()`, overriding client defaults per-field.
-- **Pool timeout** -- time waiting for a connection slot from the pool.
-- **Total timeout** -- wall-clock cap across the entire request lifecycle.
+- **Pool timeout** -- time waiting for a connection slot from the pool. Enforced via `tokio::time::timeout` around acquisition.
+- **Total timeout** -- wall-clock cap across the entire request lifecycle. Enforced via `tokio::time::timeout` around the full send.
+- **Read timeout** -- enforced per chunk by a wrapper stream. Fires `Error::Timeout { phase: Read }` if no response body chunk arrives within the duration. Resets on every chunk arrival.
+- **Write timeout** -- enforced per chunk by a wrapper stream. Fires `Error::Timeout { phase: Write }` if the request body producer does not yield the next chunk within the duration. Resets on every chunk delivery. Applies only to streamed request bodies.
+- **Connect timeout** -- accepted and merged; not independently enforced. Use `total` as a backstop.
 - **Timeout errors** -- `Error::Timeout { phase, elapsed }` identifies which phase timed out.
 - **Cancellation safety** -- cancelled timeout-wrapped operations do not leak pool permits.
 
@@ -101,12 +104,23 @@ Phase-aware timeout behavior is implemented with the following capabilities:
 
 Protocol-neutral streaming for request and response bodies:
 
-- **RequestBody** -- `Empty`, `Bytes`, and `Stream` variants. `Stream` holds a `BoxBytesStream` with optional known length.
+- **RequestBody** -- `Empty`, `Bytes`, and `Stream` variants. `Stream` holds a `BoxBytesStream` with optional known length. Stream bodies are wired through hyper's `StreamBody` and piped to the transport incrementally (no eager buffering). Producers are polled lazily.
 - **ResponseBody** -- `Buffered`, `Streaming`, and `Consumed` variants. `bytes()` and `text()` are async. `bytes_stream()` returns a `BoxBytesStream`.
 - **Response streaming** -- `bytes_stream()` yields chunks as they arrive; `text_lines()` splits byte stream into text lines.
 - **Single-consumption** -- streaming bodies can only be consumed once; double-consume returns an error.
 - **Client integration** -- all responses are wrapped as streaming `ResponseBody` via hyper's `Incoming` adapter.
 - **Chunked transfer encoding** -- test server supports chunked responses for integration testing.
+
+### Hardening Pass: Streaming, Timeouts, and Pool Lease (complete)
+
+Post-Milestone-E correctness work landed:
+
+- **True streaming uploads** -- request bodies stream into hyper via `UnsyncBoxBody<Bytes, Box<dyn StdError + Send + Sync>>`; no eager buffering.
+- **Read timeout** -- `Timeout::read` enforces per-chunk arrival deadline on response body streams.
+- **Write timeout** -- `Timeout::write` enforces per-chunk producer deadline on streamed request bodies.
+- **Pool lease on body** -- pool permits are attached to streaming response bodies and released only when the body is dropped or fully consumed. This keeps per-origin limits meaningful while bodies are in flight.
+- **Origin-keyed pool** -- per-origin limits are keyed by `(scheme, host, port)`. `http://example.com` and `https://example.com` are independent origins.
+- **Pool metrics** -- only `acquisition_waits` and `acquisition_cancellations` remain; skeletal socket counters were removed because hyper owns socket lifecycle.
 
 ## Repository Layout
 

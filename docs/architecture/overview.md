@@ -2,6 +2,8 @@
 
 This document describes the architecture of eggfetch. Milestone E is complete: the core crate provides protocol-neutral streaming for request and response bodies, building on the timeout system, connection pooling, and HTTP/1.1 engine from earlier milestones.
 
+The post-E hardening pass landed true streaming request bodies, per-chunk read/write timeouts, pool permits tied to the full response body lifecycle, and origin-keyed pool limits.
+
 ## Three-Crate Workspace
 
 eggfetch is a Cargo workspace with three crates:
@@ -63,7 +65,11 @@ This enables Python bindings to map to specific exception classes (`ConnectTimeo
 
 ### Implementation Notes
 
-The pool timeout is applied via `tokio::time::timeout` around pool acquisition. The total timeout wraps the entire send+collect lifecycle. Individual connect/write/read phases are not isolable through hyper-util's legacy client API, so the total timeout provides the wall-clock guarantee. This is a documented limitation that will be revisited when the transport layer is abstracted further.
+- **Pool timeout**: enforced via `tokio::time::timeout` around pool acquisition.
+- **Total timeout**: enforced via `tokio::time::timeout` around the full send.
+- **Read timeout**: enforced by a per-chunk wrapper stream (`stream::ReadTimeoutStream`) that fires `Error::Timeout { phase: Read }` if no response body chunk arrives within the configured duration. The deadline resets on every chunk arrival.
+- **Write timeout**: enforced by a per-chunk wrapper stream (`stream::WriteTimeoutStream`) that fires `Error::Timeout { phase: Write }` if the request body producer does not yield the next chunk within the configured duration. The deadline resets on every chunk delivery. Only applies to streamed request bodies; buffered bodies complete synchronously.
+- **Connect timeout**: accepted and merged but not independently enforced. hyper-util's legacy client does not expose a connect-phase deadline. `total` should be used as a backstop.
 
 ### Cancellation Safety
 
@@ -83,11 +89,27 @@ All responses from the client are wrapped as `ResponseBody::Streaming` by defaul
 
 ### Request Streaming
 
-Request bodies support three variants: `Empty`, `Bytes` (fixed buffer), and `Stream` (chunked upload). Stream request bodies are buffered into `Full<Bytes>` before sending via `into_hyper_body()`. Full streamed uploads (pipe-through) are deferred to a later milestone.
+Request bodies support three variants: `Empty`, `Bytes` (fixed buffer), and `Stream` (chunked upload). Stream request bodies are wrapped in a hyper `StreamBody` and piped through to the transport incrementally with no eager buffering. When `length` is `Some(n)`, the body is sent as a `Content-Length`-delimited body. When `length` is `None`, hyper's HTTP/1.1 machinery selects a safe transfer mode (e.g. chunked transfer encoding).
+
+The producer stream is polled lazily: each chunk is sent as soon as it is produced, so a slow producer backpressures the transport.
 
 ### Single-Consumption Semantics
 
 Body types are single-consume. Calling `bytes_stream()` on a streaming body replaces it with `Consumed`; a second call returns an error. Calling `bytes()` on a consumed body also returns an error. This prevents accidental double-reads and enforces ownership transfer.
+
+### Pool Permit Lifecycle (Lease on Body)
+
+Streaming response bodies carry an internal `Arc<PoolGuard>` that holds the pool permits acquired for the request. The permits are released when the response body is dropped or fully consumed. Buffered and already-consumed responses do not carry a lease.
+
+This guarantees that per-origin concurrency limits remain meaningful while response bodies are in flight: a streaming response that is held but not consumed continues to occupy its pool slot. If a caller wants to free a slot before consuming the body, they must drop or fully buffer the response.
+
+## Pool Keying
+
+Per-origin pool limits are keyed by `(scheme, host, port)`, where the port uses the scheme's default when not explicit. `http://example.com:80` and `http://example.com` share a per-origin limit; `http://example.com` and `https://example.com` are independent; `http://example.com:8080` is distinct from `http://example.com`.
+
+## Pool Metrics
+
+`PoolMetrics` exposes only `acquisition_waits` and `acquisition_cancellations`. Socket-level counters (connections_opened/reused/closed) were removed because hyper owns socket lifecycle and eggfetch cannot observe individual socket events through its current integration.
 
 ## Transport Stack
 

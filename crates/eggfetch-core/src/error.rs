@@ -9,7 +9,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 ///
 /// This is the single error entry point for callers. Source errors are
 /// preserved via [`std::error::Error::source`].
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Clone, thiserror::Error)]
 pub enum Error {
     /// The provided URL could not be parsed.
     #[error("invalid URL: {0}")]
@@ -49,15 +49,15 @@ pub enum Error {
 
     /// An error from the underlying hyper HTTP engine.
     #[error("hyper error: {0}")]
-    Hyper(#[from] hyper::Error),
+    Hyper(#[from] std::sync::Arc<hyper::Error>),
 
     /// An error from the hyper-util legacy client.
     #[error("hyper client error: {0}")]
-    HyperClient(#[source] hyper_util::client::legacy::Error),
+    HyperClient(#[source] std::sync::Arc<hyper_util::client::legacy::Error>),
 
     /// An I/O error occurred.
     #[error("I/O error: {0}")]
-    Io(#[from] std::io::Error),
+    Io(#[from] std::sync::Arc<std::io::Error>),
 
     /// The requested feature is not yet supported.
     #[error("unsupported: {0}")]
@@ -125,7 +125,7 @@ mod tests {
 
     #[test]
     fn error_from_io() {
-        let io_err = std::io::Error::other("test");
+        let io_err = std::sync::Arc::new(std::io::Error::other("test"));
         let err: Error = io_err.into();
         assert_eq!(err.kind(), "io");
     }

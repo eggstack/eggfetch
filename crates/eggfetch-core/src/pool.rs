@@ -1,12 +1,24 @@
 //! Connection pool subsystem.
 //!
 //! Provides slot-based concurrency limiting for HTTP connections, both
-//! globally and per-host. Actual connection reuse is handled by hyper;
+//! globally and per-origin. Actual connection reuse is handled by hyper;
 //! this module controls how many concurrent requests may be in flight.
+//!
+//! # Origin keying
+//!
+//! Per-origin limits are keyed by `(scheme, host, port)`, where the port
+//! uses the scheme's default if not explicitly provided:
+//!
+//! - `http://example.com:80` shares a limit with `http://example.com`
+//!   because the default port for `http` is 80.
+//! - `http://example.com` and `https://example.com` are distinct origins
+//!   and have independent per-origin limits.
+//! - `http://example.com:8080` is a distinct origin from
+//!   `http://example.com`.
 
+use std::fmt;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
-use std::time::Duration;
 
 use dashmap::DashMap;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
@@ -23,34 +35,89 @@ pub struct PoolConfig {
     pub max_idle_connections_per_host: Option<usize>,
     /// Maximum total number of concurrent connections (active + idle).
     pub max_connections: Option<usize>,
-    /// Maximum number of concurrent connections per individual host.
+    /// Maximum number of concurrent connections per individual origin.
+    ///
+    /// Origins are keyed by `(scheme, host, port)`. Two URLs with
+    /// different schemes or ports are distinct origins.
     pub max_connections_per_host: Option<usize>,
     /// Duration after which an idle connection is closed.
-    pub idle_timeout: Option<Duration>,
+    pub idle_timeout: Option<std::time::Duration>,
+}
+
+/// Origin key used for per-host pool slot acquisition.
+///
+/// Combines scheme, host, and effective port (using the scheme default
+/// when the URL does not specify a port).
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub(crate) struct OriginKey {
+    /// URL scheme (`http` or `https`).
+    scheme: String,
+    /// Hostname.
+    host: String,
+    /// Effective port (explicit or default-for-scheme).
+    port: u16,
+}
+
+impl OriginKey {
+    /// Build an `OriginKey` from a scheme and `url::Url`.
+    pub(crate) fn from_url(scheme: &str, url: &url::Url) -> Option<Self> {
+        let host = url.host_str()?.to_owned();
+        let port = url.port_or_known_default()?;
+        Some(Self {
+            scheme: scheme.to_owned(),
+            host,
+            port,
+        })
+    }
+
+    /// Build an `OriginKey` for tests or callers that already have the
+    /// components.
+    #[allow(dead_code)] // Kept for future callers; tests cover the path via from_url.
+    pub(crate) fn from_parts(scheme: &str, host: &str, port: u16) -> Self {
+        Self {
+            scheme: scheme.to_owned(),
+            host: host.to_owned(),
+            port,
+        }
+    }
+
+    /// Returns the scheme.
+    #[allow(dead_code)]
+    pub(crate) fn scheme(&self) -> &str {
+        &self.scheme
+    }
+
+    /// Returns the host.
+    pub(crate) fn host(&self) -> &str {
+        &self.host
+    }
+
+    /// Returns the effective port.
+    #[allow(dead_code)] // Exposed for future diagnostics and metrics.
+    pub(crate) fn port(&self) -> u16 {
+        self.port
+    }
+}
+
+impl fmt::Display for OriginKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}://{}:{}", self.scheme, self.host, self.port)
+    }
 }
 
 /// Observable metrics for the connection pool.
 ///
-/// Intended for internal use and testing. All counters are atomically
-/// updated and may be read concurrently.
+/// All counters are atomically updated and may be read concurrently.
 ///
-/// # Current State
+/// # What is measured
 ///
-/// Only `acquisition_waits` and `acquisition_cancellations` are
-/// actively incremented. The `connections_opened`, `connections_reused`,
-/// and `idle_connections_closed` counters are declared but not yet
-/// wired — actual connection management is handled by hyper's internal
-/// pool, which does not expose these events. These fields will be
-/// populated when the pool layer gains direct connection lifecycle
-/// visibility.
+/// These counters track **logical permits** held by the pool, not raw
+/// TCP sockets. Hyper owns socket lifecycle; eggfetch cannot observe
+/// individual socket open/reuse/close events through its current
+/// integration. If you need socket-level metrics, those would have to
+/// be added at a custom connector layer.
 #[derive(Debug, Default)]
 pub struct PoolMetrics {
-    /// Total number of new connections opened. **Skeletal**: not yet incremented.
-    pub connections_opened: AtomicUsize,
-    /// Total number of times an existing connection was reused. **Skeletal**: not yet incremented.
-    pub connections_reused: AtomicUsize,
-    /// Total number of idle connections that were closed (timeout or eviction). **Skeletal**: not yet incremented.
-    pub idle_connections_closed: AtomicUsize,
     /// Total number of times an acquire call had to wait for a permit.
     pub acquisition_waits: AtomicUsize,
     /// Total number of times an acquire call was cancelled while waiting.
@@ -62,34 +129,43 @@ pub struct PoolMetrics {
 /// Dropping the guard releases all held semaphore permits back to the pool.
 pub struct PoolGuard {
     pool: Arc<PoolInner>,
-    host: Option<String>,
+    pub(crate) origin: Option<OriginKey>,
     // These fields are held for their Drop impl (releasing semaphore permits).
+    // The `dead_code` allow is justified: the field value is read implicitly
+    // by `OwnedSemaphorePermit::drop`, not by source code.
     #[allow(dead_code)]
-    global_permit: Option<OwnedSemaphorePermit>,
+    pub(crate) global_permit: Option<OwnedSemaphorePermit>,
     #[allow(dead_code)]
-    host_permit: Option<OwnedSemaphorePermit>,
+    pub(crate) origin_permit: Option<OwnedSemaphorePermit>,
 }
 
 impl PoolGuard {
     /// Create a new guard (crate-internal).
     fn new(
         pool: Arc<PoolInner>,
-        host: Option<String>,
+        origin: Option<OriginKey>,
         global_permit: Option<OwnedSemaphorePermit>,
-        host_permit: Option<OwnedSemaphorePermit>,
+        origin_permit: Option<OwnedSemaphorePermit>,
     ) -> Self {
         Self {
             pool,
-            host,
+            origin,
             global_permit,
-            host_permit,
+            origin_permit,
         }
     }
 
-    /// Returns the host this guard was acquired for, if any.
+    /// Returns the origin this guard was acquired for, if any.
     #[must_use]
+    #[allow(dead_code)] // Exposed for future diagnostics and metrics.
+    pub(crate) fn origin(&self) -> Option<&OriginKey> {
+        self.origin.as_ref()
+    }
+
+    /// Returns the host portion of the origin, if any.
+    #[allow(dead_code)]
     pub fn host(&self) -> Option<&str> {
-        self.host.as_deref()
+        self.origin.as_ref().map(OriginKey::host)
     }
 
     /// Returns a reference to the pool metrics.
@@ -110,8 +186,8 @@ impl Drop for PoolGuard {
 struct PoolInner {
     /// Global concurrency semaphore. `None` when no global limit is set.
     global_semaphore: Option<Arc<Semaphore>>,
-    /// Per-host concurrency semaphores, created lazily on first use.
-    per_host: DashMap<String, Arc<Semaphore>>,
+    /// Per-origin concurrency semaphores, created lazily on first use.
+    per_origin: DashMap<OriginKey, Arc<Semaphore>>,
     /// Pool configuration.
     config: PoolConfig,
     /// Observable metrics.
@@ -148,55 +224,56 @@ impl Pool {
         Self {
             inner: Arc::new(PoolInner {
                 global_semaphore,
-                per_host: DashMap::new(),
+                per_origin: DashMap::new(),
                 config,
                 metrics: PoolMetrics::default(),
             }),
         }
     }
 
-    /// Acquire a pool slot for the given host.
+    /// Acquire a pool slot for the given origin.
     ///
-    /// If a per-host limit is configured, a per-host permit is acquired
-    /// first, then a global permit. The returned [`PoolGuard`] holds
-    /// both permits and releases them on drop.
+    /// If a per-origin limit is configured, a per-origin permit is
+    /// acquired first, then a global permit. The returned [`PoolGuard`]
+    /// holds both permits and releases them on drop.
     ///
     /// If no limits are configured, returns a guard that does nothing on drop.
     ///
     /// # Arguments
     ///
-    /// * `host` - The hostname extracted from the request URL. Pass `None`
+    /// * `origin` - The origin derived from the request URL. Pass `None`
     ///   for malformed URLs or URLs without a host component.
-    pub async fn acquire(&self, host: Option<&str>) -> PoolGuard {
+    pub(crate) async fn acquire(&self, origin: Option<&OriginKey>) -> PoolGuard {
         let mut waited = false;
         let mut global_permit: Option<OwnedSemaphorePermit> = None;
-        let mut host_permit: Option<OwnedSemaphorePermit> = None;
+        let mut origin_permit: Option<OwnedSemaphorePermit> = None;
 
-        // Acquire per-host permit if configured and host is known.
-        if let (Some(max_per_host), Some(host)) = (self.inner.config.max_connections_per_host, host)
+        // Acquire per-origin permit if configured and origin is known.
+        if let (Some(max_per_origin), Some(origin)) =
+            (self.inner.config.max_connections_per_host, origin)
         {
             let sem = self
                 .inner
-                .per_host
-                .entry(host.to_owned())
-                .or_insert_with(|| Arc::new(Semaphore::new(max_per_host)))
+                .per_origin
+                .entry(origin.clone())
+                .or_insert_with(|| Arc::new(Semaphore::new(max_per_origin)))
                 .clone();
 
             // Try immediate acquire first.
             if let Ok(permit) = sem.clone().try_acquire_owned() {
-                host_permit = Some(permit);
+                origin_permit = Some(permit);
             } else {
                 // Must wait for a slot.
                 waited = true;
                 if let Ok(permit) = sem.clone().acquire_owned().await {
-                    host_permit = Some(permit);
+                    origin_permit = Some(permit);
                 } else {
                     // Semaphore closed (shouldn't happen in practice).
                     self.inner
                         .metrics
                         .acquisition_cancellations
                         .fetch_add(1, Ordering::Relaxed);
-                    return PoolGuard::new(self.inner.clone(), Some(host.to_owned()), None, None);
+                    return PoolGuard::new(self.inner.clone(), Some(origin.clone()), None, None);
                 }
             }
         }
@@ -218,9 +295,9 @@ impl Pool {
                         .fetch_add(1, Ordering::Relaxed);
                     return PoolGuard::new(
                         self.inner.clone(),
-                        host.map(str::to_owned),
+                        origin.cloned(),
                         None,
-                        host_permit,
+                        origin_permit,
                     );
                 }
             }
@@ -235,9 +312,9 @@ impl Pool {
 
         PoolGuard::new(
             self.inner.clone(),
-            host.map(str::to_owned),
+            origin.cloned(),
             global_permit,
-            host_permit,
+            origin_permit,
         )
     }
 
@@ -266,7 +343,7 @@ mod tests {
     fn pool_constructs_with_defaults() {
         let pool = Pool::new(PoolConfig::default());
         assert!(pool.inner.global_semaphore.is_none());
-        assert!(pool.inner.per_host.is_empty());
+        assert!(pool.inner.per_origin.is_empty());
     }
 
     #[test]
@@ -283,9 +360,6 @@ mod tests {
     fn pool_metrics_starts_zeroed() {
         let pool = Pool::new(PoolConfig::default());
         let metrics = pool.metrics();
-        assert_eq!(metrics.connections_opened.load(Ordering::Relaxed), 0);
-        assert_eq!(metrics.connections_reused.load(Ordering::Relaxed), 0);
-        assert_eq!(metrics.idle_connections_closed.load(Ordering::Relaxed), 0);
         assert_eq!(metrics.acquisition_waits.load(Ordering::Relaxed), 0);
         assert_eq!(metrics.acquisition_cancellations.load(Ordering::Relaxed), 0);
     }
@@ -294,7 +368,7 @@ mod tests {
     async fn acquire_without_limits_returns_immediately() {
         let pool = Pool::new(PoolConfig::default());
         let guard = pool.acquire(None).await;
-        assert!(guard.host().is_none());
+        assert!(guard.origin().is_none());
     }
 
     #[tokio::test]
@@ -305,8 +379,9 @@ mod tests {
         };
         let pool = Pool::new(config);
 
-        let g1 = pool.acquire(Some("example.com")).await;
-        let g2 = pool.acquire(Some("example.com")).await;
+        let origin = OriginKey::from_parts("http", "example.com", 80);
+        let g1 = pool.acquire(Some(&origin)).await;
+        let g2 = pool.acquire(Some(&origin)).await;
 
         // Both acquired successfully; metrics should show no waits.
         assert_eq!(pool.metrics().acquisition_waits.load(Ordering::Relaxed), 0);
@@ -316,16 +391,15 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn acquire_with_per_host_limit() {
+    async fn acquire_with_per_origin_limit() {
         let config = PoolConfig {
             max_connections_per_host: Some(1),
             ..Default::default()
         };
         let pool = Pool::new(config);
 
-        let g1 = pool.acquire(Some("example.com")).await;
-        // Second acquire on same host should wait (but we can't easily test
-        // blocking in a non-async test; just verify the first one succeeds).
+        let origin = OriginKey::from_parts("http", "example.com", 80);
+        let g1 = pool.acquire(Some(&origin)).await;
         assert_eq!(pool.metrics().acquisition_waits.load(Ordering::Relaxed), 0);
 
         drop(g1);
@@ -339,27 +413,105 @@ mod tests {
         assert!(std::ptr::eq(&*pool.inner, &*pool2.inner));
     }
 
-    #[test]
-    fn pool_metrics_skeletal_fields_are_zero() {
-        let pool = Pool::new(PoolConfig::default());
-        let m = pool.metrics();
-        assert_eq!(m.connections_opened.load(Ordering::Relaxed), 0);
-        assert_eq!(m.connections_reused.load(Ordering::Relaxed), 0);
-        assert_eq!(m.idle_connections_closed.load(Ordering::Relaxed), 0);
-    }
-
     #[tokio::test]
-    async fn acquire_per_host_limit_separate_hosts() {
+    async fn acquire_per_origin_limit_separate_origins() {
         let config = PoolConfig {
             max_connections_per_host: Some(1),
             ..Default::default()
         };
         let pool = Pool::new(config);
-        let g1 = pool.acquire(Some("host-a")).await;
-        let g2 = pool.acquire(Some("host-b")).await;
-        assert!(g1.host().is_some());
-        assert!(g2.host().is_some());
+        let o1 = OriginKey::from_parts("http", "host-a", 80);
+        let o2 = OriginKey::from_parts("http", "host-b", 80);
+        let g1 = pool.acquire(Some(&o1)).await;
+        let g2 = pool.acquire(Some(&o2)).await;
+        assert!(g1.origin().is_some());
+        assert!(g2.origin().is_some());
         drop(g1);
         drop(g2);
+    }
+
+    #[test]
+    fn origin_key_from_url_http() {
+        let url = url::Url::parse("http://example.com:8080/path").unwrap();
+        let key = OriginKey::from_url("http", &url).unwrap();
+        assert_eq!(key.scheme(), "http");
+        assert_eq!(key.host(), "example.com");
+        assert_eq!(key.port(), 8080);
+    }
+
+    #[test]
+    fn origin_key_from_url_https_default_port() {
+        let url = url::Url::parse("https://example.com/path").unwrap();
+        let key = OriginKey::from_url("https", &url).unwrap();
+        assert_eq!(key.scheme(), "https");
+        assert_eq!(key.host(), "example.com");
+        assert_eq!(key.port(), 443);
+    }
+
+    #[test]
+    fn origin_key_from_url_http_default_port() {
+        let url = url::Url::parse("http://example.com/path").unwrap();
+        let key = OriginKey::from_url("http", &url).unwrap();
+        assert_eq!(key.scheme(), "http");
+        assert_eq!(key.port(), 80);
+    }
+
+    #[test]
+    fn origin_keys_distinguish_scheme() {
+        let http = OriginKey::from_parts("http", "example.com", 80);
+        let https = OriginKey::from_parts("https", "example.com", 443);
+        assert_ne!(http, https);
+    }
+
+    #[test]
+    fn origin_keys_distinguish_port() {
+        let p80 = OriginKey::from_parts("http", "example.com", 80);
+        let p8080 = OriginKey::from_parts("http", "example.com", 8080);
+        assert_ne!(p80, p8080);
+    }
+
+    #[test]
+    fn origin_keys_equal_for_same_origin() {
+        let a = OriginKey::from_parts("http", "example.com", 80);
+        let b = OriginKey::from_parts("http", "example.com", 80);
+        assert_eq!(a, b);
+    }
+
+    #[test]
+    fn origin_key_display() {
+        let key = OriginKey::from_parts("https", "example.com", 443);
+        assert_eq!(key.to_string(), "https://example.com:443");
+    }
+
+    #[tokio::test]
+    async fn origin_keys_separate_per_origin_map_entries() {
+        let config = PoolConfig {
+            max_connections_per_host: Some(1),
+            ..Default::default()
+        };
+        let pool = Pool::new(config);
+        let a = OriginKey::from_parts("http", "example.com", 80);
+        let b = OriginKey::from_parts("http", "example.com", 8080);
+        assert!(pool.acquire(Some(&a)).await.origin().is_some());
+        assert!(pool.acquire(Some(&b)).await.origin().is_some());
+    }
+
+    #[test]
+    fn origin_keys_distinct_by_scheme() {
+        // Same host and port, different scheme = different origin.
+        let http = OriginKey::from_parts("http", "example.com", 443);
+        let https = OriginKey::from_parts("https", "example.com", 443);
+        assert_ne!(http, https);
+    }
+
+    #[test]
+    fn origin_key_from_url_uses_scheme_default_port() {
+        // URL with explicit port is honored; URL without port uses scheme default.
+        let explicit = url::Url::parse("http://example.com:8080/path").unwrap();
+        let default = url::Url::parse("http://example.com/path").unwrap();
+        let k_explicit = OriginKey::from_url("http", &explicit).unwrap();
+        let k_default = OriginKey::from_url("http", &default).unwrap();
+        assert_eq!(k_explicit.port(), 8080);
+        assert_eq!(k_default.port(), 80);
     }
 }

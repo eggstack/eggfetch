@@ -18,17 +18,31 @@
 //! Request bodies can be:
 //!
 //! - **Empty**: no body sent.
-//! - **Bytes**: a fixed-size byte buffer with known length.
-//! - **Stream**: an async stream of bytes. **Buffered before sending**:
-//!   the entire stream is collected into a single `Bytes` buffer via
-//!   `into_hyper_body()` before any bytes touch the network. Full
-//!   pipe-through streaming uploads are deferred to a later milestone.
+//! - **Bytes**: a fixed-size byte buffer with known length. Sent as a
+//!   `Content-Length`-delimited body.
+//! - **Stream**: an async stream of bytes. Piped through to the transport
+//!   incrementally (no eager buffering). When `length` is `Some(n)`, the
+//!   body is sent as a `Content-Length`-delimited body. When `length` is
+//!   `None`, hyper's HTTP/1.1 machinery selects a safe transfer mode
+//!   (e.g. chunked transfer encoding for HTTP/1.1).
+//!
+//! # Response lease (pool permit lifecycle)
+//!
+//! Streaming response bodies carry an internal `Arc<PoolGuard>` that
+//! holds the pool permits acquired for the request. The permits are
+//! released when the response body is dropped or fully consumed. This
+//! guarantees that per-origin concurrency limits remain meaningful while
+//! response bodies are in flight: a streaming response that is held
+//! but not consumed continues to occupy its pool slot. Buffered and
+//! already-consumed responses do not carry a lease.
 
 use std::pin::Pin;
+use std::sync::Arc;
 
 use bytes::{Bytes, BytesMut};
 use futures_core::Stream;
 use futures_util::StreamExt;
+use http_body::Frame;
 
 use crate::error::{Error, Result};
 
@@ -42,9 +56,11 @@ pub type BoxBytesStream = Pin<Box<dyn Stream<Item = Result<Bytes>> + Send>>;
 /// Request body.
 ///
 /// Supports empty bodies, fixed-size byte buffers, and async streams.
-/// **Stream bodies are fully buffered before sending**: `into_hyper_body()`
-/// drains the stream into a single `Full<Bytes>` buffer. There is no
-/// pipe-through streaming upload in the current implementation.
+/// `Stream` bodies are **piped through** to the transport incrementally:
+/// each chunk is sent as soon as it is produced, with no eager buffering.
+/// The optional `length` hint drives `Content-Length` for known-size
+/// streams; unknown-length streams use HTTP/1.1 chunked transfer encoding
+/// (selected by hyper).
 #[derive(Default)]
 pub enum RequestBody {
     /// Empty body.
@@ -54,9 +70,11 @@ pub enum RequestBody {
     Bytes(Bytes),
     /// Async stream body.
     ///
-    /// The `Option<usize>` is the known length, if available. The stream
-    /// is fully buffered into a `Full<Bytes>` before sending; the length
-    /// hint is not currently used for transfer encoding decisions.
+    /// Chunks are sent incrementally as the stream produces them. If
+    /// `length` is `Some(n)`, a `Content-Length: n` header is set when
+    /// the user has not supplied a conflicting value. If `length` is
+    /// `None`, no `Content-Length` is set; the transport selects a
+    /// safe transfer mode (chunked for HTTP/1.1).
     Stream {
         /// The stream of body chunks.
         stream: BoxBytesStream,
@@ -125,30 +143,38 @@ impl RequestBody {
         }
     }
 
-    /// Consume the body and return all bytes.
+    /// Convert into a hyper-compatible boxed body.
     ///
-    /// For `Empty` and `Bytes` variants this is immediate. For `Stream`
-    /// variants, all chunks are collected.
-    pub(crate) async fn into_bytes(self) -> Result<Bytes> {
+    /// Stream bodies are wrapped as a `StreamBody` so that chunks are
+    /// piped through to the transport incrementally. Bytes and empty
+    /// bodies are wrapped as `Full` and `Empty` respectively. No eager
+    /// buffering is performed.
+    #[allow(clippy::type_complexity)]
+    pub(crate) fn into_http_body(
+        self,
+    ) -> http_body_util::combinators::UnsyncBoxBody<Bytes, Box<dyn std::error::Error + Send + Sync>>
+    {
+        use http_body_util::combinators::UnsyncBoxBody;
+        use http_body_util::{BodyExt, Empty, Full, StreamBody};
+
         match self {
-            Self::Empty => Ok(Bytes::new()),
-            Self::Bytes(b) => Ok(b),
-            Self::Stream { mut stream, .. } => {
-                let mut buf = BytesMut::new();
-                while let Some(chunk) = stream.next().await {
-                    buf.extend_from_slice(&chunk?);
-                }
-                Ok(buf.freeze())
+            Self::Empty => Empty::<Bytes>::new()
+                .map_err(|err| -> Box<dyn std::error::Error + Send + Sync> { match err {} })
+                .boxed_unsync(),
+            Self::Bytes(b) => Full::new(b)
+                .map_err(|err| -> Box<dyn std::error::Error + Send + Sync> { match err {} })
+                .boxed_unsync(),
+            Self::Stream { stream, .. } => {
+                let framed = stream.map(|chunk_result| {
+                    chunk_result
+                        .map(Frame::data)
+                        .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })
+                });
+                let body: UnsyncBoxBody<Bytes, Box<dyn std::error::Error + Send + Sync>> =
+                    BodyExt::boxed_unsync(StreamBody::new(framed));
+                body
             }
         }
-    }
-
-    /// Convert into a hyper-compatible body (always `Full<Bytes>`).
-    ///
-    /// For stream bodies, this collects all chunks into a single buffer.
-    pub(crate) async fn into_hyper_body(self) -> Result<http_body_util::Full<Bytes>> {
-        let bytes = self.into_bytes().await?;
-        Ok(http_body_util::Full::new(bytes))
     }
 }
 
@@ -186,6 +212,10 @@ impl From<&str> for RequestBody {
 // Response body
 // ---------------------------------------------------------------------------
 
+/// A handle to a pool permit. Cloning the handle is cheap; dropping the
+/// last handle releases the permit back to the pool.
+pub(crate) type PoolGuardArc = Arc<crate::pool::PoolGuard>;
+
 /// Response body handle.
 ///
 /// Supports two consumption modes:
@@ -194,7 +224,7 @@ impl From<&str> for RequestBody {
 ///   `ResponseBody::buffered()`. Calling `bytes()` or `text()` is O(1).
 /// - **Streaming**: body chunks are yielded incrementally. Created by
 ///   `ResponseBody::streaming()`. The stream must be fully consumed or
-///   dropped before the connection can be reused.
+///   dropped before the attached pool lease is released.
 ///
 /// # Single-consumption semantics
 ///
@@ -210,6 +240,8 @@ pub enum ResponseBody {
     Streaming {
         /// The body stream.
         stream: BoxBytesStream,
+        /// Optional pool permit holder. Released on drop.
+        lease: Option<PoolGuardArc>,
     },
     /// The streaming body has already been consumed.
     Consumed,
@@ -236,7 +268,19 @@ impl ResponseBody {
 
     /// Create a streaming response body from a type-erased stream.
     pub fn streaming(stream: BoxBytesStream) -> Self {
-        Self::Streaming { stream }
+        Self::Streaming {
+            stream,
+            lease: None,
+        }
+    }
+
+    /// Create a streaming response body with an attached pool permit.
+    /// The permit is released when the body is dropped.
+    pub(crate) fn streaming_with_lease(stream: BoxBytesStream, lease: PoolGuardArc) -> Self {
+        Self::Streaming {
+            stream,
+            lease: Some(lease),
+        }
     }
 
     /// Returns `true` if the body is empty.
@@ -286,7 +330,7 @@ impl ResponseBody {
         );
         match old {
             Self::Buffered { bytes } => Ok(bytes),
-            Self::Streaming { mut stream } => {
+            Self::Streaming { mut stream, .. } => {
                 let mut buf = BytesMut::new();
                 while let Some(chunk) = stream.next().await {
                     buf.extend_from_slice(&chunk?);
@@ -326,7 +370,7 @@ impl ResponseBody {
             }
             Self::Streaming { .. } => {
                 let old = std::mem::replace(self, Self::Consumed);
-                if let Self::Streaming { stream } = old {
+                if let Self::Streaming { stream, .. } = old {
                     Ok(stream)
                 } else {
                     unreachable!()
@@ -465,29 +509,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn request_body_into_bytes() {
-        let body = RequestBody::from(Bytes::from("hello"));
-        let bytes = body.into_bytes().await.unwrap();
-        assert_eq!(bytes, "hello");
-    }
-
-    #[tokio::test]
-    async fn request_body_stream_into_bytes() {
-        let chunks = vec![Ok(Bytes::from("a")), Ok(Bytes::from("bb"))];
-        let stream = Box::pin(futures_util::stream::iter(chunks));
-        let body = RequestBody::from_stream(stream, Some(3));
-        let bytes = body.into_bytes().await.unwrap();
-        assert_eq!(bytes, "abb");
-    }
-
-    #[tokio::test]
-    async fn request_body_empty_into_bytes() {
-        let body = RequestBody::Empty;
-        let bytes = body.into_bytes().await.unwrap();
-        assert!(bytes.is_empty());
-    }
-
-    #[tokio::test]
     async fn response_body_buffered_double_bytes_returns_empty() {
         let mut body = ResponseBody::buffered(Bytes::from("data"));
         let first = body.bytes().await.unwrap();
@@ -530,5 +551,75 @@ mod tests {
         assert!(stream.next().await.is_none());
         let bytes = body.bytes().await.unwrap();
         assert!(bytes.is_empty());
+    }
+
+    #[tokio::test]
+    async fn into_http_body_empty_produces_empty_body() {
+        use http_body::Body;
+        use http_body_util::BodyExt;
+
+        let body = RequestBody::Empty;
+        let mut hyper_body = body.into_http_body();
+        let frame = futures_util::future::poll_fn(|cx| {
+            use std::pin::Pin;
+            Pin::new(&mut hyper_body).poll_frame(cx)
+        })
+        .await;
+        assert!(frame.is_none());
+        let _ = hyper_body.collect().await;
+    }
+
+    #[tokio::test]
+    async fn into_http_body_bytes_produces_one_data_frame() {
+        use http_body::Body;
+        use std::pin::Pin;
+
+        let body = RequestBody::from(Bytes::from("hello"));
+        let mut hyper_body = body.into_http_body();
+
+        let frame = futures_util::future::poll_fn(|cx| Pin::new(&mut hyper_body).poll_frame(cx))
+            .await
+            .expect("frame present")
+            .expect("frame ok");
+        assert!(frame.is_data());
+        let data = frame.into_data().unwrap();
+        assert_eq!(data, "hello");
+
+        let end =
+            futures_util::future::poll_fn(|cx| Pin::new(&mut hyper_body).poll_frame(cx)).await;
+        assert!(end.is_none());
+    }
+
+    #[tokio::test]
+    async fn into_http_body_stream_pipes_through_without_eager_buffering() {
+        use http_body::Body;
+        use std::pin::Pin;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let polled = Arc::new(AtomicUsize::new(0));
+        let polled_inner = polled.clone();
+
+        let chunks = vec![
+            Ok(Bytes::from("a")),
+            Ok(Bytes::from("b")),
+            Ok(Bytes::from("c")),
+        ];
+        let chunk_stream = futures_util::stream::iter(chunks).inspect(move |_| {
+            polled_inner.fetch_add(1, Ordering::SeqCst);
+        });
+        let body = RequestBody::from_stream(chunk_stream.map(|r| -> Result<Bytes> { r }), Some(3));
+        let mut hyper_body = body.into_http_body();
+
+        let frame = futures_util::future::poll_fn(|cx| Pin::new(&mut hyper_body).poll_frame(cx))
+            .await
+            .expect("frame present")
+            .expect("frame ok");
+        let data = frame.into_data().unwrap();
+        assert_eq!(data, "a");
+        assert_eq!(
+            polled.load(Ordering::SeqCst),
+            1,
+            "stream should not be eagerly polled"
+        );
     }
 }

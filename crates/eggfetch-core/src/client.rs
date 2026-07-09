@@ -1,22 +1,25 @@
 //! Async client entry point.
 
+use std::sync::Arc;
+use std::time::Duration;
+
 use bytes::Bytes;
 use http::Method;
 use hyper_util::rt::TokioExecutor;
-use std::sync::Arc;
-use std::time::Duration;
 
 use crate::body::{BoxBytesStream, ResponseBody};
 use crate::error::{Error, Result};
 use crate::headers::Headers;
-use crate::pool::{Pool, PoolConfig, PoolMetrics};
-use crate::request::Request;
-use crate::request::RequestBuilder;
+use crate::pool::{OriginKey, Pool, PoolConfig, PoolGuard, PoolMetrics};
+use crate::request::{Request, RequestBuilder};
 use crate::response::Response;
+use crate::stream::{read_timeout_stream, write_timeout_stream};
 use crate::timeout::{Timeout, TimeoutPhase};
 
 type Connector = hyper_rustls::HttpsConnector<hyper_util::client::legacy::connect::HttpConnector>;
-type HyperClient = hyper_util::client::legacy::Client<Connector, http_body_util::Full<Bytes>>;
+type HyperRequestBody =
+    http_body_util::combinators::UnsyncBoxBody<Bytes, Box<dyn std::error::Error + Send + Sync>>;
+type HyperClient = hyper_util::client::legacy::Client<Connector, HyperRequestBody>;
 
 /// Shared client configuration.
 #[derive(Debug, Clone, Default)]
@@ -64,7 +67,7 @@ impl Client {
     ///
     /// # Errors
     ///
-    /// Returns an error if the URL is invalid or uses an unsupported scheme.
+    /// Returns [`Error::InvalidUrl`] if `url` cannot be parsed.
     pub fn get(&self, url: &str) -> Result<RequestBuilder> {
         self.request(Method::GET, url)
     }
@@ -73,7 +76,7 @@ impl Client {
     ///
     /// # Errors
     ///
-    /// Returns an error if the URL is invalid or uses an unsupported scheme.
+    /// Returns [`Error::InvalidUrl`] if `url` cannot be parsed.
     pub fn post(&self, url: &str) -> Result<RequestBuilder> {
         self.request(Method::POST, url)
     }
@@ -82,7 +85,7 @@ impl Client {
     ///
     /// # Errors
     ///
-    /// Returns an error if the URL is invalid or uses an unsupported scheme.
+    /// Returns [`Error::InvalidUrl`] if `url` cannot be parsed.
     pub fn put(&self, url: &str) -> Result<RequestBuilder> {
         self.request(Method::PUT, url)
     }
@@ -91,7 +94,7 @@ impl Client {
     ///
     /// # Errors
     ///
-    /// Returns an error if the URL is invalid or uses an unsupported scheme.
+    /// Returns [`Error::InvalidUrl`] if `url` cannot be parsed.
     pub fn patch(&self, url: &str) -> Result<RequestBuilder> {
         self.request(Method::PATCH, url)
     }
@@ -100,7 +103,7 @@ impl Client {
     ///
     /// # Errors
     ///
-    /// Returns an error if the URL is invalid or uses an unsupported scheme.
+    /// Returns [`Error::InvalidUrl`] if `url` cannot be parsed.
     pub fn delete(&self, url: &str) -> Result<RequestBuilder> {
         self.request(Method::DELETE, url)
     }
@@ -109,7 +112,7 @@ impl Client {
     ///
     /// # Errors
     ///
-    /// Returns an error if the URL is invalid or uses an unsupported scheme.
+    /// Returns [`Error::InvalidUrl`] if `url` cannot be parsed.
     pub fn head(&self, url: &str) -> Result<RequestBuilder> {
         self.request(Method::HEAD, url)
     }
@@ -118,7 +121,7 @@ impl Client {
     ///
     /// # Errors
     ///
-    /// Returns an error if the URL is invalid or uses an unsupported scheme.
+    /// Returns [`Error::InvalidUrl`] if `url` cannot be parsed.
     pub fn options(&self, url: &str) -> Result<RequestBuilder> {
         self.request(Method::OPTIONS, url)
     }
@@ -127,7 +130,7 @@ impl Client {
     ///
     /// # Errors
     ///
-    /// Returns an error if the URL is invalid or uses an unsupported scheme.
+    /// Returns [`Error::InvalidUrl`] if `url` cannot be parsed.
     pub fn request(&self, method: Method, url: &str) -> Result<RequestBuilder> {
         let parsed = parse_url(url)?;
         Ok(RequestBuilder::new(self.clone(), method, parsed))
@@ -159,13 +162,13 @@ impl Client {
             .parse()
             .map_err(|e| Error::InvalidUrl(format!("failed to convert url to URI: {e}")))?;
 
-        // Extract host from URL for pool slot acquisition.
-        let host = url.host_str().map(str::to_owned);
+        // Build the origin key for pool slot acquisition.
+        let origin = OriginKey::from_url(url.scheme(), &url);
 
         // Acquire a pool slot, respecting pool timeout.
-        let _guard = match timeout.pool {
+        let guard = match timeout.pool {
             Some(dur) => {
-                match tokio::time::timeout(dur, self.inner.pool.acquire(host.as_deref())).await {
+                match tokio::time::timeout(dur, self.inner.pool.acquire(origin.as_ref())).await {
                     Ok(guard) => guard,
                     Err(_) => {
                         return Err(Error::Timeout {
@@ -175,8 +178,31 @@ impl Client {
                     }
                 }
             }
-            None => self.inner.pool.acquire(host.as_deref()).await,
+            None => self.inner.pool.acquire(origin.as_ref()).await,
         };
+
+        // Apply write timeout to streamed request bodies. Empty and
+        // Bytes bodies are not subject to write timeout because they
+        // are produced synchronously inside `into_http_body()`.
+        let body = match (body, timeout.write) {
+            (crate::body::RequestBody::Stream { stream, length }, Some(write_dur)) => {
+                let wrapped = write_timeout_stream(stream, write_dur);
+                crate::body::RequestBody::Stream {
+                    stream: wrapped,
+                    length,
+                }
+            }
+            (b, _) => b,
+        };
+
+        // Determine whether the user has supplied Content-Length.
+        let user_content_length = headers
+            .get("content-length")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|s| s.parse::<u64>().ok());
+
+        // Apply Content-Length for known-size bodies when not user-supplied.
+        let headers = apply_content_length(headers, &body, user_content_length)?;
 
         let mut http_request = http::Request::builder()
             .method(method)
@@ -203,55 +229,34 @@ impl Client {
         }
 
         let hyper_request = http_request
-            .body(body.into_hyper_body().await?)
+            .body(body.into_http_body())
             .map_err(|e| Error::RequestBuild(e.to_string()))?;
 
-        // Send request and handle response body based on request method.
-        //
-        // For GET/HEAD/OPTIONS/DELETE requests (no body or empty body),
-        // we buffer the response immediately for convenience. For other
-        // methods (POST, PUT, PATCH), we also buffer the response since
-        // the primary use case for streaming is response body access.
-        //
-        // The streaming path wraps the hyper body as a `BoxBytesStream`
-        // so callers can consume chunks incrementally.
-        //
-        // Phase-specific connect/write/read timeouts are not individually
-        // isolable through hyper-util's legacy client API. The total timeout
-        // provides the wall-clock guarantee. This is a documented limitation.
-        let send_and_buffer = async {
-            let hyper_response = self
-                .inner
-                .hyper_client
-                .request(hyper_request)
-                .await
-                .map_err(Error::HyperClient)?;
+        // Send request and collect response headers. The pool permit
+        // is moved into the response body lifetime so that streaming
+        // bodies hold the permit until they are consumed or dropped.
+        let send_future = send_request(&self.inner.hyper_client, hyper_request, url.clone());
 
-            let status = hyper_response.status();
-            let resp_version = hyper_response.version();
-            let resp_headers = hyper_response.headers().clone();
-            let resp_url = url;
-
-            let response_body = ResponseBody::streaming(wrap_incoming(hyper_response.into_body()));
-
-            Ok::<Response, Error>(Response::new(
-                status,
-                resp_version,
-                resp_headers,
-                resp_url,
-                response_body,
-            ))
+        let mut response = match timeout.total {
+            Some(dur) => match tokio::time::timeout(dur, send_future).await {
+                Ok(Ok(resp)) => resp,
+                Ok(Err(e)) => return Err(e),
+                Err(_) => {
+                    return Err(Error::Timeout {
+                        phase: TimeoutPhase::Total,
+                        elapsed: dur,
+                    });
+                }
+            },
+            None => send_future.await?,
         };
 
-        match timeout.total {
-            Some(dur) => tokio::time::timeout(dur, send_and_buffer)
-                .await
-                .map_err(|_| Error::Timeout {
-                    phase: TimeoutPhase::Total,
-                    elapsed: dur,
-                })?,
-            None => send_and_buffer.await,
-        }
+        // Apply read timeout to the response body stream and attach
+        // the pool permit to keep per-origin limits meaningful while
+        // the body is in flight.
+        apply_read_timeout_and_lease(&mut response, guard, timeout.read);
+
+        Ok(response)
     }
 }
 
@@ -259,6 +264,167 @@ impl Default for Client {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// Issue a hyper request and return a streaming `Response` bound to the
+/// caller's URL.
+async fn send_request(
+    hyper_client: &HyperClient,
+    request: http::Request<HyperRequestBody>,
+    url: url::Url,
+) -> Result<Response> {
+    let hyper_response = hyper_client
+        .request(request)
+        .await
+        .map_err(map_send_error)?;
+
+    let status = hyper_response.status();
+    let resp_version = hyper_response.version();
+    let resp_headers = hyper_response.headers().clone();
+    let stream: BoxBytesStream = wrap_incoming(hyper_response.into_body());
+    let body = ResponseBody::streaming(stream);
+
+    Ok(Response::new(status, resp_version, resp_headers, url, body))
+}
+
+/// Wrap a hyper `Incoming` body into a `BoxBytesStream`.
+fn wrap_incoming(incoming: hyper::body::Incoming) -> BoxBytesStream {
+    use futures_core::Stream;
+    use http_body::Body;
+    use std::pin::Pin;
+    use std::task::{Context, Poll};
+
+    struct IncomingStream {
+        inner: hyper::body::Incoming,
+    }
+
+    impl Stream for IncomingStream {
+        type Item = Result<Bytes>;
+
+        fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+            match Pin::new(&mut self.inner).poll_frame(cx) {
+                Poll::Ready(Some(Ok(frame))) => {
+                    if let Ok(data) = frame.into_data() {
+                        Poll::Ready(Some(Ok(data)))
+                    } else {
+                        // Non-data frame (e.g., trailers); skip and poll again.
+                        cx.waker().wake_by_ref();
+                        Poll::Pending
+                    }
+                }
+                Poll::Ready(Some(Err(e))) => Poll::Ready(Some(Err(Error::Body(e.to_string())))),
+                Poll::Ready(None) => Poll::Ready(None),
+                Poll::Pending => Poll::Pending,
+            }
+        }
+    }
+
+    Box::pin(IncomingStream { inner: incoming })
+}
+
+/// Map a hyper-util legacy client error to an eggfetch [`Error`].
+///
+/// When the underlying body reports a streaming error (such as our
+/// write-timeout adapter's [`Error::Timeout`]), the error is wrapped
+/// through hyper as `hyper::Error::User(Body, _)` inside the legacy
+/// client's `SendRequest` variant. Unwrap that path so callers see
+/// the original error directly.
+fn map_send_error(err: hyper_util::client::legacy::Error) -> Error {
+    let mut current: Option<&dyn std::error::Error> = Some(&err);
+    while let Some(e) = current {
+        if let Some(hyper_err) = e.downcast_ref::<hyper::Error>() {
+            let mut src: Option<&dyn std::error::Error> = Some(hyper_err);
+            while let Some(s) = src {
+                if let Some(body_err) = s.downcast_ref::<Error>() {
+                    return body_err.clone();
+                }
+                src = s.source();
+            }
+        }
+        current = e.source();
+    }
+    Error::HyperClient(std::sync::Arc::new(err))
+}
+
+/// Apply `Content-Length` header to known-size request bodies when the
+/// user has not provided one. For known-size bodies with a user-supplied
+/// `Content-Length`, reject mismatches.
+///
+/// Returns an error if the user-supplied `Content-Length` conflicts with
+/// a known-size body.
+fn apply_content_length(
+    headers: Headers,
+    body: &crate::body::RequestBody,
+    user_content_length: Option<u64>,
+) -> Result<Headers> {
+    let known = match body {
+        crate::body::RequestBody::Empty => Some(0u64),
+        crate::body::RequestBody::Bytes(b) => Some(b.len() as u64),
+        crate::body::RequestBody::Stream {
+            length: Some(n), ..
+        } => Some(*n as u64),
+        crate::body::RequestBody::Stream { length: None, .. } => None,
+    };
+
+    if let Some(known_len) = known {
+        if let Some(user_len) = user_content_length {
+            if user_len != known_len {
+                return Err(Error::RequestBuild(format!(
+                    "Content-Length mismatch: user supplied {user_len} but body is {known_len}"
+                )));
+            }
+        } else {
+            // Inject Content-Length.
+            let mut h = headers;
+            h.insert("content-length", &known_len.to_string())?;
+            return Ok(h);
+        }
+    }
+
+    Ok(headers)
+}
+
+/// Apply the read-timeout wrapper to the streaming response body and
+/// attach the pool permit so it is held until the body is consumed or
+/// dropped. The body is consumed and a new body is placed back into the
+/// response.
+///
+/// This function performs the lease transfer by:
+/// 1. Taking the body out of the response.
+/// 2. Replacing the streaming body with a leased variant that owns an
+///    `Arc<PoolGuard>`.
+/// 3. Wrapping the inner stream with a read-timeout adapter if a read
+///    timeout is configured.
+/// 4. Putting the new body back into the response.
+fn apply_read_timeout_and_lease(
+    response: &mut Response,
+    guard: PoolGuard,
+    read_timeout: Option<Duration>,
+) {
+    let body = std::mem::replace(&mut response.body, ResponseBody::buffered(Bytes::new()));
+
+    let new_body = match body {
+        ResponseBody::Streaming { mut stream, .. } => {
+            // Apply read-timeout wrapper if configured.
+            if let Some(dur) = read_timeout {
+                let inner = std::mem::replace(
+                    &mut stream,
+                    Box::pin(futures_util::stream::empty::<Result<Bytes>>()),
+                );
+                stream = read_timeout_stream(inner, dur);
+            }
+            ResponseBody::streaming_with_lease(stream, Arc::new(guard))
+        }
+        // Buffered and Consumed bodies do not need the lease: the
+        // guard is held only for the duration of this function and
+        // dropped here.
+        other => {
+            drop(guard);
+            other
+        }
+    };
+
+    response.set_body(new_body);
 }
 
 /// Builder for configuring a [`Client`].
@@ -285,7 +451,7 @@ impl ClientBuilder {
     ///
     /// # Errors
     ///
-    /// Returns an error if the header name or value is invalid.
+    /// Returns an error if `name` or `value` is not a valid header field.
     pub fn default_header(mut self, name: &str, value: &str) -> Result<Self> {
         self.default_headers.insert(name, value)?;
         Ok(self)
@@ -334,9 +500,6 @@ impl ClientBuilder {
     }
 
     /// Set the default timeout for all requests made by this client.
-    ///
-    /// Request-level timeouts override client-level timeouts on a
-    /// per-field basis.
     #[must_use]
     pub fn timeout(mut self, timeout: Timeout) -> Self {
         self.timeout = Some(timeout);
@@ -398,44 +561,6 @@ fn parse_url(url_str: &str) -> Result<url::Url> {
     }
 }
 
-/// Wrap a `hyper::body::Incoming` into a `BoxBytesStream`.
-///
-/// Adapts the `http_body::Body` implementation into a `futures_core::Stream`
-/// by polling for frames and yielding data chunks as `Result<Bytes>`.
-fn wrap_incoming(incoming: hyper::body::Incoming) -> BoxBytesStream {
-    use futures_core::Stream;
-    use http_body::Body;
-    use std::pin::Pin;
-    use std::task::{Context, Poll};
-
-    struct IncomingStream {
-        inner: hyper::body::Incoming,
-    }
-
-    impl Stream for IncomingStream {
-        type Item = Result<Bytes>;
-
-        fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-            match Pin::new(&mut self.inner).poll_frame(cx) {
-                Poll::Ready(Some(Ok(frame))) => {
-                    if let Ok(data) = frame.into_data() {
-                        Poll::Ready(Some(Ok(data)))
-                    } else {
-                        // Non-data frame (e.g., trailers); skip and poll again.
-                        cx.waker().wake_by_ref();
-                        Poll::Pending
-                    }
-                }
-                Poll::Ready(Some(Err(e))) => Poll::Ready(Some(Err(Error::Body(e.to_string())))),
-                Poll::Ready(None) => Poll::Ready(None),
-                Poll::Pending => Poll::Pending,
-            }
-        }
-    }
-
-    Box::pin(IncomingStream { inner: incoming })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -478,5 +603,57 @@ mod tests {
         let builder = client.get("https://example.com").unwrap();
         let req = builder.build().unwrap();
         assert_eq!(*req.method(), Method::GET);
+    }
+
+    #[test]
+    fn apply_content_length_empty_body() {
+        let headers = Headers::new();
+        let body = crate::body::RequestBody::Empty;
+        let out = apply_content_length(headers, &body, None).unwrap();
+        assert_eq!(out.get("content-length").unwrap().to_str().unwrap(), "0");
+    }
+
+    #[test]
+    fn apply_content_length_bytes_body() {
+        let headers = Headers::new();
+        let body = crate::body::RequestBody::from(Bytes::from("hello"));
+        let out = apply_content_length(headers, &body, None).unwrap();
+        assert_eq!(out.get("content-length").unwrap().to_str().unwrap(), "5");
+    }
+
+    #[test]
+    fn apply_content_length_stream_known() {
+        let headers = Headers::new();
+        let stream = futures_util::stream::empty::<Result<Bytes>>();
+        let body = crate::body::RequestBody::from_stream(stream, Some(7));
+        let out = apply_content_length(headers, &body, None).unwrap();
+        assert_eq!(out.get("content-length").unwrap().to_str().unwrap(), "7");
+    }
+
+    #[test]
+    fn apply_content_length_stream_unknown() {
+        let headers = Headers::new();
+        let stream = futures_util::stream::empty::<Result<Bytes>>();
+        let body = crate::body::RequestBody::from_stream(stream, None);
+        let out = apply_content_length(headers, &body, None).unwrap();
+        assert!(out.get("content-length").is_none());
+    }
+
+    #[test]
+    fn apply_content_length_user_matches() {
+        let mut headers = Headers::new();
+        headers.insert("content-length", "5").unwrap();
+        let body = crate::body::RequestBody::from(Bytes::from("hello"));
+        let out = apply_content_length(headers, &body, Some(5)).unwrap();
+        assert_eq!(out.get("content-length").unwrap().to_str().unwrap(), "5");
+    }
+
+    #[test]
+    fn apply_content_length_user_mismatch_errors() {
+        let mut headers = Headers::new();
+        headers.insert("content-length", "10").unwrap();
+        let body = crate::body::RequestBody::from(Bytes::from("hello"));
+        let err = apply_content_length(headers, &body, Some(10)).unwrap_err();
+        assert_eq!(err.kind(), "request_build");
     }
 }

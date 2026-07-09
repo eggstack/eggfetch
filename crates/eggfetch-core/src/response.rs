@@ -28,7 +28,7 @@ pub struct Response {
     version: Version,
     headers: HeaderMap,
     url: Url,
-    body: ResponseBody,
+    pub(crate) body: ResponseBody,
 }
 
 impl std::fmt::Debug for Response {
@@ -59,6 +59,18 @@ impl Response {
             url,
             body,
         }
+    }
+
+    /// Replace the body of this response. Crate-internal: used to attach
+    /// a leased body after pool acquisition.
+    pub(crate) fn set_body(&mut self, body: ResponseBody) {
+        self.body = body;
+    }
+
+    /// Consume the response and return its body.
+    #[allow(dead_code)]
+    pub(crate) fn into_body(self) -> ResponseBody {
+        self.body
     }
 
     /// Returns the HTTP status code.

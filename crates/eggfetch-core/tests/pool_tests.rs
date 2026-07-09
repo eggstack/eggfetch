@@ -292,10 +292,18 @@ async fn test_acquisition_wait() {
         tokio::spawn(async move { client.get(&url).unwrap().send().await })
     };
 
-    let r1 = h1.await.unwrap().unwrap();
-    let r2 = h2.await.unwrap().unwrap();
+    let mut r1 = h1.await.unwrap().unwrap();
     assert!(r1.is_success());
+    // Consume the body so the pool permit is released; the lease on the
+    // response body holds the permit until the body is consumed or
+    // dropped. After consuming, the second request can acquire it.
+    let _ = r1.bytes().await;
+    drop(r1);
+
+    let mut r2 = h2.await.unwrap().unwrap();
     assert!(r2.is_success());
+    let _ = r2.bytes().await;
+    drop(r2);
 
     // With max_connections=1 and a 150ms delay per request, two sequential
     // requests should take at least 250ms (accounting for timing jitter).
@@ -411,10 +419,17 @@ async fn test_pool_metrics_waits() {
         tokio::spawn(async move { client.get(&url).unwrap().send().await })
     };
 
-    let r1 = h1.await.unwrap().unwrap();
-    let r2 = h2.await.unwrap().unwrap();
+    let mut r1 = h1.await.unwrap().unwrap();
     assert!(r1.is_success());
+    // Consume r1's body to release the pool permit; the lease holds
+    // the permit until the body is dropped or consumed.
+    let _ = r1.bytes().await;
+    drop(r1);
+
+    let mut r2 = h2.await.unwrap().unwrap();
     assert!(r2.is_success());
+    let _ = r2.bytes().await;
+    drop(r2);
 
     let elapsed = start.elapsed();
     assert!(
@@ -506,13 +521,63 @@ async fn test_cancelled_waiter_releases_cleanly() {
     // Wait for abort to propagate.
     tokio::time::sleep(Duration::from_millis(10)).await;
 
-    // First request completes, releasing the slot.
-    let r1 = h1.await.unwrap().unwrap();
+    // First request completes; consume its body to release the lease,
+    // then drop the response so the pool permit is freed.
+    let mut r1 = h1.await.unwrap().unwrap();
     assert!(r1.is_success());
+    let _ = r1.bytes().await;
+    drop(r1);
 
     // Third request should succeed — no deadlock from the cancelled waiter.
     let resp = client.get(&url).unwrap().send().await.unwrap();
     assert!(resp.is_success());
+
+    server.shutdown();
+}
+
+/// The pool permit must be held by the response body until the body is
+/// fully consumed or dropped. A streaming response that is held but not
+/// consumed must block subsequent requests that need the same slot.
+#[tokio::test]
+async fn test_streaming_response_holds_permit_until_consumed() {
+    let mut server = TestServer::start(&TestServerConfig {
+        response_delay_ms: 100,
+        ..Default::default()
+    });
+    let url = server.url();
+
+    let client = Client::builder().max_connections(1).build();
+
+    // First request: hold the response body without consuming it.
+    let mut resp1 = client.get(&url).unwrap().send().await.unwrap();
+    let body_stream = resp1.bytes_stream().unwrap();
+
+    // Second request with same slot count must wait until the first
+    // body is consumed or dropped.
+    let start = std::time::Instant::now();
+    let h2 = {
+        let client = client.clone();
+        let url = url.clone();
+        tokio::spawn(async move { client.get(&url).unwrap().send().await })
+    };
+    // Allow the waiter to actually start blocking.
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    assert!(
+        !h2.is_finished(),
+        "second request should be waiting for the permit"
+    );
+
+    // Drop the streaming body, releasing the permit.
+    drop(body_stream);
+    drop(resp1);
+
+    let resp2 = h2.await.unwrap().unwrap();
+    let elapsed = start.elapsed();
+    assert!(
+        elapsed >= std::time::Duration::from_millis(40),
+        "second request should have waited, only {elapsed:?}"
+    );
+    assert!(resp2.is_success());
 
     server.shutdown();
 }

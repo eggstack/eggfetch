@@ -429,7 +429,7 @@ fn error_kind_unsupported() {
 
 #[test]
 fn error_from_io() {
-    let io_err = std::io::Error::other("test");
+    let io_err = std::sync::Arc::new(std::io::Error::other("test"));
     let err: Error = io_err.into();
     assert_eq!(err.kind(), "io");
     assert!(std::error::Error::source(&err).is_some());
@@ -910,7 +910,7 @@ async fn stream_request_body_bytes() {
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
-async fn request_stream_body_fully_buffered_before_send() {
+async fn request_stream_body_sent_as_streaming() {
     let server = TestServer::start(&TestServerConfig {
         consume_body: true,
         ..Default::default()
@@ -925,9 +925,10 @@ async fn request_stream_body_fully_buffered_before_send() {
     let stream = Box::pin(futures_util::stream::iter(chunks));
     let body = RequestBody::from_stream(stream, None);
 
-    // Prove the stream body is fully buffered before hitting the network:
-    // the test server echoes 200 only if it can parse Content-Length and
-    // read the full body. A partial send would fail or produce a short read.
+    // The stream body is sent through hyper's Body impl, not buffered
+    // into a Full<Bytes> before send. The test server echoes 200 only
+    // if it can parse Content-Length and read the full body, proving
+    // every chunk made it on the wire in order.
     let resp = client
         .post(&server.url())
         .unwrap()
@@ -936,6 +937,54 @@ async fn request_stream_body_fully_buffered_before_send() {
         .await
         .unwrap();
     assert_eq!(resp.status().as_u16(), 200);
+}
+
+#[tokio::test]
+async fn request_stream_body_lazy_poll() {
+    // A streaming body whose producer yields one chunk at a time must be
+    // polled lazily by hyper, not eagerly drained up front.
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+
+    let server = TestServer::start(&TestServerConfig {
+        consume_body: true,
+        ..Default::default()
+    });
+    let client = Client::new();
+
+    let polled = Arc::new(AtomicUsize::new(0));
+    let p = polled.clone();
+    let producer = futures_util::stream::unfold(0u32, move |i| {
+        let p = p.clone();
+        async move {
+            if i >= 3 {
+                return None;
+            }
+            p.fetch_add(1, Ordering::SeqCst);
+            // Small async sleep so a poll that tries to drain everything
+            // up front would noticeably stall the send.
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+            Some((Ok(Bytes::from(format!("chunk{i}-"))), i + 1))
+        }
+    });
+    let stream = Box::pin(producer);
+    let body = RequestBody::from_stream(stream, Some(Bytes::from("chunk0-").len() * 3));
+
+    let resp = client
+        .post(&server.url())
+        .unwrap()
+        .body(body)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status().as_u16(), 200);
+    // Producer was polled at least once per chunk; lazy polling means the
+    // producer's per-chunk sleep was observed on the send path.
+    assert!(
+        polled.load(Ordering::SeqCst) >= 3,
+        "expected at least 3 polls, got {}",
+        polled.load(Ordering::SeqCst)
+    );
 }
 
 #[test]

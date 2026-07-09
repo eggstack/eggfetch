@@ -4,7 +4,9 @@ mod test_server;
 
 use std::time::Duration;
 
-use eggfetch_core::{Client, Error, Timeout, TimeoutPhase};
+use bytes::Bytes;
+use eggfetch_core::{Client, Error, RequestBody, Timeout, TimeoutPhase};
+use futures_util::StreamExt;
 use test_server::{TestServer, TestServerConfig};
 
 /// Pool timeout fires when `max_connections=1` saturates and the wait exceeds
@@ -338,9 +340,12 @@ async fn test_pool_timeout_cancellation_safety() {
     h2.abort();
     tokio::time::sleep(Duration::from_millis(10)).await;
 
-    // First request completes, releasing the slot.
-    let r1 = h1.await.unwrap();
-    assert!(r1.is_ok(), "first request should succeed");
+    // First request completes; consume and drop it so the streaming body
+    // releases the pooled connection before we issue the next request.
+    {
+        let mut r1 = h1.await.unwrap().expect("first request should succeed");
+        let _ = r1.bytes().await;
+    }
 
     // Third request should succeed without deadlock.
     let resp = client.get(&url).unwrap().send().await;
@@ -348,6 +353,108 @@ async fn test_pool_timeout_cancellation_safety() {
         resp.is_ok(),
         "third request should succeed after cancellation"
     );
+
+    server.shutdown();
+}
+
+/// Read timeout fires when a chunked response stalls between chunks.
+#[tokio::test]
+async fn test_read_timeout_on_chunked_response_stall() {
+    // Server sends 2 chunks quickly, then stalls 500ms before the 3rd.
+    let mut server = TestServer::start(&TestServerConfig {
+        chunked: true,
+        response_body: Some(b"abcdefghij".to_vec()),
+        chunk_stall_after: Some(2),
+        chunk_stall_ms: 500,
+        ..Default::default()
+    });
+    let url = server.url();
+
+    let client = Client::builder()
+        .timeout(Timeout {
+            read: Some(Duration::from_millis(150)),
+            ..Timeout::default()
+        })
+        .build();
+
+    let mut resp = client.get(&url).unwrap().send().await.unwrap();
+    let mut stream = resp.bytes_stream().unwrap();
+
+    // First two chunks arrive well within the read timeout.
+    for _ in 0..2 {
+        let next = tokio::time::timeout(Duration::from_millis(400), stream.next())
+            .await
+            .expect("early chunks should arrive within the read timeout")
+            .expect("stream should yield chunk")
+            .expect("chunk should be Ok");
+        assert!(!next.is_empty(), "chunk should have data");
+    }
+
+    // The server now stalls before the next chunk; read timeout fires.
+    let next = stream.next().await;
+    match next {
+        Some(Err(Error::Timeout {
+            phase: TimeoutPhase::Read,
+            ..
+        })) => {}
+        other => panic!("expected read timeout error, got: {other:?}"),
+    }
+
+    server.shutdown();
+}
+
+/// Write timeout fires when a streaming request body's producer stalls
+/// between chunks.
+#[tokio::test]
+async fn test_write_timeout_on_request_body_stall() {
+    let mut server = TestServer::start(&TestServerConfig {
+        consume_body: true,
+        ..Default::default()
+    });
+    let url = server.url();
+
+    let client = Client::builder()
+        .timeout(Timeout {
+            write: Some(Duration::from_millis(100)),
+            ..Timeout::default()
+        })
+        .build();
+
+    // Producer yields one chunk quickly, then stalls BEFORE yielding a
+    // second chunk. The server reads the request body, so hyper must
+    // drive the body stream — which gives the write timeout a chance
+    // to fire.
+    let producer = futures_util::stream::unfold(0u32, |i| async move {
+        if i == 0 {
+            tokio::time::sleep(Duration::from_millis(50)).await;
+            Some((Ok(Bytes::from("chunk0")), 1))
+        } else if i == 1 {
+            // Stall past the write timeout.
+            tokio::time::sleep(Duration::from_secs(2)).await;
+            Some((Ok(Bytes::from("chunk1")), 2))
+        } else {
+            Some((Ok(Bytes::from("chunk2")), 3))
+        }
+    });
+    let stream = Box::pin(producer);
+    // With a known Content-Length (17 bytes), hyper MUST read that many
+    // bytes from the body before the server will respond.
+    let body = RequestBody::from_stream(stream, Some(17));
+
+    let result = tokio::time::timeout(
+        Duration::from_secs(3),
+        client.post(&url).unwrap().body(body).send(),
+    )
+    .await
+    .expect("overall send should complete (likely with write timeout)");
+
+    match result {
+        Err(Error::Timeout {
+            phase: TimeoutPhase::Write,
+            ..
+        }) => {}
+        other => panic!("expected write timeout error, got: {other:?}"),
+    }
 
     server.shutdown();
 }

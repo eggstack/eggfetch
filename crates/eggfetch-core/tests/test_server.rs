@@ -22,6 +22,12 @@ pub struct TestServerConfig {
     pub chunked: bool,
     /// Delay between chunked response chunks (ms). 0 = no delay.
     pub chunk_delay_ms: u64,
+    /// After this many chunks have been sent, sleep `chunk_stall_ms`
+    /// milliseconds before the next chunk (only meaningful when
+    /// `chunked` is true).
+    pub chunk_stall_after: Option<usize>,
+    /// Stall duration in ms after `chunk_stall_after` chunks.
+    pub chunk_stall_ms: u64,
 }
 
 impl Default for TestServerConfig {
@@ -33,6 +39,8 @@ impl Default for TestServerConfig {
             response_body: None,
             chunked: false,
             chunk_delay_ms: 0,
+            chunk_stall_after: None,
+            chunk_stall_ms: 0,
         }
     }
 }
@@ -77,6 +85,8 @@ impl TestServer {
         let resp_body = config.response_body.clone();
         let chunked = config.chunked;
         let chunk_delay = config.chunk_delay_ms;
+        let chunk_stall_after = config.chunk_stall_after;
+        let chunk_stall_ms = config.chunk_stall_ms;
 
         let handle = thread::spawn(move || {
             while !sd.load(Ordering::Relaxed) {
@@ -92,7 +102,13 @@ impl TestServer {
                         chunk_delay_ms: chunk_delay,
                     };
                     thread::spawn(move || {
-                        handle_connection(stream, &conn_config, &rs);
+                        handle_connection(
+                            stream,
+                            &conn_config,
+                            chunk_stall_after,
+                            chunk_stall_ms,
+                            &rs,
+                        );
                     });
                 } else if sd.load(Ordering::Relaxed) {
                     break;
@@ -157,6 +173,8 @@ impl Drop for TestServer {
 fn handle_connection(
     stream: std::net::TcpStream,
     config: &ConnectionConfig,
+    chunk_stall_after: Option<usize>,
+    chunk_stall_ms: u64,
     requests_served: &Arc<AtomicUsize>,
 ) {
     stream.set_read_timeout(Some(Duration::from_secs(5))).ok();
@@ -190,7 +208,17 @@ fn handle_connection(
 
         if config.consume_body && content_length > 0 {
             let mut body = vec![0u8; content_length];
-            let _ = std::io::Read::read(&mut reader, &mut body);
+            // Use `take` + `read_exact` semantics by reading in a loop,
+            // honoring the per-call read timeout set on the socket. The
+            // socket timeout (5s) bounds the wait so the test does not
+            // hang forever if the client never finishes sending.
+            let mut total = 0usize;
+            while total < content_length {
+                match std::io::Read::read(&mut reader, &mut body[total..]) {
+                    Ok(0) | Err(_) => break,
+                    Ok(n) => total += n,
+                }
+            }
         }
 
         requests_served.fetch_add(1, Ordering::SeqCst);
@@ -218,9 +246,14 @@ fn handle_connection(
 
             // Send body in 3-byte chunks.
             let chunk_size = 3;
-            for chunk in body.chunks(chunk_size) {
+            for (chunks_sent, chunk) in body.chunks(chunk_size).enumerate() {
                 if config.chunk_delay_ms > 0 {
                     thread::sleep(Duration::from_millis(config.chunk_delay_ms));
+                }
+                if let Some(stall_after) = chunk_stall_after {
+                    if chunks_sent == stall_after && chunk_stall_ms > 0 {
+                        thread::sleep(Duration::from_millis(chunk_stall_ms));
+                    }
                 }
                 let chunk_header = format!("{:x}\r\n", chunk.len());
                 if stream.write_all(chunk_header.as_bytes()).is_err() {
