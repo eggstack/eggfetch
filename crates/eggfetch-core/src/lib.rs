@@ -32,6 +32,7 @@ pub mod headers;
 pub mod pool;
 pub mod request;
 pub mod response;
+pub mod timeout;
 
 pub use body::{RequestBody, ResponseBody};
 pub use client::{Client, ClientBuilder};
@@ -41,3 +42,4 @@ pub use http::Method;
 pub use pool::{Pool, PoolConfig};
 pub use request::{Request, RequestBuilder};
 pub use response::Response;
+pub use timeout::{Timeout, TimeoutBuilder, TimeoutPhase};

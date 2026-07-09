@@ -1,5 +1,7 @@
 //! Error type and result alias for the eggfetch engine.
 
+use crate::timeout::TimeoutPhase;
+
 /// Result alias using [`Error`].
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -64,6 +66,15 @@ pub enum Error {
     /// Connection pool acquisition failed or was cancelled.
     #[error("pool error: {0}")]
     Pool(String),
+
+    /// A timeout elapsed during the specified phase.
+    #[error("{phase} timeout after {elapsed:?}")]
+    Timeout {
+        /// Which phase of the request timed out.
+        phase: TimeoutPhase,
+        /// The duration that was exceeded.
+        elapsed: std::time::Duration,
+    },
 }
 
 impl Error {
@@ -85,6 +96,13 @@ impl Error {
             Self::Io(_) => "io",
             Self::Unsupported(_) => "unsupported",
             Self::Pool(_) => "pool",
+            Self::Timeout { phase, .. } => match phase {
+                crate::timeout::TimeoutPhase::Pool => "timeout_pool",
+                crate::timeout::TimeoutPhase::Connect => "timeout_connect",
+                crate::timeout::TimeoutPhase::Write => "timeout_write",
+                crate::timeout::TimeoutPhase::Read => "timeout_read",
+                crate::timeout::TimeoutPhase::Total => "timeout_total",
+            },
         }
     }
 }

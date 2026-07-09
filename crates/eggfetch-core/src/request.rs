@@ -8,6 +8,7 @@ use crate::client::Client;
 use crate::error::Result;
 use crate::headers::Headers;
 use crate::response::Response;
+use crate::timeout::Timeout;
 
 /// An outgoing HTTP request.
 #[derive(Debug, Clone)]
@@ -17,6 +18,7 @@ pub struct Request {
     headers: Headers,
     body: RequestBody,
     version: Version,
+    timeout: Option<Timeout>,
 }
 
 impl Request {
@@ -28,6 +30,7 @@ impl Request {
             headers: Headers::new(),
             body: RequestBody::default(),
             version: Version::HTTP_11,
+            timeout: None,
         }
     }
 
@@ -76,8 +79,35 @@ impl Request {
         self.version = version;
     }
 
-    pub(crate) fn into_parts(self) -> (http::Method, url::Url, Headers, RequestBody, Version) {
-        (self.method, self.url, self.headers, self.body, self.version)
+    /// Returns the request timeout configuration, if set.
+    #[must_use]
+    pub fn timeout(&self) -> Option<&Timeout> {
+        self.timeout.as_ref()
+    }
+
+    /// Set the request-level timeout.
+    pub fn set_timeout(&mut self, timeout: Option<Timeout>) {
+        self.timeout = timeout;
+    }
+
+    pub(crate) fn into_parts(
+        self,
+    ) -> (
+        http::Method,
+        url::Url,
+        Headers,
+        RequestBody,
+        Version,
+        Option<Timeout>,
+    ) {
+        (
+            self.method,
+            self.url,
+            self.headers,
+            self.body,
+            self.version,
+            self.timeout,
+        )
     }
 }
 
@@ -88,6 +118,7 @@ pub struct RequestBuilder {
     url: url::Url,
     headers: Headers,
     body: RequestBody,
+    timeout: Option<Timeout>,
     error: Option<crate::Error>,
 }
 
@@ -100,6 +131,7 @@ impl RequestBuilder {
             url,
             headers: Headers::new(),
             body: RequestBody::default(),
+            timeout: None,
             error: None,
         }
     }
@@ -140,6 +172,17 @@ impl RequestBuilder {
         self.body(RequestBody::Bytes(data.into()))
     }
 
+    /// Set the timeout for this specific request.
+    ///
+    /// When set, this overrides the client-level timeout on a per-field
+    /// basis: only fields present here replace the corresponding
+    /// client-level fields.
+    #[must_use]
+    pub fn timeout(mut self, timeout: Timeout) -> Self {
+        self.timeout = Some(timeout);
+        self
+    }
+
     /// Build the request without sending it.
     ///
     /// # Errors
@@ -153,6 +196,7 @@ impl RequestBuilder {
         let mut req = Request::new(self.method, self.url);
         req.headers = self.headers;
         req.body = self.body;
+        req.timeout = self.timeout;
         Ok(req)
     }
 

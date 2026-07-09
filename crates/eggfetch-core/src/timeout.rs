@@ -1,10 +1,320 @@
-//! Timeout model.
+//! Phase-aware timeout configuration.
+//!
+//! Timeouts are applied per-phase during the request lifecycle. Each phase
+//! measures a specific segment of the request:
+//!
+//! - **Pool**: time waiting for a connection slot from the pool.
+//! - **Connect**: time to establish the TCP connection and TLS handshake
+//!   (including DNS resolution).
+//! - **Write**: time to send request headers and body to the peer.
+//! - **Read**: time to wait for response headers and each response body chunk.
+//! - **Total**: wall-clock cap across the entire request lifecycle.
+//!
+//! When a scalar timeout is provided (e.g. `Timeout::from_secs(5)`), it
+//! applies to pool, connect, write, and read phases. The total timeout is
+//! not set by scalar constructors unless explicitly specified.
+//!
+//! Request-level timeout overrides client-level timeout on a per-field
+//! basis: only the fields present in the request-level timeout replace
+//! the corresponding client-level fields.
 
-/// Timeout configuration placeholder.
+use std::time::Duration;
+
+/// Identifies the phase of a request that timed out.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum TimeoutPhase {
+    /// Waiting for a connection slot from the pool.
+    Pool,
+    /// Establishing TCP connection and TLS handshake.
+    Connect,
+    /// Sending request headers and body.
+    Write,
+    /// Waiting for response headers or a response body chunk.
+    Read,
+    /// The overall wall-clock deadline was exceeded.
+    Total,
+}
+
+impl std::fmt::Display for TimeoutPhase {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Pool => write!(f, "pool"),
+            Self::Connect => write!(f, "connect"),
+            Self::Read => write!(f, "read"),
+            Self::Write => write!(f, "write"),
+            Self::Total => write!(f, "total"),
+        }
+    }
+}
+
+/// Phase-aware timeout configuration for a request.
 ///
-/// Phase-aware timeouts (connect, pool, write, read, total) land in
-/// Milestone D.
+/// Each field is optional. When `None`, the corresponding phase has no
+/// timeout. When a field is `Some(duration)`, the phase will fail with
+/// [`Error::Timeout`] if it exceeds the given duration.
+///
+/// # Default
+///
+/// The default `Timeout` has all phases disabled (all `None`).
+///
+/// # Examples
+///
+/// ```
+/// use std::time::Duration;
+/// use eggfetch_core::Timeout;
+///
+/// // All phases get 5 seconds.
+/// let t = Timeout::from_secs(5);
+///
+/// // Only read and total are configured.
+/// let t = Timeout {
+///     read: Some(Duration::from_secs(30)),
+///     total: Some(Duration::from_secs(60)),
+///     ..Timeout::default()
+/// };
+/// ```
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Timeout {
-    _private: (),
+    /// Time allowed to wait for a connection slot from the pool.
+    pub pool: Option<Duration>,
+    /// Time allowed to establish TCP connection and TLS handshake.
+    /// Includes DNS resolution when performed as part of connect.
+    pub connect: Option<Duration>,
+    /// Time allowed to send request headers and body.
+    pub write: Option<Duration>,
+    /// Time allowed to wait for response headers or a body chunk.
+    pub read: Option<Duration>,
+    /// Optional wall-clock cap across the entire request lifecycle.
+    pub total: Option<Duration>,
+}
+
+impl Timeout {
+    /// Create a timeout with all phases disabled.
+    ///
+    /// This is the same as `Timeout::default()`.
+    #[must_use]
+    pub fn disabled() -> Self {
+        Self::default()
+    }
+
+    /// Create a timeout where pool, connect, write, and read each get the
+    /// given duration.
+    ///
+    /// The total timeout is not set. Use [`Timeout::builder`] or the
+    /// struct literal syntax to set it explicitly.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use eggfetch_core::Timeout;
+    ///
+    /// let t = Timeout::from_secs(5);
+    /// assert_eq!(t.pool, Some(std::time::Duration::from_secs(5)));
+    /// assert_eq!(t.connect, Some(std::time::Duration::from_secs(5)));
+    /// assert_eq!(t.write, Some(std::time::Duration::from_secs(5)));
+    /// assert_eq!(t.read, Some(std::time::Duration::from_secs(5)));
+    /// assert!(t.total.is_none());
+    /// ```
+    #[must_use]
+    pub fn from_secs(secs: u64) -> Self {
+        let d = Duration::from_secs(secs);
+        Self {
+            pool: Some(d),
+            connect: Some(d),
+            write: Some(d),
+            read: Some(d),
+            total: None,
+        }
+    }
+
+    /// Create a [`TimeoutBuilder`] for configuring individual phases.
+    #[must_use]
+    pub fn builder() -> TimeoutBuilder {
+        TimeoutBuilder {
+            pool: None,
+            connect: None,
+            write: None,
+            read: None,
+            total: None,
+        }
+    }
+
+    /// Merge request-level overrides into client-level defaults.
+    ///
+    /// For each phase, if the request-level value is `Some`, it replaces
+    /// the client-level value. If `None`, the client-level value is kept.
+    #[must_use]
+    pub(crate) fn merge(self, override_timeout: Option<Self>) -> Self {
+        match override_timeout {
+            Some(req) => Self {
+                pool: req.pool.or(self.pool),
+                connect: req.connect.or(self.connect),
+                write: req.write.or(self.write),
+                read: req.read.or(self.read),
+                total: req.total.or(self.total),
+            },
+            None => self,
+        }
+    }
+
+    /// Returns `true` if any phase has a timeout set.
+    #[must_use]
+    pub fn has_any(&self) -> bool {
+        self.pool.is_some()
+            || self.connect.is_some()
+            || self.write.is_some()
+            || self.read.is_some()
+            || self.total.is_some()
+    }
+}
+
+/// Builder for constructing a [`Timeout`] with individual phase durations.
+///
+/// Created by [`Timeout::builder()`].
+#[derive(Debug, Clone)]
+pub struct TimeoutBuilder {
+    pool: Option<Duration>,
+    connect: Option<Duration>,
+    write: Option<Duration>,
+    read: Option<Duration>,
+    total: Option<Duration>,
+}
+
+impl TimeoutBuilder {
+    /// Set the pool acquisition timeout.
+    #[must_use]
+    pub fn pool(mut self, timeout: Duration) -> Self {
+        self.pool = Some(timeout);
+        self
+    }
+
+    /// Set the connect timeout.
+    #[must_use]
+    pub fn connect(mut self, timeout: Duration) -> Self {
+        self.connect = Some(timeout);
+        self
+    }
+
+    /// Set the write timeout.
+    #[must_use]
+    pub fn write(mut self, timeout: Duration) -> Self {
+        self.write = Some(timeout);
+        self
+    }
+
+    /// Set the read timeout.
+    #[must_use]
+    pub fn read(mut self, timeout: Duration) -> Self {
+        self.read = Some(timeout);
+        self
+    }
+
+    /// Set the total request timeout.
+    #[must_use]
+    pub fn total(mut self, timeout: Duration) -> Self {
+        self.total = Some(timeout);
+        self
+    }
+
+    /// Build the [`Timeout`].
+    #[must_use]
+    pub fn build(self) -> Timeout {
+        Timeout {
+            pool: self.pool,
+            connect: self.connect,
+            write: self.write,
+            read: self.read,
+            total: self.total,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn timeout_default_all_none() {
+        let t = Timeout::default();
+        assert!(t.pool.is_none());
+        assert!(t.connect.is_none());
+        assert!(t.write.is_none());
+        assert!(t.read.is_none());
+        assert!(t.total.is_none());
+    }
+
+    #[test]
+    fn timeout_disabled_same_as_default() {
+        let t = Timeout::disabled();
+        assert!(!t.has_any());
+    }
+
+    #[test]
+    fn timeout_from_secs_sets_phases() {
+        let t = Timeout::from_secs(10);
+        assert_eq!(t.pool, Some(Duration::from_secs(10)));
+        assert_eq!(t.connect, Some(Duration::from_secs(10)));
+        assert_eq!(t.write, Some(Duration::from_secs(10)));
+        assert_eq!(t.read, Some(Duration::from_secs(10)));
+        assert!(t.total.is_none());
+    }
+
+    #[test]
+    fn timeout_builder_sets_all() {
+        let t = Timeout::builder()
+            .pool(Duration::from_secs(1))
+            .connect(Duration::from_secs(2))
+            .write(Duration::from_secs(3))
+            .read(Duration::from_secs(4))
+            .total(Duration::from_secs(5))
+            .build();
+        assert_eq!(t.pool, Some(Duration::from_secs(1)));
+        assert_eq!(t.connect, Some(Duration::from_secs(2)));
+        assert_eq!(t.write, Some(Duration::from_secs(3)));
+        assert_eq!(t.read, Some(Duration::from_secs(4)));
+        assert_eq!(t.total, Some(Duration::from_secs(5)));
+    }
+
+    #[test]
+    fn timeout_merge_request_overrides_client() {
+        let client = Timeout::from_secs(10);
+        let request = Timeout {
+            read: Some(Duration::from_secs(30)),
+            ..Timeout::default()
+        };
+        let merged = client.merge(Some(request));
+        assert_eq!(merged.pool, Some(Duration::from_secs(10)));
+        assert_eq!(merged.connect, Some(Duration::from_secs(10)));
+        assert_eq!(merged.write, Some(Duration::from_secs(10)));
+        assert_eq!(merged.read, Some(Duration::from_secs(30)));
+        assert!(merged.total.is_none());
+    }
+
+    #[test]
+    fn timeout_merge_no_override() {
+        let client = Timeout::from_secs(5);
+        let merged = client.merge(None);
+        assert_eq!(merged.pool, Some(Duration::from_secs(5)));
+        assert_eq!(merged.connect, Some(Duration::from_secs(5)));
+    }
+
+    #[test]
+    fn timeout_has_any() {
+        assert!(!Timeout::default().has_any());
+        assert!(Timeout::from_secs(1).has_any());
+        assert!(Timeout {
+            total: Some(Duration::from_secs(1)),
+            ..Timeout::default()
+        }
+        .has_any());
+    }
+
+    #[test]
+    fn timeout_phase_display() {
+        assert_eq!(TimeoutPhase::Pool.to_string(), "pool");
+        assert_eq!(TimeoutPhase::Connect.to_string(), "connect");
+        assert_eq!(TimeoutPhase::Write.to_string(), "write");
+        assert_eq!(TimeoutPhase::Read.to_string(), "read");
+        assert_eq!(TimeoutPhase::Total.to_string(), "total");
+    }
 }

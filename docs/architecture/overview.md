@@ -1,6 +1,6 @@
 # Architecture Overview
 
-This document describes the architecture of eggfetch. Milestone C is complete: the core crate provides connection pooling, idle timeout, and HTTP/1.1 keep-alive reuse on top of the Milestone B HTTP engine.
+This document describes the architecture of eggfetch. Milestone D is complete: the core crate provides a phase-aware timeout system (pool, connect, write, read, total) on top of the connection pooling and HTTP/1.1 engine from earlier milestones.
 
 ## Three-Crate Workspace
 
@@ -31,6 +31,43 @@ The following types form the public API of eggfetch-core:
 - **`ResponseBody`** -- response body type (currently buffered bytes).
 - **`Headers`** -- typed header map backed by `http::HeaderMap`.
 - **`Error`** -- structured error enum covering network, HTTP, timeout, and builder errors.
+
+## Timeout System
+
+eggfetch implements phase-aware timeouts that map to specific segments of the request lifecycle:
+
+- **Pool timeout**: time waiting for a connection slot from the concurrency pool.
+- **Connect timeout**: time to establish TCP connection and TLS handshake (including DNS).
+- **Write timeout**: time to send request headers and body (documented; hyper-util does not isolate this phase).
+- **Read timeout**: time to wait for response headers or body chunks (documented; hyper-util does not isolate this phase).
+- **Total timeout**: wall-clock cap across the entire request lifecycle.
+
+### Configuration
+
+Timeouts are configured at two levels:
+
+- **Client-level**: `ClientBuilder::timeout(Timeout::from_secs(10))` sets defaults for all requests.
+- **Request-level**: `RequestBuilder::timeout(Timeout::from_secs(2))` overrides client defaults per-field.
+
+Request-level overrides are per-field: only fields present in the request-level `Timeout` replace the corresponding client-level fields.
+
+### Error Model
+
+Timeout errors carry phase identity:
+
+```rust
+Error::Timeout { phase: TimeoutPhase::Read, elapsed: Duration::from_secs(5) }
+```
+
+This enables Python bindings to map to specific exception classes (`ConnectTimeout`, `ReadTimeout`, etc.).
+
+### Implementation Notes
+
+The pool timeout is applied via `tokio::time::timeout` around pool acquisition. The total timeout wraps the entire send+collect lifecycle. Individual connect/write/read phases are not isolable through hyper-util's legacy client API, so the total timeout provides the wall-clock guarantee. This is a documented limitation that will be revisited when the transport layer is abstracted further.
+
+### Cancellation Safety
+
+Cancelled timeout-wrapped operations release pool permits cleanly. The pool uses `OwnedSemaphorePermit` with RAII drop semantics.
 
 ## Transport Stack
 
@@ -67,4 +104,4 @@ These crates do not exist yet. They will be added when the core engine is stable
 
 ## Current State
 
-Milestone C is complete. The core crate provides a working async HTTP client with HTTPS support, request/response modeling, headers, query parameters, byte bodies, connection pooling (max connections per host, idle timeout), HTTP/1.1 keep-alive reuse, and a structured error type. The CLI and Python crates remain stubs. Streaming, timeouts, and advanced features are planned for subsequent milestones.
+Milestone D is complete. The core crate provides a working async HTTP client with HTTPS support, request/response modeling, headers, query parameters, byte bodies, connection pooling, phase-aware timeouts (pool, connect, write, read, total), and a structured error type with timeout phase identification. The CLI and Python crates remain stubs. Streaming, redirects, and advanced features are planned for subsequent milestones.

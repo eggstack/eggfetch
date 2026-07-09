@@ -13,6 +13,7 @@ use crate::pool::{Pool, PoolConfig, PoolMetrics};
 use crate::request::Request;
 use crate::request::RequestBuilder;
 use crate::response::Response;
+use crate::timeout::{Timeout, TimeoutPhase};
 
 type Connector = hyper_rustls::HttpsConnector<hyper_util::client::legacy::connect::HttpConnector>;
 type HyperClient = hyper_util::client::legacy::Client<Connector, http_body_util::Full<Bytes>>;
@@ -22,6 +23,7 @@ type HyperClient = hyper_util::client::legacy::Client<Connector, http_body_util:
 struct ClientConfig {
     default_headers: Headers,
     user_agent: Option<String>,
+    timeout: Option<Timeout>,
 }
 
 /// Async HTTP client.
@@ -142,9 +144,15 @@ impl Client {
     /// # Errors
     ///
     /// Returns an error if the request fails at any stage (connect, TLS,
-    /// protocol, body).
+    /// protocol, body) or if a timeout elapses.
     pub(crate) async fn send(&self, request: Request) -> Result<Response> {
-        let (method, url, headers, body, version) = request.into_parts();
+        let (method, url, headers, body, version, request_timeout) = request.into_parts();
+
+        // Merge client-level and request-level timeouts.
+        let timeout = match self.inner.config.timeout {
+            Some(client_timeout) => client_timeout.merge(request_timeout),
+            None => request_timeout.unwrap_or_default(),
+        };
 
         let uri: http::Uri = url
             .as_str()
@@ -154,8 +162,21 @@ impl Client {
         // Extract host from URL for pool slot acquisition.
         let host = url.host_str().map(str::to_owned);
 
-        // Acquire a pool slot. The guard is held for the duration of the request.
-        let _guard = self.inner.pool.acquire(host.as_deref()).await;
+        // Acquire a pool slot, respecting pool timeout.
+        let _guard = match timeout.pool {
+            Some(dur) => {
+                match tokio::time::timeout(dur, self.inner.pool.acquire(host.as_deref())).await {
+                    Ok(guard) => guard,
+                    Err(_) => {
+                        return Err(Error::Timeout {
+                            phase: TimeoutPhase::Pool,
+                            elapsed: dur,
+                        });
+                    }
+                }
+            }
+            None => self.inner.pool.acquire(host.as_deref()).await,
+        };
 
         let mut http_request = http::Request::builder()
             .method(method)
@@ -185,31 +206,53 @@ impl Client {
             .body(body.into_hyper_body())
             .map_err(|e| Error::RequestBuild(e.to_string()))?;
 
-        let hyper_response = self
-            .inner
-            .hyper_client
-            .request(hyper_request)
-            .await
-            .map_err(Error::HyperClient)?;
+        // Send request and collect response. For buffered requests, we apply
+        // the total timeout across the entire send+collect lifecycle.
+        //
+        // Phase-specific connect/write/read timeouts are not individually
+        // isolable through hyper-util's legacy client API. The total timeout
+        // provides the wall-clock guarantee; individual phase errors would
+        // surface as hyper I/O errors without phase identity. This is a
+        // documented limitation of the current implementation.
+        //
+        // The pool timeout is applied separately above.
+        let send_and_collect = async {
+            let hyper_response = self
+                .inner
+                .hyper_client
+                .request(hyper_request)
+                .await
+                .map_err(Error::HyperClient)?;
 
-        let status = hyper_response.status();
-        let resp_version = hyper_response.version();
-        let resp_headers = hyper_response.headers().clone();
-        let resp_url = url;
+            let status = hyper_response.status();
+            let resp_version = hyper_response.version();
+            let resp_headers = hyper_response.headers().clone();
+            let resp_url = url;
 
-        let collected = http_body_util::BodyExt::collect(hyper_response.into_body())
-            .await
-            .map_err(|e| Error::Body(e.to_string()))?;
+            let collected = http_body_util::BodyExt::collect(hyper_response.into_body())
+                .await
+                .map_err(|e| Error::Body(e.to_string()))?;
 
-        let response_body = ResponseBody::from_bytes(collected.to_bytes());
+            let response_body = ResponseBody::from_bytes(collected.to_bytes());
 
-        Ok(Response::new(
-            status,
-            resp_version,
-            resp_headers,
-            resp_url,
-            response_body,
-        ))
+            Ok::<Response, Error>(Response::new(
+                status,
+                resp_version,
+                resp_headers,
+                resp_url,
+                response_body,
+            ))
+        };
+
+        match timeout.total {
+            Some(dur) => tokio::time::timeout(dur, send_and_collect)
+                .await
+                .map_err(|_| Error::Timeout {
+                    phase: TimeoutPhase::Total,
+                    elapsed: dur,
+                })?,
+            None => send_and_collect.await,
+        }
     }
 }
 
@@ -224,6 +267,7 @@ pub struct ClientBuilder {
     default_headers: Headers,
     user_agent: Option<String>,
     pool_config: PoolConfig,
+    timeout: Option<Timeout>,
 }
 
 impl ClientBuilder {
@@ -234,6 +278,7 @@ impl ClientBuilder {
             default_headers: Headers::new(),
             user_agent: None,
             pool_config: PoolConfig::default(),
+            timeout: None,
         }
     }
 
@@ -289,6 +334,16 @@ impl ClientBuilder {
         self
     }
 
+    /// Set the default timeout for all requests made by this client.
+    ///
+    /// Request-level timeouts override client-level timeouts on a
+    /// per-field basis.
+    #[must_use]
+    pub fn timeout(mut self, timeout: Timeout) -> Self {
+        self.timeout = Some(timeout);
+        self
+    }
+
     /// Build the client.
     ///
     /// # Panics
@@ -313,6 +368,7 @@ impl ClientBuilder {
         let config = ClientConfig {
             default_headers: self.default_headers,
             user_agent: self.user_agent,
+            timeout: self.timeout,
         };
 
         let pool = Pool::new(self.pool_config);

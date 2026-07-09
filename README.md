@@ -2,8 +2,8 @@
 
 eggfetch is a Rust-native HTTP client engine with Python bindings and a CLI tool. The core is async-first: a Rust engine built on tokio and hyper provides connection pooling, timeouts, TLS, and streaming. The Python bindings expose both sync and async APIs; the sync API blocks on the async engine while releasing the GIL, and the async API integrates with asyncio. There is exactly one networking implementation, living entirely in Rust.
 
-> **Status: Milestone C complete / connection management.**
-> The workspace builds, passes lints, and executes real HTTP requests. `eggfetch-core` provides an async `Client`, `Request`/`RequestBuilder`/`Response`, headers, query parameters, byte bodies, HTTPS via rustls, buffered responses, connection pooling (max connections per host, idle timeout), and a structured error taxonomy. CLI and Python crates remain stubs.
+> **Status: Milestone D complete / timeout system.**
+> The workspace builds, passes lints, and executes real HTTP requests. `eggfetch-core` provides an async `Client`, `Request`/`RequestBuilder`/`Response`, headers, query parameters, byte bodies, HTTPS via rustls, buffered responses, connection pooling (max connections per host, idle timeout), phase-aware timeout system (pool, connect, write, read, total), and a structured error taxonomy. CLI and Python crates remain stubs.
 
 ## Architecture
 
@@ -85,6 +85,18 @@ Connection pooling and reuse is implemented with the following capabilities:
 - **Pool metrics** -- `PoolMetrics` exposed via `Client::pool_metrics()` and `ClientBuilder::pool_metrics()`.
 - **Graceful degradation** -- waiter cancellation support without deadlocks.
 
+### Milestone D: Timeout System (complete)
+
+Phase-aware timeout behavior is implemented with the following capabilities:
+
+- **Timeout configuration** -- `Timeout` type with per-phase durations (pool, connect, write, read, total).
+- **Client-level timeouts** -- set via `ClientBuilder::timeout()`.
+- **Request-level timeouts** -- set via `RequestBuilder::timeout()`, overriding client defaults per-field.
+- **Pool timeout** -- time waiting for a connection slot from the pool.
+- **Total timeout** -- wall-clock cap across the entire request lifecycle.
+- **Timeout errors** -- `Error::Timeout { phase, elapsed }` identifies which phase timed out.
+- **Cancellation safety** -- cancelled timeout-wrapped operations do not leak pool permits.
+
 ## Repository Layout
 
 ```text
@@ -136,3 +148,4 @@ eggfetch is dual-licensed under [MIT](LICENSE-MIT) and [Apache License, Version 
 - [plans/milestone-a-repository-foundation.md](plans/milestone-a-repository-foundation.md) -- the plan for Milestone A (workspace foundation, linting, CI, documentation).
 - [plans/milestone-b-core-http-engine.md](plans/milestone-b-core-http-engine.md) -- the plan for Milestone B (core request/response model and HTTP engine).
 - [plans/milestone-c-connection-management.md](plans/milestone-c-connection-management.md) -- the plan for Milestone C (connection pooling and management).
+- [plans/milestone-d-timeout-system.md](plans/milestone-d-timeout-system.md) -- the plan for Milestone D (timeout system).

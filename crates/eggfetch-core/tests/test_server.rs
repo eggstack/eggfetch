@@ -30,6 +30,7 @@ impl Default for TestServerConfig {
 /// A running local TCP test server.
 pub struct TestServer {
     port: u16,
+    #[allow(dead_code)]
     connections_accepted: Arc<AtomicUsize>,
     #[allow(dead_code)]
     requests_served: Arc<AtomicUsize>,
@@ -103,6 +104,7 @@ impl TestServer {
     }
 
     /// Returns the number of TCP connections accepted so far.
+    #[allow(dead_code)]
     #[must_use]
     pub fn connections_accepted(&self) -> usize {
         self.connections_accepted.load(Ordering::SeqCst)
