@@ -1,0 +1,27 @@
+[package]
+name = "eggfetch-core"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+description = "Async-first HTTP client engine for eggfetch"
+
+[lints]
+workspace = true
+
+[features]
+default = ["http1", "tls-rustls"]
+http1 = []
+http2 = []
+tls-rustls = []
+json = []
+compression-gzip = []
+compression-brotli = []
+compression-zstd = []
+cookies = []
+proxy = []
+tracing = []
+
+[dependencies]
