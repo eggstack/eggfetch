@@ -2,8 +2,8 @@
 
 eggfetch is a Rust-native HTTP client engine with Python bindings and a CLI tool. The core is async-first: a Rust engine built on tokio and hyper provides connection pooling, timeouts, TLS, and streaming. The Python bindings expose both sync and async APIs; the sync API blocks on the async engine while releasing the GIL, and the async API integrates with asyncio. There is exactly one networking implementation, living entirely in Rust.
 
-> **Status: early development / Milestone A / skeleton.**
-> The workspace builds and passes lints, but the crates are stubs. No code makes network calls. No HTTP requests are executed. The type shapes are placeholders that will be filled in by later milestones.
+> **Status: Milestone B complete / core HTTP engine.**
+> The workspace builds, passes lints, and executes real HTTP requests. `eggfetch-core` provides an async `Client`, `Request`/`RequestBuilder`/`Response`, headers, query parameters, byte bodies, HTTPS via rustls, buffered responses, and an error taxonomy. CLI and Python crates remain stubs.
 
 ## Architecture
 
@@ -49,13 +49,31 @@ async with httpx.AsyncClient() as client:
 The Rust API remains idiomatic rather than Python-shaped:
 
 ```rust
-let client = eggfetch_core::Client::new();
+use eggfetch_core::Client;
+
+let client = Client::new();
 let response = client
-    .get("https://example.com")
+    .get("https://example.com")?
     .header("user-agent", "eggfetch")
+    .query("q", "test")
     .send()
     .await?;
+
+assert!(response.status().is_success());
+let bytes = response.bytes()?;
 ```
+
+### Milestone B: Core HTTP Engine (complete)
+
+The core HTTP engine is implemented with the following capabilities:
+
+- **Client / ClientBuilder** -- configurable async HTTP client with builder pattern.
+- **Request / RequestBuilder** -- method, URL, headers, query parameters, and body assembly.
+- **Response / ResponseBody** -- status, headers, and buffered byte body access.
+- **RequestBody** -- supports byte buffers.
+- **Headers** -- typed header map backed by `http::HeaderMap`.
+- **HTTPS** -- TLS via rustls (default feature `tls-rustls`).
+- **Error taxonomy** -- structured `Error` enum covering network, HTTP, timeout, and builder errors.
 
 ## Repository Layout
 
@@ -72,7 +90,7 @@ rustfmt.toml             max_width 100
 .clippy.toml             pedantic clippy config
 .github/workflows/ci.yml CI pipeline
 crates/
-  eggfetch-core/         async HTTP engine (stub)
+  eggfetch-core/         async HTTP engine (Milestone B complete)
   eggfetch-cli/          CLI binary (stub)
   eggfetch-python/       Python bindings (stub)
 docs/
@@ -84,7 +102,7 @@ plans/
 
 ## Development
 
-The workspace builds with no external dependencies beyond the standard library. To get started:
+The workspace requires network dependencies (hyper, tokio, rustls, etc.) for eggfetch-core. To get started:
 
 ```sh
 cargo check --workspace
@@ -105,4 +123,5 @@ eggfetch is dual-licensed under [MIT](LICENSE-MIT) and [Apache License, Version 
 ## Further Reading
 
 - [plans/ROADMAP.md](plans/ROADMAP.md) -- full project roadmap, milestone sequence, correctness priorities, and release criteria.
-- [plans/milestone-a-repository-foundation.md](plans/milestone-a-repository-foundation.md) -- the plan for this milestone (workspace foundation, linting, CI, documentation).
+- [plans/milestone-a-repository-foundation.md](plans/milestone-a-repository-foundation.md) -- the plan for Milestone A (workspace foundation, linting, CI, documentation).
+- [plans/milestone-b-core-http-engine.md](plans/milestone-b-core-http-engine.md) -- the plan for Milestone B (core request/response model and HTTP engine).

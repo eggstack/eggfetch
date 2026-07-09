@@ -4,31 +4,22 @@ eggfetch follows a conservative dependency policy. Every dependency must have an
 
 ## Current Posture
 
-At Milestone A, eggfetch-core has zero external dependencies. The workspace compiles with only the Rust standard library. This is intentional: the skeleton exists to establish crate boundaries and lint configuration before networking code arrives.
-
-## Expected Early Dependencies
-
-When Milestone B begins (core request/response model and minimal HTTP engine), eggfetch-core will gain:
+At Milestone B, eggfetch-core has the following direct dependencies:
 
 - **bytes** -- efficient byte buffer types for request and response bodies.
 - **http** -- standard HTTP types (`Method`, `StatusCode`, `HeaderMap`, `Uri`).
-- **url** -- URI parsing and query string serialization.
-- **thiserror** or a handwritten error type -- ergonomic error definitions.
-
-These are small, well-audited crates with minimal transitive trees. They are the minimum required to model HTTP requests and responses correctly.
-
-## Expected Milestone B/C Dependencies
-
-When connection management and the HTTP engine land:
-
-- **tokio** -- async runtime. Required by hyper and the core async model.
-- **hyper** -- HTTP/1.1 and HTTP/2 protocol implementation.
-- **hyper-util** -- high-level client utilities built on hyper.
+- **http-body** -- body trait abstraction.
 - **http-body-util** -- body combinators for http-body.
-- **rustls** -- TLS implementation. Preferred over native TLS for portability and auditability.
-- **tokio-rustls** -- async TLS integration for tokio + rustls.
+- **hyper** -- HTTP/1.1 protocol implementation.
+- **hyper-util** -- high-level client utilities built on hyper.
+- **hyper-rustls** -- TLS integration via rustls.
+- **rustls** -- memory-safe TLS implementation.
+- **tokio** -- async runtime.
+- **tokio-rustls** -- async TLS streams for tokio + rustls.
+- **url** -- URI parsing and query string serialization.
+- **thiserror** -- ergonomic error definitions.
 
-These are the standard building blocks for a Rust HTTP client. They are widely used, actively maintained, and have small dependency trees relative to their functionality.
+These are small, well-audited crates with minimal transitive trees. They are the minimum required to build a working HTTPS client.
 
 ## Optional Later Dependencies
 

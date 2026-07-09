@@ -1,6 +1,6 @@
 # Feature Flags
 
-eggfetch-core uses feature flags to let users opt into capabilities they need. The default feature set is minimal. None of these features are implemented yet; they represent intended capability.
+eggfetch-core uses feature flags to let users opt into capabilities they need. The default feature set is minimal.
 
 ## Current Features
 
@@ -33,9 +33,8 @@ The defaults enable HTTP/1.1 and Rustls TLS. This is the minimal set required fo
 
 ### http1
 
-**Status:** planned, not implemented.
-**Milestone:** B (core request/response model).
-Enables HTTP/1.1 support. This is expected to be the primary protocol for the MVP.
+**Status:** implemented (Milestone B).
+Enables HTTP/1.1 support. This is the primary protocol for the MVP, backed by hyper.
 
 ### http2
 
@@ -45,9 +44,8 @@ Enables HTTP/2 support. HTTP/2 is a later expansion, not an MVP requirement.
 
 ### tls-rustls
 
-**Status:** planned, not implemented.
-**Milestone:** B (core request/response model).
-Enables TLS via Rustls. This is preferred over native TLS for portability and auditability. The feature gates the rustls and tokio-rustls dependencies.
+**Status:** implemented (Milestone B).
+Enables TLS via Rustls. This is preferred over native TLS for portability and auditability. The feature gates the rustls, tokio-rustls, and hyper-rustls dependencies.
 
 ### json
 

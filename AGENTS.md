@@ -6,8 +6,9 @@ This file contains guidance for AI coding agents working in the eggfetch reposit
 
 eggfetch follows a milestone-driven development sequence: A through M. Each milestone is a handoff boundary. Before starting work, read `plans/ROADMAP.md` and the relevant milestone plan in `plans/`. The milestones are:
 
-- A: Repository and workspace foundation (current)
-- B: Core request/response model and minimal HTTP engine
+- A: Repository and workspace foundation (complete)
+- B: Core request/response model and minimal HTTP engine (complete)
+- C: Connection management (current)
 - C: Connection management
 - D: Timeout system
 - E: Streaming foundation

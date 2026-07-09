@@ -1,12 +1,12 @@
 # Architecture Overview
 
-This document describes the intended architecture of eggfetch. At the time of writing (Milestone A), the crates are stubs. This is a forward-looking design doc; the actual networking engine lands in later milestones.
+This document describes the architecture of eggfetch. Milestone B is complete: the core crate executes real HTTP requests over HTTPS.
 
 ## Three-Crate Workspace
 
 eggfetch is a Cargo workspace with three crates:
 
-- **eggfetch-core** is the async Rust HTTP engine. It owns all networking, connection management, TLS, timeouts, body streaming, redirect handling, cookie handling, proxy handling, and error types. Every dependency that touches the network lives here.
+- **eggfetch-core** is the async Rust HTTP engine. It owns all networking, connection management, TLS, body handling, and error types. Every dependency that touches the network lives here.
 - **eggfetch-cli** is a thin binary that wraps eggfetch-core. It handles argument parsing (eventually via clap), terminal output formatting, exit code mapping, and body/header display. It contains no independent HTTP behavior.
 - **eggfetch-python** is the Python bindings adapter. It uses PyO3 and maturin to expose eggfetch-core to Python. It does not duplicate request execution logic.
 
@@ -17,6 +17,31 @@ The reason eggfetch-core owns all HTTP behavior is to maintain a single networki
 The Rust engine is async-only. There is no synchronous Rust API. The `Client` type exposes methods that return futures. Callers drive execution with a tokio runtime (or another async executor that hyper supports).
 
 This design keeps the core simple: one code path, one set of state machines, no conditional compilation for sync vs async. Synchronous behavior is an adapter concern, not a core concern.
+
+## Core Types
+
+The following types form the public API of eggfetch-core:
+
+- **`Client`** -- async HTTP client. Created via `Client::new()` or `ClientBuilder`. Owns the connection pool and TLS configuration.
+- **`ClientBuilder`** -- builder for configuring a `Client` before construction.
+- **`Request`** -- a fully-formed HTTP request (method, URI, headers, body).
+- **`RequestBuilder`** -- accumulates method, URL, headers, query parameters, and body before producing a `Request`.
+- **`Response`** -- an HTTP response with status, headers, and a buffered body.
+- **`RequestBody`** -- request body type (currently byte buffers; streaming lands in Milestone E).
+- **`ResponseBody`** -- response body type (currently buffered bytes).
+- **`Headers`** -- typed header map backed by `http::HeaderMap`.
+- **`Error`** -- structured error enum covering network, HTTP, timeout, and builder errors.
+
+## Transport Stack
+
+The transport layer is built on:
+
+- **hyper** -- HTTP/1.1 protocol implementation.
+- **hyper-util** -- high-level client utilities (connection handling, IO traits).
+- **hyper-rustls** -- TLS integration via rustls, providing HTTPS support.
+- **tokio** -- async runtime powering I/O and timers.
+- **tokio-rustls** -- async TLS streams for tokio + rustls.
+- **rustls** -- memory-safe TLS implementation, preferred over native TLS for portability.
 
 ## Python Sync Adapter (Milestone F)
 
@@ -42,6 +67,4 @@ These crates do not exist yet. They will be added when the core engine is stable
 
 ## Current State
 
-The workspace is a skeleton. The core crate contains placeholder types (`Client`, `Request`, `RequestBuilder`, `Response`, `Body`, `Headers`, `Method`, `Error`, `Config`, `Timeout`) that compile but do nothing. The CLI prints a version string. The Python crate re-exports eggfetch-core to exercise the dependency boundary.
-
-No code makes network calls. No HTTP requests are executed. The type shapes reflect the intended API, not current behavior.
+Milestone B is complete. The core crate provides a working async HTTP client with HTTPS support, request/response modeling, headers, query parameters, byte bodies, and a structured error type. The CLI and Python crates remain stubs. Connection pooling, timeouts, streaming, and advanced features are planned for subsequent milestones.
