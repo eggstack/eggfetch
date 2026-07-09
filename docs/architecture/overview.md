@@ -1,6 +1,6 @@
 # Architecture Overview
 
-This document describes the architecture of eggfetch. Milestone F is complete: the core crate provides protocol-neutral streaming for request and response bodies, and the Python crate exposes a synchronous API over the async Rust core via PyO3/maturin.
+This document describes the architecture of eggfetch. Milestone G is complete: the core crate provides protocol-neutral streaming for request and response bodies, and the Python crate exposes both sync and async APIs over the async Rust core via PyO3/maturin.
 
 The post-E hardening pass landed true streaming request bodies, per-chunk read/write timeouts, pool permits tied to the full response body lifecycle, and origin-keyed pool limits.
 
@@ -140,9 +140,15 @@ Supported kwargs: `headers`, `params`, `content`, `timeout`. Unsupported kwargs 
 
 ## Python Async Adapter (Milestone G)
 
-The Python async API will expose `AsyncClient` with `__aenter__`/`__aexit__` and awaitable request methods. It targets asyncio first. Trio/AnyIO compatibility is a later goal.
+The Python async API exposes `AsyncClient` with `__aenter__`/`__aexit__` and awaitable request methods, targeting asyncio.
 
-The async adapter bridges eggfetch-core's Rust futures to Python coroutines using pyo3-async-runtimes (or an equivalent adapter if justified).
+The async adapter bridges eggfetch-core's Rust futures to Python coroutines using `pyo3-async-runtimes`. Each request method (`get`, `post`, etc.) uses `future_into_py` to convert the Rust future into a Python awaitable. The async block buffers the response body before returning, so the Python side receives a fully-buffered `PyResponse` (same type as the sync API).
+
+Key design decisions:
+
+- **No runtime creation in response path**: `PyResponse::from_parts()` constructs a response from pre-buffered data without creating a tokio runtime, avoiding the `Cannot start a runtime from within a runtime` panic.
+- **Pre-resolved futures for context manager**: `__aenter__` and `__aexit__` return pre-resolved `asyncio.Future` objects rather than using `future_into_py`, which would attempt to start a nested runtime.
+- **Cancellation safety**: cancelling an in-flight request drops the Rust future cleanly; pool permits are released via RAII `PoolGuard`.
 
 ## Future Crates
 
@@ -156,4 +162,4 @@ These crates do not exist yet. They will be added when the core engine is stable
 
 ## Current State
 
-Milestone F is complete. The core crate provides a working async HTTP client with HTTPS support, request/response modeling, headers, query parameters, streaming request/response bodies, connection pooling, phase-aware timeouts (pool, connect, write, read, total), and a structured error type with timeout phase identification. The Python crate exposes a sync API with top-level helpers, a `Client` class, buffered responses, case-insensitive headers, and a structured exception hierarchy. The CLI crate remains a stub. Redirects, advanced features, and the async Python API are planned for subsequent milestones.
+Milestone G is complete. The core crate provides a working async HTTP client with HTTPS support, request/response modeling, headers, query parameters, streaming request/response bodies, connection pooling, phase-aware timeouts (pool, connect, write, read, total), and a structured error type with timeout phase identification. The Python crate exposes sync and async APIs with top-level helpers, `Client` and `AsyncClient` classes, buffered responses, case-insensitive headers, and a structured exception hierarchy. The CLI crate remains a stub. Redirects, advanced features, and streaming response iteration are planned for subsequent milestones.

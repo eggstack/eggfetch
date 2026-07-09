@@ -2,6 +2,7 @@
 
 use pyo3::prelude::*;
 
+mod async_client;
 mod client;
 mod conversion;
 mod errors;
@@ -9,6 +10,7 @@ mod headers;
 mod response;
 mod timeout;
 
+use async_client::PyAsyncClient;
 use client::PyClient;
 use errors::map_err;
 use headers::PyHeaders;
@@ -193,6 +195,7 @@ fn options<'py>(
 fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("__version__", "0.1.0")?;
 
+    m.add_class::<PyAsyncClient>()?;
     m.add_class::<PyClient>()?;
     m.add_class::<PyHeaders>()?;
     m.add_class::<PyResponse>()?;
@@ -234,6 +237,7 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(options, m)?)?;
 
     let all_items = vec![
+        "AsyncClient",
         "Client",
         "Headers",
         "Response",

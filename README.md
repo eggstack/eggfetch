@@ -2,8 +2,8 @@
 
 eggfetch is a Rust-native HTTP client engine with Python bindings and a CLI tool. The core is async-first: a Rust engine built on tokio and hyper provides connection pooling, timeouts, TLS, and streaming. The Python bindings expose both sync and async APIs; the sync API blocks on the async engine while releasing the GIL, and the async API integrates with asyncio. There is exactly one networking implementation, living entirely in Rust.
 
-> **Status: Milestone F complete / Python sync API.**
-> The workspace builds, passes lints, and executes real HTTP requests. `eggfetch-core` provides an async `Client`, `Request`/`RequestBuilder`/`Response`, headers, query parameters, streaming request/response bodies, HTTPS via rustls, connection pooling (max connections per host, idle timeout), phase-aware timeout system (pool, connect, write, read, total), and a structured error taxonomy. The Python package `eggfetch` exposes sync helpers (`get`, `post`, etc.), a `Client` with context manager support, buffered responses, case-insensitive headers, and a structured exception hierarchy. CLI crate remains a stub.
+> **Status: Milestone G complete / Python async API.**
+> The workspace builds, passes lints, and executes real HTTP requests. `eggfetch-core` provides an async `Client`, `Request`/`RequestBuilder`/`Response`, headers, query parameters, streaming request/response bodies, HTTPS via rustls, connection pooling (max connections per host, idle timeout), phase-aware timeout system (pool, connect, write, read, total), and a structured error taxonomy. The Python package `eggfetch` exposes sync helpers (`get`, `post`, etc.), a `Client` with context manager support, an `AsyncClient` with `async with` and `await` support, buffered responses, case-insensitive headers, and a structured exception hierarchy. CLI crate remains a stub.
 
 ## Architecture
 
@@ -135,12 +135,23 @@ PyO3/maturin Python bindings exposing a synchronous API over the async Rust core
 - **Exception hierarchy** -- `EggfetchError` base with `RequestError`, `InvalidUrl`, `TimeoutException` (and phase-specific subclasses), `NetworkError`, `ProtocolError`, `BodyError`, `HTTPStatusError`.
 - **Unsupported kwargs** -- raises `TypeError` with the unsupported argument name.
 
-### Current limitations (Milestone F)
+### Milestone G: Python Async API (complete)
 
-- Sync only; async Python API deferred to Milestone G.
+Async Python API over the async Rust core via pyo3-async-runtimes:
+
+- **AsyncClient** -- `eggfetch.AsyncClient` with `async with` support and connection reuse.
+- **Awaitable requests** -- `get`, `post`, `put`, `patch`, `delete`, `head`, `options`, `request` all return awaitables.
+- **Async context manager** -- `__aenter__`/`__aexit__` for resource cleanup.
+- **Concurrent requests** -- multiple `await client.get(...)` calls can run concurrently.
+- **Cancellation** -- cancelling an in-flight request cleans up without resource leaks.
+- **Reuses sync response wrappers** -- `PyResponse`, `PyHeaders`, exception hierarchy shared with sync API.
+
+### Current limitations (Milestone G)
+
 - No redirects, cookies, auth, files, JSON body, streaming response iteration.
 - No `follow_redirects`, `stream`, `proxies`, `verify`, or `cert` kwargs.
 - `connect` timeout is accepted but not independently enforced (use `total` as backstop).
+- Trio/AnyIO support deferred to a later milestone.
 
 ## Repository Layout
 

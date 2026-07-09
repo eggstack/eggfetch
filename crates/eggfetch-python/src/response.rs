@@ -53,6 +53,18 @@ impl PyResponse {
             text,
         })
     }
+
+    /// Create a `PyResponse` from pre-buffered parts without spawning a runtime.
+    pub fn from_parts(status: u16, headers: PyHeaders, url: String, content: Bytes) -> Self {
+        let text = String::from_utf8_lossy(&content).to_string();
+        Self {
+            status_code: status,
+            headers,
+            url,
+            content,
+            text,
+        }
+    }
 }
 
 #[pymethods]

@@ -1,11 +1,13 @@
 """eggfetch - Python bindings for the eggfetch HTTP client engine.
 
-This is a sync-only API built on top of the async Rust core via PyO3.
-Network I/O releases the Python GIL so other threads can make progress.
+Provides both sync and async APIs over the async Rust core via PyO3.
+The sync API blocks on the async engine while releasing the GIL.
+The async API integrates with asyncio.
 """
 
 from eggfetch._native import (
     __version__,
+    AsyncClient,
     Client,
     Headers,
     Response,
@@ -37,6 +39,7 @@ from eggfetch._native import (
 
 __all__ = [
     "__version__",
+    "AsyncClient",
     "Client",
     "Headers",
     "Response",
