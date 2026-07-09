@@ -10,7 +10,7 @@
 //! use eggfetch_core::Client;
 //!
 //! let client = Client::new();
-//! let response = client
+//! let mut response = client
 //!     .get("https://example.com")?
 //!     .header("user-agent", "eggfetch")
 //!     .query("q", "test")
@@ -18,7 +18,7 @@
 //!     .await?;
 //!
 //! assert!(response.status().is_success());
-//! let bytes = response.bytes()?;
+//! let bytes = response.bytes().await?;
 //! # Ok(())
 //! # }
 //! ```
@@ -34,7 +34,7 @@ pub mod request;
 pub mod response;
 pub mod timeout;
 
-pub use body::{RequestBody, ResponseBody};
+pub use body::{BoxBytesStream, RequestBody, ResponseBody};
 pub use client::{Client, ClientBuilder};
 pub use error::{Error, Result};
 pub use headers::Headers;

@@ -96,12 +96,15 @@ version = "0.1.0"
 dependencies = [
  "bytes",
  "dashmap",
+ "futures-core",
+ "futures-util",
  "http",
  "http-body",
  "http-body-util",
  "hyper",
  "hyper-rustls",
  "hyper-util",
+ "pin-project-lite",
  "rustls",
  "rustls-pemfile",
  "thiserror",
@@ -180,6 +183,7 @@ dependencies = [
  "futures-core",
  "futures-task",
  "pin-project-lite",
+ "slab",
 ]
 
 [[package]]

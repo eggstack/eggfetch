@@ -11,7 +11,7 @@ use crate::response::Response;
 use crate::timeout::Timeout;
 
 /// An outgoing HTTP request.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Request {
     method: http::Method,
     url: url::Url,

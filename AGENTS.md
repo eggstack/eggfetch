@@ -10,7 +10,7 @@ eggfetch follows a milestone-driven development sequence: A through M. Each mile
 - B: Core request/response model and minimal HTTP engine (complete)
 - C: Connection management (complete)
 - D: Timeout system (complete)
-- E: Streaming foundation
+- E: Streaming foundation (complete)
 - F: Python sync API
 - G: Python async API
 - H: Response compatibility surface

@@ -2,8 +2,8 @@
 
 eggfetch is a Rust-native HTTP client engine with Python bindings and a CLI tool. The core is async-first: a Rust engine built on tokio and hyper provides connection pooling, timeouts, TLS, and streaming. The Python bindings expose both sync and async APIs; the sync API blocks on the async engine while releasing the GIL, and the async API integrates with asyncio. There is exactly one networking implementation, living entirely in Rust.
 
-> **Status: Milestone D complete / timeout system.**
-> The workspace builds, passes lints, and executes real HTTP requests. `eggfetch-core` provides an async `Client`, `Request`/`RequestBuilder`/`Response`, headers, query parameters, byte bodies, HTTPS via rustls, buffered responses, connection pooling (max connections per host, idle timeout), phase-aware timeout system (pool, connect, write, read, total), and a structured error taxonomy. CLI and Python crates remain stubs.
+> **Status: Milestone E complete / streaming foundation.**
+> The workspace builds, passes lints, and executes real HTTP requests. `eggfetch-core` provides an async `Client`, `Request`/`RequestBuilder`/`Response`, headers, query parameters, streaming request/response bodies, HTTPS via rustls, connection pooling (max connections per host, idle timeout), phase-aware timeout system (pool, connect, write, read, total), and a structured error taxonomy. CLI and Python crates remain stubs.
 
 ## Architecture
 
@@ -52,7 +52,7 @@ The Rust API remains idiomatic rather than Python-shaped:
 use eggfetch_core::Client;
 
 let client = Client::new();
-let response = client
+let mut response = client
     .get("https://example.com")?
     .header("user-agent", "eggfetch")
     .query("q", "test")
@@ -60,7 +60,7 @@ let response = client
     .await?;
 
 assert!(response.status().is_success());
-let bytes = response.bytes()?;
+let bytes = response.bytes().await?;
 ```
 
 ### Milestone B: Core HTTP Engine (complete)
@@ -97,6 +97,17 @@ Phase-aware timeout behavior is implemented with the following capabilities:
 - **Timeout errors** -- `Error::Timeout { phase, elapsed }` identifies which phase timed out.
 - **Cancellation safety** -- cancelled timeout-wrapped operations do not leak pool permits.
 
+### Milestone E: Streaming Foundation (complete)
+
+Protocol-neutral streaming for request and response bodies:
+
+- **RequestBody** -- `Empty`, `Bytes`, and `Stream` variants. `Stream` holds a `BoxBytesStream` with optional known length.
+- **ResponseBody** -- `Buffered`, `Streaming`, and `Consumed` variants. `bytes()` and `text()` are async. `bytes_stream()` returns a `BoxBytesStream`.
+- **Response streaming** -- `bytes_stream()` yields chunks as they arrive; `text_lines()` splits byte stream into text lines.
+- **Single-consumption** -- streaming bodies can only be consumed once; double-consume returns an error.
+- **Client integration** -- all responses are wrapped as streaming `ResponseBody` via hyper's `Incoming` adapter.
+- **Chunked transfer encoding** -- test server supports chunked responses for integration testing.
+
 ## Repository Layout
 
 ```text
@@ -112,7 +123,7 @@ rustfmt.toml             max_width 100
 .clippy.toml             pedantic clippy config
 .github/workflows/ci.yml CI pipeline
 crates/
-  eggfetch-core/         async HTTP engine (Milestone C complete)
+  eggfetch-core/         async HTTP engine (Milestone E complete)
   eggfetch-cli/          CLI binary (stub)
   eggfetch-python/       Python bindings (stub)
 docs/
@@ -149,3 +160,4 @@ eggfetch is dual-licensed under [MIT](LICENSE-MIT) and [Apache License, Version 
 - [plans/milestone-b-core-http-engine.md](plans/milestone-b-core-http-engine.md) -- the plan for Milestone B (core request/response model and HTTP engine).
 - [plans/milestone-c-connection-management.md](plans/milestone-c-connection-management.md) -- the plan for Milestone C (connection pooling and management).
 - [plans/milestone-d-timeout-system.md](plans/milestone-d-timeout-system.md) -- the plan for Milestone D (timeout system).
+- [plans/milestone-e-streaming-foundation.md](plans/milestone-e-streaming-foundation.md) -- the plan for Milestone E (streaming foundation).

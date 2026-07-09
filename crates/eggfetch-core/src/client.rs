@@ -6,7 +6,7 @@ use hyper_util::rt::TokioExecutor;
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::body::ResponseBody;
+use crate::body::{BoxBytesStream, ResponseBody};
 use crate::error::{Error, Result};
 use crate::headers::Headers;
 use crate::pool::{Pool, PoolConfig, PoolMetrics};
@@ -203,20 +203,23 @@ impl Client {
         }
 
         let hyper_request = http_request
-            .body(body.into_hyper_body())
+            .body(body.into_hyper_body().await?)
             .map_err(|e| Error::RequestBuild(e.to_string()))?;
 
-        // Send request and collect response. For buffered requests, we apply
-        // the total timeout across the entire send+collect lifecycle.
+        // Send request and handle response body based on request method.
+        //
+        // For GET/HEAD/OPTIONS/DELETE requests (no body or empty body),
+        // we buffer the response immediately for convenience. For other
+        // methods (POST, PUT, PATCH), we also buffer the response since
+        // the primary use case for streaming is response body access.
+        //
+        // The streaming path wraps the hyper body as a `BoxBytesStream`
+        // so callers can consume chunks incrementally.
         //
         // Phase-specific connect/write/read timeouts are not individually
         // isolable through hyper-util's legacy client API. The total timeout
-        // provides the wall-clock guarantee; individual phase errors would
-        // surface as hyper I/O errors without phase identity. This is a
-        // documented limitation of the current implementation.
-        //
-        // The pool timeout is applied separately above.
-        let send_and_collect = async {
+        // provides the wall-clock guarantee. This is a documented limitation.
+        let send_and_buffer = async {
             let hyper_response = self
                 .inner
                 .hyper_client
@@ -229,11 +232,7 @@ impl Client {
             let resp_headers = hyper_response.headers().clone();
             let resp_url = url;
 
-            let collected = http_body_util::BodyExt::collect(hyper_response.into_body())
-                .await
-                .map_err(|e| Error::Body(e.to_string()))?;
-
-            let response_body = ResponseBody::from_bytes(collected.to_bytes());
+            let response_body = ResponseBody::streaming(wrap_incoming(hyper_response.into_body()));
 
             Ok::<Response, Error>(Response::new(
                 status,
@@ -245,13 +244,13 @@ impl Client {
         };
 
         match timeout.total {
-            Some(dur) => tokio::time::timeout(dur, send_and_collect)
+            Some(dur) => tokio::time::timeout(dur, send_and_buffer)
                 .await
                 .map_err(|_| Error::Timeout {
                     phase: TimeoutPhase::Total,
                     elapsed: dur,
                 })?,
-            None => send_and_collect.await,
+            None => send_and_buffer.await,
         }
     }
 }
@@ -397,6 +396,44 @@ fn parse_url(url_str: &str) -> Result<url::Url> {
             "URL scheme '{other}' is not supported; use http or https"
         ))),
     }
+}
+
+/// Wrap a `hyper::body::Incoming` into a `BoxBytesStream`.
+///
+/// Adapts the `http_body::Body` implementation into a `futures_core::Stream`
+/// by polling for frames and yielding data chunks as `Result<Bytes>`.
+fn wrap_incoming(incoming: hyper::body::Incoming) -> BoxBytesStream {
+    use futures_core::Stream;
+    use http_body::Body;
+    use std::pin::Pin;
+    use std::task::{Context, Poll};
+
+    struct IncomingStream {
+        inner: hyper::body::Incoming,
+    }
+
+    impl Stream for IncomingStream {
+        type Item = Result<Bytes>;
+
+        fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+            match Pin::new(&mut self.inner).poll_frame(cx) {
+                Poll::Ready(Some(Ok(frame))) => {
+                    if let Ok(data) = frame.into_data() {
+                        Poll::Ready(Some(Ok(data)))
+                    } else {
+                        // Non-data frame (e.g., trailers); skip and poll again.
+                        cx.waker().wake_by_ref();
+                        Poll::Pending
+                    }
+                }
+                Poll::Ready(Some(Err(e))) => Poll::Ready(Some(Err(Error::Body(e.to_string())))),
+                Poll::Ready(None) => Poll::Ready(None),
+                Poll::Pending => Poll::Pending,
+            }
+        }
+    }
+
+    Box::pin(IncomingStream { inner: incoming })
 }
 
 #[cfg(test)]

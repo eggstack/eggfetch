@@ -1,7 +1,11 @@
 //! Integration tests for eggfetch-core public API.
 
+mod test_server;
+
 use bytes::Bytes;
 use eggfetch_core::{Client, Error, Headers, Method, RequestBody};
+use futures_util::StreamExt;
+use test_server::{TestServer, TestServerConfig};
 
 // ---------------------------------------------------------------------------
 // 1. URL handling tests (no network)
@@ -581,7 +585,7 @@ async fn network_get_request() {
     })
     .await;
 
-    let response = match result {
+    let mut response = match result {
         Some(Ok(r)) => r,
         Some(Err(e)) => {
             // Network unavailable or endpoint down — skip gracefully.
@@ -598,7 +602,7 @@ async fn network_get_request() {
         eprintln!("skipping network_get_request: status {}", response.status());
         return;
     }
-    let body = response.text().unwrap();
+    let body = response.text().await.unwrap();
     assert!(body.contains("httpbin"));
 }
 
@@ -616,7 +620,7 @@ async fn network_post_with_body() {
     })
     .await;
 
-    let response = match result {
+    let mut response = match result {
         Some(Ok(r)) => r,
         Some(Err(e)) => {
             eprintln!("skipping network_post_with_body: {e}");
@@ -635,7 +639,7 @@ async fn network_post_with_body() {
         );
         return;
     }
-    let body = response.text().unwrap();
+    let body = response.text().await.unwrap();
     assert!(body.contains("hello"));
     assert!(body.contains("world"));
 }
@@ -653,7 +657,7 @@ async fn network_custom_headers_sent() {
     })
     .await;
 
-    let response = match result {
+    let mut response = match result {
         Some(Ok(r)) => r,
         Some(Err(e)) => {
             eprintln!("skipping network_custom_headers_sent: {e}");
@@ -672,7 +676,7 @@ async fn network_custom_headers_sent() {
         );
         return;
     }
-    let body = response.text().unwrap();
+    let body = response.text().await.unwrap();
     assert!(body.contains("X-Test-Header"));
     assert!(body.contains("integration-test-value"));
 }
@@ -691,7 +695,7 @@ async fn network_query_params_serialized() {
     })
     .await;
 
-    let response = match result {
+    let mut response = match result {
         Some(Ok(r)) => r,
         Some(Err(e)) => {
             eprintln!("skipping network_query_params_serialized: {e}");
@@ -710,7 +714,7 @@ async fn network_query_params_serialized() {
         );
         return;
     }
-    let body = response.text().unwrap();
+    let body = response.text().await.unwrap();
     assert!(body.contains("foo"));
     assert!(body.contains("bar"));
     assert!(body.contains("baz"));
@@ -749,4 +753,154 @@ async fn network_post_status_code() {
         );
         return;
     }
+}
+
+// ---------------------------------------------------------------------------
+// 10. Streaming integration tests (local TCP server)
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn stream_chunked_response_collects() {
+    let server = TestServer::start(&TestServerConfig {
+        response_body: Some(b"hello world".to_vec()),
+        chunked: true,
+        ..Default::default()
+    });
+    let client = Client::new();
+    let mut resp = client.get(&server.url()).unwrap().send().await.unwrap();
+    assert_eq!(resp.status().as_u16(), 200);
+    let body = resp.text().await.unwrap();
+    assert_eq!(body, "hello world");
+}
+
+#[tokio::test]
+async fn stream_chunked_response_streams_incrementally() {
+    let server = TestServer::start(&TestServerConfig {
+        response_body: Some(b"abcdefghij".to_vec()),
+        chunked: true,
+        ..Default::default()
+    });
+    let client = Client::new();
+    let mut resp = client.get(&server.url()).unwrap().send().await.unwrap();
+
+    let mut stream = resp.bytes_stream().unwrap();
+    let mut all = Vec::new();
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.unwrap();
+        all.extend_from_slice(&chunk);
+    }
+    assert_eq!(all, b"abcdefghij");
+}
+
+#[tokio::test]
+async fn stream_buffered_response_collects() {
+    let server = TestServer::start(&TestServerConfig {
+        response_body: Some(b"buffered body".to_vec()),
+        ..Default::default()
+    });
+    let client = Client::new();
+    let mut resp = client.get(&server.url()).unwrap().send().await.unwrap();
+    let body = resp.text().await.unwrap();
+    assert_eq!(body, "buffered body");
+}
+
+#[tokio::test]
+async fn stream_large_response_buffered() {
+    let large_body = vec![b'x'; 100_000];
+    let server = TestServer::start(&TestServerConfig {
+        response_body: Some(large_body.clone()),
+        ..Default::default()
+    });
+    let client = Client::new();
+    let mut resp = client.get(&server.url()).unwrap().send().await.unwrap();
+    let body = resp.bytes().await.unwrap();
+    assert_eq!(body.len(), 100_000);
+    assert_eq!(&body[..], &large_body[..]);
+}
+
+#[tokio::test]
+async fn stream_large_response_streaming() {
+    let large_body = vec![b'y'; 100_000];
+    let server = TestServer::start(&TestServerConfig {
+        response_body: Some(large_body.clone()),
+        chunked: true,
+        ..Default::default()
+    });
+    let client = Client::new();
+    let mut resp = client.get(&server.url()).unwrap().send().await.unwrap();
+
+    let mut stream = resp.bytes_stream().unwrap();
+    let mut total = 0usize;
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.unwrap();
+        total += chunk.len();
+    }
+    assert_eq!(total, 100_000);
+}
+
+#[tokio::test]
+async fn stream_double_consume_streaming_errors() {
+    let server = TestServer::start(&TestServerConfig {
+        response_body: Some(b"data".to_vec()),
+        chunked: true,
+        ..Default::default()
+    });
+    let client = Client::new();
+    let mut resp = client.get(&server.url()).unwrap().send().await.unwrap();
+    let _ = resp.bytes_stream().unwrap();
+    let result = resp.bytes_stream();
+    assert!(result.is_err());
+}
+
+#[tokio::test]
+async fn stream_drop_unread_body() {
+    let server = TestServer::start(&TestServerConfig {
+        close_connection: false,
+        ..Default::default()
+    });
+    let client = Client::new();
+    let resp = client.get(&server.url()).unwrap().send().await.unwrap();
+    // Drop without consuming body. Connection should be handled safely.
+    drop(resp);
+    // Server should still be reachable via a new connection.
+    let mut resp2 = client.get(&server.url()).unwrap().send().await.unwrap();
+    let body = resp2.text().await.unwrap();
+    assert_eq!(body, "OK");
+}
+
+#[tokio::test]
+async fn stream_text_lines_basic() {
+    use futures_util::StreamExt;
+
+    let server = TestServer::start(&TestServerConfig {
+        response_body: Some(b"line1\nline2\nline3\n".to_vec()),
+        ..Default::default()
+    });
+    let client = Client::new();
+    let mut resp = client.get(&server.url()).unwrap().send().await.unwrap();
+
+    let mut lines = Vec::new();
+    let stream = resp.text_lines().unwrap();
+    let mut stream = std::pin::pin!(stream);
+    while let Some(line) = stream.next().await {
+        lines.push(line.unwrap());
+    }
+    assert_eq!(lines, vec!["line1", "line2", "line3"]);
+}
+
+#[tokio::test]
+async fn stream_request_body_bytes() {
+    let server = TestServer::start(&TestServerConfig {
+        consume_body: true,
+        ..Default::default()
+    });
+    let client = Client::new();
+    let resp = client
+        .post(&server.url())
+        .unwrap()
+        .body("request payload")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status().as_u16(), 200);
 }

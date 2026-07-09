@@ -1,4 +1,4 @@
-//! Local TCP test server for connection management tests.
+//! Local TCP test server for connection management and streaming tests.
 
 use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
@@ -15,6 +15,13 @@ pub struct TestServerConfig {
     pub response_delay_ms: u64,
     /// If true, read and discard the request body.
     pub consume_body: bool,
+    /// Custom response body. If None, defaults to b"OK".
+    pub response_body: Option<Vec<u8>>,
+    /// If true, send response using chunked transfer encoding.
+    /// Each chunk is sent with an optional inter-chunk delay.
+    pub chunked: bool,
+    /// Delay between chunked response chunks (ms). 0 = no delay.
+    pub chunk_delay_ms: u64,
 }
 
 impl Default for TestServerConfig {
@@ -23,6 +30,9 @@ impl Default for TestServerConfig {
             close_connection: false,
             response_delay_ms: 0,
             consume_body: true,
+            response_body: None,
+            chunked: false,
+            chunk_delay_ms: 0,
         }
     }
 }
@@ -64,14 +74,25 @@ impl TestServer {
         let close = config.close_connection;
         let delay = config.response_delay_ms;
         let consume = config.consume_body;
+        let resp_body = config.response_body.clone();
+        let chunked = config.chunked;
+        let chunk_delay = config.chunk_delay_ms;
 
         let handle = thread::spawn(move || {
             while !sd.load(Ordering::Relaxed) {
                 if let Ok((stream, _)) = listener.accept() {
                     ca.fetch_add(1, Ordering::SeqCst);
                     let rs = rs.clone();
+                    let conn_config = ConnectionConfig {
+                        close_connection: close,
+                        response_delay_ms: delay,
+                        consume_body: consume,
+                        response_body: resp_body.clone(),
+                        chunked,
+                        chunk_delay_ms: chunk_delay,
+                    };
                     thread::spawn(move || {
-                        handle_connection(stream, close, delay, consume, &rs);
+                        handle_connection(stream, &conn_config, &rs);
                     });
                 } else if sd.load(Ordering::Relaxed) {
                     break;
@@ -135,9 +156,7 @@ impl Drop for TestServer {
 
 fn handle_connection(
     stream: std::net::TcpStream,
-    close_connection: bool,
-    response_delay_ms: u64,
-    consume_body: bool,
+    config: &ConnectionConfig,
     requests_served: &Arc<AtomicUsize>,
 ) {
     stream.set_read_timeout(Some(Duration::from_secs(5))).ok();
@@ -169,37 +188,86 @@ fn handle_connection(
             }
         }
 
-        if consume_body && content_length > 0 {
+        if config.consume_body && content_length > 0 {
             let mut body = vec![0u8; content_length];
             let _ = std::io::Read::read(&mut reader, &mut body);
         }
 
         requests_served.fetch_add(1, Ordering::SeqCst);
 
-        if response_delay_ms > 0 {
-            thread::sleep(Duration::from_millis(response_delay_ms));
+        if config.response_delay_ms > 0 {
+            thread::sleep(Duration::from_millis(config.response_delay_ms));
         }
 
-        let connection_header = if close_connection {
+        let body = config.response_body.as_deref().unwrap_or(b"OK");
+        let connection_header = if config.close_connection {
             "close"
         } else {
             "keep-alive"
         };
-        let response = format!(
-            "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nConnection: {connection_header}\r\nContent-Length: 2\r\n\r\nOK"
-        );
 
         let stream = reader.get_mut();
-        if stream.write_all(response.as_bytes()).is_err() {
-            break;
+
+        if config.chunked {
+            let header = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nConnection: {connection_header}\r\nTransfer-Encoding: chunked\r\n\r\n"
+            );
+            if stream.write_all(header.as_bytes()).is_err() {
+                break;
+            }
+
+            // Send body in 3-byte chunks.
+            let chunk_size = 3;
+            for chunk in body.chunks(chunk_size) {
+                if config.chunk_delay_ms > 0 {
+                    thread::sleep(Duration::from_millis(config.chunk_delay_ms));
+                }
+                let chunk_header = format!("{:x}\r\n", chunk.len());
+                if stream.write_all(chunk_header.as_bytes()).is_err() {
+                    break;
+                }
+                if stream.write_all(chunk).is_err() {
+                    break;
+                }
+                if stream.write_all(b"\r\n").is_err() {
+                    break;
+                }
+            }
+
+            // Terminal chunk.
+            if stream.write_all(b"0\r\n\r\n").is_err() {
+                break;
+            }
+        } else {
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nConnection: {connection_header}\r\nContent-Length: {}\r\n\r\n",
+                body.len()
+            );
+            if stream.write_all(response.as_bytes()).is_err() {
+                break;
+            }
+            if stream.write_all(body).is_err() {
+                break;
+            }
         }
+
         if stream.flush().is_err() {
             break;
         }
 
-        if close_connection {
+        if config.close_connection {
             let _ = stream.shutdown(std::net::Shutdown::Both);
             break;
         }
     }
+}
+
+/// Per-connection configuration derived from `TestServerConfig`.
+struct ConnectionConfig {
+    close_connection: bool,
+    response_delay_ms: u64,
+    consume_body: bool,
+    response_body: Option<Vec<u8>>,
+    chunked: bool,
+    chunk_delay_ms: u64,
 }

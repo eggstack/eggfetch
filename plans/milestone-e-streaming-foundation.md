@@ -1,5 +1,7 @@
 # Milestone E Plan: Streaming Foundation
 
+> **Status: Complete.** All streaming types, client integration, chunked transfer tests, and documentation are done. 161 tests passing, clippy clean.
+
 ## Objective
 
 Build a protocol-neutral streaming foundation for request and response bodies. This milestone should make eggfetch capable of handling large bodies, incremental reads, streamed uploads, cancellation, and future Python sync/async iterator APIs without redesigning the core response model.

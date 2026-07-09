@@ -1,6 +1,6 @@
 # Architecture Overview
 
-This document describes the architecture of eggfetch. Milestone D is complete: the core crate provides a phase-aware timeout system (pool, connect, write, read, total) on top of the connection pooling and HTTP/1.1 engine from earlier milestones.
+This document describes the architecture of eggfetch. Milestone E is complete: the core crate provides protocol-neutral streaming for request and response bodies, building on the timeout system, connection pooling, and HTTP/1.1 engine from earlier milestones.
 
 ## Three-Crate Workspace
 
@@ -26,9 +26,9 @@ The following types form the public API of eggfetch-core:
 - **`ClientBuilder`** -- builder for configuring a `Client` before construction.
 - **`Request`** -- a fully-formed HTTP request (method, URI, headers, body).
 - **`RequestBuilder`** -- accumulates method, URL, headers, query parameters, and body before producing a `Request`.
-- **`Response`** -- an HTTP response with status, headers, and a buffered body.
-- **`RequestBody`** -- request body type (currently byte buffers; streaming lands in Milestone E).
-- **`ResponseBody`** -- response body type (currently buffered bytes).
+- **`Response`** -- an HTTP response with status, headers, and a streaming body.
+- **`RequestBody`** -- request body type: `Empty`, `Bytes`, or `Stream` (a boxed `Stream<Item = Result<Bytes>>`).
+- **`ResponseBody`** -- response body type: `Buffered` (collected bytes), `Streaming` (live chunk stream), or `Consumed` (already consumed).
 - **`Headers`** -- typed header map backed by `http::HeaderMap`.
 - **`Error`** -- structured error enum covering network, HTTP, timeout, and builder errors.
 
@@ -69,6 +69,26 @@ The pool timeout is applied via `tokio::time::timeout` around pool acquisition. 
 
 Cancelled timeout-wrapped operations release pool permits cleanly. The pool uses `OwnedSemaphorePermit` with RAII drop semantics.
 
+## Streaming
+
+The body layer provides protocol-neutral streaming for both request and response bodies.
+
+### Response Streaming
+
+All responses from the client are wrapped as `ResponseBody::Streaming` by default. The `wrap_incoming()` adapter converts hyper's `Incoming` type into a `BoxBytesStream`. Callers choose their consumption model:
+
+- **Buffered**: `response.bytes().await` or `response.text().await` collects the full body.
+- **Streaming**: `response.bytes_stream()` returns a `BoxBytesStream` for chunk-by-chunk processing.
+- **Line streaming**: `response.text_lines()` splits the byte stream into text lines.
+
+### Request Streaming
+
+Request bodies support three variants: `Empty`, `Bytes` (fixed buffer), and `Stream` (chunked upload). Stream request bodies are buffered into `Full<Bytes>` before sending via `into_hyper_body()`. Full streamed uploads (pipe-through) are deferred to a later milestone.
+
+### Single-Consumption Semantics
+
+Body types are single-consume. Calling `bytes_stream()` on a streaming body replaces it with `Consumed`; a second call returns an error. Calling `bytes()` on a consumed body also returns an error. This prevents accidental double-reads and enforces ownership transfer.
+
 ## Transport Stack
 
 The transport layer is built on:
@@ -82,7 +102,7 @@ The transport layer is built on:
 
 ## Python Sync Adapter (Milestone F)
 
-The Python sync API will own or borrow a tokio runtime internally. When a user calls `eggfetch.get(...)`, the sync adapter submits the request to the async engine and blocks the calling thread until the response arrives. During this blocking wait, the adapter releases the Python GIL so other Python threads can make progress.
+The Python sync API will own or borrow a tokio runtime internally. When a user calls `eggfetch.get(...)`, the sync adapter submits the request to the async engine and blocks the calling thread until the response arrives. During this blocking wait, the adapter releases the Python GIL so other Python threads can make progress. Response bodies will be buffered (via `bytes().await`) for the sync API, providing a simple `bytes`/`text` property interface.
 
 The sync adapter does not contain its own TCP connections, TLS handshakes, or body parsing. It delegates entirely to eggfetch-core.
 
@@ -104,4 +124,4 @@ These crates do not exist yet. They will be added when the core engine is stable
 
 ## Current State
 
-Milestone D is complete. The core crate provides a working async HTTP client with HTTPS support, request/response modeling, headers, query parameters, byte bodies, connection pooling, phase-aware timeouts (pool, connect, write, read, total), and a structured error type with timeout phase identification. The CLI and Python crates remain stubs. Streaming, redirects, and advanced features are planned for subsequent milestones.
+Milestone E is complete. The core crate provides a working async HTTP client with HTTPS support, request/response modeling, headers, query parameters, streaming request/response bodies, connection pooling, phase-aware timeouts (pool, connect, write, read, total), and a structured error type with timeout phase identification. The CLI and Python crates remain stubs. Redirects, advanced features, and Python bindings are planned for subsequent milestones.
