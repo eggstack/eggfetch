@@ -1,0 +1,278 @@
+//! Python client wrapper.
+
+use pyo3::prelude::*;
+
+use crate::conversion::{parse_timeout, python_headers_to_rust, python_params_to_url};
+use crate::errors::map_err;
+use crate::response::PyResponse;
+
+/// A synchronous HTTP client exposed to Python.
+///
+/// Owns a tokio runtime and an eggfetch-core client. Releases the GIL
+/// during network I/O.
+#[pyclass(name = "Client")]
+pub struct PyClient {
+    runtime: tokio::runtime::Runtime,
+    client: eggfetch_core::Client,
+    closed: bool,
+}
+
+#[pymethods]
+impl PyClient {
+    /// Create a new client.
+    ///
+    /// Args:
+    ///     headers: Default headers dict (optional).
+    ///     timeout: Default timeout in seconds, or Timeout object (optional).
+    #[new]
+    #[pyo3(signature = (*, headers=None, timeout=None))]
+    fn new(
+        py: Python<'_>,
+        headers: Option<&Bound<'_, PyAny>>,
+        timeout: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<Self> {
+        let runtime = tokio::runtime::Runtime::new()
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+
+        let mut builder = eggfetch_core::Client::builder();
+
+        if let Some(hdrs) = headers {
+            let rust_headers = python_headers_to_rust(py, hdrs)?;
+            for (name, value) in rust_headers.iter() {
+                builder = builder
+                    .default_header(name.as_str(), value.to_str().unwrap_or(""))
+                    .map_err(map_err)?;
+            }
+        }
+
+        if let Some(t) = timeout {
+            if let Some(rust_timeout) = parse_timeout(Some(t))? {
+                builder = builder.timeout(rust_timeout);
+            }
+        }
+
+        let client = builder.build();
+
+        Ok(Self {
+            runtime,
+            client,
+            closed: false,
+        })
+    }
+
+    /// Send an HTTP request.
+    #[pyo3(signature = (method, url, *, headers=None, params=None, content=None, timeout=None))]
+    #[allow(clippy::too_many_arguments)]
+    fn request<'py>(
+        &mut self,
+        py: Python<'py>,
+        method: &str,
+        url: &str,
+        headers: Option<&Bound<'py, PyAny>>,
+        params: Option<&Bound<'py, PyAny>>,
+        content: Option<&Bound<'py, PyAny>>,
+        timeout: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        self.ensure_not_closed()?;
+
+        let method_upper = method.to_uppercase();
+        let http_method = http::Method::try_from(method_upper.as_str()).map_err(|_| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "invalid HTTP method: {method}"
+            ))
+        })?;
+
+        let mut target_url = url::Url::parse(url)
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
+
+        if let Some(p) = params {
+            python_params_to_url(&mut target_url, p)?;
+        }
+        let target_url = target_url;
+
+        let rust_headers = if let Some(h) = headers {
+            python_headers_to_rust(py, h)?
+        } else {
+            eggfetch_core::Headers::new()
+        };
+
+        let body_bytes: Option<Vec<u8>> = if let Some(c) = content {
+            Some(c.extract::<Vec<u8>>()?)
+        } else {
+            None
+        };
+
+        let rust_timeout = parse_timeout(timeout)?;
+
+        let client = self.client.clone();
+        let result = py.allow_threads(|| {
+            self.runtime.block_on(async {
+                let mut builder = client
+                    .request(http_method, target_url.as_str())
+                    .map_err(map_err)?;
+
+                for (name, value) in rust_headers.iter() {
+                    builder = builder.header(name.as_str(), value.to_str().unwrap_or(""));
+                }
+
+                if let Some(bytes) = body_bytes {
+                    builder = builder.bytes(bytes);
+                }
+
+                if let Some(t) = rust_timeout {
+                    builder = builder.timeout(t);
+                }
+
+                let response = builder.send().await.map_err(map_err)?;
+                Ok::<_, PyErr>(response)
+            })
+        });
+
+        let response = result?;
+        let py_response = PyResponse::from_core_response(response)?;
+        Ok(Py::new(py, py_response)?.into_bound(py).into_any())
+    }
+
+    /// Send a GET request.
+    #[pyo3(signature = (url, *, headers=None, params=None, timeout=None))]
+    fn get<'py>(
+        &mut self,
+        py: Python<'py>,
+        url: &str,
+        headers: Option<&Bound<'py, PyAny>>,
+        params: Option<&Bound<'py, PyAny>>,
+        timeout: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        self.request(py, "GET", url, headers, params, None, timeout)
+    }
+
+    /// Send a POST request.
+    #[pyo3(signature = (url, *, headers=None, params=None, content=None, timeout=None))]
+    fn post<'py>(
+        &mut self,
+        py: Python<'py>,
+        url: &str,
+        headers: Option<&Bound<'py, PyAny>>,
+        params: Option<&Bound<'py, PyAny>>,
+        content: Option<&Bound<'py, PyAny>>,
+        timeout: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        self.request(py, "POST", url, headers, params, content, timeout)
+    }
+
+    /// Send a PUT request.
+    #[pyo3(signature = (url, *, headers=None, params=None, content=None, timeout=None))]
+    fn put<'py>(
+        &mut self,
+        py: Python<'py>,
+        url: &str,
+        headers: Option<&Bound<'py, PyAny>>,
+        params: Option<&Bound<'py, PyAny>>,
+        content: Option<&Bound<'py, PyAny>>,
+        timeout: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        self.request(py, "PUT", url, headers, params, content, timeout)
+    }
+
+    /// Send a PATCH request.
+    #[pyo3(signature = (url, *, headers=None, params=None, content=None, timeout=None))]
+    fn patch<'py>(
+        &mut self,
+        py: Python<'py>,
+        url: &str,
+        headers: Option<&Bound<'py, PyAny>>,
+        params: Option<&Bound<'py, PyAny>>,
+        content: Option<&Bound<'py, PyAny>>,
+        timeout: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        self.request(py, "PATCH", url, headers, params, content, timeout)
+    }
+
+    /// Send a DELETE request.
+    #[pyo3(signature = (url, *, headers=None, params=None, timeout=None))]
+    fn delete<'py>(
+        &mut self,
+        py: Python<'py>,
+        url: &str,
+        headers: Option<&Bound<'py, PyAny>>,
+        params: Option<&Bound<'py, PyAny>>,
+        timeout: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        self.request(py, "DELETE", url, headers, params, None, timeout)
+    }
+
+    /// Send a HEAD request.
+    #[pyo3(signature = (url, *, headers=None, params=None, timeout=None))]
+    fn head<'py>(
+        &mut self,
+        py: Python<'py>,
+        url: &str,
+        headers: Option<&Bound<'py, PyAny>>,
+        params: Option<&Bound<'py, PyAny>>,
+        timeout: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        self.request(py, "HEAD", url, headers, params, None, timeout)
+    }
+
+    /// Send an OPTIONS request.
+    #[pyo3(signature = (url, *, headers=None, params=None, timeout=None))]
+    fn options<'py>(
+        &mut self,
+        py: Python<'py>,
+        url: &str,
+        headers: Option<&Bound<'py, PyAny>>,
+        params: Option<&Bound<'py, PyAny>>,
+        timeout: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        self.request(py, "OPTIONS", url, headers, params, None, timeout)
+    }
+
+    /// Close the client and shut down the runtime.
+    fn close(&mut self) {
+        if !self.closed {
+            self.closed = true;
+        }
+    }
+
+    /// Returns True if the client has been closed.
+    #[getter]
+    fn is_closed(&self) -> bool {
+        self.closed
+    }
+
+    /// Context manager: enter.
+    fn __enter__(slf: Py<Self>) -> Py<Self> {
+        slf
+    }
+
+    /// Context manager: exit.
+    #[pyo3(signature = (_exc_type=None, _exc_value=None, _traceback=None))]
+    fn __exit__(
+        &mut self,
+        _exc_type: Option<&Bound<'_, PyAny>>,
+        _exc_value: Option<&Bound<'_, PyAny>>,
+        _traceback: Option<&Bound<'_, PyAny>>,
+    ) -> bool {
+        self.close();
+        false
+    }
+
+    fn __repr__(&self) -> String {
+        if self.closed {
+            "Client(closed=true)".to_string()
+        } else {
+            "Client()".to_string()
+        }
+    }
+}
+
+impl PyClient {
+    fn ensure_not_closed(&self) -> PyResult<()> {
+        if self.closed {
+            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                "client is closed",
+            ));
+        }
+        Ok(())
+    }
+}

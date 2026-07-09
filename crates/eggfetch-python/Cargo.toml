@@ -16,3 +16,11 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 eggfetch-core = { path = "../eggfetch-core" }
+pyo3 = { version = "0.23", features = ["extension-module"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "net"] }
+bytes = "1"
+http = "1"
+url = "2"
+
+[build-dependencies]
+pyo3-build-config = "0.23"

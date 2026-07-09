@@ -1,6 +1,6 @@
 # Architecture Overview
 
-This document describes the architecture of eggfetch. Milestone E is complete: the core crate provides protocol-neutral streaming for request and response bodies, building on the timeout system, connection pooling, and HTTP/1.1 engine from earlier milestones.
+This document describes the architecture of eggfetch. Milestone F is complete: the core crate provides protocol-neutral streaming for request and response bodies, and the Python crate exposes a synchronous API over the async Rust core via PyO3/maturin.
 
 The post-E hardening pass landed true streaming request bodies, per-chunk read/write timeouts, pool permits tied to the full response body lifecycle, and origin-keyed pool limits.
 
@@ -124,9 +124,19 @@ The transport layer is built on:
 
 ## Python Sync Adapter (Milestone F)
 
-The Python sync API will own or borrow a tokio runtime internally. When a user calls `eggfetch.get(...)`, the sync adapter submits the request to the async engine and blocks the calling thread until the response arrives. During this blocking wait, the adapter releases the Python GIL so other Python threads can make progress. Response bodies will be buffered (via `bytes().await`) for the sync API, providing a simple `bytes`/`text` property interface.
+The Python sync API owns a tokio runtime and an `eggfetch_core::Client` per `PyClient` instance. When a user calls `eggfetch.get(...)`, the sync adapter:
+
+1. Converts Python arguments to owned Rust types (headers, URL, body bytes, timeout).
+2. Releases the GIL via `py.allow_threads`.
+3. Blocks on the async Rust engine via `runtime.block_on(future)`.
+4. Buffers the response body via `response.bytes().await`.
+5. Re-acquires the GIL and returns a `PyResponse` with buffered data.
 
 The sync adapter does not contain its own TCP connections, TLS handshakes, or body parsing. It delegates entirely to eggfetch-core.
+
+Top-level helpers (`get`, `post`, etc.) create a short-lived runtime and client per call. The `PyClient` class owns a persistent runtime and client for connection reuse.
+
+Supported kwargs: `headers`, `params`, `content`, `timeout`. Unsupported kwargs raise `TypeError`.
 
 ## Python Async Adapter (Milestone G)
 
@@ -146,4 +156,4 @@ These crates do not exist yet. They will be added when the core engine is stable
 
 ## Current State
 
-Milestone E is complete. The core crate provides a working async HTTP client with HTTPS support, request/response modeling, headers, query parameters, streaming request/response bodies, connection pooling, phase-aware timeouts (pool, connect, write, read, total), and a structured error type with timeout phase identification. The CLI and Python crates remain stubs. Redirects, advanced features, and Python bindings are planned for subsequent milestones.
+Milestone F is complete. The core crate provides a working async HTTP client with HTTPS support, request/response modeling, headers, query parameters, streaming request/response bodies, connection pooling, phase-aware timeouts (pool, connect, write, read, total), and a structured error type with timeout phase identification. The Python crate exposes a sync API with top-level helpers, a `Client` class, buffered responses, case-insensitive headers, and a structured exception hierarchy. The CLI crate remains a stub. Redirects, advanced features, and the async Python API are planned for subsequent milestones.

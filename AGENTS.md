@@ -11,7 +11,7 @@ eggfetch follows a milestone-driven development sequence: A through M. Each mile
 - C: Connection management (complete)
 - D: Timeout system (complete)
 - E: Streaming foundation (complete)
-- F: Python sync API
+- F: Python sync API (complete)
 - G: Python async API
 - H: Response compatibility surface
 - I: Request builder compatibility surface
@@ -61,7 +61,7 @@ Prefer small, focused tests colocated with the module under test. Use `#[cfg(tes
 cargo test --workspace --all-features
 ```
 
-The workspace has ~160 tests covering construction, streaming, timeouts, pools, headers, and integration scenarios.
+The workspace has ~200 Rust tests and ~27 Python tests covering construction, streaming, timeouts, pools, headers, integration scenarios, and Python sync API.
 
 ## Working Style
 

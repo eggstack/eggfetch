@@ -2,8 +2,8 @@
 
 eggfetch is a Rust-native HTTP client engine with Python bindings and a CLI tool. The core is async-first: a Rust engine built on tokio and hyper provides connection pooling, timeouts, TLS, and streaming. The Python bindings expose both sync and async APIs; the sync API blocks on the async engine while releasing the GIL, and the async API integrates with asyncio. There is exactly one networking implementation, living entirely in Rust.
 
-> **Status: Milestone E complete / streaming foundation.**
-> The workspace builds, passes lints, and executes real HTTP requests. `eggfetch-core` provides an async `Client`, `Request`/`RequestBuilder`/`Response`, headers, query parameters, streaming request/response bodies, HTTPS via rustls, connection pooling (max connections per host, idle timeout), phase-aware timeout system (pool, connect, write, read, total), and a structured error taxonomy. CLI and Python crates remain stubs.
+> **Status: Milestone F complete / Python sync API.**
+> The workspace builds, passes lints, and executes real HTTP requests. `eggfetch-core` provides an async `Client`, `Request`/`RequestBuilder`/`Response`, headers, query parameters, streaming request/response bodies, HTTPS via rustls, connection pooling (max connections per host, idle timeout), phase-aware timeout system (pool, connect, write, read, total), and a structured error taxonomy. The Python package `eggfetch` exposes sync helpers (`get`, `post`, etc.), a `Client` with context manager support, buffered responses, case-insensitive headers, and a structured exception hierarchy. CLI crate remains a stub.
 
 ## Architecture
 
@@ -122,6 +122,26 @@ Post-Milestone-E correctness work landed:
 - **Origin-keyed pool** -- per-origin limits are keyed by `(scheme, host, port)`. `http://example.com` and `https://example.com` are independent origins.
 - **Pool metrics** -- only `acquisition_waits` and `acquisition_cancellations` remain; skeletal socket counters were removed because hyper owns socket lifecycle.
 
+### Milestone F: Python Sync API (complete)
+
+PyO3/maturin Python bindings exposing a synchronous API over the async Rust core:
+
+- **Sync helpers** -- `request`, `get`, `post`, `put`, `patch`, `delete`, `head`, `options` top-level functions.
+- **Client** -- `eggfetch.Client` with context manager support, default headers, default timeout, and connection reuse.
+- **GIL release** -- all blocking network execution releases the Python GIL via `py.allow_threads`.
+- **Buffered responses** -- `Response` exposes `status_code`, `headers`, `url`, `content` (bytes), `text`, `is_success`, and `raise_for_status()`.
+- **Case-insensitive headers** -- `Headers` supports `[]` access, `.get()`, `in`, iteration, `keys()`, `values()`, `items()`.
+- **Timeout mapping** -- scalar `timeout=float` or `timeout=None` maps to Rust phase-aware timeouts.
+- **Exception hierarchy** -- `EggfetchError` base with `RequestError`, `InvalidUrl`, `TimeoutException` (and phase-specific subclasses), `NetworkError`, `ProtocolError`, `BodyError`, `HTTPStatusError`.
+- **Unsupported kwargs** -- raises `TypeError` with the unsupported argument name.
+
+### Current limitations (Milestone F)
+
+- Sync only; async Python API deferred to Milestone G.
+- No redirects, cookies, auth, files, JSON body, streaming response iteration.
+- No `follow_redirects`, `stream`, `proxies`, `verify`, or `cert` kwargs.
+- `connect` timeout is accepted but not independently enforced (use `total` as backstop).
+
 ## Repository Layout
 
 ```text
@@ -139,7 +159,11 @@ rustfmt.toml             max_width 100
 crates/
   eggfetch-core/         async HTTP engine (Milestone E complete)
   eggfetch-cli/          CLI binary (stub)
-  eggfetch-python/       Python bindings (stub)
+  eggfetch-python/       Python bindings (Milestone F complete)
+    src/                 Rust adapter modules (PyO3)
+    python/eggfetch/     Python package (__init__.py)
+    tests/               Python tests
+    pyproject.toml       maturin build config
 docs/
   architecture/          architecture documentation
 plans/
@@ -149,6 +173,7 @@ plans/
   milestone-c-connection-management.md
   milestone-d-timeout-system.md
   milestone-e-streaming-foundation.md
+  milestone-f-python-sync-api.md
   hardening-correctness-before-python.md
 ```
 
@@ -162,6 +187,18 @@ cargo fmt --all
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo test --workspace --all-features
 cargo doc --workspace --all-features --no-deps
+```
+
+### Python package
+
+The Python package uses maturin for building. Requires Python 3.9+ and a virtual environment:
+
+```sh
+python3 -m venv .venv
+source .venv/bin/activate
+pip install pytest
+PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1 maturin develop -m crates/eggfetch-python/Cargo.toml
+python -m pytest crates/eggfetch-python/tests/
 ```
 
 ## MSRV
@@ -180,3 +217,4 @@ eggfetch is dual-licensed under [MIT](LICENSE-MIT) and [Apache License, Version 
 - [plans/milestone-c-connection-management.md](plans/milestone-c-connection-management.md) -- the plan for Milestone C (connection pooling and management).
 - [plans/milestone-d-timeout-system.md](plans/milestone-d-timeout-system.md) -- the plan for Milestone D (timeout system).
 - [plans/milestone-e-streaming-foundation.md](plans/milestone-e-streaming-foundation.md) -- the plan for Milestone E (streaming foundation).
+- [plans/milestone-f-python-sync-api.md](plans/milestone-f-python-sync-api.md) -- the plan for Milestone F (Python sync API).
