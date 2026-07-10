@@ -153,26 +153,10 @@ impl PyAsyncClient {
             }
 
             let mut response = builder.send().await.map_err(map_err)?;
-            let status = response.status().as_u16();
-            let headers = crate::headers::PyHeaders::from_header_map(response.headers().clone());
-            let url = response.url().to_string();
-            let reason_phrase = response
-                .status()
-                .canonical_reason()
-                .unwrap_or("")
-                .to_string();
-            let http_version = crate::response::version_to_string(response.version());
-            let encoding = crate::response::extract_charset(response.headers());
             let content = response.bytes().await.map_err(map_err)?;
-            Ok(crate::response::PyResponse::from_parts(
-                status,
-                headers,
-                url,
-                content,
-                reason_phrase,
-                http_version,
-                encoding,
-            ))
+            Ok(crate::response::PyResponse::from_core_response_with_body(
+                response, content,
+            )?)
         })
     }
 
@@ -383,7 +367,9 @@ impl PyAsyncClient {
 
     /// Close the client. Idempotent.
     fn close(&mut self) {
-        self.closed = true;
+        if !self.closed {
+            self.closed = true;
+        }
     }
 
     /// Returns True if the client has been closed.

@@ -181,7 +181,18 @@ impl Client {
             .as_ref()
             .unwrap_or(&self.inner.config.redirect);
 
-        // Buffer the body into bytes for replayability across redirects.
+        // Fast path: redirects disabled — send directly without buffering.
+        // This preserves streaming body semantics for ordinary requests.
+        if !effective_redirect.follow {
+            let mut request = Request::new(method, url);
+            *request.headers_mut() = headers;
+            request.set_body(body);
+            request.set_version(version);
+            request.set_timeout(Some(timeout));
+            return self.send_single_request(request, &timeout).await;
+        }
+
+        // Redirect path: buffer the body into bytes for replayability across hops.
         let body_bytes = body.into_bytes().await?;
 
         let mut history = Vec::new();

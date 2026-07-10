@@ -22,6 +22,20 @@ The repository currently provides:
 - maturin/PyO3 package structure
 - extensive Rust and Python tests
 
+## Completion status
+
+The following tracks have been completed in the corrective pass:
+
+- **Track B**: Fixed redirect body buffering. When `follow_redirects=False` (the default), request body is no longer eagerly buffered, preserving streaming body semantics for ordinary requests.
+- **Track C**: Audited and confirmed. Total timeout already uses `start_time.elapsed()` for a deadline across the full redirect chain. No code changes needed.
+- **Track D**: Audited and confirmed. History entries use drained bodies with empty bytes, releasing pool permits. No code changes needed.
+- **Track E**: Audited and confirmed. Charset-aware decoding via `encoding_rs` works correctly with case-insensitive parsing, quoted values, and UTF-8 fallback. No code changes needed.
+- **Track I**: Fixed async response construction. `AsyncClient` now uses `PyResponse::from_core_response_with_body()` (same as sync path), fixing a history bug where async responses discarded redirect history. Also made `AsyncClient::close()` idempotent to match `Client::close()`.
+- **Track H**: Updated `.gitignore` to cover `*.egg-info/`, `.maturin/`, `.pytest_cache/`, and `*.pyo`.
+- **Track J**: Documentation truth pass. Removed false `aiter_*` claims, updated async adapter description, added tightening plan to repo layout and further reading.
+
+Tracks remaining: A (true Python streaming), F (package/wheel validation), G (CI visibility).
+
 ## Main risks to close
 
 The most important remaining risks are:

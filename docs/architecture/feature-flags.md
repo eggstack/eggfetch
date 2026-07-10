@@ -73,8 +73,7 @@ Enables Zstandard decompression of response bodies.
 ### cookies
 
 **Status:** planned, not implemented.
-**Milestone:** after J (redirect engine).
-Enables cookie jar support for persistent cookies across requests.
+**Milestone:** after the post-J corrective pass. Enables cookie jar support for persistent cookies across requests.
 
 ### proxy
 

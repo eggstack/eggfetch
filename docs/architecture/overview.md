@@ -1,6 +1,6 @@
 # Architecture Overview
 
-This document describes the architecture of eggfetch. Milestone J is complete: the core crate provides protocol-neutral streaming for request and response bodies, redirect following with configurable policy, and the Python crate exposes both sync and async APIs over the async Rust core via PyO3/maturin, with a requests/httpx-compatible response surface, request builder compatibility, and redirect support.
+This document describes the architecture of eggfetch. Milestone J is complete with a post-J corrective pass applied: the core crate provides protocol-neutral streaming for request and response bodies, redirect following with configurable policy, and the Python crate exposes both sync and async APIs over the async Rust core via PyO3/maturin, with a requests/httpx-compatible response surface, request builder compatibility, and redirect support. The corrective pass fixed redirect body buffering (streaming bodies no longer eagerly buffered when redirects are disabled) and async response history handling.
 
 The post-E hardening pass landed true streaming request bodies, per-chunk read/write timeouts, pool permits tied to the full response body lifecycle, and origin-keyed pool limits.
 
@@ -163,7 +163,7 @@ The async adapter bridges eggfetch-core's Rust futures to Python coroutines usin
 
 Key design decisions:
 
-- **No runtime creation in response path**: `PyResponse::from_parts()` constructs a response from pre-buffered data without creating a tokio runtime, avoiding the `Cannot start a runtime from within a runtime` panic.
+- **Unified response construction**: `PyResponse::from_core_response_with_body()` constructs a response from pre-buffered data and handles redirect history conversion. Both sync and async paths use this method, ensuring consistent behavior and history handling.
 - **Pre-resolved futures for context manager**: `__aenter__` and `__aexit__` return pre-resolved `asyncio.Future` objects rather than using `future_into_py`, which would attempt to start a nested runtime.
 - **Cancellation safety**: cancelling an in-flight request drops the Rust future cleanly; pool permits are released via RAII `PoolGuard`.
 
@@ -174,7 +174,7 @@ The Python `PyResponse` type presents a requests/httpx-compatible surface over t
 - **Properties**: `status_code`, `reason_phrase`, `headers`, `url`, `content`, `text`, `encoding`, `http_version`, `history`.
 - **Status helpers**: `is_informational` (1xx), `is_success` (2xx), `is_redirect` (3xx), `is_client_error` (4xx), `is_server_error` (5xx), `is_error` (4xx+5xx).
 - **JSON**: `json(**kwargs)` delegates to Python's `json.loads`.
-- **Iterators**: `iter_bytes(chunk_size)`, `iter_text(chunk_size)`, `iter_lines()` return Python iterators over buffered content. Async equivalents: `aiter_bytes`, `aiter_text`, `aiter_lines`.
+- **Iterators**: `iter_bytes(chunk_size)`, `iter_text(chunk_size)`, `iter_lines()` return Python iterators over buffered content. These are not true network streaming; the full body is buffered before iteration.
 - **Close**: `close()` and `aclose()` are no-ops for buffered responses.
 - **Text decoding**: explicit `encoding` kwarg > Content-Type charset > UTF-8 fallback. Uses `encoding_rs` for non-UTF-8 charsets; `.text` uses lossy decode with replacement characters.
 - **Headers.get_list()**: returns all values for a multi-value header as a list.

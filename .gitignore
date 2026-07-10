@@ -6,7 +6,11 @@ Cargo.lock.bak
 .DS_Store
 __pycache__/
 *.pyc
+*.pyo
 *.so
 *.dylib
 *.pyd
 .venv*/
+*.egg-info/
+.maturin/
+.pytest_cache/

@@ -153,7 +153,7 @@ Requests/HTTPX-compatible Response surface in Python:
 - **Response properties** -- `status_code`, `reason_phrase`, `headers`, `url`, `content`, `text`, `encoding`, `http_version`, `history`.
 - **Status helpers** -- `is_informational`, `is_success`, `is_redirect`, `is_client_error`, `is_server_error`, `is_error` (all `#[getter]` returning `bool`).
 - **JSON** -- `json(**kwargs)` delegates to Python's `json.loads` with kwargs passthrough.
-- **Streaming iterators** -- `iter_bytes(chunk_size)`, `iter_text(chunk_size)`, `iter_lines()` return Python iterators over buffered content. Async equivalents: `aiter_bytes`, `aiter_text`, `aiter_lines`.
+- **Streaming iterators** -- `iter_bytes(chunk_size)`, `iter_text(chunk_size)`, `iter_lines()` return Python iterators over buffered content. These are not true network streaming; the full body is buffered before iteration. True network streaming (consuming chunks as they arrive) is planned for a later milestone.
 - **Close** -- `close()` and `aclose()` (no-ops for buffered responses).
 - **Text decoding** -- charset-aware decoding: explicit `encoding` kwarg > Content-Type charset > UTF-8 fallback. Uses `encoding_rs` for non-UTF-8 charsets.
 - **Headers.get_list()** -- returns all values for a multi-value header as a list.
@@ -205,8 +205,9 @@ crates/
     pyproject.toml       maturin build config
 docs/
   architecture/          architecture documentation
-plans/
-  ROADMAP.md             full milestone roadmap
+  plans/
+  ROADMAP.md                    full milestone roadmap
+  post-milestone-j-tightening.md  post-J corrective pass plan
   milestone-a-repository-foundation.md
   milestone-b-core-http-engine.md
   milestone-c-connection-management.md
@@ -215,6 +216,8 @@ plans/
   milestone-f-python-sync-api.md
   milestone-g-python-async-api.md
   milestone-h-response-compatibility.md
+  milestone-i-request-builder-compatibility.md
+  milestone-j-redirect-engine.md
   hardening-correctness-before-python.md
 ```
 
@@ -263,3 +266,4 @@ eggfetch is dual-licensed under [MIT](LICENSE-MIT) and [Apache License, Version 
 - [plans/milestone-h-response-compatibility.md](plans/milestone-h-response-compatibility.md) -- the plan for Milestone H (response compatibility surface).
 - [plans/milestone-i-request-builder-compatibility.md](plans/milestone-i-request-builder-compatibility.md) -- the plan for Milestone I (request builder compatibility).
 - [plans/milestone-j-redirect-engine.md](plans/milestone-j-redirect-engine.md) -- the plan for Milestone J (redirect engine).
+- [plans/post-milestone-j-tightening.md](plans/post-milestone-j-tightening.md) -- post-J corrective pass: redirect body buffering fix, async response construction fix, documentation truth pass.

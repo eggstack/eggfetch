@@ -72,7 +72,7 @@ pub struct PyResponse {
     /// Character encoding detected from the Content-Type header, if any.
     #[pyo3(get)]
     encoding: Option<String>,
-    /// Redirect history (empty; reserved for future redirect support).
+    /// Redirect history (populated when `follow_redirects` is enabled).
     #[pyo3(get)]
     history: Vec<PyResponse>,
     /// Whether the stream has been consumed (always `false` for buffered
@@ -83,7 +83,29 @@ pub struct PyResponse {
 
 impl PyResponse {
     /// Create a `PyResponse` from a core `Response`, buffering all data.
+    ///
+    /// Uses a short-lived tokio runtime to buffer the body. Not safe to
+    /// call from within an existing async context — use
+    /// [`from_core_response_with_body`] instead.
     pub fn from_core_response(mut response: eggfetch_core::Response) -> PyResult<Self> {
+        let content = {
+            let rt = tokio::runtime::Runtime::new()
+                .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+            rt.block_on(response.bytes())
+                .map_err(crate::errors::map_err)?
+        };
+        Self::from_core_response_with_body(response, content)
+    }
+
+    /// Create a `PyResponse` from a core `Response` with pre-buffered body
+    /// bytes.
+    ///
+    /// This is safe to call from async contexts because it does not spawn
+    /// a runtime. Redirect history is converted properly.
+    pub fn from_core_response_with_body(
+        mut response: eggfetch_core::Response,
+        content: Bytes,
+    ) -> PyResult<Self> {
         let status = response.status().as_u16();
         let headers = PyHeaders::from_header_map(response.headers().clone());
         let url = response.url().to_string();
@@ -117,13 +139,6 @@ impl PyResponse {
                 )
             })
             .collect();
-
-        // Buffer body bytes synchronously using a short-lived tokio runtime.
-        let rt = tokio::runtime::Runtime::new()
-            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
-        let content = rt
-            .block_on(response.bytes())
-            .map_err(crate::errors::map_err)?;
 
         let text = decode_with_encoding(&content, encoding.as_deref());
 
