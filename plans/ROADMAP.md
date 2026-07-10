@@ -1,173 +1,376 @@
-# eggfetch Roadmap
+# eggfetch Revised Roadmap
 
 ## Purpose
 
-eggfetch is a Rust-native HTTP client engine with Python bindings that present familiar `requests` and `httpx` style APIs. The project should be designed as a library first, with a CLI and Python package layered on top of the same core engine.
+eggfetch is a Rust-native HTTP client platform with Python bindings and a CLI layered on top of a single async engine. The project has completed its initial architectural and MVP-construction phase: the Rust core, Python sync and async APIs, response compatibility surface, common request body handling, redirects, streaming foundations, timeouts, and pooling are all in place.
 
-The central implementation principle is that the Rust engine is asynchronous only. Synchronous Python behavior is an adapter concern: the Python sync API should block on the async Rust engine while releasing the GIL. There must not be a second sync networking implementation.
+The remaining roadmap is therefore not primarily about proving feasibility. It is about tightening semantics, completing the expected HTTP-client feature set, expanding transport capabilities, and establishing production-grade release, security, testing, and documentation practices.
 
-The MVP should prioritize correctness, clean architecture, and protocol expansion foundations over broad feature parity. HTTP/1.1 over TLS, robust request/response modeling, reliable timeout behavior, safe connection reuse, streaming bodies, and familiar Python ergonomics are the essential early goals.
+## Architectural invariants
 
-## Non-goals for the MVP
+The following remain non-negotiable:
 
-The MVP is not a full drop-in replacement for HTTPX. It should not initially attempt full parity for every HTTPX transport, ASGI/WSGI in-process transport, every authentication flow, advanced proxy mounting behavior, all AnyIO backends, or every requests compatibility edge case.
+- All network I/O lives in `eggfetch-core`.
+- The Rust engine remains async-first.
+- Python sync behavior blocks on the async engine while releasing the GIL.
+- Python async behavior targets `asyncio` first.
+- The CLI contains no independent HTTP implementation.
+- Rust APIs remain idiomatic rather than mirroring Python conventions.
+- Optional capabilities remain feature-gated or isolated in higher-level crates where practical.
+- Compatibility claims must match tested behavior.
 
-The project should instead document compatibility clearly and grow toward parity deliberately.
+## Completed foundation
 
-## Architectural shape
+The following work is considered complete enough to serve as the platform for the revised roadmap:
 
-The intended workspace layout is:
+- repository/workspace foundation
+- async Rust HTTP/1.1 engine over hyper/tokio/rustls
+- request/response/header/body abstractions
+- connection pooling and per-origin permit control
+- phase-aware timeout model with implemented pool/total/read semantics where supported
+- streamed Rust request and response bodies
+- sync Python API
+- async Python API
+- Python response compatibility surface
+- Python request kwargs for params, headers, content, form data, and JSON
+- redirect engine with method rewriting, sensitive-header stripping, history, and limits
 
-```text
-eggfetch-core/      async Rust HTTP engine
-eggfetch-python/    PyO3/maturin Python package
-eggfetch-cli/       command-line interface using eggfetch-core
-plans/              roadmap and handoff plans
-```
+These capabilities should continue receiving corrective maintenance, but the roadmap no longer treats them as greenfield milestones.
 
-The long-term shape may later add:
+# Phase 1: Semantic Tightening and Public-API Stabilization
 
-```text
-eggfetch-testing/   local protocol test servers and fixtures
-eggfetch-bench/     benchmark harnesses
-eggfetch-http3/     optional QUIC/HTTP/3 transport experiments
-```
+## Milestone N: Post-Milestone J semantic tightening
 
-The dependency strategy should be conservative. Initial core dependencies should be limited to what is required for a correct HTTP/1.1 client engine: `tokio`, `hyper`, `hyper-util`, `http`, `http-body-util`, `bytes`, `url`, `rustls`, `tokio-rustls`, and small support crates where justified. Optional capabilities such as HTTP/2, brotli, zstd, multipart, SOCKS proxies, tracing, CLI support, and Python bindings should be behind features or separate crates.
+Make every already-exposed API behave exactly as documented before adding broad new features.
 
-## Core invariants
+Primary work:
 
-All network I/O goes through `eggfetch-core`.
+- true Python network streaming rather than buffered iterators
+- redirect/body replay correctness for streamed uploads
+- logical total timeout across redirect chains
+- lifecycle-safe, memory-bounded redirect history
+- deterministic response-decoding policy
+- sync/async Python API parity audit
+- clean wheel builds across supported Python versions/platforms
+- visible CI checks
+- repository-history audit for the accidentally committed virtual environment
+- compatibility documentation truth pass
 
-The sync Python API owns or borrows a runtime and blocks on the same async engine. It must release the GIL during blocking operations.
+Exit criterion:
 
-The async Python API should initially target `asyncio` semantics. Trio/AnyIO compatibility is a later compatibility track, not an MVP requirement.
+> Existing public behavior is stable, lifecycle-safe, tested, and accurately documented.
 
-Connection pooling, redirect handling, body streaming, timeouts, TLS verification, DNS behavior, proxy behavior, and response decoding must be implemented once in Rust.
+# Phase 2: HTTP Client Completeness
 
-The CLI must use `eggfetch-core` directly and contain no independent HTTP behavior.
+## Milestone O: Cookie subsystem
 
-## MVP capability target
+Implement a first-class cookie model in the Rust core.
 
-The MVP should support:
+Capabilities:
 
-```python
-import eggfetch as httpx
+- RFC 6265-style cookie parsing and serialization
+- `Cookie`, `CookieJar`, and policy abstractions
+- `Set-Cookie` ingestion
+- request `Cookie` header generation
+- domain/path/secure/expiry matching
+- redirect and cross-origin behavior
+- Python `client.cookies` and `response.cookies`
 
-r = httpx.get("https://example.com", params={"q": "test"}, timeout=5.0)
-print(r.status_code)
-print(r.headers)
-print(r.text)
-r.raise_for_status()
+The initial implementation should be HTTP-client oriented rather than browser-grade. Public-suffix enforcement and SameSite browser policy may be added later.
 
-with httpx.Client(headers={"User-Agent": "eggfetch"}) as client:
-    r = client.post("https://example.com/api", json={"a": 1})
+## Milestone P: Authentication subsystem
 
-async with httpx.AsyncClient() as client:
-    r = await client.get("https://example.com")
-```
+Implement reusable authentication abstractions in the core.
 
-The Rust API should remain idiomatic rather than Python-shaped:
+Initial capabilities:
 
-```rust
-let client = eggfetch_core::Client::new();
-let response = client
-    .get("https://example.com")
-    .header("user-agent", "eggfetch")
-    .send()
-    .await?;
-```
+- Basic authentication
+- Bearer-token authentication
+- auth application at client and request level
+- safe redirect behavior and credential stripping
+- Python tuple/basic auth compatibility
+- structured auth interface for future Digest, API-key, OAuth, and pluggable schemes
 
-## Milestone sequence
+Auth must be designed as request transformation/state machinery, not hard-coded special cases in Python.
 
-### Milestone A: Repository and workspace foundation
+## Milestone Q: Multipart and file uploads
 
-Create the cargo workspace, crate boundaries, baseline metadata, CI, linting, formatting, feature policy, MSRV policy, dependency policy, and contributor-facing docs. This milestone should establish the project skeleton without implementing a large networking stack.
+Implement streaming multipart/form-data.
 
-### Milestone B: Core request/response model and minimal HTTP engine
+Capabilities:
 
-Implement the async Rust core with `Client`, `Request`, `RequestBuilder`, `Response`, `Body`, `Headers`, `Method`, `Uri`, and `Error`. Support GET, POST, custom methods, headers, query parameters, byte bodies, HTTPS, and buffered responses.
+- fields and files
+- filenames and content types
+- constant-memory file streaming
+- known-length multipart optimization where possible
+- unknown-length chunked uploads
+- Python `files=` compatibility
+- cancellation, timeout, and redirect replay behavior
 
-### Milestone C: Connection management
+Multipart must reuse the established streaming-body pipeline.
 
-Implement the connection pool as a first-class subsystem. Support connection reuse, idle expiration, max idle connections, max total connections, graceful client shutdown, and deterministic pool acquisition behavior.
+## Milestone R: Content compression
 
-### Milestone D: Timeout system
+Implement configurable response decompression.
 
-Implement phase-aware timeout behavior: connect timeout, pool acquisition timeout, write timeout, read timeout, and optional overall request timeout. Errors must identify the timeout phase precisely.
+Initial formats:
 
-### Milestone E: Streaming foundation
+- gzip
+- deflate
+- brotli
+- zstd
 
-Implement protocol-neutral streaming abstractions for request and response bodies. Support buffered reads, streaming reads, sync Python iterators later, async Python iterators later, chunk boundaries, cancellation behavior, and clear ownership rules.
+Requirements:
 
-### Milestone F: Python sync API
+- feature-gated dependencies
+- correct `Content-Encoding` handling
+- decompression-bomb limits/policy
+- streaming decompression
+- raw/decoded body distinction where exposed
 
-Introduce PyO3/maturin packaging and expose `request`, `get`, `post`, `put`, `patch`, `delete`, `head`, `options`, and `Client`. The sync API must block on the async Rust engine and release the GIL.
+Outgoing compression can remain a later optional extension.
 
-### Milestone G: Python async API
+# Phase 3: Networking and Transport Features
 
-Expose `AsyncClient`, awaitable requests, async context managers, and async response streaming targeting `asyncio` first.
+## Milestone S: Proxy subsystem
 
-### Milestone H: Response compatibility surface (complete)
+Implement:
 
-Add Python-facing `status_code`, `headers`, `content`, `text`, `json()`, `raise_for_status()`, `iter_bytes()`, `iter_text()`, `iter_lines()`, and response history. Implemented: reason_phrase, http_version, encoding, status helpers (is_informational, is_success, is_redirect, is_client_error, is_server_error, is_error), charset-aware text decoding, multi-value header support (get_list), close/aclose, improved repr.
+- HTTP proxying
+- HTTPS CONNECT tunneling
+- proxy authentication
+- per-request/client proxy configuration
+- `NO_PROXY`-style bypass behavior if deliberately supported
+- later SOCKS5 support behind a feature
 
-### Milestone I: Request builder compatibility surface (complete)
+Proxy logic belongs in the core connector/transport layer.
 
-Add Python-facing `params`, `data`, `json`, `files` foundation, auth hooks foundation, cookies foundation, default headers, and client-level configuration merging. Implemented: `params` (dict/sequence of pairs), `headers` (dict/sequence of pairs), `content` (raw bytes/str), `data` (form-encoded dict/sequence of pairs), `json` (JSON-serialized via Python `json.dumps`), body kwarg mutual exclusion (`content`/`data`/`json`), auto Content-Type for form and JSON bodies, user Content-Type preservation, and `timeout` kwarg.
+## Milestone T: TLS configuration
 
-### Milestone J: Redirect engine (complete)
+Expose deliberate TLS configuration without weakening secure defaults.
 
-Implement method rewrite/preservation behavior, loop detection, max redirect enforcement, redirect history, header stripping across origins, and configurable redirect policies. Implemented: `RedirectPolicy` (follow, max_redirects), redirect status detection (301/302/303/307/308), method rewriting (POST→GET on 301/302/303, preserve on 307/308), body header stripping when body dropped, cross-origin sensitive header stripping (`Authorization`, `Cookie`, `Proxy-Authorization`), URL resolution via `url::Url::join`, scheme validation (http/https only), redirect history on `Response`, `follow_redirects`/`max_redirects` Python kwargs, and `TooManyRedirects` exception.
+Capabilities:
 
-### Milestone K: CLI
+- verification enabled by default
+- custom CA bundles
+- verification disable escape hatch with explicit warnings/docs
+- client certificates
+- TLS version policy
+- SNI behavior
+- Python `verify=` and `cert=` compatibility
 
-Build an `eggfetch` CLI using the same engine. Support methods, headers, JSON body, form body, body file, output body, output headers, timings, redirects, timeout options, HTTP version display, and machine-readable output.
+This milestone requires targeted security review.
 
-### Milestone L: Correctness and differential testing
+## Milestone U: Retry and resilience policy
 
-Build a local protocol test harness and compare common behaviors against requests and HTTPX where appropriate. Test redirects, timeouts, streaming, TLS, malformed responses, connection reuse, concurrency, cancellation, and decoding.
+Implement policy-driven retries rather than unconditional retry behavior.
 
-### Milestone M: Documentation and public MVP preparation
+Capabilities:
 
-Document architecture, Rust API, Python API, CLI, compatibility limits, timeout semantics, streaming semantics, dependency policy, security policy, and migration examples.
+- idempotency-aware retry decisions
+- retryable transport/status conditions
+- exponential backoff and jitter
+- retry budgets and maximum attempts
+- replayability checks for request bodies
+- cancellation and timeout interaction
 
-## Correctness priorities
+Retries should be opt-in initially.
 
-The project should explicitly test and document:
+# Phase 4: Modern HTTP Protocols
 
-- request method and header preservation
-- URI parsing and query serialization
-- duplicate headers and case-insensitive lookup
-- content-length versus chunked body behavior
-- body reuse rules
-- redirect method rewriting rules
-- cross-origin redirect header handling
-- connection reuse versus close behavior
-- TLS verification failures
-- DNS failures
-- connect, read, write, pool, and total timeout errors
-- cancellation and drop behavior
-- streaming partial reads
-- decompression boundaries when added
+## Milestone V: HTTP/2
 
-## Compatibility policy
+Enable and validate HTTP/2 support.
 
-eggfetch should prefer familiar semantics over pretending to be fully drop-in compatible before that is true. Public docs should state which requests/httpx behaviors are supported, unsupported, or intentionally different.
+Work includes:
 
-The Python package may expose an `eggfetch` top-level module first. A later compatibility package or alias can be considered if the project reaches sufficiently high parity.
+- ALPN negotiation
+- multiplexing semantics
+- flow-control tests
+- pool/concurrency model adjustments
+- protocol-version reporting
+- HTTP/2-specific error mapping
+- load and cancellation testing
 
-## Release criteria for MVP
+The pool abstraction must no longer equate one active request with one TCP connection.
 
-The MVP is ready when:
+## Milestone W: HTTP/3
 
-- the Rust core can issue correct HTTPS requests through a reusable async client
-- connection pooling is deterministic and tested
-- timeout phases are tested and exposed as precise errors
-- response bodies can be buffered or streamed
-- the Python sync API supports common requests/httpx-style calls
-- the Python async API supports common HTTPX-style calls
-- the CLI exercises the same engine
-- local correctness tests cover common protocol edge cases
-- compatibility limits are documented
-- the dependency tree is reviewed and justifiable
+Introduce optional HTTP/3 support through a separately gated transport, likely using Quinn and the `h3` ecosystem.
+
+Requirements:
+
+- no disruption to HTTP/1.1 and HTTP/2 defaults
+- protocol fallback/selection policy
+- QUIC connection lifecycle
+- 0-RTT policy if ever enabled
+- certificate and timeout integration
+- extensive interoperability testing
+
+HTTP/3 is post-MVP and should remain isolated until mature.
+
+# Phase 5: CLI and Ecosystem
+
+## Milestone X: Full CLI
+
+Expand `eggfetch-cli` into a practical HTTP command-line client using only `eggfetch-core`.
+
+Capabilities:
+
+- all common HTTP methods
+- headers and params
+- JSON, forms, raw body, and files
+- redirects
+- cookies and auth
+- proxy/TLS options
+- streamed upload/download
+- response headers/body/timing output
+- machine-readable JSON/NDJSON modes
+- useful exit codes
+
+## Milestone Y: Documentation and examples
+
+Create complete Rust, Python, and CLI documentation.
+
+Required areas:
+
+- request lifecycle
+- connection pooling
+- timeouts
+- streaming
+- redirects
+- cookies/auth
+- proxies/TLS
+- migration from requests and HTTPX
+- compatibility matrix
+- cookbook examples
+
+Examples should include JSON APIs, large downloads/uploads, SSE-like streaming, authentication, and common third-party APIs.
+
+## Milestone Z: Additional language bindings and framework use
+
+Treat `eggfetch-core` as a reusable engine for future consumers.
+
+Potential tracks:
+
+- Node/N-API
+- Ruby
+- Perl
+- Java/JNI
+- Zig/C ABI
+- internal eggstack consumers
+
+These should begin only after the core API and semantics are stable.
+
+# Phase 6: Production Readiness
+
+## Production Track A: Benchmarking and performance
+
+Build a reproducible benchmark suite comparing eggfetch with relevant clients such as requests, HTTPX, aiohttp, and reqwest.
+
+Measure:
+
+- latency and throughput
+- connection reuse
+- allocation behavior
+- memory under streaming load
+- startup/import cost
+- sync versus async Python overhead
+- redirect/proxy/compression overhead
+
+Performance work must not weaken correctness or security.
+
+## Production Track B: Robustness and fuzzing
+
+Add fuzz targets for:
+
+- headers
+- URL/query normalization
+- cookie parsing
+- redirect resolution
+- multipart generation
+- compression streams
+- timeout state machines
+
+Use cargo-fuzz initially and evaluate OSS-Fuzz later.
+
+## Production Track C: Security hardening
+
+Add:
+
+- cargo-audit
+- cargo-deny
+- dependency licensing policy
+- TLS review
+- redirect credential-leak tests
+- decompression/resource-exhaustion limits
+- proxy/auth review
+- security response process
+
+Formal external audit can be considered once the feature surface stabilizes.
+
+## Production Track D: Release engineering
+
+Establish:
+
+- reproducible Rust releases
+- multi-platform Python wheels
+- PyPI publishing automation
+- crates.io publishing policy
+- changelog and release notes
+- semantic-versioning and deprecation policy
+- MSRV and supported-Python policy
+- signed provenance/artifacts where practical
+
+# Recommended execution order
+
+The preferred order is:
+
+1. Milestone N: semantic tightening
+2. Milestone O: cookies
+3. Milestone P: authentication
+4. Milestone Q: multipart/files
+5. Milestone R: compression
+6. Milestone S: proxies
+7. Milestone T: TLS configuration
+8. Milestone U: retries
+9. Milestone V: HTTP/2
+10. Milestone X: full CLI
+11. Milestone Y: documentation/examples
+12. Production tracks
+13. HTTP/3 and additional language bindings
+
+Cookies and authentication may be developed in parallel only after Milestone N is complete and shared request/redirect semantics are stable.
+
+# Compatibility policy
+
+eggfetch should continue to provide familiar requests/httpx semantics without claiming drop-in compatibility prematurely.
+
+Documentation must classify each feature as:
+
+- supported and tested
+- partially supported with documented differences
+- planned
+- intentionally unsupported
+
+Any compatibility alias or drop-in package should wait until a large differential test suite demonstrates that the claim is credible.
+
+# Revised MVP criteria
+
+A public MVP is ready when:
+
+- semantic tightening is complete
+- Rust and Python sync/async APIs pass local and CI validation
+- real Python streaming works
+- redirect/body replay and total-timeout behavior are correct
+- cookies, basic/bearer auth, and multipart uploads are available
+- the CLI supports common request workflows
+- wheels build for the declared Python/platform matrix
+- compatibility limitations are explicit
+- dependency and security checks are active
+
+# Long-term product position
+
+`eggfetch-core` should be treated as the primary reusable HTTP engine. The Python package and CLI are first-class frontends, not the only consumers.
+
+That positioning preserves the strongest aspect of the design: one audited, high-performance implementation shared across Rust, Python, CLI, future language bindings, and other eggstack projects.
