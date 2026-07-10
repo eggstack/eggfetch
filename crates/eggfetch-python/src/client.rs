@@ -2,7 +2,10 @@
 
 use pyo3::prelude::*;
 
-use crate::conversion::{parse_timeout, python_headers_to_rust, python_params_to_url};
+use crate::conversion::{
+    build_request_body, parse_timeout, python_headers_to_rust, python_params_to_url,
+    validate_body_kwargs,
+};
 use crate::errors::map_err;
 use crate::response::PyResponse;
 
@@ -22,7 +25,7 @@ impl PyClient {
     /// Create a new client.
     ///
     /// Args:
-    ///     headers: Default headers dict (optional).
+    ///     headers: Default headers dict or sequence of pairs (optional).
     ///     timeout: Default timeout in seconds, or Timeout object (optional).
     #[new]
     #[pyo3(signature = (*, headers=None, timeout=None))]
@@ -61,7 +64,7 @@ impl PyClient {
     }
 
     /// Send an HTTP request.
-    #[pyo3(signature = (method, url, *, headers=None, params=None, content=None, timeout=None))]
+    #[pyo3(signature = (method, url, *, headers=None, params=None, content=None, data=None, json=None, timeout=None))]
     #[allow(clippy::too_many_arguments)]
     fn request<'py>(
         &mut self,
@@ -71,6 +74,8 @@ impl PyClient {
         headers: Option<&Bound<'py, PyAny>>,
         params: Option<&Bound<'py, PyAny>>,
         content: Option<&Bound<'py, PyAny>>,
+        data: Option<&Bound<'py, PyAny>>,
+        json: Option<&Bound<'py, PyAny>>,
         timeout: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Bound<'py, PyAny>> {
         self.ensure_not_closed()?;
@@ -86,21 +91,25 @@ impl PyClient {
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
 
         if let Some(p) = params {
-            python_params_to_url(&mut target_url, p)?;
+            python_params_to_url(py, &mut target_url, p)?;
         }
         let target_url = target_url;
 
-        let rust_headers = if let Some(h) = headers {
+        validate_body_kwargs(content, data, json)?;
+
+        let mut rust_headers = if let Some(h) = headers {
             python_headers_to_rust(py, h)?
         } else {
             eggfetch_core::Headers::new()
         };
 
-        let body_bytes: Option<Vec<u8>> = if let Some(c) = content {
-            Some(c.extract::<Vec<u8>>()?)
-        } else {
-            None
-        };
+        let (body_bytes, auto_content_type) = build_request_body(py, content, data, json)?;
+
+        if let Some(ct) = auto_content_type {
+            if !rust_headers.contains("content-type") {
+                rust_headers.insert("content-type", ct).map_err(map_err)?;
+            }
+        }
 
         let rust_timeout = parse_timeout(timeout)?;
 
@@ -143,11 +152,12 @@ impl PyClient {
         params: Option<&Bound<'py, PyAny>>,
         timeout: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        self.request(py, "GET", url, headers, params, None, timeout)
+        self.request(py, "GET", url, headers, params, None, None, None, timeout)
     }
 
     /// Send a POST request.
-    #[pyo3(signature = (url, *, headers=None, params=None, content=None, timeout=None))]
+    #[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, timeout=None))]
+    #[allow(clippy::too_many_arguments)]
     fn post<'py>(
         &mut self,
         py: Python<'py>,
@@ -155,13 +165,18 @@ impl PyClient {
         headers: Option<&Bound<'py, PyAny>>,
         params: Option<&Bound<'py, PyAny>>,
         content: Option<&Bound<'py, PyAny>>,
+        data: Option<&Bound<'py, PyAny>>,
+        json: Option<&Bound<'py, PyAny>>,
         timeout: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        self.request(py, "POST", url, headers, params, content, timeout)
+        self.request(
+            py, "POST", url, headers, params, content, data, json, timeout,
+        )
     }
 
     /// Send a PUT request.
-    #[pyo3(signature = (url, *, headers=None, params=None, content=None, timeout=None))]
+    #[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, timeout=None))]
+    #[allow(clippy::too_many_arguments)]
     fn put<'py>(
         &mut self,
         py: Python<'py>,
@@ -169,13 +184,18 @@ impl PyClient {
         headers: Option<&Bound<'py, PyAny>>,
         params: Option<&Bound<'py, PyAny>>,
         content: Option<&Bound<'py, PyAny>>,
+        data: Option<&Bound<'py, PyAny>>,
+        json: Option<&Bound<'py, PyAny>>,
         timeout: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        self.request(py, "PUT", url, headers, params, content, timeout)
+        self.request(
+            py, "PUT", url, headers, params, content, data, json, timeout,
+        )
     }
 
     /// Send a PATCH request.
-    #[pyo3(signature = (url, *, headers=None, params=None, content=None, timeout=None))]
+    #[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, timeout=None))]
+    #[allow(clippy::too_many_arguments)]
     fn patch<'py>(
         &mut self,
         py: Python<'py>,
@@ -183,9 +203,13 @@ impl PyClient {
         headers: Option<&Bound<'py, PyAny>>,
         params: Option<&Bound<'py, PyAny>>,
         content: Option<&Bound<'py, PyAny>>,
+        data: Option<&Bound<'py, PyAny>>,
+        json: Option<&Bound<'py, PyAny>>,
         timeout: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        self.request(py, "PATCH", url, headers, params, content, timeout)
+        self.request(
+            py, "PATCH", url, headers, params, content, data, json, timeout,
+        )
     }
 
     /// Send a DELETE request.
@@ -198,7 +222,9 @@ impl PyClient {
         params: Option<&Bound<'py, PyAny>>,
         timeout: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        self.request(py, "DELETE", url, headers, params, None, timeout)
+        self.request(
+            py, "DELETE", url, headers, params, None, None, None, timeout,
+        )
     }
 
     /// Send a HEAD request.
@@ -211,7 +237,7 @@ impl PyClient {
         params: Option<&Bound<'py, PyAny>>,
         timeout: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        self.request(py, "HEAD", url, headers, params, None, timeout)
+        self.request(py, "HEAD", url, headers, params, None, None, None, timeout)
     }
 
     /// Send an OPTIONS request.
@@ -224,7 +250,9 @@ impl PyClient {
         params: Option<&Bound<'py, PyAny>>,
         timeout: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        self.request(py, "OPTIONS", url, headers, params, None, timeout)
+        self.request(
+            py, "OPTIONS", url, headers, params, None, None, None, timeout,
+        )
     }
 
     /// Close the client and shut down the runtime.

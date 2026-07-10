@@ -162,6 +162,24 @@ class TestHeaders:
         r = eggfetch.get(f"{server}/hello")
         assert "content-type" in r.headers
 
+    def test_headers_as_sequence_of_pairs(self, server):
+        r = eggfetch.get(
+            f"{server}/hello",
+            headers=[("X-Pair", "val1"), ("X-Pair", "val2")],
+        )
+        data = json.loads(r.text)
+        assert data["headers"].get("x-pair") == "val2"
+
+    def test_request_headers_override_client_default(self, server):
+        with eggfetch.Client(headers={"X-Foo": "from-client"}) as client:
+            r = client.get(
+                f"{server}/hello",
+                headers={"X-Foo": "override", "X-Bar": "from-request"},
+            )
+            data = json.loads(r.text)
+            # Request headers are sent; verify the request-specific header arrives.
+            assert data["headers"].get("x-bar") == "from-request"
+
 
 class TestParams:
     def test_params_serialized(self, server):
@@ -169,6 +187,29 @@ class TestParams:
         data = json.loads(r.text)
         assert "q=hello" in data["query"]
         assert "page=1" in data["query"]
+
+    def test_params_sequence_of_pairs(self, server):
+        r = eggfetch.get(
+            f"{server}/search",
+            params=[("q", "test"), ("q", "other")],
+        )
+        data = json.loads(r.text)
+        assert "q=test" in data["query"]
+        assert "q=other" in data["query"]
+
+    def test_params_with_existing_query(self, server):
+        r = eggfetch.get(
+            f"{server}/search?existing=1",
+            params={"q": "hello"},
+        )
+        data = json.loads(r.text)
+        assert "existing=1" in data["query"]
+        assert "q=hello" in data["query"]
+
+    def test_params_none_ignored(self, server):
+        r = eggfetch.get(f"{server}/search", params=None)
+        data = json.loads(r.text)
+        assert data["query"] == ""
 
 
 # ---------------------------------------------------------------------------
@@ -267,3 +308,160 @@ class TestUnsupportedKwargs:
         with eggfetch.Client() as client:
             with pytest.raises(TypeError):
                 client.get(f"{server}/hello", json={"key": "value"})
+
+
+# ---------------------------------------------------------------------------
+# Body kwargs: content, data, json
+# ---------------------------------------------------------------------------
+
+class TestContent:
+    def test_content_bytes(self, server):
+        r = eggfetch.post(f"{server}/api", content=b"raw bytes")
+        data = json.loads(r.text)
+        assert data["body"] == "raw bytes"
+
+    def test_content_str(self, server):
+        r = eggfetch.post(f"{server}/api", content="string body")
+        data = json.loads(r.text)
+        assert data["body"] == "string body"
+
+    def test_content_bytearray(self, server):
+        r = eggfetch.post(f"{server}/api", content=bytearray(b"ba data"))
+        data = json.loads(r.text)
+        assert data["body"] == "ba data"
+
+    def test_content_no_auto_content_type(self, server):
+        r = eggfetch.post(f"{server}/api", content=b"raw")
+        data = json.loads(r.text)
+        # raw content should not set content-type automatically
+        assert data["headers"].get("content-type") is None or \
+               data["headers"].get("content-type") != "application/x-www-form-urlencoded"
+
+
+class TestFormData:
+    def test_form_dict(self, server):
+        r = eggfetch.post(f"{server}/api", data={"a": "1", "b": "2"})
+        data = json.loads(r.text)
+        assert "a=1" in data["body"]
+        assert "b=2" in data["body"]
+        assert data["headers"].get("content-type") == "application/x-www-form-urlencoded"
+
+    def test_form_sequence_of_pairs(self, server):
+        r = eggfetch.post(
+            f"{server}/api",
+            data=[("a", "1"), ("a", "2")],
+        )
+        data = json.loads(r.text)
+        assert "a=1" in data["body"]
+        assert "a=2" in data["body"]
+
+    def test_form_percent_encoding(self, server):
+        r = eggfetch.post(f"{server}/api", data={"key": "hello world"})
+        data = json.loads(r.text)
+        assert "key=hello+world" in data["body"] or "key=hello%20world" in data["body"]
+
+    def test_form_preserves_user_content_type(self, server):
+        r = eggfetch.post(
+            f"{server}/api",
+            headers={"Content-Type": "custom/type"},
+            data={"a": "1"},
+        )
+        data = json.loads(r.text)
+        assert data["headers"].get("content-type") == "custom/type"
+
+
+class TestJsonBody:
+    def test_json_dict(self, server):
+        r = eggfetch.post(f"{server}/api", json={"hello": "world"})
+        data = json.loads(r.text)
+        body = json.loads(data["body"])
+        assert body == {"hello": "world"}
+        assert data["headers"].get("content-type") == "application/json"
+
+    def test_json_list(self, server):
+        r = eggfetch.post(f"{server}/api", json=[1, 2, 3])
+        data = json.loads(r.text)
+        body = json.loads(data["body"])
+        assert body == [1, 2, 3]
+
+    def test_json_nested(self, server):
+        r = eggfetch.post(f"{server}/api", json={"a": {"b": [1, 2]}})
+        data = json.loads(r.text)
+        body = json.loads(data["body"])
+        assert body == {"a": {"b": [1, 2]}}
+
+    def test_json_preserves_user_content_type(self, server):
+        r = eggfetch.post(
+            f"{server}/api",
+            headers={"Content-Type": "custom/json"},
+            json={"a": 1},
+        )
+        data = json.loads(r.text)
+        assert data["headers"].get("content-type") == "custom/json"
+
+    def test_json_unserializable_raises(self, server):
+        with pytest.raises(TypeError):
+            eggfetch.post(f"{server}/api", json=object())
+
+
+class TestBodyConflict:
+    def test_content_and_json_raises(self, server):
+        with pytest.raises(TypeError, match="only one of content, data, or json"):
+            eggfetch.post(f"{server}/api", content=b"raw", json={"a": 1})
+
+    def test_content_and_data_raises(self, server):
+        with pytest.raises(TypeError, match="only one of content, data, or json"):
+            eggfetch.post(f"{server}/api", content=b"raw", data={"a": "1"})
+
+    def test_data_and_json_raises(self, server):
+        with pytest.raises(TypeError, match="only one of content, data, or json"):
+            eggfetch.post(f"{server}/api", data={"a": "1"}, json={"b": 2})
+
+    def test_all_three_raises(self, server):
+        with pytest.raises(TypeError, match="only one of content, data, or json"):
+            eggfetch.post(
+                f"{server}/api",
+                content=b"raw",
+                data={"a": "1"},
+                json={"b": 2},
+            )
+
+
+# ---------------------------------------------------------------------------
+# Client body kwargs
+# ---------------------------------------------------------------------------
+
+class TestClientBodyKwargs:
+    def test_client_json(self, server):
+        with eggfetch.Client() as client:
+            r = client.post(f"{server}/api", json={"key": "value"})
+            data = json.loads(r.text)
+            body = json.loads(data["body"])
+            assert body == {"key": "value"}
+            assert data["headers"].get("content-type") == "application/json"
+
+    def test_client_form_data(self, server):
+        with eggfetch.Client() as client:
+            r = client.post(f"{server}/api", data={"a": "1"})
+            data = json.loads(r.text)
+            assert "a=1" in data["body"]
+
+    def test_client_content(self, server):
+        with eggfetch.Client() as client:
+            r = client.post(f"{server}/api", content=b"raw bytes")
+            data = json.loads(r.text)
+            assert data["body"] == "raw bytes"
+
+    def test_client_put_json(self, server):
+        with eggfetch.Client() as client:
+            r = client.put(f"{server}/api", json={"updated": True})
+            data = json.loads(r.text)
+            body = json.loads(data["body"])
+            assert body == {"updated": True}
+
+    def test_client_patch_json(self, server):
+        with eggfetch.Client() as client:
+            r = client.patch(f"{server}/api", json={"patched": 1})
+            data = json.loads(r.text)
+            body = json.loads(data["body"])
+            assert body == {"patched": 1}

@@ -22,12 +22,15 @@ use timeout::PyTimeout;
 /// Args:
 ///     method: HTTP method string.
 ///     url: Target URL.
-///     headers: Request headers dict (optional).
-///     params: Query parameters dict (optional).
-///     content: Request body as bytes (optional).
+///     headers: Request headers dict or sequence of pairs (optional).
+///     params: Query parameters dict or sequence of pairs (optional).
+///     content: Raw request body as bytes (optional).
+///     data: Form data as dict or sequence of pairs (optional).
+///     json: JSON-serializable object (optional).
 ///     timeout: Request timeout in seconds, or Timeout object (optional).
 #[pyfunction]
-#[pyo3(signature = (method, url, *, headers=None, params=None, content=None, timeout=None))]
+#[pyo3(signature = (method, url, *, headers=None, params=None, content=None, data=None, json=None, timeout=None))]
+#[allow(clippy::too_many_arguments)]
 fn request<'py>(
     py: Python<'py>,
     method: &str,
@@ -35,6 +38,8 @@ fn request<'py>(
     headers: Option<&Bound<'py, PyAny>>,
     params: Option<&Bound<'py, PyAny>>,
     content: Option<&Bound<'py, PyAny>>,
+    data: Option<&Bound<'py, PyAny>>,
+    json: Option<&Bound<'py, PyAny>>,
     timeout: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let method_upper = method.to_uppercase();
@@ -46,21 +51,25 @@ fn request<'py>(
         .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
 
     if let Some(p) = params {
-        conversion::python_params_to_url(&mut target_url, p)?;
+        conversion::python_params_to_url(py, &mut target_url, p)?;
     }
     let target_url = target_url;
 
-    let rust_headers = if let Some(h) = headers {
+    conversion::validate_body_kwargs(content, data, json)?;
+
+    let mut rust_headers = if let Some(h) = headers {
         conversion::python_headers_to_rust(py, h)?
     } else {
         eggfetch_core::Headers::new()
     };
 
-    let body_bytes: Option<Vec<u8>> = if let Some(c) = content {
-        Some(c.extract::<Vec<u8>>()?)
-    } else {
-        None
-    };
+    let (body_bytes, auto_content_type) = conversion::build_request_body(py, content, data, json)?;
+
+    if let Some(ct) = auto_content_type {
+        if !rust_headers.contains("content-type") {
+            rust_headers.insert("content-type", ct).map_err(map_err)?;
+        }
+    }
 
     let rust_timeout = conversion::parse_timeout(timeout)?;
 
@@ -106,49 +115,64 @@ fn get<'py>(
     params: Option<&Bound<'py, PyAny>>,
     timeout: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    request(py, "GET", url, headers, params, None, timeout)
+    request(py, "GET", url, headers, params, None, None, None, timeout)
 }
 
 /// Send a POST request using a short-lived client.
 #[pyfunction]
-#[pyo3(signature = (url, *, headers=None, params=None, content=None, timeout=None))]
+#[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, timeout=None))]
+#[allow(clippy::too_many_arguments)]
 fn post<'py>(
     py: Python<'py>,
     url: &str,
     headers: Option<&Bound<'py, PyAny>>,
     params: Option<&Bound<'py, PyAny>>,
     content: Option<&Bound<'py, PyAny>>,
+    data: Option<&Bound<'py, PyAny>>,
+    json: Option<&Bound<'py, PyAny>>,
     timeout: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    request(py, "POST", url, headers, params, content, timeout)
+    request(
+        py, "POST", url, headers, params, content, data, json, timeout,
+    )
 }
 
 /// Send a PUT request using a short-lived client.
 #[pyfunction]
-#[pyo3(signature = (url, *, headers=None, params=None, content=None, timeout=None))]
+#[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, timeout=None))]
+#[allow(clippy::too_many_arguments)]
 fn put<'py>(
     py: Python<'py>,
     url: &str,
     headers: Option<&Bound<'py, PyAny>>,
     params: Option<&Bound<'py, PyAny>>,
     content: Option<&Bound<'py, PyAny>>,
+    data: Option<&Bound<'py, PyAny>>,
+    json: Option<&Bound<'py, PyAny>>,
     timeout: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    request(py, "PUT", url, headers, params, content, timeout)
+    request(
+        py, "PUT", url, headers, params, content, data, json, timeout,
+    )
 }
 
 /// Send a PATCH request using a short-lived client.
 #[pyfunction]
-#[pyo3(signature = (url, *, headers=None, params=None, content=None, timeout=None))]
+#[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, timeout=None))]
+#[allow(clippy::too_many_arguments)]
 fn patch<'py>(
     py: Python<'py>,
     url: &str,
     headers: Option<&Bound<'py, PyAny>>,
     params: Option<&Bound<'py, PyAny>>,
     content: Option<&Bound<'py, PyAny>>,
+    data: Option<&Bound<'py, PyAny>>,
+    json: Option<&Bound<'py, PyAny>>,
     timeout: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    request(py, "PATCH", url, headers, params, content, timeout)
+    request(
+        py, "PATCH", url, headers, params, content, data, json, timeout,
+    )
 }
 
 /// Send a DELETE request using a short-lived client.
@@ -161,7 +185,9 @@ fn delete<'py>(
     params: Option<&Bound<'py, PyAny>>,
     timeout: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    request(py, "DELETE", url, headers, params, None, timeout)
+    request(
+        py, "DELETE", url, headers, params, None, None, None, timeout,
+    )
 }
 
 /// Send a HEAD request using a short-lived client.
@@ -174,7 +200,7 @@ fn head<'py>(
     params: Option<&Bound<'py, PyAny>>,
     timeout: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    request(py, "HEAD", url, headers, params, None, timeout)
+    request(py, "HEAD", url, headers, params, None, None, None, timeout)
 }
 
 /// Send an OPTIONS request using a short-lived client.
@@ -187,7 +213,9 @@ fn options<'py>(
     params: Option<&Bound<'py, PyAny>>,
     timeout: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    request(py, "OPTIONS", url, headers, params, None, timeout)
+    request(
+        py, "OPTIONS", url, headers, params, None, None, None, timeout,
+    )
 }
 
 /// eggfetch - Python bindings for eggfetch.

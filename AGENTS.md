@@ -14,7 +14,7 @@ eggfetch follows a milestone-driven development sequence: A through M. Each mile
 - F: Python sync API (complete)
 - G: Python async API (complete)
 - H: Response compatibility surface (complete)
-- I: Request builder compatibility surface
+- I: Request builder compatibility surface (complete)
 - J: Redirect engine
 - K: CLI
 - L: Correctness and differential testing

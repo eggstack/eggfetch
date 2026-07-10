@@ -187,6 +187,42 @@ class TestAsyncHeadersAndParams:
                 assert "page=1" in data["query"]
         asyncio.run(_test())
 
+    def test_params_sequence_of_pairs(self, server):
+        async def _test():
+            async with eggfetch.AsyncClient() as client:
+                r = await client.get(
+                    f"{server}/search",
+                    params=[("q", "test"), ("q", "other")],
+                )
+                data = json.loads(r.text)
+                assert "q=test" in data["query"]
+                assert "q=other" in data["query"]
+        asyncio.run(_test())
+
+    def test_headers_as_sequence_of_pairs(self, server):
+        async def _test():
+            async with eggfetch.AsyncClient() as client:
+                r = await client.get(
+                    f"{server}/hello",
+                    headers=[("X-Pair", "val1"), ("X-Pair", "val2")],
+                )
+                data = json.loads(r.text)
+                assert data["headers"].get("x-pair") == "val2"
+        asyncio.run(_test())
+
+    def test_request_headers_override_client_default(self, server):
+        async def _test():
+            async with eggfetch.AsyncClient(
+                headers={"X-Foo": "from-client"}
+            ) as client:
+                r = await client.get(
+                    f"{server}/hello",
+                    headers={"X-Foo": "override", "X-Bar": "from-request"},
+                )
+                data = json.loads(r.text)
+                assert data["headers"].get("x-bar") == "from-request"
+        asyncio.run(_test())
+
 
 # ---------------------------------------------------------------------------
 # Client reuse and default headers
@@ -371,4 +407,138 @@ class TestAsyncUnsupportedKwargs:
             async with eggfetch.AsyncClient() as client:
                 with pytest.raises(TypeError):
                     await client.get(f"{server}/hello", json={"key": "value"})
+        asyncio.run(_test())
+
+
+# ---------------------------------------------------------------------------
+# Body kwargs: content, data, json
+# ---------------------------------------------------------------------------
+
+class TestAsyncContent:
+    def test_content_bytes(self, server):
+        async def _test():
+            async with eggfetch.AsyncClient() as client:
+                r = await client.post(f"{server}/api", content=b"raw bytes")
+                data = json.loads(r.text)
+                assert data["body"] == "raw bytes"
+        asyncio.run(_test())
+
+    def test_content_str(self, server):
+        async def _test():
+            async with eggfetch.AsyncClient() as client:
+                r = await client.post(f"{server}/api", content="string body")
+                data = json.loads(r.text)
+                assert data["body"] == "string body"
+        asyncio.run(_test())
+
+
+class TestAsyncFormData:
+    def test_form_dict(self, server):
+        async def _test():
+            async with eggfetch.AsyncClient() as client:
+                r = await client.post(f"{server}/api", data={"a": "1", "b": "2"})
+                data = json.loads(r.text)
+                assert "a=1" in data["body"]
+                assert "b=2" in data["body"]
+                assert data["headers"].get("content-type") == "application/x-www-form-urlencoded"
+        asyncio.run(_test())
+
+    def test_form_sequence_of_pairs(self, server):
+        async def _test():
+            async with eggfetch.AsyncClient() as client:
+                r = await client.post(
+                    f"{server}/api",
+                    data=[("a", "1"), ("a", "2")],
+                )
+                data = json.loads(r.text)
+                assert "a=1" in data["body"]
+                assert "a=2" in data["body"]
+        asyncio.run(_test())
+
+
+class TestAsyncJsonBody:
+    def test_json_dict(self, server):
+        async def _test():
+            async with eggfetch.AsyncClient() as client:
+                r = await client.post(f"{server}/api", json={"hello": "world"})
+                data = json.loads(r.text)
+                body = json.loads(data["body"])
+                assert body == {"hello": "world"}
+                assert data["headers"].get("content-type") == "application/json"
+        asyncio.run(_test())
+
+    def test_json_list(self, server):
+        async def _test():
+            async with eggfetch.AsyncClient() as client:
+                r = await client.post(f"{server}/api", json=[1, 2, 3])
+                data = json.loads(r.text)
+                body = json.loads(data["body"])
+                assert body == [1, 2, 3]
+        asyncio.run(_test())
+
+    def test_json_unserializable_raises(self, server):
+        async def _test():
+            async with eggfetch.AsyncClient() as client:
+                with pytest.raises(TypeError):
+                    await client.post(f"{server}/api", json=object())
+        asyncio.run(_test())
+
+    def test_json_preserves_user_content_type(self, server):
+        async def _test():
+            async with eggfetch.AsyncClient() as client:
+                r = await client.post(
+                    f"{server}/api",
+                    headers={"Content-Type": "custom/json"},
+                    json={"a": 1},
+                )
+                data = json.loads(r.text)
+                assert data["headers"].get("content-type") == "custom/json"
+        asyncio.run(_test())
+
+
+class TestAsyncBodyConflict:
+    def test_content_and_json_raises(self, server):
+        async def _test():
+            async with eggfetch.AsyncClient() as client:
+                with pytest.raises(TypeError, match="only one of content, data, or json"):
+                    await client.post(f"{server}/api", content=b"raw", json={"a": 1})
+        asyncio.run(_test())
+
+    def test_data_and_json_raises(self, server):
+        async def _test():
+            async with eggfetch.AsyncClient() as client:
+                with pytest.raises(TypeError, match="only one of content, data, or json"):
+                    await client.post(f"{server}/api", data={"a": "1"}, json={"b": 2})
+        asyncio.run(_test())
+
+
+# ---------------------------------------------------------------------------
+# AsyncClient body kwargs
+# ---------------------------------------------------------------------------
+
+class TestAsyncClientBodyKwargs:
+    def test_client_json(self, server):
+        async def _test():
+            async with eggfetch.AsyncClient() as client:
+                r = await client.post(f"{server}/api", json={"key": "value"})
+                data = json.loads(r.text)
+                body = json.loads(data["body"])
+                assert body == {"key": "value"}
+        asyncio.run(_test())
+
+    def test_client_put_json(self, server):
+        async def _test():
+            async with eggfetch.AsyncClient() as client:
+                r = await client.put(f"{server}/api", json={"updated": True})
+                data = json.loads(r.text)
+                body = json.loads(data["body"])
+                assert body == {"updated": True}
+        asyncio.run(_test())
+
+    def test_client_patch_form_data(self, server):
+        async def _test():
+            async with eggfetch.AsyncClient() as client:
+                r = await client.patch(f"{server}/api", data={"a": "1"})
+                data = json.loads(r.text)
+                assert "a=1" in data["body"]
         asyncio.run(_test())
