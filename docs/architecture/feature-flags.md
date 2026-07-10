@@ -56,19 +56,19 @@ Enables JSON request body serialization and response body deserialization via se
 ### compression-gzip
 
 **Status:** planned, not implemented.
-**Milestone:** after streaming foundation (E).
+**Milestone:** not yet implemented (after E).
 Enables gzip decompression of response bodies. This is behind a feature flag to avoid pulling in compression dependencies for users who do not need them.
 
 ### compression-brotli
 
 **Status:** planned, not implemented.
-**Milestone:** after streaming foundation (E).
+**Milestone:** not yet implemented (after E).
 Enables Brotli decompression of response bodies.
 
 ### compression-zstd
 
 **Status:** planned, not implemented.
-**Milestone:** after streaming foundation (E).
+**Milestone:** not yet implemented (after E).
 Enables Zstandard decompression of response bodies.
 
 ### cookies

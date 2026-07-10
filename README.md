@@ -183,7 +183,7 @@ rustfmt.toml             max_width 100
 .clippy.toml             pedantic clippy config
 .github/workflows/ci.yml CI pipeline
 crates/
-  eggfetch-core/         async HTTP engine (Milestone E complete)
+  eggfetch-core/         async HTTP engine (Milestone H complete)
   eggfetch-cli/          CLI binary (stub)
   eggfetch-python/       Python bindings (Milestone H complete)
     src/                 Rust adapter modules (PyO3)
@@ -200,6 +200,8 @@ plans/
   milestone-d-timeout-system.md
   milestone-e-streaming-foundation.md
   milestone-f-python-sync-api.md
+  milestone-g-python-async-api.md
+  milestone-h-response-compatibility.md
   hardening-correctness-before-python.md
 ```
 
@@ -244,4 +246,5 @@ eggfetch is dual-licensed under [MIT](LICENSE-MIT) and [Apache License, Version 
 - [plans/milestone-d-timeout-system.md](plans/milestone-d-timeout-system.md) -- the plan for Milestone D (timeout system).
 - [plans/milestone-e-streaming-foundation.md](plans/milestone-e-streaming-foundation.md) -- the plan for Milestone E (streaming foundation).
 - [plans/milestone-f-python-sync-api.md](plans/milestone-f-python-sync-api.md) -- the plan for Milestone F (Python sync API).
+- [plans/milestone-g-python-async-api.md](plans/milestone-g-python-async-api.md) -- the plan for Milestone G (Python async API).
 - [plans/milestone-h-response-compatibility.md](plans/milestone-h-response-compatibility.md) -- the plan for Milestone H (response compatibility surface).
