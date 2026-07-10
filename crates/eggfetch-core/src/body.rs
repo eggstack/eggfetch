@@ -132,6 +132,29 @@ impl RequestBody {
         matches!(self, Self::Empty | Self::Bytes(_))
     }
 
+    /// Consume the body and return all bytes.
+    ///
+    /// For byte bodies, returns the bytes directly. For stream bodies,
+    /// collects all chunks. For empty bodies, returns empty bytes.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if a stream chunk fails.
+    pub async fn into_bytes(self) -> Result<Bytes> {
+        use futures_util::StreamExt;
+        match self {
+            Self::Empty => Ok(Bytes::new()),
+            Self::Bytes(b) => Ok(b),
+            Self::Stream { mut stream, .. } => {
+                let mut buf = BytesMut::new();
+                while let Some(chunk) = stream.next().await {
+                    buf.extend_from_slice(&chunk?);
+                }
+                Ok(buf.freeze())
+            }
+        }
+    }
+
     /// Create a stream body with known length.
     pub fn from_stream<S>(stream: S, length: Option<usize>) -> Self
     where

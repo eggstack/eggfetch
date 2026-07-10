@@ -27,12 +27,16 @@ impl PyClient {
     /// Args:
     ///     headers: Default headers dict or sequence of pairs (optional).
     ///     timeout: Default timeout in seconds, or Timeout object (optional).
+    ///     `follow_redirects`: Whether to follow redirects (default False).
+    ///     `max_redirects`: Maximum redirects to follow (default 20).
     #[new]
-    #[pyo3(signature = (*, headers=None, timeout=None))]
+    #[pyo3(signature = (*, headers=None, timeout=None, follow_redirects=None, max_redirects=None))]
     fn new(
         py: Python<'_>,
         headers: Option<&Bound<'_, PyAny>>,
         timeout: Option<&Bound<'_, PyAny>>,
+        follow_redirects: Option<bool>,
+        max_redirects: Option<usize>,
     ) -> PyResult<Self> {
         let runtime = tokio::runtime::Runtime::new()
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
@@ -54,6 +58,12 @@ impl PyClient {
             }
         }
 
+        let redirect = eggfetch_core::redirect::RedirectPolicy::new(
+            follow_redirects.unwrap_or(false),
+            max_redirects.unwrap_or(20),
+        );
+        builder = builder.redirect_policy(redirect);
+
         let client = builder.build();
 
         Ok(Self {
@@ -64,7 +74,7 @@ impl PyClient {
     }
 
     /// Send an HTTP request.
-    #[pyo3(signature = (method, url, *, headers=None, params=None, content=None, data=None, json=None, timeout=None))]
+    #[pyo3(signature = (method, url, *, headers=None, params=None, content=None, data=None, json=None, timeout=None, follow_redirects=None, max_redirects=None))]
     #[allow(clippy::too_many_arguments)]
     fn request<'py>(
         &mut self,
@@ -77,6 +87,8 @@ impl PyClient {
         data: Option<&Bound<'py, PyAny>>,
         json: Option<&Bound<'py, PyAny>>,
         timeout: Option<&Bound<'py, PyAny>>,
+        follow_redirects: Option<bool>,
+        max_redirects: Option<usize>,
     ) -> PyResult<Bound<'py, PyAny>> {
         self.ensure_not_closed()?;
 
@@ -132,6 +144,17 @@ impl PyClient {
                     builder = builder.timeout(t);
                 }
 
+                if follow_redirects.is_some() || max_redirects.is_some() {
+                    let mut redirect = eggfetch_core::redirect::RedirectPolicy::default();
+                    if let Some(f) = follow_redirects {
+                        redirect.follow = f;
+                    }
+                    if let Some(m) = max_redirects {
+                        redirect.max_redirects = m;
+                    }
+                    builder = builder.redirect_policy(redirect);
+                }
+
                 let response = builder.send().await.map_err(map_err)?;
                 Ok::<_, PyErr>(response)
             })
@@ -143,7 +166,8 @@ impl PyClient {
     }
 
     /// Send a GET request.
-    #[pyo3(signature = (url, *, headers=None, params=None, timeout=None))]
+    #[pyo3(signature = (url, *, headers=None, params=None, timeout=None, follow_redirects=None, max_redirects=None))]
+    #[allow(clippy::too_many_arguments)]
     fn get<'py>(
         &mut self,
         py: Python<'py>,
@@ -151,12 +175,14 @@ impl PyClient {
         headers: Option<&Bound<'py, PyAny>>,
         params: Option<&Bound<'py, PyAny>>,
         timeout: Option<&Bound<'py, PyAny>>,
+        follow_redirects: Option<bool>,
+        max_redirects: Option<usize>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        self.request(py, "GET", url, headers, params, None, None, None, timeout)
+        self.request(py, "GET", url, headers, params, None, None, None, timeout, follow_redirects, max_redirects)
     }
 
     /// Send a POST request.
-    #[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, timeout=None))]
+    #[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, timeout=None, follow_redirects=None, max_redirects=None))]
     #[allow(clippy::too_many_arguments)]
     fn post<'py>(
         &mut self,
@@ -168,14 +194,16 @@ impl PyClient {
         data: Option<&Bound<'py, PyAny>>,
         json: Option<&Bound<'py, PyAny>>,
         timeout: Option<&Bound<'py, PyAny>>,
+        follow_redirects: Option<bool>,
+        max_redirects: Option<usize>,
     ) -> PyResult<Bound<'py, PyAny>> {
         self.request(
-            py, "POST", url, headers, params, content, data, json, timeout,
+            py, "POST", url, headers, params, content, data, json, timeout, follow_redirects, max_redirects,
         )
     }
 
     /// Send a PUT request.
-    #[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, timeout=None))]
+    #[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, timeout=None, follow_redirects=None, max_redirects=None))]
     #[allow(clippy::too_many_arguments)]
     fn put<'py>(
         &mut self,
@@ -187,14 +215,16 @@ impl PyClient {
         data: Option<&Bound<'py, PyAny>>,
         json: Option<&Bound<'py, PyAny>>,
         timeout: Option<&Bound<'py, PyAny>>,
+        follow_redirects: Option<bool>,
+        max_redirects: Option<usize>,
     ) -> PyResult<Bound<'py, PyAny>> {
         self.request(
-            py, "PUT", url, headers, params, content, data, json, timeout,
+            py, "PUT", url, headers, params, content, data, json, timeout, follow_redirects, max_redirects,
         )
     }
 
     /// Send a PATCH request.
-    #[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, timeout=None))]
+    #[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, timeout=None, follow_redirects=None, max_redirects=None))]
     #[allow(clippy::too_many_arguments)]
     fn patch<'py>(
         &mut self,
@@ -206,14 +236,17 @@ impl PyClient {
         data: Option<&Bound<'py, PyAny>>,
         json: Option<&Bound<'py, PyAny>>,
         timeout: Option<&Bound<'py, PyAny>>,
+        follow_redirects: Option<bool>,
+        max_redirects: Option<usize>,
     ) -> PyResult<Bound<'py, PyAny>> {
         self.request(
-            py, "PATCH", url, headers, params, content, data, json, timeout,
+            py, "PATCH", url, headers, params, content, data, json, timeout, follow_redirects, max_redirects,
         )
     }
 
     /// Send a DELETE request.
-    #[pyo3(signature = (url, *, headers=None, params=None, timeout=None))]
+    #[pyo3(signature = (url, *, headers=None, params=None, timeout=None, follow_redirects=None, max_redirects=None))]
+    #[allow(clippy::too_many_arguments)]
     fn delete<'py>(
         &mut self,
         py: Python<'py>,
@@ -221,14 +254,17 @@ impl PyClient {
         headers: Option<&Bound<'py, PyAny>>,
         params: Option<&Bound<'py, PyAny>>,
         timeout: Option<&Bound<'py, PyAny>>,
+        follow_redirects: Option<bool>,
+        max_redirects: Option<usize>,
     ) -> PyResult<Bound<'py, PyAny>> {
         self.request(
-            py, "DELETE", url, headers, params, None, None, None, timeout,
+            py, "DELETE", url, headers, params, None, None, None, timeout, follow_redirects, max_redirects,
         )
     }
 
     /// Send a HEAD request.
-    #[pyo3(signature = (url, *, headers=None, params=None, timeout=None))]
+    #[pyo3(signature = (url, *, headers=None, params=None, timeout=None, follow_redirects=None, max_redirects=None))]
+    #[allow(clippy::too_many_arguments)]
     fn head<'py>(
         &mut self,
         py: Python<'py>,
@@ -236,12 +272,15 @@ impl PyClient {
         headers: Option<&Bound<'py, PyAny>>,
         params: Option<&Bound<'py, PyAny>>,
         timeout: Option<&Bound<'py, PyAny>>,
+        follow_redirects: Option<bool>,
+        max_redirects: Option<usize>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        self.request(py, "HEAD", url, headers, params, None, None, None, timeout)
+        self.request(py, "HEAD", url, headers, params, None, None, None, timeout, follow_redirects, max_redirects)
     }
 
     /// Send an OPTIONS request.
-    #[pyo3(signature = (url, *, headers=None, params=None, timeout=None))]
+    #[pyo3(signature = (url, *, headers=None, params=None, timeout=None, follow_redirects=None, max_redirects=None))]
+    #[allow(clippy::too_many_arguments)]
     fn options<'py>(
         &mut self,
         py: Python<'py>,
@@ -249,9 +288,11 @@ impl PyClient {
         headers: Option<&Bound<'py, PyAny>>,
         params: Option<&Bound<'py, PyAny>>,
         timeout: Option<&Bound<'py, PyAny>>,
+        follow_redirects: Option<bool>,
+        max_redirects: Option<usize>,
     ) -> PyResult<Bound<'py, PyAny>> {
         self.request(
-            py, "OPTIONS", url, headers, params, None, None, None, timeout,
+            py, "OPTIONS", url, headers, params, None, None, None, timeout, follow_redirects, max_redirects,
         )
     }
 

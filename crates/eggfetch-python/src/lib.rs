@@ -28,8 +28,10 @@ use timeout::PyTimeout;
 ///     data: Form data as dict or sequence of pairs (optional).
 ///     json: JSON-serializable object (optional).
 ///     timeout: Request timeout in seconds, or Timeout object (optional).
+///     `follow_redirects`: Whether to follow redirects (default False).
+///     `max_redirects`: Maximum redirects to follow (default 20).
 #[pyfunction]
-#[pyo3(signature = (method, url, *, headers=None, params=None, content=None, data=None, json=None, timeout=None))]
+#[pyo3(signature = (method, url, *, headers=None, params=None, content=None, data=None, json=None, timeout=None, follow_redirects=None, max_redirects=None))]
 #[allow(clippy::too_many_arguments)]
 fn request<'py>(
     py: Python<'py>,
@@ -41,6 +43,8 @@ fn request<'py>(
     data: Option<&Bound<'py, PyAny>>,
     json: Option<&Bound<'py, PyAny>>,
     timeout: Option<&Bound<'py, PyAny>>,
+    follow_redirects: Option<bool>,
+    max_redirects: Option<usize>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let method_upper = method.to_uppercase();
     let http_method = http::Method::try_from(method_upper.as_str()).map_err(|_| {
@@ -73,9 +77,16 @@ fn request<'py>(
 
     let rust_timeout = conversion::parse_timeout(timeout)?;
 
+    let redirect_policy = eggfetch_core::redirect::RedirectPolicy::new(
+        follow_redirects.unwrap_or(false),
+        max_redirects.unwrap_or(20),
+    );
+
     let runtime = tokio::runtime::Runtime::new()
         .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
-    let client = eggfetch_core::Client::new();
+    let client = eggfetch_core::Client::builder()
+        .redirect_policy(redirect_policy)
+        .build();
 
     let result = py.allow_threads(|| {
         runtime.block_on(async {
@@ -107,20 +118,22 @@ fn request<'py>(
 
 /// Send a GET request using a short-lived client.
 #[pyfunction]
-#[pyo3(signature = (url, *, headers=None, params=None, timeout=None))]
+#[pyo3(signature = (url, *, headers=None, params=None, timeout=None, follow_redirects=None, max_redirects=None))]
 fn get<'py>(
     py: Python<'py>,
     url: &str,
     headers: Option<&Bound<'py, PyAny>>,
     params: Option<&Bound<'py, PyAny>>,
     timeout: Option<&Bound<'py, PyAny>>,
+    follow_redirects: Option<bool>,
+    max_redirects: Option<usize>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    request(py, "GET", url, headers, params, None, None, None, timeout)
+    request(py, "GET", url, headers, params, None, None, None, timeout, follow_redirects, max_redirects)
 }
 
 /// Send a POST request using a short-lived client.
 #[pyfunction]
-#[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, timeout=None))]
+#[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, timeout=None, follow_redirects=None, max_redirects=None))]
 #[allow(clippy::too_many_arguments)]
 fn post<'py>(
     py: Python<'py>,
@@ -131,15 +144,17 @@ fn post<'py>(
     data: Option<&Bound<'py, PyAny>>,
     json: Option<&Bound<'py, PyAny>>,
     timeout: Option<&Bound<'py, PyAny>>,
+    follow_redirects: Option<bool>,
+    max_redirects: Option<usize>,
 ) -> PyResult<Bound<'py, PyAny>> {
     request(
-        py, "POST", url, headers, params, content, data, json, timeout,
+        py, "POST", url, headers, params, content, data, json, timeout, follow_redirects, max_redirects,
     )
 }
 
 /// Send a PUT request using a short-lived client.
 #[pyfunction]
-#[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, timeout=None))]
+#[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, timeout=None, follow_redirects=None, max_redirects=None))]
 #[allow(clippy::too_many_arguments)]
 fn put<'py>(
     py: Python<'py>,
@@ -150,15 +165,17 @@ fn put<'py>(
     data: Option<&Bound<'py, PyAny>>,
     json: Option<&Bound<'py, PyAny>>,
     timeout: Option<&Bound<'py, PyAny>>,
+    follow_redirects: Option<bool>,
+    max_redirects: Option<usize>,
 ) -> PyResult<Bound<'py, PyAny>> {
     request(
-        py, "PUT", url, headers, params, content, data, json, timeout,
+        py, "PUT", url, headers, params, content, data, json, timeout, follow_redirects, max_redirects,
     )
 }
 
 /// Send a PATCH request using a short-lived client.
 #[pyfunction]
-#[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, timeout=None))]
+#[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, timeout=None, follow_redirects=None, max_redirects=None))]
 #[allow(clippy::too_many_arguments)]
 fn patch<'py>(
     py: Python<'py>,
@@ -169,52 +186,60 @@ fn patch<'py>(
     data: Option<&Bound<'py, PyAny>>,
     json: Option<&Bound<'py, PyAny>>,
     timeout: Option<&Bound<'py, PyAny>>,
+    follow_redirects: Option<bool>,
+    max_redirects: Option<usize>,
 ) -> PyResult<Bound<'py, PyAny>> {
     request(
-        py, "PATCH", url, headers, params, content, data, json, timeout,
+        py, "PATCH", url, headers, params, content, data, json, timeout, follow_redirects, max_redirects,
     )
 }
 
 /// Send a DELETE request using a short-lived client.
 #[pyfunction]
-#[pyo3(signature = (url, *, headers=None, params=None, timeout=None))]
+#[pyo3(signature = (url, *, headers=None, params=None, timeout=None, follow_redirects=None, max_redirects=None))]
 fn delete<'py>(
     py: Python<'py>,
     url: &str,
     headers: Option<&Bound<'py, PyAny>>,
     params: Option<&Bound<'py, PyAny>>,
     timeout: Option<&Bound<'py, PyAny>>,
+    follow_redirects: Option<bool>,
+    max_redirects: Option<usize>,
 ) -> PyResult<Bound<'py, PyAny>> {
     request(
-        py, "DELETE", url, headers, params, None, None, None, timeout,
+        py, "DELETE", url, headers, params, None, None, None, timeout, follow_redirects, max_redirects,
     )
 }
 
 /// Send a HEAD request using a short-lived client.
 #[pyfunction]
-#[pyo3(signature = (url, *, headers=None, params=None, timeout=None))]
+#[pyo3(signature = (url, *, headers=None, params=None, timeout=None, follow_redirects=None, max_redirects=None))]
 fn head<'py>(
     py: Python<'py>,
     url: &str,
     headers: Option<&Bound<'py, PyAny>>,
     params: Option<&Bound<'py, PyAny>>,
     timeout: Option<&Bound<'py, PyAny>>,
+    follow_redirects: Option<bool>,
+    max_redirects: Option<usize>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    request(py, "HEAD", url, headers, params, None, None, None, timeout)
+    request(py, "HEAD", url, headers, params, None, None, None, timeout, follow_redirects, max_redirects)
 }
 
 /// Send an OPTIONS request using a short-lived client.
 #[pyfunction]
-#[pyo3(signature = (url, *, headers=None, params=None, timeout=None))]
+#[pyo3(signature = (url, *, headers=None, params=None, timeout=None, follow_redirects=None, max_redirects=None))]
 fn options<'py>(
     py: Python<'py>,
     url: &str,
     headers: Option<&Bound<'py, PyAny>>,
     params: Option<&Bound<'py, PyAny>>,
     timeout: Option<&Bound<'py, PyAny>>,
+    follow_redirects: Option<bool>,
+    max_redirects: Option<usize>,
 ) -> PyResult<Bound<'py, PyAny>> {
     request(
-        py, "OPTIONS", url, headers, params, None, None, None, timeout,
+        py, "OPTIONS", url, headers, params, None, None, None, timeout, follow_redirects, max_redirects,
     )
 }
 
@@ -254,6 +279,10 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
         "UnsupportedKwarg",
         m.py().get_type::<errors::UnsupportedKwarg>(),
     )?;
+    m.add(
+        "TooManyRedirects",
+        m.py().get_type::<errors::TooManyRedirects>(),
+    )?;
 
     m.add_function(wrap_pyfunction!(request, m)?)?;
     m.add_function(wrap_pyfunction!(get, m)?)?;
@@ -291,6 +320,7 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
         "BodyError",
         "HTTPStatusError",
         "UnsupportedKwarg",
+        "TooManyRedirects",
     ];
     let py = m.py();
     let py_list = pyo3::types::PyList::new(py, &all_items)?;

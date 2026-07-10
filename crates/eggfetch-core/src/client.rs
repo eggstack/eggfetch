@@ -7,10 +7,11 @@ use bytes::Bytes;
 use http::Method;
 use hyper_util::rt::TokioExecutor;
 
-use crate::body::{BoxBytesStream, ResponseBody};
+use crate::body::{BoxBytesStream, RequestBody, ResponseBody};
 use crate::error::{Error, Result};
 use crate::headers::Headers;
 use crate::pool::{OriginKey, Pool, PoolConfig, PoolGuard, PoolMetrics};
+use crate::redirect::{self, RedirectPolicy};
 use crate::request::{Request, RequestBuilder};
 use crate::response::Response;
 use crate::stream::{read_timeout_stream, write_timeout_stream};
@@ -22,11 +23,23 @@ type HyperRequestBody =
 type HyperClient = hyper_util::client::legacy::Client<Connector, HyperRequestBody>;
 
 /// Shared client configuration.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 struct ClientConfig {
     default_headers: Headers,
     user_agent: Option<String>,
     timeout: Option<Timeout>,
+    redirect: RedirectPolicy,
+}
+
+impl Default for ClientConfig {
+    fn default() -> Self {
+        Self {
+            default_headers: Headers::new(),
+            user_agent: None,
+            timeout: None,
+            redirect: RedirectPolicy::default(),
+        }
+    }
 }
 
 /// Async HTTP client.
@@ -142,20 +155,149 @@ impl Client {
         self.inner.pool.metrics()
     }
 
-    /// Send a request and return the response.
+    /// Send a request and return the response, following redirects if
+    /// the client's redirect policy allows.
+    ///
+    /// The redirect loop enforces `max_redirects`, performs method
+    /// rewrites per HTTP semantics, strips sensitive headers on
+    /// cross-origin hops, and records redirect history.
     ///
     /// # Errors
     ///
     /// Returns an error if the request fails at any stage (connect, TLS,
     /// protocol, body) or if a timeout elapses.
     pub(crate) async fn send(&self, request: Request) -> Result<Response> {
-        let (method, url, headers, body, version, request_timeout) = request.into_parts();
+        let (method, url, headers, body, version, request_timeout, request_redirect) =
+            request.into_parts();
 
         // Merge client-level and request-level timeouts.
         let timeout = match self.inner.config.timeout {
             Some(client_timeout) => client_timeout.merge(request_timeout),
             None => request_timeout.unwrap_or_default(),
         };
+
+        // Use request-level redirect override if present, otherwise client-level.
+        let effective_redirect = request_redirect
+            .as_ref()
+            .unwrap_or(&self.inner.config.redirect);
+
+        // Buffer the body into bytes for replayability across redirects.
+        let body_bytes = body.into_bytes().await?;
+
+        let mut history = Vec::new();
+        let mut redirect_count = 0usize;
+        let start_time = std::time::Instant::now();
+
+        // State for the current hop.
+        let mut cur_method = method;
+        let mut cur_url = url;
+        let mut cur_headers = headers;
+        let mut cur_body = body_bytes;
+        let mut cur_version = version;
+
+        loop {
+            // Compute remaining total timeout for this hop.
+            let hop_timeout = if let Some(total_dur) = timeout.total {
+                let elapsed = start_time.elapsed();
+                if elapsed >= total_dur {
+                    return Err(Error::Timeout {
+                        phase: TimeoutPhase::Total,
+                        elapsed: total_dur,
+                    });
+                }
+                let remaining = total_dur.saturating_sub(elapsed);
+                let mut hop = timeout;
+                hop.total = Some(remaining);
+                hop
+            } else {
+                timeout
+            };
+
+            // Build and send the request for this hop.
+            let mut hop_request = Request::new(cur_method.clone(), cur_url.clone());
+            *hop_request.headers_mut() = cur_headers.clone();
+            hop_request.set_body(RequestBody::Bytes(cur_body.clone()));
+            hop_request.set_version(cur_version);
+            hop_request.set_timeout(Some(hop_timeout));
+
+            let mut response = self.send_single_request(hop_request, &hop_timeout).await?;
+
+            if !redirect::is_redirect_status(response.status())
+                || !effective_redirect.follow
+            {
+                // Not a redirect, or redirects disabled.
+                response.set_history(history);
+                return Ok(response);
+            }
+
+            // --- Handle redirect ---
+
+            // Get the Location header.
+            let location = if let Some(v) = response.headers().get("location") {
+                v.to_str().unwrap_or("").to_string()
+            } else {
+                response.set_history(history);
+                return Ok(response);
+            };
+
+            // Drain the redirect response body to release the pool permit.
+            {
+                let _ = response.bytes().await;
+            }
+
+            // Check max redirects.
+            redirect_count += 1;
+            if redirect_count > effective_redirect.max_redirects {
+                return Err(Error::TooManyRedirects {
+                    followed: redirect_count - 1,
+                    max: effective_redirect.max_redirects,
+                });
+            }
+
+            // Build a temporary request to pass to build_redirect_request.
+            let mut temp_request = Request::new(cur_method.clone(), cur_url.clone());
+            *temp_request.headers_mut() = cur_headers.clone();
+            temp_request.set_body(RequestBody::Bytes(cur_body.clone()));
+            temp_request.set_version(cur_version);
+
+            let (redirect_req, _) =
+                redirect::build_redirect_request(&temp_request, response.status(), &location)?;
+
+            // Save the redirect status before pushing response to history.
+            let redirect_status = response.status();
+
+            // Save the redirect response in history.
+            history.push(response);
+
+            // Determine the new method and body for the next hop.
+            let new_method =
+                redirect::redirect_method(redirect_status, &cur_method);
+            let drop_body =
+                redirect::drops_body_on_redirect(redirect_status, &cur_method);
+
+            // Extract the new state from the redirect request.
+            let (_, new_url, new_headers, _, new_version, _, _) = redirect_req.into_parts();
+
+            cur_method = new_method;
+            cur_url = new_url;
+            cur_headers = new_headers;
+            cur_body = if drop_body { Bytes::new() } else { cur_body };
+            cur_version = new_version;
+        }
+    }
+
+    /// Send a single HTTP request and return the streaming response.
+    ///
+    /// This handles pool acquisition, timeout application, and body
+    /// processing for one request/response cycle. It does NOT handle
+    /// redirects—that is the responsibility of [`Client::send`].
+    async fn send_single_request(
+        &self,
+        request: Request,
+        timeout: &Timeout,
+    ) -> Result<Response> {
+        let (method, url, headers, body, version, _request_timeout, _request_redirect) =
+            request.into_parts();
 
         let uri: http::Uri = url
             .as_str()
@@ -181,13 +323,11 @@ impl Client {
             None => self.inner.pool.acquire(origin.as_ref()).await,
         };
 
-        // Apply write timeout to streamed request bodies. Empty and
-        // Bytes bodies are not subject to write timeout because they
-        // are produced synchronously inside `into_http_body()`.
+        // Apply write timeout to streamed request bodies.
         let body = match (body, timeout.write) {
-            (crate::body::RequestBody::Stream { stream, length }, Some(write_dur)) => {
+            (RequestBody::Stream { stream, length }, Some(write_dur)) => {
                 let wrapped = write_timeout_stream(stream, write_dur);
-                crate::body::RequestBody::Stream {
+                RequestBody::Stream {
                     stream: wrapped,
                     length,
                 }
@@ -433,6 +573,7 @@ pub struct ClientBuilder {
     user_agent: Option<String>,
     pool_config: PoolConfig,
     timeout: Option<Timeout>,
+    redirect: RedirectPolicy,
 }
 
 impl ClientBuilder {
@@ -444,6 +585,7 @@ impl ClientBuilder {
             user_agent: None,
             pool_config: PoolConfig::default(),
             timeout: None,
+            redirect: RedirectPolicy::default(),
         }
     }
 
@@ -506,6 +648,27 @@ impl ClientBuilder {
         self
     }
 
+    /// Set the redirect policy for this client.
+    #[must_use]
+    pub fn follow_redirects(mut self, follow: bool) -> Self {
+        self.redirect.follow = follow;
+        self
+    }
+
+    /// Set the maximum number of redirects to follow.
+    #[must_use]
+    pub fn max_redirects(mut self, max: usize) -> Self {
+        self.redirect.max_redirects = max;
+        self
+    }
+
+    /// Set the full redirect policy.
+    #[must_use]
+    pub fn redirect_policy(mut self, policy: RedirectPolicy) -> Self {
+        self.redirect = policy;
+        self
+    }
+
     /// Build the client.
     ///
     /// # Panics
@@ -531,6 +694,7 @@ impl ClientBuilder {
             default_headers: self.default_headers,
             user_agent: self.user_agent,
             timeout: self.timeout,
+            redirect: self.redirect,
         };
 
         let pool = Pool::new(self.pool_config);

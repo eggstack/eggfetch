@@ -67,6 +67,23 @@ pub enum Error {
     #[error("pool error: {0}")]
     Pool(String),
 
+    /// The redirect location is missing or invalid.
+    #[error("invalid redirect location: {0}")]
+    InvalidRedirectLocation(String),
+
+    /// A streaming body cannot be replayed for a redirect.
+    #[error("body not replayable for redirect: streaming request bodies cannot be resent")]
+    BodyNotReplayableForRedirect,
+
+    /// Too many redirects were followed.
+    #[error("too many redirects ({followed} followed, max {max})")]
+    TooManyRedirects {
+        /// Number of redirects actually followed.
+        followed: usize,
+        /// Maximum allowed.
+        max: usize,
+    },
+
     /// A timeout elapsed during the specified phase.
     #[error("{phase} timeout after {elapsed:?}")]
     Timeout {
@@ -95,6 +112,9 @@ impl Error {
             Self::HyperClient(_) => "hyper_client",
             Self::Io(_) => "io",
             Self::Unsupported(_) => "unsupported",
+            Self::InvalidRedirectLocation(_) => "invalid_redirect_location",
+            Self::BodyNotReplayableForRedirect => "body_not_replayable_for_redirect",
+            Self::TooManyRedirects { .. } => "too_many_redirects",
             Self::Pool(_) => "pool",
             Self::Timeout { phase, .. } => match phase {
                 crate::timeout::TimeoutPhase::Pool => "timeout_pool",

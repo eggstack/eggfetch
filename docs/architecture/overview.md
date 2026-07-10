@@ -1,6 +1,6 @@
 # Architecture Overview
 
-This document describes the architecture of eggfetch. Milestone I is complete: the core crate provides protocol-neutral streaming for request and response bodies, and the Python crate exposes both sync and async APIs over the async Rust core via PyO3/maturin, with a requests/httpx-compatible response surface and request builder compatibility (params, headers, content, data, json kwargs).
+This document describes the architecture of eggfetch. Milestone J is complete: the core crate provides protocol-neutral streaming for request and response bodies, redirect following with configurable policy, and the Python crate exposes both sync and async APIs over the async Rust core via PyO3/maturin, with a requests/httpx-compatible response surface, request builder compatibility, and redirect support.
 
 The post-E hardening pass landed true streaming request bodies, per-chunk read/write timeouts, pool permits tied to the full response body lifecycle, and origin-keyed pool limits.
 
@@ -28,7 +28,7 @@ The following types form the public API of eggfetch-core:
 - **`ClientBuilder`** -- builder for configuring a `Client` before construction.
 - **`Request`** -- a fully-formed HTTP request (method, URI, headers, body).
 - **`RequestBuilder`** -- accumulates method, URL, headers, query parameters, and body before producing a `Request`.
-- **`Response`** -- an HTTP response with status, headers, and a streaming body.
+- **`Response`** -- an HTTP response with status, headers, streaming body, and redirect history.
 - **`RequestBody`** -- request body type: `Empty`, `Bytes`, or `Stream` (a boxed `Stream<Item = Result<Bytes>>`).
 - **`ResponseBody`** -- response body type: `Buffered` (collected bytes), `Streaming` (live chunk stream), or `Consumed` (already consumed).
 - **`Headers`** -- typed header map backed by `http::HeaderMap`.
@@ -178,4 +178,4 @@ These crates do not exist yet. They will be added when the core engine is stable
 
 ## Current State
 
-Milestone I is complete. The core crate provides a working async HTTP client with HTTPS support, request/response modeling, headers, query parameters, streaming request/response bodies, connection pooling, phase-aware timeouts (pool, connect, write, read, total), and a structured error type with timeout phase identification. The Python crate exposes sync and async APIs with top-level helpers, `Client` and `AsyncClient` classes, requests/httpx-compatible response properties (`status_code`, `reason_phrase`, `headers`, `url`, `content`, `text`, `encoding`, `http_version`, `history`), status helpers (`is_informational`, `is_success`, `is_redirect`, `is_client_error`, `is_server_error`, `is_error`), methods (`json()`, `raise_for_status()`, `iter_bytes()`, `iter_text()`, `iter_lines()`, `close()`/`aclose()`), charset-aware text decoding, multi-value header support, case-insensitive headers, request body kwargs (`content`, `data`, `json`), form encoding (`data`), JSON body serialization (`json`), body kwarg mutual exclusion, and a structured exception hierarchy. The CLI crate remains a stub. Redirects, advanced features, and true streaming response iteration are planned for subsequent milestones.
+Milestone J is complete. The core crate provides a working async HTTP client with HTTPS support, request/response modeling, headers, query parameters, streaming request/response bodies, connection pooling, phase-aware timeouts (pool, connect, write, read, total), redirect following with configurable policy, and a structured error type with timeout phase identification. The Python crate exposes sync and async APIs with top-level helpers, `Client` and `AsyncClient` classes, requests/httpx-compatible response properties (`status_code`, `reason_phrase`, `headers`, `url`, `content`, `text`, `encoding`, `http_version`, `history`), status helpers (`is_informational`, `is_success`, `is_redirect`, `is_client_error`, `is_server_error`, `is_error`), methods (`json()`, `raise_for_status()`, `iter_bytes()`, `iter_text()`, `iter_lines()`, `close()`/`aclose()`), charset-aware text decoding, multi-value header support, case-insensitive headers, request body kwargs (`content`, `data`, `json`), form encoding (`data`), JSON body serialization (`json`), body kwarg mutual exclusion, `follow_redirects`/`max_redirects` kwargs, and a structured exception hierarchy. The CLI crate remains a stub. Advanced features and true streaming response iteration are planned for subsequent milestones.

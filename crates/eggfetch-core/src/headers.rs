@@ -97,6 +97,11 @@ impl Headers {
         self.inner.extend(other.inner);
     }
 
+    /// Remove a header by name (case-insensitive).
+    pub fn remove(&mut self, name: &str) -> Option<HeaderValue> {
+        self.inner.remove(name)
+    }
+
     /// Consume and return the inner `HeaderMap`.
     #[must_use]
     pub fn into_inner(self) -> HeaderMap {

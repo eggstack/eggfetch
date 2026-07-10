@@ -35,6 +35,7 @@ from eggfetch._native import (
     BodyError,
     HTTPStatusError,
     UnsupportedKwarg,
+    TooManyRedirects,
 )
 
 __all__ = [
@@ -65,4 +66,5 @@ __all__ = [
     "BodyError",
     "HTTPStatusError",
     "UnsupportedKwarg",
+    "TooManyRedirects",
 ]

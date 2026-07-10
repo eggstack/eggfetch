@@ -95,6 +95,33 @@ impl PyResponse {
         let http_version = version_to_string(response.version());
         let encoding = extract_charset(response.headers());
 
+        // Convert redirect history (drained, status-only responses).
+        let core_history = std::mem::take(response.history_mut());
+        let history: Vec<PyResponse> = core_history
+            .into_iter()
+            .map(|r| {
+                let status = r.status().as_u16();
+                let headers = PyHeaders::from_header_map(r.headers().clone());
+                let url = r.url().to_string();
+                let reason_phrase = r
+                    .status()
+                    .canonical_reason()
+                    .unwrap_or("")
+                    .to_string();
+                let http_version = version_to_string(r.version());
+                let encoding = extract_charset(r.headers());
+                PyResponse::from_parts(
+                    status,
+                    headers,
+                    url,
+                    Bytes::new(),
+                    reason_phrase,
+                    http_version,
+                    encoding,
+                )
+            })
+            .collect();
+
         // Buffer body bytes synchronously using a short-lived tokio runtime.
         let rt = tokio::runtime::Runtime::new()
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
@@ -113,7 +140,7 @@ impl PyResponse {
             reason_phrase,
             http_version,
             encoding,
-            history: Vec::new(),
+            history,
             _stream_consumed: false,
         })
     }

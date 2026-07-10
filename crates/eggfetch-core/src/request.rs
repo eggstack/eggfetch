@@ -7,6 +7,7 @@ use crate::body::RequestBody;
 use crate::client::Client;
 use crate::error::Result;
 use crate::headers::Headers;
+use crate::redirect::RedirectPolicy;
 use crate::response::Response;
 use crate::timeout::Timeout;
 
@@ -19,6 +20,7 @@ pub struct Request {
     body: RequestBody,
     version: Version,
     timeout: Option<Timeout>,
+    redirect: Option<RedirectPolicy>,
 }
 
 impl Request {
@@ -31,6 +33,7 @@ impl Request {
             body: RequestBody::default(),
             version: Version::HTTP_11,
             timeout: None,
+            redirect: None,
         }
     }
 
@@ -90,6 +93,17 @@ impl Request {
         self.timeout = timeout;
     }
 
+    /// Returns the request-level redirect policy override, if set.
+    #[must_use]
+    pub fn redirect(&self) -> Option<&RedirectPolicy> {
+        self.redirect.as_ref()
+    }
+
+    /// Set the request-level redirect policy override.
+    pub fn set_redirect(&mut self, redirect: Option<RedirectPolicy>) {
+        self.redirect = redirect;
+    }
+
     pub(crate) fn into_parts(
         self,
     ) -> (
@@ -99,6 +113,7 @@ impl Request {
         RequestBody,
         Version,
         Option<Timeout>,
+        Option<RedirectPolicy>,
     ) {
         (
             self.method,
@@ -107,6 +122,7 @@ impl Request {
             self.body,
             self.version,
             self.timeout,
+            self.redirect,
         )
     }
 }
@@ -119,6 +135,7 @@ pub struct RequestBuilder {
     headers: Headers,
     body: RequestBody,
     timeout: Option<Timeout>,
+    redirect: Option<RedirectPolicy>,
     error: Option<crate::Error>,
 }
 
@@ -132,6 +149,7 @@ impl RequestBuilder {
             headers: Headers::new(),
             body: RequestBody::default(),
             timeout: None,
+            redirect: None,
             error: None,
         }
     }
@@ -183,6 +201,16 @@ impl RequestBuilder {
         self
     }
 
+    /// Override the redirect policy for this specific request.
+    ///
+    /// When set, this overrides the client-level redirect policy for
+    /// this request only.
+    #[must_use]
+    pub fn redirect_policy(mut self, policy: RedirectPolicy) -> Self {
+        self.redirect = Some(policy);
+        self
+    }
+
     /// Build the request without sending it.
     ///
     /// # Errors
@@ -197,6 +225,7 @@ impl RequestBuilder {
         req.headers = self.headers;
         req.body = self.body;
         req.timeout = self.timeout;
+        req.redirect = self.redirect;
         Ok(req)
     }
 

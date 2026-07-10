@@ -116,9 +116,9 @@ Add Python-facing `status_code`, `headers`, `content`, `text`, `json()`, `raise_
 
 Add Python-facing `params`, `data`, `json`, `files` foundation, auth hooks foundation, cookies foundation, default headers, and client-level configuration merging. Implemented: `params` (dict/sequence of pairs), `headers` (dict/sequence of pairs), `content` (raw bytes/str), `data` (form-encoded dict/sequence of pairs), `json` (JSON-serialized via Python `json.dumps`), body kwarg mutual exclusion (`content`/`data`/`json`), auto Content-Type for form and JSON bodies, user Content-Type preservation, and `timeout` kwarg.
 
-### Milestone J: Redirect engine
+### Milestone J: Redirect engine (complete)
 
-Implement method rewrite/preservation behavior, loop detection, max redirect enforcement, redirect history, header stripping across origins, and configurable redirect policies.
+Implement method rewrite/preservation behavior, loop detection, max redirect enforcement, redirect history, header stripping across origins, and configurable redirect policies. Implemented: `RedirectPolicy` (follow, max_redirects), redirect status detection (301/302/303/307/308), method rewriting (POST→GET on 301/302/303, preserve on 307/308), body header stripping when body dropped, cross-origin sensitive header stripping (`Authorization`, `Cookie`, `Proxy-Authorization`), URL resolution via `url::Url::join`, scheme validation (http/https only), redirect history on `Response`, `follow_redirects`/`max_redirects` Python kwargs, and `TooManyRedirects` exception.
 
 ### Milestone K: CLI
 

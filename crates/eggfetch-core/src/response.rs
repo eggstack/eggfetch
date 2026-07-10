@@ -29,6 +29,7 @@ pub struct Response {
     headers: HeaderMap,
     url: Url,
     pub(crate) body: ResponseBody,
+    history: Vec<Response>,
 }
 
 impl std::fmt::Debug for Response {
@@ -39,6 +40,7 @@ impl std::fmt::Debug for Response {
             .field("headers", &self.headers)
             .field("url", &self.url)
             .field("body", &self.body)
+            .field("history_len", &self.history.len())
             .finish()
     }
 }
@@ -58,6 +60,7 @@ impl Response {
             headers,
             url,
             body,
+            history: Vec::new(),
         }
     }
 
@@ -95,6 +98,22 @@ impl Response {
     #[must_use]
     pub fn url(&self) -> &Url {
         &self.url
+    }
+
+    /// Returns the redirect history (prior responses in order).
+    #[must_use]
+    pub fn history(&self) -> &[Response] {
+        &self.history
+    }
+
+    /// Returns a mutable reference to the redirect history.
+    pub fn history_mut(&mut self) -> &mut Vec<Response> {
+        &mut self.history
+    }
+
+    /// Set the redirect history.
+    pub(crate) fn set_history(&mut self, history: Vec<Response>) {
+        self.history = history;
     }
 
     /// Returns `true` if the status code indicates success (2xx).
