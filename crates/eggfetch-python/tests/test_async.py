@@ -223,6 +223,34 @@ class TestAsyncHeadersAndParams:
                 assert data["headers"].get("x-bar") == "from-request"
         asyncio.run(_test())
 
+    def test_params_with_existing_query(self, server):
+        async def _test():
+            async with eggfetch.AsyncClient() as client:
+                r = await client.get(
+                    f"{server}/search?existing=1",
+                    params={"q": "hello"},
+                )
+                data = json.loads(r.text)
+                assert "existing=1" in data["query"]
+                assert "q=hello" in data["query"]
+        asyncio.run(_test())
+
+    def test_invalid_params_type_raises(self, server):
+        async def _test():
+            async with eggfetch.AsyncClient() as client:
+                with pytest.raises(TypeError):
+                    await client.get(f"{server}/search", params=123)
+        asyncio.run(_test())
+
+    def test_invalid_header_value_raises(self, server):
+        async def _test():
+            async with eggfetch.AsyncClient() as client:
+                with pytest.raises(eggfetch.RequestError):
+                    await client.get(
+                        f"{server}/hello", headers={"X-Bad": "val\nue"}
+                    )
+        asyncio.run(_test())
+
 
 # ---------------------------------------------------------------------------
 # Client reuse and default headers
@@ -348,6 +376,14 @@ class TestAsyncTimeout:
     def test_scalar_timeout(self, server):
         async def _test():
             async with eggfetch.AsyncClient() as client:
+                r = await client.get(f"{server}/hello", timeout=10.0)
+                assert r.status_code == 200
+        asyncio.run(_test())
+
+    def test_request_timeout_overrides_client_default(self, server):
+        async def _test():
+            async with eggfetch.AsyncClient(timeout=0.001) as client:
+                # Client timeout is very short; request-level override should succeed
                 r = await client.get(f"{server}/hello", timeout=10.0)
                 assert r.status_code == 200
         asyncio.run(_test())

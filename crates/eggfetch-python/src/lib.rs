@@ -128,7 +128,19 @@ fn get<'py>(
     follow_redirects: Option<bool>,
     max_redirects: Option<usize>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    request(py, "GET", url, headers, params, None, None, None, timeout, follow_redirects, max_redirects)
+    request(
+        py,
+        "GET",
+        url,
+        headers,
+        params,
+        None,
+        None,
+        None,
+        timeout,
+        follow_redirects,
+        max_redirects,
+    )
 }
 
 /// Send a POST request using a short-lived client.
@@ -148,7 +160,17 @@ fn post<'py>(
     max_redirects: Option<usize>,
 ) -> PyResult<Bound<'py, PyAny>> {
     request(
-        py, "POST", url, headers, params, content, data, json, timeout, follow_redirects, max_redirects,
+        py,
+        "POST",
+        url,
+        headers,
+        params,
+        content,
+        data,
+        json,
+        timeout,
+        follow_redirects,
+        max_redirects,
     )
 }
 
@@ -169,7 +191,17 @@ fn put<'py>(
     max_redirects: Option<usize>,
 ) -> PyResult<Bound<'py, PyAny>> {
     request(
-        py, "PUT", url, headers, params, content, data, json, timeout, follow_redirects, max_redirects,
+        py,
+        "PUT",
+        url,
+        headers,
+        params,
+        content,
+        data,
+        json,
+        timeout,
+        follow_redirects,
+        max_redirects,
     )
 }
 
@@ -190,7 +222,17 @@ fn patch<'py>(
     max_redirects: Option<usize>,
 ) -> PyResult<Bound<'py, PyAny>> {
     request(
-        py, "PATCH", url, headers, params, content, data, json, timeout, follow_redirects, max_redirects,
+        py,
+        "PATCH",
+        url,
+        headers,
+        params,
+        content,
+        data,
+        json,
+        timeout,
+        follow_redirects,
+        max_redirects,
     )
 }
 
@@ -207,7 +249,17 @@ fn delete<'py>(
     max_redirects: Option<usize>,
 ) -> PyResult<Bound<'py, PyAny>> {
     request(
-        py, "DELETE", url, headers, params, None, None, None, timeout, follow_redirects, max_redirects,
+        py,
+        "DELETE",
+        url,
+        headers,
+        params,
+        None,
+        None,
+        None,
+        timeout,
+        follow_redirects,
+        max_redirects,
     )
 }
 
@@ -223,7 +275,19 @@ fn head<'py>(
     follow_redirects: Option<bool>,
     max_redirects: Option<usize>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    request(py, "HEAD", url, headers, params, None, None, None, timeout, follow_redirects, max_redirects)
+    request(
+        py,
+        "HEAD",
+        url,
+        headers,
+        params,
+        None,
+        None,
+        None,
+        timeout,
+        follow_redirects,
+        max_redirects,
+    )
 }
 
 /// Send an OPTIONS request using a short-lived client.
@@ -239,7 +303,17 @@ fn options<'py>(
     max_redirects: Option<usize>,
 ) -> PyResult<Bound<'py, PyAny>> {
     request(
-        py, "OPTIONS", url, headers, params, None, None, None, timeout, follow_redirects, max_redirects,
+        py,
+        "OPTIONS",
+        url,
+        headers,
+        params,
+        None,
+        None,
+        None,
+        timeout,
+        follow_redirects,
+        max_redirects,
     )
 }
 

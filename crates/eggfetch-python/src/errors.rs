@@ -110,17 +110,13 @@ pub fn map_err(err: eggfetch_core::Error) -> PyErr {
         eggfetch_core::Error::Hyper(arc) => NetworkError::new_err(arc.to_string()),
         eggfetch_core::Error::HyperClient(arc) => NetworkError::new_err(arc.to_string()),
         eggfetch_core::Error::Io(arc) => NetworkError::new_err(arc.to_string()),
-        eggfetch_core::Error::InvalidRedirectLocation(msg) => {
-            RequestError::new_err(msg)
-        }
+        eggfetch_core::Error::InvalidRedirectLocation(msg) => RequestError::new_err(msg),
         eggfetch_core::Error::BodyNotReplayableForRedirect => {
             RequestError::new_err("request body is not replayable for redirect".to_string())
         }
-        eggfetch_core::Error::TooManyRedirects { followed, max } => {
-            TooManyRedirects::new_err(format!(
-                "too many redirects: followed {followed}, max is {max}"
-            ))
-        }
+        eggfetch_core::Error::TooManyRedirects { followed, max } => TooManyRedirects::new_err(
+            format!("too many redirects: followed {followed}, max is {max}"),
+        ),
         eggfetch_core::Error::Timeout { phase, elapsed } => {
             let msg = format!("{phase} timeout after {elapsed:?}");
             match phase {

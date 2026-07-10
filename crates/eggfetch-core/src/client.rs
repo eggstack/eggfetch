@@ -222,9 +222,7 @@ impl Client {
 
             let mut response = self.send_single_request(hop_request, &hop_timeout).await?;
 
-            if !redirect::is_redirect_status(response.status())
-                || !effective_redirect.follow
-            {
+            if !redirect::is_redirect_status(response.status()) || !effective_redirect.follow {
                 // Not a redirect, or redirects disabled.
                 response.set_history(history);
                 return Ok(response);
@@ -270,10 +268,8 @@ impl Client {
             history.push(response);
 
             // Determine the new method and body for the next hop.
-            let new_method =
-                redirect::redirect_method(redirect_status, &cur_method);
-            let drop_body =
-                redirect::drops_body_on_redirect(redirect_status, &cur_method);
+            let new_method = redirect::redirect_method(redirect_status, &cur_method);
+            let drop_body = redirect::drops_body_on_redirect(redirect_status, &cur_method);
 
             // Extract the new state from the redirect request.
             let (_, new_url, new_headers, _, new_version, _, _) = redirect_req.into_parts();
@@ -291,11 +287,7 @@ impl Client {
     /// This handles pool acquisition, timeout application, and body
     /// processing for one request/response cycle. It does NOT handle
     /// redirects—that is the responsibility of [`Client::send`].
-    async fn send_single_request(
-        &self,
-        request: Request,
-        timeout: &Timeout,
-    ) -> Result<Response> {
+    async fn send_single_request(&self, request: Request, timeout: &Timeout) -> Result<Response> {
         let (method, url, headers, body, version, _request_timeout, _request_redirect) =
             request.into_parts();
 

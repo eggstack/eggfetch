@@ -180,6 +180,10 @@ class TestHeaders:
             # Request headers are sent; verify the request-specific header arrives.
             assert data["headers"].get("x-bar") == "from-request"
 
+    def test_invalid_header_value_raises(self, server):
+        with pytest.raises(eggfetch.RequestError):
+            eggfetch.get(f"{server}/hello", headers={"X-Bad": "val\nue"})
+
 
 class TestParams:
     def test_params_serialized(self, server):
@@ -210,6 +214,10 @@ class TestParams:
         r = eggfetch.get(f"{server}/search", params=None)
         data = json.loads(r.text)
         assert data["query"] == ""
+
+    def test_invalid_params_type_raises(self, server):
+        with pytest.raises(TypeError):
+            eggfetch.get(f"{server}/search", params=123)
 
 
 # ---------------------------------------------------------------------------
@@ -268,6 +276,12 @@ class TestTimeout:
     def test_timeout_none(self, server):
         r = eggfetch.get(f"{server}/hello", timeout=None)
         assert r.status_code == 200
+
+    def test_request_timeout_overrides_client_default(self, server):
+        with eggfetch.Client(timeout=0.001) as client:
+            # Client timeout is very short; request-level override should succeed
+            r = client.get(f"{server}/hello", timeout=10.0)
+            assert r.status_code == 200
 
 
 # ---------------------------------------------------------------------------

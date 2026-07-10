@@ -137,22 +137,22 @@ impl PyAsyncClient {
                 builder = builder.bytes(bytes);
             }
 
-                if let Some(t) = rust_timeout {
-                    builder = builder.timeout(t);
-                }
+            if let Some(t) = rust_timeout {
+                builder = builder.timeout(t);
+            }
 
-                if follow_redirects.is_some() || max_redirects.is_some() {
-                    let mut redirect = eggfetch_core::redirect::RedirectPolicy::default();
-                    if let Some(f) = follow_redirects {
-                        redirect.follow = f;
-                    }
-                    if let Some(m) = max_redirects {
-                        redirect.max_redirects = m;
-                    }
-                    builder = builder.redirect_policy(redirect);
+            if follow_redirects.is_some() || max_redirects.is_some() {
+                let mut redirect = eggfetch_core::redirect::RedirectPolicy::default();
+                if let Some(f) = follow_redirects {
+                    redirect.follow = f;
                 }
+                if let Some(m) = max_redirects {
+                    redirect.max_redirects = m;
+                }
+                builder = builder.redirect_policy(redirect);
+            }
 
-                let mut response = builder.send().await.map_err(map_err)?;
+            let mut response = builder.send().await.map_err(map_err)?;
             let status = response.status().as_u16();
             let headers = crate::headers::PyHeaders::from_header_map(response.headers().clone());
             let url = response.url().to_string();
@@ -189,7 +189,19 @@ impl PyAsyncClient {
         follow_redirects: Option<bool>,
         max_redirects: Option<usize>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        self.request(py, "GET", url, headers, params, None, None, None, timeout, follow_redirects, max_redirects)
+        self.request(
+            py,
+            "GET",
+            url,
+            headers,
+            params,
+            None,
+            None,
+            None,
+            timeout,
+            follow_redirects,
+            max_redirects,
+        )
     }
 
     /// Send a POST request asynchronously.
@@ -209,7 +221,17 @@ impl PyAsyncClient {
         max_redirects: Option<usize>,
     ) -> PyResult<Bound<'py, PyAny>> {
         self.request(
-            py, "POST", url, headers, params, content, data, json, timeout, follow_redirects, max_redirects,
+            py,
+            "POST",
+            url,
+            headers,
+            params,
+            content,
+            data,
+            json,
+            timeout,
+            follow_redirects,
+            max_redirects,
         )
     }
 
@@ -230,7 +252,17 @@ impl PyAsyncClient {
         max_redirects: Option<usize>,
     ) -> PyResult<Bound<'py, PyAny>> {
         self.request(
-            py, "PUT", url, headers, params, content, data, json, timeout, follow_redirects, max_redirects,
+            py,
+            "PUT",
+            url,
+            headers,
+            params,
+            content,
+            data,
+            json,
+            timeout,
+            follow_redirects,
+            max_redirects,
         )
     }
 
@@ -251,7 +283,17 @@ impl PyAsyncClient {
         max_redirects: Option<usize>,
     ) -> PyResult<Bound<'py, PyAny>> {
         self.request(
-            py, "PATCH", url, headers, params, content, data, json, timeout, follow_redirects, max_redirects,
+            py,
+            "PATCH",
+            url,
+            headers,
+            params,
+            content,
+            data,
+            json,
+            timeout,
+            follow_redirects,
+            max_redirects,
         )
     }
 
@@ -269,7 +311,17 @@ impl PyAsyncClient {
         max_redirects: Option<usize>,
     ) -> PyResult<Bound<'py, PyAny>> {
         self.request(
-            py, "DELETE", url, headers, params, None, None, None, timeout, follow_redirects, max_redirects,
+            py,
+            "DELETE",
+            url,
+            headers,
+            params,
+            None,
+            None,
+            None,
+            timeout,
+            follow_redirects,
+            max_redirects,
         )
     }
 
@@ -286,7 +338,19 @@ impl PyAsyncClient {
         follow_redirects: Option<bool>,
         max_redirects: Option<usize>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        self.request(py, "HEAD", url, headers, params, None, None, None, timeout, follow_redirects, max_redirects)
+        self.request(
+            py,
+            "HEAD",
+            url,
+            headers,
+            params,
+            None,
+            None,
+            None,
+            timeout,
+            follow_redirects,
+            max_redirects,
+        )
     }
 
     /// Send an OPTIONS request asynchronously.
@@ -303,7 +367,17 @@ impl PyAsyncClient {
         max_redirects: Option<usize>,
     ) -> PyResult<Bound<'py, PyAny>> {
         self.request(
-            py, "OPTIONS", url, headers, params, None, None, None, timeout, follow_redirects, max_redirects,
+            py,
+            "OPTIONS",
+            url,
+            headers,
+            params,
+            None,
+            None,
+            None,
+            timeout,
+            follow_redirects,
+            max_redirects,
         )
     }
 

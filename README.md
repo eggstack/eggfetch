@@ -150,7 +150,7 @@ Async Python API over the async Rust core via pyo3-async-runtimes:
 
 Requests/HTTPX-compatible Response surface in Python:
 
-- **Response properties** -- `status_code`, `reason_phrase`, `headers`, `url`, `content`, `text`, `encoding`, `http_version`, `history` (placeholder).
+- **Response properties** -- `status_code`, `reason_phrase`, `headers`, `url`, `content`, `text`, `encoding`, `http_version`, `history`.
 - **Status helpers** -- `is_informational`, `is_success`, `is_redirect`, `is_client_error`, `is_server_error`, `is_error` (all `#[getter]` returning `bool`).
 - **JSON** -- `json(**kwargs)` delegates to Python's `json.loads` with kwargs passthrough.
 - **Streaming iterators** -- `iter_bytes(chunk_size)`, `iter_text(chunk_size)`, `iter_lines()` return Python iterators over buffered content. Async equivalents: `aiter_bytes`, `aiter_text`, `aiter_lines`.
@@ -159,6 +159,19 @@ Requests/HTTPX-compatible Response surface in Python:
 - **Headers.get_list()** -- returns all values for a multi-value header as a list.
 - **Improved repr** -- `<Response [200 OK]>` format.
 - **Improved raise_for_status()** -- includes reason phrase in error message.
+
+### Milestone I: Request Builder Compatibility Surface (complete)
+
+Requests/HTTPX-compatible request construction in Python:
+
+- **Headers** -- dict or sequence of `(name, value)` pairs. Case-insensitive, validated (no empty names, no bare CR/LF).
+- **Params** -- dict or sequence of `(key, value)` pairs. Appended to URL query string, preserving existing query.
+- **Content** -- raw body as `bytes`, `str`, or `bytearray`. No auto Content-Type.
+- **Data** -- form data as dict or sequence of pairs. Auto Content-Type `application/x-www-form-urlencoded`.
+- **JSON** -- JSON-serializable object. Serialized via Python's `json.dumps()`. Auto Content-Type `application/json`.
+- **Body mutual exclusion** -- `content`, `data`, `json` are mutually exclusive; more than one raises `TypeError`.
+- **Timeout override** -- request-level `timeout` overrides client default per-request.
+- **Redirect kwargs** -- `follow_redirects` and `max_redirects` override client policy per-request.
 
 ### Current limitations (Milestone J)
 

@@ -103,11 +103,7 @@ impl PyResponse {
                 let status = r.status().as_u16();
                 let headers = PyHeaders::from_header_map(r.headers().clone());
                 let url = r.url().to_string();
-                let reason_phrase = r
-                    .status()
-                    .canonical_reason()
-                    .unwrap_or("")
-                    .to_string();
+                let reason_phrase = r.status().canonical_reason().unwrap_or("").to_string();
                 let http_version = version_to_string(r.version());
                 let encoding = extract_charset(r.headers());
                 PyResponse::from_parts(

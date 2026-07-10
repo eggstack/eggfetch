@@ -56,10 +56,7 @@ const BODY_HEADERS: &[&str] = &["content-length", "content-type", "transfer-enco
 /// Check if a status code indicates a redirect that should be followed.
 #[must_use]
 pub fn is_redirect_status(status: http::StatusCode) -> bool {
-    matches!(
-        status.as_u16(),
-        301 | 302 | 303 | 307 | 308
-    )
+    matches!(status.as_u16(), 301 | 302 | 303 | 307 | 308)
 }
 
 /// Determine the method to use for a redirect request.
@@ -289,10 +286,7 @@ mod tests {
 
     #[test]
     fn drops_body_on_303_post() {
-        assert!(drops_body_on_redirect(
-            StatusCode::SEE_OTHER,
-            &Method::POST
-        ));
+        assert!(drops_body_on_redirect(StatusCode::SEE_OTHER, &Method::POST));
     }
 
     #[test]
@@ -305,10 +299,7 @@ mod tests {
 
     #[test]
     fn preserves_body_on_302_get() {
-        assert!(!drops_body_on_redirect(
-            StatusCode::FOUND,
-            &Method::GET
-        ));
+        assert!(!drops_body_on_redirect(StatusCode::FOUND, &Method::GET));
     }
 
     // --- build_redirect_request tests ---
@@ -319,16 +310,10 @@ mod tests {
         req.headers_mut()
             .insert("authorization", "Bearer tok")
             .unwrap();
-        req.headers_mut()
-            .insert("cookie", "session=abc")
-            .unwrap();
+        req.headers_mut().insert("cookie", "session=abc").unwrap();
 
-        let (redirect, _) = build_redirect_request(
-            &req,
-            StatusCode::FOUND,
-            "https://example.com/b",
-        )
-        .unwrap();
+        let (redirect, _) =
+            build_redirect_request(&req, StatusCode::FOUND, "https://example.com/b").unwrap();
 
         assert_eq!(*redirect.method(), Method::GET);
         assert_eq!(redirect.url().as_str(), "https://example.com/b");
@@ -342,22 +327,14 @@ mod tests {
         req.headers_mut()
             .insert("authorization", "Bearer tok")
             .unwrap();
-        req.headers_mut()
-            .insert("cookie", "session=abc")
-            .unwrap();
+        req.headers_mut().insert("cookie", "session=abc").unwrap();
         req.headers_mut()
             .insert("proxy-authorization", "Basic foo")
             .unwrap();
-        req.headers_mut()
-            .insert("x-custom", "keep")
-            .unwrap();
+        req.headers_mut().insert("x-custom", "keep").unwrap();
 
-        let (redirect, _) = build_redirect_request(
-            &req,
-            StatusCode::FOUND,
-            "https://other.com/b",
-        )
-        .unwrap();
+        let (redirect, _) =
+            build_redirect_request(&req, StatusCode::FOUND, "https://other.com/b").unwrap();
 
         assert!(redirect.headers().get("authorization").is_none());
         assert!(redirect.headers().get("cookie").is_none());
@@ -369,9 +346,7 @@ mod tests {
     fn build_redirect_301_post_drops_body_headers() {
         let mut req = Request::new(Method::POST, Url::parse("https://example.com/a").unwrap());
         req.set_body(RequestBody::from(Bytes::from("payload")));
-        req.headers_mut()
-            .insert("content-length", "7")
-            .unwrap();
+        req.headers_mut().insert("content-length", "7").unwrap();
         req.headers_mut()
             .insert("content-type", "text/plain")
             .unwrap();
@@ -379,12 +354,9 @@ mod tests {
             .insert("transfer-encoding", "chunked")
             .unwrap();
 
-        let (redirect, _) = build_redirect_request(
-            &req,
-            StatusCode::MOVED_PERMANENTLY,
-            "https://example.com/b",
-        )
-        .unwrap();
+        let (redirect, _) =
+            build_redirect_request(&req, StatusCode::MOVED_PERMANENTLY, "https://example.com/b")
+                .unwrap();
 
         assert_eq!(*redirect.method(), Method::GET);
         assert!(redirect.body().is_empty());
@@ -397,9 +369,7 @@ mod tests {
     fn build_redirect_307_post_preserves_body_headers() {
         let mut req = Request::new(Method::POST, Url::parse("https://example.com/a").unwrap());
         req.set_body(RequestBody::from(Bytes::from("payload")));
-        req.headers_mut()
-            .insert("content-length", "7")
-            .unwrap();
+        req.headers_mut().insert("content-length", "7").unwrap();
         req.headers_mut()
             .insert("content-type", "text/plain")
             .unwrap();
@@ -424,12 +394,7 @@ mod tests {
     fn build_redirect_relative_url() {
         let req = Request::new(Method::GET, Url::parse("https://example.com/a/b").unwrap());
 
-        let (redirect, _) = build_redirect_request(
-            &req,
-            StatusCode::FOUND,
-            "/c/d",
-        )
-        .unwrap();
+        let (redirect, _) = build_redirect_request(&req, StatusCode::FOUND, "/c/d").unwrap();
 
         assert_eq!(redirect.url().as_str(), "https://example.com/c/d");
     }
@@ -438,12 +403,8 @@ mod tests {
     fn build_redirect_scheme_relative_url() {
         let req = Request::new(Method::GET, Url::parse("https://example.com/a").unwrap());
 
-        let (redirect, _) = build_redirect_request(
-            &req,
-            StatusCode::FOUND,
-            "//other.com/b",
-        )
-        .unwrap();
+        let (redirect, _) =
+            build_redirect_request(&req, StatusCode::FOUND, "//other.com/b").unwrap();
 
         assert_eq!(redirect.url().as_str(), "https://other.com/b");
     }
@@ -452,11 +413,7 @@ mod tests {
     fn build_redirect_unsupported_scheme_errors() {
         let req = Request::new(Method::GET, Url::parse("https://example.com/a").unwrap());
 
-        let err = build_redirect_request(
-            &req,
-            StatusCode::FOUND,
-            "ftp://example.com/b",
-        );
+        let err = build_redirect_request(&req, StatusCode::FOUND, "ftp://example.com/b");
         assert!(err.is_err());
     }
 
@@ -465,12 +422,8 @@ mod tests {
         let mut req = Request::new(Method::GET, Url::parse("https://example.com/a").unwrap());
         req.set_version(http::Version::HTTP_2);
 
-        let (redirect, _) = build_redirect_request(
-            &req,
-            StatusCode::FOUND,
-            "https://example.com/b",
-        )
-        .unwrap();
+        let (redirect, _) =
+            build_redirect_request(&req, StatusCode::FOUND, "https://example.com/b").unwrap();
 
         assert_eq!(redirect.version(), http::Version::HTTP_2);
     }

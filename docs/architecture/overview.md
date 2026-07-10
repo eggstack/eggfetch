@@ -138,6 +138,23 @@ Top-level helpers (`get`, `post`, etc.) create a short-lived runtime and client 
 
 Supported kwargs: `headers`, `params`, `content`, `data`, `json`, `timeout`. Unsupported kwargs raise `TypeError`.
 
+## Request Builder Compatibility (Milestone I)
+
+The Python crate provides a requests/httpx-compatible request construction surface. All methods (top-level helpers, `Client`, and `AsyncClient`) accept the same keyword arguments:
+
+- **`headers`** -- dict or sequence of `(name, value)` pairs. Inserted via `eggfetch_core::Headers`, which validates names and values (no empty names, no bare CR/LF).
+- **`params`** -- dict or sequence of `(key, value)` pairs. Appended to the URL query string via `url::Url::query_pairs_mut()`. Existing query parameters are preserved.
+- **`content`** -- raw body as `bytes`, `str`, or `bytearray`. Sent as-is with no auto Content-Type.
+- **`data`** -- form data as dict or sequence of pairs. Encoded as `application/x-www-form-urlencoded` via `url::form_urlencoded`.
+- **`json`** -- JSON-serializable Python object. Serialized via Python's `json.dumps()`. Auto-sets Content-Type to `application/json`.
+- **`timeout`** -- float (seconds) or `Timeout` object. Overrides client-level timeout per-request.
+- **`follow_redirects`** -- bool. Overrides client-level redirect policy per-request.
+- **`max_redirects`** -- usize. Overrides client-level max redirects per-request.
+
+Body kwargs (`content`, `data`, `json`) are mutually exclusive. Providing more than one raises `TypeError`. Auto Content-Type is only set for `data` and `json`; explicit Content-Type headers are preserved.
+
+The conversion layer lives in `conversion.rs` and is shared by both sync and async paths. No HTTP logic exists outside `eggfetch-core`.
+
 ## Python Async Adapter (Milestone G)
 
 The Python async API exposes `AsyncClient` with `__aenter__`/`__aexit__` and awaitable request methods, targeting asyncio.
@@ -154,7 +171,7 @@ Key design decisions:
 
 The Python `PyResponse` type presents a requests/httpx-compatible surface over the buffered response data:
 
-- **Properties**: `status_code`, `reason_phrase`, `headers`, `url`, `content`, `text`, `encoding`, `http_version`, `history` (placeholder).
+- **Properties**: `status_code`, `reason_phrase`, `headers`, `url`, `content`, `text`, `encoding`, `http_version`, `history`.
 - **Status helpers**: `is_informational` (1xx), `is_success` (2xx), `is_redirect` (3xx), `is_client_error` (4xx), `is_server_error` (5xx), `is_error` (4xx+5xx).
 - **JSON**: `json(**kwargs)` delegates to Python's `json.loads`.
 - **Iterators**: `iter_bytes(chunk_size)`, `iter_text(chunk_size)`, `iter_lines()` return Python iterators over buffered content. Async equivalents: `aiter_bytes`, `aiter_text`, `aiter_lines`.

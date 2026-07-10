@@ -178,7 +178,19 @@ impl PyClient {
         follow_redirects: Option<bool>,
         max_redirects: Option<usize>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        self.request(py, "GET", url, headers, params, None, None, None, timeout, follow_redirects, max_redirects)
+        self.request(
+            py,
+            "GET",
+            url,
+            headers,
+            params,
+            None,
+            None,
+            None,
+            timeout,
+            follow_redirects,
+            max_redirects,
+        )
     }
 
     /// Send a POST request.
@@ -198,7 +210,17 @@ impl PyClient {
         max_redirects: Option<usize>,
     ) -> PyResult<Bound<'py, PyAny>> {
         self.request(
-            py, "POST", url, headers, params, content, data, json, timeout, follow_redirects, max_redirects,
+            py,
+            "POST",
+            url,
+            headers,
+            params,
+            content,
+            data,
+            json,
+            timeout,
+            follow_redirects,
+            max_redirects,
         )
     }
 
@@ -219,7 +241,17 @@ impl PyClient {
         max_redirects: Option<usize>,
     ) -> PyResult<Bound<'py, PyAny>> {
         self.request(
-            py, "PUT", url, headers, params, content, data, json, timeout, follow_redirects, max_redirects,
+            py,
+            "PUT",
+            url,
+            headers,
+            params,
+            content,
+            data,
+            json,
+            timeout,
+            follow_redirects,
+            max_redirects,
         )
     }
 
@@ -240,7 +272,17 @@ impl PyClient {
         max_redirects: Option<usize>,
     ) -> PyResult<Bound<'py, PyAny>> {
         self.request(
-            py, "PATCH", url, headers, params, content, data, json, timeout, follow_redirects, max_redirects,
+            py,
+            "PATCH",
+            url,
+            headers,
+            params,
+            content,
+            data,
+            json,
+            timeout,
+            follow_redirects,
+            max_redirects,
         )
     }
 
@@ -258,7 +300,17 @@ impl PyClient {
         max_redirects: Option<usize>,
     ) -> PyResult<Bound<'py, PyAny>> {
         self.request(
-            py, "DELETE", url, headers, params, None, None, None, timeout, follow_redirects, max_redirects,
+            py,
+            "DELETE",
+            url,
+            headers,
+            params,
+            None,
+            None,
+            None,
+            timeout,
+            follow_redirects,
+            max_redirects,
         )
     }
 
@@ -275,7 +327,19 @@ impl PyClient {
         follow_redirects: Option<bool>,
         max_redirects: Option<usize>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        self.request(py, "HEAD", url, headers, params, None, None, None, timeout, follow_redirects, max_redirects)
+        self.request(
+            py,
+            "HEAD",
+            url,
+            headers,
+            params,
+            None,
+            None,
+            None,
+            timeout,
+            follow_redirects,
+            max_redirects,
+        )
     }
 
     /// Send an OPTIONS request.
@@ -292,7 +356,17 @@ impl PyClient {
         max_redirects: Option<usize>,
     ) -> PyResult<Bound<'py, PyAny>> {
         self.request(
-            py, "OPTIONS", url, headers, params, None, None, None, timeout, follow_redirects, max_redirects,
+            py,
+            "OPTIONS",
+            url,
+            headers,
+            params,
+            None,
+            None,
+            None,
+            timeout,
+            follow_redirects,
+            max_redirects,
         )
     }
 

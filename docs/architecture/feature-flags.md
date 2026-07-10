@@ -49,9 +49,8 @@ Enables TLS via Rustls. This is preferred over native TLS for portability and au
 
 ### json
 
-**Status:** planned, not implemented.
-**Milestone:** I (request builder compatibility surface).
-Enables JSON request body serialization and response body deserialization via serde and serde_json. This is an optional convenience, not a core requirement.
+**Status:** feature flag exists, not wired into eggfetch-core.
+**Milestone:** I (request builder compatibility surface) delivered JSON body support in the Python crate via Python's `json.dumps()`, not through a Rust-side feature gate. The feature flag is reserved for future Rust-native JSON serialization (e.g., serde integration in `eggfetch-core`).
 
 ### compression-gzip
 
@@ -74,14 +73,13 @@ Enables Zstandard decompression of response bodies.
 ### cookies
 
 **Status:** planned, not implemented.
-**Milestone:** J (redirect engine) or later.
+**Milestone:** after J (redirect engine).
 Enables cookie jar support for persistent cookies across requests.
 
 ### proxy
 
 **Status:** planned, not implemented.
-**Milestone:** I (request builder compatibility surface).
-Enables HTTP and HTTPS proxy support. SOCKS proxy support is a later addition.
+**Milestone:** deferred beyond I. Proxy support requires CONNECT tunneling, authentication, and PAC file handling, which are beyond the MVP scope. The feature flag is reserved.
 
 ### tracing
 
