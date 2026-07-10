@@ -28,6 +28,9 @@ pub struct TestServerConfig {
     pub chunk_stall_after: Option<usize>,
     /// Stall duration in ms after `chunk_stall_after` chunks.
     pub chunk_stall_ms: u64,
+    /// If set, send a redirect response with this status code and the
+    /// value as the Location header. The body is empty for redirects.
+    pub redirect: Option<(u16, String)>,
 }
 
 impl Default for TestServerConfig {
@@ -41,6 +44,7 @@ impl Default for TestServerConfig {
             chunk_delay_ms: 0,
             chunk_stall_after: None,
             chunk_stall_ms: 0,
+            redirect: None,
         }
     }
 }
@@ -87,6 +91,7 @@ impl TestServer {
         let chunk_delay = config.chunk_delay_ms;
         let chunk_stall_after = config.chunk_stall_after;
         let chunk_stall_ms = config.chunk_stall_ms;
+        let redirect = config.redirect.clone();
 
         let handle = thread::spawn(move || {
             while !sd.load(Ordering::Relaxed) {
@@ -100,6 +105,7 @@ impl TestServer {
                         response_body: resp_body.clone(),
                         chunked,
                         chunk_delay_ms: chunk_delay,
+                        redirect: redirect.clone(),
                     };
                     thread::spawn(move || {
                         handle_connection(
@@ -170,6 +176,95 @@ impl Drop for TestServer {
     }
 }
 
+fn send_redirect(
+    stream: &mut std::net::TcpStream,
+    status: u16,
+    location: &str,
+    close_connection: bool,
+) -> bool {
+    let status_text = match status {
+        301 => "Moved Permanently",
+        302 => "Found",
+        303 => "See Other",
+        307 => "Temporary Redirect",
+        308 => "Permanent Redirect",
+        _ => "Redirect",
+    };
+    let conn = if close_connection {
+        "close"
+    } else {
+        "keep-alive"
+    };
+    let response = format!(
+        "HTTP/1.1 {status} {status_text}\r\nLocation: {location}\r\n\
+         Connection: {conn}\r\nContent-Length: 0\r\n\r\n"
+    );
+    if stream.write_all(response.as_bytes()).is_err() {
+        return false;
+    }
+    if stream.flush().is_err() {
+        return false;
+    }
+    if close_connection {
+        let _ = stream.shutdown(std::net::Shutdown::Both);
+        false
+    } else {
+        true
+    }
+}
+
+fn send_chunked(
+    stream: &mut std::net::TcpStream,
+    body: &[u8],
+    conn: &str,
+    chunk_delay_ms: u64,
+    chunk_stall_after: Option<usize>,
+    chunk_stall_ms: u64,
+) -> bool {
+    let header = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\
+         Connection: {conn}\r\nTransfer-Encoding: chunked\r\n\r\n"
+    );
+    if stream.write_all(header.as_bytes()).is_err() {
+        return false;
+    }
+    let chunk_size = 3;
+    for (chunks_sent, chunk) in body.chunks(chunk_size).enumerate() {
+        if chunk_delay_ms > 0 {
+            thread::sleep(Duration::from_millis(chunk_delay_ms));
+        }
+        if let Some(stall_after) = chunk_stall_after {
+            if chunks_sent == stall_after && chunk_stall_ms > 0 {
+                thread::sleep(Duration::from_millis(chunk_stall_ms));
+            }
+        }
+        if stream
+            .write_all(format!("{:x}\r\n", chunk.len()).as_bytes())
+            .is_err()
+        {
+            return false;
+        }
+        if stream.write_all(chunk).is_err() {
+            return false;
+        }
+        if stream.write_all(b"\r\n").is_err() {
+            return false;
+        }
+    }
+    stream.write_all(b"0\r\n\r\n").is_ok() && stream.flush().is_ok()
+}
+
+fn send_normal(stream: &mut std::net::TcpStream, body: &[u8], conn: &str) -> bool {
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\
+         Connection: {conn}\r\nContent-Length: {}\r\n\r\n",
+        body.len()
+    );
+    stream.write_all(response.as_bytes()).is_ok()
+        && stream.write_all(body).is_ok()
+        && stream.flush().is_ok()
+}
+
 fn handle_connection(
     stream: std::net::TcpStream,
     config: &ConnectionConfig,
@@ -208,10 +303,6 @@ fn handle_connection(
 
         if config.consume_body && content_length > 0 {
             let mut body = vec![0u8; content_length];
-            // Use `take` + `read_exact` semantics by reading in a loop,
-            // honoring the per-call read timeout set on the socket. The
-            // socket timeout (5s) bounds the wait so the test does not
-            // hang forever if the client never finishes sending.
             let mut total = 0usize;
             while total < content_length {
                 match std::io::Read::read(&mut reader, &mut body[total..]) {
@@ -227,68 +318,36 @@ fn handle_connection(
             thread::sleep(Duration::from_millis(config.response_delay_ms));
         }
 
+        let stream = reader.get_mut();
+
+        if let Some((status, ref location)) = config.redirect {
+            if !send_redirect(stream, status, location, config.close_connection) {
+                break;
+            }
+            continue;
+        }
+
         let body = config.response_body.as_deref().unwrap_or(b"OK");
-        let connection_header = if config.close_connection {
+        let conn = if config.close_connection {
             "close"
         } else {
             "keep-alive"
         };
 
-        let stream = reader.get_mut();
-
-        if config.chunked {
-            let header = format!(
-                "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nConnection: {connection_header}\r\nTransfer-Encoding: chunked\r\n\r\n"
-            );
-            if stream.write_all(header.as_bytes()).is_err() {
-                break;
-            }
-
-            // Send body in 3-byte chunks.
-            let chunk_size = 3;
-            for (chunks_sent, chunk) in body.chunks(chunk_size).enumerate() {
-                if config.chunk_delay_ms > 0 {
-                    thread::sleep(Duration::from_millis(config.chunk_delay_ms));
-                }
-                if let Some(stall_after) = chunk_stall_after {
-                    if chunks_sent == stall_after && chunk_stall_ms > 0 {
-                        thread::sleep(Duration::from_millis(chunk_stall_ms));
-                    }
-                }
-                let chunk_header = format!("{:x}\r\n", chunk.len());
-                if stream.write_all(chunk_header.as_bytes()).is_err() {
-                    break;
-                }
-                if stream.write_all(chunk).is_err() {
-                    break;
-                }
-                if stream.write_all(b"\r\n").is_err() {
-                    break;
-                }
-            }
-
-            // Terminal chunk.
-            if stream.write_all(b"0\r\n\r\n").is_err() {
-                break;
-            }
+        let ok = if config.chunked {
+            send_chunked(
+                stream,
+                body,
+                conn,
+                config.chunk_delay_ms,
+                chunk_stall_after,
+                chunk_stall_ms,
+            )
         } else {
-            let response = format!(
-                "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nConnection: {connection_header}\r\nContent-Length: {}\r\n\r\n",
-                body.len()
-            );
-            if stream.write_all(response.as_bytes()).is_err() {
-                break;
-            }
-            if stream.write_all(body).is_err() {
-                break;
-            }
-        }
+            send_normal(stream, body, conn)
+        };
 
-        if stream.flush().is_err() {
-            break;
-        }
-
-        if config.close_connection {
+        if !ok || config.close_connection {
             let _ = stream.shutdown(std::net::Shutdown::Both);
             break;
         }
@@ -303,4 +362,5 @@ struct ConnectionConfig {
     response_body: Option<Vec<u8>>,
     chunked: bool,
     chunk_delay_ms: u64,
+    redirect: Option<(u16, String)>,
 }

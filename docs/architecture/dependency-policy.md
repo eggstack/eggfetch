@@ -4,7 +4,7 @@ eggfetch follows a conservative dependency policy. Every dependency must have an
 
 ## Current Posture
 
-As of Milestone J, eggfetch-core has the following direct dependencies:
+As of Milestone O, eggfetch-core has the following direct dependencies:
 
 - **bytes** -- efficient byte buffer types for request and response bodies.
 - **dashmap** -- concurrent hash map for per-host pool semaphore storage.
@@ -21,6 +21,7 @@ As of Milestone J, eggfetch-core has the following direct dependencies:
 - **tokio-rustls** -- async TLS streams for tokio + rustls.
 - **url** -- URI parsing and query string serialization.
 - **thiserror** -- ergonomic error definitions.
+- **cookie** -- RFC 6265 cookie parsing and representation (optional, behind `cookies` feature).
 
 These are small, well-audited crates with minimal transitive trees. They are the minimum required to build a working HTTPS client.
 
@@ -33,7 +34,6 @@ Features that are not core to HTTP/1.1 client behavior are optional and feature-
 - **clap** -- CLI argument parsing (eggfetch-cli crate only).
 - **serde**, **serde_json** -- JSON serialization (behind the `json` feature).
 - **compression crates** -- gzip, brotli, zstd (behind `compression-*` features).
-- **cookie** -- cookie jar support (behind the `cookies` feature).
 - **tracing** -- structured logging (behind the `tracing` feature).
 
 These dependencies stay optional. They do not enter `default` features without discussion.

@@ -4,6 +4,7 @@ use bytes::Bytes;
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyDict, PyList, PyString};
 
+use crate::cookies::PyCookies;
 use crate::errors::HTTPStatusError;
 use crate::headers::PyHeaders;
 
@@ -75,6 +76,9 @@ pub struct PyResponse {
     /// Redirect history (populated when `follow_redirects` is enabled).
     #[pyo3(get)]
     history: Vec<PyResponse>,
+    /// Cookies set by the server via Set-Cookie headers.
+    #[pyo3(get)]
+    cookies: PyCookies,
     /// Whether the stream has been consumed (always `false` for buffered
     /// responses).
     #[pyo3(get)]
@@ -102,13 +106,13 @@ impl PyResponse {
     ///
     /// This is safe to call from async contexts because it does not spawn
     /// a runtime. Redirect history is converted properly.
+    #[allow(clippy::unnecessary_wraps)]
     pub fn from_core_response_with_body(
         mut response: eggfetch_core::Response,
         content: Bytes,
     ) -> PyResult<Self> {
         let status = response.status().as_u16();
         let headers = PyHeaders::from_header_map(response.headers().clone());
-        let url = response.url().to_string();
         let reason_phrase = response
             .status()
             .canonical_reason()
@@ -117,17 +121,17 @@ impl PyResponse {
         let http_version = version_to_string(response.version());
         let encoding = extract_charset(response.headers());
 
-        // Convert redirect history (drained, status-only responses).
+        // Convert redirect history (metadata-only snapshots, no body).
         let core_history = std::mem::take(response.history_mut());
         let history: Vec<PyResponse> = core_history
             .into_iter()
-            .map(|r| {
-                let status = r.status().as_u16();
-                let headers = PyHeaders::from_header_map(r.headers().clone());
-                let url = r.url().to_string();
-                let reason_phrase = r.status().canonical_reason().unwrap_or("").to_string();
-                let http_version = version_to_string(r.version());
-                let encoding = extract_charset(r.headers());
+            .map(|entry| {
+                let status = entry.status().as_u16();
+                let headers = PyHeaders::from_header_map(entry.headers().clone());
+                let url = entry.url().to_string();
+                let reason_phrase = entry.reason_phrase().to_string();
+                let http_version = version_to_string(entry.version());
+                let encoding = extract_charset(entry.headers());
                 PyResponse::from_parts(
                     status,
                     headers,
@@ -142,16 +146,31 @@ impl PyResponse {
 
         let text = decode_with_encoding(&content, encoding.as_deref());
 
+        // Parse Set-Cookie headers into a Cookies mapping.
+        let jar = eggfetch_core::cookie::CookieJar::new();
+        let response_url = response.url();
+        let set_cookie_headers: Vec<String> = response
+            .headers()
+            .get_all("set-cookie")
+            .iter()
+            .filter_map(|v| v.to_str().ok().map(ToString::to_string))
+            .collect();
+        if !set_cookie_headers.is_empty() {
+            jar.update_from_response(response_url, &set_cookie_headers);
+        }
+        let cookies = PyCookies::from_jar(jar);
+
         Ok(Self {
             status_code: status,
             headers,
-            url,
+            url: response_url.to_string(),
             content,
             text,
             reason_phrase,
             http_version,
             encoding,
             history,
+            cookies,
             _stream_consumed: false,
         })
     }
@@ -178,6 +197,7 @@ impl PyResponse {
             http_version,
             encoding,
             history: Vec::new(),
+            cookies: PyCookies::from_jar(eggfetch_core::cookie::CookieJar::new()),
             _stream_consumed: false,
         }
     }

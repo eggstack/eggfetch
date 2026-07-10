@@ -6,6 +6,7 @@ use crate::conversion::{
     build_request_body, parse_timeout, python_headers_to_rust, python_params_to_url,
     validate_body_kwargs,
 };
+use crate::cookies::PyCookies;
 use crate::errors::map_err;
 
 /// An async HTTP client exposed to Python.
@@ -32,13 +33,14 @@ impl PyAsyncClient {
     ///     `follow_redirects`: Whether to follow redirects (default False).
     ///     `max_redirects`: Maximum redirects to follow (default 20).
     #[new]
-    #[pyo3(signature = (*, headers=None, timeout=None, follow_redirects=None, max_redirects=None))]
+    #[pyo3(signature = (*, headers=None, timeout=None, follow_redirects=None, max_redirects=None, cookies=None))]
     fn new(
         py: Python<'_>,
         headers: Option<&Bound<'_, PyAny>>,
         timeout: Option<&Bound<'_, PyAny>>,
         follow_redirects: Option<bool>,
         max_redirects: Option<usize>,
+        cookies: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<Self> {
         let mut builder = eggfetch_core::Client::builder();
 
@@ -62,6 +64,18 @@ impl PyAsyncClient {
             max_redirects.unwrap_or(20),
         );
         builder = builder.redirect_policy(redirect);
+
+        let jar = eggfetch_core::cookie::CookieJar::new();
+        if let Some(c) = cookies {
+            if let Ok(dict) = c.downcast::<pyo3::types::PyDict>() {
+                for (key, value) in dict.iter() {
+                    let name: String = key.extract()?;
+                    let val: String = value.extract()?;
+                    jar.set_default_cookie(name, val);
+                }
+            }
+        }
+        builder = builder.cookie_jar(jar);
 
         let client = builder.build();
 
@@ -154,9 +168,7 @@ impl PyAsyncClient {
 
             let mut response = builder.send().await.map_err(map_err)?;
             let content = response.bytes().await.map_err(map_err)?;
-            Ok(crate::response::PyResponse::from_core_response_with_body(
-                response, content,
-            )?)
+            crate::response::PyResponse::from_core_response_with_body(response, content)
         })
     }
 
@@ -376,6 +388,12 @@ impl PyAsyncClient {
     #[getter]
     fn is_closed(&self) -> bool {
         self.closed
+    }
+
+    /// The client's cookie jar.
+    #[getter]
+    fn cookies(&self) -> PyCookies {
+        PyCookies::from_jar(self.client.cookies().clone())
     }
 
     /// Async context manager: enter. Returns an awaitable that resolves to self.

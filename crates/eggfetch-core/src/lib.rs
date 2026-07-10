@@ -27,6 +27,8 @@
 
 pub mod body;
 pub mod client;
+#[cfg(feature = "cookies")]
+pub mod cookie;
 pub mod error;
 pub mod headers;
 pub mod pool;
@@ -44,5 +46,5 @@ pub use http::Method;
 pub use pool::{Pool, PoolConfig};
 pub use redirect::RedirectPolicy;
 pub use request::{Request, RequestBuilder};
-pub use response::Response;
+pub use response::{HistoryEntry, Response};
 pub use timeout::{Timeout, TimeoutBuilder, TimeoutPhase};

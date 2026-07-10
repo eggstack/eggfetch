@@ -124,18 +124,10 @@ pub fn build_redirect_request(
     strip_headers_for_redirect(&mut new_headers, original.url(), &new_url, drop_body);
 
     // Handle body for the redirect.
-    // After buffering, the original body is always Bytes or Empty.
     let new_body = if drop_body {
         RequestBody::Empty
     } else {
-        match original.body() {
-            RequestBody::Empty => RequestBody::Empty,
-            RequestBody::Bytes(b) => RequestBody::Bytes(b.clone()),
-            RequestBody::Stream { .. } => {
-                // Should not happen: caller buffers body before calling this.
-                return Err(Error::BodyNotReplayableForRedirect);
-            }
-        }
+        original.body().try_clone_for_redirect()?
     };
 
     let mut redirect_request = Request::new(new_method, new_url);

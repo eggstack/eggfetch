@@ -101,7 +101,8 @@ pub fn map_err(err: eggfetch_core::Error) -> PyErr {
         | eggfetch_core::Error::InvalidHeaderValue(msg)
         | eggfetch_core::Error::RequestBuild(msg)
         | eggfetch_core::Error::Unsupported(msg)
-        | eggfetch_core::Error::Pool(msg) => RequestError::new_err(msg),
+        | eggfetch_core::Error::Pool(msg)
+        | eggfetch_core::Error::InvalidRedirectLocation(msg) => RequestError::new_err(msg),
         eggfetch_core::Error::Connect(msg) | eggfetch_core::Error::Tls(msg) => {
             NetworkError::new_err(msg)
         }
@@ -110,7 +111,6 @@ pub fn map_err(err: eggfetch_core::Error) -> PyErr {
         eggfetch_core::Error::Hyper(arc) => NetworkError::new_err(arc.to_string()),
         eggfetch_core::Error::HyperClient(arc) => NetworkError::new_err(arc.to_string()),
         eggfetch_core::Error::Io(arc) => NetworkError::new_err(arc.to_string()),
-        eggfetch_core::Error::InvalidRedirectLocation(msg) => RequestError::new_err(msg),
         eggfetch_core::Error::BodyNotReplayableForRedirect => {
             RequestError::new_err("request body is not replayable for redirect".to_string())
         }

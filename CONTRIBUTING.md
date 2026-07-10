@@ -51,7 +51,7 @@ Tests live next to the code they cover, using `#[cfg(test)] mod tests` blocks wi
 cargo test --workspace --all-features
 ```
 
-Prefer small, focused tests that exercise one behavior. The workspace has ~160 tests covering construction, streaming, timeouts, pools, headers, and integration scenarios. As the project grows, tests should cover protocol correctness, edge cases, and error paths.
+Prefer small, focused tests that exercise one behavior. The workspace has ~226 Rust tests and ~200 Python tests covering construction, streaming, timeouts, pools, headers, integration scenarios, sync/async API parity, redirect replay, total timeout across redirects, and response decoding. As the project grows, tests should cover protocol correctness, edge cases, and error paths.
 
 ## Dependencies
 
@@ -101,6 +101,6 @@ If you find yourself writing HTTP logic outside of eggfetch-core, stop and refac
 
 ## Milestone Context
 
-eggfetch follows a milestone-driven development sequence (A through M). Before starting work, read `plans/ROADMAP.md` and the relevant milestone plan in `plans/`. Each milestone is a handoff boundary: finish one before starting the next. A clean baseline matters more than an early partial implementation.
+eggfetch follows a milestone-driven development sequence (A through N+). Before starting work, read `plans/ROADMAP.md` and the relevant milestone plan in `plans/`. Each milestone is a handoff boundary: finish one before starting the next. A clean baseline matters more than an early partial implementation.
 
 Make the workspace build green before adding new functionality. Format before committing. Do not bypass CI to land changes.

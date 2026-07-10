@@ -13,9 +13,12 @@ use crate::headers::Headers;
 use crate::pool::{OriginKey, Pool, PoolConfig, PoolGuard, PoolMetrics};
 use crate::redirect::{self, RedirectPolicy};
 use crate::request::{Request, RequestBuilder};
-use crate::response::Response;
+use crate::response::{HistoryEntry, Response};
 use crate::stream::{read_timeout_stream, write_timeout_stream};
 use crate::timeout::{Timeout, TimeoutPhase};
+
+#[cfg(feature = "cookies")]
+use crate::cookie::CookieJar;
 
 type Connector = hyper_rustls::HttpsConnector<hyper_util::client::legacy::connect::HttpConnector>;
 type HyperRequestBody =
@@ -29,6 +32,8 @@ struct ClientConfig {
     user_agent: Option<String>,
     timeout: Option<Timeout>,
     redirect: RedirectPolicy,
+    #[cfg(feature = "cookies")]
+    cookie_jar: CookieJar,
 }
 
 impl Default for ClientConfig {
@@ -38,6 +43,8 @@ impl Default for ClientConfig {
             user_agent: None,
             timeout: None,
             redirect: RedirectPolicy::default(),
+            #[cfg(feature = "cookies")]
+            cookie_jar: CookieJar::new(),
         }
     }
 }
@@ -155,6 +162,15 @@ impl Client {
         self.inner.pool.metrics()
     }
 
+    /// Returns a reference to the client's cookie jar.
+    ///
+    /// Only available when the `cookies` feature is enabled.
+    #[cfg(feature = "cookies")]
+    #[must_use]
+    pub fn cookies(&self) -> &CookieJar {
+        &self.inner.config.cookie_jar
+    }
+
     /// Send a request and return the response, following redirects if
     /// the client's redirect policy allows.
     ///
@@ -166,6 +182,7 @@ impl Client {
     ///
     /// Returns an error if the request fails at any stage (connect, TLS,
     /// protocol, body) or if a timeout elapses.
+    #[allow(clippy::too_many_lines)]
     pub(crate) async fn send(&self, request: Request) -> Result<Response> {
         let (method, url, headers, body, version, request_timeout, request_redirect) =
             request.into_parts();
@@ -185,11 +202,45 @@ impl Client {
         // This preserves streaming body semantics for ordinary requests.
         if !effective_redirect.follow {
             let mut request = Request::new(method, url);
+
+            // Cookie injection for fast path (before headers are moved).
+            #[cfg(feature = "cookies")]
+            let has_cookie_header = headers.contains("cookie");
+
             *request.headers_mut() = headers;
             request.set_body(body);
             request.set_version(version);
             request.set_timeout(Some(timeout));
-            return self.send_single_request(request, &timeout).await;
+
+            #[cfg(feature = "cookies")]
+            if !has_cookie_header {
+                if let Some(cookie_header) =
+                    self.inner.config.cookie_jar.cookies_for_url(request.url())
+                {
+                    request.headers_mut().insert("cookie", &cookie_header)?;
+                }
+            }
+
+            let response = self.send_single_request(request, &timeout).await?;
+
+            // Process Set-Cookie headers from the response.
+            #[cfg(feature = "cookies")]
+            {
+                let set_cookie_headers: Vec<String> = response
+                    .headers()
+                    .get_all("set-cookie")
+                    .iter()
+                    .filter_map(|v| v.to_str().ok().map(str::to_owned))
+                    .collect();
+                if !set_cookie_headers.is_empty() {
+                    self.inner
+                        .config
+                        .cookie_jar
+                        .update_from_response(response.url(), &set_cookie_headers);
+                }
+            }
+
+            return Ok(response);
         }
 
         // Redirect path: buffer the body into bytes for replayability across hops.
@@ -231,7 +282,40 @@ impl Client {
             hop_request.set_version(cur_version);
             hop_request.set_timeout(Some(hop_timeout));
 
+            // Cookie injection for redirect hop.
+            #[cfg(feature = "cookies")]
+            {
+                if !hop_request.headers().contains("cookie") {
+                    if let Some(cookie_header) = self
+                        .inner
+                        .config
+                        .cookie_jar
+                        .cookies_for_url(hop_request.url())
+                    {
+                        hop_request.headers_mut().insert("cookie", &cookie_header)?;
+                    }
+                }
+            }
+
             let mut response = self.send_single_request(hop_request, &hop_timeout).await?;
+
+            // Process Set-Cookie headers from the response (important for
+            // redirect chains).
+            #[cfg(feature = "cookies")]
+            {
+                let set_cookie_headers: Vec<String> = response
+                    .headers()
+                    .get_all("set-cookie")
+                    .iter()
+                    .filter_map(|v| v.to_str().ok().map(str::to_owned))
+                    .collect();
+                if !set_cookie_headers.is_empty() {
+                    self.inner
+                        .config
+                        .cookie_jar
+                        .update_from_response(response.url(), &set_cookie_headers);
+                }
+            }
 
             if !redirect::is_redirect_status(response.status()) || !effective_redirect.follow {
                 // Not a redirect, or redirects disabled.
@@ -275,8 +359,8 @@ impl Client {
             // Save the redirect status before pushing response to history.
             let redirect_status = response.status();
 
-            // Save the redirect response in history.
-            history.push(response);
+            // Save a metadata-only snapshot in history (no body, no pool permit).
+            history.push(HistoryEntry::from_response(&response));
 
             // Determine the new method and body for the next hop.
             let new_method = redirect::redirect_method(redirect_status, &cur_method);
@@ -577,6 +661,8 @@ pub struct ClientBuilder {
     pool_config: PoolConfig,
     timeout: Option<Timeout>,
     redirect: RedirectPolicy,
+    #[cfg(feature = "cookies")]
+    cookie_jar: Option<CookieJar>,
 }
 
 impl ClientBuilder {
@@ -589,6 +675,8 @@ impl ClientBuilder {
             pool_config: PoolConfig::default(),
             timeout: None,
             redirect: RedirectPolicy::default(),
+            #[cfg(feature = "cookies")]
+            cookie_jar: None,
         }
     }
 
@@ -672,6 +760,19 @@ impl ClientBuilder {
         self
     }
 
+    /// Set a shared cookie jar for this client.
+    ///
+    /// When set, the client will automatically inject matching cookies
+    /// into requests and update the jar from `Set-Cookie` response headers.
+    ///
+    /// Only available when the `cookies` feature is enabled.
+    #[cfg(feature = "cookies")]
+    #[must_use]
+    pub fn cookie_jar(mut self, jar: CookieJar) -> Self {
+        self.cookie_jar = Some(jar);
+        self
+    }
+
     /// Build the client.
     ///
     /// # Panics
@@ -693,11 +794,16 @@ impl ClientBuilder {
         }
         let hyper_client: HyperClient = builder.build(https);
 
+        #[cfg(feature = "cookies")]
+        let cookie_jar = self.cookie_jar.unwrap_or_default();
+
         let config = ClientConfig {
             default_headers: self.default_headers,
             user_agent: self.user_agent,
             timeout: self.timeout,
             redirect: self.redirect,
+            #[cfg(feature = "cookies")]
+            cookie_jar,
         };
 
         let pool = Pool::new(self.pool_config);

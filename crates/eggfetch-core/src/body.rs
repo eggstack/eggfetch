@@ -132,6 +132,23 @@ impl RequestBody {
         matches!(self, Self::Empty | Self::Bytes(_))
     }
 
+    /// Attempt to clone this body for use in a redirect request.
+    ///
+    /// Returns a cloned body if the body is replayable (empty or bytes),
+    /// or an error if the body is a live stream that cannot be resent.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::BodyNotReplayableForRedirect`] if the body is a
+    /// live stream that cannot be replayed for a redirect.
+    pub fn try_clone_for_redirect(&self) -> Result<Self> {
+        match self {
+            Self::Empty => Ok(Self::Empty),
+            Self::Bytes(b) => Ok(Self::Bytes(b.clone())),
+            Self::Stream { .. } => Err(Error::BodyNotReplayableForRedirect),
+        }
+    }
+
     /// Consume the body and return all bytes.
     ///
     /// For byte bodies, returns the bytes directly. For stream bodies,
@@ -448,6 +465,30 @@ mod tests {
         assert_eq!(body.len(), 1024);
         assert!(body.has_known_length());
         assert!(!body.is_replayable());
+    }
+
+    #[test]
+    fn try_clone_for_redirect_empty() {
+        let body = RequestBody::Empty;
+        let cloned = body.try_clone_for_redirect().unwrap();
+        assert!(cloned.is_empty());
+    }
+
+    #[test]
+    fn try_clone_for_redirect_bytes() {
+        let body = RequestBody::from(Bytes::from("hello"));
+        let cloned = body.try_clone_for_redirect().unwrap();
+        match cloned {
+            RequestBody::Bytes(b) => assert_eq!(b, "hello"),
+            _ => panic!("expected bytes"),
+        }
+    }
+
+    #[test]
+    fn try_clone_for_redirect_stream_errors() {
+        let stream = futures_util::stream::empty::<Result<Bytes>>();
+        let body = RequestBody::from_stream(stream, None);
+        assert!(body.try_clone_for_redirect().is_err());
     }
 
     #[test]

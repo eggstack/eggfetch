@@ -6,6 +6,7 @@ use crate::conversion::{
     build_request_body, parse_timeout, python_headers_to_rust, python_params_to_url,
     validate_body_kwargs,
 };
+use crate::cookies::PyCookies;
 use crate::errors::map_err;
 use crate::response::PyResponse;
 
@@ -30,13 +31,14 @@ impl PyClient {
     ///     `follow_redirects`: Whether to follow redirects (default False).
     ///     `max_redirects`: Maximum redirects to follow (default 20).
     #[new]
-    #[pyo3(signature = (*, headers=None, timeout=None, follow_redirects=None, max_redirects=None))]
+    #[pyo3(signature = (*, headers=None, timeout=None, follow_redirects=None, max_redirects=None, cookies=None))]
     fn new(
         py: Python<'_>,
         headers: Option<&Bound<'_, PyAny>>,
         timeout: Option<&Bound<'_, PyAny>>,
         follow_redirects: Option<bool>,
         max_redirects: Option<usize>,
+        cookies: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<Self> {
         let runtime = tokio::runtime::Runtime::new()
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
@@ -63,6 +65,18 @@ impl PyClient {
             max_redirects.unwrap_or(20),
         );
         builder = builder.redirect_policy(redirect);
+
+        let jar = eggfetch_core::cookie::CookieJar::new();
+        if let Some(c) = cookies {
+            if let Ok(dict) = c.downcast::<pyo3::types::PyDict>() {
+                for (key, value) in dict.iter() {
+                    let name: String = key.extract()?;
+                    let val: String = value.extract()?;
+                    jar.set_default_cookie(name, val);
+                }
+            }
+        }
+        builder = builder.cookie_jar(jar);
 
         let client = builder.build();
 
@@ -381,6 +395,12 @@ impl PyClient {
     #[getter]
     fn is_closed(&self) -> bool {
         self.closed
+    }
+
+    /// The client's cookie jar.
+    #[getter]
+    fn cookies(&self) -> PyCookies {
+        PyCookies::from_jar(self.client.cookies().clone())
     }
 
     /// Context manager: enter.

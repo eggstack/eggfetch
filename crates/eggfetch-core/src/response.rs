@@ -22,6 +22,65 @@ use url::Url;
 use crate::body::{BoxBytesStream, ResponseBody};
 use crate::error::Result;
 
+/// A metadata-only snapshot of a redirect response.
+///
+/// History entries intentionally omit the response body. This makes it
+/// structurally impossible for redirect history to retain active body
+/// streams or pool permits.
+#[derive(Debug, Clone)]
+pub struct HistoryEntry {
+    status: StatusCode,
+    version: Version,
+    headers: HeaderMap,
+    url: Url,
+    reason_phrase: String,
+}
+
+impl HistoryEntry {
+    /// Create a history entry from a response that has already been
+    /// drained (body consumed).
+    pub(crate) fn from_response(response: &Response) -> Self {
+        let reason = response.status.canonical_reason().unwrap_or("").to_string();
+        Self {
+            status: response.status,
+            version: response.version,
+            headers: response.headers.clone(),
+            url: response.url.clone(),
+            reason_phrase: reason,
+        }
+    }
+
+    /// Returns the HTTP status code.
+    #[must_use]
+    pub fn status(&self) -> StatusCode {
+        self.status
+    }
+
+    /// Returns the HTTP version.
+    #[must_use]
+    pub fn version(&self) -> Version {
+        self.version
+    }
+
+    /// Returns the response headers.
+    #[must_use]
+    pub fn headers(&self) -> &HeaderMap {
+        &self.headers
+    }
+
+    /// Returns the URL.
+    #[must_use]
+    pub fn url(&self) -> &Url {
+        &self.url
+    }
+
+    /// Returns the reason phrase.
+    #[must_use]
+    pub fn reason_phrase(&self) -> &str {
+        &self.reason_phrase
+    }
+}
+
 /// An HTTP response.
 pub struct Response {
     status: StatusCode,
@@ -29,7 +88,7 @@ pub struct Response {
     headers: HeaderMap,
     url: Url,
     pub(crate) body: ResponseBody,
-    history: Vec<Response>,
+    history: Vec<HistoryEntry>,
 }
 
 impl std::fmt::Debug for Response {
@@ -40,7 +99,7 @@ impl std::fmt::Debug for Response {
             .field("headers", &self.headers)
             .field("url", &self.url)
             .field("body", &self.body)
-            .field("history_len", &self.history.len())
+            .field("history", &self.history)
             .finish()
     }
 }
@@ -102,17 +161,17 @@ impl Response {
 
     /// Returns the redirect history (prior responses in order).
     #[must_use]
-    pub fn history(&self) -> &[Response] {
+    pub fn history(&self) -> &[HistoryEntry] {
         &self.history
     }
 
     /// Returns a mutable reference to the redirect history.
-    pub fn history_mut(&mut self) -> &mut Vec<Response> {
+    pub fn history_mut(&mut self) -> &mut Vec<HistoryEntry> {
         &mut self.history
     }
 
     /// Set the redirect history.
-    pub(crate) fn set_history(&mut self, history: Vec<Response>) {
+    pub(crate) fn set_history(&mut self, history: Vec<HistoryEntry>) {
         self.history = history;
     }
 

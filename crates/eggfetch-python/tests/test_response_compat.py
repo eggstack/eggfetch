@@ -111,6 +111,32 @@ class _Handler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
 
+        elif path == "/charset-quoted":
+            body = "caf\u00e9".encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain; charset=\"utf-8\"")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        elif path == "/charset-unknown":
+            body = "caf\u00e9".encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain; charset=x-notreal")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        elif path == "/latin1-bytes-no-charset":
+            # Latin-1 encoded bytes, but no charset in Content-Type
+            # Decoder should fall back to UTF-8 lossy
+            body = "caf\u00e9".encode("latin-1")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
         else:
             body = json.dumps({
                 "method": "GET",
@@ -215,6 +241,20 @@ class TestResponseProperties:
         r = eggfetch.get(f"{server}/empty-content-type")
         assert r.encoding is None
 
+    def test_encoding_quoted_charset(self, server):
+        r = eggfetch.get(f"{server}/charset-quoted")
+        assert r.encoding is not None
+        assert r.encoding.lower() == "utf-8"
+
+    def test_encoding_unknown_charset_falls_back(self, server):
+        r = eggfetch.get(f"{server}/charset-unknown")
+        # Unknown charset is not recognized by encoding_rs,
+        # so encoding property is the raw string but text falls back to UTF-8
+        assert r.encoding is not None
+        assert r.encoding == "x-notreal"
+        # Body was valid UTF-8, so it decodes correctly via lossy fallback
+        assert "caf" in r.text
+
     def test_history_empty(self, server):
         r = eggfetch.get(f"{server}/json")
         assert r.history == []
@@ -305,6 +345,15 @@ class TestTextDecoding:
         # The server sends "café" encoded in latin-1 with charset=iso-8859-1
         # Our decoder should decode it properly
         assert "caf" in r.text
+
+    def test_latin1_bytes_without_charset_use_utf8_lossy(self, server):
+        # Latin-1 bytes without charset → UTF-8 lossy decode produces
+        # replacement characters for the non-ASCII bytes
+        r = eggfetch.get(f"{server}/latin1-bytes-no-charset")
+        assert r.encoding is None
+        # The latin-1 byte 0xe9 is not valid UTF-8, so lossy decode
+        # replaces it with U+FFFD
+        assert "\ufffd" in r.text
 
     def test_html_text(self, server):
         r = eggfetch.get(f"{server}/html")

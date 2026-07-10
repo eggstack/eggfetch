@@ -72,8 +72,8 @@ Enables Zstandard decompression of response bodies.
 
 ### cookies
 
-**Status:** planned, not implemented.
-**Milestone:** after the post-J corrective pass. Enables cookie jar support for persistent cookies across requests.
+**Status:** implemented (Milestone O).
+Enables cookie jar support for persistent cookies across requests. Provides RFC 6265 cookie parsing, domain/path matching, cookie jar with thread-safe storage, and automatic Set-Cookie ingestion on responses. The Python crate exposes `client.cookies`, `response.cookies`, and a `cookies=` kwarg for initial cookies.
 
 ### proxy
 
