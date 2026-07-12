@@ -235,6 +235,14 @@ class TestAuthPrecedence:
             assert data["auth"] == "Basic dXNlcjpwYXNz"
             resp.close()
 
+    def test_noauth_disables_client_auth(self, auth_server):
+        """eggfetch.NOAUTH disables client auth for a single request."""
+        with eggfetch.Client(auth=eggfetch.BasicAuth("user", "pass")) as client:
+            resp = client.get(f"{auth_server}/echo", auth=eggfetch.NOAUTH)
+            data = resp.json()
+            assert data["auth"] is None
+            resp.close()
+
 
 # ---------------------------------------------------------------------------
 # Redirect: same-origin preserves auth
@@ -406,6 +414,14 @@ class TestAuthNoneFallthrough:
             assert data["auth"] == "Basic dXNlcjpwYXNz"
             resp.close()
 
+    def test_noauth_disables_client_auth(self, auth_server):
+        """eggfetch.NOAUTH disables client auth for a single request."""
+        with eggfetch.Client(auth=eggfetch.BasicAuth("user", "pass")) as client:
+            resp = client.get(f"{auth_server}/echo", auth=eggfetch.NOAUTH)
+            data = resp.json()
+            assert data["auth"] is None
+            resp.close()
+
     def test_no_auth_no_client_sends_no_header(self, auth_server):
         """No auth on request AND no auth on client → no Authorization header."""
         resp = eggfetch.get(f"{auth_server}/echo")
@@ -438,14 +454,15 @@ class _EchoHandler(http.server.BaseHTTPRequestHandler):
 
 class TestCrossOriginRedirectTwoServers:
     def test_cross_origin_redirect_strips_auth_header(self):
-        """Redirect from server A to server B completes successfully.
+        """Redirect from server A to server B completes without leaking auth.
 
         The Rust unit test ``build_redirect_cross_origin_strips_auth``
         verifies that ``build_redirect_request`` strips the Authorization
         header on cross-origin redirects. At the Python integration level,
-        the client re-applies client-level auth on each redirect hop via
-        ``resolve_request_auth``. This test verifies the redirect
-        completes successfully to a different origin.
+        the client suppresses client-level auth on cross-origin redirect
+        hops to prevent credential leakage. This test verifies both that
+        the redirect completes successfully AND that no Authorization
+        header arrives at the second server.
         """
         # Start server B (echo) first so we know its port
         srv_b = http.server.HTTPServer(("127.0.0.1", 0), _EchoHandler)
@@ -481,7 +498,8 @@ class TestCrossOriginRedirectTwoServers:
             )
             data = resp.json()
             # Redirect completed successfully to server B.
-            assert data["auth"] is not None
+            # Auth must NOT have been forwarded cross-origin.
+            assert data["auth"] is None
             resp.close()
         finally:
             srv_a.shutdown()

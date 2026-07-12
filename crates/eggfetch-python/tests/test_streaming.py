@@ -2,6 +2,7 @@
 
 import http.server
 import json
+import socket
 import threading
 import time
 
@@ -16,6 +17,17 @@ import eggfetch
 
 class _StreamingHandler(http.server.BaseHTTPRequestHandler):
     """Test server that supports streaming endpoints."""
+
+    def _write_raw_response(self, status, headers, body):
+        """Write a raw HTTP response with explicit bytes to avoid buffering."""
+        status_text = {200: "OK"}.get(status, "OK")
+        lines = [f"HTTP/1.1 {status} {status_text}\r\n"]
+        for k, v in headers.items():
+            lines.append(f"{k}: {v}\r\n")
+        lines.append("\r\n")
+        raw = "".join(lines).encode("latin-1") + body
+        self.wfile.write(raw)
+        self.wfile.flush()
 
     def do_GET(self):
         if self.path == "/stream-bytes":
@@ -71,6 +83,58 @@ class _StreamingHandler(http.server.BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
+            self.wfile.flush()
+
+        elif self.path == "/slow-chunks":
+            self._write_raw_response(200, {
+                "Content-Type": "text/plain",
+                "Transfer-Encoding": "chunked",
+            }, b"5\r\nhello\r\n5\r\n world\r\n0\r\n\r\n")
+
+        elif self.path == "/delayed-chunks":
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain")
+            self.end_headers()
+            self.wfile.write(b"chunk1\n")
+            self.wfile.flush()
+            time.sleep(0.3)
+            self.wfile.write(b"chunk2\n")
+            self.wfile.flush()
+
+        elif self.path == "/slow-then-hang":
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain")
+            self.end_headers()
+            self.wfile.write(b"first\n")
+            self.wfile.flush()
+            time.sleep(30)
+
+        elif self.path == "/large-stream":
+            self.send_response(200)
+            self.send_header("Content-Type", "application/octet-stream")
+            self.end_headers()
+            chunk = b"x" * 65536
+            for _ in range(160):
+                self.wfile.write(chunk)
+                self.wfile.flush()
+
+        elif self.path == "/split-utf8":
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.end_headers()
+            eacute = "\u00e9".encode("utf-8")
+            self.wfile.write(eacute[:1])
+            self.wfile.flush()
+            self.wfile.write(eacute[1:])
+            self.wfile.flush()
+
+        elif self.path == "/split-line":
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(b"line1\nline")
+            self.wfile.flush()
+            self.wfile.write(b"2\n")
             self.wfile.flush()
 
         else:
@@ -435,7 +499,7 @@ class TestAsyncStreamingErrors:
             resp = await client.stream("GET", f"{server}/stream-bytes")
             async with resp:
                 await resp.aread()
-                with pytest.raises(ValueError):
+                with pytest.raises(eggfetch.StreamConsumed):
                     [c async for c in resp.aiter_bytes()]
 
     async def test_async_stream_closed_client(self, server):
@@ -455,7 +519,7 @@ class TestStreamingErrors:
         with eggfetch.Client() as client:
             resp = client.stream("GET", f"{server}/stream-bytes")
             resp.read()
-            with pytest.raises(ValueError):
+            with pytest.raises(eggfetch.StreamConsumed):
                 list(resp.iter_bytes())
 
     def test_stream_closed_client(self, server):
@@ -463,3 +527,142 @@ class TestStreamingErrors:
         client.close()
         with pytest.raises(ValueError, match="closed"):
             client.stream("GET", f"{server}/status")
+
+
+# ---------------------------------------------------------------------------
+# Required streaming behavior tests
+# ---------------------------------------------------------------------------
+
+
+class TestRequiredStreamingBehaviors:
+    """The 9 required streaming tests from the corrective-pass plan."""
+
+    def test_first_chunk_before_complete_body(self, server):
+        with eggfetch.Client() as client:
+            resp = client.stream("GET", f"{server}/delayed-chunks")
+            it = resp.iter_bytes()
+            first = next(it)
+            assert first == b"chunk1\n"
+            rest = b"".join(it)
+            assert rest == b"chunk2\n"
+
+    def test_large_response_not_eagerly_buffered(self, server):
+        with eggfetch.Client() as client:
+            resp = client.stream("GET", f"{server}/large-stream")
+            total = 0
+            chunk_count = 0
+            for chunk in resp.iter_bytes():
+                total += len(chunk)
+                chunk_count += 1
+            assert total == 65536 * 160
+            assert chunk_count > 1
+
+    def test_sync_early_break_releases_permit(self, server):
+        with eggfetch.Client() as client:
+            resp = client.stream("GET", f"{server}/large-stream")
+            for _ in resp.iter_bytes():
+                break
+        with eggfetch.Client() as c2:
+            r = c2.get(f"{server}/status")
+            assert r.status_code == 200
+
+    def test_read_timeout_raises_correct_exception(self, server):
+        with eggfetch.Client(timeout=1.0) as client:
+            resp = client.stream("GET", f"{server}/slow-then-hang")
+            it = resp.iter_bytes()
+            first = next(it)
+            assert first == b"first\n"
+            with pytest.raises(eggfetch.TimeoutException):
+                next(it)
+
+    def test_client_reusable_after_stream_error(self, server):
+        with eggfetch.Client() as client:
+            resp = client.stream("GET", f"{server}/slow-then-hang")
+            first = next(resp.iter_bytes())
+            assert first == b"first\n"
+            resp.close()
+        with eggfetch.Client() as c2:
+            r = c2.get(f"{server}/status")
+            assert r.status_code == 200
+
+    def test_split_utf8_decodes_correctly(self, server):
+        with eggfetch.Client() as client:
+            resp = client.stream("GET", f"{server}/split-utf8")
+            text = resp.text()
+            assert text == "\u00e9"
+
+    def test_line_delimiter_split_across_chunks(self, server):
+        with eggfetch.Client() as client:
+            resp = client.stream("GET", f"{server}/split-line")
+            lines = list(resp.iter_lines())
+            assert lines == ["line1", "line2"]
+
+    def test_double_consumption_raises_stream_consumed(self, server):
+        with eggfetch.Client() as client:
+            resp = client.stream("GET", f"{server}/stream-bytes")
+            resp.read()
+            with pytest.raises(eggfetch.StreamConsumed):
+                resp.read()
+            with pytest.raises(eggfetch.StreamConsumed):
+                list(resp.iter_bytes())
+
+    def test_use_after_close_raises_stream_closed(self, server):
+        with eggfetch.Client() as client:
+            resp = client.stream("GET", f"{server}/stream-bytes")
+            resp.read()
+            resp.close()
+            with pytest.raises(eggfetch.StreamClosed):
+                resp.read()
+            with pytest.raises(eggfetch.StreamClosed):
+                list(resp.iter_bytes())
+
+
+class TestAsyncRequiredStreamingBehaviors:
+    """Async variants of the required streaming tests."""
+
+    async def test_async_split_utf8_decodes_correctly(self, server):
+        async with eggfetch.AsyncClient() as client:
+            resp = await client.stream("GET", f"{server}/split-utf8")
+            async with resp:
+                text = await resp.aread()
+                assert text == "\u00e9".encode("utf-8")
+
+    async def test_async_line_delimiter_split_across_chunks(self, server):
+        async with eggfetch.AsyncClient() as client:
+            resp = await client.stream("GET", f"{server}/split-line")
+            async with resp:
+                lines = []
+                async for line in resp.aiter_lines():
+                    lines.append(line)
+                assert lines == ["line1", "line2"]
+
+    async def test_async_client_reusable_after_stream_error(self, server):
+        async with eggfetch.AsyncClient() as client:
+            resp = await client.stream("GET", f"{server}/slow-then-hang")
+            async for chunk in resp.aiter_bytes():
+                assert chunk == b"first\n"
+                break
+            await resp.aclose()
+        async with eggfetch.AsyncClient() as c2:
+            r = await c2.get(f"{server}/status")
+            assert r.status_code == 200
+
+    async def test_async_double_consumption_raises_stream_consumed(self, server):
+        async with eggfetch.AsyncClient() as client:
+            resp = await client.stream("GET", f"{server}/stream-bytes")
+            async with resp:
+                await resp.aread()
+                with pytest.raises(eggfetch.StreamConsumed):
+                    await resp.aread()
+                with pytest.raises(eggfetch.StreamConsumed):
+                    [c async for c in resp.aiter_bytes()]
+
+    async def test_async_use_after_close_raises_stream_closed(self, server):
+        async with eggfetch.AsyncClient() as client:
+            resp = await client.stream("GET", f"{server}/stream-bytes")
+            async with resp:
+                await resp.aread()
+            with pytest.raises(eggfetch.StreamClosed):
+                await resp.aread()
+            with pytest.raises(eggfetch.StreamClosed):
+                [c async for c in resp.aiter_bytes()]

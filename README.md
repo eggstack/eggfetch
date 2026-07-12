@@ -3,7 +3,7 @@
 eggfetch is a Rust-native HTTP client engine with Python bindings and a CLI tool. The core is async-first: a Rust engine built on tokio and hyper provides connection pooling, timeouts, TLS, and streaming. The Python bindings expose both sync and async APIs; the sync API blocks on the async engine while releasing the GIL, and the async API integrates with asyncio. There is exactly one networking implementation, living entirely in Rust.
 
 > **Status: Milestone N complete / Semantic tightening and public-API stabilization.**
-> The workspace builds, passes lints, and executes real HTTP requests. `eggfetch-core` provides an async `Client`, `Request`/`RequestBuilder`/`Response`, headers, query parameters, streaming request/response bodies, HTTPS via rustls, connection pooling (max connections per host, idle timeout), phase-aware timeout system (pool, connect, write, read, total), redirect following with configurable policy, cookie subsystem (RFC 6265 parsing, domain/path matching, cookie jar), authentication subsystem (Basic auth, Bearer token, client/request-level auth, cross-origin credential stripping), and a structured error taxonomy. The Python package `eggfetch` exposes sync helpers (`get`, `post`, etc.), a `Client` with context manager support, an `AsyncClient` with `async with` and `await` support, buffered responses with requests/httpx-compatible properties (`status_code`, `reason_phrase`, `headers`, `url`, `content`, `text`, `encoding`, `http_version`, `history`), status helpers (`is_informational`, `is_success`, `is_redirect`, `is_client_error`, `is_server_error`, `is_error`), methods (`json()`, `raise_for_status()`, `iter_bytes()`, `iter_text()`, `iter_lines()`, `close()`/`aclose()`), true network streaming via `client.stream()` returning a `StreamingResponse` context manager, charset-aware text decoding via `encoding_rs`, multi-value header support (`Headers.get_list()`), case-insensitive headers, request body kwargs (`content`, `data`, `json`), form encoding, JSON body serialization, body kwarg mutual exclusion, `follow_redirects`/`max_redirects` kwargs, cookies (`client.cookies`, `response.cookies`, `cookies=` kwarg), `BasicAuth`/`BearerAuth` auth classes, `auth=` kwarg on all request methods, and a structured exception hierarchy. CLI crate remains a stub.
+> The workspace builds, passes lints, and executes real HTTP requests. `eggfetch-core` provides an async `Client`, `Request`/`RequestBuilder`/`Response`, headers, query parameters, streaming request/response bodies, HTTPS via rustls, connection pooling (max connections per host, idle timeout), phase-aware timeout system (pool, connect, write, read, total), redirect following with configurable policy, cookie subsystem (RFC 6265 parsing, domain/path matching, cookie jar), authentication subsystem (Basic auth, Bearer token, client/request-level auth, cross-origin credential stripping), and a structured error taxonomy. The Python package `eggfetch` exposes sync helpers (`get`, `post`, etc.), a `Client` with context manager support, an `AsyncClient` with `async with` and `await` support, buffered responses with requests/httpx-compatible properties (`status_code`, `reason_phrase`, `headers`, `url`, `content`, `text`, `encoding`, `http_version`, `history`), status helpers (`is_informational`, `is_success`, `is_redirect`, `is_client_error`, `is_server_error`, `is_error`), methods (`json()`, `raise_for_status()`, `iter_bytes()`, `iter_text()`, `iter_lines()`, `close()`/`aclose()`), true network streaming via `client.stream()` returning a `StreamingResponse` context manager, charset-aware text decoding via `encoding_rs`, multi-value header support (`Headers.get_list()`), case-insensitive headers, request body kwargs (`content`, `data`, `json`), form encoding, JSON body serialization, body kwarg mutual exclusion, `follow_redirects`/`max_redirects` kwargs, cookies (`client.cookies`, `response.cookies`, `cookies=` kwarg), `BasicAuth`/`BearerAuth` auth classes, `auth=` kwarg on all request methods, `NOAUTH` sentinel for disabling auth per-request, streaming-specific exceptions (`StreamConsumed`, `StreamClosed`, `ResponseNotRead`), and a structured exception hierarchy. CLI crate remains a stub.
 
 ## Architecture
 
@@ -169,7 +169,7 @@ Requests/HTTPX-compatible Response surface in Python:
 - **Response properties** -- `status_code`, `reason_phrase`, `headers`, `url`, `content`, `text`, `encoding`, `http_version`, `history`.
 - **Status helpers** -- `is_informational`, `is_success`, `is_redirect`, `is_client_error`, `is_server_error`, `is_error` (all `#[getter]` returning `bool`).
 - **JSON** -- `json(**kwargs)` delegates to Python's `json.loads` with kwargs passthrough.
-- **Streaming iterators** -- `iter_bytes(chunk_size)`, `iter_text(chunk_size)`, `iter_lines()` return Python iterators over buffered content. These are not true network streaming; the full body is buffered before iteration. True network streaming (consuming chunks as they arrive) is planned for a later milestone.
+- **Streaming iterators** -- `iter_bytes(chunk_size)`, `iter_text(chunk_size)`, `iter_lines()` return Python iterators over buffered content. For true network streaming that consumes chunks as they arrive, use `client.stream()` which returns a `StreamingResponse`.
 - **Close** -- `close()` and `aclose()` (no-ops for buffered responses).
 - **Text decoding** -- charset-aware decoding: explicit `encoding` kwarg > Content-Type charset > UTF-8 fallback. Uses `encoding_rs` for non-UTF-8 charsets.
 - **Headers.get_list()** -- returns all values for a multi-value header as a list.
@@ -188,6 +188,18 @@ Requests/HTTPX-compatible request construction in Python:
 - **Body mutual exclusion** -- `content`, `data`, `json` are mutually exclusive; more than one raises `TypeError`.
 - **Timeout override** -- request-level `timeout` overrides client default per-request.
 - **Redirect kwargs** -- `follow_redirects` and `max_redirects` override client policy per-request.
+
+### Milestone N: Semantic Tightening (complete)
+
+Public-API stabilization and correctness audit:
+
+- **True Python streaming** -- `client.stream()` / `async_client.stream()` returns a `StreamingResponse` context manager with `iter_bytes()`, `iter_text()`, `iter_lines()`, `read()`, `text()` (sync) and `aiter_bytes()`, `aiter_text()`, `aiter_lines()`, `aread()`, `text()` (async). Chunks arrive from the network without eager buffering.
+- **Body state machine** -- atomic `streaming → buffered → consumed → closed` states. Pool permits are released on drop, close, or full consumption.
+- **Named streaming exceptions** -- `StreamConsumed`, `StreamClosed`, `ResponseNotRead` (all subclass `EggfetchError`).
+- **Auth disable sentinel** -- `eggfetch.NOAUTH` disables per-request auth even when the client has auth configured.
+- **Cross-origin redirect auth fix** -- client-level auth is no longer reapplied on cross-origin redirect hops.
+- **Cookie/auth audit** -- comprehensive test coverage for cookie isolation, auth redaction, precedence, and cross-origin behavior.
+- **Sync/async parity** -- 30 parity tests covering cookies, auth, and streaming.
 
 ### Current limitations
 

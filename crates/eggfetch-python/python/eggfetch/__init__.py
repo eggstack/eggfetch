@@ -17,12 +17,14 @@ from eggfetch._native import (
     Cookie,
     Cookies,
     Headers,
+    NoAuth,
     Response,
     StreamingBytesIterator,
     StreamingLinesIterator,
     StreamingResponse,
     StreamingTextIterator,
     Timeout,
+    NOAUTH,
     # Top-level helpers
     request,
     get,
@@ -47,6 +49,9 @@ from eggfetch._native import (
     HTTPStatusError,
     UnsupportedKwarg,
     TooManyRedirects,
+    StreamConsumed,
+    StreamClosed,
+    ResponseNotRead,
 )
 
 __all__ = [
@@ -61,6 +66,8 @@ __all__ = [
     "Cookie",
     "Cookies",
     "Headers",
+    "NoAuth",
+    "NOAUTH",
     "Response",
     "StreamingBytesIterator",
     "StreamingLinesIterator",
@@ -89,4 +96,7 @@ __all__ = [
     "HTTPStatusError",
     "UnsupportedKwarg",
     "TooManyRedirects",
+    "StreamConsumed",
+    "StreamClosed",
+    "ResponseNotRead",
 ]

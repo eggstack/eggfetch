@@ -34,6 +34,7 @@ use pyo3::types::{PyBytes, PyString};
 
 use crate::cookies::PyCookies;
 use crate::errors::map_err;
+use crate::errors::{StreamClosed, StreamConsumed};
 use crate::headers::PyHeaders;
 use crate::response::{extract_charset, version_to_string};
 
@@ -135,61 +136,54 @@ impl PyStreamingResponse {
             .lock()
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?
             .take()
-            .ok_or_else(|| {
-                PyErr::new::<pyo3::exceptions::PyValueError, _>("stream already consumed")
-            })
+            .ok_or_else(|| StreamConsumed::new_err("stream already consumed"))
     }
 
     fn drain_all_bytes(&self) -> PyResult<Bytes> {
         let mut stream = self.take_stream()?;
-        match tokio::runtime::Handle::try_current() {
-            Ok(_handle) => {
-                // Inside a tokio runtime. Use block_on via a new thread to avoid deadlock.
-                // Actually, we can't create a new runtime here. Use a blocking task approach.
-                // Since we can't easily block_on in this context, we'll use a temporary runtime
-                // on a separate thread.
-                let (tx, rx) = std::sync::mpsc::channel();
-                std::thread::spawn(move || {
-                    let rt = tokio::runtime::Runtime::new().expect("failed to create runtime");
-                    let result = rt.block_on(async {
-                        let mut buf = BytesMut::new();
-                        while let Some(chunk) = stream.next().await {
-                            let chunk = chunk.map_err(map_err)?;
-                            buf.extend_from_slice(&chunk);
-                        }
-                        Ok::<_, PyErr>(buf.freeze())
-                    });
-                    let _ = tx.send(result);
-                });
-                let bytes = rx
-                    .recv()
-                    .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?
-                    .map_err(|e| e)?;
-                self.body_state.store(STATE_BUFFERED, Ordering::SeqCst);
-                if let Ok(mut cache) = self.cached_content.lock() {
-                    *cache = Some(bytes.clone());
-                }
-                Ok(bytes)
-            }
-            Err(_) => {
-                // No tokio runtime, create one directly.
-                let rt = tokio::runtime::Runtime::new().map_err(|e| {
-                    PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string())
-                })?;
-                let bytes = rt.block_on(async {
+        if let Ok(_handle) = tokio::runtime::Handle::try_current() {
+            // Inside a tokio runtime. Use block_on via a new thread to avoid deadlock.
+            // Actually, we can't create a new runtime here. Use a blocking task approach.
+            // Since we can't easily block_on in this context, we'll use a temporary runtime
+            // on a separate thread.
+            let (tx, rx) = std::sync::mpsc::channel();
+            std::thread::spawn(move || {
+                let rt = tokio::runtime::Runtime::new().expect("failed to create runtime");
+                let result = rt.block_on(async {
                     let mut buf = BytesMut::new();
                     while let Some(chunk) = stream.next().await {
                         let chunk = chunk.map_err(map_err)?;
                         buf.extend_from_slice(&chunk);
                     }
                     Ok::<_, PyErr>(buf.freeze())
-                })?;
-                self.body_state.store(STATE_BUFFERED, Ordering::SeqCst);
-                if let Ok(mut cache) = self.cached_content.lock() {
-                    *cache = Some(bytes.clone());
-                }
-                Ok(bytes)
+                });
+                let _ = tx.send(result);
+            });
+            let bytes = rx
+                .recv()
+                .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))??;
+            self.body_state.store(STATE_BUFFERED, Ordering::SeqCst);
+            if let Ok(mut cache) = self.cached_content.lock() {
+                *cache = Some(bytes.clone());
             }
+            Ok(bytes)
+        } else {
+            // No tokio runtime, create one directly.
+            let rt = tokio::runtime::Runtime::new()
+                .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+            let bytes = rt.block_on(async {
+                let mut buf = BytesMut::new();
+                while let Some(chunk) = stream.next().await {
+                    let chunk = chunk.map_err(map_err)?;
+                    buf.extend_from_slice(&chunk);
+                }
+                Ok::<_, PyErr>(buf.freeze())
+            })?;
+            self.body_state.store(STATE_BUFFERED, Ordering::SeqCst);
+            if let Ok(mut cache) = self.cached_content.lock() {
+                *cache = Some(bytes.clone());
+            }
+            Ok(bytes)
         }
     }
 
@@ -220,15 +214,11 @@ impl PyStreamingResponse {
     fn ensure_streaming(&self) -> PyResult<()> {
         match self.body_state.load(Ordering::SeqCst) {
             STATE_STREAMING => Ok(()),
-            STATE_BUFFERED => Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+            STATE_BUFFERED => Err(StreamConsumed::new_err(
                 "streaming body has already been buffered",
             )),
-            STATE_CONSUMED => Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
-                "streaming body has been consumed",
-            )),
-            STATE_CLOSED => Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
-                "streaming body has been closed",
-            )),
+            STATE_CONSUMED => Err(StreamConsumed::new_err("streaming body has been consumed")),
+            STATE_CLOSED => Err(StreamClosed::new_err("streaming body has been closed")),
             _ => unreachable!(),
         }
     }
@@ -243,20 +233,17 @@ impl PyStreamingResponse {
             {
                 // Try to get the current tokio runtime handle (if we're inside one).
                 // If we are, drain without creating a new runtime. If not, create one.
-                match tokio::runtime::Handle::try_current() {
-                    Ok(_handle) => {
-                        // We're inside a tokio runtime. We can't block_on here.
-                        // The stream will be dropped (connection closed) when it goes out of scope.
-                        // Just drop the stream to clean up.
-                        drop(stream);
-                    }
-                    Err(_) => {
-                        // No tokio runtime, create one.
-                        let rt = tokio::runtime::Runtime::new().map_err(|e| {
-                            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string())
-                        })?;
-                        rt.block_on(async { while stream.next().await.is_some() {} });
-                    }
+                if tokio::runtime::Handle::try_current().is_ok() {
+                    // We're inside a tokio runtime. We can't block_on here.
+                    // The stream will be dropped (connection closed) when it goes out of scope.
+                    // Just drop the stream to clean up.
+                    drop(stream);
+                } else {
+                    // No tokio runtime, create one.
+                    let rt = tokio::runtime::Runtime::new().map_err(|e| {
+                        PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string())
+                    })?;
+                    rt.block_on(async { while stream.next().await.is_some() {} });
                 }
             }
         }

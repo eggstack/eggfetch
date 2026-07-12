@@ -88,6 +88,24 @@ create_exception!(
     RequestError,
     "Too many redirects were followed."
 );
+create_exception!(
+    eggfetch,
+    StreamConsumed,
+    EggfetchError,
+    "The response stream has already been consumed."
+);
+create_exception!(
+    eggfetch,
+    StreamClosed,
+    EggfetchError,
+    "The response stream has been closed."
+);
+create_exception!(
+    eggfetch,
+    ResponseNotRead,
+    EggfetchError,
+    "The response body has been buffered; use the buffered API instead of streaming."
+);
 
 /// Map an eggfetch-core error to the appropriate Python exception.
 #[allow(clippy::needless_pass_by_value)]

@@ -287,6 +287,13 @@ impl Client {
         let mut cur_body = body_bytes;
         let mut cur_version = version;
 
+        // Track the previous request URL to detect cross-origin redirects.
+        // On the first iteration (before any redirect), this is None and
+        // client auth is applied normally. On subsequent iterations, if the
+        // previous URL differs in origin from the current URL, client auth
+        // is suppressed to prevent credential leakage.
+        let mut prev_url: Option<url::Url> = None;
+
         loop {
             // Compute remaining total timeout for this hop.
             let hop_timeout = if let Some(total_dur) = timeout.total {
@@ -330,12 +337,20 @@ impl Client {
             // Apply auth for this redirect hop.
             // Cross-origin hops already had Authorization stripped by
             // strip_headers_for_redirect in build_redirect_request.
-            // Client auth is NOT automatically reapplied to cross-origin hops.
+            // Client auth is NOT automatically reapplied to cross-origin hops
+            // to prevent credential leakage to third-party origins.
             {
+                let is_cross_origin_redirect = prev_url
+                    .as_ref()
+                    .is_some_and(|prev| prev.origin() != cur_url.origin());
                 let effective_auth = crate::auth::resolve_request_auth(
                     hop_request.auth(),
                     hop_request.is_auth_disabled(),
-                    self.inner.config.auth.as_ref(),
+                    if is_cross_origin_redirect {
+                        None
+                    } else {
+                        self.inner.config.auth.as_ref()
+                    },
                     hop_request.headers(),
                 )?;
                 if let Some(auth) = effective_auth {
@@ -414,6 +429,10 @@ impl Client {
 
             // Extract the new state from the redirect request.
             let (_, new_url, new_headers, _, new_version, _, _, _, _) = redirect_req.into_parts();
+
+            // Record this hop's URL before updating to the redirect target
+            // so the next hop can detect cross-origin redirects.
+            prev_url = Some(cur_url.clone());
 
             cur_method = new_method;
             cur_url = new_url;

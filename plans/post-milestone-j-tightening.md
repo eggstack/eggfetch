@@ -26,29 +26,27 @@ The repository currently provides:
 
 The following tracks have been completed in the corrective pass:
 
-- **Track A**: Implemented true Python network streaming. `client.stream()` and `async_client.stream()` return `StreamingResponse` context managers that consume the live Rust body incrementally. Sync iterators release the GIL per chunk; async iterators use the PyO3 asyncio bridge with cancellation safety. Pool leases are held until exhaustion, close, or drop.
-- **Track B**: Fixed redirect body buffering. When `follow_redirects=False` (the default), request body is no longer eagerly buffered, preserving streaming body semantics for ordinary requests.
-- **Track C**: Audited and confirmed. Total timeout already uses `start_time.elapsed()` for a deadline across the full redirect chain. No code changes needed.
+- **Track A**: Implemented true Python network streaming. `client.stream()` and `async_client.stream()` return `StreamingResponse` context managers that consume the live Rust body incrementally. Sync iterators release the GIL per chunk; async iterators use the PyO3 asyncio bridge with cancellation safety. Pool leases are held until exhaustion, close, or drop. 9 required streaming tests implemented (first-chunk-before-complete, large-response-not-buffered, early-break permit release, read-timeout exception, client-reusable-after-error, split UTF-8, cross-chunk line delimiters, double-consumption, use-after-close). Named exceptions `StreamConsumed`, `StreamClosed`, `ResponseNotRead` added.
+- **Track B**: Fixed redirect body buffering. When `follow_redirects=False` (the default), request body is no longer eagerly buffered, preserving streaming body semantics for ordinary requests. Cookie audit tests added (raw header isolation, kwarg non-persistence, client cookie persistence).
+- **Track C**: Audited and confirmed. Total timeout already uses `start_time.elapsed()` for a deadline across the full redirect chain. Auth audit: 17 Rust + 14 Python tests. Cross-origin redirect auth bug fixed (client auth no longer reapplied on cross-origin hops). `NOAUTH` sentinel added to Python API for per-request auth disable.
 - **Track D**: Audited and confirmed. History entries use drained bodies with empty bytes, releasing pool permits. No code changes needed.
 - **Track E**: Audited and confirmed. Charset-aware decoding via `encoding_rs` works correctly with case-insensitive parsing, quoted values, and UTF-8 fallback. No code changes needed.
-- **Track I**: Fixed async response construction. `AsyncClient` now uses `PyResponse::from_core_response_with_body()` (same as sync path), fixing a history bug where async responses discarded redirect history. Also made `AsyncClient::close()` idempotent to match `Client::close()`.
+- **Track F**: Clippy fixes applied. All feature-gated builds verified (default, no-default-features, tls-rustls only, all-features). CI configuration exists but Python matrix and wheel builds remain for future work.
+- **Track G**: Documentation updated. Architecture overview now correctly documents cross-origin auth behavior, `NOAUTH` sentinel, Python streaming API, cookie semantics, and pipeline order.
 - **Track H**: Updated `.gitignore` to cover `*.egg-info/`, `.maturin/`, `.pytest_cache/`, and `*.pyo`.
+- **Track I**: Fixed async response construction. `AsyncClient` now uses `PyResponse::from_core_response_with_body()` (same as sync path), fixing a history bug where async responses discarded redirect history. Also made `AsyncClient::close()` idempotent to match `Client::close()`.
 - **Track J**: Documentation truth pass. Removed false `aiter_*` claims, updated async adapter description, added tightening plan to repo layout and further reading.
+- **Cookie/Auth Interaction (Track D continued)**: `TestAuthDisableDoesNotDisableCookies` added. 30 parity tests covering cookies, auth, and streaming.
 
-Tracks remaining: F (package/wheel validation), G (CI visibility).
+Tracks remaining: CI Python matrix and wheel builds (Track F continuation).
 
 ## Main risks to close
 
-The most important remaining risks are:
+The remaining risks are:
 
-1. Python response iterators are buffered iterators rather than true network streaming.
-2. Redirect handling may buffer request bodies in a way that weakens true upload streaming or replayability guarantees.
-3. Timeout scope across redirect chains may be ambiguous.
-4. Redirect history responses and body lifetimes may retain unnecessary data or behave inconsistently.
-5. Packaging and wheel validation are not yet proven across Python versions and platforms.
-6. GitHub CI/status visibility is unclear.
-7. A Python virtual environment was committed and later removed, leaving possible repository-history bloat or local-path leakage.
-8. Compatibility documentation may now overstate parity because F-J landed quickly.
+1. CI only runs on ubuntu-latest with a single Python version; no multi-platform or Python 3.10-3.13 matrix validation.
+2. No wheel builds or wheel smoke tests.
+3. A Python virtual environment was committed and later removed, leaving possible repository-history bloat or local-path leakage.
 
 ## Non-goals
 

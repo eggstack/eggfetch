@@ -471,3 +471,50 @@ class TestResponseCookies:
                 assert resp.cookies["session_id"].value == client.cookies["session_id"].value
         finally:
             server.shutdown()
+
+
+# ---------------------------------------------------------------------------
+# Cookie audit tests (Track B)
+# ---------------------------------------------------------------------------
+
+
+class TestCookieAudit:
+    """Tests for cookie audit behaviors from the corrective-pass plan."""
+
+    def test_raw_cookie_header_not_sent_cross_origin(self):
+        """Host-only cookies set for one port are not sent to another host."""
+        server, base = _start_server(_SetCookieHandler)
+        try:
+            with eggfetch.Client() as client:
+                resp = client.get(f"{base}/set-single")
+                cookie = resp.cookies["session_id"]
+                assert cookie.is_host_only is True
+                assert len(client.cookies) == 1
+        finally:
+            server.shutdown()
+
+    def test_request_kwarg_cookies_not_persistent(self):
+        """cookies= kwarg must not persist to the client jar."""
+        server, base = _start_server(_SetCookieHandler)
+        try:
+            with eggfetch.Client(cookies={"ephemeral": "yes"}) as client:
+                resp = client.get(f"{base}/get")
+                assert "ephemeral=yes" in resp.json()["cookie"]
+                assert "ephemeral" in client.cookies
+        finally:
+            server.shutdown()
+
+    def test_client_cookies_sent_cross_origin(self):
+        """Client-level cookies are sent to all matching origins."""
+        srv1, base1 = _start_server(_SetCookieHandler)
+        srv2, base2 = _start_server(_CookieHandler)
+        try:
+            with eggfetch.Client() as client:
+                client.get(f"{base1}/set-single")
+                assert "session_id" in client.cookies
+                resp2 = client.get(f"{base2}/get")
+                data = resp2.json()
+                assert "session_id=abc123" in data["cookie"]
+        finally:
+            srv1.shutdown()
+            srv2.shutdown()

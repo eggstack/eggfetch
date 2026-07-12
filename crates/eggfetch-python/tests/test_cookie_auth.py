@@ -163,18 +163,17 @@ class TestCrossOriginRedirectStripsBoth:
     that ``build_redirect_request`` strips Authorization, Cookie, and
     Proxy-Authorization headers on cross-origin redirects.
 
-    At the Python integration level, client-level auth is re-applied on
-    every redirect hop (the client pipeline calls ``resolve_request_auth``
-    which reapplies client auth).  Cookie headers are stripped but the
+    At the Python integration level, client-level auth is suppressed on
+    cross-origin redirect hops.  Cookie headers are stripped but the
     cookie jar re-injects cookies for the target domain.  Since all local
     test servers share the same IP (127.0.0.1), the jar re-sends cookies.
 
-    This test verifies that the redirect completes successfully when
-    targeting a different origin (different port), confirming the redirect
-    machinery works end-to-end.
+    This test verifies that:
+    1. The redirect completes successfully to a different origin.
+    2. No Authorization header arrives at the second server.
     """
 
-    def test_cross_origin_redirect_completes(self):
+    def test_cross_origin_redirect_completes_and_strips_auth(self):
         server_b, base_b = _start_server(_EchoHandler)
         port_b = server_b.server_address[1]
 
@@ -210,7 +209,8 @@ class TestCrossOriginRedirectStripsBoth:
             )
             data = resp.json()
             # Redirect completed successfully to origin B.
-            assert data["auth"] is not None
+            # Auth must NOT have been forwarded cross-origin.
+            assert data["auth"] is None
         finally:
             srv_a.shutdown()
             server_b.shutdown()
@@ -231,5 +231,24 @@ class TestSameOriginRedirectPreservesBoth:
             # Both cookie and auth should be present on the final request.
             assert "redirect_session=xyz" in data["cookie"]
             assert data["auth"] == "Bearer same-origin-token"
+        finally:
+            server.shutdown()
+
+
+class TestAuthDisableDoesNotDisableCookies:
+    """Disabling auth must not disable cookie handling."""
+
+    def test_noauth_still_sends_cookies(self):
+        server, base = _start_server(_CookieAuthHandler)
+        try:
+            with eggfetch.Client(
+                auth=eggfetch.NOAUTH
+            ) as client:
+                resp = client.get(f"{base}/set-cookie-then-echo")
+                data = resp.json()
+                assert data["auth"] is None
+                resp2 = client.get(f"{base}/echo")
+                data2 = resp2.json()
+                assert "session=abc123" in data2["cookie"]
         finally:
             server.shutdown()

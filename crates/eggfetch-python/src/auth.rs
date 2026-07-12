@@ -63,28 +63,67 @@ impl PyBearerAuth {
     }
 }
 
-/// Parse a Python `auth` argument into an optional Rust `AuthScheme`.
+/// Sentinel value to disable auth on a single request.
+///
+/// Pass ``auth=eggfetch.NOAUTH`` to a request method to suppress
+/// client-level auth for that request only.
+#[pyclass(name = "NoAuth")]
+pub struct PyNoAuth;
+
+#[pymethods]
+impl PyNoAuth {
+    #[new]
+    fn new() -> Self {
+        Self
+    }
+
+    #[allow(clippy::unused_self)]
+    fn __repr__(&self) -> String {
+        "NOAUTH".to_string()
+    }
+}
+
+/// How the `auth` parameter was specified by the caller.
+pub(crate) enum AuthOverride {
+    /// Argument was omitted or set to `None` — inherit client-level auth.
+    Inherit,
+    /// `eggfetch.NOAUTH` sentinel was passed — disable auth for this request.
+    Disable,
+    /// An auth object was provided — override client auth.
+    Override(eggfetch_core::AuthScheme),
+}
+
+/// Parse a Python `auth` argument into an `AuthOverride`.
 ///
 /// Accepts:
-/// - `None` → `Ok(None)`
-/// - `("username", "password")` tuple → `Ok(Some(AuthScheme::Basic(...)))`
-/// - `BasicAuth` instance → `Ok(Some(AuthScheme::Basic(...)))`
-/// - `BearerAuth` instance → `Ok(Some(AuthScheme::Bearer(...)))`
+/// - Omitted or `None` → `AuthOverride::Inherit`
+/// - `eggfetch.NOAUTH` → `AuthOverride::Disable`
+/// - `("username", "password")` tuple → `AuthOverride::Override(...)`
+/// - `BasicAuth` instance → `AuthOverride::Override(...)`
+/// - `BearerAuth` instance → `AuthOverride::Override(...)`
 /// - Anything else → `Err`
-pub fn parse_auth(auth: Option<&Bound<'_, PyAny>>) -> PyResult<Option<eggfetch_core::AuthScheme>> {
+pub fn parse_auth(auth: Option<&Bound<'_, PyAny>>) -> PyResult<AuthOverride> {
     match auth {
-        None => Ok(None),
+        None => Ok(AuthOverride::Inherit),
         Some(val) => {
             if val.is_none() {
-                return Ok(None);
+                return Ok(AuthOverride::Inherit);
+            }
+            // Check for the NOAUTH sentinel.
+            if val.is_instance_of::<PyNoAuth>() {
+                return Ok(AuthOverride::Disable);
             }
             // Check for BasicAuth
             if let Ok(basic) = val.extract::<PyBasicAuth>() {
-                return Ok(Some(eggfetch_core::AuthScheme::Basic(basic.inner)));
+                return Ok(AuthOverride::Override(eggfetch_core::AuthScheme::Basic(
+                    basic.inner,
+                )));
             }
             // Check for BearerAuth
             if let Ok(bearer) = val.extract::<PyBearerAuth>() {
-                return Ok(Some(eggfetch_core::AuthScheme::Bearer(bearer.inner)));
+                return Ok(AuthOverride::Override(eggfetch_core::AuthScheme::Bearer(
+                    bearer.inner,
+                )));
             }
             // Check for (username, password) tuple
             if let Ok(tuple) = val.downcast::<PyTuple>() {
@@ -93,11 +132,11 @@ pub fn parse_auth(auth: Option<&Bound<'_, PyAny>>) -> PyResult<Option<eggfetch_c
                     let password: String = tuple.get_item(1)?.extract()?;
                     let scheme =
                         eggfetch_core::AuthScheme::basic(username, password).map_err(map_err)?;
-                    return Ok(Some(scheme));
+                    return Ok(AuthOverride::Override(scheme));
                 }
             }
             Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
-                "auth must be a (username, password) tuple, BasicAuth, or BearerAuth",
+                "auth must be a (username, password) tuple, BasicAuth, BearerAuth, NOAUTH, or None",
             ))
         }
     }

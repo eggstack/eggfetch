@@ -1,6 +1,6 @@
 # Architecture Overview
 
-This document describes the architecture of eggfetch. Milestone N (semantic tightening and public-API stabilization) is complete: the core crate provides protocol-neutral streaming for request and response bodies, redirect following with configurable policy, total timeout across redirect chains, metadata-only redirect history, a `RequestBody::try_clone_for_redirect()` API for replay-safe redirects, an RFC 6265 cookie subsystem with domain/path matching, cookie jar, and client-level cookie state, and an authentication subsystem with Basic and Bearer token support, client and request-level auth, precedence resolution, and cross-origin credential stripping. The Python crate exposes both sync and async APIs over the async Rust core via PyO3/maturin, with a requests/httpx-compatible response surface, request builder compatibility, redirect support, sync/async API parity, `BasicAuth`/`BearerAuth` classes, `auth=` kwarg on all request methods, and true network streaming via `client.stream()` returning a `StreamingResponse` context manager.
+This document describes the architecture of eggfetch. Milestone N (semantic tightening and public-API stabilization) is complete: the core crate provides protocol-neutral streaming for request and response bodies, redirect following with configurable policy, total timeout across redirect chains, metadata-only redirect history, a `RequestBody::try_clone_for_redirect()` API for replay-safe redirects, an RFC 6265 cookie subsystem with domain/path matching, cookie jar, and client-level cookie state, and an authentication subsystem with Basic and Bearer token support, client and request-level auth, precedence resolution, request-level auth disable via `without_auth()`, and cross-origin credential stripping. The Python crate exposes both sync and async APIs over the async Rust core via PyO3/maturin, with a requests/httpx-compatible response surface, request builder compatibility, redirect support, sync/async API parity, `BasicAuth`/`BearerAuth` classes, `auth=` kwarg on all request methods, `NOAUTH` sentinel for disabling auth per-request, true network streaming via `client.stream()` returning a `StreamingResponse` context manager, and streaming-specific exceptions (`StreamConsumed`, `StreamClosed`, `ResponseNotRead`).
 
 The post-E hardening pass landed true streaming request bodies, per-chunk read/write timeouts, pool permits tied to the full response body lifecycle, and origin-keyed pool limits.
 
@@ -124,7 +124,8 @@ eggfetch implements an authentication subsystem with the following capabilities:
   2. If request-level auth is disabled (via `without_auth()`), no auth is applied.
   3. If client-level auth is set, use it.
   4. Otherwise, no auth.
-- **Cross-origin redirect stripping** -- the redirect engine strips `Authorization` headers on cross-origin redirects via `SENSITIVE_HEADERS`. Client-level auth is NOT reapplied after cross-origin stripping.
+- **Cross-origin redirect stripping** -- the redirect engine strips `Authorization` headers on cross-origin redirects via `SENSITIVE_HEADERS`. Client-level auth is NOT reapplied on cross-origin redirect hops. Same-origin redirects do reapply client-level auth.
+- **Request-level auth disable** -- `RequestBuilder::without_auth()` sets an explicit flag that prevents client-level auth from being applied to a specific request, even when the client has auth configured. This is useful for requests to endpoints that must not carry credentials.
 - **URL credentials** -- if a URL contains userinfo (e.g., `https://user:pass@host/`), the credentials are stripped from the URL and converted to Basic auth when no explicit auth is set. Conflicting explicit auth with URL credentials returns `Error::ConflictingAuth`.
 
 ### Python Auth API
@@ -136,6 +137,86 @@ The Python bindings expose:
 - `auth=(username, password)` tuple shorthand -- automatically converted to Basic auth.
 - `auth=None` on request methods -- uses client-level auth (default behavior).
 - `auth=BasicAuth(...)` on request methods -- overrides client-level auth.
+- `auth=eggfetch.NOAUTH` on request methods -- disables auth for that request, even if the client has auth configured. `NOAUTH` is a sentinel object (not `None`).
+
+## Python Streaming API (Milestone N)
+
+The Python crate exposes true network streaming via `client.stream()`. This is distinct from the buffered `response.iter_bytes()` which iterates over cached content.
+
+### StreamingResponse
+
+`client.stream("GET", url)` returns a `StreamingResponse` context manager. The response body is consumed incrementally — chunks are read from the network as they arrive, not buffered in memory first.
+
+**Sync API:**
+
+```python
+with client.stream("GET", url) as resp:
+    for chunk in resp.iter_bytes():
+        process(chunk)  # each chunk arrives from the network
+    # or: resp.iter_text(), resp.iter_lines(), resp.read(), resp.text
+```
+
+**Async API:**
+
+```python
+async with client.stream("GET", url) as resp:
+    async for chunk in resp.aiter_bytes():
+        process(chunk)  # each chunk arrives from the network
+    # or: resp.aiter_text(), resp.aiter_lines(), resp.aread(), resp.text
+```
+
+### StreamingResponse Lifecycle
+
+- **State machine**: `StreamingResponse` uses a 4-state atomic state machine: `streaming → buffered → consumed → closed`.
+- **GIL release**: sync iteration releases the Python GIL during each chunk read.
+- **Pool permit**: the streaming response holds a pool permit (via `PoolGuard`) that is released when the body is fully consumed, explicitly closed, or dropped. Early `break` or cancellation also releases the permit.
+- **Single consumption**: a stream can only be consumed once. Calling `read()` then `iter_bytes()` raises `StreamConsumed`. Calling any method after `close()` raises `StreamClosed`.
+- **Incremental decoding**: `iter_text()` / `aiter_text()` decode per-chunk using `encoding_rs`, correctly handling multibyte code points split across chunk boundaries. `iter_lines()` / `aiter_lines()` buffer partial lines across chunks.
+
+### Buffered vs Streaming Iteration
+
+| API | Behavior | Use case |
+|-----|----------|----------|
+| `response.iter_bytes()` | Iterates over pre-buffered chunks | Small responses, simple iteration |
+| `response.text` | Returns fully buffered text | Small responses, read-once access |
+| `client.stream().iter_bytes()` | Streams chunks from network | Large responses, backpressure control |
+| `client.stream().read()` | Reads remaining stream into memory | When you need the full body but started streaming |
+
+## Cookie Subsystem (Milestone O)
+
+eggfetch implements RFC 6265 cookie handling with domain/path matching, thread-safe storage, and client-level state.
+
+### Cookie Semantics
+
+- **Parsing**: `Set-Cookie` response headers are parsed into `Cookie` structs with name, value, domain, path, secure, httpOnly, SameSite, and expiry attributes.
+- **Storage**: `CookieJar` is a thread-safe cookie store. Each `Client` owns a `CookieJar` that accumulates cookies across requests.
+- **Matching**: on each request, the client selects cookies whose domain matches the request host (including subdomains for domain cookies) and whose path is a prefix of the request path.
+- **Secure flag**: cookies with `secure=true` are only sent over HTTPS.
+- **Expiry**: cookies with `Max-Age=0` or past `Expires` are removed. Negative `Max-Age` is treated as zero.
+- **Host-only vs domain**: cookies set without a `Domain` attribute are host-only and not sent to subdomains. Cookies set with an explicit `Domain` attribute are sent to the specified domain and all subdomains.
+
+### Python Cookie API
+
+- `Client(cookies={"name": "value"})` -- initializes the client jar with pre-set cookies.
+- `response.cookies` -- returns a `Cookies` mapping of `Set-Cookie` values from the response.
+- Client jar cookies are sent on all matching requests (same-origin and cross-origin where domain/path match).
+
+### Cookie/Auth Interaction
+
+Disabling auth (via `auth=eggfetch.NOAUTH`) does not affect cookie handling. Cookies are sent independently of the auth state.
+
+## Request Pipeline Order
+
+When the client sends a request, transformations are applied in this order:
+
+1. **Defaults**: client-level headers, cookies, auth, and timeout are merged into the request.
+2. **Request overrides**: request-level headers, params, body, timeout, follow_redirects, and max_redirects override client defaults.
+3. **Auth resolution**: `resolve_request_auth()` applies precedence rules (request auth > disabled > client auth > none).
+4. **Cookie selection**: matching cookies from the client jar are appended to the `Cookie` header.
+5. **Redirect safety**: on redirect hops, sensitive headers (`Authorization`, `Cookie`, `Proxy-Authorization`) are stripped on cross-origin redirects. Client-level auth is NOT reapplied on cross-origin hops.
+6. **Normalization**: URL query params are appended, Content-Length is computed, and the request is finalized.
+
+On redirect, steps 3-6 repeat for the new destination URL (but client-level auth is suppressed on cross-origin hops, and cookies are recomputed for the new destination).
 
 ## Pool Keying
 
@@ -231,4 +312,4 @@ These crates do not exist yet. They will be added when the core engine is stable
 
 ## Current State
 
-Milestone N is complete. The core crate provides a working async HTTP client with HTTPS support, request/response modeling, headers, query parameters, streaming request/response bodies, connection pooling, phase-aware timeouts (pool, connect, write, read, total), redirect following with configurable policy, `RequestBody::try_clone_for_redirect()` for replay-safe redirects, metadata-only redirect history entries (`HistoryEntry`), total timeout as a single deadline across redirect chains, a cookie subsystem with RFC 6265 parsing, domain/path matching, secure/httpOnly/SameSite attributes, expiry handling, thread-safe `CookieJar`, and client-level cookie state, and an authentication subsystem with Basic and Bearer token support, secret redaction, client and request-level auth, precedence resolution, cross-origin credential stripping, and URL credential conversion. The Python crate exposes sync and async APIs with top-level helpers, `Client` and `AsyncClient` classes, requests/httpx-compatible response properties, status helpers, methods (`json()`, `raise_for_status()`, `iter_bytes()`, `iter_text()`, `iter_lines()`, `close()`/`aclose()`), true network streaming via `client.stream()` returning a `StreamingResponse` context manager, charset-aware text decoding with deterministic precedence, multi-value header support, case-insensitive headers, request body kwargs, form encoding, JSON body serialization, body kwarg mutual exclusion, `follow_redirects`/`max_redirects` kwargs, `Cookies` mapping wrapper (`client.cookies`, `response.cookies`, `cookies=` kwarg), `BasicAuth`/`BearerAuth` classes, `auth=` kwarg on all request methods, and a structured exception hierarchy with sync/async API parity verified by parity tests. The CLI crate remains a stub.
+Milestone N is complete. The core crate provides a working async HTTP client with HTTPS support, request/response modeling, headers, query parameters, streaming request/response bodies, connection pooling, phase-aware timeouts (pool, connect, write, read, total), redirect following with configurable policy, `RequestBody::try_clone_for_redirect()` for replay-safe redirects, metadata-only redirect history entries (`HistoryEntry`), total timeout as a single deadline across redirect chains, a cookie subsystem with RFC 6265 parsing, domain/path matching, secure/httpOnly/SameSite attributes, expiry handling, thread-safe `CookieJar`, and client-level cookie state, and an authentication subsystem with Basic and Bearer token support, secret redaction, client and request-level auth, precedence resolution, request-level auth disable via `without_auth()`, cross-origin credential stripping (client auth not reapplied on cross-origin redirects), and URL credential conversion. The Python crate exposes sync and async APIs with top-level helpers, `Client` and `AsyncClient` classes, requests/httpx-compatible response properties, status helpers, methods (`json()`, `raise_for_status()`, `iter_bytes()`, `iter_text()`, `iter_lines()`, `close()`/`aclose()`), true network streaming via `client.stream()` returning a `StreamingResponse` context manager (with `iter_bytes()`, `iter_text()`, `iter_lines()`, `read()`, `text()` and async equivalents), charset-aware text decoding with deterministic precedence, multi-value header support, case-insensitive headers, request body kwargs, form encoding, JSON body serialization, body kwarg mutual exclusion, `follow_redirects`/`max_redirects` kwargs, `Cookies` mapping wrapper (`client.cookies`, `response.cookies`, `cookies=` kwarg), `BasicAuth`/`BearerAuth` classes, `auth=` kwarg on all request methods, `NOAUTH` sentinel for per-request auth disable, streaming-specific exceptions (`StreamConsumed`, `StreamClosed`, `ResponseNotRead`), and a structured exception hierarchy with sync/async API parity verified by parity tests. The CLI crate remains a stub.

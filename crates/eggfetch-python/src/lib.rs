@@ -14,7 +14,7 @@ mod streaming;
 mod timeout;
 
 use async_client::PyAsyncClient;
-use auth::{PyBasicAuth, PyBearerAuth};
+use auth::{PyBasicAuth, PyBearerAuth, PyNoAuth};
 use client::PyClient;
 use cookies::PyCookies;
 use errors::map_err;
@@ -109,14 +109,17 @@ fn request<'py>(
     let runtime = tokio::runtime::Runtime::new()
         .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
 
-    let auth_scheme = auth::parse_auth(auth)?;
+    let auth_override = auth::parse_auth(auth)?;
 
     let mut builder = eggfetch_core::Client::builder()
         .redirect_policy(redirect_policy)
         .cookie_jar(jar);
 
-    if let Some(a) = auth_scheme {
-        builder = builder.auth(a);
+    match auth_override {
+        auth::AuthOverride::Inherit | auth::AuthOverride::Disable => {}
+        auth::AuthOverride::Override(a) => {
+            builder = builder.auth(a);
+        }
     }
 
     let client = builder.build();
@@ -382,28 +385,8 @@ fn options<'py>(
     )
 }
 
-/// eggfetch - Python bindings for eggfetch.
-#[pymodule]
-fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add("__version__", "0.1.0")?;
-
-    m.add_class::<PyAsyncClient>()?;
-    m.add_class::<PyClient>()?;
-    m.add_class::<cookies::PyCookie>()?;
-    m.add_class::<PyCookies>()?;
-    m.add_class::<PyHeaders>()?;
-    m.add_class::<PyResponse>()?;
-    m.add_class::<PyStreamingResponse>()?;
-    m.add_class::<PyBytesChunkIterator>()?;
-    m.add_class::<PyTextChunkIterator>()?;
-    m.add_class::<PyLinesChunkIterator>()?;
-    m.add_class::<PyAsyncBytesIterator>()?;
-    m.add_class::<PyAsyncTextIterator>()?;
-    m.add_class::<PyAsyncLinesIterator>()?;
-    m.add_class::<PyTimeout>()?;
-    m.add_class::<PyBasicAuth>()?;
-    m.add_class::<PyBearerAuth>()?;
-
+/// Register all exception types on the module.
+fn register_exceptions(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("EggfetchError", m.py().get_type::<errors::EggfetchError>())?;
     m.add("RequestError", m.py().get_type::<errors::RequestError>())?;
     m.add("InvalidUrl", m.py().get_type::<errors::InvalidUrl>())?;
@@ -433,16 +416,20 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
         "TooManyRedirects",
         m.py().get_type::<errors::TooManyRedirects>(),
     )?;
+    m.add(
+        "StreamConsumed",
+        m.py().get_type::<errors::StreamConsumed>(),
+    )?;
+    m.add("StreamClosed", m.py().get_type::<errors::StreamClosed>())?;
+    m.add(
+        "ResponseNotRead",
+        m.py().get_type::<errors::ResponseNotRead>(),
+    )?;
+    Ok(())
+}
 
-    m.add_function(wrap_pyfunction!(request, m)?)?;
-    m.add_function(wrap_pyfunction!(get, m)?)?;
-    m.add_function(wrap_pyfunction!(post, m)?)?;
-    m.add_function(wrap_pyfunction!(put, m)?)?;
-    m.add_function(wrap_pyfunction!(patch, m)?)?;
-    m.add_function(wrap_pyfunction!(delete, m)?)?;
-    m.add_function(wrap_pyfunction!(head, m)?)?;
-    m.add_function(wrap_pyfunction!(options, m)?)?;
-
+/// Register the __all__ list on the module.
+fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     let all_items = vec![
         "AsyncClient",
         "AsyncStreamingBytesIterator",
@@ -451,6 +438,8 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
         "Client",
         "Cookies",
         "Headers",
+        "NoAuth",
+        "NOAUTH",
         "Response",
         "StreamingBytesIterator",
         "StreamingLinesIterator",
@@ -481,10 +470,55 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
         "HTTPStatusError",
         "UnsupportedKwarg",
         "TooManyRedirects",
+        "StreamConsumed",
+        "StreamClosed",
+        "ResponseNotRead",
     ];
     let py = m.py();
     let py_list = pyo3::types::PyList::new(py, &all_items)?;
     m.add("__all__", py_list)?;
+    Ok(())
+}
+
+/// eggfetch - Python bindings for eggfetch.
+#[pymodule]
+fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add("__version__", "0.1.0")?;
+
+    m.add_class::<PyAsyncClient>()?;
+    m.add_class::<PyClient>()?;
+    m.add_class::<cookies::PyCookie>()?;
+    m.add_class::<PyCookies>()?;
+    m.add_class::<PyHeaders>()?;
+    m.add_class::<PyResponse>()?;
+    m.add_class::<PyStreamingResponse>()?;
+    m.add_class::<PyBytesChunkIterator>()?;
+    m.add_class::<PyTextChunkIterator>()?;
+    m.add_class::<PyLinesChunkIterator>()?;
+    m.add_class::<PyAsyncBytesIterator>()?;
+    m.add_class::<PyAsyncTextIterator>()?;
+    m.add_class::<PyAsyncLinesIterator>()?;
+    m.add_class::<PyTimeout>()?;
+    m.add_class::<PyBasicAuth>()?;
+    m.add_class::<PyBearerAuth>()?;
+    m.add_class::<PyNoAuth>()?;
+
+    // Create the NOAUTH singleton instance.
+    let noauth_obj = Py::new(m.py(), PyNoAuth)?;
+    m.add("NOAUTH", noauth_obj.bind(m.py()).clone())?;
+
+    register_exceptions(m)?;
+
+    m.add_function(wrap_pyfunction!(request, m)?)?;
+    m.add_function(wrap_pyfunction!(get, m)?)?;
+    m.add_function(wrap_pyfunction!(post, m)?)?;
+    m.add_function(wrap_pyfunction!(put, m)?)?;
+    m.add_function(wrap_pyfunction!(patch, m)?)?;
+    m.add_function(wrap_pyfunction!(delete, m)?)?;
+    m.add_function(wrap_pyfunction!(head, m)?)?;
+    m.add_function(wrap_pyfunction!(options, m)?)?;
+
+    register_all(m)?;
 
     Ok(())
 }

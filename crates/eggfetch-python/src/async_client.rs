@@ -80,9 +80,12 @@ impl PyAsyncClient {
         }
         builder = builder.cookie_jar(jar);
 
-        let auth_scheme = auth::parse_auth(auth)?;
-        if let Some(a) = auth_scheme {
-            builder = builder.auth(a);
+        let auth_override = auth::parse_auth(auth)?;
+        match auth_override {
+            auth::AuthOverride::Inherit | auth::AuthOverride::Disable => {}
+            auth::AuthOverride::Override(a) => {
+                builder = builder.auth(a);
+            }
         }
 
         let client = builder.build();
@@ -146,7 +149,7 @@ impl PyAsyncClient {
 
         let rust_timeout = parse_timeout(timeout)?;
 
-        let auth_scheme = auth::parse_auth(auth)?;
+        let auth_override = auth::parse_auth(auth)?;
 
         let client = self.client.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
@@ -166,8 +169,14 @@ impl PyAsyncClient {
                 builder = builder.timeout(t);
             }
 
-            if let Some(a) = auth_scheme {
-                builder = builder.auth(a);
+            match auth_override {
+                auth::AuthOverride::Inherit => {}
+                auth::AuthOverride::Disable => {
+                    builder = builder.without_auth();
+                }
+                auth::AuthOverride::Override(a) => {
+                    builder = builder.auth(a);
+                }
             }
 
             if follow_redirects.is_some() || max_redirects.is_some() {
@@ -458,7 +467,7 @@ impl PyAsyncClient {
         }
 
         let rust_timeout = parse_timeout(timeout)?;
-        let auth_scheme = auth::parse_auth(auth)?;
+        let auth_override = auth::parse_auth(auth)?;
 
         let client = self.client.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
@@ -478,8 +487,14 @@ impl PyAsyncClient {
                 builder = builder.timeout(t);
             }
 
-            if let Some(a) = auth_scheme {
-                builder = builder.auth(a);
+            match auth_override {
+                auth::AuthOverride::Inherit => {}
+                auth::AuthOverride::Disable => {
+                    builder = builder.without_auth();
+                }
+                auth::AuthOverride::Override(a) => {
+                    builder = builder.auth(a);
+                }
             }
 
             if follow_redirects.is_some() || max_redirects.is_some() {
