@@ -148,6 +148,11 @@ fn resolve_redirect_url(base: &Url, location: &str) -> Result<Url> {
 
 /// Validate that a redirect URL uses an allowed scheme.
 fn validate_redirect_url(url: &Url) -> Result<()> {
+    if !url.username().is_empty() || url.password().is_some() {
+        return Err(Error::InvalidRedirectLocation(
+            "redirect URL userinfo is not supported".into(),
+        ));
+    }
     match url.scheme() {
         "http" | "https" => Ok(()),
         other => Err(Error::Unsupported(format!(

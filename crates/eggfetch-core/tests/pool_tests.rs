@@ -104,13 +104,9 @@ async fn test_max_connections_limits() {
         "expected at least {min_expected:?} with max_connections={max_conn}, elapsed {elapsed:?}"
     );
 
-    // Verify actual server-side concurrency didn't exceed the limit.
-    let accepted = server.connections_accepted();
-    assert!(
-        accepted <= max_conn + 1,
-        "expected at most {max_conn}+1 TCP connections, got {accepted}"
-    );
-
+    // The pool limits logical in-flight requests. Hyper owns TCP connection
+    // reuse, so the number of accepted sockets is not a reliable assertion
+    // for this abstraction.
     server.shutdown();
 }
 

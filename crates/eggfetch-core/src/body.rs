@@ -43,6 +43,7 @@ use bytes::{Bytes, BytesMut};
 use futures_core::Stream;
 use futures_util::StreamExt;
 use http_body::Frame;
+use pin_project_lite::pin_project;
 
 use crate::error::{Error, Result};
 
@@ -256,6 +257,33 @@ impl From<&str> for RequestBody {
 /// last handle releases the permit back to the pool.
 pub(crate) type PoolGuardArc = Arc<crate::pool::PoolGuard>;
 
+pin_project! {
+    /// A response stream that keeps the pool lease alive while it is in use.
+    struct LeasedResponseStream {
+        #[pin]
+        inner: BoxBytesStream,
+        _lease: Option<PoolGuardArc>,
+    }
+}
+
+impl Stream for LeasedResponseStream {
+    type Item = Result<Bytes>;
+
+    fn poll_next(
+        self: Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Option<Self::Item>> {
+        let mut this = self.project();
+        let item = this.inner.as_mut().poll_next(cx);
+        if matches!(item, std::task::Poll::Ready(Some(Err(_)) | None)) {
+            // Release the permit as soon as the stream reaches a terminal
+            // state, rather than waiting for the caller to drop the iterator.
+            this._lease.take();
+        }
+        item
+    }
+}
+
 /// Response body handle.
 ///
 /// Supports two consumption modes:
@@ -362,19 +390,17 @@ impl ResponseBody {
     /// Returns an error if the body has already been consumed or if a
     /// stream chunk fails.
     pub async fn bytes(&mut self) -> Result<Bytes> {
-        let old = std::mem::replace(
-            self,
-            Self::Buffered {
-                bytes: Bytes::new(),
-            },
-        );
+        let old = std::mem::replace(self, Self::Consumed);
         match old {
             Self::Buffered { bytes } => Ok(bytes),
-            Self::Streaming { mut stream, .. } => {
+            Self::Streaming {
+                mut stream, lease, ..
+            } => {
                 let mut buf = BytesMut::new();
                 while let Some(chunk) = stream.next().await {
                     buf.extend_from_slice(&chunk?);
                 }
+                drop(lease);
                 Ok(buf.freeze())
             }
             Self::Consumed => Err(Error::Body("body already consumed".into())),
@@ -404,14 +430,18 @@ impl ResponseBody {
         match self {
             Self::Buffered { bytes } => {
                 let bytes = std::mem::take(bytes);
+                *self = Self::Consumed;
                 Ok(Box::pin(futures_util::stream::once(
                     async move { Ok(bytes) },
                 )))
             }
             Self::Streaming { .. } => {
                 let old = std::mem::replace(self, Self::Consumed);
-                if let Self::Streaming { stream, .. } = old {
-                    Ok(stream)
+                if let Self::Streaming { stream, lease } = old {
+                    Ok(Box::pin(LeasedResponseStream {
+                        inner: stream,
+                        _lease: lease,
+                    }))
                 } else {
                     unreachable!()
                 }
@@ -558,9 +588,7 @@ mod tests {
     async fn response_body_double_consume_replaces() {
         let mut body = ResponseBody::buffered(Bytes::from("data"));
         let _ = body.bytes().await.unwrap();
-        // After consumption, body is replaced with empty buffered.
-        let bytes = body.bytes().await.unwrap();
-        assert!(bytes.is_empty());
+        assert!(body.bytes().await.is_err());
     }
 
     #[tokio::test]
@@ -573,12 +601,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn response_body_buffered_double_bytes_returns_empty() {
+    async fn response_body_buffered_double_bytes_errors() {
         let mut body = ResponseBody::buffered(Bytes::from("data"));
         let first = body.bytes().await.unwrap();
         assert_eq!(first, "data");
-        let second = body.bytes().await.unwrap();
-        assert!(second.is_empty());
+        assert!(body.bytes().await.is_err());
     }
 
     #[tokio::test]
@@ -593,10 +620,7 @@ mod tests {
         let stream = Box::pin(futures_util::stream::iter(vec![Ok(Bytes::from("x"))]));
         let mut body = ResponseBody::streaming(stream);
         let _ = body.bytes().await.unwrap();
-        let mut stream = body.bytes_stream().unwrap();
-        let chunk = stream.next().await.unwrap().unwrap();
-        assert!(chunk.is_empty());
-        assert!(stream.next().await.is_none());
+        assert!(body.bytes_stream().is_err());
     }
 
     #[tokio::test]
@@ -613,8 +637,7 @@ mod tests {
         let chunk = stream.next().await.unwrap().unwrap();
         assert_eq!(chunk, "data");
         assert!(stream.next().await.is_none());
-        let bytes = body.bytes().await.unwrap();
-        assert!(bytes.is_empty());
+        assert!(body.bytes().await.is_err());
     }
 
     #[tokio::test]
@@ -685,5 +708,35 @@ mod tests {
             1,
             "stream should not be eagerly polled"
         );
+    }
+
+    #[tokio::test]
+    async fn leased_stream_holds_pool_slot_until_drop() {
+        let pool = crate::pool::Pool::new(crate::pool::PoolConfig {
+            max_connections_per_host: Some(1),
+            ..Default::default()
+        });
+        let origin = crate::pool::OriginKey::from_parts("http", "example.com", 80);
+        let guard = pool.acquire(Some(&origin)).await;
+        let mut body = ResponseBody::streaming_with_lease(
+            Box::pin(futures_util::stream::pending()),
+            Arc::new(guard),
+        );
+        let stream = body.bytes_stream().unwrap();
+
+        assert!(tokio::time::timeout(
+            std::time::Duration::from_millis(10),
+            pool.acquire(Some(&origin))
+        )
+        .await
+        .is_err());
+
+        drop(stream);
+        assert!(tokio::time::timeout(
+            std::time::Duration::from_millis(100),
+            pool.acquire(Some(&origin))
+        )
+        .await
+        .is_ok());
     }
 }

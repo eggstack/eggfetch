@@ -25,9 +25,11 @@ pub(crate) fn extract_charset(headers: &http::HeaderMap) -> Option<String> {
     let ct_str = content_type.to_str().ok()?;
     for part in ct_str.split(';').skip(1) {
         let part = part.trim();
-        if let Some(charset) = part.strip_prefix("charset=") {
-            let charset = charset.trim().trim_matches('"');
-            return Some(charset.to_string());
+        if let Some((name, charset)) = part.split_once('=') {
+            if name.trim().eq_ignore_ascii_case("charset") {
+                let charset = charset.trim().trim_matches(['"', '\'']);
+                return Some(charset.to_string());
+            }
         }
     }
     None
@@ -92,6 +94,11 @@ impl PyResponse {
     /// call from within an existing async context — use
     /// [`from_core_response_with_body`] instead.
     pub fn from_core_response(mut response: eggfetch_core::Response) -> PyResult<Self> {
+        if tokio::runtime::Handle::try_current().is_ok() {
+            return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+                "cannot synchronously buffer a response inside a Tokio runtime; use the async API",
+            ));
+        }
         let content = {
             let rt = tokio::runtime::Runtime::new()
                 .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
@@ -279,6 +286,11 @@ impl PyResponse {
     /// Iterate over response body in byte chunks.
     #[pyo3(signature = (chunk_size=8192))]
     fn iter_bytes(&self, py: Python<'_>, chunk_size: usize) -> PyResult<PyObject> {
+        if chunk_size == 0 {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "chunk_size must be greater than zero",
+            ));
+        }
         let chunks: Vec<PyObject> = self
             .content
             .chunks(chunk_size)
@@ -294,6 +306,11 @@ impl PyResponse {
     /// Iterate over response body in text chunks.
     #[pyo3(signature = (chunk_size=8192))]
     fn iter_text(&self, py: Python<'_>, chunk_size: usize) -> PyResult<PyObject> {
+        if chunk_size == 0 {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "chunk_size must be greater than zero",
+            ));
+        }
         let chars: Vec<char> = self.text.chars().collect();
         let chunks: Vec<PyObject> = chars
             .chunks(chunk_size)

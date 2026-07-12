@@ -126,7 +126,7 @@ eggfetch implements an authentication subsystem with the following capabilities:
   4. Otherwise, no auth.
 - **Cross-origin redirect stripping** -- the redirect engine strips `Authorization` headers on cross-origin redirects via `SENSITIVE_HEADERS`. Client-level auth is NOT reapplied on cross-origin redirect hops. Same-origin redirects do reapply client-level auth.
 - **Request-level auth disable** -- `RequestBuilder::without_auth()` sets an explicit flag that prevents client-level auth from being applied to a specific request, even when the client has auth configured. This is useful for requests to endpoints that must not carry credentials.
-- **URL credentials** -- if a URL contains userinfo (e.g., `https://user:pass@host/`), the credentials are stripped from the URL and converted to Basic auth when no explicit auth is set. Conflicting explicit auth with URL credentials returns `Error::ConflictingAuth`.
+- **URL credentials** -- URL userinfo (e.g., `https://user:pass@host/`) is rejected. Configure `BasicAuth` or another explicit auth scheme instead; the password is not echoed in the resulting error.
 
 ### Python Auth API
 

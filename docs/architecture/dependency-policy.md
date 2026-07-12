@@ -15,7 +15,9 @@ As of Milestone O, eggfetch-core has the following direct dependencies:
 - **http-body-util** -- body combinators for http-body (`Full`, `Empty`).
 - **hyper** -- HTTP/1.1 protocol implementation.
 - **hyper-util** -- high-level client utilities built on hyper.
-- **hyper-rustls** -- TLS integration via rustls.
+- **hyper-rustls** -- TLS integration via rustls, with native roots preferred
+  and packaged Mozilla roots as a verified fallback when the host keychain is
+  unavailable.
 - **rustls** -- memory-safe TLS implementation.
 - **tokio** -- async runtime.
 - **tokio-rustls** -- async TLS streams for tokio + rustls.

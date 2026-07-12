@@ -127,7 +127,7 @@ impl PyCookie {
 ///
 /// Keys are cookie names (strings). Values are [`Cookie`] objects.
 /// When multiple cookies share a name (different domains/paths),
-/// the first match is returned.
+/// name-only lookup is treated as ambiguous and returns no value.
 #[pyclass(name = "Cookies")]
 #[derive(Debug, Clone)]
 pub struct PyCookies {
@@ -186,8 +186,13 @@ impl PyCookies {
     /// Set or replace a cookie by name.
     ///
     /// The value must be a [`Cookie`] object.
-    fn __setitem__(&self, _name: &str, cookie: &Bound<'_, PyAny>) -> PyResult<()> {
+    fn __setitem__(&self, name: &str, cookie: &Bound<'_, PyAny>) -> PyResult<()> {
         let py_cookie: PyCookie = cookie.extract()?;
+        if py_cookie.inner.name() != name {
+            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                "cookie mapping key must match cookie.name",
+            ));
+        }
         self.jar.set(py_cookie.inner.clone());
         Ok(())
     }
@@ -195,9 +200,20 @@ impl PyCookies {
     /// Delete a cookie by name.
     fn __delitem__(&self, name: &str) -> PyResult<()> {
         let cookies = self.jar.all_cookies();
-        let cookie = cookies.iter().find(|c| c.name() == name).ok_or_else(|| {
-            PyErr::new::<pyo3::exceptions::PyKeyError, _>(format!("cookie '{name}' not found"))
-        })?;
+        let matching: Vec<_> = cookies.iter().filter(|c| c.name() == name).collect();
+        let cookie = match matching.as_slice() {
+            [] => {
+                return Err(PyErr::new::<pyo3::exceptions::PyKeyError, _>(format!(
+                    "cookie '{name}' not found"
+                )))
+            }
+            [cookie] => *cookie,
+            _ => {
+                return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                    "cookie '{name}' is ambiguous; specify its domain and path"
+                )))
+            }
+        };
         self.jar.delete(name, cookie.domain(), cookie.path());
         Ok(())
     }
@@ -209,15 +225,14 @@ impl PyCookies {
         py: Python<'py>,
         name: &str,
         default: Option<&Bound<'py, PyAny>>,
-    ) -> Bound<'py, PyAny> {
+    ) -> PyResult<Bound<'py, PyAny>> {
         match self.jar.get(name, None, None) {
-            Some(cookie) => Py::new(py, PyCookie::from_core(cookie))
-                .expect("failed to create PyCookie")
+            Some(cookie) => Ok(Py::new(py, PyCookie::from_core(cookie))?
                 .into_bound(py)
-                .into_any(),
+                .into_any()),
             None => match default {
-                Some(d) => d.clone().into_any(),
-                None => py.None().into_bound(py).into_any(),
+                Some(d) => Ok(d.clone().into_any()),
+                None => Ok(py.None().into_bound(py).into_any()),
             },
         }
     }
@@ -247,6 +262,10 @@ impl PyCookies {
         temp_jar.update_from_response(&url, &[set_cookie]);
         if let Some(cookie) = temp_jar.all_cookies().into_iter().next() {
             self.jar.set(cookie);
+        } else {
+            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                "invalid cookie name, value, domain, or path",
+            ));
         }
         Ok(())
     }

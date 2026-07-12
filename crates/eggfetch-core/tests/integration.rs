@@ -1137,10 +1137,10 @@ async fn redirect_303_drops_body() {
     assert_eq!(body.as_ref(), b"get result");
 }
 
-/// 307/308 with a stream body succeeds because the body is buffered
-/// before the redirect loop processes the 307.
+/// 307/308 with a live stream body is rejected because the stream cannot be
+/// replayed after the first hop.
 #[tokio::test]
-async fn redirect_307_buffers_stream_before_redirect() {
+async fn redirect_307_rejects_stream_body() {
     let final_server = TestServer::start(&TestServerConfig {
         response_body: Some(b"redirected".to_vec()),
         close_connection: true,
@@ -1164,17 +1164,15 @@ async fn redirect_307_buffers_stream_before_redirect() {
         None,
     );
 
-    let mut resp = client
+    let err = client
         .post(&redirect_server.url())
         .unwrap()
         .body(body)
         .send()
         .await
-        .unwrap();
+        .unwrap_err();
 
-    assert_eq!(resp.status().as_u16(), 200);
-    let body = resp.bytes().await.unwrap();
-    assert_eq!(body.as_ref(), b"redirected");
+    assert!(matches!(err, Error::BodyNotReplayableForRedirect));
 }
 
 /// Multi-hop redirects (302 → 302 → 200) do not leak pool permits.

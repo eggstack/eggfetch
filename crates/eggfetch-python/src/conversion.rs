@@ -142,12 +142,16 @@ pub fn parse_timeout(
             if val.is_none() {
                 Ok(None)
             } else if let Ok(secs) = val.extract::<f64>() {
-                if secs < 0.0 {
+                if !secs.is_finite() || secs < 0.0 {
                     return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
-                        "timeout must be a non-negative number",
+                        "timeout must be a finite, non-negative number",
                     ));
                 }
-                let duration = std::time::Duration::from_secs_f64(secs);
+                let duration = std::time::Duration::try_from_secs_f64(secs).map_err(|_| {
+                    PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                        "timeout is too large to represent",
+                    )
+                })?;
                 Ok(Some(eggfetch_core::Timeout {
                     pool: Some(duration),
                     connect: Some(duration),

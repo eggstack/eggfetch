@@ -132,31 +132,39 @@ impl PyStreamingResponse {
     }
 
     fn take_stream(&self) -> PyResult<eggfetch_core::body::BoxBytesStream> {
-        self.stream
+        let stream = self
+            .stream
             .lock()
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?
             .take()
-            .ok_or_else(|| StreamConsumed::new_err("stream already consumed"))
+            .ok_or_else(|| StreamConsumed::new_err("stream already consumed"))?;
+        // Taking ownership transfers the body to a reader/iterator. If the
+        // reader is cancelled or dropped, the stream is terminally consumed
+        // and its core lease is released by dropping the stream.
+        self.body_state.store(STATE_CONSUMED, Ordering::SeqCst);
+        Ok(stream)
     }
 
     fn drain_all_bytes(&self) -> PyResult<Bytes> {
         let mut stream = self.take_stream()?;
         if let Ok(_handle) = tokio::runtime::Handle::try_current() {
-            // Inside a tokio runtime. Use block_on via a new thread to avoid deadlock.
-            // Actually, we can't create a new runtime here. Use a blocking task approach.
-            // Since we can't easily block_on in this context, we'll use a temporary runtime
-            // on a separate thread.
+            // A synchronous Python call cannot block the current runtime
+            // thread. Drive the body on a short-lived worker thread instead.
             let (tx, rx) = std::sync::mpsc::channel();
             std::thread::spawn(move || {
-                let rt = tokio::runtime::Runtime::new().expect("failed to create runtime");
-                let result = rt.block_on(async {
-                    let mut buf = BytesMut::new();
-                    while let Some(chunk) = stream.next().await {
-                        let chunk = chunk.map_err(map_err)?;
-                        buf.extend_from_slice(&chunk);
-                    }
-                    Ok::<_, PyErr>(buf.freeze())
-                });
+                let result = match tokio::runtime::Runtime::new() {
+                    Ok(rt) => rt.block_on(async {
+                        let mut buf = BytesMut::new();
+                        while let Some(chunk) = stream.next().await {
+                            let chunk = chunk.map_err(map_err)?;
+                            buf.extend_from_slice(&chunk);
+                        }
+                        Ok::<_, PyErr>(buf.freeze())
+                    }),
+                    Err(error) => Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+                        error.to_string(),
+                    )),
+                };
                 let _ = tx.send(result);
             });
             let bytes = rx
@@ -225,26 +233,17 @@ impl PyStreamingResponse {
 
     fn drain_and_close(&self) -> PyResult<()> {
         if self.body_state.load(Ordering::SeqCst) == STATE_STREAMING {
-            if let Some(mut stream) = self
+            if let Some(stream) = self
                 .stream
                 .lock()
                 .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?
                 .take()
             {
-                // Try to get the current tokio runtime handle (if we're inside one).
-                // If we are, drain without creating a new runtime. If not, create one.
-                if tokio::runtime::Handle::try_current().is_ok() {
-                    // We're inside a tokio runtime. We can't block_on here.
-                    // The stream will be dropped (connection closed) when it goes out of scope.
-                    // Just drop the stream to clean up.
-                    drop(stream);
-                } else {
-                    // No tokio runtime, create one.
-                    let rt = tokio::runtime::Runtime::new().map_err(|e| {
-                        PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string())
-                    })?;
-                    rt.block_on(async { while stream.next().await.is_some() {} });
-                }
+                // Dropping the live body is sufficient to release the core
+                // lease and lets the transport discard the unread response.
+                // Blocking here to drain an untrusted server can hang close()
+                // indefinitely and defeats the purpose of an explicit close.
+                drop(stream);
             }
         }
         self.body_state.store(STATE_CLOSED, Ordering::SeqCst);
@@ -265,6 +264,84 @@ fn decode_bytes(encoding_name: Option<&str>, bytes: &[u8]) -> String {
         }
     }
     String::from_utf8_lossy(bytes).to_string()
+}
+
+/// Incrementally decodes chunks so multibyte characters split across network
+/// boundaries are not replaced or lost.
+struct IncrementalDecoder {
+    decoder: Option<encoding_rs::Decoder>,
+    utf8_pending: Vec<u8>,
+}
+
+impl IncrementalDecoder {
+    fn new(encoding_name: Option<&str>) -> Self {
+        Self {
+            decoder: encoding_name
+                .and_then(|name| encoding_rs::Encoding::for_label(name.as_bytes()))
+                .map(encoding_rs::Encoding::new_decoder),
+            utf8_pending: Vec::new(),
+        }
+    }
+
+    fn decode(&mut self, bytes: &[u8], last: bool) -> String {
+        if let Some(decoder) = &mut self.decoder {
+            // encoding_rs writes into the String's existing capacity and
+            // intentionally does not reallocate for the caller.
+            let capacity = bytes.len().saturating_mul(3).max(4);
+            let mut output = String::with_capacity(capacity);
+            let _ = decoder.decode_to_string(bytes, &mut output, last);
+            return output;
+        }
+
+        self.utf8_pending.extend_from_slice(bytes);
+        match std::str::from_utf8(&self.utf8_pending) {
+            Ok(text) => {
+                let output = text.to_owned();
+                self.utf8_pending.clear();
+                output
+            }
+            Err(error) if error.error_len().is_none() && !last => {
+                let valid_up_to = error.valid_up_to();
+                let output =
+                    String::from_utf8_lossy(&self.utf8_pending[..valid_up_to]).into_owned();
+                self.utf8_pending.drain(..valid_up_to);
+                output
+            }
+            Err(_) => {
+                let output = String::from_utf8_lossy(&self.utf8_pending).into_owned();
+                self.utf8_pending.clear();
+                output
+            }
+        }
+    }
+
+    fn finish(&mut self) -> String {
+        self.decode(&[], true)
+    }
+}
+
+fn complete_lines(buffer: &mut String) -> Vec<String> {
+    let mut lines = Vec::new();
+    while let Some(pos) = buffer.find('\n') {
+        let mut line = buffer.drain(..=pos).collect::<String>();
+        line.pop();
+        if line.ends_with('\r') {
+            line.pop();
+        }
+        lines.push(line);
+    }
+    lines
+}
+
+fn final_line(buffer: &mut String) -> Option<String> {
+    if buffer.is_empty() {
+        return None;
+    }
+    let mut line = std::mem::take(buffer);
+    if line.ends_with('\r') {
+        line.pop();
+    }
+    Some(line)
 }
 
 #[pymethods]
@@ -486,7 +563,7 @@ impl PyBytesChunkIterator {
             borrowed.take_stream()?
         };
 
-        let (tx, rx) = std::sync::mpsc::channel();
+        let (tx, rx) = std::sync::mpsc::sync_channel(16);
 
         std::thread::spawn(move || {
             let rt = match tokio::runtime::Runtime::new() {
@@ -571,7 +648,7 @@ impl PyTextChunkIterator {
             (stream, enc_name)
         };
 
-        let (tx, rx) = std::sync::mpsc::channel();
+        let (tx, rx) = std::sync::mpsc::sync_channel(16);
 
         std::thread::spawn(move || {
             let rt = match tokio::runtime::Runtime::new() {
@@ -585,10 +662,11 @@ impl PyTextChunkIterator {
             };
             rt.block_on(async move {
                 let mut stream = stream;
+                let mut decoder = IncrementalDecoder::new(enc_name.as_deref());
                 while let Some(chunk_result) = stream.next().await {
                     match chunk_result {
                         Ok(chunk) => {
-                            let text = decode_bytes(enc_name.as_deref(), &chunk);
+                            let text = decoder.decode(&chunk, false);
                             if tx.send(Ok(text)).is_err() {
                                 break;
                             }
@@ -598,6 +676,10 @@ impl PyTextChunkIterator {
                             break;
                         }
                     }
+                }
+                let tail = decoder.finish();
+                if !tail.is_empty() {
+                    let _ = tx.send(Ok(tail));
                 }
             });
         });
@@ -661,7 +743,7 @@ impl PyLinesChunkIterator {
             (stream, enc_name)
         };
 
-        let (tx, rx) = std::sync::mpsc::channel();
+        let (tx, rx) = std::sync::mpsc::sync_channel(16);
 
         std::thread::spawn(move || {
             let rt = match tokio::runtime::Runtime::new() {
@@ -675,22 +757,15 @@ impl PyLinesChunkIterator {
             };
             rt.block_on(async move {
                 let mut stream = stream;
-                let mut line_buffer = BytesMut::new();
+                let mut decoder = IncrementalDecoder::new(enc_name.as_deref());
+                let mut line_buffer = String::new();
 
                 while let Some(chunk_result) = stream.next().await {
                     match chunk_result {
                         Ok(chunk) => {
-                            let decoded = decode_bytes(enc_name.as_deref(), &chunk);
-                            line_buffer.extend_from_slice(decoded.as_bytes());
-
-                            while let Some(pos) = line_buffer.iter().position(|&b| b == b'\n') {
-                                let line_bytes = line_buffer.split_to(pos + 1);
-                                let mut line = &line_bytes[..line_bytes.len() - 1];
-                                if line.ends_with(&[b'\r'][..]) {
-                                    line = &line[..line.len() - 1];
-                                }
-                                let line_str = String::from_utf8(line.to_vec()).unwrap_or_default();
-                                if tx.send(Ok(line_str)).is_err() {
+                            line_buffer.push_str(&decoder.decode(&chunk, false));
+                            for line in complete_lines(&mut line_buffer) {
+                                if tx.send(Ok(line)).is_err() {
                                     return;
                                 }
                             }
@@ -702,14 +777,14 @@ impl PyLinesChunkIterator {
                     }
                 }
 
-                if !line_buffer.is_empty() {
-                    let remaining = std::mem::take(&mut line_buffer);
-                    let mut line = &remaining[..];
-                    if line.ends_with(&[b'\r'][..]) {
-                        line = &line[..line.len() - 1];
+                line_buffer.push_str(&decoder.finish());
+                for line in complete_lines(&mut line_buffer) {
+                    if tx.send(Ok(line)).is_err() {
+                        return;
                     }
-                    let line_str = String::from_utf8(line.to_vec()).unwrap_or_default();
-                    let _ = tx.send(Ok(line_str));
+                }
+                if let Some(line) = final_line(&mut line_buffer) {
+                    let _ = tx.send(Ok(line));
                 }
             });
         });
@@ -841,10 +916,11 @@ impl PyAsyncTextIterator {
 
         pyo3_async_runtimes::tokio::get_runtime().spawn(async move {
             let mut stream = stream;
+            let mut decoder = IncrementalDecoder::new(enc_name.as_deref());
             while let Some(chunk_result) = stream.next().await {
                 match chunk_result {
                     Ok(chunk) => {
-                        let text = decode_bytes(enc_name.as_deref(), &chunk);
+                        let text = decoder.decode(&chunk, false);
                         if tx.send(Ok(text)).await.is_err() {
                             break;
                         }
@@ -854,6 +930,10 @@ impl PyAsyncTextIterator {
                         break;
                     }
                 }
+            }
+            let tail = decoder.finish();
+            if !tail.is_empty() {
+                let _ = tx.send(Ok(tail)).await;
             }
         });
 
@@ -916,22 +996,15 @@ impl PyAsyncLinesIterator {
 
         pyo3_async_runtimes::tokio::get_runtime().spawn(async move {
             let mut stream = stream;
-            let mut line_buffer = BytesMut::new();
+            let mut decoder = IncrementalDecoder::new(enc_name.as_deref());
+            let mut line_buffer = String::new();
 
             while let Some(chunk_result) = stream.next().await {
                 match chunk_result {
                     Ok(chunk) => {
-                        let decoded = decode_bytes(enc_name.as_deref(), &chunk);
-                        line_buffer.extend_from_slice(decoded.as_bytes());
-
-                        while let Some(pos) = line_buffer.iter().position(|&b| b == b'\n') {
-                            let line_bytes = line_buffer.split_to(pos + 1);
-                            let mut line = &line_bytes[..line_bytes.len() - 1];
-                            if line.ends_with(&[b'\r'][..]) {
-                                line = &line[..line.len() - 1];
-                            }
-                            let line_str = String::from_utf8(line.to_vec()).unwrap_or_default();
-                            if tx.send(Ok(line_str)).await.is_err() {
+                        line_buffer.push_str(&decoder.decode(&chunk, false));
+                        for line in complete_lines(&mut line_buffer) {
+                            if tx.send(Ok(line)).await.is_err() {
                                 return;
                             }
                         }
@@ -943,14 +1016,14 @@ impl PyAsyncLinesIterator {
                 }
             }
 
-            if !line_buffer.is_empty() {
-                let remaining = std::mem::take(&mut line_buffer);
-                let mut line = &remaining[..];
-                if line.ends_with(&[b'\r'][..]) {
-                    line = &line[..line.len() - 1];
+            line_buffer.push_str(&decoder.finish());
+            for line in complete_lines(&mut line_buffer) {
+                if tx.send(Ok(line)).await.is_err() {
+                    return;
                 }
-                let line_str = String::from_utf8(line.to_vec()).unwrap_or_default();
-                let _ = tx.send(Ok(line_str)).await;
+            }
+            if let Some(line) = final_line(&mut line_buffer) {
+                let _ = tx.send(Ok(line)).await;
             }
         });
 

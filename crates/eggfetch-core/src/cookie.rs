@@ -302,8 +302,8 @@ impl CookieJar {
     /// Get a specific cookie by name.
     ///
     /// If `domain` and `path` are provided, performs an exact lookup.
-    /// If only `name` is provided, returns the first matching cookie
-    /// (or `None` if ambiguous).
+    /// If only `name` is provided, returns a cookie only when that name is
+    /// unambiguous across the jar.
     ///
     /// # Panics
     ///
@@ -325,7 +325,7 @@ impl CookieJar {
             .filter(|c| c.name.eq_ignore_ascii_case(name))
             .collect();
 
-        matching.into_iter().next().cloned()
+        (matching.len() == 1).then(|| matching[0].clone())
     }
 
     /// Set a cookie explicitly.
@@ -482,8 +482,7 @@ fn domain_matches(host: &str, domain: &str) -> bool {
         return true;
     }
     let suffix = format!(".{domain}");
-    (host.len() > suffix.len() && host.to_lowercase().ends_with(&suffix.to_lowercase()))
-        || (host.len() == suffix.len() && host.eq_ignore_ascii_case(&suffix))
+    host.len() > suffix.len() && host.to_lowercase().ends_with(&suffix.to_lowercase())
 }
 
 /// Determine if a string is an IP address (v4 or v6).
