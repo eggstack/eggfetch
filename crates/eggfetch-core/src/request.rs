@@ -11,6 +11,23 @@ use crate::redirect::RedirectPolicy;
 use crate::response::Response;
 use crate::timeout::Timeout;
 
+use crate::auth::AuthScheme;
+
+/// Parts returned by [`Request::into_parts`].
+///
+/// `(method, url, headers, body, version, timeout, redirect, auth, auth_disabled)`
+pub(crate) type RequestParts = (
+    http::Method,
+    url::Url,
+    Headers,
+    RequestBody,
+    Version,
+    Option<Timeout>,
+    Option<RedirectPolicy>,
+    Option<AuthScheme>,
+    bool,
+);
+
 /// An outgoing HTTP request.
 #[derive(Debug)]
 pub struct Request {
@@ -21,6 +38,8 @@ pub struct Request {
     version: Version,
     timeout: Option<Timeout>,
     redirect: Option<RedirectPolicy>,
+    auth: Option<AuthScheme>,
+    auth_disabled: bool,
 }
 
 impl Request {
@@ -34,6 +53,8 @@ impl Request {
             version: Version::HTTP_11,
             timeout: None,
             redirect: None,
+            auth: None,
+            auth_disabled: false,
         }
     }
 
@@ -104,17 +125,32 @@ impl Request {
         self.redirect = redirect;
     }
 
-    pub(crate) fn into_parts(
-        self,
-    ) -> (
-        http::Method,
-        url::Url,
-        Headers,
-        RequestBody,
-        Version,
-        Option<Timeout>,
-        Option<RedirectPolicy>,
-    ) {
+    /// Returns a reference to the request-level auth override, if set.
+    #[must_use]
+    pub fn auth(&self) -> Option<&AuthScheme> {
+        self.auth.as_ref()
+    }
+
+    /// Set the request-level auth override.
+    pub fn set_auth(&mut self, auth: Option<AuthScheme>) {
+        self.auth = auth;
+    }
+
+    /// Returns whether auth has been explicitly disabled for this request.
+    #[must_use]
+    pub fn is_auth_disabled(&self) -> bool {
+        self.auth_disabled
+    }
+
+    /// Mark this request as having auth explicitly disabled.
+    pub fn set_auth_disabled(&mut self, disabled: bool) {
+        self.auth_disabled = disabled;
+    }
+
+    /// Decompose a request into its parts.
+    ///
+    /// Returns `(method, url, headers, body, version, timeout, redirect, auth, auth_disabled)`.
+    pub(crate) fn into_parts(self) -> RequestParts {
         (
             self.method,
             self.url,
@@ -123,6 +159,8 @@ impl Request {
             self.version,
             self.timeout,
             self.redirect,
+            self.auth,
+            self.auth_disabled,
         )
     }
 }
@@ -136,6 +174,8 @@ pub struct RequestBuilder {
     body: RequestBody,
     timeout: Option<Timeout>,
     redirect: Option<RedirectPolicy>,
+    auth: Option<AuthScheme>,
+    auth_disabled: bool,
     error: Option<crate::Error>,
 }
 
@@ -150,6 +190,8 @@ impl RequestBuilder {
             body: RequestBody::default(),
             timeout: None,
             redirect: None,
+            auth: None,
+            auth_disabled: false,
             error: None,
         }
     }
@@ -211,6 +253,27 @@ impl RequestBuilder {
         self
     }
 
+    /// Set authentication for this specific request.
+    ///
+    /// Overrides client-level auth.
+    #[must_use]
+    pub fn auth(mut self, auth: impl Into<AuthScheme>) -> Self {
+        self.auth = Some(auth.into());
+        self.auth_disabled = false;
+        self
+    }
+
+    /// Disable authentication for this specific request.
+    ///
+    /// When set, no auth is applied to this request even if the client
+    /// has a default auth configured.
+    #[must_use]
+    pub fn without_auth(mut self) -> Self {
+        self.auth_disabled = true;
+        self.auth = None;
+        self
+    }
+
     /// Build the request without sending it.
     ///
     /// # Errors
@@ -226,6 +289,8 @@ impl RequestBuilder {
         req.body = self.body;
         req.timeout = self.timeout;
         req.redirect = self.redirect;
+        req.auth = self.auth;
+        req.auth_disabled = self.auth_disabled;
         Ok(req)
     }
 

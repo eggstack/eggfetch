@@ -8,6 +8,8 @@ The async API integrates with asyncio.
 from eggfetch._native import (
     __version__,
     AsyncClient,
+    BasicAuth,
+    BearerAuth,
     Client,
     Cookie,
     Cookies,
@@ -43,6 +45,8 @@ from eggfetch._native import (
 __all__ = [
     "__version__",
     "AsyncClient",
+    "BasicAuth",
+    "BearerAuth",
     "Client",
     "Cookie",
     "Cookies",

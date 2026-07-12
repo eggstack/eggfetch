@@ -32,6 +32,7 @@ struct ClientConfig {
     user_agent: Option<String>,
     timeout: Option<Timeout>,
     redirect: RedirectPolicy,
+    auth: Option<crate::auth::AuthScheme>,
     #[cfg(feature = "cookies")]
     cookie_jar: CookieJar,
 }
@@ -43,6 +44,7 @@ impl Default for ClientConfig {
             user_agent: None,
             timeout: None,
             redirect: RedirectPolicy::default(),
+            auth: None,
             #[cfg(feature = "cookies")]
             cookie_jar: CookieJar::new(),
         }
@@ -184,8 +186,17 @@ impl Client {
     /// protocol, body) or if a timeout elapses.
     #[allow(clippy::too_many_lines)]
     pub(crate) async fn send(&self, request: Request) -> Result<Response> {
-        let (method, url, headers, body, version, request_timeout, request_redirect) =
-            request.into_parts();
+        let (
+            method,
+            url,
+            headers,
+            body,
+            version,
+            request_timeout,
+            request_redirect,
+            req_auth,
+            req_auth_disabled,
+        ) = request.into_parts();
 
         // Merge client-level and request-level timeouts.
         let timeout = match self.inner.config.timeout {
@@ -212,12 +223,31 @@ impl Client {
             request.set_version(version);
             request.set_timeout(Some(timeout));
 
+            // Carry request-level auth fields.
+            {
+                request.set_auth(req_auth);
+                request.set_auth_disabled(req_auth_disabled);
+            }
+
             #[cfg(feature = "cookies")]
             if !has_cookie_header {
                 if let Some(cookie_header) =
                     self.inner.config.cookie_jar.cookies_for_url(request.url())
                 {
                     request.headers_mut().insert("cookie", &cookie_header)?;
+                }
+            }
+
+            // Apply auth if configured and not disabled at request level.
+            {
+                let effective_auth = crate::auth::resolve_request_auth(
+                    request.auth(),
+                    request.is_auth_disabled(),
+                    self.inner.config.auth.as_ref(),
+                    request.headers(),
+                )?;
+                if let Some(auth) = effective_auth {
+                    auth.apply(request.headers_mut())?;
                 }
             }
 
@@ -297,6 +327,22 @@ impl Client {
                 }
             }
 
+            // Apply auth for this redirect hop.
+            // Cross-origin hops already had Authorization stripped by
+            // strip_headers_for_redirect in build_redirect_request.
+            // Client auth is NOT automatically reapplied to cross-origin hops.
+            {
+                let effective_auth = crate::auth::resolve_request_auth(
+                    hop_request.auth(),
+                    hop_request.is_auth_disabled(),
+                    self.inner.config.auth.as_ref(),
+                    hop_request.headers(),
+                )?;
+                if let Some(auth) = effective_auth {
+                    auth.apply(hop_request.headers_mut())?;
+                }
+            }
+
             let mut response = self.send_single_request(hop_request, &hop_timeout).await?;
 
             // Process Set-Cookie headers from the response (important for
@@ -367,7 +413,7 @@ impl Client {
             let drop_body = redirect::drops_body_on_redirect(redirect_status, &cur_method);
 
             // Extract the new state from the redirect request.
-            let (_, new_url, new_headers, _, new_version, _, _) = redirect_req.into_parts();
+            let (_, new_url, new_headers, _, new_version, _, _, _, _) = redirect_req.into_parts();
 
             cur_method = new_method;
             cur_url = new_url;
@@ -383,7 +429,7 @@ impl Client {
     /// processing for one request/response cycle. It does NOT handle
     /// redirects—that is the responsibility of [`Client::send`].
     async fn send_single_request(&self, request: Request, timeout: &Timeout) -> Result<Response> {
-        let (method, url, headers, body, version, _request_timeout, _request_redirect) =
+        let (method, url, headers, body, version, _request_timeout, _request_redirect, _, _) =
             request.into_parts();
 
         let uri: http::Uri = url
@@ -661,6 +707,7 @@ pub struct ClientBuilder {
     pool_config: PoolConfig,
     timeout: Option<Timeout>,
     redirect: RedirectPolicy,
+    auth: Option<crate::auth::AuthScheme>,
     #[cfg(feature = "cookies")]
     cookie_jar: Option<CookieJar>,
 }
@@ -675,6 +722,7 @@ impl ClientBuilder {
             pool_config: PoolConfig::default(),
             timeout: None,
             redirect: RedirectPolicy::default(),
+            auth: None,
             #[cfg(feature = "cookies")]
             cookie_jar: None,
         }
@@ -773,6 +821,17 @@ impl ClientBuilder {
         self
     }
 
+    /// Set default authentication for all requests made by this client.
+    ///
+    /// The configured auth is applied to every request unless overridden
+    /// or disabled at the request level. Auth is recomputed per redirect
+    /// hop; cross-origin redirects never carry client auth.
+    #[must_use]
+    pub fn auth(mut self, auth: impl Into<crate::auth::AuthScheme>) -> Self {
+        self.auth = Some(auth.into());
+        self
+    }
+
     /// Build the client.
     ///
     /// # Panics
@@ -802,6 +861,7 @@ impl ClientBuilder {
             user_agent: self.user_agent,
             timeout: self.timeout,
             redirect: self.redirect,
+            auth: self.auth,
             #[cfg(feature = "cookies")]
             cookie_jar,
         };

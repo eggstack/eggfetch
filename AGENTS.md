@@ -17,6 +17,7 @@ eggfetch follows a milestone-driven development sequence: A through M. Each mile
 - I: Request builder compatibility surface (complete)
 - J: Redirect engine (complete)
 - O: Cookie subsystem (complete)
+- P: Authentication subsystem (complete)
 - N: Semantic tightening and public-API stabilization (in progress — Tracks 2-9 complete, Track 1 pending)
 - K: CLI
 - L: Correctness and differential testing
@@ -63,7 +64,7 @@ Prefer small, focused tests colocated with the module under test. Use `#[cfg(tes
 cargo test --workspace --all-features
 ```
 
-The workspace has ~286 Rust tests and ~227 Python tests covering construction, streaming, timeouts, pools, headers, integration scenarios, Python sync API, Python async API, response compatibility properties, redirect behavior, redirect replay, total timeout across redirects, sync/async API parity, and cookie subsystem (parsing, matching, jar operations, client integration, Python API).
+The workspace has ~304 Rust tests and ~242 Python tests covering construction, streaming, timeouts, pools, headers, integration scenarios, Python sync API, Python async API, response compatibility properties, redirect behavior, redirect replay, total timeout across redirects, sync/async API parity, cookie subsystem (parsing, matching, jar operations, client integration, Python API), and authentication subsystem (Basic/Bearer auth, precedence, cross-origin credential stripping, Python auth classes).
 
 ## Working Style
 

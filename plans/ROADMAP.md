@@ -34,6 +34,8 @@ The following work is considered complete enough to serve as the platform for th
 - Python response compatibility surface
 - Python request kwargs for params, headers, content, form data, and JSON
 - redirect engine with method rewriting, sensitive-header stripping, history, and limits
+- cookie subsystem with RFC 6265 parsing, domain/path matching, cookie jar, and client-level cookie state
+- authentication subsystem with Basic and Bearer token support, client and request-level auth, precedence resolution, cross-origin credential stripping, and URL credential conversion
 
 These capabilities should continue receiving corrective maintenance, but the roadmap no longer treats them as greenfield milestones.
 

@@ -71,6 +71,14 @@ pub enum Error {
     #[error("invalid redirect location: {0}")]
     InvalidRedirectLocation(String),
 
+    /// An authentication header value is invalid.
+    #[error("invalid auth header: {0}")]
+    InvalidAuthHeader(String),
+
+    /// Conflicting authentication sources (e.g., explicit header + auth config).
+    #[error("conflicting auth: {0}")]
+    ConflictingAuth(String),
+
     /// A streaming body cannot be replayed for a redirect.
     #[error("body not replayable for redirect: streaming request bodies cannot be resent")]
     BodyNotReplayableForRedirect,
@@ -113,6 +121,8 @@ impl Error {
             Self::Io(_) => "io",
             Self::Unsupported(_) => "unsupported",
             Self::InvalidRedirectLocation(_) => "invalid_redirect_location",
+            Self::InvalidAuthHeader(_) => "invalid_auth_header",
+            Self::ConflictingAuth(_) => "conflicting_auth",
             Self::BodyNotReplayableForRedirect => "body_not_replayable_for_redirect",
             Self::TooManyRedirects { .. } => "too_many_redirects",
             Self::Pool(_) => "pool",

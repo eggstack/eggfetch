@@ -102,7 +102,9 @@ pub fn map_err(err: eggfetch_core::Error) -> PyErr {
         | eggfetch_core::Error::RequestBuild(msg)
         | eggfetch_core::Error::Unsupported(msg)
         | eggfetch_core::Error::Pool(msg)
-        | eggfetch_core::Error::InvalidRedirectLocation(msg) => RequestError::new_err(msg),
+        | eggfetch_core::Error::InvalidRedirectLocation(msg)
+        | eggfetch_core::Error::InvalidAuthHeader(msg)
+        | eggfetch_core::Error::ConflictingAuth(msg) => RequestError::new_err(msg),
         eggfetch_core::Error::Connect(msg) | eggfetch_core::Error::Tls(msg) => {
             NetworkError::new_err(msg)
         }

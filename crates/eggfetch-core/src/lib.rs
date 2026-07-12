@@ -25,6 +25,7 @@
 
 #![deny(missing_docs)]
 
+pub mod auth;
 pub mod body;
 pub mod client;
 #[cfg(feature = "cookies")]
@@ -38,6 +39,7 @@ pub mod response;
 pub(crate) mod stream;
 pub mod timeout;
 
+pub use auth::{AuthScheme, BasicAuth, BearerAuth};
 pub use body::{BoxBytesStream, RequestBody, ResponseBody};
 pub use client::{Client, ClientBuilder};
 pub use error::{Error, Result};
