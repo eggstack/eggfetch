@@ -507,3 +507,377 @@ class TestConstructorParity:
             client.close()
 
         asyncio.run(run_async())
+
+
+# ---------------------------------------------------------------------------
+# Enhanced handler for cookie, auth, and streaming tests
+# ---------------------------------------------------------------------------
+
+
+class _EnhancedHandler(http.server.BaseHTTPRequestHandler):
+    """Handler with cookie, auth, and streaming support."""
+
+    def do_GET(self):
+        parsed = urllib.parse.urlparse(self.path)
+        if parsed.path == "/set-cookie":
+            body = b"cookie set"
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain")
+            self.send_header("Set-Cookie", "session=abc123; Path=/")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        elif parsed.path == "/check-cookie":
+            cookie_header = self.headers.get("Cookie", "")
+            body = json.dumps({"cookie": cookie_header}).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        elif parsed.path == "/redirect-with-cookie":
+            self.send_response(302)
+            self.send_header("Location", "/check-cookie")
+            self.send_header("Set-Cookie", "redirected=true; Path=/")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+
+        elif parsed.path == "/auth":
+            auth_header = self.headers.get("Authorization", "")
+            body = json.dumps({"authorization": auth_header}).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        elif parsed.path == "/stream-data":
+            body = b"streamed content"
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        else:
+            body = json.dumps({
+                "method": "GET",
+                "path": parsed.path,
+                "query": parsed.query,
+                "headers": dict(self.headers),
+            }).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+    def do_POST(self):
+        length = int(self.headers.get("Content-Length", 0))
+        raw = self.rfile.read(length) if length else b""
+        parsed = urllib.parse.urlparse(self.path)
+
+        if parsed.path == "/auth":
+            auth_header = self.headers.get("Authorization", "")
+            body = json.dumps({
+                "authorization": auth_header,
+                "body": raw.decode(errors="replace"),
+            }).encode()
+        else:
+            body = json.dumps({
+                "method": "POST",
+                "path": self.path,
+                "headers": dict(self.headers),
+                "body": raw.decode(errors="replace"),
+            }).encode()
+
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, format, *args):
+        pass
+
+
+@pytest.fixture(scope="module")
+def enhanced_server():
+    srv = http.server.HTTPServer(("127.0.0.1", 0), _EnhancedHandler)
+    port = srv.server_address[1]
+    t = threading.Thread(target=srv.serve_forever, daemon=True)
+    t.start()
+    yield f"http://127.0.0.1:{port}"
+    srv.shutdown()
+
+
+# ---------------------------------------------------------------------------
+# Sync/async parity: cookie behavior
+# ---------------------------------------------------------------------------
+
+
+class TestCookieParity:
+    """Verify that sync and async clients handle cookies identically."""
+
+    def test_sync_cookies_set_and_send(self, enhanced_server):
+        with eggfetch.Client() as client:
+            resp = client.get(f"{enhanced_server}/set-cookie")
+            assert resp.status_code == 200
+            jar = client.cookies
+            assert "session" in jar
+
+            resp2 = client.get(f"{enhanced_server}/check-cookie")
+            body = json.loads(resp2.text)
+            assert "session=abc123" in body["cookie"]
+
+    async def test_async_cookies_set_and_send(self, enhanced_server):
+        async with eggfetch.AsyncClient() as client:
+            resp = await client.get(f"{enhanced_server}/set-cookie")
+            assert resp.status_code == 200
+            jar = client.cookies
+            assert "session" in jar
+
+            resp2 = await client.get(f"{enhanced_server}/check-cookie")
+            body = json.loads(resp2.text)
+            assert "session=abc123" in body["cookie"]
+
+    def test_sync_redirect_cookies(self, enhanced_server):
+        with eggfetch.Client(follow_redirects=True) as client:
+            resp = client.get(f"{enhanced_server}/redirect-with-cookie")
+            assert resp.status_code == 200
+            jar = client.cookies
+            assert "redirected" in jar
+
+    async def test_async_redirect_cookies(self, enhanced_server):
+        async with eggfetch.AsyncClient(follow_redirects=True) as client:
+            resp = await client.get(f"{enhanced_server}/redirect-with-cookie")
+            assert resp.status_code == 200
+            jar = client.cookies
+            assert "redirected" in jar
+
+    def test_sync_kwarg_cookies_dont_leak(self, enhanced_server):
+        with eggfetch.Client() as client:
+            resp = client.get(
+                f"{enhanced_server}/check-cookie",
+                headers={"Cookie": "kwargs=only"},
+            )
+            body = json.loads(resp.text)
+            assert "kwargs=only" in body["cookie"]
+            assert "session" not in body["cookie"]
+
+    async def test_async_kwarg_cookies_dont_leak(self, enhanced_server):
+        async with eggfetch.AsyncClient() as client:
+            resp = await client.get(
+                f"{enhanced_server}/check-cookie",
+                headers={"Cookie": "kwargs=only"},
+            )
+            body = json.loads(resp.text)
+            assert "kwargs=only" in body["cookie"]
+            assert "session" not in body["cookie"]
+
+
+# ---------------------------------------------------------------------------
+# Sync/async parity: auth behavior
+# ---------------------------------------------------------------------------
+
+
+class TestAuthParity:
+    """Verify that sync and async clients handle auth identically."""
+
+    def test_sync_auth_basic(self, enhanced_server):
+        with eggfetch.Client() as client:
+            resp = client.get(
+                f"{enhanced_server}/auth",
+                auth=eggfetch.BasicAuth("user", "pass"),
+            )
+            body = json.loads(resp.text)
+            assert body["authorization"].startswith("Basic ")
+
+    async def test_async_auth_basic(self, enhanced_server):
+        async with eggfetch.AsyncClient() as client:
+            resp = await client.get(
+                f"{enhanced_server}/auth",
+                auth=eggfetch.BasicAuth("user", "pass"),
+            )
+            body = json.loads(resp.text)
+            assert body["authorization"].startswith("Basic ")
+
+    def test_sync_auth_bearer(self, enhanced_server):
+        with eggfetch.Client() as client:
+            resp = client.get(
+                f"{enhanced_server}/auth",
+                auth=eggfetch.BearerAuth("mytoken"),
+            )
+            body = json.loads(resp.text)
+            assert body["authorization"] == "Bearer mytoken"
+
+    async def test_async_auth_bearer(self, enhanced_server):
+        async with eggfetch.AsyncClient() as client:
+            resp = await client.get(
+                f"{enhanced_server}/auth",
+                auth=eggfetch.BearerAuth("mytoken"),
+            )
+            body = json.loads(resp.text)
+            assert body["authorization"] == "Bearer mytoken"
+
+    def test_sync_auth_none_no_header(self, enhanced_server):
+        with eggfetch.Client() as client:
+            resp = client.get(f"{enhanced_server}/auth")
+            body = json.loads(resp.text)
+            assert body["authorization"] == ""
+
+    async def test_async_auth_none_no_header(self, enhanced_server):
+        async with eggfetch.AsyncClient() as client:
+            resp = await client.get(f"{enhanced_server}/auth")
+            body = json.loads(resp.text)
+            assert body["authorization"] == ""
+
+    def test_sync_auth_override(self, enhanced_server):
+        with eggfetch.Client(auth=eggfetch.BasicAuth("default", "pwd")) as client:
+            resp = client.get(
+                f"{enhanced_server}/auth",
+                auth=eggfetch.BearerAuth("override"),
+            )
+            body = json.loads(resp.text)
+            assert body["authorization"] == "Bearer override"
+
+    async def test_async_auth_override(self, enhanced_server):
+        async with eggfetch.AsyncClient(
+            auth=eggfetch.BasicAuth("default", "pwd")
+        ) as client:
+            resp = await client.get(
+                f"{enhanced_server}/auth",
+                auth=eggfetch.BearerAuth("override"),
+            )
+            body = json.loads(resp.text)
+            assert body["authorization"] == "Bearer override"
+
+    def test_sync_auth_post(self, enhanced_server):
+        with eggfetch.Client() as client:
+            resp = client.post(
+                f"{enhanced_server}/auth",
+                auth=eggfetch.BasicAuth("user", "pass"),
+                content=b"hello",
+            )
+            body = json.loads(resp.text)
+            assert body["authorization"].startswith("Basic ")
+            assert body["body"] == "hello"
+
+    async def test_async_auth_post(self, enhanced_server):
+        async with eggfetch.AsyncClient() as client:
+            resp = await client.post(
+                f"{enhanced_server}/auth",
+                auth=eggfetch.BasicAuth("user", "pass"),
+                content=b"hello",
+            )
+            body = json.loads(resp.text)
+            assert body["authorization"].startswith("Basic ")
+            assert body["body"] == "hello"
+
+
+# ---------------------------------------------------------------------------
+# Sync/async parity: streaming
+# ---------------------------------------------------------------------------
+
+
+class TestStreamingParity:
+    """Verify that sync and async streaming produce identical results."""
+
+    def test_sync_stream_iter_bytes(self, enhanced_server):
+        with eggfetch.Client() as client:
+            with client.stream("GET", f"{enhanced_server}/stream-data") as resp:
+                result = b"".join(resp.iter_bytes())
+        assert result == b"streamed content"
+
+    async def test_async_stream_aiter_bytes(self, enhanced_server):
+        async with eggfetch.AsyncClient() as client:
+            resp = await client.stream("GET", f"{enhanced_server}/stream-data")
+            async with resp:
+                chunks = []
+                async for chunk in resp.aiter_bytes():
+                    chunks.append(chunk)
+                result = b"".join(chunks)
+        assert result == b"streamed content"
+
+    def test_sync_stream_iter_text(self, enhanced_server):
+        with eggfetch.Client() as client:
+            with client.stream("GET", f"{enhanced_server}/stream-data") as resp:
+                result = "".join(resp.iter_text())
+        assert result == "streamed content"
+
+    async def test_async_stream_aiter_text(self, enhanced_server):
+        async with eggfetch.AsyncClient() as client:
+            resp = await client.stream("GET", f"{enhanced_server}/stream-data")
+            async with resp:
+                chunks = []
+                async for chunk in resp.aiter_text():
+                    chunks.append(chunk)
+                result = "".join(chunks)
+        assert result == "streamed content"
+
+    def test_sync_stream_iter_lines(self, enhanced_server):
+        with eggfetch.Client() as client:
+            with client.stream("GET", f"{enhanced_server}/stream-data") as resp:
+                result = list(resp.iter_lines())
+        assert result == ["streamed content"]
+
+    async def test_async_stream_aiter_lines(self, enhanced_server):
+        async with eggfetch.AsyncClient() as client:
+            resp = await client.stream("GET", f"{enhanced_server}/stream-data")
+            async with resp:
+                result = []
+                async for line in resp.aiter_lines():
+                    result.append(line)
+        assert result == ["streamed content"]
+
+    def test_sync_stream_read(self, enhanced_server):
+        with eggfetch.Client() as client:
+            with client.stream("GET", f"{enhanced_server}/stream-data") as resp:
+                result = resp.read()
+        assert result == b"streamed content"
+
+    async def test_async_stream_aread(self, enhanced_server):
+        async with eggfetch.AsyncClient() as client:
+            resp = await client.stream("GET", f"{enhanced_server}/stream-data")
+            async with resp:
+                result = await resp.aread()
+        assert result == b"streamed content"
+
+    def test_sync_stream_status(self, enhanced_server):
+        with eggfetch.Client() as client:
+            with client.stream("GET", f"{enhanced_server}/stream-data") as resp:
+                assert resp.status_code == 200
+                assert resp.is_success
+
+    async def test_async_stream_status(self, enhanced_server):
+        async with eggfetch.AsyncClient() as client:
+            resp = await client.stream("GET", f"{enhanced_server}/stream-data")
+            async with resp:
+                assert resp.status_code == 200
+                assert resp.is_success
+
+    def test_sync_stream_headers(self, enhanced_server):
+        with eggfetch.Client() as client:
+            with client.stream("GET", f"{enhanced_server}/stream-data") as resp:
+                assert "text/plain" in resp.headers.get("content-type", "")
+
+    async def test_async_stream_headers(self, enhanced_server):
+        async with eggfetch.AsyncClient() as client:
+            resp = await client.stream("GET", f"{enhanced_server}/stream-data")
+            async with resp:
+                assert "text/plain" in resp.headers.get("content-type", "")
+
+    def test_sync_stream_auto_drain(self, enhanced_server):
+        with eggfetch.Client() as client:
+            with client.stream("GET", f"{enhanced_server}/stream-data") as resp:
+                pass
+            # Should not raise; context manager drains
+
+    async def test_async_stream_auto_drain(self, enhanced_server):
+        async with eggfetch.AsyncClient() as client:
+            resp = await client.stream("GET", f"{enhanced_server}/stream-data")
+            async with resp:
+                pass
+            # Should not raise; context manager drains

@@ -26,6 +26,7 @@ The repository currently provides:
 
 The following tracks have been completed in the corrective pass:
 
+- **Track A**: Implemented true Python network streaming. `client.stream()` and `async_client.stream()` return `StreamingResponse` context managers that consume the live Rust body incrementally. Sync iterators release the GIL per chunk; async iterators use the PyO3 asyncio bridge with cancellation safety. Pool leases are held until exhaustion, close, or drop.
 - **Track B**: Fixed redirect body buffering. When `follow_redirects=False` (the default), request body is no longer eagerly buffered, preserving streaming body semantics for ordinary requests.
 - **Track C**: Audited and confirmed. Total timeout already uses `start_time.elapsed()` for a deadline across the full redirect chain. No code changes needed.
 - **Track D**: Audited and confirmed. History entries use drained bodies with empty bytes, releasing pool permits. No code changes needed.
@@ -34,7 +35,7 @@ The following tracks have been completed in the corrective pass:
 - **Track H**: Updated `.gitignore` to cover `*.egg-info/`, `.maturin/`, `.pytest_cache/`, and `*.pyo`.
 - **Track J**: Documentation truth pass. Removed false `aiter_*` claims, updated async adapter description, added tightening plan to repo layout and further reading.
 
-Tracks remaining: A (true Python streaming), F (package/wheel validation), G (CI visibility).
+Tracks remaining: F (package/wheel validation), G (CI visibility).
 
 ## Main risks to close
 

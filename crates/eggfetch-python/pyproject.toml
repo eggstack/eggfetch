@@ -30,3 +30,4 @@ module-name = "eggfetch._native"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+asyncio_mode = "auto"

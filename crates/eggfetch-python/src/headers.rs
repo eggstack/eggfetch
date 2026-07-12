@@ -15,6 +15,11 @@ impl PyHeaders {
     pub fn from_header_map(inner: http::HeaderMap) -> Self {
         Self { inner }
     }
+
+    /// Get a reference to the inner `HeaderMap`.
+    pub fn inner_ref(&self) -> &http::HeaderMap {
+        &self.inner
+    }
 }
 
 #[pymethods]

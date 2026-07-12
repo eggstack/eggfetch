@@ -150,6 +150,7 @@ dependencies = [
  "bytes",
  "eggfetch-core",
  "encoding_rs",
+ "futures-util",
  "http",
  "pyo3",
  "pyo3-async-runtimes",

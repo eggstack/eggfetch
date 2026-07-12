@@ -10,6 +10,7 @@ use crate::conversion::{
 use crate::cookies::PyCookies;
 use crate::errors::map_err;
 use crate::response::PyResponse;
+use crate::streaming::PyStreamingResponse;
 
 /// A synchronous HTTP client exposed to Python.
 ///
@@ -410,6 +411,103 @@ impl PyClient {
             follow_redirects,
             max_redirects,
         )
+    }
+
+    /// Send a streaming HTTP request.
+    #[pyo3(signature = (method, url, *, headers=None, params=None, content=None, data=None, json=None, timeout=None, auth=None, follow_redirects=None, max_redirects=None))]
+    #[allow(clippy::too_many_arguments)]
+    fn stream<'py>(
+        &mut self,
+        py: Python<'py>,
+        method: &str,
+        url: &str,
+        headers: Option<&Bound<'py, PyAny>>,
+        params: Option<&Bound<'py, PyAny>>,
+        content: Option<&Bound<'py, PyAny>>,
+        data: Option<&Bound<'py, PyAny>>,
+        json: Option<&Bound<'py, PyAny>>,
+        timeout: Option<&Bound<'py, PyAny>>,
+        auth: Option<&Bound<'py, PyAny>>,
+        follow_redirects: Option<bool>,
+        max_redirects: Option<usize>,
+    ) -> PyResult<Bound<'py, PyStreamingResponse>> {
+        self.ensure_not_closed()?;
+
+        let method_upper = method.to_uppercase();
+        let http_method = http::Method::try_from(method_upper.as_str()).map_err(|_| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "invalid HTTP method: {method}"
+            ))
+        })?;
+
+        let mut target_url = url::Url::parse(url)
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
+
+        if let Some(p) = params {
+            python_params_to_url(py, &mut target_url, p)?;
+        }
+        let target_url = target_url;
+
+        validate_body_kwargs(content, data, json)?;
+
+        let mut rust_headers = if let Some(h) = headers {
+            python_headers_to_rust(py, h)?
+        } else {
+            eggfetch_core::Headers::new()
+        };
+
+        let (body_bytes, auto_content_type) = build_request_body(py, content, data, json)?;
+
+        if let Some(ct) = auto_content_type {
+            if !rust_headers.contains("content-type") {
+                rust_headers.insert("content-type", ct).map_err(map_err)?;
+            }
+        }
+
+        let rust_timeout = parse_timeout(timeout)?;
+        let auth_scheme = auth::parse_auth(auth)?;
+
+        let client = self.client.clone();
+        let result = py.allow_threads(|| {
+            self.runtime.block_on(async {
+                let mut builder = client
+                    .request(http_method, target_url.as_str())
+                    .map_err(map_err)?;
+
+                for (name, value) in rust_headers.iter() {
+                    builder = builder.header(name.as_str(), value.to_str().unwrap_or(""));
+                }
+
+                if let Some(bytes) = body_bytes {
+                    builder = builder.bytes(bytes);
+                }
+
+                if let Some(t) = rust_timeout {
+                    builder = builder.timeout(t);
+                }
+
+                if let Some(a) = auth_scheme {
+                    builder = builder.auth(a);
+                }
+
+                if follow_redirects.is_some() || max_redirects.is_some() {
+                    let mut redirect = eggfetch_core::redirect::RedirectPolicy::default();
+                    if let Some(f) = follow_redirects {
+                        redirect.follow = f;
+                    }
+                    if let Some(m) = max_redirects {
+                        redirect.max_redirects = m;
+                    }
+                    builder = builder.redirect_policy(redirect);
+                }
+
+                let response = builder.send().await.map_err(map_err)?;
+                Ok::<_, PyErr>(response)
+            })
+        });
+
+        let response = result?;
+        PyStreamingResponse::from_core_response(py, response)
     }
 
     /// Close the client and shut down the runtime.

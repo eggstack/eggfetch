@@ -279,6 +279,7 @@ pub(crate) fn resolve_request_auth(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use base64::Engine;
 
     // --- BasicAuth tests ---
 
@@ -466,5 +467,168 @@ mod tests {
         let client_auth = Some(AuthScheme::bearer("tok").unwrap());
         let result = resolve_request_auth(None, true, client_auth.as_ref(), &headers).unwrap();
         assert!(result.is_none());
+    }
+
+    // --- Edge-case tests (Track C) ---
+
+    #[test]
+    fn resolve_no_auth_is_same_as_absent() {
+        let headers = crate::headers::Headers::new();
+        // None (not set) vs None (explicitly no auth) — same result
+        let r1 = resolve_request_auth(None, false, None, &headers).unwrap();
+        let r2 = resolve_request_auth(None, false, None, &headers).unwrap();
+        assert_eq!(r1.is_none(), r2.is_none());
+    }
+
+    #[test]
+    fn auth_scheme_debug_does_not_leak_basic_password() {
+        let scheme = AuthScheme::basic("admin", "hunter2").unwrap();
+        let debug = format!("{scheme:?}");
+        assert!(debug.contains("admin"));
+        assert!(!debug.contains("hunter2"));
+        assert!(debug.contains("<redacted>"));
+    }
+
+    #[test]
+    fn auth_scheme_debug_does_not_leak_bearer_token() {
+        let scheme = AuthScheme::bearer("secret-value").unwrap();
+        let debug = format!("{scheme:?}");
+        assert!(!debug.contains("secret-value"));
+        assert!(debug.contains("<redacted>"));
+    }
+
+    #[test]
+    fn basic_auth_empty_username_and_password() {
+        let auth = BasicAuth::new("", "").unwrap();
+        // "" ":" "" → base64(":")
+        let expected = base64::engine::general_purpose::STANDARD.encode(b":");
+        assert_eq!(auth.header_value(), format!("Basic {expected}"));
+    }
+
+    #[test]
+    fn bearer_auth_empty_token() {
+        let auth = BearerAuth::new("").unwrap();
+        assert_eq!(auth.header_value(), "Bearer ");
+    }
+
+    #[test]
+    fn basic_auth_colon_in_password_is_allowed() {
+        let auth = BasicAuth::new("user", "p:a:s:s").unwrap();
+        let expected = base64::engine::general_purpose::STANDARD.encode(b"user:p:a:s:s");
+        assert_eq!(auth.header_value(), format!("Basic {expected}"));
+    }
+
+    #[test]
+    fn bearer_auth_with_spaces_in_token() {
+        let auth = BearerAuth::new("token with spaces").unwrap();
+        assert_eq!(auth.header_value(), "Bearer token with spaces");
+    }
+
+    #[test]
+    fn bearer_auth_with_unicode_token() {
+        let auth = BearerAuth::new("tökën-üñîçödé").unwrap();
+        assert!(auth.header_value().starts_with("Bearer "));
+        assert!(auth.header_value().contains("tökën-üñîçödé"));
+    }
+
+    #[test]
+    fn basic_auth_header_format() {
+        let auth = BasicAuth::new("user", "pass").unwrap();
+        let val = auth.header_value();
+        assert!(val.starts_with("Basic "), "must start with 'Basic '");
+        // The rest must be valid base64
+        let encoded = val.strip_prefix("Basic ").unwrap();
+        let decoded = base64::engine::general_purpose::STANDARD
+            .decode(encoded)
+            .unwrap();
+        assert_eq!(String::from_utf8(decoded).unwrap(), "user:pass");
+    }
+
+    #[test]
+    fn bearer_auth_header_format() {
+        let auth = BearerAuth::new("my-token-123").unwrap();
+        let val = auth.header_value();
+        assert_eq!(val, "Bearer my-token-123");
+    }
+
+    #[test]
+    fn double_resolution_is_idempotent() {
+        let headers = crate::headers::Headers::new();
+        let client_auth = Some(AuthScheme::bearer("client-tok").unwrap());
+        let request_auth = Some(AuthScheme::bearer("req-tok").unwrap());
+
+        // First resolution: request auth overrides client
+        let first =
+            resolve_request_auth(request_auth.as_ref(), false, client_auth.as_ref(), &headers)
+                .unwrap();
+        assert!(first.is_some());
+
+        // Second resolution: result + no auth → result passes through
+        let second = resolve_request_auth(first.as_ref(), false, None, &headers).unwrap();
+        match second.unwrap() {
+            AuthScheme::Bearer(b) => assert_eq!(b.header_value(), "Bearer req-tok"),
+            AuthScheme::Basic(_) => panic!("expected Bearer"),
+        }
+    }
+
+    #[test]
+    fn request_builder_without_auth_sets_disabled_and_clears_auth() {
+        let client = crate::client::Client::builder().build();
+        let req = client
+            .request(http::Method::GET, "http://example.com")
+            .unwrap()
+            .auth(AuthScheme::bearer("tok").unwrap())
+            .without_auth()
+            .build()
+            .unwrap();
+
+        assert!(req.is_auth_disabled());
+        assert!(req.auth().is_none());
+    }
+
+    #[test]
+    fn request_builder_auth_clears_disabled() {
+        let client = crate::client::Client::builder().build();
+        let req = client
+            .request(http::Method::GET, "http://example.com")
+            .unwrap()
+            .without_auth()
+            .auth(AuthScheme::bearer("tok").unwrap())
+            .build()
+            .unwrap();
+
+        assert!(!req.is_auth_disabled());
+        assert!(req.auth().is_some());
+    }
+
+    #[test]
+    fn basic_auth_display_shows_username_not_password() {
+        let auth = BasicAuth::new("admin", "s3cret").unwrap();
+        let display = format!("{auth}");
+        assert!(display.contains("admin"));
+        assert!(!display.contains("s3cret"));
+        assert!(display.starts_with("BasicAuth(username="));
+    }
+
+    #[test]
+    fn bearer_auth_display_redacts_token() {
+        let auth = BearerAuth::new("my-secret-token").unwrap();
+        let display = format!("{auth}");
+        assert!(!display.contains("my-secret-token"));
+        assert!(display.contains("<redacted>"));
+    }
+
+    #[test]
+    fn resolve_request_overrides_client_different_types() {
+        let headers = crate::headers::Headers::new();
+        let client_auth = Some(AuthScheme::basic("c", "cp").unwrap());
+        let request_auth = Some(AuthScheme::bearer("req-tok").unwrap());
+        let result =
+            resolve_request_auth(request_auth.as_ref(), false, client_auth.as_ref(), &headers)
+                .unwrap();
+        match result.unwrap() {
+            AuthScheme::Bearer(b) => assert_eq!(b.header_value(), "Bearer req-tok"),
+            AuthScheme::Basic(_) => panic!("expected Bearer"),
+        }
     }
 }

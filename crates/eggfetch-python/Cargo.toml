@@ -21,6 +21,7 @@ pyo3-async-runtimes = { version = "0.23", features = ["tokio-runtime"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "net"] }
 bytes = "1"
 encoding_rs = "0.8"
+futures-util = "0.3"
 http = "1"
 url = "2"
 

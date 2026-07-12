@@ -10,6 +10,7 @@ mod cookies;
 mod errors;
 mod headers;
 mod response;
+mod streaming;
 mod timeout;
 
 use async_client::PyAsyncClient;
@@ -19,6 +20,10 @@ use cookies::PyCookies;
 use errors::map_err;
 use headers::PyHeaders;
 use response::PyResponse;
+use streaming::{
+    PyAsyncBytesIterator, PyAsyncLinesIterator, PyAsyncTextIterator, PyBytesChunkIterator,
+    PyLinesChunkIterator, PyStreamingResponse, PyTextChunkIterator,
+};
 use timeout::PyTimeout;
 
 /// Send an HTTP request using a short-lived client.
@@ -388,6 +393,13 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyCookies>()?;
     m.add_class::<PyHeaders>()?;
     m.add_class::<PyResponse>()?;
+    m.add_class::<PyStreamingResponse>()?;
+    m.add_class::<PyBytesChunkIterator>()?;
+    m.add_class::<PyTextChunkIterator>()?;
+    m.add_class::<PyLinesChunkIterator>()?;
+    m.add_class::<PyAsyncBytesIterator>()?;
+    m.add_class::<PyAsyncTextIterator>()?;
+    m.add_class::<PyAsyncLinesIterator>()?;
     m.add_class::<PyTimeout>()?;
     m.add_class::<PyBasicAuth>()?;
     m.add_class::<PyBearerAuth>()?;
@@ -433,10 +445,17 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     let all_items = vec![
         "AsyncClient",
+        "AsyncStreamingBytesIterator",
+        "AsyncStreamingLinesIterator",
+        "AsyncStreamingTextIterator",
         "Client",
         "Cookies",
         "Headers",
         "Response",
+        "StreamingBytesIterator",
+        "StreamingLinesIterator",
+        "StreamingResponse",
+        "StreamingTextIterator",
         "Timeout",
         "BasicAuth",
         "BearerAuth",
