@@ -108,6 +108,31 @@ pub enum Error {
         /// The duration that was exceeded.
         elapsed: std::time::Duration,
     },
+
+    /// The proxy URL is invalid or malformed.
+    #[error("invalid proxy URL: {0}")]
+    InvalidProxyUrl(String),
+
+    /// The proxy server rejected the connection or tunnel.
+    #[error("proxy error: {0}")]
+    ProxyConnect(String),
+
+    /// The proxy server requires authentication.
+    #[error("proxy authentication required")]
+    ProxyAuthRequired,
+
+    /// The CONNECT tunnel was rejected by the proxy.
+    #[error("CONNECT rejected: {status} {body}")]
+    ProxyConnectRejected {
+        /// HTTP status code from the proxy.
+        status: u16,
+        /// Response body or description.
+        body: String,
+    },
+
+    /// The proxy response could not be parsed.
+    #[error("malformed proxy response: {0}")]
+    MalformedProxyResponse(String),
 }
 
 impl Error {
@@ -143,6 +168,11 @@ impl Error {
                 crate::timeout::TimeoutPhase::Read => "timeout_read",
                 crate::timeout::TimeoutPhase::Total => "timeout_total",
             },
+            Self::InvalidProxyUrl(_) => "invalid_proxy_url",
+            Self::ProxyConnect(_) => "proxy_connect",
+            Self::ProxyAuthRequired => "proxy_auth_required",
+            Self::ProxyConnectRejected { .. } => "proxy_connect_rejected",
+            Self::MalformedProxyResponse(_) => "malformed_proxy_response",
         }
     }
 }

@@ -12,10 +12,28 @@ use crate::response::Response;
 use crate::timeout::Timeout;
 
 use crate::auth::AuthScheme;
+#[cfg(feature = "proxy")]
+use crate::proxy::ProxyConfig;
+
+/// Proxy override for a specific request.
+///
+/// Controls whether a request inherits the client-level proxy,
+/// bypasses the proxy entirely, or uses a specific proxy configuration.
+#[derive(Debug, Clone, Default)]
+pub enum ProxyOverride {
+    /// Inherit the client-level proxy configuration (default).
+    #[default]
+    Inherit,
+    /// Send the request directly, bypassing any client proxy.
+    Direct,
+    /// Use a specific proxy configuration for this request.
+    #[cfg(feature = "proxy")]
+    Override(ProxyConfig),
+}
 
 /// Parts returned by [`Request::into_parts`].
 ///
-/// `(method, url, headers, body, version, timeout, redirect, auth, auth_disabled, decompress)`
+/// `(method, url, headers, body, version, timeout, redirect, auth, auth_disabled, decompress, proxy_override)`
 pub(crate) type RequestParts = (
     http::Method,
     url::Url,
@@ -27,6 +45,7 @@ pub(crate) type RequestParts = (
     Option<AuthScheme>,
     bool,
     Option<bool>,
+    ProxyOverride,
 );
 
 /// An outgoing HTTP request.
@@ -42,6 +61,8 @@ pub struct Request {
     auth: Option<AuthScheme>,
     auth_disabled: bool,
     decompress: Option<bool>,
+    /// Proxy override: `None` = inherit, `Some(None)` = direct, `Some(Some(c))` = explicit.
+    proxy_override: ProxyOverride,
 }
 
 impl Request {
@@ -58,6 +79,7 @@ impl Request {
             auth: None,
             auth_disabled: false,
             decompress: None,
+            proxy_override: ProxyOverride::Inherit,
         }
     }
 
@@ -165,6 +187,19 @@ impl Request {
         self.decompress = decompress;
     }
 
+    /// Returns the proxy override for this request.
+    #[cfg(feature = "proxy")]
+    #[must_use]
+    pub fn proxy_override(&self) -> &ProxyOverride {
+        &self.proxy_override
+    }
+
+    /// Set the per-request proxy override.
+    #[cfg(feature = "proxy")]
+    pub fn set_proxy_override(&mut self, proxy: ProxyOverride) {
+        self.proxy_override = proxy;
+    }
+
     /// Decompose a request into its parts.
     ///
     /// Returns `(method, url, headers, body, version, timeout, redirect, auth, auth_disabled, decompress)`.
@@ -180,6 +215,7 @@ impl Request {
             self.auth,
             self.auth_disabled,
             self.decompress,
+            self.proxy_override,
         )
     }
 }
@@ -196,6 +232,7 @@ pub struct RequestBuilder {
     auth: Option<AuthScheme>,
     auth_disabled: bool,
     decompress: Option<bool>,
+    proxy_override: ProxyOverride,
     error: Option<crate::Error>,
 }
 
@@ -213,6 +250,7 @@ impl RequestBuilder {
             auth: None,
             auth_disabled: false,
             decompress: None,
+            proxy_override: ProxyOverride::Inherit,
             error: None,
         }
     }
@@ -295,6 +333,27 @@ impl RequestBuilder {
         self
     }
 
+    /// Override the proxy for this specific request.
+    ///
+    /// When set, this proxy is used instead of the client-level proxy.
+    #[cfg(feature = "proxy")]
+    #[must_use]
+    pub fn proxy(mut self, proxy: &crate::proxy::Proxy) -> Self {
+        self.proxy_override = ProxyOverride::Override(proxy.config());
+        self
+    }
+
+    /// Disable proxy for this specific request.
+    ///
+    /// When set, the request is sent directly without going through
+    /// any proxy, even if the client has a default proxy configured.
+    #[cfg(feature = "proxy")]
+    #[must_use]
+    pub fn without_proxy(mut self) -> Self {
+        self.proxy_override = ProxyOverride::Direct;
+        self
+    }
+
     /// Override decompression for this specific request.
     ///
     /// - `true`: enable decompression regardless of client setting
@@ -323,6 +382,7 @@ impl RequestBuilder {
         req.auth = self.auth;
         req.auth_disabled = self.auth_disabled;
         req.decompress = self.decompress;
+        req.proxy_override = self.proxy_override;
         Ok(req)
     }
 

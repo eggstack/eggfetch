@@ -22,7 +22,7 @@ compression-brotli = ["dep:async-compression", "async-compression/brotli", "dep:
 compression-zstd = ["dep:async-compression", "async-compression/zstd", "dep:tokio-util", "tokio/io-util"]
 compression-deflate = ["dep:async-compression", "async-compression/deflate", "dep:tokio-util", "tokio/io-util"]
 cookies = ["dep:cookie"]
-proxy = []
+proxy = ["tokio/io-util"]
 tracing = []
 multipart = []
 test-util = ["tokio/test-util"]
@@ -49,5 +49,7 @@ cookie = { version = "0.18", default-features = false, features = ["percent-enco
 async-compression = { version = "0.4", default-features = false, features = ["tokio"], optional = true }
 tokio-util = { version = "0.7", features = ["io"], optional = true }
 flate2 = "1"
+httparse = "1"
+webpki-roots = "0.26"
 
 [dev-dependencies]

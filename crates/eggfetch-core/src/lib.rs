@@ -36,6 +36,8 @@ pub mod headers;
 #[cfg(feature = "multipart")]
 pub mod multipart;
 pub mod pool;
+#[cfg(feature = "proxy")]
+pub mod proxy;
 pub mod redirect;
 pub mod request;
 pub mod response;
@@ -52,7 +54,9 @@ pub use http::Method;
 #[cfg(feature = "multipart")]
 pub use multipart::{Boundary, Multipart, MultipartEncoder, Part, PartBody};
 pub use pool::{Pool, PoolConfig};
+#[cfg(feature = "proxy")]
+pub use proxy::{Proxy, ProxyAuth, ProxyConfig, ProxyDecision, ProxyRule};
 pub use redirect::RedirectPolicy;
-pub use request::{Request, RequestBuilder};
+pub use request::{ProxyOverride, Request, RequestBuilder};
 pub use response::{HistoryEntry, Response};
 pub use timeout::{Timeout, TimeoutBuilder, TimeoutPhase};

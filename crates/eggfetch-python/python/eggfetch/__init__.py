@@ -53,6 +53,9 @@ from eggfetch._native import (
     StreamConsumed,
     StreamClosed,
     ResponseNotRead,
+    ProxyError,
+    ProxyConnectError,
+    ProxyAuthError,
 )
 
 __all__ = [
@@ -101,4 +104,7 @@ __all__ = [
     "StreamConsumed",
     "StreamClosed",
     "ResponseNotRead",
+    "ProxyError",
+    "ProxyConnectError",
+    "ProxyAuthError",
 ]

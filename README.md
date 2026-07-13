@@ -2,8 +2,8 @@
 
 eggfetch is a Rust-native HTTP client engine with Python bindings and a CLI tool. The core is async-first: a Rust engine built on tokio and hyper provides connection pooling, timeouts, TLS, and streaming. The Python bindings expose both sync and async APIs; the sync API blocks on the async engine while releasing the GIL, and the async API integrates with asyncio. There is exactly one networking implementation, living entirely in Rust.
 
-> **Status: Milestone R complete.**
-> Milestones A–R are implemented as documented. The core engine supports response decompression (gzip, deflate, brotli, zstd), multipart/form-data uploads, cookies, authentication, streaming, timeouts, and connection pooling. The CLI crate remains a stub.
+> **Status: Milestone S complete.**
+> Milestones A–S are implemented as documented. The core engine supports response decompression (gzip, deflate, brotli, zstd), multipart/form-data uploads, cookies, authentication, proxy support (HTTP proxying, HTTPS CONNECT tunneling, proxy authentication, per-request/client proxy configuration, NO_PROXY bypass), streaming, timeouts, and connection pooling. The CLI crate remains a stub.
 
 [![CI](https://github.com/eggstack/eggfetch/actions/workflows/ci.yml/badge.svg)](https://github.com/eggstack/eggfetch/actions/workflows/ci.yml)
 
@@ -250,7 +250,7 @@ Streaming response decompression with Accept-Encoding negotiation:
 
 ### Current limitations
 
-- No `proxies`, `verify`, or `cert` kwargs.
+- No `verify` or `cert` kwargs.
 - Python 3.10–3.13 and the CI-supported Ubuntu, macOS, and Windows platforms are the current compatibility target. Other platforms may work but are not release-tested yet.
 - `connect` timeout is accepted but not independently enforced (use `total` as backstop).
 - Trio/AnyIO support deferred to a later milestone.

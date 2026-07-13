@@ -100,8 +100,14 @@ Python `files=` accepts bytes, `(filename, data)` tuples, `(filename, data, cont
 
 ### proxy
 
-**Status:** planned, not implemented.
-**Milestone:** deferred beyond I. Proxy support requires CONNECT tunneling, authentication, and PAC file handling, which are beyond the MVP scope. The feature flag is reserved.
+**Status:** implemented (Milestone S).
+Enables HTTP proxy support in eggfetch-core. Provides HTTP proxying, HTTPS
+CONNECT tunneling, proxy authentication, per-request and per-client proxy
+configuration via `ClientBuilder::proxy()` and `RequestBuilder::proxy()`,
+and `NO_PROXY`-style bypass behavior. The Python crate exposes
+`Client(proxy=...)`, `AsyncClient(proxy=...)`, and per-request `proxy=`
+kwarg. The feature flag is required for proxy functionality; it pulls in
+tunnel and proxy-protocol dependencies.
 
 ### tracing
 
@@ -129,4 +135,5 @@ cargo test -p eggfetch-core --all-features
 cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,compression-gzip
 cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,compression-brotli
 cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,compression-zstd
+cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,proxy
 ```

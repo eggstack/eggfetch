@@ -118,6 +118,24 @@ create_exception!(
     RequestError,
     "The server used an unsupported content encoding."
 );
+create_exception!(
+    eggfetch,
+    ProxyError,
+    RequestError,
+    "An error related to proxy configuration or connection."
+);
+create_exception!(
+    eggfetch,
+    ProxyConnectError,
+    ProxyError,
+    "Failed to connect to the proxy server."
+);
+create_exception!(
+    eggfetch,
+    ProxyAuthError,
+    ProxyError,
+    "The proxy server requires authentication."
+);
 
 /// Map an eggfetch-core error to the appropriate Python exception.
 #[allow(clippy::needless_pass_by_value)]
@@ -153,6 +171,17 @@ pub fn map_err(err: eggfetch_core::Error) -> PyErr {
         eggfetch_core::Error::TooManyRedirects { followed, max } => TooManyRedirects::new_err(
             format!("too many redirects: followed {followed}, max is {max}"),
         ),
+        eggfetch_core::Error::InvalidProxyUrl(msg) => ProxyError::new_err(msg),
+        eggfetch_core::Error::ProxyConnect(msg) => ProxyConnectError::new_err(msg),
+        eggfetch_core::Error::ProxyAuthRequired => {
+            ProxyAuthError::new_err("proxy authentication required")
+        }
+        eggfetch_core::Error::ProxyConnectRejected { status, body } => {
+            ProxyConnectError::new_err(format!("CONNECT rejected: {status} {body}"))
+        }
+        eggfetch_core::Error::MalformedProxyResponse(msg) => {
+            ProtocolError::new_err(format!("malformed proxy response: {msg}"))
+        }
         eggfetch_core::Error::Timeout { phase, elapsed } => {
             let msg = format!("{phase} timeout after {elapsed:?}");
             match phase {

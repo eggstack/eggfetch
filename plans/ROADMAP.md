@@ -36,6 +36,7 @@ The following work is considered complete enough to serve as the platform for th
 - redirect engine with method rewriting, sensitive-header stripping, history, and limits
 - cookie subsystem with RFC 6265 parsing, domain/path matching, cookie jar, and client-level cookie state
 - authentication subsystem with Basic and Bearer token support, client and request-level auth, precedence resolution, cross-origin credential stripping, and URL credential conversion
+- proxy subsystem with HTTP proxying, HTTPS CONNECT tunneling, proxy authentication, per-request/client proxy configuration, and NO_PROXY bypass
 
 These capabilities should continue receiving corrective maintenance, but the roadmap no longer treats them as greenfield milestones.
 
@@ -340,8 +341,8 @@ The preferred order is:
 2. Milestone O: cookies
 3. Milestone P: authentication
 4. Milestone Q: multipart/files (complete)
-5. Milestone R: compression
-6. Milestone S: proxies
+5. Milestone R: compression (complete)
+6. Milestone S: proxies (complete)
 7. Milestone T: TLS configuration
 8. Milestone U: retries
 9. Milestone V: HTTP/2

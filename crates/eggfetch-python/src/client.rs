@@ -9,6 +9,7 @@ use crate::conversion::{
 };
 use crate::cookies::PyCookies;
 use crate::errors::map_err;
+use crate::proxy::{self, ProxyOverride};
 use crate::response::PyResponse;
 use crate::streaming::PyStreamingResponse;
 
@@ -35,7 +36,7 @@ impl PyClient {
     ///     `max_redirects`: Maximum redirects to follow (default 20).
     #[allow(clippy::too_many_arguments)]
     #[new]
-    #[pyo3(signature = (*, headers=None, timeout=None, follow_redirects=None, max_redirects=None, cookies=None, auth=None, decompress=None))]
+    #[pyo3(signature = (*, headers=None, timeout=None, follow_redirects=None, max_redirects=None, cookies=None, auth=None, decompress=None, proxy=None))]
     fn new(
         py: Python<'_>,
         headers: Option<&Bound<'_, PyAny>>,
@@ -45,6 +46,7 @@ impl PyClient {
         cookies: Option<&Bound<'_, PyAny>>,
         auth: Option<&Bound<'_, PyAny>>,
         decompress: Option<bool>,
+        proxy: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<Self> {
         let runtime = tokio::runtime::Runtime::new()
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
@@ -92,6 +94,12 @@ impl PyClient {
             }
         }
 
+        let proxy_override = proxy::parse_proxy(proxy)?;
+        if let ProxyOverride::Override(url) = proxy_override {
+            let p = eggfetch_core::Proxy::all(&url).map_err(map_err)?;
+            builder = builder.proxy(p);
+        }
+
         let client = builder.build();
 
         Ok(Self {
@@ -103,7 +111,7 @@ impl PyClient {
     }
 
     /// Send an HTTP request.
-    #[pyo3(signature = (method, url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None))]
+    #[pyo3(signature = (method, url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None))]
     #[allow(clippy::too_many_arguments)]
     fn request<'py>(
         &mut self,
@@ -122,6 +130,7 @@ impl PyClient {
         follow_redirects: Option<bool>,
         max_redirects: Option<usize>,
         decompress: Option<bool>,
+        proxy: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Bound<'py, PyAny>> {
         self.ensure_not_closed()?;
 
@@ -178,6 +187,8 @@ impl PyClient {
 
         let auth_override = auth::parse_auth(auth)?;
 
+        let proxy_override = proxy::parse_proxy(proxy)?;
+
         let client = self.client.clone();
         let result = py.allow_threads(|| {
             self.runtime.block_on(async {
@@ -211,6 +222,17 @@ impl PyClient {
                     }
                 }
 
+                match proxy_override {
+                    ProxyOverride::Inherit => {}
+                    ProxyOverride::Disable => {
+                        builder = builder.without_proxy();
+                    }
+                    ProxyOverride::Override(url) => {
+                        let p = eggfetch_core::Proxy::all(&url).map_err(map_err)?;
+                        builder = builder.proxy(&p);
+                    }
+                }
+
                 if follow_redirects.is_some() || max_redirects.is_some() {
                     let mut redirect = eggfetch_core::redirect::RedirectPolicy::default();
                     if let Some(f) = follow_redirects {
@@ -233,7 +255,7 @@ impl PyClient {
     }
 
     /// Send a GET request.
-    #[pyo3(signature = (url, *, headers=None, params=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None))]
+    #[pyo3(signature = (url, *, headers=None, params=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None))]
     #[allow(clippy::too_many_arguments)]
     fn get<'py>(
         &mut self,
@@ -247,6 +269,7 @@ impl PyClient {
         follow_redirects: Option<bool>,
         max_redirects: Option<usize>,
         decompress: Option<bool>,
+        proxy: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Bound<'py, PyAny>> {
         self.request(
             py,
@@ -264,11 +287,12 @@ impl PyClient {
             follow_redirects,
             max_redirects,
             decompress,
+            proxy,
         )
     }
 
     /// Send a POST request.
-    #[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None))]
+    #[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None))]
     #[allow(clippy::too_many_arguments)]
     fn post<'py>(
         &mut self,
@@ -286,6 +310,7 @@ impl PyClient {
         follow_redirects: Option<bool>,
         max_redirects: Option<usize>,
         decompress: Option<bool>,
+        proxy: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Bound<'py, PyAny>> {
         self.request(
             py,
@@ -303,11 +328,12 @@ impl PyClient {
             follow_redirects,
             max_redirects,
             decompress,
+            proxy,
         )
     }
 
     /// Send a PUT request.
-    #[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None))]
+    #[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None))]
     #[allow(clippy::too_many_arguments)]
     fn put<'py>(
         &mut self,
@@ -325,6 +351,7 @@ impl PyClient {
         follow_redirects: Option<bool>,
         max_redirects: Option<usize>,
         decompress: Option<bool>,
+        proxy: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Bound<'py, PyAny>> {
         self.request(
             py,
@@ -342,11 +369,12 @@ impl PyClient {
             follow_redirects,
             max_redirects,
             decompress,
+            proxy,
         )
     }
 
     /// Send a PATCH request.
-    #[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None))]
+    #[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None))]
     #[allow(clippy::too_many_arguments)]
     fn patch<'py>(
         &mut self,
@@ -364,6 +392,7 @@ impl PyClient {
         follow_redirects: Option<bool>,
         max_redirects: Option<usize>,
         decompress: Option<bool>,
+        proxy: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Bound<'py, PyAny>> {
         self.request(
             py,
@@ -381,11 +410,12 @@ impl PyClient {
             follow_redirects,
             max_redirects,
             decompress,
+            proxy,
         )
     }
 
     /// Send a DELETE request.
-    #[pyo3(signature = (url, *, headers=None, params=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None))]
+    #[pyo3(signature = (url, *, headers=None, params=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None))]
     #[allow(clippy::too_many_arguments)]
     fn delete<'py>(
         &mut self,
@@ -399,6 +429,7 @@ impl PyClient {
         follow_redirects: Option<bool>,
         max_redirects: Option<usize>,
         decompress: Option<bool>,
+        proxy: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Bound<'py, PyAny>> {
         self.request(
             py,
@@ -416,11 +447,12 @@ impl PyClient {
             follow_redirects,
             max_redirects,
             decompress,
+            proxy,
         )
     }
 
     /// Send a HEAD request.
-    #[pyo3(signature = (url, *, headers=None, params=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None))]
+    #[pyo3(signature = (url, *, headers=None, params=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None))]
     #[allow(clippy::too_many_arguments)]
     fn head<'py>(
         &mut self,
@@ -434,6 +466,7 @@ impl PyClient {
         follow_redirects: Option<bool>,
         max_redirects: Option<usize>,
         decompress: Option<bool>,
+        proxy: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Bound<'py, PyAny>> {
         self.request(
             py,
@@ -451,11 +484,12 @@ impl PyClient {
             follow_redirects,
             max_redirects,
             decompress,
+            proxy,
         )
     }
 
     /// Send an OPTIONS request.
-    #[pyo3(signature = (url, *, headers=None, params=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None))]
+    #[pyo3(signature = (url, *, headers=None, params=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None))]
     #[allow(clippy::too_many_arguments)]
     fn options<'py>(
         &mut self,
@@ -469,6 +503,7 @@ impl PyClient {
         follow_redirects: Option<bool>,
         max_redirects: Option<usize>,
         decompress: Option<bool>,
+        proxy: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Bound<'py, PyAny>> {
         self.request(
             py,
@@ -486,11 +521,12 @@ impl PyClient {
             follow_redirects,
             max_redirects,
             decompress,
+            proxy,
         )
     }
 
     /// Send a streaming HTTP request.
-    #[pyo3(signature = (method, url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None))]
+    #[pyo3(signature = (method, url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None))]
     #[allow(clippy::too_many_arguments)]
     fn stream<'py>(
         &mut self,
@@ -509,6 +545,7 @@ impl PyClient {
         follow_redirects: Option<bool>,
         max_redirects: Option<usize>,
         decompress: Option<bool>,
+        proxy: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Bound<'py, PyStreamingResponse>> {
         self.ensure_not_closed()?;
 
@@ -565,6 +602,8 @@ impl PyClient {
 
         let auth_override = auth::parse_auth(auth)?;
 
+        let proxy_override = proxy::parse_proxy(proxy)?;
+
         let client = self.client.clone();
         let result = py.allow_threads(|| {
             self.runtime.block_on(async {
@@ -595,6 +634,17 @@ impl PyClient {
                     }
                     auth::AuthOverride::Override(a) => {
                         builder = builder.auth(a);
+                    }
+                }
+
+                match proxy_override {
+                    ProxyOverride::Inherit => {}
+                    ProxyOverride::Disable => {
+                        builder = builder.without_proxy();
+                    }
+                    ProxyOverride::Override(url) => {
+                        let p = eggfetch_core::Proxy::all(&url).map_err(map_err)?;
+                        builder = builder.proxy(&p);
                     }
                 }
 

@@ -268,7 +268,11 @@ fn sync_decode_flate2(data: &bytes::Bytes, encoding: ContentCoding) -> Result<by
 }
 
 /// Create a decoder for a single content coding.
-#[allow(clippy::unnecessary_wraps, unused_variables)]
+#[allow(
+    clippy::unnecessary_wraps,
+    clippy::needless_pass_by_value,
+    unused_variables
+)]
 fn make_decoder(stream: BoxBytesStream, encoding: ContentCoding) -> Result<BoxBytesStream> {
     match encoding {
         ContentCoding::Gzip => {
