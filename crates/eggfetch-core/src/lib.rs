@@ -28,6 +28,7 @@
 pub mod auth;
 pub mod body;
 pub mod client;
+pub mod compression;
 #[cfg(feature = "cookies")]
 pub mod cookie;
 pub mod error;
@@ -44,6 +45,7 @@ pub mod timeout;
 pub use auth::{AuthScheme, BasicAuth, BearerAuth};
 pub use body::{BoxBytesStream, RequestBody, ResponseBody};
 pub use client::{Client, ClientBuilder};
+pub use compression::{accept_encoding_value, ContentCoding};
 pub use error::{Error, Result};
 pub use headers::Headers;
 pub use http::Method;

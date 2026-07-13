@@ -190,6 +190,11 @@ impl Response {
         &self.headers
     }
 
+    /// Returns a mutable reference to the response headers.
+    pub fn headers_mut(&mut self) -> &mut HeaderMap {
+        &mut self.headers
+    }
+
     /// Returns the final URL of the response (after any redirects).
     #[must_use]
     pub fn url(&self) -> &Url {

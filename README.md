@@ -2,8 +2,8 @@
 
 eggfetch is a Rust-native HTTP client engine with Python bindings and a CLI tool. The core is async-first: a Rust engine built on tokio and hyper provides connection pooling, timeouts, TLS, and streaming. The Python bindings expose both sync and async APIs; the sync API blocks on the async engine while releasing the GIL, and the async API integrates with asyncio. There is exactly one networking implementation, living entirely in Rust.
 
-> **Status: Milestone Q complete.**
-> Milestones A–Q are implemented as documented. The core engine supports multipart/form-data uploads, cookies, authentication, streaming, timeouts, and connection pooling. The CLI crate remains a stub.
+> **Status: Milestone R complete.**
+> Milestones A–R are implemented as documented. The core engine supports response decompression (gzip, deflate, brotli, zstd), multipart/form-data uploads, cookies, authentication, streaming, timeouts, and connection pooling. The CLI crate remains a stub.
 
 [![CI](https://github.com/eggstack/eggfetch/actions/workflows/ci.yml/badge.svg)](https://github.com/eggstack/eggfetch/actions/workflows/ci.yml)
 
@@ -231,6 +231,23 @@ Streaming multipart/form-data request bodies with Python `files=` compatibility:
 
 The multipart feature is gated behind the `multipart` feature in eggfetch-core. The Python crate enables it by default.
 
+### Milestone R: Response Compression and Decompression (complete)
+
+Streaming response decompression with Accept-Encoding negotiation:
+
+- **Core model** -- feature-gated `compression-gzip`, `compression-deflate`, `compression-brotli`, and `compression-zstd` features. Each enables a streaming decoder without pulling in unneeded dependencies.
+- **Streaming decoders** -- async decompression via `async-compression` wrapped around `BoxBytesStream`. No full-body buffering; natural backpressure preserved.
+- **Accept-Encoding negotiation** -- automatic header injection when decompression is enabled. Only compiled-in algorithms are advertised.
+- **Content-Encoding parsing** -- ordered list parsing with reverse-order decode (e.g., `gzip, br` decodes brotli first, then gzip).
+- **Header policy** -- `Content-Encoding` and `Content-Length` are stripped from decoded response headers.
+- **Client configuration** -- `ClientBuilder::automatic_decompression(bool)` controls the default. Enabled by default when compression features are compiled in.
+- **Per-request override** -- `RequestBuilder::decompress(bool)` overrides client-level setting.
+- **Buffered decompression** -- buffered responses decompress synchronously via `flate2`.
+- **Python API** -- `Client(decompress=True)`, `AsyncClient(decompress=True)`, and `client.get(url, decompress=False)` kwarg.
+- **Error mapping** -- `DecompressionError` and `UnsupportedContentEncoding` Python exceptions.
+- **Resource limits** -- maximum nesting depth of 4 content encodings.
+- **Deflate compatibility** -- uses `async-compression`'s deflate decoder which handles zlib-wrapped streams (standard HTTP deflate).
+
 ### Current limitations
 
 - No `proxies`, `verify`, or `cert` kwargs.
@@ -262,6 +279,7 @@ crates/
     pyproject.toml       maturin build config
 docs/
   architecture/          architecture documentation
+  milestone-r-response-compression.md  response decompression plan
 plans/                    milestone plans and roadmap
   ROADMAP.md              full milestone roadmap
   validation-polish-after-milestone-n.md
@@ -325,4 +343,5 @@ eggfetch is dual-licensed under [MIT](LICENSE-MIT) and [Apache License, Version 
 - [plans/milestone-o-cookie-subsystem.md](plans/milestone-o-cookie-subsystem.md) -- the plan for Milestone O (cookie subsystem).
 - [plans/milestone-p-authentication-subsystem.md](plans/milestone-p-authentication-subsystem.md) -- the plan for Milestone P (authentication subsystem).
 - [plans/milestone-q-multipart-file-uploads.md](plans/milestone-q-multipart-file-uploads.md) -- the plan for Milestone Q (multipart and file uploads).
+- [plans/milestone-r-response-compression.md](plans/milestone-r-response-compression.md) -- the plan for Milestone R (response compression and decompression).
 - [plans/post-milestone-j-tightening.md](plans/post-milestone-j-tightening.md) -- post-J corrective pass: redirect body buffering fix, async response construction fix, documentation truth pass.

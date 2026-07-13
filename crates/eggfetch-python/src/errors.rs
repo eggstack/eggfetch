@@ -106,6 +106,18 @@ create_exception!(
     EggfetchError,
     "The response body has been buffered; use the buffered API instead of streaming."
 );
+create_exception!(
+    eggfetch,
+    DecompressionError,
+    RequestError,
+    "An error occurred during response decompression."
+);
+create_exception!(
+    eggfetch,
+    UnsupportedContentEncoding,
+    RequestError,
+    "The server used an unsupported content encoding."
+);
 
 /// Map an eggfetch-core error to the appropriate Python exception.
 #[allow(clippy::needless_pass_by_value)]
@@ -133,6 +145,10 @@ pub fn map_err(err: eggfetch_core::Error) -> PyErr {
         eggfetch_core::Error::Io(arc) => NetworkError::new_err(arc.to_string()),
         eggfetch_core::Error::BodyNotReplayableForRedirect => {
             RequestError::new_err("request body is not replayable for redirect".to_string())
+        }
+        eggfetch_core::Error::Decompression(msg) => DecompressionError::new_err(msg),
+        eggfetch_core::Error::UnsupportedContentEncoding(msg) => {
+            UnsupportedContentEncoding::new_err(msg)
         }
         eggfetch_core::Error::TooManyRedirects { followed, max } => TooManyRedirects::new_err(
             format!("too many redirects: followed {followed}, max is {max}"),

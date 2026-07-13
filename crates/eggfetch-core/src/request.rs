@@ -15,7 +15,7 @@ use crate::auth::AuthScheme;
 
 /// Parts returned by [`Request::into_parts`].
 ///
-/// `(method, url, headers, body, version, timeout, redirect, auth, auth_disabled)`
+/// `(method, url, headers, body, version, timeout, redirect, auth, auth_disabled, decompress)`
 pub(crate) type RequestParts = (
     http::Method,
     url::Url,
@@ -26,6 +26,7 @@ pub(crate) type RequestParts = (
     Option<RedirectPolicy>,
     Option<AuthScheme>,
     bool,
+    Option<bool>,
 );
 
 /// An outgoing HTTP request.
@@ -40,6 +41,7 @@ pub struct Request {
     redirect: Option<RedirectPolicy>,
     auth: Option<AuthScheme>,
     auth_disabled: bool,
+    decompress: Option<bool>,
 }
 
 impl Request {
@@ -55,6 +57,7 @@ impl Request {
             redirect: None,
             auth: None,
             auth_disabled: false,
+            decompress: None,
         }
     }
 
@@ -147,9 +150,24 @@ impl Request {
         self.auth_disabled = disabled;
     }
 
+    /// Returns the per-request decompression override, if set.
+    ///
+    /// - `Some(true)`: force decompression on
+    /// - `Some(false)`: force decompression off
+    /// - `None`: use client-level setting
+    #[must_use]
+    pub fn decompress(&self) -> Option<bool> {
+        self.decompress
+    }
+
+    /// Set the per-request decompression override.
+    pub fn set_decompress(&mut self, decompress: Option<bool>) {
+        self.decompress = decompress;
+    }
+
     /// Decompose a request into its parts.
     ///
-    /// Returns `(method, url, headers, body, version, timeout, redirect, auth, auth_disabled)`.
+    /// Returns `(method, url, headers, body, version, timeout, redirect, auth, auth_disabled, decompress)`.
     pub(crate) fn into_parts(self) -> RequestParts {
         (
             self.method,
@@ -161,6 +179,7 @@ impl Request {
             self.redirect,
             self.auth,
             self.auth_disabled,
+            self.decompress,
         )
     }
 }
@@ -176,6 +195,7 @@ pub struct RequestBuilder {
     redirect: Option<RedirectPolicy>,
     auth: Option<AuthScheme>,
     auth_disabled: bool,
+    decompress: Option<bool>,
     error: Option<crate::Error>,
 }
 
@@ -192,6 +212,7 @@ impl RequestBuilder {
             redirect: None,
             auth: None,
             auth_disabled: false,
+            decompress: None,
             error: None,
         }
     }
@@ -274,6 +295,16 @@ impl RequestBuilder {
         self
     }
 
+    /// Override decompression for this specific request.
+    ///
+    /// - `true`: enable decompression regardless of client setting
+    /// - `false`: disable decompression regardless of client setting
+    #[must_use]
+    pub fn decompress(mut self, decompress: bool) -> Self {
+        self.decompress = Some(decompress);
+        self
+    }
+
     /// Build the request without sending it.
     ///
     /// # Errors
@@ -291,6 +322,7 @@ impl RequestBuilder {
         req.redirect = self.redirect;
         req.auth = self.auth;
         req.auth_disabled = self.auth_disabled;
+        req.decompress = self.decompress;
         Ok(req)
     }
 

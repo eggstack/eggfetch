@@ -19,6 +19,7 @@ eggfetch follows a milestone-driven development sequence: A through Q. Each mile
 - O: Cookie subsystem (complete)
 - P: Authentication subsystem (complete)
 - Q: Multipart and file uploads (complete)
+- R: Response compression and decompression (complete)
 - N: Semantic tightening and public-API stabilization (complete)
 - Validation polish after Milestone N (complete before Q)
 - K: CLI
@@ -78,6 +79,9 @@ cd crates/eggfetch-python
 maturin develop
 python -m pytest -p pytest_asyncio
 maturin build
+cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,compression-gzip
+cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,compression-brotli
+cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,compression-zstd
 ```
 
 The supported CI matrix is Python 3.10–3.13 on Ubuntu, macOS, and Windows.
@@ -92,7 +96,7 @@ signals active readers and iterator producers. A response may outlive its
 client because the core response owns its body lease; closing the client only
 prevents new requests and does not invalidate an already returned response.
 
-The workspace has ~352 Rust tests and ~367 Python tests covering construction, streaming, timeouts, pools, headers, integration scenarios, Python sync API, Python async API, response compatibility properties, redirect behavior, redirect replay, total timeout across redirects, sync/async API parity, cookie subsystem (parsing, matching, jar operations, client integration, Python API), authentication subsystem (Basic/Bearer auth, precedence, cross-origin credential stripping, Python auth classes), multipart (encoder, boundary, streaming, known-length, Python files= support), and true network streaming (sync/async `client.stream()`, `StreamingResponse`, chunk iteration, cancellation, pool lease lifecycle, split UTF-8, cross-chunk line delimiters, named exception types).
+The workspace has ~380+ Rust tests and ~390+ Python tests covering construction, streaming, timeouts, pools, headers, integration scenarios, Python sync API, Python async API, response compatibility properties, redirect behavior, redirect replay, total timeout across redirects, sync/async API parity, cookie subsystem (parsing, matching, jar operations, client integration, Python API), authentication subsystem (Basic/Bearer auth, precedence, cross-origin credential stripping, Python auth classes), multipart (encoder, boundary, streaming, known-length, Python files= support), response decompression (gzip, deflate, brotli, zstd streaming decoders, Accept-Encoding negotiation, Content-Encoding parsing, header policy, feature-gated compilation, Python decompress kwarg), and true network streaming (sync/async `client.stream()`, `StreamingResponse`, chunk iteration, cancellation, pool lease lifecycle, split UTF-8, cross-chunk line delimiters, named exception types).
 
 ## Working Style
 

@@ -45,7 +45,7 @@ use timeout::PyTimeout;
 ///     `follow_redirects`: Whether to follow redirects (default False).
 ///     `max_redirects`: Maximum redirects to follow (default 20).
 #[pyfunction]
-#[pyo3(signature = (method, url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None))]
+#[pyo3(signature = (method, url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None))]
 #[allow(clippy::too_many_arguments)]
 fn request<'py>(
     py: Python<'py>,
@@ -62,6 +62,7 @@ fn request<'py>(
     auth: Option<&Bound<'py, PyAny>>,
     follow_redirects: Option<bool>,
     max_redirects: Option<usize>,
+    decompress: Option<bool>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let method_upper = method.to_uppercase();
     let http_method = http::Method::try_from(method_upper.as_str()).map_err(|_| {
@@ -151,6 +152,10 @@ fn request<'py>(
                 builder = builder.timeout(t);
             }
 
+            if let Some(d) = decompress {
+                builder = builder.decompress(d);
+            }
+
             let response = builder.send().await.map_err(map_err)?;
             Ok::<_, PyErr>(response)
         })
@@ -163,7 +168,7 @@ fn request<'py>(
 
 /// Send a GET request using a short-lived client.
 #[pyfunction]
-#[pyo3(signature = (url, *, headers=None, params=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None))]
+#[pyo3(signature = (url, *, headers=None, params=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None))]
 #[allow(clippy::too_many_arguments)]
 fn get<'py>(
     py: Python<'py>,
@@ -175,6 +180,7 @@ fn get<'py>(
     auth: Option<&Bound<'py, PyAny>>,
     follow_redirects: Option<bool>,
     max_redirects: Option<usize>,
+    decompress: Option<bool>,
 ) -> PyResult<Bound<'py, PyAny>> {
     request(
         py,
@@ -191,12 +197,13 @@ fn get<'py>(
         auth,
         follow_redirects,
         max_redirects,
+        decompress,
     )
 }
 
 /// Send a POST request using a short-lived client.
 #[pyfunction]
-#[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None))]
+#[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None))]
 #[allow(clippy::too_many_arguments)]
 fn post<'py>(
     py: Python<'py>,
@@ -212,6 +219,7 @@ fn post<'py>(
     auth: Option<&Bound<'py, PyAny>>,
     follow_redirects: Option<bool>,
     max_redirects: Option<usize>,
+    decompress: Option<bool>,
 ) -> PyResult<Bound<'py, PyAny>> {
     request(
         py,
@@ -228,12 +236,13 @@ fn post<'py>(
         auth,
         follow_redirects,
         max_redirects,
+        decompress,
     )
 }
 
 /// Send a PUT request using a short-lived client.
 #[pyfunction]
-#[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None))]
+#[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None))]
 #[allow(clippy::too_many_arguments)]
 fn put<'py>(
     py: Python<'py>,
@@ -249,6 +258,7 @@ fn put<'py>(
     auth: Option<&Bound<'py, PyAny>>,
     follow_redirects: Option<bool>,
     max_redirects: Option<usize>,
+    decompress: Option<bool>,
 ) -> PyResult<Bound<'py, PyAny>> {
     request(
         py,
@@ -265,12 +275,13 @@ fn put<'py>(
         auth,
         follow_redirects,
         max_redirects,
+        decompress,
     )
 }
 
 /// Send a PATCH request using a short-lived client.
 #[pyfunction]
-#[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None))]
+#[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None))]
 #[allow(clippy::too_many_arguments)]
 fn patch<'py>(
     py: Python<'py>,
@@ -286,6 +297,7 @@ fn patch<'py>(
     auth: Option<&Bound<'py, PyAny>>,
     follow_redirects: Option<bool>,
     max_redirects: Option<usize>,
+    decompress: Option<bool>,
 ) -> PyResult<Bound<'py, PyAny>> {
     request(
         py,
@@ -302,12 +314,13 @@ fn patch<'py>(
         auth,
         follow_redirects,
         max_redirects,
+        decompress,
     )
 }
 
 /// Send a DELETE request using a short-lived client.
 #[pyfunction]
-#[pyo3(signature = (url, *, headers=None, params=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None))]
+#[pyo3(signature = (url, *, headers=None, params=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None))]
 #[allow(clippy::too_many_arguments)]
 fn delete<'py>(
     py: Python<'py>,
@@ -319,6 +332,7 @@ fn delete<'py>(
     auth: Option<&Bound<'py, PyAny>>,
     follow_redirects: Option<bool>,
     max_redirects: Option<usize>,
+    decompress: Option<bool>,
 ) -> PyResult<Bound<'py, PyAny>> {
     request(
         py,
@@ -335,12 +349,13 @@ fn delete<'py>(
         auth,
         follow_redirects,
         max_redirects,
+        decompress,
     )
 }
 
 /// Send a HEAD request using a short-lived client.
 #[pyfunction]
-#[pyo3(signature = (url, *, headers=None, params=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None))]
+#[pyo3(signature = (url, *, headers=None, params=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None))]
 #[allow(clippy::too_many_arguments)]
 fn head<'py>(
     py: Python<'py>,
@@ -352,6 +367,7 @@ fn head<'py>(
     auth: Option<&Bound<'py, PyAny>>,
     follow_redirects: Option<bool>,
     max_redirects: Option<usize>,
+    decompress: Option<bool>,
 ) -> PyResult<Bound<'py, PyAny>> {
     request(
         py,
@@ -368,12 +384,13 @@ fn head<'py>(
         auth,
         follow_redirects,
         max_redirects,
+        decompress,
     )
 }
 
 /// Send an OPTIONS request using a short-lived client.
 #[pyfunction]
-#[pyo3(signature = (url, *, headers=None, params=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None))]
+#[pyo3(signature = (url, *, headers=None, params=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None))]
 #[allow(clippy::too_many_arguments)]
 fn options<'py>(
     py: Python<'py>,
@@ -385,6 +402,7 @@ fn options<'py>(
     auth: Option<&Bound<'py, PyAny>>,
     follow_redirects: Option<bool>,
     max_redirects: Option<usize>,
+    decompress: Option<bool>,
 ) -> PyResult<Bound<'py, PyAny>> {
     request(
         py,
@@ -401,6 +419,7 @@ fn options<'py>(
         auth,
         follow_redirects,
         max_redirects,
+        decompress,
     )
 }
 
@@ -443,6 +462,14 @@ fn register_exceptions(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add(
         "ResponseNotRead",
         m.py().get_type::<errors::ResponseNotRead>(),
+    )?;
+    m.add(
+        "DecompressionError",
+        m.py().get_type::<errors::DecompressionError>(),
+    )?;
+    m.add(
+        "UnsupportedContentEncoding",
+        m.py().get_type::<errors::UnsupportedContentEncoding>(),
     )?;
     Ok(())
 }
@@ -494,6 +521,8 @@ fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
         "StreamConsumed",
         "StreamClosed",
         "ResponseNotRead",
+        "DecompressionError",
+        "UnsupportedContentEncoding",
     ];
     let py = m.py();
     let py_list = pyo3::types::PyList::new(py, &all_items)?;

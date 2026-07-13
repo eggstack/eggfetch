@@ -1,6 +1,6 @@
 # Architecture Overview
 
-This document describes the architecture of eggfetch. Milestone Q is the latest completed milestone. The core crate provides protocol-neutral streaming for request and response bodies, redirect following with configurable policy, total timeout across redirect chains, metadata-only redirect history, replay-safe request bodies, an RFC 6265 cookie subsystem, an authentication subsystem with Basic and Bearer token support, precedence resolution, request-level auth disable, cross-origin credential stripping, and streaming multipart/form-data request bodies. The Python crate exposes both sync and async APIs over the async Rust core via PyO3/maturin, with buffered and live streaming response surfaces, request-local and client-level cookies, redirect support, sync/async parity, `BasicAuth`/`BearerAuth` classes, `auth=` on request methods, `NOAUTH`, named streaming exceptions, and `files=` kwarg for multipart uploads.
+This document describes the architecture of eggfetch. Milestone R is the latest completed milestone. The core crate provides protocol-neutral streaming for request and response bodies, redirect following with configurable policy, total timeout across redirect chains, metadata-only redirect history, replay-safe request bodies, an RFC 6265 cookie subsystem, an authentication subsystem with Basic and Bearer token support, precedence resolution, request-level auth disable, cross-origin credential stripping, streaming multipart/form-data request bodies, and response decompression (gzip, deflate, brotli, zstd) with Accept-Encoding negotiation. The Python crate exposes both sync and async APIs over the async Rust core via PyO3/maturin, with buffered and live streaming response surfaces, request-local and client-level cookies, redirect support, sync/async parity, `BasicAuth`/`BearerAuth` classes, `auth=` on request methods, `NOAUTH`, named streaming exceptions, `files=` kwarg for multipart uploads, and `decompress=` kwarg for decompression control.
 
 The post-E hardening pass landed true streaming request bodies, per-chunk read/write timeouts, pool permits tied to the full response body lifecycle, and origin-keyed pool limits.
 
@@ -43,6 +43,7 @@ The following types form the public API of eggfetch-core:
 - **`Part`** -- a single multipart part with name, filename, content type, headers, and body.
 - **`PartBody`** -- multipart part body: `Bytes` or `Stream` with optional known length.
 - **`Boundary`** -- validated multipart boundary string. Random generation or custom validated.
+- **`ContentCoding`** -- content coding enum: `Gzip`, `Deflate`, `Brotli`, `Zstd`. Feature-gated behind compression features.
 
 ### TLS trust stores
 

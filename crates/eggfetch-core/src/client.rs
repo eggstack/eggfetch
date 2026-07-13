@@ -35,6 +35,7 @@ struct ClientConfig {
     auth: Option<crate::auth::AuthScheme>,
     #[cfg(feature = "cookies")]
     cookie_jar: CookieJar,
+    automatic_decompression: bool,
 }
 
 impl Default for ClientConfig {
@@ -47,6 +48,7 @@ impl Default for ClientConfig {
             auth: None,
             #[cfg(feature = "cookies")]
             cookie_jar: CookieJar::new(),
+            automatic_decompression: true,
         }
     }
 }
@@ -196,6 +198,7 @@ impl Client {
             request_redirect,
             req_auth,
             req_auth_disabled,
+            _request_decompress,
         ) = request.into_parts();
 
         // Merge client defaults before any cookie, auth, or redirect policy is
@@ -500,7 +503,7 @@ impl Client {
             let new_method = redirect::redirect_method(redirect_status, &cur_method);
 
             // Extract the new state from the redirect request.
-            let (_, new_url, new_headers, new_body, new_version, _, _, _, _) =
+            let (_, new_url, new_headers, new_body, new_version, _, _, _, _, _) =
                 redirect_req.into_parts();
 
             // Record this hop's URL before updating to the redirect target
@@ -520,21 +523,41 @@ impl Client {
     /// This handles pool acquisition, timeout application, and body
     /// processing for one request/response cycle. It does NOT handle
     /// redirects—that is the responsibility of [`Client::send`].
+    #[allow(clippy::too_many_lines)]
     async fn send_single_request(&self, request: Request, timeout: &Timeout) -> Result<Response> {
-        let (method, url, headers, body, version, _request_timeout, _request_redirect, _, _) =
-            request.into_parts();
+        let (
+            method,
+            url,
+            headers,
+            body,
+            version,
+            _request_timeout,
+            _request_redirect,
+            _,
+            _,
+            request_decompress,
+        ) = request.into_parts();
+
+        // Determine effective decompression setting.
+        let decompression_enabled =
+            request_decompress.unwrap_or(self.inner.config.automatic_decompression);
+
+        // Inject Accept-Encoding if automatic decompression is enabled
+        // and the user has not supplied their own.
+        let mut headers = headers;
+        if decompression_enabled && !headers.contains("accept-encoding") {
+            if let Some(value) = crate::compression::accept_encoding_value() {
+                headers.insert("accept-encoding", value)?;
+            }
+        }
 
         let uri: http::Uri = url
             .as_str()
             .parse()
             .map_err(|e| Error::InvalidUrl(format!("failed to convert url to URI: {e}")))?;
 
-        // Build the origin key for pool slot acquisition.
         let origin = OriginKey::from_url(url.scheme(), &url);
 
-        // The total deadline starts before pool acquisition. Otherwise a
-        // saturated pool can consume the entire logical request budget before
-        // the transport timeout even begins.
         let started = std::time::Instant::now();
         let pool_deadline = match (timeout.pool, timeout.total) {
             (Some(pool), Some(total)) if total < pool => Some((total, TimeoutPhase::Total)),
@@ -558,7 +581,6 @@ impl Client {
             None => self.inner.pool.acquire(origin.as_ref()).await,
         };
 
-        // Apply write timeout to streamed request bodies.
         let body = match (body, timeout.write) {
             (RequestBody::Stream { stream, length }, Some(write_dur)) => {
                 let wrapped = write_timeout_stream(stream, write_dur);
@@ -577,12 +599,10 @@ impl Client {
             .uri(uri)
             .version(version);
 
-        // The merged map already enforces request-over-default precedence.
         for (name, value) in headers.iter() {
             http_request = http_request.header(name, value);
         }
 
-        // Apply user-agent if set and not already present.
         if let Some(ref ua) = self.inner.config.user_agent {
             if !headers.contains("user-agent") {
                 http_request = http_request.header(
@@ -597,9 +617,6 @@ impl Client {
             .body(body.into_http_body())
             .map_err(|e| Error::RequestBuild(e.to_string()))?;
 
-        // Send request and collect response headers. The pool permit
-        // is moved into the response body lifetime so that streaming
-        // bodies hold the permit until they are consumed or dropped.
         let send_future = send_request(&self.inner.hyper_client, hyper_request, url.clone());
 
         let remaining_total = timeout
@@ -619,9 +636,52 @@ impl Client {
             None => send_future.await?,
         };
 
-        // Apply read timeout to the response body stream and attach
-        // the pool permit to keep per-origin limits meaningful while
-        // the body is in flight.
+        // Apply decompression if enabled.
+        if decompression_enabled {
+            let content_encoding = response
+                .headers()
+                .get("content-encoding")
+                .and_then(|v| v.to_str().ok())
+                .map(str::to_owned);
+
+            if let Some(ce) = &content_encoding {
+                crate::compression::validate_content_encodings(ce)?;
+            }
+
+            let old_body =
+                std::mem::replace(&mut response.body, ResponseBody::buffered(Bytes::new()));
+            let new_body = match old_body {
+                ResponseBody::Streaming { stream, lease } => {
+                    let decoded_stream = crate::compression::decompress_stream(
+                        stream,
+                        content_encoding.as_deref(),
+                        true,
+                    )?;
+                    ResponseBody::Streaming {
+                        stream: decoded_stream,
+                        lease,
+                    }
+                }
+                ResponseBody::Buffered { bytes } => {
+                    if content_encoding.is_some() && !bytes.is_empty() {
+                        let decompressed = crate::compression::decompress_buffered(
+                            &bytes,
+                            content_encoding.as_deref().unwrap(),
+                        )?;
+                        ResponseBody::buffered(decompressed)
+                    } else {
+                        ResponseBody::Buffered { bytes }
+                    }
+                }
+                ResponseBody::Consumed => ResponseBody::Consumed,
+            };
+            response.set_body(new_body);
+
+            // Strip Content-Encoding and Content-Length after decompression.
+            response.headers_mut().remove("content-encoding");
+            response.headers_mut().remove("content-length");
+        }
+
         apply_read_timeout_and_lease(&mut response, guard, timeout.read);
 
         Ok(response)
@@ -814,6 +874,7 @@ pub struct ClientBuilder {
     auth: Option<crate::auth::AuthScheme>,
     #[cfg(feature = "cookies")]
     cookie_jar: Option<CookieJar>,
+    automatic_decompression: Option<bool>,
 }
 
 impl ClientBuilder {
@@ -829,6 +890,7 @@ impl ClientBuilder {
             auth: None,
             #[cfg(feature = "cookies")]
             cookie_jar: None,
+            automatic_decompression: None,
         }
     }
 
@@ -936,6 +998,21 @@ impl ClientBuilder {
         self
     }
 
+    /// Enable or disable automatic response decompression.
+    ///
+    /// When enabled (the default), the client sends an
+    /// `Accept-Encoding` header and transparently decompresses
+    /// response bodies. Decoded `Content-Encoding` and
+    /// `Content-Length` headers are removed from the response.
+    ///
+    /// Can be overridden per-request via
+    /// [`RequestBuilder::decompress`].
+    #[must_use]
+    pub fn automatic_decompression(mut self, enabled: bool) -> Self {
+        self.automatic_decompression = Some(enabled);
+        self
+    }
+
     /// Build the client.
     ///
     /// Native system roots are preferred. If the platform root store is
@@ -957,6 +1034,8 @@ impl ClientBuilder {
         #[cfg(feature = "cookies")]
         let cookie_jar = self.cookie_jar.unwrap_or_default();
 
+        let automatic_decompression = self.automatic_decompression.unwrap_or(true);
+
         let config = ClientConfig {
             default_headers: self.default_headers,
             user_agent: self.user_agent,
@@ -965,6 +1044,7 @@ impl ClientBuilder {
             auth: self.auth,
             #[cfg(feature = "cookies")]
             cookie_jar,
+            automatic_decompression,
         };
 
         let pool = Pool::new(self.pool_config);

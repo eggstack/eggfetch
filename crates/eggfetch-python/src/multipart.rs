@@ -25,7 +25,7 @@ use eggfetch_core::multipart::{Multipart, Part, PartBody};
 /// Args:
 ///     path: Filesystem path to the file.
 ///     filename: Override filename (default: basename of path).
-///     content_type: Override content type (default: application/octet-stream).
+///     `content_type`: Override content type (default: application/octet-stream).
 #[pyclass(name = "File")]
 #[derive(Debug, Clone)]
 pub struct PyFile {
@@ -51,8 +51,7 @@ impl PyFile {
         let pb = PathBuf::from(&path_str);
         let default_filename = pb
             .file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_else(|| "file".to_owned());
+            .map_or_else(|| "file".to_owned(), |n| n.to_string_lossy().into_owned());
         Ok(Self {
             path: pb,
             filename: filename.unwrap_or(&default_filename).to_owned(),
@@ -83,7 +82,9 @@ impl PyFile {
     fn __repr__(&self) -> String {
         format!(
             "File(path={:?}, filename={:?}, content_type={:?})",
-            self.path, self.filename, self.content_type
+            self.path.display(),
+            self.filename,
+            self.content_type
         )
     }
 }
@@ -146,11 +147,11 @@ fn add_form_fields(
 /// Add file parts from the `files=` kwarg.
 ///
 /// Accepts:
-/// - A mapping of field_name -> file_spec
-/// - A sequence of (field_name, file_spec) pairs
+/// - A mapping of `field_name` -> `file_spec`
+/// - A sequence of (`field_name`, `file_spec`) pairs
 ///
 /// File spec variants:
-/// - `bytes` or `str`: bare data with field_name as filename
+/// - `bytes` or `str`: bare data with `field_name` as filename
 /// - `(filename, data)`: filename + data
 /// - `(filename, data, content_type)`: filename + data + content type
 /// - `(filename, data, content_type, headers)`: full spec
@@ -249,7 +250,7 @@ fn add_tuple_file_part(
     tuple: &Bound<'_, PyTuple>,
 ) -> PyResult<()> {
     let len = tuple.len();
-    if len < 2 || len > 4 {
+    if !(2..=4).contains(&len) {
         return Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
             "file tuple must be (filename, data), (filename, data, content_type), or (filename, data, content_type, headers)",
         ));
@@ -289,7 +290,7 @@ fn add_tuple_file_part(
     Ok(())
 }
 
-/// Read a File wrapper into a PartBody.
+/// Read a `File` wrapper into a `PartBody`.
 fn add_path_file_part(
     multipart: &mut Multipart,
     field_name: &str,

@@ -92,6 +92,14 @@ pub enum Error {
         max: usize,
     },
 
+    /// A response decompression error occurred.
+    #[error("decompression error: {0}")]
+    Decompression(String),
+
+    /// The server used a content encoding that is not supported.
+    #[error("unsupported content encoding: {0}")]
+    UnsupportedContentEncoding(String),
+
     /// A timeout elapsed during the specified phase.
     #[error("{phase} timeout after {elapsed:?}")]
     Timeout {
@@ -126,6 +134,8 @@ impl Error {
             Self::BodyNotReplayableForRedirect => "body_not_replayable_for_redirect",
             Self::TooManyRedirects { .. } => "too_many_redirects",
             Self::Pool(_) => "pool",
+            Self::Decompression(_) => "decompression",
+            Self::UnsupportedContentEncoding(_) => "unsupported_content_encoding",
             Self::Timeout { phase, .. } => match phase {
                 crate::timeout::TimeoutPhase::Pool => "timeout_pool",
                 crate::timeout::TimeoutPhase::Connect => "timeout_connect",

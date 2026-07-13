@@ -55,6 +55,12 @@ impl Headers {
         self.inner.get(name)
     }
 
+    /// Get all values for a header by name.
+    #[must_use]
+    pub fn get_all(&self, name: &str) -> Vec<&HeaderValue> {
+        self.inner.get_all(name).iter().collect()
+    }
+
     /// Get a header value as a string by name.
     #[must_use]
     pub fn get_str(

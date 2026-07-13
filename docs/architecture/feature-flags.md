@@ -65,21 +65,23 @@ feature combinations so disabled-feature checks remain buildable.
 
 ### compression-gzip
 
-**Status:** planned, not implemented.
-**Milestone:** not yet implemented (after E).
-Enables gzip decompression of response bodies. This is behind a feature flag to avoid pulling in compression dependencies for users who do not need them.
+**Status:** implemented (Milestone R).
+Enables gzip decompression of response bodies. This is behind a feature flag to avoid pulling in compression dependencies for users who do not need them. Uses `async-compression` for streaming decode and `flate2` for buffered decode. Enables `Content-Encoding: gzip` transparent decompression.
 
 ### compression-brotli
 
-**Status:** planned, not implemented.
-**Milestone:** not yet implemented (after E).
-Enables Brotli decompression of response bodies.
+**Status:** implemented (Milestone R).
+Enables Brotli decompression of response bodies. Uses `async-compression` for streaming decode. Enables `Content-Encoding: br` transparent decompression.
 
 ### compression-zstd
 
-**Status:** planned, not implemented.
-**Milestone:** not yet implemented (after E).
-Enables Zstandard decompression of response bodies.
+**Status:** implemented (Milestone R).
+Enables Zstandard decompression of response bodies. Uses `async-compression` for streaming decode. Enables `Content-Encoding: zstd` transparent decompression.
+
+### compression-deflate
+
+**Status:** implemented (Milestone R).
+Enables deflate decompression of response bodies. Uses `async-compression` for streaming decode. HTTP deflate is typically zlib-wrapped; this decoder handles the standard format. Enables `Content-Encoding: deflate` transparent decompression.
 
 ### cookies
 
@@ -124,4 +126,7 @@ cargo check -p eggfetch-core --no-default-features
 cargo check -p eggfetch-core --no-default-features --features http1,tls-rustls
 cargo check -p eggfetch-core --all-features
 cargo test -p eggfetch-core --all-features
+cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,compression-gzip
+cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,compression-brotli
+cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,compression-zstd
 ```
