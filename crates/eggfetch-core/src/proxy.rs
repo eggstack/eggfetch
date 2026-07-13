@@ -8,6 +8,23 @@
 //!
 //! - `http://` — HTTP proxy (forward HTTP targets, CONNECT for HTTPS)
 //!
+//! # Environment policy
+//!
+//! eggfetch does **not** read `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`,
+//! or `NO_PROXY` environment variables. Proxy configuration is explicit
+//! only: set via [`Proxy::all`], [`Proxy::http`], or [`Proxy::https`]
+//! and attach to a client with
+//! [`ClientBuilder::proxy`](crate::ClientBuilder::proxy). This avoids
+//! surprising behavior when multiple proxy libraries coexist.
+//!
+//! # TLS interception
+//!
+//! CONNECT tunneling does **not** perform TLS interception. The tunnel
+//! is a transparent byte stream between the client and the destination.
+//! If a corporate or inspection proxy performs TLS interception (MITM),
+//! certificate verification will succeed only if the proxy's CA
+//! certificate is trusted by the system or explicitly configured.
+//!
 //! # Security
 //!
 //! - Proxy passwords are never exposed in `Debug`, `Display`, logs,
@@ -18,6 +35,181 @@
 use std::fmt;
 
 use crate::error::{Error, Result};
+
+/// A single `NO_PROXY` bypass rule.
+///
+/// Parsed from individual entries in a comma-separated `NO_PROXY` string.
+/// Each variant represents a different matching strategy.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum NoProxyRule {
+    /// Matches everything.
+    Wildcard,
+    /// Exact host match.
+    Host(String),
+    /// Domain suffix match (leading dot, e.g. `.example.com`).
+    DomainSuffix(String),
+    /// Exact host + port match.
+    HostPort(String, u16),
+    /// Matches localhost (`127.0.0.1`, `::1`, `localhost`).
+    Localhost,
+}
+
+/// `NO_PROXY` bypass rules for a proxy.
+///
+/// When a URL matches any bypass rule, the request is sent directly
+/// (without going through the proxy). Construct via [`NoProxy::parse`]
+/// with a comma-separated list of entries, then attach to a proxy with
+/// [`Proxy::no_proxy`].
+///
+/// Supported entry formats:
+/// - `*` — wildcard, matches everything
+/// - `localhost` — matches `localhost`, `127.0.0.1`, `[::1]`
+/// - `.example.com` — domain suffix match (matches `example.com` and
+///   all subdomains)
+/// - `example.com` — exact host match
+/// - `example.com:8080` — host + port match (uses scheme default port
+///   when the URL has no explicit port)
+/// - `[::1]` or `[::1]:8080` — IPv6 literal, optionally with port
+#[derive(Debug, Clone)]
+pub struct NoProxy {
+    rules: Vec<NoProxyRule>,
+}
+
+impl NoProxy {
+    /// Parse a comma-separated list of `NO_PROXY` entries.
+    ///
+    /// Entries can be:
+    /// - `*` — wildcard, matches everything
+    /// - `localhost` — matches localhost, `127.0.0.1`, `[::1]`
+    /// - `.example.com` — domain suffix match
+    /// - `example.com` — exact host match
+    /// - `example.com:8080` — host + port match
+    /// - `[::1]` — IPv6 literal
+    /// - `[::1]:8080` — IPv6 literal + port
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if a port number cannot be parsed.
+    pub fn parse(s: &str) -> Result<Self> {
+        let mut rules = Vec::new();
+        for entry in s.split(',') {
+            let entry = entry.trim();
+            if entry.is_empty() {
+                continue;
+            }
+            rules.push(Self::parse_entry(entry)?);
+        }
+        Ok(Self { rules })
+    }
+
+    fn parse_entry(entry: &str) -> Result<NoProxyRule> {
+        if entry == "*" {
+            return Ok(NoProxyRule::Wildcard);
+        }
+        if entry.eq_ignore_ascii_case("localhost") {
+            return Ok(NoProxyRule::Localhost);
+        }
+
+        // IPv6 literal: [::1] or [::1]:8080
+        if let Some(rest) = entry.strip_prefix('[') {
+            if let Some(close) = rest.find(']') {
+                let ipv6 = &rest[..close];
+                let remainder = &rest[close + 1..];
+                if remainder.is_empty() {
+                    // bare IPv6 literal — treat as host
+                    return Ok(NoProxyRule::Host(entry.to_owned()));
+                }
+                if let Some(port_str) = remainder.strip_prefix(':') {
+                    let port = port_str.parse::<u16>().map_err(|_| {
+                        Error::InvalidProxyUrl(format!("invalid port in NO_PROXY entry: {entry}"))
+                    })?;
+                    return Ok(NoProxyRule::HostPort(format!("[{ipv6}]"), port));
+                }
+            }
+        }
+
+        // Domain suffix: .example.com
+        if let Some(suffix) = entry.strip_prefix('.') {
+            if suffix.is_empty() {
+                return Err(Error::InvalidProxyUrl(
+                    "NO_PROXY entry cannot be just a dot".into(),
+                ));
+            }
+            return Ok(NoProxyRule::DomainSuffix(entry.to_owned()));
+        }
+
+        // host:port
+        if let Some(colon_pos) = entry.rfind(':') {
+            let host = &entry[..colon_pos];
+            let port_str = &entry[colon_pos + 1..];
+            if let Ok(port) = port_str.parse::<u16>() {
+                return Ok(NoProxyRule::HostPort(host.to_owned(), port));
+            }
+        }
+
+        // plain host
+        Ok(NoProxyRule::Host(entry.to_owned()))
+    }
+
+    /// Returns `true` if the given URL should bypass the proxy (go direct).
+    #[must_use]
+    pub fn should_bypass(&self, url: &url::Url) -> bool {
+        let host = url.host_str().unwrap_or("");
+        let port = url.port();
+
+        for rule in &self.rules {
+            match rule {
+                NoProxyRule::Wildcard => return true,
+                NoProxyRule::Localhost => {
+                    if Self::is_localhost(host) {
+                        return true;
+                    }
+                }
+                NoProxyRule::Host(h) => {
+                    if host.eq_ignore_ascii_case(h.as_str()) {
+                        return true;
+                    }
+                }
+                NoProxyRule::DomainSuffix(suffix) => {
+                    if Self::matches_domain_suffix(host, suffix) {
+                        return true;
+                    }
+                }
+                NoProxyRule::HostPort(h, p) => {
+                    let port_matches = match port {
+                        Some(pu) => pu == *p,
+                        None => Self::default_port_for_scheme(url.scheme()) == *p,
+                    };
+                    if port_matches && host.eq_ignore_ascii_case(h.as_str()) {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    }
+
+    fn is_localhost(host: &str) -> bool {
+        host == "localhost" || host == "127.0.0.1" || host == "::1" || host == "[::1]"
+    }
+
+    fn matches_domain_suffix(host: &str, suffix: &str) -> bool {
+        if host.eq_ignore_ascii_case(suffix) {
+            return true;
+        }
+        let host_lower = host.to_ascii_lowercase();
+        let suffix_lower = suffix.to_ascii_lowercase();
+        host_lower.ends_with(&suffix_lower)
+            || (suffix_lower.starts_with('.') && host_lower == suffix_lower[1..])
+    }
+
+    fn default_port_for_scheme(scheme: &str) -> u16 {
+        match scheme {
+            "https" => 443,
+            _ => 80,
+        }
+    }
+}
 
 /// Authentication credentials for proxy access.
 ///
@@ -183,6 +375,8 @@ pub struct Proxy {
     auth: Option<ProxyAuth>,
     /// Routing rule.
     rule: ProxyRule,
+    /// Optional `NO_PROXY` bypass rules.
+    bypass: Option<NoProxy>,
 }
 
 impl Proxy {
@@ -198,6 +392,7 @@ impl Proxy {
             uri,
             auth: None,
             rule: ProxyRule::All,
+            bypass: None,
         })
     }
 
@@ -212,6 +407,7 @@ impl Proxy {
             uri,
             auth: None,
             rule: ProxyRule::Http,
+            bypass: None,
         })
     }
 
@@ -226,6 +422,7 @@ impl Proxy {
             uri,
             auth: None,
             rule: ProxyRule::Https,
+            bypass: None,
         })
     }
 
@@ -234,6 +431,22 @@ impl Proxy {
     pub fn auth(mut self, auth: ProxyAuth) -> Self {
         self.auth = Some(auth);
         self
+    }
+
+    /// Set `NO_PROXY` bypass rules for this proxy.
+    ///
+    /// When a URL matches any bypass rule, the request is sent directly
+    /// without going through the proxy.
+    #[must_use]
+    pub fn no_proxy(mut self, no_proxy: NoProxy) -> Self {
+        self.bypass = Some(no_proxy);
+        self
+    }
+
+    /// Returns a reference to the `NO_PROXY` bypass rules, if configured.
+    #[must_use]
+    pub fn no_proxy_rules(&self) -> Option<&NoProxy> {
+        self.bypass.as_ref()
     }
 
     /// Determine whether a request with the given scheme should use
@@ -275,6 +488,7 @@ impl fmt::Debug for Proxy {
             .field("uri", &self.uri)
             .field("auth", &self.auth)
             .field("rule", &self.rule)
+            .field("bypass", &self.bypass)
             .finish()
     }
 }
@@ -479,5 +693,259 @@ mod tests {
         let proxy = Proxy::all("http://proxy:8080").unwrap().auth(auth);
         let config = proxy.config();
         assert!(config.auth().is_some());
+    }
+
+    #[test]
+    fn proxy_with_no_proxy() {
+        let np = NoProxy::parse("localhost").unwrap();
+        let proxy = Proxy::all("http://proxy:8080").unwrap().no_proxy(np);
+        assert!(proxy.no_proxy_rules().is_some());
+    }
+
+    #[test]
+    fn noparse_empty_string() {
+        let np = NoProxy::parse("").unwrap();
+        assert!(np.rules.is_empty());
+    }
+
+    #[test]
+    fn noparse_whitespace_only() {
+        let np = NoProxy::parse(" , , ").unwrap();
+        assert!(np.rules.is_empty());
+    }
+
+    #[test]
+    fn noparse_single_host() {
+        let np = NoProxy::parse("example.com").unwrap();
+        assert_eq!(np.rules.len(), 1);
+        assert_eq!(np.rules[0], NoProxyRule::Host("example.com".into()));
+    }
+
+    #[test]
+    fn noparse_domain_suffix() {
+        let np = NoProxy::parse(".example.com").unwrap();
+        assert_eq!(np.rules.len(), 1);
+        assert_eq!(
+            np.rules[0],
+            NoProxyRule::DomainSuffix(".example.com".into())
+        );
+    }
+
+    #[test]
+    fn noparse_host_port() {
+        let np = NoProxy::parse("example.com:8080").unwrap();
+        assert_eq!(np.rules.len(), 1);
+        assert_eq!(
+            np.rules[0],
+            NoProxyRule::HostPort("example.com".into(), 8080)
+        );
+    }
+
+    #[test]
+    fn noparse_localhost() {
+        let np = NoProxy::parse("localhost").unwrap();
+        assert_eq!(np.rules.len(), 1);
+        assert_eq!(np.rules[0], NoProxyRule::Localhost);
+    }
+
+    #[test]
+    fn noparse_wildcard() {
+        let np = NoProxy::parse("*").unwrap();
+        assert_eq!(np.rules.len(), 1);
+        assert_eq!(np.rules[0], NoProxyRule::Wildcard);
+    }
+
+    #[test]
+    fn noparse_mixed() {
+        let np = NoProxy::parse("localhost, .example.com, 10.0.0.1:8080").unwrap();
+        assert_eq!(np.rules.len(), 3);
+        assert_eq!(np.rules[0], NoProxyRule::Localhost);
+        assert_eq!(
+            np.rules[1],
+            NoProxyRule::DomainSuffix(".example.com".into())
+        );
+        assert_eq!(np.rules[2], NoProxyRule::HostPort("10.0.0.1".into(), 8080));
+    }
+
+    #[test]
+    fn noparse_ipv6_literal() {
+        let np = NoProxy::parse("[::1]").unwrap();
+        assert_eq!(np.rules.len(), 1);
+        assert_eq!(np.rules[0], NoProxyRule::Host("[::1]".into()));
+    }
+
+    #[test]
+    fn noparse_ipv6_with_port() {
+        let np = NoProxy::parse("[::1]:8080").unwrap();
+        assert_eq!(np.rules.len(), 1);
+        assert_eq!(np.rules[0], NoProxyRule::HostPort("[::1]".into(), 8080));
+    }
+
+    #[test]
+    fn noparse_invalid_port_treated_as_host() {
+        let np = NoProxy::parse("example.com:notaport").unwrap();
+        assert_eq!(np.rules.len(), 1);
+        assert_eq!(
+            np.rules[0],
+            NoProxyRule::Host("example.com:notaport".into())
+        );
+    }
+
+    #[test]
+    fn noparse_dot_only() {
+        let err = NoProxy::parse(".").unwrap_err();
+        assert_eq!(err.kind(), "invalid_proxy_url");
+    }
+
+    #[test]
+    fn nobypass_empty_rules() {
+        let np = NoProxy::parse("").unwrap();
+        let url = url::Url::parse("http://example.com").unwrap();
+        assert!(!np.should_bypass(&url));
+    }
+
+    #[test]
+    fn nobypass_exact_host() {
+        let np = NoProxy::parse("example.com").unwrap();
+        let url = url::Url::parse("http://example.com/path").unwrap();
+        assert!(np.should_bypass(&url));
+    }
+
+    #[test]
+    fn nobypass_exact_host_no_match() {
+        let np = NoProxy::parse("example.com").unwrap();
+        let url = url::Url::parse("http://other.com/path").unwrap();
+        assert!(!np.should_bypass(&url));
+    }
+
+    #[test]
+    fn nobypass_exact_host_case_insensitive() {
+        let np = NoProxy::parse("Example.Com").unwrap();
+        let url = url::Url::parse("http://example.com/path").unwrap();
+        assert!(np.should_bypass(&url));
+    }
+
+    #[test]
+    fn nobypass_domain_suffix_match() {
+        let np = NoProxy::parse(".example.com").unwrap();
+        let url = url::Url::parse("http://foo.example.com/path").unwrap();
+        assert!(np.should_bypass(&url));
+    }
+
+    #[test]
+    fn nobypass_domain_suffix_exact() {
+        let np = NoProxy::parse(".example.com").unwrap();
+        let url = url::Url::parse("http://example.com/path").unwrap();
+        assert!(np.should_bypass(&url));
+    }
+
+    #[test]
+    fn nobypass_domain_suffix_no_match() {
+        let np = NoProxy::parse(".example.com").unwrap();
+        let url = url::Url::parse("http://notexample.com/path").unwrap();
+        assert!(!np.should_bypass(&url));
+    }
+
+    #[test]
+    fn nobypass_host_port_match() {
+        let np = NoProxy::parse("example.com:8080").unwrap();
+        let url = url::Url::parse("http://example.com:8080/path").unwrap();
+        assert!(np.should_bypass(&url));
+    }
+
+    #[test]
+    fn nobypass_host_port_no_match_port() {
+        let np = NoProxy::parse("example.com:8080").unwrap();
+        let url = url::Url::parse("http://example.com:9090/path").unwrap();
+        assert!(!np.should_bypass(&url));
+    }
+
+    #[test]
+    fn nobypass_host_port_no_match_host() {
+        let np = NoProxy::parse("example.com:8080").unwrap();
+        let url = url::Url::parse("http://other.com:8080/path").unwrap();
+        assert!(!np.should_bypass(&url));
+    }
+
+    #[test]
+    fn nobypass_host_port_default_port_https() {
+        let np = NoProxy::parse("example.com:443").unwrap();
+        let url = url::Url::parse("https://example.com/path").unwrap();
+        assert!(np.should_bypass(&url));
+    }
+
+    #[test]
+    fn nobypass_host_port_default_port_http() {
+        let np = NoProxy::parse("example.com:80").unwrap();
+        let url = url::Url::parse("http://example.com/path").unwrap();
+        assert!(np.should_bypass(&url));
+    }
+
+    #[test]
+    fn nobypass_localhost_name() {
+        let np = NoProxy::parse("localhost").unwrap();
+        let url = url::Url::parse("http://localhost/path").unwrap();
+        assert!(np.should_bypass(&url));
+    }
+
+    #[test]
+    fn nobypass_localhost_127() {
+        let np = NoProxy::parse("localhost").unwrap();
+        let url = url::Url::parse("http://127.0.0.1/path").unwrap();
+        assert!(np.should_bypass(&url));
+    }
+
+    #[test]
+    fn nobypass_localhost_ipv6() {
+        let np = NoProxy::parse("localhost").unwrap();
+        let url = url::Url::parse("http://[::1]/path").unwrap();
+        assert!(np.should_bypass(&url));
+    }
+
+    #[test]
+    fn nobypass_localhost_not_matching() {
+        let np = NoProxy::parse("localhost").unwrap();
+        let url = url::Url::parse("http://example.com/path").unwrap();
+        assert!(!np.should_bypass(&url));
+    }
+
+    #[test]
+    fn nobypass_wildcard_matches_everything() {
+        let np = NoProxy::parse("*").unwrap();
+        let urls = [
+            "http://example.com",
+            "https://other.org",
+            "http://10.0.0.1:8080",
+            "http://localhost",
+        ];
+        for url_str in &urls {
+            let url = url::Url::parse(url_str).unwrap();
+            assert!(np.should_bypass(&url), "should bypass {url_str}");
+        }
+    }
+
+    #[test]
+    fn nobypass_ipv6_literal() {
+        let np = NoProxy::parse("[::1]").unwrap();
+        let url = url::Url::parse("http://[::1]/path").unwrap();
+        assert!(np.should_bypass(&url));
+    }
+
+    #[test]
+    fn nobypass_ipv4_literal() {
+        let np = NoProxy::parse("10.0.0.1").unwrap();
+        let url = url::Url::parse("http://10.0.0.1/path").unwrap();
+        assert!(np.should_bypass(&url));
+    }
+
+    #[test]
+    fn nobypass_multiple_rules_first_match() {
+        let np = NoProxy::parse("localhost, .example.com").unwrap();
+        let url1 = url::Url::parse("http://localhost/path").unwrap();
+        let url2 = url::Url::parse("http://foo.example.com/path").unwrap();
+        let url3 = url::Url::parse("http://other.com/path").unwrap();
+        assert!(np.should_bypass(&url1));
+        assert!(np.should_bypass(&url2));
+        assert!(!np.should_bypass(&url3));
     }
 }

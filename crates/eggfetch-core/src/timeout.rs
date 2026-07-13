@@ -6,12 +6,28 @@
 //! - **Pool**: time waiting for a connection slot from the pool.
 //! - **Connect**: time to establish the TCP connection and TLS handshake
 //!   (including DNS resolution).
+//! - **`ProxyConnect`**: TCP connection to the proxy server. Only applies
+//!   when a proxy is configured.
+//! - **`ProxyTls`**: TLS handshake over a CONNECT tunnel to the proxy.
+//!   Only applies to HTTPS targets routed through an HTTP proxy.
 //! - **Write**: time for the request body producer to yield each chunk.
 //!   Only applies to streamed request bodies; buffered bodies complete
 //!   synchronously.
 //! - **Read**: time to wait for response headers and each response body
 //!   chunk. The deadline resets on every chunk arrival.
 //! - **Total**: wall-clock cap across the entire request lifecycle.
+//!
+//! # Proxy timeout phases
+//!
+//! When a request is routed through a proxy, the connect phase splits
+//! into two sub-phases:
+//!
+//! 1. `ProxyConnect` — the TCP connection from the client to the proxy.
+//! 2. `ProxyTls` — the TLS handshake over the CONNECT tunnel (HTTPS
+//!    targets only).
+//!
+//! After the tunnel is established, regular `Connect`, `Send`, and
+//! `Receive` semantics apply to the destination.
 //!
 //! # Enforcement
 //!
@@ -44,6 +60,10 @@ pub enum TimeoutPhase {
     Pool,
     /// Establishing TCP connection and TLS handshake.
     Connect,
+    /// TCP connection to the proxy server.
+    ProxyConnect,
+    /// TLS handshake over a CONNECT tunnel to the proxy.
+    ProxyTls,
     /// Sending request headers and body.
     Write,
     /// Waiting for response headers or a response body chunk.
@@ -57,6 +77,8 @@ impl std::fmt::Display for TimeoutPhase {
         match self {
             Self::Pool => write!(f, "pool"),
             Self::Connect => write!(f, "connect"),
+            Self::ProxyConnect => write!(f, "proxy connect"),
+            Self::ProxyTls => write!(f, "proxy TLS"),
             Self::Read => write!(f, "read"),
             Self::Write => write!(f, "write"),
             Self::Total => write!(f, "total"),
@@ -348,6 +370,8 @@ mod tests {
     fn timeout_phase_display() {
         assert_eq!(TimeoutPhase::Pool.to_string(), "pool");
         assert_eq!(TimeoutPhase::Connect.to_string(), "connect");
+        assert_eq!(TimeoutPhase::ProxyConnect.to_string(), "proxy connect");
+        assert_eq!(TimeoutPhase::ProxyTls.to_string(), "proxy TLS");
         assert_eq!(TimeoutPhase::Write.to_string(), "write");
         assert_eq!(TimeoutPhase::Read.to_string(), "read");
         assert_eq!(TimeoutPhase::Total.to_string(), "total");

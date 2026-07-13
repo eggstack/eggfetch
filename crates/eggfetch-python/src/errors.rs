@@ -187,6 +187,8 @@ pub fn map_err(err: eggfetch_core::Error) -> PyErr {
             match phase {
                 TimeoutPhase::Pool => PoolTimeout::new_err(msg),
                 TimeoutPhase::Connect => ConnectTimeout::new_err(msg),
+                TimeoutPhase::ProxyConnect => ConnectTimeout::new_err(msg),
+                TimeoutPhase::ProxyTls => ConnectTimeout::new_err(msg),
                 TimeoutPhase::Read => ReadTimeout::new_err(msg),
                 TimeoutPhase::Write => WriteTimeout::new_err(msg),
                 TimeoutPhase::Total => TimeoutException::new_err(msg),

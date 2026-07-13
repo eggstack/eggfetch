@@ -571,6 +571,21 @@ impl Client {
         #[cfg(not(feature = "proxy"))]
         let effective_proxy: Option<()> = None;
 
+        #[cfg(feature = "proxy")]
+        let origin = match effective_proxy {
+            Some(ref proxy_config) => {
+                let is_tunnel = url.scheme() == "https";
+                OriginKey::from_url_with_proxy(
+                    url.scheme(),
+                    &url,
+                    proxy_config.host(),
+                    Some(proxy_config.port()),
+                    is_tunnel,
+                )
+            }
+            None => OriginKey::from_url(url.scheme(), &url),
+        };
+        #[cfg(not(feature = "proxy"))]
         let origin = OriginKey::from_url(url.scheme(), &url);
 
         let started = std::time::Instant::now();
@@ -625,6 +640,11 @@ impl Client {
         let response = match effective_proxy {
             #[cfg(feature = "proxy")]
             Some(ref proxy_config) => {
+                if headers.contains("proxy-authorization") && proxy_config.auth().is_some() {
+                    return Err(Error::ConflictingAuth(
+                        "conflict: both request Proxy-Authorization header and proxy auth are configured; remove one".into(),
+                    ));
+                }
                 send_proxy_request(
                     &url,
                     &method,
@@ -744,6 +764,7 @@ impl Client {
                 .proxy
                 .as_ref()
                 .filter(|p| p.should_use_for_scheme(url.scheme()))
+                .filter(|p| p.no_proxy_rules().map_or(true, |np| !np.should_bypass(url)))
                 .map(Proxy::config),
         }
     }
@@ -1074,6 +1095,19 @@ impl ClientBuilder {
         self
     }
 
+    /// Set `NO_PROXY` bypass rules for the default proxy.
+    ///
+    /// When set, URLs matching any bypass rule are sent directly
+    /// without going through the proxy.
+    #[cfg(feature = "proxy")]
+    #[must_use]
+    pub fn no_proxy(mut self, no_proxy: crate::proxy::NoProxy) -> Self {
+        if let Some(proxy) = self.proxy.take() {
+            self.proxy = Some(proxy.no_proxy(no_proxy));
+        }
+        self
+    }
+
     /// Enable or disable automatic response decompression.
     ///
     /// When enabled (the default), the client sends an
@@ -1246,7 +1280,7 @@ async fn connect_to_proxy(
             Ok(Err(e)) => return Err(e),
             Err(_) => {
                 return Err(Error::Timeout {
-                    phase: TimeoutPhase::Connect,
+                    phase: TimeoutPhase::ProxyConnect,
                     elapsed: dur,
                 });
             }
@@ -1377,10 +1411,26 @@ async fn send_https_connect_request(
     let domain = rustls::pki_types::ServerName::try_from(dest_host.to_owned())
         .map_err(|e| Error::Tls(format!("invalid TLS server name: {e}")))?;
 
-    let tls_stream = tls_connector
-        .connect(domain, tunnel)
-        .await
-        .map_err(|e| Error::Tls(format!("TLS handshake through tunnel failed: {e}")))?;
+    let tls_handshake = tls_connector.connect(domain, tunnel);
+    let tls_stream = match remaining_total {
+        Some(dur) => match tokio::time::timeout(dur, tls_handshake).await {
+            Ok(Ok(s)) => s,
+            Ok(Err(e)) => {
+                return Err(Error::Tls(format!(
+                    "TLS handshake through tunnel failed: {e}"
+                )))
+            }
+            Err(_) => {
+                return Err(Error::Timeout {
+                    phase: TimeoutPhase::ProxyTls,
+                    elapsed: dur,
+                });
+            }
+        },
+        None => tls_handshake
+            .await
+            .map_err(|e| Error::Tls(format!("TLS handshake through tunnel failed: {e}")))?,
+    };
 
     // Send the actual HTTP request over the TLS connection.
     let absolute_uri = dest_url.as_str();
@@ -1931,5 +1981,54 @@ mod tests {
         let err = parse_url("https://user:secret@example.com").unwrap_err();
         assert_eq!(err.kind(), "invalid_url");
         assert!(!err.to_string().contains("secret"));
+    }
+
+    #[cfg(feature = "proxy")]
+    #[tokio::test]
+    async fn proxy_auth_conflict_with_header() {
+        let proxy = Proxy::all("http://proxy.example:8080")
+            .unwrap()
+            .auth(ProxyAuth::basic("user", "pass").unwrap());
+        let client = Client::builder().proxy(proxy).build();
+        let request = client
+            .get("http://destination.example")
+            .unwrap()
+            .header("proxy-authorization", "Basic dXNlcjpwYXNz")
+            .build()
+            .unwrap();
+        let err = client.send(request).await.unwrap_err();
+        assert_eq!(err.kind(), "conflicting_auth");
+        assert!(err.to_string().contains("Proxy-Authorization"));
+    }
+
+    #[cfg(feature = "proxy")]
+    #[tokio::test]
+    async fn proxy_auth_no_conflict_without_header() {
+        let proxy = Proxy::all("http://proxy.example:8080")
+            .unwrap()
+            .auth(ProxyAuth::basic("user", "pass").unwrap());
+        let client = Client::builder().proxy(proxy).build();
+        let request = client
+            .get("http://destination.example")
+            .unwrap()
+            .build()
+            .unwrap();
+        let err = client.send(request).await.unwrap_err();
+        assert_ne!(err.kind(), "conflicting_auth");
+    }
+
+    #[cfg(feature = "proxy")]
+    #[tokio::test]
+    async fn proxy_auth_no_conflict_with_header_only() {
+        let proxy = Proxy::all("http://proxy.example:8080").unwrap();
+        let client = Client::builder().proxy(proxy).build();
+        let request = client
+            .get("http://destination.example")
+            .unwrap()
+            .header("proxy-authorization", "Basic dXNlcjpwYXNz")
+            .build()
+            .unwrap();
+        let err = client.send(request).await.unwrap_err();
+        assert_ne!(err.kind(), "conflicting_auth");
     }
 }

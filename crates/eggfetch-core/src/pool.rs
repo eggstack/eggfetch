@@ -15,6 +15,16 @@
 //!   and have independent per-origin limits.
 //! - `http://example.com:8080` is a distinct origin from
 //!   `http://example.com`.
+//!
+//! When a proxy is involved, the pool key extends to
+//! `(proxy_origin, destination_origin, tunnel_mode)`. This means:
+//!
+//! - Direct and proxied requests to the same destination have
+//!   independent concurrency slots.
+//! - Different proxies sharing the same destination get independent
+//!   slots.
+//! - HTTP forwarding and HTTPS CONNECT tunneling through the same
+//!   proxy are keyed separately.
 
 use std::fmt;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -47,7 +57,10 @@ pub struct PoolConfig {
 /// Origin key used for per-host pool slot acquisition.
 ///
 /// Combines scheme, host, and effective port (using the scheme default
-/// when the URL does not specify a port).
+/// when the URL does not specify a port). When a proxy is involved,
+/// the proxy endpoint and tunnel mode are also part of the key so that
+/// different proxies or tunnel vs direct connections get independent
+/// concurrency slots.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) struct OriginKey {
     /// URL scheme (`http` or `https`).
@@ -56,6 +69,13 @@ pub(crate) struct OriginKey {
     host: String,
     /// Effective port (explicit or default-for-scheme).
     port: u16,
+    /// Proxy hostname, if routed through a proxy.
+    proxy_host: Option<String>,
+    /// Proxy port, if routed through a proxy.
+    proxy_port: Option<u16>,
+    /// Whether this is a CONNECT tunnel (HTTPS through proxy) as
+    /// opposed to HTTP forwarding.
+    is_tunnel: bool,
 }
 
 impl OriginKey {
@@ -67,6 +87,29 @@ impl OriginKey {
             scheme: scheme.to_owned(),
             host,
             port,
+            proxy_host: None,
+            proxy_port: None,
+            is_tunnel: false,
+        })
+    }
+
+    /// Build an `OriginKey` that includes proxy route information.
+    pub(crate) fn from_url_with_proxy(
+        scheme: &str,
+        url: &url::Url,
+        proxy_host: Option<&str>,
+        proxy_port: Option<u16>,
+        is_tunnel: bool,
+    ) -> Option<Self> {
+        let host = url.host_str()?.to_owned();
+        let port = url.port_or_known_default()?;
+        Some(Self {
+            scheme: scheme.to_owned(),
+            host,
+            port,
+            proxy_host: proxy_host.map(str::to_owned),
+            proxy_port,
+            is_tunnel,
         })
     }
 
@@ -78,6 +121,31 @@ impl OriginKey {
             scheme: scheme.to_owned(),
             host: host.to_owned(),
             port,
+            proxy_host: None,
+            proxy_port: None,
+            is_tunnel: false,
+        }
+    }
+
+    /// Build an `OriginKey` with proxy route info for tests or callers
+    /// that already have all components.
+    #[cfg(feature = "proxy")]
+    #[allow(dead_code)]
+    pub(crate) fn from_parts_with_proxy(
+        scheme: &str,
+        host: &str,
+        port: u16,
+        proxy_host: Option<&str>,
+        proxy_port: Option<u16>,
+        is_tunnel: bool,
+    ) -> Self {
+        Self {
+            scheme: scheme.to_owned(),
+            host: host.to_owned(),
+            port,
+            proxy_host: proxy_host.map(str::to_owned),
+            proxy_port,
+            is_tunnel,
         }
     }
 
@@ -97,11 +165,36 @@ impl OriginKey {
     pub(crate) fn port(&self) -> u16 {
         self.port
     }
+
+    /// Returns the proxy hostname, if any.
+    #[allow(dead_code)]
+    pub(crate) fn proxy_host(&self) -> Option<&str> {
+        self.proxy_host.as_deref()
+    }
+
+    /// Returns the proxy port, if any.
+    #[allow(dead_code)]
+    pub(crate) fn proxy_port(&self) -> Option<u16> {
+        self.proxy_port
+    }
+
+    /// Returns whether this key represents a CONNECT tunnel.
+    #[allow(dead_code)]
+    pub(crate) fn is_tunnel(&self) -> bool {
+        self.is_tunnel
+    }
 }
 
 impl fmt::Display for OriginKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}://{}:{}", self.scheme, self.host, self.port)
+        write!(f, "{}://{}:{}", self.scheme, self.host, self.port)?;
+        if let (Some(ref ph), Some(pp)) = (&self.proxy_host, self.proxy_port) {
+            write!(f, " via {ph}:{pp}")?;
+            if self.is_tunnel {
+                write!(f, " tunnel")?;
+            }
+        }
+        Ok(())
     }
 }
 
@@ -513,5 +606,150 @@ mod tests {
         let k_default = OriginKey::from_url("http", &default).unwrap();
         assert_eq!(k_explicit.port(), 8080);
         assert_eq!(k_default.port(), 80);
+    }
+
+    #[test]
+    fn origin_key_direct_has_no_proxy() {
+        let key = OriginKey::from_parts("http", "example.com", 80);
+        assert!(key.proxy_host().is_none());
+        assert!(key.proxy_port().is_none());
+        assert!(!key.is_tunnel());
+    }
+
+    #[cfg(feature = "proxy")]
+    #[test]
+    fn origin_key_proxy_a_not_equal_proxy_b() {
+        let url = url::Url::parse("http://example.com/path").unwrap();
+        let a = OriginKey::from_url_with_proxy("http", &url, Some("proxy-a"), Some(8080), false)
+            .unwrap();
+        let b = OriginKey::from_url_with_proxy("http", &url, Some("proxy-b"), Some(8080), false)
+            .unwrap();
+        assert_ne!(a, b);
+    }
+
+    #[cfg(feature = "proxy")]
+    #[test]
+    fn origin_key_tunnel_not_equal_non_tunnel() {
+        let url = url::Url::parse("http://example.com/path").unwrap();
+        let tunnel =
+            OriginKey::from_url_with_proxy("http", &url, Some("proxy"), Some(8080), true).unwrap();
+        let direct =
+            OriginKey::from_url_with_proxy("http", &url, Some("proxy"), Some(8080), false).unwrap();
+        assert_ne!(tunnel, direct);
+    }
+
+    #[cfg(feature = "proxy")]
+    #[test]
+    fn origin_key_proxy_same_route_equal() {
+        let url = url::Url::parse("http://example.com/path").unwrap();
+        let a =
+            OriginKey::from_url_with_proxy("http", &url, Some("proxy"), Some(8080), false).unwrap();
+        let b =
+            OriginKey::from_url_with_proxy("http", &url, Some("proxy"), Some(8080), false).unwrap();
+        assert_eq!(a, b);
+    }
+
+    #[cfg(feature = "proxy")]
+    #[test]
+    fn origin_key_display_with_proxy() {
+        let url = url::Url::parse("https://example.com/path").unwrap();
+        let key =
+            OriginKey::from_url_with_proxy("https", &url, Some("proxy"), Some(8080), true).unwrap();
+        assert_eq!(
+            key.to_string(),
+            "https://example.com:443 via proxy:8080 tunnel"
+        );
+    }
+
+    #[cfg(feature = "proxy")]
+    #[test]
+    fn origin_key_display_without_tunnel() {
+        let url = url::Url::parse("http://example.com/path").unwrap();
+        let key =
+            OriginKey::from_url_with_proxy("http", &url, Some("proxy"), Some(8080), false).unwrap();
+        assert_eq!(key.to_string(), "http://example.com:80 via proxy:8080");
+    }
+
+    #[cfg(feature = "proxy")]
+    #[tokio::test]
+    async fn proxy_route_separate_from_direct() {
+        let config = PoolConfig {
+            max_connections_per_host: Some(1),
+            ..Default::default()
+        };
+        let pool = Pool::new(config);
+        let direct = OriginKey::from_parts("http", "example.com", 80);
+        let proxied = OriginKey::from_parts_with_proxy(
+            "http",
+            "example.com",
+            80,
+            Some("proxy"),
+            Some(8080),
+            false,
+        );
+        let g1 = pool.acquire(Some(&direct)).await;
+        let g2 = pool.acquire(Some(&proxied)).await;
+        assert!(g1.origin().is_some());
+        assert!(g2.origin().is_some());
+    }
+
+    #[cfg(feature = "proxy")]
+    #[tokio::test]
+    async fn tunnel_separate_from_non_tunnel() {
+        let config = PoolConfig {
+            max_connections_per_host: Some(1),
+            ..Default::default()
+        };
+        let pool = Pool::new(config);
+        let http_fwd = OriginKey::from_parts_with_proxy(
+            "http",
+            "example.com",
+            80,
+            Some("proxy"),
+            Some(8080),
+            false,
+        );
+        let https_tunnel = OriginKey::from_parts_with_proxy(
+            "http",
+            "example.com",
+            80,
+            Some("proxy"),
+            Some(8080),
+            true,
+        );
+        let g1 = pool.acquire(Some(&http_fwd)).await;
+        let g2 = pool.acquire(Some(&https_tunnel)).await;
+        assert!(g1.origin().is_some());
+        assert!(g2.origin().is_some());
+    }
+
+    #[cfg(feature = "proxy")]
+    #[tokio::test]
+    async fn different_proxies_separate_semaphores() {
+        let config = PoolConfig {
+            max_connections_per_host: Some(1),
+            ..Default::default()
+        };
+        let pool = Pool::new(config);
+        let a = OriginKey::from_parts_with_proxy(
+            "http",
+            "example.com",
+            80,
+            Some("proxy-a"),
+            Some(8080),
+            false,
+        );
+        let b = OriginKey::from_parts_with_proxy(
+            "http",
+            "example.com",
+            80,
+            Some("proxy-b"),
+            Some(8080),
+            false,
+        );
+        let g1 = pool.acquire(Some(&a)).await;
+        let g2 = pool.acquire(Some(&b)).await;
+        assert!(g1.origin().is_some());
+        assert!(g2.origin().is_some());
     }
 }

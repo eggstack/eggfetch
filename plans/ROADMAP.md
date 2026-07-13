@@ -151,7 +151,7 @@ Implement:
 - HTTPS CONNECT tunneling
 - proxy authentication
 - per-request/client proxy configuration
-- `NO_PROXY`-style bypass behavior if deliberately supported
+- `NO_PROXY`-style bypass matching
 - later SOCKS5 support behind a feature
 
 Proxy logic belongs in the core connector/transport layer.

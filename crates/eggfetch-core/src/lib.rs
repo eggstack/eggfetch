@@ -55,7 +55,7 @@ pub use http::Method;
 pub use multipart::{Boundary, Multipart, MultipartEncoder, Part, PartBody};
 pub use pool::{Pool, PoolConfig};
 #[cfg(feature = "proxy")]
-pub use proxy::{Proxy, ProxyAuth, ProxyConfig, ProxyDecision, ProxyRule};
+pub use proxy::{NoProxy, NoProxyRule, Proxy, ProxyAuth, ProxyConfig, ProxyDecision, ProxyRule};
 pub use redirect::RedirectPolicy;
 pub use request::{ProxyOverride, Request, RequestBuilder};
 pub use response::{HistoryEntry, Response};

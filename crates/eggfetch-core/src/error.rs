@@ -164,6 +164,8 @@ impl Error {
             Self::Timeout { phase, .. } => match phase {
                 crate::timeout::TimeoutPhase::Pool => "timeout_pool",
                 crate::timeout::TimeoutPhase::Connect => "timeout_connect",
+                crate::timeout::TimeoutPhase::ProxyConnect => "timeout_proxy_connect",
+                crate::timeout::TimeoutPhase::ProxyTls => "timeout_proxy_tls",
                 crate::timeout::TimeoutPhase::Write => "timeout_write",
                 crate::timeout::TimeoutPhase::Read => "timeout_read",
                 crate::timeout::TimeoutPhase::Total => "timeout_total",
