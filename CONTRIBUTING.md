@@ -69,7 +69,7 @@ See `docs/architecture/dependency-policy.md` for the full dependency policy.
 
 Do not add a feature flag just to silence a clippy lint or to opt into behavior that should be unconditional. Feature flags exist to let users pay only for what they use. Do not enable optional behavior in `default` without discussion.
 
-Current `eggfetch-core` features:
+Current `eggfetch-core` feature declarations:
 
 ```toml
 default = ["http1", "tls-rustls"]
@@ -85,7 +85,12 @@ proxy = []
 tracing = []
 ```
 
-The `http1` and `tls-rustls` features are implemented and wired to real dependency features (default). The remaining features represent intended capability, not current behavior. See `docs/architecture/feature-flags.md` for details.
+HTTP/1.1 and Rustls are implemented. `cookies` is implemented but remains
+opt-in in core and is enabled by the Python binding. Compression, proxy,
+HTTP/2, tracing, and JSON feature names are reserved until their milestones
+land. The current transport dependencies remain available in all compile
+combinations so the no-default feature check is meaningful. See
+`docs/architecture/feature-flags.md` for details.
 
 ## Compatibility Expectations
 
@@ -104,3 +109,13 @@ If you find yourself writing HTTP logic outside of eggfetch-core, stop and refac
 eggfetch follows a milestone-driven development sequence (A through N+). Before starting work, read `plans/ROADMAP.md` and the relevant milestone plan in `plans/`. Each milestone is a handoff boundary: finish one before starting the next. A clean baseline matters more than an early partial implementation.
 
 Make the workspace build green before adding new functionality. Format before committing. Do not bypass CI to land changes.
+
+## CI and branch protection
+
+Actions run on pushes and pull requests to `main`. The required visible checks
+are the Rust formatting, Rust clippy, Rust build/tests, and Rust documentation
+jobs, plus the Python matrix and wheel-smoke matrix. A
+maintainer enabling branch protection should require all three job families,
+require branches to be up to date before merge, and disallow force pushes to
+`main`. The wheel smoke job is intentionally separate from source-build tests
+so packaging regressions cannot hide behind a passing test matrix.

@@ -347,6 +347,13 @@ class TestAsyncClientClosed:
             assert client.is_closed
         asyncio.run(_test())
 
+    def test_aclose_is_awaitable(self):
+        async def _test():
+            client = eggfetch.AsyncClient()
+            await client.aclose()
+            assert client.is_closed
+        asyncio.run(_test())
+
 
 # ---------------------------------------------------------------------------
 # Error mapping

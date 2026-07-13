@@ -360,12 +360,6 @@ class TestSpecialCharCredentials:
             auth=eggfetch.BearerAuth(token),
         )
         data = resp.json()
-        # HTTP headers are ISO-8859-1 per spec; the server misreads UTF-8
-        # bytes as Latin-1, so we verify the raw header bytes match.
-        import base64
-        raw = base64.b64decode(
-            base64.b64encode(token.encode("utf-8")).decode()
-        )
         assert data["auth"] is not None
         assert data["auth"].startswith("Bearer ")
         resp.close()

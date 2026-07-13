@@ -11,15 +11,30 @@ env:
   RUSTFLAGS: -D warnings
 
 jobs:
-  check:
-    name: fmt / clippy / build / test / doc
+  rust-format:
+    name: Rust formatting
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Format check
+        run: cargo fmt --all -- --check
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+  rust-lint:
+    name: Rust clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
+  rust-test:
+    name: Rust build and tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
       - name: Cache cargo registry and target
         uses: actions/cache@v4
         with:
@@ -30,20 +45,23 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
-
-      - name: Format check
-        run: cargo fmt --all -- --check
-
-      - name: Clippy
-        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
-
       - name: Build
         run: cargo check --workspace --all-features
-
-      - name: Test
+      - name: Feature matrix
+        run: |
+          cargo check -p eggfetch-core --no-default-features
+          cargo check -p eggfetch-core --no-default-features --features http1,tls-rustls
+          cargo check -p eggfetch-core --all-features
+      - name: Tests
         run: cargo test --workspace --all-features
 
-      - name: Doc
+  rust-doc:
+    name: Rust documentation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Documentation
         run: cargo doc --workspace --all-features --no-deps
 
   python:
@@ -52,7 +70,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
         python-version: ["3.10", "3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
@@ -77,10 +95,42 @@ jobs:
             ${{ runner.os }}-py${{ matrix.python-version }}-cargo-
 
       - name: Install maturin and pytest
-        run: pip install maturin pytest
+        run: pip install maturin pytest pytest-asyncio
 
       - name: Build and install
-        run: PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1 maturin develop -m crates/eggfetch-python/Cargo.toml
+        env:
+          PYO3_USE_ABI3_FORWARD_COMPATIBILITY: "1"
+        run: maturin develop -m crates/eggfetch-python/Cargo.toml
 
       - name: Python tests
         run: pytest crates/eggfetch-python/tests/ -v
+
+  wheel-smoke:
+    name: Wheel smoke (py${{ matrix.python-version }}, ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ["3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install build tooling
+        run: python -m pip install maturin
+
+      - name: Build wheel
+        env:
+          PYO3_USE_ABI3_FORWARD_COMPATIBILITY: "1"
+        run: maturin build --release --manifest-path crates/eggfetch-python/Cargo.toml --out dist
+
+      - name: Install and smoke-test wheel in a clean environment
+        run: python scripts/wheel_smoke.py --wheel-dir dist

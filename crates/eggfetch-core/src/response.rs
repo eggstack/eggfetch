@@ -16,7 +16,7 @@ use std::task::{Context, Poll};
 
 use bytes::{Bytes, BytesMut};
 use futures_core::Stream;
-use http::{HeaderMap, StatusCode, Version};
+use http::{HeaderMap, HeaderValue, StatusCode, Version};
 use url::Url;
 
 use crate::body::{BoxBytesStream, ResponseBody};
@@ -27,13 +27,25 @@ use crate::error::Result;
 /// History entries intentionally omit the response body. This makes it
 /// structurally impossible for redirect history to retain active body
 /// streams or pool permits.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct HistoryEntry {
     status: StatusCode,
     version: Version,
     headers: HeaderMap,
     url: Url,
     reason_phrase: String,
+}
+
+impl std::fmt::Debug for HistoryEntry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("HistoryEntry")
+            .field("status", &self.status)
+            .field("version", &self.version)
+            .field("headers", &redacted_headers(&self.headers))
+            .field("url", &redacted_url(&self.url))
+            .field("reason_phrase", &self.reason_phrase)
+            .finish()
+    }
 }
 
 impl HistoryEntry {
@@ -96,12 +108,37 @@ impl std::fmt::Debug for Response {
         f.debug_struct("Response")
             .field("status", &self.status)
             .field("version", &self.version)
-            .field("headers", &self.headers)
-            .field("url", &self.url)
+            .field("headers", &redacted_headers(&self.headers))
+            .field("url", &redacted_url(&self.url))
             .field("body", &self.body)
             .field("history", &self.history)
             .finish()
     }
+}
+
+fn redacted_headers(headers: &HeaderMap) -> HeaderMap {
+    let mut redacted = headers.clone();
+    for name in [
+        "authorization",
+        "proxy-authorization",
+        "cookie",
+        "set-cookie",
+    ] {
+        if redacted.contains_key(name) {
+            redacted.remove(name);
+            redacted.insert(name, HeaderValue::from_static("<redacted>"));
+        }
+    }
+    redacted
+}
+
+fn redacted_url(url: &Url) -> String {
+    let mut safe = url.clone();
+    let _ = safe.set_username("");
+    let _ = safe.set_password(None);
+    safe.set_query(None);
+    safe.set_fragment(None);
+    safe.to_string()
 }
 
 impl Response {
@@ -306,6 +343,24 @@ impl Stream for LineStream {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn response_debug_redacts_sensitive_headers_and_url_parts() {
+        let mut headers = HeaderMap::new();
+        headers.insert("authorization", HeaderValue::from_static("Bearer secret"));
+        headers.insert("set-cookie", HeaderValue::from_static("session=secret"));
+        let response = Response::new(
+            StatusCode::FOUND,
+            Version::HTTP_11,
+            headers,
+            Url::parse("https://user:pass@example.com/path?token=secret#fragment").unwrap(),
+            ResponseBody::buffered(Bytes::new()),
+        );
+        let rendered = format!("{response:?}");
+        assert!(!rendered.contains("secret"));
+        assert!(!rendered.contains("user:pass"));
+        assert!(rendered.contains("https://example.com/path"));
+    }
     use futures_util::StreamExt;
 
     #[tokio::test]

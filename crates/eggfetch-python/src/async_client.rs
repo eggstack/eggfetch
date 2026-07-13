@@ -4,8 +4,8 @@ use pyo3::prelude::*;
 
 use crate::auth;
 use crate::conversion::{
-    build_request_body, parse_timeout, python_headers_to_rust, python_params_to_url,
-    validate_body_kwargs,
+    build_request_body, parse_timeout, python_cookies_to_header, python_headers_to_rust,
+    python_params_to_url, validate_body_kwargs,
 };
 use crate::cookies::PyCookies;
 use crate::errors::map_err;
@@ -97,7 +97,7 @@ impl PyAsyncClient {
     }
 
     /// Send an HTTP request asynchronously.
-    #[pyo3(signature = (method, url, *, headers=None, params=None, content=None, data=None, json=None, timeout=None, auth=None, follow_redirects=None, max_redirects=None))]
+    #[pyo3(signature = (method, url, *, headers=None, params=None, content=None, data=None, json=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None))]
     #[allow(clippy::too_many_arguments)]
     fn request<'py>(
         &self,
@@ -110,6 +110,7 @@ impl PyAsyncClient {
         data: Option<&Bound<'py, PyAny>>,
         json: Option<&Bound<'py, PyAny>>,
         timeout: Option<&Bound<'py, PyAny>>,
+        cookies: Option<&Bound<'py, PyAny>>,
         auth: Option<&Bound<'py, PyAny>>,
         follow_redirects: Option<bool>,
         max_redirects: Option<usize>,
@@ -144,6 +145,14 @@ impl PyAsyncClient {
         if let Some(ct) = auto_content_type {
             if !rust_headers.contains("content-type") {
                 rust_headers.insert("content-type", ct).map_err(map_err)?;
+            }
+        }
+
+        if let Some(cookie_header) = python_cookies_to_header(cookies, &target_url)? {
+            if !rust_headers.contains("cookie") {
+                rust_headers
+                    .insert("cookie", &cookie_header)
+                    .map_err(map_err)?;
             }
         }
 
@@ -197,7 +206,7 @@ impl PyAsyncClient {
     }
 
     /// Send a GET request asynchronously.
-    #[pyo3(signature = (url, *, headers=None, params=None, timeout=None, auth=None, follow_redirects=None, max_redirects=None))]
+    #[pyo3(signature = (url, *, headers=None, params=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None))]
     #[allow(clippy::too_many_arguments)]
     fn get<'py>(
         &self,
@@ -206,6 +215,7 @@ impl PyAsyncClient {
         headers: Option<&Bound<'py, PyAny>>,
         params: Option<&Bound<'py, PyAny>>,
         timeout: Option<&Bound<'py, PyAny>>,
+        cookies: Option<&Bound<'py, PyAny>>,
         auth: Option<&Bound<'py, PyAny>>,
         follow_redirects: Option<bool>,
         max_redirects: Option<usize>,
@@ -220,6 +230,7 @@ impl PyAsyncClient {
             None,
             None,
             timeout,
+            cookies,
             auth,
             follow_redirects,
             max_redirects,
@@ -227,7 +238,7 @@ impl PyAsyncClient {
     }
 
     /// Send a POST request asynchronously.
-    #[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, timeout=None, auth=None, follow_redirects=None, max_redirects=None))]
+    #[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None))]
     #[allow(clippy::too_many_arguments)]
     fn post<'py>(
         &self,
@@ -239,6 +250,7 @@ impl PyAsyncClient {
         data: Option<&Bound<'py, PyAny>>,
         json: Option<&Bound<'py, PyAny>>,
         timeout: Option<&Bound<'py, PyAny>>,
+        cookies: Option<&Bound<'py, PyAny>>,
         auth: Option<&Bound<'py, PyAny>>,
         follow_redirects: Option<bool>,
         max_redirects: Option<usize>,
@@ -253,6 +265,7 @@ impl PyAsyncClient {
             data,
             json,
             timeout,
+            cookies,
             auth,
             follow_redirects,
             max_redirects,
@@ -260,7 +273,7 @@ impl PyAsyncClient {
     }
 
     /// Send a PUT request asynchronously.
-    #[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, timeout=None, auth=None, follow_redirects=None, max_redirects=None))]
+    #[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None))]
     #[allow(clippy::too_many_arguments)]
     fn put<'py>(
         &self,
@@ -272,6 +285,7 @@ impl PyAsyncClient {
         data: Option<&Bound<'py, PyAny>>,
         json: Option<&Bound<'py, PyAny>>,
         timeout: Option<&Bound<'py, PyAny>>,
+        cookies: Option<&Bound<'py, PyAny>>,
         auth: Option<&Bound<'py, PyAny>>,
         follow_redirects: Option<bool>,
         max_redirects: Option<usize>,
@@ -286,6 +300,7 @@ impl PyAsyncClient {
             data,
             json,
             timeout,
+            cookies,
             auth,
             follow_redirects,
             max_redirects,
@@ -293,7 +308,7 @@ impl PyAsyncClient {
     }
 
     /// Send a PATCH request asynchronously.
-    #[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, timeout=None, auth=None, follow_redirects=None, max_redirects=None))]
+    #[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None))]
     #[allow(clippy::too_many_arguments)]
     fn patch<'py>(
         &self,
@@ -305,6 +320,7 @@ impl PyAsyncClient {
         data: Option<&Bound<'py, PyAny>>,
         json: Option<&Bound<'py, PyAny>>,
         timeout: Option<&Bound<'py, PyAny>>,
+        cookies: Option<&Bound<'py, PyAny>>,
         auth: Option<&Bound<'py, PyAny>>,
         follow_redirects: Option<bool>,
         max_redirects: Option<usize>,
@@ -319,6 +335,7 @@ impl PyAsyncClient {
             data,
             json,
             timeout,
+            cookies,
             auth,
             follow_redirects,
             max_redirects,
@@ -326,7 +343,7 @@ impl PyAsyncClient {
     }
 
     /// Send a DELETE request asynchronously.
-    #[pyo3(signature = (url, *, headers=None, params=None, timeout=None, auth=None, follow_redirects=None, max_redirects=None))]
+    #[pyo3(signature = (url, *, headers=None, params=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None))]
     #[allow(clippy::too_many_arguments)]
     fn delete<'py>(
         &self,
@@ -335,6 +352,7 @@ impl PyAsyncClient {
         headers: Option<&Bound<'py, PyAny>>,
         params: Option<&Bound<'py, PyAny>>,
         timeout: Option<&Bound<'py, PyAny>>,
+        cookies: Option<&Bound<'py, PyAny>>,
         auth: Option<&Bound<'py, PyAny>>,
         follow_redirects: Option<bool>,
         max_redirects: Option<usize>,
@@ -349,6 +367,7 @@ impl PyAsyncClient {
             None,
             None,
             timeout,
+            cookies,
             auth,
             follow_redirects,
             max_redirects,
@@ -356,7 +375,7 @@ impl PyAsyncClient {
     }
 
     /// Send a HEAD request asynchronously.
-    #[pyo3(signature = (url, *, headers=None, params=None, timeout=None, auth=None, follow_redirects=None, max_redirects=None))]
+    #[pyo3(signature = (url, *, headers=None, params=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None))]
     #[allow(clippy::too_many_arguments)]
     fn head<'py>(
         &self,
@@ -365,6 +384,7 @@ impl PyAsyncClient {
         headers: Option<&Bound<'py, PyAny>>,
         params: Option<&Bound<'py, PyAny>>,
         timeout: Option<&Bound<'py, PyAny>>,
+        cookies: Option<&Bound<'py, PyAny>>,
         auth: Option<&Bound<'py, PyAny>>,
         follow_redirects: Option<bool>,
         max_redirects: Option<usize>,
@@ -379,6 +399,7 @@ impl PyAsyncClient {
             None,
             None,
             timeout,
+            cookies,
             auth,
             follow_redirects,
             max_redirects,
@@ -386,7 +407,7 @@ impl PyAsyncClient {
     }
 
     /// Send an OPTIONS request asynchronously.
-    #[pyo3(signature = (url, *, headers=None, params=None, timeout=None, auth=None, follow_redirects=None, max_redirects=None))]
+    #[pyo3(signature = (url, *, headers=None, params=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None))]
     #[allow(clippy::too_many_arguments)]
     fn options<'py>(
         &self,
@@ -395,6 +416,7 @@ impl PyAsyncClient {
         headers: Option<&Bound<'py, PyAny>>,
         params: Option<&Bound<'py, PyAny>>,
         timeout: Option<&Bound<'py, PyAny>>,
+        cookies: Option<&Bound<'py, PyAny>>,
         auth: Option<&Bound<'py, PyAny>>,
         follow_redirects: Option<bool>,
         max_redirects: Option<usize>,
@@ -409,6 +431,7 @@ impl PyAsyncClient {
             None,
             None,
             timeout,
+            cookies,
             auth,
             follow_redirects,
             max_redirects,
@@ -416,7 +439,7 @@ impl PyAsyncClient {
     }
 
     /// Send a streaming HTTP request asynchronously.
-    #[pyo3(signature = (method, url, *, headers=None, params=None, content=None, data=None, json=None, timeout=None, auth=None, follow_redirects=None, max_redirects=None))]
+    #[pyo3(signature = (method, url, *, headers=None, params=None, content=None, data=None, json=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None))]
     #[allow(clippy::too_many_arguments)]
     fn stream<'py>(
         &self,
@@ -429,6 +452,7 @@ impl PyAsyncClient {
         data: Option<&Bound<'py, PyAny>>,
         json: Option<&Bound<'py, PyAny>>,
         timeout: Option<&Bound<'py, PyAny>>,
+        cookies: Option<&Bound<'py, PyAny>>,
         auth: Option<&Bound<'py, PyAny>>,
         follow_redirects: Option<bool>,
         max_redirects: Option<usize>,
@@ -463,6 +487,14 @@ impl PyAsyncClient {
         if let Some(ct) = auto_content_type {
             if !rust_headers.contains("content-type") {
                 rust_headers.insert("content-type", ct).map_err(map_err)?;
+            }
+        }
+
+        if let Some(cookie_header) = python_cookies_to_header(cookies, &target_url)? {
+            if !rust_headers.contains("cookie") {
+                rust_headers
+                    .insert("cookie", &cookie_header)
+                    .map_err(map_err)?;
             }
         }
 
@@ -521,6 +553,12 @@ impl PyAsyncClient {
         if !self.closed {
             self.closed = true;
         }
+    }
+
+    /// Close the client through an awaitable API.
+    fn aclose<'py>(&mut self, py: Python<'py>) -> PyResult<Bound<'py, pyo3::PyAny>> {
+        self.close();
+        pyo3_async_runtimes::tokio::future_into_py(py, async { Ok(()) })
     }
 
     /// Returns True if the client has been closed.

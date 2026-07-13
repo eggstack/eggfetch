@@ -1,6 +1,10 @@
 # Feature Flags
 
-eggfetch-core uses feature flags to let users opt into capabilities they need. The default feature set is minimal.
+eggfetch-core uses feature flags to reserve optional capabilities and to keep
+the public feature matrix explicit. The current transport implementation is
+HTTP/1.1 over Rustls; its direct transport dependencies remain unconditional
+so `--no-default-features` is a supported compile check, not a no-network
+build.
 
 ## Current Features
 
@@ -27,7 +31,9 @@ tracing = []
 default = ["http1", "tls-rustls"]
 ```
 
-The defaults enable HTTP/1.1 and Rustls TLS. This is the minimal set required for a useful HTTPS client. Users who want HTTP/2, compression, cookies, proxy support, JSON, or tracing must opt in explicitly.
+The defaults advertise HTTP/1.1 and Rustls TLS. Cookies are deliberately not
+enabled by the core default feature set; the Python binding enables them for
+its public cookie API.
 
 ## Feature Reference
 
@@ -45,7 +51,11 @@ Enables HTTP/2 support. HTTP/2 is a later expansion, not an MVP requirement.
 ### tls-rustls
 
 **Status:** implemented (Milestone B).
-Enables TLS via Rustls. This is preferred over native TLS for portability and auditability. The feature gates the rustls, tokio-rustls, and hyper-rustls dependencies.
+Enables the Rustls transport configuration. Native roots are preferred at
+runtime and packaged WebPKI roots are used only when native roots are
+unavailable. Verification failures never trigger the fallback. The current
+Cargo dependency graph keeps the transport crates available in all core
+feature combinations so disabled-feature checks remain buildable.
 
 ### json
 
@@ -75,6 +85,9 @@ Enables Zstandard decompression of response bodies.
 **Status:** implemented (Milestone O).
 Enables cookie jar support for persistent cookies across requests. Provides RFC 6265 cookie parsing, domain/path matching, cookie jar with thread-safe storage, and automatic Set-Cookie ingestion on responses. The Python crate exposes `client.cookies`, `response.cookies`, and a `cookies=` kwarg for initial cookies.
 
+Python request-local `cookies=` values are serialized into the request header,
+are not persisted in the client jar, and are removed on cross-origin redirects.
+
 ### proxy
 
 **Status:** planned, not implemented.
@@ -92,3 +105,15 @@ Enables structured logging via the tracing ecosystem. This is opt-in to avoid pu
 - Do not enable optional behavior in `default` without discussion.
 - Every feature must have a clear purpose and be documented here.
 - Features that are not core to HTTP/1.1 client behavior stay optional.
+
+## Validation matrix
+
+The repository validates the following core combinations in CI and before a
+release:
+
+```text
+cargo check -p eggfetch-core --no-default-features
+cargo check -p eggfetch-core --no-default-features --features http1,tls-rustls
+cargo check -p eggfetch-core --all-features
+cargo test -p eggfetch-core --all-features
+```

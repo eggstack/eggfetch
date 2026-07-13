@@ -19,6 +19,7 @@ eggfetch follows a milestone-driven development sequence: A through M. Each mile
 - O: Cookie subsystem (complete)
 - P: Authentication subsystem (complete)
 - N: Semantic tightening and public-API stabilization (complete)
+- Validation polish after Milestone N (complete before Q)
 - K: CLI
 - L: Correctness and differential testing
 - M: Documentation and public MVP preparation
@@ -63,6 +64,32 @@ Prefer small, focused tests colocated with the module under test. Use `#[cfg(tes
 ```sh
 cargo test --workspace --all-features
 ```
+
+The validation pass also requires the core feature matrix, Python async
+plugin, and wheel smoke path:
+
+```sh
+cargo check -p eggfetch-core --no-default-features
+cargo check -p eggfetch-core --no-default-features --features http1,tls-rustls
+cargo check -p eggfetch-core --all-features
+cargo test -p eggfetch-core --all-features
+cd crates/eggfetch-python
+maturin develop
+python -m pytest -p pytest_asyncio
+maturin build
+```
+
+The supported CI matrix is Python 3.10–3.13 on Ubuntu, macOS, and Windows.
+CI must install `pytest-asyncio`; `asyncio_mode = "auto"` alone does not
+provide the plugin. Wheel checks build a wheel, install it into a clean
+environment, and exercise both a local GET and a streaming response.
+
+Streaming lifecycle policy: `StreamingResponse` starts live, a buffered read
+owns the body until it reaches `buffered`, iterators transfer ownership to
+`consumed`, and explicit/context-manager close is terminal. Closing a response
+signals active readers and iterator producers. A response may outlive its
+client because the core response owns its body lease; closing the client only
+prevents new requests and does not invalidate an already returned response.
 
 The workspace has ~324 Rust tests and ~341 Python tests covering construction, streaming, timeouts, pools, headers, integration scenarios, Python sync API, Python async API, response compatibility properties, redirect behavior, redirect replay, total timeout across redirects, sync/async API parity, cookie subsystem (parsing, matching, jar operations, client integration, Python API), authentication subsystem (Basic/Bearer auth, precedence, cross-origin credential stripping, Python auth classes), and true network streaming (sync/async `client.stream()`, `StreamingResponse`, chunk iteration, cancellation, pool lease lifecycle, split UTF-8, cross-chunk line delimiters, named exception types).
 

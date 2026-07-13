@@ -2,8 +2,10 @@
 
 eggfetch is a Rust-native HTTP client engine with Python bindings and a CLI tool. The core is async-first: a Rust engine built on tokio and hyper provides connection pooling, timeouts, TLS, and streaming. The Python bindings expose both sync and async APIs; the sync API blocks on the async engine while releasing the GIL, and the async API integrates with asyncio. There is exactly one networking implementation, living entirely in Rust.
 
-> **Status: Milestone N complete / Semantic tightening and public-API stabilization.**
-> The workspace builds, passes lints, and executes real HTTP requests. `eggfetch-core` provides an async `Client`, `Request`/`RequestBuilder`/`Response`, headers, query parameters, streaming request/response bodies, HTTPS via rustls, connection pooling (max connections per host, idle timeout), phase-aware timeout system (pool, connect, write, read, total), redirect following with configurable policy, cookie subsystem (RFC 6265 parsing, domain/path matching, cookie jar), authentication subsystem (Basic auth, Bearer token, client/request-level auth, cross-origin credential stripping), and a structured error taxonomy. The Python package `eggfetch` exposes sync helpers (`get`, `post`, etc.), a `Client` with context manager support, an `AsyncClient` with `async with` and `await` support, buffered responses with requests/httpx-compatible properties (`status_code`, `reason_phrase`, `headers`, `url`, `content`, `text`, `encoding`, `http_version`, `history`), status helpers (`is_informational`, `is_success`, `is_redirect`, `is_client_error`, `is_server_error`, `is_error`), methods (`json()`, `raise_for_status()`, `iter_bytes()`, `iter_text()`, `iter_lines()`, `close()`/`aclose()`), true network streaming via `client.stream()` returning a `StreamingResponse` context manager, charset-aware text decoding via `encoding_rs`, multi-value header support (`Headers.get_list()`), case-insensitive headers, request body kwargs (`content`, `data`, `json`), form encoding, JSON body serialization, body kwarg mutual exclusion, `follow_redirects`/`max_redirects` kwargs, cookies (`client.cookies`, `response.cookies`, `cookies=` kwarg), `BasicAuth`/`BearerAuth` auth classes, `auth=` kwarg on all request methods, `NOAUTH` sentinel for disabling auth per-request, streaming-specific exceptions (`StreamConsumed`, `StreamClosed`, `ResponseNotRead`), and a structured exception hierarchy. CLI crate remains a stub.
+> **Status: validation and polish after Milestone N complete.**
+> Milestones A–P are implemented as documented, and the lifecycle, redirect security, packaging, CI, and compatibility pass is green before multipart uploads. The CLI crate remains a stub.
+
+[![CI](https://github.com/eggstack/eggfetch/actions/workflows/ci.yml/badge.svg)](https://github.com/eggstack/eggfetch/actions/workflows/ci.yml)
 
 ## Architecture
 
@@ -40,7 +42,11 @@ print(r.text)
 r.raise_for_status()
 
 with httpx.Client(headers={"User-Agent": "eggfetch"}) as client:
-    r = client.post("https://example.com/api", json={"a": 1})
+    r = client.post(
+        "https://example.com/api",
+        json={"a": 1},
+        cookies={"session": "request-only"},
+    )
 
 async with httpx.AsyncClient() as client:
     r = await client.get("https://example.com")
@@ -194,17 +200,27 @@ Requests/HTTPX-compatible request construction in Python:
 Public-API stabilization and correctness audit:
 
 - **True Python streaming** -- `client.stream()` / `async_client.stream()` returns a `StreamingResponse` context manager with `iter_bytes()`, `iter_text()`, `iter_lines()`, `read()`, `text()` (sync) and `aiter_bytes()`, `aiter_text()`, `aiter_lines()`, `aread()`, `text()` (async). Chunks arrive from the network without eager buffering.
-- **Body state machine** -- atomic `streaming → buffered → consumed → closed` states. Pool permits are released on drop, close, or full consumption.
+- **Body state machine** -- atomic `streaming`, `buffered`, `consumed`, and `closed` states. A response is buffered by `read()`/`aread()`, transferred to `consumed` by an iterator, and becomes `closed` after explicit/context-manager close. Invalid transitions raise named exceptions.
 - **Named streaming exceptions** -- `StreamConsumed`, `StreamClosed`, `ResponseNotRead` (all subclass `EggfetchError`).
 - **Auth disable sentinel** -- `eggfetch.NOAUTH` disables per-request auth even when the client has auth configured.
 - **Cross-origin redirect auth fix** -- client-level auth is no longer reapplied on cross-origin redirect hops.
 - **Cookie/auth audit** -- comprehensive test coverage for cookie isolation, auth redaction, precedence, and cross-origin behavior.
 - **Sync/async parity** -- 30 parity tests covering cookies, auth, and streaming.
 
+### Validation and packaging pass (complete)
+
+- Sync body reads release the GIL while waiting on the live response.
+- Iterator producers are cancelled when their iterator or response is closed; async producers are aborted on iterator drop.
+- Client/request headers are merged before redirect security decisions. Cross-origin hops strip raw credentials and recompute only destination-matching jar cookies.
+- Request-local `cookies=` values are sent once and are not persisted in a client jar.
+- Native TLS roots are preferred; packaged Mozilla roots are used only when native roots are unavailable. Certificate or hostname verification failures never trigger fallback.
+- CI covers Ubuntu, macOS, and Windows Python 3.10–3.13, plus clean wheel smoke tests on each operating system.
+
 ### Current limitations
 
 - No multipart files.
 - No `proxies`, `verify`, or `cert` kwargs.
+- Python 3.10–3.13 and the CI-supported Ubuntu, macOS, and Windows platforms are the current compatibility target. Other platforms may work but are not release-tested yet.
 - `connect` timeout is accepted but not independently enforced (use `total` as backstop).
 - Trio/AnyIO support deferred to a later milestone.
 
@@ -223,21 +239,18 @@ rustfmt.toml             max_width 100
 .clippy.toml             pedantic clippy config
 .github/workflows/ci.yml CI pipeline
 crates/
-  eggfetch-core/         async HTTP engine (Milestone N complete)
+  eggfetch-core/         async HTTP engine (validation pass complete)
   eggfetch-cli/          CLI binary (stub)
-  eggfetch-python/       Python bindings (Milestone N complete)
+  eggfetch-python/       Python bindings (validation pass complete)
     src/                 Rust adapter modules (PyO3)
     python/eggfetch/     Python package (__init__.py)
     tests/               Python tests
     pyproject.toml       maturin build config
 docs/
   architecture/          architecture documentation
-  plans/
-  ROADMAP.md                    full milestone roadmap
-  post-milestone-j-tightening.md  post-J corrective pass plan
-  milestone-a-repository-foundation.md
-  milestone-b-core-http-engine.md
-  milestone-c-connection-management.md
+plans/                    milestone plans and roadmap
+  ROADMAP.md              full milestone roadmap
+  validation-polish-after-milestone-n.md
   milestone-d-timeout-system.md
   milestone-e-streaming-foundation.md
   milestone-f-python-sync-api.md
@@ -267,9 +280,10 @@ The Python package uses maturin for building. Requires Python 3.10+ and a virtua
 ```sh
 python3 -m venv .venv
 source .venv/bin/activate
-pip install pytest
+pip install pytest pytest-asyncio
 PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1 maturin develop -m crates/eggfetch-python/Cargo.toml
 python -m pytest crates/eggfetch-python/tests/
+maturin build -m crates/eggfetch-python/Cargo.toml
 ```
 
 ## MSRV

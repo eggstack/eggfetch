@@ -189,6 +189,12 @@ impl BearerAuth {
     pub fn new(token: impl Into<String>) -> Result<Self> {
         let token = token.into();
         validate_auth_bytes(token.as_bytes(), "token")?;
+        let header = format!("Bearer {token}");
+        http::HeaderValue::from_str(&header).map_err(|_| {
+            Error::InvalidAuthHeader(
+                "auth token must contain only characters valid in an HTTP header".into(),
+            )
+        })?;
         Ok(Self { token })
     }
 

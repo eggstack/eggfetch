@@ -1,5 +1,9 @@
 # Validation and Polish Plan After Milestone N
 
+> Status: complete. Lifecycle, redirect security, cookie/auth policy, TLS
+> fallback, feature-matrix, CI, wheel-smoke, public API, and documentation
+> validation are implemented. Milestone Q may begin from this baseline.
+
 ## Objective
 
 Validate and polish the newly hardened streaming, redirect, cookie, authentication, timeout, and packaging behavior before beginning multipart/file uploads.

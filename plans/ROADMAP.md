@@ -62,6 +62,12 @@ Exit criterion:
 
 > Existing public behavior is stable, lifecycle-safe, tested, and accurately documented.
 
+The post-Milestone-N validation and polish pass is complete before multipart
+work begins. It covers Python streaming cancellation and close behavior,
+cookie/auth redirect security, deliberate TLS root fallback, feature-matrix
+builds, Windows CI, clean wheel smoke tests, public export/repr review, and a
+documentation truth pass.
+
 # Phase 2: HTTP Client Completeness
 
 ## Milestone O: Cookie subsystem

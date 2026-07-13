@@ -131,7 +131,14 @@ impl PyHeaders {
             .iter()
             .filter_map(|(k, v)| {
                 let name = k.as_str();
-                let val = v.to_str().ok()?;
+                let val = if matches!(
+                    name,
+                    "authorization" | "proxy-authorization" | "cookie" | "set-cookie"
+                ) {
+                    "<redacted>"
+                } else {
+                    v.to_str().ok()?
+                };
                 Some(format!("{name}: {val}"))
             })
             .collect();

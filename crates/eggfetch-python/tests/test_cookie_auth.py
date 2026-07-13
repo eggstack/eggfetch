@@ -215,6 +215,48 @@ class TestCrossOriginRedirectStripsBoth:
             srv_a.shutdown()
             server_b.shutdown()
 
+    def test_client_sensitive_defaults_and_request_cookies_are_not_reintroduced(self):
+        server_b, base_b = _start_server(_EchoHandler)
+        port_b = server_b.server_address[1]
+
+        class _RedirectToOriginBHandler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                self.send_response(302)
+                self.send_header(
+                    "Location",
+                    f"http://127.0.0.1:{port_b}/final",
+                )
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+
+            def log_message(self, format, *args):
+                pass
+
+        srv_a = http.server.HTTPServer(("127.0.0.1", 0), _RedirectToOriginBHandler)
+        base_a = f"http://127.0.0.1:{srv_a.server_address[1]}"
+        thread = threading.Thread(target=srv_a.serve_forever, daemon=True)
+        thread.start()
+
+        try:
+            with eggfetch.Client(
+                headers={
+                    "Authorization": "Bearer default-secret",
+                    "Cookie": "raw-secret=yes",
+                },
+                follow_redirects=True,
+            ) as client:
+                response = client.get(
+                    f"{base_a}/redirect-to-b",
+                    cookies={"request-secret": "yes"},
+                )
+            data = response.json()
+            assert data["auth"] is None
+            assert "raw-secret" not in data["cookie"]
+            assert "request-secret" not in data["cookie"]
+        finally:
+            srv_a.shutdown()
+            server_b.shutdown()
+
 
 class TestSameOriginRedirectPreservesBoth:
     """Test 16: Same-origin redirect preserves both cookie and auth."""

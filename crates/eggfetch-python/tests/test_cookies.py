@@ -497,10 +497,20 @@ class TestCookieAudit:
         """cookies= kwarg must not persist to the client jar."""
         server, base = _start_server(_SetCookieHandler)
         try:
-            with eggfetch.Client(cookies={"ephemeral": "yes"}) as client:
-                resp = client.get(f"{base}/get")
+            with eggfetch.Client() as client:
+                resp = client.get(f"{base}/get", cookies={"ephemeral": "yes"})
                 assert "ephemeral=yes" in resp.json()["cookie"]
-                assert "ephemeral" in client.cookies
+                assert "ephemeral" not in client.cookies
+        finally:
+            server.shutdown()
+
+    def test_request_kwarg_cookies_are_available_on_post_style_methods(self):
+        server, base = _start_server(_CookieHandler)
+        try:
+            with eggfetch.Client() as client:
+                resp = client.post(f"{base}/get", cookies={"ephemeral": "yes"})
+                assert "ephemeral=yes" in resp.json()["cookie"]
+                assert "ephemeral" not in client.cookies
         finally:
             server.shutdown()
 

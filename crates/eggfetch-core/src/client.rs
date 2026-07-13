@@ -189,7 +189,7 @@ impl Client {
         let (
             method,
             url,
-            headers,
+            request_headers,
             body,
             version,
             request_timeout,
@@ -197,6 +197,17 @@ impl Client {
             req_auth,
             req_auth_disabled,
         ) = request.into_parts();
+
+        // Merge client defaults before any cookie, auth, or redirect policy is
+        // evaluated. Sensitive defaults must be present when a redirect hop
+        // strips them; merging at the transport boundary would reintroduce
+        // credentials after that stripping decision.
+        let mut merged_headers = self.inner.config.default_headers.clone().into_inner();
+        for name in request_headers.keys() {
+            merged_headers.remove(name);
+        }
+        merged_headers.extend(request_headers.into_inner());
+        let headers = Headers::from(merged_headers);
 
         // Merge client-level and request-level timeouts.
         let timeout = match self.inner.config.timeout {
@@ -292,9 +303,8 @@ impl Client {
         let mut cur_url = url;
         let mut cur_headers = headers;
         let mut cur_version = version;
-        let explicit_cookie_header = cur_headers.contains("cookie");
-        #[cfg(not(feature = "cookies"))]
-        let _ = explicit_cookie_header;
+        #[cfg(feature = "cookies")]
+        let mut cookie_header_allowed = cur_headers.contains("cookie");
 
         // Track the previous request URL to detect cross-origin redirects.
         // On the first iteration (before any redirect), this is None and
@@ -334,6 +344,10 @@ impl Client {
                 .is_some_and(|prev| prev.origin() != cur_url.origin());
             if is_cross_origin_redirect {
                 credentials_allowed = false;
+                #[cfg(feature = "cookies")]
+                {
+                    cookie_header_allowed = false;
+                }
             }
 
             // Request-level auth follows same-origin redirects, but must be
@@ -353,12 +367,10 @@ impl Client {
                 // stripped on a cross-origin hop. Jar cookies are recomputed
                 // for each destination instead of carrying a serialized
                 // header from the previous hop.
-                if !explicit_cookie_header {
+                if !cookie_header_allowed {
                     hop_request.headers_mut().remove("cookie");
                 }
-                if (!explicit_cookie_header || credentials_allowed)
-                    && !hop_request.headers().contains("cookie")
-                {
+                if !cookie_header_allowed && !hop_request.headers().contains("cookie") {
                     if let Some(cookie_header) = self
                         .inner
                         .config
@@ -558,16 +570,7 @@ impl Client {
             (b, _) => b,
         };
 
-        // Merge defaults and request headers with request-level replacement
-        // semantics. Appending duplicate security-sensitive headers can
-        // produce ambiguous wire behavior, especially for Authorization and
-        // Cookie, so remove overridden default names before extending.
-        let mut merged_headers = self.inner.config.default_headers.clone().into_inner();
-        for name in headers.keys() {
-            merged_headers.remove(name);
-        }
-        merged_headers.extend(headers.into_inner());
-        let headers = apply_content_length(Headers::from(merged_headers), &body)?;
+        let headers = apply_content_length(headers, &body)?;
 
         let mut http_request = http::Request::builder()
             .method(method)
@@ -935,25 +938,14 @@ impl ClientBuilder {
 
     /// Build the client.
     ///
-    /// # Panics
-    ///
-    /// Panics if the system TLS root certificates cannot be loaded. This
-    /// should not happen on any standard operating system.
+    /// Native system roots are preferred. If the platform root store is
+    /// unavailable, the client falls back to the packaged Mozilla root set
+    /// while retaining certificate and hostname verification.
     #[must_use]
     pub fn build(self) -> Client {
         let https = match hyper_rustls::HttpsConnectorBuilder::new().with_native_roots() {
             Ok(builder) => builder.https_or_http().enable_http1().build(),
-            Err(_) => {
-                // Some minimal containers and headless macOS environments do
-                // not expose a native keychain. Fall back to Mozilla's
-                // packaged roots while retaining certificate verification;
-                // never fall back to an insecure verifier or panic.
-                hyper_rustls::HttpsConnectorBuilder::new()
-                    .with_webpki_roots()
-                    .https_or_http()
-                    .enable_http1()
-                    .build()
-            }
+            Err(_) => build_webpki_connector(),
         };
 
         let mut builder = hyper_util::client::legacy::Client::builder(TokioExecutor::new());
@@ -985,6 +977,18 @@ impl ClientBuilder {
             }),
         }
     }
+}
+
+/// Build a connector with the packaged Mozilla root set.
+///
+/// Kept as a separate function so the fallback construction path can be
+/// exercised without depending on the host's native trust store.
+fn build_webpki_connector() -> Connector {
+    hyper_rustls::HttpsConnectorBuilder::new()
+        .with_webpki_roots()
+        .https_or_http()
+        .enable_http1()
+        .build()
 }
 
 impl Default for ClientBuilder {
@@ -1027,6 +1031,16 @@ mod tests {
     #[test]
     fn client_builder() {
         let _client = Client::builder().user_agent("test-agent").build();
+    }
+
+    #[test]
+    fn tls_root_store_paths_construct() {
+        // Native roots are environment-dependent, but when available the
+        // production path must build the same verified connector shape.
+        if let Ok(builder) = hyper_rustls::HttpsConnectorBuilder::new().with_native_roots() {
+            let _ = builder.https_or_http().enable_http1().build();
+        }
+        let _ = build_webpki_connector();
     }
 
     #[test]

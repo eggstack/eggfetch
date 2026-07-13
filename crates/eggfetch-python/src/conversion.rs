@@ -5,6 +5,28 @@ use pyo3::types::PyTuple;
 
 use crate::errors::map_err;
 
+/// Convert request-local Python cookies into a destination-scoped header.
+///
+/// Request cookies are intentionally kept out of the client's persistent jar.
+/// The core redirect pipeline can therefore strip the serialized header on a
+/// cross-origin hop without accidentally replaying it from client state.
+pub(crate) fn python_cookies_to_header(
+    cookies: Option<&Bound<'_, PyAny>>,
+    target_url: &url::Url,
+) -> PyResult<Option<String>> {
+    let Some(cookies) = cookies else {
+        return Ok(None);
+    };
+    if cookies.is_none() {
+        return Ok(None);
+    }
+    let jar = eggfetch_core::cookie::CookieJar::new();
+    for (name, value) in iter_kv_pairs(cookies.py(), cookies)? {
+        jar.set_default_cookie(name, value);
+    }
+    Ok(jar.cookies_for_url(target_url))
+}
+
 /// Iterate over key-value pairs from a Python Mapping or sequence of pairs.
 ///
 /// For Mapping objects (dict, etc.), calls `.items()`.

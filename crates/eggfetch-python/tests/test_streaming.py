@@ -616,6 +616,29 @@ class TestRequiredStreamingBehaviors:
             with pytest.raises(eggfetch.StreamClosed):
                 list(resp.iter_bytes())
 
+    def test_unread_text_after_close_raises_stream_closed(self, server):
+        with eggfetch.Client() as client:
+            resp = client.stream("GET", f"{server}/slow-then-hang")
+            resp.close()
+            with pytest.raises(eggfetch.StreamClosed):
+                resp.text()
+
+    def test_close_cancels_active_iterator(self, server):
+        with eggfetch.Client() as client:
+            resp = client.stream("GET", f"{server}/slow-then-hang")
+            iterator = resp.iter_bytes()
+            assert next(iterator) == b"first\n"
+            resp.close()
+            with pytest.raises(eggfetch.StreamClosed):
+                resp.read()
+
+    def test_response_can_outlive_client(self, server):
+        client = eggfetch.Client()
+        resp = client.stream("GET", f"{server}/stream-bytes")
+        client.close()
+        assert resp.read() == b"hello world"
+        resp.close()
+
 
 class TestAsyncRequiredStreamingBehaviors:
     """Async variants of the required streaming tests."""
@@ -666,3 +689,26 @@ class TestAsyncRequiredStreamingBehaviors:
                 await resp.aread()
             with pytest.raises(eggfetch.StreamClosed):
                 [c async for c in resp.aiter_bytes()]
+
+    async def test_async_iterator_cancellation_leaves_response_closeable(self, server):
+        import asyncio
+
+        async with eggfetch.AsyncClient() as client:
+            resp = await client.stream("GET", f"{server}/slow-then-hang")
+            iterator = resp.aiter_bytes()
+            assert await iterator.__anext__() == b"first\n"
+            pending = asyncio.ensure_future(iterator.__anext__())
+            await asyncio.sleep(0.05)
+            pending.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await pending
+            await resp.aclose()
+            with pytest.raises(eggfetch.StreamClosed):
+                await resp.aread()
+
+    async def test_async_response_can_outlive_client(self, server):
+        client = eggfetch.AsyncClient()
+        resp = await client.stream("GET", f"{server}/stream-bytes")
+        client.close()
+        assert await resp.aread() == b"hello world"
+        await resp.aclose()

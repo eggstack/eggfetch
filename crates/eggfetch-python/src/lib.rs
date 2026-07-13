@@ -95,14 +95,11 @@ fn request<'py>(
         max_redirects.unwrap_or(20),
     );
 
-    let jar = eggfetch_core::cookie::CookieJar::new();
-    if let Some(c) = cookies {
-        if let Ok(dict) = c.downcast::<pyo3::types::PyDict>() {
-            for (key, value) in dict.iter() {
-                let name: String = key.extract()?;
-                let val: String = value.extract()?;
-                jar.set_default_cookie(name, val);
-            }
+    if let Some(cookie_header) = conversion::python_cookies_to_header(cookies, &target_url)? {
+        if !rust_headers.contains("cookie") {
+            rust_headers
+                .insert("cookie", &cookie_header)
+                .map_err(map_err)?;
         }
     }
 
@@ -111,9 +108,7 @@ fn request<'py>(
 
     let auth_override = auth::parse_auth(auth)?;
 
-    let mut builder = eggfetch_core::Client::builder()
-        .redirect_policy(redirect_policy)
-        .cookie_jar(jar);
+    let mut builder = eggfetch_core::Client::builder().redirect_policy(redirect_policy);
 
     match auth_override {
         auth::AuthOverride::Inherit | auth::AuthOverride::Disable => {}
@@ -436,6 +431,7 @@ fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
         "AsyncStreamingLinesIterator",
         "AsyncStreamingTextIterator",
         "Client",
+        "Cookie",
         "Cookies",
         "Headers",
         "NoAuth",
