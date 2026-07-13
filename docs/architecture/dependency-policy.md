@@ -4,7 +4,7 @@ eggfetch follows a conservative dependency policy. Every dependency must have an
 
 ## Current Posture
 
-As of the post-Milestone-N validation pass, eggfetch-core has the following
+As of Milestone Q, eggfetch-core has the following
 direct dependencies:
 
 - **bytes** -- efficient byte buffer types for request and response bodies.

@@ -21,6 +21,7 @@ compression-gzip = []
 compression-brotli = []
 compression-zstd = []
 cookies = []
+multipart = []
 proxy = []
 tracing = []
 ```
@@ -87,6 +88,13 @@ Enables cookie jar support for persistent cookies across requests. Provides RFC 
 
 Python request-local `cookies=` values are serialized into the request header,
 are not persisted in the client jar, and are removed on cross-origin redirects.
+
+### multipart
+
+**Status:** implemented (Milestone Q).
+Enables streaming multipart/form-data request bodies. Provides `Multipart`, `Part`, `PartBody`, and `Boundary` types with a builder API, a streaming encoder backed by a state machine, known-length calculation when all parts have known sizes, boundary generation and validation, and per-part headers and content types. The Python crate exposes `files=` kwarg support including bytes, tuples, path-backed `File` wrapper, and mixed `data=` + `files=`.
+
+Python `files=` accepts bytes, `(filename, data)` tuples, `(filename, data, content_type)` triples, `(filename, data, content_type, headers)` quads, and `eggfetch.File(path)` objects. Files are read via synchronous std::fs (blocking in GIL context) for path-backed parts. Cancellation safely drops file handles and streams.
 
 ### proxy
 

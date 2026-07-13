@@ -1,6 +1,6 @@
 # Architecture Overview
 
-This document describes the architecture of eggfetch. Milestone N established the semantic-tightening baseline, and the post-Milestone-N validation pass has completed lifecycle, redirect security, feature-matrix, and packaging hardening. The core crate provides protocol-neutral streaming for request and response bodies, redirect following with configurable policy, total timeout across redirect chains, metadata-only redirect history, replay-safe request bodies, an RFC 6265 cookie subsystem, and an authentication subsystem with Basic and Bearer token support, precedence resolution, request-level auth disable, and cross-origin credential stripping. The Python crate exposes both sync and async APIs over the async Rust core via PyO3/maturin, with buffered and live streaming response surfaces, request-local and client-level cookies, redirect support, sync/async parity, `BasicAuth`/`BearerAuth` classes, `auth=` on request methods, `NOAUTH`, and named streaming exceptions.
+This document describes the architecture of eggfetch. Milestone Q is the latest completed milestone. The core crate provides protocol-neutral streaming for request and response bodies, redirect following with configurable policy, total timeout across redirect chains, metadata-only redirect history, replay-safe request bodies, an RFC 6265 cookie subsystem, an authentication subsystem with Basic and Bearer token support, precedence resolution, request-level auth disable, cross-origin credential stripping, and streaming multipart/form-data request bodies. The Python crate exposes both sync and async APIs over the async Rust core via PyO3/maturin, with buffered and live streaming response surfaces, request-local and client-level cookies, redirect support, sync/async parity, `BasicAuth`/`BearerAuth` classes, `auth=` on request methods, `NOAUTH`, named streaming exceptions, and `files=` kwarg for multipart uploads.
 
 The post-E hardening pass landed true streaming request bodies, per-chunk read/write timeouts, pool permits tied to the full response body lifecycle, and origin-keyed pool limits.
 
@@ -39,6 +39,10 @@ The following types form the public API of eggfetch-core:
 - **`AuthScheme`** -- authentication scheme enum: `Basic(BasicAuth)` or `Bearer(BearerAuth)`. Applies the `Authorization` header. Secrets are redacted in Debug/Display.
 - **`BasicAuth`** -- HTTP Basic authentication credentials (username, password). Base64-encodes `username:password` for the `Authorization` header.
 - **`BearerAuth`** -- HTTP Bearer token authentication. Sets `Authorization: Bearer <token>`.
+- **`Multipart`** -- multipart/form-data request body with boundary and parts. Feature-gated behind `multipart`. Provides builder API for text fields, byte parts, and streaming parts.
+- **`Part`** -- a single multipart part with name, filename, content type, headers, and body.
+- **`PartBody`** -- multipart part body: `Bytes` or `Stream` with optional known length.
+- **`Boundary`** -- validated multipart boundary string. Random generation or custom validated.
 
 ### TLS trust stores
 
@@ -230,6 +234,66 @@ When the client sends a request, transformations are applied in this order:
 
 On redirect, steps 3-6 repeat for the new destination URL (but client-level auth is suppressed on cross-origin hops, and cookies are recomputed for the new destination).
 
+## Multipart (Milestone Q)
+
+eggfetch implements streaming multipart/form-data request bodies for file uploads and mixed form+file payloads.
+
+### Core Model
+
+- **`Multipart`** -- owns a `Boundary` and a list of `Part`s. Provides a builder API: `Multipart::new().text("field", "value").bytes("file", "name", "type", data).stream(...)`.
+- **`Part`** -- a single part with `name`, optional `filename`, optional `content_type`, optional extra `headers`, and a `PartBody`.
+- **`PartBody`** -- `Bytes(Bytes)` or `Stream { stream: BoxBytesStream, length: Option<u64> }`.
+- **`Boundary`** -- a validated multipart boundary string. Random generation uses a xorshift PRNG seeded from `SystemTime` + atomic counter (50 alphanumeric characters). Custom boundaries are validated via `Boundary::try_new()`.
+
+### Streaming Encoder
+
+`MultipartEncoder` implements `Stream<Item = Result<Bytes>>` as a state machine:
+
+- **PartHeader** -- emits the boundary line, `Content-Disposition`, optional `Content-Type`, optional custom headers, and the blank line separator.
+- **PartBody** -- polls the current part's body stream and forwards chunks.
+- **TrailingCrlf** -- emits the `\r\n` after the part body.
+- **FinalBoundary** -- emits `--boundary--\r\n`.
+- **Done** -- stream complete.
+
+The encoder preserves backpressure: it does not eagerly buffer file contents. A slow part body stream naturally backpressures the encoder.
+
+### Known-Length Calculation
+
+`Multipart::content_length()` uses checked arithmetic to sum all part header lengths, body lengths, boundary overhead, and the final terminator. Returns `Some(u64)` only when every part has a known length; returns `None` when any part is a stream with unknown length. The caller can use `Content-Length` for known-length bodies or fall back to chunked transfer encoding.
+
+### Replayability
+
+A multipart body is replayable only when all parts are `PartBody::Bytes`. If any part is a `PartBody::Stream`, the multipart is non-replayable. Redirect behavior for 307/308 rejects non-replayable multipart bodies (same as other stream request bodies).
+
+### Python API
+
+The Python bindings expose multipart via the `files=` kwarg on request methods:
+
+```python
+# Bytes directly
+eggfetch.post(url, files={"file": b"data"})
+
+# With filename and content type
+eggfetch.post(url, files={"file": ("report.txt", b"contents", "text/plain")})
+
+# Mixed data + files
+eggfetch.post(url, data={"description": "sample"}, files={"file": open("data.bin", "rb")})
+
+# Path-backed file via eggfetch.File
+eggfetch.post(url, files={"file": eggfetch.File("/path/to/file.pdf")})
+```
+
+Supported `files=` forms:
+- bytes value directly
+- `(filename, bytes)` tuple
+- `(filename, bytes, content_type)` triple
+- `(filename, bytes, content_type, headers)` quad
+- `eggfetch.File(path, filename=None, content_type=None)` wrapper
+
+`files=` + `data=` combines form fields (from `data=`) and file parts (from `files=`) in a single multipart body. `files=` + `content=` or `files=` + `json=` raises `TypeError`.
+
+`eggfetch.File` wraps a filesystem path. The file is read synchronously via `std::fs::read` (blocking in GIL context). This is acceptable for the initial implementation; true async file streaming may be added later.
+
 ## Pool Keying
 
 Per-origin pool limits are keyed by `(scheme, host, port)`, where the port uses the scheme's default when not explicit. `http://example.com:80` and `http://example.com` share a per-origin limit; `http://example.com` and `https://example.com` are independent; `http://example.com:8080` is distinct from `http://example.com`.
@@ -265,7 +329,7 @@ The sync adapter does not contain its own TCP connections, TLS handshakes, or bo
 
 Top-level helpers (`get`, `post`, etc.) create a short-lived runtime and client per call. The `PyClient` class owns a persistent runtime and client for connection reuse.
 
-Supported kwargs: `headers`, `params`, `content`, `data`, `json`, `timeout`, `cookies`, `auth`, `follow_redirects`, `max_redirects`. Request-local cookies are serialized for the initial destination and are not added to the persistent client jar. Unsupported kwargs raise `TypeError`.
+Supported kwargs: `headers`, `params`, `content`, `data`, `json`, `files`, `timeout`, `cookies`, `auth`, `follow_redirects`, `max_redirects`. Request-local cookies are serialized for the initial destination and are not added to the persistent client jar. Unsupported kwargs raise `TypeError`.
 
 ## Request Builder Compatibility (Milestone I)
 
@@ -281,7 +345,7 @@ The Python crate provides a requests/httpx-compatible request construction surfa
 - **`follow_redirects`** -- bool. Overrides client-level redirect policy per-request.
 - **`max_redirects`** -- usize. Overrides client-level max redirects per-request.
 
-Body kwargs (`content`, `data`, `json`) are mutually exclusive. Providing more than one raises `TypeError`. Auto Content-Type is only set for `data` and `json`; explicit Content-Type headers are preserved.
+Body kwargs (`content`, `data`, `json`) are mutually exclusive. `files` may be combined with `data` (forming multipart), but `files` conflicts with `content` and `json` and raises `TypeError`. Auto Content-Type is only set for `data` and `json`; explicit Content-Type headers are preserved.
 
 The conversion layer lives in `conversion.rs` and is shared by both sync and async paths. No HTTP logic exists outside `eggfetch-core`.
 
@@ -325,4 +389,4 @@ These crates do not exist yet. They will be added when the core engine is stable
 
 ## Current State
 
-Milestone N is complete. The core crate provides a working async HTTP client with HTTPS support, request/response modeling, headers, query parameters, streaming request/response bodies, connection pooling, phase-aware timeouts (pool, connect, write, read, total), redirect following with configurable policy, `RequestBody::try_clone_for_redirect()` for replay-safe redirects, metadata-only redirect history entries (`HistoryEntry`), total timeout as a single deadline across redirect chains, a cookie subsystem with RFC 6265 parsing, domain/path matching, secure/httpOnly/SameSite attributes, expiry handling, thread-safe `CookieJar`, and client-level cookie state, and an authentication subsystem with Basic and Bearer token support, secret redaction, client and request-level auth, precedence resolution, request-level auth disable via `without_auth()`, cross-origin credential stripping (client auth not reapplied on cross-origin redirects), and URL credential conversion. The Python crate exposes sync and async APIs with top-level helpers, `Client` and `AsyncClient` classes, requests/httpx-compatible response properties, status helpers, methods (`json()`, `raise_for_status()`, `iter_bytes()`, `iter_text()`, `iter_lines()`, `close()`/`aclose()`), true network streaming via `client.stream()` returning a `StreamingResponse` context manager (with `iter_bytes()`, `iter_text()`, `iter_lines()`, `read()`, `text()` and async equivalents), charset-aware text decoding with deterministic precedence, multi-value header support, case-insensitive headers, request body kwargs, form encoding, JSON body serialization, body kwarg mutual exclusion, `follow_redirects`/`max_redirects` kwargs, `Cookies` mapping wrapper (`client.cookies`, `response.cookies`, `cookies=` kwarg), `BasicAuth`/`BearerAuth` classes, `auth=` kwarg on all request methods, `NOAUTH` sentinel for per-request auth disable, streaming-specific exceptions (`StreamConsumed`, `StreamClosed`, `ResponseNotRead`), and a structured exception hierarchy with sync/async API parity verified by parity tests. The CLI crate remains a stub.
+Milestone Q is complete. The core crate provides a working async HTTP client with HTTPS support, request/response modeling, headers, query parameters, streaming request/response bodies, connection pooling, phase-aware timeouts (pool, connect, write, read, total), redirect following with configurable policy, `RequestBody::try_clone_for_redirect()` for replay-safe redirects, metadata-only redirect history entries (`HistoryEntry`), total timeout as a single deadline across redirect chains, a cookie subsystem with RFC 6265 parsing, domain/path matching, secure/httpOnly/SameSite attributes, expiry handling, thread-safe `CookieJar`, and client-level cookie state, an authentication subsystem with Basic and Bearer token support, secret redaction, client and request-level auth, precedence resolution, request-level auth disable via `without_auth()`, cross-origin credential stripping (client auth not reapplied on cross-origin redirects), URL credential conversion, and streaming multipart/form-data request bodies with `Multipart`, `Part`, `PartBody`, and `Boundary` types, a streaming encoder, known-length calculation, and boundary generation. The Python crate exposes sync and async APIs with top-level helpers, `Client` and `AsyncClient` classes, requests/httpx-compatible response properties, status helpers, methods (`json()`, `raise_for_status()`, `iter_bytes()`, `iter_text()`, `iter_lines()`, `close()`/`aclose()`), true network streaming via `client.stream()` returning a `StreamingResponse` context manager (with `iter_bytes()`, `iter_text()`, `iter_lines()`, `read()`, `text()` and async equivalents), charset-aware text decoding with deterministic precedence, multi-value header support, case-insensitive headers, request body kwargs, form encoding, JSON body serialization, body kwarg mutual exclusion, `files=` kwarg with bytes/tuples/`File` wrapper support, `follow_redirects`/`max_redirects` kwargs, `Cookies` mapping wrapper (`client.cookies`, `response.cookies`, `cookies=` kwarg), `BasicAuth`/`BearerAuth` classes, `auth=` kwarg on all request methods, `NOAUTH` sentinel for per-request auth disable, streaming-specific exceptions (`StreamConsumed`, `StreamClosed`, `ResponseNotRead`), and a structured exception hierarchy with sync/async API parity verified by parity tests. The CLI crate remains a stub.

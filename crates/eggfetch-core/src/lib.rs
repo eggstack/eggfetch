@@ -32,6 +32,8 @@ pub mod client;
 pub mod cookie;
 pub mod error;
 pub mod headers;
+#[cfg(feature = "multipart")]
+pub mod multipart;
 pub mod pool;
 pub mod redirect;
 pub mod request;
@@ -45,6 +47,8 @@ pub use client::{Client, ClientBuilder};
 pub use error::{Error, Result};
 pub use headers::Headers;
 pub use http::Method;
+#[cfg(feature = "multipart")]
+pub use multipart::{Boundary, Multipart, MultipartEncoder, Part, PartBody};
 pub use pool::{Pool, PoolConfig};
 pub use redirect::RedirectPolicy;
 pub use request::{Request, RequestBuilder};

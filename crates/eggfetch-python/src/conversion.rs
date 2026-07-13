@@ -126,6 +126,31 @@ pub fn validate_body_kwargs(
     Ok(())
 }
 
+/// Validate body kwargs with optional `files=` support.
+///
+/// `files=` may be combined with `data=` (multipart fields), but conflicts
+/// with `content=` and `json=`.
+pub fn validate_body_kwargs_with_files(
+    content: Option<&Bound<'_, PyAny>>,
+    data: Option<&Bound<'_, PyAny>>,
+    json: Option<&Bound<'_, PyAny>>,
+    files: Option<&Bound<'_, PyAny>>,
+) -> PyResult<()> {
+    if files.is_some() {
+        if content.is_some() {
+            return Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
+                "files= conflicts with content=",
+            ));
+        }
+        if json.is_some() {
+            return Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
+                "files= conflicts with json=",
+            ));
+        }
+    }
+    validate_body_kwargs(content, data, json)
+}
+
 /// Build a request body from the provided Python kwargs.
 ///
 /// Returns `(body_bytes, content_type_override)` where `content_type_override`

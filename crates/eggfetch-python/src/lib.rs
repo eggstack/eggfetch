@@ -9,6 +9,7 @@ mod conversion;
 mod cookies;
 mod errors;
 mod headers;
+mod multipart;
 mod response;
 mod streaming;
 mod timeout;
@@ -19,6 +20,7 @@ use client::PyClient;
 use cookies::PyCookies;
 use errors::map_err;
 use headers::PyHeaders;
+use multipart::PyFile;
 use response::PyResponse;
 use streaming::{
     PyAsyncBytesIterator, PyAsyncLinesIterator, PyAsyncTextIterator, PyBytesChunkIterator,
@@ -36,13 +38,14 @@ use timeout::PyTimeout;
 ///     content: Raw request body as bytes (optional).
 ///     data: Form data as dict or sequence of pairs (optional).
 ///     json: JSON-serializable object (optional).
+///     files: File uploads as mapping or sequence of pairs (optional).
 ///     timeout: Request timeout in seconds, or Timeout object (optional).
 ///     cookies: Initial cookies as dict of name=value pairs (optional).
 ///     auth: Authentication credentials (optional).
 ///     `follow_redirects`: Whether to follow redirects (default False).
 ///     `max_redirects`: Maximum redirects to follow (default 20).
 #[pyfunction]
-#[pyo3(signature = (method, url, *, headers=None, params=None, content=None, data=None, json=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None))]
+#[pyo3(signature = (method, url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None))]
 #[allow(clippy::too_many_arguments)]
 fn request<'py>(
     py: Python<'py>,
@@ -53,6 +56,7 @@ fn request<'py>(
     content: Option<&Bound<'py, PyAny>>,
     data: Option<&Bound<'py, PyAny>>,
     json: Option<&Bound<'py, PyAny>>,
+    files: Option<&Bound<'py, PyAny>>,
     timeout: Option<&Bound<'py, PyAny>>,
     cookies: Option<&Bound<'py, PyAny>>,
     auth: Option<&Bound<'py, PyAny>>,
@@ -72,7 +76,7 @@ fn request<'py>(
     }
     let target_url = target_url;
 
-    conversion::validate_body_kwargs(content, data, json)?;
+    conversion::validate_body_kwargs_with_files(content, data, json, files)?;
 
     let mut rust_headers = if let Some(h) = headers {
         conversion::python_headers_to_rust(py, h)?
@@ -80,9 +84,19 @@ fn request<'py>(
         eggfetch_core::Headers::new()
     };
 
-    let (body_bytes, auto_content_type) = conversion::build_request_body(py, content, data, json)?;
+    let (body_bytes, auto_content_type): (Option<Vec<u8>>, Option<String>) = if let Some(f) = files
+    {
+        let (body, ct) = multipart::build_multipart_body(py, data, f)?;
+        match body {
+            eggfetch_core::RequestBody::Bytes(b) => (Some(b.to_vec()), Some(ct)),
+            _ => (None, Some(ct)),
+        }
+    } else {
+        let (bytes, ct) = conversion::build_request_body(py, content, data, json)?;
+        (bytes, ct.map(String::from))
+    };
 
-    if let Some(ct) = auto_content_type {
+    if let Some(ct) = &auto_content_type {
         if !rust_headers.contains("content-type") {
             rust_headers.insert("content-type", ct).map_err(map_err)?;
         }
@@ -171,6 +185,7 @@ fn get<'py>(
         None,
         None,
         None,
+        None,
         timeout,
         cookies,
         auth,
@@ -181,7 +196,7 @@ fn get<'py>(
 
 /// Send a POST request using a short-lived client.
 #[pyfunction]
-#[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None))]
+#[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None))]
 #[allow(clippy::too_many_arguments)]
 fn post<'py>(
     py: Python<'py>,
@@ -191,6 +206,7 @@ fn post<'py>(
     content: Option<&Bound<'py, PyAny>>,
     data: Option<&Bound<'py, PyAny>>,
     json: Option<&Bound<'py, PyAny>>,
+    files: Option<&Bound<'py, PyAny>>,
     timeout: Option<&Bound<'py, PyAny>>,
     cookies: Option<&Bound<'py, PyAny>>,
     auth: Option<&Bound<'py, PyAny>>,
@@ -206,6 +222,7 @@ fn post<'py>(
         content,
         data,
         json,
+        files,
         timeout,
         cookies,
         auth,
@@ -216,7 +233,7 @@ fn post<'py>(
 
 /// Send a PUT request using a short-lived client.
 #[pyfunction]
-#[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None))]
+#[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None))]
 #[allow(clippy::too_many_arguments)]
 fn put<'py>(
     py: Python<'py>,
@@ -226,6 +243,7 @@ fn put<'py>(
     content: Option<&Bound<'py, PyAny>>,
     data: Option<&Bound<'py, PyAny>>,
     json: Option<&Bound<'py, PyAny>>,
+    files: Option<&Bound<'py, PyAny>>,
     timeout: Option<&Bound<'py, PyAny>>,
     cookies: Option<&Bound<'py, PyAny>>,
     auth: Option<&Bound<'py, PyAny>>,
@@ -241,6 +259,7 @@ fn put<'py>(
         content,
         data,
         json,
+        files,
         timeout,
         cookies,
         auth,
@@ -251,7 +270,7 @@ fn put<'py>(
 
 /// Send a PATCH request using a short-lived client.
 #[pyfunction]
-#[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None))]
+#[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None))]
 #[allow(clippy::too_many_arguments)]
 fn patch<'py>(
     py: Python<'py>,
@@ -261,6 +280,7 @@ fn patch<'py>(
     content: Option<&Bound<'py, PyAny>>,
     data: Option<&Bound<'py, PyAny>>,
     json: Option<&Bound<'py, PyAny>>,
+    files: Option<&Bound<'py, PyAny>>,
     timeout: Option<&Bound<'py, PyAny>>,
     cookies: Option<&Bound<'py, PyAny>>,
     auth: Option<&Bound<'py, PyAny>>,
@@ -276,6 +296,7 @@ fn patch<'py>(
         content,
         data,
         json,
+        files,
         timeout,
         cookies,
         auth,
@@ -305,6 +326,7 @@ fn delete<'py>(
         url,
         headers,
         params,
+        None,
         None,
         None,
         None,
@@ -340,6 +362,7 @@ fn head<'py>(
         None,
         None,
         None,
+        None,
         timeout,
         cookies,
         auth,
@@ -369,6 +392,7 @@ fn options<'py>(
         url,
         headers,
         params,
+        None,
         None,
         None,
         None,
@@ -433,6 +457,7 @@ fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
         "Client",
         "Cookie",
         "Cookies",
+        "File",
         "Headers",
         "NoAuth",
         "NOAUTH",
@@ -498,6 +523,7 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyBasicAuth>()?;
     m.add_class::<PyBearerAuth>()?;
     m.add_class::<PyNoAuth>()?;
+    m.add_class::<PyFile>()?;
 
     // Create the NOAUTH singleton instance.
     let noauth_obj = Py::new(m.py(), PyNoAuth)?;

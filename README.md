@@ -2,8 +2,8 @@
 
 eggfetch is a Rust-native HTTP client engine with Python bindings and a CLI tool. The core is async-first: a Rust engine built on tokio and hyper provides connection pooling, timeouts, TLS, and streaming. The Python bindings expose both sync and async APIs; the sync API blocks on the async engine while releasing the GIL, and the async API integrates with asyncio. There is exactly one networking implementation, living entirely in Rust.
 
-> **Status: validation and polish after Milestone N complete.**
-> Milestones A–P are implemented as documented, and the lifecycle, redirect security, packaging, CI, and compatibility pass is green before multipart uploads. The CLI crate remains a stub.
+> **Status: Milestone Q complete.**
+> Milestones A–Q are implemented as documented. The core engine supports multipart/form-data uploads, cookies, authentication, streaming, timeouts, and connection pooling. The CLI crate remains a stub.
 
 [![CI](https://github.com/eggstack/eggfetch/actions/workflows/ci.yml/badge.svg)](https://github.com/eggstack/eggfetch/actions/workflows/ci.yml)
 
@@ -216,9 +216,23 @@ Public-API stabilization and correctness audit:
 - Native TLS roots are preferred; packaged Mozilla roots are used only when native roots are unavailable. Certificate or hostname verification failures never trigger fallback.
 - CI covers Ubuntu, macOS, and Windows Python 3.10–3.13, plus clean wheel smoke tests on each operating system.
 
+### Milestone Q: Multipart and File Uploads (complete)
+
+Streaming multipart/form-data request bodies with Python `files=` compatibility:
+
+- **Core model** -- `Multipart`, `Part`, `PartBody`, and `Boundary` types with builder API.
+- **Streaming encoder** -- state-machine stream with backpressure; no eager buffering of file contents.
+- **Known-length optimization** -- computes `Content-Length` via checked arithmetic when all parts have known sizes; falls back to chunked transfer for unknown-length streams.
+- **Boundary generation** -- random alphanumeric boundary with validated custom boundary support.
+- **Python `files=` kwarg** -- bytes, tuples `(filename, data)`, `(filename, data, content_type)`, `(filename, data, content_type, headers)`, and `eggfetch.File(path)` wrapper.
+- **Mixed `data=` + `files=`** -- form fields from `data=` and file parts from `files=` combined in a single multipart body.
+- **Conflict rejection** -- `files=` with `content=` or `json=` raises `TypeError`.
+- **Cancellation safety** -- dropped file handles and streams release resources cleanly.
+
+The multipart feature is gated behind the `multipart` feature in eggfetch-core. The Python crate enables it by default.
+
 ### Current limitations
 
-- No multipart files.
 - No `proxies`, `verify`, or `cert` kwargs.
 - Python 3.10–3.13 and the CI-supported Ubuntu, macOS, and Windows platforms are the current compatibility target. Other platforms may work but are not release-tested yet.
 - `connect` timeout is accepted but not independently enforced (use `total` as backstop).
@@ -310,4 +324,5 @@ eggfetch is dual-licensed under [MIT](LICENSE-MIT) and [Apache License, Version 
 - [plans/milestone-n-semantic-tightening.md](plans/milestone-n-semantic-tightening.md) -- the plan for Milestone N (semantic tightening and public-API stabilization).
 - [plans/milestone-o-cookie-subsystem.md](plans/milestone-o-cookie-subsystem.md) -- the plan for Milestone O (cookie subsystem).
 - [plans/milestone-p-authentication-subsystem.md](plans/milestone-p-authentication-subsystem.md) -- the plan for Milestone P (authentication subsystem).
+- [plans/milestone-q-multipart-file-uploads.md](plans/milestone-q-multipart-file-uploads.md) -- the plan for Milestone Q (multipart and file uploads).
 - [plans/post-milestone-j-tightening.md](plans/post-milestone-j-tightening.md) -- post-J corrective pass: redirect body buffering fix, async response construction fix, documentation truth pass.

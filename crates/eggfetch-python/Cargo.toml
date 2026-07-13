@@ -15,10 +15,10 @@ workspace = true
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-eggfetch-core = { path = "../eggfetch-core", features = ["cookies"] }
+eggfetch-core = { path = "../eggfetch-core", features = ["cookies", "multipart"] }
 pyo3 = { version = "0.23", features = ["extension-module"] }
 pyo3-async-runtimes = { version = "0.23", features = ["tokio-runtime"] }
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "net"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "net", "fs"] }
 bytes = "1"
 encoding_rs = "0.8"
 futures-util = "0.3"

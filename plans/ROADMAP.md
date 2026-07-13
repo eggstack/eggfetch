@@ -101,21 +101,23 @@ Initial capabilities:
 
 Auth must be designed as request transformation/state machinery, not hard-coded special cases in Python.
 
-## Milestone Q: Multipart and file uploads
+## Milestone Q: Multipart and file uploads (complete)
 
-Implement streaming multipart/form-data.
+Streaming multipart/form-data request bodies in eggfetch-core and Python `files=` compatibility.
 
-Capabilities:
+Implemented capabilities:
 
-- fields and files
-- filenames and content types
-- constant-memory file streaming
-- known-length multipart optimization where possible
-- unknown-length chunked uploads
-- Python `files=` compatibility
-- cancellation, timeout, and redirect replay behavior
-
-Multipart must reuse the established streaming-body pipeline.
+- core multipart model (`Multipart`, `Part`, `PartBody`, `Boundary`)
+- text fields, byte parts, and streaming file parts
+- boundary generation (random) and custom boundary validation
+- per-part headers and content types
+- streaming encoder (state-machine, backpressure, no eager buffering)
+- known-length calculation (checked arithmetic, only when all parts known)
+- Python `files=` kwarg (bytes, tuples, paths via `eggfetch.File`)
+- Python `data=` + `files=` combination (multipart fields + files)
+- `files=` + `content=`/`json=` conflict rejection
+- cancellation-safe streaming (drops file handles and streams)
+- feature-gated (`multipart` feature in eggfetch-core)
 
 ## Milestone R: Content compression
 
@@ -337,7 +339,7 @@ The preferred order is:
 1. Milestone N: semantic tightening
 2. Milestone O: cookies
 3. Milestone P: authentication
-4. Milestone Q: multipart/files
+4. Milestone Q: multipart/files (complete)
 5. Milestone R: compression
 6. Milestone S: proxies
 7. Milestone T: TLS configuration

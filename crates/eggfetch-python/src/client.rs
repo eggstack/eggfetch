@@ -5,7 +5,7 @@ use pyo3::prelude::*;
 use crate::auth;
 use crate::conversion::{
     build_request_body, parse_timeout, python_cookies_to_header, python_headers_to_rust,
-    python_params_to_url, validate_body_kwargs,
+    python_params_to_url, validate_body_kwargs_with_files,
 };
 use crate::cookies::PyCookies;
 use crate::errors::map_err;
@@ -99,7 +99,7 @@ impl PyClient {
     }
 
     /// Send an HTTP request.
-    #[pyo3(signature = (method, url, *, headers=None, params=None, content=None, data=None, json=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None))]
+    #[pyo3(signature = (method, url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None))]
     #[allow(clippy::too_many_arguments)]
     fn request<'py>(
         &mut self,
@@ -111,6 +111,7 @@ impl PyClient {
         content: Option<&Bound<'py, PyAny>>,
         data: Option<&Bound<'py, PyAny>>,
         json: Option<&Bound<'py, PyAny>>,
+        files: Option<&Bound<'py, PyAny>>,
         timeout: Option<&Bound<'py, PyAny>>,
         cookies: Option<&Bound<'py, PyAny>>,
         auth: Option<&Bound<'py, PyAny>>,
@@ -134,7 +135,7 @@ impl PyClient {
         }
         let target_url = target_url;
 
-        validate_body_kwargs(content, data, json)?;
+        validate_body_kwargs_with_files(content, data, json, files)?;
 
         let mut rust_headers = if let Some(h) = headers {
             python_headers_to_rust(py, h)?
@@ -142,9 +143,19 @@ impl PyClient {
             eggfetch_core::Headers::new()
         };
 
-        let (body_bytes, auto_content_type) = build_request_body(py, content, data, json)?;
+        let (body_bytes, auto_content_type): (Option<Vec<u8>>, Option<String>) =
+            if let Some(f) = files {
+                let (body, ct) = crate::multipart::build_multipart_body(py, data, f)?;
+                match body {
+                    eggfetch_core::RequestBody::Bytes(b) => (Some(b.to_vec()), Some(ct)),
+                    _ => (None, Some(ct)),
+                }
+            } else {
+                let (bytes, ct) = build_request_body(py, content, data, json)?;
+                (bytes, ct.map(String::from))
+            };
 
-        if let Some(ct) = auto_content_type {
+        if let Some(ct) = &auto_content_type {
             if !rust_headers.contains("content-type") {
                 rust_headers.insert("content-type", ct).map_err(map_err)?;
             }
@@ -236,6 +247,7 @@ impl PyClient {
             None,
             None,
             None,
+            None,
             timeout,
             cookies,
             auth,
@@ -245,7 +257,7 @@ impl PyClient {
     }
 
     /// Send a POST request.
-    #[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None))]
+    #[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None))]
     #[allow(clippy::too_many_arguments)]
     fn post<'py>(
         &mut self,
@@ -256,6 +268,7 @@ impl PyClient {
         content: Option<&Bound<'py, PyAny>>,
         data: Option<&Bound<'py, PyAny>>,
         json: Option<&Bound<'py, PyAny>>,
+        files: Option<&Bound<'py, PyAny>>,
         timeout: Option<&Bound<'py, PyAny>>,
         cookies: Option<&Bound<'py, PyAny>>,
         auth: Option<&Bound<'py, PyAny>>,
@@ -271,6 +284,7 @@ impl PyClient {
             content,
             data,
             json,
+            files,
             timeout,
             cookies,
             auth,
@@ -280,7 +294,7 @@ impl PyClient {
     }
 
     /// Send a PUT request.
-    #[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None))]
+    #[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None))]
     #[allow(clippy::too_many_arguments)]
     fn put<'py>(
         &mut self,
@@ -291,6 +305,7 @@ impl PyClient {
         content: Option<&Bound<'py, PyAny>>,
         data: Option<&Bound<'py, PyAny>>,
         json: Option<&Bound<'py, PyAny>>,
+        files: Option<&Bound<'py, PyAny>>,
         timeout: Option<&Bound<'py, PyAny>>,
         cookies: Option<&Bound<'py, PyAny>>,
         auth: Option<&Bound<'py, PyAny>>,
@@ -306,6 +321,7 @@ impl PyClient {
             content,
             data,
             json,
+            files,
             timeout,
             cookies,
             auth,
@@ -315,7 +331,7 @@ impl PyClient {
     }
 
     /// Send a PATCH request.
-    #[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None))]
+    #[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None))]
     #[allow(clippy::too_many_arguments)]
     fn patch<'py>(
         &mut self,
@@ -326,6 +342,7 @@ impl PyClient {
         content: Option<&Bound<'py, PyAny>>,
         data: Option<&Bound<'py, PyAny>>,
         json: Option<&Bound<'py, PyAny>>,
+        files: Option<&Bound<'py, PyAny>>,
         timeout: Option<&Bound<'py, PyAny>>,
         cookies: Option<&Bound<'py, PyAny>>,
         auth: Option<&Bound<'py, PyAny>>,
@@ -341,6 +358,7 @@ impl PyClient {
             content,
             data,
             json,
+            files,
             timeout,
             cookies,
             auth,
@@ -370,6 +388,7 @@ impl PyClient {
             url,
             headers,
             params,
+            None,
             None,
             None,
             None,
@@ -405,6 +424,7 @@ impl PyClient {
             None,
             None,
             None,
+            None,
             timeout,
             cookies,
             auth,
@@ -437,6 +457,7 @@ impl PyClient {
             None,
             None,
             None,
+            None,
             timeout,
             cookies,
             auth,
@@ -446,7 +467,7 @@ impl PyClient {
     }
 
     /// Send a streaming HTTP request.
-    #[pyo3(signature = (method, url, *, headers=None, params=None, content=None, data=None, json=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None))]
+    #[pyo3(signature = (method, url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None))]
     #[allow(clippy::too_many_arguments)]
     fn stream<'py>(
         &mut self,
@@ -458,6 +479,7 @@ impl PyClient {
         content: Option<&Bound<'py, PyAny>>,
         data: Option<&Bound<'py, PyAny>>,
         json: Option<&Bound<'py, PyAny>>,
+        files: Option<&Bound<'py, PyAny>>,
         timeout: Option<&Bound<'py, PyAny>>,
         cookies: Option<&Bound<'py, PyAny>>,
         auth: Option<&Bound<'py, PyAny>>,
@@ -481,7 +503,7 @@ impl PyClient {
         }
         let target_url = target_url;
 
-        validate_body_kwargs(content, data, json)?;
+        validate_body_kwargs_with_files(content, data, json, files)?;
 
         let mut rust_headers = if let Some(h) = headers {
             python_headers_to_rust(py, h)?
@@ -489,9 +511,19 @@ impl PyClient {
             eggfetch_core::Headers::new()
         };
 
-        let (body_bytes, auto_content_type) = build_request_body(py, content, data, json)?;
+        let (body_bytes, auto_content_type): (Option<Vec<u8>>, Option<String>) =
+            if let Some(f) = files {
+                let (body, ct) = crate::multipart::build_multipart_body(py, data, f)?;
+                match body {
+                    eggfetch_core::RequestBody::Bytes(b) => (Some(b.to_vec()), Some(ct)),
+                    _ => (None, Some(ct)),
+                }
+            } else {
+                let (bytes, ct) = build_request_body(py, content, data, json)?;
+                (bytes, ct.map(String::from))
+            };
 
-        if let Some(ct) = auto_content_type {
+        if let Some(ct) = &auto_content_type {
             if !rust_headers.contains("content-type") {
                 rust_headers.insert("content-type", ct).map_err(map_err)?;
             }
@@ -506,6 +538,7 @@ impl PyClient {
         }
 
         let rust_timeout = parse_timeout(timeout)?;
+
         let auth_override = auth::parse_auth(auth)?;
 
         let client = self.client.clone();
