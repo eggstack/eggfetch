@@ -91,7 +91,7 @@ signals active readers and iterator producers. A response may outlive its
 client because the core response owns its body lease; closing the client only
 prevents new requests and does not invalidate an already returned response.
 
-The workspace has ~324 Rust tests and ~341 Python tests covering construction, streaming, timeouts, pools, headers, integration scenarios, Python sync API, Python async API, response compatibility properties, redirect behavior, redirect replay, total timeout across redirects, sync/async API parity, cookie subsystem (parsing, matching, jar operations, client integration, Python API), authentication subsystem (Basic/Bearer auth, precedence, cross-origin credential stripping, Python auth classes), and true network streaming (sync/async `client.stream()`, `StreamingResponse`, chunk iteration, cancellation, pool lease lifecycle, split UTF-8, cross-chunk line delimiters, named exception types).
+The workspace has ~331 Rust tests and ~367 Python tests covering construction, streaming, timeouts, pools, headers, integration scenarios, Python sync API, Python async API, response compatibility properties, redirect behavior, redirect replay, total timeout across redirects, sync/async API parity, cookie subsystem (parsing, matching, jar operations, client integration, Python API), authentication subsystem (Basic/Bearer auth, precedence, cross-origin credential stripping, Python auth classes), and true network streaming (sync/async `client.stream()`, `StreamingResponse`, chunk iteration, cancellation, pool lease lifecycle, split UTF-8, cross-chunk line delimiters, named exception types).
 
 ## Working Style
 
