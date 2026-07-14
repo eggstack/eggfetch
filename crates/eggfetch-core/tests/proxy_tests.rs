@@ -8,6 +8,8 @@
 #![allow(clippy::module_name_repetitions)]
 
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 
 use bytes::Bytes;
@@ -927,4 +929,111 @@ async fn per_request_bypass_proxy() {
 
     proxy.shutdown();
     echo.shutdown();
+}
+
+struct ConnectionCountingServer {
+    port: u16,
+    connection_count: Arc<AtomicUsize>,
+    shutdown: watch::Sender<bool>,
+}
+
+impl ConnectionCountingServer {
+    async fn start() -> Self {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let (shutdown_tx, mut shutdown_rx) = watch::channel(false);
+        let connection_count = Arc::new(AtomicUsize::new(0));
+        let count = connection_count.clone();
+
+        tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    result = listener.accept() => {
+                        if let Ok((mut stream, _)) = result {
+                            count.fetch_add(1, Ordering::SeqCst);
+                            tokio::spawn(async move {
+                                let mut reader = BufReader::new(&mut stream);
+                                let mut request_line = String::new();
+                                reader.read_line(&mut request_line).await.ok();
+
+                                let mut content_length: usize = 0;
+                                loop {
+                                    let mut line = String::new();
+                                    reader.read_line(&mut line).await.ok();
+                                    let trimmed = line.trim().to_string();
+                                    if trimmed.is_empty() {
+                                        break;
+                                    }
+                                    if let Some((name, value)) = trimmed.split_once(':') {
+                                        if name.trim().to_lowercase() == "content-length" {
+                                            content_length = value.trim().parse().unwrap_or(0);
+                                        }
+                                    }
+                                }
+
+                                if content_length > 0 {
+                                    let mut body = vec![0u8; content_length];
+                                    let mut total = 0;
+                                    while total < content_length {
+                                        match reader.read(&mut body[total..]).await {
+                                            Ok(0) | Err(_) => break,
+                                            Ok(n) => total += n,
+                                        }
+                                    }
+                                }
+
+                                let resp = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok";
+                                stream.write_all(resp.as_bytes()).await.ok();
+                            });
+                        }
+                    }
+                    _ = shutdown_rx.changed() => { break; }
+                }
+            }
+        });
+
+        Self {
+            port,
+            connection_count,
+            shutdown: shutdown_tx,
+        }
+    }
+
+    fn url(&self) -> String {
+        format!("http://127.0.0.1:{}", self.port)
+    }
+
+    fn connection_count(&self) -> usize {
+        self.connection_count.load(Ordering::SeqCst)
+    }
+
+    fn shutdown(&self) {
+        let _ = self.shutdown.send(true);
+    }
+}
+
+#[tokio::test]
+async fn repeated_proxy_requests_create_separate_connections() {
+    let server = ConnectionCountingServer::start().await;
+    let proxy = HttpProxyServer::start(HttpProxyConfig::default()).await;
+
+    let client = test_client(&proxy.url());
+
+    let request_count = 5;
+    for i in 0..request_count {
+        let url = format!("{}/req/{i}", server.url());
+        let mut resp = client.get(&url).unwrap().send().await.unwrap();
+        assert_eq!(resp.status().as_u16(), 200);
+        let body = resp.text().await.unwrap();
+        assert_eq!(body, "ok");
+    }
+
+    let connections = server.connection_count();
+    assert_eq!(
+        connections, request_count,
+        "Expected {request_count} separate connections but got {connections}"
+    );
+
+    proxy.shutdown();
+    server.shutdown();
 }

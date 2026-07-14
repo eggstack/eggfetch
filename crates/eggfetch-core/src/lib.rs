@@ -43,6 +43,7 @@ pub mod request;
 pub mod response;
 pub(crate) mod stream;
 pub mod timeout;
+pub(crate) mod transport;
 
 pub use auth::{AuthScheme, BasicAuth, BearerAuth};
 pub use body::{BoxBytesStream, RequestBody, ResponseBody};

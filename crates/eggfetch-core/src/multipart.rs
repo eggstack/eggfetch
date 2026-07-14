@@ -960,4 +960,211 @@ mod tests {
         assert_eq!(body.len(), Some(0));
         assert!(!body.is_stream());
     }
+
+    #[test]
+    fn unicode_field_names_and_filenames() {
+        let mp = Multipart::with_boundary(Boundary::try_new("b").unwrap())
+            .text("名前", "日本語の値")
+            .unwrap()
+            .bytes(
+                "файл",
+                "данные.bin",
+                "application/octet-stream",
+                Bytes::from("data"),
+            )
+            .unwrap();
+        let body = mp.into_body();
+        match body {
+            RequestBody::Bytes(data) => {
+                let s = String::from_utf8(data.to_vec()).unwrap();
+                assert!(s.contains("name=\"名前\""));
+                assert!(s.contains("日本語の値"));
+                assert!(s.contains("name=\"файл\""));
+                assert!(s.contains("filename=\"данные.bin\""));
+            }
+            _ => panic!("expected bytes body"),
+        }
+    }
+
+    #[test]
+    fn empty_field_value() {
+        let mp = Multipart::with_boundary(Boundary::try_new("b").unwrap())
+            .text("field", "")
+            .unwrap();
+        let body = mp.into_body();
+        match body {
+            RequestBody::Bytes(data) => {
+                let expected = "\
+                    --b\r\n\
+                    Content-Disposition: form-data; name=\"field\"\r\n\
+                    \r\n\
+                    \r\n\
+                    --b--\r\n\
+                ";
+                assert_eq!(data.as_ref(), expected.as_bytes());
+            }
+            _ => panic!("expected bytes body"),
+        }
+    }
+
+    #[test]
+    fn zero_byte_file() {
+        let mp = Multipart::with_boundary(Boundary::try_new("b").unwrap())
+            .bytes(
+                "file",
+                "empty.txt",
+                "application/octet-stream",
+                Bytes::new(),
+            )
+            .unwrap();
+        let body = mp.into_body();
+        match body {
+            RequestBody::Bytes(data) => {
+                let s = String::from_utf8(data.to_vec()).unwrap();
+                assert!(s.contains("filename=\"empty.txt\""));
+                assert!(s.contains("Content-Type: application/octet-stream"));
+                assert!(s.contains("name=\"file\""));
+                assert!(s.ends_with("--b--\r\n"));
+                let expected = "\
+                    --b\r\n\
+                    Content-Disposition: form-data; name=\"file\"; filename=\"empty.txt\"\r\n\
+                    Content-Type: application/octet-stream\r\n\
+                    \r\n\
+                    \r\n\
+                    --b--\r\n\
+                ";
+                assert_eq!(data.as_ref(), expected.as_bytes());
+            }
+            _ => panic!("expected bytes body"),
+        }
+    }
+
+    #[test]
+    fn mixed_known_and_unknown_length_parts() {
+        let stream = futures_util::stream::empty::<Result<Bytes>>();
+        let mp = Multipart::with_boundary(Boundary::try_new("b").unwrap())
+            .text("field", "value")
+            .unwrap()
+            .stream(
+                "file",
+                "big.bin",
+                "application/octet-stream",
+                Box::pin(stream),
+                None,
+            )
+            .unwrap();
+        assert!(!mp.is_replayable());
+        assert!(mp.content_length().is_none());
+        let body = mp.into_body();
+        match body {
+            RequestBody::Stream { length, .. } => {
+                assert!(length.is_none());
+            }
+            _ => panic!("expected stream body"),
+        }
+    }
+
+    #[test]
+    fn exact_terminal_boundary_format() {
+        let mp = Multipart::with_boundary(Boundary::try_new("bd").unwrap())
+            .text("f", "v")
+            .unwrap();
+        let body = mp.into_body();
+        match body {
+            RequestBody::Bytes(data) => {
+                let s = String::from_utf8(data.to_vec()).unwrap();
+                assert!(s.ends_with("--bd--\r\n"));
+                let final_boundary_start = s.rfind("--bd--\r\n").unwrap();
+                let rest = &s[final_boundary_start..];
+                assert_eq!(rest, "--bd--\r\n");
+            }
+            _ => panic!("expected bytes body"),
+        }
+    }
+
+    #[test]
+    fn field_name_special_valid_characters() {
+        let mp = Multipart::with_boundary(Boundary::try_new("b").unwrap())
+            .text("field_name", "a")
+            .unwrap()
+            .text("field-name", "b")
+            .unwrap()
+            .text("field.name", "c")
+            .unwrap();
+        let body = mp.into_body();
+        match body {
+            RequestBody::Bytes(data) => {
+                let s = String::from_utf8(data.to_vec()).unwrap();
+                assert!(s.contains("name=\"field_name\""));
+                assert!(s.contains("name=\"field-name\""));
+                assert!(s.contains("name=\"field.name\""));
+            }
+            _ => panic!("expected bytes body"),
+        }
+    }
+
+    #[test]
+    fn content_length_overflow_with_many_parts() {
+        let mut mp = Multipart::with_boundary(Boundary::try_new("b").unwrap());
+        for i in 0..1000 {
+            mp = mp.text(&format!("field{i}"), "value").unwrap();
+        }
+        let result = mp.content_length();
+        assert!(result.is_some());
+        let len = result.unwrap();
+        assert!(len > 0);
+    }
+
+    #[test]
+    fn multiple_custom_headers_per_part() {
+        let part = Part::new("field", PartBody::Bytes(Bytes::from("data")))
+            .header("X-First", "one")
+            .header("X-Second", "two")
+            .header("X-Third", "three");
+        let mp = Multipart::with_boundary(Boundary::try_new("b").unwrap())
+            .part(part)
+            .unwrap();
+        let body = mp.into_body();
+        match body {
+            RequestBody::Bytes(data) => {
+                let s = String::from_utf8(data.to_vec()).unwrap();
+                assert!(s.contains("x-first: one"));
+                assert!(s.contains("x-second: two"));
+                assert!(s.contains("x-third: three"));
+            }
+            _ => panic!("expected bytes body"),
+        }
+    }
+
+    #[tokio::test]
+    async fn streaming_encoder_empty_stream() {
+        let stream = futures_util::stream::empty::<Result<Bytes>>();
+        let mp = Multipart::with_boundary(Boundary::try_new("b").unwrap())
+            .stream(
+                "file",
+                "empty.bin",
+                "application/octet-stream",
+                Box::pin(stream),
+                None,
+            )
+            .unwrap();
+        let mut encoder = mp.encoder();
+        let mut output = BytesMut::new();
+        while let Some(chunk) = encoder.next().await {
+            output.extend_from_slice(&chunk.unwrap());
+        }
+        let s = String::from_utf8(output.to_vec()).unwrap();
+        assert!(s.contains("filename=\"empty.bin\""));
+        assert!(s.contains("name=\"file\""));
+        assert!(s.ends_with("--b--\r\n"));
+        let expected = "\
+            --b\r\n\
+            Content-Disposition: form-data; name=\"file\"; filename=\"empty.bin\"\r\n\
+            Content-Type: application/octet-stream\r\n\
+            \r\n\
+            \r\n\
+            --b--\r\n\
+        ";
+        assert_eq!(output.as_ref(), expected.as_bytes());
+    }
 }

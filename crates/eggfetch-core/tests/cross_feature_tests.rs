@@ -1169,6 +1169,43 @@ async fn cancellation_during_streamed_compressed_proxy_response() {
 
 #[tokio::test]
 #[cfg(feature = "compression-gzip")]
+async fn streamed_compressed_response_through_proxy() {
+    let server = CompressedResponseServer::start().await;
+    let proxy = HttpProxyServer::start(HttpProxyConfig::default()).await;
+
+    let client = test_client(&proxy.url());
+
+    let dest = server.url();
+    let mut resp = client.get(&dest).unwrap().send().await.unwrap();
+    assert_eq!(resp.status().as_u16(), 200);
+
+    let mut stream = resp.bytes_stream().unwrap();
+    let mut all_bytes = Vec::new();
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.unwrap();
+        all_bytes.extend_from_slice(&chunk);
+    }
+
+    assert!(
+        !all_bytes.is_empty(),
+        "Stream should have yielded decompressed bytes"
+    );
+    let body = String::from_utf8_lossy(&all_bytes);
+    assert_eq!(body.as_ref(), "hello compressed world");
+
+    let raw_gzip = gzip_compress(b"hello compressed world");
+    assert_ne!(
+        all_bytes.len(),
+        raw_gzip.len(),
+        "Decompressed bytes should differ in length from gzip-compressed bytes, proving decompression occurred"
+    );
+
+    proxy.shutdown();
+    server.shutdown();
+}
+
+#[tokio::test]
+#[cfg(feature = "compression-gzip")]
 async fn total_timeout_connect_plus_decompression() {
     let server = CompressedResponseServer::start().await;
     let proxy = HttpProxyServer::start(HttpProxyConfig::default()).await;
