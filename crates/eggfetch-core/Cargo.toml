@@ -17,10 +17,10 @@ http1 = ["hyper/http1", "hyper-util/http1", "hyper-rustls/http1"]
 http2 = ["hyper/http2", "hyper-util/http2"]
 tls-rustls = []
 json = []
-compression-gzip = ["dep:async-compression", "async-compression/gzip", "dep:tokio-util", "tokio/io-util"]
+compression-gzip = ["dep:async-compression", "async-compression/gzip", "dep:tokio-util", "tokio/io-util", "dep:flate2"]
 compression-brotli = ["dep:async-compression", "async-compression/brotli", "dep:tokio-util", "tokio/io-util"]
 compression-zstd = ["dep:async-compression", "async-compression/zstd", "dep:tokio-util", "tokio/io-util"]
-compression-deflate = ["dep:async-compression", "async-compression/deflate", "dep:tokio-util", "tokio/io-util"]
+compression-deflate = ["dep:async-compression", "async-compression/deflate", "dep:tokio-util", "tokio/io-util", "dep:flate2"]
 cookies = ["dep:cookie"]
 proxy = ["tokio/io-util"]
 tracing = []
@@ -48,7 +48,7 @@ base64 = "0.22"
 cookie = { version = "0.18", default-features = false, features = ["percent-encode"], optional = true }
 async-compression = { version = "0.4", default-features = false, features = ["tokio"], optional = true }
 tokio-util = { version = "0.7", features = ["io"], optional = true }
-flate2 = "1"
+flate2 = { version = "1", optional = true }
 getrandom = "0.2"
 httparse = "1"
 webpki-roots = "0.26"

@@ -19,4 +19,7 @@ pub(crate) type HyperClient = hyper_util::client::legacy::Client<Connector, Hype
 pub(crate) mod direct;
 
 #[cfg(feature = "proxy")]
+pub(crate) mod connect;
+
+#[cfg(feature = "proxy")]
 pub(crate) mod proxy;

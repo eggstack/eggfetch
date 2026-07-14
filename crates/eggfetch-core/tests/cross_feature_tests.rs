@@ -7,10 +7,12 @@
 #![allow(clippy::module_name_repetitions)]
 
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 
 use bytes::Bytes;
-use eggfetch_core::{Client, Proxy, Timeout};
+use eggfetch_core::{Client, Proxy, ProxyAuth, Timeout};
 use futures_util::StreamExt;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
@@ -67,6 +69,73 @@ impl HttpProxyServer {
 
     fn url(&self) -> String {
         format!("http://127.0.0.1:{}", self.port)
+    }
+
+    fn shutdown(&self) {
+        let _ = self.shutdown.send(true);
+    }
+}
+
+struct TrackingHttpProxyServer {
+    port: u16,
+    shutdown: watch::Sender<bool>,
+    auth_received: Arc<AtomicBool>,
+}
+
+struct TrackingHttpProxyConfig {
+    required_auth: Option<(String, String)>,
+    auth_received: Arc<AtomicBool>,
+}
+
+impl TrackingHttpProxyServer {
+    async fn start(config: TrackingHttpProxyConfig) -> Self {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let (shutdown_tx, mut shutdown_rx) = watch::channel(false);
+        let required_auth = config.required_auth;
+        let auth_received = config.auth_received;
+        let auth_received_clone = Arc::clone(&auth_received);
+
+        tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    result = listener.accept() => {
+                        match result {
+                            Ok((stream, _)) => {
+                                let auth = required_auth.clone();
+                                let ar = Arc::clone(&auth_received_clone);
+                                tokio::spawn(async move {
+                                    if let Err(e) = handle_tracking_proxy_connection(stream, auth, ar).await {
+                                        eprintln!("tracking proxy connection error: {e}");
+                                    }
+                                });
+                            }
+                            Err(e) => {
+                                eprintln!("accept error: {e}");
+                                break;
+                            }
+                        }
+                    }
+                    _ = shutdown_rx.changed() => {
+                        break;
+                    }
+                }
+            }
+        });
+
+        Self {
+            port,
+            shutdown: shutdown_tx,
+            auth_received,
+        }
+    }
+
+    fn url(&self) -> String {
+        format!("http://127.0.0.1:{}", self.port)
+    }
+
+    fn auth_was_received(&self) -> bool {
+        self.auth_received.load(Ordering::SeqCst)
     }
 
     fn shutdown(&self) {
@@ -306,6 +375,215 @@ async fn handle_connect_tunnel(
     } else {
         let resp = b"HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n";
         client_stream.write_all(resp).await?;
+    }
+
+    Ok(())
+}
+
+#[allow(clippy::too_many_lines)]
+async fn handle_tracking_proxy_connection(
+    mut client_stream: TcpStream,
+    required_auth: Option<(String, String)>,
+    auth_received: Arc<AtomicBool>,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    use std::fmt::Write as _;
+    let mut buf_reader = BufReader::new(&mut client_stream);
+
+    let mut request_line = String::new();
+    buf_reader.read_line(&mut request_line).await?;
+    if request_line.trim().is_empty() {
+        return Ok(());
+    }
+
+    let mut raw_headers = Vec::new();
+    loop {
+        let mut line = String::new();
+        buf_reader.read_line(&mut line).await?;
+        raw_headers.extend_from_slice(line.as_bytes());
+        if line.trim().is_empty() {
+            break;
+        }
+    }
+
+    let header_str = String::from_utf8_lossy(&raw_headers);
+    let mut headers = HashMap::new();
+    for h in header_str.lines() {
+        if let Some((name, value)) = h.split_once(':') {
+            headers.insert(name.trim().to_lowercase(), value.trim().to_string());
+        }
+    }
+
+    if headers.contains_key("proxy-authorization") {
+        auth_received.store(true, Ordering::SeqCst);
+    }
+
+    if let Some((ref required_user, ref required_pass)) = required_auth {
+        let mut authorized = false;
+        if let Some(auth_header) = headers.get("proxy-authorization") {
+            if let Some(encoded) = auth_header.strip_prefix("Basic ") {
+                use base64::Engine;
+                let decoded = base64::engine::general_purpose::STANDARD
+                    .decode(encoded.as_bytes())
+                    .unwrap_or_default();
+                let decoded_str = String::from_utf8_lossy(&decoded);
+                let expected = format!("{required_user}:{required_pass}");
+                authorized = decoded_str == expected;
+            }
+        }
+        if !authorized {
+            let resp = b"HTTP/1.1 407 Proxy Authentication Required\r\nContent-Length: 0\r\n\r\n";
+            let w = buf_reader.into_inner();
+            w.write_all(resp).await?;
+            return Ok(());
+        }
+    }
+
+    let parts: Vec<&str> = request_line.split_whitespace().collect();
+    let method = parts[0];
+    let target = parts[1];
+
+    if method.eq_ignore_ascii_case("CONNECT") {
+        drop(buf_reader);
+        handle_connect_tunnel(&mut client_stream, target).await?;
+    } else {
+        let content_length: usize = headers
+            .get("content-length")
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(0);
+
+        let mut request_body = vec![0u8; content_length];
+        if content_length > 0 {
+            let mut total = 0;
+            while total < content_length {
+                match buf_reader.read(&mut request_body[total..]).await {
+                    Ok(0) | Err(_) => break,
+                    Ok(n) => total += n,
+                }
+            }
+            request_body.truncate(total);
+        }
+
+        drop(buf_reader);
+
+        let dest_url = url::Url::parse(target)?;
+        let dest_host = dest_url.host_str().unwrap_or("127.0.0.1");
+        let dest_port = dest_url.port_or_known_default().unwrap_or(80);
+        let dest_addr = format!("{dest_host}:{dest_port}");
+        let dest_stream = TcpStream::connect(&dest_addr).await?;
+        let (mut dest_reader, mut dest_writer) = dest_stream.into_split();
+
+        let dest_path = dest_url.path();
+        let dest_query = dest_url
+            .query()
+            .map(|q| format!("?{q}"))
+            .unwrap_or_default();
+        let dest_path_query = format!("{dest_path}{dest_query}");
+        let mut dest_req = format!("{method} {dest_path_query} HTTP/1.1\r\n");
+        for (name, value) in &headers {
+            if name == "proxy-authorization" || name == "host" {
+                continue;
+            }
+            let _ = write!(dest_req, "{name}: {value}\r\n");
+        }
+        if let Some(host) = headers.get("host") {
+            let _ = write!(dest_req, "host: {host}\r\n");
+        } else if let Ok(parsed) = url::Url::parse(target) {
+            let host = parsed.host_str().unwrap_or("");
+            let _ = write!(dest_req, "host: {host}\r\n");
+        }
+        dest_req.push_str("\r\n");
+
+        dest_writer.write_all(dest_req.as_bytes()).await?;
+        if !request_body.is_empty() {
+            dest_writer.write_all(&request_body).await?;
+        }
+
+        let mut resp_buf = Vec::new();
+        let mut resp_reader = BufReader::new(&mut dest_reader);
+
+        let mut status_line = String::new();
+        resp_reader.read_line(&mut status_line).await?;
+        resp_buf.extend_from_slice(status_line.as_bytes());
+
+        loop {
+            let mut line = String::new();
+            resp_reader.read_line(&mut line).await?;
+            resp_buf.extend_from_slice(line.as_bytes());
+            if line.trim().is_empty() {
+                break;
+            }
+        }
+
+        let status_str = String::from_utf8_lossy(&resp_buf);
+        let mut resp_content_length: Option<usize> = None;
+        let mut chunked = false;
+        for line in status_str.lines() {
+            if let Some(val) = line
+                .strip_prefix("Content-Length:")
+                .or_else(|| line.strip_prefix("content-length:"))
+            {
+                resp_content_length = val.trim().parse().ok();
+            }
+            if let Some(val) = line
+                .strip_prefix("Transfer-Encoding:")
+                .or_else(|| line.strip_prefix("transfer-encoding:"))
+            {
+                if val.trim().to_lowercase().contains("chunked") {
+                    chunked = true;
+                }
+            }
+        }
+
+        if chunked {
+            loop {
+                let mut chunk_size_line = String::new();
+                resp_reader.read_line(&mut chunk_size_line).await?;
+                resp_buf.extend_from_slice(chunk_size_line.as_bytes());
+                let size_str = chunk_size_line.trim();
+                if size_str.is_empty() || size_str == "0" {
+                    if size_str == "0" {
+                        let mut trailer = String::new();
+                        resp_reader.read_line(&mut trailer).await?;
+                        resp_buf.extend_from_slice(trailer.as_bytes());
+                    }
+                    break;
+                }
+                let chunk_size = usize::from_str_radix(size_str, 16).unwrap_or(0);
+                let mut chunk_body = vec![0u8; chunk_size];
+                let mut total = 0;
+                while total < chunk_size {
+                    match resp_reader.read(&mut chunk_body[total..]).await {
+                        Ok(0) | Err(_) => break,
+                        Ok(n) => total += n,
+                    }
+                }
+                resp_buf.extend_from_slice(&chunk_body);
+                let mut crlf = String::new();
+                resp_reader.read_line(&mut crlf).await?;
+                resp_buf.extend_from_slice(crlf.as_bytes());
+            }
+        } else if let Some(cl) = resp_content_length {
+            let mut body = vec![0u8; cl];
+            let mut total = 0;
+            while total < cl {
+                match resp_reader.read(&mut body[total..]).await {
+                    Ok(0) | Err(_) => break,
+                    Ok(n) => total += n,
+                }
+            }
+            resp_buf.extend_from_slice(&body);
+        } else {
+            let mut buf = vec![0u8; 4096];
+            loop {
+                match resp_reader.read(&mut buf).await {
+                    Ok(0) | Err(_) => break,
+                    Ok(n) => resp_buf.extend_from_slice(&buf[..n]),
+                }
+            }
+        }
+
+        client_stream.write_all(&resp_buf).await?;
+        client_stream.flush().await?;
     }
 
     Ok(())
@@ -1205,25 +1483,133 @@ async fn streamed_compressed_response_through_proxy() {
 }
 
 #[tokio::test]
-#[cfg(feature = "compression-gzip")]
-async fn total_timeout_connect_plus_decompression() {
-    let server = CompressedResponseServer::start().await;
-    let proxy = HttpProxyServer::start(HttpProxyConfig::default()).await;
+#[cfg(feature = "multipart")]
+async fn proxy_authenticated_multipart_upload() {
+    let echo = EchoHttpServer::start().await;
+    let auth_received = Arc::new(AtomicBool::new(false));
+    let proxy = TrackingHttpProxyServer::start(TrackingHttpProxyConfig {
+        required_auth: Some(("proxyuser".into(), "proxypass".into())),
+        auth_received: auth_received.clone(),
+    })
+    .await;
 
     let client = Client::builder()
-        .proxy(Proxy::all(&proxy.url()).unwrap())
+        .proxy(
+            Proxy::all(&proxy.url())
+                .unwrap()
+                .auth(ProxyAuth::basic("proxyuser", "proxypass").unwrap()),
+        )
         .timeout(Timeout {
             total: Some(Duration::from_secs(5)),
             ..Default::default()
         })
         .build();
 
-    let dest = server.url();
+    let multipart = build_multipart_body();
+    let boundary = multipart.boundary().as_str().to_owned();
+    let body = multipart.into_body();
+
+    let dest = echo.url();
+    let mut resp = client
+        .post(&dest)
+        .unwrap()
+        .header(
+            "Content-Type",
+            &format!("multipart/form-data; boundary={boundary}"),
+        )
+        .body(body)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status().as_u16(), 200);
+    let resp_body = resp.text().await.unwrap();
+    assert!(resp_body.contains("POST"));
+    assert!(resp_body.contains("value"));
+    assert!(resp_body.contains("file content here"));
+
+    assert!(
+        proxy.auth_was_received(),
+        "Proxy should have received Proxy-Authorization header"
+    );
+
+    proxy.shutdown();
+    echo.shutdown();
+}
+
+#[tokio::test]
+async fn auth_stripping_on_cross_origin_proxied_redirect() {
+    let cross_server = CrossOriginServer::start().await;
+    let origin_server = RedirectServer::start(Some(cross_server.port())).await;
+    let proxy = HttpProxyServer::start(HttpProxyConfig::default()).await;
+
+    let client = Client::builder()
+        .proxy(Proxy::all(&proxy.url()).unwrap())
+        .auth(eggfetch_core::AuthScheme::basic("testuser", "testpass").unwrap())
+        .follow_redirects(true)
+        .timeout(Timeout {
+            total: Some(Duration::from_secs(5)),
+            ..Default::default()
+        })
+        .build();
+
+    let dest = format!("{}/redirect-cross", origin_server.url());
     let mut resp = client.get(&dest).unwrap().send().await.unwrap();
     assert_eq!(resp.status().as_u16(), 200);
     let body = resp.text().await.unwrap();
-    assert_eq!(body, "hello compressed world");
+    assert!(
+        body.contains("cross-origin response"),
+        "Body should contain cross-origin response: {body}"
+    );
+
+    assert!(
+        !body.to_lowercase().contains("authorization"),
+        "Authorization header should NOT be present on cross-origin redirect target, but got: {body}"
+    );
 
     proxy.shutdown();
-    server.shutdown();
+    origin_server.shutdown();
+    cross_server.shutdown();
+}
+
+#[tokio::test]
+#[cfg(feature = "compression-gzip")]
+async fn total_timeout_connect_plus_decompression() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let (shutdown_tx, mut shutdown_rx) = watch::channel(false);
+
+    tokio::spawn(async move {
+        loop {
+            tokio::select! {
+                result = listener.accept() => {
+                    if let Ok((mut stream, _)) = result {
+                        tokio::spawn(async move {
+                            let _ = stream.read(&mut [0u8; 1]).await;
+                        });
+                    }
+                }
+                _ = shutdown_rx.changed() => { break; }
+            }
+        }
+    });
+
+    let proxy = HttpProxyServer::start(HttpProxyConfig::default()).await;
+
+    let client = Client::builder()
+        .proxy(Proxy::all(&proxy.url()).unwrap())
+        .timeout(Timeout {
+            total: Some(Duration::from_millis(200)),
+            ..Default::default()
+        })
+        .build();
+
+    let dest = format!("https://127.0.0.1:{port}/");
+    let result = client.get(&dest).unwrap().send().await;
+    assert!(
+        result.is_err(),
+        "Expected timeout error but got: {result:?}"
+    );
+
+    let _ = shutdown_tx.send(true);
+    proxy.shutdown();
 }

@@ -1037,3 +1037,75 @@ async fn repeated_proxy_requests_create_separate_connections() {
     proxy.shutdown();
     server.shutdown();
 }
+
+// ---------------------------------------------------------------------------
+// CONNECT Authority Validation Tests
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn connect_empty_authority_returns_error() {
+    let proxy = HttpProxyServer::start(HttpProxyConfig::default()).await;
+
+    let client = test_client(&proxy.url());
+
+    let result = client.get("https:///path").unwrap().send().await;
+    assert!(
+        result.is_err(),
+        "Expected error for URL with empty authority, got: {result:?}"
+    );
+
+    proxy.shutdown();
+}
+
+#[tokio::test]
+async fn connect_missing_port_returns_error() {
+    let proxy = HttpProxyServer::start(HttpProxyConfig::default()).await;
+
+    let client = test_client(&proxy.url());
+
+    let result = client
+        .get("https://this-host-does-not-exist-xyz.invalid/")
+        .unwrap()
+        .send()
+        .await;
+    assert!(
+        result.is_err(),
+        "Expected error for URL with unreachable host, got: {result:?}"
+    );
+
+    proxy.shutdown();
+}
+
+#[tokio::test]
+async fn connect_invalid_host_returns_error() {
+    let proxy = HttpProxyServer::start(HttpProxyConfig::default()).await;
+
+    let client = test_client(&proxy.url());
+
+    let result = client
+        .get("https://this.host.does.not.exist.invalid/")
+        .unwrap()
+        .send()
+        .await;
+    assert!(
+        result.is_err(),
+        "Expected error for URL with invalid host, got: {result:?}"
+    );
+
+    proxy.shutdown();
+}
+
+#[tokio::test]
+async fn connect_non_numeric_port_returns_error() {
+    let proxy = HttpProxyServer::start(HttpProxyConfig::default()).await;
+
+    let client = test_client(&proxy.url());
+
+    let result = client.get("https://host:notaport/path");
+    assert!(
+        result.is_err(),
+        "Expected error for URL with non-numeric port"
+    );
+
+    proxy.shutdown();
+}

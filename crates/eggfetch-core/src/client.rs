@@ -6,21 +6,15 @@ use std::time::Duration;
 use http::Method;
 use hyper_util::rt::TokioExecutor;
 
-use crate::body::RequestBody;
 use crate::error::{Error, Result};
 use crate::headers::Headers;
-use crate::pool::{OriginKey, Pool, PoolConfig, PoolMetrics};
+use crate::pool::{Pool, PoolConfig, PoolMetrics};
 #[cfg(feature = "proxy")]
-use crate::proxy::{Proxy, ProxyConfig};
+use crate::proxy::Proxy;
 use crate::redirect::RedirectPolicy;
-#[cfg(feature = "proxy")]
-use crate::request::ProxyOverride;
 use crate::request::{Request, RequestBuilder};
 use crate::response::Response;
-use crate::stream::write_timeout_stream;
-use crate::timeout::{Timeout, TimeoutPhase};
-#[cfg(feature = "proxy")]
-use crate::transport::proxy::send_proxy_request;
+use crate::timeout::Timeout;
 use crate::transport::{Connector, HyperClient};
 
 #[cfg(feature = "cookies")]
@@ -210,222 +204,12 @@ impl Client {
     /// This handles pool acquisition, timeout application, and body
     /// processing for one request/response cycle. It does NOT handle
     /// redirects—that is the responsibility of [`Client::send`].
-    #[allow(clippy::too_many_lines)]
     pub(crate) async fn send_single_request(
         &self,
         request: Request,
         timeout: &Timeout,
     ) -> Result<Response> {
-        let (
-            method,
-            url,
-            headers,
-            body,
-            version,
-            _request_timeout,
-            _request_redirect,
-            _,
-            _,
-            request_decompress,
-            proxy_override,
-        ) = request.into_parts();
-
-        // Determine effective decompression setting.
-        let decompression_enabled =
-            request_decompress.unwrap_or(self.inner.config.automatic_decompression);
-
-        // Inject Accept-Encoding if automatic decompression is enabled
-        // and the user has not supplied their own.
-        let mut headers = headers;
-        if decompression_enabled && !headers.contains("accept-encoding") {
-            if let Some(value) = crate::compression::accept_encoding_value() {
-                headers.insert("accept-encoding", value)?;
-            }
-        }
-
-        // Determine effective proxy configuration.
-        #[cfg(feature = "proxy")]
-        let effective_proxy = self.resolve_proxy(&url, &proxy_override);
-        #[cfg(not(feature = "proxy"))]
-        {
-            let _ = proxy_override;
-        }
-        #[cfg(not(feature = "proxy"))]
-        let effective_proxy: Option<()> = None;
-
-        #[cfg(feature = "proxy")]
-        let origin = match effective_proxy {
-            Some(ref proxy_config) => {
-                let is_tunnel = url.scheme() == "https";
-                OriginKey::from_url_with_proxy(
-                    url.scheme(),
-                    &url,
-                    proxy_config.host(),
-                    Some(proxy_config.port()),
-                    is_tunnel,
-                )
-            }
-            None => OriginKey::from_url(url.scheme(), &url),
-        };
-        #[cfg(not(feature = "proxy"))]
-        let origin = OriginKey::from_url(url.scheme(), &url);
-
-        let started = std::time::Instant::now();
-        let pool_deadline = match (timeout.pool, timeout.total) {
-            (Some(pool), Some(total)) if total < pool => Some((total, TimeoutPhase::Total)),
-            (Some(pool), _) => Some((pool, TimeoutPhase::Pool)),
-            (None, Some(total)) => Some((total, TimeoutPhase::Total)),
-            (None, None) => None,
-        };
-        let guard = match pool_deadline {
-            Some((duration, phase)) => {
-                match tokio::time::timeout(duration, self.inner.pool.acquire(origin.as_ref())).await
-                {
-                    Ok(guard) => guard,
-                    Err(_) => {
-                        return Err(Error::Timeout {
-                            phase,
-                            elapsed: duration,
-                        })
-                    }
-                }
-            }
-            None => self.inner.pool.acquire(origin.as_ref()).await,
-        };
-
-        let body = match (body, timeout.write) {
-            (RequestBody::Stream { stream, length }, Some(write_dur)) => {
-                let wrapped = write_timeout_stream(stream, write_dur);
-                RequestBody::Stream {
-                    stream: wrapped,
-                    length,
-                }
-            }
-            (b, _) => b,
-        };
-
-        let headers = crate::pipeline::apply_content_length(headers, &body)?;
-
-        // Add user-agent if not already set.
-        let mut headers = headers;
-        if let Some(ref ua) = self.inner.config.user_agent {
-            if !headers.contains("user-agent") {
-                headers.insert(http::header::USER_AGENT.as_str(), ua.as_str())?;
-            }
-        }
-
-        // Send through proxy or directly.
-        let remaining_total = timeout
-            .total
-            .map(|total| total.saturating_sub(started.elapsed()));
-
-        let response = match effective_proxy {
-            #[cfg(feature = "proxy")]
-            Some(ref proxy_config) => {
-                if headers.contains("proxy-authorization") && proxy_config.auth().is_some() {
-                    return Err(Error::ConflictingAuth(
-                        "conflict: both request Proxy-Authorization header and proxy auth are configured; remove one".into(),
-                    ));
-                }
-                send_proxy_request(
-                    &url,
-                    &method,
-                    &headers,
-                    body,
-                    version,
-                    proxy_config,
-                    remaining_total,
-                )
-                .await?
-            }
-            _ => {
-                let uri: http::Uri = url
-                    .as_str()
-                    .parse()
-                    .map_err(|e| Error::InvalidUrl(format!("failed to convert url to URI: {e}")))?;
-
-                let mut http_request = http::Request::builder()
-                    .method(method)
-                    .uri(uri)
-                    .version(version);
-
-                for (name, value) in headers.iter() {
-                    http_request = http_request.header(name, value);
-                }
-
-                let hyper_request = http_request
-                    .body(body.into_http_body())
-                    .map_err(|e| Error::RequestBuild(e.to_string()))?;
-
-                let send_future = crate::transport::direct::send_request(
-                    &self.inner.hyper_client,
-                    hyper_request,
-                    url.clone(),
-                );
-
-                match remaining_total {
-                    Some(dur) => match tokio::time::timeout(dur, send_future).await {
-                        Ok(Ok(resp)) => resp,
-                        Ok(Err(e)) => return Err(e),
-                        Err(_) => {
-                            return Err(Error::Timeout {
-                                phase: TimeoutPhase::Total,
-                                elapsed: dur,
-                            });
-                        }
-                    },
-                    None => send_future.await?,
-                }
-            }
-        };
-
-        let mut response = response;
-
-        // Apply decompression if enabled.
-        if decompression_enabled {
-            let content_encoding = response
-                .headers()
-                .get("content-encoding")
-                .and_then(|v| v.to_str().ok())
-                .map(str::to_owned);
-
-            let limit = crate::compression::DecompressionLimit {
-                max_decoded_body_size: self.inner.config.max_decoded_body_size,
-                max_decompression_ratio: self.inner.config.max_decompression_ratio,
-            };
-
-            response = crate::response_decode::apply_decompression(
-                response,
-                content_encoding.as_deref(),
-                limit,
-            )?;
-        }
-
-        crate::pipeline::apply_read_timeout_and_lease(&mut response, guard, timeout.read);
-
-        Ok(response)
-    }
-
-    /// Resolve the effective proxy configuration for a request.
-    ///
-    /// Applies the tri-state override model:
-    /// - `Inherit`: use client-level proxy
-    /// - `Direct`: direct, no proxy
-    /// - `Override(config)`: use request-level proxy
-    #[cfg(feature = "proxy")]
-    fn resolve_proxy(&self, url: &url::Url, proxy_override: &ProxyOverride) -> Option<ProxyConfig> {
-        match proxy_override {
-            ProxyOverride::Override(config) => Some(config.clone()),
-            ProxyOverride::Direct => None,
-            ProxyOverride::Inherit => self
-                .inner
-                .config
-                .proxy
-                .as_ref()
-                .filter(|p| p.should_use_for_scheme(url.scheme()))
-                .filter(|p| p.no_proxy_rules().map_or(true, |np| !np.should_bypass(url)))
-                .map(Proxy::config),
-        }
+        crate::pipeline::send_single_request(&self.inner, request, timeout).await
     }
 }
 
@@ -613,6 +397,24 @@ impl ClientBuilder {
     #[must_use]
     pub fn automatic_decompression(mut self, enabled: bool) -> Self {
         self.automatic_decompression = Some(enabled);
+        self
+    }
+
+    /// Set the maximum decoded response body size in bytes.
+    /// When set, responses whose decompressed body exceeds this limit
+    /// produce an error instead of buffering the full content.
+    #[must_use]
+    pub fn max_decoded_body_size(mut self, max: usize) -> Self {
+        self.max_decoded_body_size = Some(max);
+        self
+    }
+
+    /// Set the maximum decompression ratio (decoded bytes / compressed bytes).
+    /// When set, responses whose expansion ratio exceeds this limit produce
+    /// an error. This guards against zip-bomb style attacks.
+    #[must_use]
+    pub fn max_decompression_ratio(mut self, ratio: f64) -> Self {
+        self.max_decompression_ratio = Some(ratio);
         self
     }
 

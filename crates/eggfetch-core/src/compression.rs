@@ -19,6 +19,9 @@
 //! is returned. If decompression is disabled, the raw bytes pass
 //! through unchanged.
 
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
+
 use crate::body::BoxBytesStream;
 use crate::error::{Error, Result};
 
@@ -182,8 +185,9 @@ pub fn validate_content_encodings(header_value: &str) -> Result<()> {
 /// maximum or if a decoder fails. Returns
 /// [`Error::UnsupportedContentEncoding`] if any encoding is not
 /// supported by the compiled-in features. Returns
-/// [`Error::DecodedBodyLimit`] if the decoded body exceeds the
-/// configured limits.
+/// [`Error::DecodedBodyTooLarge`] or
+/// [`Error::DecompressionRatioExceeded`] if the decoded body exceeds
+/// the configured limits.
 pub fn decompress_stream(
     stream: BoxBytesStream,
     content_encoding: Option<&str>,
@@ -214,8 +218,13 @@ pub fn decompress_stream(
     // Validate all encodings are supported before building the chain.
     validate_content_encodings(header)?;
 
+    // Wrap the original compressed stream with a counter so we can
+    // track compressed bytes consumed through the decoder chain.
+    let counting = CountingStream::new(stream);
+    let counter = counting.counter();
+
     // Apply decoders in reverse order (innermost encoding first).
-    let mut current: BoxBytesStream = stream;
+    let mut current: BoxBytesStream = Box::pin(counting);
     for encoding in encodings.into_iter().rev() {
         current = make_decoder(current, encoding)?;
     }
@@ -224,7 +233,7 @@ pub fn decompress_stream(
         return Ok(current);
     }
 
-    Ok(Box::pin(LimitingStream::new(current, limit)))
+    Ok(Box::pin(LimitingStream::new(current, limit, counter)))
 }
 
 /// Decompress a fully buffered byte slice using synchronous decoding.
@@ -237,8 +246,9 @@ pub fn decompress_stream(
 /// # Errors
 ///
 /// Returns an error if the content encoding is unsupported or
-/// decompression fails. Returns [`Error::DecodedBodyLimit`] if the
-/// decoded body exceeds the configured limits.
+/// decompression fails. Returns [`Error::DecodedBodyTooLarge`] or
+/// [`Error::DecompressionRatioExceeded`] if the decoded body exceeds
+/// the configured limits.
 pub fn decompress_buffered(
     data: &[u8],
     content_encoding: &str,
@@ -268,11 +278,17 @@ pub fn decompress_buffered(
     }
 
     let compressed_len = data.len();
+    #[allow(unused_mut)]
     let mut current = bytes::Bytes::copy_from_slice(data);
     for encoding in encodings.into_iter().rev() {
         match encoding {
+            #[cfg(any(feature = "compression-gzip", feature = "compression-deflate"))]
             ContentCoding::Gzip | ContentCoding::Deflate => {
                 current = sync_decode_flate2(&current, encoding)?;
+            }
+            #[cfg(not(any(feature = "compression-gzip", feature = "compression-deflate")))]
+            ContentCoding::Gzip | ContentCoding::Deflate => {
+                // Cannot synchronously decode without flate2; pass through raw.
             }
             ContentCoding::Brotli | ContentCoding::Zstd => {
                 // Cannot synchronously decode brotli/zstd; pass through raw.
@@ -282,7 +298,7 @@ pub fn decompress_buffered(
 
     if let Some(max) = limit.max_decoded_body_size {
         if current.len() > max {
-            return Err(Error::DecodedBodyLimit);
+            return Err(Error::DecodedBodyTooLarge);
         }
     }
     if let Some(max_ratio) = limit.max_decompression_ratio {
@@ -290,7 +306,7 @@ pub fn decompress_buffered(
             #[allow(clippy::cast_precision_loss)]
             let ratio = current.len() as f64 / compressed_len as f64;
             if ratio > max_ratio {
-                return Err(Error::DecodedBodyLimit);
+                return Err(Error::DecompressionRatioExceeded);
             }
         }
     }
@@ -299,6 +315,7 @@ pub fn decompress_buffered(
 }
 
 /// Synchronously decode a single layer of gzip or deflate compression using flate2.
+#[cfg(any(feature = "compression-gzip", feature = "compression-deflate"))]
 fn sync_decode_flate2(data: &bytes::Bytes, encoding: ContentCoding) -> Result<bytes::Bytes> {
     use std::io::Read;
 
@@ -475,20 +492,65 @@ impl tokio::io::AsyncRead for StreamReader {
     }
 }
 
+/// A stream wrapper that counts the compressed bytes yielded by the
+/// underlying stream. The count is exposed via a shared
+/// `Arc<AtomicUsize>` so that downstream limiters can read the
+/// compressed byte count without needing to see the raw stream.
+struct CountingStream {
+    inner: BoxBytesStream,
+    count: Arc<AtomicUsize>,
+}
+
+impl CountingStream {
+    fn new(inner: BoxBytesStream) -> Self {
+        Self {
+            inner,
+            count: Arc::new(AtomicUsize::new(0)),
+        }
+    }
+
+    fn counter(&self) -> Arc<AtomicUsize> {
+        Arc::clone(&self.count)
+    }
+}
+
+impl futures_core::Stream for CountingStream {
+    type Item = <BoxBytesStream as futures_core::Stream>::Item;
+
+    fn poll_next(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Option<Self::Item>> {
+        use std::pin::Pin;
+
+        match Pin::new(&mut self.inner).poll_next(cx) {
+            std::task::Poll::Ready(Some(Ok(chunk))) => {
+                self.count.fetch_add(chunk.len(), Ordering::Relaxed);
+                std::task::Poll::Ready(Some(Ok(chunk)))
+            }
+            other => other,
+        }
+    }
+}
+
 struct LimitingStream {
     inner: BoxBytesStream,
     limit: DecompressionLimit,
     decoded_bytes: usize,
-    compressed_bytes_seen: usize,
+    compressed_counter: Arc<AtomicUsize>,
 }
 
 impl LimitingStream {
-    fn new(inner: BoxBytesStream, limit: DecompressionLimit) -> Self {
+    fn new(
+        inner: BoxBytesStream,
+        limit: DecompressionLimit,
+        compressed_counter: Arc<AtomicUsize>,
+    ) -> Self {
         Self {
             inner,
             limit,
             decoded_bytes: 0,
-            compressed_bytes_seen: 0,
+            compressed_counter,
         }
     }
 
@@ -496,14 +558,15 @@ impl LimitingStream {
     fn check_limit(&self) -> Result<()> {
         if let Some(max) = self.limit.max_decoded_body_size {
             if self.decoded_bytes > max {
-                return Err(Error::DecodedBodyLimit);
+                return Err(Error::DecodedBodyTooLarge);
             }
         }
         if let Some(max_ratio) = self.limit.max_decompression_ratio {
-            if self.compressed_bytes_seen > 0 {
-                let ratio = self.decoded_bytes as f64 / self.compressed_bytes_seen as f64;
+            let compressed = self.compressed_counter.load(Ordering::Relaxed);
+            if compressed > 0 {
+                let ratio = self.decoded_bytes as f64 / compressed as f64;
                 if ratio > max_ratio {
-                    return Err(Error::DecodedBodyLimit);
+                    return Err(Error::DecompressionRatioExceeded);
                 }
             }
         }
@@ -523,7 +586,6 @@ impl futures_core::Stream for LimitingStream {
         match Pin::new(&mut self.inner).poll_next(cx) {
             std::task::Poll::Ready(Some(Ok(chunk))) => {
                 self.decoded_bytes += chunk.len();
-                self.compressed_bytes_seen += chunk.len();
                 if let Err(e) = self.check_limit() {
                     return std::task::Poll::Ready(Some(Err(e)));
                 }
@@ -659,7 +721,7 @@ mod tests {
             max_decompression_ratio: None,
         };
         let err = decompress_buffered(&data, "gzip", limit).unwrap_err();
-        assert_eq!(err.kind(), "decoded_body_limit");
+        assert_eq!(err.kind(), "decoded_body_too_large");
     }
 
     #[test]
@@ -681,7 +743,7 @@ mod tests {
             max_decompression_ratio: Some(0.5),
         };
         let err = decompress_buffered(&data, "gzip", limit).unwrap_err();
-        assert_eq!(err.kind(), "decoded_body_limit");
+        assert_eq!(err.kind(), "decompression_ratio_exceeded");
     }
 
     #[test]
@@ -713,7 +775,8 @@ mod tests {
             Ok(bytes::Bytes::from("ab")),
             Ok(bytes::Bytes::from("cd")),
         ]));
-        let mut limited = LimitingStream::new(stream, limit);
+        let counter = Arc::new(AtomicUsize::new(0));
+        let mut limited = LimitingStream::new(stream, limit, counter);
 
         let chunk1 = futures_util::StreamExt::next(&mut limited)
             .now_or_never()
@@ -727,7 +790,7 @@ mod tests {
             .unwrap()
             .unwrap()
             .unwrap_err();
-        assert_eq!(err.kind(), "decoded_body_limit");
+        assert_eq!(err.kind(), "decoded_body_too_large");
     }
 
     #[test]
@@ -740,7 +803,8 @@ mod tests {
             Ok(bytes::Bytes::from("a")),
             Ok(bytes::Bytes::from("b")),
         ]));
-        let mut limited = LimitingStream::new(stream, limit);
+        let counter = Arc::new(AtomicUsize::new(0));
+        let mut limited = LimitingStream::new(stream, limit, counter);
 
         let chunk1 = futures_util::StreamExt::next(&mut limited)
             .now_or_never()

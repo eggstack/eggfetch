@@ -134,9 +134,13 @@ pub enum Error {
     #[error("malformed proxy response: {0}")]
     MalformedProxyResponse(String),
 
-    /// The decoded body exceeded the configured size or ratio limit.
-    #[error("decoded body exceeded configured limit")]
-    DecodedBodyLimit,
+    /// The decoded body exceeded the configured size limit.
+    #[error("decoded body exceeded max decoded body size")]
+    DecodedBodyTooLarge,
+
+    /// The decompression ratio exceeded the configured limit.
+    #[error("decompression ratio exceeded max ratio")]
+    DecompressionRatioExceeded,
 }
 
 impl Error {
@@ -179,7 +183,8 @@ impl Error {
             Self::ProxyAuthRequired => "proxy_auth_required",
             Self::ProxyConnectRejected { .. } => "proxy_connect_rejected",
             Self::MalformedProxyResponse(_) => "malformed_proxy_response",
-            Self::DecodedBodyLimit => "decoded_body_limit",
+            Self::DecodedBodyTooLarge => "decoded_body_too_large",
+            Self::DecompressionRatioExceeded => "decompression_ratio_exceeded",
         }
     }
 }
