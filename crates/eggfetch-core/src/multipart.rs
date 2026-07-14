@@ -422,8 +422,14 @@ impl Multipart {
     ///
     /// If all parts are byte-backed, returns a buffered `RequestBody::Bytes`.
     /// Otherwise, returns a streaming `RequestBody::Stream`.
+    ///
+    /// Before encoding, checks that the boundary does not accidentally appear
+    /// within any buffered part body. If a collision is detected, the boundary
+    /// is regenerated. Streamed parts cannot be checked and are documented
+    /// accordingly.
     #[must_use]
-    pub fn into_body(self) -> RequestBody {
+    pub fn into_body(mut self) -> RequestBody {
+        self.ensure_no_boundary_collision();
         if self.is_replayable() {
             let boundary_str = self.boundary.0.clone();
             let mut buf = BytesMut::new();
@@ -449,9 +455,38 @@ impl Multipart {
     }
 
     /// Create a streaming encoder for this multipart body.
+    ///
+    /// Before encoding, checks that the boundary does not accidentally appear
+    /// within any buffered part body. If a collision is detected, the boundary
+    /// is regenerated. Streamed parts cannot be checked.
     #[must_use]
-    pub fn encoder(self) -> MultipartEncoder {
+    pub fn encoder(mut self) -> MultipartEncoder {
+        self.ensure_no_boundary_collision();
         MultipartEncoder::new(self)
+    }
+
+    /// Check that the boundary does not appear within any buffered part body.
+    ///
+    /// If a collision is detected, the boundary is regenerated (up to 10
+    /// attempts). Streamed parts are not checked because their content is
+    /// not yet available; this is documented as a known limitation.
+    fn ensure_no_boundary_collision(&mut self) {
+        const MAX_ATTEMPTS: usize = 10;
+        for _ in 0..MAX_ATTEMPTS {
+            let boundary_bytes = self.boundary.0.as_bytes();
+            let blen = boundary_bytes.len();
+            let collision = self.parts.iter().any(|part| {
+                if let PartBody::Bytes(ref data) = part.body {
+                    data.windows(blen).any(|window| window == boundary_bytes)
+                } else {
+                    false
+                }
+            });
+            if !collision {
+                return;
+            }
+            self.boundary = Boundary::random();
+        }
     }
 }
 
@@ -1166,5 +1201,82 @@ mod tests {
             --b--\r\n\
         ";
         assert_eq!(output.as_ref(), expected.as_bytes());
+    }
+
+    #[test]
+    fn boundary_collision_in_buffered_body_regenerated() {
+        let boundary = Boundary::try_new("COLLISION").unwrap();
+        let collision_body = b"this body contains COLLISION inside it";
+        let mp = Multipart::with_boundary(boundary.clone())
+            .text("field", "value")
+            .unwrap()
+            .bytes(
+                "file",
+                "test.bin",
+                "application/octet-stream",
+                Bytes::from_static(collision_body),
+            )
+            .unwrap();
+        let body = mp.into_body();
+        match body {
+            RequestBody::Bytes(data) => {
+                let s = String::from_utf8(data.to_vec()).unwrap();
+                let boundary_header = "--COLLISION\r\n";
+                assert!(
+                    !s.contains(boundary_header),
+                    "body should not contain the original boundary as a delimiter within part data"
+                );
+                assert!(s.contains("--"));
+                assert!(s.contains("value"));
+                assert!(s.contains("this body contains COLLISION inside it"));
+            }
+            _ => panic!("expected bytes body"),
+        }
+    }
+
+    #[test]
+    fn boundary_collision_in_text_field_regenerated() {
+        let boundary = Boundary::try_new("BD").unwrap();
+        let mp = Multipart::with_boundary(boundary)
+            .text("field", "contains BD in the middle")
+            .unwrap();
+        let body = mp.into_body();
+        match body {
+            RequestBody::Bytes(data) => {
+                let s = String::from_utf8(data.to_vec()).unwrap();
+                assert!(
+                    s.contains("contains BD in the middle"),
+                    "body should contain the original text value"
+                );
+            }
+            _ => panic!("expected bytes body"),
+        }
+    }
+
+    #[test]
+    fn no_collision_when_boundary_absent_from_bodies() {
+        let boundary = Boundary::try_new("NOCOLLISION").unwrap();
+        let original_boundary = boundary.as_str().to_owned();
+        let mp = Multipart::with_boundary(boundary)
+            .text("field", "safe value")
+            .unwrap()
+            .bytes(
+                "file",
+                "test.bin",
+                "text/plain",
+                Bytes::from("no collision here"),
+            )
+            .unwrap();
+        let body = mp.into_body();
+        match body {
+            RequestBody::Bytes(data) => {
+                let s = String::from_utf8(data.to_vec()).unwrap();
+                assert!(
+                    s.contains(&format!("--{original_boundary}\r\n")),
+                    "boundary should be unchanged when no collision exists"
+                );
+            }
+            _ => panic!("expected bytes body"),
+        }
     }
 }

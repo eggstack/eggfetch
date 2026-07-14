@@ -54,3 +54,4 @@ httparse = "1"
 webpki-roots = "0.26"
 
 [dev-dependencies]
+flate2 = "1"

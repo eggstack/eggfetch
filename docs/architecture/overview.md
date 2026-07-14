@@ -299,6 +299,8 @@ Supported `files=` forms:
 
 Per-origin pool limits are keyed by `(scheme, host, port)`, where the port uses the scheme's default when not explicit. `http://example.com:80` and `http://example.com` share a per-origin limit; `http://example.com` and `https://example.com` are independent; `http://example.com:8080` is distinct from `http://example.com`.
 
+When a proxy is involved, the pool key extends to `(proxy_origin, destination_origin, tunnel_mode)`, where `tunnel_mode` distinguishes HTTP forwarding from HTTPS CONNECT tunneling. Direct and proxied requests to the same destination have independent concurrency slots. Pool permits are semaphore-based concurrency tokens — they control how many requests may be in flight per origin, but they do not represent or manage TCP connections. The current implementation does not reuse TCP connections or tunnels; each request opens a fresh connection and releases the permit when the response body is consumed or dropped. See `docs/architecture/dependency-policy.md` for the full pool key specification.
+
 ## Pool Metrics
 
 `PoolMetrics` exposes only `acquisition_waits` and `acquisition_cancellations`. Socket-level counters (connections_opened/reused/closed) were removed because hyper owns socket lifecycle and eggfetch cannot observe individual socket events through its current integration.

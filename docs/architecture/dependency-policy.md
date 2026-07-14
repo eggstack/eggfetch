@@ -64,35 +64,77 @@ The project plans to use:
 
 These tools are not yet wired into CI. Adding them is part of the pre-release hardening work. Every dependency in the tree must have an explicit reason documented in code or review.
 
-## Proxy Transport Behavior
+## Pool Key Semantics
 
-The current proxy implementation creates a new TCP connection for each
-request through a proxy. The connection pool controls logical concurrency
-permits (preventing unbounded parallel requests) but does not maintain a
-socket pool for proxy connections.
+The connection pool uses `OriginKey` as its concurrency-control key. The
+key determines which requests share a concurrency slot and which get
+independent slots. The key is **not** a transport-level connection
+identifier — it controls logical concurrency permits, not TCP connection
+reuse.
 
-For HTTP forward proxying, each request:
-1. Opens a new TCP connection to the proxy
-2. Sends the request with absolute-form URI
-3. Reads the response
-4. Closes the connection
+### Key Composition
 
-For HTTPS CONNECT tunneling, each request:
-1. Opens a new TCP connection to the proxy
-2. Sends a CONNECT request
-3. Reads the 200 response
-4. Performs a TLS handshake through the tunnel
-5. Sends the HTTP request over TLS
-6. Reads the response
-7. Closes the connection
+The pool key is composed of:
 
-This means proxy connections are not reused across requests. The pool
-permit key includes proxy origin to prevent excessive parallel connections,
-but each permit corresponds to a fresh socket.
+- **`(scheme, host, port)`** for direct connections, where port uses the
+  scheme's default when not explicit. `http://example.com:80` and
+  `http://example.com` share a slot; `http://example.com` and
+  `https://example.com` are independent.
 
-Future work may introduce transport-level connection pooling for proxy
-connections, keyed by `(proxy origin, destination origin, tunnel mode,
-TLS config)`.
+When a proxy is involved, the key extends to:
+
+- **`(proxy_origin, destination_origin, tunnel_mode)`**, where
+  `tunnel_mode` is `true` for HTTPS CONNECT tunneling and `false` for
+  HTTP forward proxying. This means:
+  - Direct and proxied requests to the same destination have independent
+    concurrency slots.
+  - Different proxies sharing the same destination get independent slots.
+  - HTTP forwarding and HTTPS CONNECT tunneling through the same proxy
+    are keyed separately.
+
+### Pool Permits (Concurrency Control)
+
+Pool permits are semaphore-based concurrency tokens, not transport
+handles. Acquiring a permit means "this request is allowed to proceed";
+dropping the permit means "this request is done and another may start."
+The pool does **not** track or manage TCP connections or TLS sessions.
+
+Each permit holds:
+
+- An optional global semaphore permit (total concurrent requests).
+- An optional per-origin semaphore permit (per-`(scheme, host, port)`
+  or per-`(proxy, destination, tunnel)` concurrency).
+
+Permits are acquired before the request is sent and released when the
+response body is fully consumed, explicitly closed, or dropped. Streaming
+response bodies carry an `Arc<PoolGuard>` that holds the permits until
+the body is consumed or dropped.
+
+### Connection Reuse
+
+The current implementation does **not** reuse TCP connections or tunnels
+across requests. Each request:
+
+1. Acquires a pool permit.
+2. Opens a fresh TCP connection (and TLS handshake for HTTPS).
+3. Sends the request and reads the response.
+4. Releases the pool permit.
+
+For proxy connections specifically:
+
+- **HTTP forward proxying**: each request opens a new TCP connection to
+  the proxy, sends the request with absolute-form URI, reads the
+  response, and closes the connection.
+- **HTTPS CONNECT tunneling**: each request opens a new TCP connection to
+  the proxy, sends CONNECT, reads the 200 response, performs TLS through
+  the tunnel, sends the HTTP request, reads the response, and closes the
+  connection.
+
+The pool permit key includes the proxy origin to prevent excessive
+parallel connections through the same proxy, but each permit corresponds
+to a fresh socket. Future work may introduce transport-level connection
+pooling for proxy connections, keyed by `(proxy origin, destination
+origin, tunnel mode, TLS config)`.
 
 ## Decoded-Body Limits
 

@@ -1482,3 +1482,81 @@ async fn redirect_history_is_metadata_only() {
     // which is the structural guarantee that no pool permit can leak.
     assert!(!hist.reason_phrase().is_empty());
 }
+
+// ---------------------------------------------------------------------------
+// 12. Compression integration tests
+// ---------------------------------------------------------------------------
+
+#[cfg(feature = "compression-gzip")]
+#[tokio::test]
+async fn automatic_decompression_disabled_preserves_encoding_and_raw_bytes() {
+    use std::io::Write;
+    use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+    use tokio::net::TcpListener;
+
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+
+    let server_handle = tokio::spawn(async move {
+        let (stream, _) = listener.accept().await.unwrap();
+        let mut reader = BufReader::new(stream);
+        let mut request_line = String::new();
+        reader.read_line(&mut request_line).await.unwrap();
+
+        loop {
+            let mut line = String::new();
+            reader.read_line(&mut line).await.unwrap();
+            if line.trim().is_empty() {
+                break;
+            }
+        }
+
+        let uncompressed = b"hello compressed world";
+        let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::fast());
+        encoder.write_all(uncompressed).unwrap();
+        let compressed = encoder.finish().unwrap();
+
+        let resp = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\
+             Content-Encoding: gzip\r\nContent-Length: {}\r\n\
+             Connection: close\r\n\r\n",
+            compressed.len()
+        );
+        let mut stream = reader.into_inner();
+        stream.write_all(resp.as_bytes()).await.unwrap();
+        stream.write_all(&compressed).await.unwrap();
+        stream.flush().await.unwrap();
+    });
+
+    let client = Client::builder().automatic_decompression(false).build();
+
+    let url = format!("http://127.0.0.1:{port}/");
+    let mut resp = client.get(&url).unwrap().send().await.unwrap();
+
+    assert_eq!(resp.status().as_u16(), 200);
+
+    let encoding = resp.headers().get("content-encoding");
+    assert!(
+        encoding.is_some(),
+        "Content-Encoding header should be present when decompression is disabled"
+    );
+    assert_eq!(
+        encoding.unwrap().to_str().unwrap(),
+        "gzip",
+        "Content-Encoding should be gzip"
+    );
+
+    let body = resp.bytes().await.unwrap();
+    let expected_gzip = {
+        let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::fast());
+        encoder.write_all(b"hello compressed world").unwrap();
+        encoder.finish().unwrap()
+    };
+    assert_eq!(
+        body.as_ref(),
+        expected_gzip.as_slice(),
+        "body should be raw gzip bytes, not decompressed"
+    );
+
+    let _ = server_handle.await;
+}

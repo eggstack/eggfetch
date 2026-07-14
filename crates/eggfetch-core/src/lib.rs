@@ -35,12 +35,14 @@ pub mod error;
 pub mod headers;
 #[cfg(feature = "multipart")]
 pub mod multipart;
+pub(crate) mod pipeline;
 pub mod pool;
 #[cfg(feature = "proxy")]
 pub mod proxy;
 pub mod redirect;
 pub mod request;
 pub mod response;
+pub(crate) mod response_decode;
 pub(crate) mod stream;
 pub mod timeout;
 pub(crate) mod transport;

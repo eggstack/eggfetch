@@ -141,4 +141,5 @@ cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,co
 cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,compression-brotli
 cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,compression-zstd
 cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,proxy
+cargo check -p eggfetch-core --no-default-features --features http1,tls-rustls,multipart,proxy
 ```
