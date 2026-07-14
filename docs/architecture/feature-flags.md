@@ -45,9 +45,8 @@ Enables HTTP/1.1 support. This is the primary protocol for the MVP, backed by hy
 
 ### http2
 
-**Status:** planned, not implemented.
-**Milestone:** after MVP.
-Enables HTTP/2 support. HTTP/2 is a later expansion, not an MVP requirement.
+**Status:** implemented (Milestone V).
+Enables HTTP/2 support. When enabled, the client can negotiate HTTP/2 via ALPN for HTTPS connections. The `HttpVersionPolicy` enum controls which protocol versions are advertised. `Auto` (default) advertises both `h2` and `http/1.1`; `Http2Only` advertises only `h2`; `Http1Only` advertises only `http/1.1`. Without this feature, `Http2Only` and `Auto` silently downgrade to `Http1Only`. The Python crate exposes `Client(http2=True)` and `AsyncClient(http2=True)` for enabling HTTP/2 negotiation.
 
 ### tls-rustls
 

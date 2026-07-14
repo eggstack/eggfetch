@@ -8,6 +8,7 @@ use hyper_util::rt::TokioExecutor;
 
 use crate::error::{Error, Result};
 use crate::headers::Headers;
+use crate::http_version::HttpVersionPolicy;
 use crate::pool::{Pool, PoolConfig, PoolMetrics};
 #[cfg(feature = "proxy")]
 use crate::proxy::Proxy;
@@ -39,6 +40,11 @@ pub(crate) struct ClientConfig {
     #[cfg(feature = "proxy")]
     pub(crate) tls_config: Option<crate::tls::TlsConfig>,
     pub(crate) retry: Option<RetryPolicy>,
+    #[allow(
+        dead_code,
+        reason = "stored for inspection and future request-level use"
+    )]
+    pub(crate) http_version_policy: HttpVersionPolicy,
 }
 
 impl Default for ClientConfig {
@@ -59,6 +65,7 @@ impl Default for ClientConfig {
             #[cfg(feature = "proxy")]
             tls_config: None,
             retry: None,
+            http_version_policy: HttpVersionPolicy::default(),
         }
     }
 }
@@ -247,6 +254,7 @@ pub struct ClientBuilder {
     proxy: Option<Proxy>,
     tls_config: Option<crate::tls::TlsConfig>,
     retry: Option<RetryPolicy>,
+    http_version_policy: HttpVersionPolicy,
 }
 
 impl ClientBuilder {
@@ -269,6 +277,7 @@ impl ClientBuilder {
             proxy: None,
             tls_config: None,
             retry: None,
+            http_version_policy: HttpVersionPolicy::default(),
         }
     }
 
@@ -455,6 +464,20 @@ impl ClientBuilder {
         self
     }
 
+    /// Set the HTTP version policy for this client.
+    ///
+    /// Controls which HTTP protocol versions the client may negotiate.
+    /// The default is [`HttpVersionPolicy::Auto`], which allows HTTP/2
+    /// negotiation via ALPN when the `http2` feature is enabled.
+    ///
+    /// When the `http2` feature is not compiled in, `Http2Only` and `Auto`
+    /// are silently downgraded to `Http1Only`.
+    #[must_use]
+    pub fn http_version_policy(mut self, policy: HttpVersionPolicy) -> Self {
+        self.http_version_policy = policy;
+        self
+    }
+
     /// Build the client.
     ///
     /// Native system roots are preferred. If the platform root store is
@@ -462,25 +485,38 @@ impl ClientBuilder {
     /// while retaining certificate and hostname verification.
     #[must_use]
     pub fn build(self) -> Client {
+        use crate::http_version::HttpVersionPolicyEnabler;
+        let enabler = HttpVersionPolicyEnabler::from_policy(self.http_version_policy);
+
         let https = match self.tls_config.as_ref() {
             Some(tls_config) => match tls_config.build_rustls_config() {
                 Ok(mut rc) => {
+                    // hyper-rustls requires empty ALPN; it rebuilds based
+                    // on enable_http1/enable_http2 calls.
                     rc.alpn_protocols.clear();
-                    hyper_rustls::HttpsConnectorBuilder::new()
+                    let builder = hyper_rustls::HttpsConnectorBuilder::new()
                         .with_tls_config(rc)
-                        .https_or_http()
-                        .enable_http1()
-                        .build()
+                        .https_or_http();
+                    #[cfg(feature = "http2")]
+                    {
+                        match (enabler.enable_http1(), enabler.enable_http2()) {
+                            (true, true) => builder.enable_http1().enable_http2().build(),
+                            (true, false) => builder.enable_http1().build(),
+                            (false, true) => builder.enable_http2().build(),
+                            (false, false) => {
+                                unreachable!("at least one protocol version must be enabled")
+                            }
+                        }
+                    }
+                    #[cfg(not(feature = "http2"))]
+                    {
+                        let _ = enabler;
+                        builder.enable_http1().build()
+                    }
                 }
-                Err(_) => match hyper_rustls::HttpsConnectorBuilder::new().with_native_roots() {
-                    Ok(builder) => builder.https_or_http().enable_http1().build(),
-                    Err(_) => build_webpki_connector(),
-                },
+                Err(_) => build_fallback_connector(enabler),
             },
-            None => match hyper_rustls::HttpsConnectorBuilder::new().with_native_roots() {
-                Ok(builder) => builder.https_or_http().enable_http1().build(),
-                Err(_) => build_webpki_connector(),
-            },
+            None => build_fallback_connector(enabler),
         };
 
         let mut builder = hyper_util::client::legacy::Client::builder(TokioExecutor::new());
@@ -510,6 +546,7 @@ impl ClientBuilder {
             #[cfg(feature = "proxy")]
             tls_config: self.tls_config,
             retry: self.retry,
+            http_version_policy: self.http_version_policy,
         };
 
         let pool = Pool::new(self.pool_config);
@@ -524,16 +561,33 @@ impl ClientBuilder {
     }
 }
 
-/// Build a connector with the packaged Mozilla root set.
+/// Build a connector with fallback root stores.
 ///
-/// Kept as a separate function so the fallback construction path can be
-/// exercised without depending on the host's native trust store.
-fn build_webpki_connector() -> Connector {
-    hyper_rustls::HttpsConnectorBuilder::new()
-        .with_webpki_roots()
-        .https_or_http()
-        .enable_http1()
-        .build()
+/// Uses native roots when available, otherwise falls back to the packaged
+/// Mozilla root set. Protocol versions are determined by the enabler.
+fn build_fallback_connector(enabler: crate::http_version::HttpVersionPolicyEnabler) -> Connector {
+    let builder = match hyper_rustls::HttpsConnectorBuilder::new().with_native_roots() {
+        Ok(b) => b,
+        Err(_) => hyper_rustls::HttpsConnectorBuilder::new().with_webpki_roots(),
+    };
+    #[cfg(feature = "http2")]
+    {
+        match (enabler.enable_http1(), enabler.enable_http2()) {
+            (true, true) => builder
+                .https_or_http()
+                .enable_http1()
+                .enable_http2()
+                .build(),
+            (true, false) => builder.https_or_http().enable_http1().build(),
+            (false, true) => builder.https_or_http().enable_http2().build(),
+            (false, false) => unreachable!("at least one protocol version must be enabled"),
+        }
+    }
+    #[cfg(not(feature = "http2"))]
+    {
+        let _ = enabler;
+        builder.https_or_http().enable_http1().build()
+    }
 }
 
 impl Default for ClientBuilder {
@@ -588,7 +642,56 @@ mod tests {
         if let Ok(builder) = hyper_rustls::HttpsConnectorBuilder::new().with_native_roots() {
             let _ = builder.https_or_http().enable_http1().build();
         }
-        let _ = build_webpki_connector();
+        let enabler =
+            crate::http_version::HttpVersionPolicyEnabler::from_policy(HttpVersionPolicy::Auto);
+        let _ = build_fallback_connector(enabler);
+    }
+
+    #[test]
+    fn client_builder_http1_only() {
+        let client = Client::builder()
+            .http_version_policy(HttpVersionPolicy::Http1Only)
+            .build();
+        assert_eq!(
+            client.inner.config.http_version_policy,
+            HttpVersionPolicy::Http1Only
+        );
+    }
+
+    #[test]
+    fn client_builder_http2_auto() {
+        let client = Client::builder()
+            .http_version_policy(HttpVersionPolicy::Auto)
+            .build();
+        assert_eq!(
+            client.inner.config.http_version_policy,
+            HttpVersionPolicy::Auto
+        );
+    }
+
+    #[test]
+    #[cfg(feature = "http2")]
+    fn client_builder_http2_only() {
+        let client = Client::builder()
+            .http_version_policy(HttpVersionPolicy::Http2Only)
+            .build();
+        assert_eq!(
+            client.inner.config.http_version_policy,
+            HttpVersionPolicy::Http2Only
+        );
+    }
+
+    #[test]
+    fn connector_builds_for_all_policies() {
+        for policy in [
+            HttpVersionPolicy::Http1Only,
+            HttpVersionPolicy::Auto,
+            #[cfg(feature = "http2")]
+            HttpVersionPolicy::Http2Only,
+        ] {
+            let enabler = crate::http_version::HttpVersionPolicyEnabler::from_policy(policy);
+            let _ = build_fallback_connector(enabler);
+        }
     }
 
     #[test]

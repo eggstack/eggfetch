@@ -15,7 +15,7 @@ workspace = true
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-eggfetch-core = { path = "../eggfetch-core", features = ["cookies", "multipart", "proxy", "compression-gzip", "compression-brotli", "compression-zstd", "compression-deflate"] }
+eggfetch-core = { path = "../eggfetch-core", features = ["cookies", "multipart", "proxy", "compression-gzip", "compression-brotli", "compression-zstd", "compression-deflate", "http2"] }
 pyo3 = { version = "0.23", features = ["extension-module"] }
 pyo3-async-runtimes = { version = "0.23", features = ["tokio-runtime"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "net", "fs"] }

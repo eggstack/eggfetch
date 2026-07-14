@@ -14,7 +14,7 @@ following direct dependencies:
 - **http** -- standard HTTP types (`Method`, `StatusCode`, `HeaderMap`, `Uri`).
 - **http-body** -- body trait abstraction.
 - **http-body-util** -- body combinators for http-body (`Full`, `Empty`).
-- **hyper** -- HTTP/1.1 protocol implementation.
+- **hyper** -- HTTP/1.1 and HTTP/2 protocol implementation.
 - **hyper-util** -- high-level client utilities built on hyper.
 - **hyper-rustls** -- TLS integration via rustls, with native roots preferred
   and packaged Mozilla roots as a verified fallback when the host keychain is

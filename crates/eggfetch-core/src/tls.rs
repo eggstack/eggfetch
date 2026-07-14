@@ -709,7 +709,7 @@ mod tests {
     fn trust_store_custom_empty_rejected() {
         let result = TlsConfig::builder()
             .ca_certificate_pem(b"")
-            .map(|b| b.build());
+            .map(super::TlsConfigBuilder::build);
         assert!(result.is_err());
     }
 

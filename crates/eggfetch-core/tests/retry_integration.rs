@@ -258,13 +258,7 @@ async fn retry_stream_body_sends_once() {
     let client = Client::builder().retry(policy).build();
     let url = format!("{}/", server.url());
     // Stream body with retry configured: sends once without retry
-    let resp = client
-        .post(&url)
-        .unwrap()
-        .body(body)
-        .send()
-        .await
-        .unwrap();
+    let resp = client.post(&url).unwrap().body(body).send().await.unwrap();
     assert_eq!(resp.status(), 503);
     // Only 1 request — no retries for stream bodies
     assert_eq!(server.request_count.load(Ordering::SeqCst), 1);

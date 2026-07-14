@@ -41,7 +41,7 @@ impl PyAsyncClient {
     ///     `max_redirects`: Maximum redirects to follow (default 20).
     #[allow(clippy::too_many_arguments)]
     #[new]
-    #[pyo3(signature = (*, headers=None, timeout=None, follow_redirects=None, max_redirects=None, cookies=None, auth=None, decompress=None, proxy=None, verify=None, cert=None, retries=None))]
+    #[pyo3(signature = (*, headers=None, timeout=None, follow_redirects=None, max_redirects=None, cookies=None, auth=None, decompress=None, proxy=None, verify=None, cert=None, retries=None, http2=None))]
     fn new(
         py: Python<'_>,
         headers: Option<&Bound<'_, PyAny>>,
@@ -55,6 +55,7 @@ impl PyAsyncClient {
         verify: Option<&Bound<'_, PyAny>>,
         cert: Option<&Bound<'_, PyAny>>,
         retries: Option<&Bound<'_, PyAny>>,
+        http2: Option<bool>,
     ) -> PyResult<Self> {
         let verify_disabled = verify
             .and_then(|v| v.extract::<bool>().ok())
@@ -62,6 +63,10 @@ impl PyAsyncClient {
 
         let tls_config = crate::tls::build_tls_config(verify, cert)?;
         let mut builder = eggfetch_core::Client::builder().tls_config(tls_config);
+
+        if let Some(true) = http2 {
+            builder = builder.http_version_policy(eggfetch_core::HttpVersionPolicy::Auto);
+        }
 
         if let Some(hdrs) = headers {
             let rust_headers = python_headers_to_rust(py, hdrs)?;

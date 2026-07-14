@@ -801,7 +801,7 @@ mod tests {
 
     #[test]
     fn retry_after_http_date_parses() {
-        use std::time::{SystemTime, UNIX_EPOCH};
+        use std::time::UNIX_EPOCH;
 
         let policy = RetryPolicy::builder()
             .max_attempts(3)

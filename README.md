@@ -2,8 +2,8 @@
 
 eggfetch is a Rust-native HTTP client engine with Python bindings and a CLI tool. The core is async-first: a Rust engine built on tokio and hyper provides connection pooling, timeouts, TLS configuration, and streaming. The Python bindings expose both sync and async APIs; the sync API blocks on the async engine while releasing the GIL, and the async API integrates with asyncio. There is exactly one networking implementation, living entirely in Rust.
 
-> **Status: Milestone U complete.**
-> Milestones A–U are implemented as documented. The core engine supports response decompression (gzip, deflate, brotli, zstd), multipart/form-data uploads, cookies, authentication, proxy support (HTTP proxying, HTTPS CONNECT tunneling, proxy authentication, per-request/client proxy configuration, NO_PROXY bypass), TLS configuration (custom CA bundles, client certificates, TLS version policy, verification toggle), streaming, timeouts, connection pooling, and policy-driven retries with exponential backoff. The CLI crate remains a stub.
+> **Status: Milestone V complete.**
+> Milestones A–V are implemented as documented. The core engine supports HTTP/2 (ALPN negotiation, multiplexed connections, protocol version reporting), response decompression (gzip, deflate, brotli, zstd), multipart/form-data uploads, cookies, authentication, proxy support (HTTP proxying, HTTPS CONNECT tunneling, proxy authentication, per-request/client proxy configuration, NO_PROXY bypass), TLS configuration (custom CA bundles, client certificates, TLS version policy, verification toggle), streaming, timeouts, connection pooling, and policy-driven retries with exponential backoff. The CLI crate remains a stub.
 
 [![CI](https://github.com/eggstack/eggfetch/actions/workflows/ci.yml/badge.svg)](https://github.com/eggstack/eggfetch/actions/workflows/ci.yml)
 
@@ -313,6 +313,19 @@ Policy-driven retries with idempotency awareness and exponential backoff:
 - **Per-request override** -- `RequestBuilder::retry(policy)` or `RequestBuilder::without_retry()` overrides client-level policy.
 - **Python API** -- `Retry(max_attempts=3, backoff_factor=0.2, statuses={429, 503})` class with `retries=` kwarg on `Client()` and all request methods. `retries=False` disables retries per-request.
 - **Error taxonomy** -- `BodyNotReplayableForRetry`, `RetryBudgetExhausted`, `RetryNotConfigured` Python exceptions.
+
+### Milestone V: HTTP/2 (complete)
+
+HTTP/2 support with ALPN negotiation and protocol version reporting:
+
+- **`HttpVersionPolicy`** -- enum with `Http1Only`, `Http2Only`, and `Auto` variants. Controls which HTTP protocol versions the client may negotiate. Default is `Auto`.
+- **ALPN negotiation** -- the client advertises `h2` and/or `http/1.1` via ALPN based on the version policy. When `Auto`, both are advertised; when `Http2Only`, only `h2`; when `Http1Only`, only `http/1.1`.
+- **Feature-gated** -- the `http2` feature enables HTTP/2 support in hyper, hyper-util, and hyper-rustls. Without the feature, `Http2Only` and `Auto` silently downgrade to `Http1Only`.
+- **Protocol version reporting** -- `response.version()` returns `HTTP_2` when the server negotiates HTTP/2. Python `response.http_version` reports `"HTTP/2"` accurately.
+- **Client configuration** -- `ClientBuilder::http_version_policy(policy)` sets the version policy at client construction time.
+- **Python API** -- `Client(http2=True)` and `AsyncClient(http2=True)` enable HTTP/2 negotiation (equivalent to `Auto` policy). `http2=False` or omitted uses HTTP/1.1 only.
+- **TLS integration** -- ALPN settings are correctly set on custom TLS configurations and default connector paths. Custom CA bundles, mTLS, and CONNECT tunnels preserve ALPN settings.
+- **Backward compatible** -- HTTP/1.1 remains the default. No existing behavior changes unless `http2=True` is explicitly set.
 
 ## Repository Layout
 
