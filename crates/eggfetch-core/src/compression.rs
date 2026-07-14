@@ -682,6 +682,49 @@ mod tests {
         let _ = accept_encoding_value();
     }
 
+    #[cfg(not(any(
+        feature = "compression-gzip",
+        feature = "compression-deflate",
+        feature = "compression-brotli",
+        feature = "compression-zstd"
+    )))]
+    #[test]
+    fn accept_encoding_value_none_without_compression_features() {
+        assert!(
+            accept_encoding_value().is_none(),
+            "accept_encoding_value() should return None when no compression features are compiled"
+        );
+    }
+
+    #[cfg(all(
+        feature = "compression-gzip",
+        not(feature = "compression-brotli"),
+        not(feature = "compression-zstd")
+    ))]
+    #[test]
+    fn accept_encoding_value_gzip_only() {
+        let val = accept_encoding_value().unwrap();
+        assert!(val.contains("gzip"), "should contain gzip, got: {val}");
+        assert!(
+            !val.contains("br"),
+            "should not contain br without brotli feature, got: {val}"
+        );
+        assert!(
+            !val.contains("zstd"),
+            "should not contain zstd without zstd feature, got: {val}"
+        );
+    }
+
+    #[test]
+    fn accept_encoding_value_deterministic_order() {
+        let val1 = accept_encoding_value();
+        let val2 = accept_encoding_value();
+        assert_eq!(
+            val1, val2,
+            "accept_encoding_value() should return the same value across calls"
+        );
+    }
+
     #[test]
     fn decompress_stream_no_encoding_returns_original() {
         let stream: BoxBytesStream = Box::pin(futures_util::stream::empty());

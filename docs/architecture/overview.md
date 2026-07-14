@@ -301,6 +301,10 @@ Per-origin pool limits are keyed by `(scheme, host, port)`, where the port uses 
 
 When a proxy is involved, the pool key extends to `(proxy_origin, destination_origin, tunnel_mode)`, where `tunnel_mode` distinguishes HTTP forwarding from HTTPS CONNECT tunneling. Direct and proxied requests to the same destination have independent concurrency slots. Pool permits are semaphore-based concurrency tokens — they control how many requests may be in flight per origin, but they do not represent or manage TCP connections. The current implementation does not reuse TCP connections or tunnels; each request opens a fresh connection and releases the permit when the response body is consumed or dropped. See `docs/architecture/dependency-policy.md` for the full pool key specification.
 
+### Environment-Variable Proxy Policy
+
+eggfetch does **not** read `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, or `NO_PROXY` environment variables. Proxy configuration is always explicit via `ClientBuilder::proxy()` or `RequestBuilder::proxy()`. This is a deliberate design choice: implicit environment-variable proxying can cause surprising behavior in library contexts where the caller does not control the process environment.
+
 ## Pool Metrics
 
 `PoolMetrics` exposes only `acquisition_waits` and `acquisition_cancellations`. Socket-level counters (connections_opened/reused/closed) were removed because hyper owns socket lifecycle and eggfetch cannot observe individual socket events through its current integration.

@@ -1560,3 +1560,207 @@ async fn automatic_decompression_disabled_preserves_encoding_and_raw_bytes() {
 
     let _ = server_handle.await;
 }
+
+// ---------------------------------------------------------------------------
+// Track C: Pool permit release after decoded body limit error
+// ---------------------------------------------------------------------------
+
+#[cfg(feature = "compression-gzip")]
+#[tokio::test]
+async fn pool_permit_released_after_decoded_body_limit_error() {
+    use std::io::Write;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+    use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+    use tokio::net::TcpListener;
+
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let request_count = Arc::new(AtomicUsize::new(0));
+
+    let rc = request_count.clone();
+    let server_handle = tokio::spawn(async move {
+        for _ in 0..2 {
+            let (stream, _) = listener.accept().await.unwrap();
+            let count = rc.fetch_add(1, Ordering::SeqCst);
+            let mut reader = BufReader::new(stream);
+            let mut request_line = String::new();
+            reader.read_line(&mut request_line).await.unwrap();
+
+            loop {
+                let mut line = String::new();
+                reader.read_line(&mut line).await.unwrap();
+                if line.trim().is_empty() {
+                    break;
+                }
+            }
+
+            // First request: large body; second: small body.
+            let uncompressed = if count == 0 {
+                b"hello compressed world that exceeds the limit easily".to_vec()
+            } else {
+                b"ok".to_vec()
+            };
+            let mut encoder =
+                flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::fast());
+            encoder.write_all(&uncompressed).unwrap();
+            let compressed = encoder.finish().unwrap();
+
+            let resp = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\
+                 Content-Encoding: gzip\r\nContent-Length: {}\r\n\
+                 Connection: close\r\n\r\n",
+                compressed.len()
+            );
+            let mut stream = reader.into_inner();
+            stream.write_all(resp.as_bytes()).await.unwrap();
+            stream.write_all(&compressed).await.unwrap();
+            stream.flush().await.unwrap();
+        }
+    });
+
+    let client = Client::builder().max_decoded_body_size(10).build();
+
+    let url = format!("http://127.0.0.1:{port}/");
+
+    // First request: large body -> DecodedBodyTooLarge when consuming.
+    let mut resp = client.get(&url).unwrap().send().await.unwrap();
+    assert_eq!(resp.status().as_u16(), 200);
+    let err = resp.text().await.unwrap_err();
+    assert_eq!(err.kind(), "decoded_body_too_large");
+
+    // Second request: small body -> succeeds, proving pool permit was released.
+    let mut resp = client.get(&url).unwrap().send().await.unwrap();
+    assert_eq!(resp.status().as_u16(), 200);
+    let body = resp.text().await.unwrap();
+    assert_eq!(body, "ok");
+
+    let _ = server_handle.await;
+}
+
+// ---------------------------------------------------------------------------
+// Track C: Nested encoding decoded-size accounting
+// ---------------------------------------------------------------------------
+
+#[cfg(feature = "compression-gzip")]
+#[tokio::test]
+async fn nested_encoding_decoded_size_tracked_correctly() {
+    use std::io::Write;
+    use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+    use tokio::net::TcpListener;
+
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+
+    let server_handle = tokio::spawn(async move {
+        let (stream, _) = listener.accept().await.unwrap();
+        let mut reader = BufReader::new(stream);
+        let mut request_line = String::new();
+        reader.read_line(&mut request_line).await.unwrap();
+
+        loop {
+            let mut line = String::new();
+            reader.read_line(&mut line).await.unwrap();
+            if line.trim().is_empty() {
+                break;
+            }
+        }
+
+        // Double-gzip: gzip the already-gzip-compressed data.
+        let inner = b"nested content";
+        let mut inner_encoder =
+            flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::fast());
+        inner_encoder.write_all(inner).unwrap();
+        let inner_compressed = inner_encoder.finish().unwrap();
+
+        let mut outer_encoder =
+            flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::fast());
+        outer_encoder.write_all(&inner_compressed).unwrap();
+        let outer_compressed = outer_encoder.finish().unwrap();
+
+        let resp = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\
+             Content-Encoding: gzip, gzip\r\nContent-Length: {}\r\n\
+             Connection: close\r\n\r\n",
+            outer_compressed.len()
+        );
+        let mut stream = reader.into_inner();
+        stream.write_all(resp.as_bytes()).await.unwrap();
+        stream.write_all(&outer_compressed).await.unwrap();
+        stream.flush().await.unwrap();
+    });
+
+    // With a tight limit, the double-decoded content (14 bytes) should exceed it.
+    let client = Client::builder().max_decoded_body_size(10).build();
+
+    let url = format!("http://127.0.0.1:{port}/");
+    let mut resp = client.get(&url).unwrap().send().await.unwrap();
+    assert_eq!(resp.status().as_u16(), 200);
+    let err = resp.text().await.unwrap_err();
+    assert_eq!(
+        err.kind(),
+        "decoded_body_too_large",
+        "nested encoding decoded size should be enforced"
+    );
+
+    let _ = server_handle.await;
+}
+
+// ---------------------------------------------------------------------------
+// Track D: Accept-Encoding header matches compiled features
+// ---------------------------------------------------------------------------
+
+#[cfg(feature = "compression-gzip")]
+#[tokio::test]
+async fn accept_encoding_header_matches_compiled_features() {
+    use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+    use tokio::net::TcpListener;
+
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+
+    let server_handle = tokio::spawn(async move {
+        let (stream, _) = listener.accept().await.unwrap();
+        let mut reader = BufReader::new(stream);
+        let mut request_line = String::new();
+        reader.read_line(&mut request_line).await.unwrap();
+
+        let mut accept_encoding = None;
+        loop {
+            let mut line = String::new();
+            reader.read_line(&mut line).await.unwrap();
+            if line.trim().is_empty() {
+                break;
+            }
+            if let Some((name, value)) = line.trim().split_once(':') {
+                if name.eq_ignore_ascii_case("Accept-Encoding") {
+                    accept_encoding = Some(value.trim().to_string());
+                }
+            }
+        }
+
+        let ae = accept_encoding.unwrap_or_default();
+        let resp = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\
+             Content-Length: {}\r\nConnection: close\r\n\r\n{ae}",
+            ae.len()
+        );
+        let mut stream = reader.into_inner();
+        stream.write_all(resp.as_bytes()).await.unwrap();
+        stream.flush().await.unwrap();
+    });
+
+    let client = Client::new();
+    let url = format!("http://127.0.0.1:{port}/");
+    let mut resp = client.get(&url).unwrap().send().await.unwrap();
+    let body = resp.text().await.unwrap();
+
+    // gzip feature implies deflate too.
+    let expected = eggfetch_core::compression::accept_encoding_value().unwrap_or("");
+    assert_eq!(
+        body, expected,
+        "Accept-Encoding sent to server should match accept_encoding_value()"
+    );
+
+    let _ = server_handle.await;
+}

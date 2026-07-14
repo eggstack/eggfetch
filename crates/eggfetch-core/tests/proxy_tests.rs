@@ -1109,3 +1109,147 @@ async fn connect_non_numeric_port_returns_error() {
 
     proxy.shutdown();
 }
+
+// ---------------------------------------------------------------------------
+// Track I: MAX_TOTAL_HEADER_BYTES Enforcement
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn proxy_response_exceeding_max_header_bytes_rejected() {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let (shutdown_tx, mut shutdown_rx) = watch::channel(false);
+
+    tokio::spawn(async move {
+        loop {
+            tokio::select! {
+                result = listener.accept() => {
+                    if let Ok((mut stream, _)) = result {
+                        tokio::spawn(async move {
+                            let mut buf = [0u8; 4096];
+                            // Read request line.
+                            loop {
+                                let n = stream.read(&mut buf).await.unwrap_or(0);
+                                if n == 0 { return; }
+                                if buf[..n].windows(4).any(|w| w == b"\r\n\r\n") { break; }
+                            }
+                            // Send status line + huge headers (>65536 bytes total).
+                            let status = b"HTTP/1.1 200 OK\r\n";
+                            let mut response = Vec::from(status.as_slice());
+                            // Each header is ~100 bytes; need >656 to exceed 65536.
+                            for i in 0..700 {
+                                let header = format!("X-Pad-{i}: {}\r\n", "A".repeat(80));
+                                response.extend_from_slice(header.as_bytes());
+                            }
+                            response.extend_from_slice(b"\r\n");
+                            let _ = stream.write_all(&response).await;
+                            let _ = stream.flush().await;
+                        });
+                    }
+                }
+                _ = shutdown_rx.changed() => { break; }
+            }
+        }
+    });
+
+    let client = Client::builder()
+        .proxy(Proxy::all(&format!("http://127.0.0.1:{port}")).unwrap())
+        .timeout(Timeout {
+            total: Some(Duration::from_secs(5)),
+            ..Default::default()
+        })
+        .build();
+
+    let result = client.get("http://127.0.0.1:1/").unwrap().send().await;
+
+    let err = result.unwrap_err();
+    assert_eq!(
+        err.kind(),
+        "malformed_proxy_response",
+        "proxy response exceeding MAX_TOTAL_HEADER_BYTES should fail with MalformedProxyResponse, got: {err}"
+    );
+
+    let _ = shutdown_tx.send(true);
+}
+
+// ---------------------------------------------------------------------------
+// Track I: NO_PROXY Integration Tests
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn no_proxy_port_bypass() {
+    let echo = EchoHttpServer::start().await;
+    let echo_port: u16 = echo.url().rsplit(':').next().unwrap().parse().unwrap();
+
+    let no_proxy = eggfetch_core::NoProxy::parse(&format!("127.0.0.1:{echo_port}")).unwrap();
+    let client = Client::builder()
+        .proxy(
+            Proxy::all("http://127.0.0.1:9999")
+                .unwrap()
+                .no_proxy(no_proxy),
+        )
+        .timeout(Timeout {
+            total: Some(Duration::from_secs(5)),
+            ..Default::default()
+        })
+        .build();
+
+    let mut resp = client.get(&echo.url()).unwrap().send().await.unwrap();
+    assert_eq!(resp.status().as_u16(), 200);
+    let body = resp.text().await.unwrap();
+    assert!(body.contains("GET"));
+
+    echo.shutdown();
+}
+
+#[tokio::test]
+async fn no_proxy_ipv4_bypass() {
+    let echo = EchoHttpServer::start().await;
+
+    let no_proxy = eggfetch_core::NoProxy::parse("127.0.0.1").unwrap();
+    let client = Client::builder()
+        .proxy(
+            Proxy::all("http://127.0.0.1:9999")
+                .unwrap()
+                .no_proxy(no_proxy),
+        )
+        .timeout(Timeout {
+            total: Some(Duration::from_secs(5)),
+            ..Default::default()
+        })
+        .build();
+
+    let mut resp = client.get(&echo.url()).unwrap().send().await.unwrap();
+    assert_eq!(resp.status().as_u16(), 200);
+    let body = resp.text().await.unwrap();
+    assert!(body.contains("GET"));
+
+    echo.shutdown();
+}
+
+#[tokio::test]
+async fn no_proxy_localhost_bypass() {
+    let echo = EchoHttpServer::start().await;
+
+    let no_proxy = eggfetch_core::NoProxy::parse("localhost").unwrap();
+    let client = Client::builder()
+        .proxy(
+            Proxy::all("http://127.0.0.1:9999")
+                .unwrap()
+                .no_proxy(no_proxy),
+        )
+        .timeout(Timeout {
+            total: Some(Duration::from_secs(5)),
+            ..Default::default()
+        })
+        .build();
+
+    let mut resp = client.get(&echo.url()).unwrap().send().await.unwrap();
+    assert_eq!(resp.status().as_u16(), 200);
+    let body = resp.text().await.unwrap();
+    assert!(body.contains("GET"));
+
+    echo.shutdown();
+}

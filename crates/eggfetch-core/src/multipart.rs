@@ -719,6 +719,8 @@ impl Stream for MultipartEncoder {
 mod tests {
     use super::*;
     use futures_util::StreamExt;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
 
     #[test]
     fn boundary_random_is_valid() {
@@ -885,8 +887,107 @@ mod tests {
             .bytes("f", "bad\n", "text/plain", Bytes::new())
             .is_err());
         assert!(Multipart::new()
+            .bytes("f", "bad\r", "text/plain", Bytes::new())
+            .is_err());
+        assert!(Multipart::new()
             .bytes("f", "bad\"name", "text/plain", Bytes::new())
             .is_err());
+    }
+
+    #[test]
+    fn filename_none_omits_filename_attribute() {
+        let mp = Multipart::with_boundary(Boundary::try_new("b").unwrap())
+            .text("field", "value")
+            .unwrap();
+        let body = mp.into_body();
+        match body {
+            RequestBody::Bytes(data) => {
+                let s = String::from_utf8(data.to_vec()).unwrap();
+                assert!(s.contains("name=\"field\""), "should contain field name");
+                assert!(
+                    !s.contains("filename="),
+                    "should not contain filename= when none was set"
+                );
+            }
+            _ => panic!("expected bytes body"),
+        }
+    }
+
+    #[test]
+    fn bytes_input_various_sizes() {
+        // Zero-byte part.
+        let mp = Multipart::with_boundary(Boundary::try_new("b").unwrap())
+            .bytes(
+                "empty",
+                "empty.bin",
+                "application/octet-stream",
+                Bytes::new(),
+            )
+            .unwrap();
+        let body = mp.into_body();
+        match body {
+            RequestBody::Bytes(data) => {
+                let s = String::from_utf8(data.to_vec()).unwrap();
+                assert!(s.contains("filename=\"empty.bin\""));
+            }
+            _ => panic!("expected bytes body"),
+        }
+
+        // Large part (10 KB).
+        let large_data = Bytes::from(vec![0xAB; 10_240]);
+        let mp = Multipart::with_boundary(Boundary::try_new("b").unwrap())
+            .bytes("big", "big.bin", "application/octet-stream", large_data)
+            .unwrap();
+        let body = mp.into_body();
+        match body {
+            RequestBody::Bytes(data) => {
+                assert!(data.len() > 10_240, "body should include the 10 KB payload");
+            }
+            _ => panic!("expected bytes body"),
+        }
+    }
+
+    #[tokio::test]
+    async fn stream_drop_releases_resources() {
+        use futures_util::stream;
+
+        // Create a stream that tracks whether it was dropped.
+        let dropped = Arc::new(AtomicBool::new(false));
+        let d = dropped.clone();
+        let tracked = stream::once(async move {
+            let _guard = DropGuard(d);
+            Ok::<Bytes, crate::Error>(Bytes::from("data"))
+        });
+
+        let mp = Multipart::with_boundary(Boundary::try_new("b").unwrap())
+            .stream(
+                "file",
+                "test.bin",
+                "application/octet-stream",
+                Box::pin(tracked),
+                None,
+            )
+            .unwrap();
+
+        let mut encoder = mp.encoder();
+        // Consume all output.
+        while let Some(chunk) = encoder.next().await {
+            drop(chunk);
+        }
+
+        // After consuming, the stream should have been dropped.
+        assert!(
+            dropped.load(Ordering::SeqCst),
+            "stream should be dropped after encoder completes"
+        );
+    }
+
+    struct DropGuard(Arc<AtomicBool>);
+
+    impl Drop for DropGuard {
+        fn drop(&mut self) {
+            self.0.store(true, Ordering::SeqCst);
+        }
     }
 
     #[test]
