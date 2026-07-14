@@ -1,9 +1,9 @@
 # eggfetch
 
-eggfetch is a Rust-native HTTP client engine with Python bindings and a CLI tool. The core is async-first: a Rust engine built on tokio and hyper provides connection pooling, timeouts, TLS, and streaming. The Python bindings expose both sync and async APIs; the sync API blocks on the async engine while releasing the GIL, and the async API integrates with asyncio. There is exactly one networking implementation, living entirely in Rust.
+eggfetch is a Rust-native HTTP client engine with Python bindings and a CLI tool. The core is async-first: a Rust engine built on tokio and hyper provides connection pooling, timeouts, TLS configuration, and streaming. The Python bindings expose both sync and async APIs; the sync API blocks on the async engine while releasing the GIL, and the async API integrates with asyncio. There is exactly one networking implementation, living entirely in Rust.
 
-> **Status: Milestone S complete.**
-> Milestones A–S are implemented as documented. The core engine supports response decompression (gzip, deflate, brotli, zstd), multipart/form-data uploads, cookies, authentication, proxy support (HTTP proxying, HTTPS CONNECT tunneling, proxy authentication, per-request/client proxy configuration, NO_PROXY bypass), streaming, timeouts, and connection pooling. The CLI crate remains a stub.
+> **Status: Milestone T complete.**
+> Milestones A–T are implemented as documented. The core engine supports response decompression (gzip, deflate, brotli, zstd), multipart/form-data uploads, cookies, authentication, proxy support (HTTP proxying, HTTPS CONNECT tunneling, proxy authentication, per-request/client proxy configuration, NO_PROXY bypass), TLS configuration (custom CA bundles, client certificates, TLS version policy, verification toggle), streaming, timeouts, and connection pooling. The CLI crate remains a stub.
 
 [![CI](https://github.com/eggstack/eggfetch/actions/workflows/ci.yml/badge.svg)](https://github.com/eggstack/eggfetch/actions/workflows/ci.yml)
 
@@ -11,7 +11,7 @@ eggfetch is a Rust-native HTTP client engine with Python bindings and a CLI tool
 
 eggfetch is a three-crate Cargo workspace:
 
-- **eggfetch-core** owns all HTTP behavior: client, request builder, response, body, headers, timeout, error types, connection pooling, TLS, and streaming. Every networking dependency lives here.
+- **eggfetch-core** owns all HTTP behavior: client, request builder, response, body, headers, timeout, error types, connection pooling, TLS configuration, and streaming. Every networking dependency lives here.
 - **eggfetch-cli** is a thin binary that delegates to eggfetch-core for all HTTP work. It handles argument parsing, output formatting, and exit codes only.
 - **eggfetch-python** is the Python bindings adapter. It wraps eggfetch-core via PyO3/maturin and exposes sync and async Python APIs. It does not contain its own HTTP logic.
 
@@ -248,9 +248,21 @@ Streaming response decompression with Accept-Encoding negotiation:
 - **Resource limits** -- maximum nesting depth of 4 content encodings.
 - **Deflate compatibility** -- uses `async-compression`'s deflate decoder which handles zlib-wrapped streams (standard HTTP deflate).
 
+### Milestone T: TLS Configuration (complete)
+
+Deliberate TLS configuration without weakening secure defaults:
+
+- **`TlsConfig`** -- TLS configuration type with builder pattern (`TlsConfigBuilder`).
+- **`TrustStore`** -- custom CA bundle support via PEM files or system roots.
+- **`ClientIdentity`** -- client certificate and private key for mutual TLS.
+- **`TlsVersion`** -- TLS version policy (minimum/maximum supported versions).
+- **Verification toggle** -- `ClientBuilder::danger_disable_tls_verification()` with explicit opt-in.
+- **SNI behavior** -- Server Name Indication enabled by default, configurable.
+- **Python API** -- `Client(verify=..., cert=...)` kwargs for verification and client certificates.
+- **PEM parsing** -- `pem-rfc7468` for custom CA bundles and client certificate loading.
+
 ### Current limitations
 
-- No `verify` or `cert` kwargs.
 - Python 3.10–3.13 and the CI-supported Ubuntu, macOS, and Windows platforms are the current compatibility target. Other platforms may work but are not release-tested yet.
 - `connect` timeout is accepted but not independently enforced (use `total` as backstop).
 - Trio/AnyIO support deferred to a later milestone.
@@ -271,6 +283,7 @@ rustfmt.toml             max_width 100
 .github/workflows/ci.yml CI pipeline
 crates/
   eggfetch-core/         async HTTP engine (validation pass complete)
+                         TlsConfig, TlsConfigBuilder, TrustStore, ClientIdentity, TlsVersion
   eggfetch-cli/          CLI binary (stub)
   eggfetch-python/       Python bindings (validation pass complete)
     src/                 Rust adapter modules (PyO3)
@@ -344,4 +357,5 @@ eggfetch is dual-licensed under [MIT](LICENSE-MIT) and [Apache License, Version 
 - [plans/milestone-p-authentication-subsystem.md](plans/milestone-p-authentication-subsystem.md) -- the plan for Milestone P (authentication subsystem).
 - [plans/milestone-q-multipart-file-uploads.md](plans/milestone-q-multipart-file-uploads.md) -- the plan for Milestone Q (multipart and file uploads).
 - [plans/milestone-r-response-compression.md](plans/milestone-r-response-compression.md) -- the plan for Milestone R (response compression and decompression).
+- [plans/milestone-t-tls-configuration.md](plans/milestone-t-tls-configuration.md) -- the plan for Milestone T (TLS configuration).
 - [plans/post-milestone-j-tightening.md](plans/post-milestone-j-tightening.md) -- post-J corrective pass: redirect body buffering fix, async response construction fix, documentation truth pass.

@@ -35,6 +35,8 @@ pub(crate) struct ClientConfig {
     pub(crate) max_decompression_ratio: Option<f64>,
     #[cfg(feature = "proxy")]
     pub(crate) proxy: Option<Proxy>,
+    #[cfg(feature = "proxy")]
+    pub(crate) tls_config: Option<crate::tls::TlsConfig>,
 }
 
 impl Default for ClientConfig {
@@ -52,6 +54,8 @@ impl Default for ClientConfig {
             max_decompression_ratio: None,
             #[cfg(feature = "proxy")]
             proxy: None,
+            #[cfg(feature = "proxy")]
+            tls_config: None,
         }
     }
 }
@@ -234,6 +238,7 @@ pub struct ClientBuilder {
     max_decompression_ratio: Option<f64>,
     #[cfg(feature = "proxy")]
     proxy: Option<Proxy>,
+    tls_config: Option<crate::tls::TlsConfig>,
 }
 
 impl ClientBuilder {
@@ -254,6 +259,7 @@ impl ClientBuilder {
             max_decompression_ratio: None,
             #[cfg(feature = "proxy")]
             proxy: None,
+            tls_config: None,
         }
     }
 
@@ -385,6 +391,17 @@ impl ClientBuilder {
         self
     }
 
+    /// Set a custom TLS configuration for this client.
+    ///
+    /// When set, the client uses the provided [`TlsConfig`] for all
+    /// TLS connections instead of the default native-root-with-webpki-fallback
+    /// strategy.
+    #[must_use]
+    pub fn tls_config(mut self, config: crate::tls::TlsConfig) -> Self {
+        self.tls_config = Some(config);
+        self
+    }
+
     /// Enable or disable automatic response decompression.
     ///
     /// When enabled (the default), the client sends an
@@ -425,9 +442,25 @@ impl ClientBuilder {
     /// while retaining certificate and hostname verification.
     #[must_use]
     pub fn build(self) -> Client {
-        let https = match hyper_rustls::HttpsConnectorBuilder::new().with_native_roots() {
-            Ok(builder) => builder.https_or_http().enable_http1().build(),
-            Err(_) => build_webpki_connector(),
+        let https = match self.tls_config.as_ref() {
+            Some(tls_config) => match tls_config.build_rustls_config() {
+                Ok(mut rc) => {
+                    rc.alpn_protocols.clear();
+                    hyper_rustls::HttpsConnectorBuilder::new()
+                        .with_tls_config(rc)
+                        .https_or_http()
+                        .enable_http1()
+                        .build()
+                }
+                Err(_) => match hyper_rustls::HttpsConnectorBuilder::new().with_native_roots() {
+                    Ok(builder) => builder.https_or_http().enable_http1().build(),
+                    Err(_) => build_webpki_connector(),
+                },
+            },
+            None => match hyper_rustls::HttpsConnectorBuilder::new().with_native_roots() {
+                Ok(builder) => builder.https_or_http().enable_http1().build(),
+                Err(_) => build_webpki_connector(),
+            },
         };
 
         let mut builder = hyper_util::client::legacy::Client::builder(TokioExecutor::new());
@@ -454,6 +487,8 @@ impl ClientBuilder {
             max_decompression_ratio: self.max_decompression_ratio,
             #[cfg(feature = "proxy")]
             proxy: self.proxy,
+            #[cfg(feature = "proxy")]
+            tls_config: self.tls_config,
         };
 
         let pool = Pool::new(self.pool_config);

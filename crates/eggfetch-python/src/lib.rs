@@ -14,6 +14,7 @@ mod proxy;
 mod response;
 mod streaming;
 mod timeout;
+mod tls;
 
 use async_client::PyAsyncClient;
 use auth::{PyBasicAuth, PyBearerAuth, PyNoAuth};
@@ -47,7 +48,7 @@ use timeout::PyTimeout;
 ///     `follow_redirects`: Whether to follow redirects (default False).
 ///     `max_redirects`: Maximum redirects to follow (default 20).
 #[pyfunction]
-#[pyo3(signature = (method, url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None))]
+#[pyo3(signature = (method, url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None))]
 #[allow(clippy::too_many_arguments)]
 fn request<'py>(
     py: Python<'py>,
@@ -66,6 +67,8 @@ fn request<'py>(
     max_redirects: Option<usize>,
     decompress: Option<bool>,
     proxy: Option<&Bound<'py, PyAny>>,
+    verify: Option<&Bound<'py, PyAny>>,
+    cert: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let method_upper = method.to_uppercase();
     let http_method = http::Method::try_from(method_upper.as_str()).map_err(|_| {
@@ -128,7 +131,11 @@ fn request<'py>(
 
     let proxy_override = proxy::parse_proxy(proxy)?;
 
-    let mut builder = eggfetch_core::Client::builder().redirect_policy(redirect_policy);
+    let tls_config = tls::build_tls_config(verify, cert)?;
+
+    let mut builder = eggfetch_core::Client::builder()
+        .redirect_policy(redirect_policy)
+        .tls_config(tls_config);
 
     match auth_override {
         auth::AuthOverride::Inherit | auth::AuthOverride::Disable => {}
@@ -185,7 +192,7 @@ fn request<'py>(
 
 /// Send a GET request using a short-lived client.
 #[pyfunction]
-#[pyo3(signature = (url, *, headers=None, params=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None))]
+#[pyo3(signature = (url, *, headers=None, params=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None))]
 #[allow(clippy::too_many_arguments)]
 fn get<'py>(
     py: Python<'py>,
@@ -199,6 +206,8 @@ fn get<'py>(
     max_redirects: Option<usize>,
     decompress: Option<bool>,
     proxy: Option<&Bound<'py, PyAny>>,
+    verify: Option<&Bound<'py, PyAny>>,
+    cert: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     request(
         py,
@@ -217,12 +226,14 @@ fn get<'py>(
         max_redirects,
         decompress,
         proxy,
+        verify,
+        cert,
     )
 }
 
 /// Send a POST request using a short-lived client.
 #[pyfunction]
-#[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None))]
+#[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None))]
 #[allow(clippy::too_many_arguments)]
 fn post<'py>(
     py: Python<'py>,
@@ -240,6 +251,8 @@ fn post<'py>(
     max_redirects: Option<usize>,
     decompress: Option<bool>,
     proxy: Option<&Bound<'py, PyAny>>,
+    verify: Option<&Bound<'py, PyAny>>,
+    cert: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     request(
         py,
@@ -258,12 +271,14 @@ fn post<'py>(
         max_redirects,
         decompress,
         proxy,
+        verify,
+        cert,
     )
 }
 
 /// Send a PUT request using a short-lived client.
 #[pyfunction]
-#[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None))]
+#[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None))]
 #[allow(clippy::too_many_arguments)]
 fn put<'py>(
     py: Python<'py>,
@@ -281,6 +296,8 @@ fn put<'py>(
     max_redirects: Option<usize>,
     decompress: Option<bool>,
     proxy: Option<&Bound<'py, PyAny>>,
+    verify: Option<&Bound<'py, PyAny>>,
+    cert: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     request(
         py,
@@ -299,12 +316,14 @@ fn put<'py>(
         max_redirects,
         decompress,
         proxy,
+        verify,
+        cert,
     )
 }
 
 /// Send a PATCH request using a short-lived client.
 #[pyfunction]
-#[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None))]
+#[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None))]
 #[allow(clippy::too_many_arguments)]
 fn patch<'py>(
     py: Python<'py>,
@@ -322,6 +341,8 @@ fn patch<'py>(
     max_redirects: Option<usize>,
     decompress: Option<bool>,
     proxy: Option<&Bound<'py, PyAny>>,
+    verify: Option<&Bound<'py, PyAny>>,
+    cert: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     request(
         py,
@@ -340,12 +361,14 @@ fn patch<'py>(
         max_redirects,
         decompress,
         proxy,
+        verify,
+        cert,
     )
 }
 
 /// Send a DELETE request using a short-lived client.
 #[pyfunction]
-#[pyo3(signature = (url, *, headers=None, params=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None))]
+#[pyo3(signature = (url, *, headers=None, params=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None))]
 #[allow(clippy::too_many_arguments)]
 fn delete<'py>(
     py: Python<'py>,
@@ -359,6 +382,8 @@ fn delete<'py>(
     max_redirects: Option<usize>,
     decompress: Option<bool>,
     proxy: Option<&Bound<'py, PyAny>>,
+    verify: Option<&Bound<'py, PyAny>>,
+    cert: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     request(
         py,
@@ -377,12 +402,14 @@ fn delete<'py>(
         max_redirects,
         decompress,
         proxy,
+        verify,
+        cert,
     )
 }
 
 /// Send a HEAD request using a short-lived client.
 #[pyfunction]
-#[pyo3(signature = (url, *, headers=None, params=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None))]
+#[pyo3(signature = (url, *, headers=None, params=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None))]
 #[allow(clippy::too_many_arguments)]
 fn head<'py>(
     py: Python<'py>,
@@ -396,6 +423,8 @@ fn head<'py>(
     max_redirects: Option<usize>,
     decompress: Option<bool>,
     proxy: Option<&Bound<'py, PyAny>>,
+    verify: Option<&Bound<'py, PyAny>>,
+    cert: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     request(
         py,
@@ -414,12 +443,14 @@ fn head<'py>(
         max_redirects,
         decompress,
         proxy,
+        verify,
+        cert,
     )
 }
 
 /// Send an OPTIONS request using a short-lived client.
 #[pyfunction]
-#[pyo3(signature = (url, *, headers=None, params=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None))]
+#[pyo3(signature = (url, *, headers=None, params=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None))]
 #[allow(clippy::too_many_arguments)]
 fn options<'py>(
     py: Python<'py>,
@@ -433,6 +464,8 @@ fn options<'py>(
     max_redirects: Option<usize>,
     decompress: Option<bool>,
     proxy: Option<&Bound<'py, PyAny>>,
+    verify: Option<&Bound<'py, PyAny>>,
+    cert: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     request(
         py,
@@ -451,6 +484,8 @@ fn options<'py>(
         max_redirects,
         decompress,
         proxy,
+        verify,
+        cert,
     )
 }
 

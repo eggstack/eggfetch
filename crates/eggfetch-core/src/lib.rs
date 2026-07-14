@@ -45,6 +45,7 @@ pub mod response;
 pub(crate) mod response_decode;
 pub(crate) mod stream;
 pub mod timeout;
+pub mod tls;
 pub(crate) mod transport;
 
 pub use auth::{AuthScheme, BasicAuth, BearerAuth};
@@ -63,3 +64,4 @@ pub use redirect::RedirectPolicy;
 pub use request::{ProxyOverride, Request, RequestBuilder};
 pub use response::{HistoryEntry, Response};
 pub use timeout::{Timeout, TimeoutBuilder, TimeoutPhase};
+pub use tls::{ClientIdentity, TlsConfig, TlsConfigBuilder, TlsVersion, TrustStore};

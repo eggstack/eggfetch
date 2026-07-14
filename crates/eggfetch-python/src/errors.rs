@@ -152,10 +152,15 @@ pub fn map_err(err: eggfetch_core::Error) -> PyErr {
         | eggfetch_core::Error::Pool(msg)
         | eggfetch_core::Error::InvalidRedirectLocation(msg)
         | eggfetch_core::Error::InvalidAuthHeader(msg)
-        | eggfetch_core::Error::ConflictingAuth(msg) => RequestError::new_err(msg),
-        eggfetch_core::Error::Connect(msg) | eggfetch_core::Error::Tls(msg) => {
-            NetworkError::new_err(msg)
-        }
+        | eggfetch_core::Error::ConflictingAuth(msg)
+        | eggfetch_core::Error::TlsConfig(msg)
+        | eggfetch_core::Error::CaBundle(msg)
+        | eggfetch_core::Error::ClientCert(msg)
+        | eggfetch_core::Error::PrivateKey(msg) => RequestError::new_err(msg),
+        eggfetch_core::Error::Connect(msg)
+        | eggfetch_core::Error::Tls(msg)
+        | eggfetch_core::Error::CertificateVerification(msg)
+        | eggfetch_core::Error::HostnameVerification(msg) => NetworkError::new_err(msg),
         eggfetch_core::Error::Protocol(msg) => ProtocolError::new_err(msg),
         eggfetch_core::Error::Body(msg) => BodyError::new_err(msg),
         eggfetch_core::Error::Hyper(arc) => NetworkError::new_err(arc.to_string()),
@@ -186,13 +191,19 @@ pub fn map_err(err: eggfetch_core::Error) -> PyErr {
             let msg = format!("{phase} timeout after {elapsed:?}");
             match phase {
                 TimeoutPhase::Pool => PoolTimeout::new_err(msg),
-                TimeoutPhase::Connect => ConnectTimeout::new_err(msg),
-                TimeoutPhase::ProxyConnect => ConnectTimeout::new_err(msg),
-                TimeoutPhase::ProxyTls => ConnectTimeout::new_err(msg),
+                TimeoutPhase::Connect | TimeoutPhase::ProxyConnect | TimeoutPhase::ProxyTls => {
+                    ConnectTimeout::new_err(msg)
+                }
                 TimeoutPhase::Read => ReadTimeout::new_err(msg),
                 TimeoutPhase::Write => WriteTimeout::new_err(msg),
                 TimeoutPhase::Total => TimeoutException::new_err(msg),
             }
+        }
+        eggfetch_core::Error::DecodedBodyTooLarge => {
+            RequestError::new_err("decoded body too large".to_string())
+        }
+        eggfetch_core::Error::DecompressionRatioExceeded => {
+            RequestError::new_err("decompression ratio exceeded".to_string())
         }
     }
 }

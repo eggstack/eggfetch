@@ -9,7 +9,9 @@ use crate::proxy::ProxyConfig;
 use crate::response::Response;
 use crate::timeout::TimeoutPhase;
 
-use super::proxy::{connect_to_proxy, read_proxy_response, write_proxy_request};
+use super::proxy::{
+    connect_to_proxy, read_proxy_response, write_proxy_request, ProxyRequestContext,
+};
 
 /// Send an HTTPS request through an HTTP proxy using CONNECT tunneling.
 pub(crate) async fn send_https_connect_request(
@@ -19,11 +21,11 @@ pub(crate) async fn send_https_connect_request(
     body: RequestBody,
     version: http::Version,
     proxy_config: &ProxyConfig,
-    remaining_total: Option<std::time::Duration>,
+    ctx: &ProxyRequestContext<'_>,
 ) -> Result<Response> {
     use tokio::io::AsyncWriteExt;
 
-    let mut stream = connect_to_proxy(proxy_config, remaining_total).await?;
+    let mut stream = connect_to_proxy(proxy_config, ctx.remaining_total).await?;
 
     // Send CONNECT request.
     let dest_host = dest_url
@@ -68,18 +70,23 @@ pub(crate) async fn send_https_connect_request(
     let tunnel = ProxyTunnel::new(initial_buf, tcp_stream);
 
     // Perform TLS handshake with the destination through the tunnel.
-    let mut root_store = rustls::RootCertStore::empty();
-    root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
-    let tls_config = rustls::ClientConfig::builder()
-        .with_root_certificates(root_store)
-        .with_no_client_auth();
-    let tls_connector = tokio_rustls::TlsConnector::from(std::sync::Arc::new(tls_config));
+    let rustls_config = if let Some(tc) = ctx.tls_config {
+        tc.build_rustls_config()
+            .map_err(|e| Error::Tls(format!("failed to build TLS config for tunnel: {e}")))?
+    } else {
+        let mut root_store = rustls::RootCertStore::empty();
+        root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+        rustls::ClientConfig::builder()
+            .with_root_certificates(root_store)
+            .with_no_client_auth()
+    };
+    let tls_connector = tokio_rustls::TlsConnector::from(std::sync::Arc::new(rustls_config));
 
     let domain = rustls::pki_types::ServerName::try_from(dest_host.to_owned())
         .map_err(|e| Error::Tls(format!("invalid TLS server name: {e}")))?;
 
     let tls_handshake = tls_connector.connect(domain, tunnel);
-    let tls_stream = match remaining_total {
+    let tls_stream = match ctx.remaining_total {
         Some(dur) => match tokio::time::timeout(dur, tls_handshake).await {
             Ok(Ok(s)) => s,
             Ok(Err(e)) => {

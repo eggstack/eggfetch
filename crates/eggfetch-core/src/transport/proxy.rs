@@ -9,6 +9,11 @@ use crate::proxy::{ProxyAuth, ProxyConfig};
 use crate::response::Response;
 use crate::timeout::TimeoutPhase;
 
+pub(crate) struct ProxyRequestContext<'a> {
+    pub(crate) remaining_total: Option<std::time::Duration>,
+    pub(crate) tls_config: Option<&'a crate::tls::TlsConfig>,
+}
+
 /// Send a request through a proxy.
 ///
 /// Routes to HTTP forwarding or CONNECT tunneling based on the
@@ -20,7 +25,7 @@ pub(crate) async fn send_proxy_request(
     body: RequestBody,
     version: http::Version,
     proxy_config: &ProxyConfig,
-    remaining_total: Option<std::time::Duration>,
+    ctx: &ProxyRequestContext<'_>,
 ) -> Result<Response> {
     match dest_url.scheme() {
         "http" => {
@@ -31,7 +36,7 @@ pub(crate) async fn send_proxy_request(
                 body,
                 version,
                 proxy_config,
-                remaining_total,
+                ctx.remaining_total,
             )
             .await
         }
@@ -43,7 +48,7 @@ pub(crate) async fn send_proxy_request(
                 body,
                 version,
                 proxy_config,
-                remaining_total,
+                ctx,
             )
             .await
         }

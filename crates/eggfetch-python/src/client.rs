@@ -36,7 +36,7 @@ impl PyClient {
     ///     `max_redirects`: Maximum redirects to follow (default 20).
     #[allow(clippy::too_many_arguments)]
     #[new]
-    #[pyo3(signature = (*, headers=None, timeout=None, follow_redirects=None, max_redirects=None, cookies=None, auth=None, decompress=None, proxy=None))]
+    #[pyo3(signature = (*, headers=None, timeout=None, follow_redirects=None, max_redirects=None, cookies=None, auth=None, decompress=None, proxy=None, verify=None, cert=None))]
     fn new(
         py: Python<'_>,
         headers: Option<&Bound<'_, PyAny>>,
@@ -47,11 +47,14 @@ impl PyClient {
         auth: Option<&Bound<'_, PyAny>>,
         decompress: Option<bool>,
         proxy: Option<&Bound<'_, PyAny>>,
+        verify: Option<&Bound<'_, PyAny>>,
+        cert: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<Self> {
         let runtime = tokio::runtime::Runtime::new()
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
 
-        let mut builder = eggfetch_core::Client::builder();
+        let tls_config = crate::tls::build_tls_config(verify, cert)?;
+        let mut builder = eggfetch_core::Client::builder().tls_config(tls_config);
 
         if let Some(hdrs) = headers {
             let rust_headers = python_headers_to_rust(py, hdrs)?;

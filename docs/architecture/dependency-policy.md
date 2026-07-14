@@ -4,7 +4,7 @@ eggfetch follows a conservative dependency policy. Every dependency must have an
 
 ## Current Posture
 
-As of the post-Milestone-S corrective integration pass, eggfetch-core has the
+As of the post-Milestone-T state, eggfetch-core has the
 following direct dependencies:
 
 - **bytes** -- efficient byte buffer types for request and response bodies.
@@ -29,6 +29,7 @@ following direct dependencies:
 - **flate2** -- buffered gzip/deflate decompression for non-streaming response reads.
 - **getrandom** -- cryptographically secure random bytes for multipart boundary generation.
 - **httparse** -- low-level HTTP response parsing for proxy response status line and header extraction.
+- **pem-rfc7468** -- PEM parsing for custom CA bundles and client certificates (optional, behind `tls-rustls` feature).
 
 These are small, well-audited crates with minimal transitive trees. They are the minimum required to build a working HTTPS client.
 

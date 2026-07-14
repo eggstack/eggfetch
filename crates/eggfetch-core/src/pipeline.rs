@@ -527,7 +527,10 @@ pub(crate) async fn send_single_request(
                 body,
                 version,
                 proxy_config,
-                remaining_total,
+                &crate::transport::proxy::ProxyRequestContext {
+                    remaining_total,
+                    tls_config: inner.config.tls_config.as_ref(),
+                },
             )
             .await?
         }

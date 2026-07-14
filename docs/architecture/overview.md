@@ -1,6 +1,6 @@
 # Architecture Overview
 
-This document describes the architecture of eggfetch. The post-Milestone-S corrective integration pass is the latest completed work. The core crate provides protocol-neutral streaming for request and response bodies, redirect following with configurable policy, total timeout across redirect chains, metadata-only redirect history, replay-safe request bodies, an RFC 6265 cookie subsystem, an authentication subsystem with Basic and Bearer token support, precedence resolution, request-level auth disable, cross-origin credential stripping, streaming multipart/form-data request bodies, response decompression (gzip, deflate, brotli, zstd) with Accept-Encoding negotiation, decoded-body resource limits (max size, decompression ratio), and a proxy subsystem (HTTP proxying, HTTPS CONNECT tunneling, proxy authentication, per-request/client proxy configuration, NO_PROXY bypass). The Python crate exposes both sync and async APIs over the async Rust core via PyO3/maturin, with buffered and live streaming response surfaces, request-local and client-level cookies, redirect support, sync/async parity, `BasicAuth`/`BearerAuth` classes, `auth=` on request methods, `NOAUTH`, named streaming exceptions, `files=` kwarg for multipart uploads, and `decompress=` kwarg for decompression control.
+This document describes the architecture of eggfetch. The post-Milestone-T state is the latest completed work. The core crate provides protocol-neutral streaming for request and response bodies, redirect following with configurable policy, total timeout across redirect chains, metadata-only redirect history, replay-safe request bodies, an RFC 6265 cookie subsystem, an authentication subsystem with Basic and Bearer token support, precedence resolution, request-level auth disable, cross-origin credential stripping, streaming multipart/form-data request bodies, response decompression (gzip, deflate, brotli, zstd) with Accept-Encoding negotiation, decoded-body resource limits (max size, decompression ratio), a proxy subsystem (HTTP proxying, HTTPS CONNECT tunneling, proxy authentication, per-request/client proxy configuration, NO_PROXY bypass), and TLS configuration (custom CA bundles, client certificates, TLS version policy, verification toggle, SNI behavior). The Python crate exposes both sync and async APIs over the async Rust core via PyO3/maturin, with buffered and live streaming response surfaces, request-local and client-level cookies, redirect support, sync/async parity, `BasicAuth`/`BearerAuth` classes, `auth=` on request methods, `NOAUTH`, named streaming exceptions, `files=` kwarg for multipart uploads, `decompress=` kwarg for decompression control, and `verify=`/`cert=` kwargs for TLS configuration.
 
 The post-E hardening pass landed true streaming request bodies, per-chunk read/write timeouts, pool permits tied to the full response body lifecycle, and origin-keyed pool limits.
 
@@ -8,7 +8,7 @@ The post-E hardening pass landed true streaming request bodies, per-chunk read/w
 
 eggfetch is a Cargo workspace with three crates:
 
-- **eggfetch-core** is the async Rust HTTP engine. It owns all networking, connection management, TLS, body handling, and error types. Every dependency that touches the network lives here.
+- **eggfetch-core** is the async Rust HTTP engine. It owns all networking, connection management, TLS configuration, body handling, and error types. Every dependency that touches the network lives here.
 - **eggfetch-cli** is a thin binary that wraps eggfetch-core. It handles argument parsing (eventually via clap), terminal output formatting, exit code mapping, and body/header display. It contains no independent HTTP behavior.
 - **eggfetch-python** is the Python bindings adapter. It uses PyO3 and maturin to expose eggfetch-core to Python. It does not duplicate request execution logic.
 
@@ -25,7 +25,7 @@ This design keeps the core simple: one code path, one set of state machines, no 
 The following types form the public API of eggfetch-core:
 
 - **`Client`** -- async HTTP client. Created via `Client::new()` or `ClientBuilder`. Owns the connection pool and TLS configuration.
-- **`ClientBuilder`** -- builder for configuring a `Client` before construction.
+- **`ClientBuilder`** -- builder for configuring a `Client` before construction, including TLS settings.
 - **`Request`** -- a fully-formed HTTP request (method, URI, headers, body).
 - **`RequestBuilder`** -- accumulates method, URL, headers, query parameters, and body before producing a `Request`.
 - **`Response`** -- an HTTP response with status, headers, streaming body, and redirect history.
@@ -44,6 +44,11 @@ The following types form the public API of eggfetch-core:
 - **`PartBody`** -- multipart part body: `Bytes` or `Stream` with optional known length.
 - **`Boundary`** -- validated multipart boundary string. Random generation or custom validated.
 - **`ContentCoding`** -- content coding enum: `Gzip`, `Deflate`, `Brotli`, `Zstd`. Feature-gated behind compression features.
+- **`TlsConfig`** -- TLS configuration type with builder pattern. Custom CA bundles, client certificates, TLS version policy, verification toggle, and SNI behavior.
+- **`TlsConfigBuilder`** -- builder for constructing `TlsConfig` instances.
+- **`TrustStore`** -- custom CA bundle support via PEM files or system roots.
+- **`ClientIdentity`** -- client certificate and private key for mutual TLS authentication.
+- **`TlsVersion`** -- TLS version policy (minimum/maximum supported versions).
 
 ### TLS trust stores
 
@@ -309,6 +314,48 @@ eggfetch does **not** read `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, or `NO_PROX
 
 `PoolMetrics` exposes only `acquisition_waits` and `acquisition_cancellations`. Socket-level counters (connections_opened/reused/closed) were removed because hyper owns socket lifecycle and eggfetch cannot observe individual socket events through its current integration.
 
+## TLS Configuration (Milestone T)
+
+eggfetch implements deliberate TLS configuration without weakening secure defaults:
+
+- **`TlsConfig`** -- TLS configuration type with builder pattern. Configures custom CA bundles, client certificates, TLS version policy, verification toggle, and SNI behavior.
+- **`TlsConfigBuilder`** -- builder for constructing `TlsConfig` instances. Provides fluent API for setting trust stores, client identities, version constraints, and verification options.
+- **`TrustStore`** -- custom CA bundle support. Loads PEM-encoded CA certificates for custom trust anchors. Falls back to system roots when no custom store is configured.
+- **`ClientIdentity`** -- client certificate and private key for mutual TLS authentication. Supports PEM-encoded certificate chains and private keys.
+- **`TlsVersion`** -- TLS version policy. Configures minimum and maximum supported TLS versions (e.g., TLS 1.2, TLS 1.3).
+
+### Configuration Surface
+
+TLS configuration is applied at two levels:
+
+- **Client-level**: `ClientBuilder::tls_config(TlsConfig::builder().trust_store(...).build())` sets default TLS behavior for all requests through that client.
+- **Verification toggle**: `ClientBuilder::danger_disable_tls_verification()` explicitly disables certificate verification with an opt-in API. This is a deliberate escape hatch with documentation warnings.
+
+### Trust Store Hierarchy
+
+The trust store resolution follows this order:
+
+1. Custom `TrustStore` (if provided via `TlsConfig`)
+2. Operating system native roots (if available)
+3. Packaged Mozilla/WebPKI roots (fallback for minimal containers)
+
+Certificate-chain and hostname verification are always enforced unless explicitly disabled via the verification toggle.
+
+### Python API
+
+The Python bindings expose TLS configuration via `Client` and `AsyncClient`:
+
+```python
+# Disable verification (insecure, requires explicit opt-in)
+client = httpx.Client(verify=False)
+
+# Custom CA bundle
+client = httpx.Client(verify="/path/to/ca-bundle.pem")
+
+# Client certificate (certfile, keyfile)
+client = httpx.Client(cert=("/path/to/cert.pem", "/path/to/key.pem"))
+```
+
 ## Transport Stack
 
 The transport layer is built on:
@@ -336,7 +383,7 @@ The sync adapter does not contain its own TCP connections, TLS handshakes, or bo
 
 Top-level helpers (`get`, `post`, etc.) create a short-lived runtime and client per call. The `PyClient` class owns a persistent runtime and client for connection reuse.
 
-Supported kwargs: `headers`, `params`, `content`, `data`, `json`, `files`, `timeout`, `cookies`, `auth`, `follow_redirects`, `max_redirects`. Request-local cookies are serialized for the initial destination and are not added to the persistent client jar. Unsupported kwargs raise `TypeError`.
+Supported kwargs: `headers`, `params`, `content`, `data`, `json`, `files`, `timeout`, `cookies`, `auth`, `follow_redirects`, `max_redirects`, `verify`, `cert`. Request-local cookies are serialized for the initial destination and are not added to the persistent client jar. Unsupported kwargs raise `TypeError`.
 
 ## Request Builder Compatibility (Milestone I)
 
@@ -351,6 +398,8 @@ The Python crate provides a requests/httpx-compatible request construction surfa
 - **`cookies`** -- mapping of string names to values for this request only. These cookies do not persist in the client jar and are stripped on a cross-origin redirect.
 - **`follow_redirects`** -- bool. Overrides client-level redirect policy per-request.
 - **`max_redirects`** -- usize. Overrides client-level max redirects per-request.
+- **`verify`** -- bool or str. Client-level TLS verification setting. `False` disables verification; a string path sets a custom CA bundle.
+- **`cert`** -- str or tuple. Client certificate for mutual TLS. A string is a single PEM file; a tuple is `(certfile, keyfile)`.
 
 Body kwargs (`content`, `data`, `json`) are mutually exclusive. `files` may be combined with `data` (forming multipart), but `files` conflicts with `content` and `json` and raises `TypeError`. Auto Content-Type is only set for `data` and `json`; explicit Content-Type headers are preserved.
 
@@ -396,4 +445,4 @@ These crates do not exist yet. They will be added when the core engine is stable
 
 ## Current State
 
-The post-Milestone-S corrective integration pass is complete. The core crate provides a working async HTTP client with HTTPS support, request/response modeling, headers, query parameters, streaming request/response bodies, connection pooling, phase-aware timeouts (pool, connect, write, read, total), redirect following with configurable policy, `RequestBody::try_clone_for_redirect()` for replay-safe redirects, metadata-only redirect history entries (`HistoryEntry`), total timeout as a single deadline across redirect chains, a cookie subsystem with RFC 6265 parsing, domain/path matching, secure/httpOnly/SameSite attributes, expiry handling, thread-safe `CookieJar`, and client-level cookie state, an authentication subsystem with Basic and Bearer token support, secret redaction, client and request-level auth, precedence resolution, request-level auth disable via `without_auth()`, cross-origin credential stripping (client auth not reapplied on cross-origin redirects), URL credential conversion, streaming multipart/form-data request bodies with `Multipart`, `Part`, `PartBody`, and `Boundary` types, a streaming encoder, known-length calculation, and boundary generation, response decompression (gzip, deflate, brotli, zstd) with Accept-Encoding negotiation, decoded-body resource limits (`max_decoded_body_size`, `max_decompression_ratio`), and a proxy subsystem (HTTP proxying, HTTPS CONNECT tunneling, proxy authentication, per-request/client proxy configuration, NO_PROXY bypass). The Python crate exposes sync and async APIs with top-level helpers, `Client` and `AsyncClient` classes, requests/httpx-compatible response properties, status helpers, methods (`json()`, `raise_for_status()`, `iter_bytes()`, `iter_text()`, `iter_lines()`, `close()`/`aclose()`), true network streaming via `client.stream()` returning a `StreamingResponse` context manager (with `iter_bytes()`, `iter_text()`, `iter_lines()`, `read()`, `text()` and async equivalents), charset-aware text decoding with deterministic precedence, multi-value header support, case-insensitive headers, request body kwargs, form encoding, JSON body serialization, body kwarg mutual exclusion, `files=` kwarg with bytes/tuples/`File` wrapper support, `follow_redirects`/`max_redirects` kwargs, `Cookies` mapping wrapper (`client.cookies`, `response.cookies`, `cookies=` kwarg), `proxy=` kwarg, `decompress=` kwarg, `BasicAuth`/`BearerAuth` classes, `auth=` kwarg on all request methods, `NOAUTH` sentinel for per-request auth disable, streaming-specific exceptions (`StreamConsumed`, `StreamClosed`, `ResponseNotRead`), and a structured exception hierarchy with sync/async API parity verified by parity tests. The CLI crate remains a stub.
+The post-Milestone-T state is complete. The core crate provides a working async HTTP client with HTTPS support, request/response modeling, headers, query parameters, streaming request/response bodies, connection pooling, phase-aware timeouts (pool, connect, write, read, total), redirect following with configurable policy, `RequestBody::try_clone_for_redirect()` for replay-safe redirects, metadata-only redirect history entries (`HistoryEntry`), total timeout as a single deadline across redirect chains, a cookie subsystem with RFC 6265 parsing, domain/path matching, secure/httpOnly/SameSite attributes, expiry handling, thread-safe `CookieJar`, and client-level cookie state, an authentication subsystem with Basic and Bearer token support, secret redaction, client and request-level auth, precedence resolution, request-level auth disable via `without_auth()`, cross-origin credential stripping (client auth not reapplied on cross-origin redirects), URL credential conversion, streaming multipart/form-data request bodies with `Multipart`, `Part`, `PartBody`, and `Boundary` types, a streaming encoder, known-length calculation, and boundary generation, response decompression (gzip, deflate, brotli, zstd) with Accept-Encoding negotiation, decoded-body resource limits (`max_decoded_body_size`, `max_decompression_ratio`), a proxy subsystem (HTTP proxying, HTTPS CONNECT tunneling, proxy authentication, per-request/client proxy configuration, NO_PROXY bypass), and TLS configuration with custom CA bundles, client certificates, TLS version policy, verification toggle, and SNI behavior. The Python crate exposes sync and async APIs with top-level helpers, `Client` and `AsyncClient` classes, requests/httpx-compatible response properties, status helpers, methods (`json()`, `raise_for_status()`, `iter_bytes()`, `iter_text()`, `iter_lines()`, `close()`/`aclose()`), true network streaming via `client.stream()` returning a `StreamingResponse` context manager (with `iter_bytes()`, `iter_text()`, `iter_lines()`, `read()`, `text()` and async equivalents), charset-aware text decoding with deterministic precedence, multi-value header support, case-insensitive headers, request body kwargs, form encoding, JSON body serialization, body kwarg mutual exclusion, `files=` kwarg with bytes/tuples/`File` wrapper support, `follow_redirects`/`max_redirects` kwargs, `Cookies` mapping wrapper (`client.cookies`, `response.cookies`, `cookies=` kwarg), `proxy=` kwarg, `decompress=` kwarg, `verify=`/`cert=` kwargs, `BasicAuth`/`BearerAuth` classes, `auth=` kwarg on all request methods, `NOAUTH` sentinel for per-request auth disable, streaming-specific exceptions (`StreamConsumed`, `StreamClosed`, `ResponseNotRead`), and a structured exception hierarchy with sync/async API parity verified by parity tests. The CLI crate remains a stub.

@@ -141,6 +141,30 @@ pub enum Error {
     /// The decompression ratio exceeded the configured limit.
     #[error("decompression ratio exceeded max ratio")]
     DecompressionRatioExceeded,
+
+    /// A TLS configuration error occurred.
+    #[error("TLS configuration error: {0}")]
+    TlsConfig(String),
+
+    /// A CA certificate bundle could not be parsed.
+    #[error("CA bundle error: {0}")]
+    CaBundle(String),
+
+    /// A client certificate or private key could not be loaded.
+    #[error("client certificate error: {0}")]
+    ClientCert(String),
+
+    /// A private key could not be parsed or decrypted.
+    #[error("private key error: {0}")]
+    PrivateKey(String),
+
+    /// Certificate verification failed.
+    #[error("certificate verification failed: {0}")]
+    CertificateVerification(String),
+
+    /// Hostname verification failed.
+    #[error("hostname verification failed: {0}")]
+    HostnameVerification(String),
 }
 
 impl Error {
@@ -185,6 +209,12 @@ impl Error {
             Self::MalformedProxyResponse(_) => "malformed_proxy_response",
             Self::DecodedBodyTooLarge => "decoded_body_too_large",
             Self::DecompressionRatioExceeded => "decompression_ratio_exceeded",
+            Self::TlsConfig(_) => "tls_config",
+            Self::CaBundle(_) => "ca_bundle",
+            Self::ClientCert(_) => "client_cert",
+            Self::PrivateKey(_) => "private_key",
+            Self::CertificateVerification(_) => "certificate_verification",
+            Self::HostnameVerification(_) => "hostname_verification",
         }
     }
 }

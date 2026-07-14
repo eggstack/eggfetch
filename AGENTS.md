@@ -21,6 +21,7 @@ eggfetch follows a milestone-driven development sequence: A through Q. Each mile
 - Q: Multipart and file uploads (complete)
 - R: Response compression and decompression (complete)
 - S: Proxy subsystem (complete)
+- T: TLS configuration (complete)
 - N: Semantic tightening and public-API stabilization (complete)
 - Validation polish after Milestone N (complete before Q)
 - Corrective integration after Milestone S (complete)
