@@ -4,6 +4,41 @@
 //! globally and per-origin. Actual connection reuse is handled by hyper;
 //! this module controls how many concurrent requests may be in flight.
 //!
+//! # Concurrency model
+//!
+//! eggfetch's pool enforces **logical request concurrency** — the number
+//! of concurrent requests the application may have in flight. This is
+//! distinct from physical connection counts and, under HTTP/2, from
+//! per-connection stream concurrency:
+//!
+//! - **Logical request concurrency**: Controlled by `max_connections`
+//!   and `max_connections_per_host` in this pool. A single semaphore
+//!   permit corresponds to one logical request.
+//!
+//! - **Physical connection count**: Owned by hyper's internal connection
+//!   pool. eggfetch cannot observe or control this directly. Under
+//!   HTTP/1.1, one connection carries one request at a time. Under
+//!   HTTP/2, one connection carries many multiplexed streams.
+//!
+//! - **Per-origin HTTP/2 stream concurrency**: hyper/h2 respects the
+//!   server's `SETTINGS_MAX_CONCURRENT_STREAMS` advertisement and its
+//!   own internal limits. eggfetch does not expose or override these.
+//!   The logical request limit acts as an upper bound on concurrent
+//!   streams because each in-flight request holds a pool permit.
+//!
+//! - **Per-connection stream limit**: The h2 library enforces a default
+//!   of 100 concurrent streams per connection, or whatever the server
+//!   advertises via `SETTINGS_MAX_CONCURRENT_STREAMS`. This is
+//!   transparent to eggfetch — hyper handles stream multiplexing within
+//!   a connection automatically.
+//!
+//! Under HTTP/2, multiple logical requests may share a single TCP
+//! connection (multiplexed streams). The pool's per-origin limit still
+//! applies: it bounds the number of concurrent requests, not the number
+//! of connections. If the h2 connection's stream limit is reached,
+//! hyper internally queues streams until a slot opens, which may cause
+//! pool acquisition to wait.
+//!
 //! # Origin keying
 //!
 //! Per-origin limits are keyed by `(scheme, host, port)`, where the port
@@ -205,10 +240,21 @@ impl fmt::Display for OriginKey {
 /// # What is measured
 ///
 /// These counters track **logical permits** held by the pool, not raw
-/// TCP sockets. Hyper owns socket lifecycle; eggfetch cannot observe
-/// individual socket open/reuse/close events through its current
-/// integration. If you need socket-level metrics, those would have to
-/// be added at a custom connector layer.
+/// TCP sockets or HTTP/2 streams. Hyper owns socket lifecycle and h2
+/// stream multiplexing; eggfetch cannot observe individual socket
+/// open/reuse/close events or per-connection stream counts through its
+/// current integration.
+///
+/// Under HTTP/2, a single TCP connection may carry multiple concurrent
+/// streams, but the pool still tracks one permit per logical request.
+/// The server's `SETTINGS_MAX_CONCURRENT_STREAMS` limit is enforced
+/// internally by hyper/h2, not by this pool. If the stream limit is
+/// reached, hyper queues new streams, which may cause pool acquisition
+/// to wait even though logical permit slots are available.
+///
+/// If you need socket-level or stream-level metrics, those would have
+/// to be added at a custom connector layer or by instrumenting h2
+/// directly.
 #[derive(Debug, Default)]
 pub struct PoolMetrics {
     /// Total number of times an acquire call had to wait for a permit.

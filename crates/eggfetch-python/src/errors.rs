@@ -154,6 +154,30 @@ create_exception!(
     RequestError,
     "Retry is not configured for this request or client."
 );
+create_exception!(
+    eggfetch,
+    Http2Error,
+    RequestError,
+    "An HTTP/2 protocol error occurred."
+);
+create_exception!(
+    eggfetch,
+    Http2GoAway,
+    Http2Error,
+    "The HTTP/2 connection received a GOAWAY frame."
+);
+create_exception!(
+    eggfetch,
+    Http2StreamReset,
+    Http2Error,
+    "An HTTP/2 stream was reset."
+);
+create_exception!(
+    eggfetch,
+    Http2FlowControlError,
+    Http2Error,
+    "An HTTP/2 flow-control error occurred."
+);
 
 /// Map an eggfetch-core error to the appropriate Python exception.
 #[allow(clippy::needless_pass_by_value)]
@@ -231,6 +255,21 @@ pub fn map_err(err: eggfetch_core::Error) -> PyErr {
         ),
         eggfetch_core::Error::RetryNotConfigured => {
             RetryNotConfigured::new_err("retry is not configured for this request or client")
+        }
+        eggfetch_core::Error::Http2GoAway {
+            last_stream_id,
+            debug_data,
+        } => Http2GoAway::new_err(format!(
+            "HTTP/2 GOAWAY: last_stream_id={last_stream_id}, debug={debug_data}"
+        )),
+        eggfetch_core::Error::Http2StreamReset { reason } => {
+            Http2StreamReset::new_err(format!("HTTP/2 stream reset: {reason}"))
+        }
+        eggfetch_core::Error::Http2FlowControl(msg) => {
+            Http2FlowControlError::new_err(format!("HTTP/2 flow control error: {msg}"))
+        }
+        eggfetch_core::Error::Http2Protocol(msg) => {
+            Http2Error::new_err(format!("HTTP/2 protocol error: {msg}"))
         }
     }
 }

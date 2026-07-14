@@ -316,16 +316,23 @@ Policy-driven retries with idempotency awareness and exponential backoff:
 
 ### Milestone V: HTTP/2 (complete)
 
-HTTP/2 support with ALPN negotiation and protocol version reporting:
+HTTP/2 support with ALPN negotiation, error taxonomy, forbidden header handling, and protocol version reporting:
 
 - **`HttpVersionPolicy`** -- enum with `Http1Only`, `Http2Only`, and `Auto` variants. Controls which HTTP protocol versions the client may negotiate. Default is `Auto`.
 - **ALPN negotiation** -- the client advertises `h2` and/or `http/1.1` via ALPN based on the version policy. When `Auto`, both are advertised; when `Http2Only`, only `h2`; when `Http1Only`, only `http/1.1`.
 - **Feature-gated** -- the `http2` feature enables HTTP/2 support in hyper, hyper-util, and hyper-rustls. Without the feature, `Http2Only` and `Auto` silently downgrade to `Http1Only`.
+- **HTTP/2 error taxonomy** -- `Http2GoAway`, `Http2StreamReset`, `Http2FlowControl`, `Http2Protocol` error variants with diagnostic information. Hyper h2 errors are classified where possible.
+- **Forbidden header stripping** -- `Connection`, `Keep-Alive`, `Proxy-Connection`, `Transfer-Encoding`, `Upgrade`, and non-`trailers` `TE` values are stripped unconditionally before sending.
+- **Retry classification** -- `REFUSED_STREAM` errors are classified as retryable for replayable requests. `CANCEL`, `GOAWAY`, and other h2 errors are not retried.
+- **Trailers** -- documented as not supported; trailing HEADERS frames are silently dropped.
+- **Pool concurrency model** -- documented the separation of logical request concurrency (eggfetch pool), physical connection count (hyper), and per-connection stream limits (h2 `SETTINGS_MAX_CONCURRENT_STREAMS`).
 - **Protocol version reporting** -- `response.version()` returns `HTTP_2` when the server negotiates HTTP/2. Python `response.http_version` reports `"HTTP/2"` accurately.
 - **Client configuration** -- `ClientBuilder::http_version_policy(policy)` sets the version policy at client construction time.
 - **Python API** -- `Client(http2=True)` and `AsyncClient(http2=True)` enable HTTP/2 negotiation (equivalent to `Auto` policy). `http2=False` or omitted uses HTTP/1.1 only.
+- **Python error types** -- `Http2Error`, `Http2GoAway`, `Http2StreamReset`, `Http2FlowControlError` exception classes.
 - **TLS integration** -- ALPN settings are correctly set on custom TLS configurations and default connector paths. Custom CA bundles, mTLS, and CONNECT tunnels preserve ALPN settings.
 - **Backward compatible** -- HTTP/1.1 remains the default. No existing behavior changes unless `http2=True` is explicitly set.
+- **Tests** -- 21 HTTP/2-specific Rust tests covering error taxonomy, retry classification, forbidden header stripping, version policy, concurrent requests, stream cancellation, and feature-gated builds.
 
 ## Repository Layout
 

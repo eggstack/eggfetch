@@ -180,6 +180,30 @@ pub enum Error {
     /// Retry is not enabled for this request or client.
     #[error("retry not configured")]
     RetryNotConfigured,
+
+    /// The HTTP/2 connection received a GOAWAY frame from the server.
+    #[error("HTTP/2 GOAWAY: last_stream_id={last_stream_id}, debug={debug_data}")]
+    Http2GoAway {
+        /// The last stream ID the server will process.
+        last_stream_id: u32,
+        /// Debug data from the GOAWAY frame.
+        debug_data: String,
+    },
+
+    /// An HTTP/2 stream was reset by the server with the given reason code.
+    #[error("HTTP/2 stream reset: {reason}")]
+    Http2StreamReset {
+        /// The HTTP/2 reason code (e.g., `REFUSED_STREAM`, `CANCEL`).
+        reason: String,
+    },
+
+    /// An HTTP/2 flow-control error occurred.
+    #[error("HTTP/2 flow control error: {0}")]
+    Http2FlowControl(String),
+
+    /// An HTTP/2 protocol error occurred.
+    #[error("HTTP/2 protocol error: {0}")]
+    Http2Protocol(String),
 }
 
 impl Error {
@@ -233,6 +257,10 @@ impl Error {
             Self::BodyNotReplayableForRetry => "body_not_replayable_for_retry",
             Self::RetryBudgetExhausted { .. } => "retry_budget_exhausted",
             Self::RetryNotConfigured => "retry_not_configured",
+            Self::Http2GoAway { .. } => "http2_go_away",
+            Self::Http2StreamReset { .. } => "http2_stream_reset",
+            Self::Http2FlowControl(_) => "http2_flow_control",
+            Self::Http2Protocol(_) => "http2_protocol",
         }
     }
 }
@@ -258,5 +286,63 @@ mod tests {
         let io_err = std::sync::Arc::new(std::io::Error::other("test"));
         let err: Error = io_err.into();
         assert_eq!(err.kind(), "io");
+    }
+
+    #[test]
+    fn error_http2_go_away_display() {
+        let err = Error::Http2GoAway {
+            last_stream_id: 1,
+            debug_data: "no error: connection closed".into(),
+        };
+        assert_eq!(err.kind(), "http2_go_away");
+        let msg = err.to_string();
+        assert!(msg.contains("GOAWAY"));
+        assert!(msg.contains("no error: connection closed"));
+    }
+
+    #[test]
+    fn error_http2_stream_reset_display() {
+        let err = Error::Http2StreamReset {
+            reason: "REFUSED_STREAM: stream refused".into(),
+        };
+        assert_eq!(err.kind(), "http2_stream_reset");
+        assert!(err.to_string().contains("REFUSED_STREAM"));
+    }
+
+    #[test]
+    fn error_http2_flow_control_display() {
+        let err = Error::Http2FlowControl("flow-control violated".into());
+        assert_eq!(err.kind(), "http2_flow_control");
+    }
+
+    #[test]
+    fn error_http2_protocol_display() {
+        let err = Error::Http2Protocol("stream closed after headers".into());
+        assert_eq!(err.kind(), "http2_protocol");
+    }
+
+    #[test]
+    fn http2_refused_stream_is_retryable() {
+        let err = Error::Http2StreamReset {
+            reason: "REFUSED_STREAM: stream refused before processing".into(),
+        };
+        assert!(crate::retry::RetryPolicy::is_error_retryable(&err));
+    }
+
+    #[test]
+    fn http2_cancel_is_not_retryable() {
+        let err = Error::Http2StreamReset {
+            reason: "CANCEL: stream no longer needed".into(),
+        };
+        assert!(!crate::retry::RetryPolicy::is_error_retryable(&err));
+    }
+
+    #[test]
+    fn http2_go_away_is_not_retryable() {
+        let err = Error::Http2GoAway {
+            last_stream_id: 0,
+            debug_data: " shutting down".into(),
+        };
+        assert!(!crate::retry::RetryPolicy::is_error_retryable(&err));
     }
 }

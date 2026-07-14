@@ -581,6 +581,16 @@ fn register_exceptions(m: &Bound<'_, PyModule>) -> PyResult<()> {
         "RetryNotConfigured",
         m.py().get_type::<errors::RetryNotConfigured>(),
     )?;
+    m.add("Http2Error", m.py().get_type::<errors::Http2Error>())?;
+    m.add("Http2GoAway", m.py().get_type::<errors::Http2GoAway>())?;
+    m.add(
+        "Http2StreamReset",
+        m.py().get_type::<errors::Http2StreamReset>(),
+    )?;
+    m.add(
+        "Http2FlowControlError",
+        m.py().get_type::<errors::Http2FlowControlError>(),
+    )?;
     Ok(())
 }
 
@@ -640,6 +650,10 @@ fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
         "BodyNotReplayableForRetry",
         "RetryBudgetExhausted",
         "RetryNotConfigured",
+        "Http2Error",
+        "Http2GoAway",
+        "Http2StreamReset",
+        "Http2FlowControlError",
     ];
     let py = m.py();
     let py_list = pyo3::types::PyList::new(py, &all_items)?;

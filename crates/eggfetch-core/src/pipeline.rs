@@ -693,6 +693,10 @@ pub(crate) async fn send_single_request(
         }
     }
 
+    // Strip HTTP/2-forbidden headers unconditionally. These are
+    // hop-by-hop headers that should never be forwarded end-to-end.
+    crate::h2_headers::strip_h2_forbidden_headers(&mut headers);
+
     let remaining_total = timeout
         .total
         .map(|total| total.saturating_sub(started.elapsed()));

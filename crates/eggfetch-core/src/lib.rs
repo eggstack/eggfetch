@@ -32,6 +32,7 @@ pub mod compression;
 #[cfg(feature = "cookies")]
 pub mod cookie;
 pub mod error;
+mod h2_headers;
 pub mod headers;
 pub mod http_version;
 #[cfg(feature = "multipart")]

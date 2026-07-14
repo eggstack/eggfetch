@@ -60,6 +60,10 @@ from eggfetch._native import (
     BodyNotReplayableForRetry,
     RetryBudgetExhausted,
     RetryNotConfigured,
+    Http2Error,
+    Http2GoAway,
+    Http2StreamReset,
+    Http2FlowControlError,
 )
 
 __all__ = [
@@ -115,4 +119,8 @@ __all__ = [
     "BodyNotReplayableForRetry",
     "RetryBudgetExhausted",
     "RetryNotConfigured",
+    "Http2Error",
+    "Http2GoAway",
+    "Http2StreamReset",
+    "Http2FlowControlError",
 ]

@@ -141,21 +141,22 @@ impl RetryPolicy {
     /// Returns `true` if the given error is eligible for retry.
     #[must_use]
     pub fn is_error_retryable(error: &Error) -> bool {
-        matches!(
-            error,
+        match error {
             Error::Connect(_)
-                | Error::Io(_)
-                | Error::Hyper(_)
-                | Error::HyperClient(_)
-                | Error::Timeout {
-                    phase: crate::timeout::TimeoutPhase::Connect,
-                    ..
-                }
-                | Error::Timeout {
-                    phase: crate::timeout::TimeoutPhase::Pool,
-                    ..
-                }
-        )
+            | Error::Io(_)
+            | Error::Hyper(_)
+            | Error::HyperClient(_)
+            | Error::Timeout {
+                phase: crate::timeout::TimeoutPhase::Connect,
+                ..
+            }
+            | Error::Timeout {
+                phase: crate::timeout::TimeoutPhase::Pool,
+                ..
+            } => true,
+            Error::Http2StreamReset { reason } if reason.starts_with("REFUSED_STREAM") => true,
+            _ => false,
+        }
     }
 
     /// Compute the backoff delay for the given attempt number (1-indexed).

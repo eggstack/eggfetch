@@ -1,6 +1,6 @@
 # Architecture Overview
 
-This document describes the architecture of eggfetch. The post-Milestone-V state is the latest completed work. The core crate provides protocol-neutral streaming for request and response bodies, redirect following with configurable policy, total timeout across redirect chains, metadata-only redirect history, replay-safe request bodies, an RFC 6265 cookie subsystem, an authentication subsystem with Basic and Bearer token support, precedence resolution, request-level auth disable, cross-origin credential stripping, streaming multipart/form-data request bodies, response decompression (gzip, deflate, brotli, zstd) with Accept-Encoding negotiation, decoded-body resource limits (max size, decompression ratio), a proxy subsystem (HTTP proxying, HTTPS CONNECT tunneling, proxy authentication, per-request/client proxy configuration, NO_PROXY bypass), TLS configuration (custom CA bundles, client certificates, TLS version policy, verification toggle, SNI behavior), and HTTP/2 support (ALPN negotiation, multiplexed connections, protocol version reporting). The Python crate exposes both sync and async APIs over the async Rust core via PyO3/maturin, with buffered and live streaming response surfaces, request-local and client-level cookies, redirect support, sync/async parity, `BasicAuth`/`BearerAuth` classes, `auth=` on request methods, `NOAUTH`, named streaming exceptions, `files=` kwarg for multipart uploads, `decompress=` kwarg for decompression control, `verify=`/`cert=` kwargs for TLS configuration, and `http2=` kwarg for HTTP/2 negotiation.
+This document describes the architecture of eggfetch. The post-Milestone-V state is the latest completed work. The core crate provides protocol-neutral streaming for request and response bodies, redirect following with configurable policy, total timeout across redirect chains, metadata-only redirect history, replay-safe request bodies, an RFC 6265 cookie subsystem, an authentication subsystem with Basic and Bearer token support, precedence resolution, request-level auth disable, cross-origin credential stripping, streaming multipart/form-data request bodies, response decompression (gzip, deflate, brotli, zstd) with Accept-Encoding negotiation, decoded-body resource limits (max size, decompression ratio), a proxy subsystem (HTTP proxying, HTTPS CONNECT tunneling, proxy authentication, per-request/client proxy configuration, NO_PROXY bypass), TLS configuration (custom CA bundles, client certificates, TLS version policy, verification toggle, SNI behavior), and HTTP/2 support (ALPN negotiation, multiplexed connections, protocol version reporting, HTTP/2 error taxonomy, forbidden header stripping, retry classification for REFUSED_STREAM, trailers documentation, pool concurrency model documentation). The Python crate exposes both sync and async APIs over the async Rust core via PyO3/maturin, with buffered and live streaming response surfaces, request-local and client-level cookies, redirect support, sync/async parity, `BasicAuth`/`BearerAuth` classes, `auth=` on request methods, `NOAUTH`, named streaming exceptions, `files=` kwarg for multipart uploads, `decompress=` kwarg for decompression control, `verify=`/`cert=` kwargs for TLS configuration, `http2=` kwarg for HTTP/2 negotiation, and HTTP/2-specific exception types (`Http2Error`, `Http2GoAway`, `Http2StreamReset`, `Http2FlowControlError`).
 
 The post-E hardening pass landed true streaming request bodies, per-chunk read/write timeouts, pool permits tied to the full response body lifecycle, and origin-keyed pool limits.
 
@@ -418,12 +418,52 @@ When the server negotiates HTTP/2, `response.version()` returns
 `http::Version::HTTP_2`. In Python, `response.http_version` reports
 `"HTTP/2"`. This is handled automatically by hyper's response parsing.
 
+### Forbidden Header Stripping
+
+Per RFC 9113, Section 8.2.2, certain HTTP/1.1 connection-specific headers
+are forbidden in HTTP/2. The pipeline strips these unconditionally before
+sending: `Connection`, `Keep-Alive`, `Proxy-Connection`, `Transfer-Encoding`,
+`Upgrade`, and `TE` with any value other than `trailers`. This is safe
+because these are hop-by-hop headers that should never be forwarded
+end-to-end.
+
+### HTTP/2 Error Taxonomy
+
+eggfetch maps HTTP/2-specific errors to dedicated error variants:
+
+- **`Http2GoAway`** -- the server sent a GOAWAY frame, terminating the
+  connection. Includes the last stream ID and debug data.
+- **`Http2StreamReset`** -- a stream was reset via RST_STREAM. The reason
+  code is included (e.g., `REFUSED_STREAM`, `CANCEL`).
+- **`Http2FlowControl`** -- a flow-control error occurred.
+- **`Http2Protocol`** -- a generic HTTP/2 protocol error.
+
+Hyper wraps h2 errors internally; eggfetch classifies them by inspecting
+the error's display output for known h2 patterns.
+
+### Retry Classification
+
+`REFUSED_STREAM` errors are classified as retryable for replayable
+requests. `CANCEL`, `GOAWAY`, flow-control, and protocol errors are not
+retried. This aligns with RFC 9113, Section 7.2.4, which recommends
+retrying requests that receive a `REFUSED_STREAM` error code.
+
+### Trailers
+
+HTTP trailers (both HTTP/1.1 chunked trailers and HTTP/2 trailing HEADERS
+frames) are not currently supported. The `wrap_incoming` adapter only yields
+data frames; when a trailers frame arrives, the stream ends normally without
+surfacing the trailer headers. This is a known limitation.
+
 ### Pool and Concurrency
 
 HTTP/2 multiplexes streams on a single connection, but eggfetch's pool
 permits still control logical request concurrency per origin. The pool
 does not directly manage TCP connections or HTTP/2 stream counts. hyper
-handles connection-level multiplexing internally.
+handles connection-level multiplexing internally. The server's
+`SETTINGS_MAX_CONCURRENT_STREAMS` is respected by h2 internally; when the
+stream limit is reached, new streams are queued by hyper until a slot
+opens.
 
 ### Python API
 
@@ -436,6 +476,14 @@ print(r.http_version)  # "HTTP/2" or "HTTP/1.1"
 # Async
 async with eggfetch.AsyncClient(http2=True) as client:
     r = await client.get("https://example.com")
+
+# Catch h2-specific errors
+try:
+    r = client.get("https://example.com")
+except eggfetch.Http2GoAway as e:
+    print(f"Server sent GOAWAY: {e}")
+except eggfetch.Http2StreamReset as e:
+    print(f"Stream reset: {e}")
 ```
 
 ## Transport Stack
@@ -527,4 +575,4 @@ These crates do not exist yet. They will be added when the core engine is stable
 
 ## Current State
 
-The post-Milestone-V state is complete. The core crate provides a working async HTTP client with HTTPS support, request/response modeling, headers, query parameters, streaming request/response bodies, connection pooling, phase-aware timeouts (pool, connect, write, read, total), redirect following with configurable policy, `RequestBody::try_clone_for_redirect()` for replay-safe redirects, metadata-only redirect history entries (`HistoryEntry`), total timeout as a single deadline across redirect chains, a cookie subsystem with RFC 6265 parsing, domain/path matching, secure/httpOnly/SameSite attributes, expiry handling, thread-safe `CookieJar`, and client-level cookie state, an authentication subsystem with Basic and Bearer token support, secret redaction, client and request-level auth, precedence resolution, request-level auth disable via `without_auth()`, cross-origin credential stripping (client auth not reapplied on cross-origin redirects), URL credential conversion, streaming multipart/form-data request bodies with `Multipart`, `Part`, `PartBody`, and `Boundary` types, a streaming encoder, known-length calculation, and boundary generation, response decompression (gzip, deflate, brotli, zstd) with Accept-Encoding negotiation, decoded-body resource limits (`max_decoded_body_size`, `max_decompression_ratio`), a proxy subsystem (HTTP proxying, HTTPS CONNECT tunneling, proxy authentication, per-request/client proxy configuration, NO_PROXY bypass), TLS configuration with custom CA bundles, client certificates, TLS version policy, verification toggle, and SNI behavior, and HTTP/2 support with ALPN negotiation, `HttpVersionPolicy` enum, multiplexed connections, and protocol version reporting. The Python crate exposes sync and async APIs with top-level helpers, `Client` and `AsyncClient` classes, requests/httpx-compatible response properties, status helpers, methods (`json()`, `raise_for_status()`, `iter_bytes()`, `iter_text()`, `iter_lines()`, `close()`/`aclose()`), true network streaming via `client.stream()` returning a `StreamingResponse` context manager (with `iter_bytes()`, `iter_text()`, `iter_lines()`, `read()`, `text()` and async equivalents), charset-aware text decoding with deterministic precedence, multi-value header support, case-insensitive headers, request body kwargs, form encoding, JSON body serialization, body kwarg mutual exclusion, `files=` kwarg with bytes/tuples/`File` wrapper support, `follow_redirects`/`max_redirects` kwargs, `Cookies` mapping wrapper (`client.cookies`, `response.cookies`, `cookies=` kwarg), `proxy=` kwarg, `decompress=` kwarg, `verify=`/`cert=` kwargs, `BasicAuth`/`BearerAuth` classes, `auth=` kwarg on all request methods, `NOAUTH` sentinel for per-request auth disable, streaming-specific exceptions (`StreamConsumed`, `StreamClosed`, `ResponseNotRead`), `http2=` kwarg for HTTP/2 negotiation, and a structured exception hierarchy with sync/async API parity verified by parity tests. The CLI crate remains a stub.
+The post-Milestone-V state is complete. The core crate provides a working async HTTP client with HTTPS support, request/response modeling, headers, query parameters, streaming request/response bodies, connection pooling, phase-aware timeouts (pool, connect, write, read, total), redirect following with configurable policy, `RequestBody::try_clone_for_redirect()` for replay-safe redirects, metadata-only redirect history entries (`HistoryEntry`), total timeout as a single deadline across redirect chains, a cookie subsystem with RFC 6265 parsing, domain/path matching, secure/httpOnly/SameSite attributes, expiry handling, thread-safe `CookieJar`, and client-level cookie state, an authentication subsystem with Basic and Bearer token support, secret redaction, client and request-level auth, precedence resolution, request-level auth disable via `without_auth()`, cross-origin credential stripping (client auth not reapplied on cross-origin redirects), URL credential conversion, streaming multipart/form-data request bodies with `Multipart`, `Part`, `PartBody`, and `Boundary` types, a streaming encoder, known-length calculation, and boundary generation, response decompression (gzip, deflate, brotli, zstd) with Accept-Encoding negotiation, decoded-body resource limits (`max_decoded_body_size`, `max_decompression_ratio`), a proxy subsystem (HTTP proxying, HTTPS CONNECT tunneling, proxy authentication, per-request/client proxy configuration, NO_PROXY bypass), TLS configuration with custom CA bundles, client certificates, TLS version policy, verification toggle, and SNI behavior, and HTTP/2 support with ALPN negotiation, `HttpVersionPolicy` enum, multiplexed connections, protocol version reporting, HTTP/2 error taxonomy (GoAway, StreamReset, FlowControl, Protocol), forbidden header stripping, retry classification for REFUSED_STREAM, trailers documentation, and pool concurrency model documentation. The Python crate exposes sync and async APIs with top-level helpers, `Client` and `AsyncClient` classes, requests/httpx-compatible response properties, status helpers, methods (`json()`, `raise_for_status()`, `iter_bytes()`, `iter_text()`, `iter_lines()`, `close()`/`aclose()`), true network streaming via `client.stream()` returning a `StreamingResponse` context manager (with `iter_bytes()`, `iter_text()`, `iter_lines()`, `read()`, `text()` and async equivalents), charset-aware text decoding with deterministic precedence, multi-value header support, case-insensitive headers, request body kwargs, form encoding, JSON body serialization, body kwarg mutual exclusion, `files=` kwarg with bytes/tuples/`File` wrapper support, `follow_redirects`/`max_redirects` kwargs, `Cookies` mapping wrapper (`client.cookies`, `response.cookies`, `cookies=` kwarg), `proxy=` kwarg, `decompress=` kwarg, `verify=`/`cert=` kwargs, `BasicAuth`/`BearerAuth` classes, `auth=` kwarg on all request methods, `NOAUTH` sentinel for per-request auth disable, streaming-specific exceptions (`StreamConsumed`, `StreamClosed`, `ResponseNotRead`), `http2=` kwarg for HTTP/2 negotiation, and a structured exception hierarchy with sync/async API parity verified by parity tests. The CLI crate remains a stub.
