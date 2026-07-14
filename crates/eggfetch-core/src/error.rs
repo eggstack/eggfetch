@@ -204,6 +204,22 @@ pub enum Error {
     /// An HTTP/2 protocol error occurred.
     #[error("HTTP/2 protocol error: {0}")]
     Http2Protocol(String),
+
+    /// An HTTP/3 connection error occurred.
+    #[error("HTTP/3 connect error: {0}")]
+    H3Connect(String),
+
+    /// An HTTP/3 connection was closed by the peer.
+    #[error("HTTP/3 connection closed: {0}")]
+    H3ConnectionClosed(String),
+
+    /// An HTTP/3 stream error occurred.
+    #[error("HTTP/3 stream error: {0}")]
+    H3Stream(String),
+
+    /// An HTTP/3 protocol error occurred.
+    #[error("HTTP/3 protocol error: {0}")]
+    H3Protocol(String),
 }
 
 impl Error {
@@ -261,6 +277,10 @@ impl Error {
             Self::Http2StreamReset { .. } => "http2_stream_reset",
             Self::Http2FlowControl(_) => "http2_flow_control",
             Self::Http2Protocol(_) => "http2_protocol",
+            Self::H3Connect(_) => "h3_connect",
+            Self::H3ConnectionClosed(_) => "h3_connection_closed",
+            Self::H3Stream(_) => "h3_stream",
+            Self::H3Protocol(_) => "h3_protocol",
         }
     }
 }

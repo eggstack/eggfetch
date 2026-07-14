@@ -2,7 +2,7 @@
 
 ## Purpose
 
-eggfetch is a Rust-native HTTP client platform with Python bindings and a CLI layered on top of a single async engine. The project has completed its initial architectural and MVP-construction phase: the Rust core, Python sync and async APIs, response compatibility surface, common request body handling, redirects, streaming foundations, timeouts, and pooling are all in place.
+eggfetch is a Rust-native HTTP client platform with Python bindings and a CLI layered on top of a single async engine. The project has completed its initial architectural and MVP-construction phase: the Rust core, Python sync and async APIs, response compatibility surface, common request body handling, redirects, streaming foundations, timeouts, pooling, HTTP/2, and HTTP/3 (experimental) are all in place.
 
 The remaining roadmap is therefore not primarily about proving feasibility. It is about tightening semantics, completing the expected HTTP-client feature set, expanding transport capabilities, and establishing production-grade release, security, testing, and documentation practices.
 
@@ -38,6 +38,8 @@ The following work is considered complete enough to serve as the platform for th
 - authentication subsystem with Basic and Bearer token support, client and request-level auth, precedence resolution, cross-origin credential stripping, and URL credential conversion
 - proxy subsystem with HTTP proxying, HTTPS CONNECT tunneling, proxy authentication, per-request/client proxy configuration, and NO_PROXY bypass
 - TLS configuration with custom CA bundles, client certificates, TLS version policy, verification toggle, and SNI behavior
+- HTTP/2 support with ALPN negotiation, multiplexed connections, protocol version reporting, error taxonomy, forbidden header stripping, retry classification, and pool concurrency model
+- HTTP/3 support (experimental) via QUIC transport with Quinn/h3, feature-gated behind `http3`
 
 These capabilities should continue receiving corrective maintenance, but the roadmap no longer treats them as greenfield milestones.
 
@@ -211,20 +213,22 @@ Work includes:
 
 The pool abstraction must no longer equate one active request with one TCP connection.
 
-## Milestone W: HTTP/3
+## Milestone W: HTTP/3 (complete)
 
-Introduce optional HTTP/3 support through a separately gated transport, likely using Quinn and the `h3` ecosystem.
+HTTP/3 over QUIC is implemented as an experimental, separately feature-gated capability.
 
-Requirements:
+Implemented capabilities:
 
-- no disruption to HTTP/1.1 and HTTP/2 defaults
-- protocol fallback/selection policy
-- QUIC connection lifecycle
-- 0-RTT policy if ever enabled
-- certificate and timeout integration
-- extensive interoperability testing
-
-HTTP/3 is post-MVP and should remain isolated until mature.
+- `HttpVersionPolicy::Http3Only` enum variant for HTTP/3-only connections
+- QUIC transport via `quinn` crate with `h3` protocol layer
+- Feature-gated behind `http3` Cargo feature
+- TLS 1.3 requirement enforced (QUIC mandate)
+- 0-RTT disabled in initial implementation (replay attack risk mitigation)
+- Python `Client(http3=True)` and `AsyncClient(http3=True)`
+- Python `Http3Error` and `Http3ConnectionError` exception types
+- Protocol version reporting (`HTTP/3`)
+- Backward compatible; no existing behavior changes unless explicitly opted in
+- Rust tests covering feature-gated compilation, version policy, and error taxonomy
 
 # Phase 5: CLI and Ecosystem
 
@@ -351,8 +355,9 @@ The preferred order is:
 6. Milestone S: proxies (complete)
 7. Milestone T: TLS configuration (complete)
 8. Milestone U: retries (complete)
-9. Milestone V: HTTP/2
-10. Milestone X: full CLI
+9. Milestone V: HTTP/2 (complete)
+10. Milestone W: HTTP/3 (complete, experimental)
+11. Milestone X: full CLI
 11. Milestone Y: documentation/examples
 12. Production tracks
 13. HTTP/3 and additional language bindings

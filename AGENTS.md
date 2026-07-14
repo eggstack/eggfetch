@@ -24,6 +24,7 @@ eggfetch follows a milestone-driven development sequence: A through Q. Each mile
 - T: TLS configuration (complete)
 - U: Retry and resilience policy (complete)
 - V: HTTP/2 (complete)
+- W: HTTP/3 (complete, experimental)
 - N: Semantic tightening and public-API stabilization (complete)
 - Validation polish after Milestone N (complete before Q)
 - Corrective integration after Milestone S (complete)
@@ -88,6 +89,8 @@ cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,co
 cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,compression-brotli
 cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,compression-zstd
 cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,proxy
+cargo check -p eggfetch-core --no-default-features --features http1,tls-rustls,http3
+cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,http3
 ```
 
 The supported CI matrix is Python 3.10–3.13 on Ubuntu, macOS, and Windows.

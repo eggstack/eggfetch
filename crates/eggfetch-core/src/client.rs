@@ -37,7 +37,7 @@ pub(crate) struct ClientConfig {
     pub(crate) max_decompression_ratio: Option<f64>,
     #[cfg(feature = "proxy")]
     pub(crate) proxy: Option<Proxy>,
-    #[cfg(feature = "proxy")]
+    #[cfg(any(feature = "proxy", feature = "http3"))]
     pub(crate) tls_config: Option<crate::tls::TlsConfig>,
     pub(crate) retry: Option<RetryPolicy>,
     #[allow(
@@ -62,7 +62,7 @@ impl Default for ClientConfig {
             max_decompression_ratio: None,
             #[cfg(feature = "proxy")]
             proxy: None,
-            #[cfg(feature = "proxy")]
+            #[cfg(any(feature = "proxy", feature = "http3"))]
             tls_config: None,
             retry: None,
             http_version_policy: HttpVersionPolicy::default(),
@@ -86,9 +86,11 @@ impl std::fmt::Debug for Client {
 }
 
 pub(crate) struct ClientInner {
-    pub(crate) hyper_client: HyperClient,
+    pub(crate) hyper_client: Option<HyperClient>,
     pub(crate) config: ClientConfig,
     pub(crate) pool: Pool,
+    #[cfg(feature = "http3")]
+    pub(crate) h3_connector: Option<crate::transport::http3::H3Connector>,
 }
 
 impl Client {
@@ -488,47 +490,59 @@ impl ClientBuilder {
         use crate::http_version::HttpVersionPolicyEnabler;
         let enabler = HttpVersionPolicyEnabler::from_policy(self.http_version_policy);
 
-        let https = match self.tls_config.as_ref() {
-            Some(tls_config) => match tls_config.build_rustls_config() {
-                Ok(mut rc) => {
-                    // hyper-rustls requires empty ALPN; it rebuilds based
-                    // on enable_http1/enable_http2 calls.
-                    rc.alpn_protocols.clear();
-                    let builder = hyper_rustls::HttpsConnectorBuilder::new()
-                        .with_tls_config(rc)
-                        .https_or_http();
-                    #[cfg(feature = "http2")]
-                    {
-                        match (enabler.enable_http1(), enabler.enable_http2()) {
-                            (true, true) => builder.enable_http1().enable_http2().build(),
-                            (true, false) => builder.enable_http1().build(),
-                            (false, true) => builder.enable_http2().build(),
-                            (false, false) => {
-                                unreachable!("at least one protocol version must be enabled")
-                            }
-                        }
-                    }
-                    #[cfg(not(feature = "http2"))]
-                    {
-                        let _ = enabler;
-                        builder.enable_http1().build()
-                    }
-                }
-                Err(_) => build_fallback_connector(enabler),
-            },
-            None => build_fallback_connector(enabler),
-        };
-
-        let mut builder = hyper_util::client::legacy::Client::builder(TokioExecutor::new());
-        if let Some(timeout) = self.pool_config.idle_timeout {
-            builder.pool_idle_timeout(timeout);
-        }
-        let hyper_client: HyperClient = builder.build(https);
-
         #[cfg(feature = "cookies")]
         let cookie_jar = self.cookie_jar.unwrap_or_default();
 
         let automatic_decompression = self.automatic_decompression.unwrap_or(true);
+
+        // When HTTP/3 is selected, we skip building the hyper client
+        let hyper_client = if enabler.use_http3() {
+            None
+        } else {
+            let https = match self.tls_config.as_ref() {
+                Some(tls_config) => match tls_config.build_rustls_config() {
+                    Ok(mut rc) => {
+                        // hyper-rustls requires empty ALPN; it rebuilds based
+                        // on enable_http1/enable_http2 calls.
+                        rc.alpn_protocols.clear();
+                        let builder = hyper_rustls::HttpsConnectorBuilder::new()
+                            .with_tls_config(rc)
+                            .https_or_http();
+                        #[cfg(feature = "http2")]
+                        {
+                            match (enabler.enable_http1(), enabler.enable_http2()) {
+                                (true, true) => builder.enable_http1().enable_http2().build(),
+                                (true, false) => builder.enable_http1().build(),
+                                (false, true) => builder.enable_http2().build(),
+                                (false, false) => {
+                                    unreachable!("at least one protocol version must be enabled")
+                                }
+                            }
+                        }
+                        #[cfg(not(feature = "http2"))]
+                        {
+                            let _ = enabler;
+                            builder.enable_http1().build()
+                        }
+                    }
+                    Err(_) => build_fallback_connector(enabler),
+                },
+                None => build_fallback_connector(enabler),
+            };
+
+            let mut builder = hyper_util::client::legacy::Client::builder(TokioExecutor::new());
+            if let Some(timeout) = self.pool_config.idle_timeout {
+                builder.pool_idle_timeout(timeout);
+            }
+            Some(builder.build(https))
+        };
+
+        #[cfg(feature = "http3")]
+        let h3_connector = if enabler.use_http3() {
+            crate::transport::http3::H3Connector::new(self.tls_config.clone()).ok()
+        } else {
+            None
+        };
 
         let config = ClientConfig {
             default_headers: self.default_headers,
@@ -543,7 +557,7 @@ impl ClientBuilder {
             max_decompression_ratio: self.max_decompression_ratio,
             #[cfg(feature = "proxy")]
             proxy: self.proxy,
-            #[cfg(feature = "proxy")]
+            #[cfg(any(feature = "proxy", feature = "http3"))]
             tls_config: self.tls_config,
             retry: self.retry,
             http_version_policy: self.http_version_policy,
@@ -556,6 +570,8 @@ impl ClientBuilder {
                 hyper_client,
                 config,
                 pool,
+                #[cfg(feature = "http3")]
+                h3_connector,
             }),
         }
     }
@@ -688,9 +704,13 @@ mod tests {
             HttpVersionPolicy::Auto,
             #[cfg(feature = "http2")]
             HttpVersionPolicy::Http2Only,
+            #[cfg(feature = "http3")]
+            HttpVersionPolicy::Http3Only,
         ] {
             let enabler = crate::http_version::HttpVersionPolicyEnabler::from_policy(policy);
-            let _ = build_fallback_connector(enabler);
+            if !enabler.use_http3() {
+                let _ = build_fallback_connector(enabler);
+            }
         }
     }
 

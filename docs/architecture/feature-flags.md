@@ -15,6 +15,7 @@ The following features are declared in `crates/eggfetch-core/Cargo.toml`:
 default = ["http1", "tls-rustls"]
 http1 = []
 http2 = []
+http3 = []
 tls-rustls = []
 json = []
 compression-gzip = []
@@ -47,6 +48,11 @@ Enables HTTP/1.1 support. This is the primary protocol for the MVP, backed by hy
 
 **Status:** implemented (Milestone V).
 Enables HTTP/2 support. When enabled, the client can negotiate HTTP/2 via ALPN for HTTPS connections. The `HttpVersionPolicy` enum controls which protocol versions are advertised. `Auto` (default) advertises both `h2` and `http/1.1`; `Http2Only` advertises only `h2`; `Http1Only` advertises only `http/1.1`. Without this feature, `Http2Only` and `Auto` silently downgrade to `Http1Only`. The Python crate exposes `Client(http2=True)` and `AsyncClient(http2=True)` for enabling HTTP/2 negotiation.
+
+### http3
+
+**Status:** implemented (Milestone W, experimental).
+Enables HTTP/3 support over QUIC. When enabled, the client can negotiate HTTP/3 using the `quinn` crate for QUIC transport and the `h3` crate for the HTTP/3 protocol layer. The `HttpVersionPolicy` enum gains an `Http3Only` variant. `Auto` does not automatically negotiate HTTP/3; callers must explicitly select `Http3Only` or use `Client(http3=True)` in Python. QUIC mandates TLS 1.3, so this feature requires `tls-rustls`. 0-RTT (early data) is disabled in the initial implementation. The Python crate exposes `Client(http3=True)` and `AsyncClient(http3=True)`, plus `Http3Error` and `Http3ConnectionError` exception types. This feature is experimental; API surfaces may change as the QUIC/h3 ecosystem matures. The Python crate exposes `Client(http3=True)` and `AsyncClient(http3=True)` for enabling HTTP/3.
 
 ### tls-rustls
 
@@ -147,4 +153,6 @@ cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,co
 cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,compression-deflate
 cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,proxy
 cargo check -p eggfetch-core --no-default-features --features http1,tls-rustls,multipart,proxy
+cargo check -p eggfetch-core --no-default-features --features http1,tls-rustls,http3
+cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,http3
 ```

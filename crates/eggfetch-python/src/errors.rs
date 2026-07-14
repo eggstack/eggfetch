@@ -178,6 +178,24 @@ create_exception!(
     Http2Error,
     "An HTTP/2 flow-control error occurred."
 );
+create_exception!(
+    eggfetch,
+    H3Error,
+    RequestError,
+    "An HTTP/3 protocol error occurred."
+);
+create_exception!(
+    eggfetch,
+    H3ConnectError,
+    H3Error,
+    "An HTTP/3 connection error occurred."
+);
+create_exception!(
+    eggfetch,
+    H3ProtocolError,
+    H3Error,
+    "An HTTP/3 protocol error occurred."
+);
 
 /// Map an eggfetch-core error to the appropriate Python exception.
 #[allow(clippy::needless_pass_by_value)]
@@ -270,6 +288,18 @@ pub fn map_err(err: eggfetch_core::Error) -> PyErr {
         }
         eggfetch_core::Error::Http2Protocol(msg) => {
             Http2Error::new_err(format!("HTTP/2 protocol error: {msg}"))
+        }
+        eggfetch_core::Error::H3Connect(msg) => {
+            H3ConnectError::new_err(format!("HTTP/3 connection error: {msg}"))
+        }
+        eggfetch_core::Error::H3ConnectionClosed(msg) => {
+            H3ProtocolError::new_err(format!("HTTP/3 connection closed: {msg}"))
+        }
+        eggfetch_core::Error::H3Stream(msg) => {
+            H3Error::new_err(format!("HTTP/3 stream error: {msg}"))
+        }
+        eggfetch_core::Error::H3Protocol(msg) => {
+            H3ProtocolError::new_err(format!("HTTP/3 protocol error: {msg}"))
         }
     }
 }

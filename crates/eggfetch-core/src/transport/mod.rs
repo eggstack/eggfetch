@@ -2,6 +2,7 @@
 //!
 //! Direct and proxy send paths live here. The redirect pipeline and
 //! request normalization stay in `pipeline.rs` and `client.rs`.
+//! HTTP/3 transport over QUIC is available when the `http3` feature is enabled.
 
 use bytes::Bytes;
 
@@ -23,3 +24,6 @@ pub(crate) mod connect;
 
 #[cfg(feature = "proxy")]
 pub(crate) mod proxy;
+
+#[cfg(feature = "http3")]
+pub(crate) mod http3;

@@ -9,6 +9,10 @@
 /// When the `http2` feature is not enabled, only [`HttpVersionPolicy::Http1Only`]
 /// is valid; attempting to use `Http2Only` or `Auto` without the `http2`
 /// feature will result in an HTTP/1.1-only client at runtime.
+///
+/// When the `http3` feature is enabled, [`HttpVersionPolicy::Http3Only`]
+/// routes requests over QUIC using the h3 protocol. HTTP/3 uses a separate
+/// transport (Quinn) and does not share connections with HTTP/1.1 or HTTP/2.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum HttpVersionPolicy {
     /// Only HTTP/1.1 is permitted. The client will not advertise `h2` in
@@ -17,8 +21,13 @@ pub enum HttpVersionPolicy {
     /// Only HTTP/2 is permitted. The client advertises `h2` via ALPN. If
     /// the server does not negotiate HTTP/2, the connection fails.
     Http2Only,
+    /// Only HTTP/3 is permitted. The client uses QUIC via Quinn and the h3
+    /// protocol. Requires the `http3` feature.
+    Http3Only,
     /// Allow negotiation. The client advertises both `h2` and `http/1.1`
     /// via ALPN and accepts whichever protocol the server selects.
+    /// HTTP/3 is not included in auto-negotiation; use `Http3Only` to
+    /// explicitly opt in.
     #[default]
     Auto,
 }
@@ -31,17 +40,18 @@ pub(crate) struct HttpVersionPolicyEnabler(HttpVersionPolicy);
 impl HttpVersionPolicyEnabler {
     /// Create an enabler from a policy. When the `http2` feature is not
     /// enabled, `Http2Only` and `Auto` are silently downgraded to
-    /// `Http1Only`.
+    /// `Http1Only`. When the `http3` feature is not enabled, `Http3Only`
+    /// is silently downgraded to `Http1Only`.
     #[must_use]
     pub(crate) fn from_policy(policy: HttpVersionPolicy) -> Self {
-        #[cfg(not(feature = "http2"))]
-        {
-            let _ = policy;
-            Self(HttpVersionPolicy::Http1Only)
-        }
-        #[cfg(feature = "http2")]
-        {
-            Self(policy)
+        match policy {
+            #[cfg(not(feature = "http2"))]
+            HttpVersionPolicy::Http2Only => Self(HttpVersionPolicy::Http1Only),
+            #[cfg(not(feature = "http2"))]
+            HttpVersionPolicy::Auto => Self(HttpVersionPolicy::Http1Only),
+            #[cfg(not(feature = "http3"))]
+            HttpVersionPolicy::Http3Only => Self(HttpVersionPolicy::Http1Only),
+            _ => Self(policy),
         }
     }
 
@@ -62,6 +72,12 @@ impl HttpVersionPolicyEnabler {
             HttpVersionPolicy::Http2Only | HttpVersionPolicy::Auto
         )
     }
+
+    /// Returns `true` if HTTP/3 should be used (QUIC transport).
+    #[must_use]
+    pub(crate) const fn use_http3(self) -> bool {
+        matches!(self.0, HttpVersionPolicy::Http3Only)
+    }
 }
 
 #[cfg(test)]
@@ -78,6 +94,7 @@ mod tests {
         let enabler = HttpVersionPolicyEnabler::from_policy(HttpVersionPolicy::Http1Only);
         assert!(enabler.enable_http1());
         assert!(!enabler.enable_http2());
+        assert!(!enabler.use_http3());
     }
 
     #[test]
@@ -86,6 +103,7 @@ mod tests {
         let enabler = HttpVersionPolicyEnabler::from_policy(HttpVersionPolicy::Auto);
         assert!(enabler.enable_http1());
         assert!(enabler.enable_http2());
+        assert!(!enabler.use_http3());
     }
 
     #[test]
@@ -110,5 +128,23 @@ mod tests {
         let enabler = HttpVersionPolicyEnabler::from_policy(HttpVersionPolicy::Http2Only);
         assert!(enabler.enable_http1());
         assert!(!enabler.enable_http2());
+    }
+
+    #[test]
+    #[cfg(feature = "http3")]
+    fn http3_only_enables_http3_only() {
+        let enabler = HttpVersionPolicyEnabler::from_policy(HttpVersionPolicy::Http3Only);
+        assert!(!enabler.enable_http1());
+        assert!(!enabler.enable_http2());
+        assert!(enabler.use_http3());
+    }
+
+    #[test]
+    #[cfg(not(feature = "http3"))]
+    fn http3_only_downgrades_without_feature() {
+        let enabler = HttpVersionPolicyEnabler::from_policy(HttpVersionPolicy::Http3Only);
+        assert!(enabler.enable_http1());
+        assert!(!enabler.enable_http2());
+        assert!(!enabler.use_http3());
     }
 }

@@ -2,8 +2,8 @@
 
 eggfetch is a Rust-native HTTP client engine with Python bindings and a CLI tool. The core is async-first: a Rust engine built on tokio and hyper provides connection pooling, timeouts, TLS configuration, and streaming. The Python bindings expose both sync and async APIs; the sync API blocks on the async engine while releasing the GIL, and the async API integrates with asyncio. There is exactly one networking implementation, living entirely in Rust.
 
-> **Status: Milestone V complete.**
-> Milestones A–V are implemented as documented. The core engine supports HTTP/2 (ALPN negotiation, multiplexed connections, protocol version reporting), response decompression (gzip, deflate, brotli, zstd), multipart/form-data uploads, cookies, authentication, proxy support (HTTP proxying, HTTPS CONNECT tunneling, proxy authentication, per-request/client proxy configuration, NO_PROXY bypass), TLS configuration (custom CA bundles, client certificates, TLS version policy, verification toggle), streaming, timeouts, connection pooling, and policy-driven retries with exponential backoff. The CLI crate remains a stub.
+> **Status: Milestones V and W complete.**
+> Milestones A–W are implemented as documented. The core engine supports HTTP/2 (ALPN negotiation, multiplexed connections, protocol version reporting), HTTP/3 (QUIC transport via Quinn/h3, feature-gated, experimental), response decompression (gzip, deflate, brotli, zstd), multipart/form-data uploads, cookies, authentication, proxy support (HTTP proxying, HTTPS CONNECT tunneling, proxy authentication, per-request/client proxy configuration, NO_PROXY bypass), TLS configuration (custom CA bundles, client certificates, TLS version policy, verification toggle), streaming, timeouts, connection pooling, and policy-driven retries with exponential backoff. The CLI crate remains a stub.
 
 [![CI](https://github.com/eggstack/eggfetch/actions/workflows/ci.yml/badge.svg)](https://github.com/eggstack/eggfetch/actions/workflows/ci.yml)
 
@@ -23,8 +23,9 @@ eggfetch is not aiming for full requests/httpx drop-in parity in the MVP. Specif
 
 - Full transport parity with HTTPX (ASGI/WSGI in-process transports, all SOCKS proxy modes)
 - Trio/AnyIO support (asyncio only)
-- HTTP/3 (QUIC transport)
 - Every authentication flow, advanced proxy mounting, or requests compatibility edge case
+
+Note: HTTP/3 (QUIC) is now available as an experimental feature behind the `http3` Cargo feature flag. See [Milestone W: HTTP/3](#milestone-w-http3-experimental) below.
 
 See [plans/ROADMAP.md](plans/ROADMAP.md) for the full roadmap and compatibility policy.
 
@@ -334,6 +335,22 @@ HTTP/2 support with ALPN negotiation, error taxonomy, forbidden header handling,
 - **Backward compatible** -- HTTP/1.1 remains the default. No existing behavior changes unless `http2=True` is explicitly set.
 - **Tests** -- 21 HTTP/2-specific Rust tests covering error taxonomy, retry classification, forbidden header stripping, version policy, concurrent requests, stream cancellation, and feature-gated builds.
 
+### Milestone W: HTTP/3 (experimental)
+
+HTTP/3 support via QUIC transport, implemented as an experimental, separately feature-gated capability:
+
+- **`HttpVersionPolicy::Http3Only`** -- new enum variant that restricts the client to HTTP/3 only. The client will attempt a QUIC connection and fail if the server does not support HTTP/3.
+- **QUIC transport via Quinn/h3** -- uses the `quinn` crate for QUIC connection management and the `h3` crate for the HTTP/3 protocol layer. QUIC provides built-in TLS 1.3, multiplexed streams without head-of-line blocking, and connection migration.
+- **Feature-gated** -- the `http3` feature enables HTTP/3 support. Without the feature, `Http3Only` is not available and `Auto` falls back to HTTP/2 or HTTP/1.1.
+- **TLS 1.3 requirement** -- QUIC mandates TLS 1.3. The `http3` feature requires `tls-rustls` and uses rustls for the QUIC TLS handshake.
+- **0-RTT disabled** -- early data (0-RTT) is disabled in the initial implementation to avoid replay attack risks. This may be revisited in a future milestone.
+- **Python API** -- `Client(http3=True)` and `AsyncClient(http3=True)` enable HTTP/3 negotiation. When `http3=True` is set, the client uses `Http3Only` policy. The Python crate exposes `Http3Error` and `Http3ConnectionError` exception types for QUIC-specific failures.
+- **Protocol version reporting** -- `response.version()` returns `HTTP_3` when the server negotiates HTTP/3. Python `response.http_version` reports `"HTTP/3"`.
+- **Client configuration** -- `ClientBuilder::http_version_policy(policy)` accepts the new `Http3Only` variant.
+- **Backward compatible** -- HTTP/3 is opt-in. No existing behavior changes unless `http3=True` is explicitly set. HTTP/2 and HTTP/1.1 remain the default.
+- **Experimental status** -- this feature is experimental. The QUIC/h3 ecosystem is maturing; API surfaces may change. Production use requires thorough testing with target servers.
+- **Tests** -- Rust tests covering feature-gated compilation, version policy, protocol version reporting, and error taxonomy.
+
 ## Repository Layout
 
 ```text
@@ -351,6 +368,7 @@ rustfmt.toml             max_width 100
 crates/
   eggfetch-core/         async HTTP engine (validation pass complete)
                          TlsConfig, TlsConfigBuilder, TrustStore, ClientIdentity, TlsVersion
+                         HttpVersionPolicy (Http1Only, Http2Only, Http3Only, Auto)
   eggfetch-cli/          CLI binary (stub)
   eggfetch-python/       Python bindings (validation pass complete)
     src/                 Rust adapter modules (PyO3)

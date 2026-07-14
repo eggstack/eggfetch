@@ -16,6 +16,7 @@ default = ["http1", "tls-rustls"]
 http1 = ["hyper/http1", "hyper-util/http1", "hyper-rustls/http1"]
 http2 = ["hyper/http2", "hyper-util/http2", "hyper-rustls/http2"]
 tls-rustls = []
+http3 = ["dep:quinn", "dep:h3", "dep:h3-quinn"]
 json = []
 compression-gzip = ["dep:async-compression", "async-compression/gzip", "dep:tokio-util", "tokio/io-util", "dep:flate2"]
 compression-brotli = ["dep:async-compression", "async-compression/brotli", "dep:tokio-util", "tokio/io-util"]
@@ -54,6 +55,9 @@ httparse = "1"
 httpdate = "1"
 webpki-roots = "0.26"
 pem-rfc7468 = { version = "0.1", features = ["alloc"] }
+quinn = { version = "0.11", default-features = false, features = ["rustls", "ring"], optional = true }
+h3 = { version = "0.0.8", optional = true }
+h3-quinn = { version = "0.0.10", optional = true }
 
 [dev-dependencies]
 flate2 = "1"

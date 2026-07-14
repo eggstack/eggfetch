@@ -591,6 +591,15 @@ fn register_exceptions(m: &Bound<'_, PyModule>) -> PyResult<()> {
         "Http2FlowControlError",
         m.py().get_type::<errors::Http2FlowControlError>(),
     )?;
+    m.add("H3Error", m.py().get_type::<errors::H3Error>())?;
+    m.add(
+        "H3ConnectError",
+        m.py().get_type::<errors::H3ConnectError>(),
+    )?;
+    m.add(
+        "H3ProtocolError",
+        m.py().get_type::<errors::H3ProtocolError>(),
+    )?;
     Ok(())
 }
 
@@ -654,6 +663,9 @@ fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
         "Http2GoAway",
         "Http2StreamReset",
         "Http2FlowControlError",
+        "H3Error",
+        "H3ConnectError",
+        "H3ProtocolError",
     ];
     let py = m.py();
     let py_list = pyo3::types::PyList::new(py, &all_items)?;

@@ -39,7 +39,7 @@ impl PyClient {
     ///     `max_redirects`: Maximum redirects to follow (default 20).
     #[allow(clippy::too_many_arguments)]
     #[new]
-    #[pyo3(signature = (*, headers=None, timeout=None, follow_redirects=None, max_redirects=None, cookies=None, auth=None, decompress=None, proxy=None, verify=None, cert=None, retries=None, http2=None))]
+    #[pyo3(signature = (*, headers=None, timeout=None, follow_redirects=None, max_redirects=None, cookies=None, auth=None, decompress=None, proxy=None, verify=None, cert=None, retries=None, http2=None, http3=None))]
     fn new(
         py: Python<'_>,
         headers: Option<&Bound<'_, PyAny>>,
@@ -54,6 +54,7 @@ impl PyClient {
         cert: Option<&Bound<'_, PyAny>>,
         retries: Option<&Bound<'_, PyAny>>,
         http2: Option<bool>,
+        http3: Option<bool>,
     ) -> PyResult<Self> {
         let runtime = tokio::runtime::Runtime::new()
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
@@ -66,6 +67,10 @@ impl PyClient {
 
         if let Some(true) = http2 {
             builder = builder.http_version_policy(eggfetch_core::HttpVersionPolicy::Auto);
+        }
+
+        if let Some(true) = http3 {
+            builder = builder.http_version_policy(eggfetch_core::HttpVersionPolicy::Http3Only);
         }
 
         if let Some(hdrs) = headers {

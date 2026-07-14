@@ -41,7 +41,7 @@ impl PyAsyncClient {
     ///     `max_redirects`: Maximum redirects to follow (default 20).
     #[allow(clippy::too_many_arguments)]
     #[new]
-    #[pyo3(signature = (*, headers=None, timeout=None, follow_redirects=None, max_redirects=None, cookies=None, auth=None, decompress=None, proxy=None, verify=None, cert=None, retries=None, http2=None))]
+    #[pyo3(signature = (*, headers=None, timeout=None, follow_redirects=None, max_redirects=None, cookies=None, auth=None, decompress=None, proxy=None, verify=None, cert=None, retries=None, http2=None, http3=None))]
     fn new(
         py: Python<'_>,
         headers: Option<&Bound<'_, PyAny>>,
@@ -56,6 +56,7 @@ impl PyAsyncClient {
         cert: Option<&Bound<'_, PyAny>>,
         retries: Option<&Bound<'_, PyAny>>,
         http2: Option<bool>,
+        http3: Option<bool>,
     ) -> PyResult<Self> {
         let verify_disabled = verify
             .and_then(|v| v.extract::<bool>().ok())
@@ -66,6 +67,10 @@ impl PyAsyncClient {
 
         if let Some(true) = http2 {
             builder = builder.http_version_policy(eggfetch_core::HttpVersionPolicy::Auto);
+        }
+
+        if let Some(true) = http3 {
+            builder = builder.http_version_policy(eggfetch_core::HttpVersionPolicy::Http3Only);
         }
 
         if let Some(hdrs) = headers {

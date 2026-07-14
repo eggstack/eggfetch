@@ -724,42 +724,69 @@ pub(crate) async fn send_single_request(
             .await?
         }
         _ => {
-            let uri: http::Uri = url
-                .as_str()
-                .parse()
-                .map_err(|e| Error::InvalidUrl(format!("failed to convert url to URI: {e}")))?;
+            // Route through HTTP/3 when policy is Http3Only
+            #[cfg(feature = "http3")]
+            {
+                if inner.config.http_version_policy
+                    == crate::http_version::HttpVersionPolicy::Http3Only
+                {
+                    if let Some(ref h3_connector) = inner.h3_connector {
+                        let mut h3_request = http::Request::builder()
+                            .method(method)
+                            .uri(url.as_str())
+                            .version(version);
+                        for (name, value) in headers.iter() {
+                            h3_request = h3_request.header(name, value);
+                        }
+                        let h3_request = h3_request
+                            .body(body)
+                            .map_err(|e| Error::RequestBuild(e.to_string()))?;
 
-            let mut http_request = http::Request::builder()
-                .method(method)
-                .uri(uri)
-                .version(version);
-
-            for (name, value) in headers.iter() {
-                http_request = http_request.header(name, value);
-            }
-
-            let hyper_request = http_request
-                .body(body.into_http_body())
-                .map_err(|e| Error::RequestBuild(e.to_string()))?;
-
-            let send_future = crate::transport::direct::send_request(
-                &inner.hyper_client,
-                hyper_request,
-                url.clone(),
-            );
-
-            match remaining_total {
-                Some(dur) => match tokio::time::timeout(dur, send_future).await {
-                    Ok(Ok(resp)) => resp,
-                    Ok(Err(e)) => return Err(e),
-                    Err(_) => {
-                        return Err(Error::Timeout {
-                            phase: TimeoutPhase::Total,
-                            elapsed: dur,
-                        });
+                        let send_future = h3_connector.send_request(h3_request, url.clone());
+                        match remaining_total {
+                            Some(dur) => match tokio::time::timeout(dur, send_future).await {
+                                Ok(Ok(resp)) => resp,
+                                Ok(Err(e)) => return Err(e),
+                                Err(_) => {
+                                    return Err(Error::Timeout {
+                                        phase: TimeoutPhase::Total,
+                                        elapsed: dur,
+                                    });
+                                }
+                            },
+                            None => send_future.await?,
+                        }
+                    } else {
+                        return Err(Error::Unsupported(
+                            "HTTP/3 connector not available; ensure http3 feature is enabled"
+                                .into(),
+                        ));
                     }
-                },
-                None => send_future.await?,
+                } else {
+                    send_hyper_request(
+                        inner,
+                        &method,
+                        url,
+                        &headers,
+                        body,
+                        version,
+                        remaining_total,
+                    )
+                    .await?
+                }
+            }
+            #[cfg(not(feature = "http3"))]
+            {
+                send_hyper_request(
+                    inner,
+                    &method,
+                    url,
+                    &headers,
+                    body,
+                    version,
+                    remaining_total,
+                )
+                .await?
             }
         }
     };
@@ -788,4 +815,56 @@ pub(crate) async fn send_single_request(
     apply_read_timeout_and_lease(&mut response, guard, timeout.read);
 
     Ok(response)
+}
+
+/// Send a request through the hyper/HTTP-1.1/2 transport.
+///
+/// Extracted as a helper to avoid code duplication between the http3-gated
+/// and non-http3 code paths.
+async fn send_hyper_request(
+    inner: &ClientInner,
+    method: &http::Method,
+    url: url::Url,
+    headers: &Headers,
+    body: RequestBody,
+    version: http::Version,
+    remaining_total: Option<Duration>,
+) -> Result<Response> {
+    let hyper_client = inner
+        .hyper_client
+        .as_ref()
+        .ok_or_else(|| Error::Unsupported("HTTP client not available for this protocol".into()))?;
+
+    let uri: http::Uri = url
+        .as_str()
+        .parse()
+        .map_err(|e| Error::InvalidUrl(format!("failed to convert url to URI: {e}")))?;
+
+    let mut http_request = http::Request::builder()
+        .method(method)
+        .uri(uri)
+        .version(version);
+
+    for (name, value) in headers.iter() {
+        http_request = http_request.header(name, value);
+    }
+
+    let hyper_request = http_request
+        .body(body.into_http_body())
+        .map_err(|e| Error::RequestBuild(e.to_string()))?;
+
+    let send_future =
+        crate::transport::direct::send_request(hyper_client, hyper_request, url.clone());
+
+    match remaining_total {
+        Some(dur) => match tokio::time::timeout(dur, send_future).await {
+            Ok(Ok(resp)) => Ok(resp),
+            Ok(Err(e)) => Err(e),
+            Err(_) => Err(Error::Timeout {
+                phase: TimeoutPhase::Total,
+                elapsed: dur,
+            }),
+        },
+        None => send_future.await,
+    }
 }
