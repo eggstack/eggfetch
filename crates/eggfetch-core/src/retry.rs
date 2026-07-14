@@ -168,15 +168,21 @@ impl RetryPolicy {
 
     /// Compute the delay after receiving a `Retry-After` header value.
     ///
-    /// Parses `Retry-After` as seconds. Returns `None` if parsing fails
-    /// or if the value exceeds the backoff cap.
+    /// Parses `Retry-After` as either a number of seconds or an HTTP-date.
+    /// Returns `None` if parsing fails or if the value exceeds the backoff cap.
     #[must_use]
     pub fn retry_after_delay(&self, retry_after: &str) -> Option<Duration> {
         if !self.respect_retry_after {
             return None;
         }
-        let secs: u64 = retry_after.parse().ok()?;
-        let delay = Duration::from_secs(secs);
+        let delay = if let Ok(secs) = retry_after.trim().parse::<u64>() {
+            Duration::from_secs(secs)
+        } else if let Ok(date) = httpdate::parse_http_date(retry_after.trim()) {
+            date.duration_since(std::time::SystemTime::now())
+                .unwrap_or_default()
+        } else {
+            return None;
+        };
         let cap = self.backoff.max_delay;
         Some(if delay > cap { cap } else { delay })
     }
@@ -791,6 +797,36 @@ mod tests {
             .respect_retry_after(true)
             .build();
         assert!(policy.retry_after_delay("not-a-number").is_none());
+    }
+
+    #[test]
+    fn retry_after_http_date_parses() {
+        use std::time::{SystemTime, UNIX_EPOCH};
+
+        let policy = RetryPolicy::builder()
+            .max_attempts(3)
+            .respect_retry_after(true)
+            .build();
+        // Build a future SystemTime and format it with httpdate, then parse it back
+        // to guarantee the day-of-week matches
+        let future_time = UNIX_EPOCH
+            + Duration::from_secs(
+                std::time::SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs()
+                    + 3600,
+            ); // 1 hour from now
+        let formatted = httpdate::fmt_http_date(future_time);
+        let parsed = httpdate::parse_http_date(&formatted);
+        assert!(parsed.is_ok(), "round-trip parse failed: {formatted}");
+        let delay = policy.retry_after_delay(&formatted);
+        assert!(
+            delay.is_some(),
+            "retry_after_delay returned None for HTTP-date: {formatted}"
+        );
+        let d = delay.unwrap();
+        assert!(d.as_secs() > 0, "delay should be positive");
     }
 
     #[test]

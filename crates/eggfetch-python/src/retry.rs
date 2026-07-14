@@ -109,6 +109,64 @@ impl PyRetry {
     fn backoff_factor(&self) -> f64 {
         self.inner.backoff().factor()
     }
+
+    /// Returns the initial delay before the first retry in seconds.
+    #[getter]
+    fn initial_delay(&self) -> f64 {
+        self.inner.backoff().initial_delay().as_secs_f64()
+    }
+
+    /// Returns the maximum delay between retries in seconds.
+    #[getter]
+    fn max_delay(&self) -> f64 {
+        self.inner.backoff().max_delay().as_secs_f64()
+    }
+
+    /// Returns whether Retry-After headers are respected.
+    #[getter]
+    fn respect_retry_after(&self) -> bool {
+        self.inner.respect_retry_after()
+    }
+
+    /// Returns the set of retryable HTTP status codes.
+    #[getter]
+    fn statuses(&self) -> Vec<u16> {
+        self.inner.status_policy().statuses().to_vec()
+    }
+
+    /// Returns the maximum total elapsed time in seconds, or None if unlimited.
+    #[getter]
+    fn max_elapsed(&self) -> Option<f64> {
+        self.inner.max_elapsed().map(|d| d.as_secs_f64())
+    }
+
+    /// Returns whether POST requests are retryable.
+    #[getter]
+    fn allow_post(&self) -> bool {
+        self.inner.method_policy().is_retryable(&http::Method::POST)
+    }
+
+    /// Returns whether PUT requests are retryable.
+    #[getter]
+    fn allow_put(&self) -> bool {
+        self.inner.method_policy().is_retryable(&http::Method::PUT)
+    }
+
+    /// Returns whether DELETE requests are retryable.
+    #[getter]
+    fn allow_delete(&self) -> bool {
+        self.inner
+            .method_policy()
+            .is_retryable(&http::Method::DELETE)
+    }
+
+    /// Returns whether PATCH requests are retryable.
+    #[getter]
+    fn allow_patch(&self) -> bool {
+        self.inner
+            .method_policy()
+            .is_retryable(&http::Method::PATCH)
+    }
 }
 
 impl PyRetry {

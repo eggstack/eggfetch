@@ -56,6 +56,10 @@ from eggfetch._native import (
     ProxyError,
     ProxyConnectError,
     ProxyAuthError,
+    Retry,
+    BodyNotReplayableForRetry,
+    RetryBudgetExhausted,
+    RetryNotConfigured,
 )
 
 __all__ = [
@@ -107,4 +111,8 @@ __all__ = [
     "ProxyError",
     "ProxyConnectError",
     "ProxyAuthError",
+    "Retry",
+    "BodyNotReplayableForRetry",
+    "RetryBudgetExhausted",
+    "RetryNotConfigured",
 ]

@@ -44,6 +44,40 @@ async fn sleep_if_budget_allows(
     Ok(())
 }
 
+/// Reconstruct a request from saved parts for retry.
+fn rebuild_request(
+    method: &http::Method,
+    url: &url::Url,
+    headers: &Headers,
+    body: &RequestBody,
+    version: http::Version,
+) -> Result<Request> {
+    let mut req = Request::new(method.clone(), url.clone());
+    *req.headers_mut() = headers.clone();
+    match body {
+        RequestBody::Empty => req.set_body(RequestBody::Empty),
+        RequestBody::Bytes(b) => req.set_body(RequestBody::Bytes(b.clone())),
+        RequestBody::Stream { .. } => {
+            return Err(Error::BodyNotReplayableForRetry);
+        }
+    }
+    req.set_version(version);
+    Ok(req)
+}
+
+/// Check if there is budget remaining for another retry attempt.
+fn has_budget(policy: &RetryPolicy, attempt: usize, start_time: std::time::Instant) -> bool {
+    if attempt >= policy.max_attempts() {
+        return false;
+    }
+    if let Some(max_elapsed) = policy.max_elapsed() {
+        if start_time.elapsed() >= max_elapsed {
+            return false;
+        }
+    }
+    true
+}
+
 /// Send a request with optional retry policy.
 ///
 /// This is the top-level entry point called by [`Client::send`]. It
@@ -113,16 +147,13 @@ pub(crate) async fn send_with_retry(client: &Client, request: Request) -> Result
         }
 
         // Reconstruct the request from saved parts.
-        let mut attempt_request = Request::new(orig_method.clone(), orig_url.clone());
-        *attempt_request.headers_mut() = orig_headers.clone();
-        match &orig_body {
-            RequestBody::Empty => attempt_request.set_body(RequestBody::Empty),
-            RequestBody::Bytes(b) => attempt_request.set_body(RequestBody::Bytes(b.clone())),
-            RequestBody::Stream { .. } => {
-                return Err(Error::BodyNotReplayableForRetry);
-            }
-        }
-        attempt_request.set_version(orig_version);
+        let attempt_request = rebuild_request(
+            &orig_method,
+            &orig_url,
+            &orig_headers,
+            &orig_body,
+            orig_version,
+        )?;
 
         let result = send_with_redirects(client, attempt_request).await;
 
@@ -135,6 +166,10 @@ pub(crate) async fn send_with_retry(client: &Client, request: Request) -> Result
 
                 if let Some(cause) = should_retry(&policy, &method, &orig_body, None, Some(status))
                 {
+                    if !has_budget(&policy, attempt, start_time) {
+                        return Ok(response);
+                    }
+
                     let mut resp = response;
                     let _ = resp.bytes().await;
 
@@ -147,6 +182,10 @@ pub(crate) async fn send_with_retry(client: &Client, request: Request) -> Result
             }
             Err(err) => {
                 if let Some(cause) = should_retry(&policy, &method, &orig_body, Some(&err), None) {
+                    if !has_budget(&policy, attempt, start_time) {
+                        return Err(err);
+                    }
+
                     if let Some(dur) = compute_retry_delay(&policy, &cause, attempt) {
                         sleep_if_budget_allows(&policy, dur, attempt, start_time).await?;
                     }
