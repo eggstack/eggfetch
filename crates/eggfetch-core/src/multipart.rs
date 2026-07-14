@@ -17,7 +17,6 @@
 //! # }
 //! ```
 
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::task::{Context, Poll};
 
 use bytes::{Bytes, BytesMut};
@@ -34,37 +33,25 @@ use crate::headers::Headers;
 
 const BOUNDARY_CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-";
 
-static BOUNDARY_COUNTER: AtomicU64 = AtomicU64::new(0);
-
 /// A validated multipart boundary string.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Boundary(String);
 
 impl Boundary {
     /// Generate a random boundary.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the system random number generator fails.
     #[must_use]
-    #[allow(clippy::missing_panics_doc)]
     pub fn random() -> Self {
-        let counter = BOUNDARY_COUNTER.fetch_add(1, Ordering::Relaxed);
-        #[allow(clippy::cast_possible_truncation)]
-        let nanos = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_nanos() as u64;
-
         let mut bytes = [0u8; 50];
-        let mut state = nanos
-            .wrapping_mul(6_364_136_223_846_793_005)
-            .wrapping_add(counter);
+        getrandom::getrandom(&mut bytes).expect("getrandom failed");
         for byte in &mut bytes {
-            state = state
-                .wrapping_mul(6_364_136_223_846_793_005)
-                .wrapping_add(1);
-            let idx = ((state >> 33) as usize) % BOUNDARY_CHARS.len();
-            *byte = BOUNDARY_CHARS[idx];
+            *byte = BOUNDARY_CHARS[usize::from(*byte % 64)];
         }
 
-        // All chars are from BOUNDARY_CHARS which are valid ASCII.
+        // All chars are from BOUNDARY_CHARS which are valid ASCII/UTF-8.
         Self(String::from_utf8(bytes.to_vec()).expect("boundary chars are valid UTF-8"))
     }
 

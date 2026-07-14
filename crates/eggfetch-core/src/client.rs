@@ -40,6 +40,8 @@ struct ClientConfig {
     #[cfg(feature = "cookies")]
     cookie_jar: CookieJar,
     automatic_decompression: bool,
+    max_decoded_body_size: Option<usize>,
+    max_decompression_ratio: Option<f64>,
     #[cfg(feature = "proxy")]
     proxy: Option<Proxy>,
 }
@@ -55,6 +57,8 @@ impl Default for ClientConfig {
             #[cfg(feature = "cookies")]
             cookie_jar: CookieJar::new(),
             automatic_decompression: true,
+            max_decoded_body_size: None,
+            max_decompression_ratio: None,
             #[cfg(feature = "proxy")]
             proxy: None,
         }
@@ -708,6 +712,11 @@ impl Client {
                 crate::compression::validate_content_encodings(ce)?;
             }
 
+            let limit = crate::compression::DecompressionLimit {
+                max_decoded_body_size: self.inner.config.max_decoded_body_size,
+                max_decompression_ratio: self.inner.config.max_decompression_ratio,
+            };
+
             let old_body =
                 std::mem::replace(&mut response.body, ResponseBody::buffered(Bytes::new()));
             let new_body = match old_body {
@@ -716,6 +725,7 @@ impl Client {
                         stream,
                         content_encoding.as_deref(),
                         true,
+                        limit,
                     )?;
                     ResponseBody::Streaming {
                         stream: decoded_stream,
@@ -727,6 +737,7 @@ impl Client {
                         let decompressed = crate::compression::decompress_buffered(
                             &bytes,
                             content_encoding.as_deref().unwrap(),
+                            limit,
                         )?;
                         ResponseBody::buffered(decompressed)
                     } else {
@@ -957,6 +968,8 @@ pub struct ClientBuilder {
     #[cfg(feature = "cookies")]
     cookie_jar: Option<CookieJar>,
     automatic_decompression: Option<bool>,
+    max_decoded_body_size: Option<usize>,
+    max_decompression_ratio: Option<f64>,
     #[cfg(feature = "proxy")]
     proxy: Option<Proxy>,
 }
@@ -975,6 +988,8 @@ impl ClientBuilder {
             #[cfg(feature = "cookies")]
             cookie_jar: None,
             automatic_decompression: None,
+            max_decoded_body_size: None,
+            max_decompression_ratio: None,
             #[cfg(feature = "proxy")]
             proxy: None,
         }
@@ -1155,6 +1170,8 @@ impl ClientBuilder {
             #[cfg(feature = "cookies")]
             cookie_jar,
             automatic_decompression,
+            max_decoded_body_size: self.max_decoded_body_size,
+            max_decompression_ratio: self.max_decompression_ratio,
             #[cfg(feature = "proxy")]
             proxy: self.proxy,
         };
@@ -1573,6 +1590,40 @@ async fn write_proxy_request<S: tokio::io::AsyncWrite + Unpin>(
     Ok(())
 }
 
+#[cfg(feature = "proxy")]
+async fn read_bounded_line<S: tokio::io::AsyncRead + Unpin>(
+    stream: &mut tokio::io::BufReader<S>,
+    max_len: usize,
+) -> Result<String> {
+    use tokio::io::AsyncReadExt;
+
+    let mut buf = Vec::with_capacity(256);
+    let mut byte = [0u8; 1];
+    loop {
+        let n = stream
+            .read(&mut byte)
+            .await
+            .map_err(|e| Error::ProxyConnect(format!("failed to read proxy response: {e}")))?;
+        if n == 0 {
+            break;
+        }
+        if byte[0] == b'\n' {
+            break;
+        }
+        buf.push(byte[0]);
+        if buf.len() > max_len {
+            return Err(Error::MalformedProxyResponse(format!(
+                "proxy response line exceeded maximum length of {max_len} bytes"
+            )));
+        }
+    }
+    if buf.last() == Some(&b'\r') {
+        buf.pop();
+    }
+    String::from_utf8(buf)
+        .map_err(|_| Error::MalformedProxyResponse("proxy response contains invalid UTF-8".into()))
+}
+
 /// Read an HTTP response from a proxy or destination.
 ///
 /// Returns `(status_code, headers, remaining_initial_bytes)`.
@@ -1580,14 +1631,14 @@ async fn write_proxy_request<S: tokio::io::AsyncWrite + Unpin>(
 async fn read_proxy_response<S: tokio::io::AsyncRead + Unpin>(
     stream: &mut tokio::io::BufReader<S>,
 ) -> Result<(u16, Vec<(String, String)>, Vec<u8>)> {
-    use tokio::io::{AsyncBufReadExt, AsyncReadExt};
+    use tokio::io::AsyncReadExt;
 
-    // Read status line.
-    let mut status_line = String::new();
-    stream
-        .read_line(&mut status_line)
-        .await
-        .map_err(|e| Error::ProxyConnect(format!("failed to read proxy response status: {e}")))?;
+    const MAX_STATUS_LINE_LEN: usize = 4096;
+    const MAX_HEADER_COUNT: usize = 100;
+    const MAX_HEADER_LINE_LEN: usize = 8192;
+    const MAX_TOTAL_HEADER_BYTES: usize = 65536;
+
+    let status_line = read_bounded_line(stream, MAX_STATUS_LINE_LEN).await?;
 
     if status_line.is_empty() {
         return Err(Error::MalformedProxyResponse(
@@ -1595,7 +1646,6 @@ async fn read_proxy_response<S: tokio::io::AsyncRead + Unpin>(
         ));
     }
 
-    // Parse "HTTP/1.1 200 OK"
     let status_code = status_line
         .split_whitespace()
         .nth(1)
@@ -1604,31 +1654,42 @@ async fn read_proxy_response<S: tokio::io::AsyncRead + Unpin>(
             Error::MalformedProxyResponse(format!("invalid status line: {status_line}"))
         })?;
 
-    // Read headers.
     let mut headers = Vec::new();
+    let mut total_header_bytes: usize = 0;
     loop {
-        let mut line = String::new();
-        stream.read_line(&mut line).await.map_err(|e| {
-            Error::ProxyConnect(format!("failed to read proxy response header: {e}"))
-        })?;
+        let line = read_bounded_line(stream, MAX_HEADER_LINE_LEN).await?;
 
-        let trimmed = line.trim_end();
-        if trimmed.is_empty() {
-            break; // End of headers.
+        if line.is_empty() {
+            break;
         }
 
-        if let Some((name, value)) = trimmed.split_once(':') {
-            headers.push((name.trim().to_string(), value.trim().to_string()));
+        total_header_bytes += line.len();
+        if total_header_bytes > MAX_TOTAL_HEADER_BYTES {
+            return Err(Error::MalformedProxyResponse(format!(
+                "proxy response headers exceeded maximum total size of {MAX_TOTAL_HEADER_BYTES} bytes"
+            )));
+        }
+
+        headers.push(
+            line.split_once(':')
+                .map(|(name, value)| (name.trim().to_string(), value.trim().to_string()))
+                .ok_or_else(|| {
+                    Error::MalformedProxyResponse(format!("invalid header line: {line}"))
+                })?,
+        );
+
+        if headers.len() > MAX_HEADER_COUNT {
+            return Err(Error::MalformedProxyResponse(format!(
+                "proxy response exceeded maximum header count of {MAX_HEADER_COUNT}"
+            )));
         }
     }
 
-    // Extract any remaining buffered bytes from the BufReader.
     let mut initial_buf = Vec::new();
     let buf_ref = stream.buffer();
     if !buf_ref.is_empty() {
         initial_buf.extend_from_slice(buf_ref);
         let consumed = buf_ref.len();
-        // Advance the BufReader past the buffered data.
         let mut discard = vec![0u8; consumed];
         let _ = stream.read(&mut discard).await;
     }

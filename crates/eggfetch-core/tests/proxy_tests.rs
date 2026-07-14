@@ -84,6 +84,7 @@ async fn handle_proxy_connection(
     mut client_stream: TcpStream,
     required_auth: Option<(String, String)>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    use std::fmt::Write as _;
     let mut buf_reader = BufReader::new(&mut client_stream);
 
     let mut request_line = String::new();
@@ -172,7 +173,6 @@ async fn handle_proxy_connection(
             .unwrap_or_default();
         let dest_path_query = format!("{dest_path}{dest_query}");
         let mut dest_req = format!("{method} {dest_path_query} HTTP/1.1\r\n");
-        use std::fmt::Write as _;
         for (name, value) in &headers {
             if name == "proxy-authorization" || name == "host" {
                 continue;
@@ -413,6 +413,7 @@ impl EchoHttpServer {
 async fn handle_echo_http(
     mut stream: TcpStream,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    use std::fmt::Write as _;
     let mut reader = BufReader::new(&mut stream);
     let mut request_line = String::new();
     reader.read_line(&mut request_line).await?;
@@ -449,7 +450,6 @@ async fn handle_echo_http(
     }
 
     let mut response_body = format!("{method} {path}");
-    use std::fmt::Write as _;
     for (name, value) in &headers {
         let _ = write!(response_body, "\n{name}: {value}");
     }

@@ -49,6 +49,7 @@ cookie = { version = "0.18", default-features = false, features = ["percent-enco
 async-compression = { version = "0.4", default-features = false, features = ["tokio"], optional = true }
 tokio-util = { version = "0.7", features = ["io"], optional = true }
 flate2 = "1"
+getrandom = "0.2"
 httparse = "1"
 webpki-roots = "0.26"
 

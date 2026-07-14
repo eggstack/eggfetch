@@ -133,6 +133,10 @@ pub enum Error {
     /// The proxy response could not be parsed.
     #[error("malformed proxy response: {0}")]
     MalformedProxyResponse(String),
+
+    /// The decoded body exceeded the configured size or ratio limit.
+    #[error("decoded body exceeded configured limit")]
+    DecodedBodyLimit,
 }
 
 impl Error {
@@ -175,6 +179,7 @@ impl Error {
             Self::ProxyAuthRequired => "proxy_auth_required",
             Self::ProxyConnectRejected { .. } => "proxy_connect_rejected",
             Self::MalformedProxyResponse(_) => "malformed_proxy_response",
+            Self::DecodedBodyLimit => "decoded_body_limit",
         }
     }
 }

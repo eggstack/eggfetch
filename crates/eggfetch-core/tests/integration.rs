@@ -581,10 +581,10 @@ where
 
 #[tokio::test]
 async fn network_get_request() {
-    let result = with_network_timeout(async {
+    let result = with_network_timeout(Box::pin(async {
         let client = Client::new();
         client.get("https://httpbin.org/get").unwrap().send().await
-    })
+    }))
     .await;
 
     let mut response = match result {
@@ -610,7 +610,7 @@ async fn network_get_request() {
 
 #[tokio::test]
 async fn network_post_with_body() {
-    let result = with_network_timeout(async {
+    let result = with_network_timeout(Box::pin(async {
         let client = Client::new();
         client
             .post("https://httpbin.org/post")
@@ -619,7 +619,7 @@ async fn network_post_with_body() {
             .body(r#"{"hello":"world"}"#)
             .send()
             .await
-    })
+    }))
     .await;
 
     let mut response = match result {
@@ -648,7 +648,7 @@ async fn network_post_with_body() {
 
 #[tokio::test]
 async fn network_custom_headers_sent() {
-    let result = with_network_timeout(async {
+    let result = with_network_timeout(Box::pin(async {
         let client = Client::new();
         client
             .get("https://httpbin.org/headers")
@@ -656,7 +656,7 @@ async fn network_custom_headers_sent() {
             .header("X-Test-Header", "integration-test-value")
             .send()
             .await
-    })
+    }))
     .await;
 
     let mut response = match result {
@@ -685,7 +685,7 @@ async fn network_custom_headers_sent() {
 
 #[tokio::test]
 async fn network_query_params_serialized() {
-    let result = with_network_timeout(async {
+    let result = with_network_timeout(Box::pin(async {
         let client = Client::new();
         client
             .get("https://httpbin.org/get")
@@ -694,7 +694,7 @@ async fn network_query_params_serialized() {
             .query("baz", "42")
             .send()
             .await
-    })
+    }))
     .await;
 
     let mut response = match result {
@@ -725,14 +725,14 @@ async fn network_query_params_serialized() {
 
 #[tokio::test]
 async fn network_post_status_code() {
-    let result = with_network_timeout(async {
+    let result = with_network_timeout(Box::pin(async {
         let client = Client::new();
         client
             .post("https://httpbin.org/status/201")
             .unwrap()
             .send()
             .await
-    })
+    }))
     .await;
 
     let response = match result {

@@ -98,6 +98,11 @@ Enables streaming multipart/form-data request bodies. Provides `Multipart`, `Par
 
 Python `files=` accepts bytes, `(filename, data)` tuples, `(filename, data, content_type)` triples, `(filename, data, content_type, headers)` quads, and `eggfetch.File(path)` objects. Files are read via synchronous std::fs (blocking in GIL context) for path-backed parts. Cancellation safely drops file handles and streams.
 
+Boundary generation depends on the `getrandom` crate (always present in the
+dependency tree) to seed the internal xorshift PRNG used for random boundary
+strings. This is a unconditional transitive dependency brought in by
+`getrandom = "0.2"` in the core `Cargo.toml`.
+
 ### proxy
 
 **Status:** implemented (Milestone S).
