@@ -56,3 +56,5 @@ pem-rfc7468 = { version = "0.1", features = ["alloc"] }
 
 [dev-dependencies]
 flate2 = "1"
+rcgen = "0.13"
+tempfile = "3"

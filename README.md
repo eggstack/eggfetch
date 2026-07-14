@@ -256,10 +256,42 @@ Deliberate TLS configuration without weakening secure defaults:
 - **`TrustStore`** -- custom CA bundle support via PEM files or system roots.
 - **`ClientIdentity`** -- client certificate and private key for mutual TLS.
 - **`TlsVersion`** -- TLS version policy (minimum/maximum supported versions).
-- **Verification toggle** -- `ClientBuilder::danger_disable_tls_verification()` with explicit opt-in.
+- **Verification toggle** -- `TlsConfigBuilder::danger_accept_invalid_certs(true)` with explicit opt-in.
 - **SNI behavior** -- Server Name Indication enabled by default, configurable.
 - **Python API** -- `Client(verify=..., cert=...)` kwargs for verification and client certificates.
 - **PEM parsing** -- `pem-rfc7468` for custom CA bundles and client certificate loading.
+
+#### Enterprise and private-CA usage
+
+When operating behind a corporate proxy or internal PKI, the default trust
+store (native OS roots + WebPKI fallback) may not include your organization's
+CA. Pass a custom CA bundle to the client constructor:
+
+```python
+client = eggfetch.Client(verify="/etc/corp/ca-bundle.pem")
+```
+
+A custom bundle **replaces** the default system roots entirely. This is
+intentional: it prevents a misconfigured system trust store from silently
+undermining the custom policy. If you need both system roots and private CAs,
+concatenate them into a single PEM file before passing it in.
+
+Corporate proxy interception (MITM) is only supported if the proxy's signing
+CA is present in the configured trust store. If you see certificate
+verification failures when a corporate proxy is active, add the proxy's CA to
+your bundle.
+
+For mTLS with client certificates, supply both the certificate chain and
+private key:
+
+```python
+client = eggfetch.Client(
+    cert=("/path/to/client-cert.pem", "/path/to/client-key.pem")
+)
+```
+
+Unencrypted PEM private keys are supported. Encrypted keys will produce a
+clear error at construction time.
 
 ### Current limitations
 

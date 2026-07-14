@@ -57,7 +57,7 @@ runtime and packaged WebPKI roots are used only when native roots are
 unavailable. Verification failures never trigger the fallback. As of
 Milestone T, this feature also supports custom CA bundles via `TrustStore`,
 client certificates via `ClientIdentity`, TLS version policy via `TlsVersion`,
-verification toggle via `ClientBuilder::danger_disable_tls_verification()`,
+verification toggle via `TlsConfigBuilder::danger_accept_invalid_certs(true)`,
 and SNI configuration. The Python crate exposes `verify=` and `cert=` kwargs
 for TLS configuration. The current Cargo dependency graph keeps the transport
 crates available in all core feature combinations so disabled-feature checks

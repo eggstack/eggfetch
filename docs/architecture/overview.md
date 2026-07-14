@@ -329,7 +329,7 @@ eggfetch implements deliberate TLS configuration without weakening secure defaul
 TLS configuration is applied at two levels:
 
 - **Client-level**: `ClientBuilder::tls_config(TlsConfig::builder().trust_store(...).build())` sets default TLS behavior for all requests through that client.
-- **Verification toggle**: `ClientBuilder::danger_disable_tls_verification()` explicitly disables certificate verification with an opt-in API. This is a deliberate escape hatch with documentation warnings.
+- **Verification toggle**: `TlsConfigBuilder::danger_accept_invalid_certs(true)` explicitly disables certificate verification with an opt-in API. This is a deliberate escape hatch with documentation warnings.
 
 ### Trust Store Hierarchy
 
@@ -347,14 +347,30 @@ The Python bindings expose TLS configuration via `Client` and `AsyncClient`:
 
 ```python
 # Disable verification (insecure, requires explicit opt-in)
-client = httpx.Client(verify=False)
+client = eggfetch.Client(verify=False)
 
 # Custom CA bundle
-client = httpx.Client(verify="/path/to/ca-bundle.pem")
+client = eggfetch.Client(verify="/path/to/ca-bundle.pem")
 
 # Client certificate (certfile, keyfile)
-client = httpx.Client(cert=("/path/to/cert.pem", "/path/to/key.pem"))
+client = eggfetch.Client(cert=("/path/to/cert.pem", "/path/to/key.pem"))
 ```
+
+### Enterprise and private-CA trust policy
+
+A custom CA bundle **replaces** all default roots (system + WebPKI). This is
+intentional: it prevents a misconfigured system trust store from silently
+undermining the custom policy. If both system and private CAs are needed,
+concatenate them into a single PEM file before passing it to `ca_certificate_pem()`.
+
+Corporate MITM proxies are supported only when the proxy's signing CA is
+present in the configured trust store. Certificate verification failures
+through a corporate proxy indicate the proxy CA is missing from the bundle.
+
+Client certificates for mTLS require both the certificate chain and the
+private key. Unencrypted PEM private keys are supported; encrypted keys
+produce an error at construction time. Private key material is never included
+in debug output, error messages, or repr diagnostics.
 
 ## Transport Stack
 
