@@ -165,6 +165,21 @@ pub enum Error {
     /// Hostname verification failed.
     #[error("hostname verification failed: {0}")]
     HostnameVerification(String),
+
+    /// The request body is not replayable and cannot be retried.
+    #[error("body not replayable for retry")]
+    BodyNotReplayableForRetry,
+
+    /// The retry budget was exhausted.
+    #[error("retry budget exhausted after {attempts} attempts")]
+    RetryBudgetExhausted {
+        /// Number of attempts made.
+        attempts: usize,
+    },
+
+    /// Retry is not enabled for this request or client.
+    #[error("retry not configured")]
+    RetryNotConfigured,
 }
 
 impl Error {
@@ -215,6 +230,9 @@ impl Error {
             Self::PrivateKey(_) => "private_key",
             Self::CertificateVerification(_) => "certificate_verification",
             Self::HostnameVerification(_) => "hostname_verification",
+            Self::BodyNotReplayableForRetry => "body_not_replayable_for_retry",
+            Self::RetryBudgetExhausted { .. } => "retry_budget_exhausted",
+            Self::RetryNotConfigured => "retry_not_configured",
         }
     }
 }

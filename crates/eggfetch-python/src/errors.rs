@@ -136,6 +136,24 @@ create_exception!(
     ProxyError,
     "The proxy server requires authentication."
 );
+create_exception!(
+    eggfetch,
+    BodyNotReplayableForRetry,
+    RequestError,
+    "The request body cannot be replayed for retry."
+);
+create_exception!(
+    eggfetch,
+    RetryBudgetExhausted,
+    RequestError,
+    "The retry budget was exhausted."
+);
+create_exception!(
+    eggfetch,
+    RetryNotConfigured,
+    RequestError,
+    "Retry is not configured for this request or client."
+);
 
 /// Map an eggfetch-core error to the appropriate Python exception.
 #[allow(clippy::needless_pass_by_value)]
@@ -204,6 +222,15 @@ pub fn map_err(err: eggfetch_core::Error) -> PyErr {
         }
         eggfetch_core::Error::DecompressionRatioExceeded => {
             RequestError::new_err("decompression ratio exceeded".to_string())
+        }
+        eggfetch_core::Error::BodyNotReplayableForRetry => {
+            BodyNotReplayableForRetry::new_err("request body is not replayable for retry")
+        }
+        eggfetch_core::Error::RetryBudgetExhausted { attempts } => RetryBudgetExhausted::new_err(
+            format!("retry budget exhausted after {attempts} attempts"),
+        ),
+        eggfetch_core::Error::RetryNotConfigured => {
+            RetryNotConfigured::new_err("retry is not configured for this request or client")
         }
     }
 }

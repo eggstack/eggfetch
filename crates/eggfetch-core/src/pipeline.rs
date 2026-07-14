@@ -1,5 +1,5 @@
-//! Request pipeline: redirect loop, defaults, cookie/auth application,
-//! deadline propagation, and body-lease lifecycle.
+//! Request pipeline: redirect loop, retry wrapper, defaults, cookie/auth
+//! application, deadline propagation, and body-lease lifecycle.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -18,10 +18,154 @@ use crate::redirect;
 use crate::request::ProxyOverride;
 use crate::request::Request;
 use crate::response::{HistoryEntry, Response};
+use crate::retry::{should_retry, RetryCause, RetryPolicy};
 use crate::stream::{read_timeout_stream, write_timeout_stream};
 use crate::timeout::{Timeout, TimeoutPhase};
 #[cfg(feature = "proxy")]
 use crate::transport::proxy::send_proxy_request;
+
+/// Sleep for the backoff delay if the total budget allows it.
+///
+/// Returns `Err(RetryBudgetExhausted)` if sleeping would exceed the
+/// remaining total budget.
+async fn sleep_if_budget_allows(
+    policy: &RetryPolicy,
+    delay: Duration,
+    attempt: usize,
+    start_time: std::time::Instant,
+) -> Result<()> {
+    if let Some(max_elapsed) = policy.max_elapsed() {
+        let elapsed = start_time.elapsed();
+        if elapsed + delay > max_elapsed {
+            return Err(Error::RetryBudgetExhausted { attempts: attempt });
+        }
+    }
+    tokio::time::sleep(delay).await;
+    Ok(())
+}
+
+/// Send a request with optional retry policy.
+///
+/// This is the top-level entry point called by [`Client::send`]. It
+/// resolves the effective retry policy from the request override and
+/// client default, then wraps [`send_with_redirects`] in a retry loop
+/// with exponential backoff.
+///
+/// Retries restart the complete logical request (including redirects)
+/// under the original total deadline. Stream bodies are never retried.
+pub(crate) async fn send_with_retry(client: &Client, request: Request) -> Result<Response> {
+    let method = request.method().clone();
+    let body_replayable = request.body().is_replayable();
+
+    // Resolve the effective retry policy. Request-level takes precedence.
+    let effective_policy = request
+        .retry()
+        .cloned()
+        .or_else(|| client.config().retry.clone());
+    let policy = match effective_policy {
+        Some(p) if p.is_enabled() => p,
+        _ => {
+            return send_with_redirects(client, request).await;
+        }
+    };
+
+    // If the body is not replayable, we can only attempt once.
+    if !body_replayable {
+        return send_with_redirects(client, request).await;
+    }
+
+    // Save original request parts for replay.
+    let (
+        orig_method,
+        orig_url,
+        orig_headers,
+        orig_body,
+        orig_version,
+        _orig_timeout,
+        _orig_redirect,
+        _orig_auth,
+        _orig_auth_disabled,
+        _orig_decompress,
+        _orig_proxy,
+        _orig_retry,
+    ) = request.into_parts();
+
+    let start_time = std::time::Instant::now();
+    let mut attempt = 0usize;
+
+    loop {
+        attempt += 1;
+
+        // Check total budget before attempting.
+        if let Some(max_elapsed) = policy.max_elapsed() {
+            if start_time.elapsed() >= max_elapsed {
+                return Err(Error::RetryBudgetExhausted {
+                    attempts: attempt - 1,
+                });
+            }
+        }
+
+        // Check max attempts budget.
+        if attempt > policy.max_attempts() {
+            return Err(Error::RetryBudgetExhausted {
+                attempts: attempt - 1,
+            });
+        }
+
+        // Reconstruct the request from saved parts.
+        let mut attempt_request = Request::new(orig_method.clone(), orig_url.clone());
+        *attempt_request.headers_mut() = orig_headers.clone();
+        match &orig_body {
+            RequestBody::Empty => attempt_request.set_body(RequestBody::Empty),
+            RequestBody::Bytes(b) => attempt_request.set_body(RequestBody::Bytes(b.clone())),
+            RequestBody::Stream { .. } => {
+                return Err(Error::BodyNotReplayableForRetry);
+            }
+        }
+        attempt_request.set_version(orig_version);
+
+        let result = send_with_redirects(client, attempt_request).await;
+
+        match result {
+            Ok(response) => {
+                if response.status().is_success() {
+                    return Ok(response);
+                }
+                let status = response.status().as_u16();
+
+                if let Some(cause) = should_retry(&policy, &method, &orig_body, None, Some(status))
+                {
+                    let mut resp = response;
+                    let _ = resp.bytes().await;
+
+                    if let Some(dur) = compute_retry_delay(&policy, &cause, attempt) {
+                        sleep_if_budget_allows(&policy, dur, attempt, start_time).await?;
+                    }
+                    continue;
+                }
+                return Ok(response);
+            }
+            Err(err) => {
+                if let Some(cause) = should_retry(&policy, &method, &orig_body, Some(&err), None) {
+                    if let Some(dur) = compute_retry_delay(&policy, &cause, attempt) {
+                        sleep_if_budget_allows(&policy, dur, attempt, start_time).await?;
+                    }
+                    continue;
+                }
+                return Err(err);
+            }
+        }
+    }
+}
+
+/// Compute the backoff delay for a retry attempt.
+fn compute_retry_delay(
+    policy: &RetryPolicy,
+    _cause: &RetryCause,
+    attempt: usize,
+) -> Option<Duration> {
+    policy.backoff_delay(attempt)
+}
 
 /// Send a request through the client, following redirects if enabled.
 ///
@@ -42,6 +186,7 @@ pub(crate) async fn send_with_redirects(client: &Client, request: Request) -> Re
         req_auth_disabled,
         _request_decompress,
         _request_proxy,
+        _request_retry,
     ) = request.into_parts();
 
     let mut merged_headers = client.config().default_headers.clone().into_inner();
@@ -295,7 +440,7 @@ pub(crate) async fn send_with_redirects(client: &Client, request: Request) -> Re
 
         let new_method = redirect::redirect_method(redirect_status, &cur_method);
 
-        let (_, new_url, new_headers, new_body, new_version, _, _, _, _, _, _) =
+        let (_, new_url, new_headers, new_body, new_version, _, _, _, _, _, _, _) =
             redirect_req.into_parts();
 
         prev_url = Some(cur_url.clone());
@@ -429,6 +574,7 @@ pub(crate) async fn send_single_request(
         _,
         request_decompress,
         proxy_override,
+        _,
     ) = request.into_parts();
 
     let decompression_enabled = request_decompress.unwrap_or(inner.config.automatic_decompression);

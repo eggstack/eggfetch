@@ -173,20 +173,25 @@ Capabilities:
 
 This milestone requires targeted security review.
 
-## Milestone U: Retry and resilience policy
+## Milestone U: Retry and resilience policy (complete)
 
-Implement policy-driven retries rather than unconditional retry behavior.
+Policy-driven retries in `eggfetch-core`.
 
-Capabilities:
+Implemented capabilities:
 
-- idempotency-aware retry decisions
-- retryable transport/status conditions
-- exponential backoff and jitter
-- retry budgets and maximum attempts
-- replayability checks for request bodies
-- cancellation and timeout interaction
-
-Retries should be opt-in initially.
+- `RetryPolicy` and builder with exponential backoff and jitter
+- maximum attempts and retry budget
+- retryable transport errors (connect, I/O, hyper)
+- optional retryable status codes (408, 429, 502, 503, 504)
+- idempotency-aware method rules (GET, HEAD, OPTIONS safe by default)
+- request-body replayability checks
+- bounded exponential backoff with jitter
+- `Retry-After` header parsing support
+- total-timeout and cancellation integration
+- per-request and per-client retry policy override
+- opt-in retries (disabled by default)
+- Python `Retry` class with `retries=` kwarg on Client and request methods
+- comprehensive unit tests for policy, backoff, methods, statuses, body replayability
 
 # Phase 4: Modern HTTP Protocols
 
@@ -345,7 +350,7 @@ The preferred order is:
 5. Milestone R: compression (complete)
 6. Milestone S: proxies (complete)
 7. Milestone T: TLS configuration (complete)
-8. Milestone U: retries
+8. Milestone U: retries (complete)
 9. Milestone V: HTTP/2
 10. Milestone X: full CLI
 11. Milestone Y: documentation/examples

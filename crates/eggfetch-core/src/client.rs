@@ -14,6 +14,7 @@ use crate::proxy::Proxy;
 use crate::redirect::RedirectPolicy;
 use crate::request::{Request, RequestBuilder};
 use crate::response::Response;
+use crate::retry::RetryPolicy;
 use crate::timeout::Timeout;
 use crate::transport::{Connector, HyperClient};
 
@@ -37,6 +38,7 @@ pub(crate) struct ClientConfig {
     pub(crate) proxy: Option<Proxy>,
     #[cfg(feature = "proxy")]
     pub(crate) tls_config: Option<crate::tls::TlsConfig>,
+    pub(crate) retry: Option<RetryPolicy>,
 }
 
 impl Default for ClientConfig {
@@ -56,6 +58,7 @@ impl Default for ClientConfig {
             proxy: None,
             #[cfg(feature = "proxy")]
             tls_config: None,
+            retry: None,
         }
     }
 }
@@ -195,12 +198,16 @@ impl Client {
     /// rewrites per HTTP semantics, strips sensitive headers on
     /// cross-origin hops, and records redirect history.
     ///
+    /// If a retry policy is configured (on the client or request), the
+    /// entire logical request is retried on failure according to the
+    /// policy.
+    ///
     /// # Errors
     ///
     /// Returns an error if the request fails at any stage (connect, TLS,
     /// protocol, body) or if a timeout elapses.
     pub(crate) async fn send(&self, request: Request) -> Result<Response> {
-        crate::pipeline::send_with_redirects(self, request).await
+        crate::pipeline::send_with_retry(self, request).await
     }
 
     /// Send a single HTTP request and return the streaming response.
@@ -239,6 +246,7 @@ pub struct ClientBuilder {
     #[cfg(feature = "proxy")]
     proxy: Option<Proxy>,
     tls_config: Option<crate::tls::TlsConfig>,
+    retry: Option<RetryPolicy>,
 }
 
 impl ClientBuilder {
@@ -260,6 +268,7 @@ impl ClientBuilder {
             #[cfg(feature = "proxy")]
             proxy: None,
             tls_config: None,
+            retry: None,
         }
     }
 
@@ -435,6 +444,17 @@ impl ClientBuilder {
         self
     }
 
+    /// Set the retry policy for this client.
+    ///
+    /// When set, failed requests that match the policy (safe methods,
+    /// retryable statuses/errors, replayable bodies) are automatically
+    /// retried with exponential backoff.
+    #[must_use]
+    pub fn retry(mut self, policy: RetryPolicy) -> Self {
+        self.retry = Some(policy);
+        self
+    }
+
     /// Build the client.
     ///
     /// Native system roots are preferred. If the platform root store is
@@ -489,6 +509,7 @@ impl ClientBuilder {
             proxy: self.proxy,
             #[cfg(feature = "proxy")]
             tls_config: self.tls_config,
+            retry: self.retry,
         };
 
         let pool = Pool::new(self.pool_config);

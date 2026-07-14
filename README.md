@@ -2,8 +2,8 @@
 
 eggfetch is a Rust-native HTTP client engine with Python bindings and a CLI tool. The core is async-first: a Rust engine built on tokio and hyper provides connection pooling, timeouts, TLS configuration, and streaming. The Python bindings expose both sync and async APIs; the sync API blocks on the async engine while releasing the GIL, and the async API integrates with asyncio. There is exactly one networking implementation, living entirely in Rust.
 
-> **Status: Milestone T complete.**
-> Milestones A–T are implemented as documented. The core engine supports response decompression (gzip, deflate, brotli, zstd), multipart/form-data uploads, cookies, authentication, proxy support (HTTP proxying, HTTPS CONNECT tunneling, proxy authentication, per-request/client proxy configuration, NO_PROXY bypass), TLS configuration (custom CA bundles, client certificates, TLS version policy, verification toggle), streaming, timeouts, and connection pooling. The CLI crate remains a stub.
+> **Status: Milestone U complete.**
+> Milestones A–U are implemented as documented. The core engine supports response decompression (gzip, deflate, brotli, zstd), multipart/form-data uploads, cookies, authentication, proxy support (HTTP proxying, HTTPS CONNECT tunneling, proxy authentication, per-request/client proxy configuration, NO_PROXY bypass), TLS configuration (custom CA bundles, client certificates, TLS version policy, verification toggle), streaming, timeouts, connection pooling, and policy-driven retries with exponential backoff. The CLI crate remains a stub.
 
 [![CI](https://github.com/eggstack/eggfetch/actions/workflows/ci.yml/badge.svg)](https://github.com/eggstack/eggfetch/actions/workflows/ci.yml)
 
@@ -299,6 +299,21 @@ clear error at construction time.
 - `connect` timeout is accepted but not independently enforced (use `total` as backstop).
 - Trio/AnyIO support deferred to a later milestone.
 
+### Milestone U: Retry and Resilience Policy (complete)
+
+Policy-driven retries with idempotency awareness and exponential backoff:
+
+- **`RetryPolicy`** -- configurable retry policy with builder pattern. Controls max attempts, total elapsed budget, backoff strategy, method eligibility, and status codes.
+- **Opt-in by default** -- retries are disabled unless explicitly configured. POST/PATCH never retried by default.
+- **Method safety** -- GET, HEAD, OPTIONS are safe to retry. POST, PUT, DELETE, PATCH require explicit opt-in.
+- **Body replayability** -- only empty and byte bodies are retried. Stream bodies are never retried.
+- **Exponential backoff** -- bounded exponential backoff with jitter. Configurable factor, initial delay, and max delay.
+- **`Retry-After` support** -- optional parsing of `Retry-After` headers (seconds).
+- **Total deadline** -- a single total deadline spans all retry attempts and backoff sleeps.
+- **Per-request override** -- `RequestBuilder::retry(policy)` or `RequestBuilder::without_retry()` overrides client-level policy.
+- **Python API** -- `Retry(max_attempts=3, backoff_factor=0.2, statuses={429, 503})` class with `retries=` kwarg on `Client()` and all request methods. `retries=False` disables retries per-request.
+- **Error taxonomy** -- `BodyNotReplayableForRetry`, `RetryBudgetExhausted`, `RetryNotConfigured` Python exceptions.
+
 ## Repository Layout
 
 ```text
@@ -390,4 +405,5 @@ eggfetch is dual-licensed under [MIT](LICENSE-MIT) and [Apache License, Version 
 - [plans/milestone-q-multipart-file-uploads.md](plans/milestone-q-multipart-file-uploads.md) -- the plan for Milestone Q (multipart and file uploads).
 - [plans/milestone-r-response-compression.md](plans/milestone-r-response-compression.md) -- the plan for Milestone R (response compression and decompression).
 - [plans/milestone-t-tls-configuration.md](plans/milestone-t-tls-configuration.md) -- the plan for Milestone T (TLS configuration).
+- [plans/milestone-u-retry-resilience.md](plans/milestone-u-retry-resilience.md) -- the plan for Milestone U (retry and resilience policy).
 - [plans/post-milestone-j-tightening.md](plans/post-milestone-j-tightening.md) -- post-J corrective pass: redirect body buffering fix, async response construction fix, documentation truth pass.

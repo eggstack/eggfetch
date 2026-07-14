@@ -43,6 +43,7 @@ pub mod redirect;
 pub mod request;
 pub mod response;
 pub(crate) mod response_decode;
+pub mod retry;
 pub(crate) mod stream;
 pub mod timeout;
 pub mod tls;
@@ -63,5 +64,9 @@ pub use proxy::{NoProxy, NoProxyRule, Proxy, ProxyAuth, ProxyConfig, ProxyDecisi
 pub use redirect::RedirectPolicy;
 pub use request::{ProxyOverride, Request, RequestBuilder};
 pub use response::{HistoryEntry, Response};
+pub use retry::{
+    BackoffPolicy, MethodPolicy, ReplayCheck, RetryCause, RetryContext, RetryPolicy,
+    RetryPolicyBuilder, StatusPolicy,
+};
 pub use timeout::{Timeout, TimeoutBuilder, TimeoutPhase};
 pub use tls::{ClientIdentity, TlsConfig, TlsConfigBuilder, TlsVersion, TrustStore};

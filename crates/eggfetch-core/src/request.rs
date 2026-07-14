@@ -9,6 +9,7 @@ use crate::error::Result;
 use crate::headers::Headers;
 use crate::redirect::RedirectPolicy;
 use crate::response::Response;
+use crate::retry::RetryPolicy;
 use crate::timeout::Timeout;
 
 use crate::auth::AuthScheme;
@@ -33,7 +34,7 @@ pub enum ProxyOverride {
 
 /// Parts returned by [`Request::into_parts`].
 ///
-/// `(method, url, headers, body, version, timeout, redirect, auth, auth_disabled, decompress, proxy_override)`
+/// `(method, url, headers, body, version, timeout, redirect, auth, auth_disabled, decompress, proxy_override, retry)`
 pub(crate) type RequestParts = (
     http::Method,
     url::Url,
@@ -46,6 +47,7 @@ pub(crate) type RequestParts = (
     bool,
     Option<bool>,
     ProxyOverride,
+    Option<RetryPolicy>,
 );
 
 /// An outgoing HTTP request.
@@ -63,6 +65,8 @@ pub struct Request {
     decompress: Option<bool>,
     /// Proxy override: `None` = inherit, `Some(None)` = direct, `Some(Some(c))` = explicit.
     proxy_override: ProxyOverride,
+    /// Per-request retry policy override.
+    retry: Option<RetryPolicy>,
 }
 
 impl Request {
@@ -80,6 +84,7 @@ impl Request {
             auth_disabled: false,
             decompress: None,
             proxy_override: ProxyOverride::Inherit,
+            retry: None,
         }
     }
 
@@ -200,9 +205,20 @@ impl Request {
         self.proxy_override = proxy;
     }
 
+    /// Returns the per-request retry policy override, if set.
+    #[must_use]
+    pub fn retry(&self) -> Option<&RetryPolicy> {
+        self.retry.as_ref()
+    }
+
+    /// Set the per-request retry policy override.
+    pub fn set_retry(&mut self, retry: Option<RetryPolicy>) {
+        self.retry = retry;
+    }
+
     /// Decompose a request into its parts.
     ///
-    /// Returns `(method, url, headers, body, version, timeout, redirect, auth, auth_disabled, decompress)`.
+    /// Returns `(method, url, headers, body, version, timeout, redirect, auth, auth_disabled, decompress, proxy_override, retry)`.
     pub(crate) fn into_parts(self) -> RequestParts {
         (
             self.method,
@@ -216,6 +232,7 @@ impl Request {
             self.auth_disabled,
             self.decompress,
             self.proxy_override,
+            self.retry,
         )
     }
 }
@@ -233,6 +250,7 @@ pub struct RequestBuilder {
     auth_disabled: bool,
     decompress: Option<bool>,
     proxy_override: ProxyOverride,
+    retry: Option<RetryPolicy>,
     error: Option<crate::Error>,
 }
 
@@ -251,6 +269,7 @@ impl RequestBuilder {
             auth_disabled: false,
             decompress: None,
             proxy_override: ProxyOverride::Inherit,
+            retry: None,
             error: None,
         }
     }
@@ -364,6 +383,24 @@ impl RequestBuilder {
         self
     }
 
+    /// Override the retry policy for this specific request.
+    ///
+    /// When set, this overrides the client-level retry policy for
+    /// this request only.
+    #[must_use]
+    pub fn retry(mut self, policy: RetryPolicy) -> Self {
+        self.retry = Some(policy);
+        self
+    }
+
+    /// Disable retries for this specific request, even if the client
+    /// has a retry policy configured.
+    #[must_use]
+    pub fn without_retry(mut self) -> Self {
+        self.retry = Some(RetryPolicy::default());
+        self
+    }
+
     /// Build the request without sending it.
     ///
     /// # Errors
@@ -383,6 +420,7 @@ impl RequestBuilder {
         req.auth_disabled = self.auth_disabled;
         req.decompress = self.decompress;
         req.proxy_override = self.proxy_override;
+        req.retry = self.retry;
         Ok(req)
     }
 
