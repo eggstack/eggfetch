@@ -153,7 +153,9 @@ impl RetryPolicy {
             | Error::Timeout {
                 phase: crate::timeout::TimeoutPhase::Pool,
                 ..
-            } => true,
+            }
+            | Error::H3Connect(_)
+            | Error::H3ConnectionClosed(_) => true,
             Error::Http2StreamReset { reason } if reason.starts_with("REFUSED_STREAM") => true,
             _ => false,
         }
@@ -920,6 +922,46 @@ mod tests {
         let policy = RetryPolicy::builder().max_attempts(3).build();
         let body = RequestBody::Empty;
         let err = Error::InvalidUrl("bad url".into());
+        let cause = should_retry(&policy, &Method::GET, &body, Some(&err), None);
+        assert_eq!(cause, None);
+    }
+
+    #[test]
+    #[cfg(feature = "http3")]
+    fn should_retry_h3_connect_error() {
+        let policy = RetryPolicy::builder().max_attempts(3).build();
+        let body = RequestBody::Empty;
+        let err = Error::H3Connect("QUIC handshake failed".into());
+        let cause = should_retry(&policy, &Method::GET, &body, Some(&err), None);
+        assert!(matches!(cause, Some(RetryCause::TransportError(_))));
+    }
+
+    #[test]
+    #[cfg(feature = "http3")]
+    fn should_retry_h3_connection_closed() {
+        let policy = RetryPolicy::builder().max_attempts(3).build();
+        let body = RequestBody::Empty;
+        let err = Error::H3ConnectionClosed("peer sent GOAWAY".into());
+        let cause = should_retry(&policy, &Method::GET, &body, Some(&err), None);
+        assert!(matches!(cause, Some(RetryCause::TransportError(_))));
+    }
+
+    #[test]
+    #[cfg(feature = "http3")]
+    fn should_not_retry_h3_protocol_error() {
+        let policy = RetryPolicy::builder().max_attempts(3).build();
+        let body = RequestBody::Empty;
+        let err = Error::H3Protocol("unexpected frame".into());
+        let cause = should_retry(&policy, &Method::GET, &body, Some(&err), None);
+        assert_eq!(cause, None);
+    }
+
+    #[test]
+    #[cfg(feature = "http3")]
+    fn should_not_retry_h3_stream_error() {
+        let policy = RetryPolicy::builder().max_attempts(3).build();
+        let body = RequestBody::Empty;
+        let err = Error::H3Stream("stream reset".into());
         let cause = should_retry(&policy, &Method::GET, &body, Some(&err), None);
         assert_eq!(cause, None);
     }

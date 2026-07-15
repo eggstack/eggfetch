@@ -18,7 +18,7 @@ use eggfetch_core::{Client, Error, HttpVersionPolicy};
 fn http3_only_variant_exists() {
     let policy = HttpVersionPolicy::Http3Only;
     assert_eq!(policy, HttpVersionPolicy::Http3Only);
-    assert_ne!(policy, HttpVersionPolicy::Auto);
+    assert_ne!(policy, HttpVersionPolicy::Auto { allow_http3: false });
     assert_ne!(policy, HttpVersionPolicy::Http1Only);
     assert_ne!(policy, HttpVersionPolicy::Http2Only);
 }
@@ -40,7 +40,7 @@ fn http3_only_is_clone() {
 #[test]
 fn http3_only_is_not_default() {
     let default = HttpVersionPolicy::default();
-    assert_eq!(default, HttpVersionPolicy::Auto);
+    assert_eq!(default, HttpVersionPolicy::Auto { allow_http3: false });
     assert_ne!(default, HttpVersionPolicy::Http3Only);
 }
 
@@ -153,7 +153,7 @@ fn build_client_with_http3_only_and_custom_tls() {
 #[test]
 fn build_client_with_auto_policy() {
     let client = Client::builder()
-        .http_version_policy(HttpVersionPolicy::Auto)
+        .http_version_policy(HttpVersionPolicy::Auto { allow_http3: false })
         .build();
     let req = client.get("https://example.com/").unwrap().build().unwrap();
     assert_eq!(req.url().scheme(), "https");
@@ -237,7 +237,7 @@ async fn auto_policy_to_local_server_works() {
     });
 
     let client = Client::builder()
-        .http_version_policy(HttpVersionPolicy::Auto)
+        .http_version_policy(HttpVersionPolicy::Auto { allow_http3: false })
         .build();
 
     let mut resp = client.get(&server.url()).unwrap().send().await.unwrap();

@@ -724,12 +724,10 @@ pub(crate) async fn send_single_request(
             .await?
         }
         _ => {
-            // Route through HTTP/3 when policy is Http3Only
+            // Route through HTTP/3 when policy is Http3Only or Auto { allow_http3: true }
             #[cfg(feature = "http3")]
             {
-                if inner.config.http_version_policy
-                    == crate::http_version::HttpVersionPolicy::Http3Only
-                {
+                if inner.config.http_version_policy.use_http3() {
                     if let Some(ref h3_connector) = inner.h3_connector {
                         let mut h3_request = http::Request::builder()
                             .method(method)

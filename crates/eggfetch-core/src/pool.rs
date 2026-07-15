@@ -39,6 +39,23 @@
 //! hyper internally queues streams until a slot opens, which may cause
 //! pool acquisition to wait.
 //!
+//! # HTTP/3 and QUIC
+//!
+//! When the `http3` feature is enabled and `HttpVersionPolicy::Http3Only`
+//! is selected, requests bypass the hyper transport and are sent over QUIC
+//! via Quinn. These requests still acquire pool permits for concurrency
+//! limiting, but the underlying QUIC connection lifecycle is managed
+//! independently by the H3 connector.
+//!
+//! - **Logical request concurrency**: Same as HTTP/1.1 and HTTP/2 — one
+//!   pool permit per in-flight request.
+//! - **QUIC connection caching**: The H3 connector maintains a per-origin
+//!   cache of QUIC connections. Idle connections are reused for subsequent
+//!   requests to the same origin.
+//! - **Per-connection stream concurrency**: Quinn enforces a maximum of
+//!   100 concurrent bidirectional streams per QUIC connection by default.
+//!   This is independent of the pool's logical permit limit.
+//!
 //! # Origin keying
 //!
 //! Per-origin limits are keyed by `(scheme, host, port)`, where the port

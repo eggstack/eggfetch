@@ -289,6 +289,47 @@ impl TlsConfig {
     pub fn sni_enabled(&self) -> bool {
         self.sni_enabled
     }
+
+    /// Build a `rustls::ClientConfig` for QUIC (TLS 1.3 only, ALPN `h3`).
+    ///
+    /// This differs from [`build_rustls_config`](Self::build_rustls_config)
+    /// by restricting to TLS 1.3, using the `h3` ALPN, and requiring
+    /// the ring crypto provider for Quinn compatibility.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the trust store, client certificates, or
+    /// protocol versions cannot be configured.
+    pub(crate) fn build_quic_rustls_config(&self) -> Result<rustls::ClientConfig> {
+        let root_store = self.build_root_store()?;
+
+        let mut config = if self.verify_certificate {
+            rustls::ClientConfig::builder_with_provider(Arc::new(
+                rustls::crypto::ring::default_provider(),
+            ))
+            .with_protocol_versions(&[&rustls::version::TLS13])
+            .map_err(|e| Error::Tls(format!("TLS version config: {e}")))?
+            .with_root_certificates(root_store)
+            .with_no_client_auth()
+        } else {
+            rustls::ClientConfig::builder_with_provider(Arc::new(
+                rustls::crypto::ring::default_provider(),
+            ))
+            .with_protocol_versions(&[&rustls::version::TLS13])
+            .map_err(|e| Error::Tls(format!("TLS version config: {e}")))?
+            .dangerous()
+            .with_custom_certificate_verifier(Arc::new(NoVerifier))
+            .with_no_client_auth()
+        };
+
+        config.alpn_protocols = vec![b"h3".to_vec()];
+
+        if let Some(identity) = &self.client_identity {
+            config.client_auth_cert_resolver = Arc::new(SingleCertResolver::new(identity.clone()));
+        }
+
+        Ok(config)
+    }
 }
 
 /// Builder for constructing a [`TlsConfig`].

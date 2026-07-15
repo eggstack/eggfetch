@@ -208,7 +208,7 @@ fn builder_accepts_http2_only_policy() {
 #[test]
 fn builder_accepts_auto_policy() {
     let client = Client::builder()
-        .http_version_policy(HttpVersionPolicy::Auto)
+        .http_version_policy(HttpVersionPolicy::Auto { allow_http3: false })
         .build();
     drop(client);
 }
@@ -230,7 +230,7 @@ async fn concurrent_requests_share_pool() {
     });
 
     let client = Client::builder()
-        .http_version_policy(HttpVersionPolicy::Auto)
+        .http_version_policy(HttpVersionPolicy::Auto { allow_http3: false })
         .max_connections(5)
         .max_connections_per_host(5)
         .timeout(eggfetch_core::Timeout {

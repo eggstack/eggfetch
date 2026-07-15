@@ -659,7 +659,9 @@ mod tests {
             let _ = builder.https_or_http().enable_http1().build();
         }
         let enabler =
-            crate::http_version::HttpVersionPolicyEnabler::from_policy(HttpVersionPolicy::Auto);
+            crate::http_version::HttpVersionPolicyEnabler::from_policy(HttpVersionPolicy::Auto {
+                allow_http3: false,
+            });
         let _ = build_fallback_connector(enabler);
     }
 
@@ -677,11 +679,11 @@ mod tests {
     #[test]
     fn client_builder_http2_auto() {
         let client = Client::builder()
-            .http_version_policy(HttpVersionPolicy::Auto)
+            .http_version_policy(HttpVersionPolicy::Auto { allow_http3: false })
             .build();
         assert_eq!(
             client.inner.config.http_version_policy,
-            HttpVersionPolicy::Auto
+            HttpVersionPolicy::Auto { allow_http3: false }
         );
     }
 
@@ -701,7 +703,7 @@ mod tests {
     fn connector_builds_for_all_policies() {
         for policy in [
             HttpVersionPolicy::Http1Only,
-            HttpVersionPolicy::Auto,
+            HttpVersionPolicy::Auto { allow_http3: false },
             #[cfg(feature = "http2")]
             HttpVersionPolicy::Http2Only,
             #[cfg(feature = "http3")]

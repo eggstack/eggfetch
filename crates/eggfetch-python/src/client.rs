@@ -66,7 +66,8 @@ impl PyClient {
         let mut builder = eggfetch_core::Client::builder().tls_config(tls_config);
 
         if let Some(true) = http2 {
-            builder = builder.http_version_policy(eggfetch_core::HttpVersionPolicy::Auto);
+            builder = builder
+                .http_version_policy(eggfetch_core::HttpVersionPolicy::Auto { allow_http3: false });
         }
 
         if let Some(true) = http3 {
