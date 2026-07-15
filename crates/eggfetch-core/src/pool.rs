@@ -146,6 +146,7 @@ impl OriginKey {
     }
 
     /// Build an `OriginKey` that includes proxy route information.
+    #[allow(dead_code)]
     pub(crate) fn from_url_with_proxy(
         scheme: &str,
         url: &url::Url,

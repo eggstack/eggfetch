@@ -4,13 +4,15 @@ This document describes the architecture of eggfetch. The post-Milestone-W state
 
 The post-E hardening pass landed true streaming request bodies, per-chunk read/write timeouts, pool permits tied to the full response body lifecycle, and origin-keyed pool limits.
 
-## Three-Crate Workspace
+## Five-Crate Workspace
 
-eggfetch is a Cargo workspace with three crates:
+eggfetch is a Cargo workspace with five crates:
 
 - **eggfetch-core** is the async Rust HTTP engine. It owns all networking, connection management, TLS configuration, body handling, and error types. Every dependency that touches the network lives here.
 - **eggfetch-cli** is a thin binary that wraps eggfetch-core. It handles argument parsing (eventually via clap), terminal output formatting, exit code mapping, and body/header display. It contains no independent HTTP behavior.
 - **eggfetch-python** is the Python bindings adapter. It uses PyO3 and maturin to expose eggfetch-core to Python. It does not duplicate request execution logic.
+- **eggfetch-ffi** is the C ABI layer for foreign language bindings (Node.js N-API, Ruby FFI, Zig, etc.). It depends only on eggfetch-core's public API and adds zero networking logic.
+- **eggfetch-node** is the Node.js binding prototype. It uses napi-rs to wrap eggfetch-ffi for Node.js.
 
 The reason eggfetch-core owns all HTTP behavior is to maintain a single networking implementation. If HTTP logic were split across crates, behavioral consistency would be impossible to guarantee and the test surface would multiply.
 
@@ -641,3 +643,56 @@ The CLI streams the response body via `Response::bytes_stream()` and writes chun
 
 - `--output PATH`: write body to file, creating or overwriting (use `--no-clobber` to prevent overwrite)
 - `--download`: derive filename from `Content-Disposition` header or URL path, with counter-based deduplication to avoid overwriting existing files
+
+## FFI and Language Bindings
+
+eggfetch exposes a C ABI through the `eggfetch-ffi` crate for consumption by
+foreign language bindings (Node.js N-API, Ruby FFI, Zig, etc.).
+
+### Architecture
+
+- `eggfetch-ffi` is a separate crate with `unsafe_code = "allow"` (overriding the
+  workspace `forbid`). It depends only on `eggfetch-core`'s public API.
+- All HTTP behavior remains in `eggfetch-core`. The FFI crate adds zero networking logic.
+- The FFI crate produces `cdylib`, `staticlib`, and `rlib` targets.
+
+### Handle Types
+
+| Handle | Thread Safety | Lifetime |
+|--------|--------------|----------|
+| `ClientHandle` | `Send + Sync` (shared via `Arc`) | Process-long, freed explicitly |
+| `RequestHandle` | Single-thread, single-use | Consumed by `send()` or freed |
+| `ResponseHandle` | Single-thread, single-use | Freed after body is read |
+| `ErrorHandle` | Single-thread, single-use | Freed after inspection |
+
+### Runtime Bridge
+
+`eggfetch-ffi` manages a global tokio runtime (`OnceLock<Runtime>`). The
+`blocking_send` helper detects whether the caller is inside an existing tokio
+context:
+
+- **Outside tokio**: calls `ffi_runtime().block_on()` directly.
+- **Inside tokio**: spawns a dedicated thread with its own runtime to avoid
+  nested `block_on` panics.
+
+This ensures the FFI works correctly from both sync C code and async-aware
+host runtimes.
+
+### String and Memory Management
+
+- Returned strings (`FfiString`) are heap-allocated C strings. Callers free them
+  with `eggfetch_string_free`.
+- Body buffers are heap-allocated with `std::alloc`. Callers free them with
+  `eggfetch_body_free`.
+- Null pointer inputs are treated as no-ops for all free functions.
+
+### Feature Parity
+
+The FFI crate mirrors `eggfetch-core`'s feature flags: `http1`, `http2`,
+`tls-rustls`, `http3`, `cookies`, `proxy`, `compression-*`, `multipart`.
+
+### Node.js Binding (Prototype)
+
+The `eggfetch-node` crate uses `napi-rs` to wrap `eggfetch-ffi` for Node.js.
+It exposes `EggfetchClient` with async methods (`get`, `post`, etc.) that
+return `EggfetchResponse` objects with status, headers, body text, and JSON.

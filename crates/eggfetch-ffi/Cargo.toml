@@ -1,0 +1,45 @@
+[package]
+name = "eggfetch-ffi"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+description = "C ABI bindings for eggfetch-core"
+
+[lints.rust]
+unsafe_code = "allow"
+missing_docs = "warn"
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+
+[lib]
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+[features]
+default = ["http1", "tls-rustls", "cookies", "proxy", "compression-gzip"]
+http1 = ["eggfetch-core/http1"]
+http2 = ["eggfetch-core/http2"]
+tls-rustls = ["eggfetch-core/tls-rustls"]
+http3 = ["eggfetch-core/http3"]
+cookies = ["eggfetch-core/cookies"]
+proxy = ["eggfetch-core/proxy"]
+compression-gzip = ["eggfetch-core/compression-gzip"]
+compression-brotli = ["eggfetch-core/compression-brotli"]
+compression-zstd = ["eggfetch-core/compression-zstd"]
+compression-deflate = ["eggfetch-core/compression-deflate"]
+multipart = ["eggfetch-core/multipart"]
+
+[dependencies]
+eggfetch-core = { path = "../eggfetch-core" }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "net"] }
+bytes = "1"
+http = "1"
+url = "2"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "io-util"] }

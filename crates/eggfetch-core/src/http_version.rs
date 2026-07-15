@@ -44,6 +44,8 @@ impl Default for HttpVersionPolicy {
 
 impl HttpVersionPolicy {
     /// Returns `true` if HTTP/3 should be used.
+    #[cfg(any(feature = "http3", test))]
+    #[allow(dead_code)]
     pub(crate) fn use_http3(self) -> bool {
         matches!(self, Self::Http3Only) || matches!(self, Self::Auto { allow_http3: true })
     }
@@ -66,7 +68,7 @@ impl HttpVersionPolicyEnabler {
             HttpVersionPolicy::Http2Only => Self(HttpVersionPolicy::Http1Only),
             #[cfg(not(feature = "http3"))]
             HttpVersionPolicy::Http3Only => Self(HttpVersionPolicy::Http1Only),
-            HttpVersionPolicy::Auto { allow_http3 } => {
+            HttpVersionPolicy::Auto { allow_http3: _ } => {
                 #[cfg(not(feature = "http2"))]
                 return Self(HttpVersionPolicy::Http1Only);
                 #[cfg(all(feature = "http2", not(feature = "http3")))]
@@ -80,6 +82,7 @@ impl HttpVersionPolicyEnabler {
 
     /// Returns `true` if HTTP/1.1 should be enabled on the connector.
     #[must_use]
+    #[allow(dead_code)]
     pub(crate) const fn enable_http1(self) -> bool {
         matches!(
             self.0,
@@ -89,6 +92,7 @@ impl HttpVersionPolicyEnabler {
 
     /// Returns `true` if HTTP/2 should be enabled on the connector.
     #[must_use]
+    #[allow(dead_code)]
     pub(crate) const fn enable_http2(self) -> bool {
         matches!(
             self.0,

@@ -9,13 +9,15 @@ eggfetch is a Rust-native HTTP client engine with Python bindings and a CLI tool
 
 ## Architecture
 
-eggfetch is a three-crate Cargo workspace:
+eggfetch is a five-crate Cargo workspace:
 
 - **eggfetch-core** owns all HTTP behavior: client, request builder, response, body, headers, timeout, error types, connection pooling, TLS configuration, and streaming. Every networking dependency lives here.
 - **eggfetch-cli** is a thin binary that delegates to eggfetch-core for all HTTP work. It handles argument parsing, output formatting, and exit codes only.
 - **eggfetch-python** is the Python bindings adapter. It wraps eggfetch-core via PyO3/maturin and exposes sync and async Python APIs. It does not contain its own HTTP logic.
+- **eggfetch-ffi** is the C ABI bindings crate. It exposes eggfetch-core over a stable C interface with opaque handles, suitable for binding from C, C++, Swift, Kotlin, Ruby, and other FFI-capable languages.
+- **eggfetch-node** is the Node.js N-API binding prototype. It wraps eggfetch-core via napi-rk/napi-rs and provides a thin JavaScript/TypeScript adapter over the async Rust engine.
 
-The invariant is strict: all network I/O goes through eggfetch-core. The CLI and Python crates are adapters.
+The invariant is strict: all network I/O goes through eggfetch-core. The CLI, Python, FFI, and Node crates are adapters.
 
 ## MVP Non-goals
 
@@ -392,6 +394,16 @@ Complete user-facing documentation for Rust, Python, and CLI users:
 - **Security guidelines** -- TLS verification, credential handling, decompression limits, and troubleshooting.
 - **Error reference** -- Rust Error variants, Python exception hierarchy, and CLI exit codes.
 
+### Milestone Z: Additional Bindings and Frameworks (complete)
+
+C ABI boundary and language binding prototypes for non-Python consumers:
+
+- **C ABI bindings** -- `eggfetch-ffi` exposes eggfetch-core over a stable C interface. Opaque handle pattern for `Client`, `RequestBuilder`, `Response`, and `Error`. All functions are `extern "C"` with `#[repr(C)]` types. Thread-safe: concurrent handles from multiple threads are supported as long as each handle is used from one thread at a time.
+- **Opaque handle pattern** -- clients, requests, responses, and errors are returned as opaque pointers (`*mut eggfetch_ffi_client`, etc.). Consumers never see internal struct layouts; lifetime and mutation are managed entirely through the C API surface.
+- **Blocking-send runtime bridge** -- the FFI crate embeds a dedicated tokio runtime so that synchronous C callers can drive async requests without managing a Rust async runtime themselves.
+- **FFI surface audit** -- every exported function was audited for memory safety, thread safety, and FFI hygiene. No `unsafe` escapes the crate boundary.
+- **Node.js N-API prototype** -- `eggfetch-node` wraps eggfetch-core via napi-rs, exposing `Client`, `RequestBuilder`, `Response`, and streaming APIs to JavaScript and TypeScript. Supports both callback and Promise-based patterns.
+
 ## Documentation
 
 Complete documentation lives in the `docs/` directory:
@@ -408,6 +420,7 @@ Complete documentation lives in the `docs/` directory:
 | [reference/](docs/reference/) | Compatibility matrix, feature matrix, error reference |
 | [security/](docs/security/) | Security guidelines and troubleshooting |
 | [architecture/](docs/architecture/) | Internal architecture documentation |
+| [ffi/](docs/ffi/) | C ABI and FFI binding guide |
 
 ## Repository Layout
 
@@ -431,6 +444,8 @@ crates/
     python/eggfetch/     Python package (__init__.py)
     tests/               Python tests
     pyproject.toml       maturin build config
+  eggfetch-ffi/          C ABI bindings for eggfetch-core
+  eggfetch-node/         Node.js N-API binding prototype
 docs/
   getting-started/       installation and quickstart
   concepts/              core concept explanations
@@ -442,6 +457,7 @@ docs/
   reference/             compatibility matrix, feature matrix, errors
   security/              security guidelines and troubleshooting
   architecture/          internal architecture documentation
+  ffi/                   C ABI and FFI binding guide
 plans/                   milestone plans and roadmap
 ```
 

@@ -4,6 +4,8 @@ members = [
     "crates/eggfetch-core",
     "crates/eggfetch-cli",
     "crates/eggfetch-python",
+    "crates/eggfetch-ffi",
+    "crates/eggfetch-node",
 ]
 
 [workspace.package]

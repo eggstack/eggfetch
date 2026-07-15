@@ -268,20 +268,19 @@ Required areas:
 
 Examples should include JSON APIs, large downloads/uploads, SSE-like streaming, authentication, and common third-party APIs.
 
-## Milestone Z: Additional language bindings and framework use
+## Milestone Z: Additional bindings and frameworks (complete)
 
 Treat `eggfetch-core` as a reusable engine for future consumers.
 
-Potential tracks:
+Implemented capabilities:
 
-- Node/N-API
-- Ruby
-- Perl
-- Java/JNI
-- Zig/C ABI
-- internal eggstack consumers
+- C ABI boundary (`eggfetch-ffi`)
+- Node.js N-API prototype
+- opaque handle pattern
+- blocking-send runtime bridge
+- FFI surface audit
 
-These should begin only after the core API and semantics are stable.
+These began only after the core API and semantics are stable.
 
 # Phase 6: Production Readiness
 
@@ -361,6 +360,7 @@ The preferred order is:
 11. Milestone Y: documentation/examples
 12. Production tracks
 13. HTTP/3 and additional language bindings
+14. Milestone Z: additional bindings and frameworks (complete)
 
 Cookies and authentication may be developed in parallel only after Milestone N is complete and shared request/redirect semantics are stable.
 

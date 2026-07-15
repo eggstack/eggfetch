@@ -300,6 +300,7 @@ impl TlsConfig {
     ///
     /// Returns an error if the trust store, client certificates, or
     /// protocol versions cannot be configured.
+    #[allow(dead_code)]
     pub(crate) fn build_quic_rustls_config(&self) -> Result<rustls::ClientConfig> {
         let root_store = self.build_root_store()?;
 
