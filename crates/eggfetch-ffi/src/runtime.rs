@@ -3,7 +3,6 @@
 use std::sync::OnceLock;
 
 use tokio::runtime::Runtime;
-use tokio::sync::oneshot;
 
 static RUNTIME: OnceLock<Runtime> = OnceLock::new();
 
@@ -18,28 +17,22 @@ pub(crate) fn ffi_runtime() -> &'static Runtime {
 
 /// Block on an async future, safe to call from any context (tokio or not).
 ///
-/// If we are already inside a tokio runtime, we spawn the future on a
-/// dedicated background thread with its own runtime to avoid nested
-/// `block_on` panics. Otherwise we call `block_on` directly.
+/// If we are already inside a tokio runtime (e.g. from napi-rs), we use
+/// `block_in_place` to safely block the current worker thread while driving
+/// the future on the runtime. Otherwise we call `block_on` directly on the
+/// global FFI runtime.
 pub(crate) fn blocking_send<
     F: std::future::Future<Output = T> + Send + 'static,
     T: Send + 'static,
 >(
     future: F,
 ) -> T {
-    // Check if we're inside a tokio runtime by trying to get a handle.
-    // Handle::current() returns Err if not inside a runtime.
     match tokio::runtime::Handle::try_current() {
-        Ok(_) => {
-            // We're inside a tokio runtime. Spawn on a background thread
-            // with its own runtime to avoid nested block_on.
-            let (tx, rx) = oneshot::channel();
-            std::thread::spawn(move || {
-                let local_rt = Runtime::new().expect("failed to create blocking runtime");
-                let result = local_rt.block_on(future);
-                let _ = tx.send(result);
-            });
-            rx.blocking_recv().expect("blocking_send: channel closed")
+        Ok(handle) => {
+            // We're inside a tokio runtime (e.g. napi-rs async executor).
+            // block_in_place converts the current worker thread into a
+            // blocking context, allowing handle.block_on to run the future.
+            tokio::task::block_in_place(move || handle.block_on(future))
         }
         Err(_) => {
             // Not inside a tokio runtime — safe to call block_on directly.

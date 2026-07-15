@@ -120,3 +120,151 @@ pub unsafe extern "C" fn eggfetch_request_body_str(
     std::ptr::write(&mut handle.0, rb.bytes(body.as_bytes()));
     0
 }
+
+/// Set a per-request timeout in seconds.
+///
+/// Overrides the client-level timeout for this request.
+///
+/// Returns 0 on success, -1 if handle is invalid.
+///
+/// # Safety
+///
+/// `handle` must be a valid, non-freed request handle.
+#[no_mangle]
+pub unsafe extern "C" fn eggfetch_request_timeout(handle: *mut RequestHandle, secs: u64) -> i32 {
+    let Some(handle) = handle.as_mut() else {
+        return -1;
+    };
+    let rb = std::ptr::read(&handle.0);
+    std::ptr::write(
+        &mut handle.0,
+        rb.timeout(eggfetch_core::Timeout::from_secs(secs)),
+    );
+    0
+}
+
+/// Set basic auth credentials on the request.
+///
+/// Overrides any client-level auth for this request.
+///
+/// Returns 0 on success, -1 if handle or arguments are invalid.
+///
+/// # Safety
+///
+/// - `handle` must be a valid, non-freed request handle.
+/// - `username` and `password` must be valid null-terminated C strings.
+#[no_mangle]
+pub unsafe extern "C" fn eggfetch_request_auth_basic(
+    handle: *mut RequestHandle,
+    username: *const std::os::raw::c_char,
+    password: *const std::os::raw::c_char,
+) -> i32 {
+    let Some(handle) = handle.as_mut() else {
+        return -1;
+    };
+    let Some(username_str) = crate::handle::cstr_to_opt(username) else {
+        return -1;
+    };
+    let Some(password_str) = crate::handle::cstr_to_opt(password) else {
+        return -1;
+    };
+    let Ok(auth) = eggfetch_core::AuthScheme::basic(username_str, password_str) else {
+        return -1;
+    };
+    let rb = std::ptr::read(&handle.0);
+    std::ptr::write(&mut handle.0, rb.auth(auth));
+    0
+}
+
+/// Set a bearer auth token on the request.
+///
+/// Overrides any client-level auth for this request.
+///
+/// Returns 0 on success, -1 if handle or arguments are invalid.
+///
+/// # Safety
+///
+/// - `handle` must be a valid, non-freed request handle.
+/// - `token` must be a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn eggfetch_request_auth_bearer(
+    handle: *mut RequestHandle,
+    token: *const std::os::raw::c_char,
+) -> i32 {
+    let Some(handle) = handle.as_mut() else {
+        return -1;
+    };
+    let Some(token_str) = crate::handle::cstr_to_opt(token) else {
+        return -1;
+    };
+    let Ok(auth) = eggfetch_core::AuthScheme::bearer(token_str) else {
+        return -1;
+    };
+    let rb = std::ptr::read(&handle.0);
+    std::ptr::write(&mut handle.0, rb.auth(auth));
+    0
+}
+
+/// Remove auth from this request (opt out of client-level auth).
+///
+/// Returns 0 on success, -1 if handle is invalid.
+///
+/// # Safety
+///
+/// `handle` must be a valid, non-freed request handle.
+#[no_mangle]
+pub unsafe extern "C" fn eggfetch_request_without_auth(handle: *mut RequestHandle) -> i32 {
+    let Some(handle) = handle.as_mut() else {
+        return -1;
+    };
+    let rb = std::ptr::read(&handle.0);
+    std::ptr::write(&mut handle.0, rb.without_auth());
+    0
+}
+
+/// Enable or disable automatic decompression for this request.
+///
+/// Returns 0 on success, -1 if handle is invalid.
+///
+/// # Safety
+///
+/// `handle` must be a valid, non-freed request handle.
+#[no_mangle]
+pub unsafe extern "C" fn eggfetch_request_decompress(
+    handle: *mut RequestHandle,
+    enabled: i32,
+) -> i32 {
+    let Some(handle) = handle.as_mut() else {
+        return -1;
+    };
+    let rb = std::ptr::read(&handle.0);
+    std::ptr::write(&mut handle.0, rb.decompress(enabled != 0));
+    0
+}
+
+/// Set a per-request redirect policy.
+///
+/// Returns 0 on success, -1 if handle is invalid.
+///
+/// # Safety
+///
+/// `handle` must be a valid, non-freed request handle.
+#[no_mangle]
+pub unsafe extern "C" fn eggfetch_request_redirect_policy(
+    handle: *mut RequestHandle,
+    follow: i32,
+    max_redirects: usize,
+) -> i32 {
+    let Some(handle) = handle.as_mut() else {
+        return -1;
+    };
+    let rb = std::ptr::read(&handle.0);
+    std::ptr::write(
+        &mut handle.0,
+        rb.redirect_policy(eggfetch_core::RedirectPolicy::new(
+            follow != 0,
+            max_redirects,
+        )),
+    );
+    0
+}

@@ -8,12 +8,14 @@
 //! # Thread Safety
 //!
 //! - [`ClientHandle`] is `Send + Sync` and may be shared across threads.
-//! - [`RequestHandle`], [`ResponseHandle`], and [`ErrorHandle`] are single-thread,
-//!   single-use. Create, use, and free them on one thread.
+//! - [`RequestHandle`], [`ResponseHandle`], [`StreamingResponseHandle`],
+//!   and [`ErrorHandle`] are single-thread, single-use. Create, use, and
+//!   free them on one thread.
 //! - All callback functions must be `extern "C"`.
 
 #![allow(unsafe_code)]
 
+mod builder;
 mod client;
 mod error;
 mod ffi_response;
@@ -21,10 +23,13 @@ mod handle;
 mod request;
 mod response;
 mod runtime;
+mod streaming;
 
+pub use builder::*;
 pub use client::*;
 pub use error::*;
 pub use ffi_response::*;
 pub use handle::*;
 pub use request::*;
 pub use response::*;
+pub use streaming::*;

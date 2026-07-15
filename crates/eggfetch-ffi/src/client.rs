@@ -262,7 +262,7 @@ pub unsafe extern "C" fn eggfetch_client_send(
     // Send the request and read the body in a single async block to
     // avoid cross-runtime issues with streaming body handles.
     let result = blocking_send(async move {
-        let mut resp = rb.send().await?;
+        let mut resp = Box::pin(rb.send()).await?;
         let status = resp.status().as_u16();
         let url = resp.url().to_string();
         let headers: Vec<(String, String)> = resp

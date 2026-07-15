@@ -5,6 +5,11 @@ use std::os::raw::c_char;
 
 use eggfetch_core::Client;
 
+/// Opaque handle to a client builder.
+///
+/// Single-thread, single-use. Must be consumed by building a client or freed.
+pub struct ClientBuilderHandle(pub(crate) eggfetch_core::ClientBuilder);
+
 /// Opaque handle to an HTTP client.
 ///
 /// Thread-safe: may be shared across threads.

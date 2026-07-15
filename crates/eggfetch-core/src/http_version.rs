@@ -68,7 +68,8 @@ impl HttpVersionPolicyEnabler {
             HttpVersionPolicy::Http2Only => Self(HttpVersionPolicy::Http1Only),
             #[cfg(not(feature = "http3"))]
             HttpVersionPolicy::Http3Only => Self(HttpVersionPolicy::Http1Only),
-            HttpVersionPolicy::Auto { allow_http3: _ } => {
+            #[allow(unused_variables)]
+            HttpVersionPolicy::Auto { allow_http3 } => {
                 #[cfg(not(feature = "http2"))]
                 return Self(HttpVersionPolicy::Http1Only);
                 #[cfg(all(feature = "http2", not(feature = "http3")))]
