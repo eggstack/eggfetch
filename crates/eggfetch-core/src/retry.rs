@@ -391,26 +391,32 @@ impl BackoffPolicy {
 
         // Exponential backoff: initial_delay * factor^(attempt-2)
         let exp = (attempt - 2) as f64;
-        let base = self.initial_delay.as_secs_f64() * self.factor.powf(exp);
-        let base = Duration::from_secs_f64(base);
+        let raw = self.initial_delay.as_secs_f64() * self.factor.powf(exp);
 
-        let capped = if base > self.max_delay {
+        // Guard against NaN, inf, negative, and values exceeding max_delay
+        // before converting to Duration. `Duration::from_secs_f64` panics on
+        // non-finite, negative, or oversized floats.
+        let capped = if !raw.is_finite() || raw < 0.0 || raw > self.max_delay.as_secs_f64() {
             self.max_delay
         } else {
-            base
+            Duration::from_secs_f64(raw)
         };
 
         // Add jitter: random value between 0 and the capped delay
         let jitter = get_random_f64();
-        let jittered = capped.as_secs_f64() * jitter;
-        let final_delay = Duration::from_secs_f64(capped.as_secs_f64() + jittered);
+        let jittered_secs = capped.as_secs_f64() * jitter;
+        let final_secs = capped.as_secs_f64() + jittered_secs;
 
-        // Ensure we don't exceed max_delay after jitter
-        if final_delay > self.max_delay {
-            Some(self.max_delay)
+        let final_delay = if !final_secs.is_finite()
+            || final_secs < 0.0
+            || final_secs > self.max_delay.as_secs_f64()
+        {
+            self.max_delay
         } else {
-            Some(final_delay)
-        }
+            Duration::from_secs_f64(final_secs)
+        };
+
+        Some(final_delay)
     }
 
     /// Returns the maximum delay.
@@ -1065,6 +1071,40 @@ mod tests {
                 .build();
             let _ = policy.retry_after_delay(&input);
         });
+    }
+
+    #[test]
+    fn regression_fuzz_retry_crash_extreme_backoff_factor() {
+        let backoff = BackoffPolicy {
+            factor: 22.0,
+            max_delay: Duration::from_secs(30),
+            initial_delay: Duration::from_millis(500),
+        };
+        for attempt in 2..=20 {
+            let delay = backoff.delay(attempt);
+            assert!(delay.is_some());
+            assert!(delay.unwrap() <= backoff.max_delay);
+        }
+    }
+
+    #[test]
+    fn backoff_delay_nan_factor_returns_max_delay() {
+        let backoff = BackoffPolicy {
+            factor: f64::NAN,
+            max_delay: Duration::from_secs(30),
+            initial_delay: Duration::from_millis(500),
+        };
+        assert_eq!(backoff.delay(5), Some(Duration::from_secs(30)));
+    }
+
+    #[test]
+    fn backoff_delay_infinite_factor_returns_max_delay() {
+        let backoff = BackoffPolicy {
+            factor: f64::INFINITY,
+            max_delay: Duration::from_secs(30),
+            initial_delay: Duration::from_millis(500),
+        };
+        assert_eq!(backoff.delay(5), Some(Duration::from_secs(30)));
     }
 
     #[test]
