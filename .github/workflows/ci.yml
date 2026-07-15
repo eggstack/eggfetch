@@ -58,11 +58,31 @@ jobs:
   rust-doc:
     name: Rust documentation
     runs-on: ubuntu-latest
+    env:
+      PYO3_USE_ABI3_FORWARD_COMPATIBILITY: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - name: Documentation
+      - name: Documentation build
         run: cargo doc --workspace --all-features --no-deps
+      - name: Doctests
+        run: cargo test --doc -p eggfetch-core --all-features
+
+  docs-checks:
+    name: Documentation checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check Python example syntax
+        run: python scripts/check_doc_examples.py
+      - name: Check internal links
+        run: python scripts/check_doc_links.py
+      - name: Generate CLI help reference
+        run: python scripts/generate_cli_help.py
 
   python:
     name: Python tests (py${{ matrix.python-version }}, ${{ matrix.os }})

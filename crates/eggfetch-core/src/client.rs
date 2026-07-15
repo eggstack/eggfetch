@@ -413,7 +413,7 @@ impl ClientBuilder {
 
     /// Set a custom TLS configuration for this client.
     ///
-    /// When set, the client uses the provided [`TlsConfig`] for all
+    /// When set, the client uses the provided [`crate::tls::TlsConfig`] for all
     /// TLS connections instead of the default native-root-with-webpki-fallback
     /// strategy.
     #[must_use]

@@ -45,7 +45,7 @@ struct Cli {
     #[arg(long = "form", action = clap::ArgAction::Append)]
     form: Vec<String>,
 
-    /// Multipart file parts as NAME=@PATH[:FILENAME].
+    /// Multipart file parts as `NAME=@PATH[:FILENAME]`.
     #[arg(long = "file", action = clap::ArgAction::Append)]
     file: Vec<String>,
 
