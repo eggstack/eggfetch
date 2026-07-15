@@ -16,7 +16,7 @@ use std::task::{Context, Poll};
 
 use bytes::{Bytes, BytesMut};
 use futures_core::Stream;
-use http::{HeaderMap, HeaderValue, StatusCode, Version};
+use http::{HeaderMap, StatusCode, Version};
 use url::Url;
 
 use crate::body::{BoxBytesStream, ResponseBody};
@@ -117,28 +117,11 @@ impl std::fmt::Debug for Response {
 }
 
 fn redacted_headers(headers: &HeaderMap) -> HeaderMap {
-    let mut redacted = headers.clone();
-    for name in [
-        "authorization",
-        "proxy-authorization",
-        "cookie",
-        "set-cookie",
-    ] {
-        if redacted.contains_key(name) {
-            redacted.remove(name);
-            redacted.insert(name, HeaderValue::from_static("<redacted>"));
-        }
-    }
-    redacted
+    crate::redact::redact_headers(headers)
 }
 
 fn redacted_url(url: &Url) -> String {
-    let mut safe = url.clone();
-    let _ = safe.set_username("");
-    let _ = safe.set_password(None);
-    safe.set_query(None);
-    safe.set_fragment(None);
-    safe.to_string()
+    crate::redact::redact_url(url)
 }
 
 impl Response {
@@ -348,6 +331,7 @@ impl Stream for LineStream {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use http::HeaderValue;
 
     #[test]
     fn response_debug_redacts_sensitive_headers_and_url_parts() {

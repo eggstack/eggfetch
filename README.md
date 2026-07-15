@@ -529,6 +529,20 @@ cargo test -p eggfetch-core --all-features
 
 The minimum supported Rust version is **1.80**. This is specified in `workspace.package.rust-version` and enforced by `rust-toolchain.toml`.
 
+## Security
+
+eggfetch follows a security-hardening program covering dependencies, TLS, redirects, auth, cookies, proxies, decompression, multipart, retries, protocol handling, Python bindings, and CLI output.
+
+**Dependency auditing:** `cargo-deny` and `cargo-audit` are configured in `deny.toml` and run in CI on every push and pull request. The advisory database is checked continuously.
+
+**Secret redaction:** All `Debug`, `Display`, error, and log output redacts credentials, cookies, bearer tokens, proxy passwords, and URL userinfo. A centralized `redact` module provides `redact_headers()`, `redact_url()`, and `is_sensitive_header()` helpers with regression tests.
+
+**Threat model:** See [docs/architecture/threat-model.md](docs/architecture/threat-model.md) for asset inventory, trust boundaries, attacker capabilities, and security properties.
+
+**Security reviews:** See [docs/architecture/security-reviews.md](docs/architecture/security-reviews.md) for subsystem-level review records (TLS, redirect/auth/cookie, proxy, body handling, retry).
+
+**Vulnerability reporting:** See [SECURITY.md](SECURITY.md) for private reporting instructions, response SLAs, and embargo policy.
+
 ## License
 
 eggfetch is dual-licensed under [MIT](LICENSE-MIT) and [Apache License, Version 2.0](LICENSE-APACHE). You may use this project under either license.

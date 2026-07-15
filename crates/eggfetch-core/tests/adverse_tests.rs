@@ -950,7 +950,8 @@ fn parse_proxy_response_valid_200() {
 #[cfg(feature = "proxy")]
 #[test]
 fn parse_proxy_response_valid_with_headers() {
-    let input = b"HTTP/1.1 200 Connection established\r\nX-Proxy: test\r\nContent-Length: 0\r\n\r\n";
+    let input =
+        b"HTTP/1.1 200 Connection established\r\nX-Proxy: test\r\nContent-Length: 0\r\n\r\n";
     let result = eggfetch_core::proxy::parse_proxy_response_bytes(input);
     assert!(result.is_ok());
     let (status, headers) = result.unwrap();

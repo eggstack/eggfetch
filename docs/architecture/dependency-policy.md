@@ -58,12 +58,14 @@ When evaluating a new dependency:
 
 ## Audit Tools
 
-The project plans to use:
+The project uses:
 
-- **cargo-deny** for license compliance, advisory database checks, and duplicate dependency detection.
+- **cargo-deny** for license compliance, advisory database checks, duplicate dependency detection, and source restrictions. Configuration lives in `deny.toml` at the workspace root.
 - **cargo-audit** for known vulnerability scanning against the RustSec advisory database.
 
-These tools are not yet wired into CI. Adding them is part of the pre-release hardening work. Every dependency in the tree must have an explicit reason documented in code or review.
+Both tools run in CI via `.github/workflows/security.yml` on every push and pull request. The security workflow checks advisories, licenses, bans, and sources. Findings at the `deny` level block merges; `warn`-level findings are tracked but do not block.
+
+Every dependency in the tree must have an explicit reason documented in code or review.
 
 ## Pool Key Semantics
 
