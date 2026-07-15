@@ -592,13 +592,14 @@ The CLI accepts `eggfetch [METHOD] URL [OPTIONS]` where METHOD defaults to GET (
 
 - Headers (`-H`) → `RequestBuilder::header()`
 - Query params (`-q`) → `RequestBuilder::query()`
-- Auth (`--auth`, `--bearer`) → `ClientBuilder::auth()`
-- Proxy (`--proxy`) → `ClientBuilder::proxy()`
+- Auth (`--auth`, `--bearer`) → `ClientBuilder::auth()` (env: `EGGFETCH_AUTH`, `EGGFETCH_BEARER`)
+- Proxy (`--proxy`) → `ClientBuilder::proxy()` (env: `EGGFETCH_PROXY`, `EGGFETCH_PROXY_AUTH`)
 - TLS (`--verify`, `--cacert`, `--cert`/`--key`) → `ClientBuilder::tls_config()`
-- Redirects (`--follow`, `--max-redirects`) → `ClientBuilder::redirect_policy()`
+- Redirects (`--follow` [default on], `--no-follow`, `--max-redirects`) → `ClientBuilder::redirect_policy()`
 - Timeout (`--timeout`, etc.) → `ClientBuilder::timeout()` / `RequestBuilder::timeout()`
 - Retry (`--retry`) → `ClientBuilder::retry()`
 - HTTP version (`--http1`/`--http2`/`--http3`) → `ClientBuilder::http_version_policy()`
+- Body limits (`--max-body-size`, `--max-decompression-ratio`) → `ClientBuilder::max_decoded_body_size()` / `max_decompression_ratio()`
 - Decompression (`--no-compress`) → `ClientBuilder::automatic_decompression(false)`
 
 ### Body Modes
@@ -613,10 +614,10 @@ Body sources are mutually exclusive except `--form` + `--file` which combines in
 
 ### Output Modes
 
-- **Human** (default): body to stdout, status/timing summary to stderr
+- **Human** (default): body to stdout, verbose info to stderr when `-v` is used
 - **Headers** (`--include`): response headers to stderr before body
 - **Headers-only** (`--headers-only`): print response status line and headers, no body
-- **JSON** (`--json-output`): structured JSON with URL, status, version, headers, elapsed, history, body length
+- **JSON** (`--json-output`): structured JSON with URL, status, version, headers, elapsed, history, body length, optional base64 body (`--base64`)
 - **NDJSON** (`--ndjson`): newline-delimited JSON with redirect hops as separate lines
 
 ### Streaming
@@ -638,5 +639,5 @@ The CLI streams the response body via `Response::bytes_stream()` and writes chun
 
 ### File Output
 
-- `--output PATH`: write body to file, creating or overwriting
+- `--output PATH`: write body to file, creating or overwriting (use `--no-clobber` to prevent overwrite)
 - `--download`: derive filename from `Content-Disposition` header or URL path, with counter-based deduplication to avoid overwriting existing files

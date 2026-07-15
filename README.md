@@ -359,19 +359,23 @@ A full-featured command-line HTTP client powered by eggfetch-core:
 - **Headers and query parameters** -- `-H NAME:VALUE` and `-q NAME=VALUE` (repeatable).
 - **Request bodies** -- `--body`, `--body-file`, `--json`, `--form NAME=VALUE`, `--file NAME=@PATH`.
 - **Streaming uploads** -- multipart/form-data via `--file` with `--form` combination.
-- **Authentication** -- `--auth USER:PASS` (Basic) and `--bearer TOKEN`.
-- **Redirects** -- `--follow` / `--no-follow` with `--max-redirects`.
+- **Authentication** -- `--auth USER:PASS` (Basic) and `--bearer TOKEN`, with env var fallbacks (`EGGFETCH_AUTH`, `EGGFETCH_BEARER`).
+- **Redirects** -- `--follow` (default on) / `--no-follow` with `--max-redirects`.
 - **Cookies** -- `--cookie NAME=VALUE` and `--cookie-jar PATH`.
-- **Proxy** -- `--proxy URL`, `--proxy-auth USER:PASS`, `--no-proxy DOMAINS`.
+- **Proxy** -- `--proxy URL`, `--proxy-auth USER:PASS`, `--no-proxy DOMAINS`, with env var fallbacks.
 - **TLS** -- `--verify` / `--no-verify`, `--cacert`, `--cert` / `--key`.
 - **Timeouts** -- `--timeout`, `--connect-timeout`, `--total-timeout`, `--read-timeout`.
 - **Retries** -- `--retry N`, `--retry-delay SECS`.
 - **HTTP version** -- `--http1`, `--http2`, `--http3`.
+- **Body limits** -- `--max-body-size`, `--max-decompression-ratio`.
 - **Decompression** -- automatic by default, `--no-compress` to disable.
 - **Output** -- streaming body to stdout, `--output PATH`, `--download`, `--include`, `--headers-only`, `--no-body`.
-- **Machine output** -- `--json-output` (pretty JSON), `--ndjson` (newline-delimited JSON).
+- **File safety** -- `--no-clobber` prevents overwriting existing output files.
+- **Machine output** -- `--json-output` (pretty JSON), `--ndjson` (newline-delimited JSON), `--base64` for binary body encoding.
+- **Secret safety** -- auth/proxy/cookie headers redacted in verbose output; secrets accept env vars.
+- **Shell completions** -- `--generate-completion bash|zsh|fish|powershell|elvish`.
 - **Exit codes** -- 0 success, 2 usage, 3 connect/TLS, 4 timeout, 5 protocol, 6 status (with `--check-status`), 7 I/O, 130 interrupted.
-- **TTY awareness** -- progress info to stderr, suppressed in machine mode.
+- **TTY awareness** -- verbose output on stderr, suppressed in machine mode.
 - **Ctrl-C** -- graceful interruption with exit code 130.
 
 ## Repository Layout

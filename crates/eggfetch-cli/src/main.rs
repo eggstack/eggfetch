@@ -18,6 +18,7 @@ use eggfetch_core::{
 };
 use futures_util::StreamExt;
 use serde_json::{json, Value};
+use std::io::IsTerminal;
 use tokio::io::{stdin, AsyncReadExt, AsyncWriteExt};
 
 /// Eggfetch: a fast, modern HTTP client.
@@ -68,6 +69,10 @@ struct Cli {
     #[arg(long = "download")]
     download: bool,
 
+    /// Fail if output file already exists (no overwrite).
+    #[arg(long = "no-clobber")]
+    no_clobber: bool,
+
     /// Include response headers in output.
     #[arg(short = 'i', long = "include")]
     include: bool,
@@ -88,6 +93,10 @@ struct Cli {
     #[arg(long = "ndjson")]
     ndjson: bool,
 
+    /// Encode binary body as base64 in JSON output.
+    #[arg(long = "base64")]
+    base64: bool,
+
     /// General timeout in seconds.
     #[arg(long = "timeout")]
     timeout: Option<u64>,
@@ -104,24 +113,24 @@ struct Cli {
     #[arg(long = "read-timeout")]
     read_timeout: Option<u64>,
 
-    /// Follow redirects (default: no follow).
-    #[arg(long = "follow")]
+    /// Follow redirects (default: on).
+    #[arg(long = "follow", default_value_t = true)]
     follow: bool,
 
     /// Do not follow redirects.
-    #[arg(long = "no-follow", default_value_t = true)]
+    #[arg(long = "no-follow")]
     no_follow: bool,
 
     /// Maximum number of redirects.
     #[arg(long = "max-redirects", default_value = "20")]
     max_redirects: usize,
 
-    /// Basic auth as USER:PASS.
-    #[arg(long = "auth")]
+    /// Basic auth as USER:PASS (env: EGGFETCH_AUTH).
+    #[arg(long = "auth", env = "EGGFETCH_AUTH")]
     auth: Option<String>,
 
-    /// Bearer token.
-    #[arg(long = "bearer")]
+    /// Bearer token (env: EGGFETCH_BEARER).
+    #[arg(long = "bearer", env = "EGGFETCH_BEARER")]
     bearer: Option<String>,
 
     /// Cookies as NAME=VALUE (repeatable).
@@ -132,21 +141,17 @@ struct Cli {
     #[arg(long = "cookie-jar")]
     cookie_jar: Option<PathBuf>,
 
-    /// Proxy URL.
-    #[arg(long = "proxy")]
+    /// Proxy URL (env: EGGFETCH_PROXY).
+    #[arg(long = "proxy", env = "EGGFETCH_PROXY")]
     proxy: Option<String>,
 
-    /// Proxy auth as USER:PASS.
-    #[arg(long = "proxy-auth")]
+    /// Proxy auth as USER:PASS (env: EGGFETCH_PROXY_AUTH).
+    #[arg(long = "proxy-auth", env = "EGGFETCH_PROXY_AUTH")]
     proxy_auth: Option<String>,
 
     /// `NO_PROXY` bypass domains.
     #[arg(long = "no-proxy")]
     no_proxy: Option<String>,
-
-    /// Verify TLS certificates (default: yes).
-    #[arg(long = "verify", default_value_t = true)]
-    verify: bool,
 
     /// Disable TLS certificate verification.
     #[arg(long = "no-verify")]
@@ -188,6 +193,14 @@ struct Cli {
     #[arg(long = "no-compress")]
     no_compress: bool,
 
+    /// Maximum decoded body size in bytes.
+    #[arg(long = "max-body-size")]
+    max_body_size: Option<usize>,
+
+    /// Maximum decompression ratio.
+    #[arg(long = "max-decompression-ratio")]
+    max_decompression_ratio: Option<f64>,
+
     /// Check HTTP status for errors (exit 6 on 4xx/5xx).
     #[arg(long = "check-status")]
     check_status: bool,
@@ -195,6 +208,19 @@ struct Cli {
     /// Print verbose request/response info.
     #[arg(short = 'v', long = "verbose")]
     verbose: bool,
+
+    /// Generate shell completions and exit.
+    #[arg(long = "generate-completion", value_enum)]
+    generate_completion: Option<Shell>,
+}
+
+#[derive(clap::ValueEnum, Clone, Debug)]
+enum Shell {
+    Bash,
+    Zsh,
+    Fish,
+    PowerShell,
+    Elvish,
 }
 
 /// Exit codes.
@@ -206,35 +232,73 @@ const EXIT_PROTOCOL: u8 = 5;
 const EXIT_STATUS: u8 = 6;
 const EXIT_IO: u8 = 7;
 
+#[derive(Debug)]
+struct StatusError(u16);
+
+impl std::fmt::Display for StatusError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "HTTP status {}", self.0)
+    }
+}
+
+impl std::error::Error for StatusError {}
+
 fn map_error_to_exit_code(err: &eggfetch_core::Error) -> u8 {
-    match err.kind() {
-        "invalid_url"
-        | "invalid_method"
-        | "invalid_header_name"
-        | "invalid_header_value"
-        | "request_build"
-        | "conflicting_auth" => EXIT_USAGE,
-        "timeout_pool"
-        | "timeout_connect"
-        | "timeout_read"
-        | "timeout_write"
-        | "timeout_total"
-        | "timeout_proxy_connect"
-        | "timeout_proxy_tls" => EXIT_TIMEOUT,
-        "protocol"
-        | "decompression"
-        | "decoded_body_too_large"
-        | "decompression_ratio_exceeded"
-        | "body"
-        | "http2_go_away"
-        | "http2_stream_reset"
-        | "http2_flow_control"
-        | "http2_protocol"
-        | "h3_connect"
-        | "h3_connection_closed"
-        | "h3_stream"
-        | "h3_protocol" => EXIT_PROTOCOL,
-        _ => EXIT_CONNECT,
+    use eggfetch_core::Error;
+    match err {
+        // Usage / configuration errors
+        Error::InvalidUrl(_)
+        | Error::InvalidMethod(_)
+        | Error::InvalidHeaderName(_)
+        | Error::InvalidHeaderValue(_)
+        | Error::RequestBuild(_)
+        | Error::ConflictingAuth(_)
+        | Error::InvalidProxyUrl(_)
+        | Error::TlsConfig(_)
+        | Error::CaBundle(_)
+        | Error::ClientCert(_)
+        | Error::PrivateKey(_)
+        | Error::CertificateVerification(_)
+        | Error::HostnameVerification(_) => EXIT_USAGE,
+
+        // Timeout errors
+        Error::Timeout { .. } => EXIT_TIMEOUT,
+
+        // Protocol / decompression errors
+        Error::Protocol(_)
+        | Error::Decompression(_)
+        | Error::UnsupportedContentEncoding(_)
+        | Error::DecodedBodyTooLarge
+        | Error::DecompressionRatioExceeded
+        | Error::Body(_)
+        | Error::Unsupported(_)
+        | Error::InvalidRedirectLocation(_)
+        | Error::InvalidAuthHeader(_)
+        | Error::BodyNotReplayableForRedirect
+        | Error::TooManyRedirects { .. }
+        | Error::BodyNotReplayableForRetry
+        | Error::RetryBudgetExhausted { .. }
+        | Error::RetryNotConfigured
+        | Error::Http2GoAway { .. }
+        | Error::Http2StreamReset { .. }
+        | Error::Http2FlowControl(_)
+        | Error::Http2Protocol(_)
+        | Error::H3Connect(_)
+        | Error::H3ConnectionClosed(_)
+        | Error::H3Stream(_)
+        | Error::H3Protocol(_) => EXIT_PROTOCOL,
+
+        // Connect / TLS / proxy errors
+        Error::Connect(_)
+        | Error::Tls(_)
+        | Error::Pool(_)
+        | Error::ProxyConnect(_)
+        | Error::ProxyAuthRequired
+        | Error::ProxyConnectRejected { .. }
+        | Error::MalformedProxyResponse(_) => EXIT_CONNECT,
+
+        // I/O errors
+        Error::Hyper(_) | Error::HyperClient(_) | Error::Io(_) => EXIT_IO,
     }
 }
 
@@ -366,7 +430,48 @@ fn version_string(v: http::Version) -> &'static str {
     }
 }
 
-fn format_headers(headers: &http::HeaderMap, verbose: bool) -> String {
+const SECRET_HEADER_NAMES: &[&str] = &[
+    "authorization",
+    "proxy-authorization",
+    "cookie",
+    "set-cookie",
+];
+
+fn is_secret_header(name: &str) -> bool {
+    SECRET_HEADER_NAMES.contains(&name.to_ascii_lowercase().as_str())
+}
+
+fn is_binary_content_type(content_type: &str) -> bool {
+    let ct = content_type.to_ascii_lowercase();
+    ct.contains("octet-stream")
+        || ct.contains("image/")
+        || ct.contains("audio/")
+        || ct.contains("video/")
+        || ct.contains("application/pdf")
+        || ct.contains("application/zip")
+        || ct.contains("application/gzip")
+}
+
+fn format_header_value(name: &str, value: &str, redact: bool) -> String {
+    if redact && is_secret_header(name) {
+        if name.eq_ignore_ascii_case("authorization")
+            || name.eq_ignore_ascii_case("proxy-authorization")
+        {
+            if let Some(space_pos) = value.find(' ') {
+                let scheme = &value[..space_pos];
+                format!("{scheme} <redacted>")
+            } else {
+                "<redacted>".to_owned()
+            }
+        } else {
+            "<redacted>".to_owned()
+        }
+    } else {
+        value.to_owned()
+    }
+}
+
+fn format_headers(headers: &http::HeaderMap, verbose: bool, redact_secrets: bool) -> String {
     let mut out = String::new();
     for (name, value) in headers {
         if !verbose && name.as_str() == "set-cookie" {
@@ -375,23 +480,29 @@ fn format_headers(headers: &http::HeaderMap, verbose: bool) -> String {
         if let Ok(v) = value.to_str() {
             out.push_str(name.as_str());
             out.push_str(": ");
-            out.push_str(v);
+            out.push_str(&format_header_value(name.as_str(), v, redact_secrets));
             out.push_str("\r\n");
         }
     }
     out
 }
 
+fn format_headers_machine(headers: &http::HeaderMap) -> Vec<Value> {
+    headers
+        .iter()
+        .map(|(name, value)| json!([name.as_str(), value.to_str().unwrap_or("<binary>")]))
+        .collect()
+}
+
 fn build_json_response(
     response: &eggfetch_core::Response,
     elapsed: Duration,
     body_len: Option<usize>,
+    include_body_b64: bool,
+    body_b64: Option<&str>,
+    errors: Vec<String>,
 ) -> Value {
-    let headers: Vec<Value> = response
-        .headers()
-        .iter()
-        .map(|(name, value)| json!([name.as_str(), value.to_str().unwrap_or("<binary>")]))
-        .collect();
+    let headers = format_headers_machine(response.headers());
 
     let history: Vec<Value> = response
         .history()
@@ -405,7 +516,7 @@ fn build_json_response(
         })
         .collect();
 
-    json!({
+    let mut obj = json!({
         "url": response.url().to_string(),
         "status": response.status().as_u16(),
         "version": version_string(response.version()),
@@ -413,7 +524,16 @@ fn build_json_response(
         "elapsed_ms": elapsed.as_millis(),
         "history": history,
         "body_length": body_len,
-    })
+        "errors": errors,
+    });
+
+    if include_body_b64 {
+        if let Some(b64) = body_b64 {
+            obj["body_base64"] = json!(b64);
+        }
+    }
+
+    obj
 }
 
 fn derive_filename(response: &eggfetch_core::Response) -> Option<String> {
@@ -439,20 +559,67 @@ fn derive_filename(response: &eggfetch_core::Response) -> Option<String> {
     None
 }
 
+async fn create_output_file(path: &PathBuf, no_clobber: bool) -> Result<tokio::fs::File> {
+    if no_clobber && path.exists() {
+        anyhow::bail!(
+            "output file already exists: {} (remove --no-clobber to allow overwrite)",
+            path.display()
+        );
+    }
+    tokio::fs::File::create(path)
+        .await
+        .with_context(|| format!("failed to create output file: {}", path.display()))
+}
+
 #[allow(clippy::too_many_lines, clippy::cast_precision_loss)]
 async fn run(cli: Cli) -> Result<()> {
+    if let Some(shell) = cli.generate_completion {
+        let mut cmd = <Cli as clap::CommandFactory>::command();
+        let bin_name = "eggfetch";
+        let writer = std::io::stdout();
+        match shell {
+            Shell::Bash => clap_complete::generate(
+                clap_complete::shells::Bash,
+                &mut cmd,
+                bin_name,
+                &mut writer.lock(),
+            ),
+            Shell::Zsh => clap_complete::generate(
+                clap_complete::shells::Zsh,
+                &mut cmd,
+                bin_name,
+                &mut writer.lock(),
+            ),
+            Shell::Fish => clap_complete::generate(
+                clap_complete::shells::Fish,
+                &mut cmd,
+                bin_name,
+                &mut writer.lock(),
+            ),
+            Shell::PowerShell => clap_complete::generate(
+                clap_complete::shells::PowerShell,
+                &mut cmd,
+                bin_name,
+                &mut writer.lock(),
+            ),
+            Shell::Elvish => clap_complete::generate(
+                clap_complete::shells::Elvish,
+                &mut cmd,
+                bin_name,
+                &mut writer.lock(),
+            ),
+        }
+        return Ok(());
+    }
+
     let method_str = detect_method(&cli);
     let method = Method::from_bytes(method_str.as_bytes())
         .with_context(|| format!("invalid HTTP method: {method_str}"))?;
 
-    let follow = cli.follow || !cli.no_follow;
+    let follow = cli.follow && !cli.no_follow;
     let redirect_policy = RedirectPolicy::new(follow, cli.max_redirects);
 
     let mut client_builder = Client::builder().redirect_policy(redirect_policy);
-
-    if let Some(t) = cli.timeout {
-        client_builder = client_builder.timeout(Timeout::from_secs(t));
-    }
 
     if let Some(ref auth_str) = cli.auth {
         let (user, pass) = auth_str
@@ -488,6 +655,8 @@ async fn run(cli: Cli) -> Result<()> {
             }
             if let Some((name, value)) = line.split_once('=') {
                 jar.set_default_cookie(name.trim().to_owned(), value.trim().to_owned());
+            } else if !line.is_empty() {
+                eprintln!("Warning: skipping unrecognized cookie jar line: {line}");
             }
         }
         client_builder = client_builder.cookie_jar(jar);
@@ -533,6 +702,14 @@ async fn run(cli: Cli) -> Result<()> {
 
     if cli.no_compress {
         client_builder = client_builder.automatic_decompression(false);
+    }
+
+    if let Some(max_size) = cli.max_body_size {
+        client_builder = client_builder.max_decoded_body_size(max_size);
+    }
+
+    if let Some(ratio) = cli.max_decompression_ratio {
+        client_builder = client_builder.max_decompression_ratio(ratio);
     }
 
     if let Some(attempts) = cli.retry {
@@ -670,14 +847,27 @@ async fn run(cli: Cli) -> Result<()> {
             if cli.json_output || cli.ndjson {
                 let body_bytes = response.bytes().await.ok();
                 let body_len = body_bytes.as_ref().map(bytes::Bytes::len);
-                let json_val = build_json_response(&response, elapsed, body_len);
+
+                let body_b64 = if cli.base64 {
+                    body_bytes.as_ref().map(|b| base64_encode(b))
+                } else {
+                    None
+                };
+
+                let json_val = build_json_response(
+                    &response,
+                    elapsed,
+                    body_len,
+                    cli.base64,
+                    body_b64.as_deref(),
+                    vec![],
+                );
 
                 if cli.json_output {
                     let output = serde_json::to_string_pretty(&json_val)?;
                     if let Some(ref path) = cli.output {
-                        tokio::fs::write(path, output.as_bytes())
-                            .await
-                            .context("failed to write output file")?;
+                        let mut f = create_output_file(path, cli.no_clobber).await?;
+                        tokio::io::AsyncWriteExt::write_all(&mut f, output.as_bytes()).await?;
                     } else {
                         println!("{output}");
                     }
@@ -698,9 +888,12 @@ async fn run(cli: Cli) -> Result<()> {
                             .map(|l| serde_json::to_string(l).unwrap_or_default())
                             .collect::<Vec<_>>()
                             .join("\n");
-                        tokio::fs::write(path, format!("{output}\n").as_bytes())
-                            .await
-                            .context("failed to write output file")?;
+                        let mut f = create_output_file(path, cli.no_clobber).await?;
+                        tokio::io::AsyncWriteExt::write_all(
+                            &mut f,
+                            format!("{output}\n").as_bytes(),
+                        )
+                        .await?;
                     } else {
                         for line in &lines {
                             println!("{}", serde_json::to_string(line)?);
@@ -708,7 +901,7 @@ async fn run(cli: Cli) -> Result<()> {
                     }
                 }
                 if cli.check_status && !is_success {
-                    return Err(anyhow::anyhow!("HTTP status {status}")).context("request failed");
+                    return Err(StatusError(status.as_u16()).into());
                 }
                 return Ok(());
             }
@@ -727,7 +920,10 @@ async fn run(cli: Cli) -> Result<()> {
                             entry.url().path(),
                             version_string(entry.version()),
                         );
-                        eprint!("{}", format_headers(entry.headers(), cli.verbose));
+                        eprint!(
+                            "{}",
+                            format_headers(entry.headers(), cli.verbose, cli.verbose)
+                        );
                     }
                     eprintln!();
                 }
@@ -738,30 +934,26 @@ async fn run(cli: Cli) -> Result<()> {
                     status.as_u16(),
                     status.canonical_reason().unwrap_or("")
                 );
-                eprint!("{}", format_headers(response.headers(), cli.verbose));
+                eprint!(
+                    "{}",
+                    format_headers(response.headers(), cli.verbose, cli.verbose)
+                );
                 eprintln!("\n--- Response time: {:.3}s ---\n", elapsed.as_secs_f64());
             }
 
             if cli.headers_only {
+                let header_str = format!(
+                    "HTTP/{} {} {}\r\n{}",
+                    version_string(response.version()),
+                    status.as_u16(),
+                    status.canonical_reason().unwrap_or(""),
+                    format_headers(response.headers(), false, false)
+                );
                 if let Some(ref path) = cli.output {
-                    let header_str = format!(
-                        "HTTP/{} {} {}\r\n{}",
-                        version_string(response.version()),
-                        status.as_u16(),
-                        status.canonical_reason().unwrap_or(""),
-                        format_headers(response.headers(), false)
-                    );
-                    tokio::fs::write(path, header_str.as_bytes())
-                        .await
-                        .context("failed to write output file")?;
+                    let mut f = create_output_file(path, cli.no_clobber).await?;
+                    tokio::io::AsyncWriteExt::write_all(&mut f, header_str.as_bytes()).await?;
                 } else {
-                    print!(
-                        "HTTP/{} {} {}\r\n{}",
-                        version_string(response.version()),
-                        status.as_u16(),
-                        status.canonical_reason().unwrap_or(""),
-                        format_headers(response.headers(), false)
-                    );
+                    print!("{header_str}");
                 }
                 return Ok(());
             }
@@ -775,9 +967,7 @@ async fn run(cli: Cli) -> Result<()> {
 
             if let Some(ref path) = cli.output {
                 output_path = Some(path.clone());
-                let f = tokio::fs::File::create(path)
-                    .await
-                    .with_context(|| format!("failed to create output file: {}", path.display()))?;
+                let f = create_output_file(path, cli.no_clobber).await?;
                 output_file = Some(f);
             } else if cli.download {
                 let filename = derive_filename(&response).unwrap_or_else(|| "download".to_owned());
@@ -817,6 +1007,16 @@ async fn run(cli: Cli) -> Result<()> {
             }
 
             let mut stream = response.bytes_stream()?;
+            // Warn if writing binary body to a terminal
+            if std::io::stdout().is_terminal() {
+                if let Some(ct) = response.headers().get("content-type") {
+                    if let Ok(ct_str) = ct.to_str() {
+                        if is_binary_content_type(ct_str) {
+                            eprintln!("Warning: binary content type detected; writing to terminal may produce garbled output");
+                        }
+                    }
+                }
+            }
             let mut total_bytes: usize = 0;
 
             while let Some(chunk_result) = stream.next().await {
@@ -836,7 +1036,7 @@ async fn run(cli: Cli) -> Result<()> {
                 f.flush().await?;
             }
 
-            if !cli.json_output && !cli.ndjson && !cli.include && !cli.verbose {
+            if cli.verbose {
                 eprintln!();
                 eprintln!("Status: {}", status.as_u16());
                 eprintln!("Body: {total_bytes} bytes");
@@ -844,7 +1044,7 @@ async fn run(cli: Cli) -> Result<()> {
             }
 
             if cli.check_status && !is_success {
-                return Err(anyhow::anyhow!("HTTP status {status}")).context("request failed");
+                return Err(StatusError(status.as_u16()).into());
             }
             Ok(())
         }
@@ -854,6 +1054,30 @@ async fn run(cli: Cli) -> Result<()> {
             std::process::exit(i32::from(exit_code));
         }
     }
+}
+
+fn base64_encode(data: &[u8]) -> String {
+    const CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut result = String::with_capacity((data.len() + 2) / 3 * 4);
+    for chunk in data.chunks(3) {
+        let b0 = chunk[0] as u32;
+        let b1 = if chunk.len() > 1 { chunk[1] as u32 } else { 0 };
+        let b2 = if chunk.len() > 2 { chunk[2] as u32 } else { 0 };
+        let triple = (b0 << 16) | (b1 << 8) | b2;
+        result.push(CHARS[((triple >> 18) & 0x3F) as usize] as char);
+        result.push(CHARS[((triple >> 12) & 0x3F) as usize] as char);
+        if chunk.len() > 1 {
+            result.push(CHARS[((triple >> 6) & 0x3F) as usize] as char);
+        } else {
+            result.push('=');
+        }
+        if chunk.len() > 2 {
+            result.push(CHARS[(triple & 0x3F) as usize] as char);
+        } else {
+            result.push('=');
+        }
+    }
+    result
 }
 
 #[tokio::main]
@@ -974,17 +1198,19 @@ mod tests {
             json: None,
             output: None,
             download: false,
+            no_clobber: false,
             include: false,
             headers_only: false,
             no_body: false,
             json_output: false,
             ndjson: false,
+            base64: false,
             timeout: None,
             connect_timeout: None,
             total_timeout: None,
             read_timeout: None,
-            follow: false,
-            no_follow: true,
+            follow: true,
+            no_follow: false,
             max_redirects: 20,
             auth: None,
             bearer: None,
@@ -993,7 +1219,6 @@ mod tests {
             proxy: None,
             proxy_auth: None,
             no_proxy: None,
-            verify: true,
             no_verify: false,
             cacert: None,
             cert: None,
@@ -1004,8 +1229,11 @@ mod tests {
             http2: false,
             http3: false,
             no_compress: false,
+            max_body_size: None,
+            max_decompression_ratio: None,
             check_status: false,
             verbose: false,
+            generate_completion: None,
         };
         assert_eq!(detect_method(&cli), "GET");
     }
@@ -1024,17 +1252,19 @@ mod tests {
             json: None,
             output: None,
             download: false,
+            no_clobber: false,
             include: false,
             headers_only: false,
             no_body: false,
             json_output: false,
             ndjson: false,
+            base64: false,
             timeout: None,
             connect_timeout: None,
             total_timeout: None,
             read_timeout: None,
-            follow: false,
-            no_follow: true,
+            follow: true,
+            no_follow: false,
             max_redirects: 20,
             auth: None,
             bearer: None,
@@ -1043,7 +1273,6 @@ mod tests {
             proxy: None,
             proxy_auth: None,
             no_proxy: None,
-            verify: true,
             no_verify: false,
             cacert: None,
             cert: None,
@@ -1054,8 +1283,11 @@ mod tests {
             http2: false,
             http3: false,
             no_compress: false,
+            max_body_size: None,
+            max_decompression_ratio: None,
             check_status: false,
             verbose: false,
+            generate_completion: None,
         };
         assert_eq!(detect_method(&cli), "POST");
     }
@@ -1074,17 +1306,19 @@ mod tests {
             json: None,
             output: None,
             download: false,
+            no_clobber: false,
             include: false,
             headers_only: false,
             no_body: false,
             json_output: false,
             ndjson: false,
+            base64: false,
             timeout: None,
             connect_timeout: None,
             total_timeout: None,
             read_timeout: None,
-            follow: false,
-            no_follow: true,
+            follow: true,
+            no_follow: false,
             max_redirects: 20,
             auth: None,
             bearer: None,
@@ -1093,7 +1327,6 @@ mod tests {
             proxy: None,
             proxy_auth: None,
             no_proxy: None,
-            verify: true,
             no_verify: false,
             cacert: None,
             cert: None,
@@ -1104,8 +1337,11 @@ mod tests {
             http2: false,
             http3: false,
             no_compress: false,
+            max_body_size: None,
+            max_decompression_ratio: None,
             check_status: false,
             verbose: false,
+            generate_completion: None,
         };
         assert_eq!(detect_method(&cli), "PUT");
     }
@@ -1140,5 +1376,183 @@ mod tests {
             map_error_to_exit_code(&Error::Protocol("test".into())),
             EXIT_PROTOCOL
         );
+        assert_eq!(
+            map_error_to_exit_code(&Error::Tls("test".into())),
+            EXIT_CONNECT
+        );
+        assert_eq!(
+            map_error_to_exit_code(&Error::Io(std::sync::Arc::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "test"
+            )))),
+            EXIT_IO
+        );
+        assert_eq!(
+            map_error_to_exit_code(&Error::DecodedBodyTooLarge),
+            EXIT_PROTOCOL
+        );
+        assert_eq!(
+            map_error_to_exit_code(&Error::InvalidProxyUrl("test".into())),
+            EXIT_USAGE
+        );
+        assert_eq!(
+            map_error_to_exit_code(&Error::ProxyConnect("test".into())),
+            EXIT_CONNECT
+        );
+    }
+
+    #[test]
+    fn is_secret_header_detection() {
+        assert!(is_secret_header("authorization"));
+        assert!(is_secret_header("Authorization"));
+        assert!(is_secret_header("proxy-authorization"));
+        assert!(is_secret_header("cookie"));
+        assert!(is_secret_header("Cookie"));
+        assert!(is_secret_header("set-cookie"));
+        assert!(!is_secret_header("content-type"));
+        assert!(!is_secret_header("host"));
+    }
+
+    #[test]
+    fn format_header_value_redaction() {
+        assert_eq!(
+            format_header_value("authorization", "Bearer secret123", true),
+            "Bearer <redacted>"
+        );
+        assert_eq!(
+            format_header_value("authorization", "Basic dXNlcjpwYXNz", true),
+            "Basic <redacted>"
+        );
+        assert_eq!(
+            format_header_value("cookie", "session=abc123", true),
+            "<redacted>"
+        );
+        assert_eq!(
+            format_header_value("content-type", "application/json", true),
+            "application/json"
+        );
+        assert_eq!(
+            format_header_value("authorization", "Bearer secret123", false),
+            "Bearer secret123"
+        );
+    }
+
+    #[test]
+    fn base64_encode_works() {
+        assert_eq!(base64_encode(b""), "");
+        assert_eq!(base64_encode(b"f"), "Zg==");
+        assert_eq!(base64_encode(b"fo"), "Zm8=");
+        assert_eq!(base64_encode(b"foo"), "Zm9v");
+        assert_eq!(base64_encode(b"foobar"), "Zm9vYmFy");
+    }
+
+    #[test]
+    fn follow_default_behavior() {
+        let cli = Cli {
+            method: None,
+            url: "http://example.com".to_owned(),
+            header: vec![],
+            query: vec![],
+            form: vec![],
+            file: vec![],
+            body: None,
+            body_file: None,
+            json: None,
+            output: None,
+            download: false,
+            no_clobber: false,
+            include: false,
+            headers_only: false,
+            no_body: false,
+            json_output: false,
+            ndjson: false,
+            base64: false,
+            timeout: None,
+            connect_timeout: None,
+            total_timeout: None,
+            read_timeout: None,
+            follow: true,
+            no_follow: false,
+            max_redirects: 20,
+            auth: None,
+            bearer: None,
+            cookie: vec![],
+            cookie_jar: None,
+            proxy: None,
+            proxy_auth: None,
+            no_proxy: None,
+            no_verify: false,
+            cacert: None,
+            cert: None,
+            key: None,
+            retry: None,
+            retry_delay: None,
+            http1: false,
+            http2: false,
+            http3: false,
+            no_compress: false,
+            max_body_size: None,
+            max_decompression_ratio: None,
+            check_status: false,
+            verbose: false,
+            generate_completion: None,
+        };
+        let follow = cli.follow && !cli.no_follow;
+        assert!(follow, "default should follow redirects");
+    }
+
+    #[test]
+    fn no_follow_overrides_follow() {
+        let cli = Cli {
+            method: None,
+            url: "http://example.com".to_owned(),
+            header: vec![],
+            query: vec![],
+            form: vec![],
+            file: vec![],
+            body: None,
+            body_file: None,
+            json: None,
+            output: None,
+            download: false,
+            no_clobber: false,
+            include: false,
+            headers_only: false,
+            no_body: false,
+            json_output: false,
+            ndjson: false,
+            base64: false,
+            timeout: None,
+            connect_timeout: None,
+            total_timeout: None,
+            read_timeout: None,
+            follow: true,
+            no_follow: true,
+            max_redirects: 20,
+            auth: None,
+            bearer: None,
+            cookie: vec![],
+            cookie_jar: None,
+            proxy: None,
+            proxy_auth: None,
+            no_proxy: None,
+            no_verify: false,
+            cacert: None,
+            cert: None,
+            key: None,
+            retry: None,
+            retry_delay: None,
+            http1: false,
+            http2: false,
+            http3: false,
+            no_compress: false,
+            max_body_size: None,
+            max_decompression_ratio: None,
+            check_status: false,
+            verbose: false,
+            generate_completion: None,
+        };
+        let follow = cli.follow && !cli.no_follow;
+        assert!(!follow, "--no-follow should override --follow");
     }
 }
