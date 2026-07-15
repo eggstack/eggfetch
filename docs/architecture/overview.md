@@ -577,3 +577,66 @@ These crates do not exist yet. They will be added when the core engine is stable
 ## Current State
 
 The post-Milestone-W state is complete. The core crate provides a working async HTTP client with HTTPS support, request/response modeling, headers, query parameters, streaming request/response bodies, connection pooling, phase-aware timeouts (pool, connect, write, read, total), redirect following with configurable policy, `RequestBody::try_clone_for_redirect()` for replay-safe redirects, metadata-only redirect history entries (`HistoryEntry`), total timeout as a single deadline across redirect chains, a cookie subsystem with RFC 6265 parsing, domain/path matching, secure/httpOnly/SameSite attributes, expiry handling, thread-safe `CookieJar`, and client-level cookie state, an authentication subsystem with Basic and Bearer token support, secret redaction, client and request-level auth, precedence resolution, request-level auth disable via `without_auth()`, cross-origin credential stripping (client auth not reapplied on cross-origin redirects), URL credential conversion, streaming multipart/form-data request bodies with `Multipart`, `Part`, `PartBody`, and `Boundary` types, a streaming encoder, known-length calculation, and boundary generation, response decompression (gzip, deflate, brotli, zstd) with Accept-Encoding negotiation, decoded-body resource limits (`max_decoded_body_size`, `max_decompression_ratio`), a proxy subsystem (HTTP proxying, HTTPS CONNECT tunneling, proxy authentication, per-request/client proxy configuration, NO_PROXY bypass), TLS configuration with custom CA bundles, client certificates, TLS version policy, verification toggle, and SNI behavior, HTTP/2 support with ALPN negotiation, `HttpVersionPolicy` enum, multiplexed connections, protocol version reporting, HTTP/2 error taxonomy (GoAway, StreamReset, FlowControl, Protocol), forbidden header stripping, retry classification for REFUSED_STREAM, trailers documentation, and pool concurrency model documentation, and experimental HTTP/3 support via QUIC transport with Quinn/h3, feature-gated behind `http3`, with `Http3Only` policy variant, TLS 1.3 requirement, 0-RTT disabled, and Python `http3=` kwarg. The Python crate exposes sync and async APIs with top-level helpers, `Client` and `AsyncClient` classes, requests/httpx-compatible response properties, status helpers, methods (`json()`, `raise_for_status()`, `iter_bytes()`, `iter_text()`, `iter_lines()`, `close()`/`aclose()`), true network streaming via `client.stream()` returning a `StreamingResponse` context manager (with `iter_bytes()`, `iter_text()`, `iter_lines()`, `read()`, `text()` and async equivalents), charset-aware text decoding with deterministic precedence, multi-value header support, case-insensitive headers, request body kwargs, form encoding, JSON body serialization, body kwarg mutual exclusion, `files=` kwarg with bytes/tuples/`File` wrapper support, `follow_redirects`/`max_redirects` kwargs, `Cookies` mapping wrapper (`client.cookies`, `response.cookies`, `cookies=` kwarg), `proxy=` kwarg, `decompress=` kwarg, `verify=`/`cert=` kwargs, `BasicAuth`/`BearerAuth` classes, `auth=` kwarg on all request methods, `NOAUTH` sentinel for per-request auth disable, streaming-specific exceptions (`StreamConsumed`, `StreamClosed`, `ResponseNotRead`), `http2=` kwarg for HTTP/2 negotiation, and a structured exception hierarchy with sync/async API parity verified by parity tests. The CLI crate remains a stub.
+
+## CLI (Milestone K)
+
+The CLI crate (`eggfetch-cli`) is a thin binary adapter over `eggfetch-core`. It handles argument parsing (via clap), request construction, response output formatting, and exit code mapping. All HTTP behavior is delegated to the core crate.
+
+### Architecture
+
+The CLI creates an `eggfetch_core::Client` via `ClientBuilder`, configures it from command-line flags, constructs requests via `RequestBuilder`, and streams the response body to stdout or a file. No networking code exists in the CLI crate.
+
+### Argument Model
+
+The CLI accepts `eggfetch [METHOD] URL [OPTIONS]` where METHOD defaults to GET (or POST when a body is provided). Arguments map directly to core API calls:
+
+- Headers (`-H`) → `RequestBuilder::header()`
+- Query params (`-q`) → `RequestBuilder::query()`
+- Auth (`--auth`, `--bearer`) → `ClientBuilder::auth()`
+- Proxy (`--proxy`) → `ClientBuilder::proxy()`
+- TLS (`--verify`, `--cacert`, `--cert`/`--key`) → `ClientBuilder::tls_config()`
+- Redirects (`--follow`, `--max-redirects`) → `ClientBuilder::redirect_policy()`
+- Timeout (`--timeout`, etc.) → `ClientBuilder::timeout()` / `RequestBuilder::timeout()`
+- Retry (`--retry`) → `ClientBuilder::retry()`
+- HTTP version (`--http1`/`--http2`/`--http3`) → `ClientBuilder::http_version_policy()`
+- Decompression (`--no-compress`) → `ClientBuilder::automatic_decompression(false)`
+
+### Body Modes
+
+Body sources are mutually exclusive except `--form` + `--file` which combines into multipart:
+
+- `--json` → JSON body with auto `Content-Type: application/json`
+- `--body` → raw body string
+- `--body-file` → read body from file (or `-` for stdin)
+- `--form` → `application/x-www-form-urlencoded`
+- `--file` → multipart file parts (with `--form`: multipart with text fields + files)
+
+### Output Modes
+
+- **Human** (default): body to stdout, status/timing summary to stderr
+- **Headers** (`--include`): response headers to stderr before body
+- **Headers-only** (`--headers-only`): print response status line and headers, no body
+- **JSON** (`--json-output`): structured JSON with URL, status, version, headers, elapsed, history, body length
+- **NDJSON** (`--ndjson`): newline-delimited JSON with redirect hops as separate lines
+
+### Streaming
+
+The CLI streams the response body via `Response::bytes_stream()` and writes chunks incrementally to stdout or a file using `tokio::io::AsyncWriteExt`. No full-body buffering occurs.
+
+### Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| 0 | Success (HTTP errors included unless `--check-status`) |
+| 2 | CLI usage/configuration error |
+| 3 | DNS/connect/TLS/proxy transport error |
+| 4 | Timeout (any phase) |
+| 5 | Protocol/decompression/body limit error |
+| 6 | HTTP status failure (with `--check-status`) |
+| 7 | Output/file I/O error |
+| 130 | Interrupted (Ctrl-C) |
+
+### File Output
+
+- `--output PATH`: write body to file, creating or overwriting
+- `--download`: derive filename from `Content-Disposition` header or URL path, with counter-based deduplication to avoid overwriting existing files

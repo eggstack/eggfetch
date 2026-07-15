@@ -2,8 +2,8 @@
 
 eggfetch is a Rust-native HTTP client engine with Python bindings and a CLI tool. The core is async-first: a Rust engine built on tokio and hyper provides connection pooling, timeouts, TLS configuration, and streaming. The Python bindings expose both sync and async APIs; the sync API blocks on the async engine while releasing the GIL, and the async API integrates with asyncio. There is exactly one networking implementation, living entirely in Rust.
 
-> **Status: Milestones V and W complete.**
-> Milestones A–W are implemented as documented. The core engine supports HTTP/2 (ALPN negotiation, multiplexed connections, protocol version reporting), HTTP/3 (QUIC transport via Quinn/h3, feature-gated, experimental), response decompression (gzip, deflate, brotli, zstd), multipart/form-data uploads, cookies, authentication, proxy support (HTTP proxying, HTTPS CONNECT tunneling, proxy authentication, per-request/client proxy configuration, NO_PROXY bypass), TLS configuration (custom CA bundles, client certificates, TLS version policy, verification toggle), streaming, timeouts, connection pooling, and policy-driven retries with exponential backoff. The CLI crate remains a stub.
+> **Status: Milestones K through W complete.**
+> Milestones A–W are implemented as documented. The core engine supports HTTP/2 (ALPN negotiation, multiplexed connections, protocol version reporting), HTTP/3 (QUIC transport via Quinn/h3, feature-gated, experimental), response decompression (gzip, deflate, brotli, zstd), multipart/form-data uploads, cookies, authentication, proxy support (HTTP proxying, HTTPS CONNECT tunneling, proxy authentication, per-request/client proxy configuration, NO_PROXY bypass), TLS configuration (custom CA bundles, client certificates, TLS version policy, verification toggle), streaming, timeouts, connection pooling, and policy-driven retries with exponential backoff. The CLI crate is a full-featured HTTP client with argument parsing, streaming, machine-readable output, and deterministic exit codes.
 
 [![CI](https://github.com/eggstack/eggfetch/actions/workflows/ci.yml/badge.svg)](https://github.com/eggstack/eggfetch/actions/workflows/ci.yml)
 
@@ -351,6 +351,29 @@ HTTP/3 support via QUIC transport, implemented as an experimental, separately fe
 - **Experimental status** -- this feature is experimental. The QUIC/h3 ecosystem is maturing; API surfaces may change. Production use requires thorough testing with target servers.
 - **Tests** -- Rust tests covering feature-gated compilation, version policy, protocol version reporting, and error taxonomy.
 
+### Milestone K: CLI (complete)
+
+A full-featured command-line HTTP client powered by eggfetch-core:
+
+- **All HTTP methods** -- GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS, and arbitrary methods via `-X`.
+- **Headers and query parameters** -- `-H NAME:VALUE` and `-q NAME=VALUE` (repeatable).
+- **Request bodies** -- `--body`, `--body-file`, `--json`, `--form NAME=VALUE`, `--file NAME=@PATH`.
+- **Streaming uploads** -- multipart/form-data via `--file` with `--form` combination.
+- **Authentication** -- `--auth USER:PASS` (Basic) and `--bearer TOKEN`.
+- **Redirects** -- `--follow` / `--no-follow` with `--max-redirects`.
+- **Cookies** -- `--cookie NAME=VALUE` and `--cookie-jar PATH`.
+- **Proxy** -- `--proxy URL`, `--proxy-auth USER:PASS`, `--no-proxy DOMAINS`.
+- **TLS** -- `--verify` / `--no-verify`, `--cacert`, `--cert` / `--key`.
+- **Timeouts** -- `--timeout`, `--connect-timeout`, `--total-timeout`, `--read-timeout`.
+- **Retries** -- `--retry N`, `--retry-delay SECS`.
+- **HTTP version** -- `--http1`, `--http2`, `--http3`.
+- **Decompression** -- automatic by default, `--no-compress` to disable.
+- **Output** -- streaming body to stdout, `--output PATH`, `--download`, `--include`, `--headers-only`, `--no-body`.
+- **Machine output** -- `--json-output` (pretty JSON), `--ndjson` (newline-delimited JSON).
+- **Exit codes** -- 0 success, 2 usage, 3 connect/TLS, 4 timeout, 5 protocol, 6 status (with `--check-status`), 7 I/O, 130 interrupted.
+- **TTY awareness** -- progress info to stderr, suppressed in machine mode.
+- **Ctrl-C** -- graceful interruption with exit code 130.
+
 ## Repository Layout
 
 ```text
@@ -369,7 +392,7 @@ crates/
   eggfetch-core/         async HTTP engine (validation pass complete)
                          TlsConfig, TlsConfigBuilder, TrustStore, ClientIdentity, TlsVersion
                          HttpVersionPolicy (Http1Only, Http2Only, Http3Only, Auto)
-  eggfetch-cli/          CLI binary (stub)
+  eggfetch-cli/          CLI binary (argument parsing, streaming output, JSON/NDJSON, exit codes)
   eggfetch-python/       Python bindings (validation pass complete)
     src/                 Rust adapter modules (PyO3)
     python/eggfetch/     Python package (__init__.py)

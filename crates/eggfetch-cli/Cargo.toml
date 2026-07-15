@@ -16,4 +16,13 @@ name = "eggfetch"
 path = "src/main.rs"
 
 [dependencies]
-eggfetch-core = { path = "../eggfetch-core" }
+eggfetch-core = { path = "../eggfetch-core", features = ["cookies", "multipart", "proxy"] }
+clap = { version = "4", features = ["derive", "wrap_help"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "io-util", "fs", "signal", "io-std"] }
+anyhow = "1"
+bytes = "1"
+futures-util = "0.3"
+http = "1"
+url = "2"
