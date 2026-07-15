@@ -446,6 +446,7 @@ crates/
     pyproject.toml       maturin build config
   eggfetch-ffi/          C ABI bindings for eggfetch-core
   eggfetch-node/         Node.js N-API binding prototype
+  eggfetch-bench/        Criterion-based benchmarks
 docs/
   getting-started/       installation and quickstart
   concepts/              core concept explanations
@@ -484,6 +485,28 @@ pip install pytest pytest-asyncio
 PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1 maturin develop -m crates/eggfetch-python/Cargo.toml
 python -m pytest crates/eggfetch-python/tests/
 maturin build -m crates/eggfetch-python/Cargo.toml
+```
+
+### Benchmarking
+
+Criterion-based benchmarks live in `crates/eggfetch-bench/`. There are three benchmark suites:
+
+- **microbench** -- measures URL construction, header operations, cookie matching, auth encoding, multipart assembly, decompression, retry policy, and request building.
+- **e2e** -- measures one-shot requests, warm client reuse, concurrent requests, varying body sizes, streaming, uploads, and HTTP version comparison.
+- **resources** -- measures buffered vs streaming body consumption, long-lived client stability, pool saturation, and header parsing performance.
+
+Run all suites:
+
+```sh
+cargo bench -p eggfetch-bench
+```
+
+Run an individual suite:
+
+```sh
+cargo bench -p eggfetch-bench --bench microbench
+cargo bench -p eggfetch-bench --bench e2e
+cargo bench -p eggfetch-bench --bench resources
 ```
 
 ## MSRV

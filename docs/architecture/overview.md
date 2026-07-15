@@ -572,9 +572,9 @@ All response data is buffered at creation time. Streaming iteration returns Pyth
 The project may later add:
 
 - **eggfetch-testing**: local protocol test servers, fixtures, and differential testing against requests/HTTPX.
-- **eggfetch-bench**: benchmark harnesses for throughput, latency, and memory.
+- **eggfetch-bench** (exists): Criterion microbenchmarks, end-to-end benchmarks with local test servers, and resource tests. Not published (`publish = false`).
 
-These crates do not exist yet. They will be added when the core engine is stable enough to test and measure.
+The `eggfetch-testing` crate does not exist yet. It will be added when the core engine is stable enough to test.
 
 ## Current State
 

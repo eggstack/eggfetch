@@ -127,6 +127,17 @@ prevents new requests and does not invalidate an already returned response.
 
 The workspace has ~750+ Rust tests, ~463+ Python tests, and ~40+ Node.js/FFI tests covering construction, streaming, timeouts, pools, headers, integration scenarios, Python sync API, Python async API, response compatibility properties, redirect behavior, redirect replay, total timeout across redirects, sync/async API parity, cookie subsystem (parsing, matching, jar operations, client integration, Python API), authentication subsystem (Basic/Bearer auth, precedence, cross-origin credential stripping, Python auth classes), multipart (encoder, boundary, streaming, known-length, Python files= support), response decompression (gzip, deflate, brotli, zstd streaming decoders, Accept-Encoding negotiation, Content-Encoding parsing, header policy, feature-gated compilation, Python decompress kwarg), decoded-body resource limits (max size, decompression ratio), proxy subsystem (HTTP proxying, HTTPS CONNECT tunneling, proxy authentication, per-request/client proxy configuration, NO_PROXY bypass matching, proxy response parsing bounds (header size limits, line limits)), retry subsystem (policy construction, method safety, status codes, body replayability, backoff computation, Retry-After parsing, budget enforcement, Python Retry class), cross-feature integration tests (multipart through proxy, compressed responses through proxy, redirect/cookie/auth through proxy, cancellation, timeouts), true network streaming (sync/async `client.stream()`, `StreamingResponse`, chunk iteration, cancellation, pool lease lifecycle, split UTF-8, cross-chunk line delimiters, named exception types), HTTP/2 (HttpVersionPolicy enum, ALPN negotiation, connector construction, h2 error taxonomy (GoAway, StreamReset, FlowControl, Protocol), forbidden header stripping, retry classification for REFUSED_STREAM, trailers documentation, pool concurrency model documentation, Python http2 option, Python h2 exception types), FFI (ClientBuilder configuration, per-request overrides, streaming body, cancellation, error management, null safety, local server integration, streaming chunked responses), CLI (19 unit tests for argument parsing, method detection, exit codes, header/query/form/file parsing, version strings, secret redaction, base64 encoding, follow logic, and 56 subprocess integration tests using a local TCP test server covering GET/POST/JSON/form/body-file, headers, query params, JSON/NDJSON output, base64 binary body, include/headers-only/no-body, output files, no-clobber, download mode, basic/bearer auth, env var auth, redirect follow/no-follow, connect timeout, max redirects, status code checking, chunked responses, large downloads, shell completions, form urlencoded, file upload, cookies, verbose output, JSON errors field, max body size, and error exit codes), and FFI (11 tests for C ABI handle lifecycle, null safety, request building, response handling, error management, convenience methods, string management, and a local server integration test).
 
+## Benchmarks
+
+The benchmark suite lives in `crates/eggfetch-bench/` and uses Criterion. Run with:
+
+```sh
+cargo bench -p eggfetch-bench                     # all suites
+cargo bench -p eggfetch-bench --bench microbench   # microbenchmarks only
+cargo bench -p eggfetch-bench --bench e2e          # end-to-end only
+cargo bench -p eggfetch-bench --bench resources    # resource tests only
+```
+
 ## Working Style
 
 - Make the workspace build green before adding new functionality.

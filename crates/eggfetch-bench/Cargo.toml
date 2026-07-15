@@ -1,0 +1,57 @@
+[package]
+name = "eggfetch-bench"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+description = "Benchmark harnesses for eggfetch performance measurement"
+publish = false
+
+[lints]
+workspace = true
+
+[features]
+default = ["cookies", "multipart", "compression-gzip", "compression-deflate", "compression-brotli", "compression-zstd"]
+cookies = ["eggfetch-core/cookies"]
+multipart = ["eggfetch-core/multipart"]
+compression-gzip = ["eggfetch-core/compression-gzip"]
+compression-deflate = ["eggfetch-core/compression-deflate"]
+compression-brotli = ["eggfetch-core/compression-brotli"]
+compression-zstd = ["eggfetch-core/compression-zstd"]
+
+[dependencies]
+eggfetch-core = { path = "../eggfetch-core", features = [
+    "http1",
+    "http2",
+    "tls-rustls",
+    "json",
+    "proxy",
+] }
+bytes = "1"
+http = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "net", "io-util", "fs"] }
+url = "2"
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports", "async_tokio"] }
+flate2 = "1"
+futures-core = "0.3"
+futures-util = { version = "0.3", default-features = false, features = ["alloc"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "net", "io-util", "fs", "sync"] }
+
+[[bench]]
+name = "microbench"
+harness = false
+path = "benchmarks/microbench.rs"
+
+[[bench]]
+name = "e2e"
+harness = false
+path = "benchmarks/e2e.rs"
+
+[[bench]]
+name = "resources"
+harness = false
+path = "benchmarks/resources.rs"
