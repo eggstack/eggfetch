@@ -949,3 +949,32 @@ mod tests {
         assert!(!np.should_bypass(&url3));
     }
 }
+
+/// Parse a raw proxy CONNECT response from bytes.
+///
+/// Feed arbitrary bytes through the proxy response parser. Returns
+/// `(status_code, headers)` on success, or an error for malformed input.
+///
+/// # Internal use
+///
+/// This is a testing/fuzzing entry point. It is not part of the stable
+/// public API.
+#[doc(hidden)]
+pub fn parse_proxy_response_bytes(
+    data: &[u8],
+) -> crate::error::Result<(u16, Vec<(String, String)>)> {
+    use tokio::io::BufReader;
+
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .expect("failed to create tokio runtime for proxy response parsing");
+
+    rt.block_on(async {
+        let cursor = std::io::Cursor::new(data.to_vec());
+        let mut reader = BufReader::new(cursor);
+        let (status, headers, _remaining) =
+            crate::transport::proxy::read_proxy_response(&mut reader).await?;
+        Ok((status, headers))
+    })
+}

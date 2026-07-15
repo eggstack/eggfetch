@@ -924,3 +924,104 @@ fn retry_after_negative_number_returns_none() {
         .build();
     assert!(policy.retry_after_delay("-1").is_none());
 }
+
+// ---------------------------------------------------------------------------
+// Proxy CONNECT response parsing edge cases
+// ---------------------------------------------------------------------------
+
+#[cfg(feature = "proxy")]
+#[test]
+fn parse_proxy_response_empty_input_errors() {
+    let result = eggfetch_core::proxy::parse_proxy_response_bytes(b"");
+    assert!(result.is_err());
+}
+
+#[cfg(feature = "proxy")]
+#[test]
+fn parse_proxy_response_valid_200() {
+    let input = b"HTTP/1.1 200 Connection established\r\n\r\n";
+    let result = eggfetch_core::proxy::parse_proxy_response_bytes(input);
+    assert!(result.is_ok());
+    let (status, headers) = result.unwrap();
+    assert_eq!(status, 200);
+    assert!(headers.is_empty());
+}
+
+#[cfg(feature = "proxy")]
+#[test]
+fn parse_proxy_response_valid_with_headers() {
+    let input = b"HTTP/1.1 200 Connection established\r\nX-Proxy: test\r\nContent-Length: 0\r\n\r\n";
+    let result = eggfetch_core::proxy::parse_proxy_response_bytes(input);
+    assert!(result.is_ok());
+    let (status, headers) = result.unwrap();
+    assert_eq!(status, 200);
+    assert_eq!(headers.len(), 2);
+    assert_eq!(headers[0].0, "X-Proxy");
+    assert_eq!(headers[0].1, "test");
+}
+
+#[cfg(feature = "proxy")]
+#[test]
+fn parse_proxy_response_garbage_bytes_errors() {
+    let result = eggfetch_core::proxy::parse_proxy_response_bytes(b"not http at all\r\n\r\n");
+    assert!(result.is_err());
+}
+
+// ---------------------------------------------------------------------------
+// Python streaming drop/shutdown paths — exercised via core Rust API
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn streaming_response_close_before_read_releases_lease() {
+    let mut server = TestServer::start(&TestServerConfig {
+        chunked: true,
+        response_body: Some(b"data".to_vec()),
+        ..Default::default()
+    });
+    let url = server.url();
+    let client = Client::builder().max_connections(1).build();
+
+    let resp = client.get(&url).unwrap().send().await.unwrap();
+    assert!(resp.is_success());
+    // Drop without reading — simulates Python `resp.close()` before iteration.
+    drop(resp);
+
+    let mut resp2 = client.get(&url).unwrap().send().await.unwrap();
+    assert!(resp2.is_success());
+    let _ = resp2.bytes().await;
+
+    server.shutdown();
+}
+
+#[tokio::test]
+async fn streaming_response_concurrent_drop_and_read_no_deadlock() {
+    let mut server = TestServer::start(&TestServerConfig {
+        chunked: true,
+        response_body: Some(b"AAAA BBBB CCCC DDDD".to_vec()),
+        chunk_delay_ms: 5,
+        ..Default::default()
+    });
+    let url = server.url();
+    let client = Client::builder().max_connections(2).build();
+
+    let mut handles = Vec::new();
+    for _ in 0..4 {
+        let client = client.clone();
+        let url = url.clone();
+        handles.push(tokio::spawn(async move {
+            let mut resp = client.get(&url).unwrap().send().await.unwrap();
+            let mut stream = resp.bytes_stream().unwrap();
+            // Read one chunk then drop — simulates partial iteration + close.
+            let _ = stream.next().await;
+            drop(stream);
+        }));
+    }
+
+    for h in handles {
+        let result = tokio::time::timeout(Duration::from_secs(5), h).await;
+        assert!(result.is_ok(), "task did not complete in time (deadlock?)");
+        result.unwrap().unwrap();
+    }
+
+    server.shutdown();
+}

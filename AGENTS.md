@@ -151,7 +151,8 @@ The fuzzing and property testing infrastructure targets high-risk parsers, state
 | `fuzz_redirect` | Redirect policy and replay logic |
 | `fuzz_multipart` | Multipart encoder boundary and streaming |
 | `fuzz_compression` | Gzip, deflate, brotli, zstd decompression |
-| `fuzz_proxy` | Proxy response parsing and CONNECT tunneling |
+| `fuzz_proxy` | Proxy configuration and NO_PROXY matching |
+| `fuzz_proxy_response` | Proxy CONNECT response parsing from raw bytes |
 | `fuzz_timeout` | Timeout state machine and scheduling |
 | `fuzz_retry` | Retry policy, backoff, and Retry-After parsing |
 | `fuzz_tls` | TLS configuration and SNI handling |

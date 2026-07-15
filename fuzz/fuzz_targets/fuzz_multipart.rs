@@ -34,13 +34,19 @@ fuzz_target!(|data: &[u8]| {
         };
 
         if let Ok(mp) = mp.text(name, value) {
-            let _ = mp.content_length();
+            let claimed = mp.content_length();
             let _ = mp.is_replayable();
             let _ = mp.boundary().as_str();
             let _ = mp.parts().len();
             let body = mp.into_body();
+            let actual = body.len();
+            // content_length must match actual body length.
+            assert_eq!(
+                claimed,
+                actual,
+                "content_length ({claimed}) != body.len() ({actual})"
+            );
             let _ = body.is_empty();
-            let _ = body.len();
         }
     }
 });
