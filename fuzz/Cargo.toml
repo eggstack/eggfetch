@@ -1,0 +1,83 @@
+[package]
+name = "eggfetch-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[workspace]
+members = ["."]
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+eggfetch-core = { path = "../crates/eggfetch-core", features = ["cookies", "multipart", "proxy", "compression-gzip", "compression-deflate", "compression-brotli", "compression-zstd"] }
+libfuzzer-sys = "0.4"
+tokio = { version = "1", features = ["rt", "macros"] }
+bytes = "1"
+url = "2"
+http = "1"
+futures-util = { version = "0.3", default-features = false }
+
+[[bin]]
+name = "fuzz_headers"
+path = "fuzz_targets/fuzz_headers.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_cookie"
+path = "fuzz_targets/fuzz_cookie.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_redirect"
+path = "fuzz_targets/fuzz_redirect.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_multipart"
+path = "fuzz_targets/fuzz_multipart.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_compression"
+path = "fuzz_targets/fuzz_compression.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_proxy"
+path = "fuzz_targets/fuzz_proxy.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_timeout"
+path = "fuzz_targets/fuzz_timeout.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_retry"
+path = "fuzz_targets/fuzz_retry.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_tls"
+path = "fuzz_targets/fuzz_tls.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_url"
+path = "fuzz_targets/fuzz_url.rs"
+test = false
+doc = false
+
+[profile.release]
+debug = true

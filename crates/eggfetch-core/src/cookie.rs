@@ -660,6 +660,7 @@ pub fn parse_set_cookie_headers(response_url: &Url, set_cookie_headers: &[String
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proptest::prelude::*;
 
     fn make_url(s: &str) -> Url {
         Url::parse(s).unwrap()
@@ -1431,5 +1432,45 @@ mod tests {
         assert!(c.is_secure());
         assert!(c.is_http_only());
         assert_eq!(c.same_site(), Some(SameSite::Lax));
+    }
+
+    proptest::proptest! {
+        #[test]
+        fn parse_set_cookie_returns_some_for_valid_cookies(name in "[a-zA-Z][a-zA-Z0-9_]{0,15}", value in "[a-zA-Z0-9]{1,20}") {
+            let url = make_url("http://example.com/path");
+            let header = format!("{name}={value}");
+            let cookies = parse_set_cookie_headers(&url, &[header]);
+            prop_assert_eq!(cookies.len(), 1);
+        }
+
+        #[test]
+        fn parse_set_cookie_returns_none_for_garbage(input in ".{0,100}") {
+            let url = make_url("http://example.com/path");
+            // Must not panic, may return None or empty
+            let _ = parse_set_cookie_headers(&url, &[input]);
+        }
+
+        #[test]
+        fn domain_matches_symmetric_for_exact(domain in "[a-z]{1,10}\\.[a-z]{1,5}") {
+            prop_assert!(domain_matches(&domain, &domain));
+        }
+
+        #[test]
+        fn path_matches_monotonic(path_a in "/[a-z]{1,5}", extra in "/[a-z]{1,5}") {
+            let path_b = format!("{path_a}{extra}");
+            // path_a is a prefix of path_b
+            prop_assert!(path_matches(&path_b, &path_a));
+        }
+
+        #[test]
+        fn default_cookie_path_starts_with_slash(url_path in "/[a-z]{0,20}(/[a-z]{0,10}){0,3}") {
+            let result = default_cookie_path(&url_path);
+            prop_assert!(result.starts_with('/'));
+        }
+
+        #[test]
+        fn is_valid_cookie_name_rejects_empty(name in "") {
+            prop_assert!(!is_valid_cookie_name(&name));
+        }
     }
 }

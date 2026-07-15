@@ -189,6 +189,7 @@ mod tests {
     use super::*;
     use bytes::Bytes;
     use http::StatusCode;
+    use proptest::prelude::*;
 
     #[test]
     fn redirect_method_303_get() {
@@ -454,5 +455,54 @@ mod tests {
         let policy = RedirectPolicy::new(true, 5);
         assert!(policy.follow);
         assert_eq!(policy.max_redirects, 5);
+    }
+
+    proptest::proptest! {
+        #[test]
+        fn redirect_method_preserves_non_post_on_301_302(method in "[A-Z]{3,7}") {
+            use http::Method;
+            let m = Method::from_bytes(method.as_bytes());
+            if let Ok(m) = m {
+                if m != Method::POST {
+                    prop_assert_eq!(redirect_method(StatusCode::MOVED_PERMANENTLY, &m), m.clone());
+                    prop_assert_eq!(redirect_method(StatusCode::FOUND, &m), m);
+                }
+            }
+        }
+
+        #[test]
+        fn redirect_method_303_always_get(method in "[A-Z]{3,7}") {
+            use http::Method;
+            let m = Method::from_bytes(method.as_bytes());
+            if let Ok(m) = m {
+                if m != Method::HEAD {
+                    prop_assert_eq!(redirect_method(StatusCode::SEE_OTHER, &m), Method::GET);
+                } else {
+                    prop_assert_eq!(redirect_method(StatusCode::SEE_OTHER, &m), Method::HEAD);
+                }
+            }
+        }
+
+        #[test]
+        fn drops_body_consistent_with_redirect_method(status in "[3][012378][1234567890]", method in "[A-Z]{3,7}") {
+            use http::Method;
+            let s = StatusCode::from_bytes(status.as_bytes());
+            let m = Method::from_bytes(method.as_bytes());
+            if let (Ok(s), Ok(m)) = (s, m) {
+                let new_method = redirect_method(s, &m);
+                let drops = drops_body_on_redirect(s, &m);
+                prop_assert_eq!(drops, m == Method::POST && new_method == Method::GET);
+            }
+        }
+
+        #[test]
+        fn is_redirect_status_only_matches_3xx(status in 100u16..600) {
+            let s = StatusCode::from_u16(status);
+            if let Ok(s) = s {
+                let is_redirect = is_redirect_status(s);
+                let expected = matches!(status, 301 | 302 | 303 | 307 | 308);
+                prop_assert_eq!(is_redirect, expected);
+            }
+        }
     }
 }

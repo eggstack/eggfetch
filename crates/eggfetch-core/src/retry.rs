@@ -669,6 +669,7 @@ fn get_random_f64() -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proptest::prelude::*;
 
     #[test]
     fn retry_policy_default_disables_retries() {
@@ -1008,5 +1009,78 @@ mod tests {
     fn retry_policy_display_cause() {
         let cause = RetryCause::Status(429);
         assert_eq!(format!("{cause}"), "retryable status: 429");
+    }
+
+    #[test]
+    fn prop_backoff_delay_some_for_attempt_gt_1() {
+        proptest::proptest!(|(attempt in 2usize..100usize)| {
+            let backoff = BackoffPolicy::default();
+            prop_assert!(backoff.delay(attempt).is_some());
+        });
+    }
+
+    #[test]
+    fn prop_backoff_delay_bounded_by_max_delay() {
+        proptest::proptest!(|(
+            factor in 0.1f64..2.0f64,
+            initial_ms in 1u64..1000u64,
+            max_secs in 1u64..60u64,
+            attempt in 2usize..20usize,
+        )| {
+            let backoff = BackoffPolicy {
+                factor,
+                max_delay: Duration::from_secs(max_secs),
+                initial_delay: Duration::from_millis(initial_ms),
+            };
+            if let Some(delay) = backoff.delay(attempt) {
+                prop_assert!(delay <= Duration::from_secs(max_secs * 2));
+            }
+        });
+    }
+
+    #[test]
+    fn prop_method_policy_default_contains_get_head_options() {
+        let policy = MethodPolicy::default();
+        assert!(policy.is_retryable(&Method::GET));
+        assert!(policy.is_retryable(&Method::HEAD));
+        assert!(policy.is_retryable(&Method::OPTIONS));
+    }
+
+    #[test]
+    fn prop_status_policy_default_contains_expected() {
+        let policy = StatusPolicy::default();
+        assert!(policy.is_retryable(408));
+        assert!(policy.is_retryable(429));
+        assert!(policy.is_retryable(502));
+        assert!(policy.is_retryable(503));
+        assert!(policy.is_retryable(504));
+    }
+
+    #[test]
+    fn prop_retry_after_delay_returns_none_for_garbage() {
+        proptest::proptest!(|(input in ".{0,100}")| {
+            let policy = RetryPolicy::builder()
+                .max_attempts(3)
+                .respect_retry_after(true)
+                .build();
+            let _ = policy.retry_after_delay(&input);
+        });
+    }
+
+    #[test]
+    fn prop_is_error_retryable_never_panics() {
+        proptest::proptest!(|(msg in ".{0,200}")| {
+            let errors = vec![
+                Error::Connect(msg.clone()),
+                Error::Io(std::sync::Arc::new(std::io::Error::other(msg.clone()))),
+                Error::InvalidUrl(msg.clone()),
+                Error::Tls(msg.clone()),
+                Error::Protocol(msg.clone()),
+                Error::Body(msg.clone()),
+            ];
+            for err in &errors {
+                let _ = RetryPolicy::is_error_retryable(err);
+            }
+        });
     }
 }

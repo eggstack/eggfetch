@@ -147,6 +147,7 @@ fn validate_header_value(value: &str) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proptest::prelude::*;
 
     #[test]
     fn insert_and_get() {
@@ -196,5 +197,62 @@ mod tests {
         hm.insert("X-Test", HeaderValue::from_static("hello"));
         let h = Headers::from(hm);
         assert_eq!(h.get("x-test").unwrap().to_str().unwrap(), "hello");
+    }
+
+    proptest::proptest! {
+        #[test]
+        fn round_trip_insert_get(name in "[a-zA-Z][a-zA-Z0-9_-]{0,20}", value in "[a-zA-Z0-9 ]{1,30}") {
+            let mut h = Headers::new();
+            h.insert(&name, &value).unwrap();
+            let got = h.get_str(&name).unwrap().unwrap();
+            prop_assert_eq!(got, value.as_str());
+        }
+
+        #[test]
+        fn insert_replaces_previous(name in "[a-zA-Z][a-zA-Z0-9_-]{0,20}", v1 in "[a-z]{1,10}", v2 in "[a-z]{1,10}") {
+            let mut h = Headers::new();
+            h.insert(&name, &v1).unwrap();
+            h.insert(&name, &v2).unwrap();
+            let got = h.get_str(&name).unwrap().unwrap();
+            prop_assert_eq!(got, v2.as_str());
+        }
+
+        #[test]
+        fn append_preserves_all(name in "[a-zA-Z][a-zA-Z0-9_-]{0,20}", values in proptest::collection::vec("[a-z]{1,10}", 1..5)) {
+            let mut h = Headers::new();
+            for v in &values {
+                h.append(&name, v).unwrap();
+            }
+            let all = h.get_all(&name);
+            prop_assert_eq!(all.len(), values.len());
+        }
+
+        #[test]
+        fn contains_after_insert(name in "[a-zA-Z][a-zA-Z0-9_-]{0,20}", value in "[a-z]{1,10}") {
+            let mut h = Headers::new();
+            prop_assert!(!h.contains(&name));
+            h.insert(&name, &value).unwrap();
+            prop_assert!(h.contains(&name));
+        }
+
+        #[test]
+        fn prop_empty_name_rejected(value in "[a-z]{1,10}") {
+            let mut h = Headers::new();
+            prop_assert!(h.insert("", &value).is_err());
+        }
+
+        #[test]
+        fn prop_newline_in_name_rejected(name in "[a-zA-Z][a-zA-Z0-9_-]{0,10}", value in "[a-z]{1,10}") {
+            let mut h = Headers::new();
+            let bad_name = format!("{name}\n");
+            prop_assert!(h.insert(&bad_name, &value).is_err());
+        }
+
+        #[test]
+        fn prop_newline_in_value_rejected(name in "[a-zA-Z][a-zA-Z0-9_-]{0,10}", value in "[a-z]{1,10}") {
+            let mut h = Headers::new();
+            let bad_value = format!("{value}\r\ninjection");
+            prop_assert!(h.insert(&name, &bad_value).is_err());
+        }
     }
 }

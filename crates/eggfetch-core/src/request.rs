@@ -437,3 +437,33 @@ impl RequestBuilder {
         client.send(request).await
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use proptest::prelude::*;
+
+    proptest::proptest! {
+        #[test]
+        fn url_parse_round_trip(scheme in "https?", host in "[a-z]{2,10}\\.[a-z]{2,5}", path in "/[a-z]{0,20}") {
+            let url_str = format!("{scheme}://{host}{path}");
+            let parsed = url::Url::parse(&url_str).unwrap();
+            let serialized = parsed.to_string();
+            prop_assert_eq!(url_str, serialized);
+        }
+
+        #[test]
+        fn query_pairs_round_trip(key in "[a-z]{1,10}", value in "[a-z0-9]{1,20}") {
+            let mut url = url::Url::parse("http://example.com/").unwrap();
+            url.query_pairs_mut().append_pair(&key, &value);
+            let found = url.query_pairs().find(|(k, _)| k == &key).map(|(_, v)| v.into_owned());
+            prop_assert_eq!(found, Some(value));
+        }
+
+        #[test]
+        fn url_with_arbitrary_path(path in "/[a-zA-Z0-9._/-]{0,50}") {
+            let url_str = format!("http://example.com{path}");
+            // Must not panic
+            let _ = url::Url::parse(&url_str);
+        }
+    }
+}

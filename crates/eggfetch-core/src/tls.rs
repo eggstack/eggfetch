@@ -688,6 +688,7 @@ fn parse_private_key(key_bytes: &[u8]) -> Result<(Vec<u8>, String)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proptest::prelude::*;
 
     #[test]
     fn default_tls_config() {
@@ -825,5 +826,37 @@ mod tests {
         let debug = format!("{config:?}");
         assert!(debug.contains("verify_hostname: true"));
         assert!(debug.contains("verify_certificate: true"));
+    }
+
+    proptest::proptest! {
+        #[test]
+        fn parse_pem_certificates_empty_input(_ in 0u64..100) {
+            let result = parse_pem_certificates(b"");
+            prop_assert!(result.is_empty());
+        }
+
+        #[test]
+        fn parse_pem_certificates_garbage(input in ".{0,200}") {
+            // Must not panic
+            let _ = parse_pem_certificates(input.as_bytes());
+        }
+
+        #[test]
+        fn tls_config_builder_round_trip(sni in prop::bool::ANY) {
+            let config = TlsConfig::builder()
+                .sni(sni)
+                .build();
+            prop_assert_eq!(config.sni_enabled(), sni);
+            // Defaults are always true
+            prop_assert!(config.verify_hostname());
+            prop_assert!(config.verify_certificate());
+        }
+
+        #[test]
+        fn build_rustls_config_valid_for_defaults(_ in 0u64..100) {
+            let config = TlsConfig::default();
+            let result = config.build_rustls_config();
+            prop_assert!(result.is_ok());
+        }
     }
 }

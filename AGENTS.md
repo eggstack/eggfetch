@@ -138,6 +138,47 @@ cargo bench -p eggfetch-bench --bench e2e          # end-to-end only
 cargo bench -p eggfetch-bench --bench resources    # resource tests only
 ```
 
+## Fuzzing and Property Testing
+
+The fuzzing and property testing infrastructure targets high-risk parsers, state machines, and codec boundaries.
+
+**cargo-fuzz targets** live in `fuzz/fuzz_targets/`. Each target exercises a specific subsystem with structured random input via libFuzzer:
+
+| Target | Subsystem |
+|--------|-----------|
+| `fuzz_headers` | Header parsing and validation |
+| `fuzz_cookie` | Cookie parsing, matching, and jar operations |
+| `fuzz_redirect` | Redirect policy and replay logic |
+| `fuzz_multipart` | Multipart encoder boundary and streaming |
+| `fuzz_compression` | Gzip, deflate, brotli, zstd decompression |
+| `fuzz_proxy` | Proxy response parsing and CONNECT tunneling |
+| `fuzz_timeout` | Timeout state machine and scheduling |
+| `fuzz_retry` | Retry policy, backoff, and Retry-After parsing |
+| `fuzz_tls` | TLS configuration and SNI handling |
+| `fuzz_url` | URL parsing and normalization |
+
+**Proptest property tests** live colocated in `eggfetch-core` modules. They verify round-trip invariants (parse then serialize produces equivalent output) and state-machine correctness for cookies, redirects, retries, and decompression.
+
+Run fuzz targets:
+
+```sh
+cd fuzz && cargo +nightly fuzz run <target>
+```
+
+Build all fuzz targets:
+
+```sh
+cd fuzz && cargo +nightly fuzz build
+```
+
+Run property tests:
+
+```sh
+cargo test -p eggfetch-core --all-features
+```
+
+Nightly Rust is required for cargo-fuzz (sanitizer coverage flags). Property tests run on stable.
+
 ## Working Style
 
 - Make the workspace build green before adding new functionality.

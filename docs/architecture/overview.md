@@ -696,3 +696,50 @@ The FFI crate mirrors `eggfetch-core`'s feature flags: `http1`, `http2`,
 The `eggfetch-node` crate uses `napi-rs` to wrap `eggfetch-ffi` for Node.js.
 It exposes `EggfetchClient` with async methods (`get`, `post`, etc.) that
 return `EggfetchResponse` objects with status, headers, body text, and JSON.
+
+## Fuzzing and Property Testing
+
+eggfetch uses two complementary approaches to test correctness beyond unit and integration tests.
+
+### Fuzz Testing
+
+Fuzz targets live in `fuzz/fuzz_targets/` and use cargo-fuzz with libFuzzer. Each target feeds structured random input to a specific subsystem under test. The ten targets are:
+
+| Target | Subsystem |
+|--------|-----------|
+| `fuzz_headers` | Header parsing and validation |
+| `fuzz_cookie` | Cookie parsing, matching, and jar operations |
+| `fuzz_redirect` | Redirect policy and replay logic |
+| `fuzz_multipart` | Multipart encoder boundary and streaming |
+| `fuzz_compression` | Gzip, deflate, brotli, zstd decompression |
+| `fuzz_proxy` | Proxy response parsing and CONNECT tunneling |
+| `fuzz_timeout` | Timeout state machine and scheduling |
+| `fuzz_retry` | Retry policy, backoff, and Retry-After parsing |
+| `fuzz_tls` | TLS configuration and SNI handling |
+| `fuzz_url` | URL parsing and normalization |
+
+Run a specific target:
+
+```sh
+cd fuzz && cargo +nightly fuzz run <target>
+```
+
+Build all targets:
+
+```sh
+cd fuzz && cargo +nightly fuzz build
+```
+
+Nightly Rust is required for cargo-fuzz due to sanitizer coverage flags.
+
+### Property Testing
+
+Proptest property tests live colocated in `eggfetch-core` modules. They verify round-trip invariants (parse then serialize produces equivalent output) and state-machine correctness for cookies, redirects, retries, and decompression. Property tests run on stable Rust.
+
+```sh
+cargo test -p eggfetch-core --all-features
+```
+
+### Harness Rules
+
+Fuzz and property test harnesses must not use external network access, must be deterministic, and must use bounded memory and time. Tests operate on in-memory data structures and mock transports.

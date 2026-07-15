@@ -289,6 +289,7 @@ impl TimeoutBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proptest::prelude::*;
 
     #[test]
     fn timeout_default_all_none() {
@@ -420,5 +421,70 @@ mod tests {
         let merged = client.merge(Some(request));
         assert_eq!(merged.total, Some(Duration::from_secs(60)));
         assert_eq!(merged.pool, Some(Duration::from_secs(10)));
+    }
+
+    proptest::proptest! {
+        #[test]
+        fn from_secs_sets_correct_phases(secs in 0u64..86400) {
+            let t = Timeout::from_secs(secs);
+            let d = Duration::from_secs(secs);
+            prop_assert_eq!(t.pool, Some(d));
+            prop_assert_eq!(t.connect, Some(d));
+            prop_assert_eq!(t.write, Some(d));
+            prop_assert_eq!(t.read, Some(d));
+            prop_assert!(t.total.is_none());
+        }
+
+        #[test]
+        fn disabled_has_no_phases(_ in 0u64..100) {
+            let t = Timeout::disabled();
+            prop_assert!(!t.has_any());
+            prop_assert!(t.pool.is_none());
+            prop_assert!(t.connect.is_none());
+            prop_assert!(t.write.is_none());
+            prop_assert!(t.read.is_none());
+            prop_assert!(t.total.is_none());
+        }
+
+        #[test]
+        fn has_any_consistent_with_fields(
+            pool in proptest::option::of(0u64..3600),
+            connect in proptest::option::of(0u64..3600),
+            write in proptest::option::of(0u64..3600),
+            read in proptest::option::of(0u64..3600),
+            total in proptest::option::of(0u64..3600),
+        ) {
+            let t = Timeout {
+                pool: pool.map(Duration::from_secs),
+                connect: connect.map(Duration::from_secs),
+                write: write.map(Duration::from_secs),
+                read: read.map(Duration::from_secs),
+                total: total.map(Duration::from_secs),
+            };
+            let expected = t.pool.is_some() || t.connect.is_some() || t.write.is_some() || t.read.is_some() || t.total.is_some();
+            prop_assert_eq!(t.has_any(), expected);
+        }
+
+        #[test]
+        fn builder_round_trip(
+            pool in 0u64..3600,
+            connect in 0u64..3600,
+            write in 0u64..3600,
+            read in 0u64..3600,
+            total in 0u64..3600,
+        ) {
+            let t = Timeout::builder()
+                .pool(Duration::from_secs(pool))
+                .connect(Duration::from_secs(connect))
+                .write(Duration::from_secs(write))
+                .read(Duration::from_secs(read))
+                .total(Duration::from_secs(total))
+                .build();
+            prop_assert_eq!(t.pool, Some(Duration::from_secs(pool)));
+            prop_assert_eq!(t.connect, Some(Duration::from_secs(connect)));
+            prop_assert_eq!(t.write, Some(Duration::from_secs(write)));
+            prop_assert_eq!(t.read, Some(Duration::from_secs(read)));
+            prop_assert_eq!(t.total, Some(Duration::from_secs(total)));
+        }
     }
 }

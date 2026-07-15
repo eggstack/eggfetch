@@ -509,6 +509,22 @@ cargo bench -p eggfetch-bench --bench e2e
 cargo bench -p eggfetch-bench --bench resources
 ```
 
+### Fuzzing
+
+Fuzz targets exercise high-risk parsers and state machines using cargo-fuzz and libFuzzer. Proptest property tests verify round-trip and state-machine invariants across cookies, redirects, retries, and decompression.
+
+Run a fuzz target:
+
+```sh
+cd fuzz && cargo +nightly fuzz run <target>
+```
+
+Run property tests:
+
+```sh
+cargo test -p eggfetch-core --all-features
+```
+
 ## MSRV
 
 The minimum supported Rust version is **1.80**. This is specified in `workspace.package.rust-version` and enforced by `rust-toolchain.toml`.
