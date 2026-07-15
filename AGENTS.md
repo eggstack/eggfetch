@@ -4,7 +4,7 @@ This file contains guidance for AI coding agents working in the eggfetch reposit
 
 ## Milestone Sequence
 
-eggfetch follows a milestone-driven development sequence: A through Q. Each milestone is a handoff boundary. Before starting work, read `plans/ROADMAP.md` and the relevant milestone plan in `plans/`. The milestones are:
+eggfetch follows a milestone-driven development sequence: A through Y. Each milestone is a handoff boundary. Before starting work, read `plans/ROADMAP.md` and the relevant milestone plan in `plans/`. The milestones are:
 
 - A: Repository and workspace foundation (complete)
 - B: Core request/response model and minimal HTTP engine (complete)
@@ -29,6 +29,7 @@ eggfetch follows a milestone-driven development sequence: A through Q. Each mile
 - Validation polish after Milestone N (complete before Q)
 - Corrective integration after Milestone S (complete)
 - K: CLI (complete)
+- Y: Documentation and examples (complete)
 - L: Correctness and differential testing
 - M: Documentation and public MVP preparation
 
@@ -64,6 +65,23 @@ Public items need doc comments. The `.clippy.toml` sets `missing-docs-in-crate-i
 /// Real body semantics (buffered vs streaming, ownership rules) land in
 /// Milestone E.
 ```
+
+User-facing documentation lives in `docs/`:
+
+| Directory | Content |
+|-----------|---------|
+| `docs/getting-started/` | Installation and quickstart |
+| `docs/concepts/` | Core concept explanations |
+| `docs/rust/` | Rust API guide |
+| `docs/python/` | Python API guide |
+| `docs/cli/` | CLI reference |
+| `docs/migration/` | Migration guides (requests, HTTPX) |
+| `docs/cookbook/` | Practical examples |
+| `docs/reference/` | Compatibility matrix, feature matrix, errors |
+| `docs/security/` | Security guidelines and troubleshooting |
+| `docs/architecture/` | Internal architecture documentation |
+
+When adding new features, update the relevant docs alongside the code changes.
 
 ## Tests
 

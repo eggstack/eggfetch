@@ -2,7 +2,7 @@
 
 eggfetch is a Rust-native HTTP client engine with Python bindings and a CLI tool. The core is async-first: a Rust engine built on tokio and hyper provides connection pooling, timeouts, TLS configuration, and streaming. The Python bindings expose both sync and async APIs; the sync API blocks on the async engine while releasing the GIL, and the async API integrates with asyncio. There is exactly one networking implementation, living entirely in Rust.
 
-> **Status: Milestones K through W complete.**
+> **Status: Milestones K through Y complete.**
 > Milestones A–W are implemented as documented. The core engine supports HTTP/2 (ALPN negotiation, multiplexed connections, protocol version reporting), HTTP/3 (QUIC transport via Quinn/h3, feature-gated, experimental), response decompression (gzip, deflate, brotli, zstd), multipart/form-data uploads, cookies, authentication, proxy support (HTTP proxying, HTTPS CONNECT tunneling, proxy authentication, per-request/client proxy configuration, NO_PROXY bypass), TLS configuration (custom CA bundles, client certificates, TLS version policy, verification toggle), streaming, timeouts, connection pooling, and policy-driven retries with exponential backoff. The CLI crate is a full-featured HTTP client with argument parsing, streaming, machine-readable output, and deterministic exit codes.
 
 [![CI](https://github.com/eggstack/eggfetch/actions/workflows/ci.yml/badge.svg)](https://github.com/eggstack/eggfetch/actions/workflows/ci.yml)
@@ -378,6 +378,37 @@ A full-featured command-line HTTP client powered by eggfetch-core:
 - **TTY awareness** -- verbose output on stderr, suppressed in machine mode.
 - **Ctrl-C** -- graceful interruption with exit code 130.
 
+### Milestone Y: Documentation and Examples (complete)
+
+Complete user-facing documentation for Rust, Python, and CLI users:
+
+- **Core concepts** -- architecture, request lifecycle, connection pooling, timeouts, streaming, redirects, cookies, authentication, proxy, TLS, retry, compression, and multipart.
+- **Rust API guide** -- comprehensive guide with code examples covering Client, RequestBuilder, Response, Headers, errors, and all configuration options.
+- **Python API guide** -- sync and async API guide covering Client, AsyncClient, Response, StreamingResponse, auth, cookies, proxy, TLS, retry, and multipart.
+- **CLI reference** -- complete flag reference, output formats, exit codes, environment variables, and practical examples.
+- **Migration guides** -- step-by-step guides for migrating from requests and HTTPX with side-by-side code comparisons.
+- **Compatibility matrix** -- feature comparison table tracking requests/HTTPX compatibility status.
+- **Cookbook** -- practical runnable examples for JSON APIs, streaming, auth, proxy, retry, and common patterns.
+- **Security guidelines** -- TLS verification, credential handling, decompression limits, and troubleshooting.
+- **Error reference** -- Rust Error variants, Python exception hierarchy, and CLI exit codes.
+
+## Documentation
+
+Complete documentation lives in the `docs/` directory:
+
+| Section | Description |
+|---------|-------------|
+| [getting-started/](docs/getting-started/) | Installation and quickstart guide |
+| [concepts/](docs/concepts/) | Core concepts: architecture, lifecycle, pooling, timeouts, streaming, redirects, cookies, auth, proxy, TLS, retry, compression, multipart |
+| [rust/guide.md](docs/rust/guide.md) | Rust API guide with examples |
+| [python/guide.md](docs/python/guide.md) | Python sync/async API guide |
+| [cli/guide.md](docs/cli/guide.md) | CLI reference and usage guide |
+| [migration/](docs/migration/) | Migration guides from requests and HTTPX |
+| [cookbook/](docs/cookbook/) | Practical runnable examples |
+| [reference/](docs/reference/) | Compatibility matrix, feature matrix, error reference |
+| [security/](docs/security/) | Security guidelines and troubleshooting |
+| [architecture/](docs/architecture/) | Internal architecture documentation |
+
 ## Repository Layout
 
 ```text
@@ -393,29 +424,25 @@ rustfmt.toml             max_width 100
 .clippy.toml             pedantic clippy config
 .github/workflows/ci.yml CI pipeline
 crates/
-  eggfetch-core/         async HTTP engine (validation pass complete)
-                         TlsConfig, TlsConfigBuilder, TrustStore, ClientIdentity, TlsVersion
-                         HttpVersionPolicy (Http1Only, Http2Only, Http3Only, Auto)
-  eggfetch-cli/          CLI binary (argument parsing, streaming output, JSON/NDJSON, exit codes)
-  eggfetch-python/       Python bindings (validation pass complete)
+  eggfetch-core/         async HTTP engine
+  eggfetch-cli/          CLI binary
+  eggfetch-python/       Python bindings
     src/                 Rust adapter modules (PyO3)
     python/eggfetch/     Python package (__init__.py)
     tests/               Python tests
     pyproject.toml       maturin build config
 docs/
-  architecture/          architecture documentation
-  milestone-r-response-compression.md  response decompression plan
-plans/                    milestone plans and roadmap
-  ROADMAP.md              full milestone roadmap
-  validation-polish-after-milestone-n.md
-  milestone-d-timeout-system.md
-  milestone-e-streaming-foundation.md
-  milestone-f-python-sync-api.md
-  milestone-g-python-async-api.md
-  milestone-h-response-compatibility.md
-  milestone-i-request-builder-compatibility.md
-  milestone-j-redirect-engine.md
-  hardening-correctness-before-python.md
+  getting-started/       installation and quickstart
+  concepts/              core concept explanations
+  rust/                  Rust API guide
+  python/                Python API guide
+  cli/                   CLI reference
+  migration/             migration guides (requests, HTTPX)
+  cookbook/               practical examples
+  reference/             compatibility matrix, feature matrix, errors
+  security/              security guidelines and troubleshooting
+  architecture/          internal architecture documentation
+plans/                   milestone plans and roadmap
 ```
 
 ## Development
@@ -453,22 +480,23 @@ eggfetch is dual-licensed under [MIT](LICENSE-MIT) and [Apache License, Version 
 
 ## Further Reading
 
+**User documentation:**
+
+- [docs/getting-started/quickstart.md](docs/getting-started/quickstart.md) -- quick start guide.
+- [docs/getting-started/installation.md](docs/getting-started/installation.md) -- installation instructions.
+- [docs/concepts/](docs/concepts/) -- core concept explanations (architecture, lifecycle, timeouts, streaming, etc.).
+- [docs/rust/guide.md](docs/rust/guide.md) -- Rust API guide.
+- [docs/python/guide.md](docs/python/guide.md) -- Python API guide.
+- [docs/cli/guide.md](docs/cli/guide.md) -- CLI reference.
+- [docs/migration/](docs/migration/) -- migration guides from requests and HTTPX.
+- [docs/cookbook/](docs/cookbook/) -- practical cookbook examples.
+- [docs/reference/compatibility.md](docs/reference/compatibility.md) -- feature compatibility matrix.
+- [docs/security/guidelines.md](docs/security/guidelines.md) -- security guidelines.
+
+**Project plans and architecture:**
+
 - [plans/ROADMAP.md](plans/ROADMAP.md) -- full project roadmap, milestone sequence, correctness priorities, and release criteria.
-- [plans/milestone-a-repository-foundation.md](plans/milestone-a-repository-foundation.md) -- the plan for Milestone A (workspace foundation, linting, CI, documentation).
-- [plans/milestone-b-core-http-engine.md](plans/milestone-b-core-http-engine.md) -- the plan for Milestone B (core request/response model and HTTP engine).
-- [plans/milestone-c-connection-management.md](plans/milestone-c-connection-management.md) -- the plan for Milestone C (connection pooling and management).
-- [plans/milestone-d-timeout-system.md](plans/milestone-d-timeout-system.md) -- the plan for Milestone D (timeout system).
-- [plans/milestone-e-streaming-foundation.md](plans/milestone-e-streaming-foundation.md) -- the plan for Milestone E (streaming foundation).
-- [plans/milestone-f-python-sync-api.md](plans/milestone-f-python-sync-api.md) -- the plan for Milestone F (Python sync API).
-- [plans/milestone-g-python-async-api.md](plans/milestone-g-python-async-api.md) -- the plan for Milestone G (Python async API).
-- [plans/milestone-h-response-compatibility.md](plans/milestone-h-response-compatibility.md) -- the plan for Milestone H (response compatibility surface).
-- [plans/milestone-i-request-builder-compatibility.md](plans/milestone-i-request-builder-compatibility.md) -- the plan for Milestone I (request builder compatibility).
-- [plans/milestone-j-redirect-engine.md](plans/milestone-j-redirect-engine.md) -- the plan for Milestone J (redirect engine).
-- [plans/milestone-n-semantic-tightening.md](plans/milestone-n-semantic-tightening.md) -- the plan for Milestone N (semantic tightening and public-API stabilization).
-- [plans/milestone-o-cookie-subsystem.md](plans/milestone-o-cookie-subsystem.md) -- the plan for Milestone O (cookie subsystem).
-- [plans/milestone-p-authentication-subsystem.md](plans/milestone-p-authentication-subsystem.md) -- the plan for Milestone P (authentication subsystem).
-- [plans/milestone-q-multipart-file-uploads.md](plans/milestone-q-multipart-file-uploads.md) -- the plan for Milestone Q (multipart and file uploads).
-- [plans/milestone-r-response-compression.md](plans/milestone-r-response-compression.md) -- the plan for Milestone R (response compression and decompression).
-- [plans/milestone-t-tls-configuration.md](plans/milestone-t-tls-configuration.md) -- the plan for Milestone T (TLS configuration).
-- [plans/milestone-u-retry-resilience.md](plans/milestone-u-retry-resilience.md) -- the plan for Milestone U (retry and resilience policy).
-- [plans/post-milestone-j-tightening.md](plans/post-milestone-j-tightening.md) -- post-J corrective pass: redirect body buffering fix, async response construction fix, documentation truth pass.
+- [docs/architecture/overview.md](docs/architecture/overview.md) -- internal architecture documentation.
+- [docs/architecture/dependency-policy.md](docs/architecture/dependency-policy.md) -- dependency management policy.
+- [docs/architecture/feature-flags.md](docs/architecture/feature-flags.md) -- feature flag reference.
+- [plans/milestone-y-documentation-examples.md](plans/milestone-y-documentation-examples.md) -- the plan for Milestone Y (documentation and examples).
