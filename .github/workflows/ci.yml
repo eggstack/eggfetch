@@ -106,7 +106,7 @@ jobs:
       - name: Verify CLI help matches docs
         run: python scripts/verify_cli_help_sync.py
       - name: Execute Python doc examples
-        run: python scripts/run_doc_examples.py --install
+        run: python scripts/run_doc_examples.py
 
   python:
     name: Python tests (py${{ matrix.python-version }}, ${{ matrix.os }})
@@ -138,16 +138,23 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-py${{ matrix.python-version }}-cargo-
 
-      - name: Install maturin and pytest
-        run: pip install maturin pytest pytest-asyncio
+      - name: Create virtualenv and install dependencies
+        run: |
+          python -m venv .venv
+          source .venv/bin/activate
+          pip install maturin pytest pytest-asyncio
 
       - name: Build and install
         env:
           PYO3_USE_ABI3_FORWARD_COMPATIBILITY: "1"
-        run: maturin develop -m crates/eggfetch-python/Cargo.toml
+        run: |
+          source .venv/bin/activate
+          maturin develop -m crates/eggfetch-python/Cargo.toml
 
       - name: Python tests
-        run: pytest crates/eggfetch-python/tests/ -v
+        run: |
+          source .venv/bin/activate
+          pytest crates/eggfetch-python/tests/ -v
 
   wheel-smoke:
     name: Wheel smoke (py${{ matrix.python-version }}, ${{ matrix.os }})
