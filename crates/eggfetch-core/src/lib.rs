@@ -65,7 +65,9 @@ pub use multipart::{Boundary, Multipart, MultipartEncoder, Part, PartBody};
 pub use pool::{Pool, PoolConfig};
 #[cfg(feature = "proxy")]
 pub use proxy::{NoProxy, NoProxyRule, Proxy, ProxyAuth, ProxyConfig, ProxyDecision, ProxyRule};
-pub use redact::{is_sensitive_header, redact_headers, redact_url, SENSITIVE_HEADERS};
+pub use redact::{
+    is_sensitive_header, redact_headers, redact_url, redact_url_string, SENSITIVE_HEADERS,
+};
 pub use redirect::RedirectPolicy;
 pub use request::{ProxyOverride, Request, RequestBuilder};
 pub use response::{HistoryEntry, Response};

@@ -35,6 +35,7 @@
 use std::fmt;
 
 use crate::error::{Error, Result};
+use crate::redact::redact_url_string;
 
 /// A single `NO_PROXY` bypass rule.
 ///
@@ -512,8 +513,12 @@ impl fmt::Display for Proxy {
 /// - no fragment
 /// - no query string
 fn parse_proxy_url(url_str: &str) -> Result<url::Url> {
-    let url = url::Url::parse(url_str)
-        .map_err(|e| Error::InvalidProxyUrl(format!("invalid proxy URL: {e}")))?;
+    let url = url::Url::parse(url_str).map_err(|e| {
+        Error::InvalidProxyUrl(format!(
+            "invalid proxy URL: {e} ({})",
+            redact_url_string(url_str)
+        ))
+    })?;
 
     match url.scheme() {
         "http" => {}

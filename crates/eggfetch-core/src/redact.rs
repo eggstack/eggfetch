@@ -52,6 +52,17 @@ pub fn redact_header_value(value: &str) -> &str {
     }
 }
 
+/// Redact credentials from a URL string for safe display in error messages.
+///
+/// If the string parses as a valid URL, credentials are stripped. If parsing
+/// fails, the original string is returned unchanged.
+pub fn redact_url_string(url_str: &str) -> String {
+    match Url::parse(url_str) {
+        Ok(url) => redact_url(&url),
+        Err(_) => url_str.to_owned(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -152,5 +163,26 @@ mod tests {
         let url = Url::parse("https://user@example.com/path").unwrap();
         let redacted = redact_url(&url);
         assert!(!redacted.contains("user"));
+    }
+
+    #[test]
+    fn redact_url_string_strips_credentials() {
+        let redacted = redact_url_string("https://user:pass@example.com/path?q=secret");
+        assert_eq!(redacted, "https://example.com/path");
+        assert!(!redacted.contains("user"));
+        assert!(!redacted.contains("pass"));
+    }
+
+    #[test]
+    fn redact_url_string_no_credentials() {
+        let redacted = redact_url_string("https://example.com/api");
+        assert_eq!(redacted, "https://example.com/api");
+    }
+
+    #[test]
+    fn redact_url_string_invalid_returns_original() {
+        let input = "not a url at all";
+        let redacted = redact_url_string(input);
+        assert_eq!(redacted, input);
     }
 }

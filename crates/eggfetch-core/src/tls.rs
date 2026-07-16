@@ -52,7 +52,7 @@ pub enum TrustStore {
 }
 
 /// A client certificate and private key for mTLS.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub enum ClientIdentity {
     /// A certificate chain and private key in DER format.
     Pem {
@@ -63,6 +63,22 @@ pub enum ClientIdentity {
         /// The label from the PEM block (e.g., "PRIVATE KEY", "RSA PRIVATE KEY").
         key_label: String,
     },
+}
+
+impl std::fmt::Debug for ClientIdentity {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Pem {
+                cert_chain,
+                key_label,
+                ..
+            } => f
+                .debug_struct("ClientIdentity::Pem")
+                .field("cert_count", &cert_chain.len())
+                .field("key_label", key_label)
+                .finish_non_exhaustive(),
+        }
+    }
 }
 
 /// Minimum or maximum TLS protocol version.
@@ -566,11 +582,19 @@ impl rustls::client::danger::ServerCertVerifier for NoVerifier {
 }
 
 /// A resolver that returns a single certificate and key for mTLS.
-#[derive(Debug)]
 struct SingleCertResolver {
     cert_chain: Vec<CertificateDer<'static>>,
     private_key_der: Vec<u8>,
     key_label: String,
+}
+
+impl std::fmt::Debug for SingleCertResolver {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SingleCertResolver")
+            .field("cert_count", &self.cert_chain.len())
+            .field("key_label", &self.key_label)
+            .finish_non_exhaustive()
+    }
 }
 
 impl SingleCertResolver {
@@ -826,6 +850,22 @@ mod tests {
         let debug = format!("{config:?}");
         assert!(debug.contains("verify_hostname: true"));
         assert!(debug.contains("verify_certificate: true"));
+    }
+
+    #[test]
+    fn client_identity_debug_no_private_key() {
+        let identity = ClientIdentity::Pem {
+            cert_chain: vec![],
+            private_key_der: b"super-secret-private-key-data".to_vec(),
+            key_label: "PRIVATE KEY".to_string(),
+        };
+        let debug = format!("{identity:?}");
+        assert!(
+            !debug.contains("super-secret"),
+            "ClientIdentity Debug must not leak private key bytes: {debug}"
+        );
+        assert!(debug.contains("cert_count"));
+        assert!(debug.contains("key_label"));
     }
 
     proptest::proptest! {
