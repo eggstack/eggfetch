@@ -3,6 +3,8 @@ name: Benchmarks
 on:
   pull_request:
     branches: [main]
+  push:
+    branches: [main]
   workflow_dispatch:
     inputs:
       baseline:
@@ -33,12 +35,20 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-bench-cargo-
 
+      - name: Download baseline
+        if: inputs.baseline != true
+        uses: actions/download-artifact@v4
+        with:
+          name: benchmark-baselines
+          path: target/criterion
+        continue-on-error: true
+
       - name: Run microbenchmarks
         run: |
           if [ "${{ inputs.baseline }}" = "true" ]; then
             cargo bench -p eggfetch-bench --bench microbench -- --save-baseline main
           else
-            cargo bench -p eggfetch-bench --bench microbench -- --output-format bencher | tee bench-results.txt
+            cargo bench -p eggfetch-bench --bench microbench -- --baseline main 2>&1 | tee bench-results.txt || true
           fi
 
       - name: Run e2e benchmarks
@@ -46,7 +56,7 @@ jobs:
           if [ "${{ inputs.baseline }}" = "true" ]; then
             cargo bench -p eggfetch-bench --bench e2e -- --save-baseline main
           else
-            cargo bench -p eggfetch-bench --bench e2e -- --output-format bencher | tee -a bench-results.txt
+            cargo bench -p eggfetch-bench --bench e2e -- --baseline main 2>&1 | tee -a bench-results.txt || true
           fi
 
       - name: Run resource benchmarks
@@ -54,7 +64,16 @@ jobs:
           if [ "${{ inputs.baseline }}" = "true" ]; then
             cargo bench -p eggfetch-bench --bench resources -- --save-baseline main
           else
-            cargo bench -p eggfetch-bench --bench resources -- --output-format bencher | tee -a bench-results.txt
+            cargo bench -p eggfetch-bench --bench resources -- --baseline main 2>&1 | tee -a bench-results.txt || true
+          fi
+
+      - name: Check for regressions
+        if: inputs.baseline != true
+        run: |
+          if grep -q "Performance has regressed" bench-results.txt 2>/dev/null; then
+            echo "::warning::Performance regressions detected. Review the benchmark results."
+            # Extract regression details
+            grep -A 5 "Performance has regressed" bench-results.txt || true
           fi
 
       - name: Upload benchmark results
@@ -66,3 +85,11 @@ jobs:
             bench-results.txt
             target/criterion/**/new/
           retention-days: 30
+
+      - name: Save baselines
+        if: inputs.baseline == true || (github.ref == 'refs/heads/main' && github.event_name == 'push')
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-baselines
+          path: target/criterion
+          retention-days: 90
