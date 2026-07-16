@@ -241,7 +241,6 @@ fn bench_redirect_chain(c: &mut Criterion) {
 }
 
 fn bench_allocations_per_request(c: &mut Criterion) {
-    let rt = tokio::runtime::Runtime::new().unwrap();
     let server = BenchServer::start(BenchServerConfig {
         body_size: 1024,
         ..Default::default()
@@ -253,7 +252,6 @@ fn bench_allocations_per_request(c: &mut Criterion) {
     group.bench_function("single_request_allocations", |b| {
         b.iter_custom(|iters| {
             let rt = tokio::runtime::Runtime::new().unwrap();
-            let baseline = bytes_allocated();
             let start = std::time::Instant::now();
             for _ in 0..iters {
                 let url = url.clone();
@@ -263,7 +261,6 @@ fn bench_allocations_per_request(c: &mut Criterion) {
                     let _ = resp.bytes().await;
                 });
             }
-            let peak = bytes_allocated();
             start.elapsed()
         });
     });
@@ -273,7 +270,6 @@ fn bench_allocations_per_request(c: &mut Criterion) {
 }
 
 fn bench_memory_per_request(c: &mut Criterion) {
-    let rt = tokio::runtime::Runtime::new().unwrap();
     let server = BenchServer::start(BenchServerConfig {
         body_size: 65536,
         ..Default::default()
