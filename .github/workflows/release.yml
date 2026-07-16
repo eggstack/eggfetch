@@ -1,0 +1,595 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (e.g. 0.1.0)"
+        required: true
+        type: string
+  push:
+    tags:
+      - "v*"
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  # ──────────────────────────────────────────────────────────────────────
+  # 1. Verify tag matches Cargo.toml version and CHANGELOG has no issues
+  # ──────────────────────────────────────────────────────────────────────
+  verify:
+    name: Verify release consistency
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+    steps:
+      # Pinned to v4.3.1 — update process: check https://github.com/actions/checkout/releases
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Extract version from tag
+        id: meta
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Releasing version: $VERSION"
+
+      - name: Verify tag matches Cargo.toml workspace version
+        run: |
+          EXPECTED="${{ steps.meta.outputs.version }}"
+          CARGO_VERSION=$(grep -m1 '^version' Cargo.toml | sed 's/.*"\(.*\)"/\1/')
+          echo "Cargo.toml workspace version: $CARGO_VERSION"
+          echo "Expected version: $EXPECTED"
+          if [ "$CARGO_VERSION" != "$EXPECTED" ]; then
+            echo "::error::Cargo.toml version ($CARGO_VERSION) does not match tag version ($EXPECTED)"
+            exit 1
+          fi
+
+      - name: Verify all crate versions match
+        run: |
+          EXPECTED="${{ steps.meta.outputs.version }}"
+          for crate in crates/eggfetch-core crates/eggfetch-cli crates/eggfetch-python crates/eggfetch-ffi crates/eggfetch-node; do
+            CRATE_VERSION=$(grep -m1 '^version' "$crate/Cargo.toml" | sed 's/.*"\(.*\)"/\1/')
+            echo "$crate version: $CRATE_VERSION"
+            if [ "$CRATE_VERSION" != "$EXPECTED" ]; then
+              echo "::error::$crate version ($CRATE_VERSION) does not match expected ($EXPECTED)"
+              exit 1
+            fi
+          done
+
+      - name: Verify Python package version matches
+        run: |
+          EXPECTED="${{ steps.meta.outputs.version }}"
+          PY_VERSION=$(grep '^version' crates/eggfetch-python/pyproject.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
+          echo "pyproject.toml version: $PY_VERSION"
+          if [ "$PY_VERSION" != "$EXPECTED" ]; then
+            echo "::error::pyproject.toml version ($PY_VERSION) does not match expected ($EXPECTED)"
+            exit 1
+          fi
+
+      - name: Verify CHANGELOG has no [Unreleased] entries
+        run: |
+          UNRELEASED=$(sed -n '/^## \[Unreleased\]/,/^## \[/p' CHANGELOG.md | head -n -1 | tail -n +2)
+          # Allow blank [Unreleased] section, but not content entries
+          if echo "$UNRELEASED" | grep -qE '^\s*-\s+'; then
+            echo "::error::CHANGELOG.md [Unreleased] section has entries. Move them to the version section."
+            echo "$UNRELEASED"
+            exit 1
+          fi
+          echo "CHANGELOG [Unreleased] section is clean."
+
+      - name: Verify CHANGELOG has a section for this version
+        run: |
+          if ! grep -q "## \[${{ steps.meta.outputs.version }}\]" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no section for version ${{ steps.meta.outputs.version }}"
+            exit 1
+          fi
+          echo "CHANGELOG has section for ${{ steps.meta.outputs.version }}."
+
+  # ──────────────────────────────────────────────────────────────────────
+  # 2. CI — critical checks
+  # ──────────────────────────────────────────────────────────────────────
+  ci:
+    name: CI checks
+    runs-on: ubuntu-latest
+    steps:
+      # Pinned to v4.3.1 — update process: check https://github.com/actions/checkout/releases
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
+
+      - name: Cache cargo registry and target
+        # Pinned to v4.3.0 — update process: check https://github.com/actions/cache/releases
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: release-ubuntu-cargo-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
+          restore-keys: |
+            release-ubuntu-cargo-
+
+      - name: Format check
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+      - name: Build (all features)
+        run: cargo check --workspace --all-features
+
+      - name: Feature matrix
+        run: |
+          cargo check -p eggfetch-core --no-default-features
+          cargo check -p eggfetch-core --no-default-features --features http1,tls-rustls
+
+      - name: Tests
+        run: cargo test --workspace --all-features
+
+  ci-platform:
+    name: CI tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      # Pinned to v4.3.1 — update process: check https://github.com/actions/checkout/releases
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
+
+      - name: Cache cargo registry and target
+        # Pinned to v4.3.0 — update process: check https://github.com/actions/cache/releases
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: release-${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
+          restore-keys: |
+            release-${{ runner.os }}-cargo-
+
+      - name: Tests
+        run: cargo test --workspace --all-features
+
+  ci-python:
+    name: Python tests (${{ matrix.python-version }}, ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      # Pinned to v4.3.1 — update process: check https://github.com/actions/checkout/releases
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
+
+      - name: Set up Python ${{ matrix.python-version }}
+        # Pinned to v5.6.0 — update process: check https://github.com/actions/setup-python/releases
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Cache cargo registry and target
+        # Pinned to v4.3.0 — update process: check https://github.com/actions/cache/releases
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: release-${{ runner.os }}-py${{ matrix.python-version }}-cargo-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
+          restore-keys: |
+            release-${{ runner.os }}-py${{ matrix.python-version }}-cargo-
+
+      - name: Install maturin and pytest
+        run: pip install maturin pytest pytest-asyncio
+
+      - name: Build and install
+        env:
+          PYO3_USE_ABI3_FORWARD_COMPATIBILITY: "1"
+        run: maturin develop -m crates/eggfetch-python/Cargo.toml
+
+      - name: Python tests
+        run: pytest crates/eggfetch-python/tests/ -v
+
+  # ──────────────────────────────────────────────────────────────────────
+  # 3. Build Python wheels
+  # ──────────────────────────────────────────────────────────────────────
+  build-python-wheels:
+    name: Build Python wheels (${{ matrix.platform }})
+    runs-on: ${{ matrix.os }}
+    needs: [verify, ci, ci-platform, ci-python]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux-x86_64
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-latest
+            platform: linux-aarch64
+            target: aarch64-unknown-linux-gnu
+          - os: macos-latest
+            platform: macos-x86_64
+            target: x86_64-apple-darwin
+          - os: macos-latest
+            platform: macos-aarch64
+            target: aarch64-apple-darwin
+          - os: windows-latest
+            platform: win-amd64
+            target: x86_64-pc-windows-msvc
+    steps:
+      # Pinned to v4.3.1 — update process: check https://github.com/actions/checkout/releases
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          args: >-
+            --release
+            --manifest-path crates/eggfetch-python/Cargo.toml
+            --out dist
+            --interpreter 3.10 3.11 3.12 3.13
+          sccache: true
+        env:
+          PYO3_USE_ABI3_FORWARD_COMPATIBILITY: "1"
+
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.platform }}
+          path: dist/*.whl
+
+  build-python-sdist:
+    name: Build Python sdist
+    runs-on: ubuntu-latest
+    needs: [verify, ci, ci-platform, ci-python]
+    steps:
+      # Pinned to v4.3.1 — update process: check https://github.com/actions/checkout/releases
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Build sdist
+        uses: PyO3/maturin-action@v1
+        with:
+          command: sdist
+          args: >-
+            --manifest-path crates/eggfetch-python/Cargo.toml
+            --out dist
+
+      - name: Upload sdist
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-sdist
+          path: dist/*.tar.gz
+
+  # ──────────────────────────────────────────────────────────────────────
+  # 4. Build CLI binaries
+  # ──────────────────────────────────────────────────────────────────────
+  build-cli-binaries:
+    name: Build CLI (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    needs: [verify, ci, ci-platform]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            archive: tar.gz
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            archive: tar.gz
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            archive: tar.gz
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            archive: tar.gz
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            archive: zip
+    steps:
+      # Pinned to v4.3.1 — update process: check https://github.com/actions/checkout/releases
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo registry and target
+        # Pinned to v4.3.0 — update process: check https://github.com/actions/cache/releases
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: release-cli-${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
+          restore-keys: |
+            release-cli-${{ matrix.target }}-cargo-
+
+      - name: Build release binary
+        run: cargo build -p eggfetch-cli --release --target ${{ matrix.target }}
+
+      - name: Create archive (unix)
+        if: matrix.archive == 'tar.gz'
+        run: |
+          VERSION="${{ needs.verify.outputs.version }}"
+          BINARY="target/${{ matrix.target }}/release/eggfetch"
+          ARCHIVE="eggfetch-${VERSION}-${{ matrix.target }}.tar.gz"
+          tar czf "$ARCHIVE" -C "target/${{ matrix.target }}/release" eggfetch
+          echo "ARCHIVE=$ARCHIVE" >> "$GITHUB_ENV"
+
+      - name: Create archive (windows)
+        if: matrix.archive == 'zip'
+        shell: pwsh
+        run: |
+          $version = "${{ needs.verify.outputs.version }}"
+          $binary = "target/${{ matrix.target }}/release/eggfetch.exe"
+          $archive = "eggfetch-${version}-${{ matrix.target }}.zip"
+          Compress-Archive -Path $binary -DestinationPath $archive
+          echo "ARCHIVE=$archive" >> $env:GITHUB_ENV
+
+      - name: Generate checksums
+        shell: bash
+        run: |
+          if command -v shasum &> /dev/null; then
+            shasum -a 256 "$ARCHIVE" > "${ARCHIVE}.sha256"
+          else
+            sha256sum "$ARCHIVE" > "${ARCHIVE}.sha256"
+          fi
+          echo "--- Checksum ---"
+          cat "${ARCHIVE}.sha256"
+
+      - name: Upload archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: cli-${{ matrix.target }}
+          path: |
+            ${{ env.ARCHIVE }}
+            ${{ env.ARCHIVE }}.sha256
+
+  # ──────────────────────────────────────────────────────────────────────
+  # 5. Smoke test built artifacts
+  # ──────────────────────────────────────────────────────────────────────
+  smoke-test:
+    name: Smoke test
+    runs-on: ubuntu-latest
+    needs: [build-python-wheels, build-python-sdist, build-cli-binaries]
+    steps:
+      # Pinned to v4.3.1 — update process: check https://github.com/actions/checkout/releases
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
+
+      - name: Set up Python
+        # Pinned to v5.6.0 — update process: check https://github.com/actions/setup-python/releases
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Verify checksums
+        run: |
+          for sha_file in artifacts/cli-x86_64-unknown-linux-gnu/*.sha256; do
+            echo "Verifying: $sha_file"
+            cd "$(dirname "$sha_file")"
+            sha256sum -c "$(basename "$sha_file")"
+            cd "$GITHUB_WORKSPACE"
+          done
+
+      - name: Test Python wheel
+        run: |
+          python scripts/wheel_smoke.py --wheel-dir artifacts/wheels-linux-x86_64
+
+      - name: Test CLI binary
+        run: |
+          chmod +x artifacts/cli-x86_64-unknown-linux-gnu/eggfetch-*.tar.gz
+          cd /tmp
+          tar xzf "$GITHUB_WORKSPACE/artifacts/cli-x86_64-unknown-linux-gnu/eggfetch-*.tar.gz"
+          ./eggfetch --version
+
+  # ──────────────────────────────────────────────────────────────────────
+  # 6. Publish to crates.io
+  # ──────────────────────────────────────────────────────────────────────
+  publish-crates:
+    name: Publish to crates.io
+    runs-on: ubuntu-latest
+    needs: [verify, smoke-test]
+    environment: release
+    steps:
+      # Pinned to v4.3.1 — update process: check https://github.com/actions/checkout/releases
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
+
+      - name: Dry-run packaging check
+        run: |
+          cargo publish -p eggfetch-core --dry-run
+          cargo publish -p eggfetch-cli --dry-run
+          cargo publish -p eggfetch-ffi --dry-run
+          cargo publish -p eggfetch-python --dry-run
+          cargo publish -p eggfetch-node --dry-run
+
+      - name: Publish eggfetch-core
+        run: cargo publish -p eggfetch-core
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+      - name: Wait for crates.io index propagation
+        run: sleep 30
+
+      - name: Publish eggfetch-cli
+        run: cargo publish -p eggfetch-cli
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+      - name: Wait for crates.io index propagation
+        run: sleep 30
+
+      - name: Publish eggfetch-ffi
+        run: cargo publish -p eggfetch-ffi
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+      - name: Wait for crates.io index propagation
+        run: sleep 30
+
+      - name: Publish eggfetch-python
+        run: cargo publish -p eggfetch-python
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+      - name: Wait for crates.io index propagation
+        run: sleep 30
+
+      - name: Publish eggfetch-node
+        run: cargo publish -p eggfetch-node
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+  # ──────────────────────────────────────────────────────────────────────
+  # 7. Publish to PyPI
+  # ──────────────────────────────────────────────────────────────────────
+  publish-pypi:
+    name: Publish to PyPI
+    runs-on: ubuntu-latest
+    needs: [verify, smoke-test]
+    environment: release
+    steps:
+      # Pinned to v4.3.1 — update process: check https://github.com/actions/checkout/releases
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Download all wheel artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: wheels-*
+
+      - name: Flatten dist directory
+        run: |
+          mkdir -p dist-flat
+          find dist -name '*.whl' -exec cp {} dist-flat/ \;
+          find dist -name '*.tar.gz' -exec cp {} dist-flat/ \;
+          echo "Contents of dist-flat:"
+          ls -la dist-flat/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist-flat/
+          password: ${{ secrets.PYPI_TOKEN }}
+
+  # ──────────────────────────────────────────────────────────────────────
+  # 8. Create GitHub Release
+  # ──────────────────────────────────────────────────────────────────────
+  github-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [verify, smoke-test, publish-crates, publish-pypi]
+    steps:
+      # Pinned to v4.3.1 — update process: check https://github.com/actions/checkout/releases
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+
+      - name: Download CLI binaries
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          pattern: cli-*
+
+      - name: Gather release assets
+        id: assets
+        run: |
+          mkdir -p assets
+          for dir in release-assets/cli-*/; do
+            cp "$dir"*.tar.gz assets/ 2>/dev/null || true
+            cp "$dir"*.zip assets/ 2>/dev/null || true
+            cp "$dir"*.sha256 assets/ 2>/dev/null || true
+          done
+          echo "Release assets:"
+          ls -la assets/
+
+      - name: Extract CHANGELOG section
+        id: changelog
+        run: |
+          VERSION="${{ needs.verify.outputs.version }}"
+          # Extract the section for this version, from ## [version] to the next ## [
+          NOTES=$(awk "/^## \[$VERSION\]/{found=1; next} /^## \[/{if(found) exit} found{print}" CHANGELOG.md)
+          # Write to file to avoid multiline issues
+          echo "$NOTES" > /tmp/release-notes.md
+          echo "Release notes:"
+          cat /tmp/release-notes.md
+
+      - name: Create GitHub Release
+        uses:           softprops/action-gh-release@da05d552573ad5aba039eaac05058a918a7bf631 # v2.2.2
+        with:
+          tag_name: v${{ needs.verify.outputs.version }}
+          name: v${{ needs.verify.outputs.version }}
+          body_path: /tmp/release-notes.md
+          draft: false
+          prerelease: ${{ contains(needs.verify.outputs.version, '-rc') || contains(needs.verify.outputs.version, '-alpha') || contains(needs.verify.outputs.version, '-beta') }}
+          files: assets/*
+          generate_release_notes: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ──────────────────────────────────────────────────────────────────────
+  # 9. Post-release verification
+  # ──────────────────────────────────────────────────────────────────────
+  post-release:
+    name: Post-release verification
+    runs-on: ubuntu-latest
+    needs: [verify, publish-crates, publish-pypi]
+    steps:
+      - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
+
+      - name: Set up Python
+        # Pinned to v5.6.0 — update process: check https://github.com/actions/setup-python/releases
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+
+      - name: Wait for crates.io propagation
+        run: sleep 60
+
+      - name: Verify crates.io installation
+        run: |
+          cargo install eggfetch-cli --version "${{ needs.verify.outputs.version }}"
+          eggfetch --version
+
+      - name: Wait for PyPI propagation
+        run: sleep 30
+
+      - name: Verify PyPI installation
+        run: |
+          python -m venv /tmp/release-test-venv
+          /tmp/release-test-venv/bin/pip install "eggfetch==${{ needs.verify.outputs.version }}"
+          /tmp/release-test-venv/bin/python -c "import eggfetch; print('eggfetch imported successfully')"
+
+      - name: Verify version numbers match
+        run: |
+          EXPECTED="${{ needs.verify.outputs.version }}"
+          echo "Checking crates.io version..."
+          cargo info eggfetch-core 2>&1 | grep -q "$EXPECTED" || echo "Warning: could not verify crates.io version"
+          echo "Checking PyPI version..."
+          /tmp/release-test-venv/bin/pip show eggfetch | grep -q "$EXPECTED" || echo "Warning: could not verify PyPI version"
+          echo "Post-release verification complete."
