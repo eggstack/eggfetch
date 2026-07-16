@@ -101,6 +101,12 @@ jobs:
         run: python scripts/check_doc_links.py
       - name: Generate CLI help reference
         run: python scripts/generate_cli_help.py
+      - name: Check API surface
+        run: python scripts/check_api_surface.py
+      - name: Verify CLI help matches docs
+        run: python scripts/verify_cli_help_sync.py
+      - name: Execute Python doc examples
+        run: python scripts/run_doc_examples.py --install
 
   python:
     name: Python tests (py${{ matrix.python-version }}, ${{ matrix.os }})

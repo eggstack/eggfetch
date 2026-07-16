@@ -71,9 +71,9 @@ jobs:
         if: inputs.baseline != true
         run: |
           if grep -q "Performance has regressed" bench-results.txt 2>/dev/null; then
-            echo "::warning::Performance regressions detected. Review the benchmark results."
-            # Extract regression details
+            echo "::error::Performance regressions detected."
             grep -A 5 "Performance has regressed" bench-results.txt || true
+            exit 1
           fi
 
       - name: Upload benchmark results

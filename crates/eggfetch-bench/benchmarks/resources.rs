@@ -1,10 +1,11 @@
 #![allow(missing_docs)]
 #![allow(clippy::needless_return)]
 
+use std::alloc::{GlobalAlloc, Layout, System};
 use std::fmt::Write as _;
 use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::thread;
 
@@ -17,6 +18,36 @@ fn make_client() -> Client {
     Client::builder()
         .http_version_policy(HttpVersionPolicy::Http1Only)
         .build()
+}
+
+// ---------------------------------------------------------------------------
+// Allocation tracking wrapper
+// ---------------------------------------------------------------------------
+
+static ALLOCATED: AtomicUsize = AtomicUsize::new(0);
+
+struct TrackingAlloc;
+
+unsafe impl GlobalAlloc for TrackingAlloc {
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        let ptr = System.alloc(layout);
+        if !ptr.is_null() {
+            ALLOCATED.fetch_add(layout.size(), Ordering::Relaxed);
+        }
+        ptr
+    }
+
+    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+        System.dealloc(ptr, layout);
+        ALLOCATED.fetch_sub(layout.size(), Ordering::Relaxed);
+    }
+}
+
+#[global_allocator]
+static ALLOC: TrackingAlloc = TrackingAlloc;
+
+fn bytes_allocated() -> usize {
+    ALLOCATED.load(Ordering::Relaxed)
 }
 
 fn bench_buffered_vs_streaming(c: &mut Criterion) {
@@ -208,6 +239,67 @@ fn bench_redirect_chain(c: &mut Criterion) {
     server.shutdown();
 }
 
+fn bench_allocations_per_request(c: &mut Criterion) {
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let server = BenchServer::start(BenchServerConfig {
+        body_size: 1024,
+        ..Default::default()
+    });
+    let url = server.url();
+
+    let mut group = c.benchmark_group("allocations");
+
+    group.bench_function("single_request_allocations", |b| {
+        b.iter_custom(|iters| {
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            let baseline = bytes_allocated();
+            let start = std::time::Instant::now();
+            for _ in 0..iters {
+                let url = url.clone();
+                rt.block_on(async {
+                    let client = make_client();
+                    let mut resp = client.get(&url).unwrap().send().await.unwrap();
+                    let _ = resp.bytes().await;
+                });
+            }
+            let peak = bytes_allocated();
+            start.elapsed()
+        });
+    });
+
+    group.finish();
+    server.shutdown();
+}
+
+fn bench_memory_per_request(c: &mut Criterion) {
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let server = BenchServer::start(BenchServerConfig {
+        body_size: 65536,
+        ..Default::default()
+    });
+    let url = server.url();
+
+    c.bench_function("memory_after_100_requests", |b| {
+        b.iter_custom(|iters| {
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            let start = std::time::Instant::now();
+            for _ in 0..iters {
+                let url = url.clone();
+                rt.block_on(async {
+                    for _ in 0..100 {
+                        let client = make_client();
+                        let mut resp = client.get(&url).unwrap().send().await.unwrap();
+                        let _ = resp.bytes().await;
+                    }
+                });
+            }
+            start.elapsed()
+        });
+    });
+
+    server.shutdown();
+}
+
 criterion_group!(
     benches,
     bench_buffered_vs_streaming,
@@ -215,5 +307,7 @@ criterion_group!(
     bench_connection_pool_saturation,
     bench_header_large_set,
     bench_redirect_chain,
+    bench_allocations_per_request,
+    bench_memory_per_request,
 );
 criterion_main!(benches);
