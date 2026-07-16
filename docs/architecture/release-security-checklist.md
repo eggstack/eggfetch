@@ -115,3 +115,13 @@ This checklist must be completed before any release of eggfetch. Each item has a
 - [ ] Advisory drafted (if applicable) with affected versions, fixed version, severity, and mitigation
 - [ ] CVE/GHSA requested (if applicable) via GitHub Security Advisory
 - [ ] Reporter notified (if applicable) with 7-day advance notice before public disclosure
+
+## Release Artifacts
+
+- [ ] Python wheels built for all declared platforms and Python versions
+- [ ] CLI binaries built for all declared platforms
+- [ ] SHA256 checksums generated for all binary artifacts
+- [ ] Wheel and CLI artifacts smoke-tested in clean environments
+- [ ] crates.io packages pass `cargo package --list` verification
+- [ ] GitHub Release created with release notes from CHANGELOG
+- [ ] Post-release install tests pass from crates.io and PyPI

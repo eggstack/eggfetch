@@ -14,6 +14,7 @@ docs/
 ├── cookbook/            Practical runnable examples
 ├── migration/          Guides from requests and HTTPX
 ├── reference/          Feature matrix, errors, versioning
+├── releases/           Release process and compatibility policy
 └── security/           Security guidelines and troubleshooting
 ```
 
@@ -24,6 +25,7 @@ docs/
 - **Python users?** See `python/guide.md`
 - **CLI users?** See `cli/guide.md`
 - **Migrating?** Check `migration/from-requests.md` or `migration/from-httpx.md`
+- **Releasing?** See `releases/process.md` for the release workflow and `releases/compatibility-policy.md` for versioning
 
 ## For contributors
 

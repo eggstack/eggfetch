@@ -82,6 +82,7 @@ User-facing documentation lives in `docs/`:
 | `docs/security/` | Security guidelines and troubleshooting |
 | `docs/architecture/` | Internal architecture documentation |
 | `docs/ffi/` | C ABI guide, architecture, and surface audit |
+| `docs/releases/` | Release process and compatibility policy |
 
 When adding new features, update the relevant docs alongside the code changes.
 
@@ -192,6 +193,24 @@ The project enforces security through CI automation and code conventions:
 - See `SECURITY.md` for vulnerability reporting. See `docs/architecture/threat-model.md` for the threat model.
 - See `docs/architecture/release-security-checklist.md` for the pre-release checklist.
 - See `docs/architecture/incident-runbook.md` for the incident response process.
+
+## Release Engineering
+
+eggfetch uses coordinated versioning across all publishable crates (core, CLI, Python, FFI, Node). All crates share the same version number. The bench and fuzz crates are not published.
+
+Release workflow:
+- Triggered by version tags (`v*`) or manual dispatch
+- Runs full CI matrix before any publishing
+- Builds Python wheels for Linux (x86_64/aarch64), macOS (x86_64/aarch64), Windows (x86_64) across Python 3.10–3.13
+- Builds CLI binaries for supported platforms with checksums
+- Smoke-tests all artifacts before publishing
+- Requires environment approval for crates.io and PyPI publishing
+- Creates GitHub Release with binaries and release notes
+- Runs post-release install verification
+
+Publishing order: eggfetch-core → eggfetch-cli → eggfetch-ffi → eggfetch-python → eggfetch-node (crates.io index propagation requires waits between publishes).
+
+See `docs/releases/process.md` for the full release process and `docs/releases/compatibility-policy.md` for versioning and compatibility policies.
 
 ## Working Style
 

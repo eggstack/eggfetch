@@ -6,6 +6,9 @@ eggfetch is a Rust-native HTTP client engine with Python bindings and a CLI tool
 > Milestones A–W are implemented as documented. The core engine supports HTTP/2 (ALPN negotiation, multiplexed connections, protocol version reporting), HTTP/3 (QUIC transport via Quinn/h3, feature-gated, experimental), response decompression (gzip, deflate, brotli, zstd), multipart/form-data uploads, cookies, authentication, proxy support (HTTP proxying, HTTPS CONNECT tunneling, proxy authentication, per-request/client proxy configuration, NO_PROXY bypass), TLS configuration (custom CA bundles, client certificates, TLS version policy, verification toggle), streaming, timeouts, connection pooling, and policy-driven retries with exponential backoff. The CLI crate is a full-featured HTTP client with argument parsing, streaming, machine-readable output, and deterministic exit codes.
 
 [![CI](https://github.com/eggstack/eggfetch/actions/workflows/ci.yml/badge.svg)](https://github.com/eggstack/eggfetch/actions/workflows/ci.yml)
+[![Crates.io](https://img.shields.io/crates/v/eggfetch-core)](https://crates.io/crates/eggfetch-core)
+[![PyPI version](https://img.shields.io/pypi/v/eggfetch)](https://pypi.org/project/eggfetch/)
+[![License](https://img.shields.io/crates/l/eggfetch-core)](LICENSE-MIT)
 
 ## Architecture
 
@@ -18,6 +21,29 @@ eggfetch is a five-crate Cargo workspace:
 - **eggfetch-node** is the Node.js N-API binding prototype. It wraps eggfetch-core via napi-rk/napi-rs and provides a thin JavaScript/TypeScript adapter over the async Rust engine.
 
 The invariant is strict: all network I/O goes through eggfetch-core. The CLI, Python, FFI, and Node crates are adapters.
+
+## Installation
+
+**Python:**
+
+```bash
+pip install eggfetch
+```
+
+**Rust:**
+
+```toml
+[dependencies]
+eggfetch-core = { version = "0.1", features = ["http1", "tls-rustls"] }
+```
+
+**CLI:**
+
+```bash
+cargo install eggfetch-cli
+```
+
+**GitHub Releases:** Pre-built binaries for Linux, macOS, and Windows are available on the [GitHub Releases](https://github.com/eggstack/eggfetch/releases) page.
 
 ## MVP Non-goals
 
@@ -421,12 +447,14 @@ Complete documentation lives in the `docs/` directory:
 | [security/](docs/security/) | Security guidelines and troubleshooting |
 | [architecture/](docs/architecture/) | Internal architecture documentation |
 | [ffi/](docs/ffi/) | C ABI and FFI binding guide |
+| [releases/](docs/releases/) | Release process and compatibility policy |
 
 ## Repository Layout
 
 ```text
 Cargo.toml               workspace root
 README.md
+CHANGELOG.md
 LICENSE-MIT
 LICENSE-APACHE
 SECURITY.md
@@ -458,7 +486,8 @@ docs/
   reference/             compatibility matrix, feature matrix, errors
   security/              security guidelines and troubleshooting
   architecture/          internal architecture documentation
-  ffi/                   C ABI and FFI binding guide
+  ffi/                   CABI and FFI binding guide
+  releases/              release process and compatibility policy
 plans/                   milestone plans and roadmap
 ```
 
@@ -568,4 +597,5 @@ eggfetch is dual-licensed under [MIT](LICENSE-MIT) and [Apache License, Version 
 - [docs/architecture/overview.md](docs/architecture/overview.md) -- internal architecture documentation.
 - [docs/architecture/dependency-policy.md](docs/architecture/dependency-policy.md) -- dependency management policy.
 - [docs/architecture/feature-flags.md](docs/architecture/feature-flags.md) -- feature flag reference.
+- [CHANGELOG.md](CHANGELOG.md) -- release history and changes.
 - [plans/milestone-y-documentation-examples.md](plans/milestone-y-documentation-examples.md) -- the plan for Milestone Y (documentation and examples).
