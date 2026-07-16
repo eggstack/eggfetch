@@ -125,11 +125,11 @@ struct Cli {
     #[arg(long = "max-redirects", default_value = "20")]
     max_redirects: usize,
 
-    /// Basic auth as USER:PASS (env: EGGFETCH_AUTH).
+    /// Basic auth as USER:PASS (env: `EGGFETCH_AUTH`).
     #[arg(long = "auth", env = "EGGFETCH_AUTH")]
     auth: Option<String>,
 
-    /// Bearer token (env: EGGFETCH_BEARER).
+    /// Bearer token (env: `EGGFETCH_BEARER`).
     #[arg(long = "bearer", env = "EGGFETCH_BEARER")]
     bearer: Option<String>,
 
@@ -141,11 +141,11 @@ struct Cli {
     #[arg(long = "cookie-jar")]
     cookie_jar: Option<PathBuf>,
 
-    /// Proxy URL (env: EGGFETCH_PROXY).
+    /// Proxy URL (env: `EGGFETCH_PROXY`).
     #[arg(long = "proxy", env = "EGGFETCH_PROXY")]
     proxy: Option<String>,
 
-    /// Proxy auth as USER:PASS (env: EGGFETCH_PROXY_AUTH).
+    /// Proxy auth as USER:PASS (env: `EGGFETCH_PROXY_AUTH`).
     #[arg(long = "proxy-auth", env = "EGGFETCH_PROXY_AUTH")]
     proxy_auth: Option<String>,
 
@@ -215,6 +215,7 @@ struct Cli {
 }
 
 #[derive(clap::ValueEnum, Clone, Debug)]
+#[allow(clippy::enum_variant_names)] // PowerShell is the canonical name; renaming breaks clap completion scripts
 enum Shell {
     Bash,
     Zsh,
@@ -500,7 +501,7 @@ fn build_json_response(
     body_len: Option<usize>,
     include_body_b64: bool,
     body_b64: Option<&str>,
-    errors: Vec<String>,
+    errors: &[String],
 ) -> Value {
     let headers = format_headers_machine(response.headers());
 
@@ -836,6 +837,7 @@ async fn run(cli: Cli) -> Result<()> {
 
     let start = Instant::now();
 
+    #[allow(clippy::large_futures)] // eggfetch-core RequestBuilder::send future is large due to hyper/h2 internals
     let send_result = req_builder.send().await;
 
     match send_result {
@@ -860,7 +862,7 @@ async fn run(cli: Cli) -> Result<()> {
                     body_len,
                     cli.base64,
                     body_b64.as_deref(),
-                    vec![],
+                    &[],
                 );
 
                 if cli.json_output {
@@ -1058,11 +1060,11 @@ async fn run(cli: Cli) -> Result<()> {
 
 fn base64_encode(data: &[u8]) -> String {
     const CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut result = String::with_capacity((data.len() + 2) / 3 * 4);
+    let mut result = String::with_capacity(data.len().div_ceil(3) * 4);
     for chunk in data.chunks(3) {
-        let b0 = chunk[0] as u32;
-        let b1 = if chunk.len() > 1 { chunk[1] as u32 } else { 0 };
-        let b2 = if chunk.len() > 2 { chunk[2] as u32 } else { 0 };
+        let b0 = u32::from(chunk[0]);
+        let b1 = if chunk.len() > 1 { u32::from(chunk[1]) } else { 0 };
+        let b2 = if chunk.len() > 2 { u32::from(chunk[2]) } else { 0 };
         let triple = (b0 << 16) | (b1 << 8) | b2;
         result.push(CHARS[((triple >> 18) & 0x3F) as usize] as char);
         result.push(CHARS[((triple >> 12) & 0x3F) as usize] as char);

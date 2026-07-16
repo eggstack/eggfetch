@@ -19,7 +19,7 @@ Please do not disclose the vulnerability publicly until a fix has been released 
 
 ## Supported Versions
 
-Only the latest commit on the `main` branch HEAD is considered supported. There are no tagged releases yet. No backports or point releases are planned until a formal release is cut. Once tagged releases begin, only the most recent minor release line will receive security updates.
+Only the most recent tagged release is considered supported. No backports or point releases are planned until a formal release is cut. Once tagged releases begin, only the most recent minor release line will receive security updates.
 
 ## Security Update Process
 

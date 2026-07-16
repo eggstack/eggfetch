@@ -282,6 +282,57 @@ Implemented capabilities:
 
 These began only after the core API and semantics are stable.
 
+# Phase 5.5: Pre-Release Validation
+
+## Milestone L: Correctness and differential testing (complete)
+
+Comprehensive correctness validation and differential testing against reference
+implementations (requests, HTTPX).
+
+Implemented capabilities:
+
+- full Rust test suite (~750+ tests) covering construction, streaming, timeouts,
+  pools, headers, integration scenarios
+- Python sync/async API tests (~463+ tests) covering response compatibility,
+  redirect behavior, redirect replay, total timeout across redirects, sync/async
+  API parity
+- Cookie subsystem tests (parsing, matching, jar operations, client integration, Python API)
+- Authentication subsystem tests (Basic/Bearer auth, precedence, cross-origin credential stripping)
+- Multipart encoder, boundary, streaming, known-length, Python files= support
+- Response decompression tests (gzip, deflate, brotli, zstd streaming decoders)
+- Proxy subsystem tests (HTTP proxying, HTTPS CONNECT tunneling, NO_PROXY bypass)
+- Retry subsystem tests (policy construction, method safety, backoff, Retry-After)
+- Cross-feature integration tests (multipart through proxy, compressed responses through proxy)
+- True network streaming tests (sync/async client.stream(), StreamingResponse, chunk iteration)
+- HTTP/2 tests (ALPN negotiation, error taxonomy, forbidden header stripping)
+- FFI tests (~40+ tests for C ABI handle lifecycle, null safety, request building)
+- CLI tests (19 unit tests, 56 subprocess integration tests)
+- cargo-fuzz targets for headers, cookies, redirects, multipart, compression, proxy, timeout, retry, TLS, URL
+- Proptest property tests for round-trip invariants and state-machine correctness
+- Redaction regression tests for secret sanitization
+
+## Milestone M: Documentation and public MVP preparation (complete)
+
+Complete documentation across all surfaces and prepare for public release.
+
+Implemented capabilities:
+
+- Getting started docs (installation, quickstart)
+- Concept docs (12 topics: architecture, lifecycle, streaming, timeouts, pooling,
+  cookies, authentication, redirects, retry, TLS, proxy, compression, multipart)
+- Rust API guide, Python API guide, CLI reference
+- Migration guides (from requests, from HTTPX)
+- Cookbook examples
+- Compatibility matrix (56-row feature comparison)
+- Feature matrix (13 feature flags with defaults per surface)
+- Error reference (56 Rust variants, Python exception hierarchy, CLI exit codes)
+- Versioning policy
+- Architecture documentation (overview, dependency policy, feature flags, threat model,
+  security reviews, security findings, incident runbook, release security checklist)
+- Release process and compatibility policy
+- FFI documentation (C ABI guide, architecture, surface audit)
+- Security guidelines and troubleshooting
+
 # Phase 6: Production Readiness
 
 ## Production Track A: Benchmarking and performance
@@ -359,8 +410,10 @@ The preferred order is:
 11. Milestone X: full CLI
 11. Milestone Y: documentation/examples
 12. Production tracks
-13. HTTP/3 and additional language bindings
-14. Milestone Z: additional bindings and frameworks (complete)
+13. Milestone L: correctness and differential testing (complete)
+14. Milestone M: documentation and public MVP preparation (complete)
+15. HTTP/3 and additional language bindings
+16. Milestone Z: additional bindings and frameworks (complete)
 
 Cookies and authentication may be developed in parallel only after Milestone N is complete and shared request/redirect semantics are stable.
 

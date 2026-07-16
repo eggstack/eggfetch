@@ -30,8 +30,8 @@ eggfetch follows a milestone-driven development sequence: A through Z. Each mile
 - Corrective integration after Milestone S (complete)
 - K: CLI (complete)
 - Y: Documentation and examples (complete)
-- L: Correctness and differential testing
-- M: Documentation and public MVP preparation
+- L: Correctness and differential testing (complete)
+- M: Documentation and public MVP preparation (complete)
 - Z: Additional bindings and frameworks (complete)
 
 Do not skip ahead. A clean baseline matters more than an early partial implementation.
