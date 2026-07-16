@@ -1,5 +1,14 @@
-#![allow(missing_docs, dead_code, unused_mut)]
-#![allow(missing_docs, dead_code, unused_mut)]
+#![allow(
+    missing_docs,
+    dead_code,
+    unused_mut,
+    clippy::expect_fun_call,
+    clippy::items_after_statements,
+    clippy::too_many_lines,
+    clippy::too_many_arguments,
+    clippy::cast_possible_truncation,
+    clippy::module_name_repetitions
+)]
 
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Read, Write};
