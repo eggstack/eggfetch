@@ -45,6 +45,23 @@ For substantial releases (new major feature, pre-1.0 breaking changes), a releas
 
 Release candidates are optional for patch releases.
 
+## Release Rehearsal
+
+Before the first production release, perform at least one end-to-end release rehearsal on a pre-release tag. This validates the entire pipeline without affecting real users.
+
+Rehearsal steps:
+
+1. Create a release candidate tag (e.g., `v0.1.0-rc.1`) on a clean commit.
+2. Push the tag to trigger the release workflow.
+3. Verify every job succeeds: CI, wheel builds, CLI builds, smoke tests, crates.io publish, TestPyPI publish, PyPI publish, GitHub Release creation.
+4. Install from TestPyPI in a clean environment and run a smoke test.
+5. Install from crates.io in a clean environment and run `eggfetch --version`.
+6. Verify the GitHub Release contains all expected artifacts (CLI archives, checksums, SBOM).
+7. Verify provenance attestations are present on the release artifacts.
+8. If any step fails, fix the workflow, tag a new RC, and repeat.
+
+Record the rehearsal result (pass/fail, issues found) before proceeding to the stable release.
+
 ## Step-by-Step Release Checklist
 
 1. **Update version numbers.** Set the version in all publishable `Cargo.toml` files and `pyproject.toml`. Ensure they are consistent.

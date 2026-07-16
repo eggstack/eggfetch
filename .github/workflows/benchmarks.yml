@@ -1,0 +1,68 @@
+name: Benchmarks
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      baseline:
+        description: "Save results as baseline (for main branch)"
+        required: false
+        type: boolean
+        default: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  benchmark:
+    name: Run benchmarks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
+
+      - name: Cache cargo registry and target
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-bench-cargo-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-bench-cargo-
+
+      - name: Run microbenchmarks
+        run: |
+          if [ "${{ inputs.baseline }}" = "true" ]; then
+            cargo bench -p eggfetch-bench --bench microbench -- --save-baseline main
+          else
+            cargo bench -p eggfetch-bench --bench microbench -- --output-format bencher | tee bench-results.txt
+          fi
+
+      - name: Run e2e benchmarks
+        run: |
+          if [ "${{ inputs.baseline }}" = "true" ]; then
+            cargo bench -p eggfetch-bench --bench e2e -- --save-baseline main
+          else
+            cargo bench -p eggfetch-bench --bench e2e -- --output-format bencher | tee -a bench-results.txt
+          fi
+
+      - name: Run resource benchmarks
+        run: |
+          if [ "${{ inputs.baseline }}" = "true" ]; then
+            cargo bench -p eggfetch-bench --bench resources -- --save-baseline main
+          else
+            cargo bench -p eggfetch-bench --bench resources -- --output-format bencher | tee -a bench-results.txt
+          fi
+
+      - name: Upload benchmark results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: |
+            bench-results.txt
+            target/criterion/**/new/
+          retention-days: 30

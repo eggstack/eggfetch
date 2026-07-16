@@ -18,6 +18,7 @@ env:
 permissions:
   contents: write
   id-token: write
+  attestations: write
 
 jobs:
   # ──────────────────────────────────────────────────────────────────────
@@ -94,6 +95,19 @@ jobs:
             exit 1
           fi
           echo "CHANGELOG has section for ${{ steps.meta.outputs.version }}."
+
+      - name: Generate SBOM
+        run: |
+          cargo install cargo-deny --locked
+          cargo deny list --format json > sbom.json
+          echo "SBOM generated:"
+          wc -c sbom.json
+
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom.json
 
   # ──────────────────────────────────────────────────────────────────────
   # 2. CI — critical checks
@@ -466,7 +480,39 @@ jobs:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
   # ──────────────────────────────────────────────────────────────────────
-  # 7. Publish to PyPI
+  # 7. Publish to TestPyPI (staging)
+  # ──────────────────────────────────────────────────────────────────────
+  publish-testpypi:
+    name: Publish to TestPyPI
+    runs-on: ubuntu-latest
+    needs: [verify, smoke-test]
+    environment: release
+    steps:
+      # Pinned to v4.3.1 — update process: check https://github.com/actions/checkout/releases
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Download all wheel artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: wheels-*
+
+      - name: Flatten dist directory
+        run: |
+          mkdir -p dist-flat
+          find dist -name '*.whl' -exec cp {} dist-flat/ \;
+          find dist -name '*.tar.gz' -exec cp {} dist-flat/ \;
+
+      - name: Publish to TestPyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist-flat/
+          repository-url: https://test.pypi.org/legacy/
+          password: ${{ secrets.TESTPYPI_TOKEN }}
+        # Don't fail on RC versions — TestPyPI may reject duplicate versions
+
+  # ──────────────────────────────────────────────────────────────────────
+  # 8. Publish to PyPI
   # ──────────────────────────────────────────────────────────────────────
   publish-pypi:
     name: Publish to PyPI
@@ -498,7 +544,7 @@ jobs:
           password: ${{ secrets.PYPI_TOKEN }}
 
   # ──────────────────────────────────────────────────────────────────────
-  # 8. Create GitHub Release
+  # 9. Create GitHub Release
   # ──────────────────────────────────────────────────────────────────────
   github-release:
     name: Create GitHub Release
@@ -516,6 +562,12 @@ jobs:
           path: release-assets
           pattern: cli-*
 
+      - name: Download SBOM
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          name: sbom
+
       - name: Gather release assets
         id: assets
         run: |
@@ -525,6 +577,7 @@ jobs:
             cp "$dir"*.zip assets/ 2>/dev/null || true
             cp "$dir"*.sha256 assets/ 2>/dev/null || true
           done
+          cp release-assets/sbom.json assets/ 2>/dev/null || true
           echo "Release assets:"
           ls -la assets/
 
@@ -552,8 +605,18 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Attest build provenance (CLI binaries)
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: assets/eggfetch-*.tar.gz
+
+      - name: Attest build provenance (Python wheels)
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: assets/sbom.json
+
   # ──────────────────────────────────────────────────────────────────────
-  # 9. Post-release verification
+  # 10. Post-release verification
   # ──────────────────────────────────────────────────────────────────────
   post-release:
     name: Post-release verification

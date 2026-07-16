@@ -30,6 +30,17 @@ jobs:
       - name: Clippy
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
+  rust-msrv:
+    name: MSRV check (Rust 1.80)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.80"
+      - name: Check with MSRV toolchain
+        run: cargo check -p eggfetch-core --no-default-features --features http1,tls-rustls
+
   rust-test:
     name: Rust tests (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
