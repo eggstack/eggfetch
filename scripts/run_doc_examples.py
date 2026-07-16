@@ -65,7 +65,7 @@ class _DocTestHandler(http.server.BaseHTTPRequestHandler):
             self.send_header("Content-Length", "2")
             self.end_headers()
             self.wfile.write(b"ok")
-        el        if path == "/post":
+        elif path == "/post":
             cl = int(self.headers.get("Content-Length", 0))
             body = self.rfile.read(cl)
             self.send_response(200)

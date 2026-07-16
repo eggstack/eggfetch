@@ -291,7 +291,7 @@ impl Stream for LineStream {
         if let Some(pos) = self.buffer.iter().position(|&b| b == b'\n') {
             let line_bytes = self.buffer.split_to(pos + 1);
             let mut line = &line_bytes[..line_bytes.len() - 1]; // strip \n
-            if line.ends_with(&[b'\r'][..]) {
+            if line.ends_with(b"\r") {
                 line = &line[..line.len() - 1];
             }
             let line = String::from_utf8(line.to_vec())
@@ -315,7 +315,7 @@ impl Stream for LineStream {
                 } else {
                     let remaining = std::mem::take(&mut self.buffer);
                     let mut line = &remaining[..remaining.len()];
-                    if line.ends_with(&[b'\r'][..]) {
+                    if line.ends_with(b"\r") {
                         line = &line[..line.len() - 1];
                     }
                     let line = String::from_utf8(line.to_vec())

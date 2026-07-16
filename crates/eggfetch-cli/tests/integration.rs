@@ -1,3 +1,5 @@
+#![allow(missing_docs)]
+
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
