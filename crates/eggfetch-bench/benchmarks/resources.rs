@@ -1,5 +1,6 @@
 #![allow(missing_docs)]
 #![allow(clippy::needless_return)]
+#![allow(clippy::large_futures)]
 
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::fmt::Write as _;

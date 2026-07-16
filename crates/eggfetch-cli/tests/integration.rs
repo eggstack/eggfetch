@@ -1,4 +1,4 @@
-#![allow(missing_docs, dead_code)]
+#![allow(missing_docs, dead_code, unused_mut)]
 
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Read, Write};
