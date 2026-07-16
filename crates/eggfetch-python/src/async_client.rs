@@ -27,6 +27,7 @@ pub struct PyAsyncClient {
     closed: bool,
     decompress: Option<bool>,
     verify_disabled: bool,
+    #[allow(dead_code)]
     retry: Option<eggfetch_core::RetryPolicy>,
 }
 
