@@ -201,7 +201,7 @@ r = eggfetch.get("https://httpbin.org/gzip")
 print(r.json()["gzipped"])
 
 # Disable decompression per-request
-r = client.get(url, decompress=False)
+r = eggfetch.get("https://httpbin.org/gzip", decompress=False)
 ```
 
 ## Concurrent async requests
@@ -243,7 +243,7 @@ asyncio.run(main())
 ## CLI: JSON output
 
 ```bash
-curl -s https://api.github.com/zen | eggfetch --json https://httpbin.org/post --json --json
+eggfetch --json-output https://httpbin.org/get
 ```
 
 ## CLI: NDJSON output
@@ -292,9 +292,9 @@ except eggfetch.EggfetchError as e:
 import eggfetch
 
 # Simple: 10 seconds for everything
-r = eggfetch.get(url, timeout=10)
+r = eggfetch.get("https://example.com/api", timeout=10)
 
 # Per-phase control
 t = eggfetch.Timeout(pool=2, connect=5, read=30, total=60)
-r = eggfetch.get(url, timeout=t)
+r = eggfetch.get("https://example.com/api", timeout=t)
 ```

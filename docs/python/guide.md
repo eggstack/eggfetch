@@ -8,7 +8,7 @@ eggfetch is a fast, modern HTTP client for Python powered by a Rust core. It sup
 pip install eggfetch
 ```
 
-Requires Python 3.10 or later.
+Requires Python 3.10 through 3.13.
 
 ## Top-Level Functions
 
@@ -125,11 +125,11 @@ Use `client.stream()` for streaming responses without buffering the full body.
 async with eggfetch.AsyncClient() as client:
     async with client.stream("GET", "https://example.com/large") as response:
         # Iterate over byte chunks
-        async for chunk in response.bytes():
+        async for chunk in response.aiter_bytes():
             process(chunk)
 
         # Or iterate over lines
-        async for line in response.text():
+        async for line in response.aiter_text():
             print(line)
 ```
 
@@ -147,7 +147,7 @@ The sync client supports streaming too:
 ```python
 with eggfetch.Client() as client:
     with client.stream("GET", "https://example.com/large") as response:
-        for chunk in response.bytes():
+        for chunk in response.iter_bytes():
             process(chunk)
 ```
 

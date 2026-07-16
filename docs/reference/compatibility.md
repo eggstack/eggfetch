@@ -1,6 +1,7 @@
 # Feature compatibility matrix
 
 This page tracks compatibility with requests and HTTPX across features.
+ eggfetch Node.js bindings are experimental and not included in this matrix.
 
 ## Supported and tested
 
@@ -58,7 +59,7 @@ This page tracks compatibility with requests and HTTPX across features.
 | Feature | Difference |
 | --- | --- |
 | Redirect default | requests/HTTPX follow redirects by default. eggfetch does **not**. Set `follow_redirects=True`. |
-| Auth tuple shorthand | requests accepts `auth=("user","pass")`. eggfetch requires `auth=BasicAuth("user","pass")`. |
+| Auth tuple shorthand | requests accepts `auth=("user","pass")`. eggfetch Python supports this. eggfetch Rust requires `BasicAuth::new("user", "pass")`. |
 | Proxy configuration | requests uses a dict by scheme. eggfetch uses a single `proxy=` string. |
 | Proxy env vars | eggfetch does not read `HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY` env vars. |
 | Timeout tuple | requests accepts `(connect, read)` tuples. eggfetch uses `Timeout` objects. |

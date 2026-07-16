@@ -2,7 +2,7 @@
 
 eggfetch is a Rust-native HTTP client engine with Python bindings and a CLI tool. The core is async-first: a Rust engine built on tokio and hyper provides connection pooling, timeouts, TLS configuration, and streaming. The Python bindings expose both sync and async APIs; the sync API blocks on the async engine while releasing the GIL, and the async API integrates with asyncio. There is exactly one networking implementation, living entirely in Rust.
 
-> **Status: Milestones K through Y complete.**
+> **Status: Milestones A through Z complete.**
 > Milestones A–W are implemented as documented. The core engine supports HTTP/2 (ALPN negotiation, multiplexed connections, protocol version reporting), HTTP/3 (QUIC transport via Quinn/h3, feature-gated, experimental), response decompression (gzip, deflate, brotli, zstd), multipart/form-data uploads, cookies, authentication, proxy support (HTTP proxying, HTTPS CONNECT tunneling, proxy authentication, per-request/client proxy configuration, NO_PROXY bypass), TLS configuration (custom CA bundles, client certificates, TLS version policy, verification toggle), streaming, timeouts, connection pooling, and policy-driven retries with exponential backoff. The CLI crate is a full-featured HTTP client with argument parsing, streaming, machine-readable output, and deterministic exit codes.
 
 [![CI](https://github.com/eggstack/eggfetch/actions/workflows/ci.yml/badge.svg)](https://github.com/eggstack/eggfetch/actions/workflows/ci.yml)

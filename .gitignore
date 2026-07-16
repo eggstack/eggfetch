@@ -15,3 +15,6 @@ __pycache__/
 .maturin/
 .pytest_cache/
 /fuzz/target
+/fuzz/artifacts
+node_modules/
+*.node

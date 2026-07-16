@@ -51,7 +51,7 @@ Tests live next to the code they cover, using `#[cfg(test)] mod tests` blocks wi
 cargo test --workspace --all-features
 ```
 
-Prefer small, focused tests that exercise one behavior. The workspace has ~331 Rust tests and ~367 Python tests covering construction, streaming, timeouts, pools, headers, integration scenarios, sync/async API parity, redirect replay, total timeout across redirects, response decoding, cookie subsystem, authentication subsystem, and true network streaming via `client.stream()`. As the project grows, tests should cover protocol correctness, edge cases, and error paths.
+Prefer small, focused tests that exercise one behavior. The workspace has ~750+ Rust tests, ~463+ Python tests, and ~40+ Node.js/FFI tests covering construction, streaming, timeouts, pools, headers, integration scenarios, sync/async API parity, redirect replay, total timeout across redirects, response decoding, cookie subsystem, authentication subsystem, multipart uploads, decompression, proxy tunneling, retry policies, and true network streaming via `client.stream()`. As the project grows, tests should cover protocol correctness, edge cases, and error paths.
 
 ## Dependencies
 
@@ -75,22 +75,24 @@ Current `eggfetch-core` feature declarations:
 default = ["http1", "tls-rustls"]
 http1 = []
 http2 = []
+http3 = []
 tls-rustls = []
 json = []
 compression-gzip = []
 compression-brotli = []
 compression-zstd = []
+compression-deflate = []
 cookies = []
 proxy = []
+multipart = []
 tracing = []
+test-util = []
 ```
 
-HTTP/1.1 and Rustls are implemented. `cookies` is implemented but remains
-opt-in in core and is enabled by the Python binding. Compression, proxy,
-HTTP/2, tracing, and JSON feature names are reserved until their milestones
-land. The current transport dependencies remain available in all compile
-combinations so the no-default feature check is meaningful. See
-`docs/architecture/feature-flags.md` for details.
+All feature flags are implemented. `cookies`, `proxy`, and `multipart` are
+opt-in in core and enabled by the Python binding and CLI. `http3` is
+experimental. `tracing` and `json` are reserved stubs with no gated code
+yet. See `docs/architecture/feature-flags.md` for details.
 
 ## Compatibility Expectations
 
@@ -106,7 +108,7 @@ If you find yourself writing HTTP logic outside of eggfetch-core, stop and refac
 
 ## Milestone Context
 
-eggfetch follows a milestone-driven development sequence (A through N+). Before starting work, read `plans/ROADMAP.md` and the relevant milestone plan in `plans/`. Each milestone is a handoff boundary: finish one before starting the next. A clean baseline matters more than an early partial implementation.
+eggfetch follows a milestone-driven development sequence (A through Z). Before starting work, read `plans/ROADMAP.md` and the relevant milestone plan in `plans/`. Each milestone is a handoff boundary: finish one before starting the next. A clean baseline matters more than an early partial implementation.
 
 Make the workspace build green before adding new functionality. Format before committing. Do not bypass CI to land changes.
 

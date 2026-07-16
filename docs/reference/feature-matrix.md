@@ -1,7 +1,8 @@
 # Feature matrix by platform
 
 This page tracks which features are available in each eggfetch surface:
-Rust (eggfetch-core), Python (eggfetch-python), and CLI (eggfetch-cli).
+Rust (eggfetch-core), Python (eggfetch-python), CLI (eggfetch-cli), and
+Node.js (eggfetch-node, experimental).
 
 ## Feature flags (Rust / eggfetch-core)
 
@@ -97,7 +98,7 @@ Rust (eggfetch-core), Python (eggfetch-python), and CLI (eggfetch-cli).
 | Retries (`--retry`, `--retry-delay`) | Yes |
 | Follow/no-follow redirects | Yes |
 | Max redirects (`--max-redirects`) | Yes |
-| HTTP version (`--http1`, `--http2`, `--http3`) | Yes |
+| HTTP version (`--http1`, `--http2`, `--http3`) | Yes (compile-time) |
 | Output file (`-o`) | Yes |
 | Download mode (`--download`) | Yes |
 | Include headers (`-i`) | Yes |
@@ -114,6 +115,11 @@ Rust (eggfetch-core), Python (eggfetch-python), and CLI (eggfetch-cli).
 | JSON error output | Yes |
 | Secret redaction in verbose output | Yes |
 | TTY-aware output | Yes |
+
+### Node.js (eggfetch-node, experimental)
+
+Node.js bindings via N-API (napi-rs). **Experimental** — API surfaces may
+change before 1.0.
 
 ## Limitations per platform
 
@@ -132,4 +138,11 @@ Rust (eggfetch-core), Python (eggfetch-python), and CLI (eggfetch-cli).
 - No response hooks or scripting beyond shell piping.
 - No session state between invocations.
 - `http2` and `http3` flags are compile-time; check the binary's feature
-  set.
+  set. The default CLI build enables `cookies`, `multipart`, and `proxy`
+  but **not** `http2` or `http3`.
+
+### Node.js (experimental)
+
+- Experimental; API surfaces may change before 1.0.
+- Requires Node.js 16+.
+- HTTP/3 support depends on the Rust feature flags at build time.

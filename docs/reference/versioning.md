@@ -83,8 +83,9 @@ version bump (post-1.0).
 ## Version format
 
 Versions follow the format `MAJOR.MINOR.PATCH` as specified by Semantic
-Versioning. Pre-release identifiers (e.g., `0.1.0-alpha.1`) may be used for
-preview releases but are not published to crates.io or PyPI.
+Versioning. Pre-release identifiers (e.g., `0.1.0-rc.1`) are used for
+release candidates and are published to crates.io and PyPI as pre-release
+artifacts.
 
 ## Tag format
 
