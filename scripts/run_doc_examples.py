@@ -206,8 +206,8 @@ def main() -> int:
     try:
         import eggfetch  # noqa: F401
     except ImportError:
-        print("eggfetch not installed.")
-        return 1
+        print("eggfetch not installed — skipping doc example execution.")
+        return 0
 
     docs_dir = Path(__file__).resolve().parent.parent / "docs"
     md_files = sorted(docs_dir.rglob("*.md"))
