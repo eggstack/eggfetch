@@ -1,3 +1,4 @@
+#![allow(missing_docs, dead_code)]
 //! Timeout integration tests for eggfetch-core.
 
 mod test_server;

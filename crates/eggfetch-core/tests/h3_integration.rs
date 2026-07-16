@@ -1,3 +1,4 @@
+#![allow(missing_docs, dead_code)]
 #![cfg(feature = "http3")]
 #![allow(
     clippy::large_futures,

@@ -1,5 +1,6 @@
 #![allow(missing_docs)]
 #![allow(clippy::large_futures)]
+#![allow(clippy::uninlined_format_args)]
 
 use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};

@@ -1,3 +1,4 @@
+#![allow(missing_docs, dead_code)]
 //! Cross-feature integration tests for eggfetch-core.
 //!
 //! Tests combining proxy, multipart, compression, cookies, and redirect

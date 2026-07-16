@@ -1,3 +1,4 @@
+#![allow(missing_docs, dead_code)]
 //! Integration tests for retry + redirect+auth subsystems.
 //!
 //! These tests use tokio's async TCP utilities.

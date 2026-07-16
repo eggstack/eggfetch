@@ -1,3 +1,4 @@
+#![allow(missing_docs, dead_code)]
 //! HTTP/2 integration and unit tests.
 //!
 //! Tests cover:

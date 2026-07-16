@@ -1,3 +1,4 @@
+#![allow(missing_docs, dead_code)]
 //! Adverse-condition and edge-case tests for the eggfetch HTTP client.
 
 #![allow(clippy::large_futures)]
