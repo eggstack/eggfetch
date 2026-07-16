@@ -147,7 +147,7 @@ jobs:
           cargo check -p eggfetch-core --no-default-features --features http1,tls-rustls
 
       - name: Tests
-        run: cargo test --workspace --all-features
+        run: cargo test --workspace --exclude eggfetch-python --all-features
 
   ci-platform:
     name: CI tests (${{ matrix.os }})
@@ -176,7 +176,7 @@ jobs:
             release-${{ runner.os }}-cargo-
 
       - name: Tests
-        run: cargo test --workspace --all-features
+        run: cargo test --workspace --exclude eggfetch-python --all-features
 
   ci-python:
     name: Python tests (${{ matrix.python-version }}, ${{ matrix.os }})

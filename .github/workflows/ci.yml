@@ -71,7 +71,7 @@ jobs:
           cargo check -p eggfetch-core --no-default-features --features http1,tls-rustls
           cargo check -p eggfetch-core --all-features
       - name: Tests
-        run: cargo test --workspace --all-features
+        run: cargo test --workspace --exclude eggfetch-python --all-features
 
   rust-doc:
     name: Rust documentation
