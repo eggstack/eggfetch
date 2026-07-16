@@ -209,22 +209,39 @@ jobs:
           restore-keys: |
             release-${{ runner.os }}-py${{ matrix.python-version }}-cargo-
 
-      - name: Create virtualenv and install dependencies
+      - name: Create virtualenv
+        run: python -m venv .venv
+
+      - name: Install dependencies
+        shell: bash
         run: |
-          python -m venv .venv
-          source .venv/bin/activate
+          if [ -f .venv/bin/activate ]; then
+            source .venv/bin/activate
+          else
+            source .venv/Scripts/activate
+          fi
           pip install maturin pytest pytest-asyncio
 
       - name: Build and install
+        shell: bash
         env:
           PYO3_USE_ABI3_FORWARD_COMPATIBILITY: "1"
         run: |
-          source .venv/bin/activate
+          if [ -f .venv/bin/activate ]; then
+            source .venv/bin/activate
+          else
+            source .venv/Scripts/activate
+          fi
           maturin develop -m crates/eggfetch-python/Cargo.toml
 
       - name: Python tests
+        shell: bash
         run: |
-          source .venv/bin/activate
+          if [ -f .venv/bin/activate ]; then
+            source .venv/bin/activate
+          else
+            source .venv/Scripts/activate
+          fi
           pytest crates/eggfetch-python/tests/ -v
 
   # ──────────────────────────────────────────────────────────────────────
