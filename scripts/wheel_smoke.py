@@ -222,7 +222,7 @@ except Exception as e:
     print(f"PASS: 500 raised {{type(e).__name__}}")
 
 # --- Test 11: Retry on transient failure ---
-with eggfetch.Client(retries=2) as client:
+with eggfetch.Client(retries=eggfetch.Retry(max_attempts=3)) as client:
     r = client.get({base!r} + "/retry-then-ok")
     assert r.status_code == 200
     assert r.content == b"retry-ok"
