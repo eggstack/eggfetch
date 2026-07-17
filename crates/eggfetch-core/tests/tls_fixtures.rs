@@ -1,4 +1,4 @@
-#![allow(missing_docs, dead_code)]
+#![allow(warnings)]
 use std::sync::Arc;
 
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};

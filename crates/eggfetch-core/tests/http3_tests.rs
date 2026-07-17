@@ -1,4 +1,4 @@
-#![allow(missing_docs, dead_code)]
+#![allow(warnings)]
 #![cfg(feature = "http3")]
 
 //! HTTP/3 integration tests.

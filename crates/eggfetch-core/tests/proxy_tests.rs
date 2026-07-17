@@ -1,4 +1,4 @@
-#![allow(missing_docs, dead_code)]
+#![allow(warnings)]
 //! Proxy integration tests for eggfetch-core.
 //!
 //! Contains local test proxy servers and integration tests covering

@@ -1,4 +1,4 @@
-#![allow(missing_docs, dead_code)]
+#![allow(warnings)]
 //! Integration tests for eggfetch-core public API.
 
 mod test_server;

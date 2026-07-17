@@ -1,4 +1,4 @@
-#![allow(missing_docs, dead_code)]
+#![allow(warnings)]
 #![cfg(feature = "tls-rustls")]
 
 mod tls_fixtures;

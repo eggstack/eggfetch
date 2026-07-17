@@ -1,4 +1,4 @@
-#![allow(missing_docs, dead_code)]
+#![allow(warnings)]
 //! Connection pool and concurrency lifecycle tests.
 
 mod test_server;

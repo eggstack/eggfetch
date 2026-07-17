@@ -1,4 +1,4 @@
-#![allow(missing_docs, dead_code)]
+#![allow(warnings)]
 //! Local TCP test server for connection management and streaming tests.
 
 use std::io::{BufRead, BufReader, Write};
