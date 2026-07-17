@@ -1392,8 +1392,7 @@ mod tests {
             EXIT_CONNECT
         );
         assert_eq!(
-            map_error_to_exit_code(&Error::Io(std::sync::Arc::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            map_error_to_exit_code(&Error::Io(std::sync::Arc::new(std::io::Error::other(
                 "test"
             )))),
             EXIT_IO
