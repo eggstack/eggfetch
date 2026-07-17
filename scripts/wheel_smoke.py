@@ -161,7 +161,7 @@ import sys
 # --- Test 1: Version metadata ---
 assert hasattr(eggfetch, "__version__"), "eggfetch has no __version__"
 v = eggfetch.__version__
-assert isinstance(v, str) and len(v) > 0, f"invalid version: {v!r}"
+assert isinstance(v, str) and len(v) > 0, f"invalid version: {{v!r}}"
 print(f"PASS: version = {{v}}")
 
 # --- Test 2: Buffered GET ---
@@ -223,7 +223,7 @@ except Exception as e:
     print(f"PASS: 500 raised {{type(e).__name__}}")
 
 # --- Test 11: Retry on transient failure ---
-with eggfetch.Client(max_retries=2) as client:
+with eggfetch.Client(retries=2) as client:
     r = client.get({base!r} + "/retry-then-ok")
     assert r.status_code == 200
     assert r.content == b"retry-ok"

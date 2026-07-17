@@ -289,7 +289,7 @@ impl PyAsyncClient {
                 builder = builder.retry(retry_policy.clone());
             }
 
-            let mut response = builder.send().await.map_err(map_err)?;
+            let mut response = Box::pin(builder.send()).await.map_err(map_err)?;
             let content = response.bytes().await.map_err(map_err)?;
             crate::response::PyResponse::from_core_response_with_body(response, content)
         })
@@ -758,7 +758,7 @@ impl PyAsyncClient {
                 builder = builder.retry(retry_policy.clone());
             }
 
-            let response = builder.send().await.map_err(map_err)?;
+            let response = Box::pin(builder.send()).await.map_err(map_err)?;
             let obj: PyObject = Python::with_gil(|py| {
                 PyStreamingResponse::from_core_response(py, response).map(|r| r.unbind().into_any())
             })?;

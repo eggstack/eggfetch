@@ -289,7 +289,7 @@ impl PyClient {
                     builder = builder.retry(retry_policy.clone());
                 }
 
-                let response = builder.send().await.map_err(map_err)?;
+                let response = Box::pin(builder.send()).await.map_err(map_err)?;
                 Ok::<_, PyErr>(response)
             })
         });
@@ -762,7 +762,7 @@ impl PyClient {
                     builder = builder.retry(retry_policy.clone());
                 }
 
-                let response = builder.send().await.map_err(map_err)?;
+                let response = Box::pin(builder.send()).await.map_err(map_err)?;
                 Ok::<_, PyErr>(response)
             })
         });

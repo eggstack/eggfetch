@@ -11,17 +11,17 @@ use pyo3::prelude::*;
 /// backoff strategy.
 ///
 /// Args:
-///     max_attempts: Maximum total attempts including the first request (default 1, meaning no retries).
-///     backoff_factor: Exponential backoff factor (default 0.5).
-///     max_delay: Maximum delay between retries in seconds (default 30.0).
-///     initial_delay: Initial delay before the first retry in seconds (default 0.5).
-///     statuses: Set of HTTP status codes that trigger a retry (default: {408, 429, 502, 503, 504}).
-///     respect_retry_after: Whether to respect Retry-After headers (default False).
-///     allow_post: Whether POST requests may be retried (default False).
-///     allow_put: Whether PUT requests may be retried (default False).
-///     allow_delete: Whether DELETE requests may be retried (default False).
-///     allow_patch: Whether PATCH requests may be retried (default False).
-///     max_elapsed: Maximum total elapsed time across all attempts in seconds (default None, no limit).
+///     `max_attempts`: Maximum total attempts including the first request (default 1, meaning no retries).
+///     `backoff_factor`: Exponential backoff factor (default 0.5).
+///     `max_delay`: Maximum delay between retries in seconds (default 30.0).
+///     `initial_delay`: Initial delay before the first retry in seconds (default 0.5).
+///     `statuses`: Set of HTTP status codes that trigger a retry (default: {408, 429, 502, 503, 504}).
+///     `respect_retry_after`: Whether to respect Retry-After headers (default False).
+///     `allow_post`: Whether POST requests may be retried (default False).
+///     `allow_put`: Whether PUT requests may be retried (default False).
+///     `allow_delete`: Whether DELETE requests may be retried (default False).
+///     `allow_patch`: Whether PATCH requests may be retried (default False).
+///     `max_elapsed`: Maximum total elapsed time across all attempts in seconds (default None, no limit).
 #[pyclass(name = "Retry", frozen)]
 #[derive(Clone)]
 pub struct PyRetry {
@@ -44,7 +44,12 @@ impl PyRetry {
         allow_patch=false,
         max_elapsed=None,
     ))]
-    #[allow(clippy::too_many_arguments)]
+    #[allow(
+        clippy::too_many_arguments,
+        clippy::needless_pass_by_value,
+        clippy::unnecessary_wraps,
+        clippy::too_many_bool_params
+    )]
     fn new(
         max_attempts: usize,
         backoff_factor: f64,

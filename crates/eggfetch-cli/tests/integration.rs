@@ -1165,12 +1165,23 @@ fn test_download_mode() {
     let server = TestServer::start();
     let url = format!("{}/json", server.url());
     let dir = tempfile::tempdir().unwrap();
-    let original_dir = std::env::current_dir().unwrap();
-    std::env::set_current_dir(dir.path()).unwrap();
 
-    let (_stdout, _stderr, code) = run_cli_no_clobber(&[&url, "--download"]);
-    std::env::set_current_dir(&original_dir).unwrap();
-    assert_eq!(code, Some(0));
+    let bin = binary_path();
+    let output = std::process::Command::new(&bin)
+        .args([&url, "--download", "--no-clobber"])
+        .current_dir(dir.path())
+        .env_remove("EGGFETCH_AUTH")
+        .env_remove("EGGFETCH_BEARER")
+        .env_remove("EGGFETCH_PROXY")
+        .env_remove("EGGFETCH_PROXY_AUTH")
+        .output()
+        .unwrap_or_else(|e| panic!("failed to run CLI {bin:?}: {e}"));
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "download mode should exit 0, stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     let entries: Vec<_> = std::fs::read_dir(dir.path()).unwrap().collect();
     assert!(
         !entries.is_empty(),
