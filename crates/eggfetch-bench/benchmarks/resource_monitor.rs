@@ -18,7 +18,6 @@
 
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
-use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
@@ -63,6 +62,7 @@ fn current_rss_linux() -> Option<u64> {
 
 #[cfg(target_os = "macos")]
 fn current_rss_macos() -> Option<u64> {
+    use std::process::Command;
     let pid = std::process::id();
     let output = Command::new("ps")
         .args(["-o", "rss=", "-p", &pid.to_string()])
@@ -336,8 +336,35 @@ fn workload_concurrent_streaming(_url: &str, size: usize) -> (String, u64) {
 // Main
 // ---------------------------------------------------------------------------
 
+/// Maximum allowed delta RSS (peak - baseline) in bytes for any single workload.
+/// Set generously to avoid noisy failures on CI runners, but strict enough to
+/// catch unbounded growth. Current threshold: 50 MB.
+const MAX_DELTA_BYTES: u64 = 50 * 1024 * 1024;
+
+/// Maximum allowed peak RSS in bytes across all workloads.
+/// Current threshold: 100 MB.
+const MAX_PEAK_BYTES: u64 = 100 * 1024 * 1024;
+
+fn run_workload(name: &str, peak: u64, baseline: u64, results: &mut Vec<WorkloadResult>) -> bool {
+    let delta = delta_rss(peak, baseline);
+    let mut failed = false;
+    if delta.unsigned_abs() > MAX_DELTA_BYTES || peak > MAX_PEAK_BYTES {
+        eprintln!(
+            "FAIL: {name} peak={:.2} MB delta={:.2} MB",
+            rss_mb(peak),
+            rss_mb(delta.unsigned_abs())
+        );
+        failed = true;
+    }
+    results.push(WorkloadResult {
+        name: name.to_string(),
+        peak_rss_bytes: peak,
+        delta_rss_bytes: delta,
+    });
+    failed
+}
+
 fn main() {
-    // Warm up: get baseline RSS after process startup.
     let baseline = current_rss_bytes().unwrap_or(0);
 
     eprintln!(
@@ -346,46 +373,32 @@ fn main() {
     );
 
     let mut results = Vec::new();
+    let mut failed = false;
 
-    let (name, peak) = workload_buffered_download("", 4 * 1024 * 1024);
-    results.push(WorkloadResult {
-        name,
-        peak_rss_bytes: peak,
-        delta_rss_bytes: delta_rss(peak, baseline),
-    });
+    let (_, peak) = workload_buffered_download("", 4 * 1024 * 1024);
+    failed |= run_workload("buffered_download", peak, baseline, &mut results);
 
-    let (name, peak) = workload_streaming_download("", 4 * 1024 * 1024);
-    results.push(WorkloadResult {
-        name,
-        peak_rss_bytes: peak,
-        delta_rss_bytes: delta_rss(peak, baseline),
-    });
+    let (_, peak) = workload_streaming_download("", 4 * 1024 * 1024);
+    failed |= run_workload("streaming_download", peak, baseline, &mut results);
 
-    let (name, peak) = workload_connection_reuse("");
-    results.push(WorkloadResult {
-        name,
-        peak_rss_bytes: peak,
-        delta_rss_bytes: delta_rss(peak, baseline),
-    });
+    let (_, peak) = workload_connection_reuse("");
+    failed |= run_workload("connection_reuse", peak, baseline, &mut results);
 
-    let (name, peak) = workload_cancelled_requests("");
-    results.push(WorkloadResult {
-        name,
-        peak_rss_bytes: peak,
-        delta_rss_bytes: delta_rss(peak, baseline),
-    });
+    let (_, peak) = workload_cancelled_requests("");
+    failed |= run_workload("cancelled_requests", peak, baseline, &mut results);
 
-    let (name, peak) = workload_concurrent_streaming("", 1024 * 1024);
-    results.push(WorkloadResult {
-        name,
-        peak_rss_bytes: peak,
-        delta_rss_bytes: delta_rss(peak, baseline),
-    });
+    let (_, peak) = workload_concurrent_streaming("", 1024 * 1024);
+    failed |= run_workload("concurrent_streaming", peak, baseline, &mut results);
 
     // Output JSON report.
     println!("{{");
     println!("  \"baseline_rss_bytes\": {baseline},");
     println!("  \"baseline_rss_mb\": {:.2},", rss_mb(baseline));
+    println!("  \"thresholds\": {{");
+    println!("    \"max_delta_bytes\": {MAX_DELTA_BYTES},");
+    println!("    \"max_peak_bytes\": {MAX_PEAK_BYTES}");
+    println!("  }},");
+    println!("  \"passed\": {},", !failed);
     println!("  \"workloads\": [");
     for (i, r) in results.iter().enumerate() {
         let comma = if i + 1 < results.len() { "," } else { "" };
@@ -405,4 +418,9 @@ fn main() {
     }
     println!("  ]");
     println!("}}");
+
+    if failed {
+        eprintln!("\nResource regression detected. See details above.");
+        std::process::exit(1);
+    }
 }

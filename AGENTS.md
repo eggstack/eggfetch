@@ -145,9 +145,10 @@ Resource regression monitoring:
 ```sh
 cargo build --release -p eggfetch-bench --bin resource_monitor
 ./target/release/resource_monitor    # outputs JSON with peak RSS per workload
+# Exit code 1 if any workload exceeds thresholds
 ```
 
-The resource monitor measures peak RSS across buffered download, streaming download, connection reuse, cancelled requests, and concurrent streaming workloads. CI runs this as a scheduled job and uploads the JSON report as an artifact.
+The resource monitor measures peak RSS across buffered download, streaming download, connection reuse, cancelled requests, and concurrent streaming workloads. Thresholds: max delta RSS 50 MB, max peak RSS 100 MB. The monitor exits with code 1 if thresholds are exceeded. CI runs this as a job and fails the build if thresholds are violated.
 
 ## Fuzzing and Property Testing
 

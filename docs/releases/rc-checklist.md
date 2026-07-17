@@ -33,9 +33,12 @@ This checklist defines the mandatory evidence required before tagging `0.1.0-rc1
 - [ ] All path dependencies have version fields for publication
 - [ ] Python wheels build for all declared platforms (linux-x86_64, linux-aarch64, macos-x86_64, macos-aarch64, win-amd64)
 - [ ] `twine check` passes for all Python artifacts
+- [ ] Sdist installs and imports successfully in a clean environment
 - [ ] CLI binaries build for all declared targets
 - [ ] CLI binary runs `eggfetch --version` from extracted archive
 - [ ] CLI binary runs `eggfetch --help` from extracted archive
+- [ ] CLI local-server smoke tests pass (GET, JSON, exit codes)
+- [ ] Release manifest (`release-manifest.json`) generated with per-artifact metadata
 
 ## Supply Chain
 
@@ -55,8 +58,9 @@ This checklist defines the mandatory evidence required before tagging `0.1.0-rc1
 
 ## Resource Regression
 
-- [ ] Resource monitor runs successfully
-- [ ] Buffered download RSS delta is bounded (baseline: ~6 MB, expected peak: <50 MB)
+- [ ] Resource monitor runs successfully and reports `"passed": true`
+- [ ] Thresholds: max delta RSS 50 MB, max peak RSS 100 MB
+- [ ] Buffered download RSS delta is bounded
 - [ ] Streaming download RSS delta is bounded
 - [ ] Connection reuse shows no monotonic RSS growth
 - [ ] Cancelled requests show no unbounded RSS growth
@@ -75,15 +79,17 @@ This checklist defines the mandatory evidence required before tagging `0.1.0-rc1
 
 - [ ] All CI jobs pass on the candidate SHA
 - [ ] No required job is skipped unexpectedly
-- [ ] Matrix summary artifact uploaded
+- [ ] CI matrix summary artifact (`ci-matrix-summary.json`) uploaded
+- [ ] Release summary artifact uploaded
 
 ## Release Workflow
 
 - [ ] Dry-run workflow_dispatch completes successfully
-- [ ] All build jobs succeed (wheels, CLI binaries, SBOM)
-- [ ] Smoke tests pass (wheel install, CLI binary execution)
-- [ ] No registry credentials required for dry-run
+- [ ] All build jobs succeed (wheels, CLI binaries, SBOM, package validation)
+- [ ] Smoke tests pass (wheel install, CLI binary execution, twine check, sdist install)
+- [ ] No registry credentials required for dry-run (publish jobs skipped)
 - [ ] Release summary job reports all job statuses
+- [ ] Release manifest generated with all artifacts and checksums
 
 ## Accepted Limitations
 

@@ -458,12 +458,181 @@ jobs:
         run: |
           python scripts/wheel_smoke.py --wheel-dir artifacts/wheels-linux-x86_64
 
+      - name: Validate Python artifacts with twine
+        run: |
+          pip install twine
+          twine check artifacts/wheels-linux-x86_64/*.whl
+          twine check artifacts/wheels-sdist/*.tar.gz
+
+      - name: Test sdist installation
+        run: |
+          python -m venv /tmp/sdist-test-venv
+          /tmp/sdist-test-venv/bin/pip install artifacts/wheels-sdist/*.tar.gz
+          /tmp/sdist-test-venv/bin/python -c "import eggfetch; print(f'sdist version: {eggfetch.__version__}')"
+
       - name: Test CLI binary
         run: |
           chmod +x artifacts/cli-x86_64-unknown-linux-gnu/eggfetch-*.tar.gz
           cd /tmp
           tar xzf "$GITHUB_WORKSPACE/artifacts/cli-x86_64-unknown-linux-gnu/eggfetch-*.tar.gz"
+
+          # Test --version
           ./eggfetch --version
+
+          # Test --help
+          ./eggfetch --help | head -1
+
+          # Test local HTTP GET (start a simple server)
+          python -c "
+          import http.server, threading, time
+          class H(http.server.BaseHTTPRequestHandler):
+              def do_GET(self):
+                  self.send_response(200)
+                  self.send_header('Content-Type', 'text/plain')
+                  self.end_headers()
+                  self.wfile.write(b'cli-smoke')
+              def log_message(self, *a): pass
+          s = http.server.ThreadingHTTPServer(('127.0.0.1', 0), H)
+          t = threading.Thread(target=s.serve_forever, daemon=True)
+          t.start()
+          print(s.server_address[1])
+          import sys; sys.stdout.flush()
+          time.sleep(30)
+          " &
+          SERVER_PID=$!
+          sleep 2
+          PORT=$(python -c "
+          import http.server, threading
+          class H(http.server.BaseHTTPRequestHandler):
+              def do_GET(self):
+                  self.send_response(200)
+                  self.send_header('Content-Type', 'text/plain')
+                  self.end_headers()
+                  self.wfile.write(b'cli-smoke')
+              def log_message(self, *a): pass
+          s = http.server.ThreadingHTTPServer(('127.0.0.1', 0), H)
+          print(s.server_address[1])
+          " 2>/dev/null)
+
+          # Actually start a persistent server
+          python -c "
+          import http.server, threading, time, sys
+          class H(http.server.BaseHTTPRequestHandler):
+              def do_GET(self):
+                  self.send_response(200)
+                  self.send_header('Content-Type', 'text/plain')
+                  self.end_headers()
+                  self.wfile.write(b'cli-smoke')
+              def log_message(self, *a): pass
+          s = http.server.ThreadingHTTPServer(('127.0.0.1', 0), H)
+          t = threading.Thread(target=s.serve_forever, daemon=True)
+          t.start()
+          with open('/tmp/cli-test-port', 'w') as f:
+              f.write(str(s.server_address[1]))
+          time.sleep(60)
+          " &
+          sleep 2
+          TEST_PORT=$(cat /tmp/cli-test-port)
+
+          # Test GET
+          RESULT=$(./eggfetch http://127.0.0.1:${TEST_PORT}/ 2>&1)
+          echo "$RESULT" | grep -q "cli-smoke"
+
+          # Test JSON output
+          ./eggfetch --format json http://127.0.0.1:${TEST_PORT}/ 2>&1 | python -c "import sys,json; json.load(sys.stdin)"
+
+          # Test exit code on error (connection refused to unused port)
+          set +e
+          ./eggfetch http://127.0.0.1:1/ 2>/dev/null
+          EXIT_CODE=$?
+          set -e
+          if [ "$EXIT_CODE" -eq 0 ]; then
+            echo "ERROR: expected non-zero exit code for connection refused"
+            exit 1
+          fi
+          echo "PASS: exit code $EXIT_CODE for failed request"
+
+      - name: Generate release manifest
+        run: |
+          VERSION="${{ needs.verify.outputs.version }}"
+          COMMIT="${{ github.sha }}"
+          python -c "
+          import hashlib, json, os, glob
+
+          version = '$VERSION'
+          commit = '$COMMIT'
+          artifacts = []
+
+          # CLI archives
+          for f in sorted(glob.glob('artifacts/cli-*/*.tar.gz') + glob.glob('artifacts/cli-*/*.zip')):
+              name = os.path.basename(f)
+              sha256 = ''
+              sha_file = f + '.sha256'
+              if os.path.exists(sha_file):
+                  with open(sha_file) as sf:
+                      sha256 = sf.read().split()[0]
+              # Extract platform from directory name
+              platform = os.path.basename(os.path.dirname(f)).replace('cli-', '')
+              artifacts.append({
+                  'filename': name,
+                  'platform': platform,
+                  'type': 'cli-binary',
+                  'version': version,
+                  'sha256': sha256,
+              })
+
+          # Python wheels
+          for f in sorted(glob.glob('artifacts/wheels-*/*.whl')):
+              name = os.path.basename(f)
+              h = hashlib.sha256(open(f, 'rb').read()).hexdigest()
+              platform = os.path.basename(os.path.dirname(f)).replace('wheels-', '')
+              artifacts.append({
+                  'filename': name,
+                  'platform': platform,
+                  'type': 'python-wheel',
+                  'version': version,
+                  'sha256': h,
+              })
+
+          # Sdist
+          for f in sorted(glob.glob('artifacts/wheels-sdist/*.tar.gz')):
+              name = os.path.basename(f)
+              h = hashlib.sha256(open(f, 'rb').read()).hexdigest()
+              artifacts.append({
+                  'filename': name,
+                  'platform': 'source',
+                  'type': 'python-sdist',
+                  'version': version,
+                  'sha256': h,
+              })
+
+          # SBOM
+          for f in sorted(glob.glob('artifacts/sbom/*.json')):
+              name = os.path.basename(f)
+              h = hashlib.sha256(open(f, 'rb').read()).hexdigest()
+              artifacts.append({
+                  'filename': name,
+                  'platform': 'all',
+                  'type': 'sbom',
+                  'version': version,
+                  'sha256': h,
+              })
+
+          manifest = {
+              'version': version,
+              'commit': commit,
+              'artifacts': artifacts,
+          }
+          with open('release-manifest.json', 'w') as out:
+              json.dump(manifest, out, indent=2)
+          print(f'Release manifest: {len(artifacts)} artifacts')
+          "
+
+      - name: Upload release manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-manifest
+          path: release-manifest.json
 
   # ──────────────────────────────────────────────────────────────────────
   # 5b. Generate SBOM
@@ -486,15 +655,13 @@ jobs:
           path: sbom-output/*.json
 
   # ──────────────────────────────────────────────────────────────────────
-  # 6. Publish to crates.io
+  # 6a. Rust package validation (no credentials needed)
   # ──────────────────────────────────────────────────────────────────────
-  publish-crates:
-    name: Publish to crates.io
+  package-validate:
+    name: Validate Rust packages
     runs-on: ubuntu-latest
     needs: [verify, smoke-test, generate-sbom]
-    environment: release
     steps:
-      # Pinned to v4.3.1 — update process: check https://github.com/actions/checkout/releases
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
 
@@ -505,6 +672,48 @@ jobs:
           cargo publish -p eggfetch-ffi --dry-run
           cargo publish -p eggfetch-python --dry-run
           cargo publish -p eggfetch-node --dry-run
+
+      - name: Validate package contents
+        run: |
+          for crate in eggfetch-core eggfetch-cli eggfetch-ffi eggfetch-python eggfetch-node; do
+            echo "=== $crate ==="
+            cargo package -p "$crate" --list 2>/dev/null | tee "/tmp/${crate}-package-list.txt"
+            echo ""
+          done
+
+      - name: Check for forbidden files in packages
+        run: |
+          FORBIDDEN_PATTERNS="fuzz/|plans/|target/|\.github/|node_modules/|\.env|SECRET|PRIVATE"
+          FAILED=0
+          for crate in eggfetch-core eggfetch-cli eggfetch-ffi eggfetch-python eggfetch-node; do
+            if grep -qE "$FORBIDDEN_PATTERNS" "/tmp/${crate}-package-list.txt" 2>/dev/null; then
+              echo "::error::$crate package contains forbidden files:"
+              grep -E "$FORBIDDEN_PATTERNS" "/tmp/${crate}-package-list.txt"
+              FAILED=1
+            fi
+          done
+          if [ "$FAILED" -eq 1 ]; then exit 1; fi
+          echo "All package contents look clean."
+
+      - name: Upload package lists
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-lists
+          path: /tmp/*-package-list.txt
+
+  # ──────────────────────────────────────────────────────────────────────
+  # 6b. Publish to crates.io (requires credentials)
+  # ──────────────────────────────────────────────────────────────────────
+  publish-crates:
+    name: Publish to crates.io
+    if: ${{ !inputs.dry_run }}
+    runs-on: ubuntu-latest
+    needs: [verify, smoke-test, generate-sbom, package-validate]
+    environment: release
+    steps:
+      # Pinned to v4.3.1 — update process: check https://github.com/actions/checkout/releases
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
 
       - name: Publish eggfetch-core
         if: ${{ !inputs.dry_run }}
@@ -557,6 +766,7 @@ jobs:
   # ──────────────────────────────────────────────────────────────────────
   publish-testpypi:
     name: Publish to TestPyPI
+    if: ${{ !inputs.dry_run }}
     runs-on: ubuntu-latest
     needs: [verify, smoke-test]
     environment: release
@@ -591,6 +801,7 @@ jobs:
   # ──────────────────────────────────────────────────────────────────────
   publish-pypi:
     name: Publish to PyPI
+    if: ${{ !inputs.dry_run }}
     runs-on: ubuntu-latest
     needs: [verify, smoke-test]
     environment: release
@@ -624,6 +835,7 @@ jobs:
   # ──────────────────────────────────────────────────────────────────────
   github-release:
     name: Create GitHub Release
+    if: ${{ !inputs.dry_run }}
     runs-on: ubuntu-latest
     needs: [verify, smoke-test, publish-crates, publish-pypi]
     steps:
@@ -696,6 +908,7 @@ jobs:
   # ──────────────────────────────────────────────────────────────────────
   post-release:
     name: Post-release verification
+    if: ${{ !inputs.dry_run }}
     runs-on: ubuntu-latest
     needs: [verify, publish-crates, publish-pypi]
     steps:
@@ -739,12 +952,13 @@ jobs:
   release-summary:
     name: Release summary
     runs-on: ubuntu-latest
-    if: always()
-    needs: [verify, ci, ci-platform, ci-python, build-python-wheels, build-python-sdist, build-cli-binaries, smoke-test, generate-sbom, publish-crates, publish-testpypi, publish-pypi, github-release, post-release]
+    if: always() && !cancelled()
+    needs: [verify, ci, ci-platform, ci-python, build-python-wheels, build-python-sdist, build-cli-binaries, smoke-test, generate-sbom, package-validate, publish-crates, publish-testpypi, publish-pypi, github-release, post-release]
     steps:
       - name: Generate summary
         run: |
           VERSION="${{ needs.verify.outputs.version }}"
+          IS_DRY="${{ inputs.dry_run }}"
           echo "## Release Summary: v${VERSION}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
@@ -757,10 +971,17 @@ jobs:
           echo "| CLI binaries | ${{ needs.build-cli-binaries.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Smoke tests | ${{ needs.smoke-test.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| SBOM generation | ${{ needs.generate-sbom.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Package validation | ${{ needs.package-validate.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| crates.io publish | ${{ needs.publish-crates.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| TestPyPI publish | ${{ needs.publish-testpypi.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| PyPI publish | ${{ needs.publish-pypi.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| GitHub Release | ${{ needs.github-release.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Post-release verify | ${{ needs.post-release.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Dry run: ${{ inputs.dry_run }}" >> $GITHUB_STEP_SUMMARY
+          echo "Dry run: ${IS_DRY}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${IS_DRY}" = "true" ]; then
+            echo "**Mode: DRY RUN** — no packages were published." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "**Mode: PRODUCTION** — packages were published to registries." >> $GITHUB_STEP_SUMMARY
+          fi

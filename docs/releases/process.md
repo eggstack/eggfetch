@@ -94,7 +94,7 @@ Record the rehearsal result (pass/fail, issues found) before proceeding to the s
    ./target/release/resource_monitor
    ```
 
-   Verify all workload RSS deltas are bounded (no monotonic unbounded growth).
+   The resource monitor exits with code 1 if any workload exceeds the thresholds (50 MB delta RSS, 100 MB peak RSS). Verify the JSON output shows `"passed": true`. In CI, the `resource-monitor` job fails the build if thresholds are exceeded.
 
 5. **Run Python validation.**
 
@@ -111,15 +111,16 @@ Record the rehearsal result (pass/fail, issues found) before proceeding to the s
    - Go to Actions > Release > Run workflow
    - Set `version` to the release version (e.g., `0.1.0`)
    - Set `dry_run` to `true`
-   - This runs the full CI matrix, builds all artifacts, generates SBOM, runs `cargo publish --dry-run`, and produces a release summary — without publishing to any registry.
+   - This runs the full CI matrix, builds all artifacts, validates Rust packages (`cargo package --list` + `cargo publish --dry-run`), runs `twine check` on Python artifacts, generates SBOM, and produces a release summary — **without publishing to any registry**.
+   - Publish jobs (`publish-crates`, `publish-testpypi`, `publish-pypi`, `github-release`, `post-release`) are all skipped in dry-run mode.
 
-8. **Push and wait for CI.** The CI pipeline builds and tests on Ubuntu, macOS, and Windows across Python 3.10-3.13. The release-summary job reports the status of every job.
+8. **Push and wait for CI.** The CI pipeline builds and tests on Ubuntu, macOS, and Windows across Python 3.10-3.13. The `matrix-summary` job in CI and `release-summary` job in the release workflow report the status of every job.
 
-9. **Build release artifacts.** Produce platform-specific wheels and the CLI binary.
+9. **Build release artifacts.** Produce platform-specific wheels, the CLI binary, and a machine-readable release manifest (`release-manifest.json`) with per-artifact metadata (filename, platform, type, version, SHA-256).
 
-10. **Smoke test artifacts.** Install the wheel into a clean virtual environment. Run a local GET and a streaming response test.
+10. **Smoke test artifacts.** Install the wheel into a clean virtual environment. Run buffered GET, streaming, JSON, multipart upload, auth, retry, and error handling tests. Run `twine check` on all Python artifacts. Install the sdist in a clean environment. Run `eggfetch --version`, `--help`, a local GET, JSON output, and verify exit codes from the CLI binary.
 
-11. **Publish to registries.** Publish crates to crates.io and wheels to PyPI.
+11. **Publish to registries.** Publish crates to crates.io and wheels to PyPI. All publish jobs require the `release` environment approval and are gated behind successful validation.
 
 12. **Post-publish validation.** Install from the published artifacts (not local). Run a quick smoke test to confirm the published version works.
 
