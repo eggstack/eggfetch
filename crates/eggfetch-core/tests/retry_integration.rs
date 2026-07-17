@@ -1,4 +1,4 @@
-#![allow(warnings)]
+#![allow(missing_docs, dead_code, unused_mut, clippy::all)]
 //! Integration tests for retry + redirect+auth subsystems.
 //!
 //! These tests use tokio's async TCP utilities.

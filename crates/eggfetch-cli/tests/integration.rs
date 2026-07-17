@@ -1,4 +1,4 @@
-#![allow(warnings)]
+#![allow(missing_docs, dead_code, unused_mut, clippy::all)]
 
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Read, Write};

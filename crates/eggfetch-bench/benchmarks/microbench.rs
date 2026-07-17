@@ -1,6 +1,6 @@
 //! Microbenchmarks for eggfetch-core internals.
 
-#![allow(warnings)]
+#![allow(missing_docs)]
 
 use criterion::{black_box, criterion_group, criterion_main, BatchSize, Criterion};
 use eggfetch_core::{BasicAuth, BearerAuth, Client, Headers, RetryPolicy};

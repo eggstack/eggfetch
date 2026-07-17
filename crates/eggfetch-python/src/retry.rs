@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use pyo3::prelude::*;
 
-/// Python wrapper for an eggfetch retry policy.
+/// Python wrapper for an `eggfetch` retry policy.
 ///
 /// Controls which requests are retried, how many times, and with what
 /// backoff strategy.

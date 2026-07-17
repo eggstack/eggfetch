@@ -1,4 +1,4 @@
-#![allow(warnings)]
+#![allow(missing_docs, dead_code, unused_mut, clippy::all)]
 //! Connection pool and concurrency lifecycle tests.
 
 mod test_server;

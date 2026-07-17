@@ -1,4 +1,4 @@
-#![allow(warnings)]
+#![allow(missing_docs, dead_code, unused_mut, clippy::all)]
 //! Local TCP test server for connection management and streaming tests.
 
 use std::io::{BufRead, BufReader, Write};

@@ -1,4 +1,4 @@
-#![allow(warnings)]
+#![allow(missing_docs, dead_code, unused_mut, clippy::all)]
 //! Adverse-condition and edge-case tests for the eggfetch HTTP client.
 
 #![allow(clippy::large_futures)]

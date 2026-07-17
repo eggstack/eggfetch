@@ -1,4 +1,4 @@
-//! Python async client wrapper over the eggfetch-core engine.
+//! Python async client wrapper over the `eggfetch-core` engine.
 
 use pyo3::prelude::*;
 

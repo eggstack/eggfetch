@@ -1,4 +1,4 @@
-#![allow(warnings)]
+#![allow(missing_docs, dead_code, unused_mut, clippy::all)]
 //! Proxy integration tests for eggfetch-core.
 //!
 //! Contains local test proxy servers and integration tests covering

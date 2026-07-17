@@ -1,4 +1,4 @@
-#![allow(warnings)]
+#![allow(missing_docs, dead_code, unused_mut, clippy::all)]
 //! Integration tests for the eggfetch FFI crate.
 
 use std::ffi::CString;

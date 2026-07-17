@@ -1,5 +1,3 @@
-#![allow(warnings)]
-
 use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -18,6 +16,7 @@ fn make_client() -> Client {
         .build()
 }
 
+#[allow(clippy::large_futures)]
 fn bench_one_shot(c: &mut Criterion) {
     let rt = tokio::runtime::Runtime::new().unwrap();
     let server = BenchServer::start(BenchServerConfig {
@@ -39,6 +38,7 @@ fn bench_one_shot(c: &mut Criterion) {
     server.shutdown();
 }
 
+#[allow(clippy::large_futures)]
 fn bench_warm_client(c: &mut Criterion) {
     let rt = tokio::runtime::Runtime::new().unwrap();
     let server = BenchServer::start(BenchServerConfig {
@@ -66,6 +66,7 @@ fn bench_warm_client(c: &mut Criterion) {
     server.shutdown();
 }
 
+#[allow(clippy::large_futures)]
 fn bench_concurrent_requests(c: &mut Criterion) {
     let rt = tokio::runtime::Runtime::new().unwrap();
     let server = BenchServer::start(BenchServerConfig {
@@ -95,6 +96,7 @@ fn bench_concurrent_requests(c: &mut Criterion) {
     server.shutdown();
 }
 
+#[allow(clippy::large_futures)]
 fn bench_body_sizes(c: &mut Criterion) {
     let rt = tokio::runtime::Runtime::new().unwrap();
 
@@ -127,6 +129,7 @@ fn bench_body_sizes(c: &mut Criterion) {
     group.finish();
 }
 
+#[allow(clippy::large_futures)]
 fn bench_streaming_body(c: &mut Criterion) {
     let rt = tokio::runtime::Runtime::new().unwrap();
     let server = BenchServer::start(BenchServerConfig {
@@ -168,6 +171,7 @@ fn bench_streaming_body(c: &mut Criterion) {
     server.shutdown();
 }
 
+#[allow(clippy::large_futures)]
 fn bench_large_upload(c: &mut Criterion) {
     let rt = tokio::runtime::Runtime::new().unwrap();
     let server = BenchServer::start(BenchServerConfig {
@@ -192,6 +196,7 @@ fn bench_large_upload(c: &mut Criterion) {
     server.shutdown();
 }
 
+#[allow(clippy::large_futures)]
 fn bench_http2_handshake(c: &mut Criterion) {
     let rt = tokio::runtime::Runtime::new().unwrap();
 
@@ -426,6 +431,7 @@ impl BenchProxy {
     }
 }
 
+#[allow(clippy::large_futures)]
 fn bench_proxy_direct_comparison(c: &mut Criterion) {
     let rt = tokio::runtime::Runtime::new().unwrap();
     let server = BenchServer::start(BenchServerConfig {

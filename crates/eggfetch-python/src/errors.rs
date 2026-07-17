@@ -199,6 +199,7 @@ create_exception!(
 
 /// Map an eggfetch-core error to the appropriate Python exception.
 #[allow(clippy::needless_pass_by_value)]
+#[allow(clippy::too_many_lines)]
 pub fn map_err(err: eggfetch_core::Error) -> PyErr {
     use eggfetch_core::timeout::TimeoutPhase;
 

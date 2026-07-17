@@ -1,4 +1,4 @@
-#![allow(warnings)]
+#![allow(missing_docs, dead_code, unused_mut, clippy::all)]
 //! Cross-feature integration tests for eggfetch-core.
 //!
 //! Tests combining proxy, multipart, compression, cookies, and redirect

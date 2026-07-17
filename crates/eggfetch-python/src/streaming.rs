@@ -2,9 +2,9 @@
 //!
 //! Iterator constructors accept `encoding_override` by value because the
 //! Python binding layer already owns the string and passing it through is
-//! the natural pyo3 convention. Explicit `'py` lifetimes are kept on pyo3
+//! the natural `pyo3` convention. Explicit `'py` lifetimes are kept on `pyo3`
 //! methods for clarity even when elidable. Channel types are wrapped in
-//! `Mutex` to satisfy pyclass `Sync` requirements.
+//! `Mutex` to satisfy `pyclass` `Sync` requirements.
 
 // Clippy pedantic lints suppressed for pyo3 binding patterns:
 // - `needless_pass_by_value`: iterator constructors take `Option<String>` by value

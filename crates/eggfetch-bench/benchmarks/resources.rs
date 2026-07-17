@@ -1,4 +1,4 @@
-#![allow(warnings)]
+#![allow(missing_docs, clippy::needless_return)]
 
 use std::fmt::Write as _;
 use std::io::{BufRead, BufReader, Write};

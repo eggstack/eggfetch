@@ -1,4 +1,4 @@
-#![allow(warnings)]
+#![allow(missing_docs, dead_code, unused_mut, clippy::all)]
 //! HTTP/2 integration and unit tests.
 //!
 //! Tests cover:

@@ -16,7 +16,7 @@ use crate::streaming::PyStreamingResponse;
 
 /// A synchronous HTTP client exposed to Python.
 ///
-/// Owns a tokio runtime and an eggfetch-core client. Releases the GIL
+/// Owns a `tokio` runtime and an `eggfetch-core` client. Releases the GIL
 /// during network I/O.
 #[pyclass(name = "Client")]
 pub struct PyClient {
