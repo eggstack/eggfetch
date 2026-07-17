@@ -1,6 +1,6 @@
 //! Microbenchmarks for eggfetch-core internals.
 
-#![allow(missing_docs)]
+#![allow(missing_docs, clippy::too_many_lines)]
 
 use criterion::{black_box, criterion_group, criterion_main, BatchSize, Criterion};
 use eggfetch_core::{BasicAuth, BearerAuth, Client, Headers, RetryPolicy};
