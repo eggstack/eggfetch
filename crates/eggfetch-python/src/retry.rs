@@ -48,7 +48,7 @@ impl PyRetry {
         clippy::too_many_arguments,
         clippy::needless_pass_by_value,
         clippy::unnecessary_wraps,
-        clippy::too_many_bool_params
+        clippy::too_many_bools
     )]
     fn new(
         max_attempts: usize,

@@ -206,8 +206,7 @@ assert r.status_code == 401
 print("PASS: 401 unauthorized")
 
 # --- Test 9: Multipart upload ---
-import io
-files = {{"file_field": ("test.txt", io.BytesIO(b"hello world"), "text/plain")}}
+files = {{"file_field": ("test.txt", b"hello world", "text/plain")}}
 r = eggfetch.post({base!r} + "/multipart", files=files)
 assert r.status_code == 200
 assert r.content == b"upload-ok"
