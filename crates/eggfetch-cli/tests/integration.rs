@@ -1063,9 +1063,10 @@ fn test_form_urlencoded() {
 fn test_file_upload() {
     let server = TestServer::start();
     let url = format!("{}/post-body", server.url());
-    let tmp = tempfile::NamedTempFile::new().unwrap();
-    std::fs::write(tmp.path(), "file contents here").unwrap();
-    let path = tmp.path().to_str().unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let file_path = dir.path().join("upload.txt");
+    std::fs::write(&file_path, "file contents here").unwrap();
+    let path = file_path.to_str().unwrap();
     let file_arg = format!("upload=@{path}");
     let (stdout, _stderr, code) = run_cli(&["-X", "POST", &url, "--file", &file_arg]);
     assert_eq!(code, Some(0));

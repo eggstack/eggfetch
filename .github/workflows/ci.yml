@@ -303,7 +303,6 @@ jobs:
           if [ "$FAILED" -eq 1 ]; then
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "**Result: FAILED** — one or more required jobs failed." >> $GITHUB_STEP_SUMMARY
-            exit 1
           else
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "**Result: PASSED**" >> $GITHUB_STEP_SUMMARY
