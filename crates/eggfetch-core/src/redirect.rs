@@ -471,6 +471,7 @@ mod tests {
         }
 
         #[test]
+        #[allow(clippy::if_not_else)]
         fn redirect_method_303_always_get(method in "[A-Z]{3,7}") {
             use http::Method;
             let m = Method::from_bytes(method.as_bytes());

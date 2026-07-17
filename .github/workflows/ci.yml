@@ -30,6 +30,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
       - name: Clippy
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+      - name: Lint suppression policy
+        run: bash scripts/check_lint_suppressions.sh
 
   rust-msrv:
     name: MSRV check (Rust 1.80)

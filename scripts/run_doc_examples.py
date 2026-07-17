@@ -6,12 +6,14 @@ Reports documentation bugs (wrong parameter names, missing APIs) while
 tolerating expected failures (external URLs, missing optional deps).
 
 Usage:
-    python scripts/run_doc_examples.py [--install] [--strict]
+    python scripts/run_doc_examples.py [--install] [--strict] [--require]
 """
 
+import argparse
 import ast
 import http.server
 import json
+import os
 import re
 import subprocess
 import sys
@@ -190,8 +192,23 @@ def is_expected_failure(exc_msg: str) -> bool:
 
 
 def main() -> int:
-    install = "--install" in sys.argv
-    strict = "--strict" in sys.argv
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--install", action="store_true", help="Install eggfetch before running."
+    )
+    parser.add_argument(
+        "--strict", action="store_true", help="Fail on doc bugs."
+    )
+    parser.add_argument(
+        "--require",
+        action="store_true",
+        default=bool(os.environ.get("CI")),
+        help="Exit non-zero when eggfetch cannot be imported (default: true in CI).",
+    )
+    args = parser.parse_args()
+    install = args.install
+    strict = args.strict
+    require = args.require
 
     if install:
         print("Installing eggfetch...")
@@ -206,6 +223,9 @@ def main() -> int:
     try:
         import eggfetch  # noqa: F401
     except ImportError:
+        if require:
+            print("eggfetch not installed — required in CI.")
+            return 1
         print("eggfetch not installed — skipping doc example execution.")
         return 0
 

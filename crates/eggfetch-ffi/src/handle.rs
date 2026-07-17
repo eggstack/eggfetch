@@ -129,7 +129,7 @@ pub(crate) unsafe fn cstr_to_opt(ptr: *const c_char) -> Option<&'static str> {
 ///
 /// Returns a `Box<ErrorHandle>` suitable for FFI raw-pointer return.
 #[must_use]
-#[allow(clippy::pedantic)]
+#[allow(clippy::unnecessary_box_returns)]
 pub(crate) fn error_to_handle(e: &eggfetch_core::Error) -> Box<ErrorHandle> {
     Box::new(ErrorHandle {
         kind: e.kind().to_owned(),

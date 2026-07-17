@@ -54,6 +54,7 @@ The workspace enables pedantic clippy with `module_name_repetitions = "allow"` a
 
 - Do not disable pedantic lints to make code compile.
 - Do not add `#[allow(unsafe_code)]`. There is no path to `unsafe` without explicit discussion.
+- Do not use `#![allow(warnings)]`, `#![allow(clippy::all)]`, or `#![allow(clippy::pedantic)]`. Use specific lint names. CI enforces this via `scripts/check_lint_suppressions.sh`.
 - If a lint is genuinely wrong for a specific case, justify the suppression with a comment explaining why.
 
 ## Doc Policy

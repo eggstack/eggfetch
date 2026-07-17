@@ -555,6 +555,7 @@ fn parse_proxy_url(url_str: &str) -> Result<url::Url> {
 }
 
 #[cfg(test)]
+#[allow(clippy::items_after_test_module)]
 mod tests {
     use super::*;
 

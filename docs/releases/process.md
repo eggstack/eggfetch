@@ -2,7 +2,7 @@
 
 ## Versioning Strategy
 
-All publishable crates in the workspace share a single coordinated version number. When a release is tagged, `eggfetch-core`, `eggfetch-cli`, `eggfetch-python`, and `eggfetch-ffi` all receive the same version. Internal crates that are not published (benchmarks, fuzz targets) are excluded.
+All publishable crates in the workspace share a single coordinated version number. When a release is tagged, `eggfetch-core`, `eggfetch-cli`, `eggfetch-python`, `eggfetch-ffi`, and `eggfetch-node` all receive the same version. Internal crates that are not published (benchmarks, fuzz targets) are excluded.
 
 Version numbers follow [Semantic Versioning](https://semver.org/):
 
@@ -77,6 +77,12 @@ Record the rehearsal result (pass/fail, issues found) before proceeding to the s
    cargo check -p eggfetch-core --no-default-features
    cargo check -p eggfetch-core --no-default-features --features http1,tls-rustls
    cargo check -p eggfetch-core --all-features
+   cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,compression-gzip
+   cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,compression-brotli
+   cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,compression-zstd
+   cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,proxy
+   cargo check -p eggfetch-core --no-default-features --features http1,tls-rustls,http3
+   cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,http3
    ```
 
 4. **Run Python validation.**
@@ -90,7 +96,9 @@ Record the rehearsal result (pass/fail, issues found) before proceeding to the s
 
 5. **Commit and tag.** Create a signed tag `v<VERSION>` on the commit.
 
-6. **Push and wait for CI.** The CI pipeline builds and tests on Ubuntu, macOS, and Windows across Python 3.10-3.13.
+6. **Dry-run workflow_dispatch (optional).** Before pushing the tag, you can trigger a dry-run via GitHub Actions workflow_dispatch with `dry_run: true`. This runs the full CI matrix, builds all artifacts, and runs the `--dry-run` cargo publish check without actually publishing to any registry. It is a safe way to validate the entire release pipeline end-to-end.
+
+7. **Push and wait for CI.** The CI pipeline builds and tests on Ubuntu, macOS, and Windows across Python 3.10-3.13.
 
 7. **Build release artifacts.** Produce platform-specific wheels and the CLI binary.
 

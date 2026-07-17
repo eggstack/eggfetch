@@ -24,6 +24,8 @@ The workspace `Cargo.toml` enables `pedantic = { level = "warn", priority = -1 }
 
 Do not disable pedantic lints to make code compile. If a lint is genuinely incorrect or unhelpful for a specific case, justify the suppression with a comment explaining why and seek reviewer approval.
 
+CI enforces a lint-suppression policy via `scripts/check_lint_suppressions.sh` that rejects forbidden blanket suppressions (`allow(warnings)`, `allow(clippy::all)`, `allow(clippy::pedantic)`). Use specific lint names in all `#[allow]` attributes.
+
 ## Unsafe
 
 The workspace sets `unsafe_code = "forbid"`. There is no `#[allow(unsafe_code)]` anywhere in the project. Any new use of `unsafe` requires a strong justification, a separate decision, and likely a dedicated review. Do not add `unsafe` without explicit discussion.
@@ -52,6 +54,43 @@ cargo test --workspace --all-features
 ```
 
 Prefer small, focused tests that exercise one behavior. The workspace has ~750+ Rust tests, ~463+ Python tests, and ~40+ Node.js/FFI tests covering construction, streaming, timeouts, pools, headers, integration scenarios, sync/async API parity, redirect replay, total timeout across redirects, response decoding, cookie subsystem, authentication subsystem, multipart uploads, decompression, proxy tunneling, retry policies, and true network streaming via `client.stream()`. As the project grows, tests should cover protocol correctness, edge cases, and error paths.
+
+### Python tests
+
+Python tests require the wheel to be built first:
+
+```sh
+cd crates/eggfetch-python
+maturin develop
+python -m pytest -p pytest_asyncio
+```
+
+Run differential tests against pinned versions of `requests` and `HTTPX`:
+
+```sh
+python -m pytest tests/test_differential.py -p pytest_asyncio
+```
+
+### Validation pass
+
+The full validation pass (used before release) runs feature-gated compilation and test subsets:
+
+```sh
+cargo check -p eggfetch-core --no-default-features
+cargo check -p eggfetch-core --no-default-features --features http1,tls-rustls
+cargo check -p eggfetch-core --all-features
+cargo test -p eggfetch-core --all-features
+cd crates/eggfetch-python
+maturin develop
+python -m pytest -p pytest_asyncio
+maturin build
+cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,compression-gzip
+cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,compression-brotli
+cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,compression-zstd
+cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,proxy
+cargo check -p eggfetch-core --no-default-features --features http1,tls-rustls,http3
+cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,http3
+```
 
 ## Dependencies
 

@@ -1,4 +1,26 @@
-#![allow(missing_docs, dead_code, unused_mut, clippy::all)]
+#![allow(
+    missing_docs,
+    dead_code,
+    unused_mut,
+    clippy::large_futures,
+    clippy::missing_panics_doc,
+    clippy::redundant_closure_for_method_calls,
+    clippy::inefficient_to_string,
+    clippy::manual_let_else,
+    clippy::single_char_pattern,
+    clippy::match_same_arms,
+    clippy::needless_borrow,
+    clippy::trim_split_whitespace,
+    clippy::too_many_lines,
+    clippy::unused_self,
+    clippy::items_after_statements,
+    clippy::expect_fun_call,
+    clippy::len_zero,
+    clippy::unnecessary_debug_formatting,
+    clippy::format_push_string,
+    clippy::new_without_default,
+    clippy::map_unwrap_or
+)]
 
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Read, Write};
@@ -102,6 +124,7 @@ fn handle_client(
     request_count: &AtomicUsize,
     captured: &Mutex<Vec<CapturedRequest>>,
 ) {
+    stream.set_nonblocking(false).ok();
     stream.set_read_timeout(Some(Duration::from_secs(5))).ok();
     stream.set_write_timeout(Some(Duration::from_secs(5))).ok();
 

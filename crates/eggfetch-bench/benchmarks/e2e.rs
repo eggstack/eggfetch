@@ -1,3 +1,11 @@
+#![allow(
+    missing_docs,
+    clippy::unused_self,
+    clippy::too_many_lines,
+    clippy::if_not_else,
+    clippy::uninlined_format_args
+)]
+
 use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::atomic::{AtomicUsize, Ordering};

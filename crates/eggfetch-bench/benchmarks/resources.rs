@@ -1,4 +1,9 @@
-#![allow(missing_docs, clippy::needless_return, clippy::large_futures)]
+#![allow(
+    missing_docs,
+    clippy::needless_return,
+    clippy::large_futures,
+    clippy::missing_panics_doc
+)]
 
 use std::fmt::Write as _;
 use std::io::{BufRead, BufReader, Write};

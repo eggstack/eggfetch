@@ -251,6 +251,9 @@ pub unsafe extern "C" fn eggfetch_response_stream_next(
     };
     match handle.rx.blocking_recv() {
         Some(Ok(data)) => {
+            if handle.cancel.load(Ordering::Acquire) {
+                return ptr::null_mut();
+            }
             let len = data.len();
             let buf = if len > 0 {
                 let layout =
@@ -295,7 +298,7 @@ pub unsafe extern "C" fn eggfetch_stream_chunk_free(chunk: *mut StreamChunk) {
 #[no_mangle]
 pub unsafe extern "C" fn eggfetch_response_stream_cancel(handle: *mut StreamingResponseHandle) {
     if let Some(handle) = handle.as_mut() {
-        handle.cancel.store(true, Ordering::Relaxed);
+        handle.cancel.store(true, Ordering::Release);
         handle.rx.close();
     }
 }
