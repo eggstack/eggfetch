@@ -15,7 +15,7 @@ crate-type = ["cdylib"]
 napi-build = "2"
 
 [dependencies]
-eggfetch-ffi = { path = "../eggfetch-ffi", default-features = false }
+eggfetch-ffi = { version = "0.1.0", path = "../eggfetch-ffi", default-features = false }
 napi = { version = "2", features = ["async", "napi8", "serde-json"] }
 napi-derive = "2"
 serde = { version = "1", features = ["derive"] }

@@ -88,13 +88,12 @@ jobs:
       - name: Doctests
         run: cargo test --doc -p eggfetch-core --all-features
 
-  docs-checks:
-    name: Documentation checks
+  docs-syntax:
+    name: Documentation syntax check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       - name: Set up Python
-        # Pinned to v5.6.0 — update process: check https://github.com/actions/setup-python/releases
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.12"
@@ -108,8 +107,42 @@ jobs:
         run: python scripts/check_api_surface.py
       - name: Verify CLI help matches docs
         run: python scripts/verify_cli_help_sync.py
+
+  docs-runtime:
+    name: Documentation runtime examples
+    runs-on: ubuntu-latest
+    needs: [rust-test]
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+      - name: Install build tooling
+        run: pip install maturin pytest pytest-asyncio
+      - name: Build and install Python package
+        env:
+          PYO3_USE_ABI3_FORWARD_COMPATIBILITY: "1"
+        run: maturin develop -m crates/eggfetch-python/Cargo.toml
       - name: Execute Python doc examples
         run: python scripts/run_doc_examples.py
+
+  resource-monitor:
+    name: Resource regression check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
+      - name: Build resource monitor
+        run: cargo build --release -p eggfetch-bench --bin resource_monitor
+      - name: Run resource monitor
+        run: ./target/release/resource_monitor | tee resource-report.json
+      - name: Upload resource report
+        uses: actions/upload-artifact@v4
+        with:
+          name: resource-report
+          path: resource-report.json
 
   python:
     name: Python tests (py${{ matrix.python-version }}, ${{ matrix.os }})

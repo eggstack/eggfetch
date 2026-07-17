@@ -140,6 +140,15 @@ cargo bench -p eggfetch-bench --bench e2e          # end-to-end only
 cargo bench -p eggfetch-bench --bench resources    # resource tests only
 ```
 
+Resource regression monitoring:
+
+```sh
+cargo build --release -p eggfetch-bench --bin resource_monitor
+./target/release/resource_monitor    # outputs JSON with peak RSS per workload
+```
+
+The resource monitor measures peak RSS across buffered download, streaming download, connection reuse, cancelled requests, and concurrent streaming workloads. CI runs this as a scheduled job and uploads the JSON report as an artifact.
+
 ## Fuzzing and Property Testing
 
 The fuzzing and property testing infrastructure targets high-risk parsers, state machines, and codec boundaries.
@@ -200,14 +209,16 @@ The project enforces security through CI automation and code conventions:
 eggfetch uses coordinated versioning across all publishable crates (core, CLI, Python, FFI, Node). All crates share the same version number. The bench and fuzz crates are not published.
 
 Release workflow:
-- Triggered by version tags (`v*`) or manual dispatch
+- Triggered by version tags (`v*`) or manual dispatch with `dry_run` option
 - Runs full CI matrix before any publishing
 - Builds Python wheels for Linux (x86_64/aarch64), macOS (x86_64/aarch64), Windows (x86_64) across Python 3.10–3.13
 - Builds CLI binaries for supported platforms with checksums
+- Generates SBOM via cargo-cyclonedx
 - Smoke-tests all artifacts before publishing
 - Requires environment approval for crates.io and PyPI publishing
-- Creates GitHub Release with binaries and release notes
+- Creates GitHub Release with binaries, checksums, SBOM, and provenance attestations
 - Runs post-release install verification
+- Produces a release-summary job reporting every job's status
 
 Publishing order: eggfetch-core → eggfetch-cli → eggfetch-ffi → eggfetch-python → eggfetch-node (crates.io index propagation requires waits between publishes).
 

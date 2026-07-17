@@ -49,6 +49,19 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Releasing version: $VERSION"
 
+      - name: Validate version format
+        run: |
+          VERSION="${{ steps.meta.outputs.version }}"
+          if [ -z "$VERSION" ]; then
+            echo "::error::Version is required"
+            exit 1
+          fi
+          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$'; then
+            echo "::error::Invalid version format: $VERSION (expected X.Y.Z or X.Y.Z-prerelease)"
+            exit 1
+          fi
+          echo "Version format is valid: $VERSION"
+
       - name: Verify tag matches Cargo.toml workspace version
         run: |
           EXPECTED="${{ steps.meta.outputs.version }}"
@@ -453,12 +466,32 @@ jobs:
           ./eggfetch --version
 
   # ──────────────────────────────────────────────────────────────────────
+  # 5b. Generate SBOM
+  # ──────────────────────────────────────────────────────────────────────
+  generate-sbom:
+    name: Generate SBOM
+    runs-on: ubuntu-latest
+    needs: [verify, ci, ci-platform]
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
+      - name: Install cargo-cyclonedx
+        run: cargo install cargo-cyclonedx
+      - name: Generate SBOM
+        run: cargo cyclonedx --format json --output-dir sbom-output
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom-output/*.json
+
+  # ──────────────────────────────────────────────────────────────────────
   # 6. Publish to crates.io
   # ──────────────────────────────────────────────────────────────────────
   publish-crates:
     name: Publish to crates.io
     runs-on: ubuntu-latest
-    needs: [verify, smoke-test]
+    needs: [verify, smoke-test, generate-sbom]
     environment: release
     steps:
       # Pinned to v4.3.1 — update process: check https://github.com/actions/checkout/releases
@@ -699,3 +732,35 @@ jobs:
           echo "Checking PyPI version..."
           /tmp/release-test-venv/bin/pip show eggfetch | grep -q "$EXPECTED" || echo "Warning: could not verify PyPI version"
           echo "Post-release verification complete."
+
+  # ──────────────────────────────────────────────────────────────────────
+  # 11. Release summary
+  # ──────────────────────────────────────────────────────────────────────
+  release-summary:
+    name: Release summary
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [verify, ci, ci-platform, ci-python, build-python-wheels, build-python-sdist, build-cli-binaries, smoke-test, generate-sbom, publish-crates, publish-testpypi, publish-pypi, github-release, post-release]
+    steps:
+      - name: Generate summary
+        run: |
+          VERSION="${{ needs.verify.outputs.version }}"
+          echo "## Release Summary: v${VERSION}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| CI (lint/format/test) | ${{ needs.ci.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| CI (platform matrix) | ${{ needs.ci-platform.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| CI (Python tests) | ${{ needs.ci-python.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Python wheels | ${{ needs.build-python-wheels.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Python sdist | ${{ needs.build-python-sdist.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| CLI binaries | ${{ needs.build-cli-binaries.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Smoke tests | ${{ needs.smoke-test.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| SBOM generation | ${{ needs.generate-sbom.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| crates.io publish | ${{ needs.publish-crates.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| TestPyPI publish | ${{ needs.publish-testpypi.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| PyPI publish | ${{ needs.publish-pypi.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| GitHub Release | ${{ needs.github-release.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Post-release verify | ${{ needs.post-release.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Dry run: ${{ inputs.dry_run }}" >> $GITHUB_STEP_SUMMARY

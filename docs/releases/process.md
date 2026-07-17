@@ -83,9 +83,20 @@ Record the rehearsal result (pass/fail, issues found) before proceeding to the s
    cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,proxy
    cargo check -p eggfetch-core --no-default-features --features http1,tls-rustls,http3
    cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,http3
+   bash scripts/check_lint_suppressions.sh
+   cargo publish -p eggfetch-core --dry-run
    ```
 
-4. **Run Python validation.**
+4. **Run resource regression check.**
+
+   ```sh
+   cargo build --release -p eggfetch-bench --bin resource_monitor
+   ./target/release/resource_monitor
+   ```
+
+   Verify all workload RSS deltas are bounded (no monotonic unbounded growth).
+
+5. **Run Python validation.**
 
    ```sh
    cd crates/eggfetch-python
@@ -94,21 +105,25 @@ Record the rehearsal result (pass/fail, issues found) before proceeding to the s
    maturin build
    ```
 
-5. **Commit and tag.** Create a signed tag `v<VERSION>` on the commit.
+6. **Commit and tag.** Create a signed tag `v<VERSION>` on the commit.
 
-6. **Dry-run workflow_dispatch (optional).** Before pushing the tag, you can trigger a dry-run via GitHub Actions workflow_dispatch with `dry_run: true`. This runs the full CI matrix, builds all artifacts, and runs the `--dry-run` cargo publish check without actually publishing to any registry. It is a safe way to validate the entire release pipeline end-to-end.
+7. **Dry-run workflow_dispatch.** Before pushing the tag, trigger a dry-run via GitHub Actions:
+   - Go to Actions > Release > Run workflow
+   - Set `version` to the release version (e.g., `0.1.0`)
+   - Set `dry_run` to `true`
+   - This runs the full CI matrix, builds all artifacts, generates SBOM, runs `cargo publish --dry-run`, and produces a release summary — without publishing to any registry.
 
-7. **Push and wait for CI.** The CI pipeline builds and tests on Ubuntu, macOS, and Windows across Python 3.10-3.13.
+8. **Push and wait for CI.** The CI pipeline builds and tests on Ubuntu, macOS, and Windows across Python 3.10-3.13. The release-summary job reports the status of every job.
 
-7. **Build release artifacts.** Produce platform-specific wheels and the CLI binary.
+9. **Build release artifacts.** Produce platform-specific wheels and the CLI binary.
 
-8. **Smoke test artifacts.** Install the wheel into a clean virtual environment. Run a local GET and a streaming response test.
+10. **Smoke test artifacts.** Install the wheel into a clean virtual environment. Run a local GET and a streaming response test.
 
-9. **Publish to registries.** Publish crates to crates.io and wheels to PyPI.
+11. **Publish to registries.** Publish crates to crates.io and wheels to PyPI.
 
-10. **Post-publish validation.** Install from the published artifacts (not local). Run a quick smoke test to confirm the published version works.
+12. **Post-publish validation.** Install from the published artifacts (not local). Run a quick smoke test to confirm the published version works.
 
-11. **Create a GitHub Release.** Attach artifacts and link the changelog entry.
+13. **Create a GitHub Release.** Attach artifacts (CLI archives, checksums, SBOM) and link the changelog entry. Provenance attestations are generated automatically.
 
 ## Rollback and Yanking Policy
 

@@ -16,7 +16,7 @@ name = "eggfetch"
 path = "src/main.rs"
 
 [dependencies]
-eggfetch-core = { path = "../eggfetch-core", features = ["cookies", "multipart", "proxy"] }
+eggfetch-core = { version = "0.1.0", path = "../eggfetch-core", features = ["cookies", "multipart", "proxy"] }
 clap = { version = "4", features = ["derive", "wrap_help", "env"] }
 clap_complete = "4"
 serde_json = "1"

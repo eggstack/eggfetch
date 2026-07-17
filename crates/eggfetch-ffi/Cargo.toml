@@ -35,7 +35,7 @@ compression-deflate = ["eggfetch-core/compression-deflate"]
 multipart = ["eggfetch-core/multipart"]
 
 [dependencies]
-eggfetch-core = { path = "../eggfetch-core" }
+eggfetch-core = { version = "0.1.0", path = "../eggfetch-core" }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "net", "sync"] }
 bytes = "1"
 http = "1"
