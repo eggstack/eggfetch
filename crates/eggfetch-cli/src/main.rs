@@ -1216,8 +1216,7 @@ mod tests {
 
     #[test]
     fn parse_file_part_windows_path() {
-        let (name, path, filename) =
-            parse_file_part("file=@C:\\Users\\runner\\file.txt").unwrap();
+        let (name, path, filename) = parse_file_part("file=@C:\\Users\\runner\\file.txt").unwrap();
         assert_eq!(name, "file");
         assert_eq!(path, "C:\\Users\\runner\\file.txt");
         assert!(filename.is_none());
