@@ -386,8 +386,27 @@ fn parse_file_part(s: &str) -> Result<(String, String, Option<String>)> {
         .strip_prefix('@')
         .context("file path must start with @")?;
     let (path, filename) = if let Some(colon_pos) = path.find(':') {
-        let f = &path[colon_pos + 1..];
-        (&path[..colon_pos], Some(f.to_owned()))
+        // On Windows, "C:\..." is a drive letter, not a filename separator.
+        let is_drive_letter = colon_pos == 1
+            && path
+                .as_bytes()
+                .get(2)
+                .is_some_and(|&b| b == b'\\' || b == b'/');
+        if is_drive_letter {
+            // Skip drive letter, look for filename separator after it.
+            if let Some(rel) = path.get(3..) {
+                if let Some(filename_pos) = rel.find(':') {
+                    let real_pos = 3 + filename_pos;
+                    (&path[..real_pos], Some(path[real_pos + 1..].to_owned()))
+                } else {
+                    (path, None)
+                }
+            } else {
+                (path, None)
+            }
+        } else {
+            (&path[..colon_pos], Some(path[colon_pos + 1..].to_owned()))
+        }
     } else {
         (path, None)
     };
@@ -1193,6 +1212,24 @@ mod tests {
     #[test]
     fn parse_file_part_no_at() {
         assert!(parse_file_part("file=/tmp/test.txt").is_err());
+    }
+
+    #[test]
+    fn parse_file_part_windows_path() {
+        let (name, path, filename) =
+            parse_file_part("file=@C:\\Users\\runner\\file.txt").unwrap();
+        assert_eq!(name, "file");
+        assert_eq!(path, "C:\\Users\\runner\\file.txt");
+        assert!(filename.is_none());
+    }
+
+    #[test]
+    fn parse_file_part_windows_path_with_filename() {
+        let (name, path, filename) =
+            parse_file_part("file=@C:\\Users\\runner\\file.txt:custom.txt").unwrap();
+        assert_eq!(name, "file");
+        assert_eq!(path, "C:\\Users\\runner\\file.txt");
+        assert_eq!(filename.as_deref(), Some("custom.txt"));
     }
 
     #[test]
