@@ -91,8 +91,8 @@ When in doubt, classify one level higher than the initial assessment.
 
 ### Exception Handling
 
-- If active exploitation is detected,缩短 the embargo period and accelerate the fix release.
-- If the vulnerability is independently discovered by a third party,缩短 the embargo period.
+- If active exploitation is detected, shorten the embargo period and accelerate the fix release.
+- If the vulnerability is independently discovered by a third party, shorten the embargo period.
 - If the vulnerability affects multiple projects, coordinate disclosure with other maintainers.
 
 ## CVE/GHSA Process

@@ -38,6 +38,7 @@ Pre-release validation runs feature-gated subsets to ensure each feature compile
 cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,compression-gzip
 cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,compression-brotli
 cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,compression-zstd
+cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,compression-deflate
 cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,proxy
 cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,http3
 ```

@@ -18,7 +18,7 @@ eggfetch is a five-crate Cargo workspace:
 - **eggfetch-cli** is a thin binary that delegates to eggfetch-core for all HTTP work. It handles argument parsing, output formatting, and exit codes only.
 - **eggfetch-python** is the Python bindings adapter. It wraps eggfetch-core via PyO3/maturin and exposes sync and async Python APIs. It does not contain its own HTTP logic.
 - **eggfetch-ffi** is the C ABI bindings crate. It exposes eggfetch-core over a stable C interface with opaque handles, suitable for binding from C, C++, Swift, Kotlin, Ruby, and other FFI-capable languages.
-- **eggfetch-node** is the Node.js N-API binding prototype. It wraps eggfetch-core via napi-rk/napi-rs and provides a thin JavaScript/TypeScript adapter over the async Rust engine.
+- **eggfetch-node** is the Node.js N-API binding prototype. It wraps eggfetch-core via napi-rs and provides a thin JavaScript/TypeScript adapter over the async Rust engine.
 
 The invariant is strict: all network I/O goes through eggfetch-core. The CLI, Python, FFI, and Node crates are adapters.
 

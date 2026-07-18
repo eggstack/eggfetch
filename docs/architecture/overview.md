@@ -102,3 +102,5 @@ Client::send()
 ## Current Status
 
 All milestones A–Z are complete. The workspace provides ~750+ Rust tests, ~463+ Python tests, and ~40+ FFI tests. MSRV is Rust 1.80. CI enforces `RUSTFLAGS=-D warnings` with pedantic clippy.
+
+The `test-util` feature enables `tokio/test-util` for deterministic time testing in timeout-related tests.

@@ -59,6 +59,15 @@ GitHub Actions workflow at `.github/workflows/ci.yml`. Runs on push to `main` an
 cargo check -p eggfetch-core --no-default-features
 cargo check -p eggfetch-core --no-default-features --features http1,tls-rustls
 cargo check -p eggfetch-core --all-features
+cargo test -p eggfetch-core --all-features
+cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,compression-gzip
+cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,compression-brotli
+cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,compression-zstd
+cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,compression-deflate
+cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,proxy
+cargo check -p eggfetch-core --no-default-features --features http1,tls-rustls,multipart,proxy
+cargo check -p eggfetch-core --no-default-features --features http1,tls-rustls,http3
+cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,http3
 ```
 
 ### Additional Workflows

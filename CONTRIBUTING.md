@@ -34,13 +34,12 @@ The workspace sets `unsafe_code = "forbid"`. There is no `#[allow(unsafe_code)]`
 
 The workspace sets `missing_docs = "warn"`. Public items (structs, enums, traits, functions, modules) should have doc comments. This is enforced by both the lint and `.clippy.toml` (`missing-docs-in-crate-items = true`).
 
-For skeletal types in Milestone A, use a brief doc comment like:
+For new public types, write a brief doc comment that describes the type's purpose and behavior. Reference the relevant architecture doc if applicable:
 
 ```rust
-/// Timeout configuration placeholder.
+/// Phase-aware timeout configuration for HTTP requests.
 ///
-/// Phase-aware timeouts (connect, pool, write, read, total) land in
-/// Milestone D.
+/// See `docs/architecture/core-timeout-pool.md` for implementation details.
 ```
 
 The goal is to make the gap between current state and final implementation obvious to future readers.
@@ -53,7 +52,7 @@ Tests live next to the code they cover, using `#[cfg(test)] mod tests` blocks wi
 cargo test --workspace --all-features
 ```
 
-Prefer small, focused tests that exercise one behavior. The workspace has ~750+ Rust tests, ~463+ Python tests, and ~40+ Node.js/FFI tests covering construction, streaming, timeouts, pools, headers, integration scenarios, sync/async API parity, redirect replay, total timeout across redirects, response decoding, cookie subsystem, authentication subsystem, multipart uploads, decompression, proxy tunneling, retry policies, and true network streaming via `client.stream()`. As the project grows, tests should cover protocol correctness, edge cases, and error paths.
+Prefer small, focused tests that exercise one behavior. The workspace has ~750+ Rust tests, ~463+ Python tests, and ~40+ FFI tests covering construction, streaming, timeouts, pools, headers, integration scenarios, sync/async API parity, redirect replay, total timeout across redirects, response decoding, cookie subsystem, authentication subsystem, multipart uploads, decompression, proxy tunneling, retry policies, and true network streaming via `client.stream()`. As the project grows, tests should cover protocol correctness, edge cases, and error paths.
 
 ### Python tests
 
@@ -128,10 +127,11 @@ tracing = []
 test-util = []
 ```
 
-All feature flags are implemented. `cookies`, `proxy`, and `multipart` are
+All feature flags are declared. `cookies`, `proxy`, and `multipart` are
 opt-in in core and enabled by the Python binding and CLI. `http3` is
 experimental. `tracing` and `json` are reserved stubs with no gated code
-yet. See `docs/architecture/feature-flags.md` for details.
+yet. `test-util` enables `tokio/test-util` for deterministic time testing.
+See `docs/architecture/feature-flags.md` for details.
 
 ## Compatibility Expectations
 
@@ -145,11 +145,9 @@ All network I/O goes through eggfetch-core. There must not be a second synchrono
 
 If you find yourself writing HTTP logic outside of eggfetch-core, stop and refactor.
 
-## Milestone Context
+## Working Context
 
-eggfetch follows a milestone-driven development sequence (A through Z). Before starting work, read `plans/ROADMAP.md` and the relevant milestone plan in `plans/`. Each milestone is a handoff boundary: finish one before starting the next. A clean baseline matters more than an early partial implementation.
-
-Make the workspace build green before adding new functionality. Format before committing. Do not bypass CI to land changes.
+All milestones (A through Z) are complete. The workspace is in production-maintenance mode. Before starting work, read `plans/ROADMAP.md` for the full project history and any planned future work. Make the workspace build green before adding new functionality. Format before committing. Do not bypass CI to land changes.
 
 ## CI and branch protection
 

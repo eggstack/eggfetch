@@ -21,10 +21,12 @@ json = []
 compression-gzip = []
 compression-brotli = []
 compression-zstd = []
+compression-deflate = []
 cookies = []
 multipart = []
 proxy = []
 tracing = []
+test-util = []
 ```
 
 ## Default Features
@@ -129,6 +131,11 @@ tunnel and proxy-protocol dependencies.
 **Status:** planned, not implemented.
 **Milestone:** after core engine is stable.
 Enables structured logging via the tracing ecosystem. This is opt-in to avoid pulling in logging dependencies for users who do not need them.
+
+### test-util
+
+**Status:** implemented.
+Enables `tokio/test-util` for deterministic time testing. This feature is for internal use only and should not be enabled by downstream consumers. It allows tests to control time progression for timeout-related scenarios.
 
 ## Rules
 

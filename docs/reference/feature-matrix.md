@@ -20,6 +20,8 @@ Node.js (eggfetch-node, experimental).
 | `compression-zstd` | No | Yes | Yes |
 | `compression-deflate` | No | Yes | Yes |
 | `json` | No | N/A | N/A |
+| `tracing` | No | N/A | N/A |
+| `test-util` | No | N/A | N/A |
 
 ## API surface by language
 

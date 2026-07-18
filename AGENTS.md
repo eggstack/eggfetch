@@ -24,6 +24,21 @@ cargo build --release -p eggfetch-bench --bin resource_monitor
 
 CI enforces `RUSTFLAGS=-D warnings`. MSRV is Rust 1.80.
 
+## Skills
+
+Specialized skills for common tasks live in `.skills/`:
+
+| Skill | When to Use |
+|-------|-------------|
+| [rust-development.md](.skills/rust-development.md) | Writing, modifying, or reviewing Rust code |
+| [python-bindings.md](.skills/python-bindings.md) | Working on eggfetch-python (PyO3/maturin) |
+| [cli-development.md](.skills/cli-development.md) | Working on eggfetch-cli |
+| [documentation.md](.skills/documentation.md) | Updating docs, verifying accuracy |
+| [security-review.md](.skills/security-review.md) | Security reviews, addressing findings |
+| [release-process.md](.skills/release-process.md) | Preparing or executing releases |
+| [fuzz-testing.md](.skills/fuzz-testing.md) | Fuzz targets, property tests |
+| [ffi-development.md](.skills/ffi-development.md) | FFI and Node.js bindings |
+
 ## Crate Boundaries
 
 eggfetch-core owns all HTTP behavior. CLI and Python are thin adapters.
@@ -47,7 +62,7 @@ eggfetch-core owns all HTTP behavior. CLI and Python are thin adapters.
 
 Key flags: `http2`, `http3`, `json`, `compression-{gzip,brotli,zstd,deflate}`, `cookies`, `proxy`, `multipart`, `tracing`, `test-util`.
 
-The CLI enables: cookies, multipart, proxy. The Python binding enables all features including http3.
+The CLI enables: cookies, multipart, proxy. The Python binding enables all features including http3. `test-util` enables `tokio/test-util` for deterministic time testing.
 
 ## Tests
 
@@ -59,6 +74,7 @@ The full validation pass (pre-release) runs feature-gated subsets:
 cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,compression-gzip
 cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,compression-brotli
 cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,compression-zstd
+cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,compression-deflate
 cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,proxy
 cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,http3
 ```

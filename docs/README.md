@@ -14,6 +14,8 @@ docs/
 ├── cookbook/            Practical runnable examples
 ├── migration/          Guides from requests and HTTPX
 ├── reference/          Feature matrix, errors, versioning
+├── architecture/       Internal architecture documentation
+├── ffi/                C ABI and FFI binding guide
 ├── releases/           Release process and compatibility policy
 └── security/           Security guidelines and troubleshooting
 ```

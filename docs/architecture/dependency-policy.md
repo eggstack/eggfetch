@@ -19,6 +19,7 @@ following direct dependencies:
 - **hyper-rustls** -- TLS integration via rustls, with native roots preferred
   and packaged Mozilla roots as a verified fallback when the host keychain is
   unavailable.
+- **pin-project-lite** -- lightweight pin projections for stream wrappers (read/write timeout streams).
 - **rustls** -- memory-safe TLS implementation.
 - **tokio** -- async runtime.
 - **tokio-rustls** -- async TLS streams for tokio + rustls.
@@ -29,7 +30,9 @@ following direct dependencies:
 - **flate2** -- buffered gzip/deflate decompression for non-streaming response reads.
 - **getrandom** -- cryptographically secure random bytes for multipart boundary generation.
 - **httparse** -- low-level HTTP response parsing for proxy response status line and header extraction.
+- **httpdate** -- HTTP-date parsing for Retry-After header support.
 - **pem-rfc7468** -- PEM parsing for custom CA bundles and client certificates (optional, behind `tls-rustls` feature).
+- **webpki-roots** -- packaged Mozilla/WebPKI root certificates as a fallback when native roots are unavailable.
 
 These are small, well-audited crates with minimal transitive trees. They are the minimum required to build a working HTTPS client.
 
