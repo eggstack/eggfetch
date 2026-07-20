@@ -70,7 +70,8 @@ jobs:
       - name: Verify tag matches Cargo.toml workspace version
         run: |
           EXPECTED="${{ steps.meta.outputs.version }}"
-          CARGO_VERSION=$(grep -m1 '^version' Cargo.toml | sed 's/.*"\(.*\)"/\1/')
+          # Workspace root has no version field; read from a representative crate
+          CARGO_VERSION=$(grep -m1 '^version' crates/eggfetch-core/Cargo.toml | sed 's/.*"\(.*\)"/\1/')
           echo "Cargo.toml workspace version: $CARGO_VERSION"
           echo "Expected version: $EXPECTED"
           if [ "$CARGO_VERSION" != "$EXPECTED" ]; then
