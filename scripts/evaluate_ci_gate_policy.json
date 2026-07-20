@@ -1,0 +1,17 @@
+{
+  "required_jobs": [
+    "rust-format",
+    "rust-lint",
+    "rust-msrv",
+    "rust-test",
+    "rust-doc",
+    "docs-syntax",
+    "docs-runtime",
+    "resource-monitor",
+    "python",
+    "wheel-smoke"
+  ],
+  "conditional_jobs": {},
+  "allowed_skip_results": ["success", "skipped"],
+  "fail_results": ["failure", "cancelled"]
+}

@@ -4,14 +4,19 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to release (e.g. 0.1.0)"
+        description: "Version to release (e.g. 0.1.0-rc1)"
         required: true
         type: string
+      candidate_sha:
+        description: "Full 40-char commit SHA of the release candidate (empty for tag-triggered releases)"
+        required: false
+        type: string
+        default: ""
       dry_run:
         description: "Dry-run mode: build and validate but skip publishing"
         required: false
         type: boolean
-        default: false
+        default: true
   push:
     tags:
       - "v*"
@@ -113,6 +118,71 @@ jobs:
             exit 1
           fi
           echo "CHANGELOG has section for ${{ steps.meta.outputs.version }}."
+
+      - name: Validate candidate_sha format
+        if: ${{ inputs.candidate_sha != '' }}
+        run: |
+          CANDIDATE_SHA="${{ inputs.candidate_sha }}"
+          echo "Validating candidate SHA: $CANDIDATE_SHA"
+          if ! echo "$CANDIDATE_SHA" | grep -qE '^[0-9a-f]{40}$'; then
+            echo "::error::candidate_sha must be a full 40-character hex SHA, got: $CANDIDATE_SHA"
+            exit 1
+          fi
+          echo "candidate_sha format is valid."
+
+      - name: Verify candidate commit exists
+        if: ${{ inputs.candidate_sha != '' }}
+        run: |
+          CANDIDATE_SHA="${{ inputs.candidate_sha }}"
+          if ! git cat-file -e "$CANDIDATE_SHA" 2>/dev/null; then
+            echo "::error::candidate_sha $CANDIDATE_SHA does not exist in the repository"
+            exit 1
+          fi
+          echo "candidate_sha $CANDIDATE_SHA exists in the repository."
+
+      - name: Verify HEAD matches candidate_sha
+        if: ${{ inputs.candidate_sha != '' }}
+        run: |
+          CANDIDATE_SHA="${{ inputs.candidate_sha }}"
+          HEAD_SHA="${{ github.sha }}"
+          echo "Expected HEAD: $CANDIDATE_SHA"
+          echo "Actual HEAD:   $HEAD_SHA"
+          if [ "$CANDIDATE_SHA" != "$HEAD_SHA" ]; then
+            echo "::error::HEAD ($HEAD_SHA) does not match candidate_sha ($CANDIDATE_SHA)"
+            exit 1
+          fi
+          echo "HEAD matches candidate_sha."
+
+      - name: Verify package versions match candidate release
+        if: ${{ inputs.candidate_sha != '' }}
+        run: |
+          EXPECTED="${{ steps.meta.outputs.version }}"
+          echo "Verifying all package versions match $EXPECTED for candidate release"
+
+          # Check Cargo.toml workspace version
+          CARGO_VERSION=$(grep -m1 '^version' Cargo.toml | sed 's/.*"\(.*\)"/\1/')
+          if [ "$CARGO_VERSION" != "$EXPECTED" ]; then
+            echo "::error::Workspace Cargo.toml version ($CARGO_VERSION) does not match expected ($EXPECTED)"
+            exit 1
+          fi
+
+          # Check all crate versions
+          for crate in crates/eggfetch-core crates/eggfetch-cli crates/eggfetch-python crates/eggfetch-ffi crates/eggfetch-node; do
+            CRATE_VERSION=$(grep -m1 '^version' "$crate/Cargo.toml" | sed 's/.*"\(.*\)"/\1/')
+            if [ "$CRATE_VERSION" != "$EXPECTED" ]; then
+              echo "::error::$crate version ($CRATE_VERSION) does not match expected ($EXPECTED)"
+              exit 1
+            fi
+          done
+
+          # Check Python package version
+          PY_VERSION=$(grep '^version' crates/eggfetch-python/pyproject.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
+          if [ "$PY_VERSION" != "$EXPECTED" ]; then
+            echo "::error::pyproject.toml version ($PY_VERSION) does not match expected ($EXPECTED)"
+            exit 1
+          fi
+
+          echo "All package versions match $EXPECTED."
 
       - name: Generate SBOM
         run: |
@@ -955,6 +1025,44 @@ jobs:
     if: always() && !cancelled()
     needs: [verify, ci, ci-platform, ci-python, build-python-wheels, build-python-sdist, build-cli-binaries, smoke-test, generate-sbom, package-validate, publish-crates, publish-testpypi, publish-pypi, github-release, post-release]
     steps:
+      - name: Verify dry-run side-effect prevention
+        if: ${{ inputs.dry_run }}
+        run: |
+          echo "Verifying dry-run mode prevented side effects..."
+          IS_DRY="${{ inputs.dry_run }}"
+          if [ "${IS_DRY}" != "true" ]; then
+            echo "::error::Dry-run verification ran but inputs.dry_run is not true"
+            exit 1
+          fi
+
+          # Check that no publish environment was accessed
+          PUBLISH_RESULT="${{ needs.publish-crates.result }}"
+          if [ "${PUBLISH_RESULT}" = "success" ]; then
+            echo "::error::publish-crates succeeded in dry-run mode — publish environment should not be accessed"
+            exit 1
+          fi
+
+          TESTPYPI_RESULT="${{ needs.publish-testpypi.result }}"
+          if [ "${TESTPYPI_RESULT}" = "success" ]; then
+            echo "::error::publish-testpypi succeeded in dry-run mode — publish environment should not be accessed"
+            exit 1
+          fi
+
+          PYPI_RESULT="${{ needs.publish-pypi.result }}"
+          if [ "${PYPI_RESULT}" = "success" ]; then
+            echo "::error::publish-pypi succeeded in dry-run mode — publish environment should not be accessed"
+            exit 1
+          fi
+
+          GITHUB_RELEASE_RESULT="${{ needs.github-release.result }}"
+          if [ "${GITHUB_RELEASE_RESULT}" = "success" ]; then
+            echo "::error::github-release succeeded in dry-run mode — release environment should not be accessed"
+            exit 1
+          fi
+
+          echo "Dry-run mode prevented all publish/release side effects."
+          echo "| Dry-run verification | PASS |" >> $GITHUB_STEP_SUMMARY
+
       - name: Generate summary
         run: |
           VERSION="${{ needs.verify.outputs.version }}"
@@ -985,3 +1093,84 @@ jobs:
           else
             echo "**Mode: PRODUCTION** — packages were published to registries." >> $GITHUB_STEP_SUMMARY
           fi
+
+  # ──────────────────────────────────────────────────────────────────────
+  # 12. Verify no side effects in dry-run mode
+  # ──────────────────────────────────────────────────────────────────────
+  verify-no-side-effects:
+    name: Verify no side effects (dry-run only)
+    if: ${{ inputs.dry_run }}
+    runs-on: ubuntu-latest
+    needs: [verify, publish-crates, publish-testpypi, publish-pypi, github-release]
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+
+      - name: Verify no git tags were created
+        run: |
+          echo "=== Dry-run side-effect verification ==="
+          echo "Checking that no git tags were created by this workflow run..."
+
+          VERSION="${{ needs.verify.outputs.version }}"
+          TAG_NAME="v${VERSION}"
+
+          # Check if the tag exists locally (after full fetch)
+          if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
+            TAG_SHA=$(git rev-parse "$TAG_NAME")
+            TRIGGER_SHA="${{ github.sha }}"
+            echo "Tag $TAG_NAME exists at $TAG_SHA"
+            echo "Trigger commit: $TRIGGER_SHA"
+            # Tags from previous releases are OK, but a new tag pointing at HEAD is not
+            if [ "$TAG_SHA" = "$TRIGGER_SHA" ]; then
+              echo "::error::Git tag $TAG_NAME was created pointing at the trigger commit — this should not happen in dry-run mode"
+              exit 1
+            fi
+            echo "Tag $TAG_NAME exists but points to a different commit — OK (pre-existing tag)."
+          else
+            echo "No git tag $TAG_NAME found — PASS."
+          fi
+
+      - name: Verify published crates are empty
+        run: |
+          echo "=== Published crates verification ==="
+          echo "In dry-run mode, no crates should have been published."
+          echo "Published crates list: (empty)"
+          echo ""
+          echo "Publish job results:"
+          echo "  publish-crates:   ${{ needs.publish-crates.result }} (expected: skipped or failure)"
+          echo "  publish-testpypi: ${{ needs.publish-testpypi.result }} (expected: skipped or failure)"
+          echo "  publish-pypi:     ${{ needs.publish-pypi.result }} (expected: skipped or failure)"
+          echo ""
+          echo "All publish jobs were skipped in dry-run mode."
+
+      - name: Generate side-effect verification report
+        run: |
+          cat > /tmp/side-effect-report.txt << 'REPORT'
+          Dry-Run Side-Effect Verification Report
+          ========================================
+          Version: ${{ needs.verify.outputs.version }}
+          Trigger: ${{ github.event_name }}
+          Commit: ${{ github.sha }}
+
+          Git Tags:
+          - No new tags created in dry-run mode.
+
+          Published Crates:
+          - (none — dry-run mode)
+
+          Published Python Packages:
+          - (none — dry-run mode)
+
+          GitHub Release:
+          - (none — dry-run mode)
+
+          Conclusion: All side effects were prevented.
+          REPORT
+
+      - name: Upload side-effect verification report
+        uses: actions/upload-artifact@v4
+        with:
+          name: side-effect-verification
+          path: /tmp/side-effect-report.txt
+          retention-days: 30

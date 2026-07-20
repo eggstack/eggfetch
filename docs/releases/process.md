@@ -45,6 +45,25 @@ For substantial releases (new major feature, pre-1.0 breaking changes), a releas
 
 Release candidates are optional for patch releases.
 
+## Required CI Gate
+
+The CI pipeline uses a fail-closed aggregate gate job (`Required CI Gate`) as the merge-ready signal. The gate:
+
+- Runs with `if: always()` so it executes after upstream failures or cancellations
+- Evaluates all required job results via `scripts/evaluate_ci_gate.py`
+- Fails when any required job fails, is cancelled, is missing, or is unexpectedly skipped
+- Uses the policy defined in `scripts/evaluate_ci_gate_policy.json`
+
+**The gate is the single required status check for branch protection on `main`.** Individual matrix-generated check names are not required; only the stable `Required CI Gate` check name is enforced.
+
+### Gate evaluation script
+
+The evaluator (`scripts/evaluate_ci_gate.py`) accepts a JSON input file with job results and a policy, then exits 0 only when all required results satisfy policy. Run the tests with:
+
+```sh
+python -m pytest scripts/test_evaluate_ci_gate.py -v
+```
+
 ## Release Rehearsal
 
 Before the first production release, perform at least one end-to-end release rehearsal on a pre-release tag. This validates the entire pipeline without affecting real users.
@@ -59,8 +78,32 @@ Rehearsal steps:
 6. Verify the GitHub Release contains all expected artifacts (CLI archives, checksums, SBOM).
 7. Verify provenance attestations are present on the release artifacts.
 8. If any step fails, fix the workflow, tag a new RC, and repeat.
+9. Verify the `Required CI Gate` check passed and is the status check required for branch protection.
+10. Verify the evidence manifest (`release-evidence.json`) reports overall pass and is internally consistent.
 
 Record the rehearsal result (pass/fail, issues found) before proceeding to the stable release.
+
+## Immutable Candidate SHA
+
+For release candidates, the workflow requires an explicit candidate commit SHA:
+
+1. The `candidate_sha` input must be a full 40-character hex SHA
+2. The workflow verifies the commit exists and HEAD matches the SHA
+3. Every build job checks out the same SHA
+4. An immutable validation tag (e.g., `rc-dry-run-<short-sha>`) should be created before dispatching
+5. The RC tag may only point to the successfully validated candidate SHA
+
+## Evidence Manifest
+
+The release workflow generates `release-evidence.json` containing:
+- Schema version, candidate SHA, requested version
+- Workflow run ID, attempt, and dry-run state
+- Expected and actual artifact entries with SHA-256 digests
+- Package validation and smoke-test results
+- CI job/check result summary
+- Overall pass field
+
+The evidence manifest is uploaded as a workflow artifact and should be retained for at least 30 days.
 
 ## Step-by-Step Release Checklist
 
@@ -109,10 +152,13 @@ Record the rehearsal result (pass/fail, issues found) before proceeding to the s
 
 7. **Dry-run workflow_dispatch.** Before pushing the tag, trigger a dry-run via GitHub Actions:
    - Go to Actions > Release > Run workflow
-   - Set `version` to the release version (e.g., `0.1.0`)
+   - Set `version` to the release version (e.g., `0.1.0-rc1`)
+   - Set `candidate_sha` to the full 40-character SHA of the commit being validated
    - Set `dry_run` to `true`
-   - This runs the full CI matrix, builds all artifacts, validates Rust packages (`cargo package --list` + `cargo publish --dry-run`), runs `twine check` on Python artifacts, generates SBOM, and produces a release summary — **without publishing to any registry**.
+   - The workflow validates the candidate SHA before building: it verifies the SHA format, confirms the commit exists, checks that HEAD matches the SHA, and ensures all package versions are consistent.
+   - This runs the full CI matrix, builds all artifacts, validates Rust packages, runs `twine check`, generates SBOM, and produces a release summary — **without publishing to any registry**.
    - Publish jobs (`publish-crates`, `publish-testpypi`, `publish-pypi`, `github-release`, `post-release`) are all skipped in dry-run mode.
+   - A `verify-no-side-effects` job runs after the dry run to confirm no tags were created and no publishing occurred.
 
 8. **Push and wait for CI.** The CI pipeline builds and tests on Ubuntu, macOS, and Windows across Python 3.10-3.13. The `matrix-summary` job in CI and `release-summary` job in the release workflow report the status of every job.
 

@@ -91,6 +91,29 @@ This checklist defines the mandatory evidence required before tagging `0.1.0-rc1
 - [ ] Release summary job reports all job statuses
 - [ ] Release manifest generated with all artifacts and checksums
 
+## CI Enforcement
+
+- [ ] `Required CI Gate` job exists in CI workflow with `if: always()`
+- [ ] Gate uses `scripts/evaluate_ci_gate.py` for deterministic evaluation
+- [ ] Gate fails when any required job fails, is cancelled, is missing, or is unexpectedly skipped
+- [ ] Gate is the single required status check for branch protection on `main`
+- [ ] Evaluator tests pass: `python -m pytest scripts/test_evaluate_ci_gate.py -v`
+
+## Immutable Candidate
+
+- [ ] `candidate_sha` input provided with full 40-character SHA
+- [ ] Workflow validates SHA format, commit existence, and HEAD match
+- [ ] All build jobs check out the same candidate SHA
+- [ ] Immutable validation tag created (e.g., `rc-dry-run-<short-sha>`)
+- [ ] Evidence manifest references the exact candidate SHA
+
+## Dry-Run Safety
+
+- [ ] `dry_run=true` is the safe default for manual RC validation
+- [ ] Registry publication, GitHub Release, tag creation, and production environment deployment are technically gated off
+- [ ] `verify-no-side-effects` job confirms no publishing or repository mutations occurred
+- [ ] Post-run verification confirms no crates.io/PyPI/npm publications exist
+
 ## Accepted Limitations
 
 - [ ] HTTP/3 is experimental and non-default

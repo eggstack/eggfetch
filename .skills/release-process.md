@@ -46,6 +46,34 @@ cargo fmt --all
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 ```
 
+## CI Gate
+
+The CI pipeline uses a fail-closed `Required CI Gate` job as the merge-ready signal. The gate evaluates all required job results via `scripts/evaluate_ci_gate.py` and fails on any failure, cancellation, missing result, or unexpected skip.
+
+The gate policy is defined in `scripts/evaluate_ci_gate_policy.json` and lists all required CI jobs. Run evaluator tests:
+
+```sh
+python -m pytest scripts/test_evaluate_ci_gate.py -v
+```
+
+## Dry-Run Release Validation
+
+Trigger a dry-run release via GitHub Actions:
+
+1. Create an immutable validation tag: `git tag rc-dry-run-$(git rev-parse --short=12 HEAD)`
+2. Push the tag: `git push origin rc-dry-run-$(git rev-parse --short=12 HEAD)`
+3. Dispatch the workflow:
+   ```sh
+   gh workflow run release.yml \
+     --ref rc-dry-run-$(git rev-parse --short=12 HEAD) \
+     -f candidate_sha=$(git rev-parse HEAD) \
+     -f version=0.1.0-rc1 \
+     -f dry_run=true
+   ```
+4. Monitor the run: `gh run watch`
+5. Verify `Required CI Gate` passed
+6. Download evidence: `gh run download <run-id> --dir release-dry-run-evidence`
+
 ## Architecture References
 
 - Release process: `docs/releases/process.md`

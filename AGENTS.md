@@ -20,6 +20,9 @@ python -m pytest -p pytest_asyncio
 # Resource regression check
 cargo build --release -p eggfetch-bench --bin resource_monitor
 ./target/release/resource_monitor
+
+# CI gate evaluator tests
+python -m pytest scripts/test_evaluate_ci_gate.py -v
 ```
 
 CI enforces `RUSTFLAGS=-D warnings`. MSRV is Rust 1.80.
@@ -55,6 +58,7 @@ eggfetch-core owns all HTTP behavior. CLI and Python are thin adapters.
 - `missing_docs = "warn"`, `missing-docs-in-crate-items = true`.
 - Never use `#![allow(warnings)]`, `#![allow(clippy::all)]`, or `#![allow(clippy::pedantic)]`. CI rejects these via `scripts/check_lint_suppressions.sh`.
 - Use specific lint names. Justify suppressions with a comment.
+- CI uses a fail-closed `Required CI Gate` job evaluated by `scripts/evaluate_ci_gate.py`. The gate policy is in `scripts/evaluate_ci_gate_policy.json`.
 
 ## Feature Flags
 

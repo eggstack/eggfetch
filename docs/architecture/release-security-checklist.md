@@ -8,6 +8,8 @@ This checklist must be completed before any release of eggfetch. Each item has a
 - [ ] `cargo clippy --workspace --all-targets --all-features -- -D warnings` produces zero warnings
 - [ ] `cargo fmt --all` produces no changes (all code is formatted)
 - [ ] `cargo test --workspace --all-features` passes with no failures
+- [ ] `Required CI Gate` job passes with `if: always()` and fail-closed evaluation
+- [ ] `scripts/evaluate_ci_gate.py` tests pass: `python -m pytest scripts/test_evaluate_ci_gate.py -v`
 
 ## Dependency Audit
 
@@ -115,6 +117,9 @@ This checklist must be completed before any release of eggfetch. Each item has a
 - [ ] Advisory drafted (if applicable) with affected versions, fixed version, severity, and mitigation
 - [ ] CVE/GHSA requested (if applicable) via GitHub Security Advisory
 - [ ] Reporter notified (if applicable) with 7-day advance notice before public disclosure
+- [ ] Dry-run workflow_dispatch with `candidate_sha` and `dry_run=true` completes successfully
+- [ ] `verify-no-side-effects` job confirms no publishing or repository mutations in dry run
+- [ ] Evidence manifest (`release-evidence.json`) generated and reports overall pass
 
 ## Release Artifacts
 

@@ -251,68 +251,79 @@ jobs:
         run: python scripts/wheel_smoke.py --wheel-dir dist
 
   # ──────────────────────────────────────────────────────────────────────
-  # Matrix summary
+  # Required CI Gate — fail-closed merge prerequisite
   # ──────────────────────────────────────────────────────────────────────
-  matrix-summary:
-    name: CI matrix summary
+  required-gate:
+    name: Required CI Gate
     runs-on: ubuntu-latest
-    if: always() && !cancelled()
+    if: ${{ always() }}
     needs: [rust-format, rust-lint, rust-msrv, rust-test, rust-doc, docs-syntax, docs-runtime, resource-monitor, python, wheel-smoke]
     steps:
-      - name: Generate matrix summary
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Build gate results JSON
         run: |
-          cat > matrix-summary.json << 'EOF'
-          {
-            "jobs": {
-              "rust-format": "${{ needs.rust-format.result }}",
-              "rust-lint": "${{ needs.rust-lint.result }}",
-              "rust-msrv": "${{ needs.rust-msrv.result }}",
-              "rust-test": "${{ needs.rust-test.result }}",
-              "rust-doc": "${{ needs.rust-doc.result }}",
-              "docs-syntax": "${{ needs.docs-syntax.result }}",
-              "docs-runtime": "${{ needs.docs-runtime.result }}",
-              "resource-monitor": "${{ needs.resource-monitor.result }}",
-              "python": "${{ needs.python.result }}",
-              "wheel-smoke": "${{ needs.wheel-smoke.result }}"
-            }
-          }
-          EOF
+          python - <<'PYEOF'
+          import json, os
 
-          echo "## CI Matrix Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
-          echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Rust formatting | ${{ needs.rust-format.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Rust clippy | ${{ needs.rust-lint.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| MSRV check | ${{ needs.rust-msrv.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Rust tests (3 OS) | ${{ needs.rust-test.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Rust documentation | ${{ needs.rust-doc.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Docs syntax | ${{ needs.docs-syntax.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Docs runtime | ${{ needs.docs-runtime.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Resource monitor | ${{ needs.resource-monitor.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Python tests (12 combos) | ${{ needs.python.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Wheel smoke (3 OS) | ${{ needs.wheel-smoke.result }} |" >> $GITHUB_STEP_SUMMARY
+          jobs = [
+              ("rust-format",      "${{ needs.rust-format.result }}"),
+              ("rust-lint",        "${{ needs.rust-lint.result }}"),
+              ("rust-msrv",        "${{ needs.rust-msrv.result }}"),
+              ("rust-test",        "${{ needs.rust-test.result }}"),
+              ("rust-doc",         "${{ needs.rust-doc.result }}"),
+              ("docs-syntax",      "${{ needs.docs-syntax.result }}"),
+              ("docs-runtime",     "${{ needs.docs-runtime.result }}"),
+              ("resource-monitor", "${{ needs.resource-monitor.result }}"),
+              ("python",           "${{ needs.python.result }}"),
+              ("wheel-smoke",      "${{ needs.wheel-smoke.result }}"),
+          ]
 
-          # Check for failures
-          FAILED=0
-          for result in "${{ needs.rust-format.result }}" "${{ needs.rust-lint.result }}" "${{ needs.rust-msrv.result }}" "${{ needs.rust-test.result }}" "${{ needs.rust-doc.result }}" "${{ needs.docs-syntax.result }}" "${{ needs.docs-runtime.result }}" "${{ needs.resource-monitor.result }}" "${{ needs.python.result }}" "${{ needs.wheel-smoke.result }}"; do
-            if [ "$result" = "failure" ]; then
-              FAILED=1
-              break
-            fi
-          done
+          results = {}
+          for name, result in jobs:
+              # GitHub interpolates missing results as empty string
+              results[name] = result if result else "missing"
 
-          if [ "$FAILED" -eq 1 ]; then
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "**Result: FAILED** — one or more required jobs failed." >> $GITHUB_STEP_SUMMARY
-          else
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "**Result: PASSED**" >> $GITHUB_STEP_SUMMARY
-          fi
+          payload = {"results": results}
 
-      - name: Upload matrix summary
+          with open("/tmp/ci-results.json", "w") as fh:
+              json.dump(payload, fh, indent=2)
+
+          # ── Human-readable table to GITHUB_STEP_SUMMARY ──────────────
+          summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+          if summary_path:
+              with open(summary_path, "a") as fh:
+                  fh.write("## Required CI Gate\n\n")
+                  fh.write("| Job | Result |\n")
+                  fh.write("|-----|--------|\n")
+                  display = [
+                      ("Rust formatting",      results["rust-format"]),
+                      ("Rust clippy",          results["rust-lint"]),
+                      ("MSRV check",           results["rust-msrv"]),
+                      ("Rust tests (3 OS)",    results["rust-test"]),
+                      ("Rust documentation",   results["rust-doc"]),
+                      ("Docs syntax",          results["docs-syntax"]),
+                      ("Docs runtime",         results["docs-runtime"]),
+                      ("Resource monitor",     results["resource-monitor"]),
+                      ("Python tests (12)",    results["python"]),
+                      ("Wheel smoke (3 OS)",   results["wheel-smoke"]),
+                  ]
+                  for label, status in display:
+                      fh.write(f"| {label} | {status} |\n")
+
+          # ── Console table ────────────────────────────────────────────
+          print(f"{'Job':<24} {'Result'}")
+          print("-" * 40)
+          for label, status in display:
+              print(f"{label:<24} {status}")
+          PYEOF
+
+      - name: Evaluate CI gate
+        run: python scripts/evaluate_ci_gate.py /tmp/ci-results.json
+
+      - name: Upload gate results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ci-matrix-summary
-          path: matrix-summary.json
+          name: ci-gate-results
+          path: /tmp/ci-results.json
