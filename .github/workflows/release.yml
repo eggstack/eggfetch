@@ -374,7 +374,7 @@ jobs:
             --manifest-path crates/eggfetch-python/Cargo.toml
             --out dist
             --interpreter 3.10 3.11 3.12 3.13
-          sccache: true
+          sccache: ${{ matrix.target != 'aarch64-unknown-linux-gnu' }}
         env:
           PYO3_USE_ABI3_FORWARD_COMPATIBILITY: "1"
 
