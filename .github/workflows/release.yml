@@ -375,8 +375,11 @@ jobs:
             --out dist
             --interpreter 3.10 3.11 3.12 3.13
           sccache: ${{ matrix.target != 'aarch64-unknown-linux-gnu' }}
+          docker-options: ${{ matrix.target == 'aarch64-unknown-linux-gnu' && '-e CFLAGS_aarch64_unknown_linux_gnu=-march=armv8-a' || '' }}
         env:
           PYO3_USE_ABI3_FORWARD_COMPATIBILITY: "1"
+          CFLAGS_aarch64_unknown_linux_gnu: "-march=armv8-a"
+          CC_aarch64_unknown_linux_gnu: "aarch64-unknown-linux-gnu-gcc"
 
       - name: Upload wheels
         uses: actions/upload-artifact@v4
@@ -505,6 +508,7 @@ jobs:
   # ──────────────────────────────────────────────────────────────────────
   smoke-test:
     name: Smoke test
+    if: ${{ always() && !cancelled() && needs.build-python-sdist.result == 'success' && needs.build-cli-binaries.result == 'success' }}
     runs-on: ubuntu-latest
     needs: [build-python-wheels, build-python-sdist, build-cli-binaries]
     steps:
