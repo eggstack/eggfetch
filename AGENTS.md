@@ -111,3 +111,4 @@ See `docs/releases/process.md` and `docs/releases/compatibility-policy.md`.
 ## Safety
 
 Do not add `unsafe`. Workspace uses `unsafe_code = "forbid"`. If you think you need `unsafe`, stop and ask.
+
