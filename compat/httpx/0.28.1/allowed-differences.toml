@@ -18,15 +18,15 @@ tests = ["test_differential.py::TestRedirectDefault", "test_differential.py::Tes
 
 [[difference]]
 id = "PROXY-ENV-001"
-category = "required-later"
+category = "resolved"
 symbol = "httpx.Client(proxy=...)"
 behavior-case = "proxy-env-vars"
 reference-behavior = "HTTPX reads HTTP_PROXY/HTTPS_PROXY/NO_PROXY env vars"
-eggfetch-behavior = "eggfetch does not read proxy env vars; proxy= parameter is explicit only"
-rationale = "Not yet implemented; tracked as roadmap item"
-compatibility-stage-impact = "phase-0"
+eggfetch-behavior = "eggfetch reads proxy env vars when trust_env=True (Phase 1)"
+rationale = "Implemented in Phase 1; trust_env=True reads env vars by default"
+compatibility-stage-impact = "phase-1"
 security-improvement = false
-migration-impact = "Users must pass proxy= explicitly"
+migration-impact = "None; behavior now matches HTTPX"
 owner = "eggfetch-team"
 review-milestone = "phase-1"
 tests = ["test_differential.py::TestKnownDifferences::test_proxy_config_differs"]

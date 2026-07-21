@@ -9,6 +9,7 @@ use crate::conversion::{
 };
 use crate::cookies::PyCookies;
 use crate::errors::map_err;
+use crate::limits::PyLimits;
 use crate::proxy::{self, ProxyOverride};
 use crate::retry;
 use crate::streaming::PyStreamingResponse;
@@ -42,7 +43,7 @@ impl PyAsyncClient {
     ///     `max_redirects`: Maximum redirects to follow (default 20).
     #[allow(clippy::too_many_arguments)]
     #[new]
-    #[pyo3(signature = (*, headers=None, timeout=None, follow_redirects=None, max_redirects=None, cookies=None, auth=None, decompress=None, proxy=None, verify=None, cert=None, retries=None, http2=None, http3=None))]
+    #[pyo3(signature = (*, headers=None, timeout=None, follow_redirects=None, max_redirects=None, cookies=None, auth=None, decompress=None, proxy=None, verify=None, cert=None, retries=None, http2=None, http3=None, limits=None, trust_env=None))]
     fn new(
         py: Python<'_>,
         headers: Option<&Bound<'_, PyAny>>,
@@ -58,6 +59,8 @@ impl PyAsyncClient {
         retries: Option<&Bound<'_, PyAny>>,
         http2: Option<bool>,
         http3: Option<bool>,
+        limits: Option<&Bound<'_, PyAny>>,
+        trust_env: Option<bool>,
     ) -> PyResult<Self> {
         let verify_disabled = verify
             .and_then(|v| v.extract::<bool>().ok())
@@ -73,6 +76,11 @@ impl PyAsyncClient {
 
         if let Some(true) = http3 {
             builder = builder.http_version_policy(eggfetch_core::HttpVersionPolicy::Http3Only);
+        }
+
+        if let Some(l) = limits {
+            let py_limits: PyLimits = l.extract()?;
+            builder = builder.limits(py_limits.inner);
         }
 
         if let Some(hdrs) = headers {
@@ -117,9 +125,28 @@ impl PyAsyncClient {
         }
 
         let proxy_override = proxy::parse_proxy(proxy)?;
-        if let ProxyOverride::Override(url) = proxy_override {
-            let p = eggfetch_core::Proxy::all(&url).map_err(map_err)?;
+        if let ProxyOverride::Override(ref url) = proxy_override {
+            let p = eggfetch_core::Proxy::all(url).map_err(map_err)?;
             builder = builder.proxy(p);
+        }
+
+        let trust_env = trust_env.unwrap_or(true);
+        if trust_env && proxy_override == ProxyOverride::Inherit {
+            #[cfg(feature = "proxy")]
+            {
+                if let Ok(env_proxy) = std::env::var("HTTP_PROXY")
+                    .or_else(|_| std::env::var("http_proxy"))
+                    .or_else(|_| std::env::var("HTTPS_PROXY"))
+                    .or_else(|_| std::env::var("https_proxy"))
+                    .or_else(|_| std::env::var("ALL_PROXY"))
+                    .or_else(|_| std::env::var("all_proxy"))
+                {
+                    if !env_proxy.is_empty() {
+                        let p = eggfetch_core::Proxy::all(&env_proxy).map_err(map_err)?;
+                        builder = builder.proxy(p);
+                    }
+                }
+            }
         }
 
         let retry_policy = retry::parse_retry_option(retries)?;

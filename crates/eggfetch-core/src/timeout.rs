@@ -184,6 +184,68 @@ impl Timeout {
         }
     }
 
+    /// Create an HTTPX-compatible timeout configuration.
+    ///
+    /// HTTPX 0.28.1 uses 5 seconds for all phases including a total
+    /// wall-clock cap. Use this when migrating from HTTPX to preserve
+    /// the same timeout semantics.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::time::Duration;
+    /// use eggfetch_core::Timeout;
+    ///
+    /// let t = Timeout::compat();
+    /// assert_eq!(t.pool, Some(Duration::from_secs(5)));
+    /// assert_eq!(t.connect, Some(Duration::from_secs(5)));
+    /// assert_eq!(t.write, Some(Duration::from_secs(5)));
+    /// assert_eq!(t.read, Some(Duration::from_secs(5)));
+    /// assert_eq!(t.total, Some(Duration::from_secs(5)));
+    /// ```
+    #[must_use]
+    pub fn compat() -> Self {
+        let d = Duration::from_secs(5);
+        Self {
+            pool: Some(d),
+            connect: Some(d),
+            write: Some(d),
+            read: Some(d),
+            total: Some(d),
+        }
+    }
+
+    /// Create eggfetch-native timeout defaults.
+    ///
+    /// Uses 30 seconds for pool, connect, write, and read phases with
+    /// no total timeout. This is appropriate for general-purpose use
+    /// where the caller controls overall deadlines.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::time::Duration;
+    /// use eggfetch_core::Timeout;
+    ///
+    /// let t = Timeout::native();
+    /// assert_eq!(t.pool, Some(Duration::from_secs(30)));
+    /// assert_eq!(t.connect, Some(Duration::from_secs(30)));
+    /// assert_eq!(t.write, Some(Duration::from_secs(30)));
+    /// assert_eq!(t.read, Some(Duration::from_secs(30)));
+    /// assert!(t.total.is_none());
+    /// ```
+    #[must_use]
+    pub fn native() -> Self {
+        let d = Duration::from_secs(30);
+        Self {
+            pool: Some(d),
+            connect: Some(d),
+            write: Some(d),
+            read: Some(d),
+            total: None,
+        }
+    }
+
     /// Create a [`TimeoutBuilder`] for configuring individual phases.
     #[must_use]
     pub fn builder() -> TimeoutBuilder {
@@ -354,6 +416,28 @@ mod tests {
         let merged = client.merge(None);
         assert_eq!(merged.pool, Some(Duration::from_secs(5)));
         assert_eq!(merged.connect, Some(Duration::from_secs(5)));
+    }
+
+    #[test]
+    fn timeout_compat_sets_all_phases_with_total() {
+        let t = Timeout::compat();
+        let d = Duration::from_secs(5);
+        assert_eq!(t.pool, Some(d));
+        assert_eq!(t.connect, Some(d));
+        assert_eq!(t.write, Some(d));
+        assert_eq!(t.read, Some(d));
+        assert_eq!(t.total, Some(d));
+    }
+
+    #[test]
+    fn timeout_native_sets_phases_without_total() {
+        let t = Timeout::native();
+        let d = Duration::from_secs(30);
+        assert_eq!(t.pool, Some(d));
+        assert_eq!(t.connect, Some(d));
+        assert_eq!(t.write, Some(d));
+        assert_eq!(t.read, Some(d));
+        assert!(t.total.is_none());
     }
 
     #[test]

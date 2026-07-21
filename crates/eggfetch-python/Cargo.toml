@@ -11,6 +11,10 @@ description = "Python bindings for eggfetch"
 [lints]
 workspace = true
 
+[features]
+default = ["proxy"]
+proxy = ["eggfetch-core/proxy"]
+
 [lib]
 crate-type = ["cdylib", "rlib"]
 

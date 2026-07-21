@@ -3,6 +3,7 @@
 use pyo3::prelude::*;
 
 /// How the `proxy` parameter was specified by the caller.
+#[derive(PartialEq, Eq)]
 pub(crate) enum ProxyOverride {
     /// Argument was omitted or set to `None` — inherit client-level proxy.
     Inherit,

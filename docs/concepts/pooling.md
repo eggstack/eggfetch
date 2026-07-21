@@ -64,7 +64,31 @@ These track logical permits, not raw TCP sockets. Socket-level counters are not 
 
 ## Configuration
 
-Pool behavior is configured via `PoolConfig`:
+Pool behavior can be configured via `PoolConfig` directly or via the higher-level `Limits` type.
+
+### Using Limits
+
+The `Limits` type provides HTTPX-compatible resource limits:
+
+```rust
+use eggfetch_core::Limits;
+
+// HTTPX-compatible defaults: 100 max connections, 20 idle, 5s keepalive
+let limits = Limits::compat();
+
+let client = Client::builder()
+    .limits(limits)
+    .build();
+```
+
+| Constructor | max_connections | max_idle | keepalive_expiry |
+|-------------|----------------|----------|------------------|
+| `Limits::compat()` | 100 | 20 | 5s |
+| `Limits::native()` | None (unlimited) | None | None |
+
+### Using PoolConfig
+
+For finer control, use `PoolConfig` directly:
 
 ```rust
 use eggfetch_core::pool::PoolConfig;

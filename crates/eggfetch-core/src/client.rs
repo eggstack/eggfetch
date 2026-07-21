@@ -9,6 +9,7 @@ use hyper_util::rt::TokioExecutor;
 use crate::error::{Error, Result};
 use crate::headers::Headers;
 use crate::http_version::HttpVersionPolicy;
+use crate::limits::Limits;
 use crate::pool::{Pool, PoolConfig, PoolMetrics};
 #[cfg(feature = "proxy")]
 use crate::proxy::Proxy;
@@ -245,6 +246,7 @@ pub struct ClientBuilder {
     user_agent: Option<String>,
     pool_config: PoolConfig,
     timeout: Option<Timeout>,
+    limits: Option<Limits>,
     redirect: RedirectPolicy,
     auth: Option<crate::auth::AuthScheme>,
     #[cfg(feature = "cookies")]
@@ -268,6 +270,7 @@ impl ClientBuilder {
             user_agent: None,
             pool_config: PoolConfig::default(),
             timeout: None,
+            limits: None,
             redirect: RedirectPolicy::default(),
             auth: None,
             #[cfg(feature = "cookies")]
@@ -339,6 +342,17 @@ impl ClientBuilder {
     #[must_use]
     pub fn timeout(mut self, timeout: Timeout) -> Self {
         self.timeout = Some(timeout);
+        self
+    }
+
+    /// Set resource limits for the connection pool.
+    ///
+    /// Limits control logical request concurrency (pool permits) and
+    /// physical connection behavior (idle connection caps and expiry).
+    /// When set, the limits are applied to the pool configuration.
+    #[must_use]
+    pub fn limits(mut self, limits: Limits) -> Self {
+        self.limits = Some(limits);
         self
     }
 
@@ -490,6 +504,27 @@ impl ClientBuilder {
         use crate::http_version::HttpVersionPolicyEnabler;
         let enabler = HttpVersionPolicyEnabler::from_policy(self.http_version_policy);
 
+        let mut pool_config = self.pool_config;
+        if let Some(limits) = self.limits {
+            let limits_config: PoolConfig = limits.into();
+            if limits_config.max_connections.is_some() {
+                pool_config.max_connections = limits_config.max_connections;
+            }
+            if limits_config.max_connections_per_host.is_some() {
+                pool_config.max_connections_per_host = limits_config.max_connections_per_host;
+            }
+            if limits_config.max_idle_connections.is_some() {
+                pool_config.max_idle_connections = limits_config.max_idle_connections;
+            }
+            if limits_config.max_idle_connections_per_host.is_some() {
+                pool_config.max_idle_connections_per_host =
+                    limits_config.max_idle_connections_per_host;
+            }
+            if limits_config.idle_timeout.is_some() {
+                pool_config.idle_timeout = limits_config.idle_timeout;
+            }
+        }
+
         #[cfg(feature = "cookies")]
         let cookie_jar = self.cookie_jar.unwrap_or_default();
 
@@ -531,7 +566,7 @@ impl ClientBuilder {
             };
 
             let mut builder = hyper_util::client::legacy::Client::builder(TokioExecutor::new());
-            if let Some(timeout) = self.pool_config.idle_timeout {
+            if let Some(timeout) = pool_config.idle_timeout {
                 builder.pool_idle_timeout(timeout);
             }
             Some(builder.build(https))
@@ -563,7 +598,7 @@ impl ClientBuilder {
             http_version_policy: self.http_version_policy,
         };
 
-        let pool = Pool::new(self.pool_config);
+        let pool = Pool::new(pool_config);
 
         Client {
             inner: Arc::new(ClientInner {
