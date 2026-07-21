@@ -1,0 +1,41 @@
+[compatibility-profile]
+schema-version = "1"
+generator = "eggfetch-compat-profile"
+version = "1"
+created = "2026-07-21"
+reference = "httpx==0.28.1"
+stage = "phase-0"
+status = "in-progress"
+
+[reference]
+distribution = "httpx"
+version = "0.28.1"
+python-versions = ["3.8", "3.9", "3.10", "3.11", "3.12", "3.13"]
+sync-backend = "httpcore"
+async-backend = "httpcore"
+
+[eggfetch]
+distribution = "eggfetch"
+python-versions = ["3.10", "3.11", "3.12", "3.13"]
+sync-backend = "rust-tokio"
+async-backend = "rust-tokio"
+
+[modules]
+# Public modules included in the compatibility contract
+public = ["httpx"]
+# Private modules excluded (prefixed with _)
+private-excluded = ["_transports", "_content", "_models", "_decoders", "_exceptions", "_multipart", "_urlparse", "_config"]
+
+[feature-extras]
+# HTTPX optional extras and their eggfetch equivalents
+http2 = { httpx = "httpx[http2]", eggfetch = "http2=True" }
+brotli = { httpx = "httpx[brotli]", eggfetch = "compression-brotli feature" }
+zstd = { httpx = "httpx[zstd]", eggfetch = "compression-zstd feature" }
+socks = { httpx = "httpx[socks]", eggfetch = "not-supported" }
+
+[compatibility-categories]
+required-now = "Must match for current stage"
+required-later = "Accepted gap assigned to later roadmap phase"
+intentional-difference = "Reviewed and explicitly allowed"
+not-public = "Excluded from contract"
+not-applicable = "Reference feature cannot apply to current product stage"

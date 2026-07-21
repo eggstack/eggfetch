@@ -3,6 +3,10 @@
 These tests verify that eggfetch behaves identically to requests/HTTPX for
 shared features, and documents intentional differences. Tests are skipped if
 the comparison library is not installed.
+
+These are supplementary differential tests. The required compatibility
+tests live in tests/compat/test_httpx_required.py and are enforced
+by the CI gate. Tests here may skip when comparison libraries are absent.
 """
 
 import gzip

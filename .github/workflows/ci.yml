@@ -250,6 +250,103 @@ jobs:
       - name: Install and smoke-test wheel in a clean environment
         run: python scripts/wheel_smoke.py --wheel-dir dist
 
+  compat-httpx:
+    name: HTTPX compatibility (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12"]
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Cache cargo registry and target
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-compat-cargo-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-compat-cargo-
+
+      - name: Create virtualenv
+        run: python -m venv .venv
+
+      - name: Install dependencies
+        run: |
+          source .venv/bin/activate
+          pip install -r compat/httpx/0.28.1/requirements.txt
+          pip install maturin pytest pytest-asyncio
+
+      - name: Verify httpx version
+        run: |
+          source .venv/bin/activate
+          python -c "import httpx; assert httpx.__version__ == '0.28.1', f'Expected 0.28.1, got {httpx.__version__}'"
+
+      - name: Build and install eggfetch
+        env:
+          PYO3_USE_ABI3_FORWARD_COMPATIBILITY: "1"
+        run: |
+          source .venv/bin/activate
+          maturin develop -m crates/eggfetch-python/Cargo.toml
+
+      - name: Validate compatibility profile
+        run: |
+          source .venv/bin/activate
+          python scripts/validate_httpx_compat_profile.py compat/httpx/0.28.1
+
+      - name: Run required compatibility tests
+        env:
+          EGGFETCH_COMPAT_REQUIRED: "1"
+          EGGFETCH_COMPAT_PROFILE: "httpx/0.28.1"
+        run: |
+          source .venv/bin/activate
+          pytest crates/eggfetch-python/tests/compat/ -v --strict-markers --timeout=30
+
+      - name: Generate eggfetch API manifest
+        run: |
+          source .venv/bin/activate
+          python scripts/generate_httpx_api_manifest.py --package eggfetch --output /tmp/eggfetch-manifest.json
+
+      - name: Generate reference API manifest
+        run: |
+          source .venv/bin/activate
+          python scripts/generate_httpx_api_manifest.py --package httpx --output /tmp/httpx-manifest.json
+
+      - name: Compare manifests
+        run: |
+          source .venv/bin/activate
+          python scripts/compare_httpx_api_manifest.py \
+            --reference /tmp/httpx-manifest.json \
+            --candidate /tmp/eggfetch-manifest.json \
+            --allowed compat/httpx/0.28.1/allowed-differences.toml || true
+
+      - name: Lint compatibility claims in docs
+        run: |
+          source .venv/bin/activate
+          python scripts/check_compatibility_claims.py \
+            docs/reference/compatibility.md \
+            docs/migration/from-httpx.md
+
+      - name: Upload compatibility reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compat-reports-${{ matrix.python-version }}
+          path: |
+            /tmp/httpx-manifest.json
+            /tmp/eggfetch-manifest.json
+
   # ──────────────────────────────────────────────────────────────────────
   # Required CI Gate — fail-closed merge prerequisite
   # ──────────────────────────────────────────────────────────────────────
@@ -257,7 +354,7 @@ jobs:
     name: Required CI Gate
     runs-on: ubuntu-latest
     if: ${{ always() }}
-    needs: [rust-format, rust-lint, rust-msrv, rust-test, rust-doc, docs-syntax, docs-runtime, resource-monitor, python, wheel-smoke]
+    needs: [rust-format, rust-lint, rust-msrv, rust-test, rust-doc, docs-syntax, docs-runtime, resource-monitor, python, wheel-smoke, compat-httpx]
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
@@ -277,6 +374,7 @@ jobs:
               ("resource-monitor", "${{ needs.resource-monitor.result }}"),
               ("python",           "${{ needs.python.result }}"),
               ("wheel-smoke",      "${{ needs.wheel-smoke.result }}"),
+              ("compat-httpx",     "${{ needs.compat-httpx.result }}"),
           ]
 
           results = {}
@@ -305,8 +403,9 @@ jobs:
                       ("Docs syntax",          results["docs-syntax"]),
                       ("Docs runtime",         results["docs-runtime"]),
                       ("Resource monitor",     results["resource-monitor"]),
-                      ("Python tests (12)",    results["python"]),
-                      ("Wheel smoke (3 OS)",   results["wheel-smoke"]),
+                       ("Python tests (12)",    results["python"]),
+                       ("Wheel smoke (3 OS)",   results["wheel-smoke"]),
+                       ("HTTPX compat",         results["compat-httpx"]),
                   ]
                   for label, status in display:
                       fh.write(f"| {label} | {status} |\n")

@@ -9,7 +9,8 @@
     "docs-runtime",
     "resource-monitor",
     "python",
-    "wheel-smoke"
+    "wheel-smoke",
+    "compat-httpx"
   ],
   "conditional_jobs": {},
   "allowed_skip_results": ["success", "skipped"],

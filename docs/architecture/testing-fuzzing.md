@@ -28,6 +28,10 @@ cargo test -p eggfetch-core --all-features
 # Python tests (must build wheel first)
 cd crates/eggfetch-python && maturin develop
 python -m pytest -p pytest_asyncio
+
+# HTTPX compatibility tests (requires httpx==0.28.1)
+pip install -r compat/httpx/0.28.1/requirements.txt
+EGGFETCH_COMPAT_REQUIRED=1 pytest crates/eggfetch-python/tests/compat/ -v --strict-markers
 ```
 
 ## Feature-Gated Test Subsets
@@ -42,6 +46,22 @@ cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,co
 cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,proxy
 cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,http3
 ```
+
+## HTTPX Compatibility Testing
+
+The compatibility test suite lives in `crates/eggfetch-python/tests/compat/` and verifies eggfetch behavior against `httpx==0.28.1`.
+
+| File | Purpose |
+|------|---------|
+| `test_httpx_required.py` | Required tests that must pass; fail-closed on missing httpx |
+| `test_httpx_extras.py` | Optional extras tests (HTTP/2, retry) |
+| `test_behavior_cases.py` | Parametrized behavior cases with stable IDs |
+| `fixtures.py` | Reusable test server and `BehaviorCase` dataclass |
+| `conftest.py` | Skip auditor; fails CI on unexplained skips |
+
+Run with `EGGFETCH_COMPAT_REQUIRED=1` for fail-closed behavior. The CI `compat-httpx` job enforces this.
+
+Compatibility profiles and allowed differences live in `compat/httpx/0.28.1/`.
 
 ## Property Testing
 

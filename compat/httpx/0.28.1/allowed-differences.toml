@@ -1,0 +1,137 @@
+# Allowed differences between HTTPX 0.28.1 and eggfetch
+# Each entry must have a stable ID, category, and linked tests.
+
+[[difference]]
+id = "REDIRECT-DEFAULT-001"
+category = "intentional-difference"
+symbol = "httpx.Client(follow_redirects=...)"
+behavior-case = "redirect-default"
+reference-behavior = "HTTPX follows redirects by default (follow_redirects=True)"
+eggfetch-behavior = "eggfetch does NOT follow redirects by default (follow_redirects=True required)"
+rationale = "Security-first default; prevents accidental redirects to unexpected hosts"
+compatibility-stage-impact = "phase-0"
+security-improvement = true
+migration-impact = "Users must add follow_redirects=True explicitly"
+owner = "eggfetch-team"
+review-milestone = "phase-0"
+tests = ["test_differential.py::TestRedirectDefault", "test_differential.py::TestKnownDifferences::test_redirect_default_differs"]
+
+[[difference]]
+id = "PROXY-ENV-001"
+category = "required-later"
+symbol = "httpx.Client(proxy=...)"
+behavior-case = "proxy-env-vars"
+reference-behavior = "HTTPX reads HTTP_PROXY/HTTPS_PROXY/NO_PROXY env vars"
+eggfetch-behavior = "eggfetch does not read proxy env vars; proxy= parameter is explicit only"
+rationale = "Not yet implemented; tracked as roadmap item"
+compatibility-stage-impact = "phase-0"
+security-improvement = false
+migration-impact = "Users must pass proxy= explicitly"
+owner = "eggfetch-team"
+review-milestone = "phase-1"
+tests = ["test_differential.py::TestKnownDifferences::test_proxy_config_differs"]
+
+[[difference]]
+id = "TIMEOUT-TUPLE-001"
+category = "intentional-difference"
+symbol = "httpx.Timeout(...)"
+behavior-case = "timeout-api"
+reference-behavior = "HTTPX accepts Timeout() with named phase parameters"
+eggfetch-behavior = "eggfetch accepts Timeout() with named phase parameters (compatible)"
+rationale = "API shape is compatible; requests tuple syntax is different"
+compatibility-stage-impact = "phase-0"
+security-improvement = false
+migration-impact = "Minimal; Timeout() API is compatible"
+owner = "eggfetch-team"
+review-milestone = "phase-0"
+tests = ["test_differential.py::TestTimeout"]
+
+[[difference]]
+id = "EVENT-HOOKS-001"
+category = "required-later"
+symbol = "httpx.EventHooks / httpx.Client(event_hooks=...)"
+behavior-case = "event-hooks"
+reference-behavior = "HTTPX supports event_hooks={'request': [...], 'response': [...]}"
+eggfetch-behavior = "eggfetch does not support event hooks"
+rationale = "Not yet implemented; tracked as roadmap item"
+compatibility-stage-impact = "phase-0"
+security-improvement = false
+migration-impact = "Users needing event hooks must use other mechanisms"
+owner = "eggfetch-team"
+review-milestone = "phase-1"
+tests = []
+
+[[difference]]
+id = "TRANSPORTS-001"
+category = "required-later"
+symbol = "httpx.ASGITransport / httpx.WSGITransport"
+behavior-case = "in-process-transports"
+reference-behavior = "HTTPX supports WSGI/ASGI in-process transports"
+eggfetch-behavior = "eggfetch does not support in-process transports"
+rationale = "eggfetch is a network client, not a testing tool"
+compatibility-stage-impact = "phase-0"
+security-improvement = false
+migration-impact = "Use a real test server instead"
+owner = "eggfetch-team"
+review-milestone = "phase-2"
+tests = []
+
+[[difference]]
+id = "MOUNTS-001"
+category = "required-later"
+symbol = "httpx.Client(mounts=...)"
+behavior-case = "per-host-transports"
+reference-behavior = "HTTPX supports per-host transport mounts"
+eggfetch-behavior = "eggfetch does not support per-host transport mounts"
+rationale = "Not yet implemented; tracked as roadmap item"
+compatibility-stage-impact = "phase-0"
+security-improvement = false
+migration-impact = "Users needing per-host routing must handle externally"
+owner = "eggfetch-team"
+review-milestone = "phase-2"
+tests = []
+
+[[difference]]
+id = "TRIO-ANYIO-001"
+category = "not-applicable"
+symbol = "httpx.AsyncClient(transport=...)"
+behavior-case = "trio-anyio"
+reference-behavior = "HTTPX supports Trio and AnyIO backends"
+eggfetch-behavior = "eggfetch uses asyncio only"
+rationale = "eggfetch is built on tokio (Rust); asyncio integration is the Python path"
+compatibility-stage-impact = "phase-0"
+security-improvement = false
+migration-impact = "None for asyncio users"
+owner = "eggfetch-team"
+review-milestone = "phase-0"
+tests = []
+
+[[difference]]
+id = "EXCEPTION-NAMES-001"
+category = "intentional-difference"
+symbol = "httpx.HTTPError / eggfetch.EggfetchError"
+behavior-case = "exception-hierarchy"
+reference-behavior = "HTTPX uses httpx.HTTPError as base exception"
+eggfetch-behavior = "eggfetch uses EggfetchError as base exception"
+rationale = "Different base exception name; subclass structure is compatible"
+compatibility-stage-impact = "phase-0"
+security-improvement = false
+migration-impact = "Catch EggfetchError instead of HTTPError"
+owner = "eggfetch-team"
+review-milestone = "phase-0"
+tests = ["test_response_compat.py"]
+
+[[difference]]
+id = "RAISE-FOR-STATUS-001"
+category = "intentional-difference"
+symbol = "httpx.Response.raise_for_status()"
+behavior-case = "raise-for-status-return"
+reference-behavior = "HTTPX Response.raise_for_status() returns the response"
+eggfetch-behavior = "eggfetch Response.raise_for_status() returns the response"
+rationale = "API is compatible; both return the response object"
+compatibility-stage-impact = "phase-0"
+security-improvement = false
+migration-impact = "None"
+owner = "eggfetch-team"
+review-milestone = "phase-0"
+tests = ["test_response_compat.py"]

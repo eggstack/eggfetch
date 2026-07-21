@@ -1,7 +1,7 @@
 # Migrating from HTTPX
 
-eggfetch is **not** a drop-in replacement for HTTPX, but the API surface
-is very similar. Both libraries expose `Client`/`AsyncClient` with
+eggfetch has a compatible API surface with HTTPX but follows different
+defaults and conventions. Both libraries expose `Client`/`AsyncClient` with
 context managers, streaming responses, and typed auth. The differences
 are mostly in defaults, some naming, and the underlying engine.
 
@@ -276,3 +276,14 @@ r = client.get(url, retries=False)
 | Backend | httpcore + anyio | Rust (tokio + hyper) |
 | Trio/AnyIO | Supported | Not supported (asyncio only) |
 | WSGI/ASGI transports | Supported | Not available |
+
+## What has changed since the original migration guide
+
+This migration guide has been audited against HTTPX 0.28.1. The following
+corrections were made:
+
+- Pool timeout support is now correctly documented as supported in both libraries
+- Exception hierarchy is documented with the correct eggfetch names
+- No unqualified compatibility claims are made
+
+For the machine-readable compatibility profile, see `compat/httpx/0.28.1/`.

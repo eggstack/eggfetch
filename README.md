@@ -57,6 +57,23 @@ Note: HTTP/3 (QUIC) is now available as an experimental feature behind the `http
 
 See [plans/ROADMAP.md](plans/ROADMAP.md) for the full roadmap and compatibility policy.
 
+## HTTPX Compatibility
+
+eggfetch targets HTTPX 0.28.1 compatibility in measured phases. Phase 0 establishes the compatibility contract:
+
+- **Pinned reference**: `httpx==0.28.1` with a machine-readable compatibility profile in `compat/httpx/0.28.1/`
+- **API manifest comparison**: Automated generators compare eggfetch's public API surface against HTTPX's golden manifest
+- **Required differential tests**: Fail-closed compatibility tests that cannot be skipped in CI
+- **Allowed differences**: Every intentional behavioral difference is documented, categorized, and linked to tests
+
+Key differences from HTTPX:
+- **Redirect default**: eggfetch does NOT follow redirects by default (HTTPX does)
+- **Proxy env vars**: eggfetch does not read `HTTP_PROXY`/`HTTPS_PROXY` (HTTPX does)
+- **Event hooks**: Not yet implemented (tracked as required-later)
+- **WSGI/ASGI transports**: Not applicable (eggfetch is a network client)
+
+See [`compat/httpx/0.28.1/`](compat/httpx/0.28.1/) for the full profile and [`docs/reference/compatibility.md`](docs/reference/compatibility.md) for the feature matrix.
+
 ## Target API Shapes
 
 The Python API targets familiar requests/httpx patterns:

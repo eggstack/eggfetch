@@ -17,6 +17,21 @@ cargo check -p eggfetch-core --all-features
 cd crates/eggfetch-python && maturin develop
 python -m pytest -p pytest_asyncio
 
+# HTTPX compatibility tests (requires httpx==0.28.1)
+pip install -r compat/httpx/0.28.1/requirements.txt
+EGGFETCH_COMPAT_REQUIRED=1 pytest crates/eggfetch-python/tests/compat/ -v --strict-markers
+
+# Validate compatibility profile
+python scripts/validate_httpx_compat_profile.py compat/httpx/0.28.1
+
+# Generate and compare API manifests
+python scripts/generate_httpx_api_manifest.py --package httpx --output /tmp/httpx.json
+python scripts/generate_httpx_api_manifest.py --package eggfetch --output /tmp/eggfetch.json
+python scripts/compare_httpx_api_manifest.py \
+  --reference /tmp/httpx.json \
+  --candidate /tmp/eggfetch.json \
+  --allowed compat/httpx/0.28.1/allowed-differences.toml
+
 # Resource regression check
 cargo build --release -p eggfetch-bench --bin resource_monitor
 ./target/release/resource_monitor
@@ -82,6 +97,8 @@ cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,co
 cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,proxy
 cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,http3
 ```
+
+The HTTPX compatibility test suite lives in `crates/eggfetch-python/tests/compat/` and requires `httpx==0.28.1`. Run with `EGGFETCH_COMPAT_REQUIRED=1` for fail-closed behavior. The compatibility profile is in `compat/httpx/0.28.1/`.
 
 CI matrix: Python 3.10-3.13 on Ubuntu, macOS, Windows. CI must install `pytest-asyncio` explicitly.
 

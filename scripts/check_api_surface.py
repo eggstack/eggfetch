@@ -5,7 +5,6 @@ This ensures the hand-written docs/python/guide.md stays in sync
 with the actual public exports of the eggfetch package.
 """
 
-import importlib
 import sys
 
 
@@ -19,10 +18,17 @@ EXPECTED_CLIENT_APIS = [
     "Timeout",
     "Retry",
     "Cookie",
+    "Cookies",
+    "File",
+    "Headers",
+    "NoAuth",
     "RequestError",
-    "TimeoutError",
-    "ConnectionError",
-    "HTTPError",
+    "EggfetchError",
+    "TimeoutException",
+    "NetworkError",
+    "HTTPStatusError",
+    "TooManyRedirects",
+    "ProxyError",
 ]
 
 EXPECTED_TOPLEVEL = [

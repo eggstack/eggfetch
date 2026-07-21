@@ -45,6 +45,7 @@ GitHub Actions workflow at `.github/workflows/ci.yml`. Runs on push to `main` an
 | `resource-monitor` | Build and run resource regression check |
 | `python` | Python tests (12 combos: 3 OS × 4 Python versions) |
 | `wheel-smoke` | Build wheel and smoke test in clean environment |
+| `compat-httpx` | HTTPX 0.28.1 compatibility tests, manifest comparison, doc claim linting |
 | `matrix-summary` | Aggregate results into JSON report |
 
 ### Environment
