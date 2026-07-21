@@ -13,9 +13,18 @@ import argparse
 import importlib
 import inspect
 import json
+import re
 import sys
 import types
 from pathlib import Path
+
+
+_MEMORY_ADDR_RE = re.compile(r" at 0x[0-9a-fA-F]+")
+
+
+def _normalize_repr(val_str):
+    """Strip memory addresses from repr() output for stability."""
+    return _MEMORY_ADDR_RE.sub("", val_str)
 
 
 def _safe_signature(obj):
@@ -28,11 +37,11 @@ def _safe_signature(obj):
     for name, param in sig.parameters.items():
         p = {"name": name, "kind": param.kind.name}
         if param.default is not inspect.Parameter.empty:
-            p["default"] = repr(param.default)
+            p["default"] = _normalize_repr(repr(param.default))
         if param.annotation is not inspect.Parameter.empty:
-            p["annotation"] = repr(param.annotation)
+            p["annotation"] = _normalize_repr(repr(param.annotation))
         params.append(p)
-    return {"parameters": params, "return_annotation": repr(sig.return_annotation) if sig.return_annotation is not inspect.Parameter.empty else None}
+    return {"parameters": params, "return_annotation": _normalize_repr(repr(sig.return_annotation)) if sig.return_annotation is not inspect.Parameter.empty else None}
 
 
 def _get_kind(obj):

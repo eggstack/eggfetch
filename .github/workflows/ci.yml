@@ -329,7 +329,7 @@ jobs:
           python scripts/compare_httpx_api_manifest.py \
             --reference /tmp/httpx-manifest.json \
             --candidate /tmp/eggfetch-manifest.json \
-            --allowed compat/httpx/0.28.1/allowed-differences.toml || true
+            --allowed compat/httpx/0.28.1/allowed-differences.toml
 
       - name: Lint compatibility claims in docs
         run: |

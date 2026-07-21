@@ -32,6 +32,7 @@ Stage: Phase 0 (in-progress)
 ### New files
 - `compat/httpx/0.28.1/profile.toml` — Compatibility profile
 - `compat/httpx/0.28.1/allowed-differences.toml` — Allowed differences registry
+- `compat/httpx/0.28.1/reference-api.json` — Golden HTTPX 0.28.1 public API manifest
 - `compat/httpx/0.28.1/README.md` — Profile documentation
 - `compat/httpx/0.28.1/requirements.txt` — Pinned compatibility dependencies
 - `scripts/generate_httpx_api_manifest.py` — Manifest generator
@@ -50,7 +51,8 @@ Stage: Phase 0 (in-progress)
 - `crates/eggfetch-python/tests/test_differential.py` — Added comment about supplementary tests
 - `docs/reference/compatibility.md` — Corrected claims, added compat status section
 - `docs/migration/from-httpx.md` — Added audit section
-- `.github/workflows/ci.yml` — Added compat-httpx job, updated gate
+- `.github/workflows/ci.yml` — Added compat-httpx job, updated gate, removed `|| true` from manifest comparison
+- `scripts/generate_httpx_api_manifest.py` — Added memory address normalization for stable manifests
 - `scripts/check_api_surface.py` — Updated to match actual exports
 
 ## Validation Commands
