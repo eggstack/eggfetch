@@ -136,17 +136,9 @@ impl PyClient {
         if trust_env && proxy_override == ProxyOverride::Inherit {
             #[cfg(feature = "proxy")]
             {
-                if let Ok(env_proxy) = std::env::var("HTTP_PROXY")
-                    .or_else(|_| std::env::var("http_proxy"))
-                    .or_else(|_| std::env::var("HTTPS_PROXY"))
-                    .or_else(|_| std::env::var("https_proxy"))
-                    .or_else(|_| std::env::var("ALL_PROXY"))
-                    .or_else(|_| std::env::var("all_proxy"))
-                {
-                    if !env_proxy.is_empty() {
-                        let p = eggfetch_core::Proxy::all(&env_proxy).map_err(map_err)?;
-                        builder = builder.proxy(p);
-                    }
+                if let Some(env_proxy) = proxy::env_proxy_url() {
+                    let p = eggfetch_core::Proxy::all(&env_proxy).map_err(map_err)?;
+                    builder = builder.proxy(p);
                 }
             }
         }

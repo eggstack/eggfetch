@@ -13,6 +13,30 @@ pub(crate) enum ProxyOverride {
     Override(String),
 }
 
+/// Read the effective proxy URL from environment variables.
+///
+/// Checks `HTTP_PROXY`, `http_proxy`, `HTTPS_PROXY`, `https_proxy`,
+/// `ALL_PROXY`, `all_proxy` in priority order. Returns `None` if no
+/// variable is set or all are empty.
+pub(crate) fn env_proxy_url() -> Option<String> {
+    std::env::var("HTTP_PROXY")
+        .or_else(|_| std::env::var("http_proxy"))
+        .or_else(|_| std::env::var("HTTPS_PROXY"))
+        .or_else(|_| std::env::var("https_proxy"))
+        .or_else(|_| std::env::var("ALL_PROXY"))
+        .or_else(|_| std::env::var("all_proxy"))
+        .ok()
+        .filter(|v| !v.is_empty())
+}
+
+/// Read the `NO_PROXY` / `no_proxy` env var value, if set and non-empty.
+pub(crate) fn env_no_proxy_url() -> Option<String> {
+    std::env::var("NO_PROXY")
+        .or_else(|_| std::env::var("no_proxy"))
+        .ok()
+        .filter(|v| !v.is_empty())
+}
+
 /// Parse a Python `proxy` argument into a `ProxyOverride`.
 ///
 /// Accepts:
