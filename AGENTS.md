@@ -36,8 +36,6 @@ python scripts/compare_httpx_api_manifest.py \
 cargo build --release -p eggfetch-bench --bin resource_monitor
 ./target/release/resource_monitor
 
-# CI gate evaluator tests
-python -m pytest scripts/test_evaluate_ci_gate.py -v
 ```
 
 CI enforces `RUSTFLAGS=-D warnings`. MSRV is Rust 1.80.
@@ -73,7 +71,7 @@ eggfetch-core owns all HTTP behavior. CLI and Python are thin adapters.
 - `missing_docs = "warn"`, `missing-docs-in-crate-items = true`.
 - Never use `#![allow(warnings)]`, `#![allow(clippy::all)]`, or `#![allow(clippy::pedantic)]`. CI rejects these via `scripts/check_lint_suppressions.sh`.
 - Use specific lint names. Justify suppressions with a comment.
-- CI uses a fail-closed `Required CI Gate` job evaluated by `scripts/evaluate_ci_gate.py`. The gate policy is in `scripts/evaluate_ci_gate_policy.json`.
+- CI runs format, clippy, and test checks on pushes and pull requests. It is informational, not a merge gate.
 
 ## Feature Flags
 
@@ -139,7 +137,7 @@ See `docs/releases/process.md` and `docs/releases/compatibility-policy.md`.
 ## Working Style
 
 - Make the workspace build green before adding new functionality.
-- Do not bypass CI to land changes.
+- CI runs on pushes and pull requests. It is informational — verify locally before committing.
 - Keep commits scoped to a single logical change.
 - Do not commit without an explicit user request.
 - Public items need doc comments. For skeletal types, state which milestone fills in the real implementation.

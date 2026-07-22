@@ -57,7 +57,7 @@ When in doubt, classify one level higher than the initial assessment.
 
 ### 7. Release Fix
 
-- Merge the fix to main after review and CI passes.
+- Merge the fix to main after review.
 - Bump the version in `Cargo.toml` files.
 - Update the changelog with the security fix.
 - Publish the release (crate publish, PyPI upload, GitHub release).

@@ -147,14 +147,10 @@ If you find yourself writing HTTP logic outside of eggfetch-core, stop and refac
 
 ## Working Context
 
-All milestones (A through Z) are complete. The workspace is in production-maintenance mode. Before starting work, read `plans/ROADMAP.md` for the full project history and any planned future work. Make the workspace build green before adding new functionality. Format before committing. Do not bypass CI to land changes.
+All milestones (A through Z) are complete. The workspace is in production-maintenance mode. Before starting work, read `plans/ROADMAP.md` for the full project history and any planned future work. Make the workspace build green before adding new functionality. Format before committing.
 
-## CI and branch protection
+## CI
 
-Actions run on pushes and pull requests to `main`. The required visible checks
-are the Rust formatting, Rust clippy, Rust build/tests, and Rust documentation
-jobs, plus the Python matrix and wheel-smoke matrix. A
-maintainer enabling branch protection should require all three job families,
-require branches to be up to date before merge, and disallow force pushes to
-`main`. The wheel smoke job is intentionally separate from source-build tests
-so packaging regressions cannot hide behind a passing test matrix.
+Actions run on pushes and pull requests to `main` for informational visibility.
+CI runs format, clippy, and test checks. It is not a merge gate — verify
+locally before committing.

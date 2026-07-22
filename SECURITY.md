@@ -108,7 +108,7 @@ The following security measures are active in the eggfetch repository:
 
 - **cargo-deny** in CI: advisory database checks, license enforcement, dependency source allowlists.
 - **cargo-audit** in CI: RUSTSEC advisory scanning on every push.
-- **CI security checks**: lint, typecheck, and test suite pass before merge.
+- **CI security checks**: lint, typecheck, and test suite run on pushes and pull requests.
 - **Threat model**: documented in `docs/security/`, covers the five trust boundaries (local app, eggfetch core, remote server, network, dependency ecosystem).
 - **Security reviews**: TLS configuration, redirect/auth/cookie handling, proxy tunneling, body streaming, retry policy, Python bindings, and CLI are reviewed for misuse and injection vectors.
 - **Credential redaction**: regression-tested across Debug, Display, error, and log output.

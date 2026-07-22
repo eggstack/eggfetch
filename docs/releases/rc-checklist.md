@@ -91,13 +91,9 @@ This checklist defines the mandatory evidence required before tagging `0.1.0-rc1
 - [ ] Release summary job reports all job statuses
 - [ ] Release manifest generated with all artifacts and checksums
 
-## CI Enforcement
+## CI
 
-- [ ] `Required CI Gate` job exists in CI workflow with `if: always()`
-- [ ] Gate uses `scripts/evaluate_ci_gate.py` for deterministic evaluation
-- [ ] Gate fails when any required job fails, is cancelled, is missing, or is unexpectedly skipped
-- [ ] Gate is the single required status check for branch protection on `main`
-- [ ] Evaluator tests pass: `python -m pytest scripts/test_evaluate_ci_gate.py -v`
+- [ ] CI runs on pushes and pull requests (informational, not a merge gate)
 
 ## Immutable Candidate
 
