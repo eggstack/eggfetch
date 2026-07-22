@@ -159,7 +159,7 @@ pub fn validate_body_kwargs_with_files(
 /// is `Some(ct)` when the body was auto-typed (form or JSON).
 ///
 /// If `content` is a Python iterable/generator (not bytes or str), returns
-/// `None` for body_bytes — the caller must handle it as a stream body.
+/// `None` for `body_bytes` — the caller must handle it as a stream body.
 pub fn build_request_body<'py>(
     py: Python<'py>,
     content: Option<&Bound<'py, PyAny>>,
@@ -178,9 +178,9 @@ pub fn build_request_body<'py>(
         if c.hasattr("__iter__")? || c.hasattr("__aiter__")? {
             return Ok((None, None));
         }
-        return Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
+        Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
             "content must be bytes, str, or an iterable of bytes",
-        ));
+        ))
     } else if let Some(d) = data {
         let body_bytes = encode_form_body(py, d)?;
         Ok((Some(body_bytes), Some("application/x-www-form-urlencoded")))
@@ -206,7 +206,7 @@ pub fn is_python_iterable(obj: &Bound<'_, PyAny>) -> PyResult<bool> {
 /// calls `next()` on the Python iterator and sends chunks through a bounded
 /// channel. This avoids eagerly buffering the entire body.
 pub fn python_iterable_to_request_body<'py>(
-    py: Python<'py>,
+    _py: Python<'py>,
     iterable: &Bound<'py, PyAny>,
 ) -> PyResult<eggfetch_core::RequestBody> {
     use futures_util::stream;
@@ -234,7 +234,7 @@ pub fn python_iterable_to_request_body<'py>(
         return Ok(eggfetch_core::RequestBody::Empty);
     }
 
-    let total_len: usize = chunks.iter().map(|c| c.len()).sum();
+    let total_len: usize = chunks.iter().map(bytes::Bytes::len).sum();
     let stream = stream::iter(chunks.into_iter().map(Ok::<_, eggfetch_core::error::Error>));
     Ok(eggfetch_core::RequestBody::from_stream(
         Box::pin(stream),

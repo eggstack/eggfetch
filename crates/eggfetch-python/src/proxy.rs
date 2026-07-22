@@ -29,14 +29,6 @@ pub(crate) fn env_proxy_url() -> Option<String> {
         .filter(|v| !v.is_empty())
 }
 
-/// Read the `NO_PROXY` / `no_proxy` env var value, if set and non-empty.
-pub(crate) fn env_no_proxy_url() -> Option<String> {
-    std::env::var("NO_PROXY")
-        .or_else(|_| std::env::var("no_proxy"))
-        .ok()
-        .filter(|v| !v.is_empty())
-}
-
 /// Parse a Python `proxy` argument into a `ProxyOverride`.
 ///
 /// Accepts:

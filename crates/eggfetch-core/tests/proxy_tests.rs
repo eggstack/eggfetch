@@ -1373,7 +1373,7 @@ async fn handle_slow_connect(
 }
 
 /// TCP server that accepts connections but never responds.
-/// Used to simulate a slow TLS destination for ProxyTls timeout testing.
+/// Used to simulate a slow TLS destination for `ProxyTls` timeout testing.
 struct StallingTlsServer {
     port: u16,
     shutdown: watch::Sender<bool>,
@@ -1523,7 +1523,7 @@ async fn handle_connect_to_stalling(
     Ok(())
 }
 
-/// ProxyConnect timeout fires when connecting to an unroutable proxy IP.
+/// `ProxyConnect` timeout fires when connecting to an unroutable proxy IP.
 ///
 /// The `connect_to_proxy()` function wraps `TcpStream::connect()` with
 /// the remaining total timeout. When the proxy is unreachable (e.g.,
@@ -1557,12 +1557,12 @@ async fn test_proxy_connect_timeout_on_unreachable_proxy() {
     );
 }
 
-/// ProxyTls timeout fires when the TLS handshake through the CONNECT
+/// `ProxyTls` timeout fires when the TLS handshake through the CONNECT
 /// tunnel stalls.
 ///
 /// The TLS handshake over the tunnel is wrapped with `remaining_total`.
 /// When the destination server accepts TCP but never responds to the TLS
-/// ClientHello, the handshake stalls and the total timeout expires with
+/// `ClientHello`, the handshake stalls and the total timeout expires with
 /// `TimeoutPhase::ProxyTls`.
 #[tokio::test]
 async fn test_proxy_tls_timeout_on_stalling_destination() {

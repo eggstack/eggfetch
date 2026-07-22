@@ -14,7 +14,7 @@
     clippy::too_many_lines,
     clippy::unused_self,
     clippy::items_after_statements,
-    clippy::expect_funcall,
+    clippy::expect_fun_call,
     clippy::len_zero,
     clippy::unnecessary_debug_formatting,
     clippy::format_push_string,
@@ -243,7 +243,7 @@ async fn test_mixed_failures_stabilize() {
     // Warm up.
     for (target, _) in &targets {
         for _ in 0..2 {
-            let _ = client.get(*target).unwrap().send().await;
+            let _ = client.get(target).unwrap().send().await;
         }
     }
 
@@ -251,7 +251,7 @@ async fn test_mixed_failures_stabilize() {
 
     for i in 0..iterations {
         let (target, _kind) = &targets[i % targets.len()];
-        let result = client.get(*target).unwrap().send().await;
+        let result = client.get(target).unwrap().send().await;
         assert!(result.is_err());
     }
 
