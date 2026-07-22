@@ -190,4 +190,14 @@ The facade converts between HTTPX-compatible objects and native types at the bou
 - `build_request()` producing a fully merged Request without sending.
 - `send()` preserving object identity, body, and extensions.
 - Top-level helpers (`get`, `post`, etc.) using short-lived facade clients.
-- Stub classes for auth flows, transports, and streams (Phase 3+).
+
+### What Phase 3 Implements
+
+- Stream base classes (`SyncByteStream`, `AsyncByteStream`, `ByteStream`) for custom body producers.
+- Response streaming delegation: compat `Response` iterates over native `StreamingResponse` chunks.
+- `iter_raw()`/`aiter_raw()` for undecoded transport-level bytes.
+- Chunk size parameter on all streaming iterators (default 8192).
+- `IncrementalDecoder` for multibyte character safety in text iterators.
+- Request streaming: iterable content, file-like objects, and custom `ByteStream` subclasses passed through to the native streaming engine.
+- Multipart passthrough: compat `Request` delegates multipart encoding to the native encoder.
+- `StreamingRawBytesIterator` and `AsyncStreamingRawBytesIterator` types exposed to Python.

@@ -150,19 +150,8 @@ MockTransport = _stub_factory("MockTransport")
 ASGITransport = _stub_factory("ASGITransport")
 WSGITransport = _stub_factory("WSGITransport")
 
-# Stream stubs
-class ByteStream:
-    def __init__(self, *args, **kwargs):
-        raise NotImplementedError("eggfetch does not support custom byte streams")
-
-
-class SyncByteStream(ByteStream):
-    pass
-
-
-class AsyncByteStream:
-    def __init__(self, *args, **kwargs):
-        raise NotImplementedError("eggfetch does not support custom byte streams")
+# Stream base classes (Phase 3)
+from eggfetch.compat.httpx._stream import ByteStream, SyncByteStream, AsyncByteStream
 
 
 # Phase 2: Request / Response

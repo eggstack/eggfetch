@@ -90,7 +90,9 @@ client = Client()
 response = client.get("https://example.com")
 ```
 
-Phase 2 (object model and core API parity) is complete. See [`plans/httpx-drop-in-phase-2-status.md`](plans/httpx-drop-in-phase-2-status.md) for details, [`compat/httpx/0.28.1/`](compat/httpx/0.28.1/) for the pinned profile, and [`docs/reference/compatibility.md`](docs/reference/compatibility.md) for the feature matrix.
+Phase 2 (object model and core API parity) and Phase 3 (streaming and bodies) are complete. See [`plans/httpx-drop-in-phase-2-status.md`](plans/httpx-drop-in-phase-2-status.md) and [`plans/httpx-drop-in-phase-3-status.md`](plans/httpx-drop-in-phase-3-status.md) for details, [`compat/httpx/0.28.1/`](compat/httpx/0.28.1/) for the pinned profile, and [`docs/reference/compatibility.md`](docs/reference/compatibility.md) for the feature matrix.
+
+Phase 3 adds: `SyncByteStream`, `AsyncByteStream`, and `ByteStream` base classes; `iter_raw()`/`aiter_raw()` for raw transport bytes; chunk size parameters on all iterators; streaming request bodies (iterables, file-like, custom streams); and multipart passthrough to the native encoder.
 
 ## Target API Shapes
 

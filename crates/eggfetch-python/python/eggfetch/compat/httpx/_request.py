@@ -28,6 +28,7 @@ class Request:
         "_http_version",
         "_is_stream_consumed",
         "_stream_consumed",
+        "_files",
     )
 
     def __init__(
@@ -90,6 +91,7 @@ class Request:
 
         # Handle body content
         self._content: bytes | None = None
+        self._files = None
 
         if content is not None:
             self._content = content if isinstance(content, bytes) else content.encode("utf-8")
@@ -116,10 +118,7 @@ class Request:
             if "content-type" not in self._headers:
                 self._headers["content-type"] = "application/x-www-form-urlencoded"
         elif files is not None:
-            # Simplified: serialize files as multipart-like placeholder
-            self._content = self._encode_files(files)
-            if "content-type" not in self._headers:
-                self._headers["content-type"] = "multipart/form-data"
+            self._files = files
 
         # Auto-headers
         host = self._url.host
@@ -221,6 +220,10 @@ class Request:
     @property
     def stream(self):
         return self._stream
+
+    @property
+    def files(self):
+        return self._files
 
     @property
     def extensions(self) -> dict:

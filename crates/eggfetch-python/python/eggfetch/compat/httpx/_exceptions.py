@@ -4,10 +4,10 @@
 class HTTPError(Exception):
     """Base exception for HTTPX-compatible errors."""
 
-    def __init__(self, request=None, *, message=""):
+    def __init__(self, *args, request=None, message=""):
         self._request = request
-        self._message = message
-        super().__init__(message if message else str(self))
+        self._message = message or (args[0] if args else "")
+        super().__init__(self._message if self._message else str(self))
 
     @property
     def request(self):
@@ -20,8 +20,8 @@ class HTTPError(Exception):
 class HTTPStatusError(HTTPError):
     """Exception raised when an HTTP response indicates an error status."""
 
-    def __init__(self, message, request, response):
-        super().__init__(request=request, message=message)
+    def __init__(self, message, *, request, response):
+        super().__init__(message=message, request=request)
         self._response = response
 
     @property

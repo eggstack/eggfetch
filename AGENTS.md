@@ -93,6 +93,8 @@ from eggfetch.compat.httpx import Client, AsyncClient, Request, Response, URL, H
 
 Phase 2 is complete — value objects, request/response, exception hierarchy, client constructors, and merge semantics are implemented. See `plans/httpx-drop-in-phase-2-status.md` for status.
 
+Phase 3 is complete — streaming and bodies: `SyncByteStream`, `AsyncByteStream`, `ByteStream` base classes; `iter_raw()`/`aiter_raw()` for raw transport bytes; chunk size support on all iterators; request streaming via iterables/file-like/custom streams; multipart passthrough. See `plans/httpx-drop-in-phase-3-status.md` for status.
+
 Run compat tests:
 
 ```sh
