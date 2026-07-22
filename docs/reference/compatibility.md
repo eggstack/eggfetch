@@ -52,6 +52,16 @@ This page tracks compatibility with requests and HTTPX across features.
 | HTTP/3 (experimental) | No | No | Yes | Yes | Yes |
 | Cross-origin header stripping | Manual | Manual | Automatic | Automatic | Automatic |
 | Proxy env vars (HTTP_PROXY) | Yes | Yes | **No** | **No** | **No** |
+| Custom transports (sync/async) | No | Yes | Yes | N/A | N/A |
+| HTTP transport (HTTPTransport/AsyncHTTPTransport) | No | Yes | Yes | N/A | N/A |
+| URL-pattern mount routing (priority matching) | No | Yes | Yes | N/A | N/A |
+| MockTransport (no-network testing) | No | Yes | Yes | N/A | N/A |
+| WSGITransport (WSGI app testing) | No | Yes | Yes | N/A | N/A |
+| ASGITransport (ASGI app testing) | No | Yes | Yes | N/A | N/A |
+| Event hooks (request/response sequencing) | No | Yes | Yes | N/A | N/A |
+| DigestAuth (MD5/SHA-256) | No | Yes | Yes | N/A | N/A |
+| NetRCAuth | No | Yes | Yes | N/A | N/A |
+| Auth flow generator pattern | No | Yes | Yes | N/A | N/A |
 | Async API | No | Yes | Yes | N/A | Yes (native) |
 
 ## Partially supported with differences
@@ -63,20 +73,16 @@ This page tracks compatibility with requests and HTTPX across features.
 | Proxy configuration | requests uses a dict by scheme. eggfetch uses a single `proxy=` string. |
 | Proxy env vars | eggfetch does not read `HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY` env vars. |
 | Timeout tuple | requests accepts `(connect, read)` tuples. eggfetch uses `Timeout` objects. |
-| HTTPX transports | HTTPX supports WSGI/ASGI in-process transports. eggfetch does not. Tracked as required-later. |
-| HTTPX mounts | HTTPX supports per-host transport mounts. eggfetch does not. Tracked as required-later. |
 
 ## Intentionally unsupported
 
 | Feature | Reason |
 | --- | --- |
-| WSGI/ASGI transports | eggfetch is a network client, not a server testing tool |
-| Trio/AnyIO | asyncio only for now |
-| SOCKS proxy | Not implemented |
+| UDS (Unix domain sockets) | Not available in eggfetch-core |
+| SOCKS proxy | Not in HTTPX 0.28.1 public API, deferred |
+| Trio async backend | Deferred to Stage D |
 | requests Session hooks | Not implemented |
 | requests PreparedRequest | Not part of the public API |
-| HTTPX event hooks | Not implemented |
-| HTTPX mock transports | Use a real test server instead |
 
 ## Sync/async parity
 
@@ -89,9 +95,11 @@ the GIL.
 
 eggfetch targets HTTPX 0.28.1 compatibility in phases. The current status:
 
-- **Phase 0 (current)**: Compatibility profile defined, manifest generators created, differential tests mandatory
+- **Phase 0**: Compatibility profile defined, manifest generators created, differential tests mandatory
 - **Phase 1**: Timeout, pool, and lifecycle behavior alignment
-- **Phase 2**: Transport, mount, and hook surfaces
+- **Phase 2**: Value objects, request/response, exception hierarchy, client constructors, merge semantics
+- **Phase 3**: Streaming and bodies, byte streams, chunk size support, request streaming, multipart passthrough
+- **Phase 4**: Transports, mounts, auth, hooks, WSGI/ASGI
 
 See `compat/httpx/0.28.1/` for the machine-readable profile and allowed differences.
 

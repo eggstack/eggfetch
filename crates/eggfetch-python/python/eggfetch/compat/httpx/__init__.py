@@ -49,9 +49,9 @@ from eggfetch.compat.httpx._exceptions import (
     WriteTimeout,
 )
 
-# ── Phase 3+ / 4+: stubs for transports, auth, streams, client ────────
+# ── Phase 3+ / 4+: transports, streams, client ───────────────────────
 # These exist so the import line ``from eggfetch.compat.httpx import …``
-# works.  Real implementations arrive in later phases.
+# works.
 
 _USE_CLIENT_DEFAULT = object()
 
@@ -72,83 +72,19 @@ def _stub_factory(name: str, msg: str | None = None):
     return _Stub
 
 
-# Auth base class (Phase 3+)
-class Auth:
-    """Base class for authentication."""
+# Auth (Phase 3)
+from eggfetch.compat.httpx._auth import Auth, BasicAuth, DigestAuth, NetRCAuth
 
-    def auth_flow(self, request):
-        raise NotImplementedError("eggfetch auth flows not yet implemented")
-
-
-class _NetRCAuth(Auth):
-    """Stub for NetRCAuth."""
-
-    def __init__(self, *args, **kwargs):
-        raise NotImplementedError("eggfetch does not support NetRCAuth")
-
-
-NetRCAuth = _NetRCAuth
-
-
-class _BasicAuth(Auth):
-    """HTTPX-compatible BasicAuth (Phase 2 stub)."""
-
-    def __init__(self, username: str = "", password: str = "", *, encoding="latin-1"):
-        self._username = username
-        self._password = password
-        self._encoding = encoding
-
-    def auth_flow(self, request):
-        raise NotImplementedError("eggfetch BasicAuth flow not yet implemented")
-
-    def __repr__(self):
-        return f"BasicAuth(username={self._username!r})"
-
-
-BasicAuth = _BasicAuth
-
-
-class _DigestAuth(Auth):
-    """HTTPX-compatible DigestAuth (Phase 2 stub)."""
-
-    def __init__(self, username: str, password: str):
-        self._username = username
-        self._password = password
-
-    def auth_flow(self, request):
-        raise NotImplementedError("eggfetch DigestAuth flow not yet implemented")
-
-    def __repr__(self):
-        return f"DigestAuth(username={self._username!r})"
-
-
-DigestAuth = _DigestAuth
-
-# Transport stubs (Phase 4+)
-class _BaseTransport:
-    def handle_request(self, request):
-        raise NotImplementedError("eggfetch does not support custom transports")
-
-    def close(self):
-        pass
-
-
-class _AsyncBaseTransport:
-    async def handle_async_request(self, request):
-        raise NotImplementedError("eggfetch does not support custom transports")
-
-    async def aclose(self):
-        pass
-
-
-BaseTransport = _BaseTransport
-AsyncBaseTransport = _AsyncBaseTransport
-
-HTTPTransport = _stub_factory("HTTPTransport")
-AsyncHTTPTransport = _stub_factory("AsyncHTTPTransport")
-MockTransport = _stub_factory("MockTransport")
-ASGITransport = _stub_factory("ASGITransport")
-WSGITransport = _stub_factory("WSGITransport")
+# Transport implementations (Phase 4)
+from eggfetch.compat.httpx._transports import (
+    BaseTransport,
+    AsyncBaseTransport,
+    HTTPTransport,
+    AsyncHTTPTransport,
+)
+from eggfetch.compat.httpx._mock import MockTransport, _build_response
+from eggfetch.compat.httpx._wsgi import WSGITransport
+from eggfetch.compat.httpx._asgi import ASGITransport
 
 # Stream base classes (Phase 3)
 from eggfetch.compat.httpx._stream import ByteStream, SyncByteStream, AsyncByteStream
@@ -279,4 +215,5 @@ __all__ = [
     "WriteError",
     "WriteTimeout",
     "WSGITransport",
+    "_build_response",
 ]

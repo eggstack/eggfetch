@@ -74,11 +74,24 @@ from eggfetch.compat.httpx import Client, AsyncClient, Request, Response
 - Multipart passthrough to native encoder
 - `StreamingRawBytesIterator` and `AsyncStreamingRawBytesIterator` types
 
+**Phase 4 implements:**
+- Transport layer: `BaseTransport`, `AsyncBaseTransport`, `Transport`, `AsyncTransport`, `MockTransport`
+- Mounts: named transport routing with `Client.mount()` / `Client.unmount()`
+- Auth: `Auth` base class, `BasicAuth`, digest auth, netrc integration
+- Hooks: request/event hooks on `Client` and `Request`
+- WSGI/ASGI transport: local app dispatch via `WSGITransport`, `ASGITransport`
+
 **Testing the compat layer:**
 
 ```sh
 cd crates/eggfetch-python && maturin develop
 EGGFETCH_COMPAT_REQUIRED=1 pytest crates/eggfetch-python/tests/compat/ -v --strict-markers
+```
+
+Phase 4 test files:
+
+```sh
+EGGFETCH_COMPAT_REQUIRED=1 pytest crates/eggfetch-python/tests/compat/test_transports.py crates/eggfetch-python/tests/compat/test_mock_transport.py crates/eggfetch-python/tests/compat/test_mounts.py crates/eggfetch-python/tests/compat/test_auth.py crates/eggfetch-python/tests/compat/test_hooks.py crates/eggfetch-python/tests/compat/test_wsgi.py crates/eggfetch-python/tests/compat/test_asgi.py -v --strict-markers
 ```
 
 Validate profiles and manifests:

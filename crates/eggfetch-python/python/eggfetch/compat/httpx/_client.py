@@ -187,6 +187,83 @@ def _wrap_streaming_response(native_resp, compat_request=None, default_encoding=
     return response
 
 
+def _build_native_kwargs(request, follow_redirects=None, timeout=None):
+    kwargs: dict[str, Any] = {}
+    if isinstance(request, Request):
+        kwargs["method"] = request.method
+        kwargs["url"] = str(request.url)
+        if request.headers:
+            kwargs["headers"] = _convert_headers(request.headers)
+        if request.params:
+            kwargs["params"] = _convert_params(request.params)
+        if request._stream is not None and request._content is None:
+            kwargs["content"] = request._stream
+        elif request.content is not None:
+            kwargs["content"] = request.content
+        if request._files is not None:
+            kwargs["files"] = request._files
+        if request.cookies:
+            kwargs["cookies"] = _convert_cookies(request.cookies)
+    else:
+        raise TypeError(f"send() requires a Request object, got {type(request).__name__}")
+
+    if follow_redirects is not None:
+        kwargs["follow_redirects"] = follow_redirects
+    if timeout is not None:
+        kwargs["timeout"] = _convert_timeout(timeout)
+
+    return kwargs
+
+
+def _match_mount(url, mounts):
+    """Find the best matching transport for *url* from *mounts* dict.
+
+    Mount matching rules (from HTTPX):
+    - Exact scheme+host+port matches take priority
+    - Longer path prefixes take priority
+    - Wildcard patterns like ``http://`` match all HTTP URLs
+    - Pattern ``all://`` matches everything
+    - If no mount matches, return None
+
+    *mounts* is a dict mapping string patterns to transport objects.
+    """
+    if not mounts:
+        return None
+
+    url_str = str(url)
+    best_match: str | None = None
+    best_score: int = -1
+
+    for pattern in mounts:
+        if pattern == "all://":
+            # Lowest priority — matches everything
+            score = 0
+            if score > best_score:
+                best_score = score
+                best_match = pattern
+            continue
+
+        if pattern == url_str:
+            # Exact match — highest priority
+            score = 10_000
+            if score > best_score:
+                best_score = score
+                best_match = pattern
+            continue
+
+        # Prefix match: pattern must be a prefix of the URL
+        if url_str.startswith(pattern):
+            # Score by length — longer patterns are more specific
+            score = len(pattern)
+            if score > best_score:
+                best_score = score
+                best_match = pattern
+
+    if best_match is not None:
+        return mounts[best_match]
+    return None
+
+
 class Client:
     def __init__(
         self,
@@ -221,7 +298,6 @@ class Client:
         self._http1 = http1
         self._http2 = http2
         self._proxy = proxy
-        self._mounts = mounts
         self._timeout = timeout if isinstance(timeout, Timeout) else Timeout(timeout)
         self._follow_redirects = follow_redirects
         self._limits = limits if isinstance(limits, Limits) else Limits(limits)
@@ -233,7 +309,14 @@ class Client:
         self._native_client = None
         self._is_closed = False
 
+        self._mounts: dict[str, Any] = {}
+        if mounts:
+            for pattern, transport_obj in mounts.items():
+                self._mounts[pattern] = transport_obj
+
     def _ensure_client(self):
+        if self._transport is not None:
+            return
         if self._native_client is None or self._is_closed:
             kwargs = {}
             if self._headers:
@@ -318,38 +401,33 @@ class Client:
             extensions=merged_extensions if merged_extensions else None,
         )
 
-    def send(self, request, *, stream=False, auth=_USE_CLIENT_DEFAULT,
-             follow_redirects=None, timeout=None):
+    def _dispatch_request(self, request, *, stream=False, follow_redirects=None,
+                          timeout=None):
+        transport = _match_mount(request.url, self._mounts)
+        if transport is not None:
+            return self._send_via_transport(
+                transport, request, stream=stream
+            )
+        if self._transport is not None:
+            return self._send_via_transport(
+                self._transport, request, stream=stream
+            )
+        return self._send_via_native(
+            request, stream=stream,
+            follow_redirects=follow_redirects, timeout=timeout,
+        )
+
+    def _send_via_transport(self, transport, request, *, stream=False):
+        native_resp = transport.handle_request(request)
+        if stream:
+            return _wrap_streaming_response(native_resp, request, self._default_encoding)
+        return _wrap_response(native_resp, request, self._default_encoding)
+
+    def _send_via_native(self, request, *, stream=False, follow_redirects=None,
+                         timeout=None):
         self._ensure_client()
-
-        kwargs = {}
-        if isinstance(request, Request):
-            kwargs["method"] = request.method
-            kwargs["url"] = str(request.url)
-            if request.headers:
-                kwargs["headers"] = _convert_headers(request.headers)
-            if request.params:
-                kwargs["params"] = _convert_params(request.params)
-            # Pass stream directly to native client for lazy iteration.
-            if request._stream is not None and request._content is None:
-                kwargs["content"] = request._stream
-            elif request.content is not None:
-                kwargs["content"] = request.content
-            if request._files is not None:
-                kwargs["files"] = request._files
-            if request.cookies:
-                kwargs["cookies"] = _convert_cookies(request.cookies)
-        else:
-            raise TypeError(f"send() requires a Request object, got {type(request).__name__}")
-
-        if follow_redirects is not None:
-            kwargs["follow_redirects"] = follow_redirects
-        if timeout is not None:
-            kwargs["timeout"] = _convert_timeout(timeout)
-
-        for hook in self._event_hooks.get("request", []):
-            hook(request)
-
+        kwargs = _build_native_kwargs(request, follow_redirects=follow_redirects,
+                                       timeout=timeout)
         try:
             if stream:
                 native_resp = self._native_client.stream(**kwargs)
@@ -357,14 +435,62 @@ class Client:
                 native_resp = self._native_client.request(**kwargs)
         except Exception as exc:
             raise _map_exception(exc, request) from exc
-
         if stream:
-            response = _wrap_streaming_response(native_resp, request, self._default_encoding)
-        else:
-            response = _wrap_response(native_resp, request, self._default_encoding)
+            return _wrap_streaming_response(native_resp, request, self._default_encoding)
+        return _wrap_response(native_resp, request, self._default_encoding)
 
+    def send(self, request, *, stream=False, auth=_USE_CLIENT_DEFAULT,
+             follow_redirects=None, timeout=None):
+        if self._is_closed:
+            raise RuntimeError("Client is closed")
+
+        if not isinstance(request, Request):
+            raise TypeError(f"send() requires a Request object, got {type(request).__name__}")
+
+        # 1. Resolve auth
+        if auth is _USE_CLIENT_DEFAULT:
+            resolved_auth = self._auth
+        else:
+            resolved_auth = auth
+
+        # 2. Run auth flow (generator pattern)
+        # Auth is NOT applied when a custom transport or mount transport handles
+        # the request — transports own their own auth.
+        transport = _match_mount(request.url, self._mounts)
+        use_auth = resolved_auth is not None and transport is None and self._transport is None
+
+        auth_flow_gen = None
+        if use_auth:
+            auth_flow_gen = resolved_auth.auth_flow(request)
+            try:
+                request = next(auth_flow_gen)
+            except StopIteration:
+                auth_flow_gen = None
+
+        # 3. Execute request hooks BEFORE dispatch
+        for hook in self._event_hooks.get("request", []):
+            hook(request)
+
+        # 4. Dispatch: mount transport > custom transport > native client
+        response = self._dispatch_request(
+            request, stream=stream,
+            follow_redirects=follow_redirects, timeout=timeout,
+        )
+
+        # 5. Feed response to auth flow if generator has more
+        if auth_flow_gen is not None:
+            try:
+                auth_flow_gen.send(response)
+            except StopIteration:
+                pass
+
+        # 6. Execute response hooks
         for hook in self._event_hooks.get("response", []):
-            hook(response)
+            try:
+                hook(response)
+            except Exception:
+                response.close()
+                raise
 
         return response
 
@@ -414,6 +540,17 @@ class Client:
             pass
 
     def close(self) -> None:
+        if self._transport is not None and hasattr(self._transport, "close"):
+            try:
+                self._transport.close()
+            except Exception:
+                pass
+        for transport in self._mounts.values():
+            if hasattr(transport, "close"):
+                try:
+                    transport.close()
+                except Exception:
+                    pass
         if self._native_client is not None:
             try:
                 self._native_client.close()
@@ -492,6 +629,7 @@ class AsyncClient:
         event_hooks=None,
         base_url="",
         transport=None,
+        async_transport=None,
         default_encoding="utf-8",
     ):
         self._auth = auth
@@ -504,7 +642,6 @@ class AsyncClient:
         self._http1 = http1
         self._http2 = http2
         self._proxy = proxy
-        self._mounts = mounts
         self._timeout = timeout if isinstance(timeout, Timeout) else Timeout(timeout)
         self._follow_redirects = follow_redirects
         self._limits = limits if isinstance(limits, Limits) else Limits(limits)
@@ -512,11 +649,19 @@ class AsyncClient:
         self._event_hooks = event_hooks or {"request": [], "response": []}
         self._base_url = URL(base_url) if not isinstance(base_url, URL) else base_url
         self._transport = transport
+        self._async_transport = async_transport
         self._default_encoding = default_encoding
         self._native_client = None
         self._is_closed = False
 
+        self._mounts: dict[str, Any] = {}
+        if mounts:
+            for pattern, transport_obj in mounts.items():
+                self._mounts[pattern] = transport_obj
+
     def _ensure_client(self):
+        if self._transport is not None or self._async_transport is not None:
+            return
         if self._native_client is None or self._is_closed:
             kwargs = {}
             if self._headers:
@@ -601,41 +746,43 @@ class AsyncClient:
             extensions=merged_extensions if merged_extensions else None,
         )
 
-    async def send(self, request, *, stream=False, auth=_USE_CLIENT_DEFAULT,
-                   follow_redirects=None, timeout=None):
+    async def _dispatch_request(self, request, *, stream=False, follow_redirects=None,
+                                timeout=None):
+        transport = _match_mount(request.url, self._mounts)
+        if transport is not None:
+            return await self._send_via_transport(
+                transport, request, stream=stream
+            )
+        if self._async_transport is not None:
+            return await self._send_via_transport(
+                self._async_transport, request, stream=stream
+            )
+        if self._transport is not None:
+            return self._send_via_transport_sync(
+                self._transport, request, stream=stream
+            )
+        return await self._send_via_native(
+            request, stream=stream,
+            follow_redirects=follow_redirects, timeout=timeout,
+        )
+
+    async def _send_via_transport(self, transport, request, *, stream=False):
+        native_resp = await transport.handle_async_request(request)
+        if stream:
+            return _wrap_streaming_response(native_resp, request, self._default_encoding)
+        return _wrap_response(native_resp, request, self._default_encoding)
+
+    def _send_via_transport_sync(self, transport, request, *, stream=False):
+        native_resp = transport.handle_request(request)
+        if stream:
+            return _wrap_streaming_response(native_resp, request, self._default_encoding)
+        return _wrap_response(native_resp, request, self._default_encoding)
+
+    async def _send_via_native(self, request, *, stream=False, follow_redirects=None,
+                               timeout=None):
         self._ensure_client()
-
-        kwargs = {}
-        if isinstance(request, Request):
-            kwargs["method"] = request.method
-            kwargs["url"] = str(request.url)
-            if request.headers:
-                kwargs["headers"] = _convert_headers(request.headers)
-            if request.params:
-                kwargs["params"] = _convert_params(request.params)
-            # Pass stream directly to native client for lazy iteration.
-            if request._stream is not None and request._content is None:
-                kwargs["content"] = request._stream
-            elif request.content is not None:
-                kwargs["content"] = request.content
-            if request._files is not None:
-                kwargs["files"] = request._files
-            if request.cookies:
-                kwargs["cookies"] = _convert_cookies(request.cookies)
-        else:
-            raise TypeError(f"send() requires a Request object, got {type(request).__name__}")
-
-        if follow_redirects is not None:
-            kwargs["follow_redirects"] = follow_redirects
-        if timeout is not None:
-            kwargs["timeout"] = _convert_timeout(timeout)
-
-        for hook in self._event_hooks.get("request", []):
-            if asyncio.iscoroutinefunction(hook):
-                await hook(request)
-            else:
-                hook(request)
-
+        kwargs = _build_native_kwargs(request, follow_redirects=follow_redirects,
+                                       timeout=timeout)
         try:
             if stream:
                 native_resp = await self._native_client.stream(**kwargs)
@@ -643,17 +790,70 @@ class AsyncClient:
                 native_resp = await self._native_client.request(**kwargs)
         except Exception as exc:
             raise _map_exception(exc, request) from exc
-
         if stream:
-            response = _wrap_streaming_response(native_resp, request, self._default_encoding)
-        else:
-            response = _wrap_response(native_resp, request, self._default_encoding)
+            return _wrap_streaming_response(native_resp, request, self._default_encoding)
+        return _wrap_response(native_resp, request, self._default_encoding)
 
-        for hook in self._event_hooks.get("response", []):
+    async def send(self, request, *, stream=False, auth=_USE_CLIENT_DEFAULT,
+                   follow_redirects=None, timeout=None):
+        if self._is_closed:
+            raise RuntimeError("Client is closed")
+
+        if not isinstance(request, Request):
+            raise TypeError(f"send() requires a Request object, got {type(request).__name__}")
+
+        # 1. Resolve auth
+        if auth is _USE_CLIENT_DEFAULT:
+            resolved_auth = self._auth
+        else:
+            resolved_auth = auth
+
+        # 2. Run auth flow (generator pattern)
+        # Auth is NOT applied when a custom/mount transport handles the request.
+        transport = _match_mount(request.url, self._mounts)
+        has_custom_transport = (transport is not None or
+                               self._async_transport is not None or
+                               self._transport is not None)
+        use_auth = resolved_auth is not None and not has_custom_transport
+
+        auth_flow_gen = None
+        if use_auth:
+            auth_flow_gen = resolved_auth.auth_flow(request)
+            try:
+                request = next(auth_flow_gen)
+            except StopIteration:
+                auth_flow_gen = None
+
+        # 3. Execute request hooks BEFORE dispatch
+        for hook in self._event_hooks.get("request", []):
             if asyncio.iscoroutinefunction(hook):
-                await hook(response)
+                await hook(request)
             else:
-                hook(response)
+                hook(request)
+
+        # 4. Dispatch: mount transport > async transport > sync transport > native client
+        response = await self._dispatch_request(
+            request, stream=stream,
+            follow_redirects=follow_redirects, timeout=timeout,
+        )
+
+        # 5. Feed response to auth flow if generator has more
+        if auth_flow_gen is not None:
+            try:
+                auth_flow_gen.send(response)
+            except StopIteration:
+                pass
+
+        # 6. Execute response hooks
+        for hook in self._event_hooks.get("response", []):
+            try:
+                if asyncio.iscoroutinefunction(hook):
+                    await hook(response)
+                else:
+                    hook(response)
+            except Exception:
+                response.close()
+                raise
 
         return response
 
@@ -703,6 +903,27 @@ class AsyncClient:
             pass
 
     async def close(self) -> None:
+        if self._async_transport is not None and hasattr(self._async_transport, "aclose"):
+            try:
+                await self._async_transport.aclose()
+            except Exception:
+                pass
+        if self._transport is not None and hasattr(self._transport, "close"):
+            try:
+                self._transport.close()
+            except Exception:
+                pass
+        for transport in self._mounts.values():
+            if hasattr(transport, "aclose"):
+                try:
+                    await transport.aclose()
+                except Exception:
+                    pass
+            elif hasattr(transport, "close"):
+                try:
+                    transport.close()
+                except Exception:
+                    pass
         if self._native_client is not None:
             try:
                 await self._native_client.aclose()

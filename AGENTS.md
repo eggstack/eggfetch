@@ -93,6 +93,10 @@ Phase 2 is complete — value objects, request/response, exception hierarchy, cl
 
 Phase 3 is complete — streaming and bodies: `SyncByteStream`, `AsyncByteStream`, `ByteStream` base classes; `iter_raw()`/`aiter_raw()` for raw transport bytes; chunk size support on all iterators; request streaming via iterables/file-like/custom streams; multipart passthrough. See `plans/httpx-drop-in-phase-3-status.md` for status.
 
+Phase 4 is complete — transports, mounts, auth, hooks, WSGI/ASGI. See `plans/httpx-drop-in-phase-4-status.md` for status.
+
+Phase 4 test files: `test_transports.py`, `test_mounts.py`, `test_mock_transport.py`, `test_wsgi.py`, `test_asgi.py`, `test_hooks.py`, `test_auth.py`.
+
 Run compat tests:
 
 ```sh
