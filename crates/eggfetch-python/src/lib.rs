@@ -110,6 +110,19 @@ fn request<'py>(
         (bytes, ct.map(String::from))
     };
 
+    // Check if content is a Python iterable (not bytes/str) — treat as stream body.
+    let stream_body = if let Some(c) = content {
+        if body_bytes.is_none() && files.is_none()
+            && conversion::is_python_iterable(c)?
+        {
+            Some(conversion::python_iterable_to_request_body(py, c)?)
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
     if let Some(ct) = &auto_content_type {
         if !rust_headers.contains("content-type") {
             rust_headers.insert("content-type", ct).map_err(map_err)?;
@@ -177,6 +190,8 @@ fn request<'py>(
 
             if let Some(bytes) = body_bytes {
                 builder = builder.bytes(bytes);
+            } else if let Some(stream) = stream_body {
+                builder = builder.body(stream);
             }
 
             if let Some(t) = rust_timeout {

@@ -84,6 +84,22 @@ pub enum RequestBody {
     },
 }
 
+/// Replayability classification for request bodies.
+///
+/// Used by redirect and retry code to determine whether a body can be
+/// re-sent without re-consuming the original source.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReplayClass {
+    /// Empty or immutable byte body — always replayable.
+    Immutable,
+    /// Seekable body that can be replayed by resetting position.
+    Seekable,
+    /// One-shot stream — cannot be replayed.
+    OneShot,
+    /// Body has been consumed.
+    Consumed,
+}
+
 impl std::fmt::Debug for RequestBody {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -131,6 +147,15 @@ impl RequestBody {
     #[must_use]
     pub fn is_replayable(&self) -> bool {
         matches!(self, Self::Empty | Self::Bytes(_))
+    }
+
+    /// Returns the replayability classification for this body.
+    #[must_use]
+    pub fn replay_class(&self) -> ReplayClass {
+        match self {
+            Self::Empty | Self::Bytes(_) => ReplayClass::Immutable,
+            Self::Stream { .. } => ReplayClass::OneShot,
+        }
     }
 
     /// Attempt to clone this body for use in a redirect request.

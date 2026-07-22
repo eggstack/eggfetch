@@ -94,7 +94,24 @@ class Request:
         self._files = None
 
         if content is not None:
-            self._content = content if isinstance(content, bytes) else content.encode("utf-8")
+            # Check if content is a file-like object (has .read method)
+            if hasattr(content, "read") and not isinstance(content, (bytes, bytearray)):
+                # Wrap file-like object as a generator for lazy streaming
+                def _file_reader():
+                    while True:
+                        chunk = content.read(8192)
+                        if not chunk:
+                            break
+                        if isinstance(chunk, str):
+                            chunk = chunk.encode("utf-8")
+                        yield chunk
+
+                self._stream = _file_reader()
+            elif hasattr(content, "__iter__") and not isinstance(content, (bytes, str)):
+                # Generator or other iterable — use as stream
+                self._stream = content
+            else:
+                self._content = content if isinstance(content, bytes) else content.encode("utf-8")
         elif json is not None:
             import json as _json
 
