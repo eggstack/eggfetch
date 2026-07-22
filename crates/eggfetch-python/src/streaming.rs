@@ -655,10 +655,9 @@ impl PyStreamingResponse {
             let result: PyResult<()> = Python::with_gil(|py| {
                 let borrowed = slf.borrow(py);
                 let _ = borrowed.stream_cancel.send(true);
-                let mut stream_guard = borrowed
-                    .stream
-                    .lock()
-                    .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+                let mut stream_guard = borrowed.stream.lock().map_err(|e| {
+                    PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string())
+                })?;
                 drop(stream_guard.take());
                 borrowed.body_state.store(STATE_CLOSED, Ordering::Release);
                 Ok(())

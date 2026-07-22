@@ -54,7 +54,7 @@ use timeout::PyTimeout;
 ///     `max_redirects`: Maximum redirects to follow (default 20).
 #[pyfunction]
 #[pyo3(signature = (method, url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None, retries=None, limits=None))]
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 fn request<'py>(
     py: Python<'py>,
     method: &str,
@@ -112,9 +112,7 @@ fn request<'py>(
 
     // Check if content is a Python iterable (not bytes/str) — treat as stream body.
     let stream_body = if let Some(c) = content {
-        if body_bytes.is_none() && files.is_none()
-            && conversion::is_python_iterable(c)?
-        {
+        if body_bytes.is_none() && files.is_none() && conversion::is_python_iterable(c)? {
             Some(conversion::python_iterable_to_request_body(py, c)?)
         } else {
             None

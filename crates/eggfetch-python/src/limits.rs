@@ -12,10 +12,10 @@ impl PyLimits {
     /// Create new Limits.
     ///
     /// Args:
-    ///     max_connections: Maximum concurrent connections (optional).
-    ///     max_keepalive_connections: Maximum idle keep-alive connections (optional).
-    ///     keepalive_expiry: Keep-alive timeout in seconds (optional).
-    ///     max_connections_per_host: Maximum connections per host (optional).
+    ///     `max_connections`: Maximum concurrent connections (optional).
+    ///     `max_keepalive_connections`: Maximum idle keep-alive connections (optional).
+    ///     `keepalive_expiry`: Keep-alive timeout in seconds (optional).
+    ///     `max_connections_per_host`: Maximum connections per host (optional).
     #[new]
     #[pyo3(signature = (*, max_connections=None, max_keepalive_connections=None, keepalive_expiry=None, max_connections_per_host=None))]
     fn new(

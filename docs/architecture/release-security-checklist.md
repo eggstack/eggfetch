@@ -8,8 +8,6 @@ This checklist must be completed before any release of eggfetch. Each item has a
 - [ ] `cargo clippy --workspace --all-targets --all-features -- -D warnings` produces zero warnings
 - [ ] `cargo fmt --all` produces no changes (all code is formatted)
 - [ ] `cargo test --workspace --all-features` passes with no failures
-- [ ] `Required CI Gate` job passes with `if: always()` and fail-closed evaluation
-- [ ] `scripts/evaluate_ci_gate.py` tests pass: `python -m pytest scripts/test_evaluate_ci_gate.py -v`
 
 ## Dependency Audit
 

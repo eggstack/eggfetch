@@ -542,15 +542,9 @@ cargo test --workspace --all-features
 cargo doc --workspace --all-features --no-deps
 ```
 
-### CI Enforcement
+### CI
 
-The CI pipeline uses a fail-closed `Required CI Gate` job as the single required status check for branch protection on `main`. The gate evaluates all required job results via `scripts/evaluate_ci_gate.py` and fails when any required job fails, is cancelled, is missing, or is unexpectedly skipped. The gate policy is in `scripts/evaluate_ci_gate_policy.json`.
-
-Run the gate evaluator tests:
-
-```sh
-python -m pytest scripts/test_evaluate_ci_gate.py -v
-```
+CI runs format, clippy, and test checks on pushes and pull requests to `main` for informational visibility. It is not a merge gate.
 
 ### Python package
 

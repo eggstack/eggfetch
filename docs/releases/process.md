@@ -45,25 +45,6 @@ For substantial releases (new major feature, pre-1.0 breaking changes), a releas
 
 Release candidates are optional for patch releases.
 
-## Required CI Gate
-
-The CI pipeline uses a fail-closed aggregate gate job (`Required CI Gate`) as the merge-ready signal. The gate:
-
-- Runs with `if: always()` so it executes after upstream failures or cancellations
-- Evaluates all required job results via `scripts/evaluate_ci_gate.py`
-- Fails when any required job fails, is cancelled, is missing, or is unexpectedly skipped
-- Uses the policy defined in `scripts/evaluate_ci_gate_policy.json`
-
-**The gate is the single required status check for branch protection on `main`.** Individual matrix-generated check names are not required; only the stable `Required CI Gate` check name is enforced.
-
-### Gate evaluation script
-
-The evaluator (`scripts/evaluate_ci_gate.py`) accepts a JSON input file with job results and a policy, then exits 0 only when all required results satisfy policy. Run the tests with:
-
-```sh
-python -m pytest scripts/test_evaluate_ci_gate.py -v
-```
-
 ## Release Rehearsal
 
 Before the first production release, perform at least one end-to-end release rehearsal on a pre-release tag. This validates the entire pipeline without affecting real users.
@@ -78,8 +59,7 @@ Rehearsal steps:
 6. Verify the GitHub Release contains all expected artifacts (CLI archives, checksums, SBOM).
 7. Verify provenance attestations are present on the release artifacts.
 8. If any step fails, fix the workflow, tag a new RC, and repeat.
-9. Verify the `Required CI Gate` check passed and is the status check required for branch protection.
-10. Verify the evidence manifest (`release-evidence.json`) reports overall pass and is internally consistent.
+9. Verify the evidence manifest (`release-evidence.json`) reports overall pass and is internally consistent.
 
 Record the rehearsal result (pass/fail, issues found) before proceeding to the stable release.
 

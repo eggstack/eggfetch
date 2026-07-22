@@ -226,8 +226,7 @@ impl PyAsyncClient {
 
         // Check if content is a Python iterable (not bytes/str) — treat as stream body.
         let stream_body = if let Some(c) = content {
-            if body_bytes.is_none() && files.is_none()
-                && crate::conversion::is_python_iterable(c)?
+            if body_bytes.is_none() && files.is_none() && crate::conversion::is_python_iterable(c)?
             {
                 Some(crate::conversion::python_iterable_to_request_body(py, c)?)
             } else {
@@ -711,8 +710,7 @@ impl PyAsyncClient {
 
         // Check if content is a Python iterable (not bytes/str) — treat as stream body.
         let stream_body = if let Some(c) = content {
-            if body_bytes.is_none() && files.is_none()
-                && crate::conversion::is_python_iterable(c)?
+            if body_bytes.is_none() && files.is_none() && crate::conversion::is_python_iterable(c)?
             {
                 Some(crate::conversion::python_iterable_to_request_body(py, c)?)
             } else {
