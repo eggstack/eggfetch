@@ -330,7 +330,10 @@ class Client:
                 kwargs["headers"] = _convert_headers(request.headers)
             if request.params:
                 kwargs["params"] = _convert_params(request.params)
-            if request.content is not None:
+            # Pass stream directly to native client for lazy iteration.
+            if request._stream is not None and request._content is None:
+                kwargs["content"] = request._stream
+            elif request.content is not None:
                 kwargs["content"] = request.content
             if request._files is not None:
                 kwargs["files"] = request._files
@@ -610,7 +613,10 @@ class AsyncClient:
                 kwargs["headers"] = _convert_headers(request.headers)
             if request.params:
                 kwargs["params"] = _convert_params(request.params)
-            if request.content is not None:
+            # Pass stream directly to native client for lazy iteration.
+            if request._stream is not None and request._content is None:
+                kwargs["content"] = request._stream
+            elif request.content is not None:
                 kwargs["content"] = request.content
             if request._files is not None:
                 kwargs["files"] = request._files

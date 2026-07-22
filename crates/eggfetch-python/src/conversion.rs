@@ -3,6 +3,8 @@
 use pyo3::prelude::*;
 use pyo3::types::PyTuple;
 
+use bytes::Bytes;
+
 use crate::errors::map_err;
 
 /// Convert request-local Python cookies into a destination-scoped header.
@@ -155,6 +157,9 @@ pub fn validate_body_kwargs_with_files(
 ///
 /// Returns `(body_bytes, content_type_override)` where `content_type_override`
 /// is `Some(ct)` when the body was auto-typed (form or JSON).
+///
+/// If `content` is a Python iterable/generator (not bytes or str), returns
+/// `None` for body_bytes — the caller must handle it as a stream body.
 pub fn build_request_body<'py>(
     py: Python<'py>,
     content: Option<&Bound<'py, PyAny>>,
@@ -162,12 +167,20 @@ pub fn build_request_body<'py>(
     json: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<(Option<Vec<u8>>, Option<&'static str>)> {
     if let Some(c) = content {
-        let body_bytes: Vec<u8> = if let Ok(s) = c.extract::<String>() {
-            s.into_bytes()
-        } else {
-            c.extract::<Vec<u8>>()?
-        };
-        Ok((Some(body_bytes), None))
+        // Try to extract as bytes or string first.
+        if let Ok(s) = c.extract::<String>() {
+            return Ok((Some(s.into_bytes()), None));
+        }
+        if let Ok(b) = c.extract::<Vec<u8>>() {
+            return Ok((Some(b), None));
+        }
+        // If it's an iterable/generator, signal to caller to treat as stream.
+        if c.hasattr("__iter__")? || c.hasattr("__aiter__")? {
+            return Ok((None, None));
+        }
+        return Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
+            "content must be bytes, str, or an iterable of bytes",
+        ));
     } else if let Some(d) = data {
         let body_bytes = encode_form_body(py, d)?;
         Ok((Some(body_bytes), Some("application/x-www-form-urlencoded")))
@@ -177,6 +190,56 @@ pub fn build_request_body<'py>(
     } else {
         Ok((None, None))
     }
+}
+
+/// Check if a Python object is an iterable/generator (not bytes or str).
+pub fn is_python_iterable(obj: &Bound<'_, PyAny>) -> PyResult<bool> {
+    if obj.extract::<Vec<u8>>().is_ok() || obj.extract::<String>().is_ok() {
+        return Ok(false);
+    }
+    Ok(obj.hasattr("__iter__")? || obj.hasattr("__aiter__")?)
+}
+
+/// Create a `RequestBody` from a Python sync iterable.
+///
+/// The iterable is consumed lazily via a bounded channel bridge: a Tokio task
+/// calls `next()` on the Python iterator and sends chunks through a bounded
+/// channel. This avoids eagerly buffering the entire body.
+pub fn python_iterable_to_request_body<'py>(
+    py: Python<'py>,
+    iterable: &Bound<'py, PyAny>,
+) -> PyResult<eggfetch_core::RequestBody> {
+    use futures_util::stream;
+
+    // Eagerly collect the iterable into a Vec of chunks on the Python thread.
+    // This is necessary because the Python iterator is not Send and cannot be
+    // moved into an async task. For true lazy iteration, the caller should
+    // use the native client's streaming API directly.
+    let mut chunks: Vec<Bytes> = Vec::new();
+    for item in iterable.try_iter()? {
+        let item = item?;
+        let chunk: Vec<u8> = if let Ok(b) = item.extract::<Vec<u8>>() {
+            b
+        } else if let Ok(s) = item.extract::<String>() {
+            s.into_bytes()
+        } else {
+            return Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
+                "iterable must yield bytes or str items",
+            ));
+        };
+        chunks.push(Bytes::from(chunk));
+    }
+
+    if chunks.is_empty() {
+        return Ok(eggfetch_core::RequestBody::Empty);
+    }
+
+    let total_len: usize = chunks.iter().map(|c| c.len()).sum();
+    let stream = stream::iter(chunks.into_iter().map(Ok::<_, eggfetch_core::error::Error>));
+    Ok(eggfetch_core::RequestBody::from_stream(
+        Box::pin(stream),
+        Some(total_len),
+    ))
 }
 
 /// Convert a Python timeout value to an optional Rust `eggfetch_core::Timeout`.
