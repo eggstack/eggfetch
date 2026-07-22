@@ -64,7 +64,15 @@ from eggfetch.compat.httpx import Client, AsyncClient, Request, Response
 - `Client` and `AsyncClient` with constructor signatures, merge semantics, `build_request()`, `send()`
 - Top-level helpers: `get`, `post`, `put`, `patch`, `delete`, `head`, `options`, `request`, `stream`
 - Complete exception hierarchy matching HTTPX MRO
-- Stubs for auth flows, transports, and stream classes (Phase 3+)
+
+**Phase 3 implements:**
+- Stream base classes: `SyncByteStream`, `AsyncByteStream`, `ByteStream`
+- Response streaming delegation to native engine
+- `iter_raw()`/`aiter_raw()` for undecoded transport bytes
+- Chunk size parameter on all iterators (default 8192)
+- Request streaming bodies (iterables, file-like, custom streams)
+- Multipart passthrough to native encoder
+- `StreamingRawBytesIterator` and `AsyncStreamingRawBytesIterator` types
 
 **Testing the compat layer:**
 

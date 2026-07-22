@@ -38,6 +38,7 @@ class Response:
         "_stream",
         "_is_closed",
         "_stream_consumed",
+        "_native_stream",
     )
 
     _REASON_PHRASES: dict[int, str] = {
@@ -146,6 +147,7 @@ class Response:
         self._is_closed = False
         self._stream_consumed = False
         self._stream = stream
+        self._native_stream = None
         self._num_bytes_downloaded = 0
 
         # Build headers
@@ -351,10 +353,19 @@ class Response:
             message = f"Server error {self._status_code}"
             if self._reason_phrase:
                 message = f"Client error {self._status_code}" if self.is_client_error else f"Server error {self._status_code}"
-            raise HTTPStatusError(message, request=self._request, response=self)
+            raise HTTPStatusError(message=message, request=self._request, response=self)
         return self
 
     def read(self) -> bytes:
+        if self._native_stream is not None and not self._stream_consumed:
+            content = self._native_stream.read()
+            if isinstance(content, bytes):
+                self._content = content
+            else:
+                self._content = bytes(content)
+            self._num_bytes_downloaded = len(self._content)
+            self._stream_consumed = True
+            return self._content
         if self._stream is not None and not self._stream_consumed:
             chunks: list[bytes] = []
             for chunk in self._stream:
@@ -372,6 +383,15 @@ class Response:
         return self._content
 
     async def aread(self) -> bytes:
+        if self._native_stream is not None and not self._stream_consumed:
+            content = await self._native_stream.aread()
+            if isinstance(content, bytes):
+                self._content = content
+            else:
+                self._content = bytes(content)
+            self._num_bytes_downloaded = len(self._content)
+            self._stream_consumed = True
+            return self._content
         if self._stream is not None and not self._stream_consumed:
             chunks: list[bytes] = []
             async for chunk in self._stream:  # type: ignore[union-attr]
@@ -390,55 +410,87 @@ class Response:
 
     def close(self) -> None:
         self._is_closed = True
+        if self._native_stream is not None and hasattr(self._native_stream, "close"):
+            self._native_stream.close()
         if hasattr(self._stream, "close"):
             self._stream.close()
 
     async def aclose(self) -> None:
         self._is_closed = True
+        if self._native_stream is not None and hasattr(self._native_stream, "aclose"):
+            await self._native_stream.aclose()
         if hasattr(self._stream, "aclose"):
             await self._stream.aclose()
 
     def iter_bytes(self, chunk_size: int = 8192) -> Iterator[bytes]:
+        if self._native_stream is not None and not self._stream_consumed:
+            yield from self._native_stream.iter_bytes(chunk_size=chunk_size)
+            return
         data = self.content
         for i in range(0, len(data), chunk_size):
             yield data[i : i + chunk_size]
 
     def iter_text(self, chunk_size: int = 8192) -> Iterator[str]:
+        if self._native_stream is not None and not self._stream_consumed:
+            yield from self._native_stream.iter_text(chunk_size=chunk_size)
+            return
         enc = self._encoding or self.charset_encoding or self._default_encoding
         data = self.content.decode(enc)
         for i in range(0, len(data), chunk_size):
             yield data[i : i + chunk_size]
 
     def iter_lines(self) -> Iterator[str]:
+        if self._native_stream is not None and not self._stream_consumed:
+            yield from self._native_stream.iter_lines()
+            return
         text = self.text
         for line in text.split("\n"):
             if line.endswith("\r"):
                 line = line[:-1]
             yield line
 
-    def iter_raw(self) -> Iterator[bytes]:
-        yield from self.iter_bytes()
+    def iter_raw(self, chunk_size: int = 8192) -> Iterator[bytes]:
+        if self._native_stream is not None and not self._stream_consumed:
+            yield from self._native_stream.iter_raw(chunk_size=chunk_size)
+            return
+        yield from self.iter_bytes(chunk_size)
 
     async def aiter_bytes(self, chunk_size: int = 8192) -> AsyncIterator[bytes]:
+        if self._native_stream is not None and not self._stream_consumed:
+            async for chunk in self._native_stream.aiter_bytes(chunk_size=chunk_size):
+                yield chunk
+            return
         data = self.content
         for i in range(0, len(data), chunk_size):
             yield data[i : i + chunk_size]
 
     async def aiter_text(self, chunk_size: int = 8192) -> AsyncIterator[str]:
+        if self._native_stream is not None and not self._stream_consumed:
+            async for chunk in self._native_stream.aiter_text(chunk_size=chunk_size):
+                yield chunk
+            return
         enc = self._encoding or self.charset_encoding or self._default_encoding
         data = self.content.decode(enc)
         for i in range(0, len(data), chunk_size):
             yield data[i : i + chunk_size]
 
     async def aiter_lines(self) -> AsyncIterator[str]:
+        if self._native_stream is not None and not self._stream_consumed:
+            async for line in self._native_stream.aiter_lines():
+                yield line
+            return
         text = self.text
         for line in text.split("\n"):
             if line.endswith("\r"):
                 line = line[:-1]
             yield line
 
-    async def aiter_raw(self) -> AsyncIterator[bytes]:
-        async for chunk in self.aiter_bytes():
+    async def aiter_raw(self, chunk_size: int = 8192) -> AsyncIterator[bytes]:
+        if self._native_stream is not None and not self._stream_consumed:
+            async for chunk in self._native_stream.aiter_raw(chunk_size=chunk_size):
+                yield chunk
+            return
+        async for chunk in self.aiter_bytes(chunk_size):
             yield chunk
 
     def __repr__(self) -> str:

@@ -485,56 +485,80 @@ impl PyStreamingResponse {
         Ok(())
     }
 
-    #[pyo3(signature = ())]
+    #[pyo3(signature = (*, chunk_size=8192))]
     fn iter_bytes<'py>(
         slf: Py<Self>,
         py: Python<'py>,
+        chunk_size: usize,
     ) -> PyResult<Bound<'py, PyBytesChunkIterator>> {
-        PyBytesChunkIterator::new(slf, py)
+        PyBytesChunkIterator::new(slf, py, chunk_size)
     }
 
-    #[pyo3(signature = (*, encoding=None))]
+    #[pyo3(signature = (*, chunk_size=8192, encoding=None))]
     fn iter_text<'py>(
         slf: Py<Self>,
         py: Python<'py>,
+        chunk_size: usize,
         encoding: Option<&str>,
     ) -> PyResult<Bound<'py, PyTextChunkIterator>> {
-        PyTextChunkIterator::new(slf, py, encoding.map(String::from))
+        PyTextChunkIterator::new(slf, py, chunk_size, encoding.map(String::from))
     }
 
-    #[pyo3(signature = (*, encoding=None))]
+    #[pyo3(signature = (*, chunk_size=8192, encoding=None))]
     fn iter_lines<'py>(
         slf: Py<Self>,
         py: Python<'py>,
+        chunk_size: usize,
         encoding: Option<&str>,
     ) -> PyResult<Bound<'py, PyLinesChunkIterator>> {
-        PyLinesChunkIterator::new(slf, py, encoding.map(String::from))
+        PyLinesChunkIterator::new(slf, py, chunk_size, encoding.map(String::from))
     }
 
-    #[pyo3(signature = ())]
+    #[pyo3(signature = (*, chunk_size=8192))]
+    fn iter_raw<'py>(
+        slf: Py<Self>,
+        py: Python<'py>,
+        chunk_size: usize,
+    ) -> PyResult<Bound<'py, PyRawBytesChunkIterator>> {
+        PyRawBytesChunkIterator::new(slf, py, chunk_size)
+    }
+
+    #[pyo3(signature = (*, chunk_size=8192))]
     fn aiter_bytes<'py>(
         slf: Py<Self>,
         py: Python<'py>,
+        chunk_size: usize,
     ) -> PyResult<Bound<'py, PyAsyncBytesIterator>> {
-        PyAsyncBytesIterator::new(slf, py)
+        PyAsyncBytesIterator::new(slf, py, chunk_size)
     }
 
-    #[pyo3(signature = (*, encoding=None))]
+    #[pyo3(signature = (*, chunk_size=8192, encoding=None))]
     fn aiter_text<'py>(
         slf: Py<Self>,
         py: Python<'py>,
+        chunk_size: usize,
         encoding: Option<&str>,
     ) -> PyResult<Bound<'py, PyAsyncTextIterator>> {
-        PyAsyncTextIterator::new(slf, py, encoding.map(String::from))
+        PyAsyncTextIterator::new(slf, py, chunk_size, encoding.map(String::from))
     }
 
-    #[pyo3(signature = (*, encoding=None))]
+    #[pyo3(signature = (*, chunk_size=8192, encoding=None))]
     fn aiter_lines<'py>(
         slf: Py<Self>,
         py: Python<'py>,
+        chunk_size: usize,
         encoding: Option<&str>,
     ) -> PyResult<Bound<'py, PyAsyncLinesIterator>> {
-        PyAsyncLinesIterator::new(slf, py, encoding.map(String::from))
+        PyAsyncLinesIterator::new(slf, py, chunk_size, encoding.map(String::from))
+    }
+
+    #[pyo3(signature = (*, chunk_size=8192))]
+    fn aiter_raw<'py>(
+        slf: Py<Self>,
+        py: Python<'py>,
+        chunk_size: usize,
+    ) -> PyResult<Bound<'py, PyAsyncRawBytesIterator>> {
+        PyAsyncRawBytesIterator::new(slf, py, chunk_size)
     }
 
     fn read(slf: Py<Self>, py: Python<'_>) -> PyResult<PyObject> {
@@ -683,12 +707,18 @@ fn safe_url_for_display(url: &str) -> String {
 pub(crate) struct PyBytesChunkIterator {
     rx: std::sync::Mutex<std::sync::mpsc::Receiver<Result<Bytes, PyErr>>>,
     cancel: Option<tokio::sync::watch::Sender<bool>>,
+    chunk_size: usize,
+    pending: std::sync::Mutex<Vec<u8>>,
     _keep_alive: Py<PyStreamingResponse>,
 }
 
 impl PyBytesChunkIterator {
     #[allow(clippy::needless_pass_by_value, clippy::elidable_lifetime_names)]
-    fn new<'py>(resp: Py<PyStreamingResponse>, py: Python<'py>) -> PyResult<Bound<'py, Self>> {
+    fn new<'py>(
+        resp: Py<PyStreamingResponse>,
+        py: Python<'py>,
+        chunk_size: usize,
+    ) -> PyResult<Bound<'py, Self>> {
         let stream = {
             let borrowed = resp.borrow(py);
             borrowed.ensure_streaming()?;
@@ -739,6 +769,8 @@ impl PyBytesChunkIterator {
             Self {
                 rx: std::sync::Mutex::new(rx),
                 cancel: Some(cancel),
+                chunk_size,
+                pending: std::sync::Mutex::new(Vec::new()),
                 _keep_alive: resp,
             },
         )
@@ -759,6 +791,17 @@ impl PyBytesChunkIterator {
     }
 
     fn __next__(&self, py: Python<'_>) -> PyResult<Option<PyObject>> {
+        {
+            let mut pending = self
+                .pending
+                .lock()
+                .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+            if !pending.is_empty() {
+                let take = pending.len().min(self.chunk_size);
+                let chunk: Vec<u8> = pending.drain(..take).collect();
+                return Ok(Some(PyBytes::new(py, &chunk).into()));
+            }
+        }
         let result = py.allow_threads(|| {
             let rx = self
                 .rx
@@ -768,7 +811,18 @@ impl PyBytesChunkIterator {
                 .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
         });
         match result {
-            Ok(Ok(bytes)) => Ok(Some(PyBytes::new(py, &bytes).into())),
+            Ok(Ok(bytes)) => {
+                if bytes.len() > self.chunk_size {
+                    let chunk: Vec<u8> = bytes[..self.chunk_size].to_vec();
+                    let rest: Vec<u8> = bytes[self.chunk_size..].to_vec();
+                    let mut pending = self.pending.lock().map_err(|e| {
+                        PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string())
+                    })?;
+                    pending.extend(rest);
+                    return Ok(Some(PyBytes::new(py, &chunk).into()));
+                }
+                Ok(Some(PyBytes::new(py, &bytes).into()))
+            }
             Ok(Err(err)) => Err(err),
             Err(_) => Ok(None),
         }
@@ -791,6 +845,7 @@ impl PyTextChunkIterator {
     fn new<'py>(
         resp: Py<PyStreamingResponse>,
         py: Python<'py>,
+        _chunk_size: usize,
         encoding_override: Option<String>,
     ) -> PyResult<Bound<'py, Self>> {
         let (stream, enc_name) = {
@@ -903,6 +958,7 @@ impl PyLinesChunkIterator {
     fn new<'py>(
         resp: Py<PyStreamingResponse>,
         py: Python<'py>,
+        _chunk_size: usize,
         encoding_override: Option<String>,
     ) -> PyResult<Bound<'py, Self>> {
         let (stream, enc_name) = {
@@ -1017,12 +1073,18 @@ impl PyLinesChunkIterator {
 pub(crate) struct PyAsyncBytesIterator {
     rx: AsyncByteRx,
     producer: Option<tokio::task::JoinHandle<()>>,
+    chunk_size: usize,
+    pending: Arc<std::sync::Mutex<Vec<u8>>>,
     _keep_alive: Py<PyStreamingResponse>,
 }
 
 impl PyAsyncBytesIterator {
     #[allow(clippy::needless_pass_by_value, clippy::elidable_lifetime_names)]
-    fn new<'py>(resp: Py<PyStreamingResponse>, py: Python<'py>) -> PyResult<Bound<'py, Self>> {
+    fn new<'py>(
+        resp: Py<PyStreamingResponse>,
+        py: Python<'py>,
+        chunk_size: usize,
+    ) -> PyResult<Bound<'py, Self>> {
         let (stream, mut cancellation) = {
             let borrowed = resp.borrow(py);
             borrowed.ensure_streaming()?;
@@ -1061,6 +1123,8 @@ impl PyAsyncBytesIterator {
             Self {
                 rx: Arc::new(tokio::sync::Mutex::new(rx)),
                 producer: Some(producer),
+                chunk_size,
+                pending: Arc::new(std::sync::Mutex::new(Vec::new())),
                 _keep_alive: resp,
             },
         )
@@ -1084,10 +1148,34 @@ impl PyAsyncBytesIterator {
 
     fn __anext__<'py>(slf: Py<Self>, py: Python<'py>) -> PyResult<Bound<'py, pyo3::PyAny>> {
         let rx = Arc::clone(&slf.borrow(py).rx);
+        let chunk_size = slf.borrow(py).chunk_size;
+        let pending = Arc::clone(&slf.borrow(py).pending);
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            {
+                let mut pending_guard = pending.lock().map_err(|e| {
+                    PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string())
+                })?;
+                if !pending_guard.is_empty() {
+                    let take = pending_guard.len().min(chunk_size);
+                    let chunk: Vec<u8> = pending_guard.drain(..take).collect();
+                    return Ok(chunk);
+                }
+            }
             let mut rx_guard = rx.lock().await;
             match rx_guard.recv().await {
-                Some(Ok(bytes)) => Ok(bytes),
+                Some(Ok(bytes)) => {
+                    if bytes.len() > chunk_size {
+                        let chunk: Vec<u8> = bytes[..chunk_size].to_vec();
+                        let rest: Vec<u8> = bytes[chunk_size..].to_vec();
+                        let mut pending_guard = pending.lock().map_err(|e| {
+                            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string())
+                        })?;
+                        pending_guard.extend(rest);
+                        Ok(chunk)
+                    } else {
+                        Ok(bytes)
+                    }
+                }
                 Some(Err(err)) => Err(err),
                 None => Err(pyo3::exceptions::PyStopAsyncIteration::new_err("")),
             }
@@ -1111,6 +1199,7 @@ impl PyAsyncTextIterator {
     fn new<'py>(
         resp: Py<PyStreamingResponse>,
         py: Python<'py>,
+        _chunk_size: usize,
         encoding_override: Option<String>,
     ) -> PyResult<Bound<'py, Self>> {
         let (stream, enc_name, mut cancellation) = {
@@ -1209,6 +1298,7 @@ impl PyAsyncLinesIterator {
     fn new<'py>(
         resp: Py<PyStreamingResponse>,
         py: Python<'py>,
+        _chunk_size: usize,
         encoding_override: Option<String>,
     ) -> PyResult<Bound<'py, Self>> {
         let (stream, enc_name, mut cancellation) = {
@@ -1294,6 +1384,254 @@ impl PyAsyncLinesIterator {
             let mut rx_guard = rx.lock().await;
             match rx_guard.recv().await {
                 Some(Ok(text)) => Ok(text),
+                Some(Err(err)) => Err(err),
+                None => Err(pyo3::exceptions::PyStopAsyncIteration::new_err("")),
+            }
+        })
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Sync raw byte iterator (undecoded transport bytes)
+// ---------------------------------------------------------------------------
+
+#[pyclass(name = "StreamingRawBytesIterator")]
+pub(crate) struct PyRawBytesChunkIterator {
+    rx: std::sync::Mutex<std::sync::mpsc::Receiver<Result<Vec<u8>, PyErr>>>,
+    cancel: Option<tokio::sync::watch::Sender<bool>>,
+    chunk_size: usize,
+    pending: std::sync::Mutex<Vec<u8>>,
+    _keep_alive: Py<PyStreamingResponse>,
+}
+
+impl PyRawBytesChunkIterator {
+    #[allow(clippy::needless_pass_by_value, clippy::elidable_lifetime_names)]
+    fn new<'py>(
+        resp: Py<PyStreamingResponse>,
+        py: Python<'py>,
+        chunk_size: usize,
+    ) -> PyResult<Bound<'py, Self>> {
+        let stream = {
+            let borrowed = resp.borrow(py);
+            borrowed.ensure_streaming()?;
+            borrowed.take_stream()?
+        };
+        let (cancel, mut cancellation) = tokio::sync::watch::channel(false);
+
+        let (tx, rx) = std::sync::mpsc::sync_channel(16);
+
+        std::thread::spawn(move || {
+            let rt = match tokio::runtime::Runtime::new() {
+                Ok(rt) => rt,
+                Err(e) => {
+                    let _ = tx.send(Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+                        e.to_string(),
+                    )));
+                    return;
+                }
+            };
+            rt.block_on(async {
+                let mut stream = stream;
+                loop {
+                    tokio::select! {
+                        changed = cancellation.changed() => {
+                            if changed.is_err() || *cancellation.borrow() {
+                                break;
+                            }
+                        }
+                        chunk = stream.next() => match chunk {
+                            Some(chunk_result) => {
+                                let result = match chunk_result {
+                                    Ok(bytes) => Ok(bytes.to_vec()),
+                                    Err(e) => Err(crate::errors::map_err(e)),
+                                };
+                                if tx.send(result).is_err() {
+                                    break;
+                                }
+                            }
+                            None => break,
+                        }
+                    }
+                }
+            });
+        });
+
+        Py::new(
+            py,
+            Self {
+                rx: std::sync::Mutex::new(rx),
+                cancel: Some(cancel),
+                chunk_size,
+                pending: std::sync::Mutex::new(Vec::new()),
+                _keep_alive: resp,
+            },
+        )
+        .map(|inner| inner.into_bound(py))
+    }
+}
+
+impl Drop for PyRawBytesChunkIterator {
+    fn drop(&mut self) {
+        self.cancel.take();
+    }
+}
+
+#[pymethods]
+impl PyRawBytesChunkIterator {
+    fn __iter__(slf: Py<Self>) -> Py<Self> {
+        slf
+    }
+
+    fn __next__(&self, py: Python<'_>) -> PyResult<Option<PyObject>> {
+        {
+            let mut pending = self
+                .pending
+                .lock()
+                .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+            if !pending.is_empty() {
+                let take = pending.len().min(self.chunk_size);
+                let chunk: Vec<u8> = pending.drain(..take).collect();
+                return Ok(Some(PyBytes::new(py, &chunk).into()));
+            }
+        }
+        let result = py.allow_threads(|| {
+            let rx = self
+                .rx
+                .lock()
+                .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+            rx.recv()
+                .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
+        });
+        match result {
+            Ok(Ok(bytes)) => {
+                if bytes.len() > self.chunk_size {
+                    let chunk: Vec<u8> = bytes[..self.chunk_size].to_vec();
+                    let rest: Vec<u8> = bytes[self.chunk_size..].to_vec();
+                    let mut pending = self.pending.lock().map_err(|e| {
+                        PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string())
+                    })?;
+                    pending.extend(rest);
+                    return Ok(Some(PyBytes::new(py, &chunk).into()));
+                }
+                Ok(Some(PyBytes::new(py, &bytes).into()))
+            }
+            Ok(Err(err)) => Err(err),
+            Err(_) => Ok(None),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Async raw byte iterator (undecoded transport bytes)
+// ---------------------------------------------------------------------------
+
+#[pyclass(name = "AsyncStreamingRawBytesIterator")]
+pub(crate) struct PyAsyncRawBytesIterator {
+    rx: AsyncByteRx,
+    producer: Option<tokio::task::JoinHandle<()>>,
+    chunk_size: usize,
+    pending: Arc<std::sync::Mutex<Vec<u8>>>,
+    _keep_alive: Py<PyStreamingResponse>,
+}
+
+impl PyAsyncRawBytesIterator {
+    #[allow(clippy::needless_pass_by_value, clippy::elidable_lifetime_names)]
+    fn new<'py>(
+        resp: Py<PyStreamingResponse>,
+        py: Python<'py>,
+        chunk_size: usize,
+    ) -> PyResult<Bound<'py, Self>> {
+        let (stream, mut cancellation) = {
+            let borrowed = resp.borrow(py);
+            borrowed.ensure_streaming()?;
+            Ok::<_, PyErr>((borrowed.take_stream()?, borrowed.stream_cancel.subscribe()))?
+        };
+
+        let (tx, rx) = tokio::sync::mpsc::channel(16);
+
+        let producer = pyo3_async_runtimes::tokio::get_runtime().spawn(async move {
+            let mut stream = stream;
+            loop {
+                tokio::select! {
+                    changed = cancellation.changed() => {
+                        if changed.is_err() || *cancellation.borrow() {
+                            break;
+                        }
+                    }
+                    chunk = stream.next() => match chunk {
+                        Some(chunk_result) => {
+                            let result = match chunk_result {
+                                Ok(bytes) => Ok(bytes.to_vec()),
+                                Err(e) => Err(crate::errors::map_err(e)),
+                            };
+                            if tx.send(result).await.is_err() {
+                                break;
+                            }
+                        }
+                        None => break,
+                    }
+                }
+            }
+        });
+
+        Py::new(
+            py,
+            Self {
+                rx: Arc::new(tokio::sync::Mutex::new(rx)),
+                producer: Some(producer),
+                chunk_size,
+                pending: Arc::new(std::sync::Mutex::new(Vec::new())),
+                _keep_alive: resp,
+            },
+        )
+        .map(|inner| inner.into_bound(py))
+    }
+}
+
+impl Drop for PyAsyncRawBytesIterator {
+    fn drop(&mut self) {
+        if let Some(producer) = self.producer.take() {
+            producer.abort();
+        }
+    }
+}
+
+#[pymethods]
+impl PyAsyncRawBytesIterator {
+    fn __aiter__(slf: Py<Self>) -> Py<Self> {
+        slf
+    }
+
+    fn __anext__<'py>(slf: Py<Self>, py: Python<'py>) -> PyResult<Bound<'py, pyo3::PyAny>> {
+        let rx = Arc::clone(&slf.borrow(py).rx);
+        let chunk_size = slf.borrow(py).chunk_size;
+        let pending = Arc::clone(&slf.borrow(py).pending);
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            {
+                let mut pending_guard = pending.lock().map_err(|e| {
+                    PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string())
+                })?;
+                if !pending_guard.is_empty() {
+                    let take = pending_guard.len().min(chunk_size);
+                    let chunk: Vec<u8> = pending_guard.drain(..take).collect();
+                    return Ok(chunk);
+                }
+            }
+            let mut rx_guard = rx.lock().await;
+            match rx_guard.recv().await {
+                Some(Ok(bytes)) => {
+                    if bytes.len() > chunk_size {
+                        let chunk: Vec<u8> = bytes[..chunk_size].to_vec();
+                        let rest: Vec<u8> = bytes[chunk_size..].to_vec();
+                        let mut pending_guard = pending.lock().map_err(|e| {
+                            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string())
+                        })?;
+                        pending_guard.extend(rest);
+                        Ok(chunk)
+                    } else {
+                        Ok(bytes)
+                    }
+                }
                 Some(Err(err)) => Err(err),
                 None => Err(pyo3::exceptions::PyStopAsyncIteration::new_err("")),
             }

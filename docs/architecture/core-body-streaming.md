@@ -83,6 +83,14 @@ The Python bindings expose two consumption models:
 
 Streaming uses `StreamingResponse` with a four-state machine: `streaming` → `buffered`/`consumed` → `closed`. The GIL is released during network reads.
 
+### Raw byte iterators
+
+`iter_raw(chunk_size)` and `aiter_raw(chunk_size)` yield undecoded transport-level bytes, bypassing content-encoding decompression. These are exposed as `StreamingRawBytesIterator` and `AsyncStreamingRawBytesIterator` in the native Python module. All streaming iterators accept a `chunk_size` parameter (default 8192) controlling the maximum bytes yielded per iteration.
+
+### Request streaming
+
+Python-side request bodies support iterables, file-like objects, and custom `ByteStream` subclasses. These are bridged to `RequestBody::Stream` on the Rust side via bounded channels, preserving backpressure and GIL release during production.
+
 ## Resource Limits
 
 - `max_decoded_body_size` — maximum decoded body size after decompression.

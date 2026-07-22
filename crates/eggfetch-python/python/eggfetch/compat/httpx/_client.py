@@ -106,31 +106,31 @@ def _map_exception(native_exc, compat_request=None):
         detail = getattr(native_exc, "detail", None)
         if detail:
             if "connect" in str(detail).lower():
-                return ConnectTimeout(msg, request=compat_request)
+                return ConnectTimeout(message=msg, request=compat_request)
             if "read" in str(detail).lower():
-                return ReadTimeout(msg, request=compat_request)
+                return ReadTimeout(message=msg, request=compat_request)
             if "write" in str(detail).lower():
-                return WriteTimeout(msg, request=compat_request)
+                return WriteTimeout(message=msg, request=compat_request)
             if "pool" in str(detail).lower():
-                return PoolTimeout(msg, request=compat_request)
-        return TimeoutException(msg, request=compat_request)
+                return PoolTimeout(message=msg, request=compat_request)
+        return TimeoutException(message=msg, request=compat_request)
 
     if exc_name == "ConnectError" or exc_name == "NetworkError":
-        return ConnectError(msg, request=compat_request)
+        return ConnectError(message=msg, request=compat_request)
 
     if exc_name == "ProtocolError":
-        return ProtocolError(msg, request=compat_request)
+        return ProtocolError(message=msg, request=compat_request)
 
     if exc_name == "TooManyRedirects":
-        return TooManyRedirects(msg, request=compat_request)
+        return TooManyRedirects(message=msg, request=compat_request)
 
     if exc_name == "InvalidUrl":
         return InvalidURL(msg)
 
     if exc_name == "ProxyError":
-        return ProxyError(msg, request=compat_request)
+        return ProxyError(message=msg, request=compat_request)
 
-    return RequestError(msg, request=compat_request)
+    return RequestError(message=msg, request=compat_request)
 
 
 def _wrap_response(native_resp, compat_request=None, default_encoding="utf-8"):
@@ -158,6 +158,33 @@ def _wrap_response(native_resp, compat_request=None, default_encoding="utf-8"):
         history=history,
         default_encoding=default_encoding,
     )
+
+
+def _wrap_streaming_response(native_resp, compat_request=None, default_encoding="utf-8"):
+    status_code = native_resp.status_code
+    native_headers = native_resp.headers
+
+    header_list = []
+    if hasattr(native_headers, "multi_items"):
+        header_list = native_headers.multi_items()
+    elif hasattr(native_headers, "items"):
+        header_list = native_headers.items()
+
+    history = []
+    if hasattr(native_resp, "history") and native_resp.history:
+        for h in native_resp.history:
+            history.append(_wrap_response(h, default_encoding=default_encoding))
+
+    response = Response(
+        status_code,
+        headers=header_list,
+        stream=native_resp,
+        request=compat_request,
+        history=history,
+        default_encoding=default_encoding,
+    )
+    response._native_stream = native_resp
+    return response
 
 
 class Client:
@@ -305,6 +332,8 @@ class Client:
                 kwargs["params"] = _convert_params(request.params)
             if request.content is not None:
                 kwargs["content"] = request.content
+            if request._files is not None:
+                kwargs["files"] = request._files
             if request.cookies:
                 kwargs["cookies"] = _convert_cookies(request.cookies)
         else:
@@ -319,11 +348,17 @@ class Client:
             hook(request)
 
         try:
-            native_resp = self._native_client.request(**kwargs)
+            if stream:
+                native_resp = self._native_client.stream(**kwargs)
+            else:
+                native_resp = self._native_client.request(**kwargs)
         except Exception as exc:
             raise _map_exception(exc, request) from exc
 
-        response = _wrap_response(native_resp, request, self._default_encoding)
+        if stream:
+            response = _wrap_streaming_response(native_resp, request, self._default_encoding)
+        else:
+            response = _wrap_response(native_resp, request, self._default_encoding)
 
         for hook in self._event_hooks.get("response", []):
             hook(response)
@@ -577,6 +612,8 @@ class AsyncClient:
                 kwargs["params"] = _convert_params(request.params)
             if request.content is not None:
                 kwargs["content"] = request.content
+            if request._files is not None:
+                kwargs["files"] = request._files
             if request.cookies:
                 kwargs["cookies"] = _convert_cookies(request.cookies)
         else:
@@ -594,11 +631,17 @@ class AsyncClient:
                 hook(request)
 
         try:
-            native_resp = await self._native_client.request(**kwargs)
+            if stream:
+                native_resp = await self._native_client.stream(**kwargs)
+            else:
+                native_resp = await self._native_client.request(**kwargs)
         except Exception as exc:
             raise _map_exception(exc, request) from exc
 
-        response = _wrap_response(native_resp, request, self._default_encoding)
+        if stream:
+            response = _wrap_streaming_response(native_resp, request, self._default_encoding)
+        else:
+            response = _wrap_response(native_resp, request, self._default_encoding)
 
         for hook in self._event_hooks.get("response", []):
             if asyncio.iscoroutinefunction(hook):

@@ -30,8 +30,9 @@ use proxy::ProxyOverride;
 use response::PyResponse;
 use retry::PyRetry;
 use streaming::{
-    PyAsyncBytesIterator, PyAsyncLinesIterator, PyAsyncTextIterator, PyBytesChunkIterator,
-    PyLinesChunkIterator, PyStreamingResponse, PyTextChunkIterator,
+    PyAsyncBytesIterator, PyAsyncLinesIterator, PyAsyncRawBytesIterator, PyAsyncTextIterator,
+    PyBytesChunkIterator, PyLinesChunkIterator, PyRawBytesChunkIterator, PyStreamingResponse,
+    PyTextChunkIterator,
 };
 use timeout::PyTimeout;
 
@@ -631,6 +632,7 @@ fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
         "AsyncClient",
         "AsyncStreamingBytesIterator",
         "AsyncStreamingLinesIterator",
+        "AsyncStreamingRawBytesIterator",
         "AsyncStreamingTextIterator",
         "Client",
         "Cookie",
@@ -644,6 +646,7 @@ fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
         "Retry",
         "StreamingBytesIterator",
         "StreamingLinesIterator",
+        "StreamingRawBytesIterator",
         "StreamingResponse",
         "StreamingTextIterator",
         "Timeout",
@@ -711,9 +714,11 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyBytesChunkIterator>()?;
     m.add_class::<PyTextChunkIterator>()?;
     m.add_class::<PyLinesChunkIterator>()?;
+    m.add_class::<PyRawBytesChunkIterator>()?;
     m.add_class::<PyAsyncBytesIterator>()?;
     m.add_class::<PyAsyncTextIterator>()?;
     m.add_class::<PyAsyncLinesIterator>()?;
+    m.add_class::<PyAsyncRawBytesIterator>()?;
     m.add_class::<PyTimeout>()?;
     m.add_class::<PyBasicAuth>()?;
     m.add_class::<PyBearerAuth>()?;
