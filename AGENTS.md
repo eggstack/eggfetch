@@ -83,6 +83,23 @@ Key flags: `http2`, `http3`, `json`, `compression-{gzip,brotli,zstd,deflate}`, `
 
 The CLI enables: cookies, multipart, proxy. The Python binding enables all features including http3. `test-util` enables `tokio/test-util` for deterministic time testing.
 
+## HTTPX Compatibility Layer
+
+The `eggfetch.compat.httpx` module provides an HTTPX 0.28.1 drop-in facade. Import it as:
+
+```python
+from eggfetch.compat.httpx import Client, AsyncClient, Request, Response, URL, Headers, Cookies
+```
+
+Phase 2 is complete — value objects, request/response, exception hierarchy, client constructors, and merge semantics are implemented. See `plans/httpx-drop-in-phase-2-status.md` for status.
+
+Run compat tests:
+
+```sh
+cd crates/eggfetch-python && maturin develop
+EGGFETCH_COMPAT_REQUIRED=1 pytest crates/eggfetch-python/tests/compat/ -v --strict-markers
+```
+
 ## Tests
 
 Colocated `#[cfg(test)] mod tests` blocks. ~750+ Rust, ~463+ Python, ~40+ FFI tests.

@@ -78,6 +78,20 @@ Phase 1 (production semantics) closes these gaps:
 
 See [`compat/httpx/0.28.1/`](compat/httpx/0.28.1/) for the full profile and [`docs/reference/compatibility.md`](docs/reference/compatibility.md) for the feature matrix.
 
+## HTTPX Drop-In Compatibility
+
+eggfetch provides a drop-in HTTPX 0.28.1 compatibility facade:
+
+```python
+from eggfetch.compat.httpx import Client, AsyncClient, Request, Response, URL, Headers
+
+# Drop-in replacement for httpx
+client = Client()
+response = client.get("https://example.com")
+```
+
+Phase 2 (object model and core API parity) is complete. See [`plans/httpx-drop-in-phase-2-status.md`](plans/httpx-drop-in-phase-2-status.md) for details, [`compat/httpx/0.28.1/`](compat/httpx/0.28.1/) for the pinned profile, and [`docs/reference/compatibility.md`](docs/reference/compatibility.md) for the feature matrix.
+
 ## Target API Shapes
 
 The Python API targets familiar requests/httpx patterns:

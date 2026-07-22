@@ -49,6 +49,42 @@ EggfetchError
 └── HTTPStatusError
 ```
 
+## HTTPX Compatibility Layer
+
+The `eggfetch.compat.httpx` module provides an HTTPX 0.28.1 drop-in facade over the eggfetch Rust engine. Import path:
+
+```python
+from eggfetch.compat.httpx import Client, AsyncClient, Request, Response
+```
+
+**Phase 2 implements:**
+- Value objects: `URL`, `QueryParams`, `Headers`, `Cookies`, `Timeout`, `Limits`, `Proxy`
+- Status code helpers (`codes`)
+- Request and Response objects with full HTTPX-compatible metadata
+- `Client` and `AsyncClient` with constructor signatures, merge semantics, `build_request()`, `send()`
+- Top-level helpers: `get`, `post`, `put`, `patch`, `delete`, `head`, `options`, `request`, `stream`
+- Complete exception hierarchy matching HTTPX MRO
+- Stubs for auth flows, transports, and stream classes (Phase 3+)
+
+**Testing the compat layer:**
+
+```sh
+cd crates/eggfetch-python && maturin develop
+EGGFETCH_COMPAT_REQUIRED=1 pytest crates/eggfetch-python/tests/compat/ -v --strict-markers
+```
+
+Validate profiles and manifests:
+
+```sh
+python scripts/validate_httpx_compat_profile.py compat/httpx/0.28.1
+python scripts/generate_httpx_api_manifest.py --package httpx --output /tmp/httpx.json
+python scripts/generate_httpx_api_manifest.py --package eggfetch --output /tmp/eggfetch.json
+python scripts/compare_httpx_api_manifest.py \
+  --reference /tmp/httpx.json \
+  --candidate /tmp/eggfetch.json \
+  --allowed compat/httpx/0.28.1/allowed-differences.toml
+```
+
 ## Architecture Reference
 
 - Python bindings: `docs/architecture/python-bindings.md`

@@ -128,3 +128,66 @@ EggfetchError
 | `decompress` | bool | Automatic decompression |
 
 Body kwargs (`content`, `data`, `json`) are mutually exclusive. `files` may combine with `data` but conflicts with `content` and `json`.
+
+## HTTPX Compatibility Facade
+
+The `eggfetch.compat.httpx` module provides an HTTPX 0.28.1-compatible facade over the native eggfetch bindings. This enables existing HTTPX code to run against the eggfetch Rust engine with minimal changes.
+
+### Architecture Overview
+
+The facade sits between the user and the native PyO3 bindings:
+
+```
+User code
+  ↓
+eggfetch.compat.httpx (pure Python facade)
+  ↓
+eggfetch (native PyO3 bindings)
+  ↓
+eggfetch-core (Rust async engine)
+```
+
+The facade owns all HTTPX-shaped API surfaces (URL, Headers, QueryParams, exceptions, client constructors, merge rules) as pure-Python value objects. Network execution still flows through the native `eggfetch` module into `eggfetch-core`. The facade never duplicates networking logic.
+
+### Module Structure
+
+| Module | Purpose |
+|--------|---------|
+| `eggfetch/compat/httpx/__init__.py` | Public facade — exports all HTTPX symbols |
+| `eggfetch/compat/httpx/_urls.py` | `URL` and `QueryParams` value objects |
+| `eggfetch/compat/httpx/_headers.py` | `Headers` — case-insensitive, duplicate-preserving |
+| `eggfetch/compat/httpx/_cookies.py` | `Cookies` — mapping, domain/path, conflict handling |
+| `eggfetch/compat/httpx/_timeout.py` | `Timeout` — per-phase configuration |
+| `eggfetch/compat/httpx/_limits.py` | `Limits` — pool concurrency control |
+| `eggfetch/compat/httpx/_proxy.py` | `Proxy` — proxy configuration |
+| `eggfetch/compat/httpx/_status_codes.py` | `codes` — status code constants |
+| `eggfetch/compat/httpx/_exceptions.py` | Exception hierarchy matching HTTPX MRO |
+| `eggfetch/compat/httpx/_request.py` | `Request` — construction and auto-headers |
+| `eggfetch/compat/httpx/_response.py` | `Response` — metadata, status helpers, raise_for_status |
+| `eggfetch/compat/httpx/_client.py` | `Client` and `AsyncClient` — constructors, merge, build_request, send |
+
+### Bridge Pattern (Native ↔ Compat Conversion)
+
+The facade converts between HTTPX-compatible objects and native types at the boundary:
+
+- **URL → core URL**: Pure-Python `URL` normalizes to a string; passed to native `Client.request()`.
+- **Headers → native headers**: `Headers` exposes duplicate-preserving iteration; flattened to a list of `(name, value)` pairs for native calls.
+- **QueryParams → dict/list**: Encoded to query parameters passed as kwargs.
+- **Timeout → native timeout**: `Timeout` fields map to scalar/phase-aware native timeout config.
+- **Limits → native limits**: `Limits` fields map to `PoolConfig`.
+- **Proxy → native proxy**: `Proxy.url` maps to the native proxy string.
+- **Request → native body**: Body kwargs dispatched by mutual-exclusion rules; auto-headers computed by the facade.
+- **Response ← native response**: Status, headers, URL, body, and version extracted from native `PyResponse`.
+- **Errors ← native errors**: Exception mapping preserves the most specific HTTPX class with redacted context.
+
+### What Phase 2 Implements
+
+- Pure-Python value objects with exact HTTPX semantics for URL, QueryParams, Headers, Cookies, Timeout, Limits, Proxy.
+- Request and Response objects with HTTPX-compatible construction, properties, and state machines.
+- Full exception hierarchy (HTTPError → RequestError/TransportError → specific subclasses) with MRO matching the pinned manifest.
+- Client and AsyncClient constructors with all HTTPX parameters (auth, params, headers, cookies, verify, cert, trust_env, proxy, timeout, limits, follow_redirects, max_redirects, base_url, default_encoding, event_hooks).
+- Configuration merge semantics: client-level defaults merge with per-request overrides for params, headers, cookies, auth, timeout, extensions, and redirect policy.
+- `build_request()` producing a fully merged Request without sending.
+- `send()` preserving object identity, body, and extensions.
+- Top-level helpers (`get`, `post`, etc.) using short-lived facade clients.
+- Stub classes for auth flows, transports, and streams (Phase 3+).
