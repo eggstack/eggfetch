@@ -77,6 +77,13 @@ class AsyncBaseTransport:
 
 
 class HTTPTransport(BaseTransport):
+    """Transport backed by eggfetch-core for synchronous requests.
+
+    Note: ``local_address`` and ``socket_options`` are accepted for API
+    compatibility but are **not forwarded** to eggfetch-core, which does
+    not support them.
+    """
+
     def __init__(
         self,
         verify: bool = True,
@@ -132,6 +139,8 @@ class HTTPTransport(BaseTransport):
                 kwargs["timeout"] = _convert_timeout(self._timeout)
             if self._proxy is not None:
                 kwargs["proxy"] = _convert_proxy(self._proxy)
+            if self._retries:
+                kwargs["retries"] = self._retries
             self._native_client = eggfetch.Client(**kwargs)
             self._is_closed = False
         return self._native_client
@@ -172,6 +181,13 @@ class HTTPTransport(BaseTransport):
 
 
 class AsyncHTTPTransport(AsyncBaseTransport):
+    """Transport backed by eggfetch-core for asynchronous requests.
+
+    Note: ``local_address`` and ``socket_options`` are accepted for API
+    compatibility but are **not forwarded** to eggfetch-core, which does
+    not support them.
+    """
+
     def __init__(
         self,
         verify: bool = True,
@@ -227,6 +243,8 @@ class AsyncHTTPTransport(AsyncBaseTransport):
                 kwargs["timeout"] = _convert_timeout(self._timeout)
             if self._proxy is not None:
                 kwargs["proxy"] = _convert_proxy(self._proxy)
+            if self._retries:
+                kwargs["retries"] = self._retries
             self._native_client = eggfetch.AsyncClient(**kwargs)
             self._is_closed = False
         return self._native_client

@@ -128,6 +128,132 @@ class TestDigestAuth:
         flow.send(response)
         assert auth._nonce_count == 1
 
+    def test_sha256_algorithm(self):
+        auth = DigestAuth("user", "pass")
+        request = Request("GET", "http://example.com/")
+        flow = auth.auth_flow(request)
+        next(flow)
+
+        response = Response(
+            401,
+            headers=[
+                (
+                    "www-authenticate",
+                    'Digest realm="test", nonce="abc", '
+                    'qop="auth", algorithm=SHA-256',
+                )
+            ],
+        )
+        auth_request = flow.send(response)
+        assert "algorithm=SHA-256" in auth_request.headers["authorization"]
+
+    def test_qop_auth_int(self):
+        auth = DigestAuth("user", "pass")
+        request = Request("POST", "http://example.com/", content=b"body-data")
+        flow = auth.auth_flow(request)
+        next(flow)
+
+        response = Response(
+            401,
+            headers=[
+                (
+                    "www-authenticate",
+                    'Digest realm="test", nonce="abc", qop="auth-int"',
+                )
+            ],
+        )
+        auth_request = flow.send(response)
+        assert "qop=auth-int" in auth_request.headers["authorization"]
+
+    def test_nonce_count_increments(self):
+        auth = DigestAuth("user", "pass")
+
+        # First request
+        request1 = Request("GET", "http://example.com/")
+        flow1 = auth.auth_flow(request1)
+        next(flow1)
+        response1 = Response(
+            401,
+            headers=[
+                (
+                    "www-authenticate",
+                    'Digest realm="test", nonce="abc", qop="auth"',
+                )
+            ],
+        )
+        flow1.send(response1)
+        assert auth._nonce_count == 1
+
+        # Second request
+        request2 = Request("GET", "http://example.com/")
+        flow2 = auth.auth_flow(request2)
+        next(flow2)
+        response2 = Response(
+            401,
+            headers=[
+                (
+                    "www-authenticate",
+                    'Digest realm="test", nonce="abc", qop="auth"',
+                )
+            ],
+        )
+        auth_request2 = flow2.send(response2)
+        assert "nc=00000002" in auth_request2.headers["authorization"]
+        assert auth._nonce_count == 2
+
+    def test_opaque_passthrough(self):
+        auth = DigestAuth("user", "pass")
+        request = Request("GET", "http://example.com/")
+        flow = auth.auth_flow(request)
+        next(flow)
+
+        response = Response(
+            401,
+            headers=[
+                (
+                    "www-authenticate",
+                    'Digest realm="test", nonce="abc", qop="auth", '
+                    'opaque="my-opaque-value"',
+                )
+            ],
+        )
+        auth_request = flow.send(response)
+        assert 'opaque="my-opaque-value"' in auth_request.headers["authorization"]
+
+    def test_no_qop_old_style_response(self):
+        auth = DigestAuth("user", "pass")
+        request = Request("GET", "http://example.com/")
+        flow = auth.auth_flow(request)
+        next(flow)
+
+        response = Response(
+            401,
+            headers=[
+                (
+                    "www-authenticate",
+                    'Digest realm="test", nonce="abc"',
+                )
+            ],
+        )
+        auth_request = flow.send(response)
+        # Old-style: no qop, nc, or cnonce
+        auth_header = auth_request.headers["authorization"]
+        assert "qop=" not in auth_header
+        assert "nc=" not in auth_header
+
+    def test_non_digest_challenge_ignored(self):
+        auth = DigestAuth("user", "pass")
+        request = Request("GET", "http://example.com/")
+        flow = auth.auth_flow(request)
+        next(flow)
+
+        response = Response(
+            401,
+            headers=[("www-authenticate", 'Bearer realm="test"')],
+        )
+        with pytest.raises(StopIteration):
+            flow.send(response)
+
     def test_repr(self):
         auth = DigestAuth("user", "pass")
         assert "user" in repr(auth)

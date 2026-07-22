@@ -87,6 +87,23 @@ class TestMockTransportSync:
             resp = client.get("http://testserver/")
             assert resp.json() == {"key": "value"}
 
+    def test_sync_client_rejects_async_handler(self):
+        async def handler(request):
+            return Response(200)
+
+        with pytest.raises(RuntimeError, match="async"):
+            with Client(transport=MockTransport(handler)) as client:
+                client.get("http://testserver/")
+
+    def test_closed_transport_raises(self):
+        def handler(request):
+            return Response(200)
+
+        transport = MockTransport(handler)
+        transport.close()
+        with pytest.raises(RuntimeError, match="closed"):
+            transport.handle_request(Request("GET", "http://test/"))
+
 
 class TestMockTransportAsync:
     @pytest.mark.asyncio

@@ -22,6 +22,10 @@ class MockTransport:
 
         with Client(transport=MockTransport(handler)) as client:
             response = client.get("http://testserver/")
+
+    The handler may also return a :class:`Response` backed by a custom
+    stream (sync or async iterator).  Streaming responses are consumed
+    once, matching real network behaviour.
     """
 
     def __init__(self, handler: Callable[[Request], Response]) -> None:
@@ -29,9 +33,19 @@ class MockTransport:
         self._is_closed = False
 
     def handle_request(self, request: Request) -> Response:
-        """Call the handler with the request and return its response."""
+        """Call the handler with the request and return its response.
+
+        Raises :class:`RuntimeError` if the transport is closed, and
+        :class:`TypeError` if the handler does not return a
+        :class:`Response`.
+        """
         if self._is_closed:
             raise RuntimeError("MockTransport is closed")
+        if asyncio.iscoroutinefunction(self._handler):
+            raise RuntimeError(
+                "Cannot use an async handler with a synchronous client. "
+                "Use AsyncClient instead."
+            )
         response = self._handler(request)
         if not isinstance(response, Response):
             raise TypeError(
@@ -42,7 +56,11 @@ class MockTransport:
         return response
 
     async def handle_async_request(self, request: Request) -> Response:
-        """Async variant - calls the same handler."""
+        """Async variant — calls the same handler.
+
+        If the handler is a plain (non-async) function it is called
+        directly.  If the handler is a coroutine function it is awaited.
+        """
         if self._is_closed:
             raise RuntimeError("MockTransport is closed")
         if asyncio.iscoroutinefunction(self._handler):
@@ -85,8 +103,15 @@ def _build_response(
     content: bytes | None = None,
     text: str | None = None,
     json: Any = None,
+    stream: Any = None,
 ) -> Response:
-    """Helper to build mock responses easily."""
+    """Helper to build mock responses easily.
+
+    Supports the same body parameters as :class:`Response`, plus an
+    optional *stream* for streaming mock responses.
+    """
+    if stream is not None:
+        return Response(status_code, headers=headers, stream=stream)
     if text is not None:
         return Response(status_code, headers=headers, text=text)
     if json is not None:

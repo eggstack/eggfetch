@@ -45,16 +45,19 @@ class WSGITransport:
 
         status: str | None = None
         response_headers: list[tuple[str, str]] = []
+        exc_info_stored: tuple | None = None
 
         def start_response(
             wsgi_status: str,
             wsgi_headers: list[tuple[str, str]],
             exc_info: tuple | None = None,
         ) -> None:
-            nonlocal status
+            nonlocal status, exc_info_stored
             status = wsgi_status
             response_headers.clear()
             response_headers.extend(wsgi_headers)
+            if exc_info is not None:
+                exc_info_stored = exc_info
 
         app_iter = None
         body = b""
@@ -79,6 +82,14 @@ class WSGITransport:
                     app_iter.close()
                 except Exception:
                     pass
+
+        # If start_response was called with exc_info, re-raise the stored
+        # exception (matching HTTPX behaviour where exc_info causes the
+        # original exception to propagate after the response is built).
+        if exc_info_stored is not None and self._raise_app_exceptions:
+            exc_type, exc_value, _tb = exc_info_stored
+            if exc_value is not None:
+                raise exc_value
 
         if status is None:
             status = "500 Internal Server Error"

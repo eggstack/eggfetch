@@ -11,6 +11,7 @@ from eggfetch.compat.httpx import (
     Request,
     Response,
 )
+from eggfetch.compat.httpx._client import _match_mount, _parse_mount_pattern
 
 
 def _make_handler(response_text: str):
@@ -18,6 +19,37 @@ def _make_handler(response_text: str):
         return Response(200, content=response_text.encode())
 
     return handler
+
+
+class TestParseMountPattern:
+    def test_all_catchall(self):
+        assert _parse_mount_pattern("all://") == ("", None, None, "")
+
+    def test_http_scheme_only(self):
+        assert _parse_mount_pattern("http://") == ("http", None, None, "")
+
+    def test_https_scheme_only(self):
+        assert _parse_mount_pattern("https://") == ("https", None, None, "")
+
+    def test_scheme_and_host(self):
+        assert _parse_mount_pattern("http://example.com") == (
+            "http", "example.com", None, "",
+        )
+
+    def test_scheme_host_port(self):
+        assert _parse_mount_pattern("http://example.com:8080") == (
+            "http", "example.com", 8080, "",
+        )
+
+    def test_scheme_host_path(self):
+        assert _parse_mount_pattern("http://example.com/api") == (
+            "http", "example.com", None, "/api",
+        )
+
+    def test_full_pattern(self):
+        assert _parse_mount_pattern("https://example.com:443/api/v1") == (
+            "https", "example.com", 443, "/api/v1",
+        )
 
 
 class TestMountRouting:
@@ -70,6 +102,125 @@ class TestMountRouting:
         client = Client(mounts={"http://": TrackingTransport()})
         client.close()
         assert len(closed) == 1
+
+
+class TestComponentBasedMountRouting:
+    """Tests for the component-based mount matching."""
+
+    def test_all_catchall_matches_everything(self):
+        with Client(
+            mounts={"all://": MockTransport(_make_handler("catchall"))}
+        ) as client:
+            resp = client.get("http://example.com/")
+            assert resp.content == b"catchall"
+
+    def test_host_specific_does_not_match_different_host(self):
+        specific = _make_handler("specific")
+        default = _make_handler("default")
+
+        with Client(
+            mounts={
+                "http://specific.com": MockTransport(specific),
+                "all://": MockTransport(default),
+            }
+        ) as client:
+            resp = client.get("http://other.com/")
+            assert resp.content == b"default"
+
+    def test_port_specific_match(self):
+        port8080 = _make_handler("port8080")
+        port9090 = _make_handler("port9090")
+
+        with Client(
+            mounts={
+                "http://example.com:8080": MockTransport(port8080),
+                "http://example.com:9090": MockTransport(port9090),
+            }
+        ) as client:
+            resp = client.get("http://example.com:8080/")
+            assert resp.content == b"port8080"
+
+    def test_port_specific_no_match(self):
+        port8080 = _make_handler("port8080")
+        default = _make_handler("default")
+
+        with Client(
+            mounts={
+                "http://example.com:8080": MockTransport(port8080),
+                "all://": MockTransport(default),
+            }
+        ) as client:
+            resp = client.get("http://example.com:9090/")
+            assert resp.content == b"default"
+
+    def test_path_prefix_match(self):
+        api = _make_handler("api")
+        default = _make_handler("default")
+
+        with Client(
+            mounts={
+                "http://example.com/api": MockTransport(api),
+                "all://": MockTransport(default),
+            }
+        ) as client:
+            resp = client.get("http://example.com/api/users")
+            assert resp.content == b"api"
+
+    def test_path_prefix_no_match_without_prefix(self):
+        api = _make_handler("api")
+        default = _make_handler("default")
+
+        with Client(
+            mounts={
+                "http://example.com/api": MockTransport(api),
+                "all://": MockTransport(default),
+            }
+        ) as client:
+            resp = client.get("http://example.com/other")
+            assert resp.content == b"default"
+
+    def test_host_beats_scheme_only(self):
+        host_handler = _make_handler("host")
+        scheme_handler = _make_handler("scheme")
+
+        with Client(
+            mounts={
+                "http://": MockTransport(scheme_handler),
+                "http://example.com": MockTransport(host_handler),
+            }
+        ) as client:
+            resp = client.get("http://example.com/")
+            assert resp.content == b"host"
+
+    def test_host_with_path_beats_host_only(self):
+        host_handler = _make_handler("host")
+        path_handler = _make_handler("path")
+
+        with Client(
+            mounts={
+                "http://example.com": MockTransport(host_handler),
+                "http://example.com/api": MockTransport(path_handler),
+            }
+        ) as client:
+            resp = client.get("http://example.com/api/endpoint")
+            assert resp.content == b"path"
+
+    def test_no_mount_returns_none(self):
+        result = _match_mount("http://example.com/", {})
+        assert result is None
+
+    def test_scheme_mismatch_skips(self):
+        https_handler = _make_handler("https")
+        default = _make_handler("default")
+
+        with Client(
+            mounts={
+                "https://": MockTransport(https_handler),
+                "all://": MockTransport(default),
+            }
+        ) as client:
+            resp = client.get("http://example.com/")
+            assert resp.content == b"default"
 
 
 class TestAsyncMountRouting:

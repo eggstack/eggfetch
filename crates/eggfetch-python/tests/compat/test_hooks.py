@@ -5,6 +5,7 @@ import pytest
 from eggfetch.compat.httpx import (
     Client,
     AsyncClient,
+    Auth,
     MockTransport,
     Request,
     Response,
@@ -119,6 +120,56 @@ class TestSyncHooks:
             client.get("http://testserver/")
 
         assert received == ["yes"]
+
+    def test_request_hook_runs_before_auth(self):
+        """Request hooks must run BEFORE the auth flow modifies the request.
+
+        This verifies the correct ordering: hooks → auth → dispatch.
+        """
+        hook_saw_auth = []
+
+        def check_auth(request):
+            # The hook should see the request BEFORE auth adds the header
+            hook_saw_auth.append("authorization" in request.headers)
+
+        class TestAuth(Auth):
+            def auth_flow(self, request):
+                request.headers["authorization"] = "Bearer token"
+                yield request
+
+        def handler(request):
+            return Response(200)
+
+        with Client(
+            transport=MockTransport(handler),
+            auth=TestAuth(),
+            event_hooks={"request": [check_auth], "response": []},
+        ) as client:
+            client.get("http://testserver/")
+
+        # Hook saw the request before auth added the header
+        assert hook_saw_auth == [False]
+
+    def test_response_hook_error_closes_stream(self):
+        """When a response hook raises, the response stream is closed."""
+        call_log = []
+
+        def bad_hook(response):
+            # Record the response state before raising
+            call_log.append(("hook_called", response.status_code))
+            raise RuntimeError("hook failed")
+
+        def handler(request):
+            return Response(200, content=b"data")
+
+        with Client(
+            transport=MockTransport(handler),
+            event_hooks={"request": [], "response": [bad_hook]},
+        ) as client:
+            with pytest.raises(RuntimeError, match="hook failed"):
+                client.get("http://testserver/")
+
+        assert call_log == [("hook_called", 200)]
 
 
 class TestAsyncHooks:

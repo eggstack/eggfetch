@@ -13,6 +13,10 @@ from eggfetch.compat.httpx._response import Response
 if typing.TYPE_CHECKING:
     pass
 
+# Default chunk size for streaming request bodies through the ASGI
+# receive channel (64 KiB).
+_CHUNK_SIZE = 65_536
+
 
 class ASGITransport:
     """Transport for making requests to an ASGI application.
@@ -46,11 +50,24 @@ class ASGITransport:
         headers: list[tuple[str, str]] = []
         body_parts: list[bytes] = []
 
+        body = request.content or b""
+        body_offset = 0
+
         async def receive() -> dict:
-            body = request.content or b""
+            nonlocal body_offset
+            if body_offset < len(body):
+                chunk = body[body_offset : body_offset + _CHUNK_SIZE]
+                body_offset += len(chunk)
+                more_body = body_offset < len(body)
+                return {
+                    "type": "http.request",
+                    "body": chunk,
+                    "more_body": more_body,
+                }
+            # All body delivered — return empty final frame
             return {
                 "type": "http.request",
-                "body": body,
+                "body": b"",
                 "more_body": False,
             }
 
@@ -66,9 +83,9 @@ class ASGITransport:
                     for name, value in message.get("headers", [])
                 ]
             elif message["type"] == "http.response.body":
-                body = message.get("body", b"")
-                if body:
-                    body_parts.append(body)
+                body_chunk = message.get("body", b"")
+                if body_chunk:
+                    body_parts.append(body_chunk)
 
         try:
             await self._app(scope, receive, send)
@@ -77,12 +94,12 @@ class ASGITransport:
                 raise
             return Response(500, content=b"Internal Server Error")
 
-        body = b"".join(body_parts)
+        body_bytes = b"".join(body_parts)
 
         return Response(
             status_code,
             headers=headers,
-            content=body,
+            content=body_bytes,
         )
 
     def handle_request(self, request: Request) -> Response:
@@ -119,6 +136,9 @@ class ASGITransport:
             for name, value in request.headers.items()
         ]
 
+        # raw_path preserves the original path bytes without normalization
+        raw_path = path.encode("utf-8") if isinstance(path, str) else path
+
         scope: dict[str, Any] = {
             "type": "http",
             "asgi": {"version": "3.0", "spec_version": "2.3"},
@@ -126,6 +146,7 @@ class ASGITransport:
             "method": request.method,
             "scheme": scheme,
             "path": path,
+            "raw_path": raw_path,
             "root_path": self._root_path,
             "query_string": query_string,
             "headers": headers,

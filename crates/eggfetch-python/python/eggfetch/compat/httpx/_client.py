@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import typing
+import urllib.parse
 from contextlib import contextmanager, asynccontextmanager
 
 import eggfetch
@@ -150,6 +151,17 @@ def _wrap_response(native_resp, compat_request=None, default_encoding="utf-8"):
         for h in native_resp.history:
             history.append(_wrap_response(h, default_encoding=default_encoding))
 
+    # Build extensions: preserve request extensions + map standard keys
+    extensions: dict = {}
+    if compat_request is not None and hasattr(compat_request, "extensions"):
+        extensions.update(compat_request.extensions)
+
+    # Map standard extension keys from native response
+    if hasattr(native_resp, "http_version") and native_resp.http_version:
+        extensions["http_version"] = native_resp.http_version
+    if hasattr(native_resp, "reason_phrase") and native_resp.reason_phrase:
+        extensions["reason_phrase"] = native_resp.reason_phrase
+
     return Response(
         status_code,
         headers=header_list,
@@ -157,6 +169,7 @@ def _wrap_response(native_resp, compat_request=None, default_encoding="utf-8"):
         request=compat_request,
         history=history,
         default_encoding=default_encoding,
+        extensions=extensions if extensions else None,
     )
 
 
@@ -175,6 +188,16 @@ def _wrap_streaming_response(native_resp, compat_request=None, default_encoding=
         for h in native_resp.history:
             history.append(_wrap_response(h, default_encoding=default_encoding))
 
+    # Build extensions: preserve request extensions + map standard keys
+    extensions: dict = {}
+    if compat_request is not None and hasattr(compat_request, "extensions"):
+        extensions.update(compat_request.extensions)
+
+    if hasattr(native_resp, "http_version") and native_resp.http_version:
+        extensions["http_version"] = native_resp.http_version
+    if hasattr(native_resp, "reason_phrase") and native_resp.reason_phrase:
+        extensions["reason_phrase"] = native_resp.reason_phrase
+
     response = Response(
         status_code,
         headers=header_list,
@@ -182,6 +205,7 @@ def _wrap_streaming_response(native_resp, compat_request=None, default_encoding=
         request=compat_request,
         history=history,
         default_encoding=default_encoding,
+        extensions=extensions if extensions else None,
     )
     response._native_stream = native_resp
     return response
@@ -215,49 +239,110 @@ def _build_native_kwargs(request, follow_redirects=None, timeout=None):
     return kwargs
 
 
+def _parse_mount_pattern(pattern: str):
+    """Parse a mount pattern into (scheme, host, port, path) components.
+
+    Handles patterns like:
+    - ``all://`` → ("", None, None, "")
+    - ``http://`` → ("http", None, None, "")
+    - ``https://`` → ("https", None, None, "")
+    - ``http://example.com`` → ("http", "example.com", None, "")
+    - ``http://example.com:8080`` → ("http", "example.com", 8080, "")
+    - ``http://example.com/api`` → ("http", "example.com", None, "/api")
+    """
+    if pattern == "all://":
+        return ("", None, None, "")
+
+    parsed = urllib.parse.urlsplit(pattern)
+    scheme = parsed.scheme.lower()
+    host = parsed.hostname
+    port = parsed.port
+    path = parsed.path.rstrip("/") or ""
+    return (scheme, host, port, path)
+
+
 def _match_mount(url, mounts):
     """Find the best matching transport for *url* from *mounts* dict.
 
-    Mount matching rules (from HTTPX):
-    - Exact scheme+host+port matches take priority
-    - Longer path prefixes take priority
-    - Wildcard patterns like ``http://`` match all HTTP URLs
-    - Pattern ``all://`` matches everything
-    - If no mount matches, return None
+    Uses component-based matching (scheme, host, port, path) rather than
+    string prefix matching.  Scoring priority (highest wins):
 
-    *mounts* is a dict mapping string patterns to transport objects.
+    - Full URL match (scheme + host + port + path)             — 10 000
+    - Scheme + host + path                                      — 200 + len(path)
+    - Scheme + host + port                                      — 205
+    - Scheme + host                                             — 200
+    - Scheme only (``http://`` or ``https://``)                  — 10
+    - Catch-all (``all://``)                                    — 0
+
+    If no mount matches, return ``None``.
     """
     if not mounts:
         return None
 
     url_str = str(url)
+    url_parts = urllib.parse.urlsplit(url_str)
+    url_scheme = url_parts.scheme.lower()
+    url_host = url_parts.hostname
+    url_port = url_parts.port
+    url_path = url_parts.path.rstrip("/") or ""
+
     best_match: str | None = None
     best_score: int = -1
 
     for pattern in mounts:
-        if pattern == "all://":
-            # Lowest priority — matches everything
+        pat_scheme, pat_host, pat_port, pat_path = _parse_mount_pattern(pattern)
+
+        # Catch-all: always matches, lowest priority
+        if pat_scheme == "" and pat_host is None:
             score = 0
             if score > best_score:
                 best_score = score
                 best_match = pattern
             continue
 
-        if pattern == url_str:
-            # Exact match — highest priority
-            score = 10_000
-            if score > best_score:
-                best_score = score
-                best_match = pattern
+        # Scheme must match (or pattern has no scheme)
+        if pat_scheme and pat_scheme != url_scheme:
             continue
 
-        # Prefix match: pattern must be a prefix of the URL
-        if url_str.startswith(pattern):
-            # Score by length — longer patterns are more specific
-            score = len(pattern)
-            if score > best_score:
-                best_score = score
-                best_match = pattern
+        # Host must match (or pattern has no host)
+        if pat_host is not None:
+            if url_host is None:
+                continue
+            if pat_host.lower() != url_host.lower():
+                continue
+
+        # Port must match (or pattern has no port)
+        if pat_port is not None:
+            if url_port != pat_port:
+                continue
+
+        # Path must be a prefix (or pattern has no path)
+        if pat_path:
+            # Exact match or prefix followed by /
+            if url_path != pat_path and not url_path.startswith(pat_path + "/"):
+                continue
+
+        # Compute score — more specific matches get higher scores.
+        # Each additional component (host, port, path) adds specificity.
+        if pat_host is None and not pat_path:
+            # Scheme-only pattern (e.g. ``http://``)
+            score = 10
+        elif pat_host is not None and not pat_path and pat_port is None:
+            # Host pattern without port or path
+            score = 200
+        elif pat_host is not None and pat_port is not None and not pat_path:
+            # Host + port pattern
+            score = 205
+        elif pat_host is not None and pat_path:
+            # Host + path (with or without port)
+            base = 205 if pat_port is not None else 200
+            score = base + len(pat_path)
+        else:
+            score = 0
+
+        if score > best_score:
+            best_score = score
+            best_match = pattern
 
     if best_match is not None:
         return mounts[best_match]
@@ -453,7 +538,11 @@ class Client:
         else:
             resolved_auth = auth
 
-        # 2. Run auth flow (generator pattern)
+        # 2. Execute request hooks BEFORE auth and dispatch
+        for hook in self._event_hooks.get("request", []):
+            hook(request)
+
+        # 3. Run auth flow (generator pattern)
         # Auth is NOT applied when a custom transport or mount transport handles
         # the request — transports own their own auth.
         transport = _match_mount(request.url, self._mounts)
@@ -466,10 +555,6 @@ class Client:
                 request = next(auth_flow_gen)
             except StopIteration:
                 auth_flow_gen = None
-
-        # 3. Execute request hooks BEFORE dispatch
-        for hook in self._event_hooks.get("request", []):
-            hook(request)
 
         # 4. Dispatch: mount transport > custom transport > native client
         response = self._dispatch_request(
@@ -808,7 +893,14 @@ class AsyncClient:
         else:
             resolved_auth = auth
 
-        # 2. Run auth flow (generator pattern)
+        # 2. Execute request hooks BEFORE auth and dispatch
+        for hook in self._event_hooks.get("request", []):
+            if asyncio.iscoroutinefunction(hook):
+                await hook(request)
+            else:
+                hook(request)
+
+        # 3. Run auth flow (generator pattern)
         # Auth is NOT applied when a custom/mount transport handles the request.
         transport = _match_mount(request.url, self._mounts)
         has_custom_transport = (transport is not None or
@@ -823,13 +915,6 @@ class AsyncClient:
                 request = next(auth_flow_gen)
             except StopIteration:
                 auth_flow_gen = None
-
-        # 3. Execute request hooks BEFORE dispatch
-        for hook in self._event_hooks.get("request", []):
-            if asyncio.iscoroutinefunction(hook):
-                await hook(request)
-            else:
-                hook(request)
 
         # 4. Dispatch: mount transport > async transport > sync transport > native client
         response = await self._dispatch_request(
