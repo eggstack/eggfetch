@@ -9,6 +9,7 @@ mod conversion;
 mod cookies;
 mod errors;
 mod headers;
+mod limits;
 mod multipart;
 mod proxy;
 mod response;
@@ -23,6 +24,7 @@ use client::PyClient;
 use cookies::PyCookies;
 use errors::map_err;
 use headers::PyHeaders;
+use limits::PyLimits;
 use multipart::PyFile;
 use proxy::ProxyOverride;
 use response::PyResponse;
@@ -50,7 +52,7 @@ use timeout::PyTimeout;
 ///     `follow_redirects`: Whether to follow redirects (default False).
 ///     `max_redirects`: Maximum redirects to follow (default 20).
 #[pyfunction]
-#[pyo3(signature = (method, url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None, retries=None))]
+#[pyo3(signature = (method, url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None, retries=None, limits=None))]
 #[allow(clippy::too_many_arguments)]
 fn request<'py>(
     py: Python<'py>,
@@ -72,6 +74,7 @@ fn request<'py>(
     verify: Option<&Bound<'py, PyAny>>,
     cert: Option<&Bound<'py, PyAny>>,
     retries: Option<&Bound<'py, PyAny>>,
+    limits: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let method_upper = method.to_uppercase();
     let http_method = http::Method::try_from(method_upper.as_str()).map_err(|_| {
@@ -154,6 +157,11 @@ fn request<'py>(
         builder = builder.proxy(p);
     }
 
+    if let Some(l) = limits {
+        let py_limits: PyLimits = l.extract()?;
+        builder = builder.limits(py_limits.inner);
+    }
+
     let client = builder.build();
 
     let result = py.allow_threads(|| {
@@ -201,7 +209,7 @@ fn request<'py>(
 
 /// Send a GET request using a short-lived client.
 #[pyfunction]
-#[pyo3(signature = (url, *, headers=None, params=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None, retries=None))]
+#[pyo3(signature = (url, *, headers=None, params=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None, retries=None, limits=None))]
 #[allow(clippy::too_many_arguments)]
 fn get<'py>(
     py: Python<'py>,
@@ -218,6 +226,7 @@ fn get<'py>(
     verify: Option<&Bound<'py, PyAny>>,
     cert: Option<&Bound<'py, PyAny>>,
     retries: Option<&Bound<'py, PyAny>>,
+    limits: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     request(
         py,
@@ -239,12 +248,13 @@ fn get<'py>(
         verify,
         cert,
         retries,
+        limits,
     )
 }
 
 /// Send a POST request using a short-lived client.
 #[pyfunction]
-#[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None, retries=None))]
+#[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None, retries=None, limits=None))]
 #[allow(clippy::too_many_arguments)]
 fn post<'py>(
     py: Python<'py>,
@@ -265,6 +275,7 @@ fn post<'py>(
     verify: Option<&Bound<'py, PyAny>>,
     cert: Option<&Bound<'py, PyAny>>,
     retries: Option<&Bound<'py, PyAny>>,
+    limits: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     request(
         py,
@@ -286,12 +297,13 @@ fn post<'py>(
         verify,
         cert,
         retries,
+        limits,
     )
 }
 
 /// Send a PUT request using a short-lived client.
 #[pyfunction]
-#[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None, retries=None))]
+#[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None, retries=None, limits=None))]
 #[allow(clippy::too_many_arguments)]
 fn put<'py>(
     py: Python<'py>,
@@ -312,6 +324,7 @@ fn put<'py>(
     verify: Option<&Bound<'py, PyAny>>,
     cert: Option<&Bound<'py, PyAny>>,
     retries: Option<&Bound<'py, PyAny>>,
+    limits: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     request(
         py,
@@ -333,12 +346,13 @@ fn put<'py>(
         verify,
         cert,
         retries,
+        limits,
     )
 }
 
 /// Send a PATCH request using a short-lived client.
 #[pyfunction]
-#[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None, retries=None))]
+#[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None, retries=None, limits=None))]
 #[allow(clippy::too_many_arguments)]
 fn patch<'py>(
     py: Python<'py>,
@@ -359,6 +373,7 @@ fn patch<'py>(
     verify: Option<&Bound<'py, PyAny>>,
     cert: Option<&Bound<'py, PyAny>>,
     retries: Option<&Bound<'py, PyAny>>,
+    limits: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     request(
         py,
@@ -380,12 +395,13 @@ fn patch<'py>(
         verify,
         cert,
         retries,
+        limits,
     )
 }
 
 /// Send a DELETE request using a short-lived client.
 #[pyfunction]
-#[pyo3(signature = (url, *, headers=None, params=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None, retries=None))]
+#[pyo3(signature = (url, *, headers=None, params=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None, retries=None, limits=None))]
 #[allow(clippy::too_many_arguments)]
 fn delete<'py>(
     py: Python<'py>,
@@ -402,6 +418,7 @@ fn delete<'py>(
     verify: Option<&Bound<'py, PyAny>>,
     cert: Option<&Bound<'py, PyAny>>,
     retries: Option<&Bound<'py, PyAny>>,
+    limits: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     request(
         py,
@@ -423,12 +440,13 @@ fn delete<'py>(
         verify,
         cert,
         retries,
+        limits,
     )
 }
 
 /// Send a HEAD request using a short-lived client.
 #[pyfunction]
-#[pyo3(signature = (url, *, headers=None, params=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None, retries=None))]
+#[pyo3(signature = (url, *, headers=None, params=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None, retries=None, limits=None))]
 #[allow(clippy::too_many_arguments)]
 fn head<'py>(
     py: Python<'py>,
@@ -445,6 +463,7 @@ fn head<'py>(
     verify: Option<&Bound<'py, PyAny>>,
     cert: Option<&Bound<'py, PyAny>>,
     retries: Option<&Bound<'py, PyAny>>,
+    limits: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     request(
         py,
@@ -466,12 +485,13 @@ fn head<'py>(
         verify,
         cert,
         retries,
+        limits,
     )
 }
 
 /// Send an OPTIONS request using a short-lived client.
 #[pyfunction]
-#[pyo3(signature = (url, *, headers=None, params=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None, retries=None))]
+#[pyo3(signature = (url, *, headers=None, params=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None, retries=None, limits=None))]
 #[allow(clippy::too_many_arguments)]
 fn options<'py>(
     py: Python<'py>,
@@ -488,6 +508,7 @@ fn options<'py>(
     verify: Option<&Bound<'py, PyAny>>,
     cert: Option<&Bound<'py, PyAny>>,
     retries: Option<&Bound<'py, PyAny>>,
+    limits: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     request(
         py,
@@ -509,6 +530,7 @@ fn options<'py>(
         verify,
         cert,
         retries,
+        limits,
     )
 }
 
@@ -615,6 +637,7 @@ fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
         "Cookies",
         "File",
         "Headers",
+        "Limits",
         "NoAuth",
         "NOAUTH",
         "Response",
@@ -697,6 +720,7 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyNoAuth>()?;
     m.add_class::<PyFile>()?;
     m.add_class::<PyRetry>()?;
+    m.add_class::<PyLimits>()?;
 
     // Create the NOAUTH singleton instance.
     let noauth_obj = Py::new(m.py(), PyNoAuth)?;

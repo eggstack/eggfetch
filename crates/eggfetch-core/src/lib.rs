@@ -35,6 +35,7 @@ pub mod error;
 mod h2_headers;
 pub mod headers;
 pub mod http_version;
+pub mod limits;
 #[cfg(feature = "multipart")]
 pub mod multipart;
 pub(crate) mod pipeline;
@@ -60,6 +61,7 @@ pub use error::{Error, Result};
 pub use headers::Headers;
 pub use http::Method;
 pub use http_version::HttpVersionPolicy;
+pub use limits::Limits;
 #[cfg(feature = "multipart")]
 pub use multipart::{Boundary, Multipart, MultipartEncoder, Part, PartBody};
 pub use pool::{Pool, PoolConfig};

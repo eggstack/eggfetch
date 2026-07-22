@@ -52,6 +52,7 @@ client = eggfetch.Client(
     follow_redirects=True,
     max_redirects=10,
     auth=eggfetch.BearerAuth("my-token"),
+    limits=eggfetch.Limits(max_connections=100, max_keepalive_connections=20),
 )
 
 response = client.get("https://api.example.com/data")
@@ -180,8 +181,12 @@ import eggfetch
 # Scalar timeout: applies to pool, connect, write, and read phases
 response = eggfetch.get("https://example.com", timeout=5.0)
 
-# Timeout object
+# Timeout object (scalar)
 timeout = eggfetch.Timeout(10.0)
+response = eggfetch.get("https://example.com", timeout=timeout)
+
+# Per-phase timeout (HTTPX-compatible)
+timeout = eggfetch.Timeout(pool=2.0, connect=5.0, read=30.0, total=60.0)
 response = eggfetch.get("https://example.com", timeout=timeout)
 ```
 
@@ -271,7 +276,7 @@ response = client.get("https://example.com")
 response = client.get("https://internal.example.com", proxy=False)
 ```
 
-eggfetch does not read `HTTP_PROXY` or `HTTPS_PROXY` environment variables.
+eggfetch reads `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, and `NO_PROXY` environment variables when `trust_env=True` (the default for the compatibility layer). Set `trust_env=False` to disable environment variable discovery.
 
 ## TLS/SSL
 
@@ -353,6 +358,43 @@ response = eggfetch.post(
         "photo2": eggfetch.File("/path/to/photo2.jpg", filename="second.jpg"),
     },
 )
+```
+
+## Resource Limits
+
+Control connection pool concurrency and keep-alive behavior:
+
+```python
+# HTTPX-compatible defaults
+limits = eggfetch.Limits(
+    max_connections=100,
+    max_keepalive_connections=20,
+    keepalive_expiry=5.0,
+)
+
+client = eggfetch.Client(limits=limits)
+
+# Unlimited (native default)
+client = eggfetch.Client()  # no limits configured
+```
+
+| Parameter | Description | HTTPX default |
+|-----------|-------------|---------------|
+| `max_connections` | Maximum concurrent connections | 100 |
+| `max_keepalive_connections` | Maximum idle keep-alive connections | 20 |
+| `keepalive_expiry` | Seconds before idle connections close | 5.0 |
+| `max_connections_per_host` | Maximum connections per host | None |
+
+## Environment Trust
+
+By default, eggfetch reads proxy environment variables (`HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, `NO_PROXY`). Disable this with `trust_env=False`:
+
+```python
+# Trust environment variables (default)
+client = eggfetch.Client(trust_env=True)
+
+# Ignore all environment proxy settings
+client = eggfetch.Client(trust_env=False)
 ```
 
 ## HTTP/2 and HTTP/3

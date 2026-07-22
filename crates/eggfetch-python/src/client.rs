@@ -1,5 +1,7 @@
 //! Python client wrapper.
 
+use std::sync::Mutex;
+
 use pyo3::prelude::*;
 
 use crate::auth;
@@ -9,6 +11,7 @@ use crate::conversion::{
 };
 use crate::cookies::PyCookies;
 use crate::errors::map_err;
+use crate::limits::PyLimits;
 use crate::proxy::{self, ProxyOverride};
 use crate::response::PyResponse;
 use crate::retry;
@@ -17,12 +20,12 @@ use crate::streaming::PyStreamingResponse;
 /// A synchronous HTTP client exposed to Python.
 ///
 /// Owns a `tokio` runtime and an `eggfetch-core` client. Releases the GIL
-/// during network I/O.
+/// during network I/O. Thread-safe: multiple Python threads may call request
+/// methods concurrently on the same `Client` instance.
 #[pyclass(name = "Client")]
 pub struct PyClient {
-    runtime: tokio::runtime::Runtime,
-    client: eggfetch_core::Client,
-    closed: bool,
+    runtime: std::sync::Mutex<Option<tokio::runtime::Runtime>>,
+    client: Mutex<Option<eggfetch_core::Client>>,
     decompress: Option<bool>,
     verify_disabled: bool,
     #[allow(dead_code)]
@@ -40,7 +43,7 @@ impl PyClient {
     ///     `max_redirects`: Maximum redirects to follow (default 20).
     #[allow(clippy::too_many_arguments)]
     #[new]
-    #[pyo3(signature = (*, headers=None, timeout=None, follow_redirects=None, max_redirects=None, cookies=None, auth=None, decompress=None, proxy=None, verify=None, cert=None, retries=None, http2=None, http3=None))]
+    #[pyo3(signature = (*, headers=None, timeout=None, follow_redirects=None, max_redirects=None, cookies=None, auth=None, decompress=None, proxy=None, verify=None, cert=None, retries=None, http2=None, http3=None, limits=None, trust_env=None))]
     fn new(
         py: Python<'_>,
         headers: Option<&Bound<'_, PyAny>>,
@@ -56,6 +59,8 @@ impl PyClient {
         retries: Option<&Bound<'_, PyAny>>,
         http2: Option<bool>,
         http3: Option<bool>,
+        limits: Option<&Bound<'_, PyAny>>,
+        trust_env: Option<bool>,
     ) -> PyResult<Self> {
         let runtime = tokio::runtime::Runtime::new()
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
@@ -73,6 +78,11 @@ impl PyClient {
 
         if let Some(true) = http3 {
             builder = builder.http_version_policy(eggfetch_core::HttpVersionPolicy::Http3Only);
+        }
+
+        if let Some(l) = limits {
+            let py_limits: PyLimits = l.extract()?;
+            builder = builder.limits(py_limits.inner);
         }
 
         if let Some(hdrs) = headers {
@@ -117,9 +127,20 @@ impl PyClient {
         }
 
         let proxy_override = proxy::parse_proxy(proxy)?;
-        if let ProxyOverride::Override(url) = proxy_override {
-            let p = eggfetch_core::Proxy::all(&url).map_err(map_err)?;
+        if let ProxyOverride::Override(ref url) = proxy_override {
+            let p = eggfetch_core::Proxy::all(url).map_err(map_err)?;
             builder = builder.proxy(p);
+        }
+
+        let trust_env = trust_env.unwrap_or(true);
+        if trust_env && proxy_override == ProxyOverride::Inherit {
+            #[cfg(feature = "proxy")]
+            {
+                if let Some(env_proxy) = proxy::env_proxy_url() {
+                    let p = eggfetch_core::Proxy::all(&env_proxy).map_err(map_err)?;
+                    builder = builder.proxy(p);
+                }
+            }
         }
 
         let retry_policy = retry::parse_retry_option(retries)?;
@@ -130,9 +151,8 @@ impl PyClient {
         let client = builder.build();
 
         Ok(Self {
-            runtime,
-            client,
-            closed: false,
+            runtime: std::sync::Mutex::new(Some(runtime)),
+            client: Mutex::new(Some(client)),
             decompress,
             verify_disabled,
             retry: retry_policy,
@@ -144,7 +164,7 @@ impl PyClient {
     #[allow(clippy::too_many_arguments)]
     #[allow(clippy::too_many_lines)]
     fn request<'py>(
-        &mut self,
+        &self,
         py: Python<'py>,
         method: &str,
         url: &str,
@@ -230,9 +250,13 @@ impl PyClient {
 
         let retry_override = retry::parse_retry_option(retries)?;
 
-        let client = self.client.clone();
+        let client = self.clone_client()?;
         let result = py.allow_threads(|| {
-            self.runtime.block_on(async {
+            let handle = {
+                let rt_guard = self.runtime.lock().unwrap();
+                rt_guard.as_ref().unwrap().handle().clone()
+            };
+            handle.block_on(async {
                 let mut builder = client
                     .request(http_method, target_url.as_str())
                     .map_err(map_err)?;
@@ -303,7 +327,7 @@ impl PyClient {
     #[pyo3(signature = (url, *, headers=None, params=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None, retries=None))]
     #[allow(clippy::too_many_arguments)]
     fn get<'py>(
-        &mut self,
+        &self,
         py: Python<'py>,
         url: &str,
         headers: Option<&Bound<'py, PyAny>>,
@@ -346,7 +370,7 @@ impl PyClient {
     #[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None, retries=None))]
     #[allow(clippy::too_many_arguments)]
     fn post<'py>(
-        &mut self,
+        &self,
         py: Python<'py>,
         url: &str,
         headers: Option<&Bound<'py, PyAny>>,
@@ -393,7 +417,7 @@ impl PyClient {
     #[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None, retries=None))]
     #[allow(clippy::too_many_arguments)]
     fn put<'py>(
-        &mut self,
+        &self,
         py: Python<'py>,
         url: &str,
         headers: Option<&Bound<'py, PyAny>>,
@@ -440,7 +464,7 @@ impl PyClient {
     #[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None, retries=None))]
     #[allow(clippy::too_many_arguments)]
     fn patch<'py>(
-        &mut self,
+        &self,
         py: Python<'py>,
         url: &str,
         headers: Option<&Bound<'py, PyAny>>,
@@ -487,7 +511,7 @@ impl PyClient {
     #[pyo3(signature = (url, *, headers=None, params=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None, retries=None))]
     #[allow(clippy::too_many_arguments)]
     fn delete<'py>(
-        &mut self,
+        &self,
         py: Python<'py>,
         url: &str,
         headers: Option<&Bound<'py, PyAny>>,
@@ -530,7 +554,7 @@ impl PyClient {
     #[pyo3(signature = (url, *, headers=None, params=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None, retries=None))]
     #[allow(clippy::too_many_arguments)]
     fn head<'py>(
-        &mut self,
+        &self,
         py: Python<'py>,
         url: &str,
         headers: Option<&Bound<'py, PyAny>>,
@@ -573,7 +597,7 @@ impl PyClient {
     #[pyo3(signature = (url, *, headers=None, params=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None, retries=None))]
     #[allow(clippy::too_many_arguments)]
     fn options<'py>(
-        &mut self,
+        &self,
         py: Python<'py>,
         url: &str,
         headers: Option<&Bound<'py, PyAny>>,
@@ -617,7 +641,7 @@ impl PyClient {
     #[allow(clippy::too_many_arguments)]
     #[allow(clippy::too_many_lines)]
     fn stream<'py>(
-        &mut self,
+        &self,
         py: Python<'py>,
         method: &str,
         url: &str,
@@ -703,9 +727,13 @@ impl PyClient {
 
         let retry_override = retry::parse_retry_option(retries)?;
 
-        let client = self.client.clone();
+        let client = self.clone_client()?;
         let result = py.allow_threads(|| {
-            self.runtime.block_on(async {
+            let handle = {
+                let rt_guard = self.runtime.lock().unwrap();
+                rt_guard.as_ref().unwrap().handle().clone()
+            };
+            handle.block_on(async {
                 let mut builder = client
                     .request(http_method, target_url.as_str())
                     .map_err(map_err)?;
@@ -771,23 +799,33 @@ impl PyClient {
         PyStreamingResponse::from_core_response(py, response)
     }
 
-    /// Close the client and shut down the runtime.
-    fn close(&mut self) {
-        if !self.closed {
-            self.closed = true;
+    /// Close the client and release all resources.
+    ///
+    /// Drops the underlying `eggfetch-core` client (closing idle connections)
+    /// and shuts down the tokio runtime. Subsequent requests raise
+    /// `ValueError`. Idempotent.
+    fn close(&self) {
+        let mut guard = self.client.lock().unwrap();
+        if guard.is_some() {
+            *guard = None;
+            drop(guard);
+            if let Some(rt) = self.runtime.lock().unwrap().take() {
+                rt.shutdown_background();
+            }
         }
     }
 
     /// Returns True if the client has been closed.
     #[getter]
     fn is_closed(&self) -> bool {
-        self.closed
+        self.client.lock().unwrap().is_none()
     }
 
     /// The client's cookie jar.
     #[getter]
-    fn cookies(&self) -> PyCookies {
-        PyCookies::from_jar(self.client.cookies().clone())
+    fn cookies(&self) -> PyResult<PyCookies> {
+        let client = self.clone_client()?;
+        Ok(PyCookies::from_jar(client.cookies().clone()))
     }
 
     /// Context manager: enter.
@@ -798,7 +836,7 @@ impl PyClient {
     /// Context manager: exit.
     #[pyo3(signature = (_exc_type=None, _exc_value=None, _traceback=None))]
     fn __exit__(
-        &mut self,
+        &self,
         _exc_type: Option<&Bound<'_, PyAny>>,
         _exc_value: Option<&Bound<'_, PyAny>>,
         _traceback: Option<&Bound<'_, PyAny>>,
@@ -808,7 +846,7 @@ impl PyClient {
     }
 
     fn __repr__(&self) -> String {
-        if self.closed {
+        if self.client.lock().unwrap().is_none() {
             "Client(closed=true)".to_string()
         } else if self.verify_disabled {
             "Client(verify=False) [UNSAFE: TLS verification disabled]".to_string()
@@ -820,11 +858,20 @@ impl PyClient {
 
 impl PyClient {
     fn ensure_not_closed(&self) -> PyResult<()> {
-        if self.closed {
+        let guard = self.client.lock().unwrap();
+        if guard.is_none() {
             return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
                 "client is closed",
             ));
         }
         Ok(())
+    }
+
+    fn clone_client(&self) -> PyResult<eggfetch_core::Client> {
+        let guard = self.client.lock().unwrap();
+        guard
+            .as_ref()
+            .cloned()
+            .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyValueError, _>("client is closed"))
     }
 }

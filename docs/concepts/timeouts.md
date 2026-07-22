@@ -16,7 +16,24 @@ eggfetch implements phase-aware timeouts that map to specific segments of the re
 
 ## Default Behavior
 
-All timeout phases are disabled by default. A `Timeout` with no fields set allows requests to run indefinitely (subject to OS-level TCP timeouts).
+By default, all timeout phases are disabled (all `None`). A `Timeout` with no fields set allows requests to run indefinitely (subject to OS-level TCP timeouts).
+
+### Native vs Compatibility Defaults
+
+eggfetch provides two named constructors for common timeout profiles:
+
+- **`Timeout::native()`** -- eggfetch native defaults: pool, connect, write, and read each get 30 seconds. Total is not set.
+- **`Timeout::compat()`** -- HTTPX-compatible defaults: all phases (pool, connect, write, read, total) get 5 seconds, matching HTTPX 0.28.1's documented default.
+
+```rust
+use eggfetch_core::Timeout;
+
+// HTTPX-compatible: 5s total timeout on all phases
+let t = Timeout::compat();
+
+// eggfetch native: 30s per-phase, no total
+let t = Timeout::native();
+```
 
 ## Scalar vs Per-Phase Configuration
 
@@ -69,9 +86,9 @@ let response = client
 ## Enforcement Details
 
 - **Pool** and **Total** are enforced with `tokio::time::timeout`
+- **Connect** is enforced by wrapping the underlying connector with a deadline that bounds DNS resolution, TCP connect, and TLS handshake
 - **Read** is enforced per chunk by a wrapper stream that fires an error if no chunk arrives within the duration. The deadline resets on every chunk arrival
 - **Write** is enforced per chunk by a wrapper stream that fires an error if the body producer does not yield a chunk within the duration. The deadline resets on every chunk delivery. Only applies to streamed request bodies; buffered bodies complete synchronously
-- **Connect** is accepted and merged but not independently enforced because hyper-util does not expose a per-connect deadline. Use `total` as a backstop
 
 ## Timeout Errors
 
@@ -93,6 +110,9 @@ import eggfetch
 
 # Scalar timeout (all phases)
 client = eggfetch.Client(timeout=10.0)
+
+# HTTPX-compatible defaults (5s all phases)
+client = eggfetch.Client(timeout=eggfetch.Timeout(5.0))
 
 # Per-phase timeout
 t = eggfetch.Timeout(

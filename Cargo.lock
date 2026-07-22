@@ -558,6 +558,7 @@ dependencies = [
  "tokio",
  "tokio-rustls",
  "tokio-util",
+ "tower-service",
  "url",
  "webpki-roots 0.26.11",
 ]

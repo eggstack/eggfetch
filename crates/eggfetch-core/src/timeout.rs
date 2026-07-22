@@ -39,9 +39,11 @@
 //!   `Error::Timeout { phase: Write }` if the producer does not yield
 //!   the next chunk within the configured duration. The deadline resets
 //!   on every chunk.
-//! - **Connect** is accepted and merged but not independently enforced
-//!   because hyper-util's legacy client does not expose a connect-phase
-//!   deadline. Use `total` as a backstop.
+//! - **Connect** is enforced by wrapping the underlying connector with a
+//!   timeout that bounds the entire connection-establishment phase (DNS
+//!   resolution, TCP connect, and TLS handshake). Fires
+//!   `Error::Timeout { phase: Connect }` if the connection is not
+//!   established within the configured duration.
 //!
 //! When a scalar timeout is provided (e.g. `Timeout::from_secs(5)`), it
 //! applies to pool, connect, write, and read phases. The total timeout is
@@ -104,9 +106,10 @@ impl std::fmt::Display for TimeoutPhase {
 ///   every chunk delivery. Only applies to streamed request bodies;
 ///   buffered bodies complete synchronously.
 /// - `total`: enforced via `tokio::time::timeout` around the full send.
-/// - `connect`: accepted and merged but not independently enforced;
-///   hyper-util does not expose a per-connect deadline.
-///   `total` should be used as a backstop.
+/// - `connect`: enforced by wrapping the underlying connector with a
+///   timeout that bounds DNS resolution, TCP connect, and TLS handshake.
+///   Fires `Error::Timeout { phase: Connect }` if the connection is not
+///   established within the configured duration.
 ///
 /// # Default
 ///
@@ -134,7 +137,7 @@ pub struct Timeout {
     pub pool: Option<Duration>,
     /// Time allowed to establish TCP connection and TLS handshake.
     /// Includes DNS resolution when performed as part of connect.
-    /// Accepted but not independently enforced; `total` is the backstop.
+    /// Enforced by wrapping the underlying connector with a deadline.
     pub connect: Option<Duration>,
     /// Time allowed for the request body producer to yield each chunk.
     /// Only applies to streamed request bodies.
@@ -175,6 +178,68 @@ impl Timeout {
     #[must_use]
     pub fn from_secs(secs: u64) -> Self {
         let d = Duration::from_secs(secs);
+        Self {
+            pool: Some(d),
+            connect: Some(d),
+            write: Some(d),
+            read: Some(d),
+            total: None,
+        }
+    }
+
+    /// Create an HTTPX-compatible timeout configuration.
+    ///
+    /// HTTPX 0.28.1 uses 5 seconds for all phases including a total
+    /// wall-clock cap. Use this when migrating from HTTPX to preserve
+    /// the same timeout semantics.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::time::Duration;
+    /// use eggfetch_core::Timeout;
+    ///
+    /// let t = Timeout::compat();
+    /// assert_eq!(t.pool, Some(Duration::from_secs(5)));
+    /// assert_eq!(t.connect, Some(Duration::from_secs(5)));
+    /// assert_eq!(t.write, Some(Duration::from_secs(5)));
+    /// assert_eq!(t.read, Some(Duration::from_secs(5)));
+    /// assert_eq!(t.total, Some(Duration::from_secs(5)));
+    /// ```
+    #[must_use]
+    pub fn compat() -> Self {
+        let d = Duration::from_secs(5);
+        Self {
+            pool: Some(d),
+            connect: Some(d),
+            write: Some(d),
+            read: Some(d),
+            total: Some(d),
+        }
+    }
+
+    /// Create eggfetch-native timeout defaults.
+    ///
+    /// Uses 30 seconds for pool, connect, write, and read phases with
+    /// no total timeout. This is appropriate for general-purpose use
+    /// where the caller controls overall deadlines.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::time::Duration;
+    /// use eggfetch_core::Timeout;
+    ///
+    /// let t = Timeout::native();
+    /// assert_eq!(t.pool, Some(Duration::from_secs(30)));
+    /// assert_eq!(t.connect, Some(Duration::from_secs(30)));
+    /// assert_eq!(t.write, Some(Duration::from_secs(30)));
+    /// assert_eq!(t.read, Some(Duration::from_secs(30)));
+    /// assert!(t.total.is_none());
+    /// ```
+    #[must_use]
+    pub fn native() -> Self {
+        let d = Duration::from_secs(30);
         Self {
             pool: Some(d),
             connect: Some(d),
@@ -357,6 +422,28 @@ mod tests {
     }
 
     #[test]
+    fn timeout_compat_sets_all_phases_with_total() {
+        let t = Timeout::compat();
+        let d = Duration::from_secs(5);
+        assert_eq!(t.pool, Some(d));
+        assert_eq!(t.connect, Some(d));
+        assert_eq!(t.write, Some(d));
+        assert_eq!(t.read, Some(d));
+        assert_eq!(t.total, Some(d));
+    }
+
+    #[test]
+    fn timeout_native_sets_phases_without_total() {
+        let t = Timeout::native();
+        let d = Duration::from_secs(30);
+        assert_eq!(t.pool, Some(d));
+        assert_eq!(t.connect, Some(d));
+        assert_eq!(t.write, Some(d));
+        assert_eq!(t.read, Some(d));
+        assert!(t.total.is_none());
+    }
+
+    #[test]
     fn timeout_has_any() {
         assert!(!Timeout::default().has_any());
         assert!(Timeout::from_secs(1).has_any());
@@ -421,6 +508,19 @@ mod tests {
         let merged = client.merge(Some(request));
         assert_eq!(merged.total, Some(Duration::from_secs(60)));
         assert_eq!(merged.pool, Some(Duration::from_secs(10)));
+    }
+
+    #[test]
+    fn zero_duration_timeout_is_valid() {
+        // Zero is a valid Duration in Rust (unsigned). It produces an immediate
+        // timeout when used with tokio::time::timeout. This is documented
+        // behavior, not an error.
+        let t = Timeout::from_secs(0);
+        assert_eq!(t.pool, Some(Duration::ZERO));
+        assert_eq!(t.connect, Some(Duration::ZERO));
+        assert_eq!(t.write, Some(Duration::ZERO));
+        assert_eq!(t.read, Some(Duration::ZERO));
+        assert_eq!(t.total, None);
     }
 
     proptest::proptest! {

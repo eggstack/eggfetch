@@ -9,6 +9,7 @@ use crate::conversion::{
 };
 use crate::cookies::PyCookies;
 use crate::errors::map_err;
+use crate::limits::PyLimits;
 use crate::proxy::{self, ProxyOverride};
 use crate::retry;
 use crate::streaming::PyStreamingResponse;
@@ -23,8 +24,7 @@ use crate::streaming::PyStreamingResponse;
 /// Trio/AnyIO support is planned for a later milestone.
 #[pyclass(name = "AsyncClient")]
 pub struct PyAsyncClient {
-    client: eggfetch_core::Client,
-    closed: bool,
+    client: Option<eggfetch_core::Client>,
     decompress: Option<bool>,
     verify_disabled: bool,
     #[allow(dead_code)]
@@ -42,7 +42,7 @@ impl PyAsyncClient {
     ///     `max_redirects`: Maximum redirects to follow (default 20).
     #[allow(clippy::too_many_arguments)]
     #[new]
-    #[pyo3(signature = (*, headers=None, timeout=None, follow_redirects=None, max_redirects=None, cookies=None, auth=None, decompress=None, proxy=None, verify=None, cert=None, retries=None, http2=None, http3=None))]
+    #[pyo3(signature = (*, headers=None, timeout=None, follow_redirects=None, max_redirects=None, cookies=None, auth=None, decompress=None, proxy=None, verify=None, cert=None, retries=None, http2=None, http3=None, limits=None, trust_env=None))]
     fn new(
         py: Python<'_>,
         headers: Option<&Bound<'_, PyAny>>,
@@ -58,6 +58,8 @@ impl PyAsyncClient {
         retries: Option<&Bound<'_, PyAny>>,
         http2: Option<bool>,
         http3: Option<bool>,
+        limits: Option<&Bound<'_, PyAny>>,
+        trust_env: Option<bool>,
     ) -> PyResult<Self> {
         let verify_disabled = verify
             .and_then(|v| v.extract::<bool>().ok())
@@ -73,6 +75,11 @@ impl PyAsyncClient {
 
         if let Some(true) = http3 {
             builder = builder.http_version_policy(eggfetch_core::HttpVersionPolicy::Http3Only);
+        }
+
+        if let Some(l) = limits {
+            let py_limits: PyLimits = l.extract()?;
+            builder = builder.limits(py_limits.inner);
         }
 
         if let Some(hdrs) = headers {
@@ -117,9 +124,20 @@ impl PyAsyncClient {
         }
 
         let proxy_override = proxy::parse_proxy(proxy)?;
-        if let ProxyOverride::Override(url) = proxy_override {
-            let p = eggfetch_core::Proxy::all(&url).map_err(map_err)?;
+        if let ProxyOverride::Override(ref url) = proxy_override {
+            let p = eggfetch_core::Proxy::all(url).map_err(map_err)?;
             builder = builder.proxy(p);
+        }
+
+        let trust_env = trust_env.unwrap_or(true);
+        if trust_env && proxy_override == ProxyOverride::Inherit {
+            #[cfg(feature = "proxy")]
+            {
+                if let Some(env_proxy) = proxy::env_proxy_url() {
+                    let p = eggfetch_core::Proxy::all(&env_proxy).map_err(map_err)?;
+                    builder = builder.proxy(p);
+                }
+            }
         }
 
         let retry_policy = retry::parse_retry_option(retries)?;
@@ -130,8 +148,7 @@ impl PyAsyncClient {
         let client = builder.build();
 
         Ok(Self {
-            client,
-            closed: false,
+            client: Some(client),
             decompress,
             verify_disabled,
             retry: retry_policy,
@@ -231,7 +248,7 @@ impl PyAsyncClient {
 
         let effective_decompress = decompress.or(self.decompress);
 
-        let client = self.client.clone();
+        let client = self.ensure_client()?.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let mut builder = client
                 .request(http_method, target_url.as_str())
@@ -700,7 +717,7 @@ impl PyAsyncClient {
 
         let effective_decompress = decompress.or(self.decompress);
 
-        let client = self.client.clone();
+        let client = self.ensure_client()?.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let mut builder = client
                 .request(http_method, target_url.as_str())
@@ -766,11 +783,12 @@ impl PyAsyncClient {
         })
     }
 
-    /// Close the client. Idempotent.
+    /// Close the client and release all resources.
+    ///
+    /// Drops the underlying `eggfetch-core` client (closing idle connections).
+    /// Subsequent requests raise `ValueError`. Idempotent.
     fn close(&mut self) {
-        if !self.closed {
-            self.closed = true;
-        }
+        self.client = None;
     }
 
     /// Close the client through an awaitable API.
@@ -782,13 +800,14 @@ impl PyAsyncClient {
     /// Returns True if the client has been closed.
     #[getter]
     fn is_closed(&self) -> bool {
-        self.closed
+        self.client.is_none()
     }
 
     /// The client's cookie jar.
     #[getter]
-    fn cookies(&self) -> PyCookies {
-        PyCookies::from_jar(self.client.cookies().clone())
+    fn cookies(&self) -> PyResult<PyCookies> {
+        let client = self.ensure_client()?;
+        Ok(PyCookies::from_jar(client.cookies().clone()))
     }
 
     /// Async context manager: enter. Returns an awaitable that resolves to self.
@@ -816,7 +835,7 @@ impl PyAsyncClient {
     }
 
     fn __repr__(&self) -> String {
-        if self.closed {
+        if self.client.is_none() {
             "AsyncClient(closed=true)".to_string()
         } else if self.verify_disabled {
             "AsyncClient(verify=False) [UNSAFE: TLS verification disabled]".to_string()
@@ -828,11 +847,17 @@ impl PyAsyncClient {
 
 impl PyAsyncClient {
     fn ensure_not_closed(&self) -> PyResult<()> {
-        if self.closed {
+        if self.client.is_none() {
             return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
                 "client is closed",
             ));
         }
         Ok(())
+    }
+
+    fn ensure_client(&self) -> PyResult<&eggfetch_core::Client> {
+        self.client
+            .as_ref()
+            .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyValueError, _>("client is closed"))
     }
 }

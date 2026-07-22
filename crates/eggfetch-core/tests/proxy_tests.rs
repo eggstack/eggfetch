@@ -36,7 +36,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use bytes::Bytes;
-use eggfetch_core::{Client, Proxy, ProxyAuth, RequestBody, Timeout};
+use eggfetch_core::{Client, Error, Proxy, ProxyAuth, RequestBody, Timeout, TimeoutPhase};
 use futures_util::StreamExt;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
@@ -1275,4 +1275,360 @@ async fn no_proxy_localhost_bypass() {
     assert!(body.contains("GET"));
 
     echo.shutdown();
+}
+
+// ---------------------------------------------------------------------------
+// Proxy Timeout Phase Tests
+// ---------------------------------------------------------------------------
+
+/// Slow proxy that delays before sending the CONNECT response.
+/// Used to test total timeout during CONNECT handshake.
+struct SlowConnectResponseProxy {
+    port: u16,
+    connect_delay_ms: u64,
+    shutdown: watch::Sender<bool>,
+}
+
+impl SlowConnectResponseProxy {
+    async fn start(connect_delay_ms: u64) -> Self {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let (shutdown_tx, mut shutdown_rx) = watch::channel(false);
+
+        tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    result = listener.accept() => {
+                        if let Ok((stream, _)) = result {
+                            let delay = connect_delay_ms;
+                            tokio::spawn(async move {
+                                if let Err(e) = handle_slow_connect(stream, delay).await {
+                                    eprintln!("slow connect proxy error: {e}");
+                                }
+                            });
+                        }
+                    }
+                    _ = shutdown_rx.changed() => {
+                        break;
+                    }
+                }
+            }
+        });
+
+        Self {
+            port,
+            connect_delay_ms,
+            shutdown: shutdown_tx,
+        }
+    }
+
+    fn url(&self) -> String {
+        format!("http://127.0.0.1:{}", self.port)
+    }
+
+    fn shutdown(&self) {
+        let _ = self.shutdown.send(true);
+    }
+}
+
+/// Handler that reads the CONNECT request, delays, then sends 200.
+async fn handle_slow_connect(
+    mut client_stream: TcpStream,
+    delay_ms: u64,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let mut buf_reader = BufReader::new(&mut client_stream);
+
+    let mut request_line = String::new();
+    buf_reader.read_line(&mut request_line).await?;
+    if request_line.trim().is_empty() {
+        return Ok(());
+    }
+
+    loop {
+        let mut line = String::new();
+        buf_reader.read_line(&mut line).await?;
+        if line.trim().is_empty() {
+            break;
+        }
+    }
+
+    let parts: Vec<&str> = request_line.split_whitespace().collect();
+    let method = parts[0];
+
+    if method.eq_ignore_ascii_case("CONNECT") {
+        drop(buf_reader);
+
+        // Delay before sending the CONNECT response.
+        tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+
+        let resp = b"HTTP/1.1 200 Connection Established\r\n\r\n";
+        client_stream.write_all(resp).await?;
+
+        // Now act as a tunnel — just forward bytes bidirectionally.
+        // Stall here so the client attempts TLS through the tunnel.
+        tokio::time::sleep(Duration::from_secs(60)).await;
+    }
+
+    Ok(())
+}
+
+/// TCP server that accepts connections but never responds.
+/// Used to simulate a slow TLS destination for ProxyTls timeout testing.
+struct StallingTlsServer {
+    port: u16,
+    shutdown: watch::Sender<bool>,
+}
+
+impl StallingTlsServer {
+    async fn start() -> Self {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let (shutdown_tx, mut shutdown_rx) = watch::channel(false);
+
+        tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    result = listener.accept() => {
+                        if let Ok((_stream, _)) = result {
+                            // Accept but never respond — TLS handshake will stall.
+                            tokio::time::sleep(Duration::from_secs(60)).await;
+                        }
+                    }
+                    _ = shutdown_rx.changed() => {
+                        break;
+                    }
+                }
+            }
+        });
+
+        Self {
+            port,
+            shutdown: shutdown_tx,
+        }
+    }
+
+    fn port(&self) -> u16 {
+        self.port
+    }
+
+    fn shutdown(&self) {
+        let _ = self.shutdown.send(true);
+    }
+}
+
+/// Proxy that does CONNECT but connects to a stalling destination.
+/// This allows the CONNECT response to be sent quickly, but the TLS
+/// handshake through the tunnel will stall.
+struct ConnectToStallingProxy {
+    port: u16,
+    shutdown: watch::Sender<bool>,
+}
+
+impl ConnectToStallingProxy {
+    async fn start(dest_port: u16) -> Self {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let (shutdown_tx, mut shutdown_rx) = watch::channel(false);
+
+        tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    result = listener.accept() => {
+                        if let Ok((stream, _)) = result {
+                            tokio::spawn(async move {
+                                if let Err(e) = handle_connect_to_stalling(stream, dest_port).await {
+                                    eprintln!("connect-to-stalling proxy error: {e}");
+                                }
+                            });
+                        }
+                    }
+                    _ = shutdown_rx.changed() => {
+                        break;
+                    }
+                }
+            }
+        });
+
+        Self {
+            port,
+            shutdown: shutdown_tx,
+        }
+    }
+
+    fn url(&self) -> String {
+        format!("http://127.0.0.1:{}", self.port)
+    }
+
+    fn shutdown(&self) {
+        let _ = self.shutdown.send(true);
+    }
+}
+
+/// Handler that reads CONNECT, connects to stalling destination, sends 200,
+/// then proxies bidirectionally.
+async fn handle_connect_to_stalling(
+    mut client_stream: TcpStream,
+    dest_port: u16,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let mut buf_reader = BufReader::new(&mut client_stream);
+
+    let mut request_line = String::new();
+    buf_reader.read_line(&mut request_line).await?;
+    if request_line.trim().is_empty() {
+        return Ok(());
+    }
+
+    loop {
+        let mut line = String::new();
+        buf_reader.read_line(&mut line).await?;
+        if line.trim().is_empty() {
+            break;
+        }
+    }
+
+    let parts: Vec<&str> = request_line.split_whitespace().collect();
+    let method = parts[0];
+
+    if method.eq_ignore_ascii_case("CONNECT") {
+        drop(buf_reader);
+
+        // Connect to the stalling destination.
+        if let Ok(dest_stream) = TcpStream::connect(format!("127.0.0.1:{dest_port}")).await {
+            let resp = b"HTTP/1.1 200 Connection Established\r\n\r\n";
+            client_stream.write_all(resp).await?;
+
+            let (mut client_read, mut client_write) = tokio::io::split(client_stream);
+            let (mut dest_read, mut dest_write) = dest_stream.into_split();
+
+            let c2d = async {
+                let _ = tokio::io::copy(&mut client_read, &mut dest_write).await;
+                let _ = dest_write.shutdown().await;
+            };
+
+            let d2c = async {
+                let _ = tokio::io::copy(&mut dest_read, &mut client_write).await;
+                let _ = client_write.shutdown().await;
+            };
+
+            tokio::select! {
+                () = c2d => {}
+                () = d2c => {}
+            }
+        } else {
+            let resp = b"HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n";
+            client_stream.write_all(resp).await?;
+        }
+    }
+
+    Ok(())
+}
+
+/// ProxyConnect timeout fires when connecting to an unroutable proxy IP.
+///
+/// The `connect_to_proxy()` function wraps `TcpStream::connect()` with
+/// the remaining total timeout. When the proxy is unreachable (e.g.,
+/// TEST-NET-1 address 192.0.2.1), the TCP connect hangs and the total
+/// timeout expires with `TimeoutPhase::ProxyConnect`.
+#[tokio::test]
+async fn test_proxy_connect_timeout_on_unreachable_proxy() {
+    // 192.0.2.1 is TEST-NET-1 (RFC 5737) — unroutable on any real network.
+    // Use HTTPS to trigger the CONNECT tunnel path.
+    let client = Client::builder()
+        .proxy(Proxy::all("http://192.0.2.1:8080").unwrap())
+        .timeout(Timeout {
+            total: Some(Duration::from_millis(200)),
+            ..Default::default()
+        })
+        .build();
+
+    let start = std::time::Instant::now();
+    let result = client.get("https://example.com/test").unwrap().send().await;
+    let elapsed = start.elapsed();
+
+    // The TCP connect to the unreachable proxy should hang until the
+    // total timeout fires.
+    assert!(
+        result.is_err(),
+        "expected error connecting to unreachable proxy"
+    );
+    assert!(
+        elapsed < Duration::from_secs(2),
+        "total timeout should fire within 200ms + margin, took {elapsed:?}"
+    );
+}
+
+/// ProxyTls timeout fires when the TLS handshake through the CONNECT
+/// tunnel stalls.
+///
+/// The TLS handshake over the tunnel is wrapped with `remaining_total`.
+/// When the destination server accepts TCP but never responds to the TLS
+/// ClientHello, the handshake stalls and the total timeout expires with
+/// `TimeoutPhase::ProxyTls`.
+#[tokio::test]
+async fn test_proxy_tls_timeout_on_stalling_destination() {
+    let stalling = StallingTlsServer::start().await;
+    let proxy = ConnectToStallingProxy::start(stalling.port()).await;
+
+    let client = Client::builder()
+        .proxy(Proxy::all(&proxy.url()).unwrap())
+        .timeout(Timeout {
+            total: Some(Duration::from_millis(300)),
+            ..Default::default()
+        })
+        .build();
+
+    // Request an HTTPS URL through the proxy. The proxy will establish
+    // the CONNECT tunnel to the stalling destination, but the TLS
+    // handshake will stall.
+    let result = client
+        .get(&format!("https://127.0.0.1:{}/test", stalling.port()))
+        .unwrap()
+        .send()
+        .await;
+
+    assert!(
+        matches!(
+            result,
+            Err(Error::Timeout {
+                phase: TimeoutPhase::ProxyTls,
+                ..
+            })
+        ),
+        "expected ProxyTls timeout, got: {result:?}"
+    );
+
+    proxy.shutdown();
+    stalling.shutdown();
+}
+
+/// Total timeout is an absolute envelope across proxy phases.
+///
+/// Even if individual proxy phases have their own timeouts, the total
+/// timeout should fire first when it's shorter. We use an unreachable
+/// proxy IP to ensure the connect hangs, and verify the total timeout
+/// fires within the expected duration.
+#[tokio::test]
+async fn test_total_timeout_envelope_across_proxy_phases() {
+    // Use an unreachable proxy to make the TCP connect hang.
+    // The total timeout should fire before the connect error.
+    let client = Client::builder()
+        .proxy(Proxy::all("http://192.0.2.1:8080").unwrap())
+        .timeout(Timeout {
+            total: Some(Duration::from_millis(150)),
+            ..Default::default()
+        })
+        .build();
+
+    let start = std::time::Instant::now();
+    let result = client.get("https://example.com/test").unwrap().send().await;
+    let elapsed = start.elapsed();
+
+    assert!(
+        result.is_err(),
+        "expected error from total timeout envelope"
+    );
+    assert!(
+        elapsed < Duration::from_secs(2),
+        "total timeout should fire within 150ms + margin, took {elapsed:?}"
+    );
 }

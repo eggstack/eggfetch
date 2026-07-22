@@ -68,9 +68,13 @@ eggfetch targets HTTPX 0.28.1 compatibility in measured phases. Phase 0 establis
 
 Key differences from HTTPX:
 - **Redirect default**: eggfetch does NOT follow redirects by default (HTTPX does)
-- **Proxy env vars**: eggfetch does not read `HTTP_PROXY`/`HTTPS_PROXY` (HTTPX does)
 - **Event hooks**: Not yet implemented (tracked as required-later)
 - **WSGI/ASGI transports**: Not applicable (eggfetch is a network client)
+
+Phase 1 (production semantics) closes these gaps:
+- **Timeout defaults**: `Timeout::compat()` provides HTTPX's 5-second network timeout defaults; `Timeout::native()` provides eggfetch's 30-second defaults.
+- **Resource limits**: `Limits` object provides HTTPX-compatible pool concurrency control (100 max connections, 20 keep-alive, 5s expiry).
+- **Environment trust**: `trust_env=True` (default) reads `HTTP_PROXY`/`HTTPS_PROXY`/`ALL_PROXY`/`NO_PROXY` env vars.
 
 See [`compat/httpx/0.28.1/`](compat/httpx/0.28.1/) for the full profile and [`docs/reference/compatibility.md`](docs/reference/compatibility.md) for the feature matrix.
 
@@ -87,7 +91,7 @@ print(r.headers)
 print(r.text)
 r.raise_for_status()
 
-with httpx.Client(headers={"User-Agent": "eggfetch"}) as client:
+with httpx.Client(headers={"User-Agent": "eggfetch"}, limits=httpx.Limits(max_connections=100)) as client:
     r = client.post(
         "https://example.com/api",
         json={"a": 1},
@@ -148,6 +152,7 @@ The core HTTP engine is implemented with the following capabilities:
 Connection pooling and reuse is implemented with the following capabilities:
 
 - **Connection pooling** -- HTTP/1.1 keep-alive connection reuse via hyper-util's built-in pool.
+- **Limits model** -- `Limits` type provides HTTPX-compatible resource limits (`max_connections`, `max_keepalive_connections`, `keepalive_expiry`). `Limits::compat()` returns HTTPX defaults (100 connections, 20 keep-alive, 5s expiry).
 - **Max connections per host** -- configurable limit via `PoolConfig::max_connections`.
 - **Idle timeout** -- connections closed after a configurable idle period via `PoolConfig::idle_timeout`.
 - **Pool metrics** -- `PoolMetrics` exposed via `Client::pool_metrics()` and `ClientBuilder::pool_metrics()`.
@@ -158,6 +163,7 @@ Connection pooling and reuse is implemented with the following capabilities:
 Phase-aware timeout behavior is implemented with the following capabilities:
 
 - **Timeout configuration** -- `Timeout` type with per-phase durations (pool, connect, write, read, total).
+- **Named timeout defaults** -- `Timeout::compat()` (HTTPX-compatible 5s all phases) and `Timeout::native()` (eggfetch 30s per-phase, no total).
 - **Client-level timeouts** -- set via `ClientBuilder::timeout()`.
 - **Request-level timeouts** -- set via `RequestBuilder::timeout()`, overriding client defaults per-field.
 - **Pool timeout** -- time waiting for a connection slot from the pool. Enforced via `tokio::time::timeout` around acquisition.
