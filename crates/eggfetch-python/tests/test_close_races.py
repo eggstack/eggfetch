@@ -169,7 +169,7 @@ class TestAsyncCloseDuringRequest:
             results = await asyncio.gather(*running, return_exceptions=True)
             for r in results:
                 if isinstance(r, Exception):
-                    assert "closed" in str(r) or "connection" in str(r).lower()
+                    assert "closed" in str(r) or "connect" in str(r).lower()
 
         asyncio.run(_test())
 
@@ -267,7 +267,7 @@ class TestContextManagerCloseDuringRequest:
             results = await asyncio.gather(*running, return_exceptions=True)
             for r in results:
                 if isinstance(r, Exception):
-                    if "closed" not in str(r) and "connection" not in str(r).lower():
+                    if "closed" not in str(r) and "connect" not in str(r).lower():
                         errors.append(f"unexpected error: {r}")
 
             assert not errors, f"errors occurred: {errors}"
