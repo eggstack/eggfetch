@@ -24,7 +24,7 @@ use crate::streaming::PyStreamingResponse;
 /// methods concurrently on the same `Client` instance.
 #[pyclass(name = "Client")]
 pub struct PyClient {
-    runtime: tokio::runtime::Runtime,
+    runtime: std::sync::Mutex<Option<tokio::runtime::Runtime>>,
     client: Mutex<Option<eggfetch_core::Client>>,
     decompress: Option<bool>,
     verify_disabled: bool,
@@ -151,7 +151,7 @@ impl PyClient {
         let client = builder.build();
 
         Ok(Self {
-            runtime,
+            runtime: std::sync::Mutex::new(Some(runtime)),
             client: Mutex::new(Some(client)),
             decompress,
             verify_disabled,
@@ -252,7 +252,11 @@ impl PyClient {
 
         let client = self.clone_client()?;
         let result = py.allow_threads(|| {
-            self.runtime.block_on(async {
+            let handle = {
+                let rt_guard = self.runtime.lock().unwrap();
+                rt_guard.as_ref().unwrap().handle().clone()
+            };
+            handle.block_on(async {
                 let mut builder = client
                     .request(http_method, target_url.as_str())
                     .map_err(map_err)?;
@@ -725,7 +729,11 @@ impl PyClient {
 
         let client = self.clone_client()?;
         let result = py.allow_threads(|| {
-            self.runtime.block_on(async {
+            let handle = {
+                let rt_guard = self.runtime.lock().unwrap();
+                rt_guard.as_ref().unwrap().handle().clone()
+            };
+            handle.block_on(async {
                 let mut builder = client
                     .request(http_method, target_url.as_str())
                     .map_err(map_err)?;
@@ -800,9 +808,10 @@ impl PyClient {
         let mut guard = self.client.lock().unwrap();
         if guard.is_some() {
             *guard = None;
-            // Shut down the runtime: blocks until all worker threads finish.
             drop(guard);
-            self.runtime.shutdown_background();
+            if let Some(rt) = self.runtime.lock().unwrap().take() {
+                rt.shutdown_background();
+            }
         }
     }
 
