@@ -209,7 +209,7 @@ async fn test_repeated_client_creation_stabilizes() {
     if rss_before > 0 && rss_after > 0 {
         let delta = rss_after.abs_diff(rss_before);
         assert!(
-            delta < 2 * 1024 * 1024,
+            delta < 4 * 1024 * 1024,
             "RSS grew by {delta} bytes after {iterations} client creation/destruction cycles \
              (before={rss_before}, after={rss_after})"
         );

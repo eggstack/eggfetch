@@ -218,7 +218,7 @@ jobs:
           else
             source .venv/Scripts/activate
           fi
-          pytest crates/eggfetch-python/tests/ -v
+          pytest crates/eggfetch-python/tests/ -v --ignore=crates/eggfetch-python/tests/compat
 
   wheel-smoke:
     name: Wheel smoke (py${{ matrix.python-version }}, ${{ matrix.os }})

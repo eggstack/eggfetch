@@ -18,7 +18,7 @@ tests = ["test_differential.py::TestRedirectDefault", "test_differential.py::Tes
 
 [[difference]]
 id = "PROXY-ENV-001"
-category = "resolved"
+category = "required-now"
 symbol = "httpx.Client(proxy=...)"
 behavior-case = "proxy-env-vars"
 reference-behavior = "HTTPX reads HTTP_PROXY/HTTPS_PROXY/NO_PROXY env vars"
