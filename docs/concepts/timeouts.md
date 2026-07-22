@@ -86,9 +86,9 @@ let response = client
 ## Enforcement Details
 
 - **Pool** and **Total** are enforced with `tokio::time::timeout`
+- **Connect** is enforced by wrapping the underlying connector with a deadline that bounds DNS resolution, TCP connect, and TLS handshake
 - **Read** is enforced per chunk by a wrapper stream that fires an error if no chunk arrives within the duration. The deadline resets on every chunk arrival
 - **Write** is enforced per chunk by a wrapper stream that fires an error if the body producer does not yield a chunk within the duration. The deadline resets on every chunk delivery. Only applies to streamed request bodies; buffered bodies complete synchronously
-- **Connect** is accepted and merged but not independently enforced because hyper-util does not expose a per-connect deadline. Use `total` as a backstop
 
 ## Timeout Errors
 

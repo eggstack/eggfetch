@@ -22,8 +22,7 @@ use crate::streaming::PyStreamingResponse;
 #[pyclass(name = "Client")]
 pub struct PyClient {
     runtime: tokio::runtime::Runtime,
-    client: eggfetch_core::Client,
-    closed: bool,
+    client: Option<eggfetch_core::Client>,
     decompress: Option<bool>,
     verify_disabled: bool,
     #[allow(dead_code)]
@@ -158,8 +157,7 @@ impl PyClient {
 
         Ok(Self {
             runtime,
-            client,
-            closed: false,
+            client: Some(client),
             decompress,
             verify_disabled,
             retry: retry_policy,
@@ -257,7 +255,7 @@ impl PyClient {
 
         let retry_override = retry::parse_retry_option(retries)?;
 
-        let client = self.client.clone();
+        let client = self.ensure_client()?.clone();
         let result = py.allow_threads(|| {
             self.runtime.block_on(async {
                 let mut builder = client
@@ -730,7 +728,7 @@ impl PyClient {
 
         let retry_override = retry::parse_retry_option(retries)?;
 
-        let client = self.client.clone();
+        let client = self.ensure_client()?.clone();
         let result = py.allow_threads(|| {
             self.runtime.block_on(async {
                 let mut builder = client
@@ -798,23 +796,30 @@ impl PyClient {
         PyStreamingResponse::from_core_response(py, response)
     }
 
-    /// Close the client and shut down the runtime.
+    /// Close the client and release all resources.
+    ///
+    /// Drops the underlying `eggfetch-core` client (closing idle connections)
+    /// and shuts down the tokio runtime. Subsequent requests raise
+    /// `ValueError`. Idempotent.
     fn close(&mut self) {
-        if !self.closed {
-            self.closed = true;
+        if self.client.is_some() {
+            self.client = None;
+            // Shut down the runtime: blocks until all worker threads finish.
+            self.runtime.shutdown_background();
         }
     }
 
     /// Returns True if the client has been closed.
     #[getter]
     fn is_closed(&self) -> bool {
-        self.closed
+        self.client.is_none()
     }
 
     /// The client's cookie jar.
     #[getter]
-    fn cookies(&self) -> PyCookies {
-        PyCookies::from_jar(self.client.cookies().clone())
+    fn cookies(&self) -> PyResult<PyCookies> {
+        let client = self.ensure_client()?;
+        Ok(PyCookies::from_jar(client.cookies().clone()))
     }
 
     /// Context manager: enter.
@@ -835,7 +840,7 @@ impl PyClient {
     }
 
     fn __repr__(&self) -> String {
-        if self.closed {
+        if self.client.is_none() {
             "Client(closed=true)".to_string()
         } else if self.verify_disabled {
             "Client(verify=False) [UNSAFE: TLS verification disabled]".to_string()
@@ -847,11 +852,17 @@ impl PyClient {
 
 impl PyClient {
     fn ensure_not_closed(&self) -> PyResult<()> {
-        if self.closed {
+        if self.client.is_none() {
             return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
                 "client is closed",
             ));
         }
         Ok(())
+    }
+
+    fn ensure_client(&self) -> PyResult<&eggfetch_core::Client> {
+        self.client
+            .as_ref()
+            .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyValueError, _>("client is closed"))
     }
 }

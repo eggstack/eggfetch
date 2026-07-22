@@ -5,12 +5,12 @@ use bytes::Bytes;
 use crate::body::{BoxBytesStream, ResponseBody};
 use crate::error::{Error, Result};
 use crate::response::Response;
-use crate::transport::{HyperClient, HyperRequestBody};
+use crate::transport::{HyperRequestBody, TimeoutHyperClient};
 
 /// Issue a hyper request and return a streaming `Response` bound to the
 /// caller's URL.
 pub(crate) async fn send_request(
-    hyper_client: &HyperClient,
+    hyper_client: &TimeoutHyperClient,
     request: http::Request<HyperRequestBody>,
     url: url::Url,
 ) -> Result<Response> {

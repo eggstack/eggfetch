@@ -14,9 +14,13 @@ pub(crate) type Connector =
 pub(crate) type HyperRequestBody =
     http_body_util::combinators::UnsyncBoxBody<Bytes, Box<dyn std::error::Error + Send + Sync>>;
 
-/// Hyper legacy client type used for direct requests.
-pub(crate) type HyperClient = hyper_util::client::legacy::Client<Connector, HyperRequestBody>;
+/// Hyper legacy client type with a connect-phase timeout wrapper.
+pub(crate) type TimeoutHyperClient = hyper_util::client::legacy::Client<
+    connect_timeout::ConnectTimeout<Connector>,
+    HyperRequestBody,
+>;
 
+pub(crate) mod connect_timeout;
 pub(crate) mod direct;
 
 #[cfg(feature = "proxy")]

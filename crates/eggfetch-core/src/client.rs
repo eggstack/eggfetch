@@ -18,7 +18,7 @@ use crate::request::{Request, RequestBuilder};
 use crate::response::Response;
 use crate::retry::RetryPolicy;
 use crate::timeout::Timeout;
-use crate::transport::{Connector, HyperClient};
+use crate::transport::Connector;
 
 #[cfg(feature = "cookies")]
 use crate::cookie::CookieJar;
@@ -87,7 +87,7 @@ impl std::fmt::Debug for Client {
 }
 
 pub(crate) struct ClientInner {
-    pub(crate) hyper_client: Option<HyperClient>,
+    pub(crate) hyper_client: Option<crate::transport::TimeoutHyperClient>,
     pub(crate) config: ClientConfig,
     pub(crate) pool: Pool,
     #[cfg(feature = "http3")]
@@ -500,6 +500,7 @@ impl ClientBuilder {
     /// unavailable, the client falls back to the packaged Mozilla root set
     /// while retaining certificate and hostname verification.
     #[must_use]
+    #[allow(clippy::too_many_lines)]
     pub fn build(self) -> Client {
         use crate::http_version::HttpVersionPolicyEnabler;
         let enabler = HttpVersionPolicyEnabler::from_policy(self.http_version_policy);
@@ -564,6 +565,11 @@ impl ClientBuilder {
                 },
                 None => build_fallback_connector(enabler),
             };
+
+            // Wrap the connector with connect-phase timeout if configured.
+            let connect_timeout = self.timeout.as_ref().and_then(|t| t.connect);
+            let https =
+                crate::transport::connect_timeout::ConnectTimeout::new(https, connect_timeout);
 
             let mut builder = hyper_util::client::legacy::Client::builder(TokioExecutor::new());
             if let Some(timeout) = pool_config.idle_timeout {
