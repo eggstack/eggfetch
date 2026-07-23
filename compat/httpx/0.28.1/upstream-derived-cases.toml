@@ -160,8 +160,8 @@ status = "partial"
 id = "DERIVED-REDIRECT-002"
 source = "tests/test_redirects.py::test cross-origin header stripping"
 behavior = "Redirects to different origin strip Authorization and Cookie headers"
-eggfetch-test = "test_httpx_required.py::TestRedirectBehavior::test_follow_with_flag"
-status = "gap"
+eggfetch-test = "test_httpx_required.py::TestCrossOriginHeaderStripping"
+status = "covered"
 
 [[derived-case]]
 id = "DERIVED-COOKIE-001"

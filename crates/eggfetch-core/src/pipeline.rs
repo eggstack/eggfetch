@@ -366,8 +366,7 @@ pub(crate) async fn send_with_redirects(client: &Client, request: Request) -> Re
         {
             if !cookie_header_allowed {
                 hop_request.headers_mut().remove("cookie");
-            }
-            if !cookie_header_allowed && !hop_request.headers().contains("cookie") {
+            } else if !hop_request.headers().contains("cookie") {
                 if let Some(cookie_header) = client
                     .config()
                     .cookie_jar

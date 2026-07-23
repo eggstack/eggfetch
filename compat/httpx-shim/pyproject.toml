@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "httpx-eggfetch-shim"
+version = "0.28.1"
+description = "Compatibility shim providing 'import httpx' backed by eggfetch"
+readme = "README.md"
+license = "BSD-3-Clause"
+requires-python = ">=3.10"
+authors = [{ name = "eggfetch team" }]
+dependencies = ["eggfetch>=0.1.0"]
+
+[project.urls]
+Homepage = "https://github.com/eggstack/eggfetch"
+
+[tool.setuptools.packages.find]
+include = ["httpx*"]
+
+[tool.setuptools.package-data]
+httpx = ["py.typed"]

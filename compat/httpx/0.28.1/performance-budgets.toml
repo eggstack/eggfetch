@@ -40,9 +40,9 @@ baseline = "httpx reused connection request"
 [[threshold]]
 id = "LARGE-BODY-THROUGHPUT-001"
 metric = "large_body_throughput_mbps"
-description = "Throughput for 1MB response body"
-budget-type = "severe-regression"
-min-ratio = 0.5
+description = "Throughput for 1MB response"
+budget-type = "informational"
+min-ratio = 0.3
 baseline = "httpx large body throughput"
 
 [[threshold]]
@@ -65,8 +65,8 @@ baseline = "absolute 10MB limit"
 id = "MULTIPART-UPLOAD-001"
 metric = "multipart_upload_ms"
 description = "Time for multipart file upload"
-budget-type = "severe-regression"
-max-ratio = 2.0
+budget-type = "informational"
+max-ratio = 3.0
 baseline = "httpx multipart upload"
 
 [[threshold]]

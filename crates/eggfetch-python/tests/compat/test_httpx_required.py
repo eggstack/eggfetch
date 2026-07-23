@@ -174,6 +174,86 @@ class TestRedirectBehavior:
         assert resp.status_code == 200
 
 
+class _EchoHeadersHandler(http.server.BaseHTTPRequestHandler):
+    """Handler that echoes received headers back as JSON."""
+
+    def do_GET(self):
+        headers = {k: v for k, v in self.headers.items()}
+        body = json.dumps({"headers": headers}).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, format, *args):
+        pass
+
+
+class TestCrossOriginHeaderStripping:
+    """Verify cross-origin redirects strip Authorization and Cookie headers.
+
+    DERIVED-REDIRECT-002: Redirects to different origin must strip
+    Authorization, Cookie, and Proxy-Authorization headers.
+    """
+
+    @pytest.fixture(scope="class")
+    def cross_origin_server(self):
+        """Start a second server on a different port to act as cross-origin target."""
+        server = http.server.HTTPServer(("127.0.0.1", 0), _EchoHeadersHandler)
+        port = server.server_address[1]
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        yield f"http://127.0.0.1:{port}"
+        server.shutdown()
+
+    @pytest.fixture(scope="class")
+    def redirect_server(self, cross_origin_server):
+        """Start a server that redirects to the cross-origin server."""
+
+        class _RedirectHandler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                if self.path == "/redirect/cross-origin-auth":
+                    self.send_response(302)
+                    self.send_header("Location", f"{cross_origin_server}/echo-headers")
+                    self.end_headers()
+                else:
+                    self.send_response(404)
+                    self.end_headers()
+
+            def log_message(self, format, *args):
+                pass
+
+        server = http.server.HTTPServer(("127.0.0.1", 0), _RedirectHandler)
+        port = server.server_address[1]
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        yield f"http://127.0.0.1:{port}"
+        server.shutdown()
+
+    def test_cross_origin_redirect_strips_authorization(self, redirect_server):
+        """Authorization header must not be forwarded on cross-origin redirect."""
+        resp = eggfetch.get(
+            f"{redirect_server}/redirect/cross-origin-auth",
+            headers={"Authorization": "Bearer secret-token"},
+            follow_redirects=True,
+        )
+        assert resp.status_code == 200
+        echoed = resp.json()["headers"]
+        assert "authorization" not in {k.lower() for k in echoed}
+
+    def test_cross_origin_redirect_strips_cookie(self, redirect_server):
+        """Cookie header must not be forwarded on cross-origin redirect."""
+        with eggfetch.Client(cookies={"session": "abc123"}) as client:
+            resp = client.get(
+                f"{redirect_server}/redirect/cross-origin-auth",
+                follow_redirects=True,
+            )
+            assert resp.status_code == 200
+            echoed = resp.json()["headers"]
+            assert "cookie" not in {k.lower() for k in echoed}
+
+
 class TestErrorHandling:
     """Verify error handling matches httpx exception hierarchy."""
 

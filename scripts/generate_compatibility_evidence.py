@@ -223,7 +223,12 @@ def _downstream_manifest() -> dict[str, Any]:
     try:
         data = _load_toml_simple(manifest_path)
         if isinstance(data, dict):
-            return {"available": True, "packages": data.get("packages", data)}
+            # Handle [[package]] array-of-tables format
+            packages = data.get("package", data.get("packages", []))
+            if isinstance(packages, list):
+                pkg_dict = {p["name"]: p for p in packages if isinstance(p, dict) and "name" in p}
+                return {"available": True, "packages": pkg_dict}
+            return {"available": True, "packages": packages}
         return {"available": True, "packages": {}}
     except Exception:
         return {"available": False, "packages": {}}
