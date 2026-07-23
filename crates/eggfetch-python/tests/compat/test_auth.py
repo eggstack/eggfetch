@@ -361,6 +361,107 @@ class TestDigestAuth:
         assert "qop=" not in auth_header
         assert "nc=" not in auth_header
 
+    def test_cross_origin_redirect_preserves_auth(self):
+        """Digest auth works across redirect to different host (new request)."""
+        auth = DigestAuth("user", "pass")
+        request = Request("GET", "http://host-a.example.com/")
+        flow = auth.auth_flow(request)
+        next(flow)
+
+        response = Response(
+            401,
+            headers=[
+                (
+                    "www-authenticate",
+                    'Digest realm="host-a.example.com", nonce="nonce1", qop="auth"',
+                )
+            ],
+        )
+        auth_request = flow.send(response)
+        assert "authorization" in auth_request.headers
+
+        # Simulate redirect: new request to host-b
+        request2 = Request("GET", "http://host-b.example.com/")
+        flow2 = auth.auth_flow(request2)
+        next(flow2)
+
+        response2 = Response(
+            401,
+            headers=[
+                (
+                    "www-authenticate",
+                    'Digest realm="host-b.example.com", nonce="nonce2", qop="auth"',
+                )
+            ],
+        )
+        auth_request2 = flow2.send(response2)
+        assert "authorization" in auth_request2.headers
+        assert 'realm="host-b.example.com"' in auth_request2.headers["authorization"]
+
+    def test_body_hashing_with_auth_int(self):
+        """auth-int includes entity body hash in response."""
+        auth = DigestAuth("user", "pass")
+        body = b"test body content"
+        request = Request("POST", "http://example.com/", content=body)
+        flow = auth.auth_flow(request)
+        next(flow)
+
+        response = Response(
+            401,
+            headers=[
+                (
+                    "www-authenticate",
+                    'Digest realm="test", nonce="abc", qop="auth-int"',
+                )
+            ],
+        )
+        auth_request = flow.send(response)
+        auth_header = auth_request.headers["authorization"]
+        assert "qop=auth-int" in auth_header
+        # The header should contain a response hash
+        assert "response=" in auth_header
+
+    def test_repeated_challenge_increments_nonce(self):
+        """Multiple challenges with same nonce keep incrementing nc."""
+        auth = DigestAuth("user", "pass")
+
+        for i in range(3):
+            request = Request("GET", "http://example.com/")
+            flow = auth.auth_flow(request)
+            next(flow)
+
+            response = Response(
+                401,
+                headers=[
+                    (
+                        "www-authenticate",
+                        'Digest realm="test", nonce="abc", qop="auth"',
+                    )
+                ],
+            )
+            auth_request = flow.send(response)
+            expected_nc = f"nc={i + 1:08d}"
+            assert expected_nc in auth_request.headers["authorization"]
+
+    def test_empty_body_with_auth_int(self):
+        """auth-int with empty body (GET request) works."""
+        auth = DigestAuth("user", "pass")
+        request = Request("GET", "http://example.com/")
+        flow = auth.auth_flow(request)
+        next(flow)
+
+        response = Response(
+            401,
+            headers=[
+                (
+                    "www-authenticate",
+                    'Digest realm="test", nonce="abc", qop="auth-int"',
+                )
+            ],
+        )
+        auth_request = flow.send(response)
+        assert "qop=auth-int" in auth_request.headers["authorization"]
+
 
 class TestNetRCAuth:
     def test_parse_netrc_basic(self):
@@ -460,5 +561,157 @@ class TestNetRCAuth:
                 auth = NetRCAuth(f.name)
                 creds = auth._lookup_credentials("example.com")
                 assert creds is None
+            finally:
+                os.unlink(f.name)
+
+    def test_netrc_with_account_field(self):
+        """Account field is present but ignored during lookup."""
+        content = "machine example.com login admin password secret account myaccount\n"
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".netrc", delete=False
+        ) as f:
+            f.write(content)
+            f.flush()
+            try:
+                auth = NetRCAuth(f.name)
+                creds = auth._lookup_credentials("example.com")
+                assert creds == ("admin", "secret")
+            finally:
+                os.unlink(f.name)
+
+    def test_netrc_with_comments(self):
+        """Comment lines (starting with #) are ignored."""
+        content = (
+            "# This is a comment\n"
+            "machine example.com login admin password secret\n"
+            "# Another comment\n"
+        )
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".netrc", delete=False
+        ) as f:
+            f.write(content)
+            f.flush()
+            try:
+                auth = NetRCAuth(f.name)
+                creds = auth._lookup_credentials("example.com")
+                assert creds == ("admin", "secret")
+            finally:
+                os.unlink(f.name)
+
+    def test_netrc_multiple_machines(self):
+        """Multiple machine entries are parsed correctly."""
+        content = (
+            "machine host1.com login user1 password pass1\n"
+            "machine host2.com login user2 password pass2\n"
+        )
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".netrc", delete=False
+        ) as f:
+            f.write(content)
+            f.flush()
+            try:
+                auth = NetRCAuth(f.name)
+                assert auth._lookup_credentials("host1.com") == ("user1", "pass1")
+                assert auth._lookup_credentials("host2.com") == ("user2", "pass2")
+            finally:
+                os.unlink(f.name)
+
+    def test_netrc_default_entry_fallback(self):
+        """Default entry is used when no exact match found."""
+        content = (
+            "machine example.com login specific password cred\n"
+            "default login fallback password fallbackpass\n"
+        )
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".netrc", delete=False
+        ) as f:
+            f.write(content)
+            f.flush()
+            try:
+                auth = NetRCAuth(f.name)
+                # Exact match
+                assert auth._lookup_credentials("example.com") == ("specific", "cred")
+                # Falls back to default
+                assert auth._lookup_credentials("unknown.com") == ("fallback", "fallbackpass")
+            finally:
+                os.unlink(f.name)
+
+    def test_netrc_empty_file(self):
+        """Empty netrc file returns no credentials."""
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".netrc", delete=False
+        ) as f:
+            f.write("")
+            f.flush()
+            try:
+                auth = NetRCAuth(f.name)
+                creds = auth._lookup_credentials("example.com")
+                assert creds is None
+            finally:
+                os.unlink(f.name)
+
+    @pytest.mark.skipif(os.name == "nt", reason="Unix permission check")
+    def test_netrc_strict_permissions_accepted(self):
+        """File with 0600 permissions is accepted."""
+        content = "machine example.com login admin password secret\n"
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".netrc", delete=False
+        ) as f:
+            f.write(content)
+            f.flush()
+            try:
+                os.chmod(f.name, 0o600)
+                auth = NetRCAuth(f.name)
+                creds = auth._lookup_credentials("example.com")
+                assert creds == ("admin", "secret")
+            finally:
+                os.unlink(f.name)
+
+    @pytest.mark.skipif(os.name == "nt", reason="Unix permission check")
+    def test_netrc_group_readable_rejected(self):
+        """File with 0640 permissions (group-readable) is rejected."""
+        content = "machine example.com login admin password secret\n"
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".netrc", delete=False
+        ) as f:
+            f.write(content)
+            f.flush()
+            try:
+                os.chmod(f.name, 0o640)
+                auth = NetRCAuth(f.name)
+                creds = auth._lookup_credentials("example.com")
+                assert creds is None
+            finally:
+                os.unlink(f.name)
+
+    def test_netrc_no_login_entry_skipped(self):
+        """Entry with no login is skipped (returns None)."""
+        content = "machine example.com password secret\n"
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".netrc", delete=False
+        ) as f:
+            f.write(content)
+            f.flush()
+            try:
+                auth = NetRCAuth(f.name)
+                creds = auth._lookup_credentials("example.com")
+                assert creds is None
+            finally:
+                os.unlink(f.name)
+
+    def test_netrc_auth_flow_passthrough_without_credentials(self):
+        """Auth flow passes through unchanged when no credentials found."""
+        content = "machine other.com login x password y\n"
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".netrc", delete=False
+        ) as f:
+            f.write(content)
+            f.flush()
+            try:
+                auth = NetRCAuth(f.name)
+                request = Request("GET", "http://example.com/")
+                flow = auth.auth_flow(request)
+                req = next(flow)
+                assert "authorization" not in req.headers
             finally:
                 os.unlink(f.name)

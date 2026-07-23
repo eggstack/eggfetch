@@ -151,3 +151,140 @@ class TestSendTypeValidation:
         async with AsyncClient() as client:
             with pytest.raises(TypeError, match="Request"):
                 await client.send("not-a-request")  # type: ignore[arg-type]
+
+
+# ---------------------------------------------------------------------------
+# Asyncio leaked task detection
+# ---------------------------------------------------------------------------
+
+
+class TestAsyncioLeakedTaskDetection:
+    """Verify async operations don't leak tasks."""
+
+    @pytest.mark.asyncio
+    async def test_no_leaked_tasks_after_send(self):
+        """A single send must not leave orphan tasks behind."""
+        def handler(request):
+            return _build_response(200, text="ok")
+
+        before_tasks = asyncio.all_tasks()
+
+        async with AsyncClient(
+            async_transport=MockTransport(handler)
+        ) as client:
+            resp = await client.get("http://test/")
+            assert resp.status_code == 200
+
+        after_tasks = asyncio.all_tasks()
+        # No new tasks should remain after the client closes
+        new_tasks = after_tasks - before_tasks
+        assert len(new_tasks) == 0, f"Leaked tasks: {new_tasks}"
+
+    @pytest.mark.asyncio
+    async def test_no_leaked_tasks_after_multiple_requests(self):
+        """Multiple requests must not leak tasks."""
+        def handler(request):
+            return _build_response(200, text="ok")
+
+        before_tasks = asyncio.all_tasks()
+
+        async with AsyncClient(
+            async_transport=MockTransport(handler)
+        ) as client:
+            for _ in range(5):
+                resp = await client.get("http://test/")
+                assert resp.status_code == 200
+
+        after_tasks = asyncio.all_tasks()
+        new_tasks = after_tasks - before_tasks
+        assert len(new_tasks) == 0, f"Leaked tasks: {new_tasks}"
+
+    @pytest.mark.asyncio
+    async def test_no_leaked_tasks_after_error(self):
+        """An error in send must not leak tasks."""
+        def handler(request):
+            raise ValueError("intentional error")
+
+        before_tasks = asyncio.all_tasks()
+
+        async with AsyncClient(
+            async_transport=MockTransport(handler)
+        ) as client:
+            with pytest.raises(ValueError):
+                await client.get("http://test/")
+
+        after_tasks = asyncio.all_tasks()
+        new_tasks = after_tasks - before_tasks
+        assert len(new_tasks) == 0, f"Leaked tasks: {new_tasks}"
+
+
+# ---------------------------------------------------------------------------
+# Event loop blocking verification
+# ---------------------------------------------------------------------------
+
+
+class TestEventLoopNonBlocking:
+    """Verify async operations don't block the event loop."""
+
+    @pytest.mark.asyncio
+    async def test_concurrent_requests_dont_block(self):
+        """Multiple concurrent requests should complete without blocking."""
+        import time
+
+        call_times = []
+
+        async def handler(request):
+            call_times.append(time.monotonic())
+            return _build_response(200, text="ok")
+
+        async with AsyncClient(
+            async_transport=MockTransport(handler)
+        ) as client:
+            # Fire 3 requests concurrently
+            import asyncio as _asyncio
+            results = await _asyncio.gather(
+                client.get("http://test/1"),
+                client.get("http://test/2"),
+                client.get("http://test/3"),
+            )
+
+        assert len(results) == 3
+        for r in results:
+            assert r.status_code == 200
+
+    @pytest.mark.asyncio
+    async def test_async_client_works_in_running_loop(self):
+        """AsyncClient must work correctly inside an already-running loop."""
+        def handler(request):
+            return _build_response(200, text="in-loop")
+
+        async with AsyncClient(
+            async_transport=MockTransport(handler)
+        ) as client:
+            resp = await client.get("http://test/")
+            assert resp.text == "in-loop"
+
+
+# ---------------------------------------------------------------------------
+# Client extensions parameter
+# ---------------------------------------------------------------------------
+
+
+class TestClientExtensions:
+    """Client-level extensions parameter behavior."""
+
+    def test_sync_client_extensions_stored(self):
+        with Client(extensions={"ext_key": "ext_val"}) as client:
+            assert client._extensions == {"ext_key": "ext_val"}
+
+    def test_async_client_extensions_stored(self):
+        client = AsyncClient(extensions={"ext_key": "ext_val"})
+        assert client._extensions == {"ext_key": "ext_val"}
+
+    def test_client_default_extensions_empty(self):
+        with Client() as client:
+            assert client._extensions == {}
+
+    def test_async_client_default_extensions_empty(self):
+        client = AsyncClient()
+        assert client._extensions == {}

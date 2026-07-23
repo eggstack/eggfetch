@@ -280,6 +280,151 @@ class TestComponentBasedMountRouting:
             assert resp.content == b"api"
 
 
+class TestMountPriorityEdgeCases:
+    """Edge cases for mount routing priority."""
+
+    def test_custom_scheme_mount(self):
+        """Custom (non-http/https) scheme mounts work."""
+        ftp_handler = _make_handler("ftp")
+
+        with Client(
+            mounts={"ftp://": MockTransport(ftp_handler)}
+        ) as client:
+            resp = client.get("ftp://files.example.com/data")
+            assert resp.content == b"ftp"
+
+    def test_scheme_only_http_does_not_match_https(self):
+        """http:// mount must not match https:// URLs."""
+        http_handler = _make_handler("http")
+        https_handler = _make_handler("https")
+        default_handler = _make_handler("default")
+
+        with Client(
+            mounts={
+                "http://": MockTransport(http_handler),
+                "https://": MockTransport(https_handler),
+                "all://": MockTransport(default_handler),
+            }
+        ) as client:
+            resp = client.get("https://example.com/")
+            assert resp.content == b"https"
+
+    def test_longer_path_wins_over_shorter(self):
+        """More specific path prefix beats shorter one."""
+        short_handler = _make_handler("short")
+        long_handler = _make_handler("long")
+
+        with Client(
+            mounts={
+                "http://example.com/api": MockTransport(short_handler),
+                "http://example.com/api/v2": MockTransport(long_handler),
+            }
+        ) as client:
+            resp = client.get("http://example.com/api/v2/resource")
+            assert resp.content == b"long"
+
+    def test_catchall_always_lowest_priority(self):
+        """Catch-all always loses to any more-specific mount."""
+        catchall = _make_handler("catchall")
+        scheme = _make_handler("scheme")
+        host = _make_handler("host")
+
+        with Client(
+            mounts={
+                "all://": MockTransport(catchall),
+                "http://": MockTransport(scheme),
+                "http://example.com": MockTransport(host),
+            }
+        ) as client:
+            resp = client.get("http://example.com/")
+            assert resp.content == b"host"
+
+    def test_mount_none_transport_falls_through(self):
+        """Passing None as transport value falls through to default transport."""
+        def handler(request):
+            return Response(200, content=b"default")
+
+        with Client(
+            transport=MockTransport(handler),
+            mounts={"http://none.example.com": None},
+        ) as client:
+            resp = client.get("http://none.example.com/")
+            assert resp.content == b"default"
+
+    def test_empty_mounts_dict(self):
+        """Empty mounts dict falls through to default transport."""
+        def handler(request):
+            return Response(200, content=b"default")
+
+        with Client(transport=MockTransport(handler), mounts={}) as client:
+            resp = client.get("http://example.com/")
+            assert resp.content == b"default"
+
+    def test_host_case_insensitive(self):
+        """Mount matching is case-insensitive for hosts."""
+        upper_handler = _make_handler("upper")
+
+        with Client(
+            mounts={
+                "http://Example.Com": MockTransport(upper_handler),
+            }
+        ) as client:
+            resp = client.get("http://example.com/")
+            assert resp.content == b"upper"
+
+    def test_path_exact_match(self):
+        """Exact path match (no trailing content) works."""
+        handler = _make_handler("exact")
+
+        with Client(
+            mounts={"http://example.com/api": MockTransport(handler)}
+        ) as client:
+            resp = client.get("http://example.com/api")
+            assert resp.content == b"exact"
+
+    def test_mount_with_query_string_ignored(self):
+        """Query strings don't affect mount matching."""
+        handler = _make_handler("matched")
+
+        with Client(
+            mounts={"http://example.com/api": MockTransport(handler)}
+        ) as client:
+            resp = client.get("http://example.com/api?key=value")
+            assert resp.content == b"matched"
+
+
+class TestMountPriorityAsync:
+    """Async mount priority edge cases."""
+
+    @pytest.mark.asyncio
+    async def test_async_host_port_beats_host_path(self):
+        async def port_handler(request):
+            return Response(200, content=b"port")
+
+        async def path_handler(request):
+            return Response(200, content=b"path")
+
+        async with AsyncClient(
+            mounts={
+                "http://example.com:8080": MockTransport(port_handler),
+                "http://example.com/api": MockTransport(path_handler),
+            }
+        ) as client:
+            resp = await client.get("http://example.com:8080/api/endpoint")
+            assert resp.content == b"port"
+
+    @pytest.mark.asyncio
+    async def test_async_custom_scheme(self):
+        async def ftp_handler(request):
+            return Response(200, content=b"ftp-async")
+
+        async with AsyncClient(
+            mounts={"ftp://": MockTransport(ftp_handler)}
+        ) as client:
+            resp = await client.get("ftp://files.example.com/")
+            assert resp.content == b"ftp-async"
+
+
 class TestAsyncMountRouting:
     @pytest.mark.asyncio
     async def test_async_mount_dispatch(self):
