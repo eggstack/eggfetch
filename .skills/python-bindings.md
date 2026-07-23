@@ -81,6 +81,9 @@ from eggfetch.compat.httpx import Client, AsyncClient, Request, Response
 - Hooks: request/event hooks on `Client` and `Request`
 - WSGI/ASGI transport: local app dispatch via `WSGITransport`, `ASGITransport`
 
+**Phase 5 implements:**
+- Downstream validation, expanded behavior corpus (29 cases), upstream HTTPX test inventory (36 derived cases), evidence report generation, compatibility-stage decision (Stage C justified)
+
 **Testing the compat layer:**
 
 ```sh

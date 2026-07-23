@@ -1,0 +1,255 @@
+# HTTPX 0.28.1 Upstream Derived Test Cases
+# Generated from HTTPX 0.28.1 public API test inventory
+# Each case maps an HTTPX test behavior to eggfetch coverage status
+
+[[derived-case]]
+id = "DERIVED-CLIENT-001"
+source = "tests/test_client.py::test_client construction with parameters"
+behavior = "Client() accepts auth, params, headers, cookies, timeout, base_url, follow_redirects"
+eggfetch-test = "test_client.py::TestClientConstructor::test_defaults, test_custom_headers, test_custom_cookies, test_custom_params, test_custom_timeout, test_base_url, test_auth, test_follow_redirects"
+status = "covered"
+
+[[derived-case]]
+id = "DERIVED-CLIENT-002"
+source = "tests/test_client.py::test_context manager"
+behavior = "Client context manager closes transport on exit; is_closed becomes True"
+eggfetch-test = "test_client.py::TestClientContextManager::test_context_manager"
+status = "covered"
+
+[[derived-case]]
+id = "DERIVED-CLIENT-003"
+source = "tests/test_client.py::test_async_client construction"
+behavior = "AsyncClient() accepts same parameters as Client(); async context manager works"
+eggfetch-test = "test_client.py::TestAsyncClient::test_async_context_manager"
+status = "covered"
+
+[[derived-case]]
+id = "DERIVED-CLIENT-004"
+source = "tests/test_client.py::test_base_url joining"
+behavior = "Client(base_url=...) joins relative URLs; absolute URLs override base"
+eggfetch-test = "test_client.py::TestClientBaseUrl::test_base_url_joining, test_absolute_url_wins"
+status = "covered"
+
+[[derived-case]]
+id = "DERIVED-CLIENT-005"
+source = "tests/test_client.py::test_send request"
+behavior = "Client.send(request) returns Response; resp.request is the original request"
+eggfetch-test = "test_client.py::TestClientSend::test_send_request, test_send_request_identity"
+status = "covered"
+
+[[derived-case]]
+id = "DERIVED-CLIENT-006"
+source = "tests/test_client.py::test_client methods (get, post, put, patch, delete, head, options)"
+behavior = "Client has convenience methods for all HTTP verbs"
+eggfetch-test = "test_httpx_required.py::TestBasicClientShape::test_client_has_expected_methods"
+status = "covered"
+
+[[derived-case]]
+id = "DERIVED-REQUEST-001"
+source = "tests/test_content.py::test_request body types"
+behavior = "Request accepts content (bytes), json (dict), data (dict/str), stream (iterator); body sources are mutually exclusive"
+eggfetch-test = "test_request.py::TestBodyMutualExclusion::test_content_only, test_json_only, test_data_dict, test_content_and_json_raises, test_content_and_data_raises"
+status = "covered"
+
+[[derived-case]]
+id = "DERIVED-REQUEST-002"
+source = "tests/test_content.py::test_auto headers"
+behavior = "Request auto-generates Host, Content-Length, Content-Type, Transfer-Encoding headers"
+eggfetch-test = "test_request.py::TestAutoHeaders::test_host_header, test_content_length_json, test_content_type_json, test_transfer_encoding_stream"
+status = "covered"
+
+[[derived-case]]
+id = "DERIVED-REQUEST-003"
+source = "tests/test_content.py::test_stream request"
+behavior = "Request with stream= iterator sets Transfer-Encoding: chunked; read() consumes stream"
+eggfetch-test = "test_request.py::TestRead::test_read_stream, test_aread_stream"
+status = "covered"
+
+[[derived-case]]
+id = "DERIVED-REQUEST-004"
+source = "tests/test_multipart.py::test_multipart encoding"
+behavior = "Request with files= produces multipart/form-data body"
+eggfetch-test = "test_request_streaming.py::TestRequestConstruction::test_request_files_stored"
+status = "partial"
+
+[[derived-case]]
+id = "DERIVED-RESPONSE-001"
+source = "tests/test_response.py::test_response construction"
+behavior = "Response(status_code, content=, text=, json=, html=) constructs response; conflicting sources raise ValueError"
+eggfetch-test = "test_response.py::TestResponseConstruction::test_status_code, test_content, test_text, test_json, test_html, test_conflicting_sources_raises"
+status = "covered"
+
+[[derived-case]]
+id = "DERIVED-RESPONSE-002"
+source = "tests/test_response.py::test_raise_for_status"
+behavior = "raise_for_status() returns self on 2xx; raises HTTPStatusError on 4xx/5xx with response and request attached"
+eggfetch-test = "test_response.py::TestRaiseForStatus::test_success_returns_self, test_4xx_raises, test_5xx_raises, test_4xx_exception_has_response"
+status = "covered"
+
+[[derived-case]]
+id = "DERIVED-RESPONSE-003"
+source = "tests/test_response.py::test_response status predicates"
+behavior = "is_success, is_redirect, is_client_error, is_server_error, is_error, is_informational return correct booleans"
+eggfetch-test = "test_response.py::TestStatusPredicates::test_is_success, test_is_redirect, test_is_client_error, test_is_server_error, test_is_error, test_is_informational"
+status = "covered"
+
+[[derived-case]]
+id = "DERIVED-RESPONSE-004"
+source = "tests/test_response.py::test_response streaming"
+behavior = "iter_bytes, iter_text, iter_lines, iter_raw yield chunks; aiter_* async variants work"
+eggfetch-test = "test_response.py::TestIterators::test_iter_bytes, test_iter_text, test_iter_lines; test_response_streaming.py::TestClientStreamSync, TestClientStreamAsync"
+status = "covered"
+
+[[derived-case]]
+id = "DERIVED-RESPONSE-005"
+source = "tests/test_response.py::test_response links"
+behavior = "Response.links parses Link header into dict with url/rel/anchor"
+eggfetch-test = "test_response.py::TestLinks::test_links_from_header, test_links_empty"
+status = "covered"
+
+[[derived-case]]
+id = "DERIVED-TRANSPORT-001"
+source = "tests/test_transport.py::test_mock_transport"
+behavior = "MockTransport(handler) dispatches to handler function; handler receives Request, returns Response"
+eggfetch-test = "test_mock_transport.py::TestMockTransportSync::test_basic_handler, test_handler_receives_request, test_response_request_attached"
+status = "covered"
+
+[[derived-case]]
+id = "DERIVED-TRANSPORT-002"
+source = "tests/test_transport.py::test_transport base class"
+behavior = "BaseTransport.handle_request raises NotImplementedError; close() is idempotent"
+eggfetch-test = "test_transports.py::TestBaseTransport::test_handle_request_not_implemented, test_close_is_noop, test_close_idempotent"
+status = "covered"
+
+[[derived-case]]
+id = "DERIVED-MOUNT-001"
+source = "tests/test_client.py::test_transport mounts"
+behavior = "Client(mounts={pattern: transport}) routes requests by URL pattern; longest match wins"
+eggfetch-test = "test_mounts.py::TestMountRouting::test_exact_scheme_match, test_longer_prefix_wins, test_no_match_falls_through"
+status = "covered"
+
+[[derived-case]]
+id = "DERIVED-AUTH-001"
+source = "tests/auth/test_basic.py::test_basic auth flow"
+behavior = "BasicAuth.auth_flow yields request with Authorization: Basic header; single yield"
+eggfetch-test = "test_auth.py::TestBasicAuth::test_auth_flow_adds_header, test_auth_flow_single_yield"
+status = "covered"
+
+[[derived-case]]
+id = "DERIVED-AUTH-002"
+source = "tests/auth/test_digest.py::test_digest auth flow"
+behavior = "DigestAuth.auth_flow sends initial request, parses 401 challenge, yields authenticated request with Digest header"
+eggfetch-test = "test_auth.py::TestDigestAuth::test_auth_flow_uses_challenge, test_stale_nonce_resets_count, test_sha256_algorithm, test_qop_auth_int"
+status = "covered"
+
+[[derived-case]]
+id = "DERIVED-AUTH-003"
+source = "tests/auth/test_auth.py::test auth tuple shorthand"
+behavior = "Client(auth=('user', 'pass')) creates BasicAuth internally"
+eggfetch-test = "test_merge_matrix.py::TestAuthOverride::test_client_auth"
+status = "covered"
+
+[[derived-case]]
+id = "DERIVED-REDIRECT-001"
+source = "tests/test_redirects.py::test redirect status codes"
+behavior = "301/302/303 change method to GET; 307/308 preserve method"
+eggfetch-test = "test_httpx_required.py::TestRedirectBehavior::test_no_follow_by_default, test_follow_with_flag"
+status = "partial"
+
+[[derived-case]]
+id = "DERIVED-REDIRECT-002"
+source = "tests/test_redirects.py::test cross-origin header stripping"
+behavior = "Redirects to different origin strip Authorization and Cookie headers"
+eggfetch-test = "test_httpx_required.py::TestRedirectBehavior::test_follow_with_flag"
+status = "gap"
+
+[[derived-case]]
+id = "DERIVED-COOKIE-001"
+source = "tests/test_cookies.py::test_cookie jar behavior"
+behavior = "Cookies supports set/get/delete/clear/update; domain/path parameters accepted"
+eggfetch-test = "test_cookies.py::TestCookiesConstruction, TestCookiesMutation, TestCookiesDunder"
+status = "covered"
+
+[[derived-case]]
+id = "DERIVED-COOKIE-002"
+source = "tests/test_cookies.py::test_cookie merging"
+behavior = "Request cookies merge with client cookies; request overrides client for same key"
+eggfetch-test = "test_merge_matrix.py::TestCookiesMerging::test_request_cookies_override_client"
+status = "covered"
+
+[[derived-case]]
+id = "DERIVED-TIMEOUT-001"
+source = "tests/test_config.py::test_timeout construction"
+behavior = "Timeout(5.0) sets all phases; Timeout(10.0, connect=1.0) sets per-phase; negative raises ValueError"
+eggfetch-test = "test_config_objects.py::TestTimeoutConstruction, TestTimeoutValidation"
+status = "covered"
+
+[[derived-case]]
+id = "DERIVED-ERROR-001"
+source = "tests/test_exceptions.py::test exception hierarchy"
+behavior = "HTTPError is base; HTTPStatusError, RequestError, TransportError, TimeoutException form correct MRO"
+eggfetch-test = "test_exceptions.py::TestExceptionHierarchy::test_httperror_is_exception, test_status_error_mro, test_request_error_mro, test_transport_error_mro, test_timeout_exception_mro"
+status = "covered"
+
+[[derived-case]]
+id = "DERIVED-HOOK-001"
+source = "tests/test_client.py::test event hooks"
+behavior = "event_hooks={'request': [...], 'response': [...]} calls hooks in order; request hooks before auth; response hooks after dispatch"
+eggfetch-test = "test_hooks.py::TestSyncHooks::test_request_hook_called, test_response_hook_called, test_hook_ordering, test_request_hook_runs_before_auth"
+status = "covered"
+
+[[derived-case]]
+id = "DERIVED-URL-001"
+source = "tests/test_url.py::test URL construction"
+behavior = "URL(string) parses scheme/host/port/path/query; relative URLs resolve against base"
+eggfetch-test = "test_merge_matrix.py::TestBaseUrlMerging::test_relative_url_joined, test_absolute_url_wins"
+status = "covered"
+
+[[derived-case]]
+id = "DERIVED-MULTIPART-001"
+source = "tests/test_multipart.py::test_multipart file upload"
+behavior = "Request with files= parameter produces multipart/form-data with boundary"
+eggfetch-test = "test_request_streaming.py::TestRequestConstruction::test_request_files_stored"
+status = "partial"
+
+[[derived-case]]
+id = "DERIVED-TRUST-ENV-001"
+source = "tests/test_client.py::test_trust_env"
+behavior = "Client(trust_env=True) reads HTTP_PROXY/HTTPS_PROXY/NO_PROXY env vars"
+eggfetch-test = "test_config_objects.py::TestProxyConstruction"
+status = "partial"
+
+[[derived-case]]
+id = "DERIVED-STREAM-001"
+source = "tests/test_content.py::test_client streaming"
+behavior = "client.stream('GET', url) returns context manager with iter_bytes/aiter_bytes/iter_lines/aiter_lines"
+eggfetch-test = "test_response_streaming.py::TestClientStreamSync::test_stream_iter_bytes, test_stream_iter_lines; TestClientStreamAsync::test_async_stream_aiter_bytes, test_async_stream_aiter_lines"
+status = "covered"
+
+[[derived-case]]
+id = "DERIVED-STATUS-001"
+source = "tests/test_status_codes.py::test named status codes"
+behavior = "httpx.codes.OK == 200, codes.NOT_FOUND == 404, etc."
+eggfetch-test = "test_config_objects.py::TestStatusCodes::test_ok, test_not_found, test_internal_server_error"
+status = "covered"
+
+[[derived-case]]
+id = "DERIVED-EXTENSIONS-001"
+source = "tests/test_request.py::test extensions"
+behavior = "Request extensions dict is preserved and accessible"
+eggfetch-test = "test_request.py::TestExtensions::test_default_empty, test_custom_extensions"
+status = "covered"
+
+[[derived-case]]
+id = "DERIVED-RESPONSE-006"
+source = "tests/test_response.py::test response history"
+behavior = "Response.history contains redirect responses; default is empty list"
+eggfetch-test = "test_response.py::TestHistory::test_default_empty, test_with_history"
+status = "covered"
+
+[[derived-case]]
+id = "DERIVED-RESPONSE-007"
+source = "tests/test_response.py::test response encoding"
+behavior = "Response.encoding can be set; charset_encoding parsed from Content-Type"
+eggfetch-test = "test_response.py::TestEncoding::test_encoding_setter, test_charset_encoding_from_content_type"
+status = "covered"

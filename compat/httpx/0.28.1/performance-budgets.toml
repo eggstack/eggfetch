@@ -1,0 +1,78 @@
+# Compatibility performance budgets
+# These are thresholds for eggfetch compatibility mode vs pinned HTTPX.
+# Breach of a "correctness-blocker" or "severe-regression" gate fails CI.
+
+[thresholds]
+schema-version = "1"
+
+[[threshold]]
+id = "IMPORT-TIME-001"
+metric = "import_time_ms"
+description = "Time to import eggfetch.compat.httpx module"
+budget-type = "informational"
+max-ratio = 3.0
+baseline = "httpx import time"
+
+[[threshold]]
+id = "CLIENT-CONSTRUCTION-001"
+metric = "client_construction_ms"
+description = "Time to construct Client() or AsyncClient()"
+budget-type = "informational"
+max-ratio = 2.0
+baseline = "httpx Client construction"
+
+[[threshold]]
+id = "ONE-SHOT-REQUEST-001"
+metric = "one_shot_request_ms"
+description = "Time for a single GET request to local test server"
+budget-type = "severe-regression"
+max-ratio = 1.5
+baseline = "httpx one-shot request"
+
+[[threshold]]
+id = "REUSED-REQUEST-001"
+metric = "reused_connection_request_ms"
+description = "Time for a GET request on reused connection"
+budget-type = "severe-regression"
+max-ratio = 1.5
+baseline = "httpx reused connection request"
+
+[[threshold]]
+id = "LARGE-BODY-THROUGHPUT-001"
+metric = "large_body_throughput_mbps"
+description = "Throughput for 1MB response body"
+budget-type = "severe-regression"
+min-ratio = 0.5
+baseline = "httpx large body throughput"
+
+[[threshold]]
+id = "STREAMING-OVERHEAD-001"
+metric = "streaming_overhead_pct"
+description = "Overhead of streaming vs buffered response"
+budget-type = "informational"
+max-ratio = 2.0
+baseline = "httpx streaming overhead"
+
+[[threshold]]
+id = "MEMORY-GROWTH-001"
+metric = "memory_growth_bytes"
+description = "Memory growth during 1000 sequential requests"
+budget-type = "correctness-blocker"
+max-bytes = 10485760
+baseline = "absolute 10MB limit"
+
+[[threshold]]
+id = "MULTIPART-UPLOAD-001"
+metric = "multipart_upload_ms"
+description = "Time for multipart file upload"
+budget-type = "severe-regression"
+max-ratio = 2.0
+baseline = "httpx multipart upload"
+
+[[threshold]]
+id = "ASGI-TRANSPORT-001"
+metric = "asgi_transport_ms"
+description = "Time for request via ASGITransport"
+budget-type = "severe-regression"
+max-ratio = 1.5
+baseline = "httpx ASGITransport"

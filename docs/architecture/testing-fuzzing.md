@@ -63,6 +63,43 @@ Run with `EGGFETCH_COMPAT_REQUIRED=1` for fail-closed behavior. The CI `compat-h
 
 Compatibility profiles and allowed differences live in `compat/httpx/0.28.1/`.
 
+## Phase 5 Downstream Validation
+
+Phase 5 validates eggfetch against real-world downstream consumers to ensure compatibility in practice.
+
+### Downstream Consumer Portfolio
+
+The `compat/downstream/` directory contains a 12-package consumer portfolio — real Python packages that depend on HTTPX or requests — tested against eggfetch to detect regressions:
+
+```sh
+python scripts/validate_downstream_compat.py
+```
+
+### Expanded Behavior Corpus
+
+The behavior corpus grew from 24 to 29 cases in Phase 5. Parametrized tests with stable IDs verify edge cases across the HTTPX-compatible surface.
+
+### Upstream HTTPX Test Inventory
+
+36 derived test cases were extracted from the upstream HTTPX test suite and adapted for eggfetch. See:
+
+- `compat/httpx/0.28.1/upstream-test-inventory.md` — catalog of upstream tests
+- `compat/httpx/0.28.1/upstream-derived-cases.toml` — machine-readable mapping
+
+### Evidence Report Generation
+
+Phase 5 introduces automated evidence reporting:
+
+```sh
+python scripts/generate_compatibility_evidence.py
+```
+
+This produces a structured report with pass/fail status, behavior corpus results, downstream portfolio results, and performance budget adherence.
+
+### Performance Budgets
+
+Performance budgets are defined in `compat/httpx/0.28.1/performance-budgets.toml` and enforce latency and throughput ceilings on critical paths.
+
 ## Property Testing
 
 Proptest property tests are colocated in `eggfetch-core` modules. They verify round-trip invariants and state-machine correctness.

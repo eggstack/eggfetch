@@ -48,48 +48,48 @@ tests = ["test_differential.py::TestTimeout"]
 
 [[difference]]
 id = "EVENT-HOOKS-001"
-category = "required-later"
+category = "resolved"
 symbol = "httpx.EventHooks / httpx.Client(event_hooks=...)"
 behavior-case = "event-hooks"
 reference-behavior = "HTTPX supports event_hooks={'request': [...], 'response': [...]}"
 eggfetch-behavior = "eggfetch does not support event hooks"
-rationale = "Not yet implemented; tracked as roadmap item"
+rationale = "Implemented in Phase 4; event hooks now supported"
 compatibility-stage-impact = "phase-0"
 security-improvement = false
 migration-impact = "Users needing event hooks must use other mechanisms"
 owner = "eggfetch-team"
-review-milestone = "phase-1"
-tests = []
+review-milestone = "phase-4"
+tests = ["test_hooks.py"]
 
 [[difference]]
 id = "TRANSPORTS-001"
-category = "required-later"
+category = "resolved"
 symbol = "httpx.ASGITransport / httpx.WSGITransport"
 behavior-case = "in-process-transports"
 reference-behavior = "HTTPX supports WSGI/ASGI in-process transports"
 eggfetch-behavior = "eggfetch does not support in-process transports"
-rationale = "eggfetch is a network client, not a testing tool"
+rationale = "ASGITransport and WSGITransport were implemented in Phase 4"
 compatibility-stage-impact = "phase-0"
 security-improvement = false
 migration-impact = "Use a real test server instead"
 owner = "eggfetch-team"
-review-milestone = "phase-2"
-tests = []
+review-milestone = "phase-4"
+tests = ["test_asgi.py", "test_wsgi.py"]
 
 [[difference]]
 id = "MOUNTS-001"
-category = "required-later"
+category = "resolved"
 symbol = "httpx.Client(mounts=...)"
 behavior-case = "per-host-transports"
 reference-behavior = "HTTPX supports per-host transport mounts"
 eggfetch-behavior = "eggfetch does not support per-host transport mounts"
-rationale = "Not yet implemented; tracked as roadmap item"
+rationale = "Mounts were implemented in Phase 4"
 compatibility-stage-impact = "phase-0"
 security-improvement = false
 migration-impact = "Users needing per-host routing must handle externally"
 owner = "eggfetch-team"
-review-milestone = "phase-2"
-tests = []
+review-milestone = "phase-4"
+tests = ["test_mounts.py"]
 
 [[difference]]
 id = "TRIO-ANYIO-001"

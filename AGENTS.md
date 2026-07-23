@@ -95,6 +95,8 @@ Phase 3 is complete — streaming and bodies: `SyncByteStream`, `AsyncByteStream
 
 Phase 4 is complete — transports, mounts, auth, hooks, WSGI/ASGI. See `plans/httpx-drop-in-phase-4-status.md` for status.
 
+Phase 5 is complete — downstream validation, behavior corpus, upstream test inventory, evidence reporting, compatibility-stage decision. See `plans/httpx-drop-in-phase-5-status.md` for status.
+
 Phase 4 test files: `test_transports.py`, `test_mounts.py`, `test_mock_transport.py`, `test_wsgi.py`, `test_asgi.py`, `test_hooks.py`, `test_auth.py`.
 
 Run compat tests:
@@ -104,9 +106,23 @@ cd crates/eggfetch-python && maturin develop
 EGGFETCH_COMPAT_REQUIRED=1 pytest crates/eggfetch-python/tests/compat/ -v --strict-markers
 ```
 
+Evidence report generation:
+
+```sh
+# Evidence report generation
+python scripts/generate_compatibility_evidence.py --skip-tests --output compatibility-evidence.json
+python scripts/generate_compatibility_report.py --input compatibility-evidence.json --output compatibility-report.md
+
+# Downstream portfolio validation
+python scripts/run_downstream_compat.py
+
+# Isolated downstream testing
+python scripts/run_isolated_downstream.py --package httpx
+```
+
 ## Tests
 
-Colocated `#[cfg(test)] mod tests` blocks. ~750+ Rust, ~463+ Python, ~40+ FFI tests.
+Colocated `#[cfg(test)] mod tests` blocks. ~880+ Rust, ~1170+ Python, ~30+ FFI tests.
 
 The full validation pass (pre-release) runs feature-gated subsets:
 

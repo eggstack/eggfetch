@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 
 
-VALID_CATEGORIES = {"required-now", "required-later", "intentional-difference", "not-public", "not-applicable"}
+VALID_CATEGORIES = {"required-now", "required-later", "intentional-difference", "not-public", "not-applicable", "resolved"}
 
 
 def _load_toml(path):

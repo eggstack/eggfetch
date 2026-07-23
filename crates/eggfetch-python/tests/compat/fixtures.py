@@ -60,6 +60,8 @@ class CompatTestHandler(http.server.BaseHTTPRequestHandler):
 
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
+        if self._do_common_paths(parsed):
+            return
         path = parsed.path
         qs = urllib.parse.parse_qs(parsed.query)
         port = self.server.server_address[1]
@@ -157,6 +159,8 @@ class CompatTestHandler(http.server.BaseHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urllib.parse.urlparse(self.path)
+        if self._do_common_paths(parsed):
+            return
         path = parsed.path
         if path == "/json":
             content_length = int(self.headers.get("Content-Length", 0))
@@ -186,9 +190,169 @@ class CompatTestHandler(http.server.BaseHTTPRequestHandler):
                     }
                 }
             )
+        elif path == "/empty-body":
+            content_length = int(self.headers.get("Content-Length", 0))
+            self.rfile.read(content_length)
+            self._send_json({"method": "POST", "empty": True})
         else:
             self.send_response(404)
             self.end_headers()
+
+    def do_PUT(self):
+        parsed = urllib.parse.urlparse(self.path)
+        path = parsed.path
+        content_length = int(self.headers.get("Content-Length", 0))
+        body = self.rfile.read(content_length) if content_length > 0 else b""
+        if path == "/resource":
+            try:
+                data = json.loads(body) if body else {}
+            except json.JSONDecodeError:
+                data = {}
+            self._send_json({"method": "PUT", "received": data})
+        else:
+            self.send_response(404)
+            self.end_headers()
+
+    def do_DELETE(self):
+        parsed = urllib.parse.urlparse(self.path)
+        path = parsed.path
+        if path == "/resource":
+            self._send_json({"method": "DELETE", "deleted": True})
+        else:
+            self.send_response(404)
+            self.end_headers()
+
+    def do_PATCH(self):
+        parsed = urllib.parse.urlparse(self.path)
+        path = parsed.path
+        content_length = int(self.headers.get("Content-Length", 0))
+        body = self.rfile.read(content_length) if content_length > 0 else b""
+        if path == "/resource":
+            try:
+                data = json.loads(body) if body else {}
+            except json.JSONDecodeError:
+                data = {}
+            self._send_json({"method": "PATCH", "received": data})
+        else:
+            self.send_response(404)
+            self.end_headers()
+
+    def do_HEAD(self):
+        parsed = urllib.parse.urlparse(self.path)
+        path = parsed.path
+        if path == "/get":
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", "30")
+            self.end_headers()
+        elif path == "/empty-body-response":
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+        else:
+            self.send_response(404)
+            self.end_headers()
+
+    def do_OPTIONS(self):
+        parsed = urllib.parse.urlparse(self.path)
+        path = parsed.path
+        if path == "/resource":
+            self.send_response(200)
+            self.send_header("Allow", "GET, POST, PUT, DELETE, PATCH, OPTIONS")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+        else:
+            self.send_response(404)
+            self.end_headers()
+
+    def do_PROPFIND(self):
+        parsed = urllib.parse.urlparse(self.path)
+        path = parsed.path
+        if path == "/resource":
+            self._send_json({"method": "PROPFIND", "path": path})
+        else:
+            self.send_response(404)
+            self.end_headers()
+
+    def _do_common_paths(self, parsed):
+        path = parsed.path
+        qs = urllib.parse.parse_qs(parsed.query)
+        port = self.server.server_address[1]
+        base = f"http://127.0.0.1:{port}"
+
+        if path == "/query":
+            flat = {k: v[0] if len(v) == 1 else v for k, v in qs.items()}
+            self._send_json({"query": flat})
+        elif path == "/query/repeated":
+            flat = {k: v for k, v in qs.items()}
+            self._send_json({"query": flat})
+        elif path == "/duplicate-headers":
+            accept = self.headers.get("Accept", "")
+            x_custom = self.headers.get("X-Custom", "")
+            self._send_json({
+                "accept": accept,
+                "x_custom": x_custom,
+            })
+        elif path == "/custom-content-type":
+            content_type = self.headers.get("Content-Type", "")
+            self._send_json({"content_type": content_type})
+        elif path == "/redirect/303":
+            self.send_response(303)
+            self.send_header("Location", f"{base}/get")
+            self.end_headers()
+        elif path == "/redirect/relative":
+            self.send_response(302)
+            self.send_header("Location", "./get")
+            self.end_headers()
+        elif path == "/redirect/chain-max":
+            depth = int(qs.get("depth", ["1"])[0])
+            max_depth = int(qs.get("max", ["3"])[0])
+            if depth < max_depth:
+                self.send_response(302)
+                self.send_header(
+                    "Location",
+                    f"{base}/redirect/chain-max?depth={depth + 1}&max={max_depth}",
+                )
+                self.end_headers()
+            else:
+                self._send_json({"method": "GET", "path": path, "depth": depth})
+        elif path == "/redirect/cross-origin":
+            self.send_response(302)
+            self.send_header("Location", "http://127.0.0.1:19999/get")
+            self.end_headers()
+        elif path == "/large-body":
+            size = int(qs.get("size", ["65536"])[0])
+            body = b"X" * size
+            self.send_response(200)
+            self.send_header("Content-Type", "application/octet-stream")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        elif path == "/empty-body-response":
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+        elif path == "/many-headers":
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            for i in range(50):
+                self.send_header(f"X-Custom-{i:03d}", f"value-{i}")
+            body = json.dumps({"headers_sent": 50}).encode()
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        elif path == "/binary":
+            body = bytes(range(256))
+            self.send_response(200)
+            self.send_header("Content-Type", "application/octet-stream")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        else:
+            return False
+        return True
 
     def log_message(self, format, *args):
         pass
@@ -278,5 +442,174 @@ BEHAVIOR_CASES = [
         method="GET",
         path="/status/500",
         expected_status=500,
+    ),
+    BehaviorCase(
+        case_id="PUT-001",
+        description="PUT with JSON body",
+        method="PUT",
+        path="/resource",
+        expected_status=200,
+        body=json.dumps({"update": "data"}).encode(),
+        content_type="application/json",
+        expected_fields={"method": "PUT", "received": {"update": "data"}},
+    ),
+    BehaviorCase(
+        case_id="DELETE-001",
+        description="DELETE method",
+        method="DELETE",
+        path="/resource",
+        expected_status=200,
+        expected_fields={"method": "DELETE", "deleted": True},
+    ),
+    BehaviorCase(
+        case_id="PATCH-001",
+        description="PATCH with JSON body",
+        method="PATCH",
+        path="/resource",
+        expected_status=200,
+        body=json.dumps({"patch": "value"}).encode(),
+        content_type="application/json",
+        expected_fields={"method": "PATCH", "received": {"patch": "value"}},
+    ),
+    BehaviorCase(
+        case_id="HEAD-001",
+        description="HEAD returns headers without body",
+        method="HEAD",
+        path="/get",
+        expected_status=200,
+        expected_fields={},
+    ),
+    BehaviorCase(
+        case_id="OPTIONS-001",
+        description="OPTIONS returns allowed methods",
+        method="OPTIONS",
+        path="/resource",
+        expected_status=200,
+        expected_fields={},
+    ),
+    BehaviorCase(
+        case_id="PROPFIND-001",
+        description="Arbitrary custom method PROPFIND",
+        method="PROPFIND",
+        path="/resource",
+        expected_status=200,
+        expected_fields={"method": "PROPFIND"},
+    ),
+    BehaviorCase(
+        case_id="QUERY-001",
+        description="Repeated query parameters",
+        method="GET",
+        path="/query/repeated?tag=a&tag=b&tag=c",
+        expected_status=200,
+        expected_fields={"query": {"tag": ["a", "b", "c"]}},
+    ),
+    BehaviorCase(
+        case_id="QUERY-002",
+        description="Empty query string",
+        method="GET",
+        path="/query",
+        expected_status=200,
+        expected_fields={"query": {}},
+    ),
+    BehaviorCase(
+        case_id="QUERY-003",
+        description="Query with empty value",
+        method="GET",
+        path="/query?key=",
+        expected_status=200,
+        expected_fields={"query": {"key": ""}},
+    ),
+    BehaviorCase(
+        case_id="HEADER-001",
+        description="Duplicate custom headers sent correctly",
+        method="GET",
+        path="/duplicate-headers",
+        expected_status=200,
+        headers={"X-Custom": "first"},
+        expected_fields={"x_custom": "first"},
+    ),
+    BehaviorCase(
+        case_id="HEADER-002",
+        description="Custom Content-Type header",
+        method="POST",
+        path="/custom-content-type",
+        expected_status=200,
+        body=b"test",
+        content_type="application/vnd.api+json",
+        expected_fields={"content_type": "application/vnd.api+json"},
+    ),
+    BehaviorCase(
+        case_id="POST-EMPTY-001",
+        description="POST with empty body",
+        method="POST",
+        path="/empty-body",
+        expected_status=200,
+        body=b"",
+        expected_fields={"method": "POST", "empty": True},
+    ),
+    BehaviorCase(
+        case_id="REDIRECT-303-001",
+        description="303 redirect changes method to GET",
+        method="GET",
+        path="/redirect/303",
+        expected_status=200,
+        follow_redirects=True,
+    ),
+    BehaviorCase(
+        case_id="REDIRECT-REL-001",
+        description="Relative redirect location resolved",
+        method="GET",
+        path="/redirect/relative",
+        expected_status=200,
+        follow_redirects=True,
+    ),
+    BehaviorCase(
+        case_id="REDIRECT-CHAIN-MAX-001",
+        description="Redirect chain stops at max depth",
+        method="GET",
+        path="/redirect/chain-max?depth=0&max=3",
+        expected_status=200,
+        follow_redirects=True,
+        expected_fields={"depth": 3},
+    ),
+    BehaviorCase(
+        case_id="REDIRECT-CROSS-001",
+        description="Cross-origin redirect to different port",
+        method="GET",
+        path="/redirect/cross-origin",
+        expected_status=302,
+        follow_redirects=False,
+    ),
+    BehaviorCase(
+        case_id="LARGE-001",
+        description="Large response body over 64KB",
+        method="GET",
+        path="/large-body?size=65536",
+        expected_status=200,
+        expected_fields={},
+    ),
+    BehaviorCase(
+        case_id="EMPTY-001",
+        description="Empty response body",
+        method="GET",
+        path="/empty-body-response",
+        expected_status=200,
+        expected_fields={},
+    ),
+    BehaviorCase(
+        case_id="MANY-HEADERS-001",
+        description="Response with 50 custom headers",
+        method="GET",
+        path="/many-headers",
+        expected_status=200,
+        expected_fields={"headers_sent": 50},
+    ),
+    BehaviorCase(
+        case_id="BINARY-001",
+        description="Binary content response",
+        method="GET",
+        path="/binary",
+        expected_status=200,
+        expected_fields={},
     ),
 ]

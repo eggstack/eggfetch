@@ -1,0 +1,188 @@
+[portfolio]
+schema-version = "1"
+status = "phase-5"
+created = "2026-07-23"
+reference-profile = "../httpx/0.28.1/profile.toml"
+description = "Downstream consumer packages that exercise distinct httpx compatibility surfaces"
+
+[[package]]
+name = "httpx"
+version = "0.28.1"
+license = "BSD-3-Clause"
+category = "contract-tests"
+rationale = "Reference implementation of the httpx API surface. Used for contract tests and API manifest comparison."
+usage = "public"
+test-subset = "spec"
+expected-network-isolation = true
+optional-dependencies = []
+known-incompatibilities = []
+update-owner = "eggfetch-team"
+review-cadence = "every-phase"
+
+[[package]]
+name = "respx"
+version = "0.21.1"
+license = "BSD-3-Clause"
+category = "mock-transport-user"
+rationale = "Widely-used mock transport library that patches httpx transports. Exercises MockTransport and Router APIs."
+usage = "public"
+test-subset = "unit"
+expected-network-isolation = true
+optional-dependencies = ["httpx"]
+known-incompatibilities = [
+  "respx patches httpx._transports.default which is private API"
+]
+update-owner = "eggfetch-team"
+review-cadence = "every-phase"
+
+[[package]]
+name = "pytest-httpx"
+version = "0.30.0"
+license = "BSD-3-Clause"
+category = "framework-test-client"
+rationale = "Pytest fixture plugin that intercepts httpx requests via MockTransport. Exercises fixture injection and request matching."
+usage = "public"
+test-subset = "unit"
+expected-network-isolation = true
+optional-dependencies = ["pytest", "httpx"]
+known-incompatibilities = [
+  "pytest-httpx relies on httpx._transports.default for interception"
+]
+update-owner = "eggfetch-team"
+review-cadence = "every-phase"
+
+[[package]]
+name = "starlette"
+version = "0.37.2"
+license = "BSD-3-Clause"
+category = "framework-asgi-transport"
+rationale = "ASGI framework whose TestClient uses httpx.ASGITransport. Exercises in-process transport and ASGI app integration."
+usage = "public"
+test-subset = "integration"
+expected-network-isolation = true
+optional-dependencies = ["httpx", "anyio"]
+known-incompatibilities = []
+update-owner = "eggfetch-team"
+review-cadence = "every-phase"
+
+[[package]]
+name = "anthropic"
+version = "0.39.0"
+license = "MIT"
+category = "sdk-async-client"
+rationale = "Major AI SDK using httpx.AsyncClient with custom auth, base_url, timeouts, streaming, and exception inspection."
+usage = "public"
+test-subset = "integration"
+expected-network-isolation = false
+optional-dependencies = ["httpx", "pydantic"]
+known-incompatibilities = [
+  "anthropic accesses httpx.Response.stream internally for SSE parsing"
+]
+update-owner = "eggfetch-team"
+review-cadence = "quarterly"
+
+[[package]]
+name = "groq"
+version = "0.13.0"
+license = "Apache-2.0"
+category = "sdk-sync-client"
+rationale = "Groq Python SDK using httpx.Client for synchronous API calls with custom auth and timeout configuration."
+usage = "public"
+test-subset = "integration"
+expected-network-isolation = false
+optional-dependencies = ["httpx", "pydantic"]
+known-incompatibilities = []
+update-owner = "eggfetch-team"
+review-cadence = "quarterly"
+
+[[package]]
+name = "httpx-sse"
+version = "0.4.0"
+license = "BSD-3-Clause"
+category = "streaming-upload-download"
+rationale = "Server-Sent Events extension for httpx. Exercises streaming response consumption and transport subclassing."
+usage = "public"
+test-subset = "unit"
+expected-network-isolation = true
+optional-dependencies = ["httpx"]
+known-incompatibilities = [
+  "httpx-sse accesses httpx.Response.aiter_lines and iter_lines internals"
+]
+update-owner = "eggfetch-team"
+review-cadence = "every-phase"
+
+[[package]]
+name = "httpcore"
+version = "1.0.5"
+license = "BSD-3-Clause"
+category = "custom-transport-subclass"
+rationale = "Underlying transport layer for httpx. Provides ConnectionPool, HTTP/1.1 and HTTP/2 transports. Exercises transport API contract."
+usage = "public"
+test-subset = "unit"
+expected-network-isolation = true
+optional-dependencies = []
+known-incompatibilities = [
+  "httpcore is httpx's direct dependency; eggfetch replaces both"
+]
+update-owner = "eggfetch-team"
+review-cadence = "every-phase"
+
+[[package]]
+name = "anyio"
+version = "4.8.0"
+license = "MIT"
+category = "async-testing-support"
+rationale = "Async compatibility library used by httpx for async backend selection. Exercises async context manager and task group integration."
+usage = "private"
+test-subset = "unit"
+expected-network-isolation = true
+optional-dependencies = []
+known-incompatibilities = []
+update-owner = "eggfetch-team"
+review-cadence = "quarterly"
+
+[[package]]
+name = "httpx-auth"
+version = "0.22.0"
+license = "BSD-3-Clause"
+category = "custom-auth-flow"
+rationale = "Authentication library implementing OAuth, Digest, and API key flows on top of httpx.Auth. Exercises custom auth subclassing."
+usage = "public"
+test-subset = "unit"
+expected-network-isolation = true
+optional-dependencies = ["httpx"]
+known-incompatibilities = [
+  "httpx-auth subclasses httpx.Auth and accesses auth flow hooks"
+]
+update-owner = "eggfetch-team"
+review-cadence = "quarterly"
+
+[[package]]
+name = "httpx-ws"
+version = "0.7.0"
+license = "BSD-3-Clause"
+category = "event-hook-instrumentation"
+rationale = "WebSocket extension for httpx. Exercises connection upgrade handling and transport extension patterns."
+usage = "public"
+test-subset = "unit"
+expected-network-isolation = true
+optional-dependencies = ["httpx", "anyio"]
+known-incompatibilities = [
+  "httpx-ws accesses httpx._transport and httpx._config internals"
+]
+update-owner = "eggfetch-team"
+review-cadence = "every-phase"
+
+[[package]]
+name = "pydantic"
+version = "2.10.0"
+license = "MIT"
+category = "heavy-config-user"
+rationale = "Data validation library whose HTTP integration examples use httpx with base_url, params, headers, cookies, and timeouts extensively."
+usage = "private"
+test-subset = "integration"
+expected-network-isolation = true
+optional-dependencies = []
+known-incompatibilities = []
+update-owner = "eggfetch-team"
+review-cadence = "quarterly"

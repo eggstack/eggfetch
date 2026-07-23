@@ -94,6 +94,12 @@ Phase 2 (object model and core API parity) and Phase 3 (streaming and bodies) ar
 
 Phase 3 adds: `SyncByteStream`, `AsyncByteStream`, and `ByteStream` base classes; `iter_raw()`/`aiter_raw()` for raw transport bytes; chunk size parameters on all iterators; streaming request bodies (iterables, file-like, custom streams); and multipart passthrough to the native encoder.
 
+Phase 4 adds: transports, mounts, auth, hooks, WSGI/ASGI transports. See [`plans/httpx-drop-in-phase-4-status.md`](plans/httpx-drop-in-phase-4-status.md) for details.
+
+Phase 5 adds: downstream validation, behavior corpus, upstream test inventory, evidence reporting, and compatibility-stage decision. See [`plans/httpx-drop-in-phase-5-status.md`](plans/httpx-drop-in-phase-5-status.md) for details.
+
+The downstream validation portfolio covers 12 representative downstream consumer packages with defined performance budgets. The compatibility stage decision is Stage C (asyncio drop-in), justified by the evidence corpus.
+
 ## Target API Shapes
 
 The Python API targets familiar requests/httpx patterns:

@@ -1,13 +1,17 @@
 # HTTPX 0.28.1 Compatibility Profile
 
 This directory contains the machine-readable compatibility profile for
-HTTPX 0.28.1 drop-in compatibility (Phase 0).
+HTTPX 0.28.1 drop-in compatibility (Phase 5).
 
 ## Files
 
 - `profile.toml` — Defines the reference package, supported surfaces, and categories
 - `allowed-differences.toml` — Registry of reviewed, allowed behavioral differences
 - `reference-api.json` — Golden manifest of HTTPX 0.28.1 public API (generated)
+- `upstream-test-inventory.md` — Catalog of upstream HTTPX tests mapped to eggfetch cases
+- `upstream-derived-cases.toml` — Machine-readable mapping of 36 derived upstream test cases
+- `performance-budgets.toml` — Latency and throughput budgets for critical paths
+- `compat/downstream/` — 12-package consumer portfolio for downstream validation
 
 ## Usage
 
@@ -44,4 +48,4 @@ python scripts/compare_httpx_api_manifest.py \
 
 ## Status
 
-This profile targets HTTPX 0.28.1. The compatibility stage is **Phase 0**.
+This profile targets HTTPX 0.28.1. The compatibility stage is **Phase 5**.

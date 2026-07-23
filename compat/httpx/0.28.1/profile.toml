@@ -4,7 +4,7 @@ generator = "eggfetch-compat-profile"
 version = "1"
 created = "2026-07-21"
 reference = "httpx==0.28.1"
-stage = "phase-0"
+stage = "phase-5"
 status = "in-progress"
 
 [reference]
@@ -39,3 +39,4 @@ required-later = "Accepted gap assigned to later roadmap phase"
 intentional-difference = "Reviewed and explicitly allowed"
 not-public = "Excluded from contract"
 not-applicable = "Reference feature cannot apply to current product stage"
+resolved = "Previously required gap, now implemented and verified"

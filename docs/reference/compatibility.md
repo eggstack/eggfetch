@@ -100,6 +100,7 @@ eggfetch targets HTTPX 0.28.1 compatibility in phases. The current status:
 - **Phase 2**: Value objects, request/response, exception hierarchy, client constructors, merge semantics
 - **Phase 3**: Streaming and bodies, byte streams, chunk size support, request streaming, multipart passthrough
 - **Phase 4**: Transports, mounts, auth, hooks, WSGI/ASGI
+- **Phase 5**: Downstream validation, 12-package consumer portfolio, expanded behavior corpus, upstream test inventory, evidence reporting, performance budgets, compatibility-stage decision (Stage C)
 
 See `compat/httpx/0.28.1/` for the machine-readable profile and allowed differences.
 
@@ -109,4 +110,4 @@ The following statements from earlier documentation have been corrected:
 
 1. **Pool timeout**: HTTPX 0.28.1 supports pool timeout via `Timeout(pool=...)`. eggfetch also supports this. The compatibility matrix has been updated to reflect this.
 2. **Redirect default**: Both HTTPX and requests follow redirects by default. eggfetch does **not**. This is an intentional security-first difference.
-3. **Proxy env vars**: HTTPX reads `HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY` by default. eggfetch does not. This is tracked as a required-later item.
+3. **Proxy env vars**: ~~HTTPX reads `HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY` by default. eggfetch does not. This is tracked as a required-later item.~~ Resolved — Phase 5 validation confirmed no behavioral regression; proxy env var support is now implemented.

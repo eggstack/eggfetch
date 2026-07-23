@@ -511,7 +511,7 @@ class TestHeaders:
         egg_resp = eggfetch.get(f"{diff_server}/headers", headers=headers)
         httpx_resp = _httpx.get(f"{diff_server}/headers", headers=headers)
         egg_h = {k.lower(): v for k, v in egg_resp.json()["headers"].items()}
-        httpx_h = {k.lower(): v for k, v in httpx_resp.headers.items()}
+        httpx_h = {k.lower(): v for k, v in httpx_resp.json()["headers"].items()}
         assert egg_h.get("x-custom-header") == httpx_h.get("x-custom-header")
         assert egg_h.get("x-request-id") == httpx_h.get("x-request-id")
 
