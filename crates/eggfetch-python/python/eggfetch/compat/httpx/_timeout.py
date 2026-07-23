@@ -85,6 +85,14 @@ class Timeout:
         return NotImplemented
 
     def __repr__(self) -> str:
+        if (
+            self._connect == self._total
+            and self._read == self._total
+            and self._write == self._total
+            and self._pool == self._total
+            and self._total is not None
+        ):
+            return f"Timeout(timeout={self._total!r})"
         parts = []
         if self._connect is not None:
             parts.append(f"connect={self._connect!r}")

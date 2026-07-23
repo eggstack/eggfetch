@@ -145,7 +145,7 @@ class TestStandaloneExceptions:
 class TestExceptionConstructors:
     def test_http_error_with_request(self):
         req = Request("GET", "https://example.com")
-        exc = HTTPError(request=req)
+        exc = HTTPError("error", request=req)
         assert exc.request is req
 
     def test_http_error_with_message(self):

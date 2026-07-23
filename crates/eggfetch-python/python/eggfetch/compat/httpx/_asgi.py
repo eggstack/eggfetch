@@ -35,7 +35,7 @@ class ASGITransport:
         app: Callable,
         raise_app_exceptions: bool = True,
         root_path: str = "",
-        client: tuple[str, int] | None = ("127.0.0.1", 12345),
+        client: tuple[str, int] | None = ("127.0.0.1", 123),
     ) -> None:
         self._app = app
         self._raise_app_exceptions = raise_app_exceptions

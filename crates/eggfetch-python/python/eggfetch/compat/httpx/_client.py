@@ -728,7 +728,6 @@ class AsyncClient:
         cookies=None,
         verify=True,
         cert=None,
-        trust_env=True,
         http1=True,
         http2=False,
         proxy=None,
@@ -740,6 +739,7 @@ class AsyncClient:
         event_hooks=None,
         base_url="",
         transport=None,
+        trust_env=True,
         async_transport=None,
         default_encoding="utf-8",
         extensions=None,
@@ -1019,7 +1019,10 @@ class AsyncClient:
             yield response
         finally:
             if response is not None:
-                response.close()
+                if hasattr(response, "aclose"):
+                    await response.aclose()
+                else:
+                    response.close()
 
     async def close(self) -> None:
         if self._async_transport is not None and hasattr(self._async_transport, "aclose"):

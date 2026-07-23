@@ -33,11 +33,13 @@ class WSGITransport:
         raise_app_exceptions: bool = True,
         script_name: str = "",
         remote_addr: str = "127.0.0.1",
+        wsgi_errors=None,
     ) -> None:
         self._app = app
         self._raise_app_exceptions = raise_app_exceptions
         self._script_name = script_name
         self._remote_addr = remote_addr
+        self._wsgi_errors = wsgi_errors
 
     def handle_request(self, request: Request) -> Response:
         """Convert HTTPX request to WSGI environ and call the app."""

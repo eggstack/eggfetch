@@ -21,23 +21,33 @@ class QueryParams:
 
     __slots__ = ("_items",)
 
-    def __init__(self, args=None):
+    def __init__(self, *args, **kwargs):
         self._items: list[tuple[str, str]] = []
-        if args is None:
-            pass
-        elif isinstance(args, str):
-            self._parse_string(args)
-        elif isinstance(args, dict):
-            self._items = [(k, v) for k, v in args.items()]
-        elif isinstance(args, (list, tuple)):
-            self._items = [(str(k), str(v)) for k, v in args]
-        elif isinstance(args, QueryParams):
-            self._items = list(args._items)
-        else:
-            raise TypeError(
-                f"QueryParams() argument must be str, dict, list, tuple, or QueryParams, "
-                f"not {type(args).__name__}"
-            )
+        if args:
+            if len(args) == 1:
+                value = args[0]
+                if value is None:
+                    pass  # Empty QueryParams
+                elif isinstance(value, str):
+                    self._parse_string(value)
+                elif isinstance(value, dict):
+                    self._items = [(k, v) for k, v in value.items()]
+                elif isinstance(value, (list, tuple)):
+                    self._items = [(str(k), str(v)) for k, v in value]
+                elif isinstance(value, QueryParams):
+                    self._items = list(value._items)
+                else:
+                    raise TypeError(
+                        f"QueryParams() argument must be str, dict, list, tuple, or QueryParams, "
+                        f"not {type(value).__name__}"
+                    )
+            else:
+                raise TypeError(
+                    f"QueryParams() accepts at most 1 positional argument, got {len(args)}"
+                )
+        if kwargs:
+            for k, v in kwargs.items():
+                self._items.append((k, str(v)))
 
     def _parse_string(self, s: str) -> None:
         if not s:
@@ -168,7 +178,7 @@ class URL:
 
     __slots__ = ("_parts", "_raw")
 
-    def __new__(cls, url=None, *, base_url=None):
+    def __new__(cls, url="", *, base_url=None):
         if isinstance(url, URL):
             return url
         instance = object.__new__(cls)

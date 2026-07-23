@@ -4,7 +4,7 @@ generator = "eggfetch-compat-profile"
 version = "1"
 created = "2026-07-21"
 reference = "httpx==0.28.1"
-stage = "phase-6-corrective"
+stage = "stage-c-candidate"
 status = "candidate"
 
 [reference]
