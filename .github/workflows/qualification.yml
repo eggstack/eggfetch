@@ -163,7 +163,7 @@ jobs:
       - name: Build httpx replacement wheel
         run: |
           pip install build
-          python -m build --wheel --outdir dist/httpx-replacement compat/httpx-shim
+          python -m build --wheel --outdir dist/httpx-replacement compat/httpx-controlled-replacement
 
       - name: Upload eggfetch wheel
         uses: actions/upload-artifact@v4
@@ -497,11 +497,24 @@ jobs:
           path: dist
           pattern: eggfetch-wheel
 
+      - name: Download httpx replacement wheel
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: httpx-replacement-wheel
+
+      - name: Combine wheels into single directory
+        run: |
+          mkdir -p wheel-dir
+          find dist -name '*.whl' -exec cp {} wheel-dir/ \;
+          echo "Wheels available:"
+          ls -la wheel-dir/
+
       - name: Run downstream substitution test
         run: |
           python scripts/run_isolated_downstream.py \
             --package ${{ matrix.package }} \
-            --wheel-dir dist/eggfetch-wheel \
+            --wheel-dir wheel-dir \
             --timeout 180
 
       - name: Emit job result artifact
@@ -567,38 +580,7 @@ jobs:
 
       - name: Verify shim identity
         run: |
-          /tmp/shim-test-venv/bin/python -c "
-          import httpx
-          import os
-
-          # Verify httpx resolves to eggfetch shim
-          httpx_file = httpx.__file__
-          print(f'httpx.__file__ = {httpx_file}')
-
-          # Must NOT be real httpx
-          assert 'site-packages/httpx/__init__.py' not in httpx_file, \
-              f'Real httpx is installed at {httpx_file}'
-
-          # Must point to eggfetch shim
-          assert 'httpx_shim' in httpx_file or 'eggfetch' in httpx_file or 'httpx-eggfetch-shim' in httpx_file, \
-              f'httpx does not resolve to eggfetch shim: {httpx_file}'
-
-          # Verify Client comes from eggfetch
-          from httpx import Client, AsyncClient
-          print(f'Client module: {Client.__module__}')
-          print(f'AsyncClient module: {AsyncClient.__module__}')
-          assert 'eggfetch' in Client.__module__ or 'compat' in Client.__module__, \
-              f'Client not from eggfetch: {Client.__module__}'
-
-          # Verify upstream httpx files are absent
-          import importlib
-          spec = importlib.util.find_spec('httpx')
-          httpx_dir = os.path.dirname(spec.origin)
-          assert os.path.basename(os.path.dirname(httpx_dir)) != 'httpx', \
-              'Upstream httpx package directory detected'
-
-          print('Shim identity: PASS')
-          "
+          /tmp/shim-test-venv/bin/python compat/httpx-controlled-replacement/verify_identity.py
 
       - name: Run compat tests with shim
         run: |
@@ -652,6 +634,12 @@ jobs:
           path: dist
           pattern: eggfetch-wheel
 
+      - name: Download httpx replacement wheel
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: httpx-replacement-wheel
+
       - name: Create venv and install from wheel
         run: |
           python -m venv .venv
@@ -660,10 +648,65 @@ jobs:
           pip install -r compat/httpx/0.28.1/requirements.txt
           pip install dist/eggfetch-wheel/*.whl
 
+      - name: Run compat tests and save results
+        run: |
+          source .venv/bin/activate
+          pytest crates/eggfetch-python/tests/compat/ \
+            -v --strict-markers --timeout=30 \
+            --json-report --json-report-file=/tmp/compat-test-results.json || true
+          # Ensure the result file exists even if tests fail
+          if [ ! -f /tmp/compat-test-results.json ]; then
+            echo '{"total":0,"passed":0,"failures":0,"errors":0,"sha":" '${{ needs.verify.outputs.sha }}'"}' > /tmp/compat-test-results.json
+          fi
+
+      - name: Run downstream validation and save results
+        run: |
+          source .venv/bin/activate
+          python scripts/run_downstream_compat.py \
+            --wheel-dir dist/eggfetch-wheel \
+            --required-only \
+            --output /tmp/downstream-results.json || true
+          # Ensure the result file exists
+          if [ ! -f /tmp/downstream-results.json ]; then
+            echo '{"overall_pass":false,"results":[],"sha":" '${{ needs.verify.outputs.sha }}'"}' > /tmp/downstream-results.json
+          fi
+
+      - name: Run API comparison and save results
+        run: |
+          source .venv/bin/activate
+          python scripts/generate_httpx_api_manifest.py --package eggfetch.compat.httpx --output /tmp/eggfetch-manifest.json
+          python scripts/generate_httpx_api_manifest.py --package httpx --output /tmp/httpx-manifest.json
+          python scripts/compare_httpx_api_manifest.py \
+            --reference /tmp/httpx-manifest.json \
+            --candidate /tmp/eggfetch-manifest.json \
+            --allowed compat/httpx/0.28.1/allowed-differences.toml \
+            --json > /tmp/api-comparison-results.json || true
+          # Ensure the result file exists
+          if [ ! -f /tmp/api-comparison-results.json ]; then
+            echo '{"unexplained":[],"stale_allowed":[],"sha":" '${{ needs.verify.outputs.sha }}'"}' > /tmp/api-comparison-results.json
+          fi
+
+      - name: Compute artifact hashes
+        run: |
+          python -c "
+          import json, hashlib, glob
+          hashes = {}
+          for whl in glob.glob('dist/eggfetch-wheel/*.whl') + glob.glob('dist/httpx-replacement-wheel/*.whl'):
+              name = whl.split('/')[-1]
+              h = hashlib.sha256(open(whl, 'rb').read()).hexdigest()
+              hashes[name] = h
+          json.dump({'hashes': hashes}, open('/tmp/artifact-hashes.json', 'w'), indent=2)
+          "
+
       - name: Generate evidence
         run: |
           source .venv/bin/activate
           python scripts/generate_compatibility_evidence.py \
+            --compat-test-results /tmp/compat-test-results.json \
+            --downstream-results /tmp/downstream-results.json \
+            --api-comparison-results /tmp/api-comparison-results.json \
+            --candidate-sha ${{ needs.verify.outputs.sha }} \
+            --artifact-hashes /tmp/artifact-hashes.json \
             --output compatibility-evidence.json
 
       - name: Generate evidence report
@@ -704,12 +747,117 @@ jobs:
           retention-days: 30
 
   # ──────────────────────────────────────────────────────────────────────
-  # 10. Job structure validation
+  # 10. Soak and resource verification
+  # ──────────────────────────────────────────────────────────────────────
+  soak-resource:
+    name: Soak and resource
+    runs-on: ubuntu-latest
+    needs: [verify, build-artifacts]
+    if: needs.verify.outputs.verified == 'true'
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: ${{ needs.verify.outputs.sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+
+      - name: Download eggfetch wheel
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: eggfetch-wheel
+
+      - name: Create venv and install from wheel
+        run: |
+          python -m venv .venv
+          source .venv/bin/activate
+          pip install pytest pytest-asyncio
+          pip install dist/eggfetch-wheel/*.whl
+
+      - name: Run soak and lifecycle tests
+        run: |
+          source .venv/bin/activate
+          pytest crates/eggfetch-python/tests/compat/test_lifecycle.py \
+            crates/eggfetch-python/tests/compat/test_timeout_integration.py \
+            -v --timeout=60
+
+      - name: Build and run resource monitor
+        run: |
+          cargo build --release -p eggfetch-bench --bin resource_monitor
+          ./target/release/resource_monitor | tee /tmp/resource-report.json
+          # Check that the resource report indicates pass
+          python -c "
+          import json
+          report = json.load(open('/tmp/resource-report.json'))
+          if not report.get('passed', False):
+              print('::error::Resource regression detected')
+              raise SystemExit(1)
+          print('All resource workloads within thresholds.')
+          "
+
+      - name: Run interpreter shutdown test
+        run: |
+          source .venv/bin/activate
+          python -c "
+          import subprocess, sys, json
+
+          # Test clean shutdown with unused client
+          code = '''
+          from eggfetch.compat.httpx import Client
+          c = Client()
+          # Explicitly close
+          c.close()
+          '''
+          result = subprocess.run(
+              [sys.executable, '-c', code],
+              capture_output=True, text=True, timeout=30,
+          )
+          if result.returncode != 0:
+              print(f'FAIL: shutdown test failed: {result.stderr}')
+              raise SystemExit(1)
+          print('Clean shutdown test: PASS')
+          "
+
+      - name: Emit job result artifact
+        if: always()
+        run: |
+          python - <<'PYEOF'
+          import json, os
+          result = {
+              "job": "soak-resource",
+              "status": "${{ job.status }}",
+              "sha": "${{ needs.verify.outputs.sha }}",
+          }
+          with open("/tmp/job-result-soak.json", "w") as f:
+              json.dump(result, f, indent=2)
+          PYEOF
+
+      - name: Upload job result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: job-result-soak-resource
+          path: /tmp/job-result-soak.json
+          retention-days: 30
+
+      - name: Upload resource report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: resource-report
+          path: /tmp/resource-report.json
+          retention-days: 30
+
+  # ──────────────────────────────────────────────────────────────────────
+  # 11. Job structure validation
   # ──────────────────────────────────────────────────────────────────────
   check-structure:
     name: Validate job structure
     runs-on: ubuntu-latest
-    needs: [verify, build-artifacts, build-wheels, build-sdist, validate-content, wheel-smoke, compat-tests, downstream-substitution, shim-substitution, generate-evidence]
+    needs: [verify, build-artifacts, build-wheels, build-sdist, validate-content, wheel-smoke, compat-tests, downstream-substitution, shim-substitution, generate-evidence, soak-resource]
     if: needs.verify.outputs.verified == 'true'
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -775,7 +923,7 @@ jobs:
     name: Qualification gate
     runs-on: ubuntu-latest
     if: ${{ always() }}
-    needs: [verify, build-artifacts, build-wheels, build-sdist, validate-content, wheel-smoke, compat-tests, downstream-substitution, shim-substitution, generate-evidence, check-structure]
+    needs: [verify, build-artifacts, build-wheels, build-sdist, validate-content, wheel-smoke, compat-tests, downstream-substitution, shim-substitution, generate-evidence, soak-resource, check-structure]
     steps:
       - name: Evaluate qualification results
         run: |
@@ -793,6 +941,7 @@ jobs:
               "downstream-substitution": "${{ needs.downstream-substitution.result }}",
               "shim-substitution":       "${{ needs.shim-substitution.result }}",
               "generate-evidence":       "${{ needs.generate-evidence.result }}",
+              "soak-resource":           "${{ needs.soak-resource.result }}",
               "check-structure":         "${{ needs.check-structure.result }}",
           }
 
@@ -801,7 +950,7 @@ jobs:
               "verify", "build-artifacts", "build-wheels", "build-sdist",
               "validate-content", "wheel-smoke", "compat-tests",
               "downstream-substitution", "shim-substitution",
-              "generate-evidence", "check-structure",
+              "generate-evidence", "soak-resource", "check-structure",
           ]
 
           errors = []
