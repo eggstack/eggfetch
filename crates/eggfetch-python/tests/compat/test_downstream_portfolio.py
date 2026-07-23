@@ -24,6 +24,8 @@ REQUIRED_PACKAGE_FIELDS = {
     "known-incompatibilities",
     "update-owner",
     "review-cadence",
+    "test-command",
+    "min-tests",
 }
 
 REQUIRED_PORTFOLIO_FIELDS = {
@@ -160,3 +162,58 @@ class TestPackageEntries:
         covered = {pkg["category"] for pkg in packages}
         missing = VALID_CATEGORIES - covered
         assert not missing, f"Categories with no representative package: {missing}"
+
+    def test_test_commands_are_strings(self, manifest):
+        packages = manifest.get("package", [])
+        errors = []
+        for pkg in packages:
+            cmd = pkg.get("test-command")
+            if cmd is None:
+                errors.append(f"{pkg['name']}: missing test-command")
+            elif not isinstance(cmd, str):
+                errors.append(f"{pkg['name']}: test-command must be a string")
+            elif not cmd.strip():
+                errors.append(f"{pkg['name']}: test-command is empty")
+        assert not errors, "\n".join(errors)
+
+    def test_min_tests_are_non_negative_integers(self, manifest):
+        packages = manifest.get("package", [])
+        errors = []
+        for pkg in packages:
+            min_t = pkg.get("min-tests")
+            if min_t is None:
+                errors.append(f"{pkg['name']}: missing min-tests")
+            elif not isinstance(min_t, int) or min_t < 0:
+                errors.append(f"{pkg['name']}: min-tests must be a non-negative integer, got {min_t}")
+        assert not errors, "\n".join(errors)
+
+    def test_required_packages_have_min_tests(self, manifest):
+        """Public-usage packages with testable categories should have min-tests > 0.
+
+        Excludes packages that are pytest plugins or libraries without
+        installed test suites (e.g. pytest-httpx, anthropic, groq).
+        """
+        packages = manifest.get("package", [])
+        # Packages that are test frameworks or SDK wrappers without shipped tests
+        EXEMPT_PACKAGES = {"pytest-httpx", "anthropic", "groq", "anyio", "pydantic", "httpx"}
+        errors = []
+        for pkg in packages:
+            if pkg.get("usage") != "public":
+                continue
+            if pkg["name"] in EXEMPT_PACKAGES:
+                continue
+            cat = pkg.get("category", "")
+            min_t = pkg.get("min-tests", 0)
+            # Categories that should have runnable tests
+            testable = {
+                "mock-transport-user", "framework-test-client",
+                "framework-asgi-transport", "streaming-upload-download",
+                "custom-transport-subclass", "custom-auth-flow",
+                "event-hook-instrumentation",
+            }
+            if cat in testable and min_t == 0:
+                errors.append(
+                    f"{pkg['name']}: public package in category '{cat}' "
+                    f"should have min-tests > 0, got {min_t}"
+                )
+        assert not errors, "\n".join(errors)

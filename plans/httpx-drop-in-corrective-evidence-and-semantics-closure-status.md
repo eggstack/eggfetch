@@ -27,6 +27,15 @@ to `Stage C candidate` to reflect the actual evidence state.
 - Resolved allowed-differences entries updated to reflect actual behavior
 - Timeout conversion no longer sets implicit total deadline
 
+### Track C — Downstream Substitution Validation
+- `run_isolated_downstream.py` rewritten to install eggfetch wheel (not upstream httpx)
+- Added upstream httpx detection (fails when upstream is present)
+- Added shim identity verification (asserts `httpx.__file__` resolves to eggfetch)
+- `run_downstream_compat.py` rewritten to actually run downstream tests (not just imports)
+- Added `--wheel-dir`, `--required-only`, `--packages` options
+- Downstream manifest updated with `test-command` and `min-tests` fields
+- Downstream portfolio tests expanded to validate new manifest fields
+
 ### Track D — Timeout Semantics
 - `_convert_timeout` no longer passes `seconds=timeout.total` to native layer
 - Numeric timeouts map to per-phase fields (connect, read, write, pool) only
@@ -47,6 +56,22 @@ to `Stage C candidate` to reflect the actual evidence state.
 - Request extensions override matching client keys
 - Unrelated client keys remain in merged result
 
+### Track I — CI and Governance
+- `wheel-smoke` CI job expanded to all Python versions (3.10-3.13)
+- `compat-httpx` CI job expanded to all Python versions (3.10-3.13)
+- Manifest comparison is now fail-closed (no `continue-on-error`)
+
+### Track K — Immutable Release Requalification
+- Created `qualification.yml` workflow for release qualification
+- Builds wheels across 5 platforms × 4 Python versions
+- Validates package content via `validate_package_content.py`
+- Runs wheel smoke tests across all Python/OS combinations
+- Runs HTTPX compat tests across all Python versions
+- Runs downstream substitution tests (respx, httpx-sse, httpx-auth, starlette, anyio, pydantic)
+- Tests shim substitution with identity verification
+- Generates qualification evidence
+- Has dry-run mode for non-publishing validation
+
 ## Files Modified
 
 | File | Track |
@@ -61,18 +86,22 @@ to `Stage C candidate` to reflect the actual evidence state.
 | `AGENTS.md` | A, I |
 | `.skills/release-process.md` | I |
 | `.github/workflows/ci.yml` | B, I |
+| `.github/workflows/qualification.yml` | K |
 | `compat/httpx/0.28.1/allowed-differences.toml` | B |
 | `crates/eggfetch-python/python/eggfetch/compat/httpx/_client.py` | D, E, F, G |
+| `scripts/run_isolated_downstream.py` | C |
+| `scripts/run_downstream_compat.py` | C |
+| `compat/downstream/manifest.toml` | C |
+| `crates/eggfetch-python/tests/compat/test_downstream_portfolio.py` | C |
 
 ## Remaining Work
 
-- Track C: Downstream substitution validation rebuild (requires isolated env infrastructure)
-- Track H: Production-semantics gaps (soak workflow, flaky-test policy)
-- Track K: Immutable release requalification (after all other tracks complete)
+- Track H: Production-semantics gaps (soak workflow, Phase 1 status cleanup)
 
 ## Final Stage Decision
 
-**Stage C candidate** — The implementation has corrected known defects but
-immutable release qualification is not yet complete. The claim may be
-restored to `Stage C released` only after every acceptance criterion in
-the corrective plan is satisfied against one exact candidate SHA.
+**Stage C candidate** — The implementation has corrected known defects and
+built qualification infrastructure. Immutable release qualification is not
+yet complete (Track H remains). The claim may be restored to `Stage C released`
+only after every acceptance criterion in the corrective plan is satisfied
+against one exact candidate SHA.

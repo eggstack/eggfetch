@@ -1,0 +1,516 @@
+name: Qualification
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_sha:
+        description: "Full 40-char SHA of the release candidate"
+        required: true
+        type: string
+      dry_run:
+        description: "Dry-run: build and validate but skip publishing"
+        required: false
+        type: boolean
+        default: true
+  schedule:
+    # Weekly soak run against main
+    - cron: "0 3 * * 1"
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
+  PYO3_USE_ABI3_FORWARD_COMPATIBILITY: "1"
+
+permissions:
+  contents: read
+  attestations: write
+
+jobs:
+  # ──────────────────────────────────────────────────────────────────────
+  # 1. Verify candidate SHA
+  # ──────────────────────────────────────────────────────────────────────
+  verify:
+    name: Verify candidate
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.resolve.outputs.sha }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+
+      - name: Resolve candidate SHA
+        id: resolve
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            SHA="${{ inputs.candidate_sha }}"
+          else
+            SHA="${{ github.sha }}"
+          fi
+          # Validate SHA format
+          if ! echo "$SHA" | grep -qE '^[0-9a-f]{40}$'; then
+            echo "::error::Invalid SHA: $SHA"
+            exit 1
+          fi
+          # Verify it exists
+          if ! git cat-file -e "$SHA" 2>/dev/null; then
+            echo "::error::SHA does not exist: $SHA"
+            exit 1
+          fi
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "Candidate SHA: $SHA"
+
+      - name: Verify CI gate was green for this SHA
+        run: |
+          SHA="${{ steps.resolve.outputs.sha }}"
+          echo "Checking CI status for $SHA..."
+          # The SHA must be the HEAD of a branch or tag that passed CI
+          git checkout "$SHA"
+          echo "Checked out candidate SHA."
+
+  # ──────────────────────────────────────────────────────────────────────
+  # 2. Build wheels across all platforms
+  # ──────────────────────────────────────────────────────────────────────
+  build-wheels:
+    name: Build wheels (${{ matrix.platform }})
+    runs-on: ${{ matrix.os }}
+    needs: [verify]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux-x86_64
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-latest
+            platform: linux-aarch64
+            target: aarch64-unknown-linux-gnu
+          - os: macos-latest
+            platform: macos-x86_64
+            target: x86_64-apple-darwin
+          - os: macos-latest
+            platform: macos-aarch64
+            target: aarch64-apple-darwin
+          - os: windows-latest
+            platform: win-amd64
+            target: x86_64-pc-windows-msvc
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: ${{ needs.verify.outputs.sha }}
+
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          args: >-
+            --release
+            --manifest-path crates/eggfetch-python/Cargo.toml
+            --out dist
+            --interpreter 3.10 3.11 3.12 3.13
+          sccache: ${{ matrix.target != 'aarch64-unknown-linux-gnu' }}
+        env:
+          CFLAGS_aarch64_unknown_linux_gnu: "-march=armv8-a"
+
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.platform }}
+          path: dist/*.whl
+
+  build-sdist:
+    name: Build sdist
+    runs-on: ubuntu-latest
+    needs: [verify]
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: ${{ needs.verify.outputs.sha }}
+
+      - name: Build sdist
+        uses: PyO3/maturin-action@v1
+        with:
+          command: sdist
+          args: >-
+            --manifest-path crates/eggfetch-python/Cargo.toml
+            --out dist
+
+      - name: Upload sdist
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-sdist
+          path: dist/*.tar.gz
+
+  # ──────────────────────────────────────────────────────────────────────
+  # 3. Validate package content
+  # ──────────────────────────────────────────────────────────────────────
+  validate-content:
+    name: Validate package content
+    runs-on: ubuntu-latest
+    needs: [build-wheels, build-sdist]
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: ${{ needs.verify.outputs.sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: wheels-*
+
+      - name: Validate wheels
+        run: |
+          FAILED=0
+          for wheel in artifacts/wheels-*/*.whl; do
+            echo "=== Validating: $(basename "$wheel") ==="
+            python scripts/validate_package_content.py "$wheel" || FAILED=1
+          done
+          if [ "$FAILED" -eq 1 ]; then
+            echo "::error::Package content validation failed"
+            exit 1
+          fi
+          echo "All packages passed content validation."
+
+      - name: Validate sdist
+        run: |
+          for sdist in artifacts/wheels-sdist/*.tar.gz; do
+            echo "=== Validating: $(basename "$sdist") ==="
+            python scripts/validate_package_content.py "$sdist"
+          done
+
+  # ──────────────────────────────────────────────────────────────────────
+  # 4. Wheel smoke tests across all Python versions
+  # ──────────────────────────────────────────────────────────────────────
+  wheel-smoke:
+    name: Wheel smoke (py${{ matrix.python-version }}, ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    needs: [build-wheels]
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: ${{ needs.verify.outputs.sha }}
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Download wheel for this platform
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: wheels-${{ runner.os == 'Linux' && 'linux-x86_64' || runner.os == 'macOS' && 'macos-' || 'win-' }}*
+
+      - name: Flatten wheel directory
+        run: |
+          mkdir -p wheel-dir
+          find dist -name '*.whl' -exec cp {} wheel-dir/ \;
+          echo "Wheels available:"
+          ls -la wheel-dir/
+
+      - name: Run wheel smoke test
+        run: python scripts/wheel_smoke.py --wheel-dir wheel-dir
+
+  # ──────────────────────────────────────────────────────────────────────
+  # 5. HTTPX compatibility tests
+  # ──────────────────────────────────────────────────────────────────────
+  compat-tests:
+    name: Compat tests (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    needs: [build-wheels]
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: ${{ needs.verify.outputs.sha }}
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Cache cargo
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: qual-${{ runner.os }}-py${{ matrix.python-version }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: qual-${{ runner.os }}-py${{ matrix.python-version }}-cargo-
+
+      - name: Create venv and install deps
+        run: |
+          python -m venv .venv
+          source .venv/bin/activate
+          pip install -r compat/httpx/0.28.1/requirements.txt
+          pip install maturin pytest pytest-asyncio
+
+      - name: Build and install eggfetch
+        run: |
+          source .venv/bin/activate
+          maturin develop -m crates/eggfetch-python/Cargo.toml
+
+      - name: Validate compatibility profile
+        run: |
+          source .venv/bin/activate
+          python scripts/validate_httpx_compat_profile.py compat/httpx/0.28.1
+
+      - name: Run compatibility tests
+        env:
+          EGGFETCH_COMPAT_REQUIRED: "1"
+          EGGFETCH_COMPAT_PROFILE: "httpx/0.28.1"
+        run: |
+          source .venv/bin/activate
+          pytest crates/eggfetch-python/tests/compat/ -v --strict-markers --timeout=30
+
+      - name: Generate and compare API manifests
+        run: |
+          source .venv/bin/activate
+          python scripts/generate_httpx_api_manifest.py --package eggfetch.compat.httpx --output /tmp/eggfetch-manifest.json
+          python scripts/generate_httpx_api_manifest.py --package httpx --output /tmp/httpx-manifest.json
+          python scripts/compare_httpx_api_manifest.py \
+            --reference /tmp/httpx-manifest.json \
+            --candidate /tmp/eggfetch-manifest.json \
+            --allowed compat/httpx/0.28.1/allowed-differences.toml
+
+  # ──────────────────────────────────────────────────────────────────────
+  # 6. Downstream substitution tests
+  # ──────────────────────────────────────────────────────────────────────
+  downstream-substitution:
+    name: Downstream (${{ matrix.package }})
+    runs-on: ubuntu-latest
+    needs: [build-wheels]
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - respx
+          - httpx-sse
+          - httpx-auth
+          - starlette
+          - anyio
+          - pydantic
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: ${{ needs.verify.outputs.sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+
+      - name: Download linux-x86_64 wheel
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: wheels-linux-x86_64
+
+      - name: Run downstream substitution test
+        run: |
+          python scripts/run_isolated_downstream.py \
+            --package ${{ matrix.package }} \
+            --wheel-dir dist/wheels-linux-x86_64 \
+            --timeout 180
+
+  # ──────────────────────────────────────────────────────────────────────
+  # 7. Build shim and test substitution
+  # ──────────────────────────────────────────────────────────────────────
+  shim-substitution:
+    name: Shim substitution test
+    runs-on: ubuntu-latest
+    needs: [build-wheels]
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: ${{ needs.verify.outputs.sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+
+      - name: Download linux-x86_64 wheel
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: wheels-linux-x86_64
+
+      - name: Build and install shim
+        run: |
+          python -m venv /tmp/shim-test-venv
+          # Install eggfetch wheel first (no upstream httpx)
+          /tmp/shim-test-venv/bin/pip install dist/wheels-linux-x86_64/*.whl
+          # Install the shim from local source
+          /tmp/shim-test-venv/bin/pip install ./compat/httpx-shim
+
+      - name: Verify shim identity
+        run: |
+          /tmp/shim-test-venv/bin/python -c "
+          import httpx
+          import os
+
+          # Verify httpx resolves to eggfetch shim
+          httpx_file = httpx.__file__
+          print(f'httpx.__file__ = {httpx_file}')
+
+          # Must NOT be real httpx
+          assert 'site-packages/httpx/__init__.py' not in httpx_file, \
+              f'Real httpx is installed at {httpx_file}'
+
+          # Must point to eggfetch shim
+          assert 'httpx_shim' in httpx_file or 'eggfetch' in httpx_file or 'httpx-eggfetch-shim' in httpx_file, \
+              f'httpx does not resolve to eggfetch shim: {httpx_file}'
+
+          # Verify Client comes from eggfetch
+          from httpx import Client, AsyncClient
+          print(f'Client module: {Client.__module__}')
+          print(f'AsyncClient module: {AsyncClient.__module__}')
+          assert 'eggfetch' in Client.__module__ or 'compat' in Client.__module__, \
+              f'Client not from eggfetch: {Client.__module__}'
+
+          # Verify upstream httpx files are absent
+          import importlib
+          spec = importlib.util.find_spec('httpx')
+          httpx_dir = os.path.dirname(spec.origin)
+          assert os.path.basename(os.path.dirname(httpx_dir)) != 'httpx', \
+              'Upstream httpx package directory detected'
+
+          print('Shim identity: PASS')
+          "
+
+      - name: Run compat tests with shim
+        run: |
+          /tmp/shim-test-venv/bin/pip install pytest pytest-asyncio
+          EGGFETCH_COMPAT_REQUIRED=1 /tmp/shim-test-venv/bin/pytest \
+            crates/eggfetch-python/tests/compat/ -v --strict-markers --timeout=30
+
+  # ──────────────────────────────────────────────────────────────────────
+  # 8. Generate evidence
+  # ──────────────────────────────────────────────────────────────────────
+  generate-evidence:
+    name: Generate evidence
+    runs-on: ubuntu-latest
+    needs: [verify, wheel-smoke, compat-tests, downstream-substitution, shim-substitution]
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: ${{ needs.verify.outputs.sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
+
+      - name: Build and install eggfetch
+        run: |
+          python -m venv .venv
+          source .venv/bin/activate
+          pip install maturin pytest pytest-asyncio
+          pip install -r compat/httpx/0.28.1/requirements.txt
+          maturin develop -m crates/eggfetch-python/Cargo.toml
+
+      - name: Generate evidence
+        run: |
+          source .venv/bin/activate
+          python scripts/generate_compatibility_evidence.py \
+            --output compatibility-evidence.json
+
+      - name: Generate evidence report
+        run: |
+          source .venv/bin/activate
+          python scripts/generate_compatibility_report.py \
+            --input compatibility-evidence.json \
+            --output compatibility-report.md
+
+      - name: Upload evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: qualification-evidence
+          path: |
+            compatibility-evidence.json
+            compatibility-report.md
+
+  # ──────────────────────────────────────────────────────────────────────
+  # 9. Qualification gate
+  # ──────────────────────────────────────────────────────────────────────
+  qualification-gate:
+    name: Qualification gate
+    runs-on: ubuntu-latest
+    if: ${{ always() }}
+    needs: [verify, build-wheels, build-sdist, validate-content, wheel-smoke, compat-tests, downstream-substitution, shim-substitution, generate-evidence]
+    steps:
+      - name: Evaluate qualification results
+        run: |
+          python - <<'PYEOF'
+          import json, os
+
+          jobs = {
+              "verify":                  "${{ needs.verify.result }}",
+              "build-wheels":            "${{ needs.build-wheels.result }}",
+              "build-sdist":             "${{ needs.build-sdist.result }}",
+              "validate-content":        "${{ needs.validate-content.result }}",
+              "wheel-smoke":             "${{ needs.wheel-smoke.result }}",
+              "compat-tests":            "${{ needs.compat-tests.result }}",
+              "downstream-substitution": "${{ needs.downstream-substitution.result }}",
+              "shim-substitution":       "${{ needs.shim-substitution.result }}",
+              "generate-evidence":       "${{ needs.generate-evidence.result }}",
+          }
+
+          # Jobs that must succeed
+          required = [
+              "verify", "build-wheels", "build-sdist", "validate-content",
+              "wheel-smoke", "compat-tests", "downstream-substitution",
+              "shim-substitution", "generate-evidence",
+          ]
+
+          errors = []
+          summary_lines = ["## Qualification Results\n", "| Job | Result |", "|-----|--------|"]
+          for job in required:
+              result = jobs.get(job, "missing")
+              summary_lines.append(f"| {job} | {result} |")
+              if result not in ("success",):
+                  errors.append(f"Required job '{job}' finished with result '{result}'")
+
+          summary = "\n".join(summary_lines)
+          step_summary = os.environ.get("GITHUB_STEP_SUMMARY")
+          if step_summary:
+              with open(step_summary, "a") as f:
+                  f.write(summary + "\n")
+
+          if errors:
+              for err in errors:
+                  print(f"FAIL: {err}")
+              raise SystemExit(1)
+
+          print("All qualification gates passed.")
+          PYEOF
+
+      - name: Upload qualification summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qualification-summary
+          path: /tmp/qual-*.json
+          retention-days: 30

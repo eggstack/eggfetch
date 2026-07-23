@@ -1,19 +1,30 @@
 #!/usr/bin/env python3
-"""Validate the downstream compatibility manifest.
+"""Validate downstream compatibility by running actual downstream test suites.
 
 Reads compat/downstream/manifest.toml, validates each entry structure,
-attempts to import each listed package, and reports availability.
-Outputs a JSON summary to stdout. Idempotent and safe to run without
-packages installed (reports missing ones).
+runs downstream package tests in isolated environments against the eggfetch
+wheel, and reports results as JSON.
+
+Usage:
+    run_downstream_compat.py --wheel-dir <dir> [--packages pkg1,pkg2] [--timeout <seconds>]
+
+Exit codes:
+    0 — all required packages passed
+    1 — one or more required packages failed
+    2 — argument or manifest error
 """
 
-import importlib
+from __future__ import annotations
+
+import argparse
 import json
+import subprocess
 import sys
-import tomllib
 from pathlib import Path
 
-MANIFEST_PATH = Path(__file__).resolve().parent.parent / "compat" / "downstream" / "manifest.toml"
+SCRIPT_DIR = Path(__file__).resolve().parent
+MANIFEST_PATH = SCRIPT_DIR.parent / "compat" / "downstream" / "manifest.toml"
+ISOLATED_RUNNER = SCRIPT_DIR / "run_isolated_downstream.py"
 
 REQUIRED_FIELDS = {
     "name",
@@ -48,6 +59,8 @@ VALID_CATEGORIES = {
 
 def validate_manifest(path: Path) -> dict:
     """Load and validate the manifest structure. Returns a result dict."""
+    import tomllib
+
     errors = []
 
     if not path.exists():
@@ -97,59 +110,128 @@ def validate_manifest(path: Path) -> dict:
     }
 
 
-def check_imports(packages: list[dict]) -> list[dict]:
-    """Attempt to import each package and report availability."""
-    results = []
-    for pkg in packages:
-        name = pkg["name"]
-        version = pkg.get("version", "unknown")
-        installed = False
-        installed_version = None
-        import_error = None
+def run_downstream_test(package_name: str, wheel_dir: Path, timeout: int) -> dict:
+    """Run a single downstream package test via run_isolated_downstream.py."""
+    cmd = [
+        sys.executable,
+        str(ISOLATED_RUNNER),
+        "--package", package_name,
+        "--wheel-dir", str(wheel_dir),
+        "--timeout", str(timeout),
+    ]
 
-        try:
-            mod = importlib.import_module(name.replace("-", "_"))
-            installed = True
-            installed_version = getattr(mod, "__version__", None)
-        except ImportError as exc:
-            import_error = str(exc)
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=timeout + 30,  # Extra buffer for venv creation
+        )
 
-        results.append({
-            "name": name,
-            "expected_version": version,
-            "installed": installed,
-            "installed_version": installed_version,
-            "import_error": import_error,
-        })
+        # Parse the JSON output from the runner
+        stdout = result.stdout.strip()
+        if stdout:
+            try:
+                return json.loads(stdout)
+            except json.JSONDecodeError:
+                return {
+                    "package": package_name,
+                    "status": "error",
+                    "error": f"Could not parse runner output: {stdout[:500]}",
+                    "returncode": result.returncode,
+                }
 
-    return results
+        return {
+            "package": package_name,
+            "status": "error",
+            "error": f"No output from runner. stderr: {result.stderr[:500]}",
+            "returncode": result.returncode,
+        }
+
+    except subprocess.TimeoutExpired:
+        return {
+            "package": package_name,
+            "status": "timeout",
+            "error": f"Runner timed out after {timeout + 30}s",
+        }
+    except Exception as exc:
+        return {
+            "package": package_name,
+            "status": "error",
+            "error": str(exc),
+        }
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(
+        description="Run downstream compatibility tests against eggfetch wheel",
+    )
+    parser.add_argument(
+        "--wheel-dir", required=True,
+        help="Directory containing eggfetch .whl files",
+    )
+    parser.add_argument(
+        "--packages", default=None,
+        help="Comma-separated list of packages to test (default: all in manifest)",
+    )
+    parser.add_argument(
+        "--timeout", type=int, default=120,
+        help="Per-package timeout in seconds (default: 120)",
+    )
+    parser.add_argument(
+        "--required-only", action="store_true",
+        help="Only test packages with usage=public (required for Stage C)",
+    )
+    args = parser.parse_args()
+
+    wheel_dir = Path(args.wheel_dir).resolve()
+    if not wheel_dir.exists():
+        print(json.dumps({"status": "error", "message": f"Wheel directory not found: {wheel_dir}"}))
+        return 2
+
     manifest_result = validate_manifest(MANIFEST_PATH)
-    import_results = check_imports(manifest_result["packages"])
+    if manifest_result["status"] == "invalid":
+        print(json.dumps({
+            "status": "error",
+            "errors": manifest_result["errors"],
+        }, indent=2))
+        return 2
+
+    packages = manifest_result["packages"]
+    if args.packages:
+        selected = set(args.packages.split(","))
+        packages = [p for p in packages if p["name"] in selected]
+
+    if args.required_only:
+        packages = [p for p in packages if p.get("usage") == "public"]
+
+    results = []
+    for pkg in packages:
+        print(f"Testing {pkg['name']}...", file=sys.stderr)
+        result = run_downstream_test(pkg["name"], wheel_dir, args.timeout)
+        results.append(result)
+
+    # Build summary
+    passed = [r for r in results if r.get("status") == "passed"]
+    failed = [r for r in results if r.get("status") == "failed"]
+    skipped = [r for r in results if r.get("status") in ("skipped", "skipped-no-tests")]
+    errors = [r for r in results if r.get("status") in ("error", "timeout", "install-failed", "downstream-install-failed")]
 
     summary = {
         "manifest_status": manifest_result["status"],
-        "manifest_errors": manifest_result["errors"],
-        "total_packages": len(manifest_result["packages"]),
-        "installed_count": sum(1 for r in import_results if r["installed"]),
-        "missing_count": sum(1 for r in import_results if not r["installed"]),
-        "packages": import_results,
+        "total_packages": len(results),
+        "passed": len(passed),
+        "failed": len(failed),
+        "skipped": len(skipped),
+        "errors": len(errors),
+        "overall_pass": len(failed) == 0 and len(errors) == 0,
+        "results": results,
     }
 
     print(json.dumps(summary, indent=2))
 
-    if manifest_result["status"] == "invalid":
-        print(f"\nManifest validation failed with {len(manifest_result['errors'])} error(s)", file=sys.stderr)
+    if failed or errors:
         return 1
-
-    missing = [r["name"] for r in import_results if not r["installed"]]
-    if missing:
-        print(f"\n{len(missing)} package(s) not installed: {', '.join(missing)}", file=sys.stderr)
-        return 0
-
-    print(f"\nAll {summary['total_packages']} packages installed and available.")
     return 0
 
 

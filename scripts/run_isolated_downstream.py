@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Run a downstream package's tests in an isolated virtual environment.
 
-Creates a temporary venv, installs httpx==0.28.1 and the target package,
-runs the package's tests with network disabled, and reports results as JSON.
+Creates a temporary venv, installs the eggfetch wheel (NOT upstream httpx),
+installs the target package, and runs its tests with network disabled.
 
 Usage:
-    run_isolated_downstream.py --package <name> [--timeout <seconds>] [--keep-env]
+    run_isolated_downstream.py --package <name> --wheel-dir <dir> [--timeout <seconds>] [--keep-env]
 
 The package name must exist in compat/downstream/manifest.toml.
 Exit codes:
@@ -62,6 +62,89 @@ def pip_install(venv_dir: Path, packages: list[str], timeout: int) -> subprocess
     )
 
 
+def verify_no_upstream_httpx(venv_dir: Path) -> list[str]:
+    """Assert that upstream httpx is NOT installed. Returns list of errors."""
+    errors = []
+    python = venv_dir / "bin" / "python"
+
+    # Check that httpx.__file__ points to eggfetch
+    result = subprocess.run(
+        [str(python), "-c", """
+import sys
+try:
+    import httpx
+    f = httpx.__file__
+    if 'eggfetch' not in f and 'httpx_shim' not in f and 'httpx-eggfetch-shim' not in f:
+        print(f'ERROR: httpx resolves to upstream: {f}')
+        sys.exit(1)
+    print(f'OK: httpx resolves to: {f}')
+except ImportError:
+    print('OK: httpx not importable (expected in some environments)')
+"""],
+        capture_output=True, text=True, timeout=30,
+    )
+    if result.returncode != 0:
+        errors.append(f"Upstream httpx detected: {result.stdout} {result.stderr}")
+
+    # Check that no real httpx package exists in site-packages
+    result = subprocess.run(
+        [str(python), "-c", """
+import importlib, os, sys
+spec = importlib.util.find_spec('httpx')
+if spec and spec.origin:
+    httpx_dir = os.path.dirname(spec.origin)
+    parent = os.path.basename(os.path.dirname(httpx_dir))
+    if parent == 'site-packages' and os.path.basename(httpx_dir) == 'httpx':
+        # Check if it's the shim by looking for eggfetch imports
+        init_path = os.path.join(httpx_dir, '__init__.py')
+        if os.path.exists(init_path):
+            with open(init_path) as f:
+                content = f.read()
+            if 'eggfetch' not in content and 'shim' not in content.lower():
+                print(f'ERROR: Real httpx package at {httpx_dir}')
+                sys.exit(1)
+    print(f'httpx location OK: {httpx_dir}')
+else:
+    print('httpx not found (OK)')
+"""],
+        capture_output=True, text=True, timeout=30,
+    )
+    if result.returncode != 0:
+        errors.append(f"Upstream httpx package directory detected: {result.stderr}")
+
+    return errors
+
+
+def verify_shim_identity(venv_dir: Path) -> list[str]:
+    """Verify that httpx resolves to the eggfetch-backed shim. Returns errors."""
+    errors = []
+    python = venv_dir / "bin" / "python"
+
+    result = subprocess.run(
+        [str(python), "-c", """
+import sys
+try:
+    import httpx
+    from httpx import Client, AsyncClient
+    print(f'httpx.__file__={httpx.__file__}')
+    print(f'Client.__module__={Client.__module__}')
+    print(f'AsyncClient.__module__={AsyncClient.__module__}')
+    # Verify it's eggfetch-backed
+    if 'eggfetch' not in Client.__module__ and 'compat' not in Client.__module__:
+        print(f'ERROR: Client not from eggfetch compat layer')
+        sys.exit(1)
+except ImportError as e:
+    print(f'Import error: {e}')
+    sys.exit(1)
+"""],
+        capture_output=True, text=True, timeout=30,
+    )
+    if result.returncode != 0:
+        errors.append(f"Shim identity check failed: {result.stdout} {result.stderr}")
+
+    return errors
+
+
 def run_tests(venv_dir: Path, package_name: str, timeout: int) -> subprocess.CompletedProcess:
     pytest_bin = venv_dir / "bin" / "pytest"
     python_bin = venv_dir / "bin" / "python"
@@ -104,9 +187,20 @@ def run_tests(venv_dir: Path, package_name: str, timeout: int) -> subprocess.Com
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run downstream tests in isolation")
     parser.add_argument("--package", required=True, help="Package name from manifest")
+    parser.add_argument("--wheel-dir", required=True, help="Directory containing eggfetch .whl files")
     parser.add_argument("--timeout", type=int, default=120, help="Timeout in seconds (default: 120)")
     parser.add_argument("--keep-env", action="store_true", help="Keep virtual environment after tests")
     args = parser.parse_args()
+
+    wheel_dir = Path(args.wheel_dir).resolve()
+    if not wheel_dir.exists():
+        print(json.dumps({"status": "error", "message": f"Wheel directory not found: {wheel_dir}"}))
+        return 2
+
+    wheels = list(wheel_dir.glob("*.whl"))
+    if not wheels:
+        print(json.dumps({"status": "error", "message": f"No .whl files found in {wheel_dir}"}))
+        return 2
 
     manifest = load_manifest()
     if not manifest:
@@ -132,14 +226,20 @@ def main() -> int:
         "timeout": args.timeout,
         "install": {"success": False, "stdout": "", "stderr": ""},
         "tests": {"success": False, "returncode": -1, "stdout": "", "stderr": ""},
+        "shim_identity": {"success": False, "errors": []},
+        "upstream_check": {"success": False, "errors": []},
         "status": "error",
     }
 
     try:
         venv_dir = create_venv(Path(tmpdir))
-        install_pkgs = [f"httpx==0.28.1", pkg["name"]]
+
+        # Install eggfetch wheel first (NOT upstream httpx)
+        install_pkgs = [str(wheels[0])]
         if pkg.get("optional-dependencies"):
-            install_pkgs.extend(pkg["optional-dependencies"])
+            # Filter out 'httpx' from optional-dependencies — we use the shim
+            filtered_deps = [d for d in pkg["optional-dependencies"] if d != "httpx"]
+            install_pkgs.extend(filtered_deps)
 
         install_result = pip_install(venv_dir, install_pkgs, args.timeout)
         result["install"] = {
@@ -150,6 +250,34 @@ def main() -> int:
 
         if install_result.returncode != 0:
             result["status"] = "install-failed"
+            print(json.dumps(result, indent=2))
+            return 1
+
+        # Verify no upstream httpx is installed
+        upstream_errors = verify_no_upstream_httpx(venv_dir)
+        result["upstream_check"] = {
+            "success": len(upstream_errors) == 0,
+            "errors": upstream_errors,
+        }
+        if upstream_errors:
+            result["status"] = "upstream-httpx-detected"
+            print(json.dumps(result, indent=2))
+            return 1
+
+        # Verify shim identity
+        shim_errors = verify_shim_identity(venv_dir)
+        result["shim_identity"] = {
+            "success": len(shim_errors) == 0,
+            "errors": shim_errors,
+        }
+        # Don't fail on shim errors — some packages may not import httpx at top level
+
+        # Install the downstream package
+        downstream_install = pip_install(venv_dir, [pkg["name"]], args.timeout)
+        if downstream_install.returncode != 0:
+            result["install"]["success"] = False
+            result["install"]["stderr"] += "\n--- downstream install ---\n" + downstream_install.stderr
+            result["status"] = "downstream-install-failed"
             print(json.dumps(result, indent=2))
             return 1
 

@@ -16,6 +16,8 @@ test-subset = "spec"
 expected-network-isolation = true
 optional-dependencies = []
 known-incompatibilities = []
+test-command = "python -m pytest --pyargs httpx --co -q"
+min-tests = 0
 update-owner = "eggfetch-team"
 review-cadence = "every-phase"
 
@@ -32,6 +34,8 @@ optional-dependencies = ["httpx"]
 known-incompatibilities = [
   "respx patches httpx._transports.default which is private API"
 ]
+test-command = "python -m pytest --pyargs respx --co -q"
+min-tests = 10
 update-owner = "eggfetch-team"
 review-cadence = "every-phase"
 
@@ -48,6 +52,8 @@ optional-dependencies = ["pytest", "httpx"]
 known-incompatibilities = [
   "pytest-httpx relies on httpx._transports.default for interception"
 ]
+test-command = "python -m pytest --pyargs pytest_httpx --co -q"
+min-tests = 0
 update-owner = "eggfetch-team"
 review-cadence = "every-phase"
 
@@ -62,6 +68,8 @@ test-subset = "integration"
 expected-network-isolation = true
 optional-dependencies = ["httpx", "anyio"]
 known-incompatibilities = []
+test-command = "python -m pytest --pyargs starlette.testclient --co -q"
+min-tests = 5
 update-owner = "eggfetch-team"
 review-cadence = "every-phase"
 
@@ -78,6 +86,8 @@ optional-dependencies = ["httpx", "pydantic"]
 known-incompatibilities = [
   "anthropic accesses httpx.Response.stream internally for SSE parsing"
 ]
+test-command = "python -c 'import anthropic; print(anthropic.__version__)'"
+min-tests = 0
 update-owner = "eggfetch-team"
 review-cadence = "quarterly"
 
@@ -92,6 +102,8 @@ test-subset = "integration"
 expected-network-isolation = false
 optional-dependencies = ["httpx", "pydantic"]
 known-incompatibilities = []
+test-command = "python -c 'import groq; print(groq.__version__)'"
+min-tests = 0
 update-owner = "eggfetch-team"
 review-cadence = "quarterly"
 
@@ -108,6 +120,8 @@ optional-dependencies = ["httpx"]
 known-incompatibilities = [
   "httpx-sse accesses httpx.Response.aiter_lines and iter_lines internals"
 ]
+test-command = "python -m pytest --pyargs httpx_sse --co -q"
+min-tests = 3
 update-owner = "eggfetch-team"
 review-cadence = "every-phase"
 
@@ -124,6 +138,8 @@ optional-dependencies = []
 known-incompatibilities = [
   "httpcore is httpx's direct dependency; eggfetch replaces both"
 ]
+test-command = "python -m pytest --pyargs httpcore --co -q"
+min-tests = 10
 update-owner = "eggfetch-team"
 review-cadence = "every-phase"
 
@@ -138,6 +154,8 @@ test-subset = "unit"
 expected-network-isolation = true
 optional-dependencies = []
 known-incompatibilities = []
+test-command = "python -c 'import anyio; print(anyio.__version__)'"
+min-tests = 0
 update-owner = "eggfetch-team"
 review-cadence = "quarterly"
 
@@ -154,6 +172,8 @@ optional-dependencies = ["httpx"]
 known-incompatibilities = [
   "httpx-auth subclasses httpx.Auth and accesses auth flow hooks"
 ]
+test-command = "python -m pytest --pyargs httpx_auth --co -q"
+min-tests = 5
 update-owner = "eggfetch-team"
 review-cadence = "quarterly"
 
@@ -170,6 +190,8 @@ optional-dependencies = ["httpx", "anyio"]
 known-incompatibilities = [
   "httpx-ws accesses httpx._transport and httpx._config internals"
 ]
+test-command = "python -m pytest --pyargs httpx_ws --co -q"
+min-tests = 3
 update-owner = "eggfetch-team"
 review-cadence = "every-phase"
 
@@ -184,5 +206,7 @@ test-subset = "integration"
 expected-network-isolation = true
 optional-dependencies = []
 known-incompatibilities = []
+test-command = "python -c 'import pydantic; print(pydantic.__version__)'"
+min-tests = 0
 update-owner = "eggfetch-team"
 review-cadence = "quarterly"
