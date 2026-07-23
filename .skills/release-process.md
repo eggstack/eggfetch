@@ -44,6 +44,12 @@ python -m pytest -p pytest_asyncio
 # Lint
 cargo fmt --all
 cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+# Release manifest
+python scripts/generate_release_manifest.py --output compatibility-manifest.json
+
+# Package content validation
+python scripts/validate_package_content.py path/to/wheel.whl
 ```
 
 ## CI

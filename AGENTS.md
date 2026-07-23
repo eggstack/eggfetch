@@ -36,6 +36,12 @@ python scripts/compare_httpx_api_manifest.py \
 cargo build --release -p eggfetch-bench --bin resource_monitor
 ./target/release/resource_monitor
 
+# Release manifest generation
+python scripts/generate_release_manifest.py --output compatibility-manifest.json
+
+# Package content validation
+python scripts/validate_package_content.py path/to/wheel.whl
+
 ```
 
 CI enforces `RUSTFLAGS=-D warnings`. MSRV is Rust 1.80.
@@ -89,15 +95,27 @@ The `eggfetch.compat.httpx` module provides an HTTPX 0.28.1 drop-in facade. Impo
 from eggfetch.compat.httpx import Client, AsyncClient, Request, Response, URL, Headers, Cookies
 ```
 
-Phase 2 is complete — value objects, request/response, exception hierarchy, client constructors, and merge semantics are implemented. See `plans/httpx-drop-in-phase-2-status.md` for status.
+Phases 0 through 6 are complete. The compatibility stage is Stage C (asyncio drop-in).
 
-Phase 3 is complete — streaming and bodies: `SyncByteStream`, `AsyncByteStream`, `ByteStream` base classes; `iter_raw()`/`aiter_raw()` for raw transport bytes; chunk size support on all iterators; request streaming via iterables/file-like/custom streams; multipart passthrough. See `plans/httpx-drop-in-phase-3-status.md` for status.
+- Phase 0: compatibility contract
+- Phase 1: production semantics
+- Phase 2: value objects, request/response, exception hierarchy, client constructors, merge semantics
+- Phase 3: streaming and bodies
+- Phase 4: transports, mounts, auth, hooks, WSGI/ASGI
+- Phase 5: downstream validation, behavior corpus, evidence reporting, compatibility-stage decision
+- Phase 6: release qualification — immutable manifests, artifact smoke tests, package content validation, runtime diagnostics
 
-Phase 4 is complete — transports, mounts, auth, hooks, WSGI/ASGI. See `plans/httpx-drop-in-phase-4-status.md` for status.
+Runtime diagnostics:
 
-Phase 5 is complete — downstream validation, behavior corpus, upstream test inventory, evidence reporting, compatibility-stage decision. See `plans/httpx-drop-in-phase-5-status.md` for status.
+```python
+from eggfetch.compat.httpx import get_compatibility_info, diagnostics_summary
+info = get_compatibility_info()
+print(info.provider)          # "eggfetch"
+print(info.emulated_version)  # "0.28.1"
+print(info.compatibility_stage)  # "stage-c"
+```
 
-Phase 4 test files: `test_transports.py`, `test_mounts.py`, `test_mock_transport.py`, `test_wsgi.py`, `test_asgi.py`, `test_hooks.py`, `test_auth.py`.
+See `plans/httpx-drop-in-phase-6-status.md` for release evidence.
 
 Run compat tests:
 

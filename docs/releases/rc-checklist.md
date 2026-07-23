@@ -39,6 +39,8 @@ This checklist defines the mandatory evidence required before tagging `0.1.0-rc1
 - [ ] CLI binary runs `eggfetch --help` from extracted archive
 - [ ] CLI local-server smoke tests pass (GET, JSON, exit codes)
 - [ ] Release manifest (`release-manifest.json`) generated with per-artifact metadata
+- [ ] `scripts/validate_package_content.py` passes for all built wheels
+- [ ] `scripts/generate_release_manifest.py` generates checksummed manifest
 
 ## Supply Chain
 

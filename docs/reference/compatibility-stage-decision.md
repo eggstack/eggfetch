@@ -1,13 +1,13 @@
 # Compatibility Stage Decision
 
-**Phase 5 — Downstream Validation Result**
+**Phase 6 — Release Qualification Result**
 
 | Field | Value |
 |-------|-------|
 | Date | 2026-07-23 |
 | Stage Evaluated | Stage C (asyncio drop-in) |
-| Decision | **Stage C justified** |
-| Evidence | Phase 5 status, compatibility-evidence.json |
+| Decision | **Stage C released** |
+| Evidence | Phase 6 status, compatibility-evidence.json, compatibility-manifest.json |
 
 ## Decision Rationale
 

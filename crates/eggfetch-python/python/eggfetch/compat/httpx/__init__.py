@@ -72,6 +72,14 @@ def _stub_factory(name: str, msg: str | None = None):
     return _Stub
 
 
+# Diagnostics
+from eggfetch.compat.httpx._diagnostics import (
+    CompatibilityInfo,
+    COMPATIBILITY_INFO,
+    get_compatibility_info,
+    diagnostics_summary,
+)
+
 # Auth (Phase 3)
 from eggfetch.compat.httpx._auth import Auth, BasicAuth, DigestAuth, NetRCAuth
 
@@ -163,14 +171,18 @@ __all__ = [
     "Client",
     "CloseError",
     "codes",
+    "COMPATIBILITY_INFO",
+    "CompatibilityInfo",
     "ConnectError",
     "ConnectTimeout",
     "CookieConflict",
     "Cookies",
     "DecodingError",
     "delete",
+    "diagnostics_summary",
     "DigestAuth",
     "get",
+    "get_compatibility_info",
     "head",
     "Headers",
     "HTTPError",

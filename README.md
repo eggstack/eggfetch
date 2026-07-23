@@ -80,7 +80,7 @@ See [`compat/httpx/0.28.1/`](compat/httpx/0.28.1/) for the full profile and [`do
 
 ## HTTPX Drop-In Compatibility
 
-eggfetch provides a drop-in HTTPX 0.28.1 compatibility facade:
+eggfetch provides an HTTPX 0.28.1-compatible asyncio drop-in (Stage C):
 
 ```python
 from eggfetch.compat.httpx import Client, AsyncClient, Request, Response, URL, Headers
@@ -90,15 +90,33 @@ client = Client()
 response = client.get("https://example.com")
 ```
 
-Phase 2 (object model and core API parity) and Phase 3 (streaming and bodies) are complete. See [`plans/httpx-drop-in-phase-2-status.md`](plans/httpx-drop-in-phase-2-status.md) and [`plans/httpx-drop-in-phase-3-status.md`](plans/httpx-drop-in-phase-3-status.md) for details, [`compat/httpx/0.28.1/`](compat/httpx/0.28.1/) for the pinned profile, and [`docs/reference/compatibility.md`](docs/reference/compatibility.md) for the feature matrix.
+Phases 0 through 6 are complete:
 
-Phase 3 adds: `SyncByteStream`, `AsyncByteStream`, and `ByteStream` base classes; `iter_raw()`/`aiter_raw()` for raw transport bytes; chunk size parameters on all iterators; streaming request bodies (iterables, file-like, custom streams); and multipart passthrough to the native encoder.
+- **Phase 0**: Compatibility contract, pinned reference, API manifest comparison
+- **Phase 1**: Production semantics (timeout defaults, resource limits, env trust)
+- **Phase 2**: Object model and core API parity
+- **Phase 3**: Streaming and bodies
+- **Phase 4**: Transports, mounts, auth, hooks, WSGI/ASGI
+- **Phase 5**: Downstream validation, behavior corpus, evidence reporting
+- **Phase 6**: Release qualification — immutable manifests, artifact smoke tests, package content validation, runtime diagnostics
 
-Phase 4 adds: transports, mounts, auth, hooks, WSGI/ASGI transports. See [`plans/httpx-drop-in-phase-4-status.md`](plans/httpx-drop-in-phase-4-status.md) for details.
+The compatibility stage is **Stage C** (asyncio drop-in). See [`plans/httpx-drop-in-phase-6-status.md`](plans/httpx-drop-in-phase-6-status.md) for the release qualification evidence.
 
-Phase 5 adds: downstream validation, behavior corpus, upstream test inventory, evidence reporting, and compatibility-stage decision. See [`plans/httpx-drop-in-phase-5-status.md`](plans/httpx-drop-in-phase-5-status.md) for details.
+Runtime diagnostics are available:
 
-The downstream validation portfolio covers 12 representative downstream consumer packages with defined performance budgets. The compatibility stage decision is Stage C (asyncio drop-in), justified by the evidence corpus.
+```python
+from eggfetch.compat.httpx import get_compatibility_info, diagnostics_summary
+print(diagnostics_summary())
+```
+
+Key differences from upstream HTTPX:
+
+- **Redirect default**: eggfetch does NOT follow redirects by default (security-first)
+- **Trio/AnyIO**: Not supported (asyncio only, tokio-based)
+- **SOCKS proxy**: Not supported
+- **Package naming**: eggfetch is a separately-named distribution; it does not shadow `httpx`
+
+See [`compat/httpx/0.28.1/`](compat/httpx/0.28.1/) for the pinned profile, [`docs/reference/compatibility.md`](docs/reference/compatibility.md) for the feature matrix, and [`docs/reference/compatibility-stage-decision.md`](docs/reference/compatibility-stage-decision.md) for the stage decision.
 
 ## Target API Shapes
 
