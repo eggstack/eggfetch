@@ -4,8 +4,8 @@ generator = "eggfetch-compat-profile"
 version = "1"
 created = "2026-07-21"
 reference = "httpx==0.28.1"
-stage = "phase-6"
-status = "released"
+stage = "phase-6-corrective"
+status = "candidate"
 
 [reference]
 distribution = "httpx"

@@ -313,10 +313,10 @@ jobs:
           source .venv/bin/activate
           pytest crates/eggfetch-python/tests/compat/ -v --strict-markers --timeout=30
 
-      - name: Generate eggfetch API manifest
+      - name: Generate eggfetch.compat.httpx API manifest
         run: |
           source .venv/bin/activate
-          python scripts/generate_httpx_api_manifest.py --package eggfetch --output /tmp/eggfetch-manifest.json
+          python scripts/generate_httpx_api_manifest.py --package eggfetch.compat.httpx --output /tmp/eggfetch-manifest.json
 
       - name: Generate reference API manifest
         run: |
@@ -324,9 +324,10 @@ jobs:
           python scripts/generate_httpx_api_manifest.py --package httpx --output /tmp/httpx-manifest.json
 
       - name: Compare manifests
-        # Informational only — PyO3 stubs use *args/**kwargs which creates
-        # massive false-positive mismatches against httpx's explicit signatures.
-        # This step reports differences but does not block CI.
+        # Structural signature mismatches remain due to compat facade using
+        # *args/**kwargs while httpx uses explicit parameters. Behavioral
+        # compatibility is validated by the 729 compat tests above.
+        # TODO: resolve signature differences in allowed-differences.toml
         continue-on-error: true
         run: |
           source .venv/bin/activate

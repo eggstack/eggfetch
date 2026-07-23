@@ -80,7 +80,7 @@ See [`compat/httpx/0.28.1/`](compat/httpx/0.28.1/) for the full profile and [`do
 
 ## HTTPX Drop-In Compatibility
 
-eggfetch provides an HTTPX 0.28.1-compatible asyncio drop-in (Stage C):
+eggfetch provides an HTTPX 0.28.1-compatible asyncio drop-in (Stage C candidate):
 
 ```python
 from eggfetch.compat.httpx import Client, AsyncClient, Request, Response, URL, Headers
@@ -90,7 +90,7 @@ client = Client()
 response = client.get("https://example.com")
 ```
 
-Phases 0 through 6 are complete:
+Phases 0 through 6 are implemented. A corrective evidence and semantics closure pass is in progress:
 
 - **Phase 0**: Compatibility contract, pinned reference, API manifest comparison
 - **Phase 1**: Production semantics (timeout defaults, resource limits, env trust)
@@ -98,7 +98,7 @@ Phases 0 through 6 are complete:
 - **Phase 3**: Streaming and bodies
 - **Phase 4**: Transports, mounts, auth, hooks, WSGI/ASGI
 - **Phase 5**: Downstream validation, behavior corpus, evidence reporting
-- **Phase 6**: Release qualification — immutable manifests, artifact smoke tests, package content validation, runtime diagnostics
+- **Phase 6 / Corrective Pass**: Evidence reset, oracle repair, downstream validation rebuild, timeout/auth/streaming/merge semantics fixes, CI governance
 
 The compatibility stage is **Stage C** (asyncio drop-in). See [`plans/httpx-drop-in-phase-6-status.md`](plans/httpx-drop-in-phase-6-status.md) for the release qualification evidence.
 
@@ -568,7 +568,7 @@ cargo doc --workspace --all-features --no-deps
 
 ### CI
 
-CI runs format, clippy, and test checks on pushes and pull requests to `main` for informational visibility. It is not a merge gate.
+CI runs format, clippy, and test checks on pushes and pull requests to `main`. The Required CI Gate is a mandatory merge prerequisite.
 
 ### Python package
 

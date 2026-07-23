@@ -1,3 +1,5 @@
+> **WARNING**: This report was generated from an older commit and is invalidated. See the corrective evidence for the current candidate.
+
 # Compatibility Evidence Report
 
 ## Summary

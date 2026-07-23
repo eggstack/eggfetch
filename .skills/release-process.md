@@ -54,7 +54,7 @@ python scripts/validate_package_content.py path/to/wheel.whl
 
 ## CI
 
-CI runs format, clippy, and test checks on pushes and pull requests for informational visibility. It is not a merge gate. Verify locally before committing.
+CI runs format, clippy, and test checks on pushes and pull requests. The Required CI Gate is a mandatory merge prerequisite. Verify locally before committing.
 
 ## Dry-Run Release Validation
 

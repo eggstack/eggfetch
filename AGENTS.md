@@ -77,7 +77,7 @@ eggfetch-core owns all HTTP behavior. CLI and Python are thin adapters.
 - `missing_docs = "warn"`, `missing-docs-in-crate-items = true`.
 - Never use `#![allow(warnings)]`, `#![allow(clippy::all)]`, or `#![allow(clippy::pedantic)]`. CI rejects these via `scripts/check_lint_suppressions.sh`.
 - Use specific lint names. Justify suppressions with a comment.
-- CI runs format, clippy, and test checks on pushes and pull requests. It is informational, not a merge gate.
+- CI runs format, clippy, and test checks on pushes and pull requests. The Required CI Gate is a mandatory merge prerequisite.
 
 ## Feature Flags
 
@@ -89,13 +89,13 @@ The CLI enables: cookies, multipart, proxy. The Python binding enables all featu
 
 ## HTTPX Compatibility Layer
 
-The `eggfetch.compat.httpx` module provides an HTTPX 0.28.1 drop-in facade. Import it as:
+The `eggfetch.compat.httpx` module provides an HTTPX 0.28.1 drop-in facade (Stage C candidate). Import it as:
 
 ```python
 from eggfetch.compat.httpx import Client, AsyncClient, Request, Response, URL, Headers, Cookies
 ```
 
-Phases 0 through 6 are complete. The compatibility stage is Stage C (asyncio drop-in).
+Phases 0 through 6 are implemented. A corrective evidence and semantics closure pass is in progress. The compatibility stage is **Stage C candidate** (asyncio drop-in).
 
 - Phase 0: compatibility contract
 - Phase 1: production semantics
@@ -103,7 +103,7 @@ Phases 0 through 6 are complete. The compatibility stage is Stage C (asyncio dro
 - Phase 3: streaming and bodies
 - Phase 4: transports, mounts, auth, hooks, WSGI/ASGI
 - Phase 5: downstream validation, behavior corpus, evidence reporting, compatibility-stage decision
-- Phase 6: release qualification — immutable manifests, artifact smoke tests, package content validation, runtime diagnostics
+- Phase 6 / Corrective Pass: evidence reset, oracle repair, downstream validation rebuild, timeout/auth/streaming/merge semantics fixes, CI governance
 
 Runtime diagnostics:
 

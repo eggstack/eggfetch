@@ -1,5 +1,7 @@
 {
   "schema_version": "1",
+  "status": "invalidated",
+  "invalidation_reason": "Superseded by corrective pass. Old SHA 2418da6bb4408fa3a9c9fd287a68d937ae7d82aa.",
   "eggfetch_commit": "2418da6bb4408fa3a9c9fd287a68d937ae7d82aa",
   "eggfetch_version": "0.1.0",
   "reference_httpx_version": "0.28.1",

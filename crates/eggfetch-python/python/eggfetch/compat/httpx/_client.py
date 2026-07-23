@@ -45,14 +45,13 @@ _USE_CLIENT_DEFAULT = object()
 def _convert_timeout(timeout):
     if isinstance(timeout, Timeout):
         return eggfetch.Timeout(
-            seconds=timeout.total,
             connect=timeout.connect,
             read=timeout.read,
             write=timeout.write,
             pool=timeout.pool,
         )
     if isinstance(timeout, (int, float)):
-        return eggfetch.Timeout(seconds=timeout)
+        return eggfetch.Timeout(connect=timeout, read=timeout, write=timeout, pool=timeout)
     return None
 
 
@@ -571,20 +570,23 @@ class Client:
             except StopIteration:
                 auth_flow_gen = None
 
-        # 4. Dispatch: mount transport > custom transport > native client
-        response = self._dispatch_request(
-            request, stream=stream,
-            follow_redirects=follow_redirects, timeout=timeout,
-        )
+        # 4. Dispatch loop — feed each auth response back and dispatch follow-ups
+        while True:
+            response = self._dispatch_request(
+                request, stream=stream,
+                follow_redirects=follow_redirects, timeout=timeout,
+            )
 
-        # 5. Feed response to auth flow if generator has more
-        if auth_flow_gen is not None:
+            if auth_flow_gen is None:
+                break
+
             try:
-                auth_flow_gen.send(response)
+                request = auth_flow_gen.send(response)
             except StopIteration:
-                pass
+                auth_flow_gen = None
+                break
 
-        # 6. Execute response hooks
+        # 5. Execute response hooks
         for hook in self._event_hooks.get("response", []):
             try:
                 hook(response)
@@ -634,10 +636,13 @@ class Client:
     def stream(self, method, url, **kwargs):
         self._ensure_client()
         req = self.build_request(method, url, **kwargs)
+        response = None
         try:
-            yield self.send(req, stream=True)
+            response = self.send(req, stream=True)
+            yield response
         finally:
-            pass
+            if response is not None:
+                response.close()
 
     def close(self) -> None:
         if self._transport is not None and hasattr(self._transport, "close"):
@@ -703,6 +708,8 @@ class Client:
 
     def _merge_extensions(self, request_extensions):
         if request_extensions is None:
+            if self._extensions:
+                return dict(self._extensions)
             return None
         if self._extensions:
             merged = dict(self._extensions)
@@ -937,20 +944,23 @@ class AsyncClient:
             except StopIteration:
                 auth_flow_gen = None
 
-        # 4. Dispatch: mount transport > async transport > sync transport > native client
-        response = await self._dispatch_request(
-            request, stream=stream,
-            follow_redirects=follow_redirects, timeout=timeout,
-        )
+        # 4. Dispatch loop — feed each auth response back and dispatch follow-ups
+        while True:
+            response = await self._dispatch_request(
+                request, stream=stream,
+                follow_redirects=follow_redirects, timeout=timeout,
+            )
 
-        # 5. Feed response to auth flow if generator has more
-        if auth_flow_gen is not None:
+            if auth_flow_gen is None:
+                break
+
             try:
-                auth_flow_gen.send(response)
+                request = auth_flow_gen.send(response)
             except StopIteration:
-                pass
+                auth_flow_gen = None
+                break
 
-        # 6. Execute response hooks
+        # 5. Execute response hooks
         for hook in self._event_hooks.get("response", []):
             try:
                 if asyncio.iscoroutinefunction(hook):
@@ -1003,10 +1013,13 @@ class AsyncClient:
     async def stream(self, method, url, **kwargs):
         self._ensure_client()
         req = self.build_request(method, url, **kwargs)
+        response = None
         try:
-            yield await self.send(req, stream=True)
+            response = await self.send(req, stream=True)
+            yield response
         finally:
-            pass
+            if response is not None:
+                response.close()
 
     async def close(self) -> None:
         if self._async_transport is not None and hasattr(self._async_transport, "aclose"):
@@ -1085,6 +1098,8 @@ class AsyncClient:
 
     def _merge_extensions(self, request_extensions):
         if request_extensions is None:
+            if self._extensions:
+                return dict(self._extensions)
             return None
         if self._extensions:
             merged = dict(self._extensions)

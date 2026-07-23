@@ -1,6 +1,8 @@
 # HTTPX Drop-In Phase 6: Release Qualification — Status
 
-Status: COMPLETE
+Status: SUPERSEDED — corrective pass in progress
+
+> **Correction Notice**: This status document overstated release readiness. The corrective pass (`plans/httpx-drop-in-corrective-evidence-and-semantics-closure.md`) addresses defects including: stale evidence SHAs, placeholder values, incorrect redirect defaults in allowed-differences, and documentation/CI governance inconsistencies. The compatibility claim has been downgraded to `candidate`.
 
 ## Summary
 
