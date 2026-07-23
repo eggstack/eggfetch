@@ -67,9 +67,9 @@ def _convert_limits(limits):
 
 def _convert_headers(headers):
     if isinstance(headers, Headers):
-        return dict(headers.items())
+        return headers.multi_items()
     if isinstance(headers, dict):
-        return headers
+        return list(headers.items())
     return None
 
 
@@ -82,10 +82,15 @@ def _convert_cookies(cookies):
 
 
 def _convert_params(params):
+    if params is None:
+        return None
     if isinstance(params, QueryParams):
-        return dict(params.items())
+        return list(params.multi_items())
     if isinstance(params, dict):
-        return params
+        return list(params.items())
+    if isinstance(params, str):
+        from urllib.parse import parse_qsl
+        return parse_qsl(params)
     return None
 
 
@@ -223,7 +228,7 @@ def _wrap_streaming_response(native_resp, compat_request=None, default_encoding=
     return response
 
 
-def _build_native_kwargs(request, follow_redirects=None, timeout=None):
+def _build_native_kwargs(request, follow_redirects=None, timeout=_USE_CLIENT_DEFAULT):
     kwargs: dict[str, Any] = {}
     if isinstance(request, Request):
         kwargs["method"] = request.method
@@ -245,7 +250,13 @@ def _build_native_kwargs(request, follow_redirects=None, timeout=None):
 
     if follow_redirects is not None:
         kwargs["follow_redirects"] = follow_redirects
-    if timeout is not None:
+    if timeout is _USE_CLIENT_DEFAULT:
+        # Use client default — don't add to kwargs
+        pass
+    elif timeout is None:
+        # Explicit None — disable all timeouts (pass None to native)
+        kwargs["timeout"] = None
+    else:
         kwargs["timeout"] = _convert_timeout(timeout)
 
     return kwargs
@@ -539,7 +550,7 @@ class Client:
         return _wrap_response(native_resp, request, self._default_encoding)
 
     def send(self, request, *, stream=False, auth=_USE_CLIENT_DEFAULT,
-             follow_redirects=None, timeout=None):
+             follow_redirects=None, timeout=_USE_CLIENT_DEFAULT):
         if self._is_closed:
             raise RuntimeError("Client is closed")
 
@@ -557,10 +568,9 @@ class Client:
             hook(request)
 
         # 3. Run auth flow (generator pattern)
-        # Auth is NOT applied when a custom transport or mount transport handles
-        # the request — transports own their own auth.
-        transport = _match_mount(request.url, self._mounts)
-        use_auth = resolved_auth is not None and transport is None and self._transport is None
+        # Auth is ALWAYS applied by the client regardless of transport.
+        # The transport simply sends whatever request the client gives it.
+        use_auth = resolved_auth is not None
 
         auth_flow_gen = None
         if use_auth:
@@ -598,7 +608,7 @@ class Client:
 
     def request(self, method, url, *, params=None, headers=None, cookies=None,
                 content=None, data=None, files=None, json=None,
-                follow_redirects=None, timeout=None, extensions=None):
+                follow_redirects=None, timeout=_USE_CLIENT_DEFAULT, extensions=None):
         req = self.build_request(
             method, url,
             params=params, headers=headers, cookies=cookies,
@@ -908,7 +918,7 @@ class AsyncClient:
         return _wrap_response(native_resp, request, self._default_encoding)
 
     async def send(self, request, *, stream=False, auth=_USE_CLIENT_DEFAULT,
-                   follow_redirects=None, timeout=None):
+                   follow_redirects=None, timeout=_USE_CLIENT_DEFAULT):
         if self._is_closed:
             raise RuntimeError("Client is closed")
 
@@ -929,12 +939,9 @@ class AsyncClient:
                 hook(request)
 
         # 3. Run auth flow (generator pattern)
-        # Auth is NOT applied when a custom/mount transport handles the request.
-        transport = _match_mount(request.url, self._mounts)
-        has_custom_transport = (transport is not None or
-                               self._async_transport is not None or
-                               self._transport is not None)
-        use_auth = resolved_auth is not None and not has_custom_transport
+        # Auth is ALWAYS applied by the client regardless of transport.
+        # The transport simply sends whatever request the client gives it.
+        use_auth = resolved_auth is not None
 
         auth_flow_gen = None
         if use_auth:
@@ -975,7 +982,7 @@ class AsyncClient:
 
     async def request(self, method, url, *, params=None, headers=None, cookies=None,
                       content=None, data=None, files=None, json=None,
-                      follow_redirects=None, timeout=None, extensions=None):
+                      follow_redirects=None, timeout=_USE_CLIENT_DEFAULT, extensions=None):
         req = self.build_request(
             method, url,
             params=params, headers=headers, cookies=cookies,

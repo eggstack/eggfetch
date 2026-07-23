@@ -39,6 +39,7 @@ REQUIRED_FIELDS = {
     "known-incompatibilities",
     "update-owner",
     "review-cadence",
+    "min-tests",
 }
 
 VALID_CATEGORIES = {
@@ -55,6 +56,8 @@ VALID_CATEGORIES = {
     "event-hook-instrumentation",
     "heavy-config-user",
 }
+
+VALID_USAGES = {"required", "informational", "private", "public"}
 
 
 def validate_manifest(path: Path) -> dict:
@@ -103,11 +106,45 @@ def validate_manifest(path: Path) -> dict:
         if cat not in VALID_CATEGORIES:
             errors.append(f"{name}: unknown category '{cat}'")
 
+        usage = pkg.get("usage", "")
+        if usage not in VALID_USAGES:
+            errors.append(f"{name}: unknown usage '{usage}'")
+
+        min_tests = pkg.get("min-tests")
+        if min_tests is None:
+            errors.append(f"{name}: missing min-tests field")
+        elif not isinstance(min_tests, int) or min_tests < 0:
+            errors.append(f"{name}: min-tests must be a non-negative integer, got '{min_tests}'")
+
     return {
         "status": "valid" if not errors else "invalid",
         "errors": errors,
         "packages": packages,
     }
+
+
+def validate_wheel_dir(wheel_dir: Path) -> list[str]:
+    """Validate that the wheel directory contains both required wheels."""
+    errors = []
+    if not wheel_dir.exists():
+        errors.append(f"Wheel directory does not exist: {wheel_dir}")
+        return errors
+
+    wheels = list(wheel_dir.glob("*.whl"))
+    if not wheels:
+        errors.append(f"No .whl files found in {wheel_dir}")
+        return errors
+
+    names = [w.name.lower() for w in wheels]
+    has_eggfetch = any(n.startswith("eggfetch-") for n in names)
+    has_httpx = any(n.startswith("httpx-") for n in names)
+
+    if not has_eggfetch:
+        errors.append(f"No eggfetch wheel found in {wheel_dir}")
+    if not has_httpx:
+        errors.append(f"No httpx controlled replacement wheel found in {wheel_dir}")
+
+    return errors
 
 
 def run_downstream_test(package_name: str, wheel_dir: Path, timeout: int) -> dict:
@@ -125,14 +162,17 @@ def run_downstream_test(package_name: str, wheel_dir: Path, timeout: int) -> dic
             cmd,
             capture_output=True,
             text=True,
-            timeout=timeout + 30,  # Extra buffer for venv creation
+            timeout=timeout + 60,  # Extra buffer for venv creation + install
         )
 
-        # Parse the JSON output from the runner
         stdout = result.stdout.strip()
         if stdout:
             try:
-                return json.loads(stdout)
+                parsed = json.loads(stdout)
+                # Ensure package name is set
+                if "package" not in parsed:
+                    parsed["package"] = package_name
+                return parsed
             except json.JSONDecodeError:
                 return {
                     "package": package_name,
@@ -152,7 +192,7 @@ def run_downstream_test(package_name: str, wheel_dir: Path, timeout: int) -> dic
         return {
             "package": package_name,
             "status": "timeout",
-            "error": f"Runner timed out after {timeout + 30}s",
+            "error": f"Runner timed out after {timeout + 60}s",
         }
     except Exception as exc:
         return {
@@ -168,7 +208,7 @@ def main() -> int:
     )
     parser.add_argument(
         "--wheel-dir", required=True,
-        help="Directory containing eggfetch .whl files",
+        help="Directory containing eggfetch .whl AND httpx controlled replacement .whl",
     )
     parser.add_argument(
         "--packages", default=None,
@@ -180,13 +220,17 @@ def main() -> int:
     )
     parser.add_argument(
         "--required-only", action="store_true",
-        help="Only test packages with usage=public (required for Stage C)",
+        help="Only test packages with usage=required",
     )
     args = parser.parse_args()
 
     wheel_dir = Path(args.wheel_dir).resolve()
-    if not wheel_dir.exists():
-        print(json.dumps({"status": "error", "message": f"Wheel directory not found: {wheel_dir}"}))
+    wheel_errors = validate_wheel_dir(wheel_dir)
+    if wheel_errors:
+        print(json.dumps({
+            "status": "error",
+            "errors": wheel_errors,
+        }, indent=2))
         return 2
 
     manifest_result = validate_manifest(MANIFEST_PATH)
@@ -203,7 +247,7 @@ def main() -> int:
         packages = [p for p in packages if p["name"] in selected]
 
     if args.required_only:
-        packages = [p for p in packages if p.get("usage") == "public"]
+        packages = [p for p in packages if p.get("usage") == "required"]
 
     results = []
     for pkg in packages:
@@ -215,22 +259,35 @@ def main() -> int:
     passed = [r for r in results if r.get("status") == "passed"]
     failed = [r for r in results if r.get("status") == "failed"]
     skipped = [r for r in results if r.get("status") in ("skipped", "skipped-no-tests")]
-    errors = [r for r in results if r.get("status") in ("error", "timeout", "install-failed", "downstream-install-failed")]
+    errors = [r for r in results if r.get("status") in (
+        "error", "timeout", "install-failed", "downstream-install-failed",
+        "shim-identity-failure", "upstream-httpx-detected", "pip-check-failure",
+        "below-min-tests", "zero-tests-expected",
+    )]
+
+    # Determine overall pass/fail: required packages must pass
+    required_packages = {p["name"] for p in packages if p.get("usage") == "required"}
+    required_results = [r for r in results if r.get("package") in required_packages]
+    required_failed = [r for r in required_results if r.get("status") not in ("passed", "skipped", "skipped-no-tests")]
 
     summary = {
         "manifest_status": manifest_result["status"],
+        "wheel_dir": str(wheel_dir),
         "total_packages": len(results),
         "passed": len(passed),
         "failed": len(failed),
         "skipped": len(skipped),
         "errors": len(errors),
-        "overall_pass": len(failed) == 0 and len(errors) == 0,
+        "required_total": len(required_packages),
+        "required_passed": len(required_packages) - len(required_failed),
+        "required_failed": len(required_failed),
+        "overall_pass": len(required_failed) == 0 and len(errors) == 0,
         "results": results,
     }
 
     print(json.dumps(summary, indent=2))
 
-    if failed or errors:
+    if required_failed or errors:
         return 1
     return 0
 

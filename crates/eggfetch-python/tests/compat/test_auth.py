@@ -1,14 +1,18 @@
 """Tests for HTTPX-compatible authentication."""
 from __future__ import annotations
 
+import asyncio
 import base64
 import os
 import tempfile
 import pytest
 from eggfetch.compat.httpx import (
     Auth,
+    AsyncClient,
     BasicAuth,
+    Client,
     DigestAuth,
+    MockTransport,
     NetRCAuth,
     Request,
     Response,
@@ -715,3 +719,242 @@ class TestNetRCAuth:
                 assert "authorization" not in req.headers
             finally:
                 os.unlink(f.name)
+
+
+class TestAuthThroughTransport:
+    """Verify auth is applied by the client regardless of transport."""
+
+    def test_basic_auth_through_mock_transport_sync(self):
+        """BasicAuth header is present when using MockTransport with Client."""
+        def handler(request):
+            return Response(200, text=request.headers.get("authorization", ""))
+
+        with Client(
+            auth=BasicAuth("user", "pass"),
+            transport=MockTransport(handler),
+        ) as client:
+            response = client.get("http://testserver/")
+
+        assert response.status_code == 200
+        auth_header = response.text
+        assert auth_header.startswith("Basic ")
+        decoded = base64.b64decode(auth_header.split(" ", 1)[1]).decode("latin-1")
+        assert decoded == "user:pass"
+
+    @pytest.mark.asyncio
+    async def test_basic_auth_through_mock_transport_async(self):
+        """BasicAuth header is present when using MockTransport with AsyncClient."""
+        def handler(request):
+            return Response(200, text=request.headers.get("authorization", ""))
+
+        async with AsyncClient(
+            auth=BasicAuth("user", "pass"),
+            transport=MockTransport(handler),
+        ) as client:
+            response = await client.get("http://testserver/")
+
+        assert response.status_code == 200
+        auth_header = response.text
+        assert auth_header.startswith("Basic ")
+        decoded = base64.b64decode(auth_header.split(" ", 1)[1]).decode("latin-1")
+        assert decoded == "user:pass"
+
+    def test_basic_auth_through_mounted_transport_sync(self):
+        """BasicAuth works through a mounted transport (sync)."""
+        def handler(request):
+            return Response(200, text=request.headers.get("authorization", ""))
+
+        with Client(
+            auth=BasicAuth("user", "pass"),
+            mounts={"http://": MockTransport(handler)},
+        ) as client:
+            response = client.get("http://testserver/")
+
+        assert response.status_code == 200
+        auth_header = response.text
+        assert auth_header.startswith("Basic ")
+        decoded = base64.b64decode(auth_header.split(" ", 1)[1]).decode("latin-1")
+        assert decoded == "user:pass"
+
+    @pytest.mark.asyncio
+    async def test_basic_auth_through_mounted_transport_async(self):
+        """BasicAuth works through a mounted transport (async)."""
+        def handler(request):
+            return Response(200, text=request.headers.get("authorization", ""))
+
+        async with AsyncClient(
+            auth=BasicAuth("user", "pass"),
+            mounts={"http://": MockTransport(handler)},
+        ) as client:
+            response = await client.get("http://testserver/")
+
+        assert response.status_code == 200
+        auth_header = response.text
+        assert auth_header.startswith("Basic ")
+        decoded = base64.b64decode(auth_header.split(" ", 1)[1]).decode("latin-1")
+        assert decoded == "user:pass"
+
+    def test_multi_yield_auth_flow_through_transport(self):
+        """A custom auth flow with multiple yields works through MockTransport."""
+        call_count = 0
+
+        class MultiStepAuth(Auth):
+            def auth_flow(self, request):
+                nonlocal call_count
+                # First: add a header
+                request.headers["x-auth-step"] = "1"
+                response = yield request
+                # Second: retry with a different header if challenged
+                if response.status_code == 401:
+                    call_count += 1
+                    request.headers["x-auth-step"] = "2"
+                    yield request
+
+        def handler(request):
+            step = request.headers.get("x-auth-step", "")
+            if step == "1":
+                return Response(401, text="unauthorized")
+            return Response(200, text=f"step={step}")
+
+        with Client(
+            auth=MultiStepAuth(),
+            transport=MockTransport(handler),
+        ) as client:
+            response = client.get("http://testserver/")
+
+        assert response.status_code == 200
+        assert response.text == "step=2"
+        assert call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_multi_yield_auth_flow_through_transport_async(self):
+        """A custom auth flow with multiple yields works through MockTransport (async)."""
+        call_count = 0
+
+        class MultiStepAuth(Auth):
+            def auth_flow(self, request):
+                nonlocal call_count
+                request.headers["x-auth-step"] = "1"
+                response = yield request
+                if response.status_code == 401:
+                    call_count += 1
+                    request.headers["x-auth-step"] = "2"
+                    yield request
+
+        def handler(request):
+            step = request.headers.get("x-auth-step", "")
+            if step == "1":
+                return Response(401, text="unauthorized")
+            return Response(200, text=f"step={step}")
+
+        async with AsyncClient(
+            auth=MultiStepAuth(),
+            transport=MockTransport(handler),
+        ) as client:
+            response = await client.get("http://testserver/")
+
+        assert response.status_code == 200
+        assert response.text == "step=2"
+        assert call_count == 1
+
+    def test_intermediate_auth_response_handled(self):
+        """Intermediate auth responses (401) are properly fed back to the auth flow."""
+        responses_seen = []
+
+        class TrackingAuth(Auth):
+            def auth_flow(self, request):
+                request.headers["x-attempt"] = "1"
+                response = yield request
+                responses_seen.append(response.status_code)
+                if response.status_code == 401:
+                    request.headers["x-attempt"] = "2"
+                    response2 = yield request
+                    responses_seen.append(response2.status_code)
+
+        def handler(request):
+            attempt = request.headers.get("x-attempt", "")
+            if attempt == "1":
+                return Response(401, text="need auth")
+            return Response(200, text="ok")
+
+        with Client(
+            auth=TrackingAuth(),
+            transport=MockTransport(handler),
+        ) as client:
+            response = client.get("http://testserver/")
+
+        assert response.status_code == 200
+        assert responses_seen == [401, 200]
+
+    def test_request_context_preserved_on_auth_failure(self):
+        """Request method, URL, and body are preserved across auth retries."""
+        captured_requests = []
+
+        class ContextPreservingAuth(Auth):
+            def auth_flow(self, request):
+                request.headers["x-auth"] = "first"
+                captured_requests.append(("first", request.method, str(request.url), request.content))
+                response = yield request
+                if response.status_code == 401:
+                    request.headers["x-auth"] = "second"
+                    captured_requests.append(("second", request.method, str(request.url), request.content))
+                    yield request
+
+        def handler(request):
+            auth = request.headers.get("x-auth", "")
+            if auth == "first":
+                return Response(401)
+            return Response(200, text="done")
+
+        with Client(
+            auth=ContextPreservingAuth(),
+            transport=MockTransport(handler),
+        ) as client:
+            response = client.post(
+                "http://testserver/data",
+                content=b"payload",
+            )
+
+        assert response.status_code == 200
+        assert len(captured_requests) == 2
+        # Both attempts preserve the same method, URL, and body
+        for label, method, url, body in captured_requests:
+            assert method == "POST"
+            assert url == "http://testserver/data"
+            assert body == b"payload"
+
+    def test_auth_none_with_transport_skips_auth(self):
+        """When auth=None, no auth header is sent even with a transport."""
+        def handler(request):
+            return Response(200, text=request.headers.get("authorization", "none"))
+
+        with Client(
+            auth=None,
+            transport=MockTransport(handler),
+        ) as client:
+            response = client.get("http://testserver/")
+
+        assert response.status_code == 200
+        assert response.text == "none"
+
+    def test_digest_auth_through_transport(self):
+        """DigestAuth works through MockTransport."""
+        def handler(request):
+            auth_header = request.headers.get("authorization", "")
+            if auth_header.startswith("Digest "):
+                return Response(200, text="authenticated")
+            return Response(
+                401,
+                headers=[
+                    ("www-authenticate", 'Digest realm="test", nonce="abc", qop="auth"')
+                ],
+            )
+
+        with Client(
+            auth=DigestAuth("user", "pass"),
+            transport=MockTransport(handler),
+        ) as client:
+            response = client.get("http://testserver/")
+
+        assert response.status_code == 200
+        assert response.text == "authenticated"

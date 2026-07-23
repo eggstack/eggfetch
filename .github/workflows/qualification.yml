@@ -24,16 +24,20 @@ env:
 permissions:
   contents: read
   attestations: write
+  checks: read
 
 jobs:
   # ──────────────────────────────────────────────────────────────────────
-  # 1. Verify candidate SHA
+  # 1. Verify candidate SHA has a green Required CI Gate
   # ──────────────────────────────────────────────────────────────────────
   verify:
     name: Verify candidate
     runs-on: ubuntu-latest
     outputs:
       sha: ${{ steps.resolve.outputs.sha }}
+      verified: ${{ steps.check-gate.outputs.verified }}
+      run_url: ${{ steps.check-gate.outputs.run_url }}
+      attempt: ${{ steps.check-gate.outputs.attempt }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
@@ -52,7 +56,7 @@ jobs:
             echo "::error::Invalid SHA: $SHA"
             exit 1
           fi
-          # Verify it exists
+          # Verify it exists in the repo
           if ! git cat-file -e "$SHA" 2>/dev/null; then
             echo "::error::SHA does not exist: $SHA"
             exit 1
@@ -60,21 +64,127 @@ jobs:
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
           echo "Candidate SHA: $SHA"
 
-      - name: Verify CI gate was green for this SHA
+      - name: Verify Required CI Gate is green
+        id: check-gate
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           SHA="${{ steps.resolve.outputs.sha }}"
-          echo "Checking CI status for $SHA..."
-          # The SHA must be the HEAD of a branch or tag that passed CI
-          git checkout "$SHA"
-          echo "Checked out candidate SHA."
+          REPO="${{ github.repository }}"
+          echo "Checking Required CI Gate for $SHA in $REPO..."
+
+          # Query check runs for this commit
+          CHECK_RUNS=$(gh api \
+            "repos/$REPO/commits/$SHA/check-runs" \
+            --jq '.check_runs[] | select(.name == "Required CI Gate")' \
+            2>&1) || {
+            echo "::error::Failed to query check runs: $CHECK_RUNS"
+            echo "verified=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          }
+
+          if [ -z "$CHECK_RUNS" ]; then
+            echo "::error::Required CI Gate check not found for SHA $SHA"
+            echo "verified=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Extract status and conclusion
+          STATUS=$(echo "$CHECK_RUNS" | jq -r '.status')
+          CONCLUSION=$(echo "$CHECK_RUNS" | jq -r '.conclusion')
+          RUN_ID=$(echo "$CHECK_RUNS" | jq -r '.check_suite.id')
+          ATTEMPT=$(echo "$CHECK_RUNS" | jq -r '.check_suite.attempt // 1')
+          HTML_URL=$(echo "$CHECK_RUNS" | jq -r '.html_url')
+
+          echo "Status: $STATUS, Conclusion: $CONCLUSION, Run ID: $RUN_ID, Attempt: $ATTEMPT"
+
+          if [ "$STATUS" != "completed" ]; then
+            echo "::error::Required CI Gate has not completed (status=$STATUS)"
+            echo "verified=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ "$CONCLUSION" != "success" ]; then
+            echo "::error::Required CI Gate conclusion is $CONCLUSION (expected success)"
+            echo "verified=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Required CI Gate passed for $SHA (attempt $ATTEMPT)"
+          echo "verified=true" >> "$GITHUB_OUTPUT"
+          echo "run_url=$HTML_URL" >> "$GITHUB_OUTPUT"
+          echo "attempt=$ATTEMPT" >> "$GITHUB_OUTPUT"
+
+      - name: Fail if verification failed
+        if: steps.check-gate.outputs.verified != 'true'
+        run: |
+          echo "::error::Candidate SHA ${{ steps.resolve.outputs.sha }} does not have a green Required CI Gate"
+          exit 1
 
   # ──────────────────────────────────────────────────────────────────────
-  # 2. Build wheels across all platforms
+  # 2. Build eggfetch wheel and httpx replacement wheel (linux-x86_64)
+  # ──────────────────────────────────────────────────────────────────────
+  build-artifacts:
+    name: Build test artifacts
+    runs-on: ubuntu-latest
+    needs: [verify]
+    if: needs.verify.outputs.verified == 'true'
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: ${{ needs.verify.outputs.sha }}
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+
+      - name: Cache cargo
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: qual-build-${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: qual-build-${{ runner.os }}-cargo-
+
+      - name: Build eggfetch wheel
+        run: |
+          pip install maturin
+          maturin build --release \
+            --manifest-path crates/eggfetch-python/Cargo.toml \
+            --out dist/eggfetch \
+            --interpreter 3.10 3.11 3.12 3.13
+
+      - name: Build httpx replacement wheel
+        run: |
+          pip install build
+          python -m build --wheel --outdir dist/httpx-replacement compat/httpx-shim
+
+      - name: Upload eggfetch wheel
+        uses: actions/upload-artifact@v4
+        with:
+          name: eggfetch-wheel
+          path: dist/eggfetch/*.whl
+
+      - name: Upload httpx replacement wheel
+        uses: actions/upload-artifact@v4
+        with:
+          name: httpx-replacement-wheel
+          path: dist/httpx-replacement/*.whl
+
+  # ──────────────────────────────────────────────────────────────────────
+  # 3. Build wheels across all platforms (for release)
   # ──────────────────────────────────────────────────────────────────────
   build-wheels:
     name: Build wheels (${{ matrix.platform }})
     runs-on: ${{ matrix.os }}
     needs: [verify]
+    if: needs.verify.outputs.verified == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -122,6 +232,7 @@ jobs:
     name: Build sdist
     runs-on: ubuntu-latest
     needs: [verify]
+    if: needs.verify.outputs.verified == 'true'
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
@@ -142,12 +253,13 @@ jobs:
           path: dist/*.tar.gz
 
   # ──────────────────────────────────────────────────────────────────────
-  # 3. Validate package content
+  # 4. Validate package content
   # ──────────────────────────────────────────────────────────────────────
   validate-content:
     name: Validate package content
     runs-on: ubuntu-latest
-    needs: [build-wheels, build-sdist]
+    needs: [verify, build-wheels, build-sdist]
+    if: needs.verify.outputs.verified == 'true'
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
@@ -184,13 +296,36 @@ jobs:
             python scripts/validate_package_content.py "$sdist"
           done
 
+      - name: Emit job result artifact
+        if: always()
+        run: |
+          python - <<'PYEOF'
+          import json, os
+          result = {
+              "job": "validate-content",
+              "status": "${{ job.status }}",
+              "sha": "${{ needs.verify.outputs.sha }}",
+          }
+          with open("/tmp/job-result-validate-content.json", "w") as f:
+              json.dump(result, f, indent=2)
+          PYEOF
+
+      - name: Upload job result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: job-result-validate-content
+          path: /tmp/job-result-validate-content.json
+          retention-days: 30
+
   # ──────────────────────────────────────────────────────────────────────
-  # 4. Wheel smoke tests across all Python versions
+  # 5. Wheel smoke tests across all Python versions
   # ──────────────────────────────────────────────────────────────────────
   wheel-smoke:
     name: Wheel smoke (py${{ matrix.python-version }}, ${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    needs: [build-wheels]
+    needs: [verify, build-wheels]
+    if: needs.verify.outputs.verified == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -222,13 +357,38 @@ jobs:
       - name: Run wheel smoke test
         run: python scripts/wheel_smoke.py --wheel-dir wheel-dir
 
+      - name: Emit job result artifact
+        if: always()
+        run: |
+          python - <<'PYEOF'
+          import json, os
+          result = {
+              "job": "wheel-smoke",
+              "status": "${{ job.status }}",
+              "python": "${{ matrix.python-version }}",
+              "os": "${{ matrix.os }}",
+              "sha": "${{ needs.verify.outputs.sha }}",
+          }
+          with open("/tmp/job-result-wheel-smoke.json", "w") as f:
+              json.dump(result, f, indent=2)
+          PYEOF
+
+      - name: Upload job result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: job-result-wheel-smoke-${{ matrix.os }}-py${{ matrix.python-version }}
+          path: /tmp/job-result-wheel-smoke.json
+          retention-days: 30
+
   # ──────────────────────────────────────────────────────────────────────
-  # 5. HTTPX compatibility tests
+  # 6. HTTPX compatibility tests
   # ──────────────────────────────────────────────────────────────────────
   compat-tests:
     name: Compat tests (py${{ matrix.python-version }})
     runs-on: ubuntu-latest
-    needs: [build-wheels]
+    needs: [verify, build-artifacts]
+    if: needs.verify.outputs.verified == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -238,35 +398,24 @@ jobs:
         with:
           ref: ${{ needs.verify.outputs.sha }}
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
-
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Cache cargo
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+      - name: Download eggfetch wheel
+        uses: actions/download-artifact@v4
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: qual-${{ runner.os }}-py${{ matrix.python-version }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: qual-${{ runner.os }}-py${{ matrix.python-version }}-cargo-
+          path: dist
+          pattern: eggfetch-wheel
 
-      - name: Create venv and install deps
+      - name: Create venv and install from wheel
         run: |
           python -m venv .venv
           source .venv/bin/activate
           pip install -r compat/httpx/0.28.1/requirements.txt
-          pip install maturin pytest pytest-asyncio
-
-      - name: Build and install eggfetch
-        run: |
-          source .venv/bin/activate
-          maturin develop -m crates/eggfetch-python/Cargo.toml
+          pip install pytest pytest-asyncio
+          pip install dist/eggfetch-wheel/*.whl
 
       - name: Validate compatibility profile
         run: |
@@ -291,13 +440,37 @@ jobs:
             --candidate /tmp/eggfetch-manifest.json \
             --allowed compat/httpx/0.28.1/allowed-differences.toml
 
+      - name: Emit job result artifact
+        if: always()
+        run: |
+          python - <<'PYEOF'
+          import json, os
+          result = {
+              "job": "compat-tests",
+              "status": "${{ job.status }}",
+              "python": "${{ matrix.python-version }}",
+              "sha": "${{ needs.verify.outputs.sha }}",
+          }
+          with open("/tmp/job-result-compat-tests.json", "w") as f:
+              json.dump(result, f, indent=2)
+          PYEOF
+
+      - name: Upload job result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: job-result-compat-tests-py${{ matrix.python-version }}
+          path: /tmp/job-result-compat-tests.json
+          retention-days: 30
+
   # ──────────────────────────────────────────────────────────────────────
-  # 6. Downstream substitution tests
+  # 7. Downstream substitution tests
   # ──────────────────────────────────────────────────────────────────────
   downstream-substitution:
     name: Downstream (${{ matrix.package }})
     runs-on: ubuntu-latest
-    needs: [build-wheels]
+    needs: [verify, build-artifacts]
+    if: needs.verify.outputs.verified == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -318,26 +491,50 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Download linux-x86_64 wheel
+      - name: Download eggfetch wheel
         uses: actions/download-artifact@v4
         with:
           path: dist
-          pattern: wheels-linux-x86_64
+          pattern: eggfetch-wheel
 
       - name: Run downstream substitution test
         run: |
           python scripts/run_isolated_downstream.py \
             --package ${{ matrix.package }} \
-            --wheel-dir dist/wheels-linux-x86_64 \
+            --wheel-dir dist/eggfetch-wheel \
             --timeout 180
 
+      - name: Emit job result artifact
+        if: always()
+        run: |
+          python - <<'PYEOF'
+          import json, os
+          result = {
+              "job": "downstream-substitution",
+              "status": "${{ job.status }}",
+              "package": "${{ matrix.package }}",
+              "sha": "${{ needs.verify.outputs.sha }}",
+          }
+          with open("/tmp/job-result-downstream.json", "w") as f:
+              json.dump(result, f, indent=2)
+          PYEOF
+
+      - name: Upload job result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: job-result-downstream-${{ matrix.package }}
+          path: /tmp/job-result-downstream.json
+          retention-days: 30
+
   # ──────────────────────────────────────────────────────────────────────
-  # 7. Build shim and test substitution
+  # 8. Build shim and test substitution
   # ──────────────────────────────────────────────────────────────────────
   shim-substitution:
     name: Shim substitution test
     runs-on: ubuntu-latest
-    needs: [build-wheels]
+    needs: [verify, build-artifacts]
+    if: needs.verify.outputs.verified == 'true'
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
@@ -348,19 +545,25 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Download linux-x86_64 wheel
+      - name: Download eggfetch wheel
         uses: actions/download-artifact@v4
         with:
           path: dist
-          pattern: wheels-linux-x86_64
+          pattern: eggfetch-wheel
 
-      - name: Build and install shim
+      - name: Download httpx replacement wheel
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: httpx-replacement-wheel
+
+      - name: Build and install shim from wheel
         run: |
           python -m venv /tmp/shim-test-venv
           # Install eggfetch wheel first (no upstream httpx)
-          /tmp/shim-test-venv/bin/pip install dist/wheels-linux-x86_64/*.whl
-          # Install the shim from local source
-          /tmp/shim-test-venv/bin/pip install ./compat/httpx-shim
+          /tmp/shim-test-venv/bin/pip install dist/eggfetch-wheel/*.whl
+          # Install the replacement httpx wheel
+          /tmp/shim-test-venv/bin/pip install dist/httpx-replacement-wheel/*.whl
 
       - name: Verify shim identity
         run: |
@@ -403,13 +606,36 @@ jobs:
           EGGFETCH_COMPAT_REQUIRED=1 /tmp/shim-test-venv/bin/pytest \
             crates/eggfetch-python/tests/compat/ -v --strict-markers --timeout=30
 
+      - name: Emit job result artifact
+        if: always()
+        run: |
+          python - <<'PYEOF'
+          import json, os
+          result = {
+              "job": "shim-substitution",
+              "status": "${{ job.status }}",
+              "sha": "${{ needs.verify.outputs.sha }}",
+          }
+          with open("/tmp/job-result-shim.json", "w") as f:
+              json.dump(result, f, indent=2)
+          PYEOF
+
+      - name: Upload job result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: job-result-shim-substitution
+          path: /tmp/job-result-shim.json
+          retention-days: 30
+
   # ──────────────────────────────────────────────────────────────────────
-  # 8. Generate evidence
+  # 9. Generate evidence
   # ──────────────────────────────────────────────────────────────────────
   generate-evidence:
     name: Generate evidence
     runs-on: ubuntu-latest
-    needs: [verify, wheel-smoke, compat-tests, downstream-substitution, shim-substitution]
+    needs: [verify, build-artifacts, wheel-smoke, compat-tests, downstream-substitution, shim-substitution]
+    if: needs.verify.outputs.verified == 'true'
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
@@ -420,16 +646,19 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
+      - name: Download eggfetch wheel
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: eggfetch-wheel
 
-      - name: Build and install eggfetch
+      - name: Create venv and install from wheel
         run: |
           python -m venv .venv
           source .venv/bin/activate
-          pip install maturin pytest pytest-asyncio
+          pip install pytest pytest-asyncio
           pip install -r compat/httpx/0.28.1/requirements.txt
-          maturin develop -m crates/eggfetch-python/Cargo.toml
+          pip install dist/eggfetch-wheel/*.whl
 
       - name: Generate evidence
         run: |
@@ -452,14 +681,101 @@ jobs:
             compatibility-evidence.json
             compatibility-report.md
 
+      - name: Emit job result artifact
+        if: always()
+        run: |
+          python - <<'PYEOF'
+          import json, os
+          result = {
+              "job": "generate-evidence",
+              "status": "${{ job.status }}",
+              "sha": "${{ needs.verify.outputs.sha }}",
+          }
+          with open("/tmp/job-result-evidence.json", "w") as f:
+              json.dump(result, f, indent=2)
+          PYEOF
+
+      - name: Upload job result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: job-result-generate-evidence
+          path: /tmp/job-result-evidence.json
+          retention-days: 30
+
   # ──────────────────────────────────────────────────────────────────────
-  # 9. Qualification gate
+  # 10. Job structure validation
+  # ──────────────────────────────────────────────────────────────────────
+  check-structure:
+    name: Validate job structure
+    runs-on: ubuntu-latest
+    needs: [verify, build-artifacts, build-wheels, build-sdist, validate-content, wheel-smoke, compat-tests, downstream-substitution, shim-substitution, generate-evidence]
+    if: needs.verify.outputs.verified == 'true'
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Validate needs.verify.outputs references have verify in needs
+        run: |
+          # Parse the YAML to find jobs that reference needs.verify.outputs but lack verify in needs
+          python - <<'PYEOF'
+          import re, sys
+
+          with open(".github/workflows/qualification.yml") as f:
+              content = f.read()
+
+          # Split into job blocks (rough parse)
+          jobs_section = content.split("jobs:")[1]
+
+          # Find all job definitions
+          job_pattern = re.compile(r'^  (\S+):\s*$', re.MULTILINE)
+          job_names = [m.group(1) for m in job_pattern.finditer(jobs_section)]
+
+          errors = []
+          for job_name in job_names:
+              # Find the job block
+              pattern = re.compile(
+                  rf'^  {re.escape(job_name)}:.*?(?=^\  \S+:|$)',
+                  re.MULTILINE | re.DOTALL
+              )
+              match = pattern.search(jobs_section)
+              if not match:
+                  continue
+              block = match.group(0)
+
+              # Check if this job references needs.verify.outputs
+              if "needs.verify.outputs" not in block:
+                  continue
+
+              # Check if verify is in needs
+              needs_match = re.search(r'needs:\s*\[(.*?)\]', block)
+              if not needs_match:
+                  errors.append(f"Job '{job_name}' uses needs.verify.outputs but has no needs list")
+                  continue
+
+              needs_list = [n.strip() for n in needs_match.group(1).split(",")]
+              if "verify" not in needs_list:
+                  errors.append(
+                      f"Job '{job_name}' uses needs.verify.outputs but "
+                      f"'verify' not in needs: {needs_list}"
+                  )
+
+          if errors:
+              print("STRUCTURE VALIDATION FAILED:")
+              for e in errors:
+                  print(f"  - {e}")
+              sys.exit(1)
+
+          print("Job structure validation passed: all jobs referencing needs.verify.outputs have verify in needs.")
+          PYEOF
+
+  # ──────────────────────────────────────────────────────────────────────
+  # 11. Qualification gate
   # ──────────────────────────────────────────────────────────────────────
   qualification-gate:
     name: Qualification gate
     runs-on: ubuntu-latest
     if: ${{ always() }}
-    needs: [verify, build-wheels, build-sdist, validate-content, wheel-smoke, compat-tests, downstream-substitution, shim-substitution, generate-evidence]
+    needs: [verify, build-artifacts, build-wheels, build-sdist, validate-content, wheel-smoke, compat-tests, downstream-substitution, shim-substitution, generate-evidence, check-structure]
     steps:
       - name: Evaluate qualification results
         run: |
@@ -468,6 +784,7 @@ jobs:
 
           jobs = {
               "verify":                  "${{ needs.verify.result }}",
+              "build-artifacts":         "${{ needs.build-artifacts.result }}",
               "build-wheels":            "${{ needs.build-wheels.result }}",
               "build-sdist":             "${{ needs.build-sdist.result }}",
               "validate-content":        "${{ needs.validate-content.result }}",
@@ -476,13 +793,15 @@ jobs:
               "downstream-substitution": "${{ needs.downstream-substitution.result }}",
               "shim-substitution":       "${{ needs.shim-substitution.result }}",
               "generate-evidence":       "${{ needs.generate-evidence.result }}",
+              "check-structure":         "${{ needs.check-structure.result }}",
           }
 
           # Jobs that must succeed
           required = [
-              "verify", "build-wheels", "build-sdist", "validate-content",
-              "wheel-smoke", "compat-tests", "downstream-substitution",
-              "shim-substitution", "generate-evidence",
+              "verify", "build-artifacts", "build-wheels", "build-sdist",
+              "validate-content", "wheel-smoke", "compat-tests",
+              "downstream-substitution", "shim-substitution",
+              "generate-evidence", "check-structure",
           ]
 
           errors = []
