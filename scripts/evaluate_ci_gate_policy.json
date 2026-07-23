@@ -12,7 +12,9 @@
     "wheel-smoke",
     "compat-httpx"
   ],
-  "conditional_jobs": {},
+  "conditional_jobs": {
+    "docs-runtime": "Depends on rust-test; skipped when rust-test is skipped"
+  },
   "allowed_skip_results": ["success", "skipped"],
   "fail_results": ["failure", "cancelled"]
 }

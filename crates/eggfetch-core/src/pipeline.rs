@@ -316,7 +316,7 @@ pub(crate) async fn send_with_redirects(client: &Client, request: Request) -> Re
     let mut cur_headers = headers;
     let mut cur_version = version;
     #[cfg(feature = "cookies")]
-    let mut cookie_header_allowed = cur_headers.contains("cookie");
+    let mut cookie_header_allowed = true;
 
     let mut prev_url: Option<url::Url> = None;
     let mut credentials_allowed = true;
@@ -352,6 +352,11 @@ pub(crate) async fn send_with_redirects(client: &Client, request: Request) -> Re
             #[cfg(feature = "cookies")]
             {
                 cookie_header_allowed = false;
+            }
+        } else if prev_url.is_some() {
+            #[cfg(feature = "cookies")]
+            {
+                cookie_header_allowed = true;
             }
         }
 
