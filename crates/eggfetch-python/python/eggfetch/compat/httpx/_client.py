@@ -174,19 +174,28 @@ def _wrap_response(native_resp, compat_request=None, default_encoding="utf-8"):
 
 
 def _wrap_streaming_response(native_resp, compat_request=None, default_encoding="utf-8"):
-    status_code = native_resp.status_code
-    native_headers = native_resp.headers
+    # If native_resp is already a compat Response (e.g. from MockTransport),
+    # extract its stream for proper iteration.
+    if isinstance(native_resp, Response):
+        status_code = native_resp.status_code
+        header_list = native_resp.headers.multi_items()
+        stream_obj = native_resp._stream
+        history = native_resp.history or []
+    else:
+        status_code = native_resp.status_code
+        native_headers = native_resp.headers
 
-    header_list = []
-    if hasattr(native_headers, "multi_items"):
-        header_list = native_headers.multi_items()
-    elif hasattr(native_headers, "items"):
-        header_list = native_headers.items()
+        header_list = []
+        if hasattr(native_headers, "multi_items"):
+            header_list = native_headers.multi_items()
+        elif hasattr(native_headers, "items"):
+            header_list = native_headers.items()
 
-    history = []
-    if hasattr(native_resp, "history") and native_resp.history:
-        for h in native_resp.history:
-            history.append(_wrap_response(h, default_encoding=default_encoding))
+        history = []
+        if hasattr(native_resp, "history") and native_resp.history:
+            for h in native_resp.history:
+                history.append(_wrap_response(h, default_encoding=default_encoding))
+        stream_obj = native_resp
 
     # Build extensions: preserve request extensions + map standard keys
     extensions: dict = {}
@@ -201,13 +210,17 @@ def _wrap_streaming_response(native_resp, compat_request=None, default_encoding=
     response = Response(
         status_code,
         headers=header_list,
-        stream=native_resp,
+        stream=stream_obj,
         request=compat_request,
         history=history,
         default_encoding=default_encoding,
         extensions=extensions if extensions else None,
     )
-    response._native_stream = native_resp
+    # Only set _native_stream for objects with a .read() method (native
+    # eggfetch streams).  Python generators/iterables go through _stream
+    # iteration instead.
+    if hasattr(stream_obj, "read"):
+        response._native_stream = stream_obj
     return response
 
 
@@ -372,6 +385,7 @@ class Client:
         base_url="",
         transport=None,
         default_encoding="utf-8",
+        extensions=None,
     ):
         self._auth = auth
         self._params = params if isinstance(params, QueryParams) else QueryParams(params)
@@ -391,6 +405,7 @@ class Client:
         self._base_url = URL(base_url) if not isinstance(base_url, URL) else base_url
         self._transport = transport
         self._default_encoding = default_encoding
+        self._extensions = extensions or {}
         self._native_client = None
         self._is_closed = False
 
@@ -689,6 +704,10 @@ class Client:
     def _merge_extensions(self, request_extensions):
         if request_extensions is None:
             return None
+        if self._extensions:
+            merged = dict(self._extensions)
+            merged.update(request_extensions)
+            return merged
         return request_extensions
 
 
@@ -716,6 +735,7 @@ class AsyncClient:
         transport=None,
         async_transport=None,
         default_encoding="utf-8",
+        extensions=None,
     ):
         self._auth = auth
         self._params = params if isinstance(params, QueryParams) else QueryParams(params)
@@ -736,6 +756,7 @@ class AsyncClient:
         self._transport = transport
         self._async_transport = async_transport
         self._default_encoding = default_encoding
+        self._extensions = extensions or {}
         self._native_client = None
         self._is_closed = False
 
@@ -1065,4 +1086,8 @@ class AsyncClient:
     def _merge_extensions(self, request_extensions):
         if request_extensions is None:
             return None
+        if self._extensions:
+            merged = dict(self._extensions)
+            merged.update(request_extensions)
+            return merged
         return request_extensions

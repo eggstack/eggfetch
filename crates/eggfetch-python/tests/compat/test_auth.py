@@ -258,6 +258,109 @@ class TestDigestAuth:
         auth = DigestAuth("user", "pass")
         assert "user" in repr(auth)
 
+    def test_sha256_auth_int_combo(self):
+        auth = DigestAuth("user", "pass")
+        request = Request("POST", "http://example.com/", content=b"body-data")
+        flow = auth.auth_flow(request)
+        next(flow)
+
+        response = Response(
+            401,
+            headers=[
+                (
+                    "www-authenticate",
+                    'Digest realm="test", nonce="abc", '
+                    'qop="auth-int", algorithm=SHA-256',
+                )
+            ],
+        )
+        auth_request = flow.send(response)
+        assert "algorithm=SHA-256" in auth_request.headers["authorization"]
+        assert "qop=auth-int" in auth_request.headers["authorization"]
+
+    def test_uri_with_query_string(self):
+        auth = DigestAuth("user", "pass")
+        request = Request("GET", "http://example.com/search?q=test&page=1")
+        flow = auth.auth_flow(request)
+        next(flow)
+
+        response = Response(
+            401,
+            headers=[
+                (
+                    "www-authenticate",
+                    'Digest realm="test", nonce="abc", qop="auth"',
+                )
+            ],
+        )
+        auth_request = flow.send(response)
+        assert 'uri="/search?q=test&page=1"' in auth_request.headers["authorization"]
+
+    def test_qop_list_negotiation(self):
+        """Server advertises qop as comma-separated list; client picks first supported."""
+        auth = DigestAuth("user", "pass")
+        request = Request("GET", "http://example.com/")
+        flow = auth.auth_flow(request)
+        next(flow)
+
+        response = Response(
+            401,
+            headers=[
+                (
+                    "www-authenticate",
+                    'Digest realm="test", nonce="abc", '
+                    'qop="auth-int,auth"',
+                )
+            ],
+        )
+        auth_request = flow.send(response)
+        # Should pick auth-int (first supported from the list)
+        assert "qop=auth-int" in auth_request.headers["authorization"]
+
+    def test_qop_list_auth_first(self):
+        """Server advertises qop as comma-separated list with auth first."""
+        auth = DigestAuth("user", "pass")
+        request = Request("GET", "http://example.com/")
+        flow = auth.auth_flow(request)
+        next(flow)
+
+        response = Response(
+            401,
+            headers=[
+                (
+                    "www-authenticate",
+                    'Digest realm="test", nonce="abc", '
+                    'qop="auth,auth-int"',
+                )
+            ],
+        )
+        auth_request = flow.send(response)
+        # Should pick auth (first supported)
+        assert "qop=auth" in auth_request.headers["authorization"]
+
+    def test_qop_list_no_supported_falls_back(self):
+        """Server advertises only unsupported qop; client falls back to old-style."""
+        auth = DigestAuth("user", "pass")
+        request = Request("GET", "http://example.com/")
+        flow = auth.auth_flow(request)
+        next(flow)
+
+        response = Response(
+            401,
+            headers=[
+                (
+                    "www-authenticate",
+                    'Digest realm="test", nonce="abc", '
+                    'qop="unknown"',
+                )
+            ],
+        )
+        auth_request = flow.send(response)
+        # Should fall back to old-style (no qop/nc/cnonce)
+        auth_header = auth_request.headers["authorization"]
+        assert "qop=" not in auth_header
+        assert "nc=" not in auth_header
+
 
 class TestNetRCAuth:
     def test_parse_netrc_basic(self):

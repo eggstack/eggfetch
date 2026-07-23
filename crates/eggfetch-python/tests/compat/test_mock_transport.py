@@ -104,6 +104,21 @@ class TestMockTransportSync:
         with pytest.raises(RuntimeError, match="closed"):
             transport.handle_request(Request("GET", "http://test/"))
 
+    def test_streaming_response_via_handler(self):
+        def handler(request):
+            def body_iter():
+                yield b"chunk1-"
+                yield b"chunk2-"
+                yield b"chunk3"
+
+            return Response(200, stream=body_iter())
+
+        with Client(transport=MockTransport(handler)) as client:
+            with client.stream("GET", "http://testserver/") as resp:
+                assert resp.status_code == 200
+                content = resp.read()
+                assert content == b"chunk1-chunk2-chunk3"
+
 
 class TestMockTransportAsync:
     @pytest.mark.asyncio

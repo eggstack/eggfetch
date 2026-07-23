@@ -81,6 +81,30 @@ class TestProxyEnvOverride:
             assert client.trust_env is False
 
 
+class TestProxyEnvNegative:
+    """Verify behavior with unsupported or unexpected proxy env vars."""
+
+    @mock.patch.dict(os.environ, {"ALL_PROXY": "http://proxy.local:8080"}, clear=False)
+    def test_all_proxy_env_accepted(self):
+        with Client(trust_env=True) as client:
+            assert client.trust_env is True
+
+    @mock.patch.dict(os.environ, {"NO_PROXY": "*"}, clear=False)
+    def test_no_proxy_wildcard_accepted(self):
+        with Client(trust_env=True) as client:
+            assert client.trust_env is True
+
+    @mock.patch.dict(os.environ, {"NO_PROXY": "10.0.0.0/8,.example.com,localhost:8080"}, clear=False)
+    def test_no_proxy_complex_pattern_accepted(self):
+        with Client(trust_env=True) as client:
+            assert client.trust_env is True
+
+    @mock.patch.dict(os.environ, {"HTTPS_PROXY": "http://proxy.local:8080"}, clear=False)
+    def test_https_proxy_env_accepted(self):
+        with Client(trust_env=True) as client:
+            assert client.trust_env is True
+
+
 # ---------------------------------------------------------------------------
 # Explicit proxy overrides env
 # ---------------------------------------------------------------------------

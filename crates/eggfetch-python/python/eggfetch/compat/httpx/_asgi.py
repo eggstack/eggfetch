@@ -52,24 +52,30 @@ class ASGITransport:
 
         body = request.content or b""
         body_offset = 0
+        body_consumed = False
 
         async def receive() -> dict:
-            nonlocal body_offset
+            nonlocal body_offset, body_consumed
             if body_offset < len(body):
                 chunk = body[body_offset : body_offset + _CHUNK_SIZE]
                 body_offset += len(chunk)
                 more_body = body_offset < len(body)
+                if not more_body:
+                    body_consumed = True
                 return {
                     "type": "http.request",
                     "body": chunk,
                     "more_body": more_body,
                 }
-            # All body delivered — return empty final frame
-            return {
-                "type": "http.request",
-                "body": b"",
-                "more_body": False,
-            }
+            if not body_consumed:
+                body_consumed = True
+                return {
+                    "type": "http.request",
+                    "body": b"",
+                    "more_body": False,
+                }
+            # All body consumed — deliver disconnect signal
+            return {"type": "http.disconnect"}
 
         async def send(message: dict) -> None:
             nonlocal status_code, headers

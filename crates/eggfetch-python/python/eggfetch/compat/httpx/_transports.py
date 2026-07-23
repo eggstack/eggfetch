@@ -79,9 +79,9 @@ class AsyncBaseTransport:
 class HTTPTransport(BaseTransport):
     """Transport backed by eggfetch-core for synchronous requests.
 
-    Note: ``local_address`` and ``socket_options`` are accepted for API
-    compatibility but are **not forwarded** to eggfetch-core, which does
-    not support them.
+    Note: ``local_address``, ``socket_options``, and ``uds_path`` are
+    accepted for API compatibility but are **not forwarded** to
+    eggfetch-core, which does not support them.
     """
 
     def __init__(
@@ -97,6 +97,7 @@ class HTTPTransport(BaseTransport):
         local_address: str | None = None,
         retries: int = 0,
         socket_options: typing.Any | None = None,
+        uds: str | None = None,
     ) -> None:
         self._verify = verify
         self._cert = cert
@@ -119,6 +120,7 @@ class HTTPTransport(BaseTransport):
         self._local_address = local_address
         self._retries = retries
         self._socket_options = socket_options
+        self._uds = uds
         self._native_client: eggfetch.Client | None = None
         self._is_closed: bool = False
 
@@ -183,9 +185,9 @@ class HTTPTransport(BaseTransport):
 class AsyncHTTPTransport(AsyncBaseTransport):
     """Transport backed by eggfetch-core for asynchronous requests.
 
-    Note: ``local_address`` and ``socket_options`` are accepted for API
-    compatibility but are **not forwarded** to eggfetch-core, which does
-    not support them.
+    Note: ``local_address``, ``socket_options``, and ``uds_path`` are
+    accepted for API compatibility but are **not forwarded** to
+    eggfetch-core, which does not support them.
     """
 
     def __init__(
@@ -201,6 +203,7 @@ class AsyncHTTPTransport(AsyncBaseTransport):
         local_address: str | None = None,
         retries: int = 0,
         socket_options: typing.Any | None = None,
+        uds: str | None = None,
     ) -> None:
         self._verify = verify
         self._cert = cert
@@ -223,6 +226,7 @@ class AsyncHTTPTransport(AsyncBaseTransport):
         self._local_address = local_address
         self._retries = retries
         self._socket_options = socket_options
+        self._uds = uds
         self._native_client: eggfetch.AsyncClient | None = None
         self._is_closed: bool = False
 

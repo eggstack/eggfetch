@@ -222,6 +222,63 @@ class TestComponentBasedMountRouting:
             resp = client.get("http://example.com/")
             assert resp.content == b"default"
 
+    def test_host_port_beats_host_path(self):
+        """host+port (score 205) beats host+path (score 200+len)."""
+        port_handler = _make_handler("port")
+        path_handler = _make_handler("path")
+
+        with Client(
+            mounts={
+                "http://example.com:8080": MockTransport(port_handler),
+                "http://example.com/api": MockTransport(path_handler),
+            }
+        ) as client:
+            resp = client.get("http://example.com:8080/api/endpoint")
+            assert resp.content == b"port"
+
+    def test_full_url_beats_all(self):
+        """Full URL pattern (score 10000) beats catch-all."""
+        full_handler = _make_handler("full")
+        catchall_handler = _make_handler("catchall")
+
+        with Client(
+            mounts={
+                "http://example.com:8080/api": MockTransport(full_handler),
+                "all://": MockTransport(catchall_handler),
+            }
+        ) as client:
+            resp = client.get("http://example.com:8080/api/v1")
+            assert resp.content == b"full"
+
+    def test_no_explicit_port_matches_default(self):
+        """URL without explicit port matches mount without port."""
+        port_handler = _make_handler("port")
+        default_handler = _make_handler("default")
+
+        with Client(
+            mounts={
+                "http://example.com:8080": MockTransport(port_handler),
+                "all://": MockTransport(default_handler),
+            }
+        ) as client:
+            resp = client.get("http://example.com/")
+            assert resp.content == b"default"
+
+    def test_base_url_plus_mount(self):
+        """Mount matching uses the resolved URL (after base_url merge)."""
+        api_handler = _make_handler("api")
+        default_handler = _make_handler("default")
+
+        with Client(
+            base_url="http://example.com",
+            mounts={
+                "http://example.com/api": MockTransport(api_handler),
+                "all://": MockTransport(default_handler),
+            },
+        ) as client:
+            resp = client.get("/api/users")
+            assert resp.content == b"api"
+
 
 class TestAsyncMountRouting:
     @pytest.mark.asyncio

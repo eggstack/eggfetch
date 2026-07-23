@@ -171,6 +171,63 @@ class TestSyncHooks:
 
         assert call_log == [("hook_called", 200)]
 
+    def test_response_hook_can_modify_response(self):
+        """Response hook can mutate the response and caller sees the mutation."""
+
+        def add_header(response):
+            response.headers["x-modified"] = "yes"
+
+        def handler(request):
+            return Response(200, content=b"data")
+
+        with Client(
+            transport=MockTransport(handler),
+            event_hooks={"request": [], "response": [add_header]},
+        ) as client:
+            resp = client.get("http://testserver/")
+
+        assert resp.headers["x-modified"] == "yes"
+
+    def test_request_hook_error_propagates(self):
+        """Request hook error prevents dispatch and propagates cleanly."""
+
+        def bad_hook(request):
+            raise RuntimeError("request hook failed")
+
+        def handler(request):
+            return Response(200, content=b"should-not-reach")
+
+        with Client(
+            transport=MockTransport(handler),
+            event_hooks={"request": [bad_hook], "response": []},
+        ) as client:
+            with pytest.raises(RuntimeError, match="request hook failed"):
+                client.get("http://testserver/")
+
+    def test_response_hook_multiple_error_cleanup(self):
+        """First response hook error closes response; second hook is not called."""
+        call_log = []
+
+        def first_hook(response):
+            call_log.append("first")
+            raise RuntimeError("first hook error")
+
+        def second_hook(response):
+            call_log.append("second")
+
+        def handler(request):
+            return Response(200, content=b"data")
+
+        with Client(
+            transport=MockTransport(handler),
+            event_hooks={"request": [], "response": [first_hook, second_hook]},
+        ) as client:
+            with pytest.raises(RuntimeError, match="first hook error"):
+                client.get("http://testserver/")
+
+        # Second hook should not have been called
+        assert call_log == ["first"]
+
 
 class TestAsyncHooks:
     @pytest.mark.asyncio

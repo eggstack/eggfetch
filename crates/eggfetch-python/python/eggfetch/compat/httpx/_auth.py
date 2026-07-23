@@ -158,8 +158,18 @@ class DigestAuth(Auth):
         realm = challenge.get("realm", "")
         nonce = challenge.get("nonce", "")
         algorithm = challenge.get("algorithm", "MD5")
-        qop = challenge.get("qop", "")
         opaque = challenge.get("opaque", "")
+
+        # qop may be a comma-separated list (e.g. "auth, auth-int").
+        # Select the first supported value.
+        raw_qop = challenge.get("qop", "")
+        qop = ""
+        if raw_qop:
+            for candidate in raw_qop.split(","):
+                candidate = candidate.strip().strip('"')
+                if candidate in ("auth", "auth-int"):
+                    qop = candidate
+                    break
 
         hash_fn = _digest_hash(algorithm)
 
@@ -235,7 +245,8 @@ class DigestAuth(Auth):
         url = request.url
         uri = url.path
         if url.query:
-            uri = f"{uri}?{url.query}"
+            query = url.query.decode("utf-8") if isinstance(url.query, bytes) else url.query
+            uri = f"{uri}?{query}"
 
         # Get the request method
         method = request.method

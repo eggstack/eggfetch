@@ -155,3 +155,79 @@ class TestASGITransport:
         ) as client:
             resp = await client.get("http://testserver/test")
             assert resp.content == b"/app"
+
+    @pytest.mark.asyncio
+    async def test_disconnect_signal(self):
+        """After body is consumed, receive() should return http.disconnect."""
+        received_messages = []
+
+        async def disconnect_app(scope, receive, send):
+            while True:
+                msg = await receive()
+                received_messages.append(msg["type"])
+                if msg["type"] == "http.disconnect":
+                    break
+
+            await send({"type": "http.response.start", "status": 200, "headers": []})
+            await send({"type": "http.response.body", "body": b"ok"})
+
+        async with AsyncClient(
+            async_transport=ASGITransport(disconnect_app)
+        ) as client:
+            resp = await client.post(
+                "http://testserver/",
+                content=b"hello",
+            )
+            assert resp.status_code == 200
+            # Should see: http.request (body chunk), then http.disconnect
+            assert received_messages[-1] == "http.disconnect"
+
+    @pytest.mark.asyncio
+    async def test_large_body_chunking(self):
+        """Request bodies larger than 64 KiB are chunked through receive."""
+        captured_body = []
+
+        async def capture_app(scope, receive, send):
+            while True:
+                msg = await receive()
+                body = msg.get("body", b"")
+                if body:
+                    captured_body.append(len(body))
+                if not msg.get("more_body", False):
+                    break
+
+            await send({"type": "http.response.start", "status": 200, "headers": []})
+            await send({"type": "http.response.body", "body": b""})
+
+        large_body = b"x" * 200_000  # ~200 KiB
+
+        async with AsyncClient(
+            async_transport=ASGITransport(capture_app)
+        ) as client:
+            resp = await client.post(
+                "http://testserver/",
+                content=large_body,
+            )
+            assert resp.status_code == 200
+            # Should have been chunked (64 KiB + 64 KiB + remaining)
+            total = sum(captured_body)
+            assert total == 200_000
+            assert len(captured_body) >= 2
+
+    @pytest.mark.asyncio
+    async def test_raw_path_preserved(self):
+        """raw_path should preserve the original path bytes."""
+        scope_captured = []
+
+        async def capture_app(scope, receive, send):
+            scope_captured.append(scope)
+            await send({"type": "http.response.start", "status": 200, "headers": []})
+            await send({"type": "http.response.body", "body": b""})
+
+        async with AsyncClient(
+            async_transport=ASGITransport(capture_app)
+        ) as client:
+            await client.get("http://testserver/hello%20world")
+
+        scope = scope_captured[0]
+        assert scope["raw_path"] == b"/hello%20world"
