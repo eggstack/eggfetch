@@ -4,15 +4,14 @@ Ensures all required fields are present, versions are pinned, no duplicate
 package names exist, and the manifest conforms to schema-version 1.
 """
 
-import sys
 from pathlib import Path
 
 import pytest
 
-if sys.version_info < (3, 11):
-    pytest.skip("tomllib requires Python 3.11+", allow_module_level=True)
-
-import tomllib  # noqa: E402
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import tomli as tomllib
 
 MANIFEST_PATH = Path(__file__).resolve().parents[4] / "compat" / "downstream" / "manifest.toml"
 
@@ -56,7 +55,7 @@ VALID_CATEGORIES = {
     "heavy-config-user",
 }
 
-VALID_USAGE = {"public", "private"}
+VALID_USAGE = {"public", "private", "required", "informational"}
 
 
 @pytest.fixture(scope="module")

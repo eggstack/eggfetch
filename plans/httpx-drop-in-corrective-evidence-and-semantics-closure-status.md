@@ -1,12 +1,26 @@
 # HTTPX Drop-In Corrective Evidence and Semantics Closure — Status
 
-Status: IN PROGRESS
+Status: SUPERSEDED
+
+> **Correction Notice**: This status document overstated completion. The
+> verification/substitution/lifecycle corrective closure pass
+> (`plans/httpx-drop-in-verification-substitution-and-lifecycle-corrective-closure.md`)
+> identified additional defects in API oracle fail-closed behavior, controlled
+> replacement validation, downstream execution, auth flow dispatch, async
+> streaming lifecycle, data preservation, timeout handling, Python matrix
+> coverage, exact-SHA qualification, and evidence generation. This status
+> document is superseded by
+> `plans/httpx-drop-in-verification-substitution-and-lifecycle-corrective-closure-status.md`.
 
 ## Summary
 
-This corrective pass addresses defects found after the HTTPX drop-in roadmap
+This corrective pass addressed defects found after the HTTPX drop-in roadmap
 was implemented. The compatibility claim was downgraded from `Stage C released`
 to `Stage C candidate` to reflect the actual evidence state.
+
+The correctness of some claims in this document (e.g., "fail-closed" oracle,
+"actual" downstream execution) was later found to be overstated and was
+corrected by the second corrective pass.
 
 ## Starting SHA
 

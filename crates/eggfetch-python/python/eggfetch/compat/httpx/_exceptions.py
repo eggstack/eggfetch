@@ -1,37 +1,46 @@
 """HTTPX-compatible exception hierarchy for eggfetch."""
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .._models import Request
+
 
 class HTTPError(Exception):
     """Base exception for HTTPX-compatible errors."""
 
-    def __init__(self, *args, request=None, message=""):
+    def __init__(self, message: str, *, request: Request | None = None) -> None:
+        self.message = message
         self._request = request
-        self._message = message or (args[0] if args else "")
-        super().__init__(self._message if self._message else str(self))
+        super().__init__(self.message)
 
     @property
-    def request(self):
+    def request(self) -> Request | None:
         return self._request
 
-    def __repr__(self):
-        return f"{type(self).__name__}({self._message!r})"
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}({self.message!r})"
 
 
 class HTTPStatusError(HTTPError):
     """Exception raised when an HTTP response indicates an error status."""
 
-    def __init__(self, message, *, request, response):
+    def __init__(
+        self,
+        message: str,
+        *,
+        request: Request | None = None,
+        response: object | None = None,
+    ) -> None:
         super().__init__(message=message, request=request)
-        self._response = response
+        self.response = response
 
-    @property
-    def response(self):
-        return self._response
-
-    def __repr__(self):
+    def __repr__(self) -> str:
         return (
-            f"{type(self).__name__}({self._message!r}, "
-            f"request={self._request!r}, response={self._response!r})"
+            f"{type(self).__name__}({self.message!r}, "
+            f"request={self.request!r}, response={self.response!r})"
         )
 
 
@@ -114,6 +123,9 @@ class TooManyRedirects(RequestError):
 class StreamError(Exception):
     """Base exception for stream-related errors."""
 
+    def __init__(self, *args: object) -> None:
+        super().__init__(*args)
+
 
 class RequestNotRead(StreamError):
     """Exception raised when attempting to read a request that hasn't been read."""
@@ -134,12 +146,20 @@ class StreamConsumed(StreamError):
 class InvalidURL(Exception):
     """Exception raised when an invalid URL is provided."""
 
-    def __init__(self, message):
-        super().__init__(message)
+    def __init__(self, message: str = "", **kwargs: object) -> None:
+        self.message = message if message is not None else ""
+        super().__init__(self.message)
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}({self.message!r})"
 
 
 class CookieConflict(Exception):
     """Exception raised when a cookie conflict occurs."""
 
-    def __init__(self, message):
-        super().__init__(message)
+    def __init__(self, message: str = "", **kwargs: object) -> None:
+        self.message = message if message is not None else ""
+        super().__init__(self.message)
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}({self.message!r})"

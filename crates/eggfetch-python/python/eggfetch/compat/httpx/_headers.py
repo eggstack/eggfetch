@@ -12,9 +12,9 @@ class Headers:
 
     __slots__ = ("_items", "_encoding")
 
-    def __init__(self, headers=None, encoding: str = "utf-8"):
+    def __init__(self, headers=None, encoding: str | None = None):
         self._items: list[tuple[str, str]] = []
-        self._encoding = encoding
+        self._encoding = encoding if encoding is not None else "utf-8"
         if headers is not None:
             self._init_from(headers)
 

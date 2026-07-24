@@ -3,18 +3,18 @@
 
 [[difference]]
 id = "REDIRECT-DEFAULT-001"
-category = "intentional-difference"
+category = "resolved"
 symbol = "httpx.Client(follow_redirects=...)"
 behavior-case = "redirect-default"
-reference-behavior = "HTTPX follows redirects by default (follow_redirects=True)"
-eggfetch-behavior = "eggfetch does NOT follow redirects by default (follow_redirects=True required)"
-rationale = "Security-first default; prevents accidental redirects to unexpected hosts"
-compatibility-stage-impact = "phase-0"
-security-improvement = true
-migration-impact = "Users must add follow_redirects=True explicitly"
+reference-behavior = "HTTPX 0.28.1 does NOT follow redirects by default (follow_redirects=False)"
+eggfetch-behavior = "eggfetch does NOT follow redirects by default (follow_redirects=False)"
+rationale = "Both HTTPX 0.28.1 and eggfetch default to follow_redirects=False. No difference."
+compatibility-stage-impact = "resolved"
+security-improvement = false
+migration-impact = "None; defaults match"
 owner = "eggfetch-team"
-review-milestone = "phase-0"
-tests = ["test_differential.py::TestRedirectDefault", "test_differential.py::TestKnownDifferences::test_redirect_default_differs"]
+review-milestone = "corrective-closure"
+tests = []
 
 [[difference]]
 id = "PROXY-ENV-001"
@@ -135,3 +135,738 @@ migration-impact = "None"
 owner = "eggfetch-team"
 review-milestone = "phase-0"
 tests = ["test_response_compat.py"]
+
+[[difference]]
+id = "EXCEPTION-CTOR-001"
+category = "intentional-difference"
+symbol = "*Error"
+behavior-case = "exception-constructor-signature"
+reference-behavior = "HTTPX exceptions use (message, *, request) with message as required positional"
+eggfetch-behavior = "eggfetch exceptions use (message, *, request) matching HTTPX exactly"
+rationale = "eggfetch exception constructors match HTTPX's signature pattern."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "None"
+owner = "eggfetch-team"
+review-milestone = "corrective-closure"
+tests = ["test_exceptions.py"]
+
+[[difference]]
+id = "EXCEPTION-OPTIONAL-MSG-001"
+category = "stage-bounded"
+symbol = "InvalidURL"
+behavior-case = "exception-optional-message"
+reference-behavior = "HTTPX InvalidURL requires message as a mandatory parameter"
+eggfetch-behavior = "eggfetch InvalidURL accepts message with a default of empty string"
+rationale = "eggfetch makes the message parameter optional for convenience. The behavior is identical when a message is provided."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "Minimal; message can still be provided"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_exceptions.py"]
+
+[[difference]]
+id = "EXCEPTION-OPTIONAL-MSG-002"
+category = "stage-bounded"
+symbol = "CookieConflict"
+behavior-case = "exception-optional-message"
+reference-behavior = "HTTPX CookieConflict requires message as a mandatory parameter"
+eggfetch-behavior = "eggfetch CookieConflict accepts message with a default of empty string"
+rationale = "eggfetch makes the message parameter optional for convenience."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "Minimal; message can still be provided"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_exceptions.py"]
+
+[[difference]]
+id = "PROXY-SSL-CONTEXT-001"
+category = "stage-bounded"
+symbol = "Proxy"
+behavior-case = "proxy-missing-ssl-context"
+reference-behavior = "HTTPX Proxy accepts ssl_context parameter"
+eggfetch-behavior = "eggfetch Proxy does not accept ssl_context; TLS is handled by the Rust engine"
+rationale = "eggfetch delegates TLS configuration to the native Rust engine. The ssl_context parameter is not applicable."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "Minimal; ssl_context is rarely customized"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_config_objects.py"]
+
+[[difference]]
+id = "STREAM-ERROR-SIG-001"
+category = "stage-bounded"
+symbol = "ResponseNotRead"
+behavior-case = "stream-error-signature"
+reference-behavior = "HTTPX ResponseNotRead takes no arguments: ResponseNotRead()"
+eggfetch-behavior = "eggfetch ResponseNotRead accepts (*args) for compatibility"
+rationale = "eggfetch StreamError accepts *args for flexibility. Calling with no arguments still works."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "None"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_exceptions.py"]
+
+[[difference]]
+id = "STREAM-ERROR-SIG-002"
+category = "stage-bounded"
+symbol = "StreamClosed"
+behavior-case = "stream-error-signature"
+reference-behavior = "HTTPX StreamClosed takes no arguments"
+eggfetch-behavior = "eggfetch StreamClosed accepts (*args) for compatibility"
+rationale = "See STREAM-ERROR-SIG-001."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "None"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_exceptions.py"]
+
+[[difference]]
+id = "STREAM-ERROR-SIG-003"
+category = "stage-bounded"
+symbol = "StreamConsumed"
+behavior-case = "stream-error-signature"
+reference-behavior = "HTTPX StreamConsumed takes no arguments"
+eggfetch-behavior = "eggfetch StreamConsumed accepts (*args) for compatibility"
+rationale = "See STREAM-ERROR-SIG-001."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "None"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_exceptions.py"]
+
+[[difference]]
+id = "MUTABLE-MAPPING-002"
+category = "stage-bounded"
+symbol = "Cookies"
+behavior-case = "cookies-inheritance"
+reference-behavior = "HTTPX Cookies inherits Generic, MutableMapping"
+eggfetch-behavior = "eggfetch Cookies implements the mapping protocol without inheriting MutableMapping"
+rationale = "eggfetch implements the same public interface without the internal inheritance hierarchy."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "None; the mapping protocol is preserved"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_cookies.py"]
+
+[[difference]]
+id = "MUTABLE-MAPPING-003"
+category = "stage-bounded"
+symbol = "Headers"
+behavior-case = "headers-inheritance"
+reference-behavior = "HTTPX Headers inherits Generic, MutableMapping"
+eggfetch-behavior = "eggfetch Headers implements the mapping protocol without inheriting MutableMapping"
+rationale = "eggfetch implements the same public interface without the internal inheritance hierarchy."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "None; the mapping protocol is preserved"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_headers.py"]
+
+[[difference]]
+id = "MAPPING-001"
+category = "stage-bounded"
+symbol = "QueryParams"
+behavior-case = "queryparams-inheritance"
+reference-behavior = "HTTPX QueryParams inherits Generic, Mapping"
+eggfetch-behavior = "eggfetch QueryParams implements the mapping protocol without inheriting Mapping"
+rationale = "eggfetch implements the same public interface without the internal inheritance hierarchy."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "None; the mapping protocol is preserved"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_url_query.py"]
+
+[[difference]]
+id = "AUTH-FLOW-INTERNAL-001"
+category = "stage-bounded"
+symbol = "Auth"
+behavior-case = "auth-internal-methods"
+reference-behavior = "HTTPX Auth exposes async_auth_flow and sync_auth_flow methods"
+eggfetch-behavior = "eggfetch Auth exposes auth_flow generator method; async/sync dispatch handled by client"
+rationale = "eggfetch uses a single auth_flow generator and the client dispatches sync vs async."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "None; custom auth subclasses implement auth_flow"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_auth.py"]
+
+[[difference]]
+id = "AUTH-FLOW-INTERNAL-002"
+category = "stage-bounded"
+symbol = "DigestAuth"
+behavior-case = "auth-internal-methods"
+reference-behavior = "HTTPX DigestAuth exposes async_auth_flow and sync_auth_flow methods"
+eggfetch-behavior = "eggfetch DigestAuth exposes auth_flow generator method"
+rationale = "See AUTH-FLOW-INTERNAL-001."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "None"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_auth.py"]
+
+[[difference]]
+id = "COOKIES-EXTRA-001"
+category = "stage-bounded"
+symbol = "Cookies"
+behavior-case = "cookies-missing-methods"
+reference-behavior = "HTTPX Cookies has pop and popitem methods"
+eggfetch-behavior = "eggfetch Cookies implements core mapping methods without pop/popitem"
+rationale = "pop/popitem are convenience methods not commonly used in HTTP client code."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "Minimal; pop/popitem are rarely used directly"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_cookies.py"]
+
+[[difference]]
+id = "HEADERS-EXTRA-002"
+category = "stage-bounded"
+symbol = "Headers"
+behavior-case = "headers-missing-methods"
+reference-behavior = "HTTPX Headers has setdefault and popitem methods"
+eggfetch-behavior = "eggfetch Headers implements core mapping methods without setdefault/popitem"
+rationale = "setdefault/popitem are convenience methods not commonly used in HTTP client code."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "Minimal; setdefault/popitem are rarely used directly"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_headers.py"]
+
+[[difference]]
+id = "EXTRA-PROPS-001"
+category = "stage-bounded"
+symbol = "DigestAuth"
+behavior-case = "extra-public-properties"
+reference-behavior = "HTTPX DigestAuth does not expose username/password as properties"
+eggfetch-behavior = "eggfetch DigestAuth exposes username and password as public properties"
+rationale = "Extra properties are additive and do not conflict with HTTPX's API."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "None; extra properties are additive"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_auth.py"]
+
+[[difference]]
+id = "EXTRA-PROPS-002"
+category = "stage-bounded"
+symbol = "Limits"
+behavior-case = "extra-public-properties"
+reference-behavior = "HTTPX Limits does not expose keepalive_expiry/max_connections/max_keepalive_connections as properties"
+eggfetch-behavior = "eggfetch Limits exposes these as public properties"
+rationale = "Extra properties are additive and do not conflict with HTTPX's API."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "None; extra properties are additive"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_config_objects.py"]
+
+[[difference]]
+id = "EXTRA-PROPS-003"
+category = "stage-bounded"
+symbol = "Proxy"
+behavior-case = "extra-public-properties"
+reference-behavior = "HTTPX Proxy does not expose auth/headers/ssl_context/url as properties"
+eggfetch-behavior = "eggfetch Proxy exposes these as public properties"
+rationale = "Extra properties are additive and do not conflict with HTTPX's API."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "None; extra properties are additive"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_config_objects.py"]
+
+[[difference]]
+id = "EXTRA-PROPS-004"
+category = "stage-bounded"
+symbol = "Response"
+behavior-case = "extra-public-properties"
+reference-behavior = "HTTPX Response does not expose extensions/headers/history/status_code as properties"
+eggfetch-behavior = "eggfetch Response exposes these as public properties"
+rationale = "Extra properties are additive and do not conflict with HTTPX's API."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "None; extra properties are additive"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_response.py"]
+
+[[difference]]
+id = "HTTP-METHOD-ARGS-001"
+category = "stage-bounded"
+symbol = "get"
+behavior-case = "http-method-parameter-style"
+reference-behavior = "HTTPX HTTP methods use explicit keyword parameters (url, *, params, headers, ...)"
+eggfetch-behavior = "eggfetch compat layer HTTP methods use (*args, **kwargs) and delegate to request()"
+rationale = "The compat layer wraps the native engine which accepts all parameters. Using *args/**kwargs avoids duplicating parameter documentation while preserving the call convention."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "None; call convention is identical"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_client.py"]
+
+[[difference]]
+id = "HTTP-METHOD-ARGS-002"
+category = "stage-bounded"
+symbol = "post"
+behavior-case = "http-method-parameter-style"
+reference-behavior = "HTTPX HTTP methods use explicit keyword parameters"
+eggfetch-behavior = "eggfetch compat layer HTTP methods use (*args, **kwargs) and delegate to request()"
+rationale = "See HTTP-METHOD-ARGS-001."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "None"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_client.py"]
+
+[[difference]]
+id = "HTTP-METHOD-ARGS-003"
+category = "stage-bounded"
+symbol = "put"
+behavior-case = "http-method-parameter-style"
+reference-behavior = "HTTPX HTTP methods use explicit keyword parameters"
+eggfetch-behavior = "eggfetch compat layer HTTP methods use (*args, **kwargs) and delegate to request()"
+rationale = "See HTTP-METHOD-ARGS-001."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "None"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_client.py"]
+
+[[difference]]
+id = "HTTP-METHOD-ARGS-004"
+category = "stage-bounded"
+symbol = "patch"
+behavior-case = "http-method-parameter-style"
+reference-behavior = "HTTPX HTTP methods use explicit keyword parameters"
+eggfetch-behavior = "eggfetch compat layer HTTP methods use (*args, **kwargs) and delegate to request()"
+rationale = "See HTTP-METHOD-ARGS-001."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "None"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_client.py"]
+
+[[difference]]
+id = "HTTP-METHOD-ARGS-005"
+category = "stage-bounded"
+symbol = "delete"
+behavior-case = "http-method-parameter-style"
+reference-behavior = "HTTPX HTTP methods use explicit keyword parameters"
+eggfetch-behavior = "eggfetch compat layer HTTP methods use (*args, **kwargs) and delegate to request()"
+rationale = "See HTTP-METHOD-ARGS-001."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "None"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_client.py"]
+
+[[difference]]
+id = "HTTP-METHOD-ARGS-006"
+category = "stage-bounded"
+symbol = "head"
+behavior-case = "http-method-parameter-style"
+reference-behavior = "HTTPX HTTP methods use explicit keyword parameters"
+eggfetch-behavior = "eggfetch compat layer HTTP methods use (*args, **kwargs) and delegate to request()"
+rationale = "See HTTP-METHOD-ARGS-001."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "None"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_client.py"]
+
+[[difference]]
+id = "HTTP-METHOD-ARGS-007"
+category = "stage-bounded"
+symbol = "options"
+behavior-case = "http-method-parameter-style"
+reference-behavior = "HTTPX HTTP methods use explicit keyword parameters"
+eggfetch-behavior = "eggfetch compat layer HTTP methods use (*args, **kwargs) and delegate to request()"
+rationale = "See HTTP-METHOD-ARGS-001."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "None"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_client.py"]
+
+[[difference]]
+id = "HTTP-METHOD-ARGS-008"
+category = "stage-bounded"
+symbol = "request"
+behavior-case = "http-method-parameter-style"
+reference-behavior = "HTTPX request() uses explicit keyword parameters"
+eggfetch-behavior = "eggfetch compat layer request() uses (*args, **kwargs)"
+rationale = "See HTTP-METHOD-ARGS-001."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "None"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_client.py"]
+
+[[difference]]
+id = "HTTP-METHOD-ARGS-009"
+category = "stage-bounded"
+symbol = "stream"
+behavior-case = "http-method-parameter-style"
+reference-behavior = "HTTPX stream() uses explicit keyword parameters"
+eggfetch-behavior = "eggfetch compat layer stream() uses (*args, **kwargs)"
+rationale = "See HTTP-METHOD-ARGS-001."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "None"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_client.py"]
+
+[[difference]]
+id = "BASE-CLIENT-001"
+category = "stage-bounded"
+symbol = "httpx.Client/AsyncClient"
+behavior-case = "class-inheritance"
+reference-behavior = "HTTPX Client inherits BaseClient; AsyncClient inherits BaseClient"
+eggfetch-behavior = "eggfetch Client/AsyncClient are standalone classes without BaseClient inheritance"
+rationale = "eggfetch implements the same public interface without the internal BaseClient hierarchy. The public API surface is preserved."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "None; BaseClient is not part of the public API"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_client.py"]
+
+[[difference]]
+id = "MUTABLE-MAPPING-001"
+category = "stage-bounded"
+symbol = "httpx.Cookies/Headers"
+behavior-case = "collections-inheritance"
+reference-behavior = "HTTPX Cookies inherits MutableMapping; Headers inherits MutableMapping"
+eggfetch-behavior = "eggfetch Cookies/Headers implement the mapping protocol without inheriting MutableMapping"
+rationale = "eggfetch implements the same public interface (get, set, items, keys, values, __getitem__, __setitem__, __delitem__, __contains__, __iter__, __len__) without inheriting from collections.abc.MutableMapping."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "None; the mapping protocol is preserved"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_cookies.py", "test_headers.py"]
+
+[[difference]]
+id = "AUTH-FLOW-METHODS-001"
+category = "stage-bounded"
+symbol = "httpx.Auth.async_auth_flow/sync_auth_flow"
+behavior-case = "auth-internal-methods"
+reference-behavior = "HTTPX Auth base class exposes async_auth_flow and sync_auth_flow methods"
+eggfetch-behavior = "eggfetch Auth exposes auth_flow generator method; async/sync dispatch handled by client"
+rationale = "eggfetch uses a single auth_flow generator and the client dispatches sync vs async. The public contract (auth_flow) is preserved."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "None; custom auth subclasses implement auth_flow"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_auth.py"]
+
+[[difference]]
+id = "COOKIES-EXTRA-METHODS-001"
+category = "stage-bounded"
+symbol = "httpx.Cookies"
+behavior-case = "cookies-extra-methods"
+reference-behavior = "HTTPX Cookies has pop, popitem, setdefault methods"
+eggfetch-behavior = "eggfetch Cookies implements core mapping methods (get, set, items, __getitem__, __setitem__, __delitem__, __contains__, __iter__, __len__, update, set_cookie, extract_cookies, set_cookie_header)"
+rationale = "The core cookie operations are supported. pop/popitem are convenience methods not commonly used in HTTP client code."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "Minimal; pop/popitem are rarely used directly"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_cookies.py"]
+
+[[difference]]
+id = "HEADERS-EXTRA-METHODS-001"
+category = "stage-bounded"
+symbol = "httpx.Headers"
+behavior-case = "headers-extra-methods"
+reference-behavior = "HTTPX Headers has setdefault, popitem methods"
+eggfetch-behavior = "eggfetch Headers implements core mapping methods plus raw, multi_items, get_list, append, remove, update"
+rationale = "The core header operations are supported. setdefault/popitem are convenience methods."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "Minimal; setdefault/popitem are rarely used directly"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_headers.py"]
+
+[[difference]]
+id = "URL-RAW-001"
+category = "stage-bounded"
+symbol = "httpx.URL.raw"
+behavior-case = "url-raw-property"
+reference-behavior = "HTTPX URL exposes a .raw property returning the raw URL components"
+eggfetch-behavior = "eggfetch URL provides _raw internal attribute; public API uses properties (scheme, host, port, path, query, fragment)"
+rationale = "The .raw property is an internal detail. The public URL properties are fully supported."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "None; .raw is not commonly used in application code"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_url_query.py"]
+
+[[difference]]
+id = "STREAM-CTOR-001"
+category = "stage-bounded"
+symbol = "*Stream"
+behavior-case = "stream-constructor-signature"
+reference-behavior = "HTTPX stream classes have specific constructor signatures"
+eggfetch-behavior = "eggfetch stream classes use simplified constructors"
+rationale = "eggfetch stream classes are internal implementation details. The public stream API (iter_bytes, iter_text, iter_lines, read, close/aclose) is preserved."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "None; stream classes are not typically instantiated directly"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_response_streaming.py"]
+
+[[difference]]
+id = "TRANSPORT-PARAMS-001"
+category = "stage-bounded"
+symbol = "*Transport"
+behavior-case = "transport-constructor-params"
+reference-behavior = "HTTPX transport classes accept ssl_context, socket_options, local_address parameters"
+eggfetch-behavior = "eggfetch transport classes accept core parameters (verify, cert, proxy, limits, http1, http2, trust_env)"
+rationale = "eggfetch handles TLS configuration through the native Rust engine. The Python transport API exposes the essential parameters."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "Minimal; ssl_context and socket_options are rarely customized"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_transports.py"]
+
+[[difference]]
+id = "PRIVATE-SYMBOLS-001"
+category = "stage-bounded"
+symbol = "create_ssl_context"
+behavior-case = "private-internal-symbols"
+reference-behavior = "HTTPX exposes create_ssl_context as a public symbol"
+eggfetch-behavior = "eggfetch does not expose create_ssl_context; TLS is handled by the Rust engine"
+rationale = "create_ssl_context is an HTTPX internal detail. eggfetch delegates TLS to the native Rust engine."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "None; create_ssl_context is not part of the public API contract"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = []
+
+[[difference]]
+id = "PRIVATE-SYMBOLS-002"
+category = "stage-bounded"
+symbol = "main"
+behavior-case = "private-internal-symbols"
+reference-behavior = "HTTPX exposes main as a public symbol"
+eggfetch-behavior = "eggfetch does not expose main; CLI is a separate crate"
+rationale = "main is an HTTPX internal CLI entry point. eggfetch has a separate CLI crate."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "None; main is not part of the public API contract"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = []
+
+[[difference]]
+id = "CODES-KIND-001"
+category = "stage-bounded"
+symbol = "codes"
+behavior-case = "codes-type-difference"
+reference-behavior = "HTTPX codes is an IntEnum class with methods like as_integer_ratio, bit_count, etc."
+eggfetch-behavior = "eggfetch codes is a plain constant namespace with integer values"
+rationale = "eggfetch provides the same integer status codes (codes.OK = 200, etc.) without the IntEnum type. The values are identical."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "Minimal; codes.OK == 200 works the same way"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_config_objects.py"]
+
+[[difference]]
+id = "CLIENT-EXTENSIONS-001"
+category = "stage-bounded"
+symbol = "*Client"
+behavior-case = "client-extra-params"
+reference-behavior = "HTTPX Client/AsyncClient do not have an extensions parameter"
+eggfetch-behavior = "eggfetch Client/AsyncClient accept an extensions parameter for passing metadata through to the transport"
+rationale = "extensions is an eggfetch-specific parameter for passing metadata through to the native engine. It does not affect HTTPX compatibility."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "None; extensions is optional and defaults to None"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_extensions.py"]
+
+[[difference]]
+id = "BASICAUTH-ENCODING-001"
+category = "stage-bounded"
+symbol = "BasicAuth"
+behavior-case = "basicauth-extra-param"
+reference-behavior = "HTTPX BasicAuth takes (username, password)"
+eggfetch-behavior = "eggfetch BasicAuth takes (username, password, encoding='utf-8')"
+rationale = "The encoding parameter controls the charset for the Authorization header. It defaults to utf-8 and is rarely customized."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "None; encoding is optional and defaults to utf-8"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_auth.py"]
+
+[[difference]]
+id = "STREAM-CTOR-002"
+category = "stage-bounded"
+symbol = "*ByteStream"
+behavior-case = "stream-constructor-differences"
+reference-behavior = "HTTPX ByteStream takes (stream=None), SyncByteStream/AsyncByteStream take (*args, **kwargs)"
+eggfetch-behavior = "eggfetch ByteStream/SyncByteStream/AsyncByteStream take (content=b'')"
+rationale = "eggfetch stream classes use 'content' as the parameter name instead of 'stream'. The public stream API is preserved."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "Minimal; stream classes are rarely instantiated directly"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_response_streaming.py"]
+
+[[difference]]
+id = "STREAM-ERROR-ARGS-001"
+category = "stage-bounded"
+symbol = "RequestNotRead"
+behavior-case = "stream-error-constructor"
+reference-behavior = "HTTPX stream error subclasses take no arguments: RequestNotRead()"
+eggfetch-behavior = "eggfetch stream error subclasses accept (*args) for compatibility"
+rationale = "eggfetch StreamError accepts *args for flexibility. Calling with no arguments still works."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "None; both patterns work"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_exceptions.py"]
+
+[[difference]]
+id = "NETRC-PARAM-NAME-001"
+category = "stage-bounded"
+symbol = "NetRCAuth"
+behavior-case = "netrc-parameter-name"
+reference-behavior = "HTTPX NetRCAuth takes (file=...)"
+eggfetch-behavior = "eggfetch NetRCAuth takes (auth_file=...)"
+rationale = "The parameter is renamed to avoid shadowing the built-in file type. The behavior is identical."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "Minimal; use auth_file= instead of file="
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_auth.py"]
+
+[[difference]]
+id = "TIMEOUT-SENTINEL-001"
+category = "stage-bounded"
+symbol = "Timeout"
+behavior-case = "timeout-default-values"
+reference-behavior = "HTTPX Timeout uses UnsetType sentinels for unspecified phases"
+eggfetch-behavior = "eggfetch Timeout uses None for unspecified phases and 5.0 for total"
+rationale = "eggfetch uses standard Python None instead of HTTPX's internal UnsetType. The behavior is equivalent: unspecified phases inherit from total."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "None; Timeout() behavior is identical"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_config_objects.py"]
+
+[[difference]]
+id = "CLIENT-EXTRA-PROPS-001"
+category = "stage-bounded"
+symbol = "Request/Response/BasicAuth/DigestAuth/Limits/Timeout/Proxy"
+behavior-case = "extra-public-properties"
+reference-behavior = "HTTPX does not expose certain properties on these classes"
+eggfetch-behavior = "eggfetch exposes additional properties (e.g., Request.method, Response.status_code, BasicAuth.username, Limits.max_connections, Timeout.connect)"
+rationale = "eggfetch exposes the internal state as public properties for convenience. These do not conflict with HTTPX's API."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "None; extra properties are additive"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_request.py", "test_response.py", "test_config_objects.py"]
+
+[[difference]]
+id = "TIMEOUT-AS-DICT-001"
+category = "stage-bounded"
+symbol = "Timeout"
+behavior-case = "timeout-extra-methods"
+reference-behavior = "HTTPX Timeout does not have an as_dict method"
+eggfetch-behavior = "eggfetch Timeout has an as_dict method for serialization"
+rationale = "as_dict is an eggfetch-specific convenience method. It does not conflict with HTTPX's API."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "None; as_dict is optional"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_config_objects.py"]
+
+[[difference]]
+id = "URL-RAW-002"
+category = "stage-bounded"
+symbol = "URL"
+behavior-case = "url-raw-property"
+reference-behavior = "HTTPX URL exposes a .raw property returning raw URL components"
+eggfetch-behavior = "eggfetch URL provides public properties (scheme, host, port, path, query, fragment) but no .raw"
+rationale = "The .raw property is an internal detail. The public URL properties are fully supported."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "None; .raw is not commonly used"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_url_query.py"]
+
+[[difference]]
+id = "EXTRA-TRANSPORT-METHODS-001"
+category = "stage-bounded"
+symbol = "ASGITransport"
+behavior-case = "extra-methods"
+reference-behavior = "HTTPX does not expose handle_request on ASGITransport or close on AsyncClient"
+eggfetch-behavior = "eggfetch exposes handle_request on ASGITransport and close on AsyncClient"
+rationale = "handle_request is used internally by the transport dispatch. close is an eggfetch-specific convenience."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "None; extra methods are additive"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_asgi.py", "test_backends.py"]
+
+[[difference]]
+id = "EXTRA-COLLECTION-METHODS-001"
+category = "stage-bounded"
+symbol = "Request"
+behavior-case = "extra-public-properties"
+reference-behavior = "HTTPX does not expose certain internal state as public properties"
+eggfetch-behavior = "eggfetch exposes internal state as public properties for debugging and introspection"
+rationale = "Extra properties are additive and do not conflict with HTTPX's API surface."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "None; extra properties are additive"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = []

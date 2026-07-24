@@ -68,10 +68,9 @@ This page tracks compatibility with requests and HTTPX across features.
 
 | Feature | Difference |
 | --- | --- |
-| Redirect default | requests/HTTPX follow redirects by default. eggfetch does **not**. Set `follow_redirects=True`. |
 | Auth tuple shorthand | requests accepts `auth=("user","pass")`. eggfetch Python supports this. eggfetch Rust requires `BasicAuth::new("user", "pass")`. |
 | Proxy configuration | requests uses a dict by scheme. eggfetch uses a single `proxy=` string. |
-| Proxy env vars | eggfetch does not read `HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY` env vars. |
+| Proxy env vars | eggfetch reads `HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY` env vars when `trust_env=True` (default). |
 | Timeout tuple | requests accepts `(connect, read)` tuples. eggfetch uses `Timeout` objects. |
 
 ## Intentionally unsupported
@@ -109,5 +108,5 @@ See `compat/httpx/0.28.1/` for the machine-readable profile and allowed differen
 The following statements from earlier documentation have been corrected:
 
 1. **Pool timeout**: HTTPX 0.28.1 supports pool timeout via `Timeout(pool=...)`. eggfetch also supports this. The compatibility matrix has been updated to reflect this.
-2. **Redirect default**: Both HTTPX and requests follow redirects by default. eggfetch does **not**. This is an intentional security-first difference.
-3. **Proxy env vars**: ~~HTTPX reads `HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY` by default. eggfetch does not. This is tracked as a required-later item.~~ Resolved — Phase 5 validation confirmed no behavioral regression; proxy env var support is now implemented.
+2. **Redirect default**: HTTPX 0.28.1 defaults to `follow_redirects=False`, same as eggfetch. The earlier claim that "HTTPX follows redirects by default" was incorrect for version 0.28.1.
+3. **Proxy env vars**: eggfetch reads `HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY` env vars when `trust_env=True` (default). Implemented in Phase 1.

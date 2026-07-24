@@ -287,3 +287,71 @@ class TestAsyncClient:
         client._ensure_client()
         with pytest.raises(TypeError, match="Request"):
             await client.send("not a request")
+
+
+class TestClientTimeout:
+    """Test timeout parameter behavior."""
+
+    def test_timeout_none_disables_timeout(self, compat_server):
+        """timeout=None should explicitly disable all timeouts."""
+        with Client(timeout=5.0) as client:
+            req = client.build_request("GET", f"{compat_server}/get")
+            resp = client.send(req, timeout=None)
+            assert resp.status_code == 200
+
+    def test_timeout_omitted_uses_client_default(self, compat_server):
+        """Omitted timeout should use client-level timeout."""
+        with Client(timeout=5.0) as client:
+            req = client.build_request("GET", f"{compat_server}/get")
+            resp = client.send(req)
+            assert resp.status_code == 200
+
+    def test_timeout_scalar_sets_all_phases(self, compat_server):
+        """timeout=10 should set all phases to 10."""
+        with Client(timeout=5.0) as client:
+            req = client.build_request("GET", f"{compat_server}/get")
+            resp = client.send(req, timeout=10.0)
+            assert resp.status_code == 200
+
+    def test_timeout_object_preserved(self, compat_server):
+        """Timeout object should be passed through correctly."""
+        with Client(timeout=5.0) as client:
+            req = client.build_request("GET", f"{compat_server}/get")
+            resp = client.send(req, timeout=Timeout(2.0))
+            assert resp.status_code == 200
+
+    @pytest.mark.asyncio
+    async def test_async_timeout_none_disables(self, compat_server):
+        """async: timeout=None should explicitly disable all timeouts."""
+        async with AsyncClient(timeout=5.0) as client:
+            req = client.build_request("GET", f"{compat_server}/get")
+            resp = await client.send(req, timeout=None)
+            assert resp.status_code == 200
+
+    @pytest.mark.asyncio
+    async def test_async_timeout_omitted_uses_default(self, compat_server):
+        """async: omitted timeout should use client-level timeout."""
+        async with AsyncClient(timeout=5.0) as client:
+            req = client.build_request("GET", f"{compat_server}/get")
+            resp = await client.send(req)
+            assert resp.status_code == 200
+
+    @pytest.mark.asyncio
+    async def test_async_timeout_scalar(self, compat_server):
+        """async: timeout=10 should set all phases to 10."""
+        async with AsyncClient(timeout=5.0) as client:
+            req = client.build_request("GET", f"{compat_server}/get")
+            resp = await client.send(req, timeout=10.0)
+            assert resp.status_code == 200
+
+    def test_request_timeout_none(self, compat_server):
+        """request() timeout=None should disable timeouts."""
+        with Client(timeout=5.0) as client:
+            resp = client.request("GET", f"{compat_server}/get", timeout=None)
+            assert resp.status_code == 200
+
+    def test_request_timeout_omitted(self, compat_server):
+        """request() omitted timeout should use client default."""
+        with Client(timeout=5.0) as client:
+            resp = client.request("GET", f"{compat_server}/get")
+            assert resp.status_code == 200

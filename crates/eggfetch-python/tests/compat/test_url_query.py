@@ -391,3 +391,38 @@ class TestQueryParamsDunder:
     def test_delitem_missing(self):
         with pytest.raises(KeyError):
             del QueryParams()["missing"]
+
+
+class TestQueryParamsDuplicateConversion:
+    """Test that duplicate query params survive conversion for native client."""
+
+    def test_duplicate_params_preserved_in_list(self):
+        """QueryParams with duplicates should convert to list of tuples."""
+        qp = QueryParams([("a", "1"), ("a", "2"), ("b", "3")])
+        items = qp.multi_items()
+        assert len(items) == 3
+        assert ("a", "1") in items
+        assert ("a", "2") in items
+        assert ("b", "3") in items
+
+    def test_string_query_preserves_duplicates(self):
+        """String query with repeated keys should preserve duplicates."""
+        qp = QueryParams("a=1&a=2&b=&a=3")
+        items = qp.multi_items()
+        assert len(items) == 4
+        assert ("a", "1") in items
+        assert ("a", "2") in items
+        assert ("b", "") in items
+        assert ("a", "3") in items
+
+    def test_merge_preserves_multiplicity(self):
+        """QueryParams merge should preserve multiplicity of both sides."""
+        base = QueryParams([("a", "1"), ("a", "2")])
+        extra = QueryParams([("a", "3"), ("b", "4")])
+        base.merge(extra)
+        items = base.multi_items()
+        assert len(items) == 4
+        assert ("a", "1") in items
+        assert ("a", "2") in items
+        assert ("a", "3") in items
+        assert ("b", "4") in items

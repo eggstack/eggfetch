@@ -112,7 +112,7 @@ from eggfetch.compat.httpx import get_compatibility_info, diagnostics_summary
 info = get_compatibility_info()
 print(info.provider)          # "eggfetch"
 print(info.emulated_version)  # "0.28.1"
-print(info.compatibility_stage)  # "stage-c"
+print(info.compatibility_stage)  # "stage-c-candidate"
 ```
 
 See `plans/httpx-drop-in-phase-6-status.md` for release evidence.

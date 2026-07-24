@@ -2,7 +2,10 @@
 
 Status: SUPERSEDED — corrective pass in progress
 
-> **Correction Notice**: This status document overstated release readiness. The corrective pass (`plans/httpx-drop-in-corrective-evidence-and-semantics-closure.md`) addresses defects including: stale evidence SHAs, placeholder values, incorrect redirect defaults in allowed-differences, and documentation/CI governance inconsistencies. The compatibility claim has been downgraded to `candidate`.
+> **Correction Notice**: This status document overstated release readiness. Two corrective passes have superseded it:
+> 1. The first corrective pass (`plans/httpx-drop-in-corrective-evidence-and-semantics-closure.md`) addressed stale evidence SHAs, placeholder values, incorrect redirect defaults, and documentation/CI governance inconsistencies.
+> 2. The second corrective pass (`plans/httpx-drop-in-verification-substitution-and-lifecycle-corrective-closure.md`) identified additional defects in API oracle fail-closed behavior, controlled replacement validation, downstream execution, auth flow dispatch, async streaming lifecycle, data preservation, timeout handling, and exact-SHA qualification.
+> The compatibility claim remains at `Stage C candidate` per the latest corrective closure status.
 
 ## Summary
 

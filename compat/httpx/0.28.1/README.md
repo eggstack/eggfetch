@@ -1,7 +1,7 @@
 # HTTPX 0.28.1 Compatibility Profile
 
 This directory contains the machine-readable compatibility profile for
-HTTPX 0.28.1 drop-in compatibility (Phase 5).
+HTTPX 0.28.1 drop-in compatibility (Stage C candidate).
 
 ## Files
 
@@ -48,4 +48,4 @@ python scripts/compare_httpx_api_manifest.py \
 
 ## Status
 
-This profile targets HTTPX 0.28.1. The compatibility stage is **Phase 5**.
+This profile targets HTTPX 0.28.1. The compatibility stage is **Stage C candidate**.

@@ -180,3 +180,23 @@ class TestHeadersMisc:
     def test_iter(self):
         h = Headers([("a", "1"), ("b", "2")])
         assert list(h) == ["a", "b"]
+
+
+class TestHeadersDuplicateConversion:
+    """Test that duplicate headers survive conversion for native client."""
+
+    def test_duplicate_headers_preserved_in_list(self):
+        """Headers with duplicates should convert to list of tuples."""
+        h = Headers([("set-cookie", "a=1"), ("set-cookie", "b=2"), ("x-other", "val")])
+        items = h.multi_items()
+        assert len(items) == 3
+        assert ("set-cookie", "a=1") in items
+        assert ("set-cookie", "b=2") in items
+        assert ("x-other", "val") in items
+
+    def test_single_header_converts_to_list(self):
+        """Single header should still work as list of tuples."""
+        h = Headers({"content-type": "text/plain"})
+        items = h.multi_items()
+        assert len(items) == 1
+        assert items[0] == ("content-type", "text/plain")

@@ -44,13 +44,13 @@ class BasicAuth(Auth):
 
     def __init__(
         self,
-        username: str = "",
-        password: str = "",
+        username: str | None = None,
+        password: str | None = None,
         *,
         encoding: str = "latin-1",
     ) -> None:
-        self._username = username
-        self._password = password
+        self._username = username or ""
+        self._password = password or ""
         self._encoding = encoding
 
     @property

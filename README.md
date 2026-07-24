@@ -67,7 +67,6 @@ eggfetch targets HTTPX 0.28.1 compatibility in measured phases. Phase 0 establis
 - **Allowed differences**: Every intentional behavioral difference is documented, categorized, and linked to tests
 
 Key differences from HTTPX:
-- **Redirect default**: eggfetch does NOT follow redirects by default (HTTPX does)
 - **Event hooks**: Not yet implemented (tracked as required-later)
 - **WSGI/ASGI transports**: Not applicable (eggfetch is a network client)
 
@@ -100,7 +99,7 @@ Phases 0 through 6 are implemented. A corrective evidence and semantics closure 
 - **Phase 5**: Downstream validation, behavior corpus, evidence reporting
 - **Phase 6 / Corrective Pass**: Evidence reset, oracle repair, downstream validation rebuild, timeout/auth/streaming/merge semantics fixes, CI governance
 
-The compatibility stage is **Stage C** (asyncio drop-in). See [`plans/httpx-drop-in-phase-6-status.md`](plans/httpx-drop-in-phase-6-status.md) for the release qualification evidence.
+The compatibility stage is **Stage C candidate** (asyncio drop-in). See [`plans/httpx-drop-in-verification-substitution-and-lifecycle-corrective-closure.md`](plans/httpx-drop-in-verification-substitution-and-lifecycle-corrective-closure.md) for the corrective closure plan and release qualification evidence.
 
 Runtime diagnostics are available:
 
