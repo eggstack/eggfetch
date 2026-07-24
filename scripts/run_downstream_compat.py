@@ -6,12 +6,13 @@ runs downstream package tests in isolated environments against the eggfetch
 wheel, and reports results as JSON.
 
 Usage:
-    run_downstream_compat.py --wheel-dir <dir> [--packages pkg1,pkg2] [--timeout <seconds>]
+    run_downstream_compat.py --artifact-manifest <manifest.json> [--packages pkg1,pkg2] [--timeout <seconds>]
 
 Exit codes:
     0 — all required packages passed
     1 — one or more required packages failed
     2 — argument or manifest error
+    3 — structured diagnostic error
 """
 
 from __future__ import annotations
@@ -74,6 +75,17 @@ VALID_CATEGORIES = {
 }
 
 VALID_USAGES = {"required", "informational", "private", "public"}
+
+STAGE_C_CATEGORIES = {
+    "sync-sdk-client",
+    "asyncio-sdk-client",
+    "asgi-test-client",
+    "mock-transport-request-matching",
+    "streaming-sse-consumption",
+    "custom-auth-flow",
+    "event-hooks-instrumentation",
+    "custom-mounted-transport",
+}
 
 
 def _emit_result(result: dict, output_path: str | None = None) -> None:
@@ -165,6 +177,23 @@ def validate_manifest(path: Path) -> dict:
         if not isinstance(cat_ids, list):
             errors.append(f"{name}: category-ids must be a list")
 
+        # Validate max-skipped and max-xfailed for required packages
+        if usage == "required":
+            max_skip = pkg.get("max-skipped", -1)
+            if not isinstance(max_skip, int) or max_skip < 0:
+                errors.append(f"{name}: required package must have non-negative max-skipped, got '{max_skip}'")
+            max_xf = pkg.get("max-xfailed", -1)
+            if not isinstance(max_xf, int) or max_xf < 0:
+                errors.append(f"{name}: required package must have non-negative max-xfailed, got '{max_xf}'")
+
+            # Required packages must have test-command
+            if not pkg.get("test-command", ""):
+                errors.append(f"{name}: required package missing test-command")
+
+            # Required packages must have source-hash
+            if not pkg.get("source-hash", ""):
+                errors.append(f"{name}: required package missing source-hash")
+
     return {
         "status": "valid" if not errors else "invalid",
         "errors": errors,
@@ -196,16 +225,19 @@ def validate_wheel_dir(wheel_dir: Path) -> list[str]:
     return errors
 
 
-def run_downstream_test(package_name: str, wheel_dir: Path, timeout: int,
-                        output_dir: Path | None = None) -> dict:
+def run_downstream_test(package_name: str, artifact_manifest_path: Path, timeout: int,
+                        output_dir: Path | None = None,
+                        candidate_identity_path: Path | None = None) -> dict:
     """Run a single downstream package test via run_isolated_downstream.py."""
     cmd = [
         sys.executable,
         str(ISOLATED_RUNNER),
         "--package", package_name,
-        "--wheel-dir", str(wheel_dir),
+        "--artifact-manifest", str(artifact_manifest_path),
         "--timeout", str(timeout),
     ]
+    if candidate_identity_path:
+        cmd.extend(["--candidate-identity", str(candidate_identity_path)])
     if output_dir:
         output_dir.mkdir(parents=True, exist_ok=True)
         result_file = output_dir / f"{package_name}.json"
@@ -231,6 +263,8 @@ def run_downstream_test(package_name: str, wheel_dir: Path, timeout: int,
                 return {
                     "package": package_name,
                     "status": "error",
+                    "diagnostic_code": "E014",
+                    "diagnostic_name": "malformed-result",
                     "error": f"Could not parse runner output: {stdout[:500]}",
                     "returncode": result.returncode,
                 }
@@ -238,6 +272,8 @@ def run_downstream_test(package_name: str, wheel_dir: Path, timeout: int,
         return {
             "package": package_name,
             "status": "error",
+            "diagnostic_code": "E014",
+            "diagnostic_name": "malformed-result",
             "error": f"No output from runner. stderr: {result.stderr[:500]}",
             "returncode": result.returncode,
         }
@@ -261,8 +297,8 @@ def main() -> int:
         description="Run downstream compatibility tests against eggfetch wheel",
     )
     parser.add_argument(
-        "--wheel-dir", required=True,
-        help="Directory containing eggfetch .whl AND httpx controlled replacement .whl",
+        "--artifact-manifest", required=True,
+        help="Path to artifact-manifest.json listing built wheels with hashes",
     )
     parser.add_argument(
         "--packages", default=None,
@@ -277,19 +313,59 @@ def main() -> int:
         help="Only test packages with usage=required",
     )
     parser.add_argument(
+        "--candidate-identity", default=None,
+        help="Path to candidate-identity.json for identity propagation",
+    )
+    parser.add_argument(
         "--output", default=None,
         help="Path to write aggregate result JSON (default: stdout)",
     )
     args = parser.parse_args()
 
-    wheel_dir = Path(args.wheel_dir).resolve()
-    wheel_errors = validate_wheel_dir(wheel_dir)
-    if wheel_errors:
+    artifact_manifest_path = Path(args.artifact_manifest).resolve()
+    if not artifact_manifest_path.exists():
         _emit_result({
             "status": "error",
-            "errors": wheel_errors,
+            "errors": [f"Artifact manifest not found: {artifact_manifest_path}"],
         }, args.output)
         return 2
+
+    with open(artifact_manifest_path) as f:
+        artifact_manifest = json.load(f)
+
+    # Validate artifact manifest has required wheels
+    eggfetch_found = False
+    httpx_found = False
+    for art in artifact_manifest.get("artifacts", []):
+        art_type = art.get("artifact_type", "")
+        path = art.get("path", "")
+        if art_type == "eggfetch" and path:
+            eggfetch_found = True
+        if art_type == "httpx-controlled-replacement" and path:
+            httpx_found = True
+
+    if not eggfetch_found or not httpx_found:
+        missing = []
+        if not eggfetch_found:
+            missing.append("eggfetch wheel")
+        if not httpx_found:
+            missing.append("httpx-controlled-replacement wheel")
+        _emit_result({
+            "status": "error",
+            "errors": [f"Artifact manifest missing required wheels: {', '.join(missing)}"],
+        }, args.output)
+        return 2
+
+    # Load candidate identity if provided
+    candidate_identity_path = None
+    if args.candidate_identity:
+        candidate_identity_path = Path(args.candidate_identity).resolve()
+        if not candidate_identity_path.exists():
+            _emit_result({
+                "status": "error",
+                "errors": [f"Candidate identity not found: {candidate_identity_path}"],
+            }, args.output)
+            return 2
 
     manifest_result = validate_manifest(MANIFEST_PATH)
     if manifest_result["status"] == "invalid":
@@ -307,9 +383,11 @@ def main() -> int:
         if not packages:
             _emit_result({
                 "status": "error",
+                "diagnostic_code": "E002",
+                "diagnostic_name": "empty-selection",
                 "errors": [f"No packages matched selection: {args.packages}"],
             }, args.output)
-            return 2
+            return 3
 
     if args.required_only:
         packages = [p for p in packages if p.get("usage") == "required"]
@@ -318,9 +396,26 @@ def main() -> int:
     if not packages:
         _emit_result({
             "status": "error",
+            "diagnostic_code": "E002",
+            "diagnostic_name": "empty-selection",
             "errors": ["No packages to test after filtering (fail-closed)"],
         }, args.output)
-        return 2
+        return 3
+
+    # Validate matrix equals manifest
+    manifest_names = {p["name"] for p in manifest_result["packages"]}
+    selected_names = {p["name"] for p in packages}
+    if args.packages:
+        requested = set(args.packages.split(","))
+        missing_from_manifest = requested - manifest_names
+        if missing_from_manifest:
+            _emit_result({
+                "status": "error",
+                "diagnostic_code": "E001",
+                "diagnostic_name": "unknown-package",
+                "errors": [f"Packages not in manifest: {', '.join(sorted(missing_from_manifest))}"],
+            }, args.output)
+            return 3
 
     # Validate that required entries have real behavioral tests
     required_packages = [p for p in packages if p.get("usage") == "required"]
@@ -328,12 +423,26 @@ def main() -> int:
     for pkg in required_packages:
         cmd = pkg.get("test-command", "")
         if not cmd:
-            validation_errors.append(f"{pkg['name']}: required package missing test-command")
-        elif "print" in cmd and "import" in cmd and "-c" in cmd and "assert" not in cmd:
+            validation_errors.append(
+                f"{pkg['name']}: required package missing test-command"
+            )
+        elif _is_import_only_command(cmd):
             # Import-only smoke test for a required package
             validation_errors.append(
                 f"{pkg['name']}: required package has import-only test-command, "
                 f"expected behavioral test"
+            )
+        # Validate max-skipped = 0 for required packages
+        max_skip = pkg.get("max-skipped", -1)
+        if max_skip != 0:
+            validation_errors.append(
+                f"{pkg['name']}: required package must have max-skipped = 0, got {max_skip}"
+            )
+        # Validate max-xfailed = 0 for required packages
+        max_xf = pkg.get("max-xfailed", -1)
+        if max_xf != 0:
+            validation_errors.append(
+                f"{pkg['name']}: required package must have max-xfailed = 0, got {max_xf}"
             )
     if validation_errors:
         _emit_result({
@@ -346,7 +455,10 @@ def main() -> int:
     results_dir = Path(args.output).parent / "results" if args.output else None
     for pkg in packages:
         print(f"Testing {pkg['name']}...", file=sys.stderr)
-        result = run_downstream_test(pkg["name"], wheel_dir, args.timeout, results_dir)
+        result = run_downstream_test(
+            pkg["name"], artifact_manifest_path, args.timeout, results_dir,
+            candidate_identity_path,
+        )
         results.append(result)
 
     # Build summary
@@ -356,18 +468,24 @@ def main() -> int:
     errors = [r for r in results if r.get("status") in (
         "error", "timeout", "install-failed", "downstream-install-failed",
         "shim-identity-failure", "upstream-httpx-detected", "pip-check-failure",
-        "below-min-tests", "zero-tests-expected",
+        "below-min-tests", "below-min-count", "zero-tests", "zero-tests-expected",
+        "zero-tests-required", "skipped-required", "xfailed-required",
+        "source-hash-mismatch", "source-hash-missing",
+        "identity-mismatch", "artifact-mismatch",
     )]
 
     # Determine overall pass/fail: required packages must pass
     required_packages = {p["name"] for p in packages if p.get("usage") == "required"}
     required_results = [r for r in results if r.get("package") in required_packages]
-    required_failed = [r for r in required_results if r.get("status") not in ("passed", "skipped", "skipped-no-tests")]
+
+    # Required results must be exactly "passed" — skipped and skipped-no-tests are failures
+    required_failed = [r for r in required_results if r.get("status") != "passed"]
 
     summary = {
         "manifest_status": manifest_result["status"],
         "schema_version": manifest_result["packages"][0].get("source-type", "") if manifest_result["packages"] else "",
-        "wheel_dir": str(wheel_dir),
+        "artifact_manifest": str(artifact_manifest_path),
+        "candidate_identity": str(candidate_identity_path) if candidate_identity_path else None,
         "total_packages": len(results),
         "passed": len(passed),
         "failed": len(failed),
@@ -377,7 +495,7 @@ def main() -> int:
         "required_passed": len(required_packages) - len(required_failed),
         "required_failed": len(required_failed),
         "required_missing_behavioral": len([
-            r for r in required_failed if r.get("status") in ("zero-tests-required", "below-min-tests")
+            r for r in required_failed if r.get("status") in ("zero-tests-required", "below-min-tests", "below-min-count")
         ]),
         "overall_pass": len(required_failed) == 0 and len(errors) == 0,
         "results": results,
@@ -388,6 +506,17 @@ def main() -> int:
     if required_failed or errors:
         return 1
     return 0
+
+
+def _is_import_only_command(test_command: str) -> bool:
+    """Return True if the test command is a trivial import-only smoke test."""
+    if not test_command:
+        return True
+    if "-c" in test_command and "import" in test_command:
+        if "assert" not in test_command:
+            if "pytest" not in test_command and "unittest" not in test_command:
+                return True
+    return False
 
 
 if __name__ == "__main__":

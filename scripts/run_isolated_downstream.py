@@ -6,15 +6,36 @@ replacement httpx wheel, installs the target package, and runs its tests
 with network disabled. Verifies shim identity at multiple points.
 
 Usage:
-    run_isolated_downstream.py --package <name> --wheel-dir <dir> [--timeout <seconds>] [--keep-env]
+    run_isolated_downstream.py --package <name> --artifact-manifest <manifest.json> \
+        [--candidate-identity <identity.json>] [--timeout <seconds>] [--keep-env]
 
 The package name must exist in compat/downstream/manifest.toml.
-The wheel-dir must contain both the eggfetch wheel and the httpx controlled replacement wheel.
+The artifact-manifest must list both the eggfetch wheel and the httpx
+controlled replacement wheel with verified SHA-256 hashes.
 
 Exit codes:
     0 — tests passed or package not found (graceful skip)
     1 — tests failed
     2 — argument or manifest error
+    3 — structured diagnostic (see diagnostic_code in result JSON)
+
+Diagnostic codes:
+    E001 unknown-package          Package not found in downstream manifest
+    E002 empty-selection          Package selection filter yielded no matches
+    E003 missing-test-command     Required package has no test-command
+    E004 import-only-required     Required package has import-only test-command
+    E005 source-hash-missing      Package has no source-hash in manifest
+    E006 source-hash-mismatch     Downloaded source hash does not match manifest
+    E007 upstream-httpx-detected  Upstream httpx found instead of shim
+    E008 shim-identity-mismatch   httpx does not resolve to eggfetch shim
+    E009 pip-check-failure        pip check found dependency conflicts
+    E010 zero-tests              Zero tests collected for required package
+    E011 skipped-required         Required suite was skipped
+    E012 xfailed-required         Required suite was xfailed (expected failures)
+    E013 below-min-count         Collected/passed below manifest minimum
+    E014 malformed-result        Runner produced unparseable output
+    E015 identity-mismatch       Candidate identity does not match
+    E016 artifact-mismatch       Artifact hash mismatch
 """
 
 from __future__ import annotations
@@ -32,6 +53,36 @@ import venv
 from pathlib import Path
 
 MANIFEST_PATH = Path(__file__).resolve().parent.parent / "compat" / "downstream" / "manifest.toml"
+
+DIAGNOSTIC_CODES = {
+    "unknown-package": "E001",
+    "empty-selection": "E002",
+    "missing-test-command": "E003",
+    "import-only-required": "E004",
+    "source-hash-missing": "E005",
+    "source-hash-mismatch": "E006",
+    "upstream-httpx-detected": "E007",
+    "shim-identity-mismatch": "E008",
+    "pip-check-failure": "E009",
+    "zero-tests": "E010",
+    "skipped-required": "E011",
+    "xfailed-required": "E012",
+    "below-min-count": "E013",
+    "malformed-result": "E014",
+    "identity-mismatch": "E015",
+    "artifact-mismatch": "E016",
+}
+
+
+def _diagnostic(code_name: str, message: str) -> dict:
+    """Build a structured diagnostic result."""
+    code = DIAGNOSTIC_CODES.get(code_name, "E999")
+    return {
+        "status": "error",
+        "diagnostic_code": code,
+        "diagnostic_name": code_name,
+        "error": message,
+    }
 
 
 def _emit_result(result: dict, output_path: str | None = None) -> None:
@@ -59,22 +110,45 @@ def find_package(manifest: dict, name: str) -> dict | None:
     return None
 
 
-def find_wheels(wheel_dir: Path) -> tuple[Path | None, Path | None]:
+def find_wheels(artifact_manifest: dict) -> tuple[Path | None, Path | None]:
     """Find the eggfetch wheel and the httpx controlled replacement wheel.
+
+    Reads paths from the artifact manifest and verifies their SHA-256 hashes.
 
     Returns (eggfetch_wheel, httpx_wheel).
     """
     eggfetch_wheel = None
     httpx_wheel = None
 
-    for whl in wheel_dir.glob("*.whl"):
-        name_lower = whl.name.lower()
-        if name_lower.startswith("eggfetch-"):
-            eggfetch_wheel = whl
-        elif name_lower.startswith("httpx-") and "controlled" not in name_lower:
-            httpx_wheel = whl
+    for art in artifact_manifest.get("artifacts", []):
+        art_type = art.get("artifact_type", "")
+        path = Path(art.get("path", ""))
+        expected_hash = art.get("sha256", "")
+
+        if not path.exists():
+            continue
+
+        actual_hash = _compute_sha256(path)
+        if actual_hash != expected_hash:
+            continue
+
+        if art_type == "eggfetch":
+            eggfetch_wheel = path
+        elif art_type == "httpx-controlled-replacement":
+            httpx_wheel = path
 
     return eggfetch_wheel, httpx_wheel
+
+
+def _compute_sha256(path: Path) -> str:
+    """Compute SHA-256 hash of a file."""
+    import hashlib
+
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(65536), b""):
+            h.update(chunk)
+    return h.hexdigest()
 
 
 def create_venv(dest: Path) -> Path:
@@ -104,6 +178,92 @@ def pip_check(venv_dir: Path) -> tuple[bool, str]:
     )
     output = (result.stdout + result.stderr).strip()
     return result.returncode == 0, output
+
+
+def pip_show_dist(venv_dir: Path, package_name: str) -> dict:
+    """Query pip show for installed distribution metadata. Returns dict with
+    name, version, location, or empty dict on failure."""
+    pip = venv_dir / "bin" / "pip"
+    result = subprocess.run(
+        [str(pip), "show", package_name],
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    info: dict[str, str] = {}
+    if result.returncode == 0:
+        for line in result.stdout.splitlines():
+            if ":" in line:
+                key, _, val = line.partition(":")
+                info[key.strip().lower()] = val.strip()
+    return info
+
+
+def verify_source_hash(pkg: dict, timeout: int) -> tuple[bool, str]:
+    """Verify the source hash of a package by downloading its wheel.
+
+    Returns (ok, error_message). Downloads the wheel to a temp directory,
+    computes its SHA-256, and compares against the manifest's source-hash.
+    """
+    import hashlib
+    import tempfile
+    import urllib.request
+
+    source_hash = pkg.get("source-hash", "")
+    if not source_hash:
+        return False, f"Package '{pkg['name']}' has empty source-hash"
+
+    source_locator = pkg.get("source-locator", "")
+    if not source_locator:
+        return False, f"Package('{pkg['name']}') has empty source-locator"
+
+    # Parse package name and version from source-locator (e.g., "respx==0.21.1")
+    if "==" in source_locator:
+        pkg_name, pkg_version = source_locator.split("==", 1)
+    else:
+        pkg_name, pkg_version = source_locator, ""
+
+    # Fetch wheel URL from PyPI JSON API
+    url = f"https://pypi.org/pypi/{pkg_name}/{pkg_version}/json"
+    try:
+        with urllib.request.urlopen(url, timeout=timeout) as resp:
+            data = json.loads(resp.read())
+    except Exception as e:
+        return False, f"Failed to fetch PyPI metadata for {pkg_name}=={pkg_version}: {e}"
+
+    # Find the py3-none-any wheel
+    wheel_url = None
+    wheel_filename = None
+    for f in data.get("urls", []):
+        if f["filename"].endswith(".whl") and "py3-none-any" in f["filename"]:
+            wheel_url = f["url"]
+            wheel_filename = f["filename"]
+            break
+    if not wheel_url:
+        for f in data.get("urls", []):
+            if f["filename"].endswith(".whl"):
+                wheel_url = f["url"]
+                wheel_filename = f["filename"]
+                break
+    if not wheel_url:
+        return False, f"No wheel found for {pkg_name}=={pkg_version}"
+
+    # Download and hash
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".whl") as tmp:
+        try:
+            urllib.request.urlretrieve(wheel_url, tmp.name)
+        except Exception as e:
+            return False, f"Failed to download wheel: {e}"
+
+        actual_hash = hashlib.sha256(open(tmp.name, "rb").read()).hexdigest()
+
+    if actual_hash != source_hash:
+        return False, (
+            f"Source hash mismatch for {pkg_name}=={pkg_version}: "
+            f"expected {source_hash}, got {actual_hash}"
+        )
+
+    return True, wheel_filename or ""
 
 
 def verify_shim_identity_strict(venv_dir: Path) -> list[str]:
@@ -184,16 +344,18 @@ def parse_pytest_counts(output: str) -> dict:
     Looks for lines like: '5 passed, 2 failed, 1 error in 0.34s'
     or 'no tests ran' or '1 passed in 0.01s'.
     """
-    counts = {"passed": 0, "failed": 0, "error": 0, "skipped": 0, "total": 0}
+    counts = {"passed": 0, "failed": 0, "error": 0, "skipped": 0, "xfailed": 0, "total": 0}
 
     # Match the summary line: e.g. "5 passed, 2 failed, 1 error in 0.34s"
     # or "1 passed in 0.01s"
     summary_pattern = re.compile(
-        r"(\d+)\s+(passed|failed|error|skipped|warnings?)"
+        r"(\d+)\s+(passed|failed|error|skipped|xfail(?:ed)?|warnings?)"
     )
     for match in summary_pattern.finditer(output):
         num = int(match.group(1))
         kind = match.group(2).rstrip("s")  # normalize 'warnings' -> 'warning'
+        if kind == "xfailed":
+            kind = "xfailed"
         if kind in counts:
             counts[kind] = num
             counts["total"] += num
@@ -245,11 +407,26 @@ def run_tests(venv_dir: Path, pkg: dict, timeout: int) -> subprocess.CompletedPr
     )
 
 
+def _is_import_only_command(test_command: str) -> bool:
+    """Return True if the test command is a trivial import-only smoke test."""
+    if not test_command:
+        return True
+    if "-c" in test_command and "import" in test_command:
+        # Check for behavioral assertions beyond print
+        if "assert" not in test_command and "assert" not in test_command:
+            # Check for actual test frameworks
+            if "pytest" not in test_command and "unittest" not in test_command:
+                return True
+    return False
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run downstream tests in isolation")
     parser.add_argument("--package", required=True, help="Package name from manifest")
-    parser.add_argument("--wheel-dir", required=True,
-                        help="Directory containing eggfetch .whl AND httpx controlled replacement .whl")
+    parser.add_argument("--artifact-manifest", required=True,
+                        help="Path to artifact-manifest.json listing built wheels with hashes")
+    parser.add_argument("--candidate-identity", default=None,
+                        help="Path to candidate-identity.json for identity propagation")
     parser.add_argument("--timeout", type=int, default=120,
                         help="Timeout in seconds (default: 120)")
     parser.add_argument("--keep-env", action="store_true",
@@ -258,18 +435,35 @@ def main() -> int:
                         help="Path to write structured result JSON (default: stdout)")
     args = parser.parse_args()
 
-    wheel_dir = Path(args.wheel_dir).resolve()
-    if not wheel_dir.exists():
-        _emit_result({"status": "error", "message": f"Wheel directory not found: {wheel_dir}"}, args.output)
+    manifest_path = Path(args.artifact_manifest).resolve()
+    if not manifest_path.exists():
+        _emit_result({"status": "error", "message": f"Artifact manifest not found: {manifest_path}"}, args.output)
         return 2
 
-    eggfetch_wheel, httpx_wheel = find_wheels(wheel_dir)
+    with open(manifest_path) as f:
+        artifact_manifest = json.load(f)
+
+    # Load candidate identity if provided
+    candidate_identity = None
+    if args.candidate_identity:
+        identity_path = Path(args.candidate_identity).resolve()
+        if identity_path.exists():
+            with open(identity_path) as f:
+                candidate_identity = json.load(f)
+
+    eggfetch_wheel, httpx_wheel = find_wheels(artifact_manifest)
     if eggfetch_wheel is None:
-        _emit_result({"status": "error", "message": f"No eggfetch wheel found in {wheel_dir}"}, args.output)
-        return 2
+        _emit_result(
+            {**_diagnostic("artifact-mismatch", "No valid eggfetch wheel found in artifact manifest (hash mismatch or missing)")},  # noqa: E501
+            args.output,
+        )
+        return 3
     if httpx_wheel is None:
-        _emit_result({"status": "error", "message": f"No httpx controlled replacement wheel found in {wheel_dir}"}, args.output)
-        return 2
+        _emit_result(
+            {**_diagnostic("artifact-mismatch", "No valid httpx controlled replacement wheel found in artifact manifest (hash mismatch or missing)")},  # noqa: E501
+            args.output,
+        )
+        return 3
 
     manifest = load_manifest()
     if not manifest:
@@ -279,27 +473,46 @@ def main() -> int:
     pkg = find_package(manifest, args.package)
     if pkg is None:
         # Fail-closed: unknown package in manifest is an error
-        _emit_result({
-            "status": "error",
-            "package": args.package,
-            "error": f"Package '{args.package}' not found in manifest (fail-closed)",
-        }, args.output)
-        return 1
+        diag = _diagnostic("unknown-package", f"Package '{args.package}' not found in downstream manifest")
+        diag["package"] = args.package
+        _emit_result(diag, args.output)
+        return 3
 
     min_tests = pkg.get("min-tests", 0)
+    min_collected = pkg.get("min-collected", 0)
+    min_passed = pkg.get("min-passed", 0)
+    max_skipped = pkg.get("max-skipped", -1)
+    max_xfailed = pkg.get("max-xfailed", -1)
     usage = pkg.get("usage", "required")
 
     tmpdir = tempfile.mkdtemp(prefix=f"eggfetch-downstream-{args.package}-")
     start_time = time.monotonic()
+
     # Fail-closed: missing test command is an error for required packages
     test_command = pkg.get("test-command", "")
     if not test_command and usage == "required":
-        _emit_result({
-            "status": "error",
-            "package": pkg["name"],
-            "error": "Required package has no test-command (fail-closed)",
-        }, args.output)
-        return 1
+        diag = _diagnostic("missing-test-command", f"Required package '{pkg['name']}' has no test-command")
+        diag["package"] = pkg["name"]
+        _emit_result(diag, args.output)
+        return 3
+
+    # Fail-closed: import-only test command is an error for required packages
+    if usage == "required" and test_command and _is_import_only_command(test_command):
+        diag = _diagnostic(
+            "import-only-required",
+            f"Required package '{pkg['name']}' has import-only test-command; expected behavioral test",
+        )
+        diag["package"] = pkg["name"]
+        _emit_result(diag, args.output)
+        return 3
+
+    # Fail-closed: missing source-hash for required packages
+    source_hash = pkg.get("source-hash", "")
+    if usage == "required" and not source_hash:
+        diag = _diagnostic("source-hash-missing", f"Required package '{pkg['name']}' has no source-hash")
+        diag["package"] = pkg["name"]
+        _emit_result(diag, args.output)
+        return 3
 
     result: dict = {
         "package": pkg["name"],
@@ -307,24 +520,34 @@ def main() -> int:
         "category": pkg.get("category", "unknown"),
         "usage": usage,
         "min_tests": min_tests,
+        "min_collected": min_collected,
+        "min_passed": min_passed,
+        "max_skipped": max_skipped,
+        "max_xfailed": max_xfailed,
         "source_type": pkg.get("source-type", ""),
         "source_locator": pkg.get("source-locator", ""),
-        "source_hash": pkg.get("source-hash", ""),
+        "source_hash": source_hash,
         "venv_dir": tmpdir,
         "keep_env": args.keep_env,
         "timeout": args.timeout,
         "wheels": {
             "eggfetch": str(eggfetch_wheel),
             "httpx_replacement": str(httpx_wheel),
+            "artifact_manifest": str(manifest_path),
         },
+        "candidate_identity": candidate_identity,
         "install": {"success": False, "stdout": "", "stderr": ""},
+        "installed_dist": {"name": "", "version": "", "location": ""},
+        "source_hash_verification": {"success": False, "hash": "", "error": ""},
         "shim_identity": {"pre_install": {"success": False, "errors": []},
                           "post_install": {"success": False, "errors": []}},
         "upstream_check": {"success": False, "errors": []},
         "pip_check": {"success": False, "output": ""},
         "tests": {"success": False, "returncode": -1, "stdout": "", "stderr": "",
-                  "collected": 0, "passed": 0, "failed": 0, "error": 0, "skipped": 0},
+                  "collected": 0, "passed": 0, "failed": 0, "error": 0, "skipped": 0, "xfailed": 0},
         "status": "error",
+        "diagnostic_code": "",
+        "diagnostic_name": "",
         "duration_seconds": 0,
     }
 
@@ -362,9 +585,12 @@ def main() -> int:
         }
         if pre_shim_errors:
             result["status"] = "shim-identity-failure"
+            diag = _diagnostic("shim-identity-mismatch", pre_shim_errors[0])
+            result["diagnostic_code"] = diag["diagnostic_code"]
+            result["diagnostic_name"] = diag["diagnostic_name"]
             result["duration_seconds"] = round(time.monotonic() - start_time, 2)
             _emit_result(result, args.output)
-            return 1
+            return 3
 
         # --- Step 4: Verify no upstream httpx ---
         upstream_errors = verify_no_upstream_httpx(venv_dir)
@@ -374,11 +600,30 @@ def main() -> int:
         }
         if upstream_errors:
             result["status"] = "upstream-httpx-detected"
+            diag = _diagnostic("upstream-httpx-detected", upstream_errors[0])
+            result["diagnostic_code"] = diag["diagnostic_code"]
+            result["diagnostic_name"] = diag["diagnostic_name"]
             result["duration_seconds"] = round(time.monotonic() - start_time, 2)
             _emit_result(result, args.output)
-            return 1
+            return 3
 
-        # --- Step 5: Install the downstream package ---
+        # --- Step 5: Verify source hash before downstream install ---
+        source_ok, source_msg = verify_source_hash(pkg, args.timeout)
+        result["source_hash_verification"] = {
+            "success": source_ok,
+            "hash": source_hash,
+            "error": "" if source_ok else source_msg,
+        }
+        if not source_ok:
+            result["status"] = "source-hash-mismatch"
+            diag = _diagnostic("source-hash-mismatch", source_msg)
+            result["diagnostic_code"] = diag["diagnostic_code"]
+            result["diagnostic_name"] = diag["diagnostic_name"]
+            result["duration_seconds"] = round(time.monotonic() - start_time, 2)
+            _emit_result(result, args.output)
+            return 3
+
+        # --- Step 6: Install the downstream package ---
         # Filter out 'httpx' from optional-dependencies — we use the shim
         downstream_deps = [d for d in pkg.get("optional-dependencies", []) if d != "httpx"]
         downstream_install = pip_install(venv_dir, [pkg["name"]] + downstream_deps, args.timeout)
@@ -390,7 +635,15 @@ def main() -> int:
             _emit_result(result, args.output)
             return 1
 
-        # --- Step 6: Re-verify shim identity AFTER downstream deps ---
+        # --- Step 6b: Record installed distribution metadata ---
+        dist_info = pip_show_dist(venv_dir, pkg["name"])
+        result["installed_dist"] = {
+            "name": dist_info.get("name", ""),
+            "version": dist_info.get("version", ""),
+            "location": dist_info.get("location", ""),
+        }
+
+        # --- Step 7: Re-verify shim identity AFTER downstream deps ---
         post_shim_errors = verify_shim_identity_strict(venv_dir)
         result["shim_identity"]["post_install"] = {
             "success": len(post_shim_errors) == 0,
@@ -398,22 +651,43 @@ def main() -> int:
         }
         if post_shim_errors:
             result["status"] = "shim-identity-failure"
+            diag = _diagnostic("shim-identity-mismatch", post_shim_errors[0])
+            result["diagnostic_code"] = diag["diagnostic_code"]
+            result["diagnostic_name"] = diag["diagnostic_name"]
             result["duration_seconds"] = round(time.monotonic() - start_time, 2)
             _emit_result(result, args.output)
-            return 1
+            return 3
 
-        # --- Step 7: Run pip check ---
+        # --- Step 8: Run pip check (separate validation step) ---
         pip_ok, pip_output = pip_check(venv_dir)
         result["pip_check"] = {"success": pip_ok, "output": pip_output}
         if not pip_ok:
             result["status"] = "pip-check-failure"
+            diag = _diagnostic("pip-check-failure", f"pip check failed: {pip_output[:500]}")
+            result["diagnostic_code"] = diag["diagnostic_code"]
+            result["diagnostic_name"] = diag["diagnostic_name"]
             result["duration_seconds"] = round(time.monotonic() - start_time, 2)
             _emit_result(result, args.output)
-            return 1
+            return 3
 
-        # --- Step 8: Run tests ---
-        test_command = pkg.get("test-command", "")
-        is_pytest_cmd = "pytest" in test_command
+        # --- Step 9: Verify candidate identity if provided ---
+        if candidate_identity:
+            expected_name = candidate_identity.get("package_name", "")
+            expected_version = candidate_identity.get("version", "")
+            if expected_name and expected_name != pkg["name"]:
+                result["status"] = "identity-mismatch"
+                diag = _diagnostic(
+                    "identity-mismatch",
+                    f"Candidate identity package '{expected_name}' != manifest package '{pkg['name']}'",
+                )
+                result["diagnostic_code"] = diag["diagnostic_code"]
+                result["diagnostic_name"] = diag["diagnostic_name"]
+                result["duration_seconds"] = round(time.monotonic() - start_time, 2)
+                _emit_result(result, args.output)
+                return 3
+
+        # --- Step 10: Run tests ---
+        is_pytest_cmd = "pytest" in (pkg.get("test-command", "") or "")
 
         test_result = run_tests(venv_dir, pkg, args.timeout)
         output = test_result.stdout + test_result.stderr
@@ -428,6 +702,7 @@ def main() -> int:
                 "failed": 0,
                 "error": 0,
                 "skipped": 0,
+                "xfailed": 0,
                 "total": 1 if test_result.returncode == 0 else 0,
             }
             no_tests_collected = False
@@ -442,20 +717,86 @@ def main() -> int:
             "failed": counts["failed"],
             "error": counts["error"],
             "skipped": counts["skipped"],
+            "xfailed": counts.get("xfailed", 0),
         }
 
-        # --- Step 9: Enforce min-tests ---
-        if min_tests > 0 and counts["total"] < min_tests:
-            result["status"] = "below-min-tests"
+        # --- Step 11: Enforce min-collected ---
+        if min_collected > 0 and counts["total"] < min_collected:
+            result["status"] = "below-min-count"
             result["tests"]["success"] = False
+            diag = _diagnostic(
+                "below-min-count",
+                f"Collected {counts['total']} tests, minimum required: {min_collected}",
+            )
+            result["diagnostic_code"] = diag["diagnostic_code"]
+            result["diagnostic_name"] = diag["diagnostic_name"]
             result["duration_seconds"] = round(time.monotonic() - start_time, 2)
             _emit_result(result, args.output)
-            return 1
+            return 3
+
+        # --- Step 12: Enforce min-passed ---
+        if min_passed > 0 and counts["passed"] < min_passed:
+            result["status"] = "below-min-count"
+            result["tests"]["success"] = False
+            diag = _diagnostic(
+                "below-min-count",
+                f"Passed {counts['passed']} tests, minimum required: {min_passed}",
+            )
+            result["diagnostic_code"] = diag["diagnostic_code"]
+            result["diagnostic_name"] = diag["diagnostic_name"]
+            result["duration_seconds"] = round(time.monotonic() - start_time, 2)
+            _emit_result(result, args.output)
+            return 3
+
+        # --- Step 13: Enforce max-skipped ---
+        if max_skipped >= 0 and counts["skipped"] > max_skipped:
+            result["status"] = "skipped-required"
+            result["tests"]["success"] = False
+            diag = _diagnostic(
+                "skipped-required",
+                f"Skipped {counts['skipped']} tests, maximum allowed: {max_skipped}",
+            )
+            result["diagnostic_code"] = diag["diagnostic_code"]
+            result["diagnostic_name"] = diag["diagnostic_name"]
+            result["duration_seconds"] = round(time.monotonic() - start_time, 2)
+            _emit_result(result, args.output)
+            return 3
+
+        # --- Step 14: Enforce max-xfailed ---
+        if max_xfailed >= 0 and counts.get("xfailed", 0) > max_xfailed:
+            result["status"] = "xfailed-required"
+            result["tests"]["success"] = False
+            diag = _diagnostic(
+                "xfailed-required",
+                f"Xfailed {counts.get('xfailed', 0)} tests, maximum allowed: {max_xfailed}",
+            )
+            result["diagnostic_code"] = diag["diagnostic_code"]
+            result["diagnostic_name"] = diag["diagnostic_name"]
+            result["duration_seconds"] = round(time.monotonic() - start_time, 2)
+            _emit_result(result, args.output)
+            return 3
+
+        # --- Step 15: Legacy min-tests enforcement (backward compat) ---
+        if min_tests > 0 and counts["total"] < min_tests:
+            result["status"] = "below-min-count"
+            result["tests"]["success"] = False
+            diag = _diagnostic(
+                "below-min-count",
+                f"Total {counts['total']} tests below min-tests threshold: {min_tests}",
+            )
+            result["diagnostic_code"] = diag["diagnostic_code"]
+            result["diagnostic_name"] = diag["diagnostic_name"]
+            result["duration_seconds"] = round(time.monotonic() - start_time, 2)
+            _emit_result(result, args.output)
+            return 3
 
         if no_tests_collected:
-            if min_tests > 0:
-                result["status"] = "zero-tests-expected"
+            if min_tests > 0 or min_collected > 0:
+                result["status"] = "zero-tests"
                 result["tests"]["success"] = False
+                diag = _diagnostic("zero-tests", f"Zero tests collected for required package '{pkg['name']}'")
+                result["diagnostic_code"] = diag["diagnostic_code"]
+                result["diagnostic_name"] = diag["diagnostic_name"]
             else:
                 result["status"] = "skipped-no-tests"
                 result["tests"]["success"] = True
@@ -466,11 +807,28 @@ def main() -> int:
 
         # Fail-closed: zero tests collected for a required package is an error
         if counts["total"] == 0 and usage == "required":
-            result["status"] = "zero-tests-required"
+            result["status"] = "zero-tests"
             result["tests"]["success"] = False
+            diag = _diagnostic("zero-tests", f"Zero tests collected for required package '{pkg['name']}'")
+            result["diagnostic_code"] = diag["diagnostic_code"]
+            result["diagnostic_name"] = diag["diagnostic_name"]
             result["duration_seconds"] = round(time.monotonic() - start_time, 2)
             _emit_result(result, args.output)
-            return 1
+            return 3
+
+        # Fail-closed: skipped required suite
+        if counts["skipped"] > 0 and counts["passed"] == 0 and counts["failed"] == 0 and usage == "required":
+            result["status"] = "skipped-required"
+            result["tests"]["success"] = False
+            diag = _diagnostic(
+                "skipped-required",
+                f"Required package '{pkg['name']}' had all tests skipped",
+            )
+            result["diagnostic_code"] = diag["diagnostic_code"]
+            result["diagnostic_name"] = diag["diagnostic_name"]
+            result["duration_seconds"] = round(time.monotonic() - start_time, 2)
+            _emit_result(result, args.output)
+            return 3
 
         result["duration_seconds"] = round(time.monotonic() - start_time, 2)
         _emit_result(result, args.output)

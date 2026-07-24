@@ -14,13 +14,23 @@ SCHEMA_VERSION = "3"
 REQUIRED_FIELDS = [
     "schema_version",
     "candidate_sha",
-    "eggfetch_version", 
+    "eggfetch_version",
     "eggfetch_wheel",
     "httpx_replacement_wheel",
     "reference_httpx_version",
     "producer",
     "started_at",
     "finished_at",
+    "run_id",
+    "run_attempt",
+]
+
+# Top-level wheel fields (flat, alongside the nested wheel records)
+_TOPLEVEL_WHEEL_FIELDS = [
+    "eggfetch_wheel_filename",
+    "eggfetch_wheel_sha256",
+    "httpx_replacement_filename",
+    "httpx_replacement_sha256",
 ]
 
 
@@ -49,12 +59,15 @@ def create_identity(
     eggfetch_wheel: dict,
     httpx_replacement_wheel: dict,
     producer: str,
+    run_id: str = "",
+    run_attempt: str = "",
     started_at: str | None = None,
     finished_at: str | None = None,
+    workflow_run_url: str = "",
 ) -> dict:
     """Create a candidate identity record."""
     now = datetime.now(timezone.utc).isoformat()
-    return {
+    identity: dict = {
         "schema_version": SCHEMA_VERSION,
         "candidate_sha": candidate_sha,
         "eggfetch_version": eggfetch_version,
@@ -62,38 +75,76 @@ def create_identity(
         "httpx_replacement_wheel": httpx_replacement_wheel,
         "reference_httpx_version": "0.28.1",
         "producer": producer,
+        "run_id": run_id,
+        "run_attempt": run_attempt,
         "started_at": started_at or now,
         "finished_at": finished_at or now,
     }
+    if workflow_run_url:
+        identity["workflow_run_url"] = workflow_run_url
+    return identity
 
 
 def validate_identity(identity: dict) -> list[str]:
     """Validate a candidate identity record, returning list of errors."""
     errors = []
-    
+
     for field in REQUIRED_FIELDS:
         if field not in identity:
             errors.append(f"missing required field: {field}")
-    
+
     if not errors:
         if identity["schema_version"] != SCHEMA_VERSION:
             errors.append(f"schema_version must be '{SCHEMA_VERSION}', got '{identity['schema_version']}'")
-        
+
         if not validate_sha(identity["candidate_sha"]):
             errors.append(f"candidate_sha must be a 40-char hex SHA, got '{identity['candidate_sha']}'")
-        
+
         if not isinstance(identity["eggfetch_version"], str) or not identity["eggfetch_version"]:
             errors.append("eggfetch_version must be a non-empty string")
-        
+
         errors.extend(validate_wheel_record(identity.get("eggfetch_wheel", {})))
         errors.extend(validate_wheel_record(identity.get("httpx_replacement_wheel", {})))
-        
+
         if identity.get("reference_httpx_version") != "0.28.1":
             errors.append(f"reference_httpx_version must be '0.28.1', got '{identity.get('reference_httpx_version')}'")
-        
+
         if not isinstance(identity.get("producer"), str) or not identity["producer"]:
             errors.append("producer must be a non-empty string")
-    
+
+        # Validate run_id and run_attempt are non-empty strings
+        for field in ("run_id", "run_attempt"):
+            val = identity.get(field)
+            if not isinstance(val, str) or not val:
+                errors.append(f"{field} must be a non-empty string, got {val!r}")
+
+        # Validate top-level wheel fields are non-empty strings where present
+        for field in _TOPLEVEL_WHEEL_FIELDS:
+            val = identity.get(field)
+            if val is not None:
+                if not isinstance(val, str) or not val:
+                    errors.append(f"{field} must be a non-empty string when present, got {val!r}")
+
+        # Validate workflow_run_url if present
+        workflow_url = identity.get("workflow_run_url")
+        if workflow_url is not None:
+            if not isinstance(workflow_url, str) or not workflow_url:
+                errors.append(f"workflow_run_url must be a non-empty string when present, got {workflow_url!r}")
+
+        # Validate timestamp order: started_at < finished_at
+        started = identity.get("started_at")
+        finished = identity.get("finished_at")
+        if started and finished and isinstance(started, str) and isinstance(finished, str):
+            try:
+                dt_started = datetime.fromisoformat(started)
+                dt_finished = datetime.fromisoformat(finished)
+                if dt_started >= dt_finished:
+                    errors.append(
+                        f"started_at ({started}) must be before finished_at ({finished})"
+                    )
+            except ValueError:
+                errors.append(f"invalid timestamp format: started_at={started!r}, finished_at={finished!r}")
+
     return errors
 
 

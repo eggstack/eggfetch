@@ -14,7 +14,7 @@ compatibility metadata finalized, artifact smoke tests scripted, security
 and resource qualification evidence collected, documentation aligned to
 the achieved stage, and the release decision recorded.
 
-The compatibility profile status is now `released`. The immutable
+The compatibility profile status is now `candidate`. The immutable
 compatibility manifest is generated and checksummed. Runtime diagnostics
 are exposed via `eggfetch.compat.httpx.get_compatibility_info()`.
 

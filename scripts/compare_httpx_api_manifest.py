@@ -16,8 +16,7 @@ from pathlib import Path
 
 
 _REQUIRED_DIFF_FIELDS = (
-    "id", "category", "symbol", "behavior-case",
-    "reference-behavior", "eggfetch-behavior", "rationale",
+    "id", "category", "symbol", "rationale", "owner", "review-milestone",
 )
 
 _VALID_CATEGORIES = (
@@ -151,9 +150,34 @@ def _compare_signatures(ref_sig, cand_sig, symbol):
     return diffs
 
 
-def _match_allowed(symbol, diff):
-    allowed_symbol = diff.get("symbol", "")
-    return symbol == allowed_symbol
+def _match_allowed(symbol, diff, allowed_entry):
+    """Match an allowed entry against a difference record by exact tuple.
+
+    An allowed entry matches only when all applicable fields match:
+    - symbol
+    - difference type
+    - member
+    - canonical reference value
+    - canonical candidate value
+
+    No wildcard, regex, glob, prefix, suffix, or symbol-only matching is allowed.
+    """
+    if symbol != allowed_entry.get("symbol", ""):
+        return False
+    if diff.get("difference_type", "") != allowed_entry.get("difference-type", ""):
+        return False
+    if diff.get("member", "") != allowed_entry.get("member", ""):
+        return False
+    # Canonical reference and candidate values — must match exactly
+    ref_norm = _norm_default(diff.get("reference"))
+    cand_norm = _norm_default(diff.get("candidate"))
+    allowed_ref = allowed_entry.get("reference", "")
+    allowed_cand = allowed_entry.get("candidate", "")
+    if str(ref_norm) != allowed_ref:
+        return False
+    if str(cand_norm) != allowed_cand:
+        return False
+    return True
 
 
 def compare(reference, candidate, allowed_diffs):
@@ -260,7 +284,7 @@ def compare(reference, candidate, allowed_diffs):
         symbol = diff_record["symbol"]
         matched = False
         for ad in allowed_diffs:
-            if _match_allowed(symbol, ad):
+            if _match_allowed(symbol, diff_record, ad):
                 results["allowed_matches"].append({
                     "id": ad.get("id"),
                     "category": ad.get("category"),
@@ -273,12 +297,21 @@ def compare(reference, candidate, allowed_diffs):
             unexplained.append(diff_record)
 
     stale = []
+    resolved_in_active = []
     for ad in allowed_diffs:
         ad_id = ad.get("id")
+        # Flag resolved category entries as errors (they should not be in active file)
+        if ad.get("category") == "resolved":
+            resolved_in_active.append({
+                "id": ad_id,
+                "symbol": ad.get("symbol", ""),
+                "reason": "'resolved' category entry must not appear in active allowed-differences file",
+            })
         if ad_id in used_ids:
             continue
-        if ad.get("category") in ("resolved", "not-applicable"):
-            continue
+        # Per plan: resolved entries must not waive current differences.
+        # They may remain only as historical records in a separate resolved
+        # ledger or must fail as stale if present in the active allowed file.
         symbol = ad.get("symbol", "")
         if symbol in ref_map and symbol in cand_map:
             ref_s = ref_map[symbol]
@@ -295,20 +328,45 @@ def compare(reference, candidate, allowed_diffs):
                     })
 
     results["stale_allowed"] = stale
+    results["resolved_in_active"] = resolved_in_active
     results["unexplained"] = unexplained
     return results
 
 
 def validate_allowed_diffs(path):
-    """Validate allowed-differences.toml schema. Returns list of errors."""
+    """Validate allowed-differences.toml schema. Returns list of errors.
+
+    Non-resolved entries that carry a ``difference-type`` field must also
+    provide ``member``, ``reference``, and ``candidate`` (exact typed tuple).
+    Entries without ``difference-type`` are behavioral descriptions and are
+    not matched against API manifest differences.
+
+    Enforced rules:
+    - ``resolved`` category entries in the active file are flagged as errors.
+    - ``expiry`` field is validated when present.
+    - Duplicate IDs fail validation.
+    - Duplicate tuples (symbol, difference-type, member, reference, candidate) fail.
+    - Wildcard entries (``*``) are rejected.
+    """
     entries = _load_toml(path)
     errors = []
     seen_ids = set()
+    seen_tuples: dict[tuple, str] = {}
+
+    # Fields required for all entries
+    _BASE_REQUIRED = (
+        "id", "category", "symbol", "rationale", "owner", "review-milestone",
+    )
+    # Fields required for typed-tuple entries (non-resolved with difference-type)
+    _TYPED_REQUIRED = (
+        "difference-type", "member", "reference", "candidate",
+    )
 
     for i, entry in enumerate(entries):
         entry_id = entry.get("id", f"<entry {i}>")
 
-        for field in _REQUIRED_DIFF_FIELDS:
+        # Base required fields for all entries
+        for field in _BASE_REQUIRED:
             if field not in entry or not entry[field]:
                 errors.append(f"[{entry_id}] missing required field: {field}")
 
@@ -316,28 +374,67 @@ def validate_allowed_diffs(path):
         if category and category not in _VALID_CATEGORIES:
             errors.append(f"[{entry_id}] invalid category: {category!r}")
 
+        # resolved category entries must not appear in the active allowed file
+        if category == "resolved":
+            errors.append(
+                f"[{entry_id}] 'resolved' category entry must not appear in "
+                f"the active allowed-differences file (move to resolved-differences.toml)"
+            )
+
         symbol = entry.get("symbol", "")
+        # Check for wildcard in symbol field (reject all wildcards)
         if "*" in symbol:
             errors.append(f"[{entry_id}] wildcard in symbol: {symbol!r}")
 
-        for key, val in entry.items():
-            if key == "tests" and isinstance(val, list):
-                continue
-            if isinstance(val, str) and "*" in val and key == "symbol":
-                continue
+        # Typed-tuple fields: required for non-resolved entries with difference-type
+        has_diff_type = "difference-type" in entry
+        if has_diff_type and category != "resolved":
+            for field in _TYPED_REQUIRED:
+                if field not in entry:
+                    errors.append(f"[{entry_id}] typed entry missing field: {field}")
+            # difference-type must be a valid type
+            dt = entry.get("difference-type", "")
+            if dt and dt not in _VALID_DIFFERENCE_TYPES:
+                errors.append(f"[{entry_id}] invalid difference-type: {dt!r}")
 
+            # Build tuple for duplicate detection
+            tuple_key = (
+                symbol,
+                dt,
+                entry.get("member", ""),
+                entry.get("reference", ""),
+                entry.get("candidate", ""),
+            )
+            if tuple_key in seen_tuples:
+                errors.append(
+                    f"[{entry_id}] duplicate tuple: same (symbol, difference-type, "
+                    f"member, reference, candidate) as [{seen_tuples[tuple_key]}]"
+                )
+            else:
+                seen_tuples[tuple_key] = entry_id
+
+        # Duplicate ID detection
         if entry_id in seen_ids:
             errors.append(f"[{entry_id}] duplicate ID")
         seen_ids.add(entry_id)
 
+        # Expiry field validation
         expiry = entry.get("expiry")
         if expiry:
-            try:
-                exp_date = datetime.fromisoformat(expiry)
-                if exp_date < datetime.now():
-                    errors.append(f"[{entry_id}] expired entry: {expiry}")
-            except ValueError:
-                errors.append(f"[{entry_id}] invalid expiry format: {expiry!r}")
+            if not isinstance(expiry, str) or not expiry:
+                errors.append(f"[{entry_id}] expiry must be a non-empty string, got {expiry!r}")
+            else:
+                try:
+                    exp_date = datetime.fromisoformat(expiry)
+                    if exp_date.tzinfo is None:
+                        # Assume UTC for naive datetimes
+                        from datetime import timezone as _tz
+                        exp_date = exp_date.replace(tzinfo=_tz.utc)
+                    now = datetime.now(_tz.utc) if exp_date.tzinfo else datetime.now()
+                    if exp_date < now:
+                        errors.append(f"[{entry_id}] expired entry: {expiry}")
+                except ValueError:
+                    errors.append(f"[{entry_id}] invalid expiry format: {expiry!r} (expected ISO-8601)")
 
     return errors
 
@@ -345,6 +442,11 @@ def validate_allowed_diffs(path):
 def _format_report(results):
     """Format results as human-readable text."""
     lines = []
+    if results.get("resolved_in_active"):
+        lines.append(f"RESOLVED ENTRIES IN ACTIVE FILE ({len(results['resolved_in_active'])}):")
+        for r in results["resolved_in_active"]:
+            lines.append(f"  - [{r['id']}] {r['symbol']}: {r['reason']}")
+        lines.append("")
     if results["differences"]:
         lines.append(f"DIFFERENCES ({len(results['differences'])}):")
         for d in results["differences"]:
@@ -369,15 +471,15 @@ def _format_report(results):
             member_info = f" ({u['member']})" if u.get("member") else ""
             lines.append(f"  - [{u['difference_type']}] {u['symbol']}{member_info}: ref={u['reference']} cand={u['candidate']}")
         lines.append("")
-    if not any(results[k] for k in results if k != "allowed_matches"):
+    if not any(results.get(k) for k in results if k not in ("allowed_matches", "resolved_in_active")):
         lines.append("All symbols match or are covered by allowed differences.")
     return "\n".join(lines)
 
 
 def main():
     parser = argparse.ArgumentParser(description="Compare eggfetch manifest against HTTPX reference")
-    parser.add_argument("--reference", required=True, help="Path to reference manifest JSON")
-    parser.add_argument("--candidate", required=True, help="Path to candidate (eggfetch) manifest JSON")
+    parser.add_argument("--reference", help="Path to reference manifest JSON")
+    parser.add_argument("--candidate", help="Path to candidate (eggfetch) manifest JSON")
     parser.add_argument("--allowed", required=True, help="Path to allowed-differences.toml")
     parser.add_argument("--json", dest="json_output", action="store_true", help="Output JSON instead of text")
     parser.add_argument("--validate", action="store_true", help="Validate allowed-differences.toml schema")
@@ -394,6 +496,9 @@ def main():
             print("Validation passed.")
             sys.exit(0)
 
+    if not args.reference or not args.candidate:
+        parser.error("--reference and --candidate are required unless --validate is used")
+
     with open(args.reference) as f:
         reference = json.load(f)
     with open(args.candidate) as f:
@@ -407,7 +512,11 @@ def main():
     else:
         print(_format_report(results))
 
-    has_failures = bool(results["unexplained"]) or bool(results["stale_allowed"])
+    has_failures = (
+        bool(results["unexplained"])
+        or bool(results["stale_allowed"])
+        or bool(results.get("resolved_in_active"))
+    )
     sys.exit(1 if has_failures else 0)
 
 

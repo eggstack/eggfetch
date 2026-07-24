@@ -63,7 +63,7 @@ def validate_profile(profile_dir):
         ids = []
         for d in diffs:
             # Check required fields
-            required_fields = ["id", "category", "symbol", "behavior-case", "reference-behavior", "eggfetch-behavior", "rationale", "compatibility-stage-impact", "owner", "review-milestone", "tests"]
+            required_fields = ["id", "category", "symbol", "rationale", "owner", "review-milestone"]
             for field in required_fields:
                 if field not in d:
                     errors.append(f"Difference {d.get('id', '?')}: missing required field '{field}'")

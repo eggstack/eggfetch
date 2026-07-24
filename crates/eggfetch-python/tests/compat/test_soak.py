@@ -74,47 +74,42 @@ class TestQualificationChurn:
         with local_http_server() as (host, port):
             url = f"http://{host}:{port}/json"
             total_requests = 0
-            errors = []
 
             with Client(timeout=Timeout(10)) as c:
                 for i in range(200):
-                    try:
-                        r = c.get(url)
-                        assert r.status_code == 200
-                        _ = r.content
-                        total_requests += 1
-                        if i % 50 == 0:
-                            time.sleep(0.01)
-                    except Exception as exc:
-                        errors.append(str(exc))
+                    r = c.get(url)
+                    assert r.status_code == 200
+                    body = r.content
+                    assert len(body) > 0
+                    total_requests += 1
+                    if i % 50 == 0:
+                        time.sleep(0.01)
 
-            assert total_requests > 150, f"Only {total_requests} requests completed"
-            assert len(errors) <= 5, f"Too many errors during churn: {errors}"
+            assert total_requests == 200, (
+                f"Expected 200 successful requests, got {total_requests}"
+            )
 
     def test_sustained_churn_mixed_methods(self):
         """Sustained mixed GET/POST churn: 100 pairs."""
         with local_http_server() as (host, port):
             url = f"http://{host}:{port}/json"
             successes = 0
-            errors = []
 
             with Client(timeout=Timeout(10)) as c:
                 for i in range(100):
-                    try:
-                        r = c.get(url)
-                        assert r.status_code == 200
-                        successes += 1
+                    r = c.get(url)
+                    assert r.status_code == 200
+                    successes += 1
 
-                        r = c.post(url, content=b"payload")
-                        assert r.status_code == 200
-                        successes += 1
-                        if i % 25 == 0:
-                            time.sleep(0.01)
-                    except Exception as exc:
-                        errors.append(str(exc))
+                    r = c.post(url, content=b"payload")
+                    assert r.status_code == 200
+                    successes += 1
+                    if i % 25 == 0:
+                        time.sleep(0.01)
 
-            assert successes > 100, f"Only {successes} requests completed"
-            assert len(errors) <= 5, f"Too many errors: {errors}"
+            assert successes == 200, (
+                f"Expected 200 successful requests, got {successes}"
+            )
 
     def test_sustained_churn_repeated_clients(self):
         """Sustained churn with repeated client open/close: 50 cycles.
@@ -124,19 +119,32 @@ class TestQualificationChurn:
         with local_http_server() as (host, port):
             url = f"http://{host}:{port}/json"
             cycles = 0
-            errors = []
 
             for i in range(50):
-                try:
-                    with Client(timeout=Timeout(10)) as c:
-                        for _ in range(3):
-                            r = c.get(url)
-                            assert r.status_code == 200
-                    cycles += 1
-                    if i % 10 == 0:
-                        time.sleep(0.01)
-                except Exception as exc:
-                    errors.append(str(exc))
+                with Client(timeout=Timeout(10)) as c:
+                    for _ in range(3):
+                        r = c.get(url)
+                        assert r.status_code == 200
+                cycles += 1
+                if i % 10 == 0:
+                    time.sleep(0.01)
 
-            assert cycles > 30, f"Only {cycles} client cycles completed"
-            assert len(errors) <= 5, f"Too many errors: {errors}"
+            assert cycles == 50, (
+                f"Expected 50 successful client cycles, got {cycles}"
+            )
+
+    def test_sustained_churn_body_content_validation(self):
+        """Sustained churn with body content validation."""
+        with local_http_server() as (host, port):
+            url = f"http://{host}:{port}/json"
+            import json
+            expected_body = json.dumps({"status": "ok"}).encode()
+
+            with Client(timeout=Timeout(10)) as c:
+                for i in range(50):
+                    r = c.get(url)
+                    assert r.status_code == 200
+                    body = r.content
+                    assert body == expected_body, (
+                        f"Iteration {i}: expected {expected_body!r}, got {body!r}"
+                    )

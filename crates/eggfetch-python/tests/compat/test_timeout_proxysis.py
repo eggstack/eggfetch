@@ -14,21 +14,35 @@ import time
 import pytest
 import eggfetch
 from eggfetch.compat.httpx import Client, AsyncClient, Timeout, MockTransport, Response
+from eggfetch.compat.httpx._exceptions import (
+    ConnectTimeout,
+    PoolTimeout,
+    ReadTimeout,
+    TimeoutException,
+    WriteTimeout,
+)
+
+import sys
+sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parent))
+from native_fixtures import (
+    local_http_server,
+    local_stall_server,
+    local_proxy_server,
+    local_tls_server,
+)
 
 
 class _StallHandler(http.server.BaseHTTPRequestHandler):
     """Handler that reads the request but never responds (simulates stall)."""
 
     def do_GET(self):
-        # Read the request but do not send a response
         content_length = int(self.headers.get("Content-Length", 0))
         if content_length:
             self.rfile.read(content_length)
-        # Stall forever (test timeout will kill the thread)
         time.sleep(300)
 
     def log_message(self, format, *args):
-        pass  # Suppress logs
+        pass
 
 
 class TestProxyTimeoutClassification:
@@ -36,48 +50,72 @@ class TestProxyTimeoutClassification:
 
     def test_mock_proxy_connect_timeout(self):
         """A mock transport that simulates proxy CONNECT stall raises ConnectTimeout."""
-        from eggfetch.compat.httpx._exceptions import ConnectTimeout
-
         def handler(request):
-            # Simulate a proxy that accepts connection but stalls CONNECT
             raise eggfetch.ConnectTimeout("Connect timed out")
 
         with Client(transport=MockTransport(handler)) as client:
-            with pytest.raises((ConnectTimeout, eggfetch.TimeoutException)):
+            with pytest.raises(ConnectTimeout) as exc_info:
                 client.get("http://testserver/")
+            assert isinstance(exc_info.value, TimeoutException)
 
     def test_mock_read_timeout_on_slow_server(self):
         """A mock transport that simulates a slow server raises ReadTimeout."""
-        from eggfetch.compat.httpx._exceptions import ReadTimeout
-
         def handler(request):
             raise eggfetch.ReadTimeout("Read timed out")
 
         with Client(transport=MockTransport(handler)) as client:
-            with pytest.raises((ReadTimeout, eggfetch.TimeoutException)):
+            with pytest.raises(ReadTimeout) as exc_info:
                 client.get("http://testserver/")
+            assert isinstance(exc_info.value, TimeoutException)
 
     def test_mock_write_timeout(self):
         """A mock transport that simulates write stall raises WriteTimeout."""
-        from eggfetch.compat.httpx._exceptions import WriteTimeout
-
         def handler(request):
             raise eggfetch.WriteTimeout("Write timed out")
 
         with Client(transport=MockTransport(handler)) as client:
-            with pytest.raises((WriteTimeout, eggfetch.TimeoutException)):
+            with pytest.raises(WriteTimeout) as exc_info:
                 client.post("http://testserver/", content=b"data")
+            assert isinstance(exc_info.value, TimeoutException)
 
     def test_mock_pool_timeout(self):
         """A mock transport that simulates pool exhaustion raises PoolTimeout."""
-        from eggfetch.compat.httpx._exceptions import PoolTimeout
-
         def handler(request):
             raise eggfetch.PoolTimeout("Pool timed out")
 
         with Client(transport=MockTransport(handler)) as client:
-            with pytest.raises((PoolTimeout, eggfetch.TimeoutException)):
+            with pytest.raises(PoolTimeout) as exc_info:
                 client.get("http://testserver/")
+            assert isinstance(exc_info.value, TimeoutException)
+
+    def test_stall_handler_read_timeout(self):
+        """Real socket stall handler produces ReadTimeout."""
+        from native_fixtures import _ThreadedHTTPServer
+        srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        srv.bind(("127.0.0.1", 0))
+        srv.listen(5)
+        port = srv.getsockname()[1]
+
+        httpd = _ThreadedHTTPServer(
+            ("127.0.0.1", port), _StallHandler, bind_and_activate=False
+        )
+        httpd.socket = srv
+        t = threading.Thread(target=httpd.serve_forever, daemon=True)
+        t.start()
+
+        try:
+            with Client(timeout=Timeout(0.5)) as c:
+                start = time.monotonic()
+                with pytest.raises(ReadTimeout) as exc_info:
+                    c.get(f"http://127.0.0.1:{port}/")
+                elapsed = time.monotonic() - start
+                assert isinstance(exc_info.value, TimeoutException)
+                assert not isinstance(exc_info.value, ConnectTimeout)
+                assert elapsed < 5.0, f"Stall timeout took too long: {elapsed:.2f}s"
+        finally:
+            httpd.shutdown()
+            srv.close()
 
 
 class TestAsyncProxyTimeoutClassification:
@@ -86,26 +124,24 @@ class TestAsyncProxyTimeoutClassification:
     @pytest.mark.asyncio
     async def test_async_mock_connect_timeout(self):
         """Async mock transport that simulates CONNECT stall raises ConnectTimeout."""
-        from eggfetch.compat.httpx._exceptions import ConnectTimeout
-
         async def handler(request):
             raise eggfetch.ConnectTimeout("Connect timed out")
 
         async with AsyncClient(async_transport=MockTransport(handler)) as client:
-            with pytest.raises((ConnectTimeout, eggfetch.TimeoutException)):
+            with pytest.raises(ConnectTimeout) as exc_info:
                 await client.get("http://testserver/")
+            assert isinstance(exc_info.value, TimeoutException)
 
     @pytest.mark.asyncio
     async def test_async_mock_read_timeout(self):
         """Async mock transport that simulates read stall raises ReadTimeout."""
-        from eggfetch.compat.httpx._exceptions import ReadTimeout
-
         async def handler(request):
             raise eggfetch.ReadTimeout("Read timed out")
 
         async with AsyncClient(async_transport=MockTransport(handler)) as client:
-            with pytest.raises((ReadTimeout, eggfetch.TimeoutException)):
+            with pytest.raises(ReadTimeout) as exc_info:
                 await client.get("http://testserver/")
+            assert isinstance(exc_info.value, TimeoutException)
 
 
 class TestTimeoutPassthrough:
@@ -171,3 +207,56 @@ class TestTimeoutPassthrough:
         with Client(transport=MockTransport(handler), timeout=timeout) as client:
             client.get("http://testserver/")
         assert captured.get("timeout")
+
+
+class TestRealSocketTimeoutClassification:
+    """Timeout classification tests using real local sockets."""
+
+    def test_real_stall_server_timeout(self):
+        """Real stall server produces timeout on read."""
+        with local_stall_server() as (host, port, ready):
+            ready.wait()
+            with Client(timeout=Timeout(0.5)) as c:
+                start = time.monotonic()
+                with pytest.raises(TimeoutException) as exc_info:
+                    c.get(f"http://{host}:{port}/")
+                elapsed = time.monotonic() - start
+                assert elapsed < 5.0, f"Timeout took too long: {elapsed:.2f}s"
+
+    def test_real_slow_server_timeout(self):
+        """Real slow server produces timeout on read."""
+        with local_http_server() as (host, port):
+            with Client(timeout=Timeout(0.5)) as c:
+                start = time.monotonic()
+                with pytest.raises(ReadTimeout) as exc_info:
+                    c.get(f"http://{host}:{port}/slow")
+                elapsed = time.monotonic() - start
+                assert isinstance(exc_info.value, TimeoutException)
+                assert elapsed < 5.0, f"Timeout took too long: {elapsed:.2f}s"
+
+    def test_real_connect_timeout_refused(self):
+        """Connection refused on unreachable port produces ConnectTimeout."""
+        with Client(timeout=Timeout(0.3)) as c:
+            start = time.monotonic()
+            with pytest.raises(ConnectTimeout) as exc_info:
+                c.get("http://127.0.0.1:1/")
+            elapsed = time.monotonic() - start
+            assert isinstance(exc_info.value, ConnectTimeout)
+            assert elapsed < 5.0, f"Timeout took too long: {elapsed:.2f}s"
+
+    def test_real_proxy_server_forward(self):
+        """Real local proxy server forwards requests successfully."""
+        with local_http_server() as (backend_host, backend_port):
+            with local_proxy_server() as (proxy_host, proxy_port):
+                with Client(timeout=Timeout(5)) as c:
+                    resp = c.get(
+                        f"http://{proxy_host}:{proxy_port}/health",
+                    )
+                    assert resp.status_code == 200
+
+    def test_real_tls_server_handshake(self):
+        """Real local TLS server completes handshake successfully."""
+        with local_tls_server() as (tls_host, tls_port, client_ctx):
+            with Client(timeout=Timeout(5), verify=client_ctx) as c:
+                resp = c.get(f"https://{tls_host}:{tls_port}/health")
+                assert resp.status_code == 200

@@ -230,8 +230,9 @@ class TestPackageEntries:
         installed test suites (e.g. pytest-httpx, anthropic, groq).
         """
         packages = manifest.get("package", [])
-        # Packages exempted from min-tests requirement
-        EXEMPT_PACKAGES = {"pytest-httpx", "anthropic", "groq", "anyio", "pydantic", "httpx"}
+        # Packages exempted from min-tests requirement (informational or
+        # SDK wrappers without installed test suites)
+        EXEMPT_PACKAGES = {"anthropic", "groq", "anyio", "pydantic", "httpx"}
         errors = []
         for pkg in packages:
             if pkg.get("usage") != "required":

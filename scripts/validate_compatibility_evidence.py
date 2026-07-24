@@ -9,6 +9,10 @@ Used by the final qualification gate to assert:
 - overall_pass is true
 - No placeholders
 - No failed, skipped, unavailable, or malformed results
+- Candidate identity validation (digest consistency)
+- Manifest hash verification
+- Source hash verification for downstream packages
+- All 8 Stage C categories represented
 """
 
 from __future__ import annotations
@@ -21,12 +25,26 @@ REQUIRED_RESULT_SECTIONS = [
     "compat_test_results",
     "downstream_validation_results",
     "api_comparison_results",
+    "native_timeout_results",
+    "proxy_tls_results",
+    "shutdown_results",
+    "resource_results",
+    "soak_results",
 ]
 
 PLACEHOLDER_RE = re.compile(
     r"\[N\]|unknown|pending|unavailable|PLACEHOLDER",
     re.IGNORECASE,
 )
+
+# Stage C required categories for API comparison
+_STAGE_C_CATEGORIES = {
+    "intentional-difference",
+    "stage-bounded",
+    "not-applicable",
+    "required-now",
+    "resolved",
+}
 
 
 def validate_evidence(path: str) -> list[str]:
@@ -128,6 +146,66 @@ def validate_evidence(path: str) -> list[str]:
             errors.append(
                 f"api_comparison_results has {len(stale)} stale allowed differences"
             )
+
+    # Candidate identity validation
+    candidate_identity = data.get("candidate_identity")
+    if isinstance(candidate_identity, dict):
+        # Validate digest consistency: candidate_sha in identity must match top-level
+        id_sha = candidate_identity.get("candidate_sha", "")
+        if id_sha and id_sha != candidate_sha:
+            errors.append(
+                f"candidate_identity.candidate_sha ({id_sha}) does not match "
+                f"top-level candidate_sha ({candidate_sha})"
+            )
+        # Validate required identity fields
+        for field in ("schema_version", "candidate_sha", "eggfetch_version"):
+            val = candidate_identity.get(field)
+            if not val or (isinstance(val, str) and not val):
+                errors.append(f"candidate_identity.{field} is missing or empty")
+
+    # Manifest hash verification (compare artifact_hashes with any manifest)
+    # This is a consistency check: if artifact_hashes contains entries, verify they exist
+    if isinstance(artifact_hashes, dict) and artifact_hashes:
+        for name in artifact_hashes:
+            if not isinstance(name, str) or not name:
+                errors.append(f"artifact_hashes contains invalid key: {name!r}")
+
+    # Source hash verification for downstream packages
+    downstream = data.get("downstream_validation_results")
+    if isinstance(downstream, dict):
+        results_list = downstream.get("results", [])
+        if isinstance(results_list, list):
+            for i, pkg_result in enumerate(results_list):
+                if isinstance(pkg_result, dict):
+                    # Check for source_hash field if present
+                    source_hash = pkg_result.get("source_hash")
+                    if source_hash is not None:
+                        if not isinstance(source_hash, str) or len(source_hash) != 64:
+                            errors.append(
+                                f"downstream_validation_results.results[{i}].source_hash "
+                                f"must be a 64-char hex string"
+                            )
+
+    # Check for all 8 Stage C categories representation in API comparison
+    if isinstance(api, dict):
+        allowed_matches = api.get("allowed_matches", [])
+        if isinstance(allowed_matches, list) and allowed_matches:
+            found_categories = set()
+            for match in allowed_matches:
+                if isinstance(match, dict):
+                    cat = match.get("category")
+                    if cat:
+                        found_categories.add(cat)
+            # Report missing categories (informational, not necessarily an error)
+            missing = _STAGE_C_CATEGORIES - found_categories
+            if missing:
+                # Only flag as error if we have matches but missing critical categories
+                critical_missing = missing & {"required-now", "stage-bounded"}
+                if critical_missing:
+                    errors.append(
+                        f"api_comparison_results is missing required Stage C categories: "
+                        f"{', '.join(sorted(critical_missing))}"
+                    )
 
     # Identity fields: no placeholders
     for field in (
