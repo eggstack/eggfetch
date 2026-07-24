@@ -138,8 +138,8 @@ tests = ["test_response_compat.py"]
 
 [[difference]]
 id = "EXCEPTION-CTOR-001"
-category = "intentional-difference"
-symbol = "*Error"
+category = "resolved"
+symbol = "HTTPError"
 behavior-case = "exception-constructor-signature"
 reference-behavior = "HTTPX exceptions use (message, *, request) with message as required positional"
 eggfetch-behavior = "eggfetch exceptions use (message, *, request) matching HTTPX exactly"
@@ -634,7 +634,37 @@ tests = ["test_url_query.py"]
 [[difference]]
 id = "STREAM-CTOR-001"
 category = "stage-bounded"
-symbol = "*Stream"
+symbol = "ByteStream"
+behavior-case = "stream-constructor-signature"
+reference-behavior = "HTTPX stream classes have specific constructor signatures"
+eggfetch-behavior = "eggfetch stream classes use simplified constructors"
+rationale = "eggfetch stream classes are internal implementation details. The public stream API (iter_bytes, iter_text, iter_lines, read, close/aclose) is preserved."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "None; stream classes are not typically instantiated directly"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_response_streaming.py"]
+
+[[difference]]
+id = "STREAM-CTOR-001B"
+category = "stage-bounded"
+symbol = "SyncByteStream"
+behavior-case = "stream-constructor-signature"
+reference-behavior = "HTTPX stream classes have specific constructor signatures"
+eggfetch-behavior = "eggfetch stream classes use simplified constructors"
+rationale = "eggfetch stream classes are internal implementation details. The public stream API (iter_bytes, iter_text, iter_lines, read, close/aclose) is preserved."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "None; stream classes are not typically instantiated directly"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_response_streaming.py"]
+
+[[difference]]
+id = "STREAM-CTOR-001C"
+category = "stage-bounded"
+symbol = "AsyncByteStream"
 behavior-case = "stream-constructor-signature"
 reference-behavior = "HTTPX stream classes have specific constructor signatures"
 eggfetch-behavior = "eggfetch stream classes use simplified constructors"
@@ -649,7 +679,97 @@ tests = ["test_response_streaming.py"]
 [[difference]]
 id = "TRANSPORT-PARAMS-001"
 category = "stage-bounded"
-symbol = "*Transport"
+symbol = "HTTPTransport"
+behavior-case = "transport-constructor-params"
+reference-behavior = "HTTPX transport classes accept ssl_context, socket_options, local_address parameters"
+eggfetch-behavior = "eggfetch transport classes accept core parameters (verify, cert, proxy, limits, http1, http2, trust_env)"
+rationale = "eggfetch handles TLS configuration through the native Rust engine. The Python transport API exposes the essential parameters."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "Minimal; ssl_context and socket_options are rarely customized"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_transports.py"]
+
+[[difference]]
+id = "TRANSPORT-PARAMS-001B"
+category = "stage-bounded"
+symbol = "AsyncHTTPTransport"
+behavior-case = "transport-constructor-params"
+reference-behavior = "HTTPX transport classes accept ssl_context, socket_options, local_address parameters"
+eggfetch-behavior = "eggfetch transport classes accept core parameters (verify, cert, proxy, limits, http1, http2, trust_env)"
+rationale = "eggfetch handles TLS configuration through the native Rust engine. The Python transport API exposes the essential parameters."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "Minimal; ssl_context and socket_options are rarely customized"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_transports.py"]
+
+[[difference]]
+id = "TRANSPORT-PARAMS-001C"
+category = "stage-bounded"
+symbol = "BaseTransport"
+behavior-case = "transport-constructor-params"
+reference-behavior = "HTTPX transport classes accept ssl_context, socket_options, local_address parameters"
+eggfetch-behavior = "eggfetch transport classes accept core parameters (verify, cert, proxy, limits, http1, http2, trust_env)"
+rationale = "eggfetch handles TLS configuration through the native Rust engine. The Python transport API exposes the essential parameters."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "Minimal; ssl_context and socket_options are rarely customized"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_transports.py"]
+
+[[difference]]
+id = "TRANSPORT-PARAMS-001D"
+category = "stage-bounded"
+symbol = "AsyncBaseTransport"
+behavior-case = "transport-constructor-params"
+reference-behavior = "HTTPX transport classes accept ssl_context, socket_options, local_address parameters"
+eggfetch-behavior = "eggfetch transport classes accept core parameters (verify, cert, proxy, limits, http1, http2, trust_env)"
+rationale = "eggfetch handles TLS configuration through the native Rust engine. The Python transport API exposes the essential parameters."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "Minimal; ssl_context and socket_options are rarely customized"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_transports.py"]
+
+[[difference]]
+id = "TRANSPORT-PARAMS-001E"
+category = "stage-bounded"
+symbol = "ASGITransport"
+behavior-case = "transport-constructor-params"
+reference-behavior = "HTTPX transport classes accept ssl_context, socket_options, local_address parameters"
+eggfetch-behavior = "eggfetch transport classes accept core parameters (verify, cert, proxy, limits, http1, http2, trust_env)"
+rationale = "eggfetch handles TLS configuration through the native Rust engine. The Python transport API exposes the essential parameters."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "Minimal; ssl_context and socket_options are rarely customized"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_transports.py"]
+
+[[difference]]
+id = "TRANSPORT-PARAMS-001F"
+category = "stage-bounded"
+symbol = "WSGITransport"
+behavior-case = "transport-constructor-params"
+reference-behavior = "HTTPX transport classes accept ssl_context, socket_options, local_address parameters"
+eggfetch-behavior = "eggfetch transport classes accept core parameters (verify, cert, proxy, limits, http1, http2, trust_env)"
+rationale = "eggfetch handles TLS configuration through the native Rust engine. The Python transport API exposes the essential parameters."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "Minimal; ssl_context and socket_options are rarely customized"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_transports.py"]
+
+[[difference]]
+id = "TRANSPORT-PARAMS-001G"
+category = "stage-bounded"
+symbol = "MockTransport"
 behavior-case = "transport-constructor-params"
 reference-behavior = "HTTPX transport classes accept ssl_context, socket_options, local_address parameters"
 eggfetch-behavior = "eggfetch transport classes accept core parameters (verify, cert, proxy, limits, http1, http2, trust_env)"
@@ -709,7 +829,22 @@ tests = ["test_config_objects.py"]
 [[difference]]
 id = "CLIENT-EXTENSIONS-001"
 category = "stage-bounded"
-symbol = "*Client"
+symbol = "Client"
+behavior-case = "client-extra-params"
+reference-behavior = "HTTPX Client/AsyncClient do not have an extensions parameter"
+eggfetch-behavior = "eggfetch Client/AsyncClient accept an extensions parameter for passing metadata through to the transport"
+rationale = "extensions is an eggfetch-specific parameter for passing metadata through to the native engine. It does not affect HTTPX compatibility."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "None; extensions is optional and defaults to None"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_extensions.py"]
+
+[[difference]]
+id = "CLIENT-EXTENSIONS-001B"
+category = "stage-bounded"
+symbol = "AsyncClient"
 behavior-case = "client-extra-params"
 reference-behavior = "HTTPX Client/AsyncClient do not have an extensions parameter"
 eggfetch-behavior = "eggfetch Client/AsyncClient accept an extensions parameter for passing metadata through to the transport"
@@ -739,7 +874,37 @@ tests = ["test_auth.py"]
 [[difference]]
 id = "STREAM-CTOR-002"
 category = "stage-bounded"
-symbol = "*ByteStream"
+symbol = "ByteStream"
+behavior-case = "stream-constructor-differences"
+reference-behavior = "HTTPX ByteStream takes (stream=None), SyncByteStream/AsyncByteStream take (*args, **kwargs)"
+eggfetch-behavior = "eggfetch ByteStream/SyncByteStream/AsyncByteStream take (content=b'')"
+rationale = "eggfetch stream classes use 'content' as the parameter name instead of 'stream'. The public stream API is preserved."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "Minimal; stream classes are rarely instantiated directly"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_response_streaming.py"]
+
+[[difference]]
+id = "STREAM-CTOR-002B"
+category = "stage-bounded"
+symbol = "SyncByteStream"
+behavior-case = "stream-constructor-differences"
+reference-behavior = "HTTPX ByteStream takes (stream=None), SyncByteStream/AsyncByteStream take (*args, **kwargs)"
+eggfetch-behavior = "eggfetch ByteStream/SyncByteStream/AsyncByteStream take (content=b'')"
+rationale = "eggfetch stream classes use 'content' as the parameter name instead of 'stream'. The public stream API is preserved."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "Minimal; stream classes are rarely instantiated directly"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_response_streaming.py"]
+
+[[difference]]
+id = "STREAM-CTOR-002C"
+category = "stage-bounded"
+symbol = "AsyncByteStream"
 behavior-case = "stream-constructor-differences"
 reference-behavior = "HTTPX ByteStream takes (stream=None), SyncByteStream/AsyncByteStream take (*args, **kwargs)"
 eggfetch-behavior = "eggfetch ByteStream/SyncByteStream/AsyncByteStream take (content=b'')"

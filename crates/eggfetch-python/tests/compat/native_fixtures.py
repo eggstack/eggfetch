@@ -6,10 +6,17 @@ Fixtures expose synchronization barriers rather than relying on sleeps.
 import http.server
 import json
 import socket
+import socketserver
 import threading
 import time
 from contextlib import contextmanager
 from typing import Generator
+
+
+class _ThreadedHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
+    daemon_threads = True
+    allow_reuse_address = True
+    request_queue_size = 32
 
 
 class DelayedResponseHandler(http.server.BaseHTTPRequestHandler):
@@ -78,18 +85,8 @@ def local_http_server(
     handler_class=DelayedResponseHandler,
 ) -> Generator[tuple[str, int], None, None]:
     """Start a local HTTP server and yield (host, port)."""
-    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    server.bind(("127.0.0.1", 0))
-    server.listen(5)
-    port = server.getsockname()[1]
-
-    httpd = http.server.HTTPServer(
-        ("127.0.0.1", port), handler_class, bind_and_activate=False
-    )
-    httpd.socket = server
-    httpd.server_name = "127.0.0.1"
-    httpd.server_port = port
+    httpd = _ThreadedHTTPServer(("127.0.0.1", 0), handler_class)
+    port = httpd.server_address[1]
 
     thread = threading.Thread(target=httpd.serve_forever, daemon=True)
     thread.start()
@@ -98,7 +95,6 @@ def local_http_server(
         yield "127.0.0.1", port
     finally:
         httpd.shutdown()
-        server.close()
 
 
 @contextmanager

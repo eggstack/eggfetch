@@ -54,8 +54,9 @@ class _Handler(http.server.BaseHTTPRequestHandler):
         pass  # suppress request logs
 
 
-class _QuietTCPServer(socketserver.TCPServer):
+class _QuietTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     allow_reuse_address = True
+    daemon_threads = True
 
 
 @pytest.fixture(scope="session")

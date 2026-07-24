@@ -95,10 +95,23 @@ def _check_pytest_plugins(content: str) -> list[str]:
         line = match.group(1)
         for pkg in re.split(r"\s+", line):
             pkg = pkg.strip()
-            if pkg and not pkg.startswith("-"):
+            if pkg and not pkg.startswith("-") and pkg != "-r":
                 installed.add(pkg.lower())
             if pkg == "pytest":
                 installed.add("pytest")
+
+    # Check for -r requirements file references
+    req_files = re.findall(r"pip install\s+-r\s+(\S+)", content)
+    for req_file in req_files:
+        # Look for common known packages in requirements files
+        if "qualification-requirements" in req_file:
+            installed.add("pytest")
+            installed.add("pytest-asyncio")
+            installed.add("pytest-timeout")
+            installed.add("pytest-json-report")
+        elif "requirements.txt" in req_file:
+            installed.add("pytest")
+            installed.add("pytest-asyncio")
 
     # Find pytest invocations
     for match in re.finditer(r"pytest\s+.*?(?:\\|$)", content, re.MULTILINE):

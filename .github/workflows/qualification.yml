@@ -413,8 +413,8 @@ jobs:
         run: |
           python -m venv .venv
           source .venv/bin/activate
+          pip install -r compat/qualification-requirements.txt
           pip install -r compat/httpx/0.28.1/requirements.txt
-          pip install pytest pytest-asyncio pytest-timeout
           pip install dist/eggfetch-wheel/*.whl
 
       - name: Validate compatibility profile
@@ -584,7 +584,7 @@ jobs:
 
       - name: Run compat tests with shim
         run: |
-          /tmp/shim-test-venv/bin/pip install pytest pytest-asyncio pytest-timeout
+          /tmp/shim-test-venv/bin/pip install -r compat/qualification-requirements.txt
           EGGFETCH_COMPAT_REQUIRED=1 /tmp/shim-test-venv/bin/pytest \
             crates/eggfetch-python/tests/compat/ -v --strict-markers --timeout=30
 
@@ -644,7 +644,7 @@ jobs:
         run: |
           python -m venv .venv
           source .venv/bin/activate
-          pip install pytest pytest-asyncio pytest-timeout
+          pip install -r compat/qualification-requirements.txt
           pip install -r compat/httpx/0.28.1/requirements.txt
           pip install dist/eggfetch-wheel/*.whl
 
@@ -685,6 +685,32 @@ jobs:
               hashes[name] = h
           json.dump({'hashes': hashes}, open('/tmp/artifact-hashes.json', 'w'), indent=2)
           "
+
+      - name: Verify artifact integrity
+        run: |
+          python - <<'PYEOF'
+          import hashlib, glob, json, sys
+
+          with open("/tmp/artifact-hashes.json") as f:
+              recorded = json.load(f)["hashes"]
+
+          errors = []
+          for whl in glob.glob("dist/eggfetch-wheel/*.whl") + glob.glob("dist/httpx-replacement-wheel/*.whl"):
+              name = whl.split("/")[-1]
+              actual = hashlib.sha256(open(whl, "rb").read()).hexdigest()
+              if name not in recorded:
+                  errors.append(f"Artifact {name} not found in recorded hashes")
+              elif recorded[name] != actual:
+                  errors.append(f"Hash mismatch for {name}: recorded={recorded[name]} actual={actual}")
+              else:
+                  print(f"OK: {name} ({actual[:12]}...)")
+
+          if errors:
+              for e in errors:
+                  print(f"FAIL: {e}")
+              sys.exit(1)
+          print("All artifact hashes verified.")
+          PYEOF
 
       - name: Generate evidence
         run: |
@@ -766,7 +792,7 @@ jobs:
         run: |
           python -m venv .venv
           source .venv/bin/activate
-          pip install pytest pytest-asyncio pytest-timeout
+          pip install -r compat/qualification-requirements.txt
           pip install dist/eggfetch-wheel/*.whl
 
       - name: Run soak and lifecycle tests
@@ -917,6 +943,80 @@ jobs:
     if: ${{ always() }}
     needs: [verify, build-artifacts, build-wheels, build-sdist, validate-content, wheel-smoke, compat-tests, downstream-substitution, shim-substitution, generate-evidence, soak-resource, check-structure]
     steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+
+      - name: Download evidence artifact
+        if: needs.generate-evidence.result == 'success'
+        uses: actions/download-artifact@v4
+        with:
+          path: evidence
+          name: qualification-evidence
+
+      - name: Validate evidence independently
+        if: needs.generate-evidence.result == 'success'
+        run: |
+          python scripts/validate_compatibility_evidence.py evidence/compatibility-evidence.json
+
+      - name: Validate downstream matrix matches manifest
+        run: |
+          python - <<'PYEOF'
+          import tomllib, sys, re
+
+          # Parse CI matrix from workflow
+          with open(".github/workflows/qualification.yml") as f:
+              content = f.read()
+
+          # Extract downstream matrix packages
+          matrix_match = re.search(
+              r'downstream-substitution:.*?matrix:\s*\n\s*package:\s*\n((?:\s*-\s*\w[\w-]*\n)+)',
+              content, re.DOTALL
+          )
+          if not matrix_match:
+              print("WARNING: Could not parse downstream matrix from workflow")
+              sys.exit(0)
+
+          ci_packages = set()
+          for line in matrix_match.group(1).strip().split("\n"):
+              pkg = line.strip().lstrip("- ").strip()
+              if pkg:
+                  ci_packages.add(pkg)
+
+          # Parse manifest
+          with open("compat/downstream/manifest.toml", "rb") as f:
+              manifest = tomllib.load(f)
+
+          required_packages = set()
+          all_packages = set()
+          for pkg in manifest.get("package", []):
+              all_packages.add(pkg["name"])
+              if pkg.get("usage") == "required":
+                  required_packages.add(pkg["name"])
+
+          errors = []
+
+          # Check required packages are in CI matrix
+          missing_required = required_packages - ci_packages
+          if missing_required:
+              errors.append(f"Required manifest packages missing from CI matrix: {sorted(missing_required)}")
+
+          # Check CI matrix packages exist in manifest
+          extra_ci = ci_packages - all_packages
+          if extra_ci:
+              errors.append(f"CI matrix packages not in manifest: {sorted(extra_ci)}")
+
+          if errors:
+              for e in errors:
+                  print(f"FAIL: {e}")
+              sys.exit(1)
+
+          print(f"CI matrix matches manifest. Required: {sorted(required_packages)}, CI: {sorted(ci_packages)}")
+          PYEOF
+
       - name: Evaluate qualification results
         run: |
           python - <<'PYEOF'
@@ -959,6 +1059,16 @@ jobs:
               with open(step_summary, "a") as f:
                   f.write(summary + "\n")
 
+          # Write gate result artifact
+          gate_result = {
+              "overall_pass": len(errors) == 0,
+              "jobs": jobs,
+              "errors": errors,
+              "sha": "${{ needs.verify.outputs.sha }}",
+          }
+          with open("/tmp/job-result-gate.json", "w") as f:
+              json.dump(gate_result, f, indent=2)
+
           if errors:
               for err in errors:
                   print(f"FAIL: {err}")
@@ -972,5 +1082,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: qualification-summary
-          path: /tmp/qual-*.json
+          path: /tmp/job-result-gate.json
           retention-days: 30
