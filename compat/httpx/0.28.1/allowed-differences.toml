@@ -1734,6 +1734,25 @@ review-milestone = "stage-d"
 tests = ["test_config_objects.py"]
 non_expiring = true
 [[difference]]
+id = "CODES-KIND-001-11"
+category = "stage-bounded"
+symbol = "codes"
+difference-type = "variadic-shape"
+member = "__init__"
+reference = "{'parameters': [{'name': 'self', 'kind': 'POSITIONAL_OR_KEYWORD'}, {'name': 'args', 'kind': 'VAR_POSITIONAL'}, {'name': 'kwds', 'kind': 'VAR_KEYWORD'}], 'return_annotation': None}"
+candidate = "None"
+behavior-case = "codes-type-difference"
+reference-behavior = "HTTPX codes is an IntEnum class with methods like as_integer_ratio, bit_count, etc."
+eggfetch-behavior = "eggfetch codes is a plain constant namespace with integer values"
+rationale = "Python 3.11+ exposes the HTTPX IntEnum constructor with a different inspect.signature shape; eggfetch intentionally remains a plain status-code namespace."
+compatibility-stage-impact = "stage-c"
+security-improvement = "false"
+migration-impact = "Minimal; codes.OK == 200 works the same way"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_config_objects.py"]
+non_expiring = true
+[[difference]]
 id = "CODES-KIND-001-3"
 category = "stage-bounded"
 symbol = "codes"
