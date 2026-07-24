@@ -11,14 +11,22 @@ if TYPE_CHECKING:
 class HTTPError(Exception):
     """Base exception for HTTPX-compatible errors."""
 
-    def __init__(self, message: str, *, request: Request | None = None) -> None:
+    def __init__(self, message: str) -> None:
         self.message = message
-        self._request = request
+        self._request: Request | None = None
         super().__init__(self.message)
 
     @property
-    def request(self) -> Request | None:
+    def request(self) -> Request:
+        if self._request is None:
+            raise RuntimeError(
+                "The request instance has not been set on this exception."
+            )
         return self._request
+
+    @request.setter
+    def request(self, request: Request) -> None:
+        self._request = request
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}({self.message!r})"
@@ -34,7 +42,8 @@ class HTTPStatusError(HTTPError):
         request: Request | None = None,
         response: object | None = None,
     ) -> None:
-        super().__init__(message=message, request=request)
+        super().__init__(message)
+        self._request = request
         self.response = response
 
     def __repr__(self) -> str:
@@ -47,9 +56,20 @@ class HTTPStatusError(HTTPError):
 class RequestError(HTTPError):
     """Base exception for request-related errors."""
 
+    def __init__(
+        self, message: str, *, request: Request | None = None
+    ) -> None:
+        super().__init__(message)
+        self._request = request
+
 
 class TransportError(RequestError):
     """Base exception for transport-related errors."""
+
+    def __init__(
+        self, message: str, *, request: Request | None = None
+    ) -> None:
+        super().__init__(message, request=request)
 
 
 class TimeoutException(TransportError):
