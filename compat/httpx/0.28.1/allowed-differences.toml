@@ -288,7 +288,7 @@ tests = ["test_url_query.py"]
 
 [[difference]]
 id = "AUTH-FLOW-INTERNAL-001"
-category = "stage-bounded"
+category = "resolved"
 symbol = "Auth"
 behavior-case = "auth-internal-methods"
 reference-behavior = "HTTPX Auth exposes async_auth_flow and sync_auth_flow methods"
@@ -707,36 +707,6 @@ review-milestone = "stage-d"
 tests = ["test_transports.py"]
 
 [[difference]]
-id = "TRANSPORT-PARAMS-001C"
-category = "stage-bounded"
-symbol = "BaseTransport"
-behavior-case = "transport-constructor-params"
-reference-behavior = "HTTPX transport classes accept ssl_context, socket_options, local_address parameters"
-eggfetch-behavior = "eggfetch transport classes accept core parameters (verify, cert, proxy, limits, http1, http2, trust_env)"
-rationale = "eggfetch handles TLS configuration through the native Rust engine. The Python transport API exposes the essential parameters."
-compatibility-stage-impact = "stage-c"
-security-improvement = false
-migration-impact = "Minimal; ssl_context and socket_options are rarely customized"
-owner = "eggfetch-team"
-review-milestone = "stage-d"
-tests = ["test_transports.py"]
-
-[[difference]]
-id = "TRANSPORT-PARAMS-001D"
-category = "stage-bounded"
-symbol = "AsyncBaseTransport"
-behavior-case = "transport-constructor-params"
-reference-behavior = "HTTPX transport classes accept ssl_context, socket_options, local_address parameters"
-eggfetch-behavior = "eggfetch transport classes accept core parameters (verify, cert, proxy, limits, http1, http2, trust_env)"
-rationale = "eggfetch handles TLS configuration through the native Rust engine. The Python transport API exposes the essential parameters."
-compatibility-stage-impact = "stage-c"
-security-improvement = false
-migration-impact = "Minimal; ssl_context and socket_options are rarely customized"
-owner = "eggfetch-team"
-review-milestone = "stage-d"
-tests = ["test_transports.py"]
-
-[[difference]]
 id = "TRANSPORT-PARAMS-001E"
 category = "stage-bounded"
 symbol = "ASGITransport"
@@ -1032,6 +1002,111 @@ rationale = "Extra properties are additive and do not conflict with HTTPX's API 
 compatibility-stage-impact = "stage-c"
 security-improvement = false
 migration-impact = "None; extra properties are additive"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = []
+
+[[difference]]
+id = "STREAM-ERROR-BASE-001"
+category = "stage-bounded"
+symbol = "StreamError"
+behavior-case = "exception-base-class"
+reference-behavior = "HTTPX StreamError inherits from RuntimeError"
+eggfetch-behavior = "eggfetch StreamError inherits from Exception"
+rationale = "eggfetch uses Exception as the base for stream errors. The public API contract is preserved."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "Minimal; catch StreamError still works"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_exceptions.py"]
+
+[[difference]]
+id = "STREAM-ERROR-SIG-004"
+category = "stage-bounded"
+symbol = "StreamError"
+behavior-case = "stream-error-constructor"
+reference-behavior = "HTTPX StreamError takes no arguments: StreamError()"
+eggfetch-behavior = "eggfetch StreamError accepts (*args) for compatibility"
+rationale = "eggfetch StreamError accepts *args for flexibility. Calling with no arguments still works."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "None; both patterns work"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_exceptions.py"]
+
+[[difference]]
+id = "EGGFETCH-EXTRA-SYMBOLS-001"
+category = "stage-bounded"
+symbol = "get_compatibility_info"
+behavior-case = "extra-symbol"
+reference-behavior = "HTTPX does not expose get_compatibility_info"
+eggfetch-behavior = "eggfetch exposes get_compatibility_info for runtime diagnostics"
+rationale = "eggfetch-specific diagnostic function for checking compatibility status."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "None; additive"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = []
+
+[[difference]]
+id = "EGGFETCH-EXTRA-SYMBOLS-002"
+category = "stage-bounded"
+symbol = "diagnostics_summary"
+behavior-case = "extra-symbol"
+reference-behavior = "HTTPX does not expose diagnostics_summary"
+eggfetch-behavior = "eggfetch exposes diagnostics_summary for runtime diagnostics"
+rationale = "eggfetch-specific diagnostic function for checking compatibility status."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "None; additive"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = []
+
+[[difference]]
+id = "EGGFETCH-EXTRA-SYMBOLS-003"
+category = "stage-bounded"
+symbol = "CompatibilityInfo"
+behavior-case = "extra-symbol"
+reference-behavior = "HTTPX does not expose CompatibilityInfo"
+eggfetch-behavior = "eggfetch exposes CompatibilityInfo for runtime diagnostics"
+rationale = "eggfetch-specific dataclass for compatibility status information."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "None; additive"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = []
+
+[[difference]]
+id = "EGGFETCH-EXTRA-SYMBOLS-004"
+category = "stage-bounded"
+symbol = "COMPATIBILITY_INFO"
+behavior-case = "extra-symbol"
+reference-behavior = "HTTPX does not expose COMPATIBILITY_INFO"
+eggfetch-behavior = "eggfetch exposes COMPATIBILITY_INFO as a module-level constant"
+rationale = "eggfetch-specific constant for compatibility status information."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "None; additive"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = []
+
+[[difference]]
+id = "EGGFETCH-EXTRA-SYMBOLS-005"
+category = "stage-bounded"
+symbol = "_build_response"
+behavior-case = "extra-symbol"
+reference-behavior = "HTTPX does not expose _build_response"
+eggfetch-behavior = "eggfetch exposes _build_response as a module-level function"
+rationale = "eggfetch-specific internal function for building response objects."
+compatibility-stage-impact = "stage-c"
+security-improvement = false
+migration-impact = "None; additive"
 owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = []
