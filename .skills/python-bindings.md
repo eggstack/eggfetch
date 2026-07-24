@@ -90,9 +90,10 @@ from eggfetch.compat.httpx import Client, AsyncClient, Request, Response
 - Lossless merge semantics (`crates/eggfetch-python/tests/compat/test_merge_lossless.py`)
 - Separate sync/async auth drivers
 - Behavioral downstream fixtures (`compat/downstream/behavioral_fixtures/`)
-- Native lifecycle proof fixtures (`test_native_timeout_classification.py`, `test_soak.py`)
+- Native lifecycle proof fixtures (`test_native_timeout_classification.py`, `test_soak.py`, proxy and TLS tests)
 - Qualification workflow validation (`scripts/validate_qualification_workflow.py`)
 - Evidence validation (`scripts/validate_compatibility_evidence.py`)
+- Versioned result contracts (`scripts/normalize_pytest_result.py`, `scripts/generate_artifact_manifest.py`)
 
 **Testing the compat layer:**
 
@@ -116,7 +117,10 @@ python scripts/generate_httpx_api_manifest.py --package eggfetch --output /tmp/e
 python scripts/compare_httpx_api_manifest.py \
   --reference /tmp/httpx.json \
   --candidate /tmp/eggfetch.json \
-  --allowed compat/httpx/0.28.1/allowed-differences.toml
+  --allowed compat/httpx/0.28.1/allowed-differences.toml \
+  --resolved compat/httpx/0.28.1/resolved-differences.toml \
+  --artifact-manifest /tmp/artifact-manifest.json \
+  --candidate-identity /tmp/candidate-identity.json
 ```
 
 ## Architecture Reference

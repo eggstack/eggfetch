@@ -7,12 +7,20 @@ artifacts produced by prior CI jobs and fails hard on missing, stale, or
 failed results.
 
 Usage:
-    generate_compatibility_evidence.py \
-        --compat-test-results <path> \
-        --downstream-results <path> \
-        --api-comparison-results <path> \
-        --candidate-sha <40-char-sha> \
-        --artifact-hashes <path> \
+    generate_compatibility_evidence.py \\
+        --compat-test-results <path> \\
+        --downstream-results <path> \\
+        --api-comparison-results <path> \\
+        --candidate-sha <40-char-sha> \\
+        --artifact-hashes <path> \\
+        [--artifact-manifest <path>] \\
+        [--candidate-identity <path>] \\
+        [--native-timeout-results <path>] \\
+        [--proxy-tls-results <path>] \\
+        [--shutdown-results <path>] \\
+        [--resource-results <path>] \\
+        [--soak-results <path>] \\
+        [--workflow-validation-results <path>] \\
         --output <path>
 
 All result files are required. The generator verifies:
@@ -130,10 +138,20 @@ def _platform_info() -> dict[str, str]:
 
 
 def _load_compat_test_results(path: Path, candidate_sha: str) -> dict[str, Any]:
-    """Load and validate compat test results."""
+    """Load and validate compat test results.
+
+    Accepts both:
+    - Raw pytest JSON schema (with ``total``, ``passed``, ``failures``, ``errors``)
+    - Normalized schema (with ``metrics.collected``, ``metrics.passed``, etc.)
+    """
     data = _load_json(path, "compat-test-results")
 
-    result_sha = data.get("candidate_sha") or data.get("sha") or data.get("commit")
+    result_sha = (
+        data.get("candidate_sha")
+        or data.get("sha")
+        or data.get("commit")
+        or (data.get("candidate_identity", {}).get("candidate_sha"))
+    )
     if result_sha:
         result_sha = str(result_sha).strip()
         if result_sha != candidate_sha:
@@ -144,10 +162,19 @@ def _load_compat_test_results(path: Path, candidate_sha: str) -> dict[str, Any]:
 
     _check_placeholder(data, "root", "compat-test-results")
 
-    total = data.get("total", 0)
-    passed = data.get("passed", 0)
-    failures = data.get("failures", 0)
-    errors = data.get("errors", 0)
+    # Support normalized schema (metrics.collected, metrics.passed, etc.)
+    metrics = data.get("metrics")
+    if isinstance(metrics, dict):
+        total = metrics.get("collected", 0)
+        passed = metrics.get("passed", 0)
+        failures = metrics.get("failed", 0)
+        errors_count = metrics.get("errors", 0)
+    else:
+        # Raw pytest schema
+        total = data.get("total", 0)
+        passed = data.get("passed", 0)
+        failures = data.get("failures", 0)
+        errors_count = data.get("errors", 0)
 
     if not isinstance(total, int) or total < 0:
         _fail(f"compat-test-results: 'total' must be a non-negative integer, got {total!r}")
@@ -155,14 +182,20 @@ def _load_compat_test_results(path: Path, candidate_sha: str) -> dict[str, Any]:
         _fail(f"compat-test-results: 'passed' must be a non-negative integer, got {passed!r}")
     if not isinstance(failures, int) or failures < 0:
         _fail(f"compat-test-results: 'failures' must be a non-negative integer, got {failures!r}")
-    if not isinstance(errors, int) or errors < 0:
-        _fail(f"compat-test-results: 'errors' must be a non-negative integer, got {errors!r}")
+    if not isinstance(errors_count, int) or errors_count < 0:
+        _fail(f"compat-test-results: 'errors' must be a non-negative integer, got {errors_count!r}")
 
-    if total > 0 and passed + failures + errors != total:
+    if total > 0 and passed + failures + errors_count != total:
         _fail(
             f"compat-test-results: passed({passed}) + failures({failures}) + "
-            f"errors({errors}) != total({total})"
+            f"errors({errors_count}) != total({total})"
         )
+
+    # Normalize output to consistent schema
+    data["total"] = total
+    data["passed"] = passed
+    data["failures"] = failures
+    data["errors"] = errors_count
 
     return data
 
@@ -288,6 +321,33 @@ def _compute_overall_pass(
     return compat_pass and downstream_pass and api_pass and artifacts_pass
 
 
+def _load_artifact_manifest(path: Path) -> dict[str, Any]:
+    """Load and validate artifact manifest for hash verification."""
+    data = _load_json(path, "artifact-manifest")
+    if "artifacts" not in data:
+        _fail("artifact-manifest: missing 'artifacts' field")
+    if not isinstance(data["artifacts"], list):
+        _fail("artifact-manifest: 'artifacts' must be a list")
+    return data
+
+
+def _load_candidate_identity(path: Path) -> dict[str, Any]:
+    """Load and validate candidate identity."""
+    data = _load_json(path, "candidate-identity")
+    required = ["schema_version", "candidate_sha"]
+    for field in required:
+        if field not in data:
+            _fail(f"candidate-identity: missing required field '{field}'")
+    return data
+
+
+def _load_result_section(path: Path, label: str) -> dict[str, Any]:
+    """Load and validate a generic result section."""
+    data = _load_json(path, label)
+    _check_placeholder(data, "root", label)
+    return data
+
+
 def generate_evidence(
     compat_test_results_path: Path,
     downstream_results_path: Path,
@@ -295,6 +355,14 @@ def generate_evidence(
     candidate_sha: str,
     artifact_hashes_path: Path,
     output_path: Path,
+    artifact_manifest_path: Path | None = None,
+    candidate_identity_path: Path | None = None,
+    native_timeout_results_path: Path | None = None,
+    proxy_tls_results_path: Path | None = None,
+    shutdown_results_path: Path | None = None,
+    resource_results_path: Path | None = None,
+    soak_results_path: Path | None = None,
+    workflow_validation_results_path: Path | None = None,
 ) -> dict[str, Any]:
     """Generate evidence by consuming explicit result files."""
     _validate_sha(candidate_sha, "candidate-sha")
@@ -302,7 +370,23 @@ def generate_evidence(
     compat_data = _load_compat_test_results(compat_test_results_path, candidate_sha)
     downstream_data = _load_downstream_results(downstream_results_path, candidate_sha)
     api_data = _load_api_comparison_results(api_comparison_results_path, candidate_sha)
-    artifact_data = _load_artifact_hashes(artifact_hashes_path)
+
+    # Load artifact manifest if provided (for hash verification)
+    artifact_manifest_data = None
+    if artifact_manifest_path and artifact_manifest_path.exists():
+        artifact_manifest_data = _load_artifact_manifest(artifact_manifest_path)
+
+    # Use artifact manifest hashes if available, otherwise use artifact_hashes file
+    if artifact_manifest_data and "artifacts" in artifact_manifest_data:
+        # Build hashes dict from manifest
+        manifest_hashes = {}
+        for art in artifact_manifest_data["artifacts"]:
+            if "name" in art and "sha256" in art:
+                manifest_hashes[art["name"]] = art["sha256"]
+        artifact_data = {"hashes": manifest_hashes}
+    else:
+        artifact_data = _load_artifact_hashes(artifact_hashes_path)
+
     artifact_verification = _verify_artifact_hashes(artifact_data["hashes"])
 
     all_artifacts_valid = all(
@@ -311,6 +395,36 @@ def generate_evidence(
     if not all_artifacts_valid:
         failed = [k for k, v in artifact_verification.items() if not v.get("matches")]
         _fail(f"Artifact hash verification failed for: {', '.join(failed)}")
+
+    # Load optional result sections
+    native_timeout_data = None
+    if native_timeout_results_path and native_timeout_results_path.exists():
+        native_timeout_data = _load_result_section(native_timeout_results_path, "native-timeout-results")
+
+    proxy_tls_data = None
+    if proxy_tls_results_path and proxy_tls_results_path.exists():
+        proxy_tls_data = _load_result_section(proxy_tls_results_path, "proxy-tls-results")
+
+    shutdown_data = None
+    if shutdown_results_path and shutdown_results_path.exists():
+        shutdown_data = _load_result_section(shutdown_results_path, "shutdown-results")
+
+    resource_data = None
+    if resource_results_path and resource_results_path.exists():
+        resource_data = _load_result_section(resource_results_path, "resource-results")
+
+    soak_data = None
+    if soak_results_path and soak_results_path.exists():
+        soak_data = _load_result_section(soak_results_path, "soak-results")
+
+    workflow_validation_data = None
+    if workflow_validation_results_path and workflow_validation_results_path.exists():
+        workflow_validation_data = _load_result_section(workflow_validation_results_path, "workflow-validation-results")
+
+    # Load candidate identity if provided
+    candidate_identity_data = None
+    if candidate_identity_path and candidate_identity_path.exists():
+        candidate_identity_data = _load_candidate_identity(candidate_identity_path)
 
     overall_pass = _compute_overall_pass(
         compat_data, downstream_data, api_data, artifact_verification
@@ -348,6 +462,24 @@ def generate_evidence(
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }
 
+    # Add optional result sections
+    if native_timeout_data is not None:
+        evidence["native_timeout_results"] = native_timeout_data
+    if proxy_tls_data is not None:
+        evidence["proxy_tls_results"] = proxy_tls_data
+    if shutdown_data is not None:
+        evidence["shutdown_results"] = shutdown_data
+    if resource_data is not None:
+        evidence["resource_results"] = resource_data
+    if soak_data is not None:
+        evidence["soak_results"] = soak_data
+    if workflow_validation_data is not None:
+        evidence["workflow_validation_results"] = workflow_validation_data
+
+    # Add candidate identity
+    if candidate_identity_data is not None:
+        evidence["candidate_identity"] = candidate_identity_data
+
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(evidence, indent=2) + "\n")
     return evidence
@@ -378,6 +510,38 @@ def main() -> None:
         help="Path to artifact hash manifest JSON",
     )
     parser.add_argument(
+        "--artifact-manifest", default=None,
+        help="Path to artifact-manifest.json for hash verification (overrides --artifact-hashes)",
+    )
+    parser.add_argument(
+        "--candidate-identity", default=None,
+        help="Path to candidate-identity.json to embed in evidence",
+    )
+    parser.add_argument(
+        "--native-timeout-results", default=None,
+        help="Path to native timeout classification results JSON",
+    )
+    parser.add_argument(
+        "--proxy-tls-results", default=None,
+        help="Path to proxy/TLS results JSON",
+    )
+    parser.add_argument(
+        "--shutdown-results", default=None,
+        help="Path to shutdown lifecycle results JSON",
+    )
+    parser.add_argument(
+        "--resource-results", default=None,
+        help="Path to resource regression results JSON",
+    )
+    parser.add_argument(
+        "--soak-results", default=None,
+        help="Path to soak test results JSON",
+    )
+    parser.add_argument(
+        "--workflow-validation-results", default=None,
+        help="Path to workflow validation results JSON",
+    )
+    parser.add_argument(
         "--output", default="compatibility-evidence.json",
         help="Output JSON path (default: compatibility-evidence.json)",
     )
@@ -390,6 +554,14 @@ def main() -> None:
         candidate_sha=args.candidate_sha,
         artifact_hashes_path=Path(args.artifact_hashes),
         output_path=Path(args.output),
+        artifact_manifest_path=Path(args.artifact_manifest) if args.artifact_manifest else None,
+        candidate_identity_path=Path(args.candidate_identity) if args.candidate_identity else None,
+        native_timeout_results_path=Path(args.native_timeout_results) if args.native_timeout_results else None,
+        proxy_tls_results_path=Path(args.proxy_tls_results) if args.proxy_tls_results else None,
+        shutdown_results_path=Path(args.shutdown_results) if args.shutdown_results else None,
+        resource_results_path=Path(args.resource_results) if args.resource_results else None,
+        soak_results_path=Path(args.soak_results) if args.soak_results else None,
+        workflow_validation_results_path=Path(args.workflow_validation_results) if args.workflow_validation_results else None,
     )
     print(f"Evidence written to {args.output}")
     print(f"Candidate SHA: {evidence['candidate_sha']}")

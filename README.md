@@ -89,16 +89,19 @@ client = Client()
 response = client.get("https://example.com")
 ```
 
-Phases 0 through 6 are implemented. The final qualification pass applies:
+Phases 0 through 6 are implemented. The corrective closure pass applies:
 
-- **Typed API oracle with exact difference matching** — API manifest comparison produces structured difference records; `allowed-differences.toml` gates CI enforcement.
+- **Typed API oracle with exact difference matching** — API manifest comparison produces structured difference records; `allowed-differences.toml` gates CI enforcement; `resolved-differences.toml` tracks historical entries.
 - **Lossless header and query merge** — header and query parameter merge preserves order and duplicates across all transport paths.
 - **Sync/async auth dispatch** — `Auth` base class routes to separate sync and async implementations independently.
-- **Native lifecycle proof fixtures** — timeout classification, soak, and lifecycle tests validate engine behavior under load.
-- **Behavioral downstream portfolio** — `compat/downstream/behavioral_fixtures/` exercises real consumer patterns with pinned sources and enforced minimum counts.
+- **Native lifecycle proof fixtures** — timeout classification, soak, proxy, and TLS tests validate engine behavior under load with deterministic native proofs.
+- **Fail-closed downstream execution** — behavioral downstream portfolio with pinned sources, enforced minimum counts, and diagnostic codes.
+- **Exact typed API-oracle waiver governance** — structured difference records with typed tuples for CI enforcement.
+- **Versioned result contracts** — `scripts/normalize_pytest_result.py` and `scripts/generate_artifact_manifest.py` produce versioned release evidence.
+- **Candidate identity propagation** — identity manifest flows through all release-blocking artifacts.
 - **Qualification workflow with evidence validation** — `scripts/validate_qualification_workflow.py` and `scripts/validate_compatibility_evidence.py` enforce evidence provenance.
 
-The compatibility stage is **Stage C candidate** (asyncio drop-in). See [`plans/httpx-drop-in-verification-substitution-and-lifecycle-corrective-closure.md`](plans/httpx-drop-in-verification-substitution-and-lifecycle-corrective-closure.md) for the corrective closure plan and release qualification evidence.
+The compatibility stage is **Stage C candidate** (asyncio drop-in). See [`plans/httpx-drop-in-qualification-integrity-and-native-proof-corrective-closure.md`](plans/httpx-drop-in-qualification-integrity-and-native-proof-corrective-closure.md) for the corrective closure plan and release qualification evidence.
 
 Runtime diagnostics are available:
 
@@ -109,7 +112,7 @@ print(diagnostics_summary())
 
 Key differences from upstream HTTPX:
 
-- **Redirect default**: eggfetch does NOT follow redirects by default (security-first)
+- **Redirect default**: eggfetch does NOT follow redirects by default (security-first). Note: HTTPX 0.28.1 also defaults to `follow_redirects=False`, so this is NOT an eggfetch-specific divergence.
 - **Trio/AnyIO**: Not supported (asyncio only, tokio-based)
 - **SOCKS proxy**: Not supported
 - **Package naming**: eggfetch is a separately-named distribution; it does not shadow `httpx`

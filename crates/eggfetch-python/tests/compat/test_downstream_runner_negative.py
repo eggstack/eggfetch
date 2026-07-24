@@ -149,8 +149,9 @@ class TestManifestSchemaV2:
             import tomli as tomllib
         with open(MANIFEST_PATH, "rb") as f:
             data = tomllib.load(f)
-        # Packages that are test frameworks/SDKs without shipped tests
-        EXEMPT = {"pytest-httpx", "anthropic", "groq", "httpx-auth", "httpx-ws"}
+        # Packages exempted from import-only check (SDKs requiring network or
+        # without runnable test suites in isolation)
+        EXEMPT = {"anthropic", "groq"}
         errors = []
         for pkg in data.get("package", []):
             if pkg.get("usage") != "required":
@@ -179,6 +180,25 @@ class TestManifestSchemaV2:
                 errors.append(f"{pkg['name']}: missing source-type")
             if not pkg.get("source-locator"):
                 errors.append(f"{pkg['name']}: missing source-locator")
+        assert not errors, "\n".join(errors)
+
+    def test_required_entries_have_source_hash(self):
+        """All required entries must have a non-empty source-hash."""
+        try:
+            import tomllib
+        except ModuleNotFoundError:
+            import tomli as tomllib
+        with open(MANIFEST_PATH, "rb") as f:
+            data = tomllib.load(f)
+        errors = []
+        for pkg in data.get("package", []):
+            if pkg.get("usage") != "required":
+                continue
+            source_hash = pkg.get("source-hash", "")
+            if not source_hash:
+                errors.append(f"{pkg['name']}: missing source-hash")
+            elif len(source_hash) != 64 or not all(c in "0123456789abcdef" for c in source_hash):
+                errors.append(f"{pkg['name']}: source-hash is not a valid SHA-256: {source_hash!r}")
         assert not errors, "\n".join(errors)
 
     def test_required_entries_have_category_ids(self):

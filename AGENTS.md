@@ -47,11 +47,18 @@ python scripts/validate_compatibility_evidence.py evidence.json
 python scripts/validate_qualification_workflow.py
 python scripts/candidate_identity.py identity.json
 
+# Artifact normalization
+python scripts/normalize_pytest_result.py --input /tmp/test-results.json --output /tmp/test-results-contract.json
+python scripts/generate_artifact_manifest.py --wheel dist/*.whl --output /tmp/artifact-manifest.json
+
 # API oracle with typed differences
 python scripts/compare_httpx_api_manifest.py \
   --reference compat/httpx/0.28.1/reference-api.json \
   --candidate /tmp/eggfetch-api.json \
   --allowed compat/httpx/0.28.1/allowed-differences.toml \
+  --resolved compat/httpx/0.28.1/resolved-differences.toml \
+  --artifact-manifest /tmp/artifact-manifest.json \
+  --candidate-identity /tmp/candidate-identity.json \
   --validate
 
 # Lossless merge tests
@@ -116,14 +123,16 @@ The `eggfetch.compat.httpx` module provides an HTTPX 0.28.1-compatible asyncio f
 from eggfetch.compat.httpx import Client, AsyncClient, Request, Response, URL, Headers, Cookies
 ```
 
-The compatibility stage is **Stage C candidate** (asyncio drop-in). Phases 0 through 6 are implemented. The final qualification pass applies:
+The compatibility stage is **Stage C candidate** (asyncio drop-in). Phases 0 through 6 are implemented. The corrective closure pass applies:
 
 - **Schema v3 candidate identity** — `scripts/candidate_identity.py` validates the identity schema against the reference profile.
-- **Typed difference records** — API oracle produces structured difference records; `allowed-differences.toml` gates CI enforcement.
+- **Typed difference records** — API oracle produces structured difference records; `allowed-differences.toml` gates CI enforcement; `resolved-differences.toml` tracks historical/behavioral entries separate from the active allowlist.
 - **Lossless merge semantics** — header and query parameter merge preserves order and duplicates across transports.
 - **Separate sync/async auth drivers** — `Auth` base class dispatches to sync and async implementations independently.
 - **Behavioral downstream fixtures** — `compat/downstream/behavioral_fixtures/` exercises real consumer patterns.
-- **Native lifecycle proof fixtures** — timeout classification, soak, and lifecycle tests validate engine behavior under load.
+- **Native lifecycle proof fixtures** — timeout classification, soak, proxy, and TLS tests validate engine behavior under load.
+- **Versioned result contracts** — `scripts/normalize_pytest_result.py` converts pytest output to versioned contracts; `scripts/generate_artifact_manifest.py` normalizes wheel artifacts for release evidence.
+- **Candidate identity propagation** — identity manifest flows through all release-blocking artifacts via `--candidate-identity` flag.
 
 Runtime diagnostics:
 
@@ -157,6 +166,9 @@ python scripts/compare_httpx_api_manifest.py \
   --reference compat/httpx/0.28.1/reference-api.json \
   --candidate /tmp/eggfetch-api.json \
   --allowed compat/httpx/0.28.1/allowed-differences.toml \
+  --resolved compat/httpx/0.28.1/resolved-differences.toml \
+  --artifact-manifest /tmp/artifact-manifest.json \
+  --candidate-identity /tmp/candidate-identity.json \
   --validate
 ```
 
@@ -168,7 +180,7 @@ python -m pytest compat/downstream/behavioral_fixtures/ -v
 python -m pytest crates/eggfetch-python/tests/compat/test_native_timeout_classification.py crates/eggfetch-python/tests/compat/test_soak.py -v --timeout=120
 ```
 
-See `plans/httpx-drop-in-phase-6-status.md` for release evidence.
+See `plans/httpx-drop-in-qualification-integrity-and-native-proof-corrective-closure.md` for release evidence.
 
 ## Tests
 

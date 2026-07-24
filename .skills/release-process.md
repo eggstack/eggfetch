@@ -50,6 +50,13 @@ python scripts/generate_release_manifest.py --output compatibility-manifest.json
 
 # Package content validation
 python scripts/validate_package_content.py path/to/wheel.whl
+
+# Artifact normalization
+python scripts/normalize_pytest_result.py --input /tmp/test-results.json --output /tmp/test-results-contract.json
+python scripts/generate_artifact_manifest.py --wheel dist/*.whl --output /tmp/artifact-manifest.json
+
+# Candidate identity
+python scripts/candidate_identity.py identity.json
 ```
 
 ## CI

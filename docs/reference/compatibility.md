@@ -51,7 +51,7 @@ This page tracks compatibility with requests and HTTPX across features.
 | HTTP/2 | No | Yes | Yes | Yes | Yes |
 | HTTP/3 (experimental) | No | No | Yes | Yes | Yes |
 | Cross-origin header stripping | Manual | Manual | Automatic | Automatic | Automatic |
-| Proxy env vars (HTTP_PROXY) | Yes | Yes | **No** | **No** | **No** |
+| Proxy env vars (HTTP_PROXY) | Yes | Yes | Yes | Yes | Yes |
 | Custom transports (sync/async) | No | Yes | Yes | N/A | N/A |
 | HTTP transport (HTTPTransport/AsyncHTTPTransport) | No | Yes | Yes | N/A | N/A |
 | URL-pattern mount routing (priority matching) | No | Yes | Yes | N/A | N/A |
@@ -102,9 +102,17 @@ eggfetch targets HTTPX 0.28.1 compatibility in phases. The current status:
 - **Phase 5**: Downstream validation, 12-package consumer portfolio, expanded behavior corpus, upstream test inventory, evidence reporting, performance budgets, compatibility-stage decision (Stage C)
 - **Phase 6 / Qualification Pass**: Schema v3 candidate identity, typed difference records in API oracle, lossless merge semantics, separate sync/async auth drivers, behavioral downstream fixtures, native lifecycle proof fixtures, qualification workflow with evidence validation
 
-**Current status: Stage C candidate** (asyncio drop-in). The qualification pass applies typed difference records, lossless merge semantics, and native lifecycle proof fixtures. See `scripts/candidate_identity.py`, `scripts/validate_qualification_workflow.py`, and `scripts/validate_compatibility_evidence.py` for the validation toolchain.
+**Current status: Stage C candidate** (asyncio drop-in). The corrective closure pass applies typed difference records, lossless merge semantics, native lifecycle proof fixtures (including proxy and TLS), versioned result contracts, and candidate identity propagation. See `scripts/candidate_identity.py`, `scripts/validate_qualification_workflow.py`, `scripts/validate_compatibility_evidence.py`, `scripts/normalize_pytest_result.py`, and `scripts/generate_artifact_manifest.py` for the validation toolchain.
 
 See `compat/httpx/0.28.1/` for the machine-readable profile and allowed differences.
+
+### Allowed Differences
+
+The API oracle produces structured difference records with typed tuples. Each difference is categorized as `required-now`, `required-later`, `intentional-difference`, `not-public`, or `not-applicable`. The active allowlist lives in `allowed-differences.toml` and gates CI enforcement.
+
+### Resolved Differences
+
+`resolved-differences.toml` is a separate historical ledger of previously-allowed differences that have been resolved (implemented and verified). It serves as an audit trail and must NOT appear in the active `allowed-differences.toml`. Entries are generated from the corrective closure pass and are tracked independently of the active allowlist.
 
 ### Corrected claims
 

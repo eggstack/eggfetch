@@ -8,6 +8,10 @@ max_rss_growth_bytes = 10485760  # 10MB
 max_timeout_overshoot_ms = 2000
 min_completed_operations = 50
 max_hung_operations = 0
+socket_count_delta = 10
+task_count_delta = 5
+operation_completion_count = 100
+timeout_overshoot_threshold_ms = 2000
 
 [platform.macos]
 max_fd_delta = 10
@@ -16,6 +20,10 @@ max_rss_growth_bytes = 10485760
 max_timeout_overshoot_ms = 3000
 min_completed_operations = 50
 max_hung_operations = 0
+socket_count_delta = 10
+task_count_delta = 5
+operation_completion_count = 100
+timeout_overshoot_threshold_ms = 3000
 
 [platform.windows]
 max_fd_delta = 20
@@ -24,7 +32,24 @@ max_rss_growth_bytes = 20971520  # 20MB
 max_timeout_overshoot_ms = 5000
 min_completed_operations = 50
 max_hung_operations = 0
+socket_count_delta = 20
+task_count_delta = 10
+operation_completion_count = 100
+timeout_overshoot_threshold_ms = 5000
 
 [soak]
 duration_seconds = 300
 request_count = 500
+network_policy = "allow-all"
+
+[soak.workload_mix]
+sync_get = 25
+sync_post = 10
+async_get = 25
+async_post = 10
+streaming = 10
+cancellation = 5
+redirects = 5
+auth = 5
+proxy_path = 3
+tls_path = 2

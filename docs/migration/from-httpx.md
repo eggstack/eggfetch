@@ -201,14 +201,12 @@ custom CAs into one file if you need both.
 
 ## Redirects
 
-HTTPX follows redirects by default (`follow_redirects=True`). eggfetch
-does **not** follow redirects by default.
+HTTPX 0.28.1 does **not** follow redirects by default (`follow_redirects=False`),
+and neither does eggfetch. This is **not** a divergence between the two libraries.
 
 ```python
-# HTTPX: follows by default
-r = httpx.get("https://example.com/redirect")
-
-# eggfetch: must opt in
+# Both HTTPX 0.28.1 and eggfetch: must opt in to follow redirects
+r = httpx.get("https://example.com/redirect", follow_redirects=True)
 r = eggfetch.get("https://example.com/redirect", follow_redirects=True)
 ```
 
