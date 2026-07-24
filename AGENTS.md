@@ -42,6 +42,27 @@ python scripts/generate_release_manifest.py --output compatibility-manifest.json
 # Package content validation
 python scripts/validate_package_content.py path/to/wheel.whl
 
+# Evidence and qualification validation
+python scripts/validate_compatibility_evidence.py evidence.json
+python scripts/validate_qualification_workflow.py
+python scripts/candidate_identity.py identity.json
+
+# API oracle with typed differences
+python scripts/compare_httpx_api_manifest.py \
+  --reference compat/httpx/0.28.1/reference-api.json \
+  --candidate /tmp/eggfetch-api.json \
+  --allowed compat/httpx/0.28.1/allowed-differences.toml \
+  --validate
+
+# Lossless merge tests
+python -m pytest crates/eggfetch-python/tests/compat/test_merge_lossless.py -v
+
+# Behavioral downstream fixtures
+python -m pytest compat/downstream/behavioral_fixtures/ -v
+
+# Native lifecycle and soak tests
+python -m pytest crates/eggfetch-python/tests/compat/test_native_timeout_classification.py crates/eggfetch-python/tests/compat/test_soak.py -v --timeout=120
+
 ```
 
 CI enforces `RUSTFLAGS=-D warnings`. MSRV is Rust 1.80.
@@ -89,21 +110,20 @@ The CLI enables: cookies, multipart, proxy. The Python binding enables all featu
 
 ## HTTPX Compatibility Layer
 
-The `eggfetch.compat.httpx` module provides an HTTPX 0.28.1 drop-in facade (Stage C candidate). Import it as:
+The `eggfetch.compat.httpx` module provides an HTTPX 0.28.1-compatible asyncio facade (Stage C candidate). Import it as:
 
 ```python
 from eggfetch.compat.httpx import Client, AsyncClient, Request, Response, URL, Headers, Cookies
 ```
 
-Phases 0 through 6 are implemented. A corrective evidence and semantics closure pass is in progress. The compatibility stage is **Stage C candidate** (asyncio drop-in).
+The compatibility stage is **Stage C candidate** (asyncio drop-in). Phases 0 through 6 are implemented. The final qualification pass applies:
 
-- Phase 0: compatibility contract
-- Phase 1: production semantics
-- Phase 2: value objects, request/response, exception hierarchy, client constructors, merge semantics
-- Phase 3: streaming and bodies
-- Phase 4: transports, mounts, auth, hooks, WSGI/ASGI
-- Phase 5: downstream validation, behavior corpus, evidence reporting, compatibility-stage decision
-- Phase 6 / Corrective Pass: evidence reset, oracle repair, downstream validation rebuild, timeout/auth/streaming/merge semantics fixes, CI governance
+- **Schema v3 candidate identity** — `scripts/candidate_identity.py` validates the identity schema against the reference profile.
+- **Typed difference records** — API oracle produces structured difference records; `allowed-differences.toml` gates CI enforcement.
+- **Lossless merge semantics** — header and query parameter merge preserves order and duplicates across transports.
+- **Separate sync/async auth drivers** — `Auth` base class dispatches to sync and async implementations independently.
+- **Behavioral downstream fixtures** — `compat/downstream/behavioral_fixtures/` exercises real consumer patterns.
+- **Native lifecycle proof fixtures** — timeout classification, soak, and lifecycle tests validate engine behavior under load.
 
 Runtime diagnostics:
 
@@ -115,8 +135,6 @@ print(info.emulated_version)  # "0.28.1"
 print(info.compatibility_stage)  # "stage-c-candidate"
 ```
 
-See `plans/httpx-drop-in-phase-6-status.md` for release evidence.
-
 Run compat tests:
 
 ```sh
@@ -124,19 +142,33 @@ cd crates/eggfetch-python && maturin develop
 EGGFETCH_COMPAT_REQUIRED=1 pytest crates/eggfetch-python/tests/compat/ -v --strict-markers
 ```
 
-Evidence report generation:
+Evidence and qualification validation:
 
 ```sh
-# Evidence report generation
-python scripts/generate_compatibility_evidence.py --skip-tests --output compatibility-evidence.json
-python scripts/generate_compatibility_report.py --input compatibility-evidence.json --output compatibility-report.md
-
-# Downstream portfolio validation
-python scripts/run_downstream_compat.py
-
-# Isolated downstream testing
-python scripts/run_isolated_downstream.py --package httpx
+python scripts/validate_compatibility_evidence.py evidence.json
+python scripts/validate_qualification_workflow.py
+python scripts/candidate_identity.py identity.json
 ```
+
+API oracle with typed differences:
+
+```sh
+python scripts/compare_httpx_api_manifest.py \
+  --reference compat/httpx/0.28.1/reference-api.json \
+  --candidate /tmp/eggfetch-api.json \
+  --allowed compat/httpx/0.28.1/allowed-differences.toml \
+  --validate
+```
+
+Lossless merge, downstream, and lifecycle tests:
+
+```sh
+python -m pytest crates/eggfetch-python/tests/compat/test_merge_lossless.py -v
+python -m pytest compat/downstream/behavioral_fixtures/ -v
+python -m pytest crates/eggfetch-python/tests/compat/test_native_timeout_classification.py crates/eggfetch-python/tests/compat/test_soak.py -v --timeout=120
+```
+
+See `plans/httpx-drop-in-phase-6-status.md` for release evidence.
 
 ## Tests
 

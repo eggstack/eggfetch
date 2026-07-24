@@ -1,0 +1,105 @@
+Command-line interface for eggfetch
+
+Usage: eggfetch [OPTIONS] <URL>
+
+Arguments:
+  <URL>  Target URL
+
+Options:
+  -X, --method <METHOD>
+          HTTP method (GET, POST, PUT, etc.)
+  -H, --header <HEADER>
+          Repeatable headers as NAME:VALUE
+  -q, --query <QUERY>
+          Repeatable query parameters as NAME=VALUE
+      --form <FORM>
+          Form fields as NAME=VALUE (application/x-www-form-urlencoded)
+      --file <FILE>
+          Multipart file parts as `NAME=@PATH[:FILENAME]`
+      --body <BODY>
+          Raw body string
+      --body-file <BODY_FILE>
+          Read body from file (- for stdin)
+      --json <JSON>
+          JSON body string with auto Content-Type
+  -o, --output <OUTPUT>
+          Write body to file instead of stdout
+      --download
+          Derive filename from Content-Disposition or URL
+      --no-clobber
+          Fail if output file already exists (no overwrite)
+  -i, --include
+          Include response headers in output
+      --headers-only
+          Print headers only, no body
+      --no-body
+          Suppress body output
+      --json-output
+          Machine-readable JSON output
+      --ndjson
+          Newline-delimited JSON output
+      --base64
+          Encode binary body as base64 in JSON output
+      --timeout <TIMEOUT>
+          General timeout in seconds
+      --connect-timeout <CONNECT_TIMEOUT>
+          Connect timeout in seconds
+      --total-timeout <TOTAL_TIMEOUT>
+          Total timeout in seconds
+      --read-timeout <READ_TIMEOUT>
+          Read timeout in seconds
+      --follow
+          Follow redirects (default: on)
+      --no-follow
+          Do not follow redirects
+      --max-redirects <MAX_REDIRECTS>
+          Maximum number of redirects [default: 20]
+      --auth <AUTH>
+          Basic auth as USER:PASS (env: `EGGFETCH_AUTH`) [env: EGGFETCH_AUTH=]
+      --bearer <BEARER>
+          Bearer token (env: `EGGFETCH_BEARER`) [env: EGGFETCH_BEARER=]
+      --cookie <COOKIE>
+          Cookies as NAME=VALUE (repeatable)
+      --cookie-jar <COOKIE_JAR>
+          Cookie jar file path
+      --proxy <PROXY>
+          Proxy URL (env: `EGGFETCH_PROXY`) [env: EGGFETCH_PROXY=]
+      --proxy-auth <PROXY_AUTH>
+          Proxy auth as USER:PASS (env: `EGGFETCH_PROXY_AUTH`) [env: EGGFETCH_PROXY_AUTH=]
+      --no-proxy <NO_PROXY>
+          `NO_PROXY` bypass domains
+      --no-verify
+          Disable TLS certificate verification
+      --cacert <CACERT>
+          Custom CA certificate file
+      --cert <CERT>
+          Client certificate file for mTLS
+      --key <KEY>
+          Client private key file for mTLS
+      --retry <RETRY>
+          Max retry attempts
+      --retry-delay <RETRY_DELAY>
+          Delay between retries in seconds
+      --http1
+          Force HTTP/1.1 only
+      --http2
+          Force HTTP/2 only
+      --http3
+          Force HTTP/3 only
+      --no-compress
+          Disable automatic response decompression
+      --max-body-size <MAX_BODY_SIZE>
+          Maximum decoded body size in bytes
+      --max-decompression-ratio <MAX_DECOMPRESSION_RATIO>
+          Maximum decompression ratio
+      --check-status
+          Check HTTP status for errors (exit 6 on 4xx/5xx)
+  -v, --verbose
+          Print verbose request/response info
+      --generate-completion <GENERATE_COMPLETION>
+          Generate shell completions and exit [possible values: bash, zsh, fish, power-shell,
+          elvish]
+  -h, --help
+          Print help
+  -V, --version
+          Print version

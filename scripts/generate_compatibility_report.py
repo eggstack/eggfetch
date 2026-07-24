@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Generate human-readable Markdown compatibility report from evidence JSON.
 
-Reads evidence produced by generate_compatibility_evidence.py (schema v2)
+Reads evidence produced by generate_compatibility_evidence.py (schema v3)
 and renders a Markdown report.
 """
 

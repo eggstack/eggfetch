@@ -958,3 +958,400 @@ class TestAuthThroughTransport:
 
         assert response.status_code == 200
         assert response.text == "authenticated"
+
+
+class TestSyncAuthWithThreeYields:
+    """Custom sync auth that yields three requests (401 → 401 → 200)."""
+
+    def test_three_yields_sync(self):
+        call_count = 0
+
+        class ThreeStepAuth(Auth):
+            def auth_flow(self, request):
+                nonlocal call_count
+                for attempt in ("1", "2", "3"):
+                    call_count += 1
+                    request.headers["x-attempt"] = attempt
+                    response = yield request
+                    if response.status_code != 401:
+                        return
+
+        def handler(request):
+            attempt = request.headers.get("x-attempt", "")
+            if attempt in ("1", "2"):
+                return Response(401, text=f"attempt {attempt}")
+            return Response(200, text=f"attempt {attempt}")
+
+        with Client(
+            auth=ThreeStepAuth(),
+            transport=MockTransport(handler),
+        ) as client:
+            response = client.get("http://testserver/")
+
+        assert response.status_code == 200
+        assert response.text == "attempt 3"
+        assert call_count == 3
+
+    def test_three_yields_intermediate_drained(self):
+        """Intermediate responses are drained and closed before follow-up dispatch."""
+        closed = []
+
+        class ThreeStepAuth(Auth):
+            def auth_flow(self, request):
+                for attempt in ("1", "2"):
+                    request.headers["x-attempt"] = attempt
+                    response = yield request
+                    # Intermediate response should be closed by the client
+                    # before we get here (the generator yields after send()).
+                    # But we can verify the response was received.
+                    assert response.status_code == 401
+                request.headers["x-attempt"] = "3"
+                yield request
+
+        def handler(request):
+            attempt = request.headers.get("x-attempt", "")
+            if attempt in ("1", "2"):
+                return Response(401, text=f"attempt {attempt}")
+            return Response(200, text=f"attempt {attempt}")
+
+        with Client(
+            auth=ThreeStepAuth(),
+            transport=MockTransport(handler),
+        ) as client:
+            response = client.get("http://testserver/")
+
+        assert response.status_code == 200
+        assert response.text == "attempt 3"
+
+
+class TestAsyncAuthWithThreeYields:
+    """Custom async auth that yields three requests (401 → 401 → 200)."""
+
+    @pytest.mark.asyncio
+    async def test_three_yields_async(self):
+        call_count = 0
+
+        class ThreeStepAuth(Auth):
+            def auth_flow(self, request):
+                nonlocal call_count
+                for attempt in ("1", "2", "3"):
+                    call_count += 1
+                    request.headers["x-attempt"] = attempt
+                    response = yield request
+                    if response.status_code != 401:
+                        return
+
+        async def handler(request):
+            attempt = request.headers.get("x-attempt", "")
+            if attempt in ("1", "2"):
+                return Response(401, text=f"attempt {attempt}")
+            return Response(200, text=f"attempt {attempt}")
+
+        async with AsyncClient(
+            auth=ThreeStepAuth(),
+            async_transport=MockTransport(handler),
+        ) as client:
+            response = await client.get("http://testserver/")
+
+        assert response.status_code == 200
+        assert response.text == "attempt 3"
+        assert call_count == 3
+
+    @pytest.mark.asyncio
+    async def test_three_yields_async_native_async_auth_flow(self):
+        """Subclass overrides async_auth_flow with real async logic."""
+        call_count = 0
+
+        class AsyncNativeAuth(Auth):
+            def auth_flow(self, request):
+                # Base auth_flow (not used directly by async client)
+                raise NotImplementedError("async_auth_flow should be called")
+
+            async def async_auth_flow(self, request):
+                nonlocal call_count
+                for attempt in ("1", "2", "3"):
+                    call_count += 1
+                    request.headers["x-attempt"] = attempt
+                    response = yield request
+                    if response.status_code != 401:
+                        return
+
+        async def handler(request):
+            attempt = request.headers.get("x-attempt", "")
+            if attempt in ("1", "2"):
+                return Response(401, text=f"attempt {attempt}")
+            return Response(200, text=f"attempt {attempt}")
+
+        async with AsyncClient(
+            auth=AsyncNativeAuth(),
+            async_transport=MockTransport(handler),
+        ) as client:
+            response = await client.get("http://testserver/")
+
+        assert response.status_code == 200
+        assert response.text == "attempt 3"
+        assert call_count == 3
+
+
+class TestIntermediateResponseCleanup:
+    """Intermediate auth responses are drained and closed, not exposed to hooks."""
+
+    def test_intermediate_closed_sync(self):
+        """Sync: intermediate 401 is read + closed before follow-up dispatch."""
+        response_close_count = [0]
+        original_close = Response.close
+
+        def tracking_close(self):
+            response_close_count[0] += 1
+            original_close(self)
+
+        Response.close = tracking_close
+        try:
+
+            class AlwaysRetryAuth(Auth):
+                def auth_flow(self, request):
+                    request.headers["x-step"] = "1"
+                    response = yield request
+                    if response.status_code == 401:
+                        request.headers["x-step"] = "2"
+                        yield request
+
+            def handler(request):
+                step = request.headers.get("x-step", "")
+                if step == "1":
+                    return Response(401, text="unauthorized")
+                return Response(200, text="ok")
+
+            with Client(
+                auth=AlwaysRetryAuth(),
+                transport=MockTransport(handler),
+            ) as client:
+                response = client.get("http://testserver/")
+
+            assert response.status_code == 200
+            # Intermediate response should have been closed
+            assert response_close_count[0] >= 1
+        finally:
+            Response.close = original_close
+
+    @pytest.mark.asyncio
+    async def test_intermediate_closed_async(self):
+        """Async: intermediate 401 is read + closed before follow-up dispatch."""
+        response_close_count = [0]
+        original_aclose = Response.aclose
+
+        async def tracking_aclose(self):
+            response_close_count[0] += 1
+            await original_aclose(self)
+
+        Response.aclose = tracking_aclose
+        try:
+
+            class AlwaysRetryAuth(Auth):
+                def auth_flow(self, request):
+                    request.headers["x-step"] = "1"
+                    response = yield request
+                    if response.status_code == 401:
+                        request.headers["x-step"] = "2"
+                        yield request
+
+            async def handler(request):
+                step = request.headers.get("x-step", "")
+                if step == "1":
+                    return Response(401, text="unauthorized")
+                return Response(200, text="ok")
+
+            async with AsyncClient(
+                auth=AlwaysRetryAuth(),
+                async_transport=MockTransport(handler),
+            ) as client:
+                response = await client.get("http://testserver/")
+
+            assert response.status_code == 200
+            assert response_close_count[0] >= 1
+        finally:
+            Response.aclose = original_aclose
+
+    def test_response_hooks_only_see_final_sync(self):
+        """Response hooks receive only the final response, not intermediates."""
+        hook_responses = []
+
+        def on_response(response):
+            hook_responses.append(response.status_code)
+
+        class MultiAuth(Auth):
+            def auth_flow(self, request):
+                request.headers["x-step"] = "1"
+                response = yield request
+                if response.status_code == 401:
+                    request.headers["x-step"] = "2"
+                    yield request
+
+        def handler(request):
+            step = request.headers.get("x-step", "")
+            if step == "1":
+                return Response(401)
+            return Response(200)
+
+        with Client(
+            auth=MultiAuth(),
+            transport=MockTransport(handler),
+            event_hooks={"request": [], "response": [on_response]},
+        ) as client:
+            response = client.get("http://testserver/")
+
+        assert response.status_code == 200
+        # Response hook should only see the final 200, not the intermediate 401
+        assert hook_responses == [200]
+
+    @pytest.mark.asyncio
+    async def test_response_hooks_only_see_final_async(self):
+        """Async response hooks receive only the final response."""
+        hook_responses = []
+
+        async def on_response(response):
+            hook_responses.append(response.status_code)
+
+        class MultiAuth(Auth):
+            def auth_flow(self, request):
+                request.headers["x-step"] = "1"
+                response = yield request
+                if response.status_code == 401:
+                    request.headers["x-step"] = "2"
+                    yield request
+
+        async def handler(request):
+            step = request.headers.get("x-step", "")
+            if step == "1":
+                return Response(401)
+            return Response(200)
+
+        async with AsyncClient(
+            auth=MultiAuth(),
+            async_transport=MockTransport(handler),
+            event_hooks={"request": [], "response": [on_response]},
+        ) as client:
+            response = await client.get("http://testserver/")
+
+        assert response.status_code == 200
+        assert hook_responses == [200]
+
+
+class TestPerRequestAuthDisable:
+    """auth=None on send() disables auth even if client has default auth."""
+
+    def test_per_request_auth_none_sync(self):
+        def handler(request):
+            return Response(200, text=request.headers.get("authorization", "none"))
+
+        with Client(
+            auth=BasicAuth("user", "pass"),
+            transport=MockTransport(handler),
+        ) as client:
+            response = client.get("http://testserver/", auth=None)
+
+        assert response.status_code == 200
+        assert response.text == "none"
+
+    @pytest.mark.asyncio
+    async def test_per_request_auth_none_async(self):
+        async def handler(request):
+            return Response(200, text=request.headers.get("authorization", "none"))
+
+        async with AsyncClient(
+            auth=BasicAuth("user", "pass"),
+            async_transport=MockTransport(handler),
+        ) as client:
+            response = await client.get("http://testserver/", auth=None)
+
+        assert response.status_code == 200
+        assert response.text == "none"
+
+    def test_per_request_auth_override_sync(self):
+        """Passing a different auth on send() overrides the client default."""
+        def handler(request):
+            return Response(200, text=request.headers.get("authorization", ""))
+
+        with Client(
+            auth=BasicAuth("default", "default"),
+            transport=MockTransport(handler),
+        ) as client:
+            response = client.get(
+                "http://testserver/",
+                auth=BasicAuth("override", "override"),
+            )
+
+        assert response.status_code == 200
+        decoded = base64.b64decode(
+            response.text.split(" ", 1)[1]
+        ).decode("latin-1")
+        assert decoded == "override:override"
+
+    @pytest.mark.asyncio
+    async def test_per_request_auth_override_async(self):
+        async def handler(request):
+            return Response(200, text=request.headers.get("authorization", ""))
+
+        async with AsyncClient(
+            auth=BasicAuth("default", "default"),
+            async_transport=MockTransport(handler),
+        ) as client:
+            response = await client.get(
+                "http://testserver/",
+                auth=BasicAuth("override", "override"),
+            )
+
+        assert response.status_code == 200
+        decoded = base64.b64decode(
+            response.text.split(" ", 1)[1]
+        ).decode("latin-1")
+        assert decoded == "override:override"
+
+
+class TestAuthExceptionRetainsContext:
+    """Auth exceptions preserve the request context."""
+
+    def test_auth_exception_has_request_sync(self):
+        class BrokenAuth(Auth):
+            def auth_flow(self, request):
+                request.headers["x-broken"] = "true"
+                raise ValueError("auth failed")
+
+        with Client(
+            auth=BrokenAuth(),
+            transport=MockTransport(lambda r: Response(200)),
+        ) as client:
+            with pytest.raises(ValueError, match="auth failed"):
+                client.get("http://testserver/")
+
+    @pytest.mark.asyncio
+    async def test_auth_exception_has_request_async(self):
+        class BrokenAuth(Auth):
+            def auth_flow(self, request):
+                request.headers["x-broken"] = "true"
+                raise ValueError("auth failed")
+
+        async with AsyncClient(
+            auth=BrokenAuth(),
+            async_transport=MockTransport(lambda r: Response(200)),
+        ) as client:
+            with pytest.raises(ValueError, match="auth failed"):
+                await client.get("http://testserver/")
+
+    @pytest.mark.asyncio
+    async def test_auth_exception_in_async_auth_flow(self):
+        """Exception in async_auth_flow is raised correctly."""
+        class BrokenAsyncAuth(Auth):
+            def auth_flow(self, request):
+                raise NotImplementedError("should not be called")
+
+            async def async_auth_flow(self, request):
+                yield request  # yield the request first
+                raise ValueError("async auth broken")
+
+        async with AsyncClient(
+            auth=BrokenAsyncAuth(),
+            async_transport=MockTransport(lambda r: Response(200)),
+        ) as client:
+            with pytest.raises(ValueError, match="async auth broken"):
+                await client.get("http://testserver/")

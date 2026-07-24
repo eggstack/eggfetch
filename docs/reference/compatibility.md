@@ -100,6 +100,9 @@ eggfetch targets HTTPX 0.28.1 compatibility in phases. The current status:
 - **Phase 3**: Streaming and bodies, byte streams, chunk size support, request streaming, multipart passthrough
 - **Phase 4**: Transports, mounts, auth, hooks, WSGI/ASGI
 - **Phase 5**: Downstream validation, 12-package consumer portfolio, expanded behavior corpus, upstream test inventory, evidence reporting, performance budgets, compatibility-stage decision (Stage C)
+- **Phase 6 / Qualification Pass**: Schema v3 candidate identity, typed difference records in API oracle, lossless merge semantics, separate sync/async auth drivers, behavioral downstream fixtures, native lifecycle proof fixtures, qualification workflow with evidence validation
+
+**Current status: Stage C candidate** (asyncio drop-in). The qualification pass applies typed difference records, lossless merge semantics, and native lifecycle proof fixtures. See `scripts/candidate_identity.py`, `scripts/validate_qualification_workflow.py`, and `scripts/validate_compatibility_evidence.py` for the validation toolchain.
 
 See `compat/httpx/0.28.1/` for the machine-readable profile and allowed differences.
 

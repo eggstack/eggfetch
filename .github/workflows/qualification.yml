@@ -414,7 +414,7 @@ jobs:
           python -m venv .venv
           source .venv/bin/activate
           pip install -r compat/httpx/0.28.1/requirements.txt
-          pip install pytest pytest-asyncio
+          pip install pytest pytest-asyncio pytest-timeout
           pip install dist/eggfetch-wheel/*.whl
 
       - name: Validate compatibility profile
@@ -584,7 +584,7 @@ jobs:
 
       - name: Run compat tests with shim
         run: |
-          /tmp/shim-test-venv/bin/pip install pytest pytest-asyncio
+          /tmp/shim-test-venv/bin/pip install pytest pytest-asyncio pytest-timeout
           EGGFETCH_COMPAT_REQUIRED=1 /tmp/shim-test-venv/bin/pytest \
             crates/eggfetch-python/tests/compat/ -v --strict-markers --timeout=30
 
@@ -644,7 +644,7 @@ jobs:
         run: |
           python -m venv .venv
           source .venv/bin/activate
-          pip install pytest pytest-asyncio
+          pip install pytest pytest-asyncio pytest-timeout
           pip install -r compat/httpx/0.28.1/requirements.txt
           pip install dist/eggfetch-wheel/*.whl
 
@@ -653,11 +653,7 @@ jobs:
           source .venv/bin/activate
           pytest crates/eggfetch-python/tests/compat/ \
             -v --strict-markers --timeout=30 \
-            --json-report --json-report-file=/tmp/compat-test-results.json || true
-          # Ensure the result file exists even if tests fail
-          if [ ! -f /tmp/compat-test-results.json ]; then
-            echo '{"total":0,"passed":0,"failures":0,"errors":0,"sha":" '${{ needs.verify.outputs.sha }}'"}' > /tmp/compat-test-results.json
-          fi
+            --json-report --json-report-file=/tmp/compat-test-results.json
 
       - name: Run downstream validation and save results
         run: |
@@ -665,11 +661,7 @@ jobs:
           python scripts/run_downstream_compat.py \
             --wheel-dir dist/eggfetch-wheel \
             --required-only \
-            --output /tmp/downstream-results.json || true
-          # Ensure the result file exists
-          if [ ! -f /tmp/downstream-results.json ]; then
-            echo '{"overall_pass":false,"results":[],"sha":" '${{ needs.verify.outputs.sha }}'"}' > /tmp/downstream-results.json
-          fi
+            --output /tmp/downstream-results.json
 
       - name: Run API comparison and save results
         run: |
@@ -680,11 +672,7 @@ jobs:
             --reference /tmp/httpx-manifest.json \
             --candidate /tmp/eggfetch-manifest.json \
             --allowed compat/httpx/0.28.1/allowed-differences.toml \
-            --json > /tmp/api-comparison-results.json || true
-          # Ensure the result file exists
-          if [ ! -f /tmp/api-comparison-results.json ]; then
-            echo '{"unexplained":[],"stale_allowed":[],"sha":" '${{ needs.verify.outputs.sha }}'"}' > /tmp/api-comparison-results.json
-          fi
+            --json > /tmp/api-comparison-results.json
 
       - name: Compute artifact hashes
         run: |
@@ -708,6 +696,10 @@ jobs:
             --candidate-sha ${{ needs.verify.outputs.sha }} \
             --artifact-hashes /tmp/artifact-hashes.json \
             --output compatibility-evidence.json
+
+      - name: Validate evidence
+        run: |
+          python scripts/validate_compatibility_evidence.py compatibility-evidence.json
 
       - name: Generate evidence report
         run: |
@@ -774,7 +766,7 @@ jobs:
         run: |
           python -m venv .venv
           source .venv/bin/activate
-          pip install pytest pytest-asyncio
+          pip install pytest pytest-asyncio pytest-timeout
           pip install dist/eggfetch-wheel/*.whl
 
       - name: Run soak and lifecycle tests

@@ -44,14 +44,17 @@ _USE_CLIENT_DEFAULT = object()
 
 def _convert_timeout(timeout):
     if isinstance(timeout, Timeout):
-        return eggfetch.Timeout(
-            connect=timeout.connect,
-            read=timeout.read,
-            write=timeout.write,
-            pool=timeout.pool,
-        )
+        kwargs = {
+            "connect": timeout.connect,
+            "read": timeout.read,
+            "write": timeout.write,
+            "pool": timeout.pool,
+        }
+        if timeout.total is not None:
+            kwargs["total"] = timeout.total
+        return eggfetch.Timeout(**kwargs)
     if isinstance(timeout, (int, float)):
-        return eggfetch.Timeout(connect=timeout, read=timeout, write=timeout, pool=timeout)
+        return eggfetch.Timeout(connect=timeout, read=timeout, write=timeout, pool=timeout, total=timeout)
     return None
 
 
@@ -497,6 +500,9 @@ class Client:
         merged_cookies = self._merge_cookies(kwargs.get("cookies"))
         merged_extensions = self._merge_extensions(kwargs.get("extensions"))
 
+        if merged_params:
+            merged_url = merged_url.copy_with(params=merged_params)
+
         return Request(
             method,
             merged_url,
@@ -567,14 +573,14 @@ class Client:
         for hook in self._event_hooks.get("request", []):
             hook(request)
 
-        # 3. Run auth flow (generator pattern)
+        # 3. Run auth flow via sync_auth_flow (generator pattern)
         # Auth is ALWAYS applied by the client regardless of transport.
         # The transport simply sends whatever request the client gives it.
         use_auth = resolved_auth is not None
 
         auth_flow_gen = None
         if use_auth:
-            auth_flow_gen = resolved_auth.auth_flow(request)
+            auth_flow_gen = resolved_auth.sync_auth_flow(request)
             try:
                 request = next(auth_flow_gen)
             except StopIteration:
@@ -590,13 +596,21 @@ class Client:
             if auth_flow_gen is None:
                 break
 
+            # Try to get the next request from the auth flow.
+            # If StopIteration, the current response is final.
             try:
                 request = auth_flow_gen.send(response)
             except StopIteration:
                 auth_flow_gen = None
                 break
 
-        # 5. Execute response hooks
+            # Intermediate auth response — drain body and close before
+            # dispatching the follow-up request.  The generator already
+            # yielded the next request above.
+            response.read()
+            response.close()
+
+        # 5. Execute response hooks (only the final response)
         for hook in self._event_hooks.get("response", []):
             try:
                 hook(response)
@@ -606,7 +620,8 @@ class Client:
 
         return response
 
-    def request(self, method, url, *, params=None, headers=None, cookies=None,
+    def request(self, method, url, *, auth=_USE_CLIENT_DEFAULT, params=None,
+                headers=None, cookies=None,
                 content=None, data=None, files=None, json=None,
                 follow_redirects=None, timeout=_USE_CLIENT_DEFAULT, extensions=None):
         req = self.build_request(
@@ -617,6 +632,7 @@ class Client:
         )
         return self.send(
             req,
+            auth=auth,
             follow_redirects=follow_redirects,
             timeout=timeout,
         )
@@ -692,10 +708,12 @@ class Client:
             req = request_params
         else:
             req = QueryParams(request_params)
-        merged = QueryParams(self._params)
-        for key in req.keys():
-            merged.set(key, req[key])
-        return merged
+        req_keys = {k for k, _ in req.multi_items()}
+        merged_items = [
+            (k, v) for k, v in self._params.multi_items() if k not in req_keys
+        ]
+        merged_items.extend(req.multi_items())
+        return QueryParams(merged_items)
 
     def _merge_headers(self, request_headers):
         merged = self._headers.copy()
@@ -855,6 +873,9 @@ class AsyncClient:
         merged_cookies = self._merge_cookies(kwargs.get("cookies"))
         merged_extensions = self._merge_extensions(kwargs.get("extensions"))
 
+        if merged_params:
+            merged_url = merged_url.copy_with(params=merged_params)
+
         return Request(
             method,
             merged_url,
@@ -938,17 +959,17 @@ class AsyncClient:
             else:
                 hook(request)
 
-        # 3. Run auth flow (generator pattern)
+        # 3. Run auth flow via async_auth_flow (async generator pattern)
         # Auth is ALWAYS applied by the client regardless of transport.
         # The transport simply sends whatever request the client gives it.
         use_auth = resolved_auth is not None
 
         auth_flow_gen = None
         if use_auth:
-            auth_flow_gen = resolved_auth.auth_flow(request)
+            auth_flow_gen = resolved_auth.async_auth_flow(request)
             try:
-                request = next(auth_flow_gen)
-            except StopIteration:
+                request = await auth_flow_gen.__anext__()
+            except StopAsyncIteration:
                 auth_flow_gen = None
 
         # 4. Dispatch loop — feed each auth response back and dispatch follow-ups
@@ -961,13 +982,21 @@ class AsyncClient:
             if auth_flow_gen is None:
                 break
 
+            # Try to get the next request from the auth flow.
+            # If StopAsyncIteration, the current response is final.
             try:
-                request = auth_flow_gen.send(response)
-            except StopIteration:
+                request = await auth_flow_gen.asend(response)
+            except StopAsyncIteration:
                 auth_flow_gen = None
                 break
 
-        # 5. Execute response hooks
+            # Intermediate auth response — drain body and close before
+            # dispatching the follow-up request.  The generator already
+            # yielded the next request above.
+            await response.aread()
+            await response.aclose()
+
+        # 5. Execute response hooks (only the final response)
         for hook in self._event_hooks.get("response", []):
             try:
                 if asyncio.iscoroutinefunction(hook):
@@ -975,12 +1004,13 @@ class AsyncClient:
                 else:
                     hook(response)
             except Exception:
-                response.close()
+                await response.aclose()
                 raise
 
         return response
 
-    async def request(self, method, url, *, params=None, headers=None, cookies=None,
+    async def request(self, method, url, *, auth=_USE_CLIENT_DEFAULT, params=None,
+                      headers=None, cookies=None,
                       content=None, data=None, files=None, json=None,
                       follow_redirects=None, timeout=_USE_CLIENT_DEFAULT, extensions=None):
         req = self.build_request(
@@ -991,6 +1021,7 @@ class AsyncClient:
         )
         return await self.send(
             req,
+            auth=auth,
             follow_redirects=follow_redirects,
             timeout=timeout,
         )
@@ -1082,10 +1113,12 @@ class AsyncClient:
             req = request_params
         else:
             req = QueryParams(request_params)
-        merged = QueryParams(self._params)
-        for key in req.keys():
-            merged.set(key, req[key])
-        return merged
+        req_keys = {k for k, _ in req.multi_items()}
+        merged_items = [
+            (k, v) for k, v in self._params.multi_items() if k not in req_keys
+        ]
+        merged_items.extend(req.multi_items())
+        return QueryParams(merged_items)
 
     def _merge_headers(self, request_headers):
         merged = self._headers.copy()

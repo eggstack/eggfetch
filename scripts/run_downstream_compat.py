@@ -40,6 +40,22 @@ REQUIRED_FIELDS = {
     "update-owner",
     "review-cadence",
     "min-tests",
+    "test-command",
+    "source-type",
+    "source-locator",
+    "source-hash",
+    "python-versions",
+    "public-httpx-api",
+    "install-command",
+    "test-working-dir",
+    "test-result-format",
+    "min-collected",
+    "max-skipped",
+    "max-xfailed",
+    "timeout",
+    "network-policy",
+    "category-ids",
+    "release-blocking",
 }
 
 VALID_CATEGORIES = {
@@ -60,6 +76,15 @@ VALID_CATEGORIES = {
 VALID_USAGES = {"required", "informational", "private", "public"}
 
 
+def _emit_result(result: dict, output_path: str | None = None) -> None:
+    """Write structured result to file or stdout."""
+    payload = json.dumps(result, indent=2)
+    if output_path:
+        Path(output_path).write_text(payload)
+    else:
+        print(payload)
+
+
 def validate_manifest(path: Path) -> dict:
     """Load and validate the manifest structure. Returns a result dict."""
     import tomllib
@@ -73,10 +98,13 @@ def validate_manifest(path: Path) -> dict:
         data = tomllib.load(f)
 
     portfolio = data.get("portfolio", {})
-    if portfolio.get("schema-version") != "1":
-        errors.append(f"portfolio.schema-version must be '1', got '{portfolio.get('schema-version')}'")
-    if portfolio.get("status") != "phase-5":
-        errors.append(f"portfolio.status must be 'phase-5', got '{portfolio.get('status')}'")
+    schema_version = portfolio.get("schema-version", "1")
+    if schema_version not in ("1", "2"):
+        errors.append(f"portfolio.schema-version must be '1' or '2', got '{schema_version}'")
+    if schema_version == "2" and portfolio.get("status") != "phase-6":
+        errors.append(f"portfolio.status must be 'phase-6' for schema v2, got '{portfolio.get('status')}'")
+    if schema_version == "1" and portfolio.get("status") != "phase-5":
+        errors.append(f"portfolio.status must be 'phase-5' for schema v1, got '{portfolio.get('status')}'")
 
     ref_profile = portfolio.get("reference-profile", "")
     if ref_profile:
@@ -87,6 +115,12 @@ def validate_manifest(path: Path) -> dict:
     packages = data.get("package", [])
     if not packages:
         errors.append("No [[package]] entries found")
+
+    # For schema v2, require behavioral test fixtures directory
+    if schema_version == "2":
+        fixtures_dir = path.parent / "behavioral_fixtures"
+        if not fixtures_dir.exists():
+            errors.append(f"Schema v2 requires behavioral_fixtures directory: {fixtures_dir}")
 
     seen_names = set()
     for pkg in packages:
@@ -115,6 +149,21 @@ def validate_manifest(path: Path) -> dict:
             errors.append(f"{name}: missing min-tests field")
         elif not isinstance(min_tests, int) or min_tests < 0:
             errors.append(f"{name}: min-tests must be a non-negative integer, got '{min_tests}'")
+
+        # Validate source-type
+        source_type = pkg.get("source-type", "")
+        if source_type and source_type not in ("pypi", "git", "local"):
+            errors.append(f"{name}: invalid source-type '{source_type}'")
+
+        # Validate test-result-format
+        trf = pkg.get("test-result-format", "")
+        if trf and trf not in ("exit-code", "junit-xml", "pytest-json"):
+            errors.append(f"{name}: invalid test-result-format '{trf}'")
+
+        # Validate category-ids is a list
+        cat_ids = pkg.get("category-ids", [])
+        if not isinstance(cat_ids, list):
+            errors.append(f"{name}: category-ids must be a list")
 
     return {
         "status": "valid" if not errors else "invalid",
@@ -147,7 +196,8 @@ def validate_wheel_dir(wheel_dir: Path) -> list[str]:
     return errors
 
 
-def run_downstream_test(package_name: str, wheel_dir: Path, timeout: int) -> dict:
+def run_downstream_test(package_name: str, wheel_dir: Path, timeout: int,
+                        output_dir: Path | None = None) -> dict:
     """Run a single downstream package test via run_isolated_downstream.py."""
     cmd = [
         sys.executable,
@@ -156,6 +206,10 @@ def run_downstream_test(package_name: str, wheel_dir: Path, timeout: int) -> dic
         "--wheel-dir", str(wheel_dir),
         "--timeout", str(timeout),
     ]
+    if output_dir:
+        output_dir.mkdir(parents=True, exist_ok=True)
+        result_file = output_dir / f"{package_name}.json"
+        cmd.extend(["--output", str(result_file)])
 
     try:
         result = subprocess.run(
@@ -222,37 +276,77 @@ def main() -> int:
         "--required-only", action="store_true",
         help="Only test packages with usage=required",
     )
+    parser.add_argument(
+        "--output", default=None,
+        help="Path to write aggregate result JSON (default: stdout)",
+    )
     args = parser.parse_args()
 
     wheel_dir = Path(args.wheel_dir).resolve()
     wheel_errors = validate_wheel_dir(wheel_dir)
     if wheel_errors:
-        print(json.dumps({
+        _emit_result({
             "status": "error",
             "errors": wheel_errors,
-        }, indent=2))
+        }, args.output)
         return 2
 
     manifest_result = validate_manifest(MANIFEST_PATH)
     if manifest_result["status"] == "invalid":
-        print(json.dumps({
+        _emit_result({
             "status": "error",
             "errors": manifest_result["errors"],
-        }, indent=2))
+        }, args.output)
         return 2
 
     packages = manifest_result["packages"]
     if args.packages:
         selected = set(args.packages.split(","))
         packages = [p for p in packages if p["name"] in selected]
+        # Fail-closed: empty selection from explicit --packages is an error
+        if not packages:
+            _emit_result({
+                "status": "error",
+                "errors": [f"No packages matched selection: {args.packages}"],
+            }, args.output)
+            return 2
 
     if args.required_only:
         packages = [p for p in packages if p.get("usage") == "required"]
 
+    # Fail-closed: empty package list after filtering is an error
+    if not packages:
+        _emit_result({
+            "status": "error",
+            "errors": ["No packages to test after filtering (fail-closed)"],
+        }, args.output)
+        return 2
+
+    # Validate that required entries have real behavioral tests
+    required_packages = [p for p in packages if p.get("usage") == "required"]
+    validation_errors = []
+    for pkg in required_packages:
+        cmd = pkg.get("test-command", "")
+        if not cmd:
+            validation_errors.append(f"{pkg['name']}: required package missing test-command")
+        elif "print" in cmd and "import" in cmd and "-c" in cmd and "assert" not in cmd:
+            # Import-only smoke test for a required package
+            validation_errors.append(
+                f"{pkg['name']}: required package has import-only test-command, "
+                f"expected behavioral test"
+            )
+    if validation_errors:
+        _emit_result({
+            "status": "error",
+            "errors": validation_errors,
+        }, args.output)
+        return 2
+
     results = []
+    results_dir = Path(args.output).parent / "results" if args.output else None
     for pkg in packages:
         print(f"Testing {pkg['name']}...", file=sys.stderr)
-        result = run_downstream_test(pkg["name"], wheel_dir, args.timeout)
+        result = run_downstream_test(pkg["name"], wheel_dir, args.timeout, results_dir)
         results.append(result)
 
     # Build summary
@@ -272,6 +366,7 @@ def main() -> int:
 
     summary = {
         "manifest_status": manifest_result["status"],
+        "schema_version": manifest_result["packages"][0].get("source-type", "") if manifest_result["packages"] else "",
         "wheel_dir": str(wheel_dir),
         "total_packages": len(results),
         "passed": len(passed),
@@ -281,11 +376,14 @@ def main() -> int:
         "required_total": len(required_packages),
         "required_passed": len(required_packages) - len(required_failed),
         "required_failed": len(required_failed),
+        "required_missing_behavioral": len([
+            r for r in required_failed if r.get("status") in ("zero-tests-required", "below-min-tests")
+        ]),
         "overall_pass": len(required_failed) == 0 and len(errors) == 0,
         "results": results,
     }
 
-    print(json.dumps(summary, indent=2))
+    _emit_result(summary, args.output)
 
     if required_failed or errors:
         return 1

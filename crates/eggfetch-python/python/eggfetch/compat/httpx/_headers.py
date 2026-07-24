@@ -136,9 +136,9 @@ class Headers:
                 f"update() argument must be Headers, dict, or list of tuples, "
                 f"not {type(headers).__name__}"
             )
-        for k, v in items:
-            self._items = [(ek, ev) for ek, ev in self._items if ek != k]
-            self._items.append((k, v))
+        incoming_keys = {k for k, _ in items}
+        self._items = [(k, v) for k, v in self._items if k not in incoming_keys]
+        self._items.extend(items)
 
     def pop(self, name: str, default=None):
         norm = self._normalize_name(name)
@@ -153,6 +153,10 @@ class Headers:
                 new_items.append((k, v))
         self._items = new_items
         return result
+
+    def append(self, name: str, value: str) -> None:
+        self._validate(name, value)
+        self._items.append((name.lower(), value))
 
     def clear(self) -> None:
         self._items.clear()

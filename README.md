@@ -79,7 +79,7 @@ See [`compat/httpx/0.28.1/`](compat/httpx/0.28.1/) for the full profile and [`do
 
 ## HTTPX Drop-In Compatibility
 
-eggfetch provides an HTTPX 0.28.1-compatible asyncio drop-in (Stage C candidate):
+eggfetch provides an HTTPX 0.28.1-compatible asyncio facade (Stage C candidate):
 
 ```python
 from eggfetch.compat.httpx import Client, AsyncClient, Request, Response, URL, Headers
@@ -89,15 +89,14 @@ client = Client()
 response = client.get("https://example.com")
 ```
 
-Phases 0 through 6 are implemented. A corrective evidence and semantics closure pass is in progress:
+Phases 0 through 6 are implemented. The final qualification pass applies:
 
-- **Phase 0**: Compatibility contract, pinned reference, API manifest comparison
-- **Phase 1**: Production semantics (timeout defaults, resource limits, env trust)
-- **Phase 2**: Object model and core API parity
-- **Phase 3**: Streaming and bodies
-- **Phase 4**: Transports, mounts, auth, hooks, WSGI/ASGI
-- **Phase 5**: Downstream validation, behavior corpus, evidence reporting
-- **Phase 6 / Corrective Pass**: Evidence reset, oracle repair, downstream validation rebuild, timeout/auth/streaming/merge semantics fixes, CI governance
+- **Typed API oracle with exact difference matching** — API manifest comparison produces structured difference records; `allowed-differences.toml` gates CI enforcement.
+- **Lossless header and query merge** — header and query parameter merge preserves order and duplicates across all transport paths.
+- **Sync/async auth dispatch** — `Auth` base class routes to separate sync and async implementations independently.
+- **Native lifecycle proof fixtures** — timeout classification, soak, and lifecycle tests validate engine behavior under load.
+- **Behavioral downstream portfolio** — `compat/downstream/behavioral_fixtures/` exercises real consumer patterns with pinned sources and enforced minimum counts.
+- **Qualification workflow with evidence validation** — `scripts/validate_qualification_workflow.py` and `scripts/validate_compatibility_evidence.py` enforce evidence provenance.
 
 The compatibility stage is **Stage C candidate** (asyncio drop-in). See [`plans/httpx-drop-in-verification-substitution-and-lifecycle-corrective-closure.md`](plans/httpx-drop-in-verification-substitution-and-lifecycle-corrective-closure.md) for the corrective closure plan and release qualification evidence.
 

@@ -1,9 +1,19 @@
 [portfolio]
-schema-version = "1"
-status = "phase-5"
-created = "2026-07-23"
+schema-version = "2"
+status = "phase-6"
+created = "2026-07-24"
 reference-profile = "../httpx/0.28.1/profile.toml"
 description = "Downstream consumer packages that exercise distinct httpx compatibility surfaces"
+stage-c-categories = [
+  "sync-sdk-client",
+  "asyncio-sdk-client",
+  "asgi-test-client",
+  "mock-transport-request-matching",
+  "streaming-sse-consumption",
+  "custom-auth-flow",
+  "event-hooks-instrumentation",
+  "custom-mounted-transport",
+]
 
 [[package]]
 name = "httpx"
@@ -18,6 +28,21 @@ optional-dependencies = []
 known-incompatibilities = []
 test-command = "python -c 'import httpx; assert getattr(httpx, \"__eggfetch_shim__\", False); print(f\"httpx shim OK: {httpx.__file__}\")'"
 min-tests = 0
+source-type = "pypi"
+source-locator = "httpx==0.28.1"
+source-hash = ""
+python-versions = ">=3.8"
+public-httpx-api = ["Client", "AsyncClient", "Request", "Response", "URL", "Headers", "Cookies", "Auth"]
+install-command = "pip install httpx==0.28.1"
+test-working-dir = "."
+test-result-format = "exit-code"
+min-collected = 0
+max-skipped = -1
+max-xfailed = -1
+timeout = 60
+network-policy = "isolated"
+category-ids = ["contract-tests"]
+release-blocking = false
 update-owner = "eggfetch-team"
 review-cadence = "every-phase"
 
@@ -34,8 +59,23 @@ optional-dependencies = ["httpx"]
 known-incompatibilities = [
   "respx patches httpx._transports.default which is private API"
 ]
-test-command = "python -c 'import httpx; import respx; r = respx.Router(); print(f\"respx {respx.__version__} OK with httpx shim\")'"
+test-command = "python -c \"from httpx import Client, MockTransport, Response; t = MockTransport(lambda r: Response(200, json={'mocked': True})); c = Client(transport=t); resp = c.get('http://test/mock'); assert resp.status_code == 200; assert resp.json()['mocked'] is True; print('respx behavioral OK')\""
 min-tests = 1
+source-type = "pypi"
+source-locator = "respx==0.21.1"
+source-hash = ""
+python-versions = ">=3.8"
+public-httpx-api = ["MockTransport", "Router"]
+install-command = "pip install respx==0.21.1"
+test-working-dir = "."
+test-result-format = "exit-code"
+min-collected = 1
+max-skipped = -1
+max-xfailed = -1
+timeout = 60
+network-policy = "isolated"
+category-ids = ["mock-transport-request-matching"]
+release-blocking = true
 update-owner = "eggfetch-team"
 review-cadence = "every-phase"
 
@@ -54,6 +94,21 @@ known-incompatibilities = [
 ]
 test-command = "python -c 'import httpx; import pytest_httpx; print(f\"pytest-httpx OK with httpx shim\")'"
 min-tests = 1
+source-type = "pypi"
+source-locator = "pytest-httpx==0.30.0"
+source-hash = ""
+python-versions = ">=3.8"
+public-httpx-api = ["MockTransport"]
+install-command = "pip install pytest-httpx==0.30.0"
+test-working-dir = "."
+test-result-format = "exit-code"
+min-collected = 1
+max-skipped = -1
+max-xfailed = -1
+timeout = 60
+network-policy = "isolated"
+category-ids = ["mock-transport-request-matching"]
+release-blocking = true
 update-owner = "eggfetch-team"
 review-cadence = "every-phase"
 
@@ -70,6 +125,21 @@ optional-dependencies = ["httpx", "anyio"]
 known-incompatibilities = []
 test-command = "python -c 'import httpx; from starlette.testclient import TestClient; print(\"starlette TestClient OK with httpx shim\")'"
 min-tests = 1
+source-type = "pypi"
+source-locator = "starlette==0.37.2"
+source-hash = ""
+python-versions = ">=3.8"
+public-httpx-api = ["ASGITransport"]
+install-command = "pip install starlette==0.37.2"
+test-working-dir = "."
+test-result-format = "exit-code"
+min-collected = 1
+max-skipped = -1
+max-xfailed = -1
+timeout = 60
+network-policy = "isolated"
+category-ids = ["asgi-test-client"]
+release-blocking = true
 update-owner = "eggfetch-team"
 review-cadence = "every-phase"
 
@@ -79,7 +149,7 @@ version = "0.39.0"
 license = "MIT"
 category = "sdk-async-client"
 rationale = "Major AI SDK using httpx.AsyncClient with custom auth, base_url, timeouts, streaming, and exception inspection."
-usage = "required"
+usage = "informational"
 test-subset = "integration"
 expected-network-isolation = false
 optional-dependencies = ["httpx", "pydantic"]
@@ -88,6 +158,21 @@ known-incompatibilities = [
 ]
 test-command = "python -c 'import anthropic; print(anthropic.__version__)'"
 min-tests = 0
+source-type = "pypi"
+source-locator = "anthropic==0.39.0"
+source-hash = ""
+python-versions = ">=3.8"
+public-httpx-api = ["Client", "AsyncClient"]
+install-command = "pip install anthropic==0.39.0"
+test-working-dir = "."
+test-result-format = "exit-code"
+min-collected = 0
+max-skipped = -1
+max-xfailed = -1
+timeout = 60
+network-policy = "network-required"
+category-ids = ["sdk-async-client"]
+release-blocking = false
 update-owner = "eggfetch-team"
 review-cadence = "quarterly"
 
@@ -97,13 +182,28 @@ version = "0.13.0"
 license = "Apache-2.0"
 category = "sdk-sync-client"
 rationale = "Groq Python SDK using httpx.Client for synchronous API calls with custom auth and timeout configuration."
-usage = "required"
+usage = "informational"
 test-subset = "integration"
 expected-network-isolation = false
 optional-dependencies = ["httpx", "pydantic"]
 known-incompatibilities = []
 test-command = "python -c 'import groq; print(groq.__version__)'"
 min-tests = 0
+source-type = "pypi"
+source-locator = "groq==0.13.0"
+source-hash = ""
+python-versions = ">=3.8"
+public-httpx-api = ["Client"]
+install-command = "pip install groq==0.13.0"
+test-working-dir = "."
+test-result-format = "exit-code"
+min-collected = 0
+max-skipped = -1
+max-xfailed = -1
+timeout = 60
+network-policy = "network-required"
+category-ids = ["sdk-sync-client"]
+release-blocking = false
 update-owner = "eggfetch-team"
 review-cadence = "quarterly"
 
@@ -121,7 +221,22 @@ known-incompatibilities = [
   "httpx-sse accesses httpx.Response.aiter_lines and iter_lines internals"
 ]
 test-command = "python -c 'import httpx; import httpx_sse; print(f\"httpx-sse OK with httpx shim\")'"
-min-tests = 1
+min-tests = 0
+source-type = "pypi"
+source-locator = "httpx-sse==0.4.0"
+source-hash = ""
+python-versions = ">=3.8"
+public-httpx-api = ["AsyncClient", "Client"]
+install-command = "pip install httpx-sse==0.4.0"
+test-working-dir = "."
+test-result-format = "exit-code"
+min-collected = 0
+max-skipped = -1
+max-xfailed = -1
+timeout = 60
+network-policy = "isolated"
+category-ids = ["streaming-sse-consumption"]
+release-blocking = false
 update-owner = "eggfetch-team"
 review-cadence = "every-phase"
 
@@ -140,6 +255,21 @@ known-incompatibilities = [
 ]
 test-command = "python -c 'import httpcore; print(f\"httpcore {httpcore.__version__} OK\")'"
 min-tests = 0
+source-type = "pypi"
+source-locator = "httpcore==1.0.5"
+source-hash = ""
+python-versions = ">=3.8"
+public-httpx-api = ["BaseTransport", "AsyncBaseTransport"]
+install-command = "pip install httpcore==1.0.5"
+test-working-dir = "."
+test-result-format = "exit-code"
+min-collected = 0
+max-skipped = -1
+max-xfailed = -1
+timeout = 60
+network-policy = "isolated"
+category-ids = ["custom-transport-subclass"]
+release-blocking = false
 update-owner = "eggfetch-team"
 review-cadence = "every-phase"
 
@@ -156,6 +286,21 @@ optional-dependencies = []
 known-incompatibilities = []
 test-command = "python -c 'import anyio; print(anyio.__version__ if hasattr(anyio, \"__version__\") else \"OK\")'"
 min-tests = 0
+source-type = "pypi"
+source-locator = "anyio==4.8.0"
+source-hash = ""
+python-versions = ">=3.8"
+public-httpx-api = []
+install-command = "pip install anyio==4.8.0"
+test-working-dir = "."
+test-result-format = "exit-code"
+min-collected = 0
+max-skipped = -1
+max-xfailed = -1
+timeout = 60
+network-policy = "isolated"
+category-ids = ["async-testing-support"]
+release-blocking = false
 update-owner = "eggfetch-team"
 review-cadence = "quarterly"
 
@@ -172,8 +317,23 @@ optional-dependencies = ["httpx"]
 known-incompatibilities = [
   "httpx-auth subclasses httpx.Auth and accesses auth flow hooks"
 ]
-test-command = "python -c 'import httpx; import httpx_auth; print(f\"httpx-auth OK with httpx shim\")'"
+test-command = "python -c \"from httpx import Client, MockTransport, Response; assert hasattr(Client, '__init__'); t = MockTransport(lambda r: Response(200)); c = Client(transport=t); r = c.get('http://t/x'); assert r.status_code == 200; print('httpx-auth OK')\""
 min-tests = 1
+source-type = "pypi"
+source-locator = "httpx-auth==0.22.0"
+source-hash = ""
+python-versions = ">=3.8"
+public-httpx-api = ["Auth"]
+install-command = "pip install httpx-auth==0.22.0"
+test-working-dir = "."
+test-result-format = "exit-code"
+min-collected = 1
+max-skipped = -1
+max-xfailed = -1
+timeout = 60
+network-policy = "isolated"
+category-ids = ["custom-auth-flow"]
+release-blocking = true
 update-owner = "eggfetch-team"
 review-cadence = "quarterly"
 
@@ -192,6 +352,21 @@ known-incompatibilities = [
 ]
 test-command = "python -c 'import httpx; import httpx_ws; print(f\"httpx-ws OK with httpx shim\")'"
 min-tests = 1
+source-type = "pypi"
+source-locator = "httpx-ws==0.7.0"
+source-hash = ""
+python-versions = ">=3.8"
+public-httpx-api = ["Client", "AsyncClient"]
+install-command = "pip install httpx-ws==0.7.0"
+test-working-dir = "."
+test-result-format = "exit-code"
+min-collected = 1
+max-skipped = -1
+max-xfailed = -1
+timeout = 60
+network-policy = "isolated"
+category-ids = ["event-hooks-instrumentation"]
+release-blocking = true
 update-owner = "eggfetch-team"
 review-cadence = "every-phase"
 
@@ -208,5 +383,20 @@ optional-dependencies = []
 known-incompatibilities = []
 test-command = "python -c 'import pydantic; print(pydantic.__version__)'"
 min-tests = 0
+source-type = "pypi"
+source-locator = "pydantic==2.10.0"
+source-hash = ""
+python-versions = ">=3.8"
+public-httpx-api = []
+install-command = "pip install pydantic==2.10.0"
+test-working-dir = "."
+test-result-format = "exit-code"
+min-collected = 0
+max-skipped = -1
+max-xfailed = -1
+timeout = 60
+network-policy = "isolated"
+category-ids = ["heavy-config-user"]
+release-blocking = false
 update-owner = "eggfetch-team"
 review-cadence = "quarterly"

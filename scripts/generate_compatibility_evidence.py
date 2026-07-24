@@ -316,8 +316,24 @@ def generate_evidence(
         compat_data, downstream_data, api_data, artifact_verification
     )
 
+    if not overall_pass:
+        reasons = []
+        if not (
+            compat_data.get("failures", 0) == 0
+            and compat_data.get("errors", 0) == 0
+            and compat_data.get("total", 0) > 0
+        ):
+            reasons.append("compat tests did not pass")
+        if not downstream_data.get("overall_pass", False):
+            reasons.append("downstream validation did not pass")
+        if len(api_data.get("unexplained", [])) > 0 or len(api_data.get("stale_allowed", [])) > 0:
+            reasons.append("api comparison found unexplained differences")
+        if not all(v.get("matches", False) for v in artifact_verification.values()):
+            reasons.append("artifact hash verification failed")
+        _fail(f"overall_pass is false: {'; '.join(reasons)}")
+
     evidence: dict[str, Any] = {
-        "schema_version": "2",
+        "schema_version": "3",
         "candidate_sha": candidate_sha,
         "eggfetch_commit": _git_commit(),
         "eggfetch_version": _eggfetch_version(),

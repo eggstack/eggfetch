@@ -13,29 +13,29 @@
 
 | Field | Value |
 |-------|-------|
-| Date | 2026-07-23 |
+| Date | 2026-07-24 |
 | Stage Evaluated | Stage C (asyncio drop-in) |
 | Decision | **Stage C candidate** |
-| Evidence | Corrective closure plan, compat tests, API manifest comparison |
+| Evidence | Corrective closure plan, compat tests, API manifest comparison, typed difference records, schema v3 identity, lossless merge, native lifecycle fixtures |
 
 ## Decision Rationale
 
 Stage C candidate status is supported by the following evidence:
 
 1. **API Surface**: The httpx 0.28.1 compatibility layer provides full Client/AsyncClient constructors, all HTTP methods, request/response objects, streaming, and transport abstraction.
-2. **Differential Corpus**: 732 behavioral test cases run against both httpx and eggfetch with status code and body parity.
-3. **Public Contract Coverage**: API manifest comparison runs in CI; allowed differences are documented in `compat/httpx/0.28.1/allowed-differences.toml`.
-4. **Framework Integration**: ASGITransport and WSGITransport enable Starlette/FastAPI test client patterns.
-5. **Transport Flexibility**: MockTransport, per-host mounts, custom transport subclassing all functional.
-6. **Auth Flows**: BasicAuth, DigestAuth, custom auth flows, and auth disabling per-request.
-7. **Event Hooks**: Request and response hooks with ordering guarantees.
-8. **Downstream Portfolio**: 12 representative consumer packages identified across all required categories.
+2. **Typed Difference Records**: The API oracle (`scripts/compare_httpx_api_manifest.py --validate`) produces structured difference records. `allowed-differences.toml` gates CI enforcement with exact difference matching.
+3. **Schema v3 Candidate Identity**: `scripts/candidate_identity.py` validates the identity schema against the reference profile, ensuring the candidate declares its capabilities correctly.
+4. **Lossless Merge Semantics**: Header and query parameter merge preserves order and duplicates across all transport paths (`test_merge_lossless.py`).
+5. **Separate Sync/Async Auth Drivers**: The `Auth` base class dispatches to independent sync and async implementations, eliminating shared mutable state.
+6. **Behavioral Downstream Fixtures**: `compat/downstream/behavioral_fixtures/` exercises real consumer patterns with pinned sources and enforced minimum counts.
+7. **Native Lifecycle Proof Fixtures**: Timeout classification (`test_native_timeout_classification.py`), soak (`test_soak.py`), and lifecycle tests validate engine behavior under load.
+8. **Qualification Workflow**: `scripts/validate_qualification_workflow.py` enforces workflow linting; `scripts/validate_compatibility_evidence.py` validates evidence provenance.
 
 ### Remaining blockers for Stage C released
 
 The following must be resolved before restoring a release claim:
 
-1. API oracle must fail-closed (manifest comparator currently informational in CI)
+1. API oracle must fail-closed in CI (currently informational)
 2. Controlled replacement artifact (`httpx` wheel) must satisfy downstream `Requires-Dist: httpx`
 3. Downstream suites must use pinned sources, exact commands, and enforced minimum counts
 4. Auth must work through all transport paths (mounted, custom, mock, ASGI, WSGI)

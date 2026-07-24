@@ -32,6 +32,24 @@ REQUIRED_PACKAGE_FIELDS = {
     "min-tests",
 }
 
+REQUIRED_V2_PACKAGE_FIELDS = {
+    "source-type",
+    "source-locator",
+    "source-hash",
+    "python-versions",
+    "public-httpx-api",
+    "install-command",
+    "test-working-dir",
+    "test-result-format",
+    "min-collected",
+    "max-skipped",
+    "max-xfailed",
+    "timeout",
+    "network-policy",
+    "category-ids",
+    "release-blocking",
+}
+
 REQUIRED_PORTFOLIO_FIELDS = {
     "schema-version",
     "status",
@@ -67,13 +85,17 @@ def manifest():
 
 
 class TestPortfolioMetadata:
-    def test_schema_version_is_1(self, manifest):
+    def test_schema_version_is_valid(self, manifest):
         portfolio = manifest.get("portfolio", {})
-        assert portfolio.get("schema-version") == "1"
+        assert portfolio.get("schema-version") in ("1", "2")
 
-    def test_status_is_phase5(self, manifest):
+    def test_status_matches_schema_version(self, manifest):
         portfolio = manifest.get("portfolio", {})
-        assert portfolio.get("status") == "phase-5"
+        sv = portfolio.get("schema-version", "1")
+        if sv == "2":
+            assert portfolio.get("status") == "phase-6"
+        else:
+            assert portfolio.get("status") == "phase-5"
 
     def test_all_portfolio_fields_present(self, manifest):
         portfolio = manifest.get("portfolio", {})
@@ -85,6 +107,12 @@ class TestPortfolioMetadata:
         ref = portfolio.get("reference-profile", "")
         ref_path = (MANIFEST_PATH.parent / ref).resolve()
         assert ref_path.exists(), f"Reference profile not found: {ref_path}"
+
+    def test_v2_has_stage_c_categories(self, manifest):
+        portfolio = manifest.get("portfolio", {})
+        if portfolio.get("schema-version") == "2":
+            cats = portfolio.get("stage-c-categories", [])
+            assert len(cats) >= 8, f"Schema v2 should have >=8 stage-c-categories, got {len(cats)}"
 
 
 class TestPackageEntries:
@@ -101,9 +129,13 @@ class TestPackageEntries:
 
     def test_all_required_fields_present(self, manifest):
         packages = manifest.get("package", [])
+        schema_version = manifest.get("portfolio", {}).get("schema-version", "1")
+        base_fields = REQUIRED_PACKAGE_FIELDS
+        if schema_version == "2":
+            base_fields = base_fields | REQUIRED_V2_PACKAGE_FIELDS
         errors = []
         for pkg in packages:
-            missing = REQUIRED_PACKAGE_FIELDS - set(pkg.keys())
+            missing = base_fields - set(pkg.keys())
             if missing:
                 errors.append(f"{pkg.get('name', '?')}: missing {missing}")
         assert not errors, "\n".join(errors)
@@ -192,17 +224,17 @@ class TestPackageEntries:
         assert not errors, "\n".join(errors)
 
     def test_required_packages_have_min_tests(self, manifest):
-        """Public-usage packages with testable categories should have min-tests > 0.
+        """Required packages should have min-tests > 0.
 
-        Excludes packages that are pytest plugins or libraries without
+        Excludes packages that are pytest plugins or SDK wrappers without
         installed test suites (e.g. pytest-httpx, anthropic, groq).
         """
         packages = manifest.get("package", [])
-        # Packages that are test frameworks or SDK wrappers without shipped tests
+        # Packages exempted from min-tests requirement
         EXEMPT_PACKAGES = {"pytest-httpx", "anthropic", "groq", "anyio", "pydantic", "httpx"}
         errors = []
         for pkg in packages:
-            if pkg.get("usage") != "public":
+            if pkg.get("usage") != "required":
                 continue
             if pkg["name"] in EXEMPT_PACKAGES:
                 continue
@@ -217,7 +249,59 @@ class TestPackageEntries:
             }
             if cat in testable and min_t == 0:
                 errors.append(
-                    f"{pkg['name']}: public package in category '{cat}' "
+                    f"{pkg['name']}: required package in category '{cat}' "
                     f"should have min-tests > 0, got {min_t}"
                 )
         assert not errors, "\n".join(errors)
+
+    def test_informational_entries_are_not_required(self, manifest):
+        """Informational entries should not be classified as required."""
+        packages = manifest.get("package", [])
+        errors = []
+        for pkg in packages:
+            if pkg.get("usage") == "informational" and pkg.get("min-tests", 0) > 0:
+                errors.append(
+                    f"{pkg['name']}: informational entry should have min-tests=0, "
+                    f"got {pkg.get('min-tests')}"
+                )
+        assert not errors, "\n".join(errors)
+
+
+class TestSchemaV2Fields:
+    def test_v2_required_entries_have_source_type(self, manifest):
+        schema_version = manifest.get("portfolio", {}).get("schema-version", "1")
+        if schema_version != "2":
+            pytest.skip("Not schema v2")
+        packages = manifest.get("package", [])
+        errors = []
+        for pkg in packages:
+            if pkg.get("usage") == "required":
+                if not pkg.get("source-type"):
+                    errors.append(f"{pkg['name']}: missing source-type")
+                if not pkg.get("source-locator"):
+                    errors.append(f"{pkg['name']}: missing source-locator")
+                if not isinstance(pkg.get("category-ids"), list):
+                    errors.append(f"{pkg['name']}: missing category-ids")
+        assert not errors, "\n".join(errors)
+
+    def test_v2_required_entries_have_test_command(self, manifest):
+        schema_version = manifest.get("portfolio", {}).get("schema-version", "1")
+        if schema_version != "2":
+            pytest.skip("Not schema v2")
+        packages = manifest.get("package", [])
+        errors = []
+        for pkg in packages:
+            if pkg.get("usage") == "required":
+                cmd = pkg.get("test-command", "")
+                if not cmd:
+                    errors.append(f"{pkg['name']}: required package missing test-command")
+        assert not errors, "\n".join(errors)
+
+    def test_v2_behavioral_fixtures_dir_exists(self, manifest):
+        schema_version = manifest.get("portfolio", {}).get("schema-version", "1")
+        if schema_version != "2":
+            pytest.skip("Not schema v2")
+        fixtures_dir = MANIFEST_PATH.parent / "behavioral_fixtures"
+        assert fixtures_dir.exists(), f"Schema v2 requires behavioral_fixtures: {fixtures_dir}"
+        py_files = list(fixtures_dir.glob("test_*.py"))
+        assert len(py_files) >= 5, f"Expected >=5 fixture files, found {len(py_files)}"

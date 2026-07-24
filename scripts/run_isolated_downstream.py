@@ -34,6 +34,15 @@ from pathlib import Path
 MANIFEST_PATH = Path(__file__).resolve().parent.parent / "compat" / "downstream" / "manifest.toml"
 
 
+def _emit_result(result: dict, output_path: str | None = None) -> None:
+    """Write structured result to file or stdout."""
+    payload = json.dumps(result, indent=2)
+    if output_path:
+        Path(output_path).write_text(payload)
+    else:
+        print(payload)
+
+
 def load_manifest() -> dict:
     import tomllib
 
@@ -245,46 +254,62 @@ def main() -> int:
                         help="Timeout in seconds (default: 120)")
     parser.add_argument("--keep-env", action="store_true",
                         help="Keep virtual environment after tests")
+    parser.add_argument("--output", default=None,
+                        help="Path to write structured result JSON (default: stdout)")
     args = parser.parse_args()
 
     wheel_dir = Path(args.wheel_dir).resolve()
     if not wheel_dir.exists():
-        print(json.dumps({"status": "error", "message": f"Wheel directory not found: {wheel_dir}"}))
+        _emit_result({"status": "error", "message": f"Wheel directory not found: {wheel_dir}"}, args.output)
         return 2
 
     eggfetch_wheel, httpx_wheel = find_wheels(wheel_dir)
     if eggfetch_wheel is None:
-        print(json.dumps({"status": "error", "message": f"No eggfetch wheel found in {wheel_dir}"}))
+        _emit_result({"status": "error", "message": f"No eggfetch wheel found in {wheel_dir}"}, args.output)
         return 2
     if httpx_wheel is None:
-        print(json.dumps({"status": "error", "message": f"No httpx controlled replacement wheel found in {wheel_dir}"}))
+        _emit_result({"status": "error", "message": f"No httpx controlled replacement wheel found in {wheel_dir}"}, args.output)
         return 2
 
     manifest = load_manifest()
     if not manifest:
-        print(json.dumps({"status": "error", "message": "Manifest not found or empty"}))
+        _emit_result({"status": "error", "message": "Manifest not found or empty"}, args.output)
         return 2
 
     pkg = find_package(manifest, args.package)
     if pkg is None:
-        print(json.dumps({
-            "status": "skipped",
+        # Fail-closed: unknown package in manifest is an error
+        _emit_result({
+            "status": "error",
             "package": args.package,
-            "message": "Package not found in manifest",
-        }))
-        return 0
+            "error": f"Package '{args.package}' not found in manifest (fail-closed)",
+        }, args.output)
+        return 1
 
     min_tests = pkg.get("min-tests", 0)
     usage = pkg.get("usage", "required")
 
     tmpdir = tempfile.mkdtemp(prefix=f"eggfetch-downstream-{args.package}-")
     start_time = time.monotonic()
+    # Fail-closed: missing test command is an error for required packages
+    test_command = pkg.get("test-command", "")
+    if not test_command and usage == "required":
+        _emit_result({
+            "status": "error",
+            "package": pkg["name"],
+            "error": "Required package has no test-command (fail-closed)",
+        }, args.output)
+        return 1
+
     result: dict = {
         "package": pkg["name"],
         "version": pkg.get("version", "unknown"),
         "category": pkg.get("category", "unknown"),
         "usage": usage,
         "min_tests": min_tests,
+        "source_type": pkg.get("source-type", ""),
+        "source_locator": pkg.get("source-locator", ""),
+        "source_hash": pkg.get("source-hash", ""),
         "venv_dir": tmpdir,
         "keep_env": args.keep_env,
         "timeout": args.timeout,
@@ -316,7 +341,7 @@ def main() -> int:
         if install_result.returncode != 0:
             result["status"] = "install-failed"
             result["duration_seconds"] = round(time.monotonic() - start_time, 2)
-            print(json.dumps(result, indent=2))
+            _emit_result(result, args.output)
             return 1
 
         # --- Step 2: Install controlled replacement httpx wheel ---
@@ -326,7 +351,7 @@ def main() -> int:
             result["install"]["stderr"] += "\n--- httpx replacement install ---\n" + httpx_install.stderr
             result["status"] = "install-failed"
             result["duration_seconds"] = round(time.monotonic() - start_time, 2)
-            print(json.dumps(result, indent=2))
+            _emit_result(result, args.output)
             return 1
 
         # --- Step 3: Verify shim identity BEFORE downstream deps ---
@@ -338,7 +363,7 @@ def main() -> int:
         if pre_shim_errors:
             result["status"] = "shim-identity-failure"
             result["duration_seconds"] = round(time.monotonic() - start_time, 2)
-            print(json.dumps(result, indent=2))
+            _emit_result(result, args.output)
             return 1
 
         # --- Step 4: Verify no upstream httpx ---
@@ -350,7 +375,7 @@ def main() -> int:
         if upstream_errors:
             result["status"] = "upstream-httpx-detected"
             result["duration_seconds"] = round(time.monotonic() - start_time, 2)
-            print(json.dumps(result, indent=2))
+            _emit_result(result, args.output)
             return 1
 
         # --- Step 5: Install the downstream package ---
@@ -362,7 +387,7 @@ def main() -> int:
             result["install"]["stderr"] += "\n--- downstream install ---\n" + downstream_install.stderr
             result["status"] = "downstream-install-failed"
             result["duration_seconds"] = round(time.monotonic() - start_time, 2)
-            print(json.dumps(result, indent=2))
+            _emit_result(result, args.output)
             return 1
 
         # --- Step 6: Re-verify shim identity AFTER downstream deps ---
@@ -374,7 +399,7 @@ def main() -> int:
         if post_shim_errors:
             result["status"] = "shim-identity-failure"
             result["duration_seconds"] = round(time.monotonic() - start_time, 2)
-            print(json.dumps(result, indent=2))
+            _emit_result(result, args.output)
             return 1
 
         # --- Step 7: Run pip check ---
@@ -383,7 +408,7 @@ def main() -> int:
         if not pip_ok:
             result["status"] = "pip-check-failure"
             result["duration_seconds"] = round(time.monotonic() - start_time, 2)
-            print(json.dumps(result, indent=2))
+            _emit_result(result, args.output)
             return 1
 
         # --- Step 8: Run tests ---
@@ -424,7 +449,7 @@ def main() -> int:
             result["status"] = "below-min-tests"
             result["tests"]["success"] = False
             result["duration_seconds"] = round(time.monotonic() - start_time, 2)
-            print(json.dumps(result, indent=2))
+            _emit_result(result, args.output)
             return 1
 
         if no_tests_collected:
@@ -439,20 +464,28 @@ def main() -> int:
         else:
             result["status"] = "failed"
 
+        # Fail-closed: zero tests collected for a required package is an error
+        if counts["total"] == 0 and usage == "required":
+            result["status"] = "zero-tests-required"
+            result["tests"]["success"] = False
+            result["duration_seconds"] = round(time.monotonic() - start_time, 2)
+            _emit_result(result, args.output)
+            return 1
+
         result["duration_seconds"] = round(time.monotonic() - start_time, 2)
-        print(json.dumps(result, indent=2))
+        _emit_result(result, args.output)
         return 0 if result["status"] in ("passed", "skipped-no-tests") else 1
 
     except subprocess.TimeoutExpired:
         result["status"] = "timeout"
         result["duration_seconds"] = round(time.monotonic() - start_time, 2)
-        print(json.dumps(result, indent=2))
+        _emit_result(result, args.output)
         return 1
     except Exception as exc:
         result["status"] = "error"
         result["error"] = str(exc)
         result["duration_seconds"] = round(time.monotonic() - start_time, 2)
-        print(json.dumps(result, indent=2))
+        _emit_result(result, args.output)
         return 1
     finally:
         if not args.keep_env and os.path.exists(tmpdir):

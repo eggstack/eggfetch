@@ -13,7 +13,7 @@ from pathlib import Path
 from eggfetch.compat.httpx._request import Request
 
 if typing.TYPE_CHECKING:
-    from collections.abc import Generator
+    from collections.abc import AsyncGenerator, Generator
 
     from eggfetch.compat.httpx._response import Response
 
@@ -24,10 +24,40 @@ class Auth:
     Subclasses implement ``auth_flow`` as a generator that yields
     :class:`Request` objects and receives the corresponding
     :class:`Response` via ``.send()``.
+
+    The client drives the flow via ``sync_auth_flow`` (sync) or
+    ``async_auth_flow`` (async).  Subclasses may override these to
+    provide native async auth logic.
     """
 
     def auth_flow(self, request: Request) -> Generator[Request, Response, None]:
         raise NotImplementedError()
+
+    def sync_auth_flow(
+        self, request: Request
+    ) -> Generator[Request, Response, None]:
+        """Sync auth driver — drives ``auth_flow`` as a regular generator."""
+        yield from self.auth_flow(request)
+
+    async def async_auth_flow(
+        self, request: Request
+    ) -> AsyncGenerator[Request, Response]:
+        """Async auth driver — drives ``auth_flow`` synchronously.
+
+        Subclasses that need real async I/O during authentication should
+        override this method.  The default falls back to the sync
+        ``auth_flow`` generator.
+        """
+        # Drive the sync generator inside an async context.
+        # We iterate manually so the caller sees an async generator.
+        gen = self.auth_flow(request)
+        request = next(gen)
+        while True:
+            response = yield request
+            try:
+                request = gen.send(response)
+            except StopIteration:
+                break
 
     def __repr__(self) -> str:
         return f"<{type(self).__name__}>"

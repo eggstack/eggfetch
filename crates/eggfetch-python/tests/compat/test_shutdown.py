@@ -82,6 +82,14 @@ def test_context_manager_cleanup():
         assert resp.status_code == 200
     # Client is closed here
 
+def test_no_explicit_close():
+    """Client without explicit close shuts down cleanly on GC."""
+    c = Client(transport=MockTransport(_handler))
+    resp = c.get("http://testserver/")
+    assert resp.status_code == 200
+    del c
+    import gc; gc.collect()
+
 if __name__ == "__main__":
     test_unused_sync_client()
     test_used_sync_client()
@@ -90,6 +98,7 @@ if __name__ == "__main__":
     test_auth_challenge_sequence()
     test_close_then_request_raises()
     test_context_manager_cleanup()
+    test_no_explicit_close()
     print("All sync shutdown tests: PASS")
 '''
 

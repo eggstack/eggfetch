@@ -45,3 +45,25 @@ cargo check -p eggfetch-core --all-features
 - Cookies, multipart & compression: `docs/architecture/core-cookies-multipart-compression.md`
 - Feature flags: `docs/architecture/feature-flags.md`
 - Dependency policy: `docs/architecture/dependency-policy.md`
+
+## HTTPX Compatibility Qualification
+
+When working on the compatibility layer or qualification pass:
+
+- **Identity schema**: `scripts/candidate_identity.py` validates schema v3 candidate identity against the reference profile.
+- **Evidence validation**: `scripts/validate_compatibility_evidence.py` checks evidence provenance and structure.
+- **Qualification workflow**: `scripts/validate_qualification_workflow.py` enforces workflow linting rules.
+- **Typed API oracle**: `scripts/compare_httpx_api_manifest.py --validate` produces structured difference records gated by `allowed-differences.toml`.
+
+### Qualification test files
+
+```sh
+# Lossless merge semantics
+python -m pytest crates/eggfetch-python/tests/compat/test_merge_lossless.py -v
+
+# Native lifecycle and soak
+python -m pytest crates/eggfetch-python/tests/compat/test_native_timeout_classification.py crates/eggfetch-python/tests/compat/test_soak.py -v --timeout=120
+
+# Behavioral downstream fixtures
+python -m pytest compat/downstream/behavioral_fixtures/ -v
+```

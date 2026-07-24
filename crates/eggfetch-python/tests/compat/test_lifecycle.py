@@ -298,3 +298,103 @@ class TestMultipleClientLifecycle:
             assert resp.status_code == 200
             await client.close()
             await asyncio.sleep(0.05)
+
+
+# ---------------------------------------------------------------------------
+# Native lifecycle: fully consumed, unread, partial, close-while-response
+# ---------------------------------------------------------------------------
+
+class TestNativeResponseLifecycle:
+    """Tests using real local sockets for resource lifecycle proof."""
+
+    def test_fully_consumed_response_releases_resources(self, server):
+        """Fully consumed response body releases connection cleanly."""
+        with Client() as client:
+            resp = client.get(f"{server}/hello")
+            body = resp.read()
+            assert body == b"hello world"
+            resp.close()
+            assert resp._is_closed
+
+    def test_unread_response_closed_by_context_exit(self, server):
+        """Unread response does not leak when client context exits."""
+        with Client() as client:
+            resp = client.get(f"{server}/stream")
+            # Never read the body
+        assert client.is_closed
+
+    def test_partially_consumed_response_releases_resources(self, server):
+        """Partially consumed response is cleaned up on close."""
+        with Client() as client:
+            with client.stream("GET", f"{server}/slow") as resp:
+                chunks_read = 0
+                for chunk in resp.iter_bytes():
+                    chunks_read += 1
+                    if chunks_read >= 2:
+                        break
+            assert resp._is_closed
+
+    def test_client_close_while_response_exists(self, server):
+        """Client close cleans up outstanding response resources."""
+        with Client() as client:
+            resp = client.get(f"{server}/hello")
+            assert resp.status_code == 200
+            client.close()
+            assert client.is_closed
+
+    def test_multiple_responses_on_same_client(self, server):
+        """Multiple responses on a single client all clean up correctly."""
+        with Client() as client:
+            responses = []
+            for _ in range(10):
+                resp = client.get(f"{server}/hello")
+                assert resp.status_code == 200
+                responses.append(resp)
+            for resp in responses:
+                resp.close()
+                assert resp._is_closed
+
+    def test_response_outlives_client_close(self, server):
+        """Response read after client close returns cached data."""
+        with Client() as client:
+            resp = client.get(f"{server}/hello")
+            client.close()
+            # Response body is already buffered
+            body = resp.read()
+            assert body == b"hello world"
+
+    def test_stream_abandon_releases_resources(self, server):
+        """Abandoning a stream mid-iteration releases resources."""
+        with Client() as client:
+            with client.stream("GET", f"{server}/stream") as resp:
+                for _ in resp.iter_bytes():
+                    break
+            # Context exit closes stream
+            assert resp._is_closed
+
+    def test_close_is_idempotent_after_stream(self, server):
+        """Close is idempotent even after streaming operations."""
+        client = Client()
+        with client.stream("GET", f"{server}/stream") as resp:
+            for _ in resp.iter_bytes():
+                break
+        client.close()
+        client.close()
+        assert client.is_closed
+
+    @pytest.mark.asyncio
+    async def test_async_fully_consumed_response_releases(self, server):
+        """Async: fully consumed response releases cleanly."""
+        async with AsyncClient() as client:
+            resp = await client.get(f"{server}/hello")
+            body = resp.read()
+            assert body == b"hello world"
+            await resp.aclose()
+            assert resp._is_closed
+
+    @pytest.mark.asyncio
+    async def test_async_unread_response_closed_by_context(self, server):
+        """Async: unread response does not leak when context exits."""
+        async with AsyncClient() as client:
+            resp = await client.get(f"{server}/stream")
+        assert client.is_closed

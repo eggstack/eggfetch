@@ -2,15 +2,8 @@
 
 Status: SUPERSEDED
 
-> **Correction Notice**: This status document overstated completion. The
-> verification/substitution/lifecycle corrective closure pass
-> (`plans/httpx-drop-in-verification-substitution-and-lifecycle-corrective-closure.md`)
-> identified additional defects in API oracle fail-closed behavior, controlled
-> replacement validation, downstream execution, auth flow dispatch, async
-> streaming lifecycle, data preservation, timeout handling, Python matrix
-> coverage, exact-SHA qualification, and evidence generation. This status
-> document is superseded by
-> `plans/httpx-drop-in-verification-substitution-and-lifecycle-corrective-closure-status.md`.
+> **Correction Notice**: This status document overstated completion. It is superseded by
+> `plans/httpx-drop-in-final-native-qualification-and-evidence-closure-status.md`.
 
 ## Summary
 
