@@ -15,6 +15,7 @@ import pytest
 import eggfetch
 from eggfetch.compat.httpx import Client, AsyncClient, Timeout, MockTransport, Response
 from eggfetch.compat.httpx._exceptions import (
+    ConnectError,
     ConnectTimeout,
     PoolTimeout,
     ReadTimeout,
@@ -235,19 +236,19 @@ class TestRealSocketTimeoutClassification:
                 assert elapsed < 5.0, f"Timeout took too long: {elapsed:.2f}s"
 
     def test_real_connect_timeout_refused(self):
-        """Connection refused on unreachable port produces ConnectTimeout."""
+        """Connection refused on unreachable port produces ConnectError."""
         with Client(timeout=Timeout(0.3)) as c:
             start = time.monotonic()
-            with pytest.raises(ConnectTimeout) as exc_info:
+            with pytest.raises(ConnectError) as exc_info:
                 c.get("http://127.0.0.1:1/")
             elapsed = time.monotonic() - start
-            assert isinstance(exc_info.value, ConnectTimeout)
+            assert isinstance(exc_info.value, ConnectError)
             assert elapsed < 5.0, f"Timeout took too long: {elapsed:.2f}s"
 
     def test_real_proxy_server_forward(self):
         """Real local proxy server forwards requests successfully."""
         with local_http_server() as (backend_host, backend_port):
-            with local_proxy_server() as (proxy_host, proxy_port):
+            with local_proxy_server(backend=(backend_host, backend_port)) as (proxy_host, proxy_port):
                 with Client(timeout=Timeout(5)) as c:
                     resp = c.get(
                         f"http://{proxy_host}:{proxy_port}/health",
@@ -256,7 +257,7 @@ class TestRealSocketTimeoutClassification:
 
     def test_real_tls_server_handshake(self):
         """Real local TLS server completes handshake successfully."""
-        with local_tls_server() as (tls_host, tls_port, client_ctx):
-            with Client(timeout=Timeout(5), verify=client_ctx) as c:
+        with local_tls_server() as (tls_host, tls_port, client_ctx, cert_path):
+            with Client(timeout=Timeout(5), verify=cert_path) as c:
                 resp = c.get(f"https://{tls_host}:{tls_port}/health")
                 assert resp.status_code == 200

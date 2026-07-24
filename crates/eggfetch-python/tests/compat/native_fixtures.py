@@ -144,6 +144,8 @@ def local_stall_server() -> Generator[tuple[str, int, threading.Event], None, No
 class _ProxyHandler(http.server.BaseHTTPRequestHandler):
     """Minimal HTTP proxy that forwards requests and handles CONNECT."""
 
+    backend: tuple[str, int] | None = None
+
     def do_GET(self):
         self._forward_request()
 
@@ -189,13 +191,19 @@ class _ProxyHandler(http.server.BaseHTTPRequestHandler):
         """Forward an HTTP request to the target server."""
         content_length = int(self.headers.get("Content-Length", 0))
         body = self.rfile.read(content_length) if content_length else b""
+
+        target = getattr(self.__class__, "backend", None)
+        if target is None:
+            self.send_error(502, "No backend configured")
+            return
+
         try:
-            upstream = socket.create_connection(("127.0.0.1", 1), timeout=5)
+            upstream = socket.create_connection(target, timeout=5)
         except OSError:
             self.send_error(502, "Upstream unavailable")
             return
         try:
-            req_line = f"{self.command} / HTTP/1.1\r\nHost: 127.0.0.1:1\r\n"
+            req_line = f"{self.command} {self.path} HTTP/1.1\r\nHost: {target[0]}:{target[1]}\r\n"
             if body:
                 req_line += f"Content-Length: {len(body)}\r\n"
             req_line += "\r\n"
@@ -222,9 +230,17 @@ class _ProxyHandler(http.server.BaseHTTPRequestHandler):
 
 
 @contextmanager
-def local_proxy_server() -> Generator[tuple[str, int], None, None]:
-    """Deterministic loopback HTTP proxy that forwards requests and handles CONNECT."""
-    httpd = _ThreadedHTTPServer(("127.0.0.1", 0), _ProxyHandler)
+def local_proxy_server(
+    backend: tuple[str, int] | None = None,
+) -> Generator[tuple[str, int], None, None]:
+    """Deterministic loopback HTTP proxy that forwards requests and handles CONNECT.
+
+    If *backend* is given, all requests are forwarded to that (host, port) pair.
+    """
+    handler_class = _ProxyHandler
+    if backend is not None:
+        handler_class = type("_ConfiguredProxy", (_ProxyHandler,), {"backend": backend})
+    httpd = _ThreadedHTTPServer(("127.0.0.1", 0), handler_class)
     port = httpd.server_address[1]
     thread = threading.Thread(target=httpd.serve_forever, daemon=True)
     thread.start()
@@ -239,17 +255,22 @@ class _TLSDirectHandler(http.server.BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == "/health":
+            body = b"ok"
             self.send_response(200)
             self.send_header("Content-Type", "text/plain")
+            self.send_header("Content-Length", str(len(body)))
             self.end_headers()
-            self.wfile.write(b"ok")
+            self.wfile.write(body)
         elif self.path == "/json":
+            body = json.dumps({"status": "tls-ok"}).encode()
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
             self.end_headers()
-            self.wfile.write(json.dumps({"status": "tls-ok"}).encode())
+            self.wfile.write(body)
         else:
             self.send_response(404)
+            self.send_header("Content-Length", "0")
             self.end_headers()
 
     def log_message(self, format, *args):
@@ -267,6 +288,8 @@ def _generate_self_signed_cert(cert_dir: str) -> tuple[str, str]:
             "-keyout", key_path, "-out", cert_path,
             "-days", "1", "-nodes",
             "-subj", "/CN=127.0.0.1",
+            "-addext", "basicConstraints=critical,CA:FALSE",
+            "-addext", "subjectAltName=IP:127.0.0.1",
         ],
         check=True, capture_output=True,
     )
@@ -274,11 +297,12 @@ def _generate_self_signed_cert(cert_dir: str) -> tuple[str, str]:
 
 
 @contextmanager
-def local_tls_server() -> Generator[tuple[str, int, ssl.SSLContext], None, None]:
+def local_tls_server() -> Generator[tuple[str, int, ssl.SSLContext, str], None, None]:
     """TLS-capable test server with a self-signed certificate.
 
-    Yields (host, port, client_ssl_context) where client_ssl_context can be
-    used to verify the server certificate.
+    Yields (host, port, client_ssl_context, cert_path) where client_ssl_context
+    can be used to verify the server certificate, and cert_path is the
+    CA certificate PEM file path that the native engine accepts.
     """
     with tempfile.TemporaryDirectory() as tmpdir:
         cert_path, key_path = _generate_self_signed_cert(tmpdir)
@@ -297,6 +321,6 @@ def local_tls_server() -> Generator[tuple[str, int, ssl.SSLContext], None, None]
         thread = threading.Thread(target=httpd.serve_forever, daemon=True)
         thread.start()
         try:
-            yield "127.0.0.1", port, client_ssl
+            yield "127.0.0.1", port, client_ssl, cert_path
         finally:
             httpd.shutdown()

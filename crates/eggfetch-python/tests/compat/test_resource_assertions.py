@@ -237,10 +237,11 @@ class TestEarlyExitResourceCleanup:
 
         with Client(transport=MockTransport(mixed_handler)) as client:
             for _ in range(30):
-                resp = client.get("http://testserver/")
-                if call_count[0] % 3 == 0:
+                try:
+                    resp = client.get("http://testserver/")
                     assert resp.status_code == 200
-                # Some calls raise; we only assert on successes
+                except RuntimeError:
+                    pass  # Expected intermittent errors
 
         fd_after = _get_fd_count()
         delta = fd_after - fd_before

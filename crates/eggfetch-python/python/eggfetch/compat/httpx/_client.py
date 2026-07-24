@@ -106,36 +106,44 @@ def _convert_proxy(proxy):
 
 
 def _map_exception(native_exc, compat_request=None):
-    exc_type = type(native_exc)
-    exc_name = exc_type.__name__
     msg = str(native_exc)
 
-    if exc_name == "TimeoutException" or isinstance(native_exc, eggfetch.TimeoutException):
-        detail = getattr(native_exc, "detail", None)
-        if detail:
-            if "connect" in str(detail).lower():
-                return ConnectTimeout(message=msg, request=compat_request)
-            if "read" in str(detail).lower():
-                return ReadTimeout(message=msg, request=compat_request)
-            if "write" in str(detail).lower():
-                return WriteTimeout(message=msg, request=compat_request)
-            if "pool" in str(detail).lower():
-                return PoolTimeout(message=msg, request=compat_request)
+    if not isinstance(native_exc, eggfetch.EggfetchError):
+        raise
+
+    if isinstance(native_exc, eggfetch.PoolTimeout):
+        return PoolTimeout(message=msg, request=compat_request)
+    if isinstance(native_exc, eggfetch.ConnectTimeout):
+        return ConnectTimeout(message=msg, request=compat_request)
+    if isinstance(native_exc, eggfetch.ReadTimeout):
+        return ReadTimeout(message=msg, request=compat_request)
+    if isinstance(native_exc, eggfetch.WriteTimeout):
+        return WriteTimeout(message=msg, request=compat_request)
+    if isinstance(native_exc, eggfetch.TimeoutException):
+        msg_lower = msg.lower()
+        if "pool timeout" in msg_lower:
+            return PoolTimeout(message=msg, request=compat_request)
+        if "proxy connect" in msg_lower or "proxy tls" in msg_lower or "connect timeout" in msg_lower:
+            return ConnectTimeout(message=msg, request=compat_request)
+        if "write timeout" in msg_lower:
+            return WriteTimeout(message=msg, request=compat_request)
+        if "read timeout" in msg_lower or "total timeout" in msg_lower:
+            return ReadTimeout(message=msg, request=compat_request)
         return TimeoutException(message=msg, request=compat_request)
 
-    if exc_name == "ConnectError" or exc_name == "NetworkError":
+    if isinstance(native_exc, eggfetch.NetworkError):
         return ConnectError(message=msg, request=compat_request)
 
-    if exc_name == "ProtocolError":
+    if isinstance(native_exc, eggfetch.ProtocolError):
         return ProtocolError(message=msg, request=compat_request)
 
-    if exc_name == "TooManyRedirects":
+    if isinstance(native_exc, eggfetch.TooManyRedirects):
         return TooManyRedirects(message=msg, request=compat_request)
 
-    if exc_name == "InvalidUrl":
+    if isinstance(native_exc, eggfetch.InvalidUrl):
         return InvalidURL(msg)
 
-    if exc_name == "ProxyError":
+    if isinstance(native_exc, eggfetch.ProxyError):
         return ProxyError(message=msg, request=compat_request)
 
     return RequestError(message=msg, request=compat_request)
@@ -534,7 +542,10 @@ class Client:
         )
 
     def _send_via_transport(self, transport, request, *, stream=False):
-        native_resp = transport.handle_request(request)
+        try:
+            native_resp = transport.handle_request(request)
+        except Exception as exc:
+            raise _map_exception(exc, request) from exc
         if stream:
             return _wrap_streaming_response(native_resp, request, self._default_encoding)
         return _wrap_response(native_resp, request, self._default_encoding)
@@ -911,13 +922,19 @@ class AsyncClient:
         )
 
     async def _send_via_transport(self, transport, request, *, stream=False):
-        native_resp = await transport.handle_async_request(request)
+        try:
+            native_resp = await transport.handle_async_request(request)
+        except Exception as exc:
+            raise _map_exception(exc, request) from exc
         if stream:
             return _wrap_streaming_response(native_resp, request, self._default_encoding)
         return _wrap_response(native_resp, request, self._default_encoding)
 
     def _send_via_transport_sync(self, transport, request, *, stream=False):
-        native_resp = transport.handle_request(request)
+        try:
+            native_resp = transport.handle_request(request)
+        except Exception as exc:
+            raise _map_exception(exc, request) from exc
         if stream:
             return _wrap_streaming_response(native_resp, request, self._default_encoding)
         return _wrap_response(native_resp, request, self._default_encoding)

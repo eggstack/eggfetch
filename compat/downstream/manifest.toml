@@ -5,11 +5,14 @@ created = "2026-07-24"
 reference-profile = "../httpx/0.28.1/profile.toml"
 description = "Downstream consumer packages that exercise distinct httpx compatibility surfaces"
 stage-c-categories = [
+  "contract-tests",
   "mock-transport-request-matching",
+  "framework-test-client",
   "asgi-test-client",
+  "sdk-async-client",
+  "streaming-sse-consumption",
   "custom-auth-flow",
   "event-hooks-instrumentation",
-  "streaming-sse-consumption",
 ]
 
 [[package]]

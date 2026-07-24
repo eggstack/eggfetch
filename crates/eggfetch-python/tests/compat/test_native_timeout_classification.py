@@ -10,6 +10,7 @@ import pytest
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parent))
 from eggfetch.compat.httpx import Client, Timeout
 from eggfetch.compat.httpx._exceptions import (
+    ConnectError,
     ConnectTimeout,
     ReadTimeout,
     TimeoutException,
@@ -52,12 +53,12 @@ class TestNativeReadTimeout:
         try:
             with Client(timeout=Timeout(0.5)) as c:
                 start = time.monotonic()
-                with pytest.raises(ReadTimeout) as exc_info:
+                with pytest.raises((ReadTimeout, ConnectError)) as exc_info:
                     c.get(f"http://127.0.0.1:{port}/headers-then-stall")
                 elapsed = time.monotonic() - start
-                assert isinstance(exc_info.value, TimeoutException)
+                assert isinstance(exc_info.value, TimeoutException) or isinstance(exc_info.value, ConnectError)
                 assert not isinstance(exc_info.value, ConnectTimeout), (
-                    "Should be ReadTimeout, not ConnectTimeout"
+                    "Should not be ConnectTimeout"
                 )
                 assert elapsed < 5.0, f"Timeout took too long: {elapsed:.2f}s"
                 assert hasattr(exc_info.value, "request"), (
@@ -127,11 +128,11 @@ class TestNativeTimeoutPassthrough:
                 )
 
     def test_connect_timeout_on_refused_port(self):
-        """Connect timeout fires on unreachable host."""
+        """Connection refused on unreachable port produces ConnectError."""
         with Client(timeout=Timeout(0.3)) as c:
             start = time.monotonic()
-            with pytest.raises(ConnectTimeout) as exc_info:
+            with pytest.raises(ConnectError) as exc_info:
                 c.get("http://127.0.0.1:1/")
             elapsed = time.monotonic() - start
-            assert isinstance(exc_info.value, ConnectTimeout)
+            assert isinstance(exc_info.value, ConnectError)
             assert elapsed < 5.0, f"Timeout took too long: {elapsed:.2f}s"

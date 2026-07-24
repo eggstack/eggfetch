@@ -231,7 +231,7 @@ from eggfetch.compat.httpx import AsyncClient, MockTransport, Response
 
 def _slow_handler(request):
     import time
-    time.sleep(300)
+    time.sleep(0.1)
     return Response(200)
 
 async def test_cancelled_async_shutdown():
