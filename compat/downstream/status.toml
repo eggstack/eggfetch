@@ -1,0 +1,93 @@
+# Downstream compatibility portfolio status
+# Updated: 2026-07-25
+# Phase: 6 (Stage C candidate — corrective closure)
+
+[portfolio]
+schema-version = "2"
+status = "phase-6"
+stage = "stage-c-candidate"
+reference-profile = "../httpx/0.28.1/profile.toml"
+description = "Downstream consumer packages exercising distinct httpx compatibility surfaces"
+
+[release-blocking-coverage]
+# All 8 Stage C categories covered by release-blocking packages
+categories = [
+  "contract-tests",
+  "mock-transport-request-matching",
+  "framework-test-client",
+  "asgi-test-client",
+  "sdk-async-client",
+  "streaming-sse-consumption",
+  "custom-auth-flow",
+  "event-hooks-instrumentation",
+]
+packages = [
+  "httpx",
+  "respx",
+  "pytest-httpx",
+  "starlette",
+  "anthropic",
+  "httpx-sse",
+  "httpx-auth",
+  "opentelemetry-instrumentation-httpx",
+]
+
+[behavioral-fixtures]
+# Behavioral fixtures created for each release-blocking package
+fixtures = [
+  "test_httpx_contract_behavior.py",
+  "test_respx_behavior.py",
+  "test_pytest_httpx_behavior.py",
+  "test_starlette_behavior.py",
+  "test_httpx_sse_behavior.py",
+  "test_httpx_auth_behavior.py",
+  "test_opentelemetry_behavior.py",
+  "test_anthropic_behavior.py",
+]
+# Last verified: 58 passed, 2 skipped (anthropic not installed)
+last-run = "2026-07-25"
+last-result = "58 passed, 2 skipped"
+
+[scripts]
+# Scripts updated for schema v4 / v1 / v3
+candidate_identity = "schema v4 (identity_digest, artifact_manifest_sha256, workflow_run_url, canonical JSON)"
+generate_artifact_manifest = "schema v1 (eggfetch/httpx-controlled-replacement artifact types, canonical paths)"
+normalize_pytest_result = "embeds candidate_sha, identity_digest, suite, overall_pass, diagnostics"
+generate_downstream_matrix = "manifest-driven matrix generation (8 release-blocking packages)"
+generate_compatibility_evidence = "requires all sections, manifest paths, identity consistency, --release mode"
+validate_compatibility_evidence = "independent recomputation, all 24 checks"
+validate_qualification_workflow = "24 checks (10 workflow + 14 evidence)"
+
+[workflow]
+# Qualification workflow rewritten with 20 jobs
+jobs = [
+  "verify-candidate",
+  "build-candidate-artifacts",
+  "normalize-candidate-artifacts",
+  "validate-workflow",
+  "compat-suite",
+  "facade-api-oracle",
+  "shim-api-oracle",
+  "prepare-downstream-matrix",
+  "downstream-substitution",
+  "aggregate-downstream-results",
+  "shim-substitution",
+  "native-timeout",
+  "proxy-tls",
+  "shutdown",
+  "resource",
+  "soak",
+  "aggregate-qualification-results",
+  "generate-evidence",
+  "independent-evidence-validation",
+  "qualification-summary-gate",
+]
+no_wheel_dir = true
+candidate_identity_propagation = true
+
+[verification]
+# Last verification results
+rust-tests = "passed (cargo test --workspace --all-features --quiet)"
+python-compat-tests = "981 passed (EGGFETCH_COMPAT_REQUIRED=1)"
+behavioral-fixtures = "58 passed, 2 skipped"
+key-script-tests = "69 passed"

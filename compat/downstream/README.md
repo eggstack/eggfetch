@@ -18,8 +18,18 @@ real-world consumers. This manifest defines the test matrix:
 
 ```
 compat/downstream/
-  manifest.toml    # Machine-readable package inventory
-  README.md        # This file
+  manifest.toml           # Machine-readable package inventory
+  README.md               # This file
+  status.toml             # Current qualification status
+  behavioral_fixtures/    # Package-specific behavioral test fixtures
+    test_httpx_contract_behavior.py
+    test_respx_behavior.py
+    test_pytest_httpx_behavior.py
+    test_starlette_behavior.py
+    test_httpx_sse_behavior.py
+    test_httpx_auth_behavior.py
+    test_opentelemetry_behavior.py
+    test_anthropic_behavior.py
 ```
 
 ## How to Add a New Fixture
@@ -44,17 +54,25 @@ compat/downstream/
 python scripts/run_downstream_compat.py
 ```
 
+### Generate downstream matrix
+```bash
+python scripts/generate_downstream_matrix.py \
+  --manifest compat/downstream/manifest.toml \
+  --output /tmp/downstream-matrix.json
+```
+
 ### Run package-specific integration tests
 ```bash
 cd crates/eggfetch-python && maturin develop
-EGGFETCH_COMPAT_REQUIRED=1 pytest crates/eggfetch-python/tests/compat/test_downstream_portfolio.py -v --strict-markers
+EGGFETCH_COMPAT_REQUIRED=1 pytest compat/downstream/behavioral_fixtures/ -v --strict-markers
 ```
 
 ### Install all downstream packages for manual testing
 ```bash
-pip install httpx==0.28.1 respx==0.21.1 pytest-httpx==0.30.0 starlette==0.37.2
-pip install anthropic==0.39.0 groq==0.13.0 httpx-sse==0.4.0 httpcore==1.0.5
-pip install anyio==4.8.0 httpx-auth==0.22.0 httpx-ws==0.7.0 pydantic==2.10.0
+pip install httpx==0.28.1 respx==0.23.1 pytest-httpx==0.36.2 starlette==0.37.2
+pip install anthropic==0.39.0 httpx-sse==0.4.3 httpx-auth==0.23.1
+pip install opentelemetry-instrumentation-httpx==0.65b0 opentelemetry-sdk==1.44.0
+pip install httpcore==1.0.5 anyio==4.8.0 pydantic==2.10.0
 ```
 
 ## Isolation Requirements
@@ -78,14 +96,29 @@ pip install anyio==4.8.0 httpx-auth==0.22.0 httpx-ws==0.7.0 pydantic==2.10.0
 | Category | What It Tests |
 |----------|--------------|
 | contract-tests | Reference httpx API surface |
-| mock-transport-user | MockTransport, Router, request interception |
+| mock-transport-request-matching | MockTransport, Router, request interception |
 | framework-test-client | Pytest fixtures, request matching |
-| framework-asgi-transport | ASGITransport, in-process ASGI |
+| asgi-test-client | ASGITransport, in-process ASGI |
 | sdk-async-client | AsyncClient, custom auth, streaming, timeouts |
 | sdk-sync-client | Client, custom auth, timeout config |
-| streaming-upload-download | Streaming responses, SSE, chunked transfer |
+| streaming-sse-consumption | Streaming responses, SSE, chunked transfer |
 | custom-transport-subclass | BaseTransport/AsyncBaseTransport subclassing |
 | async-testing-support | Async context managers, task groups |
 | custom-auth-flow | Auth subclassing, OAuth, token refresh |
-| event-hook-instrumentation | Transport extensions, connection lifecycle |
+| event-hooks-instrumentation | Transport extensions, connection lifecycle |
 | heavy-config-user | base_url, params, headers, cookies, timeouts |
+
+## Release-Blocking Coverage
+
+All 8 Stage C categories are covered by release-blocking packages:
+
+| Category | Package | Version |
+|----------|---------|---------|
+| contract-tests | httpx | 0.28.1 |
+| mock-transport-request-matching | respx | 0.23.1 |
+| framework-test-client | pytest-httpx | 0.36.2 |
+| asgi-test-client | starlette | 0.37.2 |
+| sdk-async-client | anthropic | 0.39.0 |
+| streaming-sse-consumption | httpx-sse | 0.4.3 |
+| custom-auth-flow | httpx-auth | 0.23.1 |
+| event-hooks-instrumentation | opentelemetry-instrumentation-httpx | 0.65b0 |

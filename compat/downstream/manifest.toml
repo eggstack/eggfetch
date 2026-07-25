@@ -21,12 +21,12 @@ version = "0.28.1"
 license = "BSD-3-Clause"
 category = "contract-tests"
 rationale = "Reference implementation of the httpx API surface. Used for contract tests and API manifest comparison."
-usage = "informational"
+usage = "required"
 test-subset = "spec"
 expected-network-isolation = true
 optional-dependencies = []
 known-incompatibilities = []
-test-command = "python -c 'import httpx; assert getattr(httpx, \"__eggfetch_shim__\", False); print(f\"httpx shim OK: {httpx.__file__}\")'"
+test-command = "python -m pytest compat/downstream/behavioral_fixtures/test_httpx_contract_behavior.py -v"
 min-tests = 0
 source-type = "pypi"
 source-locator = "httpx==0.28.1"
@@ -35,22 +35,23 @@ python-versions = ">=3.8"
 public-httpx-api = ["Client", "AsyncClient", "Request", "Response", "URL", "Headers", "Cookies", "Auth"]
 install-command = "pip install httpx==0.28.1"
 test-working-dir = "."
-test-result-format = "exit-code"
-min-collected = 0
-max-skipped = -1
-max-xfailed = -1
+test-result-format = "pytest-json"
+min-collected = 1
+min-passed = 1
+max-skipped = 0
+max-xfailed = 0
 timeout = 60
 network-policy = "isolated"
 category-ids = ["contract-tests"]
-release-blocking = false
+release-blocking = true
 update-owner = "eggfetch-team"
 review-cadence = "every-phase"
 
 [[package]]
 name = "respx"
-version = "0.21.1"
+version = "0.23.1"
 license = "BSD-3-Clause"
-category = "mock-transport-user"
+category = "mock-transport-request-matching"
 rationale = "Widely-used mock transport library that patches httpx transports. Exercises MockTransport and Router APIs."
 usage = "required"
 test-subset = "unit"
@@ -59,16 +60,16 @@ optional-dependencies = ["httpx"]
 known-incompatibilities = [
   "respx patches httpx._transports.default which is private API"
 ]
-test-command = "python -c \"import respx; from httpx import Client, Response; with respx.mock(base_url='http://test') as mock: mock.get('/mock').respond(200, json={'mocked': True}); c = Client(); resp = c.get('http://test/mock'); assert resp.status_code == 200; assert resp.json()['mocked'] is True; assert mock.calls.call_count == 1; print('respx behavioral OK')\""
+test-command = "python -m pytest compat/downstream/behavioral_fixtures/test_respx_behavior.py -v"
 min-tests = 1
 source-type = "pypi"
-source-locator = "respx==0.21.1"
-source-hash = "05f45de23f0c785862a2c92a3e173916e8ca88e4caad715dd5f68584d6053c20"
+source-locator = "respx==0.23.1"
+source-hash = "b18004b029935384bccfa6d7d9d74b4ec9af73a081cc28600fffc0447f4b8c1a"
 python-versions = ">=3.8"
 public-httpx-api = ["MockTransport", "Router"]
-install-command = "pip install respx==0.21.1"
+install-command = "pip install respx==0.23.1"
 test-working-dir = "."
-test-result-format = "exit-code"
+test-result-format = "pytest-json"
 min-collected = 1
 min-passed = 1
 max-skipped = 0
@@ -82,7 +83,7 @@ review-cadence = "every-phase"
 
 [[package]]
 name = "pytest-httpx"
-version = "0.30.0"
+version = "0.36.2"
 license = "BSD-3-Clause"
 category = "framework-test-client"
 rationale = "Pytest fixture plugin that intercepts httpx requests via MockTransport. Exercises fixture injection and request matching."
@@ -93,23 +94,23 @@ optional-dependencies = ["pytest", "httpx"]
 known-incompatibilities = [
   "pytest-httpx relies on httpx._transports.default for interception"
 ]
-test-command = "python -c \"from pytest_httpx import HTTPXMock; import httpx; from httpx import Client, Response; t = httpx.MockTransport(lambda r: Response(200, json={'mocked': True})); c = Client(transport=t); resp = c.get('http://test/mock'); assert resp.status_code == 200; assert resp.json()['mocked'] is True; print('pytest-httpx behavioral OK')\""
+test-command = "python -m pytest compat/downstream/behavioral_fixtures/test_pytest_httpx_behavior.py -v"
 min-tests = 1
 source-type = "pypi"
-source-locator = "pytest-httpx==0.30.0"
-source-hash = "6d47849691faf11d2532565d0c8e0e02b9f4ee730da31687feae315581d7520c"
+source-locator = "pytest-httpx==0.36.2"
+source-hash = "d42ebd5679442dc7bfb0c48e0767b6562e9bc4534d805127b0084171886a5e22"
 python-versions = ">=3.8"
 public-httpx-api = ["MockTransport"]
-install-command = "pip install pytest-httpx==0.30.0"
+install-command = "pip install pytest-httpx==0.36.2"
 test-working-dir = "."
-test-result-format = "exit-code"
+test-result-format = "pytest-json"
 min-collected = 1
 min-passed = 1
 max-skipped = 0
 max-xfailed = 0
 timeout = 60
 network-policy = "isolated"
-category-ids = ["mock-transport-request-matching"]
+category-ids = ["framework-test-client"]
 release-blocking = true
 update-owner = "eggfetch-team"
 review-cadence = "every-phase"
@@ -118,14 +119,14 @@ review-cadence = "every-phase"
 name = "starlette"
 version = "0.37.2"
 license = "BSD-3-Clause"
-category = "framework-asgi-transport"
+category = "asgi-test-client"
 rationale = "ASGI framework whose TestClient uses httpx.ASGITransport. Exercises in-process transport and ASGI app integration."
 usage = "required"
 test-subset = "integration"
 expected-network-isolation = true
 optional-dependencies = ["httpx", "anyio"]
 known-incompatibilities = []
-test-command = "python -c \"from starlette.applications import Starlette; from starlette.responses import PlainTextResponse; from starlette.testclient import TestClient; app = Starlette(); app.router.routes.append(__import__('starlette.routing', fromlist=['Route']).Route('/hello', lambda req: PlainTextResponse('hello from starlette'))); client = TestClient(app); resp = client.get('/hello'); assert resp.status_code == 200; assert resp.text == 'hello from starlette'; print('starlette TestClient behavioral OK')\""
+test-command = "python -m pytest compat/downstream/behavioral_fixtures/test_starlette_behavior.py -v"
 min-tests = 1
 source-type = "pypi"
 source-locator = "starlette==0.37.2"
@@ -134,7 +135,7 @@ python-versions = ">=3.8"
 public-httpx-api = ["ASGITransport"]
 install-command = "pip install starlette==0.37.2"
 test-working-dir = "."
-test-result-format = "exit-code"
+test-result-format = "pytest-json"
 min-collected = 1
 min-passed = 1
 max-skipped = 0
@@ -152,14 +153,14 @@ version = "0.39.0"
 license = "MIT"
 category = "sdk-async-client"
 rationale = "Major AI SDK using httpx.AsyncClient with custom auth, base_url, timeouts, streaming, and exception inspection."
-usage = "informational"
+usage = "required"
 test-subset = "integration"
-expected-network-isolation = false
+expected-network-isolation = true
 optional-dependencies = ["httpx", "pydantic"]
 known-incompatibilities = [
   "anthropic accesses httpx.Response.stream internally for SSE parsing"
 ]
-test-command = "python -c 'import anthropic; print(anthropic.__version__)'"
+test-command = "python -m pytest compat/downstream/behavioral_fixtures/test_anthropic_behavior.py -v"
 min-tests = 0
 source-type = "pypi"
 source-locator = "anthropic==0.39.0"
@@ -168,14 +169,117 @@ python-versions = ">=3.8"
 public-httpx-api = ["Client", "AsyncClient"]
 install-command = "pip install anthropic==0.39.0"
 test-working-dir = "."
-test-result-format = "exit-code"
-min-collected = 0
-max-skipped = -1
-max-xfailed = -1
+test-result-format = "pytest-json"
+min-collected = 1
+min-passed = 1
+max-skipped = 0
+max-xfailed = 0
 timeout = 60
-network-policy = "network-required"
+network-policy = "isolated"
 category-ids = ["sdk-async-client"]
-release-blocking = false
+release-blocking = true
+update-owner = "eggfetch-team"
+review-cadence = "quarterly"
+
+[[package]]
+name = "httpx-sse"
+version = "0.4.3"
+license = "BSD-3-Clause"
+category = "streaming-sse-consumption"
+rationale = "Server-Sent Events extension for httpx. Exercises streaming response consumption and transport subclassing."
+usage = "required"
+test-subset = "unit"
+expected-network-isolation = true
+optional-dependencies = ["httpx"]
+known-incompatibilities = [
+  "httpx-sse accesses httpx.Response.aiter_lines and iter_lines internals"
+]
+test-command = "python -m pytest compat/downstream/behavioral_fixtures/test_httpx_sse_behavior.py -v"
+min-tests = 1
+source-type = "pypi"
+source-locator = "httpx-sse==0.4.3"
+source-hash = "0ac1c9fe3c0afad2e0ebb25a934a59f4c7823b60792691f779fad2c5568830fc"
+python-versions = ">=3.8"
+public-httpx-api = ["AsyncClient", "Client"]
+install-command = "pip install httpx-sse==0.4.3"
+test-working-dir = "."
+test-result-format = "pytest-json"
+min-collected = 1
+min-passed = 1
+max-skipped = 0
+max-xfailed = 0
+timeout = 60
+network-policy = "isolated"
+category-ids = ["streaming-sse-consumption"]
+release-blocking = true
+update-owner = "eggfetch-team"
+review-cadence = "every-phase"
+
+[[package]]
+name = "httpx-auth"
+version = "0.23.1"
+license = "BSD-3-Clause"
+category = "custom-auth-flow"
+rationale = "Authentication library implementing OAuth, Digest, and API key flows on top of httpx.Auth. Exercises custom auth subclassing."
+usage = "required"
+test-subset = "unit"
+expected-network-isolation = true
+optional-dependencies = ["httpx"]
+known-incompatibilities = [
+  "httpx-auth subclasses httpx.Auth and accesses auth flow hooks"
+]
+test-command = "python -m pytest compat/downstream/behavioral_fixtures/test_httpx_auth_behavior.py -v"
+min-tests = 1
+source-type = "pypi"
+source-locator = "httpx-auth==0.23.1"
+source-hash = "04f8bd0824efe3d9fb79690cc670b0da98ea809babb7aea04a72f334d4fd5ec5"
+python-versions = ">=3.8"
+public-httpx-api = ["Auth"]
+install-command = "pip install httpx-auth==0.23.1"
+test-working-dir = "."
+test-result-format = "pytest-json"
+min-collected = 1
+min-passed = 1
+max-skipped = 0
+max-xfailed = 0
+timeout = 60
+network-policy = "isolated"
+category-ids = ["custom-auth-flow"]
+release-blocking = true
+update-owner = "eggfetch-team"
+review-cadence = "quarterly"
+
+[[package]]
+name = "opentelemetry-instrumentation-httpx"
+version = "0.65b0"
+license = "Apache-2.0"
+category = "event-hooks-instrumentation"
+rationale = "OpenTelemetry instrumentation for httpx that emits tracing spans via event hooks. Exercises instrumentation, span emission, and clean uninstrumentation."
+usage = "required"
+test-subset = "integration"
+expected-network-isolation = true
+optional-dependencies = ["httpx", "opentelemetry-api", "opentelemetry-sdk"]
+known-incompatibilities = [
+  "instrumentation patches httpx client transport internals"
+]
+test-command = "python -m pytest compat/downstream/behavioral_fixtures/test_opentelemetry_behavior.py -v"
+min-tests = 1
+source-type = "pypi"
+source-locator = "opentelemetry-instrumentation-httpx==0.65b0"
+source-hash = "400f1b78afa4ee2332b5debe58e1ed1b317913d58812c952576be76660aeadb1"
+python-versions = ">=3.8"
+public-httpx-api = ["Client", "AsyncClient"]
+install-command = "pip install opentelemetry-instrumentation-httpx==0.65b0 opentelemetry-sdk==1.44.0"
+test-working-dir = "."
+test-result-format = "pytest-json"
+min-collected = 1
+min-passed = 1
+max-skipped = 0
+max-xfailed = 0
+timeout = 60
+network-policy = "isolated"
+category-ids = ["event-hooks-instrumentation"]
+release-blocking = true
 update-owner = "eggfetch-team"
 review-cadence = "quarterly"
 
@@ -209,40 +313,6 @@ category-ids = ["sdk-sync-client"]
 release-blocking = false
 update-owner = "eggfetch-team"
 review-cadence = "quarterly"
-
-[[package]]
-name = "httpx-sse"
-version = "0.4.0"
-license = "BSD-3-Clause"
-category = "streaming-upload-download"
-rationale = "Server-Sent Events extension for httpx. Exercises streaming response consumption and transport subclassing."
-usage = "required"
-test-subset = "unit"
-expected-network-isolation = true
-optional-dependencies = ["httpx"]
-known-incompatibilities = [
-  "httpx-sse accesses httpx.Response.aiter_lines and iter_lines internals"
-]
-test-command = "python -c \"import httpx; import httpx_sse; from httpx import Client, MockTransport, Response; t = MockTransport(lambda r: Response(200, text='event: message\\ndata: hello\\n\\n', headers={'content-type': 'text/event-stream'})); c = Client(transport=t); resp = c.get('http://test/sse'); events = list(httpx_sse.iter_sse(resp)); assert len(events) == 1; assert events[0].data == 'hello'; print('httpx-sse behavioral OK')\""
-min-tests = 1
-source-type = "pypi"
-source-locator = "httpx-sse==0.4.0"
-source-hash = "f329af6eae57eaa2bdfd962b42524764af68075ea87370a2de920af5341e318f"
-python-versions = ">=3.8"
-public-httpx-api = ["AsyncClient", "Client"]
-install-command = "pip install httpx-sse==0.4.0"
-test-working-dir = "."
-test-result-format = "exit-code"
-min-collected = 1
-min-passed = 1
-max-skipped = 0
-max-xfailed = 0
-timeout = 60
-network-policy = "isolated"
-category-ids = ["streaming-sse-consumption"]
-release-blocking = true
-update-owner = "eggfetch-team"
-review-cadence = "every-phase"
 
 [[package]]
 name = "httpcore"
@@ -307,74 +377,6 @@ category-ids = ["async-testing-support"]
 release-blocking = false
 update-owner = "eggfetch-team"
 review-cadence = "quarterly"
-
-[[package]]
-name = "httpx-auth"
-version = "0.22.0"
-license = "BSD-3-Clause"
-category = "custom-auth-flow"
-rationale = "Authentication library implementing OAuth, Digest, and API key flows on top of httpx.Auth. Exercises custom auth subclassing."
-usage = "required"
-test-subset = "unit"
-expected-network-isolation = true
-optional-dependencies = ["httpx"]
-known-incompatibilities = [
-  "httpx-auth subclasses httpx.Auth and accesses auth flow hooks"
-]
-test-command = "python -c \"import httpx_auth; from httpx import Client, MockTransport, Response; auth = httpx_auth.BasicAuth('user', 'pass'); t = MockTransport(lambda r: Response(200, json={'auth': r.headers.get('Authorization', '')})); c = Client(auth=auth, transport=t); r = c.get('http://test/auth'); assert r.status_code == 200; assert 'Basic' in r.json()['auth']; print('httpx-auth behavioral OK')\""
-min-tests = 1
-source-type = "pypi"
-source-locator = "httpx-auth==0.22.0"
-source-hash = "c60198e8160728f00e754b5181f4b9d1e4530260b94bbd09fd8abfe826b5be50"
-python-versions = ">=3.8"
-public-httpx-api = ["Auth"]
-install-command = "pip install httpx-auth==0.22.0"
-test-working-dir = "."
-test-result-format = "exit-code"
-min-collected = 1
-min-passed = 1
-max-skipped = 0
-max-xfailed = 0
-timeout = 60
-network-policy = "isolated"
-category-ids = ["custom-auth-flow"]
-release-blocking = true
-update-owner = "eggfetch-team"
-review-cadence = "quarterly"
-
-[[package]]
-name = "httpx-ws"
-version = "0.7.0"
-license = "BSD-3-Clause"
-category = "event-hook-instrumentation"
-rationale = "WebSocket extension for httpx. Exercises connection upgrade handling and transport extension patterns."
-usage = "required"
-test-subset = "unit"
-expected-network-isolation = true
-optional-dependencies = ["httpx", "anyio"]
-known-incompatibilities = [
-  "httpx-ws accesses httpx._transport and httpx._config internals"
-]
-test-command = "python -c \"import httpx_ws; from httpx import Client, MockTransport, Response; t = MockTransport(lambda r: Response(101, headers={'upgrade': 'websocket'})); c = Client(transport=t); ws = httpx_ws.WebSocketHandshake(c, 'http://test/ws'); assert ws is not None; print('httpx-ws behavioral OK')\""
-min-tests = 1
-source-type = "pypi"
-source-locator = "httpx-ws==0.7.0"
-source-hash = "4e888b8f662862cfafc3bbcf7d851105da4a6d50088d3168909c209762b6ea32"
-python-versions = ">=3.8"
-public-httpx-api = ["Client", "AsyncClient"]
-install-command = "pip install httpx-ws==0.7.0"
-test-working-dir = "."
-test-result-format = "exit-code"
-min-collected = 1
-min-passed = 1
-max-skipped = 0
-max-xfailed = 0
-timeout = 60
-network-policy = "isolated"
-category-ids = ["event-hooks-instrumentation"]
-release-blocking = true
-update-owner = "eggfetch-team"
-review-cadence = "every-phase"
 
 [[package]]
 name = "pydantic"

@@ -9,6 +9,7 @@ Usage:
     normalize_pytest_result.py --input <pytest.json> --output <normalized.json> \\
         --candidate-sha <40-char-sha> --job-name <name> \\
         --producer <producer> --run-id <id> --run-attempt <n> \\
+        [--suite <suite-id>] [--identity-digest <64-char-hex>] \\
         [--required]
 
 The normalizer enforces:
@@ -40,8 +41,17 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _validate_sha(sha: str) -> bool:
+    return isinstance(sha, str) and len(sha) == 40 and all(c in "0123456789abcdef" for c in sha)
+
+
+def _validate_sha256(digest: str) -> bool:
+    return isinstance(digest, str) and len(digest) == 64 and all(c in "0123456789abcdef" for c in digest)
+
+
 def normalize(raw: dict, candidate_sha: str, job_name: str,
-              producer: str, run_id: str, run_attempt: str) -> dict:
+              producer: str, run_id: str, run_attempt: str,
+              suite: str = "", identity_digest: str = "") -> dict:
     """Normalize a raw pytest JSON report into schema-1 contract.
 
     Accepts either the standard ``pytest-json-report`` schema (with
@@ -63,6 +73,11 @@ def normalize(raw: dict, candidate_sha: str, job_name: str,
             "xpassed": raw.get("xpassed", 0),
             "total": raw.get("total", 0),
         }
+
+    if not summary:
+        errors.append("raw report has no summary data")
+        summary = {k: 0 for k in _OUTCOME_KEYS}
+        summary["total"] = 0
 
     counts = {}
     total = 0
@@ -108,6 +123,11 @@ def normalize(raw: dict, candidate_sha: str, job_name: str,
     else:
         started_at = _now_iso()
 
+    finished_at = _now_iso()
+
+    # overall_pass: true only when status is passed and no result-level errors
+    overall_pass = status == "passed" and not errors
+
     result: dict = {
         "schema_version": SCHEMA_VERSION,
         "candidate_identity": {
@@ -118,8 +138,9 @@ def normalize(raw: dict, candidate_sha: str, job_name: str,
         "run_attempt": run_attempt,
         "job_name": job_name,
         "started_at": started_at,
-        "finished_at": _now_iso(),
+        "finished_at": finished_at,
         "status": status,
+        "overall_pass": overall_pass,
         "errors": errors,
         "metrics": {
             "collected": collected,
@@ -131,7 +152,20 @@ def normalize(raw: dict, candidate_sha: str, job_name: str,
             "xpassed": counts["xpassed"],
             "duration_seconds": round(float(duration), 3),
         },
+        "diagnostics": [],
     }
+
+    # Top-level candidate_sha for the common contract
+    result["candidate_sha"] = candidate_sha
+
+    # Suite identifier
+    if suite:
+        result["suite"] = suite
+
+    # Identity digest (from candidate-identity.json)
+    if identity_digest:
+        result["identity_digest"] = identity_digest
+        result["candidate_identity"]["identity_digest"] = identity_digest
 
     return result
 
@@ -224,6 +258,16 @@ def validate(result: dict, required: bool = False) -> list[str]:
         for e in result["errors"]:
             errors.append(f"result error: {e}")
 
+    # Validate candidate_sha if present at top level
+    if "candidate_sha" in result:
+        if not _validate_sha(result["candidate_sha"]):
+            errors.append(f"candidate_sha must be a 40-char hex string, got {result['candidate_sha']!r}")
+
+    # Validate identity_digest if present
+    if "identity_digest" in result:
+        if not _validate_sha256(result["identity_digest"]):
+            errors.append(f"identity_digest must be a 64-char hex string, got {result['identity_digest']!r}")
+
     return errors
 
 
@@ -238,6 +282,9 @@ def main() -> None:
     parser.add_argument("--producer", help="Producer identifier")
     parser.add_argument("--run-id", help="GitHub run ID")
     parser.add_argument("--run-attempt", help="Run attempt number")
+    parser.add_argument("--suite", default="", help="Stable suite identifier")
+    parser.add_argument("--identity-digest", default="",
+                        help="64-char hex identity digest from candidate-identity.json")
     parser.add_argument("--validate-only", action="store_true",
                         help="Only validate an existing normalized result")
     parser.add_argument("--required", action="store_true",
@@ -266,6 +313,11 @@ def main() -> None:
     if len(args.candidate_sha) != 40 or not all(c in "0123456789abcdef" for c in args.candidate_sha):
         parser.error(f"--candidate-sha must be a 40-char hex string, got: {args.candidate_sha!r}")
 
+    # Validate identity digest if provided
+    if args.identity_digest:
+        if not _validate_sha256(args.identity_digest):
+            parser.error(f"--identity-digest must be a 64-char hex string, got: {args.identity_digest!r}")
+
     with open(args.input) as f:
         raw = json.load(f)
 
@@ -276,6 +328,8 @@ def main() -> None:
         producer=args.producer,
         run_id=args.run_id,
         run_attempt=args.run_attempt,
+        suite=args.suite,
+        identity_digest=args.identity_digest,
     )
 
     # Self-validate

@@ -60,16 +60,16 @@ REQUIRED_PORTFOLIO_FIELDS = {
 
 VALID_CATEGORIES = {
     "contract-tests",
-    "mock-transport-user",
+    "mock-transport-request-matching",
     "framework-test-client",
-    "framework-asgi-transport",
+    "asgi-test-client",
     "sdk-async-client",
     "sdk-sync-client",
-    "streaming-upload-download",
+    "streaming-sse-consumption",
     "custom-transport-subclass",
     "async-testing-support",
     "custom-auth-flow",
-    "event-hook-instrumentation",
+    "event-hooks-instrumentation",
     "heavy-config-user",
 }
 
@@ -243,10 +243,10 @@ class TestPackageEntries:
             min_t = pkg.get("min-tests", 0)
             # Categories that should have runnable tests
             testable = {
-                "mock-transport-user", "framework-test-client",
-                "framework-asgi-transport", "streaming-upload-download",
+                "mock-transport-request-matching", "framework-test-client",
+                "asgi-test-client", "streaming-sse-consumption",
                 "custom-transport-subclass", "custom-auth-flow",
-                "event-hook-instrumentation",
+                "event-hooks-instrumentation",
             }
             if cat in testable and min_t == 0:
                 errors.append(
