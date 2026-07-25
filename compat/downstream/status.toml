@@ -90,4 +90,8 @@ candidate_identity_propagation = true
 rust-tests = "passed (cargo test --workspace --all-features --quiet)"
 python-compat-tests = "981 passed (EGGFETCH_COMPAT_REQUIRED=1)"
 behavioral-fixtures = "58 passed, 2 skipped"
+native-tests = "13 passed (6 shutdown + 7 proxy/TLS)"
 key-script-tests = "69 passed"
+clippy = "passed (RUSTFLAGS=-D warnings)"
+fmt = "passed (cargo fmt --all -- --check)"
+feature-matrix = "passed (no-default, http1+tls-rustls, all-features)"
