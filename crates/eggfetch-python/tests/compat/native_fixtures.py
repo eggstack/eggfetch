@@ -197,13 +197,22 @@ class _ProxyHandler(http.server.BaseHTTPRequestHandler):
             self.send_error(502, "No backend configured")
             return
 
+        # Strip scheme and host from path (proxy clients send full URL)
+        path = self.path
+        if path.startswith("http://"):
+            path = path[7:]
+            path = path[path.index("/"):] if "/" in path else "/"
+        elif path.startswith("https://"):
+            path = path[8:]
+            path = path[path.index("/"):] if "/" in path else "/"
+
         try:
             upstream = socket.create_connection(target, timeout=5)
         except OSError:
             self.send_error(502, "Upstream unavailable")
             return
         try:
-            req_line = f"{self.command} {self.path} HTTP/1.1\r\nHost: {target[0]}:{target[1]}\r\n"
+            req_line = f"{self.command} {path} HTTP/1.1\r\nHost: {target[0]}:{target[1]}\r\n"
             if body:
                 req_line += f"Content-Length: {len(body)}\r\n"
             req_line += "\r\n"

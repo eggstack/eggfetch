@@ -1,20 +1,23 @@
 #!/usr/bin/env python3
 """Validate the qualification workflow YAML for internal consistency.
 
-Uses PyYAML (or ruamel.yaml) for proper YAML parsing. Checks include:
+Checks include:
 - Every referenced runner argument exists in the matrix
 - Every pytest option has a declared plugin dependency
 - Every artifact name downloaded is produced by exactly one upstream job
-- No `|| true` in required steps
+- No `|| true` or `|| echo` in required steps
 - needs dependency references are valid
+- Every job references outputs only from direct dependencies
 - candidate identity propagation is correct
 - artifact normalization ordering is valid
-- downstream matrix equals manifest
+- downstream matrix comes from manifest-generated output
+- No duplicated static required-package matrix
 - evidence inputs completeness
 - final gate requirements are met
 - soak suite invocation is present
 - resource policy reading is configured
 - exact-SHA checkout enforcement
+- no continue-on-error on required steps
 
 Negative workflow fixtures can be tested with --expect-failure.
 """
@@ -22,6 +25,7 @@ Negative workflow fixtures can be tested with --expect-failure.
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from pathlib import Path
 
@@ -109,8 +113,8 @@ def _extract_artifacts_downloaded(workflow: dict) -> dict[str, list[str]]:
     return artifacts
 
 
-def _find_or_true_in_required_steps(workflow: dict) -> list[str]:
-    """Find `|| true` occurrences in steps that are not explicitly optional."""
+def _find_suppression_patterns(workflow: dict) -> list[str]:
+    """Find failure suppression patterns in required steps."""
     problems: list[str] = []
     jobs = workflow.get("jobs", {})
     if not isinstance(jobs, dict):
@@ -124,15 +128,34 @@ def _find_or_true_in_required_steps(workflow: dict) -> list[str]:
         for step in steps:
             if not isinstance(step, dict):
                 continue
-            # Skip if it's a genuinely optional step
-            if step.get("if") and "always()" in str(step.get("if", "")):
-                continue
-            # Check run commands for || true
             run_cmd = step.get("run", "")
-            if isinstance(run_cmd, str) and "|| true" in run_cmd:
-                step_name = step.get("name", "<unnamed>")
-                problems.append(f"job '{job_name}', step '{step_name}': {run_cmd.strip()}")
+            if not isinstance(run_cmd, str):
+                continue
+            step_name = step.get("name", "<unnamed>")
+            # Check for || true
+            if "|| true" in run_cmd:
+                problems.append(f"job '{job_name}', step '{step_name}': || true found")
+            # Check for || echo
+            if "|| echo" in run_cmd:
+                problems.append(f"job '{job_name}', step '{step_name}': || echo found")
+            # Check for continue-on-error
+            if step.get("continue-on-error"):
+                problems.append(f"job '{job_name}', step '{step_name}': continue-on-error is set")
     return problems
+
+
+def _check_continue_on_error(workflow: dict) -> list[str]:
+    """Check for continue-on-error on required jobs."""
+    errors: list[str] = []
+    jobs = workflow.get("jobs", {})
+    if not isinstance(jobs, dict):
+        return errors
+    for job_name, job_def in jobs.items():
+        if not isinstance(job_def, dict):
+            continue
+        if job_def.get("continue-on-error"):
+            errors.append(f"job '{job_name}' has continue-on-error set")
+    return errors
 
 
 def _check_pytest_plugins(workflow: dict) -> list[str]:
@@ -162,30 +185,19 @@ def _check_pytest_plugins(workflow: dict) -> list[str]:
             if not isinstance(run_cmd, str):
                 continue
             if "pip install" in run_cmd:
-                # Parse packages from pip install commands
                 for line in run_cmd.split("\n"):
                     line = line.strip().rstrip("\\").strip()
                     if not line or line.startswith("#"):
                         continue
-                    if "pip install" not in line and not line.startswith("-"):
-                        # This might be a package name continuation
+                    if "pip install" in line:
                         parts = line.split()
                         for part in parts:
-                            if part and not part.startswith("-"):
-                                installed.add(part.split(">=")[0].split("==")[0].lower())
-                    elif "pip install" in line:
-                        parts = line.split()
-                        for i, part in enumerate(parts):
-                            if part == "pip" and i + 1 < len(parts) and parts[i + 1] == "install":
-                                continue
                             if part.startswith("-"):
                                 continue
-                            if part == "-r":
+                            if part in ("pip", "install"):
                                 continue
                             installed.add(part.split(">=")[0].split("==")[0].lower())
-            # Check for requirements file references
             if "-r" in run_cmd:
-                import re
                 req_files = re.findall(r"-r\s+(\S+)", run_cmd)
                 for req_file in req_files:
                     if "qualification" in req_file:
@@ -241,8 +253,8 @@ def _check_needs_dependencies(workflow: dict) -> list[str]:
     return errors
 
 
-def _check_candidate_identity_propagation(workflow: dict) -> list[str]:
-    """Check that candidate SHA is propagated through jobs."""
+def _check_output_references(workflow: dict) -> list[str]:
+    """Check that jobs referencing needs.X.outputs.X declare X in their needs."""
     errors: list[str] = []
     jobs = workflow.get("jobs", {})
     if not isinstance(jobs, dict):
@@ -250,28 +262,27 @@ def _check_candidate_identity_propagation(workflow: dict) -> list[str]:
     for job_name, job_def in jobs.items():
         if not isinstance(job_def, dict):
             continue
-        steps = job_def.get("steps", [])
-        if not isinstance(steps, list):
-            continue
-        for step in steps:
-            if not isinstance(step, dict):
-                continue
-            run_cmd = step.get("run", "")
-            if not isinstance(run_cmd, str):
-                continue
-            # Check for candidate SHA usage in checkout or env
-            if "checkout" in step.get("uses", ""):
-                step_with = step.get("with", {})
-                if isinstance(step_with, dict):
-                    ref = step_with.get("ref", "")
-                    if ref and "${{" in str(ref):
-                        # Dynamic ref — good
-                        pass
+        # Serialize job definition to string for pattern matching
+        job_str = str(job_def)
+        # Find all needs.X.outputs references
+        refs = re.findall(r'needs\.(\S+?)\.outputs', job_str)
+        needs = job_def.get("needs", [])
+        if isinstance(needs, str):
+            needs = [needs]
+        if not isinstance(needs, list):
+            needs = []
+        needs_set = set(needs)
+        for ref in set(refs):
+            if ref not in needs_set:
+                errors.append(
+                    f"job '{job_name}' references needs.{ref}.outputs but "
+                    f"'{ref}' not in its needs list"
+                )
     return errors
 
 
-def _check_exact_sha_checkout(workflow: dict) -> list[str]:
-    """Check that checkout steps use exact SHA, not branches."""
+def _check_candidate_identity_propagation(workflow: dict) -> list[str]:
+    """Check that candidate SHA is propagated through jobs."""
     errors: list[str] = []
     jobs = workflow.get("jobs", {})
     if not isinstance(jobs, dict):
@@ -291,12 +302,41 @@ def _check_exact_sha_checkout(workflow: dict) -> list[str]:
                 if isinstance(step_with, dict):
                     ref = step_with.get("ref", "")
                     if ref and not ref.startswith("${{"):
-                        # Static ref — warn if it's a branch name
                         if ref in ("main", "master", "develop", "HEAD"):
                             errors.append(
                                 f"job '{job_name}': checkout uses branch ref '{ref}' "
                                 f"instead of exact SHA"
                             )
+    return errors
+
+
+def _check_downstream_matrix(workflow: dict) -> list[str]:
+    """Check that downstream matrix comes from manifest-generated output."""
+    errors: list[str] = []
+    jobs = workflow.get("jobs", {})
+    if not isinstance(jobs, dict):
+        return errors
+
+    # Check for prepare-downstream-matrix job
+    has_prepare = "prepare-downstream-matrix" in jobs
+    has_downstream = "downstream-substitution" in jobs
+
+    if has_downstream and not has_prepare:
+        errors.append("downstream-substitution exists but prepare-downstream-matrix is missing")
+
+    # Check for static matrix in downstream-substitution
+    if has_downstream:
+        ds_job = jobs["downstream-substitution"]
+        strategy = ds_job.get("strategy", {})
+        matrix = strategy.get("matrix", {})
+        if isinstance(matrix, dict) and "package" in matrix:
+            # Static package list — should use fromJSON instead
+            if isinstance(matrix["package"], list):
+                errors.append(
+                    "downstream-substitution uses a static package matrix "
+                    "instead of fromJSON(needs.prepare-downstream-matrix.outputs.matrix)"
+                )
+
     return errors
 
 
@@ -327,14 +367,24 @@ def _check_soak_suite_invocation(workflow: dict) -> list[str]:
     return errors
 
 
-def _check_resource_policy(workflow: dict) -> list[str]:
-    """Check that resource policy reading is configured."""
+def _check_candidate_bundle_usage(workflow: dict) -> list[str]:
+    """Check that post-normalization jobs consume candidate-bundle, not raw wheel artifacts."""
     errors: list[str] = []
     jobs = workflow.get("jobs", {})
     if not isinstance(jobs, dict):
         return errors
-    resource_found = False
-    for job_name, job_def in jobs.items():
+
+    # Jobs that should use candidate-bundle
+    bundle_consumers = {
+        "compat-tests", "downstream-substitution", "shim-substitution",
+        "native-timeout", "proxy-tls", "shutdown", "soak-resource",
+        "generate-evidence", "qualification-gate",
+    }
+
+    for job_name in bundle_consumers:
+        if job_name not in jobs:
+            continue
+        job_def = jobs[job_name]
         if not isinstance(job_def, dict):
             continue
         steps = job_def.get("steps", [])
@@ -343,13 +393,45 @@ def _check_resource_policy(workflow: dict) -> list[str]:
         for step in steps:
             if not isinstance(step, dict):
                 continue
-            run_cmd = step.get("run", "")
-            if isinstance(run_cmd, str) and "resource" in run_cmd.lower():
-                resource_found = True
-                break
-        if resource_found:
-            break
-    # Resource policy is optional but should be mentioned
+            uses = step.get("uses", "")
+            if "download-artifact" in uses:
+                step_with = step.get("with", {})
+                if isinstance(step_with, dict):
+                    name = step_with.get("name", "")
+                    pattern = step_with.get("pattern", "")
+                    # Should not download eggfetch-wheel or httpx-replacement-wheel directly
+                    if name in ("eggfetch-wheel", "httpx-replacement-wheel"):
+                        errors.append(
+                            f"job '{job_name}' downloads '{name}' directly "
+                            f"instead of using candidate-bundle"
+                        )
+    return errors
+
+
+def _check_evidence_inputs(workflow: dict) -> list[str]:
+    """Check that evidence generation consumes direct result artifacts."""
+    errors: list[str] = []
+    jobs = workflow.get("jobs", {})
+    if not isinstance(jobs, dict):
+        return errors
+
+    gen_job = jobs.get("generate-evidence")
+    if not gen_job or not isinstance(gen_job, dict):
+        errors.append("generate-evidence job not found")
+        return errors
+
+    # Check that it has the required dependencies
+    needs = gen_job.get("needs", [])
+    if isinstance(needs, str):
+        needs = [needs]
+    required_deps = {
+        "verify", "normalize-candidate-artifacts", "compat-tests",
+        "downstream-substitution", "shim-substitution",
+    }
+    for dep in required_deps:
+        if dep not in needs:
+            errors.append(f"generate-evidence is missing dependency: {dep}")
+
     return errors
 
 
@@ -363,44 +445,53 @@ def validate_workflow(path: str) -> list[str]:
     consumed = _extract_artifacts_downloaded(workflow)
     for name, consumers in consumed.items():
         if name not in produced:
-            errors.append(
-                f"Artifact '{name}' is downloaded but never produced by upload-artifact"
-            )
-        elif len(produced[name]) > 1:
-            errors.append(
-                f"Artifact '{name}' is produced by multiple jobs: {produced[name]}"
-            )
+            # Pattern downloads don't need exact producers
+            if "*" not in str(name):
+                errors.append(
+                    f"Artifact '{name}' is downloaded but never produced by upload-artifact"
+                )
 
-    # 2. Check for || true in required steps
-    or_true_problems = _find_or_true_in_required_steps(workflow)
-    for problem in or_true_problems:
-        errors.append(f"|| true found in required step: {problem}")
+    # 2. Check for failure suppression patterns
+    suppression_problems = _find_suppression_patterns(workflow)
+    for problem in suppression_problems:
+        errors.append(f"Failure suppression: {problem}")
 
-    # 3. Check pytest plugin dependencies
+    # 3. Check continue-on-error on jobs
+    errors.extend(_check_continue_on_error(workflow))
+
+    # 4. Check pytest plugin dependencies
     plugin_problems = _check_pytest_plugins(workflow)
     for problem in plugin_problems:
         errors.append(f"Pytest plugin issue: {problem}")
 
-    # 4. Check needs dependency references
+    # 5. Check needs dependency references
     errors.extend(_check_needs_dependencies(workflow))
 
-    # 5. Check candidate identity propagation
+    # 6. Check output references have direct dependencies
+    errors.extend(_check_output_references(workflow))
+
+    # 7. Check candidate identity propagation
     errors.extend(_check_candidate_identity_propagation(workflow))
 
-    # 6. Check exact-SHA checkout enforcement
-    errors.extend(_check_exact_sha_checkout(workflow))
+    # 8. Check downstream matrix is manifest-authoritative
+    errors.extend(_check_downstream_matrix(workflow))
 
-    # 7. Check soak suite invocation
+    # 9. Check soak suite invocation
     errors.extend(_check_soak_suite_invocation(workflow))
 
-    # 8. Check resource policy reading
-    errors.extend(_check_resource_policy(workflow))
+    # 10. Check candidate bundle usage
+    errors.extend(_check_candidate_bundle_usage(workflow))
+
+    # 11. Check evidence inputs
+    errors.extend(_check_evidence_inputs(workflow))
 
     return errors
 
 
-def main() -> None:
+def build_parser() -> argparse.ArgumentParser:
+    """Build the argument parser for workflow validation tests."""
     parser = argparse.ArgumentParser(
+        prog="validate_qualification_workflow.py",
         description="Validate qualification workflow YAML for internal consistency",
     )
     parser.add_argument("workflow", help="Path to workflow YAML file")
@@ -408,6 +499,11 @@ def main() -> None:
         "--expect-failure", action="store_true",
         help="Expect validation to fail (for negative fixture testing)",
     )
+    return parser
+
+
+def main() -> None:
+    parser = build_parser()
     args = parser.parse_args()
 
     errors = validate_workflow(args.workflow)

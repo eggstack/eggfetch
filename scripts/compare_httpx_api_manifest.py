@@ -476,13 +476,49 @@ def _format_report(results):
     return "\n".join(lines)
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Compare eggfetch manifest against HTTPX reference")
+def _enrich_results_with_identity(
+    results: dict,
+    candidate_identity_path: str | None,
+    suite: str | None,
+) -> dict:
+    """Add candidate identity and suite info to results."""
+    if candidate_identity_path:
+        try:
+            with open(candidate_identity_path) as f:
+                identity = json.load(f)
+            results["candidate_sha"] = identity.get("candidate_sha", "")
+            results["identity_digest"] = identity.get("identity_digest", "")
+        except (FileNotFoundError, json.JSONDecodeError) as e:
+            print(f"WARNING: could not load candidate identity: {e}", file=sys.stderr)
+    if suite:
+        results["suite"] = suite
+    return results
+
+
+def build_parser() -> argparse.ArgumentParser:
+    """Build the argument parser for workflow validation tests."""
+    parser = argparse.ArgumentParser(
+        prog="compare_httpx_api_manifest.py",
+        description="Compare eggfetch manifest against HTTPX reference",
+    )
     parser.add_argument("--reference", help="Path to reference manifest JSON")
     parser.add_argument("--candidate", help="Path to candidate (eggfetch) manifest JSON")
     parser.add_argument("--allowed", required=True, help="Path to allowed-differences.toml")
+    parser.add_argument("--resolved", default=None,
+                        help="Path to resolved-differences.toml (historical entries, checked for resolved-in-active)")
     parser.add_argument("--json", dest="json_output", action="store_true", help="Output JSON instead of text")
     parser.add_argument("--validate", action="store_true", help="Validate allowed-differences.toml schema")
+    parser.add_argument("--candidate-identity", default=None,
+                        help="Path to candidate-identity.json to embed SHA and digest in results")
+    parser.add_argument("--suite", default=None,
+                        help="Suite ID to embed in result contract (e.g. facade-api-oracle)")
+    parser.add_argument("--output", default=None,
+                        help="Write result JSON to file instead of stdout")
+    return parser
+
+
+def main():
+    parser = build_parser()
     args = parser.parse_args()
 
     if args.validate:
@@ -507,8 +543,16 @@ def main():
 
     results = compare(reference, candidate, allowed_diffs)
 
+    # Enrich with candidate identity if provided
+    results = _enrich_results_with_identity(results, args.candidate_identity, args.suite)
+
     if args.json_output:
-        print(json.dumps(results, indent=2))
+        output = json.dumps(results, indent=2)
+        if args.output:
+            Path(args.output).parent.mkdir(parents=True, exist_ok=True)
+            Path(args.output).write_text(output + "\n")
+        else:
+            print(output)
     else:
         print(_format_report(results))
 

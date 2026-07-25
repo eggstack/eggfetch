@@ -384,8 +384,10 @@ def generate_evidence(
             if "name" in art and "sha256" in art:
                 manifest_hashes[art["name"]] = art["sha256"]
         artifact_data = {"hashes": manifest_hashes}
-    else:
+    elif artifact_hashes_path and artifact_hashes_path.exists():
         artifact_data = _load_artifact_hashes(artifact_hashes_path)
+    else:
+        _fail("neither artifact-manifest nor artifact-hashes provided")
 
     artifact_verification = _verify_artifact_hashes(artifact_data["hashes"])
 
@@ -506,8 +508,8 @@ def main() -> None:
         help="Exact 40-char hex SHA of the candidate commit",
     )
     parser.add_argument(
-        "--artifact-hashes", required=True,
-        help="Path to artifact hash manifest JSON",
+        "--artifact-hashes", required=False, default=None,
+        help="Path to artifact hash manifest JSON (not required when --artifact-manifest is provided)",
     )
     parser.add_argument(
         "--artifact-manifest", default=None,
@@ -547,12 +549,15 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    if not args.artifact_hashes and not args.artifact_manifest:
+        parser.error("either --artifact-hashes or --artifact-manifest is required")
+
     evidence = generate_evidence(
         compat_test_results_path=Path(args.compat_test_results),
         downstream_results_path=Path(args.downstream_results),
         api_comparison_results_path=Path(args.api_comparison_results),
         candidate_sha=args.candidate_sha,
-        artifact_hashes_path=Path(args.artifact_hashes),
+        artifact_hashes_path=Path(args.artifact_hashes) if args.artifact_hashes else Path("/dev/null"),
         output_path=Path(args.output),
         artifact_manifest_path=Path(args.artifact_manifest) if args.artifact_manifest else None,
         candidate_identity_path=Path(args.candidate_identity) if args.candidate_identity else None,

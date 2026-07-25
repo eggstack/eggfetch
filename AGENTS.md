@@ -44,12 +44,24 @@ python scripts/validate_package_content.py path/to/wheel.whl
 
 # Evidence and qualification validation
 python scripts/validate_compatibility_evidence.py evidence.json
-python scripts/validate_qualification_workflow.py
-python scripts/candidate_identity.py identity.json
+python scripts/validate_qualification_workflow.py .github/workflows/qualification.yml
+python scripts/candidate_identity.py validate identity.json
 
-# Artifact normalization
-python scripts/normalize_pytest_result.py --input /tmp/test-results.json --output /tmp/test-results-contract.json
-python scripts/generate_artifact_manifest.py --wheel dist/*.whl --output /tmp/artifact-manifest.json
+# Artifact normalization (candidate bundle)
+python scripts/generate_artifact_manifest.py \
+  --wheel-dir /tmp/source-wheels \
+  --candidate-sha <sha> --run-id <id> --run-attempt <n> \
+  --bundle-dir /tmp/candidate-bundle \
+  --generate-identity
+python scripts/candidate_identity.py generate \
+  --artifact-manifest /tmp/candidate-bundle/artifact-manifest.json \
+  --candidate-sha <sha> --run-id <id> --run-attempt <n> \
+  --output /tmp/candidate-bundle/candidate-identity.json
+
+# Downstream matrix generation
+python scripts/generate_downstream_matrix.py \
+  --manifest compat/downstream/manifest.toml \
+  --output /tmp/downstream-matrix.json
 
 # API oracle with typed differences
 python scripts/compare_httpx_api_manifest.py \
@@ -57,9 +69,9 @@ python scripts/compare_httpx_api_manifest.py \
   --candidate /tmp/eggfetch-api.json \
   --allowed compat/httpx/0.28.1/allowed-differences.toml \
   --resolved compat/httpx/0.28.1/resolved-differences.toml \
-  --artifact-manifest /tmp/artifact-manifest.json \
   --candidate-identity /tmp/candidate-identity.json \
-  --validate
+  --suite facade-api-oracle \
+  --json --output /tmp/api-result.json
 
 # Lossless merge tests
 python -m pytest crates/eggfetch-python/tests/compat/test_merge_lossless.py -v
@@ -70,6 +82,11 @@ python -m pytest compat/downstream/behavioral_fixtures/ -v
 # Native lifecycle and soak tests
 python -m pytest crates/eggfetch-python/tests/compat/test_native_timeout_classification.py crates/eggfetch-python/tests/compat/test_soak.py -v --timeout=120
 
+# Native proxy and TLS tests
+python -m pytest crates/eggfetch-python/tests/compat/test_native_proxy_tls.py -v --timeout=30
+
+# Shutdown lifecycle tests
+python -m pytest crates/eggfetch-python/tests/compat/test_shutdown.py -v --timeout=60
 ```
 
 CI enforces `RUSTFLAGS=-D warnings`. MSRV is Rust 1.80.
@@ -123,16 +140,18 @@ The `eggfetch.compat.httpx` module provides an HTTPX 0.28.1-compatible asyncio f
 from eggfetch.compat.httpx import Client, AsyncClient, Request, Response, URL, Headers, Cookies
 ```
 
-The compatibility stage is **Stage C candidate** (asyncio drop-in). Phases 0 through 6 are implemented. The corrective closure pass applies:
+The compatibility stage is **Stage C candidate** (asyncio drop-in). The corrective closure pass applies:
 
-- **Schema v3 candidate identity** — `scripts/candidate_identity.py` validates the identity schema against the reference profile.
+- **Schema v3 candidate identity** — `scripts/candidate_identity.py generate|validate` produces and validates identity records with computed identity_digest.
 - **Typed difference records** — API oracle produces structured difference records; `allowed-differences.toml` gates CI enforcement; `resolved-differences.toml` tracks historical/behavioral entries separate from the active allowlist.
 - **Lossless merge semantics** — header and query parameter merge preserves order and duplicates across transports.
 - **Separate sync/async auth drivers** — `Auth` base class dispatches to sync and async implementations independently.
 - **Behavioral downstream fixtures** — `compat/downstream/behavioral_fixtures/` exercises real consumer patterns.
 - **Native lifecycle proof fixtures** — timeout classification, soak, proxy, and TLS tests validate engine behavior under load.
-- **Versioned result contracts** — `scripts/normalize_pytest_result.py` converts pytest output to versioned contracts; `scripts/generate_artifact_manifest.py` normalizes wheel artifacts for release evidence.
+- **Versioned result contracts** — `scripts/normalize_pytest_result.py` converts pytest output to versioned contracts; `scripts/generate_artifact_manifest.py` normalizes wheel artifacts into candidate bundles.
 - **Candidate identity propagation** — identity manifest flows through all release-blocking artifacts via `--candidate-identity` flag.
+- **Manifest-authoritative downstream matrix** — `scripts/generate_downstream_matrix.py` generates the CI matrix from `compat/downstream/manifest.toml`.
+- **Fail-closed qualification gate** — all required jobs must succeed; no failure suppression on release-blocking steps.
 
 Runtime diagnostics:
 
@@ -155,8 +174,8 @@ Evidence and qualification validation:
 
 ```sh
 python scripts/validate_compatibility_evidence.py evidence.json
-python scripts/validate_qualification_workflow.py
-python scripts/candidate_identity.py identity.json
+python scripts/validate_qualification_workflow.py .github/workflows/qualification.yml
+python scripts/candidate_identity.py validate identity.json
 ```
 
 API oracle with typed differences:
@@ -167,9 +186,9 @@ python scripts/compare_httpx_api_manifest.py \
   --candidate /tmp/eggfetch-api.json \
   --allowed compat/httpx/0.28.1/allowed-differences.toml \
   --resolved compat/httpx/0.28.1/resolved-differences.toml \
-  --artifact-manifest /tmp/artifact-manifest.json \
   --candidate-identity /tmp/candidate-identity.json \
-  --validate
+  --suite facade-api-oracle \
+  --json --output /tmp/api-result.json
 ```
 
 Lossless merge, downstream, and lifecycle tests:
@@ -178,9 +197,11 @@ Lossless merge, downstream, and lifecycle tests:
 python -m pytest crates/eggfetch-python/tests/compat/test_merge_lossless.py -v
 python -m pytest compat/downstream/behavioral_fixtures/ -v
 python -m pytest crates/eggfetch-python/tests/compat/test_native_timeout_classification.py crates/eggfetch-python/tests/compat/test_soak.py -v --timeout=120
+python -m pytest crates/eggfetch-python/tests/compat/test_native_proxy_tls.py -v --timeout=30
+python -m pytest crates/eggfetch-python/tests/compat/test_shutdown.py -v --timeout=60
 ```
 
-See `plans/httpx-drop-in-qualification-integrity-and-native-proof-corrective-closure.md` for release evidence.
+See `plans/httpx-drop-in-qualification-execution-corrective-pass.md` for the corrective pass plan.
 
 ## Tests
 
