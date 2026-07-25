@@ -48,20 +48,33 @@ python scripts/validate_qualification_workflow.py .github/workflows/qualificatio
 python scripts/candidate_identity.py validate identity.json
 
 # Artifact normalization (candidate bundle)
-python scripts/generate_artifact_manifest.py \
-  --wheel-dir /tmp/source-wheels \
+python scripts/generate_artifact_manifest.py generate \
+  --eggfetch-wheel /tmp/source-wheels/eggfetch-*.whl \
+  --httpx-replacement-wheel /tmp/source-wheels/httpx-*.whl \
   --candidate-sha <sha> --run-id <id> --run-attempt <n> \
   --bundle-dir /tmp/candidate-bundle \
-  --generate-identity
+  --output /tmp/candidate-bundle/artifact-manifest.json
 python scripts/candidate_identity.py generate \
   --artifact-manifest /tmp/candidate-bundle/artifact-manifest.json \
   --candidate-sha <sha> --run-id <id> --run-attempt <n> \
   --output /tmp/candidate-bundle/candidate-identity.json
 
+# Validate candidate bundle
+python scripts/generate_artifact_manifest.py validate \
+  --manifest /tmp/candidate-bundle/artifact-manifest.json \
+  --bundle-root /tmp/candidate-bundle \
+  --expected-sha <sha>
+
 # Downstream matrix generation
 python scripts/generate_downstream_matrix.py \
   --manifest compat/downstream/manifest.toml \
   --output /tmp/downstream-matrix.json
+
+# Downstream matrix validation (fail-closed)
+python scripts/generate_downstream_matrix.py \
+  --manifest compat/downstream/manifest.toml \
+  --validate-only \
+  --output /dev/null
 
 # API oracle with typed differences
 python scripts/compare_httpx_api_manifest.py \
@@ -142,13 +155,13 @@ from eggfetch.compat.httpx import Client, AsyncClient, Request, Response, URL, H
 
 The compatibility stage is **Stage C candidate** (asyncio drop-in). The corrective closure pass applies:
 
-- **Schema v3 candidate identity** — `scripts/candidate_identity.py generate|validate` produces and validates identity records with computed identity_digest.
+- **Schema v4 candidate identity** — `scripts/candidate_identity.py generate|validate` produces and validates identity records with computed identity_digest and artifact_manifest_sha256 binding.
 - **Typed difference records** — API oracle produces structured difference records; `allowed-differences.toml` gates CI enforcement; `resolved-differences.toml` tracks historical/behavioral entries separate from the active allowlist.
 - **Lossless merge semantics** — header and query parameter merge preserves order and duplicates across transports.
 - **Separate sync/async auth drivers** — `Auth` base class dispatches to sync and async implementations independently.
 - **Behavioral downstream fixtures** — `compat/downstream/behavioral_fixtures/` exercises real consumer patterns.
 - **Native lifecycle proof fixtures** — timeout classification, soak, proxy, and TLS tests validate engine behavior under load.
-- **Versioned result contracts** — `scripts/normalize_pytest_result.py` converts pytest output to versioned contracts; `scripts/generate_artifact_manifest.py` normalizes wheel artifacts into candidate bundles.
+- **Versioned result contracts** — `scripts/normalize_pytest_result.py` converts pytest output to versioned contracts; `scripts/generate_artifact_manifest.py` (schema v3) normalizes wheel artifacts into candidate bundles; `scripts/candidate_identity.py` (schema v4) binds identity to manifest digest.
 - **Candidate identity propagation** — identity manifest flows through all release-blocking artifacts via `--candidate-identity` flag.
 - **Manifest-authoritative downstream matrix** — `scripts/generate_downstream_matrix.py` generates the CI matrix from `compat/downstream/manifest.toml`.
 - **Fail-closed qualification gate** — all required jobs must succeed; no failure suppression on release-blocking steps.
@@ -201,7 +214,7 @@ python -m pytest crates/eggfetch-python/tests/compat/test_native_proxy_tls.py -v
 python -m pytest crates/eggfetch-python/tests/compat/test_shutdown.py -v --timeout=60
 ```
 
-See `plans/httpx-drop-in-qualification-execution-corrective-pass.md` for the corrective pass plan.
+See `plans/httpx-drop-in-exact-sha-qualification-execution-and-evidence-closure.md` for the exact-SHA qualification execution closure plan.
 
 ## Tests
 

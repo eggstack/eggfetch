@@ -378,11 +378,12 @@ def generate_evidence(
 
     # Use artifact manifest hashes if available, otherwise use artifact_hashes file
     if artifact_manifest_data and "artifacts" in artifact_manifest_data:
-        # Build hashes dict from manifest
+        # Build hashes dict from manifest (support schema v3 filename and v2 name)
         manifest_hashes = {}
         for art in artifact_manifest_data["artifacts"]:
-            if "name" in art and "sha256" in art:
-                manifest_hashes[art["name"]] = art["sha256"]
+            art_name = art.get("filename", art.get("name", ""))
+            if art_name and "sha256" in art:
+                manifest_hashes[art_name] = art["sha256"]
         artifact_data = {"hashes": manifest_hashes}
     elif artifact_hashes_path and artifact_hashes_path.exists():
         artifact_data = _load_artifact_hashes(artifact_hashes_path)

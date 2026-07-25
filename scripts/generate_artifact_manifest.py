@@ -1,44 +1,58 @@
 #!/usr/bin/env python3
-"""Generate an artifact manifest for built wheel artifacts.
+"""Generate or validate an artifact manifest for built wheel artifacts.
 
-Produces a schema-2 artifact-manifest.json that lists all built wheel
-artifacts with their SHA-256 hashes, sizes, and candidate identity.
+Produces a schema-3 artifact-manifest.json that lists all built wheel
+artifacts with their SHA-256 hashes, sizes, and role assignments.
 
-Usage:
-    generate_artifact_manifest.py --wheel-dir <dir> --candidate-sha <sha> \\
-        --run-id <id> --run-attempt <n> --output <path.json> \\
-        [--workflow-name <name>] [--producer-job <job>] \\
-        [--bundle-dir <dir>] [--allow-extra-wheels] \\
-        [--generate-identity]
+Subcommands:
+    generate    Create a new artifact manifest from wheel files
+    validate    Validate an existing artifact manifest against bundle on disk
 
-The manifest format:
+Usage (generate):
+    generate_artifact_manifest.py generate \\
+        --eggfetch-wheel <path> \\
+        --httpx-replacement-wheel <path> \\
+        --candidate-sha <sha> \\
+        --run-id <id> \\
+        --run-attempt <n> \\
+        --workflow-name Qualification \\
+        --producer-job normalize-candidate-artifacts \\
+        --bundle-dir <dir> \\
+        --output <dir>/artifact-manifest.json
+
+Usage (validate):
+    generate_artifact_manifest.py validate \\
+        --manifest <dir>/artifact-manifest.json \\
+        --bundle-root <dir> \\
+        --expected-sha <sha>
+
+Manifest schema (v3):
     {
-      "schema_version": "2",
+      "schema_version": "3",
       "candidate_sha": "<40-char-hex>",
       "run_id": "<github-run-id>",
       "run_attempt": "<attempt-number>",
       "workflow_name": "<workflow-name>",
       "producer_job": "<producer-job>",
       "generated_at": "<iso-8601>",
-      "candidate_identity": { ... },
       "artifacts": [
         {
-          "name": "eggfetch-0.x.0-py3-none-any.whl",
-          "path": "wheels/eggfetch-0.x.0-py3-none-any.whl",
+          "role": "eggfetch",
+          "distribution": "eggfetch",
+          "version": "<version>",
+          "filename": "<wheel filename>",
+          "relative_path": "wheels/<filename>",
           "sha256": "<64-char-hex>",
-          "size_bytes": 123456,
-          "artifact_type": "eggfetch",
-          "wheel_distribution_name": "eggfetch",
-          "wheel_version": "0.x.0",
-          "wheel_tags": "py3-none-any"
+          "size_bytes": <int>,
+          "tags": "<wheel tags>"
         },
         ...
       ]
     }
 
 Exit codes:
-    0 — manifest generated successfully
-    1 — error (missing directory, no wheels, hash mismatch, etc.)
+    0 — success
+    1 — error (missing files, hash mismatch, validation failure, etc.)
 """
 
 from __future__ import annotations
@@ -51,12 +65,8 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-SCHEMA_VERSION = "2"
+SCHEMA_VERSION = "3"
 
-# Expected wheel types for default manifest (no --allow-extra-wheels)
-_EXPECTED_ARTIFACT_TYPES = {"eggfetch", "httpx-controlled-replacement"}
-
-# Wheel filename pattern: {distribution}-{version}(-{build tag})?-{python tag}-{abi tag}-{platform tag}.whl
 _WHEEL_NAME_RE = __import__("re").compile(
     r"^(?P<distribution>[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?)"
     r"-(?P<version>[A-Za-z0-9_.!]+)"
@@ -77,18 +87,6 @@ def compute_sha256(path: Path) -> str:
     return h.hexdigest()
 
 
-def classify_artifact(filename: str) -> str:
-    """Classify a wheel file by its artifact type."""
-    name_lower = filename.lower()
-    if name_lower.startswith("eggfetch-"):
-        return "eggfetch"
-    if name_lower.startswith("httpx-") and "controlled" in name_lower:
-        return "httpx-controlled-replacement"
-    if name_lower.startswith("httpx-"):
-        return "httpx"
-    return "other"
-
-
 def _parse_wheel_name(filename: str) -> dict[str, str] | None:
     """Parse wheel filename into distribution/version/tags components."""
     m = _WHEEL_NAME_RE.match(filename)
@@ -107,269 +105,79 @@ def _has_path_traversal(path_str: str) -> bool:
     return ".." in path_str or path_str.startswith("/")
 
 
-def _select_single_wheel(wheels: list[Path], label: str) -> Path:
-    """Select exactly one wheel from a list. Fail if zero or multiple."""
-    if not wheels:
-        raise ValueError(f"No {label} wheel found")
-    if len(wheels) > 1:
-        names = [w.name for w in wheels]
-        raise ValueError(f"Multiple {label} wheels found (expected exactly one): {names}")
-    return wheels[0]
-
-
-def generate_manifest(
-    wheel_dir: Path,
-    candidate_sha: str,
-    run_id: str,
-    run_attempt: str,
-    workflow_name: str = "",
-    producer_job: str = "",
-    allow_extra_wheels: bool = False,
-    candidate_identity_path: Path | None = None,
-    bundle_dir: Path | None = None,
+def _build_artifact_entry(
+    wheel_path: Path,
+    role: str,
+    bundle_dir: Path | None,
 ) -> dict:
-    """Generate the artifact manifest from a wheel directory.
+    """Build a single artifact entry for a wheel file."""
+    wheel_info = _parse_wheel_name(wheel_path.name) or {}
+    sha256 = compute_sha256(wheel_path)
+    size_bytes = wheel_path.stat().st_size
 
-    If bundle_dir is provided, copies exactly the eggfetch and
-    httpx-controlled-replacement wheels into bundle_dir/wheels/ and
-    uses relative paths in the manifest.
-    """
-    if not wheel_dir.exists():
-        raise FileNotFoundError(f"Wheel directory not found: {wheel_dir}")
-
-    if len(candidate_sha) != 40 or not all(c in "0123456789abcdef" for c in candidate_sha):
-        raise ValueError(f"candidate_sha must be a 40-char hex string, got: {candidate_sha!r}")
-
-    wheels = sorted(wheel_dir.glob("*.whl"))
-    if not wheels:
-        raise ValueError(f"No .whl files found in {wheel_dir}")
-
-    # Classify wheels
-    eggfetch_wheels = [w for w in wheels if classify_artifact(w.name) == "eggfetch"]
-    httpx_wheels = [w for w in wheels if classify_artifact(w.name) == "httpx-controlled-replacement"]
-
-    if not allow_extra_wheels:
-        eggfetch_whl = _select_single_wheel(eggfetch_wheels, "eggfetch")
-        httpx_whl = _select_single_wheel(httpx_wheels, "httpx-controlled-replacement")
-        selected = [eggfetch_whl, httpx_whl]
+    if bundle_dir:
+        rel_path = f"wheels/{wheel_path.name}"
     else:
-        selected = wheels
+        rel_path = str(wheel_path.resolve())
 
-    # If bundle_dir is provided, copy wheels and use relative paths
+    return {
+        "role": role,
+        "distribution": wheel_info.get("distribution_name", ""),
+        "version": wheel_info.get("version", ""),
+        "filename": wheel_path.name,
+        "relative_path": rel_path,
+        "sha256": sha256,
+        "size_bytes": size_bytes,
+        "tags": wheel_info.get("tags", ""),
+    }
+
+
+def _cmd_generate(args: argparse.Namespace) -> None:
+    """Handle 'generate' subcommand."""
+    eggfetch_path = Path(args.eggfetch_wheel).resolve()
+    httpx_path = Path(args.httpx_replacement_wheel).resolve()
+    bundle_dir = Path(args.bundle_dir) if args.bundle_dir else None
+
+    # Validate inputs
+    if not eggfetch_path.exists():
+        print(f"FATAL: eggfetch wheel not found: {eggfetch_path}", file=sys.stderr)
+        sys.exit(1)
+    if not httpx_path.exists():
+        print(f"FATAL: httpx replacement wheel not found: {httpx_path}", file=sys.stderr)
+        sys.exit(1)
+    if not eggfetch_path.name.endswith(".whl"):
+        print(f"FATAL: eggfetch wheel is not a .whl file: {eggfetch_path.name}", file=sys.stderr)
+        sys.exit(1)
+    if not httpx_path.name.endswith(".whl"):
+        print(f"FATAL: httpx replacement wheel is not a .whl file: {httpx_path.name}", file=sys.stderr)
+        sys.exit(1)
+
+    candidate_sha = args.candidate_sha
+    if len(candidate_sha) != 40 or not all(c in "0123456789abcdef" for c in candidate_sha):
+        print(f"FATAL: candidate_sha must be a 40-char hex string, got: {candidate_sha!r}", file=sys.stderr)
+        sys.exit(1)
+
+    # Copy wheels into bundle if requested
     if bundle_dir:
         wheels_dest = bundle_dir / "wheels"
         wheels_dest.mkdir(parents=True, exist_ok=True)
-        for whl in selected:
-            dest = wheels_dest / whl.name
-            shutil.copy2(whl, dest)
+        shutil.copy2(eggfetch_path, wheels_dest / eggfetch_path.name)
+        shutil.copy2(httpx_path, wheels_dest / httpx_path.name)
 
-    artifacts = []
-    for whl in selected:
-        sha256 = compute_sha256(whl)
-        artifact_type = classify_artifact(whl.name)
-        wheel_info = _parse_wheel_name(whl.name) or {}
-
-        if bundle_dir:
-            # Relative path from bundle root
-            rel_path = f"wheels/{whl.name}"
-            art_path = rel_path
-        else:
-            art_path = str(whl.resolve())
-
-        artifacts.append({
-            "name": whl.name,
-            "path": art_path,
-            "sha256": sha256,
-            "size_bytes": whl.stat().st_size,
-            "artifact_type": artifact_type,
-            "wheel_distribution_name": wheel_info.get("distribution_name", ""),
-            "wheel_version": wheel_info.get("version", ""),
-            "wheel_tags": wheel_info.get("tags", ""),
-        })
-
-    # Reject unlisted extra wheels unless explicitly allowed
-    if not allow_extra_wheels:
-        found_types = {a["artifact_type"] for a in artifacts}
-        unexpected = found_types - _EXPECTED_ARTIFACT_TYPES
-        if unexpected:
-            raise ValueError(
-                f"Unexpected artifact types found (use --allow-extra-wheels to permit): "
-                f"{', '.join(sorted(unexpected))}"
-            )
-
-    # Load candidate identity if provided
-    candidate_identity = None
-    if candidate_identity_path and candidate_identity_path.exists():
-        with open(candidate_identity_path) as f:
-            candidate_identity = json.load(f)
+    # Build artifact entries with explicit roles
+    eggfetch_art = _build_artifact_entry(eggfetch_path, "eggfetch", bundle_dir)
+    httpx_art = _build_artifact_entry(httpx_path, "httpx-controlled-replacement", bundle_dir)
 
     manifest = {
         "schema_version": SCHEMA_VERSION,
         "candidate_sha": candidate_sha,
-        "run_id": run_id,
-        "run_attempt": run_attempt,
-        "workflow_name": workflow_name,
-        "producer_job": producer_job,
+        "run_id": args.run_id,
+        "run_attempt": args.run_attempt,
+        "workflow_name": args.workflow_name or "",
+        "producer_job": args.producer_job or "",
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "candidate_identity": candidate_identity,
-        "artifacts": artifacts,
+        "artifacts": [eggfetch_art, httpx_art],
     }
-
-    return manifest
-
-
-def validate_manifest(manifest: dict, base_dir: Path | None = None) -> list[str]:
-    """Validate an artifact manifest. Returns list of errors.
-
-    If base_dir is provided, artifact paths are resolved relative to it.
-    """
-    errors: list[str] = []
-
-    if not isinstance(manifest, dict):
-        return ["manifest must be a JSON object"]
-
-    required_fields = ["schema_version", "candidate_sha", "run_id",
-                       "run_attempt", "generated_at", "artifacts"]
-    for field in required_fields:
-        if field not in manifest:
-            errors.append(f"missing required field: {field}")
-
-    if errors:
-        return errors
-
-    if manifest["schema_version"] != SCHEMA_VERSION:
-        errors.append(f"schema_version must be '{SCHEMA_VERSION}', got '{manifest['schema_version']}'")
-
-    sha = manifest["candidate_sha"]
-    if len(sha) != 40 or not all(c in "0123456789abcdef" for c in sha):
-        errors.append(f"candidate_sha must be a 40-char hex string, got: {sha!r}")
-
-    if not isinstance(manifest["artifacts"], list) or len(manifest["artifacts"]) == 0:
-        errors.append("artifacts must be a non-empty list")
-        return errors
-
-    # Path traversal protection
-    for i, art in enumerate(manifest["artifacts"]):
-        if not isinstance(art, dict):
-            errors.append(f"artifacts[{i}] must be a JSON object")
-            continue
-        for field in ("name", "path", "sha256", "size_bytes", "artifact_type"):
-            if field not in art:
-                errors.append(f"artifacts[{i}].{field} is missing")
-        if "sha256" in art:
-            if len(art["sha256"]) != 64 or not all(c in "0123456789abcdef" for c in art["sha256"]):
-                errors.append(f"artifacts[{i}].sha256 must be a 64-char hex string")
-        if "size_bytes" in art:
-            if not isinstance(art["size_bytes"], int) or art["size_bytes"] < 0:
-                errors.append(f"artifacts[{i}].size_bytes must be a non-negative integer")
-        if "path" in art:
-            if _has_path_traversal(art["path"]):
-                errors.append(f"artifacts[{i}].path contains path traversal: {art['path']}")
-            else:
-                # Resolve path relative to base_dir if provided
-                check_path = (base_dir / art["path"]) if base_dir else Path(art["path"])
-                if not check_path.exists():
-                    errors.append(f"artifacts[{i}].path does not exist: {art['path']}")
-        # Validate wheel metadata fields if present
-        for wfield in ("wheel_distribution_name", "wheel_version", "wheel_tags"):
-            wval = art.get(wfield)
-            if wval is not None and (not isinstance(wval, str) or not wval):
-                errors.append(f"artifacts[{i}].{wfield} must be a non-empty string when present")
-
-    # Must have at least eggfetch and httpx artifacts
-    types = {a.get("artifact_type") for a in manifest["artifacts"]}
-    if "eggfetch" not in types:
-        errors.append("manifest must contain an eggfetch artifact")
-    if "httpx-controlled-replacement" not in types:
-        errors.append("manifest must contain an httpx-controlled-replacement artifact")
-
-    return errors
-
-
-def build_parser() -> argparse.ArgumentParser:
-    """Build the argument parser for workflow validation tests."""
-    parser = argparse.ArgumentParser(
-        prog="generate_artifact_manifest.py",
-        description="Generate artifact manifest for built wheel artifacts",
-    )
-    parser.add_argument("--wheel-dir", required=True, help="Directory containing .whl files")
-    parser.add_argument("--candidate-sha", required=True, help="40-char hex SHA")
-    parser.add_argument("--run-id", required=True, help="GitHub run ID")
-    parser.add_argument("--run-attempt", required=True, help="Run attempt number")
-    parser.add_argument("--output", required=True, help="Output manifest path")
-    parser.add_argument("--workflow-name", default="", help="Workflow name")
-    parser.add_argument("--producer-job", default="", help="Producer job name")
-    parser.add_argument("--bundle-dir", default=None,
-                        help="Create candidate bundle at this dir (copies wheels, uses relative paths)")
-    parser.add_argument("--allow-extra-wheels", action="store_true",
-                        help="Allow artifact types beyond eggfetch and httpx-controlled-replacement")
-    parser.add_argument("--candidate-identity", default=None,
-                        help="Path to candidate-identity.json to embed in manifest")
-    parser.add_argument("--generate-identity", action="store_true",
-                        help="Also generate candidate-identity.json alongside the manifest")
-    parser.add_argument("--validate-only", action="store_true",
-                        help="Only validate an existing manifest")
-    parser.add_argument("--manifest", help="Manifest path for --validate-only")
-    return parser
-
-
-def main() -> None:
-    parser = build_parser()
-    args = parser.parse_args()
-
-    if args.validate_only:
-        if not args.manifest:
-            parser.error("--manifest is required with --validate-only")
-        with open(args.manifest) as f:
-            manifest = json.load(f)
-        base_dir = Path(args.manifest).parent if args.manifest else None
-        errors = validate_manifest(manifest, base_dir=base_dir)
-        if errors:
-            print(f"VALIDATION FAILED ({len(errors)} errors):")
-            for e in errors:
-                print(f"  - {e}")
-            sys.exit(1)
-        else:
-            print("Artifact manifest validation passed.")
-            sys.exit(0)
-
-    wheel_dir = Path(args.wheel_dir).resolve()
-    candidate_identity_path = Path(args.candidate_identity) if args.candidate_identity else None
-    bundle_dir = Path(args.bundle_dir) if args.bundle_dir else None
-
-    try:
-        manifest = generate_manifest(
-            wheel_dir, args.candidate_sha, args.run_id, args.run_attempt,
-            workflow_name=args.workflow_name,
-            producer_job=args.producer_job,
-            allow_extra_wheels=args.allow_extra_wheels,
-            candidate_identity_path=candidate_identity_path,
-            bundle_dir=bundle_dir,
-        )
-    except (FileNotFoundError, ValueError) as e:
-        print(f"FATAL: {e}")
-        sys.exit(1)
-
-    # Self-validate
-    errors = validate_manifest(manifest, base_dir=bundle_dir)
-    if errors:
-        print(f"FATAL: manifest has validation errors:")
-        for e in errors:
-            print(f"  - {e}")
-        sys.exit(1)
-
-    # Hash mismatch validation: verify artifact hashes against disk
-    for art in manifest["artifacts"]:
-        if bundle_dir:
-            art_path = bundle_dir / art["path"]
-        else:
-            art_path = Path(art["path"])
-        if art_path.exists():
-            actual_sha = compute_sha256(art_path)
-            if actual_sha != art["sha256"]:
-                print(f"FATAL: hash mismatch for {art['name']}: "
-                      f"manifest={art['sha256']}, disk={actual_sha}")
-                sys.exit(1)
 
     # Determine output path
     if bundle_dir:
@@ -382,56 +190,203 @@ def main() -> None:
         json.dump(manifest, f, indent=2)
         f.write("\n")
 
-    # Generate candidate-identity.json alongside the manifest if requested
-    if args.generate_identity:
-        identity_path = output_path.parent / "candidate-identity.json"
-        # Import from sibling script
-        try:
-            from candidate_identity import create_identity, validate_identity
-            eggfetch_whl = {}
-            httpx_whl = {}
-            for art in manifest["artifacts"]:
-                if art["artifact_type"] == "eggfetch":
-                    eggfetch_whl = {"filename": art["name"], "sha256": art["sha256"]}
-                elif art["artifact_type"] == "httpx-controlled-replacement":
-                    httpx_whl = {"filename": art["name"], "sha256": art["sha256"]}
-            identity = create_identity(
-                candidate_sha=manifest["candidate_sha"],
-                eggfetch_version=eggfetch_whl.get("filename", "").split("-")[1] if eggfetch_whl else "0.0.0",
-                eggfetch_wheel=eggfetch_whl,
-                httpx_replacement_wheel=httpx_whl,
-                producer=args.producer_job or "unknown",
-                run_id=manifest["run_id"],
-                run_attempt=manifest["run_attempt"],
-            )
-            id_errors = validate_identity(identity)
-            if id_errors:
-                print(f"FATAL: generated identity has validation errors:")
-                for e in id_errors:
-                    print(f"  - {e}")
-                sys.exit(1)
-        except ImportError:
-            # Fallback: basic identity
-            identity = {
-                "schema_version": "3",
-                "candidate_sha": manifest["candidate_sha"],
-                "run_id": manifest["run_id"],
-                "run_attempt": manifest["run_attempt"],
-                "producer": args.producer_job or "unknown",
-                "started_at": manifest["generated_at"],
-                "finished_at": manifest["generated_at"],
-            }
-        with open(identity_path, "w") as f:
-            json.dump(identity, f, indent=2)
-            f.write("\n")
-        print(f"Candidate identity written to {identity_path}")
+    # Self-validate
+    base_dir = bundle_dir if bundle_dir else output_path.parent
+    errors = validate_manifest(manifest, bundle_root=base_dir)
+    if errors:
+        print(f"FATAL: generated manifest has validation errors:", file=sys.stderr)
+        for e in errors:
+            print(f"  - {e}", file=sys.stderr)
+        sys.exit(1)
 
     print(f"Artifact manifest written to {output_path}")
     print(f"  schema_version: {manifest['schema_version']}")
-    print(f"  candidate_sha: {manifest['candidate_sha'][:16]}...")
+    print(f"  candidate_sha: {candidate_sha[:16]}...")
     print(f"  artifacts: {len(manifest['artifacts'])}")
     for art in manifest["artifacts"]:
-        print(f"    {art['artifact_type']}: {art['name']} ({art['size_bytes']} bytes)")
+        print(f"    {art['role']}: {art['filename']} ({art['size_bytes']} bytes)")
+
+
+def _cmd_validate(args: argparse.Namespace) -> None:
+    """Handle 'validate' subcommand."""
+    manifest_path = Path(args.manifest)
+    if not manifest_path.exists():
+        print(f"FATAL: manifest not found: {manifest_path}", file=sys.stderr)
+        sys.exit(1)
+
+    with open(manifest_path) as f:
+        manifest = json.load(f)
+
+    bundle_root = Path(args.bundle_root) if args.bundle_root else manifest_path.parent
+
+    errors = validate_manifest(manifest, bundle_root=bundle_root)
+
+    if args.expected_sha:
+        manifest_sha = manifest.get("candidate_sha", "")
+        if manifest_sha != args.expected_sha:
+            errors.append(
+                f"candidate_sha mismatch: expected {args.expected_sha[:12]}, "
+                f"got {manifest_sha[:12]}"
+            )
+
+    if errors:
+        print(f"VALIDATION FAILED ({len(errors)} errors):", file=sys.stderr)
+        for e in errors:
+            print(f"  - {e}", file=sys.stderr)
+        sys.exit(1)
+    else:
+        print("Artifact manifest validation passed.")
+        sys.exit(0)
+
+
+def validate_manifest(manifest: dict, bundle_root: Path | None = None) -> list[str]:
+    """Validate an artifact manifest. Returns list of errors.
+
+    If bundle_root is provided, artifact paths are resolved relative to it
+    and file existence, sizes, and hashes are verified against disk.
+    """
+    errors: list[str] = []
+
+    if not isinstance(manifest, dict):
+        return ["manifest must be a JSON object"]
+
+    required_fields = [
+        "schema_version", "candidate_sha", "run_id",
+        "run_attempt", "generated_at", "artifacts",
+    ]
+    for field in required_fields:
+        if field not in manifest:
+            errors.append(f"missing required field: {field}")
+
+    if errors:
+        return errors
+
+    if manifest["schema_version"] != SCHEMA_VERSION:
+        errors.append(
+            f"schema_version must be '{SCHEMA_VERSION}', "
+            f"got '{manifest['schema_version']}'"
+        )
+
+    sha = manifest["candidate_sha"]
+    if len(sha) != 40 or not all(c in "0123456789abcdef" for c in sha):
+        errors.append(f"candidate_sha must be a 40-char hex string, got: {sha!r}")
+
+    artifacts = manifest.get("artifacts", [])
+    if not isinstance(artifacts, list) or len(artifacts) == 0:
+        errors.append("artifacts must be a non-empty list")
+        return errors
+
+    # Validate each artifact entry
+    roles_seen: set[str] = set()
+    for i, art in enumerate(artifacts):
+        if not isinstance(art, dict):
+            errors.append(f"artifacts[{i}] must be a JSON object")
+            continue
+
+        for field in ("role", "distribution", "version", "filename", "relative_path", "sha256", "size_bytes"):
+            if field not in art:
+                errors.append(f"artifacts[{i}].{field} is missing")
+
+        role = art.get("role", "")
+        if role:
+            if role in roles_seen:
+                errors.append(f"duplicate artifact role: {role}")
+            roles_seen.add(role)
+
+        sha256 = art.get("sha256", "")
+        if sha256:
+            if len(sha256) != 64 or not all(c in "0123456789abcdef" for c in sha256):
+                errors.append(f"artifacts[{i}].sha256 must be a 64-char hex string")
+
+        size_bytes = art.get("size_bytes")
+        if size_bytes is not None:
+            if not isinstance(size_bytes, int) or size_bytes < 0:
+                errors.append(f"artifacts[{i}].size_bytes must be a non-negative integer")
+
+        rel_path = art.get("relative_path", "")
+        if rel_path:
+            if _has_path_traversal(rel_path):
+                errors.append(f"artifacts[{i}].relative_path contains path traversal: {rel_path}")
+            elif bundle_root:
+                full_path = bundle_root / rel_path
+                if not full_path.exists():
+                    errors.append(f"artifacts[{i}].relative_path does not exist: {rel_path}")
+                else:
+                    # Verify hash and size
+                    actual_sha = compute_sha256(full_path)
+                    if sha256 and actual_sha != sha256:
+                        errors.append(
+                            f"artifacts[{i}].sha256 mismatch: "
+                            f"manifest={sha256[:16]}..., disk={actual_sha[:16]}..."
+                        )
+                    actual_size = full_path.stat().st_size
+                    if size_bytes is not None and actual_size != size_bytes:
+                        errors.append(
+                            f"artifacts[{i}].size_bytes mismatch: "
+                            f"manifest={size_bytes}, disk={actual_size}"
+                        )
+
+    # Must have exactly eggfetch and httpx-controlled-replacement roles
+    if "eggfetch" not in roles_seen:
+        errors.append("manifest must contain an artifact with role 'eggfetch'")
+    if "httpx-controlled-replacement" not in roles_seen:
+        errors.append("manifest must contain an artifact with role 'httpx-controlled-replacement'")
+
+    # Exactly two artifacts for standard bundle
+    if len(artifacts) != 2:
+        errors.append(f"manifest must contain exactly 2 artifacts, got {len(artifacts)}")
+
+    return errors
+
+
+def compute_manifest_digest(manifest: dict) -> str:
+    """Compute SHA-256 digest of canonical manifest JSON."""
+    canonical = json.dumps(manifest, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def build_parser() -> argparse.ArgumentParser:
+    """Build the argument parser with subcommands."""
+    parser = argparse.ArgumentParser(
+        prog="generate_artifact_manifest.py",
+        description="Generate or validate artifact manifest for built wheel artifacts",
+    )
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    # generate subcommand
+    gen = subparsers.add_parser("generate", help="Generate a new artifact manifest")
+    gen.add_argument("--eggfetch-wheel", required=True, help="Path to eggfetch .whl file")
+    gen.add_argument("--httpx-replacement-wheel", required=True, help="Path to httpx replacement .whl file")
+    gen.add_argument("--candidate-sha", required=True, help="40-char hex SHA")
+    gen.add_argument("--run-id", required=True, help="GitHub run ID")
+    gen.add_argument("--run-attempt", required=True, help="Run attempt number")
+    gen.add_argument("--output", required=True, help="Output manifest path")
+    gen.add_argument("--workflow-name", default="", help="Workflow name")
+    gen.add_argument("--producer-job", default="", help="Producer job name")
+    gen.add_argument("--bundle-dir", default=None,
+                     help="Create candidate bundle at this dir (copies wheels, uses relative paths)")
+
+    # validate subcommand
+    val = subparsers.add_parser("validate", help="Validate an existing artifact manifest")
+    val.add_argument("--manifest", required=True, help="Manifest path to validate")
+    val.add_argument("--bundle-root", default=None,
+                     help="Bundle root directory for resolving relative paths (default: manifest directory)")
+    val.add_argument("--expected-sha", default=None, help="Expected candidate SHA")
+
+    return parser
+
+
+def main() -> None:
+    parser = build_parser()
+    args = parser.parse_args()
+
+    if args.command == "generate":
+        _cmd_generate(args)
+    elif args.command == "validate":
+        _cmd_validate(args)
+    else:
+        parser.print_help()
+        sys.exit(2)
 
 
 if __name__ == "__main__":

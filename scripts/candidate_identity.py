@@ -1,7 +1,7 @@
 """Shared candidate identity schema for qualification artifacts.
 
 All generated JSON artifacts must use this module to produce and validate
-candidate identity fields. Schema version 3.
+candidate identity fields. Schema version 4.
 
 Usage:
     candidate_identity.py generate \\
@@ -26,11 +26,12 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-SCHEMA_VERSION = "3"
+SCHEMA_VERSION = "4"
 
 REQUIRED_FIELDS = [
     "schema_version",
     "candidate_sha",
+    "artifact_manifest_sha256",
     "eggfetch_version",
     "eggfetch_wheel",
     "httpx_replacement_wheel",
@@ -41,14 +42,6 @@ REQUIRED_FIELDS = [
     "run_id",
     "run_attempt",
     "identity_digest",
-]
-
-# Top-level wheel fields (flat, alongside the nested wheel records)
-_TOPLEVEL_WHEEL_FIELDS = [
-    "eggfetch_wheel_filename",
-    "eggfetch_wheel_sha256",
-    "httpx_replacement_filename",
-    "httpx_replacement_sha256",
 ]
 
 
@@ -78,6 +71,12 @@ def compute_identity_digest(identity: dict) -> str:
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
+def compute_manifest_digest(manifest: dict) -> str:
+    """Compute SHA-256 digest of canonical manifest JSON."""
+    canonical = json.dumps(manifest, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
 def create_identity(
     candidate_sha: str,
     eggfetch_version: str,
@@ -93,12 +92,10 @@ def create_identity(
 ) -> dict:
     """Create a candidate identity record with computed digest."""
     started = started_at or datetime.now(timezone.utc).isoformat()
-    # Ensure finished_at is strictly after started_at
     if finished_at:
         finished = finished_at
     else:
         finished = datetime.now(timezone.utc).isoformat()
-        # Guarantee strict ordering
         dt_started = datetime.fromisoformat(started)
         dt_finished = datetime.fromisoformat(finished)
         if dt_finished <= dt_started:
@@ -108,11 +105,11 @@ def create_identity(
     identity: dict = {
         "schema_version": SCHEMA_VERSION,
         "candidate_sha": candidate_sha,
+        "artifact_manifest_sha256": artifact_manifest_sha256,
         "eggfetch_version": eggfetch_version,
         "eggfetch_wheel": eggfetch_wheel,
         "httpx_replacement_wheel": httpx_replacement_wheel,
         "reference_httpx_version": "0.28.1",
-        "artifact_manifest_sha256": artifact_manifest_sha256,
         "producer": producer,
         "run_id": run_id,
         "run_attempt": run_attempt,
@@ -143,6 +140,12 @@ def validate_identity(identity: dict) -> list[str]:
     if not validate_sha(identity["candidate_sha"]):
         errors.append(f"candidate_sha must be a 40-char hex SHA, got '{identity['candidate_sha']}'")
 
+    manifest_sha = identity.get("artifact_manifest_sha256", "")
+    if not isinstance(manifest_sha, str) or len(manifest_sha) != 64:
+        errors.append(f"artifact_manifest_sha256 must be a 64-char hex string, got: {manifest_sha!r}")
+    elif not all(c in "0123456789abcdef" for c in manifest_sha):
+        errors.append(f"artifact_manifest_sha256 must be a 64-char hex string")
+
     if not isinstance(identity["eggfetch_version"], str) or not identity["eggfetch_version"]:
         errors.append("eggfetch_version must be a non-empty string")
 
@@ -155,26 +158,16 @@ def validate_identity(identity: dict) -> list[str]:
     if not isinstance(identity.get("producer"), str) or not identity["producer"]:
         errors.append("producer must be a non-empty string")
 
-    # Validate run_id and run_attempt are non-empty strings
     for field in ("run_id", "run_attempt"):
         val = identity.get(field)
         if not isinstance(val, str) or not val:
             errors.append(f"{field} must be a non-empty string, got {val!r}")
 
-    # Validate top-level wheel fields are non-empty strings where present
-    for field in _TOPLEVEL_WHEEL_FIELDS:
-        val = identity.get(field)
-        if val is not None:
-            if not isinstance(val, str) or not val:
-                errors.append(f"{field} must be a non-empty string when present, got {val!r}")
-
-    # Validate workflow_run_url if present
     workflow_url = identity.get("workflow_run_url")
     if workflow_url is not None:
         if not isinstance(workflow_url, str) or not workflow_url:
             errors.append(f"workflow_run_url must be a non-empty string when present, got {workflow_url!r}")
 
-    # Validate timestamp order: started_at < finished_at
     started = identity.get("started_at")
     finished = identity.get("finished_at")
     if started and finished and isinstance(started, str) and isinstance(finished, str):
@@ -188,7 +181,6 @@ def validate_identity(identity: dict) -> list[str]:
         except ValueError:
             errors.append(f"invalid timestamp format: started_at={started!r}, finished_at={finished!r}")
 
-    # Validate identity_digest
     digest = identity.get("identity_digest")
     if not digest or not isinstance(digest, str):
         errors.append("identity_digest must be a non-empty string")
@@ -227,22 +219,23 @@ def _generate_from_manifest(
     started_at: str,
     finished_at: str,
 ) -> dict:
-    """Generate identity from an artifact manifest."""
+    """Generate identity from an artifact manifest (schema v3)."""
     with open(artifact_manifest_path) as f:
         manifest = json.load(f)
 
-    manifest_sha = hashlib.sha256(
-        json.dumps(manifest, sort_keys=True, separators=(",", ":")).encode()
-    ).hexdigest()
+    manifest_sha = compute_manifest_digest(manifest)
 
     eggfetch_wheel = {}
     httpx_wheel = {}
     for art in manifest.get("artifacts", []):
-        art_type = art.get("artifact_type", "")
-        if art_type == "eggfetch":
-            eggfetch_wheel = {"filename": art["name"], "sha256": art["sha256"]}
-        elif art_type == "httpx-controlled-replacement":
-            httpx_wheel = {"filename": art["name"], "sha256": art["sha256"]}
+        # Support schema v3 (role) and schema v2 (artifact_type)
+        art_role = art.get("role", art.get("artifact_type", ""))
+        art_filename = art.get("filename", art.get("name", ""))
+        art_hash = art.get("sha256", "")
+        if art_role == "eggfetch":
+            eggfetch_wheel = {"filename": art_filename, "sha256": art_hash}
+        elif art_role == "httpx-controlled-replacement":
+            httpx_wheel = {"filename": art_filename, "sha256": art_hash}
 
     if not eggfetch_wheel:
         print("FATAL: no eggfetch artifact found in manifest", file=sys.stderr)
@@ -282,7 +275,6 @@ def _cmd_generate(args: argparse.Namespace) -> None:
         finished_at=args.finished_at or started_at,
     )
 
-    # Overwrite finished_at with explicit value or a fresh timestamp
     if not args.finished_at:
         from datetime import timedelta
         dt = datetime.fromisoformat(started_at)
@@ -320,13 +312,10 @@ def _cmd_validate(args: argparse.Namespace) -> None:
         else:
             print(f"OK {path}: candidate={data['candidate_sha'][:12]}")
 
-    # Cross-validate against artifact manifest if provided
     if args.artifact_manifest and all_ok:
         with open(args.artifact_manifest) as f:
             manifest = json.load(f)
-        manifest_sha = hashlib.sha256(
-            json.dumps(manifest, sort_keys=True, separators=(",", ":")).encode()
-        ).hexdigest()
+        manifest_sha = compute_manifest_digest(manifest)
 
         for path in args.identity_files:
             with open(path) as f:
@@ -335,7 +324,6 @@ def _cmd_validate(args: argparse.Namespace) -> None:
                 print(f"FAIL {path}: artifact_manifest_sha256 mismatch")
                 all_ok = False
 
-    # Validate expected SHA if provided
     if args.expected_sha:
         for path in args.identity_files:
             with open(path) as f:
@@ -355,7 +343,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    # generate subcommand
     gen = subparsers.add_parser("generate", help="Generate a candidate identity")
     gen.add_argument("--artifact-manifest", required=True, help="Path to artifact-manifest.json")
     gen.add_argument("--candidate-sha", required=True, help="40-char hex SHA")
@@ -367,7 +354,6 @@ def build_parser() -> argparse.ArgumentParser:
     gen.add_argument("--finished-at", default="", help="Finished timestamp (ISO-8601)")
     gen.add_argument("--output", required=True, help="Output identity JSON path")
 
-    # validate subcommand
     val = subparsers.add_parser("validate", help="Validate candidate identity file(s)")
     val.add_argument("identity_files", nargs="+", help="Path(s) to identity JSON file(s)")
     val.add_argument("--artifact-manifest", default=None, help="Cross-validate against manifest")

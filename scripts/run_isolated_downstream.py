@@ -110,10 +110,11 @@ def find_package(manifest: dict, name: str) -> dict | None:
     return None
 
 
-def find_wheels(artifact_manifest: dict) -> tuple[Path | None, Path | None]:
+def find_wheels(artifact_manifest: dict, bundle_root: Path | None = None) -> tuple[Path | None, Path | None]:
     """Find the eggfetch wheel and the httpx controlled replacement wheel.
 
     Reads paths from the artifact manifest and verifies their SHA-256 hashes.
+    Paths are resolved relative to bundle_root if provided.
 
     Returns (eggfetch_wheel, httpx_wheel).
     """
@@ -121,9 +122,16 @@ def find_wheels(artifact_manifest: dict) -> tuple[Path | None, Path | None]:
     httpx_wheel = None
 
     for art in artifact_manifest.get("artifacts", []):
-        art_type = art.get("artifact_type", "")
-        path = Path(art.get("path", ""))
+        # Support schema v3 (role) and schema v2 (artifact_type)
+        art_type = art.get("role", art.get("artifact_type", ""))
+        # Support schema v3 (relative_path) and schema v2 (path)
+        rel_path = art.get("relative_path", art.get("path", ""))
         expected_hash = art.get("sha256", "")
+
+        if bundle_root and rel_path:
+            path = bundle_root / rel_path
+        else:
+            path = Path(rel_path)
 
         if not path.exists():
             continue
@@ -422,9 +430,14 @@ def _is_import_only_command(test_command: str) -> bool:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run downstream tests in isolation")
-    parser.add_argument("--package", required=True, help="Package name from manifest")
-    parser.add_argument("--artifact-manifest", required=True,
+    parser.add_argument("--package", "--package-id", dest="package", required=True,
+                        help="Package name from manifest")
+    parser.add_argument("--artifact-manifest", default=None,
                         help="Path to artifact-manifest.json listing built wheels with hashes")
+    parser.add_argument("--manifest", default=None,
+                        help="Path to downstream manifest.toml (for resolving package details)")
+    parser.add_argument("--bundle-root", default=None,
+                        help="Bundle root directory for resolving relative wheel paths")
     parser.add_argument("--candidate-identity", default=None,
                         help="Path to candidate-identity.json for identity propagation")
     parser.add_argument("--timeout", type=int, default=120,
@@ -435,7 +448,14 @@ def main() -> int:
                         help="Path to write structured result JSON (default: stdout)")
     args = parser.parse_args()
 
-    manifest_path = Path(args.artifact_manifest).resolve()
+    # Resolve artifact manifest path
+    artifact_manifest_arg = args.artifact_manifest
+    if not artifact_manifest_arg and args.bundle_root:
+        artifact_manifest_arg = str(Path(args.bundle_root) / "artifact-manifest.json")
+    if not artifact_manifest_arg:
+        parser.error("--artifact-manifest or --bundle-root is required")
+
+    manifest_path = Path(artifact_manifest_arg).resolve()
     if not manifest_path.exists():
         _emit_result({"status": "error", "message": f"Artifact manifest not found: {manifest_path}"}, args.output)
         return 2
@@ -451,7 +471,8 @@ def main() -> int:
             with open(identity_path) as f:
                 candidate_identity = json.load(f)
 
-    eggfetch_wheel, httpx_wheel = find_wheels(artifact_manifest)
+    bundle_root = Path(args.bundle_root).resolve() if args.bundle_root else None
+    eggfetch_wheel, httpx_wheel = find_wheels(artifact_manifest, bundle_root=bundle_root)
     if eggfetch_wheel is None:
         _emit_result(
             {**_diagnostic("artifact-mismatch", "No valid eggfetch wheel found in artifact manifest (hash mismatch or missing)")},  # noqa: E501
