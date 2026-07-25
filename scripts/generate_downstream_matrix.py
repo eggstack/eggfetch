@@ -207,7 +207,7 @@ def main() -> None:
         print(f"    {entry['package_id']}=={entry['version']}")
 
     # Compact single-line JSON for $GITHUB_OUTPUT
-    print(f"\n::set-output name=matrix::{json.dumps(matrix, separators=(',', ':'))}")
+    print(json.dumps(matrix, separators=(',', ':')))
 
 
 if __name__ == "__main__":

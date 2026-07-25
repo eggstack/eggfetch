@@ -538,7 +538,7 @@ jobs:
           python scripts/generate_downstream_matrix.py \
             --manifest compat/downstream/manifest.toml \
             --output /tmp/downstream-matrix.json
-          MATRIX=$(jq -c . /tmp/downstream-matrix.json)
+          MATRIX=$(python -c "import json; print(json.dumps(json.load(open('/tmp/downstream-matrix.json')), separators=(',',':')))")
           echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
 
       - name: Upload matrix artifact
