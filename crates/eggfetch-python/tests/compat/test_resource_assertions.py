@@ -19,7 +19,10 @@ from native_fixtures import local_http_server
 
 
 def _load_resource_thresholds():
-    """Load platform thresholds from compat/httpx/0.28.1/resource-thresholds.toml."""
+    """Load platform thresholds from compat/httpx/0.28.1/resource-thresholds.toml.
+
+    Per plan §10.6: missing platform profile or unparsed policy is a failure.
+    """
     try:
         import tomllib
     except ModuleNotFoundError:
@@ -31,22 +34,21 @@ def _load_resource_thresholds():
     )
     thresholds_path = os.path.normpath(thresholds_path)
     if not os.path.exists(thresholds_path):
-        pytest.skip(f"Resource thresholds file not found: {thresholds_path}")
+        pytest.fail(f"Resource thresholds file not found: {thresholds_path}")
 
     with open(thresholds_path, "rb") as f:
         data = tomllib.load(f)
 
     system = platform.system().lower()
     if system not in data.get("platform", {}):
-        pytest.skip(f"No resource thresholds for platform: {system}")
+        pytest.fail(f"No resource thresholds for platform: {system}")
     return data["platform"][system]
 
 
 def _get_fd_count():
     """Get current file descriptor count (Linux/macOS).
 
-    Raises RuntimeError if the platform does not support FD counting,
-    so callers should catch and skip rather than silently swallowing.
+    Per plan §10.6: missing platform support is a failure, not a skip.
     """
     if platform.system() == "Linux":
         fd_dir = f"/proc/{os.getpid()}/fd"
@@ -95,7 +97,7 @@ class TestResourceStability:
         try:
             fd_before = _get_fd_count()
         except RuntimeError as e:
-            pytest.skip(str(e))
+            pytest.fail(str(e))
 
         with Client(transport=MockTransport(_handler)) as client:
             for _ in range(50):
@@ -136,7 +138,7 @@ class TestResourceStability:
         try:
             fd_before = _get_fd_count()
         except RuntimeError as e:
-            pytest.skip(str(e))
+            pytest.fail(str(e))
 
         for _ in range(20):
             with Client(transport=MockTransport(_handler)) as client:
@@ -200,7 +202,7 @@ class TestEarlyExitResourceCleanup:
         try:
             fd_before = _get_fd_count()
         except RuntimeError as e:
-            pytest.skip(str(e))
+            pytest.fail(str(e))
 
         def error_handler(request):
             raise RuntimeError("handler error")
@@ -225,7 +227,7 @@ class TestEarlyExitResourceCleanup:
         try:
             fd_before = _get_fd_count()
         except RuntimeError as e:
-            pytest.skip(str(e))
+            pytest.fail(str(e))
 
         call_count = [0]
 
@@ -262,7 +264,7 @@ class TestConcurrentResourceStability:
         try:
             fd_before = _get_fd_count()
         except RuntimeError as e:
-            pytest.skip(str(e))
+            pytest.fail(str(e))
 
         def make_request():
             with Client(transport=MockTransport(_handler)) as client:
@@ -295,7 +297,7 @@ class TestRealSocketResourceStability:
         try:
             fd_before = _get_fd_count()
         except RuntimeError as e:
-            pytest.skip(str(e))
+            pytest.fail(str(e))
 
         with local_http_server() as (host, port):
             url = f"http://{host}:{port}/json"

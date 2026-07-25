@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
 """Normalize raw pytest JSON reports into versioned result contracts.
 
-Converts ``pytest --json-report`` output into the schema-1 normalized format
-required by the qualification evidence pipeline. Every normalized result
-includes candidate identity, producer metadata, and terminal test counts.
+Converts ``pytest --json-report`` output into the qualification-result/v1
+normalized format required by the qualification evidence pipeline. Every
+normalized result includes candidate identity, producer metadata, and
+terminal test counts.
 
 Usage:
     normalize_pytest_result.py --input <pytest.json> --output <normalized.json> \\
-        --candidate-sha <40-char-sha> --job-name <name> \\
+        --suite-id <suite-id> --candidate-sha <40-char-sha> \\
+        --candidate-identity <path> --job-name <name> \\
         --producer <producer> --run-id <id> --run-attempt <n> \\
-        [--required]
+        [--required] [--max-skipped 0] [--max-xfailed 0]
 
 The normalizer enforces:
   - ``collected`` equals the sum of terminal outcomes
@@ -25,6 +27,7 @@ required suites is a hard failure.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sys
 from datetime import datetime, timezone
@@ -35,14 +38,41 @@ SCHEMA_VERSION = "1"
 # Terminal outcome keys in pytest JSON
 _OUTCOME_KEYS = ("passed", "failed", "error", "skipped", "xfailed", "xpassed")
 
+# Canonical result envelope schema
+_RESULT_SCHEMA = "qualification-result/v1"
+
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def normalize(raw: dict, candidate_sha: str, job_name: str,
-              producer: str, run_id: str, run_attempt: str) -> dict:
-    """Normalize a raw pytest JSON report into schema-1 contract.
+def _validate_sha40(sha: str, label: str) -> None:
+    if not isinstance(sha, str) or len(sha) != 40:
+        raise ValueError(f"{label}: must be a 40-char hex string, got {sha!r}")
+    if not all(c in "0123456789abcdef" for c in sha):
+        raise ValueError(f"{label}: contains non-hex characters: {sha}")
+
+
+def _validate_digest64(digest: str, label: str) -> None:
+    if not isinstance(digest, str) or len(digest) != 64:
+        raise ValueError(f"{label}: must be a 64-char hex string, got {digest!r}")
+    if not all(c in "0123456789abcdef" for c in digest):
+        raise ValueError(f"{label}: contains non-hex characters: {digest}")
+
+
+def normalize(
+    raw: dict,
+    candidate_sha: str,
+    identity_digest: str,
+    job_name: str,
+    producer: str,
+    run_id: str,
+    run_attempt: str,
+    suite_id: str | None = None,
+    max_skipped: int | None = None,
+    max_xfailed: int | None = None,
+) -> dict:
+    """Normalize a raw pytest JSON report into qualification-result/v1.
 
     Accepts either the standard ``pytest-json-report`` schema (with
     ``tests``, ``summary``, ``duration``) or a simplified flat schema
@@ -108,36 +138,51 @@ def normalize(raw: dict, candidate_sha: str, job_name: str,
     else:
         started_at = _now_iso()
 
+    # Build metrics dict
+    metrics = {
+        "collected": collected,
+        "passed": counts["passed"],
+        "failed": counts["failed"],
+        "errors": counts["error"],
+        "skipped": counts["skipped"],
+        "xfailed": counts["xfailed"],
+        "xpassed": counts["xpassed"],
+        "duration_seconds": round(float(duration), 3),
+    }
+
+    # Apply custom thresholds
+    if max_skipped is not None and counts["skipped"] > max_skipped:
+        errors.append(
+            f"skipped count {counts['skipped']} exceeds max-skipped {max_skipped}"
+        )
+    if max_xfailed is not None and counts["xfailed"] > max_xfailed:
+        errors.append(
+            f"xfailed count {counts['xfailed']} exceeds max-xfailed {max_xfailed}"
+        )
+
+    # Emit as qualification-result/v1 envelope
     result: dict = {
-        "schema_version": SCHEMA_VERSION,
-        "candidate_identity": {
-            "candidate_sha": candidate_sha,
-        },
-        "producer": producer,
+        "schema": _RESULT_SCHEMA,
+        "suite_id": suite_id or producer,
+        "producer_job": producer,
+        "candidate_sha": candidate_sha,
+        "identity_digest": identity_digest,
         "run_id": run_id,
         "run_attempt": run_attempt,
-        "job_name": job_name,
         "started_at": started_at,
         "finished_at": _now_iso(),
         "status": status,
-        "errors": errors,
-        "metrics": {
-            "collected": collected,
-            "passed": counts["passed"],
-            "failed": counts["failed"],
-            "errors": counts["error"],
-            "skipped": counts["skipped"],
-            "xfailed": counts["xfailed"],
-            "xpassed": counts["xpassed"],
-            "duration_seconds": round(float(duration), 3),
-        },
+        "required": True,
+        "metrics": metrics,
+        "artifacts": [],
+        "diagnostics": errors,
     }
 
     return result
 
 
 def validate(result: dict, required: bool = False) -> list[str]:
-    """Validate a normalized result contract. Returns list of errors.
+    """Validate a qualification-result/v1 envelope. Returns list of errors.
 
     When *required* is ``True``, stricter checks apply:
     - ``collected > 0`` is enforced (error, not warning).
@@ -148,10 +193,16 @@ def validate(result: dict, required: bool = False) -> list[str]:
     if not isinstance(result, dict):
         return ["result must be a JSON object"]
 
+    # Schema version
+    if result.get("schema") != _RESULT_SCHEMA:
+        errors.append(
+            f"schema must be '{_RESULT_SCHEMA}', got {result.get('schema')!r}"
+        )
+
     required_fields = [
-        "schema_version", "candidate_identity", "producer", "run_id",
-        "run_attempt", "job_name", "started_at", "finished_at",
-        "status", "errors", "metrics",
+        "suite_id", "producer_job", "candidate_sha", "identity_digest",
+        "run_id", "run_attempt", "started_at", "finished_at",
+        "status", "required", "metrics", "artifacts", "diagnostics",
     ]
     for field in required_fields:
         if field not in result:
@@ -160,18 +211,28 @@ def validate(result: dict, required: bool = False) -> list[str]:
     if errors:
         return errors
 
-    if result["schema_version"] != SCHEMA_VERSION:
-        errors.append(
-            f"schema_version must be '{SCHEMA_VERSION}', got '{result['schema_version']}'"
-        )
+    # Status must be passed or failed
+    if result["status"] not in ("passed", "failed"):
+        errors.append(f"status must be 'passed' or 'failed', got '{result['status']}'")
 
-    if not isinstance(result["errors"], list):
-        errors.append("errors must be a list")
+    # SHA validation
+    candidate_sha = result.get("candidate_sha", "")
+    if not isinstance(candidate_sha, str) or len(candidate_sha) != 40:
+        errors.append("candidate_sha must be a 40-char hex string")
+    elif not all(c in "0123456789abcdef" for c in candidate_sha):
+        errors.append("candidate_sha contains non-hex characters")
 
-    if not isinstance(result["metrics"], dict):
+    identity_digest = result.get("identity_digest", "")
+    if not isinstance(identity_digest, str) or len(identity_digest) != 64:
+        errors.append("identity_digest must be a 64-char hex string")
+    elif not all(c in "0123456789abcdef" for c in identity_digest):
+        errors.append("identity_digest contains non-hex characters")
+
+    # Metrics validation
+    metrics = result.get("metrics")
+    if not isinstance(metrics, dict):
         errors.append("metrics must be a JSON object")
     else:
-        metrics = result["metrics"]
         for key in ("collected", "passed", "failed", "errors", "skipped", "xfailed", "xpassed"):
             if key not in metrics:
                 errors.append(f"metrics.{key} is missing")
@@ -204,10 +265,6 @@ def validate(result: dict, required: bool = False) -> list[str]:
                         f"required suite has non-zero {key}: {metrics[key]}"
                     )
 
-    # Status must be passed or failed
-    if result["status"] not in ("passed", "failed"):
-        errors.append(f"status must be 'passed' or 'failed', got '{result['status']}'")
-
     # If status is passed, no failures/errors/skips
     if result["status"] == "passed":
         m = result.get("metrics", {})
@@ -219,21 +276,23 @@ def validate(result: dict, required: bool = False) -> list[str]:
         if m.get("collected", 0) == 0:
             errors.append("status is 'passed' but collected is 0")
 
-    # Result-level errors list must be empty for a valid result
-    if result.get("errors"):
-        for e in result["errors"]:
-            errors.append(f"result error: {e}")
+    # Result-level diagnostics must be empty for a valid passing result
+    if result.get("diagnostics") and result["status"] == "passed":
+        for e in result["diagnostics"]:
+            errors.append(f"result diagnostic: {e}")
 
     return errors
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Normalize raw pytest JSON into schema-1 result contract",
+        description="Normalize raw pytest JSON into qualification-result/v1",
     )
     parser.add_argument("--input", required=True, help="Path to raw pytest JSON report")
     parser.add_argument("--output", required=True, help="Output normalized JSON path")
+    parser.add_argument("--suite-id", help="Suite identifier (defaults to --producer)")
     parser.add_argument("--candidate-sha", help="40-char hex SHA")
+    parser.add_argument("--candidate-identity", help="Path to candidate-identity.json")
     parser.add_argument("--job-name", help="Job name")
     parser.add_argument("--producer", help="Producer identifier")
     parser.add_argument("--run-id", help="GitHub run ID")
@@ -243,6 +302,10 @@ def main() -> None:
     parser.add_argument("--required", action="store_true",
                         help="Enforce stricter validation for required suites "
                              "(zero skip/xfail/xpassed/failed/errors)")
+    parser.add_argument("--max-skipped", type=int, default=None,
+                        help="Maximum allowed skipped count (default: 0 for required)")
+    parser.add_argument("--max-xfailed", type=int, default=None,
+                        help="Maximum allowed xfailed count (default: 0 for required)")
     args = parser.parse_args()
 
     if args.validate_only:
@@ -266,22 +329,47 @@ def main() -> None:
     if len(args.candidate_sha) != 40 or not all(c in "0123456789abcdef" for c in args.candidate_sha):
         parser.error(f"--candidate-sha must be a 40-char hex string, got: {args.candidate_sha!r}")
 
+    # Load identity digest from candidate-identity file or compute placeholder
+    identity_digest = "0" * 64
+    if args.candidate_identity:
+        try:
+            with open(args.candidate_identity) as f:
+                identity_data = json.load(f)
+            identity_digest = identity_data.get("identity_digest", "0" * 64)
+            if len(identity_digest) != 64 or not all(c in "0123456789abcdef" for c in identity_digest):
+                identity_digest = "0" * 64
+        except (json.JSONDecodeError, FileNotFoundError):
+            pass
+
+    # Default max-skipped and max-xfailed for required suites
+    max_skipped = args.max_skipped
+    max_xfailed = args.max_xfailed
+    if args.required:
+        if max_skipped is None:
+            max_skipped = 0
+        if max_xfailed is None:
+            max_xfailed = 0
+
     with open(args.input) as f:
         raw = json.load(f)
 
     result = normalize(
         raw,
         candidate_sha=args.candidate_sha,
+        identity_digest=identity_digest,
         job_name=args.job_name,
         producer=args.producer,
         run_id=args.run_id,
         run_attempt=args.run_attempt,
+        suite_id=args.suite_id,
+        max_skipped=max_skipped,
+        max_xfailed=max_xfailed,
     )
 
     # Self-validate
     errors = validate(result, required=args.required)
     if errors:
-        print(f"FATAL: normalized result has validation errors:")
+        print("FATAL: normalized result has validation errors:")
         for e in errors:
             print(f"  - {e}")
         sys.exit(1)
