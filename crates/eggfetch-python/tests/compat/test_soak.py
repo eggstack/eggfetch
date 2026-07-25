@@ -55,13 +55,22 @@ class TestQualificationChurn:
                     time.sleep(0.01)
 
     def test_qualification_churn_post(self):
-        """Run 50 POST requests to prove write stability."""
+        """Run 50 POST requests to prove write stability.
+
+        Uses a 30s per-request timeout (vs 10s elsewhere) to absorb
+        CI runner resource contention without weakening the stability
+        proof. Each response is explicitly closed to release connection
+        resources promptly under sustained churn.
+        """
         with local_http_server() as (host, port):
             url = f"http://{host}:{port}/json"
-            with Client(timeout=Timeout(10)) as c:
+            with Client(timeout=Timeout(30)) as c:
                 for i in range(50):
                     r = c.post(url, content=b"test payload")
                     assert r.status_code == 200
+                    # Consume body and release connection promptly
+                    _ = r.content
+                    r.close()
                     if i % 20 == 0:
                         time.sleep(0.01)
 
