@@ -175,6 +175,23 @@ def pip_install(venv_dir: Path, packages: list[str], timeout: int) -> subprocess
     )
 
 
+def pip_install_no_deps(venv_dir: Path, packages: list[str], timeout: int) -> subprocess.CompletedProcess:
+    """Install packages without resolving dependencies.
+
+    Used for downstream packages whose httpx version constraint may conflict
+    with the controlled replacement wheel. We install the controlled httpx
+    first, then install the downstream package with --no-deps so pip doesn't
+    replace it.
+    """
+    pip = venv_dir / "bin" / "pip"
+    return subprocess.run(
+        [str(pip), "install", "--quiet", "--disable-pip-version-check", "--no-deps", *packages],
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+    )
+
+
 def pip_check(venv_dir: Path) -> tuple[bool, str]:
     """Run pip check. Returns (ok, output)."""
     pip = venv_dir / "bin" / "pip"
@@ -645,9 +662,12 @@ def main() -> int:
             return 3
 
         # --- Step 6: Install the downstream package ---
-        # Filter out 'httpx' from optional-dependencies — we use the shim
+        # Use --no-deps to prevent pip from replacing the controlled httpx
+        # wheel. The downstream package's httpx version constraint may not
+        # match the controlled replacement (0.28.1), causing pip to install
+        # the real httpx from PyPI.
         downstream_deps = [d for d in pkg.get("optional-dependencies", []) if d != "httpx"]
-        downstream_install = pip_install(venv_dir, [pkg["name"]] + downstream_deps, args.timeout)
+        downstream_install = pip_install_no_deps(venv_dir, [pkg["name"]] + downstream_deps, args.timeout)
         if downstream_install.returncode != 0:
             result["install"]["success"] = False
             result["install"]["stderr"] += "\n--- downstream install ---\n" + downstream_install.stderr

@@ -180,9 +180,6 @@ jobs:
           - os: ubuntu-latest
             platform: linux-x86_64
             target: x86_64-unknown-linux-gnu
-          - os: ubuntu-latest
-            platform: linux-aarch64
-            target: aarch64-unknown-linux-gnu
           - os: macos-latest
             platform: macos-x86_64
             target: x86_64-apple-darwin
@@ -215,6 +212,39 @@ jobs:
         with:
           name: wheels-${{ matrix.platform }}
           path: dist/*.whl
+
+  # aarch64 wheels built separately — ring cross-compilation may fail on CI
+  # runners without a cross-compiler. This is non-blocking for qualification.
+  build-wheels-aarch64:
+    name: Build wheels (linux-aarch64)
+    runs-on: ubuntu-latest
+    needs: [verify]
+    if: needs.verify.outputs.verified == 'true'
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: ${{ needs.verify.outputs.sha }}
+
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          target: aarch64-unknown-linux-gnu
+          args: >-
+            --release
+            --manifest-path crates/eggfetch-python/Cargo.toml
+            --out dist
+            --interpreter 3.10 3.11 3.12 3.13
+          sccache: false
+        env:
+          CFLAGS_aarch64_unknown_linux_gnu: "-march=armv8-a"
+
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-linux-aarch64
+          path: dist/*.whl
+          if-no-files-found: warn
 
   build-sdist:
     name: Build sdist
