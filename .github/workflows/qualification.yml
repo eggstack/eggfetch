@@ -613,9 +613,9 @@ jobs:
         run: |
           python -m venv .venv
           source .venv/bin/activate
-          pip install -r compat/qualification-requirements.txt
           pip install candidate-bundle/wheels/eggfetch-*.whl
           pip install candidate-bundle/wheels/httpx-*.whl
+          pip install -r compat/qualification-requirements.txt
           python compat/httpx-controlled-replacement/verify_identity.py
 
       - name: Run downstream test via runner

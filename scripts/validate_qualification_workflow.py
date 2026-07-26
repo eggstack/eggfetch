@@ -145,16 +145,33 @@ def _find_suppression_patterns(workflow: dict) -> list[str]:
 
 
 def _check_continue_on_error(workflow: dict) -> list[str]:
-    """Check for continue-on-error on required jobs."""
+    """Check for continue-on-error on required gate jobs.
+
+    Only jobs listed in the qualification-gate's required_jobs are checked.
+    Non-gate jobs (e.g. aarch64 cross-compilation) may use continue-on-error
+    for non-blocking optional builds.
+    """
     errors: list[str] = []
     jobs = workflow.get("jobs", {})
     if not isinstance(jobs, dict):
         return errors
+
+    # Extract the set of required gate jobs from the qualification-gate job
+    gate_job = jobs.get("qualification-gate", {})
+    if not isinstance(gate_job, dict):
+        return errors
+
+    # Parse the gate's needs list (which defines the required jobs)
+    gate_needs = gate_job.get("needs", [])
+    if isinstance(gate_needs, str):
+        gate_needs = [gate_needs]
+    gate_jobs = set(gate_needs) if isinstance(gate_needs, list) else set()
+
     for job_name, job_def in jobs.items():
         if not isinstance(job_def, dict):
             continue
-        if job_def.get("continue-on-error"):
-            errors.append(f"job '{job_name}' has continue-on-error set")
+        if job_def.get("continue-on-error") and job_name in gate_jobs:
+            errors.append(f"job '{job_name}' has continue-on-error set (required gate job)")
     return errors
 
 

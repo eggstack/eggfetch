@@ -147,7 +147,7 @@ def _check_wheel_unexpected_modules(namelist: list[str]) -> list[ValidationError
     for part in sorted(top):
         if part in WHEEL_ALLOWED_TOP_DIRS:
             continue
-        if WHEEL_ALLOWED_TOP_FILES.match(part):
+        if part in WHEEL_ALLOWED_TOP_FILES:
             continue
         if WHEEL_ALLOWED_DIST_INFO.match(part):
             continue
