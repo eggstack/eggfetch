@@ -62,6 +62,7 @@ def validate_evidence(path: str) -> list[str]:
     elif len(candidate_sha) != 40:
         errors.append(
             f"candidate_sha must be 40 hex characters, got {len(candidate_sha)} chars"
+        )
     elif not all(c in "0123456789abcdef" for c in candidate_sha):
         errors.append(f"candidate_sha contains non-hex characters: {candidate_sha}")
     elif PLACEHOLDER_RE.search(candidate_sha):

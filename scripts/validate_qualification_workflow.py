@@ -393,9 +393,10 @@ def _check_candidate_bundle_usage(workflow: dict) -> list[str]:
 
     # Jobs that should use candidate-bundle
     bundle_consumers = {
-        "compat-tests", "downstream-substitution", "shim-substitution",
+        "compat-tests", "downstream-substitution", "downstream-aggregate",
+        "shim-substitution",
         "native-timeout", "proxy-tls", "shutdown", "soak-resource",
-        "generate-evidence", "qualification-gate",
+        "generate-evidence", "qualification-gate", "status-generate",
     }
 
     for job_name in bundle_consumers:
@@ -443,7 +444,8 @@ def _check_evidence_inputs(workflow: dict) -> list[str]:
         needs = [needs]
     required_deps = {
         "verify", "normalize-candidate-artifacts", "compat-tests",
-        "downstream-substitution", "shim-substitution",
+        "downstream-substitution", "downstream-aggregate",
+        "shim-substitution",
     }
     for dep in required_deps:
         if dep not in needs:

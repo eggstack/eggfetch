@@ -43,16 +43,7 @@ except ImportError:
         sys.exit(2)
 
 
-REQUIRED_STAGE_C_CATEGORIES = {
-    "contract-tests",
-    "mock-transport-request-matching",
-    "framework-test-client",
-    "asgi-test-client",
-    "sdk-async-client",
-    "streaming-sse-consumption",
-    "custom-auth-flow",
-    "event-hooks-instrumentation",
-}
+from stage_c_categories import STAGE_C_CATEGORY_SET, validate_category_coverage
 
 
 def load_manifest(path: Path) -> dict:
@@ -117,12 +108,10 @@ def validate_manifest(manifest: dict) -> list[str]:
 
     # Check required categories are covered by release-blocking packages
     # or by known non-package producers
-    missing_categories = REQUIRED_STAGE_C_CATEGORIES - covered_categories - _NON_PACKAGE_CATEGORIES
-    if missing_categories:
-        errors.append(
-            f"categories not covered by release-blocking packages: "
-            f"{', '.join(sorted(missing_categories))}"
-        )
+    cat_errors = validate_category_coverage(
+        covered_categories, non_package_categories=_NON_PACKAGE_CATEGORIES
+    )
+    errors.extend(cat_errors)
 
     return errors
 
