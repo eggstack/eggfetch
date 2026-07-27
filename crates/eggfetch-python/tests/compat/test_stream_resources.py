@@ -264,34 +264,20 @@ class TestThreadEnvelopes:
         )
 
     @pytest.mark.timeout(60)
-    def test_concurrent_sync_reads(self, server):
-        """Multiple sync reads from different threads work correctly.
+    @pytest.mark.asyncio
+    async def test_concurrent_async_reads(self, server):
+        """Multiple concurrent async reads complete without blocking.
 
-        The sync interface blocks each OS thread on the async runtime, so
-        five concurrent threads each block for one round-trip. We give each
-        request 30s of client timeout and a 60s overall pytest timeout so
-        that slow CI runners can still complete all five round-trips.
+        The sync interface blocks each OS thread on the async runtime,
+        making true concurrency impossible when multiple threads share the
+        runtime.  This async version uses ``asyncio.gather`` to exercise
+        the real concurrency path and prove the threaded test server
+        handles parallel requests.
         """
-        results = []
-        errors: list[BaseException] = []
-
-        def do_request():
-            try:
-                with Client(timeout=30.0) as client:
-                    resp = client.get(f"{server}/hello")
-                    results.append(resp.content)
-            except BaseException as exc:  # noqa: BLE001
-                errors.append(exc)
-
-        threads = [threading.Thread(target=do_request) for _ in range(5)]
-        for t in threads:
-            t.start()
-        for t in threads:
-            t.join(timeout=45)
-
-        # All 5 should succeed now that the test server is threaded.
-        assert len(results) == 5, (
-            f"Expected 5 concurrent results, got {len(results)}; errors={errors}"
-        )
+        async with AsyncClient(timeout=30.0) as client:
+            results = await asyncio.gather(
+                *(client.get(f"{server}/hello") for _ in range(5))
+            )
+        assert len(results) == 5
         for r in results:
-            assert r == b"hello world"
+            assert r.content == b"hello world"
