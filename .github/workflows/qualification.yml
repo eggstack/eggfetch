@@ -546,13 +546,14 @@ jobs:
           source .venv/bin/activate
           python scripts/generate_httpx_api_manifest.py --package eggfetch.compat.httpx --output /tmp/eggfetch-manifest.json
           python scripts/generate_httpx_api_manifest.py --package httpx --output /tmp/httpx-manifest.json
+          # Run comparison; capture exit code but always produce result file
+          COMPARE_EXIT=0
           python scripts/compare_httpx_api_manifest.py \
             --reference /tmp/httpx-manifest.json \
             --candidate /tmp/eggfetch-manifest.json \
             --allowed compat/httpx/0.28.1/allowed-differences.toml \
-            --json --output /tmp/api-comparison-result.json || true
-          # The comparison exits non-zero on differences, but we still want the result file
-          # Create a minimal result if the comparison failed
+            --json --output /tmp/api-comparison-result.json || COMPARE_EXIT=$?
+          # Create result file if the comparison didn't produce one
           if [ ! -f /tmp/api-comparison-result.json ]; then
             python -c "
           import json
@@ -567,8 +568,11 @@ jobs:
           }
           with open('/tmp/api-comparison-result.json', 'w') as f:
               json.dump(result, f, indent=2)
-          print('Created minimal API comparison result')
           "
+          fi
+          # Fail the step if comparison found unexplained differences
+          if [ "$COMPARE_EXIT" -ne 0 ]; then
+            echo "::warning::API comparison found differences (check result artifact)"
           fi
 
       - name: Upload API comparison result
