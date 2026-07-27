@@ -5,6 +5,7 @@ Per plan §10.2: exact exception class assertions.
 """
 import http.server
 import socket
+import socketserver
 import sys
 import threading
 import time

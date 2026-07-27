@@ -10,6 +10,8 @@ import pytest
 
 import eggfetch
 
+from conftest import _ThreadingHTTPServer
+
 
 # ---------------------------------------------------------------------------
 # Test servers
@@ -102,7 +104,7 @@ class _EchoHandler(http.server.BaseHTTPRequestHandler):
 
 def _start_server(handler_class):
     """Start a test server on a random port and return (server, base_url)."""
-    server = http.server.HTTPServer(("127.0.0.1", 0), handler_class)
+    server = _ThreadingHTTPServer(("127.0.0.1", 0), handler_class)
     port = server.server_address[1]
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -194,7 +196,7 @@ class TestCrossOriginRedirectStripsBoth:
             def log_message(self, format, *args):
                 pass
 
-        srv_a = http.server.HTTPServer(
+        srv_a = _ThreadingHTTPServer(
             ("127.0.0.1", 0), _RedirectToOriginBHandler
         )
         base_a = f"http://127.0.0.1:{srv_a.server_address[1]}"
@@ -232,7 +234,7 @@ class TestCrossOriginRedirectStripsBoth:
             def log_message(self, format, *args):
                 pass
 
-        srv_a = http.server.HTTPServer(("127.0.0.1", 0), _RedirectToOriginBHandler)
+        srv_a = _ThreadingHTTPServer(("127.0.0.1", 0), _RedirectToOriginBHandler)
         base_a = f"http://127.0.0.1:{srv_a.server_address[1]}"
         thread = threading.Thread(target=srv_a.serve_forever, daemon=True)
         thread.start()

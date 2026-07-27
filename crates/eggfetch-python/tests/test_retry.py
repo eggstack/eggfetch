@@ -7,6 +7,8 @@ import pytest
 
 import eggfetch
 
+from conftest import _ThreadingHTTPServer
+
 
 # ---------------------------------------------------------------------------
 # Test server with retry endpoints
@@ -88,7 +90,7 @@ class _RetryHandler(http.server.BaseHTTPRequestHandler):
 @pytest.fixture(scope="module")
 def server():
     global _call_count
-    srv = http.server.HTTPServer(("127.0.0.1", 0), _RetryHandler)
+    srv = _ThreadingHTTPServer(("127.0.0.1", 0), _RetryHandler)
     port = srv.server_address[1]
     t = threading.Thread(target=srv.serve_forever, daemon=True)
     t.start()

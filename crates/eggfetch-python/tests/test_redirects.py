@@ -8,6 +8,8 @@ import pytest
 
 import eggfetch
 
+from conftest import _ThreadingHTTPServer
+
 
 # ---------------------------------------------------------------------------
 # Test server with redirect endpoints
@@ -102,7 +104,7 @@ class _RedirectHandler(http.server.BaseHTTPRequestHandler):
 @pytest.fixture(scope="module")
 def redirect_server():
     """Start a test server with redirect endpoints."""
-    server = http.server.HTTPServer(("127.0.0.1", 0), _RedirectHandler)
+    server = _ThreadingHTTPServer(("127.0.0.1", 0), _RedirectHandler)
     port = server.server_address[1]
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()

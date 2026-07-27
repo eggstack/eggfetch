@@ -14,6 +14,8 @@ import pytest
 
 import eggfetch
 
+from conftest import _ThreadingHTTPServer
+
 
 # ---------------------------------------------------------------------------
 # Local test server
@@ -114,7 +116,7 @@ class _Handler(http.server.BaseHTTPRequestHandler):
 
 @pytest.fixture(scope="module")
 def server():
-    srv = http.server.HTTPServer(("127.0.0.1", 0), _Handler)
+    srv = _ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
     port = srv.server_address[1]
     t = threading.Thread(target=srv.serve_forever, daemon=True)
     t.start()
@@ -419,7 +421,7 @@ class _RedirectHandler(http.server.BaseHTTPRequestHandler):
 
 @pytest.fixture(scope="module")
 def redirect_server():
-    srv = http.server.HTTPServer(("127.0.0.1", 0), _RedirectHandler)
+    srv = _ThreadingHTTPServer(("127.0.0.1", 0), _RedirectHandler)
     port = srv.server_address[1]
     t = threading.Thread(target=srv.serve_forever, daemon=True)
     t.start()
@@ -605,7 +607,7 @@ class _EnhancedHandler(http.server.BaseHTTPRequestHandler):
 
 @pytest.fixture(scope="module")
 def enhanced_server():
-    srv = http.server.HTTPServer(("127.0.0.1", 0), _EnhancedHandler)
+    srv = _ThreadingHTTPServer(("127.0.0.1", 0), _EnhancedHandler)
     port = srv.server_address[1]
     t = threading.Thread(target=srv.serve_forever, daemon=True)
     t.start()

@@ -10,6 +10,8 @@ import pytest
 
 import eggfetch
 
+from conftest import _ThreadingHTTPServer
+
 
 # ---------------------------------------------------------------------------
 # Local test server that echoes auth headers
@@ -100,7 +102,7 @@ class _RedirectAuthHandler(http.server.BaseHTTPRequestHandler):
 @pytest.fixture(scope="module")
 def auth_server():
     """Start a local HTTP server for auth tests."""
-    srv = http.server.HTTPServer(("127.0.0.1", 0), _AuthHandler)
+    srv = _ThreadingHTTPServer(("127.0.0.1", 0), _AuthHandler)
     port = srv.server_address[1]
     t = threading.Thread(target=srv.serve_forever, daemon=True)
     t.start()
@@ -111,7 +113,7 @@ def auth_server():
 @pytest.fixture(scope="module")
 def redirect_auth_server():
     """Start a server with redirect endpoints for auth stripping tests."""
-    srv = http.server.HTTPServer(("127.0.0.1", 0), _RedirectAuthHandler)
+    srv = _ThreadingHTTPServer(("127.0.0.1", 0), _RedirectAuthHandler)
     port = srv.server_address[1]
     t = threading.Thread(target=srv.serve_forever, daemon=True)
     t.start()
@@ -459,7 +461,7 @@ class TestCrossOriginRedirectTwoServers:
         header arrives at the second server.
         """
         # Start server B (echo) first so we know its port
-        srv_b = http.server.HTTPServer(("127.0.0.1", 0), _EchoHandler)
+        srv_b = _ThreadingHTTPServer(("127.0.0.1", 0), _EchoHandler)
         port_b = srv_b.server_address[1]
         t_b = threading.Thread(target=srv_b.serve_forever, daemon=True)
         t_b.start()
@@ -479,7 +481,7 @@ class TestCrossOriginRedirectTwoServers:
                 pass
 
         # Start server A (redirector)
-        srv_a = http.server.HTTPServer(("127.0.0.1", 0), _RedirectToBHandler)
+        srv_a = _ThreadingHTTPServer(("127.0.0.1", 0), _RedirectToBHandler)
         port_a = srv_a.server_address[1]
         t_a = threading.Thread(target=srv_a.serve_forever, daemon=True)
         t_a.start()

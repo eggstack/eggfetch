@@ -3,6 +3,7 @@
 import asyncio
 import json
 import http.server
+import socketserver
 import threading
 
 import pytest
@@ -18,6 +19,10 @@ from eggfetch.compat.httpx import (
     QueryParams,
     URL,
 )
+
+
+class _ThreadedHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
+    daemon_threads = True
 
 
 class _ClientHandler(http.server.BaseHTTPRequestHandler):
@@ -96,7 +101,7 @@ class _ClientHandler(http.server.BaseHTTPRequestHandler):
 
 @pytest.fixture(scope="module")
 def compat_server():
-    server = http.server.HTTPServer(("127.0.0.1", 0), _ClientHandler)
+    server = _ThreadedHTTPServer(("127.0.0.1", 0), _ClientHandler)
     port = server.server_address[1]
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()

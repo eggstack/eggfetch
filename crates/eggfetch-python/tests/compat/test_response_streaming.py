@@ -1,6 +1,7 @@
 """Tests for HTTPX compat layer streaming support."""
 
 import http.server
+import socketserver
 import threading
 
 import pytest
@@ -45,9 +46,13 @@ class _StreamTestHandler(http.server.BaseHTTPRequestHandler):
         pass
 
 
+class _ThreadedHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
+    daemon_threads = True
+
+
 @pytest.fixture(scope="module")
 def server():
-    srv = http.server.HTTPServer(("127.0.0.1", 0), _StreamTestHandler)
+    srv = _ThreadedHTTPServer(("127.0.0.1", 0), _StreamTestHandler)
     port = srv.server_address[1]
     t = threading.Thread(target=srv.serve_forever, daemon=True)
     t.start()

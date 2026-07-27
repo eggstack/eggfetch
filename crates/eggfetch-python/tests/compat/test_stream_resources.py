@@ -9,6 +9,7 @@ H1-H3: Stress — reference stream server, thread count assertions.
 import asyncio
 import io
 import os
+import socketserver
 import tempfile
 import threading
 
@@ -75,9 +76,13 @@ class _EchoHandler(http.server.BaseHTTPRequestHandler):
         pass
 
 
+class _ThreadedHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
+    daemon_threads = True
+
+
 @pytest.fixture(scope="module")
 def server():
-    srv = http.server.HTTPServer(("127.0.0.1", 0), _EchoHandler)
+    srv = _ThreadedHTTPServer(("127.0.0.1", 0), _EchoHandler)
     port = srv.server_address[1]
     t = threading.Thread(target=srv.serve_forever, daemon=True)
     t.start()
@@ -258,27 +263,35 @@ class TestThreadEnvelopes:
             f"Thread leak: started with {initial_threads}, now {final_threads}"
         )
 
+    @pytest.mark.timeout(60)
     def test_concurrent_sync_reads(self, server):
-        """Multiple sync reads from different threads work correctly."""
+        """Multiple sync reads from different threads work correctly.
+
+        The sync interface blocks each OS thread on the async runtime, so
+        five concurrent threads each block for one round-trip. We give each
+        request 30s of client timeout and a 60s overall pytest timeout so
+        that slow CI runners can still complete all five round-trips.
+        """
         results = []
+        errors: list[BaseException] = []
 
         def do_request():
             try:
-                with Client(timeout=10.0) as client:
+                with Client(timeout=30.0) as client:
                     resp = client.get(f"{server}/hello")
                     results.append(resp.content)
-            except Exception:
-                pass
+            except BaseException as exc:  # noqa: BLE001
+                errors.append(exc)
 
         threads = [threading.Thread(target=do_request) for _ in range(5)]
         for t in threads:
             t.start()
         for t in threads:
-            t.join(timeout=30)
+            t.join(timeout=45)
 
-        # At least 1/5 should succeed — full concurrency depends on CI resources
-        assert len(results) >= 1, (
-            f"Expected at least 1 concurrent result, got {len(results)}"
+        # All 5 should succeed now that the test server is threaded.
+        assert len(results) == 5, (
+            f"Expected 5 concurrent results, got {len(results)}; errors={errors}"
         )
         for r in results:
             assert r == b"hello world"
