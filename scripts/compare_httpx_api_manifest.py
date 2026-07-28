@@ -481,17 +481,56 @@ def _enrich_results_with_identity(
     candidate_identity_path: str | None,
     suite: str | None,
 ) -> dict:
-    """Add candidate identity and suite info to results."""
+    """Add candidate identity and suite info to results.
+
+    Wraps results in a qualification-result/v1 envelope when --suite is provided.
+    """
+    candidate_sha = ""
+    identity_digest = ""
+    run_id = ""
+    run_attempt = ""
+
     if candidate_identity_path:
         try:
             with open(candidate_identity_path) as f:
                 identity = json.load(f)
-            results["candidate_sha"] = identity.get("candidate_sha", "")
-            results["identity_digest"] = identity.get("identity_digest", "")
+            candidate_sha = identity.get("candidate_sha", "")
+            identity_digest = identity.get("identity_digest", "")
+            run_id = identity.get("run_id", "")
+            run_attempt = identity.get("run_attempt", "")
         except (FileNotFoundError, json.JSONDecodeError) as e:
             print(f"WARNING: could not load candidate identity: {e}", file=sys.stderr)
     if suite:
         results["suite"] = suite
+
+    # Wrap in qualification-result/v1 envelope if suite and identity provided
+    if suite and candidate_sha and identity_digest:
+        from qualification_result import build_result, write_result
+        from datetime import datetime, timezone
+
+        unexplained = len(results.get("unexplained", []))
+        stale = len(results.get("stale_allowed", []))
+        resolved = len(results.get("resolved_in_active", []))
+        passed = unexplained == 0 and stale == 0 and resolved == 0
+
+        envelope = build_result(
+            suite_id=suite,
+            producer_job="api-oracle",
+            candidate_sha=candidate_sha,
+            identity_digest=identity_digest,
+            run_id=run_id,
+            run_attempt=run_attempt,
+            status="passed" if passed else "failed",
+            metrics={
+                "differences": len(results.get("differences", [])),
+                "allowed_matches": len(results.get("allowed_matches", [])),
+                "unexplained": unexplained,
+                "stale_allowed": stale,
+                "resolved_in_active": resolved,
+            },
+        )
+        results["_qualification_envelope"] = envelope
+
     return results
 
 
@@ -553,7 +592,18 @@ def main():
             Path(args.output).write_text(output + "\n")
         else:
             print(output)
+
+        # Write the qualification-result/v1 envelope to a separate file
+        envelope = results.pop("_qualification_envelope", None)
+        if envelope and args.output:
+            envelope_path = Path(args.output).with_name(
+                Path(args.output).stem + "-result.json"
+            )
+            from qualification_result import write_result
+            write_result(envelope, envelope_path)
+            print(f"Qualification result written to {envelope_path}")
     else:
+        results.pop("_qualification_envelope", None)
         print(_format_report(results))
 
     has_failures = (

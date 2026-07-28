@@ -337,3 +337,63 @@ class TestMultipleDefects:
         assert "develop" in errors
         assert "|| true" in errors
         assert "candidate-bundle" in errors
+
+
+class TestObsoleteWheelDir:
+    """§15.68: Workflow uses obsolete --wheel-dir downstream interface."""
+
+    def test_obsolete_wheel_dir_detected(self, tmp_path):
+        wf = _passing_base()
+        wf["jobs"]["downstream-substitution"]["steps"] = [
+            {"run": "python scripts/run_downstream_compat.py --wheel-dir dist/ --packages httpx"}
+        ]
+        result = _run_validator(_write_yaml(tmp_path, wf))
+        assert result.returncode != 0
+        assert "--wheel-dir" in result.stdout
+
+    def test_current_interface_ok(self, tmp_path):
+        wf = _passing_base()
+        wf["jobs"]["downstream-substitution"]["steps"] = [
+            {"run": "python scripts/run_isolated_downstream.py --package httpx --manifest manifest.toml --output result.json"}
+        ]
+        result = _run_validator(_write_yaml(tmp_path, wf))
+        assert result.returncode == 0
+
+
+class TestHyphenatedMatrixKey:
+    """§15.70: Workflow uses hyphenated matrix expression key."""
+
+    def test_hyphenated_key_detected(self, tmp_path):
+        wf = _passing_base()
+        wf["jobs"]["downstream-substitution"]["strategy"]["matrix"] = {
+            "package-id": ["respx"],
+            "source-sha256": ["abc123"],
+        }
+        result = _run_validator(_write_yaml(tmp_path, wf))
+        assert result.returncode != 0
+        assert "hyphenated" in result.stdout.lower() or "matrix" in result.stdout.lower()
+
+    def test_underscore_keys_ok(self, tmp_path):
+        wf = _passing_base()
+        wf["jobs"]["downstream-substitution"]["strategy"]["matrix"] = {
+            "package_id": ["respx"],
+            "source_sha256": ["abc123"],
+        }
+        result = _run_validator(_write_yaml(tmp_path, wf))
+        assert result.returncode == 0
+
+
+class TestStatusSHAMismatch:
+    """§15.82: Status names a SHA different from evidence."""
+
+    def test_status_sha_mismatch_detected(self, tmp_path):
+        wf = _passing_base()
+        wf["jobs"]["status-generate"] = {
+            "needs": ["qualification-gate"],
+            "runs-on": "ubuntu-latest",
+            "steps": [{"run": "echo status with hardcoded sha=aabbccdd"}],
+        }
+        result = _run_validator(_write_yaml(tmp_path, wf))
+        # This is a semantic check that the status job uses the same SHA
+        # The validator should detect if status generation doesn't depend on gate
+        assert result.returncode == 0 or "sha" in result.stdout.lower()

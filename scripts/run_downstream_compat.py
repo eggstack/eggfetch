@@ -76,16 +76,10 @@ VALID_CATEGORIES = {
 
 VALID_USAGES = {"required", "informational", "private", "public"}
 
-STAGE_C_CATEGORIES = {
-    "sync-sdk-client",
-    "asyncio-sdk-client",
-    "asgi-test-client",
-    "mock-transport-request-matching",
-    "streaming-sse-consumption",
-    "custom-auth-flow",
-    "event-hooks-instrumentation",
-    "custom-mounted-transport",
-}
+# Import shared Stage C category registry instead of duplicating.
+from stage_c_categories import STAGE_C_CATEGORIES as _SHARED_STAGE_C_CATEGORIES
+
+STAGE_C_CATEGORIES = _SHARED_STAGE_C_CATEGORIES
 
 
 def _emit_result(result: dict, output_path: str | None = None) -> None:

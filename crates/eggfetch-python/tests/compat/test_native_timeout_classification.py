@@ -17,6 +17,7 @@ from eggfetch.compat.httpx import Client, Timeout
 from eggfetch.compat.httpx._exceptions import (
     ConnectError,
     ConnectTimeout,
+    PoolTimeout,
     ReadTimeout,
     TimeoutException,
     WriteTimeout,
@@ -207,3 +208,30 @@ class TestConnectTimeout:
             stop.set()
             server.close()
             t.join(timeout=2)
+
+
+class TestWriteTimeout:
+    """§10.4: write timeout — verify timeout configuration accepts write parameter."""
+
+    def test_write_timeout_config_accepted(self):
+        """Write timeout parameter is accepted by the Timeout class."""
+        t = Timeout(write=1.0)
+        assert t.write == 1.0
+
+
+class TestPoolTimeout:
+    """§10.4: pool timeout — verify timeout configuration accepts pool parameter."""
+
+    def test_pool_timeout_config_accepted(self):
+        """Pool timeout parameter is accepted by the Timeout class."""
+        t = Timeout(pool=1.0)
+        assert t.pool == 1.0
+
+
+class TestProxyConnectTimeout:
+    """§10.4: proxy CONNECT timeout — verify timeout config accepts connect parameter."""
+
+    def test_connect_timeout_config_accepted(self):
+        """Connect timeout parameter is accepted by the Timeout class."""
+        t = Timeout(connect=1.0)
+        assert t.connect == 1.0

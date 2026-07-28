@@ -61,7 +61,7 @@ optional-dependencies = ["httpx"]
 known-incompatibilities = [
   "respx patches httpx._transports.default which is private API"
 ]
-test-command = "pytest -q compat/downstream/behavioral_fixtures/test_mock_transport_behavior.py"
+test-command = "pytest -q compat/downstream/behavioral_fixtures/test_respx.py"
 min-tests = 1
 source-type = "pypi"
 source-locator = "respx==0.21.1"
@@ -167,7 +167,7 @@ optional-dependencies = ["httpx", "pydantic"]
 known-incompatibilities = [
   "anthropic accesses httpx.Response.stream internally for SSE parsing"
 ]
-test-command = "pytest -q compat/downstream/behavioral_fixtures/test_anthropic.py"
+test-command = "pytest -q compat/downstream/behavioral_fixtures/test_anthropic_async.py"
 min-tests = 1
 source-type = "pypi"
 source-locator = "anthropic==0.39.0"
@@ -340,7 +340,7 @@ optional-dependencies = ["httpx"]
 known-incompatibilities = [
   "httpx-auth subclasses httpx.Auth and accesses auth flow hooks"
 ]
-test-command = "pytest -q compat/downstream/behavioral_fixtures/test_custom_auth_flow.py"
+test-command = "pytest -q compat/downstream/behavioral_fixtures/test_httpx_auth.py"
 min-tests = 1
 source-type = "pypi"
 source-locator = "httpx-auth==0.22.0"

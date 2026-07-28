@@ -600,7 +600,8 @@ def main() -> int:
         "installed_dist": {"name": "", "version": "", "location": ""},
         "source_hash_verification": {"success": False, "hash": "", "error": ""},
         "shim_identity": {"pre_install": {"success": False, "errors": []},
-                          "post_install": {"success": False, "errors": []}},
+                          "post_install": {"success": False, "errors": []},
+                          "post_test": {"success": False, "errors": []}},
         "upstream_check": {"success": False, "errors": []},
         "pip_check": {"success": False, "output": ""},
         "tests": {"success": False, "returncode": -1, "stdout": "", "stderr": "",
@@ -803,6 +804,21 @@ def main() -> int:
                 "below-min-count",
                 f"Collected {counts['total']} tests, minimum required: {min_collected}",
             )
+            result["diagnostic_code"] = diag["diagnostic_code"]
+            result["diagnostic_name"] = diag["diagnostic_name"]
+            result["duration_seconds"] = round(time.monotonic() - start_time, 2)
+            _emit_result(result, args.output)
+            return 3
+
+        # --- Step 11b: Third shim identity verification AFTER tests ---
+        post_test_shim_errors = verify_shim_identity_strict(venv_dir)
+        result["shim_identity"]["post_test"] = {
+            "success": len(post_test_shim_errors) == 0,
+            "errors": post_test_shim_errors,
+        }
+        if post_test_shim_errors:
+            result["status"] = "shim-identity-failure"
+            diag = _diagnostic("shim-identity-mismatch", post_test_shim_errors[0])
             result["diagnostic_code"] = diag["diagnostic_code"]
             result["diagnostic_name"] = diag["diagnostic_name"]
             result["duration_seconds"] = round(time.monotonic() - start_time, 2)

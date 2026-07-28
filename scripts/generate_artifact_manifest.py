@@ -132,6 +132,56 @@ def _build_artifact_entry(
     }
 
 
+def _generate_bundle_index(
+    bundle_dir: Path,
+    manifest: dict,
+    candidate_sha: str,
+) -> None:
+    """Generate bundle-index.json binding manifest and identity without circularity.
+
+    Per plan §6.4: the bundle index binds the two documents without circularity.
+    """
+    from candidate_identity import compute_manifest_digest, load_and_validate
+
+    manifest_path = bundle_dir / "artifact-manifest.json"
+    identity_path = bundle_dir / "candidate-identity.json"
+
+    manifest_sha = compute_manifest_digest(manifest)
+
+    # Identity may not exist yet during generation; compute if present
+    identity_sha = ""
+    identity_digest = ""
+    if identity_path.exists():
+        identity_data, id_errors = load_and_validate(str(identity_path))
+        if not id_errors and identity_data:
+            from candidate_identity import compute_identity_digest
+            identity_sha = hashlib.sha256(
+                json.dumps(identity_data, sort_keys=True, separators=(",", ":")).encode()
+            ).hexdigest()
+            identity_digest = identity_data.get("identity_digest", "")
+
+    bundle_index = {
+        "schema_version": "1",
+        "candidate_sha": candidate_sha,
+        "artifact_manifest": {
+            "path": "artifact-manifest.json",
+            "sha256": manifest_sha,
+        },
+        "candidate_identity": {
+            "path": "candidate-identity.json",
+            "sha256": identity_sha,
+        },
+        "identity_digest": identity_digest,
+    }
+
+    index_path = bundle_dir / "bundle-index.json"
+    with open(index_path, "w") as f:
+        json.dump(bundle_index, f, indent=2)
+        f.write("\n")
+
+    print(f"Bundle index written to {index_path}")
+
+
 def _cmd_generate(args: argparse.Namespace) -> None:
     """Handle 'generate' subcommand."""
     eggfetch_path = Path(args.eggfetch_wheel).resolve()
@@ -206,6 +256,10 @@ def _cmd_generate(args: argparse.Namespace) -> None:
     for art in manifest["artifacts"]:
         print(f"    {art['role']}: {art['filename']} ({art['size_bytes']} bytes)")
 
+    # Generate bundle-index.json if bundle-dir was provided
+    if bundle_dir:
+        _generate_bundle_index(bundle_dir, manifest, candidate_sha)
+
 
 def _cmd_validate(args: argparse.Namespace) -> None:
     """Handle 'validate' subcommand."""
@@ -228,6 +282,14 @@ def _cmd_validate(args: argparse.Namespace) -> None:
                 f"candidate_sha mismatch: expected {args.expected_sha[:12]}, "
                 f"got {manifest_sha[:12]}"
             )
+
+    # Validate bundle-index.json if present
+    bundle_index_path = bundle_root / "bundle-index.json"
+    if bundle_index_path.exists():
+        with open(bundle_index_path) as f:
+            bundle_index = json.load(f)
+        index_errors = validate_bundle_index(bundle_index, manifest, bundle_root)
+        errors.extend(index_errors)
 
     if errors:
         print(f"VALIDATION FAILED ({len(errors)} errors):", file=sys.stderr)
@@ -343,6 +405,93 @@ def compute_manifest_digest(manifest: dict) -> str:
     """Compute SHA-256 digest of canonical manifest JSON."""
     canonical = json.dumps(manifest, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def validate_bundle_index(
+    bundle_index: dict,
+    manifest: dict,
+    bundle_root: Path,
+) -> list[str]:
+    """Validate bundle-index.json against manifest and identity.
+
+    Per plan §6.4: bundle validation must verify all three files and both wheel hashes.
+    """
+    errors: list[str] = []
+
+    if not isinstance(bundle_index, dict):
+        return ["bundle-index must be a JSON object"]
+
+    for field in ("schema_version", "candidate_sha", "artifact_manifest", "candidate_identity"):
+        if field not in bundle_index:
+            errors.append(f"bundle-index missing required field: {field}")
+
+    if errors:
+        return errors
+
+    if bundle_index["schema_version"] != "1":
+        errors.append(
+            f"bundle-index schema_version must be '1', "
+            f"got '{bundle_index['schema_version']}'"
+        )
+
+    # Verify candidate_sha matches manifest
+    index_sha = bundle_index.get("candidate_sha", "")
+    manifest_sha = manifest.get("candidate_sha", "")
+    if index_sha != manifest_sha:
+        errors.append(
+            f"bundle-index candidate_sha mismatch: index={index_sha[:12]}, "
+            f"manifest={manifest_sha[:12]}"
+        )
+
+    # Verify manifest digest
+    manifest_ref = bundle_index.get("artifact_manifest", {})
+    expected_manifest_sha = compute_manifest_digest(manifest)
+    actual_manifest_sha = manifest_ref.get("sha256", "")
+    if actual_manifest_sha != expected_manifest_sha:
+        errors.append(
+            f"bundle-index artifact_manifest.sha256 mismatch: "
+            f"expected {expected_manifest_sha[:16]}..., got {actual_manifest_sha[:16]}..."
+        )
+
+    # Verify manifest file exists and hash matches
+    manifest_path = bundle_root / manifest_ref.get("path", "artifact-manifest.json")
+    if manifest_path.exists():
+        file_sha = compute_sha256(manifest_path)
+        if file_sha != actual_manifest_sha:
+            errors.append(
+                f"bundle-index manifest file hash mismatch: "
+                f"file={file_sha[:16]}..., recorded={actual_manifest_sha[:16]}..."
+            )
+    else:
+        errors.append(f"bundle-index references missing manifest: {manifest_path}")
+
+    # Verify identity file exists and hash matches (if identity exists)
+    identity_ref = bundle_index.get("candidate_identity", {})
+    identity_path = bundle_root / identity_ref.get("path", "candidate-identity.json")
+    if identity_path.exists():
+        identity_sha = compute_sha256(identity_path)
+        recorded_identity_sha = identity_ref.get("sha256", "")
+        if recorded_identity_sha and identity_sha != recorded_identity_sha:
+            errors.append(
+                f"bundle-index identity file hash mismatch: "
+                f"file={identity_sha[:16]}..., recorded={recorded_identity_sha[:16]}..."
+            )
+
+        # Verify identity_digest matches
+        with open(identity_path) as f:
+            identity_data = json.load(f)
+        recorded_digest = bundle_index.get("identity_digest", "")
+        actual_digest = identity_data.get("identity_digest", "")
+        if recorded_digest and actual_digest and recorded_digest != actual_digest:
+            errors.append(
+                f"bundle-index identity_digest mismatch: "
+                f"index={recorded_digest[:16]}..., identity={actual_digest[:16]}..."
+            )
+    elif identity_ref.get("sha256"):
+        # Identity is referenced but missing
+        errors.append(f"bundle-index references missing identity: {identity_path}")
+
+    return errors
 
 
 def build_parser() -> argparse.ArgumentParser:

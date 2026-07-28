@@ -454,6 +454,55 @@ def _check_evidence_inputs(workflow: dict) -> list[str]:
     return errors
 
 
+def _check_obsolete_wheel_dir(workflow: dict) -> list[str]:
+    """§15.68: Workflow uses obsolete --wheel-dir downstream interface."""
+    errors: list[str] = []
+    jobs = workflow.get("jobs", {})
+    if not isinstance(jobs, dict):
+        return errors
+    for job_name, job_def in jobs.items():
+        if not isinstance(job_def, dict):
+            continue
+        steps = job_def.get("steps", [])
+        if not isinstance(steps, list):
+            continue
+        for step in steps:
+            if not isinstance(step, dict):
+                continue
+            run_cmd = step.get("run", "")
+            if isinstance(run_cmd, str) and "--wheel-dir" in run_cmd:
+                step_name = step.get("name", "<unnamed>")
+                errors.append(
+                    f"job '{job_name}', step '{step_name}': "
+                    f"uses obsolete --wheel-dir interface"
+                )
+    return errors
+
+
+def _check_hyphenated_matrix_keys(workflow: dict) -> list[str]:
+    """§15.70: Workflow uses hyphenated matrix expression keys."""
+    errors: list[str] = []
+    jobs = workflow.get("jobs", {})
+    if not isinstance(jobs, dict):
+        return errors
+    for job_name, job_def in jobs.items():
+        if not isinstance(job_def, dict):
+            continue
+        strategy = job_def.get("strategy", {})
+        if not isinstance(strategy, dict):
+            continue
+        matrix = strategy.get("matrix", {})
+        if not isinstance(matrix, dict):
+            continue
+        for key in matrix:
+            if "-" in key and key not in ("include", "exclude"):
+                errors.append(
+                    f"job '{job_name}': matrix contains hyphenated key '{key}' "
+                    f"(use underscore keys instead)"
+                )
+    return errors
+
+
 def validate_workflow(path: str) -> list[str]:
     """Validate a workflow YAML file for internal consistency."""
     workflow = _load_workflow(path)
@@ -503,6 +552,12 @@ def validate_workflow(path: str) -> list[str]:
 
     # 11. Check evidence inputs
     errors.extend(_check_evidence_inputs(workflow))
+
+    # 12. Check obsolete --wheel-dir interface
+    errors.extend(_check_obsolete_wheel_dir(workflow))
+
+    # 13. Check hyphenated matrix keys
+    errors.extend(_check_hyphenated_matrix_keys(workflow))
 
     return errors
 

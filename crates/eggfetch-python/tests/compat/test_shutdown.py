@@ -342,6 +342,39 @@ if __name__ == "__main__":
 '''
 
 
+ACTIVE_STALLED_REQUEST_SHUTDOWN_TEST_CODE = '''
+"""§10.5: Active stalled native request during interpreter shutdown."""
+import sys
+import threading
+import time
+from eggfetch.compat.httpx import Client, MockTransport, Response
+
+def _slow_handler(request):
+    """Handler that sleeps before responding (simulates stalled request)."""
+    time.sleep(10.0)
+    return Response(200, content=b"done")
+
+def test_active_stalled_request_shutdown():
+    """Request in-flight when process exits shuts down cleanly."""
+    c = Client(transport=MockTransport(_slow_handler))
+    # Start request in a thread so it's in-flight during shutdown
+    def do_request():
+        try:
+            c.get("http://testserver/")
+        except Exception:
+            pass
+
+    t = threading.Thread(target=do_request, daemon=True)
+    t.start()
+    time.sleep(0.1)  # Let request start
+    # Exit immediately — daemon thread will be killed on exit
+    print("Active stalled request shutdown: PASS")
+
+if __name__ == "__main__":
+    test_active_stalled_request_shutdown()
+'''
+
+
 FORBIDDEN_WARNING_PATTERNS = [
     "event loop is closed",
     "unhandled task",
@@ -499,6 +532,26 @@ class TestGeneratorCancellationShutdown:
             )
 
 
+class TestActiveStalledRequestShutdown:
+    """§10.5: active stalled native request during interpreter shutdown."""
+
+    def test_active_stalled_request_shutdown_subprocess(self):
+        result = subprocess.run(
+            [sys.executable, "-c", ACTIVE_STALLED_REQUEST_SHUTDOWN_TEST_CODE],
+            capture_output=True, text=True, timeout=30,
+        )
+        assert result.returncode == 0, (
+            f"Active stalled request shutdown test failed.\n"
+            f"stdout: {result.stdout}\nstderr: {result.stderr}"
+        )
+        assert "PASS" in result.stdout
+        stderr_lower = result.stderr.lower()
+        for pattern in FORBIDDEN_WARNING_PATTERNS:
+            assert pattern.lower() not in stderr_lower, (
+                f"Unexpected stderr warning '{pattern}' detected:\n{result.stderr}"
+            )
+
+
 class TestShutdownDeadlineBounds:
     """All shutdown subprocess tests must complete within bounded time."""
 
@@ -511,6 +564,7 @@ class TestShutdownDeadlineBounds:
         (STREAMING_SHUTDOWN_TEST_CODE, "streaming"),
         (REPEATED_CLIENT_SHUTDOWN_TEST_CODE, "repeated-client"),
         (GENERATOR_CANCELLATION_SHUTDOWN_TEST_CODE, "generator-cancellation"),
+        (ACTIVE_STALLED_REQUEST_SHUTDOWN_TEST_CODE, "active-stalled-request"),
     ])
     def test_shutdown_deadline(self, test_code, expected_label):
         """Each shutdown scenario completes within 15 seconds."""

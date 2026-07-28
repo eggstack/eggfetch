@@ -142,18 +142,25 @@ def local_stall_server() -> Generator[tuple[str, int, threading.Event], None, No
 
 
 class _ProxyHandler(http.server.BaseHTTPRequestHandler):
-    """Minimal HTTP proxy that forwards requests and handles CONNECT."""
+    """Minimal HTTP proxy that forwards requests and handles CONNECT.
+
+    Records all observed methods and targets for verification by tests.
+    """
 
     backend: tuple[str, int] | None = None
+    recorded_requests: list[dict] = []
 
     def do_GET(self):
+        self._record_request("GET")
         self._forward_request()
 
     def do_POST(self):
+        self._record_request("POST")
         self._forward_request()
 
     def do_CONNECT(self):
         """Handle CONNECT tunnel (used for TLS through proxy)."""
+        self._record_request("CONNECT", target=self.path)
         target_host, _, target_port = self.path.partition(":")
         target_port = int(target_port) if target_port else 443
         try:
@@ -167,6 +174,13 @@ class _ProxyHandler(http.server.BaseHTTPRequestHandler):
         upstream.setblocking(False)
         self._tunnel(self.connection, upstream)
         upstream.close()
+
+    def _record_request(self, method: str, target: str = "") -> None:
+        """Record method and target for test verification."""
+        self.__class__.recorded_requests.append({
+            "method": method,
+            "target": target or self.path,
+        })
 
     def _tunnel(self, client: socket.socket, upstream: socket.socket):
         """Bidirectional data relay between client and upstream."""
@@ -241,20 +255,25 @@ class _ProxyHandler(http.server.BaseHTTPRequestHandler):
 @contextmanager
 def local_proxy_server(
     backend: tuple[str, int] | None = None,
-) -> Generator[tuple[str, int], None, None]:
+) -> Generator[tuple[str, int, type], None, None]:
     """Deterministic loopback HTTP proxy that forwards requests and handles CONNECT.
 
     If *backend* is given, all requests are forwarded to that (host, port) pair.
+
+    Yields (host, port, handler_class) where handler_class.recorded_requests
+    contains the list of observed method/target dicts for test verification.
     """
     handler_class = _ProxyHandler
     if backend is not None:
         handler_class = type("_ConfiguredProxy", (_ProxyHandler,), {"backend": backend})
+    # Clear recorded requests for this proxy instance
+    handler_class.recorded_requests = []
     httpd = _ThreadedHTTPServer(("127.0.0.1", 0), handler_class)
     port = httpd.server_address[1]
     thread = threading.Thread(target=httpd.serve_forever, daemon=True)
     thread.start()
     try:
-        yield "127.0.0.1", port
+        yield "127.0.0.1", port, handler_class
     finally:
         httpd.shutdown()
 

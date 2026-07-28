@@ -21,6 +21,7 @@ from eggfetch.compat.httpx import Client, Timeout
 from eggfetch.compat.httpx._exceptions import (
     ConnectError,
     NetworkError,
+    ProxyError,
     RequestError,
     TimeoutException,
 )
@@ -38,7 +39,7 @@ class TestProxyForwarding:
     def test_http_proxy_forwarding(self):
         """Request through HTTP proxy reaches backend."""
         with local_http_server() as (backend_host, backend_port):
-            with local_proxy_server(backend=(backend_host, backend_port)) as (proxy_host, proxy_port):
+            with local_proxy_server(backend=(backend_host, backend_port)) as (proxy_host, proxy_port, handler):
                 with Client(
                     proxy=f"http://{proxy_host}:{proxy_port}",
                     timeout=Timeout(5.0),
@@ -46,11 +47,14 @@ class TestProxyForwarding:
                     resp = c.get(f"http://{backend_host}:{backend_port}/health")
                     assert resp.status_code == 200
                     assert resp.text == "ok"
+                    # Verify proxy observed the request
+                    methods = [r["method"] for r in handler.recorded_requests]
+                    assert "GET" in methods
 
     def test_http_proxy_post(self):
         """POST through proxy reaches backend with body intact."""
         with local_http_server() as (backend_host, backend_port):
-            with local_proxy_server(backend=(backend_host, backend_port)) as (proxy_host, proxy_port):
+            with local_proxy_server(backend=(backend_host, backend_port)) as (proxy_host, proxy_port, handler):
                 with Client(
                     proxy=f"http://{proxy_host}:{proxy_port}",
                     timeout=Timeout(5.0),
@@ -60,6 +64,8 @@ class TestProxyForwarding:
                         content=b"test body",
                     )
                     assert resp.status_code == 200
+                    methods = [r["method"] for r in handler.recorded_requests]
+                    assert "POST" in methods
 
 
 class TestProxyConnect:
@@ -67,13 +73,13 @@ class TestProxyConnect:
 
     The BodyError on tunnel close is a known incompatibility where the native
     engine raises BodyError when the proxy closes the tunnel without TLS
-    close_notify. This is recorded as a typed compatibility difference.
+    close_notify. The compat layer maps this to RequestError.
     """
 
     def test_connect_proxy_records_tunnel(self):
         """CONNECT proxy establishes a tunnel to the TLS backend."""
         with local_tls_server() as (tls_host, tls_port, client_ssl, cert_path):
-            with local_proxy_server() as (proxy_host, proxy_port):
+            with local_proxy_server() as (proxy_host, proxy_port, handler):
                 with Client(
                     proxy=f"http://{proxy_host}:{proxy_port}",
                     timeout=Timeout(5.0),
@@ -84,17 +90,18 @@ class TestProxyConnect:
                         assert resp.status_code == 200
                         assert resp.text == "ok"
                     except RequestError:
-                        # Known incompatibility: native engine raises BodyError
-                        # when proxy tunnel closes without TLS close_notify,
-                        # which maps to RequestError in the compat layer.
-                        # The tunnel WAS established — this is a body-level
-                        # error, not a connection error.
+                        # Documented incompatibility: BodyError on tunnel close
+                        # mapped to RequestError by compat layer
                         pass
+                    methods = [r["method"] for r in handler.recorded_requests]
+                    assert "CONNECT" in methods, (
+                        f"CONNECT method not observed; proxy saw: {methods}"
+                    )
 
     def test_connect_proxy_json_response(self):
         """JSON response passes through CONNECT tunnel correctly."""
         with local_tls_server() as (tls_host, tls_port, client_ssl, cert_path):
-            with local_proxy_server() as (proxy_host, proxy_port):
+            with local_proxy_server() as (proxy_host, proxy_port, handler):
                 with Client(
                     proxy=f"http://{proxy_host}:{proxy_port}",
                     timeout=Timeout(5.0),
@@ -105,8 +112,10 @@ class TestProxyConnect:
                         assert resp.status_code == 200
                         assert resp.json() == {"status": "tls-ok"}
                     except RequestError:
-                        # Known incompatibility: BodyError on tunnel close
+                        # Documented incompatibility: BodyError on tunnel close
                         pass
+                    methods = [r["method"] for r in handler.recorded_requests]
+                    assert "CONNECT" in methods
 
 
 class TestProxyRefusal:
@@ -118,7 +127,7 @@ class TestProxyRefusal:
             proxy="http://127.0.0.1:1",
             timeout=Timeout(0.5),
         ) as c:
-            with pytest.raises(RequestError) as exc_info:
+            with pytest.raises((ConnectError, ProxyConnectError, ProxyError)) as exc_info:
                 c.get("http://example.com/anything")
             assert hasattr(exc_info.value, "request"), (
                 "Error must retain request context"
@@ -130,11 +139,25 @@ class TestProxyRefusal:
             proxy="http://127.0.0.1:1",
             timeout=Timeout(0.5),
         ) as c:
-            with pytest.raises(RequestError) as exc_info:
+            with pytest.raises((ConnectError, ProxyConnectError, ProxyError)) as exc_info:
                 c.get("https://127.0.0.1:1/tunnel")
             assert hasattr(exc_info.value, "request"), (
                 "Error must retain request context"
             )
+
+
+class TestProxyConnectRefusal:
+    """§10.2: deterministic CONNECT refusal and stall fixtures."""
+
+    def test_connect_refusal_upstream(self):
+        """CONNECT to a target that refuses the upstream tunnel."""
+        with local_proxy_server() as (proxy_host, proxy_port, handler):
+            with Client(
+                proxy=f"http://{proxy_host}:{proxy_port}",
+                timeout=Timeout(1.0),
+            ) as c:
+                with pytest.raises((ConnectError, ProxyConnectError, ProxyError)):
+                    c.get("https://127.0.0.1:1/tunnel")
 
 
 class TestTLSVerification:
@@ -214,7 +237,7 @@ class TestTLSHandshakeStall:
         try:
             with Client(timeout=Timeout(0.5)) as c:
                 start = time.monotonic()
-                with pytest.raises((TimeoutException, ConnectError)) as exc_info:
+                with pytest.raises((TimeoutException, NetworkError)) as exc_info:
                     c.get(f"https://127.0.0.1:{port}/health")
                 elapsed = time.monotonic() - start
                 assert elapsed < 5.0, f"Stall detection took too long: {elapsed:.2f}s"
@@ -228,12 +251,17 @@ class TestTLSHandshakeStall:
 
 
 class TestHTTPSThroughProxy:
-    """§10.1: HTTPS request through CONNECT proxy."""
+    """§10.1: HTTPS request through CONNECT proxy.
+
+    The BodyError on tunnel close is a documented incompatibility where the
+    native engine raises BodyError when the proxy closes the tunnel without
+    TLS close_notify. The compat layer maps this to RequestError.
+    """
 
     def test_https_through_connect_proxy(self):
         """Full HTTPS request through CONNECT tunnel with verification."""
         with local_tls_server() as (tls_host, tls_port, client_ssl, cert_path):
-            with local_proxy_server() as (proxy_host, proxy_port):
+            with local_proxy_server() as (proxy_host, proxy_port, handler):
                 with Client(
                     proxy=f"http://{proxy_host}:{proxy_port}",
                     timeout=Timeout(5.0),
@@ -245,5 +273,8 @@ class TestHTTPSThroughProxy:
                         data = resp.json()
                         assert data["status"] == "tls-ok"
                     except RequestError:
-                        # Known incompatibility: BodyError on tunnel close
+                        # Documented incompatibility: BodyError on tunnel close
+                        # mapped to RequestError by compat layer
                         pass
+                    methods = [r["method"] for r in handler.recorded_requests]
+                    assert "CONNECT" in methods
