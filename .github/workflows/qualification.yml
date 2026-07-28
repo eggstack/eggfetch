@@ -544,6 +544,7 @@ jobs:
           source .venv/bin/activate
           pytest crates/eggfetch-python/tests/compat/ -v --strict-markers --timeout=30 \
             --json-report --json-report-file=/tmp/compat-test-results.json \
+            --import-mode=importlib \
             --ignore=crates/eggfetch-python/tests/compat/test_resource_assertions.py \
             --ignore=crates/eggfetch-python/tests/compat/test_soak.py
 
@@ -736,6 +737,7 @@ jobs:
           /tmp/shim-test-venv/bin/pip install -r compat/qualification-requirements.txt
           EGGFETCH_COMPAT_REQUIRED=1 /tmp/shim-test-venv/bin/pytest \
             crates/eggfetch-python/tests/compat/ -v --strict-markers --timeout=30 \
+            --import-mode=importlib \
             --ignore=crates/eggfetch-python/tests/compat/test_resource_assertions.py \
             --ignore=crates/eggfetch-python/tests/compat/test_soak.py
 

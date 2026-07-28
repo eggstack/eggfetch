@@ -412,13 +412,15 @@ def run_tests(venv_dir: Path, pkg: dict, timeout: int) -> subprocess.CompletedPr
     # Remove --co/--collect-only (we want to actually run tests, not just collect)
     # Use the outer venv's pytest via PATH, NOT the isolated venv's python.
     # The isolated venv's site-packages is set in PYTHONPATH so imports resolve there.
+    # --rootdir=/tmp prevents pytest from adding the source tree to sys.path,
+    # which would shadow the installed eggfetch wheel with the source eggfetch/.
     if "pytest" in test_command:
         test_command = test_command.replace(" --co", "").replace(" --collect-only", "")
         # Add --tb=short but do NOT add -q (it suppresses the summary line
         # that parse_pytest_counts needs). If -q is already present, remove it.
         test_command = test_command.replace(" -q ", " ")
         if "--tb=short" not in test_command:
-            test_command = test_command.replace("pytest ", "pytest --tb=short ", 1)
+            test_command = test_command.replace("pytest ", "pytest --tb=short --rootdir=/tmp ", 1)
         # Convert relative test file paths to absolute using repo root
         repo_root = str(Path.cwd())
         parts = test_command.split()
@@ -442,14 +444,13 @@ def run_tests(venv_dir: Path, pkg: dict, timeout: int) -> subprocess.CompletedPr
     if site_packages:
         env["PYTHONPATH"] = str(site_packages[0])
 
-    # Use repo root as cwd so relative test file paths resolve
-    repo_root = str(Path.cwd())
-
+    # Run from /tmp to avoid Python finding the source tree's eggfetch/
+    # before the installed wheel. Use absolute test file paths.
     return subprocess.run(
         test_command,
         shell=True,
         capture_output=True, text=True, timeout=timeout,
-        env=env, cwd=repo_root,
+        env=env, cwd="/tmp",
     )
 
 
