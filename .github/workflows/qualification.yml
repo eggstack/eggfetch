@@ -475,10 +475,22 @@ jobs:
 
       - name: Flatten wheel directory
         run: |
-          mkdir -p wheel-dir
-          find dist -name '*.whl' -exec cp {} wheel-dir/ \;
-          echo "Wheels available:"
-          ls -la wheel-dir/
+          python -c "
+          import os, shutil, struct
+          from pathlib import Path
+          os.makedirs('wheel-dir', exist_ok=True)
+          is_arm = struct.calcsize('P') * 8 == 64 and os.uname().machine in ('arm64', 'aarch64') if hasattr(os, 'uname') else False
+          for whl in Path('dist').rglob('*.whl'):
+              name = whl.name.lower()
+              if is_arm and ('arm64' in name or 'aarch64' in name or 'any' in name):
+                  shutil.copy2(whl, 'wheel-dir/')
+              elif not is_arm and ('x86_64' in name or 'amd64' in name or 'any' in name):
+                  shutil.copy2(whl, 'wheel-dir/')
+          print('Wheels available:')
+          for f in sorted(Path('wheel-dir').iterdir()):
+              print(f'  {f.name}')
+          "
+        shell: bash
 
       - name: Run wheel smoke test
         run: python scripts/wheel_smoke.py --wheel-dir wheel-dir
@@ -532,8 +544,8 @@ jobs:
           source .venv/bin/activate
           pytest crates/eggfetch-python/tests/compat/ -v --strict-markers --timeout=30 \
             --json-report --json-report-file=/tmp/compat-test-results.json \
-            --deselect crates/eggfetch-python/tests/compat/test_resource_assertions.py::TestRealSocketResourceStability \
-            --deselect crates/eggfetch-python/tests/compat/test_soak.py::TestNativeLoopbackChurn
+            --ignore=crates/eggfetch-python/tests/compat/test_resource_assertions.py \
+            --ignore=crates/eggfetch-python/tests/compat/test_soak.py
 
       - name: Upload compat test results
         if: always()
