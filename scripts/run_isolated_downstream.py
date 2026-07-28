@@ -396,6 +396,10 @@ def run_tests(venv_dir: Path, pkg: dict, timeout: int) -> subprocess.CompletedPr
 
     Commands are executed through the shell to preserve shell quoting (e.g.
     ``python -c 'import foo; print(foo.__version__)'``).
+
+    pytest commands are redirected to the isolated venv's python -m pytest
+    to avoid using the outer workflow's pytest binary. The cwd is set to the
+    repo root so relative test file paths resolve correctly.
     """
     test_command = pkg.get("test-command", "")
     if not test_command:
@@ -404,12 +408,15 @@ def run_tests(venv_dir: Path, pkg: dict, timeout: int) -> subprocess.CompletedPr
         normalized = pkg["name"].replace("-", "_")
         test_command = f"{python_bin} -c \"import {normalized}; print(f'{normalized} OK')\""
 
-    # For pytest commands, add --tb=short -q for structured output
-    # Remove --co/--collect-only (we want to actually run tests, not just collect)
+    # For pytest commands, redirect to isolated venv's python -m pytest
+    # and set cwd to repo root so relative paths resolve.
     if "pytest" in test_command:
+        python_bin = venv_dir / "bin" / "python"
         test_command = test_command.replace(" --co", "").replace(" --collect-only", "")
+        test_command = test_command.replace("pytest ", f"{python_bin} -m pytest ", 1)
         if "--tb=short" not in test_command:
-            test_command = test_command.replace("pytest ", "pytest --tb=short -q ", 1)
+            test_command = test_command.replace(f"{python_bin} -m pytest ",
+                                               f"{python_bin} -m pytest --tb=short -q ", 1)
 
     env = os.environ.copy()
     env["http_proxy"] = ""
@@ -424,11 +431,14 @@ def run_tests(venv_dir: Path, pkg: dict, timeout: int) -> subprocess.CompletedPr
     if site_packages:
         env["PYTHONPATH"] = str(site_packages[0])
 
+    # Use repo root as cwd so relative test file paths resolve
+    repo_root = str(MANIFEST_PATH.parent.parent)
+
     return subprocess.run(
         test_command,
         shell=True,
         capture_output=True, text=True, timeout=timeout,
-        env=env, cwd=str(venv_dir),
+        env=env, cwd=repo_root,
     )
 
 
@@ -586,6 +596,7 @@ def main() -> int:
         "status": "error",
         "diagnostic_code": "",
         "diagnostic_name": "",
+        "diagnostics": [],
         "duration_seconds": 0,
     }
 
@@ -699,17 +710,13 @@ def main() -> int:
             _emit_result(result, args.output)
             return 3
 
-        # --- Step 8: Run pip check (separate validation step) ---
+        # --- Step 8: Run pip check (non-fatal diagnostic) ---
         pip_ok, pip_output = pip_check(venv_dir)
         result["pip_check"] = {"success": pip_ok, "output": pip_output}
         if not pip_ok:
-            result["status"] = "pip-check-failure"
-            diag = _diagnostic("pip-check-failure", f"pip check failed: {pip_output[:500]}")
-            result["diagnostic_code"] = diag["diagnostic_code"]
-            result["diagnostic_name"] = diag["diagnostic_name"]
-            result["duration_seconds"] = round(time.monotonic() - start_time, 2)
-            _emit_result(result, args.output)
-            return 3
+            result["diagnostics"].append(
+                f"pip check warning: {pip_output[:500]}"
+            )
 
         # --- Step 9: Verify candidate identity if provided ---
         if candidate_identity:

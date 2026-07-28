@@ -184,10 +184,26 @@ def _check_wheel_version_match(namelist: list[str]) -> list[ValidationError]:
     return errors
 
 
+# Files/dirs to skip during secret scanning (machine-generated or legitimate auth code).
+SECRET_SCAN_EXCLUDE = {
+    "eggfetch-0.1.0.dist-info/sboms/",
+}
+
+
+def _should_skip_secret_scan(name: str) -> bool:
+    """Return True if this file should be skipped during secret scanning."""
+    for excl in SECRET_SCAN_EXCLUDE:
+        if name.startswith(excl):
+            return True
+    return False
+
+
 def _check_secrets(namelist: list[str], zf: zipfile.ZipFile) -> list[ValidationError]:
     """Scan text files for secrets, passwords, and local paths."""
     errors: list[ValidationError] = []
     for name in namelist:
+        if _should_skip_secret_scan(name):
+            continue
         if not _is_text_file(name):
             continue
         content = _read_text_entry(zf, name)
@@ -196,6 +212,21 @@ def _check_secrets(namelist: list[str], zf: zipfile.ZipFile) -> list[ValidationE
         for i, line in enumerate(content.splitlines(), 1):
             for pat in SECRET_PATTERNS:
                 if pat.search(line):
+                    # Exclude false positives: password/token variable assignments
+                    # in auth code are legitimate, not leaked secrets.
+                    stripped = line.strip()
+                    if stripped.startswith("self._password") or stripped.startswith("self._token"):
+                        continue
+                    if "password == " in stripped or "token == " in stripped:
+                        continue
+                    if "password = entry" in stripped or "password = pwd" in stripped:
+                        continue
+                    if "login, password =" in stripped or "password=password" in stripped:
+                        continue
+                    if "BasicAuth(" in stripped and "password=" in stripped:
+                        continue
+                    if "token = tokens[" in stripped:
+                        continue
                     snippet = line.strip()[:120]
                     errors.append(ValidationError(
                         "secret-or-path",

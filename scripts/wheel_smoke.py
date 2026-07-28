@@ -137,15 +137,28 @@ def main() -> None:
     args = parser.parse_args()
 
     wheels = sorted(args.wheel_dir.glob("*.whl"))
-    if len(wheels) != 1:
-        raise SystemExit(f"expected exactly one wheel in {args.wheel_dir}, found {wheels}")
+    if not wheels:
+        raise SystemExit(f"no wheels found in {args.wheel_dir}")
+
+    # Filter to wheel matching the running Python version
+    major, minor = sys.version_info[:2]
+    cp_tag = f"cp{major}{minor}"
+    matched = [w for w in wheels if cp_tag in w.name]
+    if not matched:
+        # Fallback: if no cp-specific wheel, look for abi3 or py3-none-any
+        matched = [w for w in wheels if "abi3" in w.name or "py3-none-any" in w.name]
+    if not matched:
+        raise SystemExit(
+            f"no wheel matching Python {cp_tag} in {args.wheel_dir}: {wheels}"
+        )
+    wheel = matched[0]
 
     with tempfile.TemporaryDirectory(prefix="eggfetch-wheel-smoke-") as directory:
         venv_dir = Path(directory) / "venv"
         venv.EnvBuilder(with_pip=True, clear=True).create(venv_dir)
         python = venv_dir / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
         subprocess.run(
-            [str(python), "-m", "pip", "install", "--quiet", str(wheels[0])],
+            [str(python), "-m", "pip", "install", "--quiet", str(wheel)],
             check=True,
         )
 
