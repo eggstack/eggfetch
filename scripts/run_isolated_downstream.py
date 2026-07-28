@@ -408,15 +408,14 @@ def run_tests(venv_dir: Path, pkg: dict, timeout: int) -> subprocess.CompletedPr
         normalized = pkg["name"].replace("-", "_")
         test_command = f"{python_bin} -c \"import {normalized}; print(f'{normalized} OK')\""
 
-    # For pytest commands, redirect to isolated venv's python -m pytest
-    # and set cwd to repo root so relative paths resolve.
+    # For pytest commands, add --tb=short -q for structured output
+    # Remove --co/--collect-only (we want to actually run tests, not just collect)
+    # Use the outer venv's pytest via PATH, NOT the isolated venv's python.
+    # The isolated venv's site-packages is set in PYTHONPATH so imports resolve there.
     if "pytest" in test_command:
-        python_bin = venv_dir / "bin" / "python"
         test_command = test_command.replace(" --co", "").replace(" --collect-only", "")
-        test_command = test_command.replace("pytest ", f"{python_bin} -m pytest ", 1)
         if "--tb=short" not in test_command:
-            test_command = test_command.replace(f"{python_bin} -m pytest ",
-                                               f"{python_bin} -m pytest --tb=short -q ", 1)
+            test_command = test_command.replace("pytest ", "pytest --tb=short -q ", 1)
 
     env = os.environ.copy()
     env["http_proxy"] = ""
@@ -431,22 +430,8 @@ def run_tests(venv_dir: Path, pkg: dict, timeout: int) -> subprocess.CompletedPr
     if site_packages:
         env["PYTHONPATH"] = str(site_packages[0])
 
-    # Prepend outer venv bin to PATH so pytest is found, but isolated venv
-    # site-packages take precedence via PYTHONPATH.
+    # Use repo root as cwd so relative test file paths resolve
     repo_root = MANIFEST_PATH.parent.parent
-    outer_venv_bin = repo_root / ".venv" / "bin"
-    if not outer_venv_bin.exists():
-        outer_venv_bin = venv_dir / "bin"
-    path = env.get("PATH", "")
-    env["PATH"] = f"{outer_venv_bin}:{venv_dir / 'bin'}:{path}"
-
-    # Also add outer venv site-packages to PYTHONPATH so `python -m pytest`
-    # can find pytest (which is installed in the outer venv, not the isolated one).
-    # Append so isolated venv site-packages take precedence.
-    outer_site_packages = list((repo_root / ".venv" / "lib").rglob("site-packages"))
-    if outer_site_packages:
-        existing_pp = env.get("PYTHONPATH", "")
-        env["PYTHONPATH"] = f"{existing_pp}:{outer_site_packages[0]}" if existing_pp else str(outer_site_packages[0])
 
     # Use repo root as cwd so relative test file paths resolve
     repo_root = str(MANIFEST_PATH.parent.parent)
