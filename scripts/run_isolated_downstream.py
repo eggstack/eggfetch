@@ -689,6 +689,18 @@ def main() -> int:
             _emit_result(result, args.output)
             return 1
 
+        # --- Step 6b: Install safe transitive deps ---
+        # The --no-deps install above skips all transitive dependencies.
+        # Install safe ones (excluding httpx) so the downstream package can
+        # import its own dependencies. Use --no-deps to avoid pulling httpx.
+        safe_transitive = []
+        for dep_name in ["httpcore", "anyio", "sniffio", "idna", "certifi",
+                         "h11", "h2", "pydantic", "typing-extensions"]:
+            if dep_name != "httpx" and dep_name not in downstream_deps:
+                safe_transitive.append(dep_name)
+        if safe_transitive:
+            pip_install_no_deps(venv_dir, safe_transitive, args.timeout)
+
         # --- Step 6b: Record installed distribution metadata ---
         dist_info = pip_show_dist(venv_dir, pkg["name"])
         result["installed_dist"] = {
