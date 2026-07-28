@@ -408,14 +408,17 @@ def run_tests(venv_dir: Path, pkg: dict, timeout: int) -> subprocess.CompletedPr
         normalized = pkg["name"].replace("-", "_")
         test_command = f"{python_bin} -c \"import {normalized}; print(f'{normalized} OK')\""
 
-    # For pytest commands, add --tb=short -q for structured output
+    # For pytest commands, add --tb=short for structured output
     # Remove --co/--collect-only (we want to actually run tests, not just collect)
     # Use the outer venv's pytest via PATH, NOT the isolated venv's python.
     # The isolated venv's site-packages is set in PYTHONPATH so imports resolve there.
     if "pytest" in test_command:
         test_command = test_command.replace(" --co", "").replace(" --collect-only", "")
+        # Add --tb=short but do NOT add -q (it suppresses the summary line
+        # that parse_pytest_counts needs). If -q is already present, remove it.
+        test_command = test_command.replace(" -q ", " ")
         if "--tb=short" not in test_command:
-            test_command = test_command.replace("pytest ", "pytest --tb=short -q ", 1)
+            test_command = test_command.replace("pytest ", "pytest --tb=short ", 1)
         # Convert relative test file paths to absolute using repo root
         repo_root = str(Path.cwd())
         parts = test_command.split()
