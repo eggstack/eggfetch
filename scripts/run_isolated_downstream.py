@@ -440,6 +440,14 @@ def run_tests(venv_dir: Path, pkg: dict, timeout: int) -> subprocess.CompletedPr
     path = env.get("PATH", "")
     env["PATH"] = f"{outer_venv_bin}:{venv_dir / 'bin'}:{path}"
 
+    # Also add outer venv site-packages to PYTHONPATH so `python -m pytest`
+    # can find pytest (which is installed in the outer venv, not the isolated one).
+    # Append so isolated venv site-packages take precedence.
+    outer_site_packages = list((repo_root / ".venv" / "lib").rglob("site-packages"))
+    if outer_site_packages:
+        existing_pp = env.get("PYTHONPATH", "")
+        env["PYTHONPATH"] = f"{existing_pp}:{outer_site_packages[0]}" if existing_pp else str(outer_site_packages[0])
+
     # Use repo root as cwd so relative test file paths resolve
     repo_root = str(MANIFEST_PATH.parent.parent)
 

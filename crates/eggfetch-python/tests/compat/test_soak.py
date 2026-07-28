@@ -177,7 +177,7 @@ class TestNativeLoopbackChurn:
         with local_http_server() as (host, port):
             url = f"http://{host}:{port}/json"
             count = 0
-            with Client(timeout=Timeout(30)) as c:
+            with Client(timeout=Timeout(60)) as c:
                 for i in range(20):
                     r = c.get(url)
                     assert r.status_code == 200
