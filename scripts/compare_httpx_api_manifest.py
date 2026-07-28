@@ -482,7 +482,7 @@ def _enrich_results(results: dict) -> dict:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """Build the argument parser for workflow validation tests."""
+    """Build the argument parser for API manifest comparison."""
     parser = argparse.ArgumentParser(
         prog="compare_httpx_api_manifest.py",
         description="Compare eggfetch manifest against HTTPX reference",
@@ -490,8 +490,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--reference", help="Path to reference manifest JSON")
     parser.add_argument("--candidate", help="Path to candidate (eggfetch) manifest JSON")
     parser.add_argument("--allowed", required=True, help="Path to allowed-differences.toml")
-    parser.add_argument("--resolved", default=None,
-                        help="Path to resolved-differences.toml (historical entries, checked for resolved-in-active)")
     parser.add_argument("--json", dest="json_output", action="store_true", help="Output JSON instead of text")
     parser.add_argument("--validate", action="store_true", help="Validate allowed-differences.toml schema")
     parser.add_argument("--output", default=None,

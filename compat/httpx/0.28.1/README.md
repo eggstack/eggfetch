@@ -16,11 +16,6 @@ HTTPX 0.28.1 drop-in compatibility (Stage C candidate).
 
 ## Usage
 
-Validate the profile:
-```bash
-python scripts/validate_httpx_compat_profile.py compat/httpx/0.28.1
-```
-
 Generate the reference manifest:
 ```bash
 python scripts/generate_httpx_api_manifest.py --package httpx --output compat/httpx/0.28.1/reference-api.json

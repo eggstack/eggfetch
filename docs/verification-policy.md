@@ -53,7 +53,7 @@ Runs on every push and pull request via CI. Also run locally before committing. 
 ./scripts/check.sh extended
 ```
 
-Runs Tier 1 first, then optional slower checks. Advisory unless explicitly selected for a change. Includes full HTTPX compatibility, feature combinations, docs, MSRV, resource monitoring, FFI, soak tests, downstream compatibility.
+Runs Tier 1 first, then additional checks. May include an explicit skip when an optional prerequisite (e.g., Rust 1.80 toolchain for MSRV) is unavailable. All executed checks are fail-closed. Includes full HTTPX compatibility, feature combinations, docs, MSRV, resource monitoring, FFI, soak tests, downstream compatibility, lossless merge tests, and benchmarks.
 
 ### Tier 3: Package Validation
 
@@ -61,7 +61,7 @@ Runs Tier 1 first, then optional slower checks. Advisory unless explicitly selec
 ./scripts/check.sh package
 ```
 
-Runs Tier 1 first, then local side-effect-free packaging checks. Must never publish.
+Runs Tier 1 first, then fail-closed local packaging checks. Crate dry-runs, wheel build, wheel smoke test, and package-content validation all use fresh temporary artifacts. Must never publish.
 
 ## Rules for New Automatic Checks
 

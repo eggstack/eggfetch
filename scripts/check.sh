@@ -17,19 +17,70 @@ YELLOW='\033[0;33m'
 NC='\033[0m'
 
 info()  { echo -e "${GREEN}==>${NC} $*"; }
-warn()  { echo -e "${YELLOW}WARNING:${NC} $*"; }
+warn()  { echo -e "${YELLOW}WARNING:${NC} $*" >&2; }
 fail()  { echo -e "${RED}FAIL:${NC} $*" >&2; exit 1; }
 
-# ── Check required tools ──────────────────────────────────────────────────
-check_tools() {
-    local missing=()
-    for tool in cargo rustc python3; do
-        if ! command -v "$tool" &>/dev/null; then
-            missing+=("$tool")
+# ── Helpers ───────────────────────────────────────────────────────────────
+
+# Track optional skips for the final summary.
+SKIPS=()
+
+record_skip() {
+    local name="$1" reason="$2"
+    SKIPS+=("- ${name}: ${reason}")
+    echo -e "${YELLOW}SKIP:${NC} ${name} — ${reason}"
+}
+
+# Require a command to exist.
+require_command() {
+    local cmd="$1"
+    if ! command -v "$cmd" &>/dev/null; then
+        fail "Required command not found: $cmd"
+    fi
+}
+
+# Require a file or directory to exist.
+require_file() {
+    local path="$1"
+    if [[ ! -e "$path" ]]; then
+        fail "Required file not found: $path"
+    fi
+}
+
+# ── Python environment ────────────────────────────────────────────────────
+
+PYTHON_BIN="${PYTHON:-python3}"
+
+require_python_env() {
+    require_command "$PYTHON_BIN"
+
+    # Verify Python 3.10+
+    if ! "$PYTHON_BIN" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)'; then
+        fail "Python 3.10+ is required. Found: $("$PYTHON_BIN" --version 2>&1)"
+    fi
+
+    # Verify active virtual environment
+    if ! "$PYTHON_BIN" -c 'import sys; raise SystemExit(0 if sys.prefix != sys.base_prefix else 1)'; then
+        cat >&2 <<'SETUP_GUIDE'
+Python validation requires an active virtual environment.
+Create one and install test tooling:
+  python3 -m venv .venv
+  source .venv/bin/activate
+  python -m pip install maturin pytest pytest-asyncio
+SETUP_GUIDE
+        exit 1
+    fi
+
+    # Verify required Python modules
+    for mod in pytest pytest_asyncio; do
+        if ! "$PYTHON_BIN" -c "import $mod" 2>/dev/null; then
+            fail "Required Python module not found: $mod. Install into the active venv: python -m pip install $mod"
         fi
     done
-    if [[ ${#missing[@]} -gt 0 ]]; then
-        fail "Missing required tools: ${missing[*]}"
+
+    # Verify maturin is available in the active environment
+    if ! command -v maturin &>/dev/null; then
+        fail "Required command not found: maturin. Install into the active venv: python -m pip install maturin"
     fi
 }
 
@@ -56,23 +107,18 @@ tier1_rust_tests() {
 
 tier1_python_build() {
     info "Building Python extension"
-    if ! command -v maturin &>/dev/null; then
-        warn "maturin not found, installing..."
-        pip install maturin
-    fi
     maturin develop -m "$REPO_ROOT/crates/eggfetch-python/Cargo.toml"
 }
 
 tier1_python_tests() {
     info "Python behavior tests"
-    python -m pytest "$REPO_ROOT/crates/eggfetch-python/tests/" -q \
-        --ignore="$REPO_ROOT/crates/eggfetch-python/tests/compat" \
-        --ignore="$REPO_ROOT/crates/eggfetch-python/tests/soak_test.py"
+    "$PYTHON_BIN" -m pytest "$REPO_ROOT/crates/eggfetch-python/tests/" -q \
+        --ignore="$REPO_ROOT/crates/eggfetch-python/tests/compat"
 }
 
 tier1_compat_smoke() {
     info "HTTPX compatibility smoke kernel"
-    python -m pytest \
+    "$PYTHON_BIN" -m pytest \
         "$REPO_ROOT/crates/eggfetch-python/tests/compat/test_imports.py" \
         "$REPO_ROOT/crates/eggfetch-python/tests/compat/test_client.py" \
         "$REPO_ROOT/crates/eggfetch-python/tests/compat/test_exceptions.py" \
@@ -81,6 +127,7 @@ tier1_compat_smoke() {
 
 run_tier1() {
     check_tools
+    require_python_env
     tier1_rust_format
     tier1_lint_suppressions
     tier1_clippy
@@ -93,10 +140,23 @@ run_tier1() {
 # ── Tier 2: Extended validation ──────────────────────────────────────────
 tier2_full_compat() {
     info "Full HTTPX compatibility suite"
+    # Verify compatibility dependencies are installed
+    if ! "$PYTHON_BIN" -c "import httpx; assert httpx.__version__ == '0.28.1'" 2>/dev/null; then
+        cat >&2 <<'SETUP_GUIDE'
+Extended HTTPX compatibility dependencies are not installed.
+Install them in the active environment:
+  python -m pip install -r compat/httpx/0.28.1/requirements.txt
+SETUP_GUIDE
+        exit 1
+    fi
+    for mod in requests pytest_timeout; do
+        if ! "$PYTHON_BIN" -c "import $mod" 2>/dev/null; then
+            fail "Required Python module not found: $mod. Install into the active venv: python -m pip install -r compat/httpx/0.28.1/requirements.txt"
+        fi
+    done
     (
         cd "$REPO_ROOT"
-        pip install -r compat/httpx/0.28.1/requirements.txt 2>/dev/null || true
-        EGGFETCH_COMPAT_REQUIRED=1 python -m pytest \
+        EGGFETCH_COMPAT_REQUIRED=1 "$PYTHON_BIN" -m pytest \
             "$REPO_ROOT/crates/eggfetch-python/tests/compat/" \
             -v --strict-markers
     )
@@ -104,13 +164,19 @@ tier2_full_compat() {
 
 tier2_api_manifest() {
     info "API manifest comparison"
+    require_file "$SCRIPT_DIR/generate_httpx_api_manifest.py"
+    require_file "$SCRIPT_DIR/compare_httpx_api_manifest.py"
+    require_file "$REPO_ROOT/compat/httpx/0.28.1/allowed-differences.toml"
+    local tmp_dir
+    tmp_dir="$(mktemp -d)"
+    trap 'rm -rf "$tmp_dir"' EXIT
     (
         cd "$REPO_ROOT"
-        python scripts/generate_httpx_api_manifest.py --package eggfetch.compat.httpx --output /tmp/eggfetch-manifest.json
-        python scripts/generate_httpx_api_manifest.py --package httpx --output /tmp/httpx-manifest.json
-        python scripts/compare_httpx_api_manifest.py \
-            --reference /tmp/httpx-manifest.json \
-            --candidate /tmp/eggfetch-manifest.json \
+        "$PYTHON_BIN" scripts/generate_httpx_api_manifest.py --package eggfetch.compat.httpx --output "$tmp_dir/eggfetch-manifest.json"
+        "$PYTHON_BIN" scripts/generate_httpx_api_manifest.py --package httpx --output "$tmp_dir/httpx-manifest.json"
+        "$PYTHON_BIN" scripts/compare_httpx_api_manifest.py \
+            --reference "$tmp_dir/httpx-manifest.json" \
+            --candidate "$tmp_dir/eggfetch-manifest.json" \
             --allowed compat/httpx/0.28.1/allowed-differences.toml
     )
 }
@@ -133,20 +199,23 @@ tier2_feature_tests() {
 
 tier2_msrv() {
     info "MSRV check (Rust 1.80)"
-    if command -v rustup &>/dev/null; then
-        rustup run 1.80 cargo check -p eggfetch-core --no-default-features --features http1,tls-rustls 2>/dev/null \
-            || warn "MSRV toolchain not installed, skipping"
-    else
-        warn "rustup not found, skipping MSRV check"
+    if ! command -v rustup &>/dev/null; then
+        record_skip "MSRV" "rustup is not installed"
+        return 0
     fi
+    if ! rustup toolchain list | grep -Eq '^1\.80([.-]|$)'; then
+        record_skip "MSRV" "Rust 1.80 toolchain is not installed"
+        return 0
+    fi
+    rustup run 1.80 cargo check -p eggfetch-core --no-default-features --features http1,tls-rustls
 }
 
 tier2_docs() {
     info "Documentation checks"
     cargo doc --workspace --all-features --no-deps
     cargo test --doc -p eggfetch-core --all-features
-    python "$SCRIPT_DIR/check_doc_examples.py"
-    python "$SCRIPT_DIR/check_doc_links.py"
+    "$PYTHON_BIN" "$SCRIPT_DIR/check_doc_examples.py"
+    "$PYTHON_BIN" "$SCRIPT_DIR/check_doc_links.py"
 }
 
 tier2_ffi() {
@@ -156,45 +225,39 @@ tier2_ffi() {
 
 tier2_resource_monitor() {
     info "Resource regression check"
-    cargo build --release -p eggfetch-bench --bin resource_monitor 2>/dev/null \
-        && ./target/release/resource_monitor \
-        || warn "Resource monitor not available, skipping"
+    cargo build --release -p eggfetch-bench --bin resource_monitor
+    ./target/release/resource_monitor
 }
 
 tier2_lifecycle() {
     info "Lifecycle tests (timeout, proxy, TLS, shutdown)"
-    python -m pytest \
+    "$PYTHON_BIN" -m pytest \
         "$REPO_ROOT/crates/eggfetch-python/tests/compat/test_native_timeout_classification.py" \
         "$REPO_ROOT/crates/eggfetch-python/tests/compat/test_native_proxy_tls.py" \
         "$REPO_ROOT/crates/eggfetch-python/tests/compat/test_shutdown.py" \
-        -v 2>/dev/null \
-        || warn "Some lifecycle tests skipped"
+        -v
 }
 
 tier2_soak() {
     info "Soak tests"
-    python -m pytest \
+    "$PYTHON_BIN" -m pytest \
         "$REPO_ROOT/crates/eggfetch-python/tests/compat/test_soak.py" \
-        -v 2>/dev/null \
-        || warn "Soak tests skipped"
+        -v
 }
 
 tier2_downstream() {
     info "Downstream behavioral fixtures"
-    python -m pytest "$REPO_ROOT/compat/downstream/behavioral_fixtures/" -v 2>/dev/null \
-        || warn "Downstream fixtures skipped"
+    "$PYTHON_BIN" -m pytest "$REPO_ROOT/compat/downstream/behavioral_fixtures/" -v
 }
 
 tier2_merge_lossless() {
     info "Lossless merge tests"
-    python -m pytest "$REPO_ROOT/crates/eggfetch-python/tests/compat/test_merge_lossless.py" -v 2>/dev/null \
-        || warn "Merge tests skipped"
+    "$PYTHON_BIN" -m pytest "$REPO_ROOT/crates/eggfetch-python/tests/compat/test_merge_lossless.py" -v
 }
 
 tier2_benchmarks() {
     info "Benchmarks"
-    cargo bench -p eggfetch-bench --bench microbench 2>/dev/null \
-        || warn "Benchmarks not available, skipping"
+    cargo bench -p eggfetch-bench --bench microbench
 }
 
 run_tier2() {
@@ -217,36 +280,62 @@ run_tier2() {
 # ── Tier 3: Package validation ───────────────────────────────────────────
 tier3_crate_dry_run() {
     info "Crate package dry runs"
-    for crate in eggfetch-core eggfetch-cli eggfetch-ffi eggfetch-python eggfetch-node; do
-        info "  cargo publish --dry-run -p $crate"
-        cargo publish -p "$crate" --dry-run 2>&1 || warn "Dry-run for $crate had issues"
+    # eggfetch-core has no internal deps — dry-run succeeds independently.
+    info "  cargo publish --dry-run -p eggfetch-core"
+    cargo publish -p eggfetch-core --dry-run
+
+    # Dependent crates require their internal deps to be visible on crates.io.
+    # Use cargo package to verify packaging without upload simulation.
+    for crate in eggfetch-cli eggfetch-ffi eggfetch-python eggfetch-node; do
+        info "  cargo package -p $crate"
+        cargo package -p "$crate"
     done
 }
 
 tier3_wheel_build() {
     info "Python wheel build"
-    maturin build --release -m "$REPO_ROOT/crates/eggfetch-python/Cargo.toml" --out "$REPO_ROOT/dist"
+    local out_dir="$PACKAGE_TMP/wheels"
+    mkdir -p "$out_dir"
+    maturin build --release -m "$REPO_ROOT/crates/eggfetch-python/Cargo.toml" --out "$out_dir"
 }
 
 tier3_wheel_smoke() {
     info "Wheel smoke test"
-    python "$SCRIPT_DIR/wheel_smoke.py" --wheel-dir "$REPO_ROOT/dist"
+    require_file "$SCRIPT_DIR/wheel_smoke.py"
+    local wheels=("$PACKAGE_TMP"/wheels/*.whl)
+    if [[ ${#wheels[@]} -eq 0 ]]; then
+        fail "No wheels found in $PACKAGE_TMP/wheels"
+    fi
+    "$PYTHON_BIN" "$SCRIPT_DIR/wheel_smoke.py" --wheel-dir "$PACKAGE_TMP/wheels"
 }
 
 tier3_package_content() {
     info "Package content validation"
-    for whl in "$REPO_ROOT"/dist/*.whl; do
-        python "$SCRIPT_DIR/validate_package_content.py" "$whl" 2>/dev/null \
-            || warn "Package content check for $(basename "$whl") had issues"
+    require_file "$SCRIPT_DIR/validate_package_content.py"
+    local wheels=("$PACKAGE_TMP"/wheels/*.whl)
+    if [[ ${#wheels[@]} -eq 0 ]]; then
+        fail "No wheels found for content validation"
+    fi
+    for whl in "${wheels[@]}"; do
+        "$PYTHON_BIN" "$SCRIPT_DIR/validate_package_content.py" "$whl"
     done
 }
 
 run_tier3() {
     run_tier1
+    PACKAGE_TMP="$(mktemp -d)"
+    trap 'rm -rf "$PACKAGE_TMP"' EXIT
     tier3_crate_dry_run
     tier3_wheel_build
     tier3_wheel_smoke
     tier3_package_content
+}
+
+# ── Check required tools ──────────────────────────────────────────────────
+check_tools() {
+    require_command cargo
+    require_command rustc
+    require_command "$PYTHON_BIN"
 }
 
 # ── Usage ─────────────────────────────────────────────────────────────────
@@ -270,16 +359,27 @@ cd "$REPO_ROOT"
 case "$MODE" in
     "")
         run_tier1
+        echo ""
+        info "All routine checks passed."
         ;;
     extended)
         run_tier2
+        echo ""
+        if [[ ${#SKIPS[@]} -gt 0 ]]; then
+            info "Extended validation passed with ${#SKIPS[@]} optional check(s) skipped:"
+            for skip in "${SKIPS[@]}"; do
+                echo "  $skip"
+            done
+        else
+            info "All extended checks passed."
+        fi
         ;;
     package)
         run_tier3
+        echo ""
+        info "All package checks passed."
         ;;
     *)
         usage
         ;;
 esac
-
-info "All checks passed."

@@ -59,7 +59,7 @@ When working on the compatibility layer:
 python -m pytest crates/eggfetch-python/tests/compat/test_merge_lossless.py -v
 
 # Native lifecycle and soak
-python -m pytest crates/eggfetch-python/tests/compat/test_native_timeout_classification.py crates/eggfetch-python/tests/compat/test_soak.py -v --timeout=120
+python -m pytest crates/eggfetch-python/tests/compat/test_native_timeout_classification.py crates/eggfetch-python/tests/compat/test_soak.py -v
 
 # Behavioral downstream fixtures
 python -m pytest compat/downstream/behavioral_fixtures/ -v

@@ -48,7 +48,7 @@ jobs:
         run: |
           python -m venv .venv
           source .venv/bin/activate
-          pip install maturin pytest pytest-asyncio
+          python -m pip install maturin pytest pytest-asyncio
 
       - name: Run validation
         run: |

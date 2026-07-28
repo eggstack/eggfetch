@@ -18,11 +18,8 @@ cd crates/eggfetch-python && maturin develop
 python -m pytest -p pytest_asyncio
 
 # HTTPX compatibility tests (requires httpx==0.28.1)
-pip install -r compat/httpx/0.28.1/requirements.txt
+python -m pip install -r compat/httpx/0.28.1/requirements.txt
 EGGFETCH_COMPAT_REQUIRED=1 pytest crates/eggfetch-python/tests/compat/ -v --strict-markers
-
-# Validate compatibility profile
-python scripts/validate_httpx_compat_profile.py compat/httpx/0.28.1
 
 # Generate and compare API manifests
 python scripts/generate_httpx_api_manifest.py --package httpx --output /tmp/httpx.json
@@ -32,27 +29,8 @@ python scripts/compare_httpx_api_manifest.py \
   --candidate /tmp/eggfetch.json \
   --allowed compat/httpx/0.28.1/allowed-differences.toml
 
-# Resource regression check
-cargo build --release -p eggfetch-bench --bin resource_monitor
-./target/release/resource_monitor
-
 # Package content validation
 python scripts/validate_package_content.py path/to/wheel.whl
-
-# Lossless merge tests
-python -m pytest crates/eggfetch-python/tests/compat/test_merge_lossless.py -v
-
-# Behavioral downstream fixtures
-python -m pytest compat/downstream/behavioral_fixtures/ -v
-
-# Native lifecycle and soak tests
-python -m pytest crates/eggfetch-python/tests/compat/test_native_timeout_classification.py crates/eggfetch-python/tests/compat/test_soak.py -v --timeout=120
-
-# Native proxy and TLS tests
-python -m pytest crates/eggfetch-python/tests/compat/test_native_proxy_tls.py -v --timeout=30
-
-# Shutdown lifecycle tests
-python -m pytest crates/eggfetch-python/tests/compat/test_shutdown.py -v --timeout=60
 ```
 
 ## Validation Tiers
@@ -145,18 +123,7 @@ python scripts/compare_httpx_api_manifest.py \
   --reference compat/httpx/0.28.1/reference-api.json \
   --candidate /tmp/eggfetch-api.json \
   --allowed compat/httpx/0.28.1/allowed-differences.toml \
-  --resolved compat/httpx/0.28.1/resolved-differences.toml \
   --json --output /tmp/api-result.json
-```
-
-Lossless merge, downstream, and lifecycle tests:
-
-```sh
-python -m pytest crates/eggfetch-python/tests/compat/test_merge_lossless.py -v
-python -m pytest compat/downstream/behavioral_fixtures/ -v
-python -m pytest crates/eggfetch-python/tests/compat/test_native_timeout_classification.py crates/eggfetch-python/tests/compat/test_soak.py -v --timeout=120
-python -m pytest crates/eggfetch-python/tests/compat/test_native_proxy_tls.py -v --timeout=30
-python -m pytest crates/eggfetch-python/tests/compat/test_shutdown.py -v --timeout=60
 ```
 
 ## Tests
@@ -171,7 +138,6 @@ cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,co
 cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,compression-zstd
 cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,compression-deflate
 cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,proxy
-cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,http3
 ```
 
 The HTTPX compatibility test suite lives in `crates/eggfetch-python/tests/compat/` and requires `httpx==0.28.1`. Run with `EGGFETCH_COMPAT_REQUIRED=1` for fail-closed behavior. The compatibility profile is in `compat/httpx/0.28.1/`.

@@ -47,11 +47,11 @@ See [verification-policy.md](../verification-policy.md) for the normative policy
 
 ### Extended Validation (Tier 2)
 
-Run `./scripts/check.sh extended` for: full HTTPX compatibility, API manifest comparison, feature matrix, feature-gated tests, MSRV, docs, FFI, resource monitoring, lifecycle, soak, downstream, merge, benchmarks.
+Run `./scripts/check.sh extended` for: full HTTPX compatibility, API manifest comparison, feature matrix, feature-gated tests, MSRV, docs, FFI, resource monitoring, lifecycle, soak, downstream, merge, and benchmarks. All executed checks are fail-closed. The only permitted skip is MSRV when the Rust 1.80 toolchain is not installed.
 
 ### Package Validation (Tier 3)
 
-Run `./scripts/check.sh package` for: crate dry-runs, wheel build, wheel smoke, package content validation.
+Run `./scripts/check.sh package` for: crate dry-runs (independent crates via `cargo publish --dry-run`, dependent crates via `cargo package`), wheel build, wheel smoke, and package content validation. Uses fresh temporary artifacts; stale repository wheels are never used.
 
 ## Environment
 

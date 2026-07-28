@@ -107,7 +107,6 @@ EGGFETCH_COMPAT_REQUIRED=1 pytest crates/eggfetch-python/tests/compat/test_trans
 Validate profiles and manifests:
 
 ```sh
-python scripts/validate_httpx_compat_profile.py compat/httpx/0.28.1
 python scripts/generate_httpx_api_manifest.py --package httpx --output /tmp/httpx.json
 python scripts/generate_httpx_api_manifest.py --package eggfetch --output /tmp/eggfetch.json
 python scripts/compare_httpx_api_manifest.py \
