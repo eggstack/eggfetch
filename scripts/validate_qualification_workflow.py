@@ -460,7 +460,15 @@ def _check_obsolete_wheel_dir(workflow: dict) -> list[str]:
     jobs = workflow.get("jobs", {})
     if not isinstance(jobs, dict):
         return errors
-    for job_name, job_def in jobs.items():
+    # Only check downstream-related jobs for obsolete interface
+    downstream_jobs = {
+        "downstream-substitution", "downstream-aggregate",
+        "prepare-downstream-matrix", "run-downstream",
+    }
+    for job_name in downstream_jobs:
+        if job_name not in jobs:
+            continue
+        job_def = jobs[job_name]
         if not isinstance(job_def, dict):
             continue
         steps = job_def.get("steps", [])
@@ -480,26 +488,28 @@ def _check_obsolete_wheel_dir(workflow: dict) -> list[str]:
 
 
 def _check_hyphenated_matrix_keys(workflow: dict) -> list[str]:
-    """§15.70: Workflow uses hyphenated matrix expression keys."""
+    """§15.70: Workflow uses hyphenated matrix expression keys in downstream jobs."""
     errors: list[str] = []
     jobs = workflow.get("jobs", {})
     if not isinstance(jobs, dict):
         return errors
-    for job_name, job_def in jobs.items():
-        if not isinstance(job_def, dict):
-            continue
-        strategy = job_def.get("strategy", {})
-        if not isinstance(strategy, dict):
-            continue
-        matrix = strategy.get("matrix", {})
-        if not isinstance(matrix, dict):
-            continue
-        for key in matrix:
-            if "-" in key and key not in ("include", "exclude"):
-                errors.append(
-                    f"job '{job_name}': matrix contains hyphenated key '{key}' "
-                    f"(use underscore keys instead)"
-                )
+    # Only check downstream-substitution for hyphenated keys — standard
+    # GitHub Actions keys like python-version are acceptable
+    downstream_job = jobs.get("downstream-substitution")
+    if not downstream_job or not isinstance(downstream_job, dict):
+        return errors
+    strategy = downstream_job.get("strategy", {})
+    if not isinstance(strategy, dict):
+        return errors
+    matrix = strategy.get("matrix", {})
+    if not isinstance(matrix, dict):
+        return errors
+    for key in matrix:
+        if "-" in key and key not in ("include", "exclude"):
+            errors.append(
+                f"job 'downstream-substitution': matrix contains hyphenated key '{key}' "
+                f"(use underscore keys instead)"
+            )
     return errors
 
 

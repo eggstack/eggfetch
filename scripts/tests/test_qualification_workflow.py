@@ -371,7 +371,7 @@ class TestHyphenatedMatrixKey:
         }
         result = _run_validator(_write_yaml(tmp_path, wf))
         assert result.returncode != 0
-        assert "hyphenated" in result.stdout.lower() or "matrix" in result.stdout.lower()
+        assert "hyphenated" in result.stdout.lower()
 
     def test_underscore_keys_ok(self, tmp_path):
         wf = _passing_base()
@@ -379,6 +379,14 @@ class TestHyphenatedMatrixKey:
             "package_id": ["respx"],
             "source_sha256": ["abc123"],
         }
+        result = _run_validator(_write_yaml(tmp_path, wf))
+        assert result.returncode == 0
+
+    def test_standard_github_keys_ok(self, tmp_path):
+        wf = _passing_base()
+        # python-version is a standard GitHub Actions key, should not flag
+        wf["jobs"]["build"]["strategy"] = {"matrix": {"python-version": ["3.10", "3.11"]}}
+        wf["jobs"]["build"]["steps"] = [{"run": "echo ${{ matrix.python-version }}\npytest -k soak"}]
         result = _run_validator(_write_yaml(tmp_path, wf))
         assert result.returncode == 0
 
