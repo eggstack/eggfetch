@@ -45,7 +45,12 @@ jobs:
             ${{ runner.os }}-cargo-
 
       - name: Install Python build dependencies
-        run: pip install maturin pytest pytest-asyncio
+        run: |
+          python -m venv .venv
+          source .venv/bin/activate
+          pip install maturin pytest pytest-asyncio
 
       - name: Run validation
-        run: ./scripts/check.sh
+        run: |
+          source .venv/bin/activate
+          ./scripts/check.sh
