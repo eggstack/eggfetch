@@ -281,6 +281,66 @@ if __name__ == "__main__":
     print("All streaming shutdown tests: PASS")
 '''
 
+REPEATED_CLIENT_SHUTDOWN_TEST_CODE = '''
+"""§10.5: Repeated client creation followed by process exit."""
+import sys
+from eggfetch.compat.httpx import Client, MockTransport, Response
+
+def _handler(request):
+    return Response(200, content=b"ok")
+
+def test_repeated_client_creation_exit():
+    """Repeated client open/close followed by process exit."""
+    for i in range(20):
+        c = Client(transport=MockTransport(_handler))
+        resp = c.get("http://testserver/")
+        assert resp.status_code == 200
+        c.close()
+    # Process exits cleanly after repeated creation
+
+if __name__ == "__main__":
+    test_repeated_client_creation_exit()
+    print("Repeated client shutdown: PASS")
+'''
+
+
+GENERATOR_CANCELLATION_SHUTDOWN_TEST_CODE = '''
+"""§10.5: Generator/auth-flow cancellation during dispatch."""
+import sys
+from eggfetch.compat.httpx import Client, MockTransport, Response, Auth
+
+class _CancellationAuth(Auth):
+    """Auth flow that yields then is cancelled."""
+    def auth_flow(self, request):
+        request.headers["x-auth"] = "step1"
+        response = yield request
+        # If we get here, auth succeeded on first try
+        # Simulate cancellation by raising (client handles this)
+
+def _auth_handler(request):
+    if request.headers.get("x-auth") == "step1":
+        return Response(200, text="authenticated")
+    return Response(401)
+
+def test_generator_auth_flow_shutdown():
+    """Auth flow generator shuts down cleanly."""
+    c = Client(auth=_CancellationAuth(), transport=MockTransport(_auth_handler))
+    resp = c.get("http://testserver/")
+    assert resp.status_code == 200
+    c.close()
+
+def test_generator_auth_flow_context_manager():
+    """Auth flow via context manager shuts down cleanly."""
+    with Client(auth=_CancellationAuth(), transport=MockTransport(_auth_handler)) as c:
+        resp = c.get("http://testserver/")
+        assert resp.status_code == 200
+
+if __name__ == "__main__":
+    test_generator_auth_flow_shutdown()
+    test_generator_auth_flow_context_manager()
+    print("Generator cancellation shutdown: PASS")
+'''
+
 
 FORBIDDEN_WARNING_PATTERNS = [
     "event loop is closed",
@@ -399,6 +459,46 @@ class TestStreamingShutdown:
             )
 
 
+class TestRepeatedClientShutdown:
+    """§10.5: repeated client creation followed by process exit."""
+
+    def test_repeated_client_shutdown_subprocess(self):
+        result = subprocess.run(
+            [sys.executable, "-c", REPEATED_CLIENT_SHUTDOWN_TEST_CODE],
+            capture_output=True, text=True, timeout=30,
+        )
+        assert result.returncode == 0, (
+            f"Repeated client shutdown test failed.\n"
+            f"stdout: {result.stdout}\nstderr: {result.stderr}"
+        )
+        assert "PASS" in result.stdout
+        stderr_lower = result.stderr.lower()
+        for pattern in FORBIDDEN_WARNING_PATTERNS:
+            assert pattern.lower() not in stderr_lower, (
+                f"Unexpected stderr warning '{pattern}' detected:\n{result.stderr}"
+            )
+
+
+class TestGeneratorCancellationShutdown:
+    """§10.5: generator/auth-flow cancellation during dispatch."""
+
+    def test_generator_cancellation_shutdown_subprocess(self):
+        result = subprocess.run(
+            [sys.executable, "-c", GENERATOR_CANCELLATION_SHUTDOWN_TEST_CODE],
+            capture_output=True, text=True, timeout=30,
+        )
+        assert result.returncode == 0, (
+            f"Generator cancellation shutdown test failed.\n"
+            f"stdout: {result.stdout}\nstderr: {result.stderr}"
+        )
+        assert "PASS" in result.stdout
+        stderr_lower = result.stderr.lower()
+        for pattern in FORBIDDEN_WARNING_PATTERNS:
+            assert pattern.lower() not in stderr_lower, (
+                f"Unexpected stderr warning '{pattern}' detected:\n{result.stderr}"
+            )
+
+
 class TestShutdownDeadlineBounds:
     """All shutdown subprocess tests must complete within bounded time."""
 
@@ -409,6 +509,8 @@ class TestShutdownDeadlineBounds:
         (TLS_SHUTDOWN_TEST_CODE, "tls"),
         (CANCELLED_ASYNC_SHUTDOWN_TEST_CODE, "cancelled-async"),
         (STREAMING_SHUTDOWN_TEST_CODE, "streaming"),
+        (REPEATED_CLIENT_SHUTDOWN_TEST_CODE, "repeated-client"),
+        (GENERATOR_CANCELLATION_SHUTDOWN_TEST_CODE, "generator-cancellation"),
     ])
     def test_shutdown_deadline(self, test_code, expected_label):
         """Each shutdown scenario completes within 15 seconds."""

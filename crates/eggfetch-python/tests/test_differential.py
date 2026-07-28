@@ -19,6 +19,8 @@ import pytest
 
 import eggfetch
 
+from conftest import _ThreadingHTTPServer
+
 try:
     import requests as _requests
 
@@ -290,7 +292,7 @@ class _DifferentialHandler(http.server.BaseHTTPRequestHandler):
 @pytest.fixture(scope="module")
 def diff_server():
     """Start a test server for differential tests."""
-    server = http.server.HTTPServer(("127.0.0.1", 0), _DifferentialHandler)
+    server = _ThreadingHTTPServer(("127.0.0.1", 0), _DifferentialHandler)
     port = server.server_address[1]
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()

@@ -9,6 +9,8 @@ import pytest
 
 import eggfetch
 
+from conftest import _ThreadingHTTPServer
+
 
 # ---------------------------------------------------------------------------
 # Local test server (HTTP/1.1 only)
@@ -53,7 +55,7 @@ class _Handler(http.server.BaseHTTPRequestHandler):
 @pytest.fixture(scope="module")
 def server():
     """Start a local HTTP/1.1 server for the test module."""
-    srv = http.server.HTTPServer(("127.0.0.1", 0), _Handler)
+    srv = _ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
     port = srv.server_address[1]
     t = threading.Thread(target=srv.serve_forever, daemon=True)
     t.start()

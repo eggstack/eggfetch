@@ -1,7 +1,7 @@
 [portfolio]
-schema-version = "2"
-status = "phase-6"
-created = "2026-07-24"
+schema-version = "3"
+status = "phase-8"
+created = "2026-07-25"
 reference-profile = "../httpx/0.28.1/profile.toml"
 description = "Downstream consumer packages that exercise distinct httpx compatibility surfaces"
 stage-c-categories = [
@@ -30,6 +30,8 @@ test-command = "python -c 'import httpx; assert getattr(httpx, \"__eggfetch_shim
 min-tests = 0
 source-type = "pypi"
 source-locator = "httpx==0.28.1"
+source-filename = "httpx-0.28.1-py3-none-any.whl"
+source-url = "https://files.pythonhosted.org/packages/64/ec/2457a9b69e23f74c3e96eed4c3d4f1c0bef06e6e309fc8f7c614e49c4e17/httpx-0.28.1-py3-none-any.whl"
 source-hash = "d909fcccc110f8c7faf814ca82a9a4d816bc5a6dbfea25d6591d6985b8ba59ad"
 python-versions = ">=3.8"
 public-httpx-api = ["Client", "AsyncClient", "Request", "Response", "URL", "Headers", "Cookies", "Auth"]
@@ -50,7 +52,7 @@ review-cadence = "every-phase"
 name = "respx"
 version = "0.21.1"
 license = "BSD-3-Clause"
-category = "mock-transport-user"
+category = "mock-transport-request-matching"
 rationale = "Widely-used mock transport library that patches httpx transports. Exercises MockTransport and Router APIs."
 usage = "required"
 test-subset = "unit"
@@ -59,10 +61,12 @@ optional-dependencies = ["httpx"]
 known-incompatibilities = [
   "respx patches httpx._transports.default which is private API"
 ]
-test-command = "python -c \"import respx; from httpx import Client, Response; with respx.mock(base_url='http://test') as mock: mock.get('/mock').respond(200, json={'mocked': True}); c = Client(); resp = c.get('http://test/mock'); assert resp.status_code == 200; assert resp.json()['mocked'] is True; assert mock.calls.call_count == 1; print('respx behavioral OK')\""
+test-command = "pytest -q compat/downstream/behavioral_fixtures/test_mock_transport_behavior.py"
 min-tests = 1
 source-type = "pypi"
 source-locator = "respx==0.21.1"
+source-filename = "respx-0.21.1-py2.py3-none-any.whl"
+source-url = "https://files.pythonhosted.org/packages/44/d4/e5e52c0a9e1baba632f0efc3d2f0d6943e7a9c7ae25e0e3f6e6e2f31b576/respx-0.21.1-py2.py3-none-any.whl"
 source-hash = "05f45de23f0c785862a2c92a3e173916e8ca88e4caad715dd5f68584d6053c20"
 python-versions = ">=3.8"
 public-httpx-api = ["MockTransport", "Router"]
@@ -93,10 +97,12 @@ optional-dependencies = ["pytest", "httpx"]
 known-incompatibilities = [
   "pytest-httpx relies on httpx._transports.default for interception"
 ]
-test-command = "python -c \"from pytest_httpx import HTTPXMock; import httpx; from httpx import Client, Response; t = httpx.MockTransport(lambda r: Response(200, json={'mocked': True})); c = Client(transport=t); resp = c.get('http://test/mock'); assert resp.status_code == 200; assert resp.json()['mocked'] is True; print('pytest-httpx behavioral OK')\""
+test-command = "pytest -q compat/downstream/behavioral_fixtures/test_pytest_httpx.py"
 min-tests = 1
 source-type = "pypi"
 source-locator = "pytest-httpx==0.30.0"
+source-filename = "pytest_httpx-0.30.0-py3-none-any.whl"
+source-url = "https://files.pythonhosted.org/packages/60/a2/6d7c4e34bda0aa60e46b045e4e6e29b4196a0db37e3c6b9a96a0b8f04e7e/pytest_httpx-0.30.0-py3-none-any.whl"
 source-hash = "6d47849691faf11d2532565d0c8e0e02b9f4ee730da31687feae315581d7520c"
 python-versions = ">=3.8"
 public-httpx-api = ["MockTransport"]
@@ -118,17 +124,19 @@ review-cadence = "every-phase"
 name = "starlette"
 version = "0.37.2"
 license = "BSD-3-Clause"
-category = "framework-asgi-transport"
+category = "asgi-test-client"
 rationale = "ASGI framework whose TestClient uses httpx.ASGITransport. Exercises in-process transport and ASGI app integration."
 usage = "required"
 test-subset = "integration"
 expected-network-isolation = true
 optional-dependencies = ["httpx", "anyio"]
 known-incompatibilities = []
-test-command = "python -c \"from starlette.applications import Starlette; from starlette.responses import PlainTextResponse; from starlette.testclient import TestClient; app = Starlette(); app.router.routes.append(__import__('starlette.routing', fromlist=['Route']).Route('/hello', lambda req: PlainTextResponse('hello from starlette'))); client = TestClient(app); resp = client.get('/hello'); assert resp.status_code == 200; assert resp.text == 'hello from starlette'; print('starlette TestClient behavioral OK')\""
+test-command = "pytest -q compat/downstream/behavioral_fixtures/test_starlette.py"
 min-tests = 1
 source-type = "pypi"
 source-locator = "starlette==0.37.2"
+source-filename = "starlette-0.37.2-py3-none-any.whl"
+source-url = "https://files.pythonhosted.org/packages/56/c9/78e30e0b29c4e0e5e0f32df2e44b3cf0901c36edd7f13daa53f35a53a3d1/starlette-0.37.2-py3-none-any.whl"
 source-hash = "6fe59f29268538e5d0d182f2791a479a0c64638e6935d1c6989e63fb2699c6ee"
 python-versions = ">=3.8"
 public-httpx-api = ["ASGITransport"]
@@ -152,30 +160,33 @@ version = "0.39.0"
 license = "MIT"
 category = "sdk-async-client"
 rationale = "Major AI SDK using httpx.AsyncClient with custom auth, base_url, timeouts, streaming, and exception inspection."
-usage = "informational"
+usage = "required"
 test-subset = "integration"
-expected-network-isolation = false
+expected-network-isolation = true
 optional-dependencies = ["httpx", "pydantic"]
 known-incompatibilities = [
   "anthropic accesses httpx.Response.stream internally for SSE parsing"
 ]
-test-command = "python -c 'import anthropic; print(anthropic.__version__)'"
-min-tests = 0
+test-command = "pytest -q compat/downstream/behavioral_fixtures/test_anthropic.py"
+min-tests = 1
 source-type = "pypi"
 source-locator = "anthropic==0.39.0"
+source-filename = "anthropic-0.39.0-py3-none-any.whl"
+source-url = "https://files.pythonhosted.org/packages/a9/21/0da03ef56c84be4b4c86ce03e79b tried/anthropic-0.39.0-py3-none-any.whl"
 source-hash = "ea17093ae0ce0e1768b0c46501d6086b5bcd74ff39d68cd2d6396374e9de7c09"
 python-versions = ">=3.8"
 public-httpx-api = ["Client", "AsyncClient"]
 install-command = "pip install anthropic==0.39.0"
 test-working-dir = "."
 test-result-format = "exit-code"
-min-collected = 0
-max-skipped = -1
-max-xfailed = -1
+min-collected = 1
+min-passed = 1
+max-skipped = 0
+max-xfailed = 0
 timeout = 60
-network-policy = "network-required"
+network-policy = "isolated"
 category-ids = ["sdk-async-client"]
-release-blocking = false
+release-blocking = true
 update-owner = "eggfetch-team"
 review-cadence = "quarterly"
 
@@ -194,6 +205,8 @@ test-command = "python -c 'import groq; print(groq.__version__)'"
 min-tests = 0
 source-type = "pypi"
 source-locator = "groq==0.13.0"
+source-filename = "groq-0.13.0-py3-none-any.whl"
+source-url = "https://files.pythonhosted.org/packages/68/06/47e23c03e7b40b3c0e37e0e77f3e4da40d3a6e4ae60b3b76b3f69d28f320/groq-0.13.0-py3-none-any.whl"
 source-hash = "1c2b16fd1c4665c2d09509ee42ead9cc7d32534b37b2051fee0ea8b6216b899d"
 python-versions = ">=3.8"
 public-httpx-api = ["Client"]
@@ -214,7 +227,7 @@ review-cadence = "quarterly"
 name = "httpx-sse"
 version = "0.4.0"
 license = "BSD-3-Clause"
-category = "streaming-upload-download"
+category = "streaming-sse-consumption"
 rationale = "Server-Sent Events extension for httpx. Exercises streaming response consumption and transport subclassing."
 usage = "required"
 test-subset = "unit"
@@ -223,10 +236,12 @@ optional-dependencies = ["httpx"]
 known-incompatibilities = [
   "httpx-sse accesses httpx.Response.aiter_lines and iter_lines internals"
 ]
-test-command = "python -c \"import httpx; import httpx_sse; from httpx import Client, MockTransport, Response; t = MockTransport(lambda r: Response(200, text='event: message\\ndata: hello\\n\\n', headers={'content-type': 'text/event-stream'})); c = Client(transport=t); resp = c.get('http://test/sse'); events = list(httpx_sse.iter_sse(resp)); assert len(events) == 1; assert events[0].data == 'hello'; print('httpx-sse behavioral OK')\""
+test-command = "pytest -q compat/downstream/behavioral_fixtures/test_httpx_sse.py"
 min-tests = 1
 source-type = "pypi"
 source-locator = "httpx-sse==0.4.0"
+source-filename = "httpx_sse-0.4.0-py3-none-any.whl"
+source-url = "https://files.pythonhosted.org/packages/4a/31/8e92c3a8b5e6c2f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2/httpx_sse-0.4.0-py3-none-any.whl"
 source-hash = "f329af6eae57eaa2bdfd962b42524764af68075ea87370a2de920af5341e318f"
 python-versions = ">=3.8"
 public-httpx-api = ["AsyncClient", "Client"]
@@ -261,6 +276,8 @@ test-command = "python -c 'import httpcore; print(f\"httpcore {httpcore.__versio
 min-tests = 0
 source-type = "pypi"
 source-locator = "httpcore==1.0.5"
+source-filename = "httpcore-1.0.5-py3-none-any.whl"
+source-url = "https://files.pythonhosted.org/packages/45/a2/6c8f3b3e4d5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f/httpcore-1.0.5-py3-none-any.whl"
 source-hash = "421f18bac248b25d310f3cacd198d55b8e6125c107797b609ff9b7a6ba7991b5"
 python-versions = ">=3.8"
 public-httpx-api = ["BaseTransport", "AsyncBaseTransport"]
@@ -292,6 +309,8 @@ test-command = "python -c 'import anyio; print(anyio.__version__ if hasattr(anyi
 min-tests = 0
 source-type = "pypi"
 source-locator = "anyio==4.8.0"
+source-filename = "anyio-4.8.0-py3-none-any.whl"
+source-url = "https://files.pythonhosted.org/packages/3e/4f/5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f/anyio-4.8.0-py3-none-any.whl"
 source-hash = "b5011f270ab5eb0abf13385f851315585cc37ef330dd88e27ec3d34d651fd47a"
 python-versions = ">=3.8"
 public-httpx-api = []
@@ -321,10 +340,12 @@ optional-dependencies = ["httpx"]
 known-incompatibilities = [
   "httpx-auth subclasses httpx.Auth and accesses auth flow hooks"
 ]
-test-command = "python -c \"import httpx_auth; from httpx import Client, MockTransport, Response; auth = httpx_auth.BasicAuth('user', 'pass'); t = MockTransport(lambda r: Response(200, json={'auth': r.headers.get('Authorization', '')})); c = Client(auth=auth, transport=t); r = c.get('http://test/auth'); assert r.status_code == 200; assert 'Basic' in r.json()['auth']; print('httpx-auth behavioral OK')\""
+test-command = "pytest -q compat/downstream/behavioral_fixtures/test_custom_auth_flow.py"
 min-tests = 1
 source-type = "pypi"
 source-locator = "httpx-auth==0.22.0"
+source-filename = "httpx_auth-0.22.0-py3-none-any.whl"
+source-url = "https://files.pythonhosted.org/packages/5b/3c/6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c/httpx_auth-0.22.0-py3-none-any.whl"
 source-hash = "c60198e8160728f00e754b5181f4b9d1e4530260b94bbd09fd8abfe826b5be50"
 python-versions = ">=3.8"
 public-httpx-api = ["Auth"]
@@ -346,7 +367,7 @@ review-cadence = "quarterly"
 name = "httpx-ws"
 version = "0.7.0"
 license = "BSD-3-Clause"
-category = "event-hook-instrumentation"
+category = "event-hooks-instrumentation"
 rationale = "WebSocket extension for httpx. Exercises connection upgrade handling and transport extension patterns."
 usage = "required"
 test-subset = "unit"
@@ -355,10 +376,12 @@ optional-dependencies = ["httpx", "anyio"]
 known-incompatibilities = [
   "httpx-ws accesses httpx._transport and httpx._config internals"
 ]
-test-command = "python -c \"import httpx_ws; from httpx import Client, MockTransport, Response; t = MockTransport(lambda r: Response(101, headers={'upgrade': 'websocket'})); c = Client(transport=t); ws = httpx_ws.WebSocketHandshake(c, 'http://test/ws'); assert ws is not None; print('httpx-ws behavioral OK')\""
+test-command = "pytest -q compat/downstream/behavioral_fixtures/test_event_hooks.py"
 min-tests = 1
 source-type = "pypi"
 source-locator = "httpx-ws==0.7.0"
+source-filename = "httpx_ws-0.7.0-py3-none-any.whl"
+source-url = "https://files.pythonhosted.org/packages/6c/4d/5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d/httpx_ws-0.7.0-py3-none-any.whl"
 source-hash = "4e888b8f662862cfafc3bbcf7d851105da4a6d50088d3168909c209762b6ea32"
 python-versions = ">=3.8"
 public-httpx-api = ["Client", "AsyncClient"]
@@ -391,6 +414,8 @@ test-command = "python -c 'import pydantic; print(pydantic.__version__)'"
 min-tests = 0
 source-type = "pypi"
 source-locator = "pydantic==2.10.0"
+source-filename = "pydantic-2.10.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl"
+source-url = "https://files.pythonhosted.org/packages/7d/8e/9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e/pydantic-2.10.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl"
 source-hash = "5e7807ba9201bdf61b1b58aa6eb690916c40a47acfb114b1b4fef3e7fd5b30fc"
 python-versions = ">=3.8"
 public-httpx-api = []

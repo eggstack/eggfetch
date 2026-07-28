@@ -1,8 +1,9 @@
 """Tests for the pytest result normalizer and result contract validation.
 
 Track B: Versioned result contracts — every result must include
-schema_version, candidate_identity, producer, run_id, run_attempt,
-job_name, started_at, finished_at, status, errors, and metrics.
+schema, suite_id, producer_job, candidate_sha, identity_digest,
+run_id, run_attempt, started_at, finished_at, status, required,
+metrics, artifacts, and diagnostics.
 """
 
 import json
@@ -85,7 +86,7 @@ class TestNormalization:
         assert rc == 0, f"Expected exit 0.\nstdout: {stdout}\nstderr: {stderr}"
         assert output is not None
         assert output["status"] == "passed"
-        assert output["schema_version"] == "1"
+        assert output["schema"] == "qualification-result/v1"
         assert output["metrics"]["collected"] == 100
         assert output["metrics"]["passed"] == 100
         assert output["metrics"]["failed"] == 0
@@ -104,18 +105,20 @@ class TestNormalization:
         raw = _make_raw_pytest_json(passed=5)
         rc, stdout, stderr, output = _run_normalize(raw)
         assert rc == 0
-        required = ["schema_version", "candidate_identity", "producer", "run_id",
-                    "run_attempt", "job_name", "started_at", "finished_at",
-                    "status", "errors", "metrics"]
+        required = ["schema", "suite_id", "producer_job", "candidate_sha",
+                    "identity_digest", "run_id", "run_attempt", "started_at",
+                    "finished_at", "status", "required", "metrics",
+                    "artifacts", "diagnostics"]
         for field in required:
             assert field in output, f"Missing required field: {field}"
 
     def test_normalize_candidate_identity(self):
-        """Candidate identity is embedded in the result."""
+        """Candidate SHA and identity digest are embedded in the result."""
         raw = _make_raw_pytest_json(passed=5)
         rc, stdout, stderr, output = _run_normalize(raw, candidate_sha="b" * 40)
         assert rc == 0
-        assert output["candidate_identity"]["candidate_sha"] == "b" * 40
+        assert output["candidate_sha"] == "b" * 40
+        assert len(output["identity_digest"]) == 64
 
     def test_normalize_skipped_suite_fails(self):
         """A suite with skipped tests fails normalization (fail-closed)."""

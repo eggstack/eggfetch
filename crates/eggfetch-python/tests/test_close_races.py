@@ -13,6 +13,8 @@ import time
 
 import pytest
 
+from conftest import _ThreadingHTTPServer
+
 import eggfetch
 
 
@@ -40,7 +42,7 @@ class _SlowHandler(http.server.BaseHTTPRequestHandler):
 
 @pytest.fixture(scope="module")
 def slow_server():
-    srv = http.server.HTTPServer(("127.0.0.1", 0), _SlowHandler)
+    srv = _ThreadingHTTPServer(("127.0.0.1", 0), _SlowHandler)
     port = srv.server_address[1]
     t = threading.Thread(target=srv.serve_forever, daemon=True)
     t.start()

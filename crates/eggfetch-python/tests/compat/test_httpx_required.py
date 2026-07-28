@@ -8,6 +8,7 @@ session will fail rather than skip.
 import base64
 import http.server
 import json
+import socketserver
 import threading
 import urllib.parse
 
@@ -91,10 +92,14 @@ class _CompatHandler(http.server.BaseHTTPRequestHandler):
         pass
 
 
+class _ThreadedHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
+    daemon_threads = True
+
+
 @pytest.fixture(scope="module")
 def compat_server():
     """Start a test server for required compatibility tests."""
-    server = http.server.HTTPServer(("127.0.0.1", 0), _CompatHandler)
+    server = _ThreadedHTTPServer(("127.0.0.1", 0), _CompatHandler)
     port = server.server_address[1]
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -200,7 +205,7 @@ class TestCrossOriginHeaderStripping:
     @pytest.fixture(scope="class")
     def cross_origin_server(self):
         """Start a second server on a different port to act as cross-origin target."""
-        server = http.server.HTTPServer(("127.0.0.1", 0), _EchoHeadersHandler)
+        server = _ThreadedHTTPServer(("127.0.0.1", 0), _EchoHeadersHandler)
         port = server.server_address[1]
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
@@ -224,7 +229,7 @@ class TestCrossOriginHeaderStripping:
             def log_message(self, format, *args):
                 pass
 
-        server = http.server.HTTPServer(("127.0.0.1", 0), _RedirectHandler)
+        server = _ThreadedHTTPServer(("127.0.0.1", 0), _RedirectHandler)
         port = server.server_address[1]
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()

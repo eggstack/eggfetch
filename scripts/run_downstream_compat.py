@@ -337,8 +337,10 @@ def main() -> int:
     eggfetch_found = False
     httpx_found = False
     for art in artifact_manifest.get("artifacts", []):
-        art_type = art.get("artifact_type", "")
-        path = art.get("path", "")
+        # Support schema v3 (role) and schema v2 (artifact_type)
+        art_type = art.get("role", art.get("artifact_type", ""))
+        # Support schema v3 (relative_path) and schema v2 (path)
+        path = art.get("relative_path", art.get("path", ""))
         if art_type == "eggfetch" and path:
             eggfetch_found = True
         if art_type == "httpx-controlled-replacement" and path:

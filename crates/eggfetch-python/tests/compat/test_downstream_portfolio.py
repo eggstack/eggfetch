@@ -60,16 +60,16 @@ REQUIRED_PORTFOLIO_FIELDS = {
 
 VALID_CATEGORIES = {
     "contract-tests",
-    "mock-transport-user",
+    "mock-transport-request-matching",
     "framework-test-client",
-    "framework-asgi-transport",
+    "asgi-test-client",
     "sdk-async-client",
     "sdk-sync-client",
-    "streaming-upload-download",
+    "streaming-sse-consumption",
     "custom-transport-subclass",
     "async-testing-support",
     "custom-auth-flow",
-    "event-hook-instrumentation",
+    "event-hooks-instrumentation",
     "heavy-config-user",
 }
 
@@ -87,12 +87,14 @@ def manifest():
 class TestPortfolioMetadata:
     def test_schema_version_is_valid(self, manifest):
         portfolio = manifest.get("portfolio", {})
-        assert portfolio.get("schema-version") in ("1", "2")
+        assert portfolio.get("schema-version") in ("1", "2", "3")
 
     def test_status_matches_schema_version(self, manifest):
         portfolio = manifest.get("portfolio", {})
         sv = portfolio.get("schema-version", "1")
-        if sv == "2":
+        if sv == "3":
+            assert portfolio.get("status") in ("phase-8", "phase-7", "released")
+        elif sv == "2":
             assert portfolio.get("status") == "phase-6"
         else:
             assert portfolio.get("status") == "phase-5"
@@ -110,9 +112,10 @@ class TestPortfolioMetadata:
 
     def test_v2_has_stage_c_categories(self, manifest):
         portfolio = manifest.get("portfolio", {})
-        if portfolio.get("schema-version") == "2":
+        sv = portfolio.get("schema-version", "1")
+        if sv in ("2", "3"):
             cats = portfolio.get("stage-c-categories", [])
-            assert len(cats) >= 8, f"Schema v2 should have >=8 stage-c-categories, got {len(cats)}"
+            assert len(cats) >= 8, f"Schema v{sv} should have >=8 stage-c-categories, got {len(cats)}"
 
 
 class TestPackageEntries:
@@ -131,7 +134,7 @@ class TestPackageEntries:
         packages = manifest.get("package", [])
         schema_version = manifest.get("portfolio", {}).get("schema-version", "1")
         base_fields = REQUIRED_PACKAGE_FIELDS
-        if schema_version == "2":
+        if schema_version in ("2", "3"):
             base_fields = base_fields | REQUIRED_V2_PACKAGE_FIELDS
         errors = []
         for pkg in packages:
@@ -271,8 +274,8 @@ class TestPackageEntries:
 class TestSchemaV2Fields:
     def test_v2_required_entries_have_source_type(self, manifest):
         schema_version = manifest.get("portfolio", {}).get("schema-version", "1")
-        if schema_version != "2":
-            pytest.skip("Not schema v2")
+        if schema_version not in ("2", "3"):
+            pytest.skip("Not schema v2/v3")
         packages = manifest.get("package", [])
         errors = []
         for pkg in packages:
@@ -287,8 +290,8 @@ class TestSchemaV2Fields:
 
     def test_v2_required_entries_have_test_command(self, manifest):
         schema_version = manifest.get("portfolio", {}).get("schema-version", "1")
-        if schema_version != "2":
-            pytest.skip("Not schema v2")
+        if schema_version not in ("2", "3"):
+            pytest.skip("Not schema v2/v3")
         packages = manifest.get("package", [])
         errors = []
         for pkg in packages:
@@ -300,8 +303,8 @@ class TestSchemaV2Fields:
 
     def test_v2_behavioral_fixtures_dir_exists(self, manifest):
         schema_version = manifest.get("portfolio", {}).get("schema-version", "1")
-        if schema_version != "2":
-            pytest.skip("Not schema v2")
+        if schema_version not in ("2", "3"):
+            pytest.skip("Not schema v2/v3")
         fixtures_dir = MANIFEST_PATH.parent / "behavioral_fixtures"
         assert fixtures_dir.exists(), f"Schema v2 requires behavioral_fixtures: {fixtures_dir}"
         py_files = list(fixtures_dir.glob("test_*.py"))

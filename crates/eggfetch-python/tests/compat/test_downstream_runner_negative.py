@@ -128,15 +128,15 @@ class TestDownstreamRunnerFailClosed:
 
 class TestManifestSchemaV2:
     def test_manifest_has_schema_version_2(self):
-        """Manifest should be at schema version 2."""
+        """Manifest should be at schema version 2 or 3."""
         try:
             import tomllib
         except ModuleNotFoundError:
             import tomli as tomllib
         with open(MANIFEST_PATH, "rb") as f:
             data = tomllib.load(f)
-        assert data["portfolio"]["schema-version"] == "2"
-        assert data["portfolio"]["status"] == "phase-6"
+        assert data["portfolio"]["schema-version"] in ("2", "3")
+        assert data["portfolio"]["status"] in ("phase-6", "phase-7", "phase-8")
 
     def test_required_packages_are_not_import_only(self):
         """Required packages must not have import-only test commands.

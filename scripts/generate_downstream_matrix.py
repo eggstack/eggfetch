@@ -3,22 +3,24 @@
 
 Reads the downstream manifest and produces a GitHub Actions matrix JSON
 for the qualification workflow. Validates that all required categories
-are covered and all required fields are present.
+are covered by release-blocking packages and all required fields are present.
 
 Usage:
     generate_downstream_matrix.py --output <matrix.json>
+    generate_downstream_matrix.py --validate-only
 
-The output is a JSON object suitable for use with fromJSON() in GitHub
-Actions:
+The output matrix contains only identifiers and normalized scalar fields.
+Test commands, dependency lists, and other runtime details are resolved
+by the downstream runner from the manifest, not embedded in the matrix.
+
+Matrix schema:
     {
       "include": [
         {
-          "package": "respx",
+          "package_id": "respx",
           "version": "0.21.1",
-          "source-locator": "pypi:respx==0.21.1",
-          "source-hash": "<sha256>",
-          "category-ids": ["mock-transport-request-matching"],
-          ...
+          "source_sha256": "<hash>",
+          "timeout_seconds": 60
         }
       ]
     }
@@ -41,22 +43,7 @@ except ImportError:
         sys.exit(2)
 
 
-REQUIRED_STAGE_C_CATEGORIES = {
-    "contract-tests",
-    "mock-transport-request-matching",
-    "framework-test-client",
-    "asgi-test-client",
-    "sdk-async-client",
-    "streaming-sse-consumption",
-    "custom-auth-flow",
-    "event-hooks-instrumentation",
-}
-
-REQUIRED_PACKAGE_FIELDS = [
-    "name", "version", "source-locator", "source-hash",
-    "source-type", "test-command", "min-tests",
-    "category-ids", "timeout",
-]
+from stage_c_categories import STAGE_C_CATEGORY_SET, validate_category_coverage
 
 
 def load_manifest(path: Path) -> dict:
@@ -66,7 +53,10 @@ def load_manifest(path: Path) -> dict:
 
 
 def validate_manifest(manifest: dict) -> list[str]:
-    """Validate the manifest structure. Returns list of errors."""
+    """Validate the manifest structure. Returns list of errors.
+
+    Missing required categories are errors, not warnings.
+    """
     errors: list[str] = []
 
     packages = manifest.get("package", [])
@@ -75,31 +65,24 @@ def validate_manifest(manifest: dict) -> list[str]:
         return errors
 
     covered_categories: set[str] = set()
-    required_packages = []
     seen_names: set[str] = set()
 
     for i, pkg in enumerate(packages):
         name = pkg.get("name", f"<entry {i}>")
 
-        # Duplicate detection
         if name in seen_names:
             errors.append(f"duplicate package: {name}")
         seen_names.add(name)
 
         # Required field validation
-        for field in REQUIRED_PACKAGE_FIELDS:
+        for field in ("name", "version", "source-hash", "category-ids", "timeout"):
             if field not in pkg:
                 errors.append(f"[{name}] missing required field: {field}")
 
         usage = pkg.get("usage", "required")
         if usage == "required":
-            required_packages.append(name)
-
-            # Validate required fields for required packages
             min_tests = pkg.get("min-tests", 0)
-            if not isinstance(min_tests, int) or min_tests < 0:
-                errors.append(f"[{name}] min-tests must be a non-negative integer")
-            elif min_tests == 0:
+            if not isinstance(min_tests, int) or min_tests <= 0:
                 errors.append(f"[{name}] required package must have min-tests > 0")
 
             timeout = pkg.get("timeout", 0)
@@ -112,28 +95,33 @@ def validate_manifest(manifest: dict) -> list[str]:
             elif len(source_hash) != 64:
                 errors.append(f"[{name}] source-hash must be 64 hex chars")
 
-            # Collect categories
-            cat_ids = pkg.get("category-ids", [])
-            if isinstance(cat_ids, list):
-                for cat in cat_ids:
-                    covered_categories.add(cat)
+            # Collect categories from release-blocking packages only
+            release_blocking = pkg.get("release-blocking", False)
+            if release_blocking:
+                cat_ids = pkg.get("category-ids", [])
+                if isinstance(cat_ids, list):
+                    for cat in cat_ids:
+                        covered_categories.add(cat)
 
-    # Check required categories are covered by required packages
-    missing_categories = REQUIRED_STAGE_C_CATEGORIES - covered_categories
-    if missing_categories:
-        # Only warn for categories only covered by informational packages
-        # These are still tracked in the manifest but don't block the matrix
-        print(
-            f"WARNING: categories not covered by required packages: "
-            f"{', '.join(sorted(missing_categories))}",
-            file=sys.stderr,
-        )
+    # Categories covered by non-package jobs (API oracles, etc.)
+    _NON_PACKAGE_CATEGORIES = {"contract-tests"}
+
+    # Check required categories are covered by release-blocking packages
+    # or by known non-package producers
+    cat_errors = validate_category_coverage(
+        covered_categories, non_package_categories=_NON_PACKAGE_CATEGORIES
+    )
+    errors.extend(cat_errors)
 
     return errors
 
 
 def generate_matrix(manifest: dict) -> dict:
-    """Generate the GitHub Actions matrix from the manifest."""
+    """Generate the GitHub Actions matrix from the manifest.
+
+    Output contains only identifiers and scalar fields.
+    Test commands and dependency details are resolved by the runner.
+    """
     packages = manifest.get("package", [])
     include = []
 
@@ -142,22 +130,16 @@ def generate_matrix(manifest: dict) -> dict:
         if usage != "required":
             continue
 
-        entry = {
-            "package": pkg["name"],
-            "version": pkg.get("version", ""),
-            "source-locator": pkg.get("source-locator", ""),
-            "source-hash": pkg.get("source-hash", ""),
-            "source-type": pkg.get("source-type", ""),
-            "test-command": pkg.get("test-command", ""),
-            "min-tests": pkg.get("min-tests", 0),
-            "category-ids": pkg.get("category-ids", []),
-            "timeout": pkg.get("timeout", 180),
-        }
+        release_blocking = pkg.get("release-blocking", False)
+        if not release_blocking:
+            continue
 
-        # Optional fields
-        for opt_field in ("optional-deps", "known-incompatibilities"):
-            if opt_field in pkg:
-                entry[opt_field] = pkg[opt_field]
+        entry = {
+            "package_id": pkg["name"],
+            "version": pkg.get("version", ""),
+            "source_sha256": pkg.get("source-hash", ""),
+            "timeout_seconds": pkg.get("timeout", 180),
+        }
 
         include.append(entry)
 
@@ -165,7 +147,7 @@ def generate_matrix(manifest: dict) -> dict:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """Build the argument parser for workflow validation tests."""
+    """Build the argument parser."""
     parser = argparse.ArgumentParser(
         prog="generate_downstream_matrix.py",
         description="Generate downstream test matrix from manifest.toml",
@@ -211,10 +193,10 @@ def main() -> None:
     print(f"Matrix written to {output_path}")
     print(f"  entries: {len(matrix['include'])}")
     for entry in matrix["include"]:
-        print(f"    {entry['package']}=={entry['version']} ({', '.join(entry['category-ids'])})")
+        print(f"    {entry['package_id']}=={entry['version']}")
 
-    # Also output to stdout for GitHub Actions $GITHUB_OUTPUT consumption
-    print(f"\n::set-output name=matrix::{json.dumps(matrix)}")
+    # Compact single-line JSON for $GITHUB_OUTPUT
+    print(json.dumps(matrix, separators=(',', ':')))
 
 
 if __name__ == "__main__":

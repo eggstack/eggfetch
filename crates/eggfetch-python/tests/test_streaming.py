@@ -10,6 +10,8 @@ import pytest
 
 import eggfetch
 
+from conftest import _ThreadingHTTPServer
+
 
 # ---------------------------------------------------------------------------
 # Local test server
@@ -150,7 +152,7 @@ class _StreamingHandler(http.server.BaseHTTPRequestHandler):
 
 @pytest.fixture(scope="module")
 def server():
-    srv = http.server.HTTPServer(("127.0.0.1", 0), _StreamingHandler)
+    srv = _ThreadingHTTPServer(("127.0.0.1", 0), _StreamingHandler)
     port = srv.server_address[1]
     t = threading.Thread(target=srv.serve_forever, daemon=True)
     t.start()

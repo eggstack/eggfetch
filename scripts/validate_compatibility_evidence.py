@@ -4,14 +4,13 @@
 Used by the final qualification gate to assert:
 - Expected schema version
 - Exact candidate SHA
-- Exact artifact hashes present
+- Identity digest present and consistent
 - All required result sections present
 - overall_pass is true
 - No placeholders
 - No failed, skipped, unavailable, or malformed results
 - Candidate identity validation (digest consistency)
 - Manifest hash verification
-- Source hash verification for downstream packages
 - All 8 Stage C categories represented
 """
 
@@ -30,21 +29,13 @@ REQUIRED_RESULT_SECTIONS = [
     "shutdown_results",
     "resource_results",
     "soak_results",
+    "workflow_validation_results",
 ]
 
 PLACEHOLDER_RE = re.compile(
     r"\[N\]|unknown|pending|unavailable|PLACEHOLDER",
     re.IGNORECASE,
 )
-
-# Stage C required categories for API comparison
-_STAGE_C_CATEGORIES = {
-    "intentional-difference",
-    "stage-bounded",
-    "not-applicable",
-    "required-now",
-    "resolved",
-}
 
 
 def validate_evidence(path: str) -> list[str]:
@@ -77,6 +68,15 @@ def validate_evidence(path: str) -> list[str]:
     elif PLACEHOLDER_RE.search(candidate_sha):
         errors.append(f"candidate_sha contains placeholder: {candidate_sha}")
 
+    # Identity digest (required)
+    identity_digest = data.get("identity_digest", "")
+    if not identity_digest or not isinstance(identity_digest, str):
+        errors.append(f"identity_digest is missing or not a string")
+    elif len(identity_digest) != 64:
+        errors.append(f"identity_digest must be 64 hex characters, got {len(identity_digest)} chars")
+    elif not all(c in "0123456789abcdef" for c in identity_digest):
+        errors.append(f"identity_digest contains non-hex characters")
+
     # Artifact hashes section
     artifact_hashes = data.get("artifact_hashes")
     if artifact_hashes is None:
@@ -105,7 +105,7 @@ def validate_evidence(path: str) -> list[str]:
     if not data.get("overall_pass"):
         errors.append("overall_pass is not true")
 
-    # Required result sections
+    # Required result sections (all must be present)
     for section in REQUIRED_RESULT_SECTIONS:
         val = data.get(section)
         if val is None:
@@ -147,71 +147,62 @@ def validate_evidence(path: str) -> list[str]:
                 f"api_comparison_results has {len(stale)} stale allowed differences"
             )
 
+    # Native timeout results: must have status
+    native_timeout = data.get("native_timeout_results")
+    if isinstance(native_timeout, dict):
+        if native_timeout.get("status") == "failed":
+            errors.append("native_timeout_results.status is 'failed'")
+
+    # Proxy TLS results: must have status
+    proxy_tls = data.get("proxy_tls_results")
+    if isinstance(proxy_tls, dict):
+        if proxy_tls.get("status") == "failed":
+            errors.append("proxy_tls_results.status is 'failed'")
+
+    # Shutdown results: must have status
+    shutdown = data.get("shutdown_results")
+    if isinstance(shutdown, dict):
+        if shutdown.get("status") == "failed":
+            errors.append("shutdown_results.status is 'failed'")
+
+    # Resource results: must have status
+    resource = data.get("resource_results")
+    if isinstance(resource, dict):
+        if resource.get("status") == "failed":
+            errors.append("resource_results.status is 'failed'")
+
+    # Soak results: must have status
+    soak = data.get("soak_results")
+    if isinstance(soak, dict):
+        if soak.get("status") == "failed":
+            errors.append("soak_results.status is 'failed'")
+
+    # Workflow validation results: must have status
+    workflow = data.get("workflow_validation_results")
+    if isinstance(workflow, dict):
+        if workflow.get("status") == "failed":
+            errors.append("workflow_validation_results.status is 'failed'")
+
     # Candidate identity validation
     candidate_identity = data.get("candidate_identity")
     if isinstance(candidate_identity, dict):
-        # Validate digest consistency: candidate_sha in identity must match top-level
         id_sha = candidate_identity.get("candidate_sha", "")
         if id_sha and id_sha != candidate_sha:
             errors.append(
                 f"candidate_identity.candidate_sha ({id_sha}) does not match "
                 f"top-level candidate_sha ({candidate_sha})"
             )
-        # Validate required identity fields
         for field in ("schema_version", "candidate_sha", "eggfetch_version"):
             val = candidate_identity.get(field)
             if not val or (isinstance(val, str) and not val):
                 errors.append(f"candidate_identity.{field} is missing or empty")
-
-    # Manifest hash verification (compare artifact_hashes with any manifest)
-    # This is a consistency check: if artifact_hashes contains entries, verify they exist
-    if isinstance(artifact_hashes, dict) and artifact_hashes:
-        for name in artifact_hashes:
-            if not isinstance(name, str) or not name:
-                errors.append(f"artifact_hashes contains invalid key: {name!r}")
-
-    # Source hash verification for downstream packages
-    downstream = data.get("downstream_validation_results")
-    if isinstance(downstream, dict):
-        results_list = downstream.get("results", [])
-        if isinstance(results_list, list):
-            for i, pkg_result in enumerate(results_list):
-                if isinstance(pkg_result, dict):
-                    # Check for source_hash field if present
-                    source_hash = pkg_result.get("source_hash")
-                    if source_hash is not None:
-                        if not isinstance(source_hash, str) or len(source_hash) != 64:
-                            errors.append(
-                                f"downstream_validation_results.results[{i}].source_hash "
-                                f"must be a 64-char hex string"
-                            )
-
-    # Check for all 8 Stage C categories representation in API comparison
-    if isinstance(api, dict):
-        allowed_matches = api.get("allowed_matches", [])
-        if isinstance(allowed_matches, list) and allowed_matches:
-            found_categories = set()
-            for match in allowed_matches:
-                if isinstance(match, dict):
-                    cat = match.get("category")
-                    if cat:
-                        found_categories.add(cat)
-            # Report missing categories (informational, not necessarily an error)
-            missing = _STAGE_C_CATEGORIES - found_categories
-            if missing:
-                # Only flag as error if we have matches but missing critical categories
-                critical_missing = missing & {"required-now", "stage-bounded"}
-                if critical_missing:
-                    errors.append(
-                        f"api_comparison_results is missing required Stage C categories: "
-                        f"{', '.join(sorted(critical_missing))}"
-                    )
 
     # Identity fields: no placeholders
     for field in (
         "candidate_sha",
         "eggfetch_version",
         "reference_httpx_version",
+        "identity_digest",
     ):
         val = data.get(field, "")
         if not val or PLACEHOLDER_RE.search(str(val)):

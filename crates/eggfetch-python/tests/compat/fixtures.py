@@ -8,6 +8,7 @@ import base64
 import gzip
 import http.server
 import json
+import socketserver
 import threading
 import urllib.parse
 from dataclasses import dataclass, field
@@ -358,9 +359,13 @@ class CompatTestHandler(http.server.BaseHTTPRequestHandler):
         pass
 
 
+class _ThreadedHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
+    daemon_threads = True
+
+
 def create_server():
     """Create and start a test server, returning the base URL."""
-    server = http.server.HTTPServer(("127.0.0.1", 0), CompatTestHandler)
+    server = _ThreadedHTTPServer(("127.0.0.1", 0), CompatTestHandler)
     port = server.server_address[1]
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()

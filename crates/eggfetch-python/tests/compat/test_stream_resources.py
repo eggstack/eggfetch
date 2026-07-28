@@ -9,6 +9,7 @@ H1-H3: Stress — reference stream server, thread count assertions.
 import asyncio
 import io
 import os
+import socketserver
 import tempfile
 import threading
 
@@ -75,9 +76,13 @@ class _EchoHandler(http.server.BaseHTTPRequestHandler):
         pass
 
 
+class _ThreadedHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
+    daemon_threads = True
+
+
 @pytest.fixture(scope="module")
 def server():
-    srv = http.server.HTTPServer(("127.0.0.1", 0), _EchoHandler)
+    srv = _ThreadedHTTPServer(("127.0.0.1", 0), _EchoHandler)
     port = srv.server_address[1]
     t = threading.Thread(target=srv.serve_forever, daemon=True)
     t.start()
@@ -258,27 +263,21 @@ class TestThreadEnvelopes:
             f"Thread leak: started with {initial_threads}, now {final_threads}"
         )
 
-    def test_concurrent_sync_reads(self, server):
-        """Multiple sync reads from different threads work correctly."""
-        results = []
+    @pytest.mark.timeout(60)
+    @pytest.mark.asyncio
+    async def test_concurrent_async_reads(self, server):
+        """Multiple concurrent async reads complete without blocking.
 
-        def do_request():
-            try:
-                with Client(timeout=10.0) as client:
-                    resp = client.get(f"{server}/hello")
-                    results.append(resp.content)
-            except Exception:
-                pass
-
-        threads = [threading.Thread(target=do_request) for _ in range(5)]
-        for t in threads:
-            t.start()
-        for t in threads:
-            t.join(timeout=30)
-
-        # At least 1/5 should succeed — full concurrency depends on CI resources
-        assert len(results) >= 1, (
-            f"Expected at least 1 concurrent result, got {len(results)}"
-        )
+        The sync interface blocks each OS thread on the async runtime,
+        making true concurrency impossible when multiple threads share the
+        runtime.  This async version uses ``asyncio.gather`` to exercise
+        the real concurrency path and prove the threaded test server
+        handles parallel requests.
+        """
+        async with AsyncClient(timeout=30.0) as client:
+            results = await asyncio.gather(
+                *(client.get(f"{server}/hello") for _ in range(5))
+            )
+        assert len(results) == 5
         for r in results:
-            assert r == b"hello world"
+            assert r.content == b"hello world"
