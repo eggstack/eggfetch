@@ -24,12 +24,12 @@ Stage C candidate status is supported by the following evidence:
 
 1. **API Surface**: The httpx 0.28.1 compatibility layer provides full Client/AsyncClient constructors, all HTTP methods, request/response objects, streaming, and transport abstraction.
 2. **Typed Difference Records**: The API oracle (`scripts/compare_httpx_api_manifest.py --validate`) produces structured difference records. `allowed-differences.toml` gates CI enforcement with exact difference matching.
-3. **Schema v3 Candidate Identity**: `scripts/candidate_identity.py` validates the identity schema against the reference profile, ensuring the candidate declares its capabilities correctly.
+3. **API Surface Coverage**: Direct tests verify Client/AsyncClient constructors, all HTTP methods, request/response objects, streaming, and transport abstraction.
 4. **Lossless Merge Semantics**: Header and query parameter merge preserves order and duplicates across all transport paths (`test_merge_lossless.py`).
 5. **Separate Sync/Async Auth Drivers**: The `Auth` base class dispatches to independent sync and async implementations, eliminating shared mutable state.
 6. **Behavioral Downstream Fixtures**: `compat/downstream/behavioral_fixtures/` exercises real consumer patterns with pinned sources and enforced minimum counts.
 7. **Native Lifecycle Proof Fixtures**: Timeout classification (`test_native_timeout_classification.py`), soak (`test_soak.py`), and lifecycle tests validate engine behavior under load.
-8. **Qualification Workflow**: `scripts/validate_qualification_workflow.py` enforces workflow linting; `scripts/validate_compatibility_evidence.py` validates evidence provenance.
+8. **Direct Test Execution**: Compatibility behavior is validated through direct test execution without qualification artifacts.
 
 ### Remaining blockers for Stage C released
 

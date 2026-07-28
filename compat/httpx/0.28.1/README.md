@@ -36,23 +36,7 @@ Compare manifests:
 python scripts/compare_httpx_api_manifest.py \
   --reference compat/httpx/0.28.1/reference-api.json \
   --candidate /tmp/eggfetch.json \
-  --allowed compat/httpx/0.28.1/allowed-differences.toml \
-  --resolved compat/httpx/0.28.1/resolved-differences.toml \
-  --artifact-manifest /tmp/artifact-manifest.json \
-  --candidate-identity /tmp/candidate-identity.json
-```
-
-Validate qualification workflow and evidence:
-```bash
-python scripts/validate_qualification_workflow.py
-python scripts/validate_compatibility_evidence.py evidence.json
-python scripts/candidate_identity.py identity.json
-```
-
-Normalize pytest results and generate artifact manifest:
-```bash
-python scripts/normalize_pytest_result.py --input /tmp/test-results.json --output /tmp/test-results-contract.json
-python scripts/generate_artifact_manifest.py --wheel dist/*.whl --output /tmp/artifact-manifest.json
+  --allowed compat/httpx/0.28.1/allowed-differences.toml
 ```
 
 ## Categories

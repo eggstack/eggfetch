@@ -113,10 +113,7 @@ python scripts/generate_httpx_api_manifest.py --package eggfetch --output /tmp/e
 python scripts/compare_httpx_api_manifest.py \
   --reference /tmp/httpx.json \
   --candidate /tmp/eggfetch.json \
-  --allowed compat/httpx/0.28.1/allowed-differences.toml \
-  --resolved compat/httpx/0.28.1/resolved-differences.toml \
-  --artifact-manifest /tmp/artifact-manifest.json \
-  --candidate-identity /tmp/candidate-identity.json
+  --allowed compat/httpx/0.28.1/allowed-differences.toml
 ```
 
 ## Architecture Reference

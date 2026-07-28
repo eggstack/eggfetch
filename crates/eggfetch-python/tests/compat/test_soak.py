@@ -1,14 +1,8 @@
 """Soak test — bounded native request loop with policy binding.
 
-Per plan §10.7:
-- Qualification soak: bounded for normal release qualification, zero
-  unexpected errors, all scheduled operations complete.
-- Scheduled retained soak: ≥300 seconds, ≥500 completed requests,
-  same candidate identity contract.
-- The result must state which mode ran and the exact policy values.
-
-Qualification churn tests use MockTransport (zero-network, deterministic)
-for fast CI. One loopback test exercises the real TCP path for native proof.
+Measures sustained throughput and error rates over a bounded duration.
+Uses MockTransport (zero-network, deterministic) for fast CI.
+One loopback test exercises the real TCP path for native proof.
 """
 import json
 import sys

@@ -86,16 +86,6 @@ The behavior corpus grew from 24 to 29 cases in Phase 5. Parametrized tests with
 - `compat/httpx/0.28.1/upstream-test-inventory.md` — catalog of upstream tests
 - `compat/httpx/0.28.1/upstream-derived-cases.toml` — machine-readable mapping
 
-### Evidence Report Generation
-
-Phase 5 introduces automated evidence reporting:
-
-```sh
-python scripts/generate_compatibility_evidence.py
-```
-
-This produces a structured report with pass/fail status, behavior corpus results, downstream portfolio results, and performance budget adherence.
-
 ### Performance Budgets
 
 Performance budgets are defined in `compat/httpx/0.28.1/performance-budgets.toml` and enforce latency and throughput ceilings on critical paths.
