@@ -91,17 +91,12 @@ response = client.get("https://example.com")
 
 Phases 0 through 6 are implemented. The corrective closure pass applies:
 
-- **Typed API oracle with exact difference matching** — API manifest comparison produces structured difference records; `allowed-differences.toml` gates CI enforcement; `resolved-differences.toml` tracks historical entries.
+- **Typed API oracle with exact difference matching** — API manifest comparison produces structured difference records; `allowed-differences.toml` gates enforcement; `resolved-differences.toml` tracks historical entries.
 - **Lossless header and query merge** — header and query parameter merge preserves order and duplicates across all transport paths.
 - **Sync/async auth dispatch** — `Auth` base class routes to separate sync and async implementations independently.
 - **Native lifecycle proof fixtures** — timeout classification, soak, proxy, and TLS tests validate engine behavior under load with deterministic native proofs.
-- **Fail-closed downstream execution** — behavioral downstream portfolio with pinned sources, enforced minimum counts, and diagnostic codes.
-- **Exact typed API-oracle waiver governance** — structured difference records with typed tuples for CI enforcement.
-- **Versioned result contracts** — `scripts/normalize_pytest_result.py` and `scripts/generate_artifact_manifest.py` produce versioned release evidence.
-- **Candidate identity propagation** — identity manifest flows through all release-blocking artifacts.
-- **Qualification workflow with evidence validation** — `scripts/validate_qualification_workflow.py` and `scripts/validate_compatibility_evidence.py` enforce evidence provenance.
 
-The compatibility stage is **Stage C candidate** (asyncio drop-in). See [`plans/httpx-drop-in-qualification-integrity-and-native-proof-corrective-closure.md`](plans/httpx-drop-in-qualification-integrity-and-native-proof-corrective-closure.md) for the corrective closure plan and release qualification evidence.
+The compatibility stage is **Stage C candidate** (asyncio drop-in).
 
 Runtime diagnostics are available:
 
@@ -307,7 +302,6 @@ Public-API stabilization and correctness audit:
 - Client/request headers are merged before redirect security decisions. Cross-origin hops strip raw credentials and recompute only destination-matching jar cookies.
 - Request-local `cookies=` values are sent once and are not persisted in a client jar.
 - Native TLS roots are preferred; packaged Mozilla roots are used only when native roots are unavailable. Certificate or hostname verification failures never trigger fallback.
-- CI covers Ubuntu, macOS, and Windows Python 3.10–3.13, plus clean wheel smoke tests on each operating system.
 
 ### Milestone Q: Multipart and File Uploads (complete)
 
@@ -569,7 +563,13 @@ cargo doc --workspace --all-features --no-deps
 
 ### CI
 
-CI runs format, clippy, and test checks on pushes and pull requests to `main`. The Required CI Gate is a mandatory merge prerequisite.
+CI runs format, clippy, and test checks on pushes and pull requests to `main`. It is a fast regression safety net, not a release authority. See [docs/verification-policy.md](docs/verification-policy.md) for the normative verification policy.
+
+Run the same checks locally:
+
+```sh
+./scripts/check.sh
+```
 
 ### Python package
 
@@ -630,7 +630,7 @@ The minimum supported Rust version is **1.80**. This is specified in `workspace.
 
 eggfetch follows a security-hardening program covering dependencies, TLS, redirects, auth, cookies, proxies, decompression, multipart, retries, protocol handling, Python bindings, and CLI output.
 
-**Dependency auditing:** `cargo-deny` and `cargo-audit` are configured in `deny.toml` and run in CI on every push and pull request. The advisory database is checked continuously.
+**Dependency auditing:** `cargo-deny` is configured in `deny.toml`. Run `cargo deny check` locally or via `./scripts/check.sh extended`.
 
 **Secret redaction:** All `Debug`, `Display`, error, and log output redacts credentials, cookies, bearer tokens, proxy passwords, and URL userinfo. A centralized `redact` module provides `redact_headers()`, `redact_url()`, and `is_sensitive_header()` helpers with regression tests.
 

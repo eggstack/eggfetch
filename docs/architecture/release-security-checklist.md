@@ -109,22 +109,18 @@ This checklist must be completed before any release of eggfetch. Each item has a
 
 ## Release Process
 
-- [ ] Release branch created from main
 - [ ] Version bumped in `Cargo.toml` files
 - [ ] Release notes drafted with security-relevant changes highlighted
 - [ ] Advisory drafted (if applicable) with affected versions, fixed version, severity, and mitigation
 - [ ] CVE/GHSA requested (if applicable) via GitHub Security Advisory
 - [ ] Reporter notified (if applicable) with 7-day advance notice before public disclosure
-- [ ] Dry-run workflow_dispatch with `candidate_sha` and `dry_run=true` completes successfully
-- [ ] `verify-no-side-effects` job confirms no publishing or repository mutations in dry run
-- [ ] Evidence manifest (`release-evidence.json`) generated and reports overall pass
+- [ ] `./scripts/check.sh` passes
+- [ ] `./scripts/check.sh package` passes
+- [ ] Package contents reviewed
 
 ## Release Artifacts
 
-- [ ] Python wheels built for all declared platforms and Python versions
-- [ ] CLI binaries built for all declared platforms
-- [ ] SHA256 checksums generated for all binary artifacts
-- [ ] Wheel and CLI artifacts smoke-tested in clean environments
-- [ ] crates.io packages pass `cargo package --list` verification
-- [ ] GitHub Release created with release notes from CHANGELOG
-- [ ] Post-release install tests pass from crates.io and PyPI
+- [ ] crates.io packages published in dependency order
+- [ ] Python wheels built and published (if applicable)
+- [ ] Version tag created and pushed
+- [ ] GitHub Release created with release notes from CHANGELOG (optional)

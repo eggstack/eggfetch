@@ -100,9 +100,9 @@ eggfetch targets HTTPX 0.28.1 compatibility in phases. The current status:
 - **Phase 3**: Streaming and bodies, byte streams, chunk size support, request streaming, multipart passthrough
 - **Phase 4**: Transports, mounts, auth, hooks, WSGI/ASGI
 - **Phase 5**: Downstream validation, 12-package consumer portfolio, expanded behavior corpus, upstream test inventory, evidence reporting, performance budgets, compatibility-stage decision (Stage C)
-- **Phase 6 / Qualification Pass**: Schema v3 candidate identity, typed difference records in API oracle, lossless merge semantics, separate sync/async auth drivers, behavioral downstream fixtures, native lifecycle proof fixtures, qualification workflow with evidence validation
+- **Phase 6 / Corrective Closure**: Typed difference records in API oracle, lossless merge semantics, separate sync/async auth drivers, behavioral downstream fixtures, native lifecycle proof fixtures
 
-**Current status: Stage C candidate** (asyncio drop-in). The corrective closure pass applies typed difference records, lossless merge semantics, native lifecycle proof fixtures (including proxy and TLS), versioned result contracts, and candidate identity propagation. See `scripts/candidate_identity.py`, `scripts/validate_qualification_workflow.py`, `scripts/validate_compatibility_evidence.py`, `scripts/normalize_pytest_result.py`, and `scripts/generate_artifact_manifest.py` for the validation toolchain.
+**Current status: Stage C candidate** (asyncio drop-in). The corrective closure pass applies typed difference records, lossless merge semantics, native lifecycle proof fixtures (including proxy and TLS), and behavioral downstream fixtures. See `scripts/compare_httpx_api_manifest.py` for the API comparison tool.
 
 See `compat/httpx/0.28.1/` for the machine-readable profile and allowed differences.
 

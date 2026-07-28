@@ -84,16 +84,12 @@ from eggfetch.compat.httpx import Client, AsyncClient, Request, Response
 **Phase 5 implements:**
 - Downstream validation, expanded behavior corpus (29 cases), upstream HTTPX test inventory (36 derived cases), evidence report generation, compatibility-stage decision (Stage C justified)
 
-**Phase 6 / Qualification Pass implements:**
-- Schema v3 candidate identity (`scripts/candidate_identity.py`)
+**Phase 6 / Corrective Closure implements:**
 - Typed difference records in API oracle (`scripts/compare_httpx_api_manifest.py --validate`)
 - Lossless merge semantics (`crates/eggfetch-python/tests/compat/test_merge_lossless.py`)
 - Separate sync/async auth drivers
 - Behavioral downstream fixtures (`compat/downstream/behavioral_fixtures/`)
 - Native lifecycle proof fixtures (`test_native_timeout_classification.py`, `test_soak.py`, proxy and TLS tests)
-- Qualification workflow validation (`scripts/validate_qualification_workflow.py`)
-- Evidence validation (`scripts/validate_compatibility_evidence.py`)
-- Versioned result contracts (`scripts/normalize_pytest_result.py`, `scripts/generate_artifact_manifest.py`)
 
 **Testing the compat layer:**
 

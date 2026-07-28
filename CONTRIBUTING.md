@@ -147,10 +147,8 @@ If you find yourself writing HTTP logic outside of eggfetch-core, stop and refac
 
 ## Working Context
 
-All milestones (A through Z) are complete. The workspace is in production-maintenance mode. Before starting work, read `plans/ROADMAP.md` for the full project history and any planned future work. Make the workspace build green before adding new functionality. Format before committing.
+All milestones (A through Z) are complete. The workspace is in production-maintenance mode. Before starting work, read `plans/ROADMAP.md` for the full project history and any planned future work. Make the workspace build green before adding new functionality. Run `./scripts/check.sh` before committing.
 
 ## CI
 
-Actions run on pushes and pull requests to `main` for informational visibility.
-CI runs format, clippy, and test checks. It is not a merge gate — verify
-locally before committing.
+Actions run on pushes and pull requests to `main` as a fast regression safety net. CI repeats the same `./scripts/check.sh` command on Ubuntu. It is not a release authority. Verify locally before committing.

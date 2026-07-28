@@ -8,7 +8,7 @@ cargo fmt --all
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo test --workspace --all-features
 
-# Feature matrix validation (used in CI)
+# Feature matrix validation
 cargo check -p eggfetch-core --no-default-features
 cargo check -p eggfetch-core --no-default-features --features http1,tls-rustls
 cargo check -p eggfetch-core --all-features
@@ -36,55 +36,8 @@ python scripts/compare_httpx_api_manifest.py \
 cargo build --release -p eggfetch-bench --bin resource_monitor
 ./target/release/resource_monitor
 
-# Release manifest generation
-python scripts/generate_release_manifest.py --output compatibility-manifest.json
-
 # Package content validation
 python scripts/validate_package_content.py path/to/wheel.whl
-
-# Evidence and qualification validation
-python scripts/validate_compatibility_evidence.py evidence.json
-python scripts/validate_qualification_workflow.py .github/workflows/qualification.yml
-python scripts/candidate_identity.py validate identity.json
-
-# Artifact normalization (candidate bundle)
-python scripts/generate_artifact_manifest.py generate \
-  --eggfetch-wheel /tmp/source-wheels/eggfetch-*.whl \
-  --httpx-replacement-wheel /tmp/source-wheels/httpx-*.whl \
-  --candidate-sha <sha> --run-id <id> --run-attempt <n> \
-  --bundle-dir /tmp/candidate-bundle \
-  --output /tmp/candidate-bundle/artifact-manifest.json
-python scripts/candidate_identity.py generate \
-  --artifact-manifest /tmp/candidate-bundle/artifact-manifest.json \
-  --candidate-sha <sha> --run-id <id> --run-attempt <n> \
-  --output /tmp/candidate-bundle/candidate-identity.json
-
-# Validate candidate bundle
-python scripts/generate_artifact_manifest.py validate \
-  --manifest /tmp/candidate-bundle/artifact-manifest.json \
-  --bundle-root /tmp/candidate-bundle \
-  --expected-sha <sha>
-
-# Downstream matrix generation
-python scripts/generate_downstream_matrix.py \
-  --manifest compat/downstream/manifest.toml \
-  --output /tmp/downstream-matrix.json
-
-# Downstream matrix validation (fail-closed)
-python scripts/generate_downstream_matrix.py \
-  --manifest compat/downstream/manifest.toml \
-  --validate-only \
-  --output /dev/null
-
-# API oracle with typed differences
-python scripts/compare_httpx_api_manifest.py \
-  --reference compat/httpx/0.28.1/reference-api.json \
-  --candidate /tmp/eggfetch-api.json \
-  --allowed compat/httpx/0.28.1/allowed-differences.toml \
-  --resolved compat/httpx/0.28.1/resolved-differences.toml \
-  --candidate-identity /tmp/candidate-identity.json \
-  --suite facade-api-oracle \
-  --json --output /tmp/api-result.json
 
 # Lossless merge tests
 python -m pytest crates/eggfetch-python/tests/compat/test_merge_lossless.py -v
@@ -102,7 +55,15 @@ python -m pytest crates/eggfetch-python/tests/compat/test_native_proxy_tls.py -v
 python -m pytest crates/eggfetch-python/tests/compat/test_shutdown.py -v --timeout=60
 ```
 
-CI enforces `RUSTFLAGS=-D warnings`. MSRV is Rust 1.80.
+## Validation Tiers
+
+| Tier | Command | When |
+|------|---------|------|
+| Routine | `./scripts/check.sh` | Every commit, CI |
+| Extended | `./scripts/check.sh extended` | Before release, manual |
+| Package | `./scripts/check.sh package` | Before publish, manual |
+
+CI repeats Tier 1 on Ubuntu for every push/PR. See `docs/verification-policy.md`.
 
 ## Skills
 
@@ -135,7 +96,6 @@ eggfetch-core owns all HTTP behavior. CLI and Python are thin adapters.
 - `missing_docs = "warn"`, `missing-docs-in-crate-items = true`.
 - Never use `#![allow(warnings)]`, `#![allow(clippy::all)]`, or `#![allow(clippy::pedantic)]`. CI rejects these via `scripts/check_lint_suppressions.sh`.
 - Use specific lint names. Justify suppressions with a comment.
-- CI runs format, clippy, and test checks on pushes and pull requests. The Required CI Gate is a mandatory merge prerequisite.
 
 ## Feature Flags
 
@@ -155,16 +115,11 @@ from eggfetch.compat.httpx import Client, AsyncClient, Request, Response, URL, H
 
 The compatibility stage is **Stage C candidate** (asyncio drop-in). The corrective closure pass applies:
 
-- **Schema v4 candidate identity** — `scripts/candidate_identity.py generate|validate` produces and validates identity records with computed identity_digest and artifact_manifest_sha256 binding.
-- **Typed difference records** — API oracle produces structured difference records; `allowed-differences.toml` gates CI enforcement; `resolved-differences.toml` tracks historical/behavioral entries separate from the active allowlist.
+- **Typed difference records** — API oracle produces structured difference records; `allowed-differences.toml` gates enforcement; `resolved-differences.toml` tracks historical/behavioral entries separate from the active allowlist.
 - **Lossless merge semantics** — header and query parameter merge preserves order and duplicates across transports.
 - **Separate sync/async auth drivers** — `Auth` base class dispatches to sync and async implementations independently.
 - **Behavioral downstream fixtures** — `compat/downstream/behavioral_fixtures/` exercises real consumer patterns.
 - **Native lifecycle proof fixtures** — timeout classification, soak, proxy, and TLS tests validate engine behavior under load.
-- **Versioned result contracts** — `scripts/normalize_pytest_result.py` converts pytest output to versioned contracts; `scripts/generate_artifact_manifest.py` (schema v3) normalizes wheel artifacts into candidate bundles; `scripts/candidate_identity.py` (schema v4) binds identity to manifest digest.
-- **Candidate identity propagation** — identity manifest flows through all release-blocking artifacts via `--candidate-identity` flag.
-- **Manifest-authoritative downstream matrix** — `scripts/generate_downstream_matrix.py` generates the CI matrix from `compat/downstream/manifest.toml`.
-- **Fail-closed qualification gate** — all required jobs must succeed; no failure suppression on release-blocking steps.
 
 Runtime diagnostics:
 
@@ -183,14 +138,6 @@ cd crates/eggfetch-python && maturin develop
 EGGFETCH_COMPAT_REQUIRED=1 pytest crates/eggfetch-python/tests/compat/ -v --strict-markers
 ```
 
-Evidence and qualification validation:
-
-```sh
-python scripts/validate_compatibility_evidence.py evidence.json
-python scripts/validate_qualification_workflow.py .github/workflows/qualification.yml
-python scripts/candidate_identity.py validate identity.json
-```
-
 API oracle with typed differences:
 
 ```sh
@@ -199,8 +146,6 @@ python scripts/compare_httpx_api_manifest.py \
   --candidate /tmp/eggfetch-api.json \
   --allowed compat/httpx/0.28.1/allowed-differences.toml \
   --resolved compat/httpx/0.28.1/resolved-differences.toml \
-  --candidate-identity /tmp/candidate-identity.json \
-  --suite facade-api-oracle \
   --json --output /tmp/api-result.json
 ```
 
@@ -213,8 +158,6 @@ python -m pytest crates/eggfetch-python/tests/compat/test_native_timeout_classif
 python -m pytest crates/eggfetch-python/tests/compat/test_native_proxy_tls.py -v --timeout=30
 python -m pytest crates/eggfetch-python/tests/compat/test_shutdown.py -v --timeout=60
 ```
-
-See `plans/httpx-drop-in-exact-sha-qualification-execution-and-evidence-closure.md` for the exact-SHA qualification execution closure plan.
 
 ## Tests
 
@@ -233,27 +176,26 @@ cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,ht
 
 The HTTPX compatibility test suite lives in `crates/eggfetch-python/tests/compat/` and requires `httpx==0.28.1`. Run with `EGGFETCH_COMPAT_REQUIRED=1` for fail-closed behavior. The compatibility profile is in `compat/httpx/0.28.1/`.
 
-CI matrix: Python 3.10-3.13 on Ubuntu, macOS, Windows. CI must install `pytest-asyncio` explicitly.
-
 ## Security
 
 - `deny.toml` configures cargo-deny (advisories, licenses, bans, sources).
-- `.github/workflows/security.yml` runs cargo-deny and cargo-audit on every push/PR.
 - All Debug/Display/error output must redact secrets via `eggfetch_core::redact`.
 - See `SECURITY.md` and `docs/architecture/threat-model.md`.
 
 ## Release
 
+Release timing and crates.io publication are manual maintainer actions. GitHub Actions does not publish packages.
+
 Coordinated versioning across all publishable crates (core, CLI, Python, FFI, Node). Bench and fuzz crates are not published.
 
-Publishing order: eggfetch-core → eggfetch-cli → eggfetch-ffi → eggfetch-python → eggfetch-node (crates.io index propagation requires waits).
+Publishing order: eggfetch-core → eggfetch-cli → eggfetch-ffi → eggfetch-python → eggfetch-node.
 
 See `docs/releases/process.md` and `docs/releases/compatibility-policy.md`.
 
 ## Working Style
 
 - Make the workspace build green before adding new functionality.
-- CI runs on pushes and pull requests. It is informational — verify locally before committing.
+- Run `./scripts/check.sh` before committing.
 - Keep commits scoped to a single logical change.
 - Do not commit without an explicit user request.
 - Public items need doc comments. For skeletal types, state which milestone fills in the real implementation.
@@ -261,3 +203,5 @@ See `docs/releases/process.md` and `docs/releases/compatibility-policy.md`.
 ## Safety
 
 Do not add `unsafe`. Workspace uses `unsafe_code = "forbid"`. If you think you need `unsafe`, stop and ask.
+
+> Do not add CI jobs, matrices, evidence formats, release workflows, or publication automation without an explicit user request. Prefer direct tests in the existing local check path.

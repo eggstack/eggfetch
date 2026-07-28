@@ -46,16 +46,13 @@ cargo check -p eggfetch-core --all-features
 - Feature flags: `docs/architecture/feature-flags.md`
 - Dependency policy: `docs/architecture/dependency-policy.md`
 
-## HTTPX Compatibility Qualification
+## HTTPX Compatibility
 
-When working on the compatibility layer or qualification pass:
+When working on the compatibility layer:
 
-- **Identity schema**: `scripts/candidate_identity.py` validates schema v3 candidate identity against the reference profile.
-- **Evidence validation**: `scripts/validate_compatibility_evidence.py` checks evidence provenance and structure.
-- **Qualification workflow**: `scripts/validate_qualification_workflow.py` enforces workflow linting rules.
 - **Typed API oracle**: `scripts/compare_httpx_api_manifest.py --validate` produces structured difference records gated by `allowed-differences.toml`.
 
-### Qualification test files
+### Compatibility test files
 
 ```sh
 # Lossless merge semantics

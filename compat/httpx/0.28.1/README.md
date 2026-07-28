@@ -66,4 +66,4 @@ python scripts/generate_artifact_manifest.py --wheel dist/*.whl --output /tmp/ar
 
 ## Status
 
-This profile targets HTTPX 0.28.1. The compatibility stage is **Stage C candidate**. The corrective closure pass applies typed difference records, lossless merge semantics, native lifecycle proof fixtures, versioned result contracts, and candidate identity propagation. See `scripts/validate_qualification_workflow.py` and `scripts/validate_compatibility_evidence.py` for the evidence validation toolchain.
+This profile targets HTTPX 0.28.1. The compatibility stage is **Stage C candidate**. The corrective closure pass applies typed difference records, lossless merge semantics, native lifecycle proof fixtures, and behavioral downstream fixtures.

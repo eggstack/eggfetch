@@ -43,8 +43,8 @@ The following must be resolved before restoring a release claim:
 6. Repeated query parameters and duplicate headers must survive all transport paths
 7. Explicit per-request `timeout=None` must be distinguishable from client default
 8. Python 3.10 required compatibility suite must run without skips
-9. Exact-SHA qualification must verify a green `Required CI Gate`
-10. Evidence must be generated solely from retained result artifacts
+9. Direct compatibility tests must pass against pinned HTTPX version
+10. Behavioral correctness must be validated through direct test execution
 
 ## Blockers to Stage D
 

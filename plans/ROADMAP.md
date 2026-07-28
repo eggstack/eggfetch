@@ -1,5 +1,7 @@
 # eggfetch Revised Roadmap
 
+> **Note:** Completed plan files in this directory are historical records, not active CI, verification, or release requirements. The normative verification and release policy is in `docs/verification-policy.md` and `docs/releases/process.md`.
+
 ## Purpose
 
 eggfetch is a Rust-native HTTP client platform with Python bindings and a CLI layered on top of a single async engine. The project has completed its initial architectural and MVP-construction phase: the Rust core, Python sync and async APIs, response compatibility surface, common request body handling, redirects, streaming foundations, timeouts, pooling, HTTP/2, and HTTP/3 (experimental) are all in place.
