@@ -32,7 +32,7 @@ Version numbers follow [Semantic Versioning](https://semver.org/). Until 1.0, mi
    ./scripts/check.sh package
    ```
 
-   Package validation is fail-closed: crate dry-runs, wheel build, wheel smoke, and content validation all must pass. Crate dry-runs for dependent crates (`eggfetch-cli`, `eggfetch-ffi`, `eggfetch-python`, `eggfetch-node`) use `cargo package` because their internal dependencies are not yet on crates.io. Run `cargo publish --dry-run -p <crate>` for each dependent crate immediately before its real publication, after its dependencies are visible in the registry.
+   Package validation is fail-closed: crate packaging, wheel build, wheel smoke, and content validation all must pass. `eggfetch-core` gets a full `cargo publish --dry-run` since it has no internal dependencies. Dependent crates (`eggfetch-cli`, `eggfetch-ffi`, `eggfetch-python`, `eggfetch-node`) use `cargo package --no-verify` to validate package structure and metadata only, because their internal dependencies are not yet on crates.io. Full build verification for dependent crates happens at publication time via `cargo publish --dry-run -p <crate>` immediately before each crate's real publication, after its dependencies are visible in the registry.
 
 7. **Review package contents** for changed packaging surfaces.
 8. **Confirm credentials exist only in your local Cargo configuration or temporary environment.**
