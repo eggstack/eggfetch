@@ -416,6 +416,15 @@ def run_tests(venv_dir: Path, pkg: dict, timeout: int) -> subprocess.CompletedPr
         test_command = test_command.replace(" --co", "").replace(" --collect-only", "")
         if "--tb=short" not in test_command:
             test_command = test_command.replace("pytest ", "pytest --tb=short -q ", 1)
+        # Convert relative test file paths to absolute using repo root
+        repo_root = str(Path.cwd())
+        parts = test_command.split()
+        for i, part in enumerate(parts):
+            if part.endswith(".py") and not part.startswith("/"):
+                abs_path = os.path.join(repo_root, part)
+                if os.path.exists(abs_path):
+                    parts[i] = abs_path
+        test_command = " ".join(parts)
 
     env = os.environ.copy()
     env["http_proxy"] = ""
@@ -431,10 +440,7 @@ def run_tests(venv_dir: Path, pkg: dict, timeout: int) -> subprocess.CompletedPr
         env["PYTHONPATH"] = str(site_packages[0])
 
     # Use repo root as cwd so relative test file paths resolve
-    repo_root = MANIFEST_PATH.parent.parent
-
-    # Use repo root as cwd so relative test file paths resolve
-    repo_root = str(MANIFEST_PATH.parent.parent)
+    repo_root = str(Path.cwd())
 
     return subprocess.run(
         test_command,
