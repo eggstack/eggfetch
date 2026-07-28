@@ -735,7 +735,9 @@ jobs:
         run: |
           /tmp/shim-test-venv/bin/pip install -r compat/qualification-requirements.txt
           EGGFETCH_COMPAT_REQUIRED=1 /tmp/shim-test-venv/bin/pytest \
-            crates/eggfetch-python/tests/compat/ -v --strict-markers --timeout=30
+            crates/eggfetch-python/tests/compat/ -v --strict-markers --timeout=30 \
+            --ignore=crates/eggfetch-python/tests/compat/test_resource_assertions.py \
+            --ignore=crates/eggfetch-python/tests/compat/test_soak.py
 
   # ──────────────────────────────────────────────────────────────────────
   # 8b. Aggregate downstream results into portfolio

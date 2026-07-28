@@ -433,7 +433,8 @@ def run_tests(venv_dir: Path, pkg: dict, timeout: int) -> subprocess.CompletedPr
 
     # Prepend outer venv bin to PATH so pytest is found, but isolated venv
     # site-packages take precedence via PYTHONPATH.
-    outer_venv_bin = Path(__file__).resolve().parent.parent.parent / ".venv" / "bin"
+    repo_root = MANIFEST_PATH.parent.parent
+    outer_venv_bin = repo_root / ".venv" / "bin"
     if not outer_venv_bin.exists():
         outer_venv_bin = venv_dir / "bin"
     path = env.get("PATH", "")
