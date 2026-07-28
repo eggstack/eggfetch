@@ -675,6 +675,7 @@ jobs:
           python compat/httpx-controlled-replacement/verify_identity.py
 
       - name: Run downstream test via runner
+        shell: bash {0}
         run: |
           source .venv/bin/activate
           python scripts/run_isolated_downstream.py \

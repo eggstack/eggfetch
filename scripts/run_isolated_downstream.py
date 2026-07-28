@@ -705,7 +705,10 @@ def main() -> int:
         # import its own dependencies. Use --no-deps to avoid pulling httpx.
         safe_transitive = []
         for dep_name in ["httpcore", "anyio", "sniffio", "idna", "certifi",
-                         "h11", "h2", "pydantic", "typing-extensions"]:
+                         "h11", "h2", "pydantic", "typing-extensions",
+                         "distro", "docstring-parser", "jiter",
+                         "pydantic-core", "typing-inspection", "annotated-types",
+                         "httpx-auth", "starlette", "anyio"]:
             if dep_name != "httpx" and dep_name not in downstream_deps:
                 safe_transitive.append(dep_name)
         if safe_transitive:
