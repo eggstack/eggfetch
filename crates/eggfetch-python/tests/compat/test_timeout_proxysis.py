@@ -248,7 +248,7 @@ class TestRealSocketTimeoutClassification:
     def test_real_proxy_server_forward(self):
         """Real local proxy server forwards requests successfully."""
         with local_http_server() as (backend_host, backend_port):
-            with local_proxy_server(backend=(backend_host, backend_port)) as (proxy_host, proxy_port):
+            with local_proxy_server(backend=(backend_host, backend_port)) as (proxy_host, proxy_port, _handler):
                 with Client(timeout=Timeout(5)) as c:
                     resp = c.get(
                         f"http://{proxy_host}:{proxy_port}/health",
