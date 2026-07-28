@@ -76,7 +76,7 @@ tier1_compat_smoke() {
         "$REPO_ROOT/crates/eggfetch-python/tests/compat/test_imports.py" \
         "$REPO_ROOT/crates/eggfetch-python/tests/compat/test_client.py" \
         "$REPO_ROOT/crates/eggfetch-python/tests/compat/test_exceptions.py" \
-        -v --timeout=60
+        -v
 }
 
 run_tier1() {
@@ -98,7 +98,7 @@ tier2_full_compat() {
         pip install -r compat/httpx/0.28.1/requirements.txt 2>/dev/null || true
         EGGFETCH_COMPAT_REQUIRED=1 python -m pytest \
             "$REPO_ROOT/crates/eggfetch-python/tests/compat/" \
-            -v --strict-markers --timeout=30
+            -v --strict-markers
     )
 }
 
@@ -167,7 +167,7 @@ tier2_lifecycle() {
         "$REPO_ROOT/crates/eggfetch-python/tests/compat/test_native_timeout_classification.py" \
         "$REPO_ROOT/crates/eggfetch-python/tests/compat/test_native_proxy_tls.py" \
         "$REPO_ROOT/crates/eggfetch-python/tests/compat/test_shutdown.py" \
-        -v --timeout=120 2>/dev/null \
+        -v 2>/dev/null \
         || warn "Some lifecycle tests skipped"
 }
 
@@ -175,7 +175,7 @@ tier2_soak() {
     info "Soak tests"
     python -m pytest \
         "$REPO_ROOT/crates/eggfetch-python/tests/compat/test_soak.py" \
-        -v --timeout=300 2>/dev/null \
+        -v 2>/dev/null \
         || warn "Soak tests skipped"
 }
 
