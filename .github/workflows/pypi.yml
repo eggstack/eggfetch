@@ -78,43 +78,51 @@ jobs:
           - os: linux
             arch: x86_64
             runner: ubuntu-latest
-            maturin-args: --manylinux 2014 --target x86_64-unknown-linux-gnu
+            maturin-args: --target x86_64-unknown-linux-gnu
+            manylinux: "2014"
             python: "3.10"
           - os: linux
             arch: x86_64
             runner: ubuntu-latest
-            maturin-args: --manylinux 2014 --target x86_64-unknown-linux-gnu
+            maturin-args: --target x86_64-unknown-linux-gnu
+            manylinux: "2014"
             python: "3.11"
           - os: linux
             arch: x86_64
             runner: ubuntu-latest
-            maturin-args: --manylinux 2014 --target x86_64-unknown-linux-gnu
+            maturin-args: --target x86_64-unknown-linux-gnu
+            manylinux: "2014"
             python: "3.12"
           - os: linux
             arch: x86_64
             runner: ubuntu-latest
-            maturin-args: --manylinux 2014 --target x86_64-unknown-linux-gnu
+            maturin-args: --target x86_64-unknown-linux-gnu
+            manylinux: "2014"
             python: "3.13"
           # Linux aarch64 (cross-build)
           - os: linux
             arch: aarch64
             runner: ubuntu-latest
-            maturin-args: --manylinux 2014 --target aarch64-unknown-linux-gnu
+            maturin-args: --target aarch64-unknown-linux-gnu
+            manylinux: "2014"
             python: "3.10"
           - os: linux
             arch: aarch64
             runner: ubuntu-latest
-            maturin-args: --manylinux 2014 --target aarch64-unknown-linux-gnu
+            maturin-args: --target aarch64-unknown-linux-gnu
+            manylinux: "2014"
             python: "3.11"
           - os: linux
             arch: aarch64
             runner: ubuntu-latest
-            maturin-args: --manylinux 2014 --target aarch64-unknown-linux-gnu
+            maturin-args: --target aarch64-unknown-linux-gnu
+            manylinux: "2014"
             python: "3.12"
           - os: linux
             arch: aarch64
             runner: ubuntu-latest
-            maturin-args: --manylinux 2014 --target aarch64-unknown-linux-gnu
+            maturin-args: --target aarch64-unknown-linux-gnu
+            manylinux: "2014"
             python: "3.13"
           # macOS x86_64
           - os: macos
@@ -195,6 +203,7 @@ jobs:
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
         with:
           args: --release --out dist ${{ matrix.maturin-args }} -i python${{ matrix.python }} -m crates/eggfetch-python/Cargo.toml
+          manylinux: ${{ matrix.manylinux || 'auto' }}
 
       - name: Verify exactly one wheel
         shell: bash
@@ -206,7 +215,8 @@ jobs:
             ls -la dist/ >&2
             exit 1
           fi
-          echo "WHEEL=$(realpath "${wheels[0]}")" >> "$GITHUB_ENV"
+          WHEEL_PATH=$(cd "$(dirname "${wheels[0]}")" && pwd)/$(basename "${wheels[0]}")
+          echo "WHEEL=$WHEEL_PATH" >> "$GITHUB_ENV"
 
       - name: Smoke test wheel
         shell: bash
@@ -312,7 +322,7 @@ jobs:
             PIP=.venv/bin/pip
           fi
           $PIP install maturin
-          $PIP wheel --no-deps --no-build-isolation "dist/$(basename $SDIST)" --wheel-dir wheels/
+          $PIP wheel --no-deps --no-build-isolation "$(basename $SDIST)" --wheel-dir wheels/
           whls=(wheels/*.whl)
           if [[ ${#whls[@]} -ne 1 ]]; then
             echo "FAIL: sdist build produced ${#whls[@]} wheels" >&2; exit 1
