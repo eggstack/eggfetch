@@ -194,8 +194,7 @@ jobs:
       - name: Build wheel
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
         with:
-          args: --release --out dist ${{ matrix.maturin-args }} --interpreter cp${{ matrix.python }}
-          manifest-path: crates/eggfetch-python/Cargo.toml
+          args: --release --out dist ${{ matrix.maturin-args }} --interpreter cp${{ matrix.python }} -m crates/eggfetch-python/Cargo.toml
 
       - name: Verify exactly one wheel
         shell: bash
@@ -207,7 +206,7 @@ jobs:
             ls -la dist/ >&2
             exit 1
           fi
-          echo "WHEEL=${wheels[0]}" >> "$GITHUB_ENV"
+          echo "WHEEL=$(realpath "${wheels[0]}")" >> "$GITHUB_ENV"
 
       - name: Smoke test wheel
         shell: bash
@@ -294,7 +293,7 @@ jobs:
             ls -la dist/ >&2
             exit 1
           fi
-          echo "SDIST=${sdists[0]}" >> "$GITHUB_ENV"
+          echo "SDIST=$(realpath "${sdists[0]}")" >> "$GITHUB_ENV"
 
       - name: Test sdist builds outside repo
         shell: bash
