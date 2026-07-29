@@ -42,7 +42,7 @@ See [verification-policy.md](../verification-policy.md) for the normative policy
 | Rust clippy | `cargo clippy --workspace --all-targets --all-features -- -D warnings` |
 | Rust tests | `cargo test --workspace --exclude eggfetch-python --all-features` |
 | Python build | `maturin develop -m crates/eggfetch-python/Cargo.toml` |
-| Python tests | `pytest crates/eggfetch-python/tests/ -q --ignore=.../compat --ignore=.../soak_test.py` |
+| Python tests | `pytest crates/eggfetch-python/tests/ -q --ignore=.../compat` |
 | HTTPX compat smoke | `pytest .../test_imports.py .../test_client.py .../test_exceptions.py` |
 
 ### Extended Validation (Tier 2)
@@ -51,7 +51,7 @@ Run `./scripts/check.sh extended` for: full HTTPX compatibility, API manifest co
 
 ### Package Validation (Tier 3)
 
-Run `./scripts/check.sh package` for: crate dry-runs (independent crates via `cargo publish --dry-run`, dependent crates via `cargo package`), wheel build, wheel smoke, and package content validation. Uses fresh temporary artifacts; stale repository wheels are never used.
+Run `./scripts/check.sh package` for: core publish dry-run (`cargo publish --dry-run -p eggfetch-core`), dependent-crate package-structure validation (`cargo package --list` plus manifest version verification for eggfetch-cli, eggfetch-ffi, eggfetch-python, eggfetch-node), wheel build, exactly-one-wheel resolution, wheel smoke, and package content validation. Uses fresh temporary artifacts; stale repository wheels are never used.
 
 ## Environment
 

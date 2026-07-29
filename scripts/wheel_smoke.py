@@ -1,7 +1,9 @@
 """Build an isolated environment, install one eggfetch wheel, and smoke-test it.
 
-Tests: buffered GET, streaming, version metadata, multipart upload, auth,
-retry on server errors, response status codes, and named exception mapping.
+Accepts either --wheel (exact path) or --wheel-dir (directory with exactly one
+compatible wheel). Tests: buffered GET, streaming, version metadata, multipart
+upload, auth, retry on server errors, response status codes, and named
+exception mapping.
 """
 
 from __future__ import annotations
@@ -131,27 +133,43 @@ class Handler(http.server.BaseHTTPRequestHandler):
         return
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--wheel-dir", type=Path, required=True)
-    args = parser.parse_args()
-
-    wheels = sorted(args.wheel_dir.glob("*.whl"))
+def _resolve_wheel(wheel_dir: Path) -> Path:
+    """Resolve exactly one compatible wheel from a directory."""
+    wheels = sorted(wheel_dir.glob("*.whl"))
     if not wheels:
-        raise SystemExit(f"no wheels found in {args.wheel_dir}")
+        raise SystemExit(f"no wheels found in {wheel_dir}")
 
-    # Filter to wheel matching the running Python version
     major, minor = sys.version_info[:2]
     cp_tag = f"cp{major}{minor}"
     matched = [w for w in wheels if cp_tag in w.name]
     if not matched:
-        # Fallback: if no cp-specific wheel, look for abi3 or py3-none-any
         matched = [w for w in wheels if "abi3" in w.name or "py3-none-any" in w.name]
     if not matched:
         raise SystemExit(
-            f"no wheel matching Python {cp_tag} in {args.wheel_dir}: {wheels}"
+            f"no wheel matching Python {cp_tag} in {wheel_dir}: {wheels}"
         )
-    wheel = matched[0]
+    if len(matched) > 1:
+        raise SystemExit(
+            f"ambiguous: {len(matched)} wheels match Python {cp_tag} in {wheel_dir}: {matched}"
+        )
+    return matched[0]
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("--wheel", type=Path, help="Exact path to a wheel file")
+    group.add_argument("--wheel-dir", type=Path, help="Directory containing exactly one compatible wheel")
+    args = parser.parse_args()
+
+    if args.wheel is not None:
+        if not args.wheel.is_file():
+            raise SystemExit(f"wheel not found: {args.wheel}")
+        if not args.wheel.name.endswith(".whl"):
+            raise SystemExit(f"not a .whl file: {args.wheel}")
+        wheel = args.wheel
+    else:
+        wheel = _resolve_wheel(args.wheel_dir)
 
     with tempfile.TemporaryDirectory(prefix="eggfetch-wheel-smoke-") as directory:
         venv_dir = Path(directory) / "venv"

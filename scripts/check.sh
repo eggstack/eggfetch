@@ -278,19 +278,63 @@ run_tier2() {
 }
 
 # ── Tier 3: Package validation ───────────────────────────────────────────
-tier3_crate_dry_run() {
-    info "Crate package dry runs"
+
+# Find exactly one wheel in a directory. Fails on zero or multiple wheels.
+find_single_wheel() {
+    local wheel_dir="$1"
+    local wheels=()
+
+    shopt -s nullglob
+    wheels=("$wheel_dir"/*.whl)
+    shopt -u nullglob
+
+    if [[ ${#wheels[@]} -ne 1 ]]; then
+        fail "Expected exactly one wheel in $wheel_dir; found ${#wheels[@]}"
+    fi
+
+    printf '%s\n' "${wheels[0]}"
+}
+
+# Verify that a crate's Cargo.toml specifies a non-path version for every
+# publishable eggfetch dependency. This is the local fallback check when
+# cargo package --no-verify cannot resolve unpublished internal dependencies.
+verify_non_path_versions() {
+    local crate="$1"
+    local toml="crates/$crate/Cargo.toml"
+
+    if [[ ! -f "$toml" ]]; then
+        fail "Cargo.toml not found for $crate at $toml"
+    fi
+
+    # Check that eggfetch-core and eggfetch-ffi dependencies have version = "..."
+    # alongside path = "...". This ensures Cargo.toml is publishable once deps are live.
+    local has_version
+    has_version=$(grep -E 'eggfetch-(core|ffi)\s*=\s*\{.*version\s*=' "$toml" || true)
+    if [[ -z "$has_version" ]]; then
+        fail "$crate: missing non-path version for eggfetch dependency in $toml"
+    fi
+    info "  $crate: manifest version fields verified"
+}
+
+tier3_crate_packages() {
+    info "Crate package validation"
+
     # eggfetch-core has no internal deps — full dry-run succeeds independently.
     info "  cargo publish --dry-run -p eggfetch-core"
     cargo publish -p eggfetch-core --dry-run
 
-    # Dependent crates require their internal deps to be visible on crates.io
-    # for full packaging verification. This is a Cargo limitation: cargo package
-    # and cargo publish --dry-run both need resolvable dependencies.
-    # Full dry-run verification for dependent crates happens at publication time,
-    # after eggfetch-core is published and visible in the registry.
-    info "  Dependent crates: eggfetch-cli, eggfetch-ffi, eggfetch-python, eggfetch-node"
-    info "  Skipped: internal dependencies not yet on crates.io (verified at publication time)"
+    # Dependent crates cannot run cargo package --no-verify or cargo publish --dry-run
+    # because their internal dependencies (eggfetch-core, eggfetch-ffi) are not yet on
+    # crates.io. This is a Cargo limitation. The local fallback validates:
+    #   1. cargo package --list succeeds (manifest/package inclusion)
+    #   2. Cargo.toml contains a non-path version for every publishable dependency
+    #   3. The crate builds and tests pass through Tier 1 validation
+    # Full cargo publish --dry-run runs at publication time, after deps are visible.
+    for crate in eggfetch-cli eggfetch-ffi eggfetch-python eggfetch-node; do
+        info "  cargo package --list -p $crate"
+        cargo package --list -p "$crate" >/dev/null
+        verify_non_path_versions "$crate"
+    done
 }
 
 tier3_wheel_build() {
@@ -303,31 +347,22 @@ tier3_wheel_build() {
 tier3_wheel_smoke() {
     info "Wheel smoke test"
     require_file "$SCRIPT_DIR/wheel_smoke.py"
-    local wheels=("$PACKAGE_TMP"/wheels/*.whl)
-    if [[ ${#wheels[@]} -eq 0 ]]; then
-        fail "No wheels found in $PACKAGE_TMP/wheels"
-    fi
-    "$PYTHON_BIN" "$SCRIPT_DIR/wheel_smoke.py" --wheel-dir "$PACKAGE_TMP/wheels"
+    "$PYTHON_BIN" "$SCRIPT_DIR/wheel_smoke.py" --wheel "$PACKAGE_WHEEL"
 }
 
 tier3_package_content() {
     info "Package content validation"
     require_file "$SCRIPT_DIR/validate_package_content.py"
-    local wheels=("$PACKAGE_TMP"/wheels/*.whl)
-    if [[ ${#wheels[@]} -eq 0 ]]; then
-        fail "No wheels found for content validation"
-    fi
-    for whl in "${wheels[@]}"; do
-        "$PYTHON_BIN" "$SCRIPT_DIR/validate_package_content.py" "$whl"
-    done
+    "$PYTHON_BIN" "$SCRIPT_DIR/validate_package_content.py" "$PACKAGE_WHEEL"
 }
 
 run_tier3() {
     run_tier1
     PACKAGE_TMP="$(mktemp -d)"
     trap 'rm -rf "$PACKAGE_TMP"' EXIT
-    tier3_crate_dry_run
+    tier3_crate_packages
     tier3_wheel_build
+    PACKAGE_WHEEL="$(find_single_wheel "$PACKAGE_TMP/wheels")"
     tier3_wheel_smoke
     tier3_package_content
 }

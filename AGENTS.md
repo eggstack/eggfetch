@@ -3,34 +3,16 @@
 ## Quick Commands
 
 ```sh
-# Format, lint, test — run before committing
+# Canonical validation (run before committing)
+./scripts/check.sh              # Tier 1: routine validation (CI runs this)
+./scripts/check.sh extended     # Tier 2: extended validation
+./scripts/check.sh package      # Tier 3: package validation
+
+# Focused commands
 cargo fmt --all
 cargo clippy --workspace --all-targets --all-features -- -D warnings
-cargo test --workspace --all-features
-
-# Feature matrix validation
-cargo check -p eggfetch-core --no-default-features
-cargo check -p eggfetch-core --no-default-features --features http1,tls-rustls
-cargo check -p eggfetch-core --all-features
-
-# Python tests (must build wheel first)
-cd crates/eggfetch-python && maturin develop
-python -m pytest -p pytest_asyncio
-
-# HTTPX compatibility tests (requires httpx==0.28.1)
+python -m pytest crates/eggfetch-python/tests/ -q --ignore=crates/eggfetch-python/tests/compat
 python -m pip install -r compat/httpx/0.28.1/requirements.txt
-EGGFETCH_COMPAT_REQUIRED=1 pytest crates/eggfetch-python/tests/compat/ -v --strict-markers
-
-# Generate and compare API manifests
-python scripts/generate_httpx_api_manifest.py --package httpx --output /tmp/httpx.json
-python scripts/generate_httpx_api_manifest.py --package eggfetch --output /tmp/eggfetch.json
-python scripts/compare_httpx_api_manifest.py \
-  --reference /tmp/httpx.json \
-  --candidate /tmp/eggfetch.json \
-  --allowed compat/httpx/0.28.1/allowed-differences.toml
-
-# Package content validation
-python scripts/validate_package_content.py path/to/wheel.whl
 ```
 
 ## Validation Tiers
@@ -113,7 +95,7 @@ Run compat tests:
 
 ```sh
 cd crates/eggfetch-python && maturin develop
-EGGFETCH_COMPAT_REQUIRED=1 pytest crates/eggfetch-python/tests/compat/ -v --strict-markers
+EGGFETCH_COMPAT_REQUIRED=1 python -m pytest crates/eggfetch-python/tests/compat/ -v --strict-markers
 ```
 
 API oracle with typed differences:
