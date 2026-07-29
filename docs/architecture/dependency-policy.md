@@ -4,8 +4,7 @@ eggfetch follows a conservative dependency policy. Every dependency must have an
 
 ## Current Posture
 
-As of the post-Milestone-T state, eggfetch-core has the
-following direct dependencies:
+eggfetch-core has the following direct dependencies:
 
 - **bytes** -- efficient byte buffer types for request and response bodies.
 - **dashmap** -- concurrent hash map for per-host pool semaphore storage.

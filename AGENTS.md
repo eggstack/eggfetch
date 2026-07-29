@@ -105,7 +105,7 @@ The compatibility profile is in `compat/httpx/0.28.1/`. Allowed differences are 
 
 ## Tests
 
-Colocated `#[cfg(test)] mod tests` blocks. ~880+ Rust, ~1170+ Python, ~30+ FFI tests.
+Colocated `#[cfg(test)] mod tests` blocks. ~685 Rust, ~513 Python (non-compat), ~934 Python (compat), 30 FFI tests.
 
 The full validation pass (pre-release) runs feature-gated subsets:
 
@@ -148,5 +148,31 @@ See `docs/releases/process.md` and `docs/releases/compatibility-policy.md`.
 ## Safety
 
 Do not add `unsafe`. Workspace uses `unsafe_code = "forbid"`. If you think you need `unsafe`, stop and ask.
+
+## Architecture Index
+
+Detailed architecture docs live in `docs/architecture/`. Use this index to find the right deep-dive:
+
+| Topic | Document |
+|-------|----------|
+| Workspace layout, crate graph, module map | [docs/architecture/overview.md](docs/architecture/overview.md) |
+| Client, RequestBuilder, Response, pipeline | [docs/architecture/core-engine.md](docs/architecture/core-engine.md) |
+| RequestBody, ResponseBody, streaming adapters | [docs/architecture/core-body-streaming.md](docs/architecture/core-body-streaming.md) |
+| Phase-aware timeouts, connection pool | [docs/architecture/core-timeout-pool.md](docs/architecture/core-timeout-pool.md) |
+| Auth, redirect following, retry with backoff | [docs/architecture/core-auth-redirect-retry.md](docs/architecture/core-auth-redirect-retry.md) |
+| TLS config, HTTP proxy, HTTP/2, HTTP/3 | [docs/architecture/core-tls-proxy-protocols.md](docs/architecture/core-tls-proxy-protocols.md) |
+| Cookies, multipart, compression | [docs/architecture/core-cookies-multipart-compression.md](docs/architecture/core-cookies-multipart-compression.md) |
+| CLI argument model, exit codes | [docs/architecture/cli.md](docs/architecture/cli.md) |
+| Python sync/async adapter, PyO3 bridge | [docs/architecture/python-bindings.md](docs/architecture/python-bindings.md) |
+| C ABI handles, N-API prototype | [docs/architecture/ffi-and-node.md](docs/architecture/ffi-and-node.md) |
+| Unit/integration tests, fuzz targets, property tests | [docs/architecture/testing-fuzzing.md](docs/architecture/testing-fuzzing.md) |
+| CI pipeline, lint policy, MSRV, release process | [docs/architecture/build-ci.md](docs/architecture/build-ci.md) |
+| Feature flag reference and validation matrix | [docs/architecture/feature-flags.md](docs/architecture/feature-flags.md) |
+| Dependency selection criteria, pool key semantics | [docs/architecture/dependency-policy.md](docs/architecture/dependency-policy.md) |
+| Threat model, trust boundaries | [docs/architecture/threat-model.md](docs/architecture/threat-model.md) |
+| Security review records | [docs/architecture/security-reviews.md](docs/architecture/security-reviews.md) |
+| Security findings tracker | [docs/architecture/security-findings.md](docs/architecture/security-findings.md) |
+| Pre-release security checklist | [docs/architecture/release-security-checklist.md](docs/architecture/release-security-checklist.md) |
+| Vulnerability response and CVE process | [docs/architecture/incident-runbook.md](docs/architecture/incident-runbook.md) |
 
 > Do not add CI jobs, matrices, evidence formats, release workflows, or publication automation without an explicit user request. Prefer direct tests in the existing local check path.

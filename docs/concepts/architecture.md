@@ -1,8 +1,8 @@
 # Architecture
 
-eggfetch is a three-crate Rust workspace. Understanding the boundaries between crates explains why the library behaves the way it does.
+eggfetch is a six-crate Rust workspace. Understanding the boundaries between crates explains why the library behaves the way it does.
 
-## The Three Crates
+## The Six Crates
 
 ### eggfetch-core
 
@@ -24,6 +24,18 @@ The Python crate enables a broader set of feature flags than the core defaults (
 ### eggfetch-cli
 
 A command-line binary that wraps eggfetch-core. It handles argument parsing, terminal output formatting, and exit code mapping. All network I/O goes through the core crate.
+
+### eggfetch-ffi
+
+C ABI bindings exposing eggfetch-core over a stable C interface. Uses opaque handle patterns and `extern "C"` functions. This crate uses `unsafe_code = "allow"` — the sole exception to the workspace `forbid` policy.
+
+### eggfetch-node
+
+Node.js N-API binding prototype. Wraps eggfetch-core via napi-rs. Also uses `unsafe_code = "allow"`.
+
+### eggfetch-bench
+
+Criterion-based benchmarks. Not published.
 
 ## Async-First Design
 
@@ -72,6 +84,7 @@ eggfetch-core uses feature flags to keep the default build small. The Python cra
 | `compression-deflate` | deflate decompression |
 | `json` | Reserved for future Rust-native JSON |
 | `tracing` | Structured logging (planned) |
+| `test-util` | Deterministic time testing (internal) |
 
 See [feature-flags.md](../architecture/feature-flags.md) for the full validation matrix and compilation rules.
 
@@ -99,6 +112,6 @@ The public API of eggfetch-core centers on a few key types:
 
 ## Crate Boundary Invariant
 
-eggfetch-core must not depend on PyO3, clap, or CLI argument parsing. The CLI and Python crates must not contain independent HTTP behavior. All network I/O goes through eggfetch-core. This invariant is enforced by code review and the workspace dependency structure.
+eggfetch-core must not depend on PyO3, clap, or CLI argument parsing. The CLI, Python, FFI, and Node crates must not contain independent HTTP behavior. All network I/O goes through eggfetch-core. This invariant is enforced by code review and the workspace dependency structure.
 
 If you find yourself writing HTTP logic outside of eggfetch-core, stop and refactor. There is exactly one networking implementation.

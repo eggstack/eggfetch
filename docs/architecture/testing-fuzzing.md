@@ -12,9 +12,10 @@ All tests are colocated in `#[cfg(test)] mod tests` blocks within each source fi
 
 | Category | Approximate Count |
 |----------|-------------------|
-| Rust unit/integration | ~750+ |
-| Python | ~463+ |
-| FFI | ~40+ |
+| Rust unit/integration | ~685 |
+| Python (non-compat) | ~513 |
+| Python (compat) | ~934 |
+| FFI | 30 |
 
 ## Running Tests
 

@@ -41,7 +41,7 @@ eggfetch-core  ←  eggfetch-cli
 
 ### eggfetch-core (the engine)
 
-All HTTP behavior lives here. 26 source modules:
+All HTTP behavior lives here. 24 source modules (including `stream` and `transport` submodules):
 
 | Module | Public? | Purpose |
 |--------|---------|---------|
@@ -69,8 +69,8 @@ All HTTP behavior lives here. 26 source modules:
 | `config` | No | Shared configuration types |
 | `limits` | No | Pool concurrency limits (HTTPX-compatible) |
 | `h2_headers` | No | HTTP/2 forbidden header stripping |
-| `http_version_policy` | No | HTTP/1.1, HTTP/2, HTTP/3 version negotiation |
-| `response_decoding` | No | Content-Encoding parsing and decompression dispatch |
+| `http_version` | No | HTTP/1.1, HTTP/2, HTTP/3 version negotiation |
+| `response_decode` | No | Content-Encoding parsing and decompression dispatch |
 
 ### eggfetch-cli (the CLI)
 
@@ -200,6 +200,6 @@ Client::send()
 
 ## Current Status
 
-All milestones A–Z are complete. The workspace provides ~880+ Rust tests, ~1170+ Python tests, and ~40+ FFI tests. MSRV is Rust 1.80. CI enforces `RUSTFLAGS=-D warnings` with pedantic clippy.
+All milestones A–Z are complete. The workspace provides ~685 Rust tests, ~513 Python tests (non-compat), ~934 Python tests (compat), and 30 FFI tests. MSRV is Rust 1.80. CI enforces `RUSTFLAGS=-D warnings` with pedantic clippy.
 
 The `test-util` feature enables `tokio/test-util` for deterministic time testing in timeout-related tests.

@@ -52,7 +52,7 @@ Tests live next to the code they cover, using `#[cfg(test)] mod tests` blocks wi
 cargo test --workspace --all-features
 ```
 
-Prefer small, focused tests that exercise one behavior. The workspace has ~750+ Rust tests, ~463+ Python tests, and ~40+ FFI tests covering construction, streaming, timeouts, pools, headers, integration scenarios, sync/async API parity, redirect replay, total timeout across redirects, response decoding, cookie subsystem, authentication subsystem, multipart uploads, decompression, proxy tunneling, retry policies, and true network streaming via `client.stream()`. As the project grows, tests should cover protocol correctness, edge cases, and error paths.
+Prefer small, focused tests that exercise one behavior. The workspace has ~685 Rust tests, ~513 Python tests (non-compat), ~934 Python tests (compat), and 30 FFI tests covering construction, streaming, timeouts, pools, headers, integration scenarios, sync/async API parity, redirect replay, total timeout across redirects, response decoding, cookie subsystem, authentication subsystem, multipart uploads, decompression, proxy tunneling, retry policies, and true network streaming via `client.stream()`. As the project grows, tests should cover protocol correctness, edge cases, and error paths.
 
 ### Python tests
 
@@ -86,6 +86,7 @@ maturin build
 cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,compression-gzip
 cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,compression-brotli
 cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,compression-zstd
+cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,compression-deflate
 cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,proxy
 cargo check -p eggfetch-core --no-default-features --features http1,tls-rustls,http3
 cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,http3
@@ -147,7 +148,7 @@ If you find yourself writing HTTP logic outside of eggfetch-core, stop and refac
 
 ## Working Context
 
-All milestones (A through Z) are complete. The workspace is in production-maintenance mode. Before starting work, read `plans/ROADMAP.md` for the full project history and any planned future work. Make the workspace build green before adding new functionality. Run `./scripts/check.sh` before committing.
+All milestones (A through Z) are complete. The workspace is in production-maintenance mode. Before starting work, read `plans/ROADMAP.md` for the full project history and any planned future work. Make the workspace build green before adding new functionality. Run `./scripts/check.sh` before committing. See `docs/architecture/overview.md` for the crate layout and architecture deep-dive index.
 
 ## CI
 

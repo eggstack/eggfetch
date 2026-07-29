@@ -43,26 +43,26 @@ its public cookie API.
 
 ### http1
 
-**Status:** implemented (Milestone B).
+**Status:** implemented.
 Enables HTTP/1.1 support. This is the primary protocol for the MVP, backed by hyper.
 
 ### http2
 
-**Status:** implemented (Milestone V).
+**Status:** implemented.
 Enables HTTP/2 support. When enabled, the client can negotiate HTTP/2 via ALPN for HTTPS connections. The `HttpVersionPolicy` enum controls which protocol versions are advertised. `Auto` (default) advertises both `h2` and `http/1.1`; `Http2Only` advertises only `h2`; `Http1Only` advertises only `http/1.1`. Without this feature, `Http2Only` and `Auto` silently downgrade to `Http1Only`. The Python crate exposes `Client(http2=True)` and `AsyncClient(http2=True)` for enabling HTTP/2 negotiation.
 
 ### http3
 
-**Status:** implemented (Milestone W, experimental).
-Enables HTTP/3 support over QUIC. When enabled, the client can negotiate HTTP/3 using the `quinn` crate for QUIC transport and the `h3` crate for the HTTP/3 protocol layer. The `HttpVersionPolicy` enum gains an `Http3Only` variant. `Auto` does not automatically negotiate HTTP/3; callers must explicitly select `Http3Only` or use `Client(http3=True)` in Python. QUIC mandates TLS 1.3, so this feature requires `tls-rustls`. 0-RTT (early data) is disabled in the initial implementation. The Python crate exposes `Client(http3=True)` and `AsyncClient(http3=True)`, plus `Http3Error` and `Http3ConnectionError` exception types. This feature is experimental; API surfaces may change as the QUIC/h3 ecosystem matures. The Python crate exposes `Client(http3=True)` and `AsyncClient(http3=True)` for enabling HTTP/3.
+**Status:** implemented (experimental).
+Enables HTTP/3 support over QUIC. When enabled, the client can negotiate HTTP/3 using the `quinn` crate for QUIC transport and the `h3` crate for the HTTP/3 protocol layer. The `HttpVersionPolicy` enum gains an `Http3Only` variant. `Auto` does not automatically negotiate HTTP/3; callers must explicitly select `Http3Only` or use `Client(http3=True)` in Python. QUIC mandates TLS 1.3, so this feature requires `tls-rustls`. 0-RTT (early data) is disabled in the initial implementation. The Python crate exposes `Client(http3=True)` and `AsyncClient(http3=True)`, plus `Http3Error` and `Http3ConnectionError` exception types. This feature is experimental; API surfaces may change as the QUIC/h3 ecosystem matures.
 
 ### tls-rustls
 
-**Status:** implemented (Milestone B, enhanced in Milestone T).
+**Status:** implemented.
 Enables the Rustls transport configuration. Native roots are preferred at
 runtime and packaged WebPKI roots are used only when native roots are
-unavailable. Verification failures never trigger the fallback. As of
-Milestone T, this feature also supports custom CA bundles via `TrustStore`,
+unavailable. Verification failures never trigger the fallback. This feature
+also supports custom CA bundles via `TrustStore`,
 client certificates via `ClientIdentity`, TLS version policy via `TlsVersion`,
 verification toggle via `TlsConfigBuilder::danger_accept_invalid_certs(true)`,
 and SNI configuration. The Python crate exposes `verify=` and `cert=` kwargs
@@ -73,31 +73,31 @@ remain buildable.
 ### json
 
 **Status:** feature flag exists, not wired into eggfetch-core.
-**Milestone:** I (request builder compatibility surface) delivered JSON body support in the Python crate via Python's `json.dumps()`, not through a Rust-side feature gate. The feature flag is reserved for future Rust-native JSON serialization (e.g., serde integration in `eggfetch-core`).
+The Python crate delivers JSON body support via Python's `json.dumps()`, not through a Rust-side feature gate. The feature flag is reserved for future Rust-native JSON serialization (e.g., serde integration in `eggfetch-core`).
 
 ### compression-gzip
 
-**Status:** implemented (Milestone R).
+**Status:** implemented.
 Enables gzip decompression of response bodies. This is behind a feature flag to avoid pulling in compression dependencies for users who do not need them. Uses `async-compression` for streaming decode and `flate2` for buffered decode. Enables `Content-Encoding: gzip` transparent decompression.
 
 ### compression-brotli
 
-**Status:** implemented (Milestone R).
+**Status:** implemented.
 Enables Brotli decompression of response bodies. Uses `async-compression` for streaming decode. Enables `Content-Encoding: br` transparent decompression.
 
 ### compression-zstd
 
-**Status:** implemented (Milestone R).
+**Status:** implemented.
 Enables Zstandard decompression of response bodies. Uses `async-compression` for streaming decode. Enables `Content-Encoding: zstd` transparent decompression.
 
 ### compression-deflate
 
-**Status:** implemented (Milestone R).
+**Status:** implemented.
 Enables deflate decompression of response bodies. Uses `async-compression` for streaming decode. HTTP deflate is typically zlib-wrapped; this decoder handles the standard format. Enables `Content-Encoding: deflate` transparent decompression.
 
 ### cookies
 
-**Status:** implemented (Milestone O).
+**Status:** implemented.
 Enables cookie jar support for persistent cookies across requests. Provides RFC 6265 cookie parsing, domain/path matching, cookie jar with thread-safe storage, and automatic Set-Cookie ingestion on responses. The Python crate exposes `client.cookies`, `response.cookies`, and a `cookies=` kwarg for initial cookies.
 
 Python request-local `cookies=` values are serialized into the request header,
@@ -105,7 +105,7 @@ are not persisted in the client jar, and are removed on cross-origin redirects.
 
 ### multipart
 
-**Status:** implemented (Milestone Q).
+**Status:** implemented.
 Enables streaming multipart/form-data request bodies. Provides `Multipart`, `Part`, `PartBody`, and `Boundary` types with a builder API, a streaming encoder backed by a state machine, known-length calculation when all parts have known sizes, boundary generation and validation, and per-part headers and content types. The Python crate exposes `files=` kwarg support including bytes, tuples, path-backed `File` wrapper, and mixed `data=` + `files=`.
 
 Python `files=` accepts bytes, `(filename, data)` tuples, `(filename, data, content_type)` triples, `(filename, data, content_type, headers)` quads, and `eggfetch.File(path)` objects. Files are read via synchronous std::fs (blocking in GIL context) for path-backed parts. Cancellation safely drops file handles and streams.
@@ -117,7 +117,7 @@ strings. This is a unconditional transitive dependency brought in by
 
 ### proxy
 
-**Status:** implemented (Milestone S).
+**Status:** implemented.
 Enables HTTP proxy support in eggfetch-core. Provides HTTP proxying, HTTPS
 CONNECT tunneling, proxy authentication, per-request and per-client proxy
 configuration via `ClientBuilder::proxy()` and `RequestBuilder::proxy()`,
@@ -129,7 +129,6 @@ tunnel and proxy-protocol dependencies.
 ### tracing
 
 **Status:** planned, not implemented.
-**Milestone:** after core engine is stable.
 Enables structured logging via the tracing ecosystem. This is opt-in to avoid pulling in logging dependencies for users who do not need them.
 
 ### test-util
