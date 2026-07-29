@@ -15,6 +15,17 @@ python -m pytest crates/eggfetch-python/tests/ -q --ignore=crates/eggfetch-pytho
 python -m pip install -r compat/httpx/0.28.1/requirements.txt
 ```
 
+## Python Environment
+
+`./scripts/check.sh` requires an active virtual environment with Python 3.10+, maturin, pytest, and pytest-asyncio. Setup:
+
+```sh
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install maturin pytest pytest-asyncio
+PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1 maturin develop -m crates/eggfetch-python/Cargo.toml
+```
+
 ## Validation Tiers
 
 | Tier | Command | When |
@@ -53,7 +64,7 @@ eggfetch-core owns all HTTP behavior. CLI and Python are thin adapters.
 ## Lint Policy
 
 - Pedantic clippy enabled workspace-wide. `unsafe_code = "forbid"` (except FFI/Node).
-- `missing_docs = "warn"`, `missing-docs-in-crate-items = true`.
+- `missing_docs = "warn"` in workspace `Cargo.toml`.
 - Never use `#![allow(warnings)]`, `#![allow(clippy::all)]`, or `#![allow(clippy::pedantic)]`. CI rejects these via `scripts/check_lint_suppressions.sh`.
 - Use specific lint names. Justify suppressions with a comment.
 
@@ -67,28 +78,10 @@ The CLI enables: cookies, multipart, proxy. The Python binding enables all featu
 
 ## HTTPX Compatibility Layer
 
-The `eggfetch.compat.httpx` module provides an HTTPX 0.28.1-compatible asyncio facade (Stage C candidate). Import it as:
+The `eggfetch.compat.httpx` module provides an HTTPX 0.28.1-compatible asyncio facade (**Stage C candidate**). Import it as:
 
 ```python
 from eggfetch.compat.httpx import Client, AsyncClient, Request, Response, URL, Headers, Cookies
-```
-
-The compatibility stage is **Stage C candidate** (asyncio drop-in). The corrective closure pass applies:
-
-- **Typed difference records** — API oracle produces structured difference records; `allowed-differences.toml` gates enforcement; `resolved-differences.toml` tracks historical/behavioral entries separate from the active allowlist.
-- **Lossless merge semantics** — header and query parameter merge preserves order and duplicates across transports.
-- **Separate sync/async auth drivers** — `Auth` base class dispatches to sync and async implementations independently.
-- **Behavioral downstream fixtures** — `compat/downstream/behavioral_fixtures/` exercises real consumer patterns.
-- **Native lifecycle proof fixtures** — timeout classification, soak, proxy, and TLS tests validate engine behavior under load.
-
-Runtime diagnostics:
-
-```python
-from eggfetch.compat.httpx import get_compatibility_info, diagnostics_summary
-info = get_compatibility_info()
-print(info.provider)          # "eggfetch"
-print(info.emulated_version)  # "0.28.1"
-print(info.compatibility_stage)  # "stage-c-candidate"
 ```
 
 Run compat tests:
@@ -107,6 +100,8 @@ python scripts/compare_httpx_api_manifest.py \
   --allowed compat/httpx/0.28.1/allowed-differences.toml \
   --json --output /tmp/api-result.json
 ```
+
+The compatibility profile is in `compat/httpx/0.28.1/`. Allowed differences are documented in `allowed-differences.toml`.
 
 ## Tests
 
