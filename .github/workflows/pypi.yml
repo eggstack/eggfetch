@@ -1,0 +1,448 @@
+name: PyPI Wheels
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish validated distributions to PyPI
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
+  PYO3_USE_ABI3_FORWARD_COMPATIBILITY: "1"
+
+jobs:
+  # ── Validation ──────────────────────────────────────────────────────────
+  validate-release:
+    name: validate-release
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+
+      - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+
+      - name: Cache cargo registry and target
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Validate release versions
+        run: python scripts/validate_release_versions.py
+
+      - name: Validate internal dependency topology
+        run: python scripts/validate_publishable_internal_dependencies.py
+
+      - name: Run routine validation
+        run: |
+          python -m venv .venv
+          source .venv/bin/activate
+          python -m pip install maturin pytest pytest-asyncio
+          ./scripts/check.sh
+
+      - name: Run package validation
+        run: |
+          source .venv/bin/activate
+          ./scripts/check.sh package
+
+  # ── Wheel builds ────────────────────────────────────────────────────────
+  build-wheel:
+    name: wheel ${{ matrix.os }}-${{ matrix.arch }} py${{ matrix.python }}
+    needs: validate-release
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux x86_64
+          - os: linux
+            arch: x86_64
+            runner: ubuntu-latest
+            maturin-args: --manylinux 2014 --target x86_64-unknown-linux-gnu
+            python: "3.10"
+          - os: linux
+            arch: x86_64
+            runner: ubuntu-latest
+            maturin-args: --manylinux 2014 --target x86_64-unknown-linux-gnu
+            python: "3.11"
+          - os: linux
+            arch: x86_64
+            runner: ubuntu-latest
+            maturin-args: --manylinux 2014 --target x86_64-unknown-linux-gnu
+            python: "3.12"
+          - os: linux
+            arch: x86_64
+            runner: ubuntu-latest
+            maturin-args: --manylinux 2014 --target x86_64-unknown-linux-gnu
+            python: "3.13"
+          # Linux aarch64 (cross-build)
+          - os: linux
+            arch: aarch64
+            runner: ubuntu-latest
+            maturin-args: --manylinux 2014 --target aarch64-unknown-linux-gnu
+            python: "3.10"
+          - os: linux
+            arch: aarch64
+            runner: ubuntu-latest
+            maturin-args: --manylinux 2014 --target aarch64-unknown-linux-gnu
+            python: "3.11"
+          - os: linux
+            arch: aarch64
+            runner: ubuntu-latest
+            maturin-args: --manylinux 2014 --target aarch64-unknown-linux-gnu
+            python: "3.12"
+          - os: linux
+            arch: aarch64
+            runner: ubuntu-latest
+            maturin-args: --manylinux 2014 --target aarch64-unknown-linux-gnu
+            python: "3.13"
+          # macOS x86_64
+          - os: macos
+            arch: x86_64
+            runner: macos-13
+            maturin-args: --target x86_64-apple-darwin
+            python: "3.10"
+          - os: macos
+            arch: x86_64
+            runner: macos-13
+            maturin-args: --target x86_64-apple-darwin
+            python: "3.11"
+          - os: macos
+            arch: x86_64
+            runner: macos-13
+            maturin-args: --target x86_64-apple-darwin
+            python: "3.12"
+          - os: macos
+            arch: x86_64
+            runner: macos-13
+            maturin-args: --target x86_64-apple-darwin
+            python: "3.13"
+          # macOS arm64
+          - os: macos
+            arch: arm64
+            runner: macos-latest
+            maturin-args: --target aarch64-apple-darwin
+            python: "3.10"
+          - os: macos
+            arch: arm64
+            runner: macos-latest
+            maturin-args: --target aarch64-apple-darwin
+            python: "3.11"
+          - os: macos
+            arch: arm64
+            runner: macos-latest
+            maturin-args: --target aarch64-apple-darwin
+            python: "3.12"
+          - os: macos
+            arch: arm64
+            runner: macos-latest
+            maturin-args: --target aarch64-apple-darwin
+            python: "3.13"
+          # Windows x86_64
+          - os: windows
+            arch: x86_64
+            runner: windows-latest
+            maturin-args: --target x86_64-pc-windows-msvc
+            python: "3.10"
+          - os: windows
+            arch: x86_64
+            runner: windows-latest
+            maturin-args: --target x86_64-pc-windows-msvc
+            python: "3.11"
+          - os: windows
+            arch: x86_64
+            runner: windows-latest
+            maturin-args: --target x86_64-pc-windows-msvc
+            python: "3.12"
+          - os: windows
+            arch: x86_64
+            runner: windows-latest
+            maturin-args: --target x86_64-pc-windows-msvc
+            python: "3.13"
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+
+      - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
+
+      - name: Set up Python ${{ matrix.python }}
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Build wheel
+        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
+        with:
+          args: --release --out dist ${{ matrix.maturin-args }} --interpreter cp${{ matrix.python }}
+          manifest-path: crates/eggfetch-python/Cargo.toml
+
+      - name: Verify exactly one wheel
+        shell: bash
+        run: |
+          set -euo pipefail
+          wheels=(dist/*.whl)
+          if [[ ${#wheels[@]} -ne 1 ]]; then
+            echo "FAIL: expected exactly one wheel, found ${#wheels[@]}" >&2
+            ls -la dist/ >&2
+            exit 1
+          fi
+          echo "WHEEL=${wheels[0]}" >> "$GITHUB_ENV"
+
+      - name: Smoke test wheel
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m venv .venv-test
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            .venv-test/Scripts/pip install "${{ env.WHEEL }}"
+            .venv-test/Scripts/python scripts/wheel_smoke.py --wheel "${{ env.WHEEL }}"
+          else
+            .venv-test/bin/pip install "${{ env.WHEEL }}"
+            .venv-test/bin/python scripts/wheel_smoke.py --wheel "${{ env.WHEEL }}"
+          fi
+
+      - name: Validate wheel metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -c "
+          import zipfile, re, sys
+          whl = '${{ env.WHEEL }}'
+          with zipfile.ZipFile(whl) as zf:
+              names = zf.namelist()
+              # Check METADATA
+              meta = [n for n in names if n.endswith('.dist-info/METADATA')]
+              if not meta:
+                  print('FAIL: no METADATA found', file=sys.stderr); sys.exit(1)
+              content = zf.read(meta[0]).decode()
+              m = re.search(r'^Name:\s*(.+)$', content, re.M)
+              if not m or m.group(1).strip() != 'eggfetch':
+                  print(f'FAIL: unexpected name: {m.group(1) if m else \"missing\"}', file=sys.stderr); sys.exit(1)
+              m = re.search(r'^Version:\s*(.+)$', content, re.M)
+              if not m:
+                  print('FAIL: no version in METADATA', file=sys.stderr); sys.exit(1)
+              print(f'METADATA version: {m.group(1).strip()}')
+              # Check eggfetch._native exists
+              native = [n for n in names if 'eggfetch/_native' in n]
+              if not native:
+                  print('FAIL: eggfetch._native not found', file=sys.stderr); sys.exit(1)
+              print('eggfetch._native found')
+              # Check __init__.py
+              init = [n for n in names if n.endswith('eggfetch/__init__.py')]
+              if not init:
+                  print('FAIL: eggfetch/__init__.py not found', file=sys.stderr); sys.exit(1)
+              print('eggfetch/__init__.py found')
+          "
+
+      - name: Upload wheel artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: wheel-${{ matrix.os }}-${{ matrix.arch }}-py${{ matrix.python }}
+          path: ${{ env.WHEEL }}
+          retention-days: 7
+
+  # ── Source distribution ──────────────────────────────────────────────────
+  build-sdist:
+    name: sdist
+    needs: validate-release
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+
+      - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+
+      - name: Build sdist
+        run: |
+          pip install maturin
+          maturin sdist --out dist -m crates/eggfetch-python/Cargo.toml
+
+      - name: Verify exactly one sdist
+        run: |
+          set -euo pipefail
+          sdists=(dist/*.tar.gz)
+          if [[ ${#sdists[@]} -ne 1 ]]; then
+            echo "FAIL: expected exactly one sdist, found ${#sdists[@]}" >&2
+            ls -la dist/ >&2
+            exit 1
+          fi
+          echo "SDIST=${sdists[0]}" >> "$GITHUB_ENV"
+
+      - name: Test sdist builds outside repo
+        shell: bash
+        run: |
+          set -euo pipefail
+          TMPDIR=$(mktemp -d)
+          trap 'rm -rf "$TMPDIR"' EXIT
+          cp "$SDIST" "$TMPDIR/"
+          cd "$TMPDIR"
+          python -m venv .venv
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            PYTHON=.venv/Scripts/python
+            PIP=.venv/Scripts/pip
+          else
+            PYTHON=.venv/bin/python
+            PIP=.venv/bin/pip
+          fi
+          $PIP install maturin
+          $PIP wheel --no-deps --no-build-isolation "dist/$(basename $SDIST)" --wheel-dir wheels/
+          whls=(wheels/*.whl)
+          if [[ ${#whls[@]} -ne 1 ]]; then
+            echo "FAIL: sdist build produced ${#whls[@]} wheels" >&2; exit 1
+          fi
+          $PIP install "${whls[0]}"
+          $PYTHON -c "import eggfetch; print(f'eggfetch {eggfetch.__version__}')"
+
+      - name: Validate sdist content
+        run: python scripts/validate_package_content.py "$SDIST"
+
+      - name: Upload sdist artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sdist
+          path: ${{ env.SDIST }}
+          retention-days: 7
+
+  # ── Assemble release set ────────────────────────────────────────────────
+  assemble:
+    name: assemble
+    needs: [build-wheel, build-sdist]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+
+      - name: Download all wheel artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: wheel-*
+          path: wheels/
+          merge-multiple: true
+
+      - name: Download sdist artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: sdist
+          path: wheels/
+
+      - name: Validate assembled release set
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "=== Assembled distributions ==="
+          ls -la wheels/
+
+          # Count wheels and sdist
+          wheel_count=$(find wheels/ -name '*.whl' | wc -l)
+          sdist_count=$(find wheels/ -name '*.tar.gz' | wc -l)
+          total=$((wheel_count + sdist_count))
+
+          echo "Wheels: $wheel_count"
+          echo "Sdists: $sdist_count"
+          echo "Total: $total"
+
+          if [[ $wheel_count -ne 20 ]]; then
+            echo "FAIL: expected 20 wheels, found $wheel_count" >&2; exit 1
+          fi
+          if [[ $sdist_count -ne 1 ]]; then
+            echo "FAIL: expected 1 sdist, found $sdist_count" >&2; exit 1
+          fi
+
+          # Check for duplicate filenames
+          dupes=$(find wheels/ -type f -printf '%f\n' | sort | uniq -d)
+          if [[ -n "$dupes" ]]; then
+            echo "FAIL: duplicate filenames: $dupes" >&2; exit 1
+          fi
+
+          # Validate matrix coverage
+          python scripts/validate_wheel_coverage.py wheels/
+
+          # Run twine check
+          pip install twine
+          twine check wheels/*
+
+      - name: Package for upload
+        run: |
+          mkdir -p dist
+          cp wheels/* dist/
+
+      - name: Upload assembled release set
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: pypi-distributions
+          path: dist/
+          retention-days: 7
+
+  # ── PyPI publication ────────────────────────────────────────────────────
+  publish:
+    name: publish
+    needs: assemble
+    if: inputs.publish == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    environment: pypi
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+
+      - name: Download assembled distributions
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: pypi-distributions
+          path: dist/
+
+      - name: Verify distribution count
+        shell: bash
+        run: |
+          set -euo pipefail
+          count=$(find dist/ -type f \( -name '*.whl' -o -name '*.tar.gz' \) | wc -l)
+          echo "Distributions to publish: $count"
+          if [[ $count -ne 21 ]]; then
+            echo "FAIL: expected 21 distributions, found $count" >&2; exit 1
+          fi
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@ba38be9e461d3875417946c167d0b5f3d385a247 # v1.14.1
+        with:
+          packages-dir: dist/

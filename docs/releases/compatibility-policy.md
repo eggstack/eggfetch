@@ -11,22 +11,20 @@ The minimum supported Rust version (MSRV) is specified in `workspace.package.rus
 
 ## Python Supported Versions
 
-The supported Python versions are **3.10 through 3.13**. The CI matrix tests all four versions on Ubuntu, macOS, and Windows.
+The supported Python versions are **3.10 through 3.13**. The PyPI release workflow builds interpreter-specific wheels for all four versions on Linux, macOS, and Windows.
 
 - New Python versions are supported as soon as their stable release is compatible with PyO3.
 - Dropped Python versions receive a deprecation notice at least one minor release before removal.
-- The Python package uses the `abi3` stable ABI where possible, reducing per-version wheel maintenance.
+- Each supported Python version receives a distinct native wheel (ABI3 is not currently configured).
 - Python 3.9 and earlier are not supported and will not receive compatibility fixes.
 
 ## OS and Architecture Support Tiers
 
-| Tier | Platforms | CI Coverage |
-|------|-----------|-------------|
-| Tier 1 | Ubuntu x86_64, macOS x86_64, macOS aarch64, Windows x86_64 | Full CI matrix, release wheels |
-| Tier 2 | Ubuntu aarch64, Windows aarch64 | Tested in CI but not release-gated |
-| Tier 3 | FreeBSD, other Unix variants | Community-supported, not CI-tested |
-
-Tier 1 platforms receive release wheels and are release-gated. Tier 2 platforms are tested but do not block releases. Tier 3 platforms may work but are not verified.
+| Tier | Platforms | CI Coverage | PyPI Wheels |
+|------|-----------|-------------|-------------|
+| Tier 1 | Ubuntu x86_64, macOS x86_64, macOS aarch64, Windows x86_64 | Full CI matrix | Native wheels, smoke-tested |
+| Tier 2 | Ubuntu aarch64 | Tested in CI | Cross-built wheels (maturin-action) |
+| Tier 3 | FreeBSD, other Unix variants | Community-supported, not CI-tested | No wheels |
 
 ## CLI Machine-Output Schema Versioning
 

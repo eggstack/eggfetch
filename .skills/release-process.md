@@ -10,6 +10,8 @@ Use this skill when preparing or executing a release of eggfetch.
 
 ## Publishing Order
 
+### crates.io (manual, local)
+
 1. `eggfetch-core`
 2. `eggfetch-cli`
 3. `eggfetch-ffi`
@@ -18,12 +20,26 @@ Use this skill when preparing or executing a release of eggfetch.
 
 crates.io index propagation requires verification between publishes. Do not encode fixed sleeps.
 
+### PyPI (GitHub Actions, manual dispatch)
+
+After crates.io publication and tag creation, dispatch `.github/workflows/pypi.yml`:
+
+1. Select the `v<VERSION>` tag
+2. Run with `publish=false` first (optional rehearsal)
+3. Inspect assembled artifacts
+4. Run with `publish=true` to publish
+5. Approve the `pypi` environment deployment
+
+PyPI uses Trusted Publishing (OIDC). No API token is needed.
+
 ## Pre-release Validation
 
 ```sh
 ./scripts/check.sh
 ./scripts/check.sh package
 ```
+
+Both require a clean worktree.
 
 ## Publication
 
@@ -41,7 +57,8 @@ crates.io versions are immutable. If publication is partial, bump and republish.
 
 ## CI
 
-CI runs `./scripts/check.sh` on pushes and pull requests. It is a regression safety net, not a release authority.
+- Routine CI (`.github/workflows/ci.yml`): runs `./scripts/check.sh` on pushes and pull requests. One Ubuntu job, no matrix.
+- PyPI CI (`.github/workflows/pypi.yml`): manually dispatched, builds 20 wheels + 1 sdist across 5 platforms and 4 Python versions.
 
 ## Architecture References
 
@@ -49,3 +66,4 @@ CI runs `./scripts/check.sh` on pushes and pull requests. It is a regression saf
 - Compatibility policy: `docs/releases/compatibility-policy.md`
 - Build & CI: `docs/architecture/build-ci.md`
 - Release checklist: `docs/architecture/release-security-checklist.md`
+- Verification policy: `docs/verification-policy.md`

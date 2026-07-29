@@ -132,11 +132,13 @@ The HTTPX compatibility test suite lives in `crates/eggfetch-python/tests/compat
 
 ## Release
 
-Release timing and crates.io publication are manual maintainer actions. GitHub Actions does not publish packages.
+Release timing and crates.io publication are manual maintainer actions. GitHub Actions does not publish to crates.io.
+
+PyPI publication is performed via the manually dispatched `.github/workflows/pypi.yml` workflow. It builds 20 wheels across 5 platforms and 4 Python versions, plus a source distribution. PyPI upload uses Trusted Publishing (OIDC) with the `pypi` GitHub environment.
 
 Coordinated versioning across all publishable crates (core, CLI, Python, FFI, Node). Bench and fuzz crates are not published.
 
-Publishing order: eggfetch-core → eggfetch-cli → eggfetch-ffi → eggfetch-python → eggfetch-node.
+Publishing order: eggfetch-core → eggfetch-cli → eggfetch-ffi → eggfetch-python → eggfetch-node. Then tag and dispatch PyPI workflow.
 
 See `docs/releases/process.md` and `docs/releases/compatibility-policy.md`.
 

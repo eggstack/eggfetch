@@ -1,23 +1,26 @@
 #!/usr/bin/env python3
-"""Validate that publishable internal dependencies have concrete version requirements.
+"""Validate that publishable internal dependencies form the exact expected topology.
 
 Uses `cargo metadata --format-version 1 --no-deps` and stdlib json.
 No third-party dependencies.
 
-Expected publishable internal crates:
-  eggfetch-core, eggfetch-ffi
-
-Each dependent crate (eggfetch-cli, eggfetch-ffi, eggfetch-python, eggfetch-node)
-must have a concrete (non-wildcard, non-empty) version requirement for every
-internal dependency it uses.
+Expected publishable internal crates and their dependency edges:
+  eggfetch-cli  -> eggfetch-core
+  eggfetch-ffi  -> eggfetch-core
+  eggfetch-python -> eggfetch-core
+  eggfetch-node -> eggfetch-ffi
 """
 
 import json
 import subprocess
 import sys
 
-EXPECTED_PACKAGES = {"eggfetch-cli", "eggfetch-ffi", "eggfetch-python", "eggfetch-node"}
-INTERNAL_DEPS = {"eggfetch-core", "eggfetch-ffi"}
+EXPECTED_DEPENDENCIES: dict[str, set[str]] = {
+    "eggfetch-cli": {"eggfetch-core"},
+    "eggfetch-ffi": {"eggfetch-core"},
+    "eggfetch-python": {"eggfetch-core"},
+    "eggfetch-node": {"eggfetch-ffi"},
+}
 
 
 def cargo_metadata() -> dict:
@@ -37,8 +40,8 @@ def validate_version_req(dep_name: str, version_req: str | None) -> str | None:
     v = version_req.strip()
     if not v:
         return f"{dep_name}: empty version requirement"
-    if v == "*":
-        return f"{dep_name}: wildcard version requirement not publishable"
+    if "*" in v:
+        return f"{dep_name}: wildcard version requirement not publishable: {v!r}"
     return None
 
 
@@ -51,48 +54,82 @@ def main() -> int:
 
     packages = {p["name"]: p for p in metadata.get("packages", [])}
 
-    missing_packages = EXPECTED_PACKAGES - set(packages.keys())
-    if missing_packages:
-        print(f"FAIL: expected packages not found in workspace: {', '.join(sorted(missing_packages))}", file=sys.stderr)
+    # Verify all expected dependent crates exist in the workspace.
+    missing = set(EXPECTED_DEPENDENCIES.keys()) - set(packages.keys())
+    if missing:
+        print(
+            f"FAIL: expected dependent crates not found in workspace: "
+            f"{', '.join(sorted(missing))}",
+            file=sys.stderr,
+        )
         return 1
 
     errors: list[str] = []
+    edges: list[str] = []
 
-    for crate_name in sorted(EXPECTED_PACKAGES):
+    for crate_name in sorted(EXPECTED_DEPENDENCIES):
+        expected = EXPECTED_DEPENDENCIES[crate_name]
         pkg = packages[crate_name]
         deps = pkg.get("dependencies", [])
-        internal_deps_found = [d for d in deps if d["name"] in INTERNAL_DEPS]
 
-        if not internal_deps_found:
-            # eggfetch-node depends on eggfetch-ffi, not eggfetch-core directly.
-            # eggfetch-ffi depends on eggfetch-core, not on itself.
-            # Only fail if the crate SHOULD have internal deps but doesn't.
-            if crate_name in ("eggfetch-cli", "eggfetch-python"):
-                errors.append(f"{crate_name}: no internal publishable dependency found (expected eggfetch-core)")
-            continue
+        # Build a map of actual package name -> dependency record.
+        # Handle renamed deps by using the actual package name.
+        actual_internal: dict[str, dict] = {}
+        for dep in deps:
+            # The "package" field is the real crate name for renamed deps.
+            real_name = dep.get("package", dep["name"])
+            if real_name in expected or dep["name"] in expected:
+                actual_internal[real_name] = dep
 
-        for dep in internal_deps_found:
-            # cargo metadata puts the version from the resolved dependency.
-            # We need the version from the requirement, not the resolved version.
-            # In cargo metadata, `req` field has the version requirement string.
+        # Check every expected dependency is present.
+        for exp_dep in sorted(expected):
+            if exp_dep not in actual_internal:
+                errors.append(
+                    f"{crate_name}: expected internal dependency {exp_dep!r} not found"
+                )
+                continue
+
+            dep = actual_internal[exp_dep]
+
+            # Validate version requirement.
             version_req = dep.get("req")
-            err = validate_version_req(dep["name"], version_req)
+            err = validate_version_req(exp_dep, version_req)
             if err:
                 errors.append(f"{crate_name}: {err}")
+                continue
+
+            # Validate local path is present.
+            path = dep.get("path")
+            if not path:
+                errors.append(
+                    f"{crate_name}: {exp_dep} missing local path "
+                    f"(version-only dependency not allowed)"
+                )
+                continue
+
+            # Record the validated edge.
+            alias = dep.get("name", exp_dep)
+            alias_note = f" (aliased as {alias!r})" if alias != exp_dep else ""
+            edges.append(
+                f"  {crate_name} -> {exp_dep} req={version_req} "
+                f"path={path}{alias_note}"
+            )
+
+        # Check for unexpected internal dependencies.
+        for real_name, dep in actual_internal.items():
+            if real_name not in expected:
+                errors.append(
+                    f"{crate_name}: unexpected internal dependency {real_name!r}"
+                )
 
     if errors:
         for e in errors:
             print(f"FAIL: {e}", file=sys.stderr)
         return 1
 
-    # Print what was checked
-    for crate_name in sorted(EXPECTED_PACKAGES):
-        pkg = packages[crate_name]
-        deps = pkg.get("dependencies", [])
-        internal = [d for d in deps if d["name"] in INTERNAL_DEPS]
-        if internal:
-            for dep in internal:
-                print(f"  {crate_name} -> {dep['name']} req={dep.get('req', '?')}")
+    # Print validated edges.
+    for edge in edges:
+        print(edge)
 
     return 0
 

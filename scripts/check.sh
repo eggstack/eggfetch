@@ -307,7 +307,7 @@ tier3_crate_packages() {
 
     # eggfetch-core has no internal deps — full dry-run succeeds independently.
     info "  cargo publish --dry-run -p eggfetch-core"
-    cargo publish -p eggfetch-core --dry-run --allow-dirty
+    cargo publish -p eggfetch-core --dry-run
 
     # Dependent crates cannot run cargo package --no-verify or cargo publish --dry-run
     # because their internal dependencies (eggfetch-core, eggfetch-ffi) are not yet on
@@ -318,7 +318,7 @@ tier3_crate_packages() {
     # Full cargo publish --dry-run runs at publication time, after deps are visible.
     for crate in eggfetch-cli eggfetch-ffi eggfetch-python eggfetch-node; do
         info "  cargo package --list -p $crate"
-        cargo package --list -p "$crate" --allow-dirty >/dev/null
+        cargo package --list -p "$crate" >/dev/null
     done
     info "  Validating publishable internal dependency versions"
     validate_publishable_dependencies

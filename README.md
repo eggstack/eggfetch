@@ -521,7 +521,8 @@ AGENTS.md
 rust-toolchain.toml      stable toolchain with rustfmt + clippy
 rustfmt.toml             max_width 100
 .clippy.toml             pedantic clippy config
-.github/workflows/ci.yml CI pipeline
+.github/workflows/ci.yml CI pipeline (push/PR, one Ubuntu job)
+.github/workflows/pypi.yml PyPI wheel pipeline (manual dispatch, release-only)
 crates/
   eggfetch-core/         async HTTP engine
   eggfetch-cli/          CLI binary
@@ -547,6 +548,13 @@ docs/
   ffi/                   CABI and FFI binding guide
   releases/              release process and compatibility policy
 plans/                   milestone plans and roadmap
+scripts/
+  check.sh              canonical validation entry point
+  validate_publishable_internal_dependencies.py
+  validate_release_versions.py
+  validate_wheel_coverage.py
+  wheel_smoke.py
+  validate_package_content.py
 ```
 
 ## Development
@@ -564,6 +572,8 @@ cargo doc --workspace --all-features --no-deps
 ### CI
 
 CI runs format, clippy, and test checks on pushes and pull requests to `main`. It is a fast regression safety net, not a release authority. See [docs/verification-policy.md](docs/verification-policy.md) for the normative verification policy.
+
+PyPI wheel builds are performed via a manually dispatched GitHub Actions workflow (`.github/workflows/pypi.yml`). This workflow builds 20 wheels across Linux, macOS, and Windows for Python 3.10–3.13, plus a source distribution. It is not triggered by pushes or pull requests.
 
 Run the same checks locally:
 
