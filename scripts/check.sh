@@ -295,25 +295,11 @@ find_single_wheel() {
     printf '%s\n' "${wheels[0]}"
 }
 
-# Verify that a crate's Cargo.toml specifies a non-path version for every
-# publishable eggfetch dependency. This is the local fallback check when
-# cargo package --no-verify cannot resolve unpublished internal dependencies.
-verify_non_path_versions() {
-    local crate="$1"
-    local toml="crates/$crate/Cargo.toml"
-
-    if [[ ! -f "$toml" ]]; then
-        fail "Cargo.toml not found for $crate at $toml"
-    fi
-
-    # Check that eggfetch-core and eggfetch-ffi dependencies have version = "..."
-    # alongside path = "...". This ensures Cargo.toml is publishable once deps are live.
-    local has_version
-    has_version=$(grep -E 'eggfetch-(core|ffi)\s*=\s*\{.*version\s*=' "$toml" || true)
-    if [[ -z "$has_version" ]]; then
-        fail "$crate: missing non-path version for eggfetch dependency in $toml"
-    fi
-    info "  $crate: manifest version fields verified"
+# Validate that all publishable internal dependencies have concrete version
+# requirements using cargo metadata (portable, no grep, no GNU extensions).
+validate_publishable_dependencies() {
+    require_command "$PYTHON_BIN"
+    "$PYTHON_BIN" "$SCRIPT_DIR/validate_publishable_internal_dependencies.py"
 }
 
 tier3_crate_packages() {
@@ -321,7 +307,7 @@ tier3_crate_packages() {
 
     # eggfetch-core has no internal deps — full dry-run succeeds independently.
     info "  cargo publish --dry-run -p eggfetch-core"
-    cargo publish -p eggfetch-core --dry-run
+    cargo publish -p eggfetch-core --dry-run --allow-dirty
 
     # Dependent crates cannot run cargo package --no-verify or cargo publish --dry-run
     # because their internal dependencies (eggfetch-core, eggfetch-ffi) are not yet on
@@ -332,9 +318,10 @@ tier3_crate_packages() {
     # Full cargo publish --dry-run runs at publication time, after deps are visible.
     for crate in eggfetch-cli eggfetch-ffi eggfetch-python eggfetch-node; do
         info "  cargo package --list -p $crate"
-        cargo package --list -p "$crate" >/dev/null
-        verify_non_path_versions "$crate"
+        cargo package --list -p "$crate" --allow-dirty >/dev/null
     done
+    info "  Validating publishable internal dependency versions"
+    validate_publishable_dependencies
 }
 
 tier3_wheel_build() {

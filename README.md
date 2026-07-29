@@ -630,7 +630,7 @@ The minimum supported Rust version is **1.80**. This is specified in `workspace.
 
 eggfetch follows a security-hardening program covering dependencies, TLS, redirects, auth, cookies, proxies, decompression, multipart, retries, protocol handling, Python bindings, and CLI output.
 
-**Dependency auditing:** `cargo-deny` is configured in `deny.toml`. Run `cargo deny check` locally or via `./scripts/check.sh extended`.
+**Dependency auditing:** `cargo-deny` is configured in `deny.toml`. Run `cargo deny check` locally as an optional manual security review (not part of CI).
 
 **Secret redaction:** All `Debug`, `Display`, error, and log output redacts credentials, cookies, bearer tokens, proxy passwords, and URL userinfo. A centralized `redact` module provides `redact_headers()`, `redact_url()`, and `is_sensitive_header()` helpers with regression tests.
 

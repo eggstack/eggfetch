@@ -66,7 +66,14 @@ The project uses:
 - **cargo-deny** for license compliance, advisory database checks, duplicate dependency detection, and source restrictions. Configuration lives in `deny.toml` at the workspace root.
 - **cargo-audit** for known vulnerability scanning against the RustSec advisory database.
 
-Both tools run locally via `./scripts/check.sh extended`. cargo-deny findings at the `deny` level block; `warn`-level findings are tracked but do not block.
+These are **optional manual security-review tools**. They are not part of routine CI or `./scripts/check.sh extended`. When installed, maintainers may run:
+
+```sh
+cargo deny check
+cargo audit
+```
+
+Findings should be addressed during security review, but these tools are not automatic merge or release gates under the simplified CI policy.
 
 Every dependency in the tree must have an explicit reason documented in code or review.
 

@@ -7,7 +7,7 @@ eggfetch is a Rust-native async HTTP client engine with Python bindings and a CL
 1. **Single networking implementation** — all HTTP logic lives in `eggfetch-core`. CLI, Python, FFI, and Node never touch the network directly.
 2. **Async-first** — the Rust engine is async-only (tokio). Synchronous APIs are adapter-layer concerns that block on the async engine.
 3. **Feature-gated modularity** — default is HTTP/1.1 + Rustls TLS. HTTP/2, HTTP/3, cookies, compression, multipart, and proxy are opt-in via Cargo features.
-4. **Security by default** — `unsafe_code = "forbid"` workspace-wide (FFI/Node exceptions), credential redaction, CR/LF injection prevention, cargo-deny enforcement.
+4. **Security by default** — `unsafe_code = "forbid"` workspace-wide (FFI/Node exceptions), credential redaction, CR/LF injection prevention.
 
 ## Workspace Layout
 

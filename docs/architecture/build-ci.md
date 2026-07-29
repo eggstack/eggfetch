@@ -51,7 +51,7 @@ Run `./scripts/check.sh extended` for: full HTTPX compatibility, API manifest co
 
 ### Package Validation (Tier 3)
 
-Run `./scripts/check.sh package` for: core publish dry-run (`cargo publish --dry-run -p eggfetch-core`), dependent-crate package-structure validation (`cargo package --list` plus manifest version verification for eggfetch-cli, eggfetch-ffi, eggfetch-python, eggfetch-node), wheel build, exactly-one-wheel resolution, wheel smoke, and package content validation. Uses fresh temporary artifacts; stale repository wheels are never used.
+Run `./scripts/check.sh package` for: core publish dry-run (`cargo publish --dry-run -p eggfetch-core`), dependent-crate package-structure validation (`cargo package --list` plus structured internal dependency version verification via cargo metadata for eggfetch-cli, eggfetch-ffi, eggfetch-python, eggfetch-node), wheel build, exactly-one-wheel resolution, wheel smoke, and package content validation. Uses fresh temporary artifacts; stale repository wheels are never used.
 
 ## Environment
 
