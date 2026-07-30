@@ -199,6 +199,12 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
 
+      - name: Set up QEMU
+        if: matrix.arch == 'aarch64'
+        uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 # v3.6.0
+        with:
+          platforms: arm64
+
       - name: Build wheel
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
         with:
@@ -215,8 +221,7 @@ jobs:
             ls -la dist/ >&2
             exit 1
           fi
-          WHEEL_PATH=$(cd "$(dirname "${wheels[0]}")" && pwd)/$(basename "${wheels[0]}")
-          echo "WHEEL=$WHEEL_PATH" >> "$GITHUB_ENV"
+          echo "WHEEL=$GITHUB_WORKSPACE/${wheels[0]}" >> "$GITHUB_ENV"
 
       - name: Smoke test wheel
         shell: bash
