@@ -185,13 +185,14 @@ def _check_wheel_version_match(namelist: list[str]) -> list[ValidationError]:
 
 
 # Files/dirs to skip during secret scanning (machine-generated or legitimate auth code).
-SECRET_SCAN_EXCLUDE = {
-    "eggfetch-0.1.0.dist-info/sboms/",
-}
+SECRET_SCAN_EXCLUDE: set[str] = set()
 
 
 def _should_skip_secret_scan(name: str) -> bool:
     """Return True if this file should be skipped during secret scanning."""
+    # Skip all SBOM files (machine-generated, contains build paths)
+    if ".dist-info/sboms/" in name:
+        return True
     for excl in SECRET_SCAN_EXCLUDE:
         if name.startswith(excl):
             return True
