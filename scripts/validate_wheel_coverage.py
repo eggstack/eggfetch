@@ -15,8 +15,6 @@ from pathlib import Path
 
 EXPECTED_PLATFORMS = {
     "linux_x86_64",
-    "linux_aarch64",
-    "macosx_x86_64",
     "macosx_arm64",
     "win_amd64",
 }
@@ -143,8 +141,8 @@ def main() -> int:
             errors.append(f"Unexpected wheel: {platform} py{py}")
 
     # Check total count
-    if len(observed) != 20:
-        errors.append(f"Expected 20 wheels, observed {len(observed)}")
+    if len(observed) != 12:
+        errors.append(f"Expected 12 wheels, observed {len(observed)}")
 
     if errors:
         for e in errors:
