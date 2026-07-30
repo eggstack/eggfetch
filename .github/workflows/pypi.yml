@@ -221,23 +221,20 @@ jobs:
             ls -la dist/ >&2
             exit 1
           fi
-          if command -v cygpath &>/dev/null; then
-            echo "WHEEL=$(cygpath -w "$(pwd)/${wheels[0]}")" >> "$GITHUB_ENV"
-          else
-            echo "WHEEL=$(pwd)/${wheels[0]}" >> "$GITHUB_ENV"
-          fi
+          echo "WHEEL=${wheels[0]//\\//}" >> "$GITHUB_ENV"
 
       - name: Smoke test wheel
         shell: bash
         run: |
           set -euo pipefail
           python -m venv .venv-test
+          WHEEL_PATH="${WHEEL//\\//}"
           if [[ "$RUNNER_OS" == "Windows" ]]; then
-            .venv-test/Scripts/pip install "${{ env.WHEEL }}"
-            .venv-test/Scripts/python scripts/wheel_smoke.py --wheel "${{ env.WHEEL }}"
+            .venv-test/Scripts/pip install "$WHEEL_PATH"
+            .venv-test/Scripts/python scripts/wheel_smoke.py --wheel "$WHEEL_PATH"
           else
-            .venv-test/bin/pip install "${{ env.WHEEL }}"
-            .venv-test/bin/python scripts/wheel_smoke.py --wheel "${{ env.WHEEL }}"
+            .venv-test/bin/pip install "$WHEEL_PATH"
+            .venv-test/bin/python scripts/wheel_smoke.py --wheel "$WHEEL_PATH"
           fi
 
       - name: Validate wheel metadata
@@ -245,8 +242,8 @@ jobs:
         run: |
           set -euo pipefail
           python -c "
-          import zipfile, re, sys
-          whl = '${{ env.WHEEL }}'
+          import zipfile, re, sys, os
+          whl = os.environ['WHEEL'].replace('\\\\', '/')
           with zipfile.ZipFile(whl) as zf:
               names = zf.namelist()
               # Check METADATA
