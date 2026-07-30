@@ -221,7 +221,11 @@ jobs:
             ls -la dist/ >&2
             exit 1
           fi
-          echo "WHEEL=$GITHUB_WORKSPACE/${wheels[0]}" >> "$GITHUB_ENV"
+          if command -v cygpath &>/dev/null; then
+            echo "WHEEL=$(cygpath -w "$(pwd)/${wheels[0]}")" >> "$GITHUB_ENV"
+          else
+            echo "WHEEL=$(pwd)/${wheels[0]}" >> "$GITHUB_ENV"
+          fi
 
       - name: Smoke test wheel
         shell: bash
