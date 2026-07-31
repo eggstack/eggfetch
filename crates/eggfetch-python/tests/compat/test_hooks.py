@@ -121,15 +121,15 @@ class TestSyncHooks:
 
         assert received == ["yes"]
 
-    def test_request_hook_runs_before_auth(self):
-        """Request hooks must run BEFORE the auth flow modifies the request.
+    def test_request_hook_runs_after_auth_yields_request(self):
+        """Per-hop ordering: auth yields the concrete Request, then hooks run.
 
-        This verifies the correct ordering: hooks → auth → dispatch.
+        This verifies the correct ordering: auth → hooks → dispatch.
         """
         hook_saw_auth = []
 
         def check_auth(request):
-            # The hook should see the request BEFORE auth adds the header
+            # The hook should see the request AFTER auth added the header
             hook_saw_auth.append("authorization" in request.headers)
 
         class TestAuth(Auth):
@@ -147,8 +147,8 @@ class TestSyncHooks:
         ) as client:
             client.get("http://testserver/")
 
-        # Hook saw the request before auth added the header
-        assert hook_saw_auth == [False]
+        # Hook saw the request AFTER auth added the header
+        assert hook_saw_auth == [True]
 
     def test_response_hook_error_closes_stream(self):
         """When a response hook raises, the response stream is closed."""
@@ -228,6 +228,68 @@ class TestSyncHooks:
         # Second hook should not have been called
         assert call_log == ["first"]
 
+    def test_per_hop_request_hook_on_auth_retry(self):
+        """Request hook runs on every auth hop (per Track 4.2)."""
+        hook_count = [0]
+
+        def on_request(request):
+            hook_count[0] += 1
+
+        class RetryAuth(Auth):
+            def auth_flow(self, request):
+                request.headers["x-round"] = "1"
+                yield request
+                # After first response, yield a second request
+                request.headers["x-round"] = "2"
+                yield request
+
+        def handler(request):
+            step = request.headers.get("x-round", "")
+            if step == "1":
+                return Response(401)
+            return Response(200)
+
+        with Client(
+            transport=MockTransport(handler),
+            auth=RetryAuth(),
+            event_hooks={"request": [on_request], "response": []},
+        ) as client:
+            resp = client.get("http://testserver/")
+
+        # Hook ran once per hop (2 hops for auth retry)
+        assert hook_count[0] == 2
+        assert resp.status_code == 200
+
+    def test_per_hop_response_hook_on_auth_retry(self):
+        """Response hook runs on every hop before auth decides (per Track 4.2)."""
+        response_codes = []
+
+        def on_response(response):
+            response_codes.append(response.status_code)
+
+        class RetryAuth(Auth):
+            def auth_flow(self, request):
+                request.headers["x-round"] = "1"
+                yield request
+                request.headers["x-round"] = "2"
+                yield request
+
+        def handler(request):
+            step = request.headers.get("x-round", "")
+            if step == "1":
+                return Response(401)
+            return Response(200)
+
+        with Client(
+            transport=MockTransport(handler),
+            auth=RetryAuth(),
+            event_hooks={"request": [], "response": [on_response]},
+        ) as client:
+            resp = client.get("http://testserver/")
+
+        # Response hook ran on each hop: 401 then 200
+        assert response_codes == [401, 200]
+
 
 class TestAsyncHooks:
     @pytest.mark.asyncio
@@ -304,3 +366,26 @@ class TestAsyncHooks:
             await client.get("http://testserver/")
 
         assert calls == ["sync", "async"]
+
+    @pytest.mark.asyncio
+    async def test_callable_object_returning_awaitable(self):
+        """Callable objects returning awaitables are awaited (Track 4.4)."""
+        calls = []
+
+        class CallableHook:
+            def __call__(self, request):
+                # Returns an awaitable (coroutine-like)
+                async def _hook():
+                    calls.append("awaited")
+                return _hook()
+
+        async def handler(request):
+            return Response(200)
+
+        async with AsyncClient(
+            async_transport=MockTransport(handler),
+            event_hooks={"request": [CallableHook()], "response": []},
+        ) as client:
+            await client.get("http://testserver/")
+
+        assert calls == ["awaited"]

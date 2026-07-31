@@ -125,6 +125,10 @@ class Response:
         history: list | None = None,
         default_encoding: str | typing.Callable[[bytes], str] = "utf-8",
     ) -> None:
+        # NOTE: ``extensions`` here are *response* extensions (http_version,
+        # reason_phrase, etc.).  Request extensions live on
+        # ``request.extensions`` and must NOT be merged into response
+        # extensions (Track 5.3).
         # Validate mutual exclusion of content sources
         body_sources = [
             name

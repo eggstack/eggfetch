@@ -1,6 +1,6 @@
 # HTTPX Parity Correction Phase 2 — Request and Response Semantics
 
-Status: implemented
+Status: ready for implementation handoff
 
 Depends on:
 
@@ -110,13 +110,13 @@ Do not duplicate the native multipart encoder if it can be adapted without losin
 
 ### Track 1 acceptance criteria
 
-- [x] Direct `Request(params=...)` updates the URL correctly.
-- [x] Repeated query values survive construction.
-- [x] `data` plus `files` is accepted and encoded as multipart.
-- [x] Invalid body combinations raise the same error class and equivalent message category as HTTPX.
-- [x] JSON bytes and generated headers match the pinned reference for representative payloads.
-- [x] Multipart metadata and repeated fields are preserved.
-- [x] Large streaming file inputs are not eagerly buffered solely by Request construction.
+- [ ] Direct `Request(params=...)` updates the URL correctly.
+- [ ] Repeated query values survive construction.
+- [ ] `data` plus `files` is accepted and encoded as multipart.
+- [ ] Invalid body combinations raise the same error class and equivalent message category as HTTPX.
+- [ ] JSON bytes and generated headers match the pinned reference for representative payloads.
+- [ ] Multipart metadata and repeated fields are preserved.
+- [ ] Large streaming file inputs are not eagerly buffered solely by Request construction.
 
 # Track 2 — Match request auto-header and stream semantics
 
@@ -163,12 +163,12 @@ Expose `is_stream_consumed` consistently.
 
 ### Track 2 acceptance criteria
 
-- [x] Explicit `stream=` does not receive encoded-content auto-headers.
-- [x] Empty POST/PUT/PATCH header behavior matches HTTPX.
-- [x] Host formatting passes IPv4, IPv6, port, and IDNA cases.
-- [x] Unread streaming content raises `RequestNotRead`.
-- [x] Sync/async stream mismatches fail before dispatch.
-- [x] Request consumption state is externally consistent with HTTPX.
+- [ ] Explicit `stream=` does not receive encoded-content auto-headers.
+- [ ] Empty POST/PUT/PATCH header behavior matches HTTPX.
+- [ ] Host formatting passes IPv4, IPv6, port, and IDNA cases.
+- [ ] Unread streaming content raises `RequestNotRead`.
+- [ ] Sync/async stream mismatches fail before dispatch.
+- [ ] Request consumption state is externally consistent with HTTPX.
 
 # Track 3 — Surface response protocol metadata correctly
 
@@ -210,12 +210,12 @@ A native timing field may be used, but the facade must define one consistent sta
 
 ### Track 3 acceptance criteria
 
-- [x] HTTP/2 native responses report `HTTP/2` through the compatibility facade.
-- [x] Reason phrase uses response extensions when supplied.
-- [x] Missing request attachment produces the correct runtime error.
-- [x] Response URL cannot diverge from the attached request URL.
-- [x] Buffered and streaming elapsed timing follow HTTPX state rules.
-- [x] No response initializes elapsed to a misleading constant zero.
+- [ ] HTTP/2 native responses report `HTTP/2` through the compatibility facade.
+- [ ] Reason phrase uses response extensions when supplied.
+- [ ] Missing request attachment produces the correct runtime error.
+- [ ] Response URL cannot diverge from the attached request URL.
+- [ ] Buffered and streaming elapsed timing follow HTTPX state rules.
+- [ ] No response initializes elapsed to a misleading constant zero.
 
 # Track 4 — Correct response status and redirect state
 
@@ -257,12 +257,12 @@ Phase 4 will populate it when redirects are not followed. This phase establishes
 
 ### Track 4 acceptance criteria
 
-- [x] All status predicates match the pinned reference across representative 1xx–5xx codes.
-- [x] `raise_for_status()` raises for non-success status classes as HTTPX does.
-- [x] Raised errors retain request and response identity.
-- [x] Redirect error messages include Location when present.
-- [x] `next_request` exists and defaults to `None`.
-- [x] History construction does not alias caller-owned lists.
+- [ ] All status predicates match the pinned reference across representative 1xx–5xx codes.
+- [ ] `raise_for_status()` raises for non-success status classes as HTTPX does.
+- [ ] Raised errors retain request and response identity.
+- [ ] Redirect error messages include Location when present.
+- [ ] `next_request` exists and defaults to `None`.
+- [ ] History construction does not alias caller-owned lists.
 
 # Track 5 — Correct response content, encoding, and stream state
 
@@ -334,15 +334,15 @@ When rewrapping a response from a native or custom transport:
 
 ### Track 5 acceptance criteria
 
-- [x] Unread streaming properties raise `ResponseNotRead`.
-- [x] Closed and consumed stream errors use the compatibility exception hierarchy.
-- [x] State flags update on all completion and failure paths.
-- [x] Raw and decoded iterators are distinct.
-- [x] Multibyte text split across chunks decodes correctly.
-- [x] Line iteration matches CRLF and final-line behavior.
-- [x] Callable default encoding works after content becomes available.
-- [x] Encoding cannot be reset after text access.
-- [x] Buffered custom-transport content survives response wrapping.
+- [ ] Unread streaming properties raise `ResponseNotRead`.
+- [ ] Closed and consumed stream errors use the compatibility exception hierarchy.
+- [ ] State flags update on all completion and failure paths.
+- [ ] Raw and decoded iterators are distinct.
+- [ ] Multibyte text split across chunks decodes correctly.
+- [ ] Line iteration matches CRLF and final-line behavior.
+- [ ] Callable default encoding works after content becomes available.
+- [ ] Encoding cannot be reset after text access.
+- [ ] Buffered custom-transport content survives response wrapping.
 
 # Track 6 — Public representations and missing exports
 
@@ -369,10 +369,10 @@ The CLI entry point is lower priority than request behavior and must not trigger
 
 ### Track 6 acceptance criteria
 
-- [x] Request and Response repr match the stable public reference shape.
-- [x] Sensitive data remains redacted.
-- [x] Every missing public export has either an implementation or exact active difference record.
-- [x] No private HTTPX module compatibility is added by implication.
+- [ ] Request and Response repr match the stable public reference shape.
+- [ ] Sensitive data remains redacted.
+- [ ] Every missing public export has either an implementation or exact active difference record.
+- [ ] No private HTTPX module compatibility is added by implication.
 
 # Testing plan
 

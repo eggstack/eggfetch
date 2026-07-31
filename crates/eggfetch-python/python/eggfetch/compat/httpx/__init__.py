@@ -6,6 +6,8 @@ HTTPX code can run against the eggfetch Rust engine with minimal changes.
 
 from __future__ import annotations
 
+from contextlib import contextmanager
+
 __description__ = "A HTTPX-compatible facade for eggfetch."
 __title__ = "eggfetch[httpx-compat]"
 __version__ = "0.28.1"
@@ -106,51 +108,314 @@ from eggfetch.compat.httpx._response import Response
 from eggfetch.compat.httpx._client import Client, AsyncClient
 
 
-# Top-level convenience functions
-def request(*args, **kwargs):
-    with Client() as client:
-        return client.request(*args, **kwargs)
+# Top-level convenience functions — explicit signatures matching HTTPX 0.28.1
 
 
-def get(*args, **kwargs):
-    with Client() as client:
-        return client.get(*args, **kwargs)
+def request(
+    method,
+    url,
+    *,
+    params=None,
+    content=None,
+    data=None,
+    files=None,
+    json=None,
+    headers=None,
+    cookies=None,
+    auth=None,
+    proxy=None,
+    timeout=Timeout(5.0),
+    follow_redirects=False,
+    verify=True,
+    trust_env=True,
+):
+    with Client(
+        cookies=cookies,
+        proxy=proxy,
+        verify=verify,
+        timeout=timeout,
+        trust_env=trust_env,
+    ) as client:
+        return client.request(
+            method,
+            url,
+            params=params,
+            content=content,
+            data=data,
+            files=files,
+            json=json,
+            headers=headers,
+            auth=auth,
+            follow_redirects=follow_redirects,
+        )
 
 
-def post(*args, **kwargs):
-    with Client() as client:
-        return client.post(*args, **kwargs)
+def get(
+    url,
+    *,
+    params=None,
+    headers=None,
+    cookies=None,
+    auth=None,
+    proxy=None,
+    follow_redirects=False,
+    verify=True,
+    timeout=Timeout(5.0),
+    trust_env=True,
+):
+    with Client(
+        cookies=cookies,
+        proxy=proxy,
+        verify=verify,
+        timeout=timeout,
+        trust_env=trust_env,
+    ) as client:
+        return client.get(
+            url,
+            params=params,
+            headers=headers,
+            auth=auth,
+            follow_redirects=follow_redirects,
+        )
 
 
-def put(*args, **kwargs):
-    with Client() as client:
-        return client.put(*args, **kwargs)
+def post(
+    url,
+    *,
+    content=None,
+    data=None,
+    files=None,
+    json=None,
+    params=None,
+    headers=None,
+    cookies=None,
+    auth=None,
+    proxy=None,
+    follow_redirects=False,
+    verify=True,
+    timeout=Timeout(5.0),
+    trust_env=True,
+):
+    with Client(
+        cookies=cookies,
+        proxy=proxy,
+        verify=verify,
+        timeout=timeout,
+        trust_env=trust_env,
+    ) as client:
+        return client.post(
+            url,
+            content=content,
+            data=data,
+            files=files,
+            json=json,
+            params=params,
+            headers=headers,
+            auth=auth,
+            follow_redirects=follow_redirects,
+        )
 
 
-def patch(*args, **kwargs):
-    with Client() as client:
-        return client.patch(*args, **kwargs)
+def put(
+    url,
+    *,
+    content=None,
+    data=None,
+    files=None,
+    json=None,
+    params=None,
+    headers=None,
+    cookies=None,
+    auth=None,
+    proxy=None,
+    follow_redirects=False,
+    verify=True,
+    timeout=Timeout(5.0),
+    trust_env=True,
+):
+    with Client(
+        cookies=cookies,
+        proxy=proxy,
+        verify=verify,
+        timeout=timeout,
+        trust_env=trust_env,
+    ) as client:
+        return client.put(
+            url,
+            content=content,
+            data=data,
+            files=files,
+            json=json,
+            params=params,
+            headers=headers,
+            auth=auth,
+            follow_redirects=follow_redirects,
+        )
 
 
-def delete(*args, **kwargs):
-    with Client() as client:
-        return client.delete(*args, **kwargs)
+def patch(
+    url,
+    *,
+    content=None,
+    data=None,
+    files=None,
+    json=None,
+    params=None,
+    headers=None,
+    cookies=None,
+    auth=None,
+    proxy=None,
+    follow_redirects=False,
+    verify=True,
+    timeout=Timeout(5.0),
+    trust_env=True,
+):
+    with Client(
+        cookies=cookies,
+        proxy=proxy,
+        verify=verify,
+        timeout=timeout,
+        trust_env=trust_env,
+    ) as client:
+        return client.patch(
+            url,
+            content=content,
+            data=data,
+            files=files,
+            json=json,
+            params=params,
+            headers=headers,
+            auth=auth,
+            follow_redirects=follow_redirects,
+        )
 
 
-def head(*args, **kwargs):
-    with Client() as client:
-        return client.head(*args, **kwargs)
+def delete(
+    url,
+    *,
+    params=None,
+    headers=None,
+    cookies=None,
+    auth=None,
+    proxy=None,
+    follow_redirects=False,
+    timeout=Timeout(5.0),
+    verify=True,
+    trust_env=True,
+):
+    with Client(
+        cookies=cookies,
+        proxy=proxy,
+        verify=verify,
+        timeout=timeout,
+        trust_env=trust_env,
+    ) as client:
+        return client.delete(
+            url,
+            params=params,
+            headers=headers,
+            auth=auth,
+            follow_redirects=follow_redirects,
+        )
 
 
-def options(*args, **kwargs):
-    with Client() as client:
-        return client.options(*args, **kwargs)
+def head(
+    url,
+    *,
+    params=None,
+    headers=None,
+    cookies=None,
+    auth=None,
+    proxy=None,
+    follow_redirects=False,
+    verify=True,
+    timeout=Timeout(5.0),
+    trust_env=True,
+):
+    with Client(
+        cookies=cookies,
+        proxy=proxy,
+        verify=verify,
+        timeout=timeout,
+        trust_env=trust_env,
+    ) as client:
+        return client.head(
+            url,
+            params=params,
+            headers=headers,
+            auth=auth,
+            follow_redirects=follow_redirects,
+        )
 
 
-def stream(*args, **kwargs):
-    with Client() as client:
-        with client.stream(*args, **kwargs) as response:
-            return response
+def options(
+    url,
+    *,
+    params=None,
+    headers=None,
+    cookies=None,
+    auth=None,
+    proxy=None,
+    follow_redirects=False,
+    verify=True,
+    timeout=Timeout(5.0),
+    trust_env=True,
+):
+    with Client(
+        cookies=cookies,
+        proxy=proxy,
+        verify=verify,
+        timeout=timeout,
+        trust_env=trust_env,
+    ) as client:
+        return client.options(
+            url,
+            params=params,
+            headers=headers,
+            auth=auth,
+            follow_redirects=follow_redirects,
+        )
+
+
+@contextmanager
+def stream(
+    method,
+    url,
+    *,
+    params=None,
+    content=None,
+    data=None,
+    files=None,
+    json=None,
+    headers=None,
+    cookies=None,
+    auth=None,
+    proxy=None,
+    timeout=Timeout(5.0),
+    follow_redirects=False,
+    verify=True,
+    trust_env=True,
+):
+    with Client(
+        cookies=cookies,
+        proxy=proxy,
+        verify=verify,
+        timeout=timeout,
+        trust_env=trust_env,
+    ) as client:
+        with client.stream(
+            method,
+            url,
+            params=params,
+            content=content,
+            data=data,
+            files=files,
+            json=json,
+            headers=headers,
+            auth=auth,
+            follow_redirects=follow_redirects,
+        ) as response:
+            yield response
 
 
 USE_CLIENT_DEFAULT = _USE_CLIENT_DEFAULT

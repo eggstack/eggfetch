@@ -61,13 +61,6 @@ from eggfetch.compat.httpx import Client, AsyncClient, Request, Response
 - Value objects: `URL`, `QueryParams`, `Headers`, `Cookies`, `Timeout`, `Limits`, `Proxy`
 - Status code helpers (`codes`)
 - Request and Response objects with full HTTPX-compatible metadata
-- **Request URL params** merged into URL; **body exclusion** follows HTTPX rules (data+files valid for multipart)
-- **JSON serialization** compact format; **multipart** 4-tuple file spec; **auto-headers** corrected for stream=
-- **Response extensions** (http_version, reason_phrase); **elapsed** timing; **status predicates** matching HTTPX
-- **raise_for_status()** for all non-success; **next_request** stub; **history** copy semantics
-- **Stream exceptions** (ResponseNotRead, StreamClosed, StreamConsumed); **stream state** flags
-- **Encoding**: callable default_encoding; encoding setter guard after text access
-- **Exports**: `main()`, `create_ssl_context()` stubs; **repr** with status+reason phrase
 - `Client` and `AsyncClient` with constructor signatures, merge semantics, `build_request()`, `send()`
 - Top-level helpers: `get`, `post`, `put`, `patch`, `delete`, `head`, `options`, `request`, `stream`
 - Complete exception hierarchy matching HTTPX MRO
@@ -132,19 +125,6 @@ EGGFETCH_COMPAT_REQUIRED=1 pytest \
   crates/eggfetch-python/tests/compat/test_auth_input_normalization.py \
   crates/eggfetch-python/tests/compat/test_client_mutability_and_state.py \
   crates/eggfetch-python/tests/compat/test_protocol_and_unsupported_options.py \
-  -v --strict-markers
-```
-
-Phase 2 parity test files:
-
-```sh
-EGGFETCH_COMPAT_REQUIRED=1 pytest \
-  crates/eggfetch-python/tests/compat/test_request_construction_parity.py \
-  crates/eggfetch-python/tests/compat/test_request_stream_state.py \
-  crates/eggfetch-python/tests/compat/test_response_metadata_parity.py \
-  crates/eggfetch-python/tests/compat/test_response_status_and_redirect_state.py \
-  crates/eggfetch-python/tests/compat/test_response_stream_state_parity.py \
-  crates/eggfetch-python/tests/compat/test_response_encoding_parity.py \
   -v --strict-markers
 ```
 

@@ -210,6 +210,7 @@ The facade converts between HTTPX-compatible objects and native types at the bou
 
 ### What Phase 3 Implements
 
+**Streaming and body:**
 - Stream base classes (`SyncByteStream`, `AsyncByteStream`, `ByteStream`) for custom body producers.
 - Response streaming delegation: compat `Response` iterates over native `StreamingResponse` chunks.
 - `iter_raw()`/`aiter_raw()` for undecoded transport-level bytes.
@@ -218,3 +219,13 @@ The facade converts between HTTPX-compatible objects and native types at the bou
 - Request streaming: iterable content, file-like objects, and custom `ByteStream` subclasses passed through to the native streaming engine.
 - Multipart passthrough: compat `Request` delegates multipart encoding to the native encoder.
 - `StreamingRawBytesIterator` and `AsyncStreamingRawBytesIterator` types exposed to Python.
+
+**Transport, mount, hook, and dispatch (Phase 3 correction):**
+
+- **One-hop dispatch contract**: `_dispatch_one_hop()` sends exactly one prepared Request through exactly one selected transport. Native dispatch always uses `follow_redirects=False`. The higher-level client owns auth/redirect orchestration.
+- **Timeout extension**: Effective timeout is placed into `request.extensions["timeout"]` unless the caller provided one, matching HTTPX's transport contract.
+- **Per-hop event hooks** (Track 4): Request and response hooks run around every dispatch hop. For auth challenges, hooks see each intermediate request/response, not just the final pair. Ordering: auth yields Request → request hook → transport → response hook → auth/redirect decision.
+- **Faithful mount matching** (Track 3): `_parse_mount_pattern()` returns a 5-tuple `(scheme, host, port, path, is_wildcard)`. Wildcard domain patterns (`all://*.example.com`) are supported. Priority follows HTTPX 0.28.1: exact host+port+path > wildcard > host+port > host+path > host > scheme > catch-all. Explicit `None` mounts bypass to default transport. Malformed patterns are rejected at construction.
+- **Extension preservation** (Track 5): Client and request extensions merge losslessly. Request extensions live on `response.request.extensions`, never on `response.extensions`. Response extensions from the transport handler are preserved without overwriting.
+- **Transport ownership and close** (Track 6): Duplicate mounted transport instances close exactly once. Close errors propagate (last error raised). Client close is idempotent.
+- **Transport body preservation** (Track 2): Buffered custom transport responses retain their body under `stream=True`. Streaming responses remain lazy. `HTTPTransport`/`AsyncHTTPTransport` always return stream-backed responses.

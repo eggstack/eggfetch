@@ -38,6 +38,8 @@ from eggfetch.compat.httpx._client import (
     _convert_proxy,
     _map_exception,
     _wrap_response,
+    _wrap_streaming_response,
+    _validate_transport_options,
 )
 
 if typing.TYPE_CHECKING:
@@ -79,6 +81,9 @@ class AsyncBaseTransport:
 class HTTPTransport(BaseTransport):
     """Transport backed by eggfetch-core for synchronous requests.
 
+    The transport always returns a stream-backed Response so that the
+    higher-level client layer can decide whether to buffer or iterate.
+
     Note: ``local_address``, ``socket_options``, and ``uds_path`` are
     accepted for API compatibility but are **not forwarded** to
     eggfetch-core, which does not support them.
@@ -99,6 +104,9 @@ class HTTPTransport(BaseTransport):
         socket_options: typing.Any | None = None,
         uds: str | None = None,
     ) -> None:
+        _validate_transport_options(
+            uds=uds, local_address=local_address, socket_options=socket_options,
+        )
         self._verify = verify
         self._cert = cert
         self._trust_env = trust_env
@@ -171,7 +179,7 @@ class HTTPTransport(BaseTransport):
         except Exception as exc:
             raise _map_exception(exc, request) from exc
 
-        return _wrap_response(native_resp, request)
+        return _wrap_streaming_response(native_resp, request)
 
     def close(self) -> None:
         if self._native_client is not None and not self._is_closed:
@@ -184,6 +192,9 @@ class HTTPTransport(BaseTransport):
 
 class AsyncHTTPTransport(AsyncBaseTransport):
     """Transport backed by eggfetch-core for asynchronous requests.
+
+    The transport always returns a stream-backed Response so that the
+    higher-level client layer can decide whether to buffer or iterate.
 
     Note: ``local_address``, ``socket_options``, and ``uds_path`` are
     accepted for API compatibility but are **not forwarded** to
@@ -205,6 +216,9 @@ class AsyncHTTPTransport(AsyncBaseTransport):
         socket_options: typing.Any | None = None,
         uds: str | None = None,
     ) -> None:
+        _validate_transport_options(
+            uds=uds, local_address=local_address, socket_options=socket_options,
+        )
         self._verify = verify
         self._cert = cert
         self._trust_env = trust_env
@@ -277,7 +291,7 @@ class AsyncHTTPTransport(AsyncBaseTransport):
         except Exception as exc:
             raise _map_exception(exc, request) from exc
 
-        return _wrap_response(native_resp, request)
+        return _wrap_streaming_response(native_resp, request)
 
     async def aclose(self) -> None:
         if self._native_client is not None and not self._is_closed:
