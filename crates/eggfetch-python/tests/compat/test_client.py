@@ -144,7 +144,10 @@ class TestClientConstructor:
 
     def test_auth(self):
         client = Client(auth=("user", "pass"))
-        assert client.auth == ("user", "pass")
+        from eggfetch.compat.httpx._auth import BasicAuth
+        assert isinstance(client.auth, BasicAuth)
+        assert client.auth.username == "user"
+        assert client.auth.password == "pass"
 
     def test_follow_redirects(self):
         client = Client(follow_redirects=True)

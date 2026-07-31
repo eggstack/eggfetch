@@ -334,6 +334,10 @@ class Response:
         return 100 <= self._status_code < 200
 
     @property
+    def is_closed(self) -> bool:
+        return self._is_closed
+
+    @property
     def has_redirect_location(self) -> bool:
         return "location" in self._headers and self.is_redirect
 

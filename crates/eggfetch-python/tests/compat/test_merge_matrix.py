@@ -143,8 +143,11 @@ class TestTimeoutOverride:
 
 class TestAuthOverride:
     def test_client_auth(self):
+        from eggfetch.compat.httpx._auth import BasicAuth
         client = Client(auth=("user", "pass"))
-        assert client.auth == ("user", "pass")
+        assert isinstance(client.auth, BasicAuth)
+        assert client.auth.username == "user"
+        assert client.auth.password == "pass"
 
     def test_client_auth_none(self):
         client = Client()

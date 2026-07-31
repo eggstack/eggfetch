@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import enum
 import typing
 import urllib.parse
 from contextlib import contextmanager, asynccontextmanager
@@ -15,6 +16,7 @@ from eggfetch.compat.httpx._cookies import Cookies
 from eggfetch.compat.httpx._timeout import Timeout
 from eggfetch.compat.httpx._limits import Limits
 from eggfetch.compat.httpx._proxy import Proxy
+from eggfetch.compat.httpx._auth import Auth, BasicAuth
 from eggfetch.compat.httpx._request import Request
 from eggfetch.compat.httpx._response import Response
 from eggfetch.compat.httpx._exceptions import (
@@ -40,6 +42,157 @@ if typing.TYPE_CHECKING:
     from typing import Any, AsyncIterator, Iterator
 
 _USE_CLIENT_DEFAULT = object()
+
+
+# ── Client state ────────────────────────────────────────────────────────
+
+class _ClientState(enum.Enum):
+    UNOPENED = "unopened"
+    OPENED = "opened"
+    CLOSED = "closed"
+
+
+# ── Auth normalization ──────────────────────────────────────────────────
+
+class _FunctionAuth(Auth):
+    """Adapter wrapping a callable as a compatibility Auth object.
+
+    Matches HTTPX's callable-auth behavior: the callable receives the
+    request and must return a request (sync) or await a request (async).
+    """
+
+    def __init__(self, func: typing.Callable[..., Any]) -> None:
+        self._func = func
+
+    def sync_auth_flow(self, request: Request):  # type: ignore[override]
+        result = self._func(request)
+        if isinstance(result, Request):
+            yield result
+        elif hasattr(result, "__iter__"):
+            yield from result
+        else:
+            yield request
+
+    async def async_auth_flow(self, request: Request):  # type: ignore[override]
+        if asyncio.iscoroutinefunction(self._func):
+            result = await self._func(request)
+        else:
+            result = self._func(request)
+        if isinstance(result, Request):
+            yield result
+        elif hasattr(result, "__aiter__"):
+            async for req in result:
+                yield req
+        elif hasattr(result, "__iter__"):
+            for req in result:
+                yield req
+        else:
+            yield request
+
+    def __repr__(self) -> str:
+        return f"_FunctionAuth({self._func!r})"
+
+
+def _build_auth(auth: typing.Any) -> Auth | None:
+    """Normalize an auth value into a compatibility Auth object.
+
+    Returns ``None`` for no-auth.  Raises ``TypeError`` for unsupported
+    types.
+    """
+    if auth is None:
+        return None
+    if isinstance(auth, Auth):
+        return auth
+    if isinstance(auth, tuple):
+        if len(auth) != 2:
+            raise TypeError(
+                f"auth tuple must be (username, password), got {len(auth)} elements"
+            )
+        username, password = auth
+        return BasicAuth(username=str(username), password=str(password))
+    if callable(auth):
+        return _FunctionAuth(auth)
+    raise TypeError(
+        f"auth must be None, Auth instance, (username, password) tuple, or callable, "
+        f"got {type(auth).__name__}"
+    )
+
+
+def _extract_url_credentials(url: URL) -> Auth | None:
+    """Extract Basic Auth from URL user-info, or return None."""
+    url_str = str(url)
+    parsed = urllib.parse.urlsplit(url_str)
+    if parsed.username:
+        return BasicAuth(
+            username=urllib.parse.unquote(parsed.username),
+            password=urllib.parse.unquote(parsed.password or ""),
+        )
+    return None
+
+
+# ── Protocol validation ─────────────────────────────────────────────────
+
+def _validate_protocol_options(http1: bool, http2: bool) -> None:
+    """Validate protocol combination.  Raises ValueError on invalid combos."""
+    if not http1 and not http2:
+        raise ValueError(
+            "At least one of http1 or http2 must be True"
+        )
+    if not http1 and http2:
+        raise NotImplementedError(
+            "eggfetch does not support http1=False, http2=True (H2-only mode)"
+        )
+
+
+# ── Transport unsupported-option validation ─────────────────────────────
+
+def _validate_transport_options(
+    *,
+    uds: str | None = None,
+    local_address: str | None = None,
+    socket_options: typing.Any | None = None,
+) -> None:
+    """Reject unsupported transport options before any network activity."""
+    if uds is not None:
+        raise NotImplementedError(
+            "eggfetch does not support Unix domain sockets (uds)"
+        )
+    if local_address is not None:
+        raise NotImplementedError(
+            "eggfetch does not support local_address"
+        )
+    if socket_options is not None:
+        raise NotImplementedError(
+            "eggfetch does not support socket_options"
+        )
+
+
+# ── Default headers ─────────────────────────────────────────────────────
+
+def _default_httpx_headers() -> Headers:
+    """Return HTTPX-equivalent default headers."""
+    headers = Headers()
+    headers["accept"] = "*/*"
+    headers["accept-encoding"] = "gzip, deflate, br"
+    headers["connection"] = "keep-alive"
+    headers["user-agent"] = "python-httpx/0.28.1"
+    return headers
+
+
+def _merge_default_headers(user_headers) -> Headers:
+    """Merge user-provided headers with HTTPX default headers.
+
+    User headers override defaults using duplicate-preserving semantics.
+    """
+    defaults = _default_httpx_headers()
+    if user_headers is not None:
+        if isinstance(user_headers, Headers):
+            defaults.update(user_headers)
+        elif isinstance(user_headers, dict):
+            defaults.update(user_headers)
+        elif isinstance(user_headers, (list, tuple)):
+            defaults.update(user_headers)
+    return defaults
 
 
 def _convert_timeout(timeout):
@@ -408,9 +561,10 @@ class Client:
         default_encoding="utf-8",
         extensions=None,
     ):
-        self._auth = auth
+        _validate_protocol_options(http1, http2)
+        self._auth = _build_auth(auth)
         self._params = params if isinstance(params, QueryParams) else QueryParams(params)
-        self._headers = headers if isinstance(headers, Headers) else Headers(headers)
+        self._headers = _merge_default_headers(headers)
         self._cookies = cookies if isinstance(cookies, Cookies) else Cookies(cookies)
         self._verify = verify
         self._cert = cert
@@ -428,7 +582,7 @@ class Client:
         self._default_encoding = default_encoding
         self._extensions = extensions or {}
         self._native_client = None
-        self._is_closed = False
+        self._state = _ClientState.UNOPENED
 
         self._mounts: dict[str, Any] = {}
         if mounts:
@@ -437,8 +591,12 @@ class Client:
 
     def _ensure_client(self):
         if self._transport is not None:
+            if self._state == _ClientState.UNOPENED:
+                self._state = _ClientState.OPENED
             return
-        if self._native_client is None or self._is_closed:
+        if self._state == _ClientState.CLOSED:
+            raise RuntimeError("Client is closed")
+        if self._native_client is None:
             kwargs = {}
             if self._headers:
                 kwargs["headers"] = _convert_headers(self._headers)
@@ -463,39 +621,93 @@ class Client:
             if self._http2:
                 kwargs["http2"] = self._http2
             self._native_client = eggfetch.Client(**kwargs)
-            self._is_closed = False
+            self._state = _ClientState.OPENED
 
     @property
     def auth(self):
         return self._auth
 
+    @auth.setter
+    def auth(self, value):
+        self._auth = _build_auth(value)
+
     @property
     def base_url(self) -> URL:
         return self._base_url
+
+    @base_url.setter
+    def base_url(self, value):
+        if isinstance(value, str):
+            self._base_url = URL(value)
+        elif isinstance(value, URL):
+            self._base_url = value
+        else:
+            raise TypeError(f"base_url must be str or URL, got {type(value).__name__}")
 
     @property
     def cookies(self) -> Cookies:
         return self._cookies
 
+    @cookies.setter
+    def cookies(self, value):
+        if isinstance(value, Cookies):
+            self._cookies = value
+        elif isinstance(value, dict):
+            self._cookies = Cookies(value)
+        else:
+            self._cookies = Cookies(value)
+
     @property
     def event_hooks(self) -> dict:
         return self._event_hooks
+
+    @event_hooks.setter
+    def event_hooks(self, value):
+        if not isinstance(value, dict):
+            raise TypeError(f"event_hooks must be dict, got {type(value).__name__}")
+        self._event_hooks = {
+            "request": list(value.get("request", [])),
+            "response": list(value.get("response", [])),
+        }
 
     @property
     def headers(self) -> Headers:
         return self._headers
 
+    @headers.setter
+    def headers(self, value):
+        if isinstance(value, Headers):
+            self._headers = value
+        elif isinstance(value, dict):
+            self._headers = Headers(value)
+        else:
+            self._headers = Headers(value)
+
     @property
     def is_closed(self) -> bool:
-        return self._is_closed
+        return self._state == _ClientState.CLOSED
 
     @property
     def params(self) -> QueryParams:
         return self._params
 
+    @params.setter
+    def params(self, value):
+        if isinstance(value, QueryParams):
+            self._params = value
+        else:
+            self._params = QueryParams(value)
+
     @property
     def timeout(self) -> Timeout:
         return self._timeout
+
+    @timeout.setter
+    def timeout(self, value):
+        if isinstance(value, Timeout):
+            self._timeout = value
+        else:
+            self._timeout = Timeout(value)
 
     @property
     def trust_env(self) -> bool:
@@ -568,7 +780,7 @@ class Client:
 
     def send(self, request, *, stream=False, auth=_USE_CLIENT_DEFAULT,
              follow_redirects=None, timeout=_USE_CLIENT_DEFAULT):
-        if self._is_closed:
+        if self._state == _ClientState.CLOSED:
             raise RuntimeError("Client is closed")
 
         if not isinstance(request, Request):
@@ -577,8 +789,11 @@ class Client:
         # 1. Resolve auth
         if auth is _USE_CLIENT_DEFAULT:
             resolved_auth = self._auth
+        elif auth is None:
+            # Explicit auth=None disables auth entirely
+            resolved_auth = None
         else:
-            resolved_auth = auth
+            resolved_auth = _build_auth(auth)
 
         # 2. Execute request hooks BEFORE auth and dispatch
         for hook in self._event_hooks.get("request", []):
@@ -670,12 +885,26 @@ class Client:
         return self.request("OPTIONS", url, **kwargs)
 
     @contextmanager
-    def stream(self, method, url, **kwargs):
-        self._ensure_client()
-        req = self.build_request(method, url, **kwargs)
+    def stream(self, method, url, *, content=None, data=None, files=None,
+               json=None, params=None, headers=None, cookies=None,
+               auth=_USE_CLIENT_DEFAULT, follow_redirects=None,
+               timeout=_USE_CLIENT_DEFAULT, extensions=None):
+        if self._state == _ClientState.CLOSED:
+            raise RuntimeError("Client is closed")
+        req = self.build_request(
+            method, url,
+            content=content, data=data, files=files, json=json,
+            params=params, headers=headers, cookies=cookies,
+            extensions=extensions,
+        )
         response = None
         try:
-            response = self.send(req, stream=True)
+            response = self.send(
+                req, stream=True,
+                auth=auth,
+                follow_redirects=follow_redirects,
+                timeout=timeout,
+            )
             yield response
         finally:
             if response is not None:
@@ -698,7 +927,7 @@ class Client:
                 self._native_client.close()
             except Exception:
                 pass
-        self._is_closed = True
+        self._state = _ClientState.CLOSED
 
     def __enter__(self) -> Client:
         self._ensure_client()
@@ -783,9 +1012,10 @@ class AsyncClient:
         default_encoding="utf-8",
         extensions=None,
     ):
-        self._auth = auth
+        _validate_protocol_options(http1, http2)
+        self._auth = _build_auth(auth)
         self._params = params if isinstance(params, QueryParams) else QueryParams(params)
-        self._headers = headers if isinstance(headers, Headers) else Headers(headers)
+        self._headers = _merge_default_headers(headers)
         self._cookies = cookies if isinstance(cookies, Cookies) else Cookies(cookies)
         self._verify = verify
         self._cert = cert
@@ -804,7 +1034,7 @@ class AsyncClient:
         self._default_encoding = default_encoding
         self._extensions = extensions or {}
         self._native_client = None
-        self._is_closed = False
+        self._state = _ClientState.UNOPENED
 
         self._mounts: dict[str, Any] = {}
         if mounts:
@@ -813,8 +1043,12 @@ class AsyncClient:
 
     def _ensure_client(self):
         if self._transport is not None or self._async_transport is not None:
+            if self._state == _ClientState.UNOPENED:
+                self._state = _ClientState.OPENED
             return
-        if self._native_client is None or self._is_closed:
+        if self._state == _ClientState.CLOSED:
+            raise RuntimeError("Client is closed")
+        if self._native_client is None:
             kwargs = {}
             if self._headers:
                 kwargs["headers"] = _convert_headers(self._headers)
@@ -839,39 +1073,93 @@ class AsyncClient:
             if self._http2:
                 kwargs["http2"] = self._http2
             self._native_client = eggfetch.AsyncClient(**kwargs)
-            self._is_closed = False
+            self._state = _ClientState.OPENED
 
     @property
     def auth(self):
         return self._auth
 
+    @auth.setter
+    def auth(self, value):
+        self._auth = _build_auth(value)
+
     @property
     def base_url(self) -> URL:
         return self._base_url
+
+    @base_url.setter
+    def base_url(self, value):
+        if isinstance(value, str):
+            self._base_url = URL(value)
+        elif isinstance(value, URL):
+            self._base_url = value
+        else:
+            raise TypeError(f"base_url must be str or URL, got {type(value).__name__}")
 
     @property
     def cookies(self) -> Cookies:
         return self._cookies
 
+    @cookies.setter
+    def cookies(self, value):
+        if isinstance(value, Cookies):
+            self._cookies = value
+        elif isinstance(value, dict):
+            self._cookies = Cookies(value)
+        else:
+            self._cookies = Cookies(value)
+
     @property
     def event_hooks(self) -> dict:
         return self._event_hooks
+
+    @event_hooks.setter
+    def event_hooks(self, value):
+        if not isinstance(value, dict):
+            raise TypeError(f"event_hooks must be dict, got {type(value).__name__}")
+        self._event_hooks = {
+            "request": list(value.get("request", [])),
+            "response": list(value.get("response", [])),
+        }
 
     @property
     def headers(self) -> Headers:
         return self._headers
 
+    @headers.setter
+    def headers(self, value):
+        if isinstance(value, Headers):
+            self._headers = value
+        elif isinstance(value, dict):
+            self._headers = Headers(value)
+        else:
+            self._headers = Headers(value)
+
     @property
     def is_closed(self) -> bool:
-        return self._is_closed
+        return self._state == _ClientState.CLOSED
 
     @property
     def params(self) -> QueryParams:
         return self._params
 
+    @params.setter
+    def params(self, value):
+        if isinstance(value, QueryParams):
+            self._params = value
+        else:
+            self._params = QueryParams(value)
+
     @property
     def timeout(self) -> Timeout:
         return self._timeout
+
+    @timeout.setter
+    def timeout(self, value):
+        if isinstance(value, Timeout):
+            self._timeout = value
+        else:
+            self._timeout = Timeout(value)
 
     @property
     def trust_env(self) -> bool:
@@ -957,7 +1245,7 @@ class AsyncClient:
 
     async def send(self, request, *, stream=False, auth=_USE_CLIENT_DEFAULT,
                    follow_redirects=None, timeout=_USE_CLIENT_DEFAULT):
-        if self._is_closed:
+        if self._state == _ClientState.CLOSED:
             raise RuntimeError("Client is closed")
 
         if not isinstance(request, Request):
@@ -966,8 +1254,10 @@ class AsyncClient:
         # 1. Resolve auth
         if auth is _USE_CLIENT_DEFAULT:
             resolved_auth = self._auth
+        elif auth is None:
+            resolved_auth = None
         else:
-            resolved_auth = auth
+            resolved_auth = _build_auth(auth)
 
         # 2. Execute request hooks BEFORE auth and dispatch
         for hook in self._event_hooks.get("request", []):
@@ -1065,12 +1355,26 @@ class AsyncClient:
         return await self.request("OPTIONS", url, **kwargs)
 
     @asynccontextmanager
-    async def stream(self, method, url, **kwargs):
-        self._ensure_client()
-        req = self.build_request(method, url, **kwargs)
+    async def stream(self, method, url, *, content=None, data=None, files=None,
+                     json=None, params=None, headers=None, cookies=None,
+                     auth=_USE_CLIENT_DEFAULT, follow_redirects=None,
+                     timeout=_USE_CLIENT_DEFAULT, extensions=None):
+        if self._state == _ClientState.CLOSED:
+            raise RuntimeError("Client is closed")
+        req = self.build_request(
+            method, url,
+            content=content, data=data, files=files, json=json,
+            params=params, headers=headers, cookies=cookies,
+            extensions=extensions,
+        )
         response = None
         try:
-            response = await self.send(req, stream=True)
+            response = await self.send(
+                req, stream=True,
+                auth=auth,
+                follow_redirects=follow_redirects,
+                timeout=timeout,
+            )
             yield response
         finally:
             if response is not None:
@@ -1106,7 +1410,7 @@ class AsyncClient:
                 await self._native_client.aclose()
             except Exception:
                 pass
-        self._is_closed = True
+        self._state = _ClientState.CLOSED
 
     async def aclose(self) -> None:
         await self.close()

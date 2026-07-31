@@ -1,6 +1,6 @@
 # HTTPX Parity Correction Phase 1 — Entrypoints, Client Configuration, Auth Normalization, and Lifecycle
 
-Status: ready for implementation handoff
+Status: implemented
 
 Depends on: `plans/httpx-parity-correction-roadmap.md`
 

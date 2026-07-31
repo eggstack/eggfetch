@@ -91,6 +91,18 @@ from eggfetch.compat.httpx import Client, AsyncClient, Request, Response
 - Behavioral downstream fixtures (`compat/downstream/behavioral_fixtures/`)
 - Native lifecycle proof fixtures (`test_native_timeout_classification.py`, `test_soak.py`, proxy and TLS tests)
 
+**Phase 1 / HTTPX Parity Correction implements:**
+- Explicit top-level function signatures matching HTTPX 0.28.1 (`request`, `get`, `post`, `put`, `patch`, `delete`, `head`, `options`, `stream`)
+- Client-only options (`cookies`, `proxy`, `verify`, `timeout`, `trust_env`) separated from request args in top-level helpers
+- `stream()` implemented as real `@contextmanager` yielding open response
+- Auth normalization: tuples become `BasicAuth`, callables become `_FunctionAuth`, `None` disables auth
+- Client state enum (unopened/opened/closed) preventing reopen after close
+- Property setters for `auth`, `base_url`, `cookies`, `event_hooks`, `headers`, `params`, `timeout`
+- HTTPX default headers (`Accept`, `Accept-Encoding`, `Connection`, `User-Agent`)
+- Protocol validation: `http1=False, http2=False` raises `ValueError`, `http1=False, http2=True` raises `NotImplementedError`
+- Transport unsupported option rejection: `uds`, `local_address`, `socket_options` raise `NotImplementedError`
+- `Response.is_closed` public property for stream context manager compatibility
+
 **Testing the compat layer:**
 
 ```sh
@@ -102,6 +114,18 @@ Phase 4 test files:
 
 ```sh
 EGGFETCH_COMPAT_REQUIRED=1 pytest crates/eggfetch-python/tests/compat/test_transports.py crates/eggfetch-python/tests/compat/test_mock_transport.py crates/eggfetch-python/tests/compat/test_mounts.py crates/eggfetch-python/tests/compat/test_auth.py crates/eggfetch-python/tests/compat/test_hooks.py crates/eggfetch-python/tests/compat/test_wsgi.py crates/eggfetch-python/tests/compat/test_asgi.py -v --strict-markers
+```
+
+Phase 1 corrective closure test files:
+
+```sh
+EGGFETCH_COMPAT_REQUIRED=1 pytest \
+  crates/eggfetch-python/tests/compat/test_top_level_helpers_parity.py \
+  crates/eggfetch-python/tests/compat/test_client_stream_overrides.py \
+  crates/eggfetch-python/tests/compat/test_auth_input_normalization.py \
+  crates/eggfetch-python/tests/compat/test_client_mutability_and_state.py \
+  crates/eggfetch-python/tests/compat/test_protocol_and_unsupported_options.py \
+  -v --strict-markers
 ```
 
 Validate profiles and manifests:

@@ -38,6 +38,7 @@ from eggfetch.compat.httpx._client import (
     _convert_proxy,
     _map_exception,
     _wrap_response,
+    _validate_transport_options,
 )
 
 if typing.TYPE_CHECKING:
@@ -99,6 +100,9 @@ class HTTPTransport(BaseTransport):
         socket_options: typing.Any | None = None,
         uds: str | None = None,
     ) -> None:
+        _validate_transport_options(
+            uds=uds, local_address=local_address, socket_options=socket_options,
+        )
         self._verify = verify
         self._cert = cert
         self._trust_env = trust_env
@@ -205,6 +209,9 @@ class AsyncHTTPTransport(AsyncBaseTransport):
         socket_options: typing.Any | None = None,
         uds: str | None = None,
     ) -> None:
+        _validate_transport_options(
+            uds=uds, local_address=local_address, socket_options=socket_options,
+        )
         self._verify = verify
         self._cert = cert
         self._trust_env = trust_env
