@@ -646,6 +646,168 @@ def _ensure_timeout_extension(request: Request, timeout) -> None:
         request.extensions["timeout"] = Timeout(timeout)
 
 
+# ── Redirect helpers (Phase 4, Track 2) ────────────────────────────────
+
+_REDIRECT_STATUSES = frozenset({301, 302, 303, 307, 308})
+
+
+def _is_redirect_status(status_code: int) -> bool:
+    """Return True if *status_code* is a redirect that may need following."""
+    return status_code in _REDIRECT_STATUSES
+
+
+def _port_or_default(url: URL) -> int | None:
+    """Return the port, or the default port for the scheme."""
+    if url.port is not None:
+        return url.port
+    if url.scheme == "https":
+        return 443
+    if url.scheme == "http":
+        return 80
+    return None
+
+
+def _same_origin(url: URL, other: URL) -> bool:
+    """Return True if *url* and *other* share the same origin."""
+    return (
+        url.scheme == other.scheme
+        and url.host == other.host
+        and _port_or_default(url) == _port_or_default(other)
+    )
+
+
+def _is_https_redirect(url: URL, location: URL) -> bool:
+    """Return True if *location* is an HTTPS upgrade of *url*."""
+    if url.host != location.host:
+        return False
+    return (
+        url.scheme == "http"
+        and _port_or_default(url) == 80
+        and location.scheme == "https"
+        and _port_or_default(location) == 443
+    )
+
+
+def _redirect_method(request: Request, response: Response) -> str:
+    """Determine the method for a redirect request (HTTPX 0.28.1 rules)."""
+    method = request.method
+
+    # 303 See Other: change non-HEAD to GET
+    if response.status_code == 303 and method != "HEAD":
+        method = "GET"
+
+    # 302 Found: browser-compatible conversion to GET except HEAD
+    if response.status_code == 302 and method != "HEAD":
+        method = "GET"
+
+    # 301 Moved Permanently: convert POST to GET
+    if response.status_code == 301 and method == "POST":
+        method = "GET"
+
+    return method
+
+
+def _redirect_url(request: Request, response: Response) -> URL:
+    """Resolve the redirect URL from the Location header."""
+    location = response.headers.get("location", "")
+    if not location:
+        return request.url
+
+    try:
+        url = URL(location)
+    except Exception:
+        raise InvalidURL(f"Invalid URL in location header: {location}")
+
+    # Handle malformed 'Location' headers that are "absolute" form but have no host
+    if url.scheme and not url.host:
+        # Reconstruct with the request's host
+        parts = urllib.parse.urlsplit(str(url))
+        new_netloc = request.url.host
+        if request.url.port is not None:
+            new_netloc = f"{new_netloc}:{request.url.port}"
+        reconstructed = urllib.parse.urlunsplit((
+            parts.scheme, new_netloc, parts.path, parts.query, parts.fragment,
+        ))
+        url = URL(reconstructed)
+
+    # Handle relative URLs
+    if url.is_relative_url:
+        url = request.url.join(url)
+
+    # Attach previous fragment if needed (RFC 7231 7.1.2)
+    if request.url.fragment and not url.fragment:
+        parts = urllib.parse.urlsplit(str(url))
+        reconstructed = urllib.parse.urlunsplit((
+            parts.scheme, parts.netloc, parts.path, parts.query, request.url.fragment,
+        ))
+        url = URL(reconstructed)
+
+    return url
+
+
+def _redirect_headers(request: Request, url: URL, method: str) -> Headers:
+    """Build headers for a redirect request, stripping sensitive headers."""
+    headers = Headers(request.headers)
+
+    if not _same_origin(url, request.url):
+        if not _is_https_redirect(request.url, url):
+            # Strip Authorization when redirecting away from origin
+            headers.pop("Authorization", None)
+        # Update Host header
+        raw_host = url.raw_host
+        if raw_host is not None:
+            host_val = raw_host.decode("ascii") if isinstance(raw_host, bytes) else str(raw_host)
+            if url.port is not None and url.port not in (80, 443):
+                host_val = f"{host_val}:{url.port}"
+            headers["Host"] = host_val
+
+    if method != request.method and method == "GET":
+        # Strip body-related headers when switching to GET
+        headers.pop("Content-Length", None)
+        headers.pop("Transfer-Encoding", None)
+
+    # Cookie header is regenerated from the client jar, not carried over
+    headers.pop("Cookie", None)
+
+    return headers
+
+
+def _redirect_stream(request: Request, method: str):
+    """Return the body stream for a redirect, or None if switching to GET."""
+    if method != request.method and method == "GET":
+        return None
+    # For methods that keep the body, we need to be able to replay it.
+    # If the body is buffered content, it can be replayed.
+    # If it's a stream, it may not be replayable.
+    if request._stream is not None and request._content is None:
+        # Streaming body — may not be replayable
+        return request._stream
+    return request._stream
+
+
+def _build_redirect_request(
+    client_cookies: Cookies,
+    request: Request,
+    response: Response,
+) -> Request:
+    """Build a new Request for a redirect response (HTTPX 0.28.1 rules)."""
+    method = _redirect_method(request, response)
+    url = _redirect_url(request, response)
+    headers = _redirect_headers(request, url, method)
+    stream = _redirect_stream(request, method)
+
+    cookies = Cookies(client_cookies)
+
+    return Request(
+        method=method,
+        url=url,
+        headers=headers,
+        cookies=cookies,
+        stream=stream,
+        extensions=request.extensions,
+    )
+
+
 # ── Client ──────────────────────────────────────────────────────────────
 
 class Client:
@@ -928,6 +1090,64 @@ class Client:
 
     # ── Per-hop send (Track 4) ──────────────────────────────────────────
 
+    def _send_single_request(self, request, *, stream=False):
+        """Dispatch a single request through the transport layer.
+
+        Before dispatching:
+        - Set the Cookie header from the client jar (domain/path selection).
+        After receiving the response:
+        - Extract cookies from ``Set-Cookie`` headers into the client jar.
+
+        This matches HTTPX's ``_send_single_request``.
+        """
+        _ensure_timeout_extension(request, self._timeout)
+
+        # Set Cookie header from client jar for this request URL
+        request.headers.pop("Cookie", None)
+        request.headers.pop("cookie", None)
+        self._cookies.set_cookie_header(request)
+
+        transport = _match_mount(request.url, self._mounts)
+
+        if transport is not _MOUNT_NO_MATCH and transport is not None:
+            # A specific transport was matched.
+            try:
+                native_resp = transport.handle_request(request)
+            except Exception as exc:
+                if not isinstance(exc, (RequestError, TransportError)):
+                    raise _map_exception(exc, request) from exc
+                raise
+        elif self._transport is not None:
+            # No match or explicit None — use default transport.
+            try:
+                native_resp = self._transport.handle_request(request)
+            except Exception as exc:
+                if not isinstance(exc, (RequestError, TransportError)):
+                    raise _map_exception(exc, request) from exc
+                raise
+        else:
+            self._ensure_client()
+            kwargs = _build_native_kwargs(
+                request, follow_redirects=False, timeout=self._timeout,
+            )
+            try:
+                if stream:
+                    native_resp = self._native_client.stream(**kwargs)
+                else:
+                    native_resp = self._native_client.request(**kwargs)
+            except Exception as exc:
+                raise _map_exception(exc, request) from exc
+
+        if stream:
+            response = _wrap_streaming_response(native_resp, request, self._default_encoding)
+        else:
+            response = _wrap_response(native_resp, request, self._default_encoding)
+
+        # Extract cookies from response Set-Cookie headers into client jar
+        self._cookies.extract_cookies(response)
+
+        return response
+
     def _run_request_hooks(self, request):
         """Run request hooks, returning the (possibly mutated) request.
 
@@ -938,7 +1158,7 @@ class Client:
         return request
 
     def _run_response_hooks(self, response):
-        """Run response hooks on the final response.
+        """Run response hooks on the response.
 
         If a hook raises, the response is closed and the exception propagates.
         """
@@ -957,7 +1177,14 @@ class Client:
         if not isinstance(request, Request):
             raise TypeError(f"send() requires a Request object, got {type(request).__name__}")
 
-        # 1. Resolve auth
+        # 1. Resolve effective follow_redirects
+        effective_follow = (
+            self._follow_redirects
+            if follow_redirects is None
+            else follow_redirects
+        )
+
+        # 2. Resolve auth
         if auth is _USE_CLIENT_DEFAULT:
             resolved_auth = self._auth
         elif auth is None:
@@ -965,49 +1192,106 @@ class Client:
         else:
             resolved_auth = _build_auth(auth)
 
-        # 2. Initialize auth flow generator
-        use_auth = resolved_auth is not None
-        auth_flow_gen = None
-        if use_auth:
+        # If no explicit auth, check URL credentials
+        if resolved_auth is None:
+            resolved_auth = _extract_url_credentials(request.url)
+
+        # 3. Auth flow + redirect handling (HTTPX 0.28.1 order)
+        #    _send_handling_auth wraps _send_handling_redirects,
+        #    which wraps _send_single_request (one transport hop).
+        history: list[Response] = []
+
+        if resolved_auth is not None:
             auth_flow_gen = resolved_auth.sync_auth_flow(request)
             try:
                 request = next(auth_flow_gen)
             except StopIteration:
                 auth_flow_gen = None
+        else:
+            auth_flow_gen = None
 
-        # 3. Per-hop dispatch loop
-        #    For each hop: hooks → dispatch → response hooks → auth/redirect decision
-        while True:
-            # 3a. Request hooks (see the transported Request)
-            request = self._run_request_hooks(request)
+        try:
+            while True:
+                response = self._send_handling_redirects(
+                    request,
+                    follow_redirects=effective_follow,
+                    history=history,
+                    stream=stream,
+                )
 
-            # 3b. One-hop transport dispatch
-            response = self._dispatch_one_hop(
-                request, stream=stream,
-            )
+                if auth_flow_gen is None:
+                    break
 
-            # 3c. Response hooks (see the response before auth decides)
-            self._run_response_hooks(response)
+                try:
+                    request = auth_flow_gen.send(response)
+                except StopIteration:
+                    auth_flow_gen = None
+                    break
 
-            # 3d. Auth/redirect state machine decision
-            if auth_flow_gen is None:
-                break
+                # Auth produced a follow-up request — read and close
+                # the intermediate response, then continue.
+                response.read()
+                response.close()
+                history.append(response)
+        finally:
+            if auth_flow_gen is not None:
+                auth_flow_gen.close()
 
-            try:
-                request = auth_flow_gen.send(response)
-            except StopAsyncIteration:
-                auth_flow_gen = None
-                break
-            except StopIteration:
-                auth_flow_gen = None
-                break
-
-            # Intermediate auth response — drain body and close before
-            # dispatching the follow-up request.
+        if not stream:
             response.read()
-            response.close()
 
         return response
+
+    def _send_handling_redirects(
+        self,
+        request: Request,
+        *,
+        follow_redirects: bool,
+        history: list[Response],
+        stream: bool = False,
+    ) -> Response:
+        """Follow redirects until a non-redirect response is received.
+
+        This implements the redirect loop that was previously delegated to
+        the native Rust engine.  Each hop runs request/response hooks and
+        dispatches through ``_send_single_request``.
+        """
+        while True:
+            if len(history) > self._max_redirects:
+                raise TooManyRedirects(
+                    "Exceeded maximum allowed redirects.", request=request
+                )
+
+            # Request hooks
+            request = self._run_request_hooks(request)
+
+            # One transport hop
+            response = self._send_single_request(request, stream=stream)
+            try:
+                # Response hooks
+                self._run_response_hooks(response)
+
+                # Snapshot history for the response
+                response.history = list(history)
+
+                if not _is_redirect_status(response.status_code):
+                    return response
+
+                # Build the redirect request
+                request = _build_redirect_request(self._cookies, request, response)
+                history = history + [response]
+
+                if follow_redirects:
+                    # Drain the redirect response before following
+                    response.read()
+                else:
+                    # Manual redirect: expose next_request, don't follow
+                    response.next_request = request
+                    return response
+
+            except BaseException as exc:
+                response.close()
+                raise exc
 
     def request(self, method, url, *, auth=_USE_CLIENT_DEFAULT, params=None,
                 headers=None, cookies=None,
@@ -1472,14 +1756,75 @@ class AsyncClient:
             return _wrap_streaming_response(native_resp, request, self._default_encoding)
         return _wrap_response(native_resp, request, self._default_encoding)
 
+    async def _send_single_request(self, request, *, stream=False):
+        """Dispatch a single request through the transport layer (async).
+
+        Before dispatching:
+        - Set the Cookie header from the client jar (domain/path selection).
+        After receiving the response:
+        - Extract cookies from ``Set-Cookie`` headers into the client jar.
+        """
+        _ensure_timeout_extension(request, self._timeout)
+
+        # Set Cookie header from client jar for this request URL
+        request.headers.pop("Cookie", None)
+        request.headers.pop("cookie", None)
+        self._cookies.set_cookie_header(request)
+
+        transport = _match_mount(request.url, self._mounts)
+
+        if transport is not _MOUNT_NO_MATCH and transport is not None:
+            # A specific transport was matched.
+            try:
+                if hasattr(transport, "handle_async_request"):
+                    native_resp = await transport.handle_async_request(request)
+                else:
+                    native_resp = transport.handle_request(request)
+            except Exception as exc:
+                if not isinstance(exc, (RequestError, TransportError)):
+                    raise _map_exception(exc, request) from exc
+                raise
+        elif self._async_transport is not None:
+            try:
+                native_resp = await self._async_transport.handle_async_request(request)
+            except Exception as exc:
+                if not isinstance(exc, (RequestError, TransportError)):
+                    raise _map_exception(exc, request) from exc
+                raise
+        elif self._transport is not None:
+            try:
+                native_resp = self._transport.handle_request(request)
+            except Exception as exc:
+                if not isinstance(exc, (RequestError, TransportError)):
+                    raise _map_exception(exc, request) from exc
+                raise
+        else:
+            self._ensure_client()
+            kwargs = _build_native_kwargs(
+                request, follow_redirects=False, timeout=self._timeout,
+            )
+            try:
+                if stream:
+                    native_resp = await self._native_client.stream(**kwargs)
+                else:
+                    native_resp = await self._native_client.request(**kwargs)
+            except Exception as exc:
+                raise _map_exception(exc, request) from exc
+
+        if stream:
+            response = _wrap_streaming_response(native_resp, request, self._default_encoding)
+        else:
+            response = _wrap_response(native_resp, request, self._default_encoding)
+
+        # Extract cookies from response Set-Cookie headers into client jar
+        self._cookies.extract_cookies(response)
+
+        return response
+
     # ── Per-hop send (Track 4) ──────────────────────────────────────────
 
     async def _run_request_hooks(self, request):
-        """Run request hooks, awaiting if necessary.
-
-        Matches HTTPX: callable objects returning awaitables are awaited
-        in async mode.  Plain callables are called directly.
-        """
+        """Run request hooks, awaiting if necessary."""
         for hook in self._event_hooks.get("request", []):
             result = hook(request)
             if asyncio.iscoroutine(result) or asyncio.isfuture(result):
@@ -1487,10 +1832,7 @@ class AsyncClient:
         return request
 
     async def _run_response_hooks(self, response):
-        """Run response hooks on the final response.
-
-        If a hook raises, the response is closed and the exception propagates.
-        """
+        """Run response hooks on the response."""
         for hook in self._event_hooks.get("response", []):
             try:
                 result = hook(response)
@@ -1508,7 +1850,14 @@ class AsyncClient:
         if not isinstance(request, Request):
             raise TypeError(f"send() requires a Request object, got {type(request).__name__}")
 
-        # 1. Resolve auth
+        # 1. Resolve effective follow_redirects
+        effective_follow = (
+            self._follow_redirects
+            if follow_redirects is None
+            else follow_redirects
+        )
+
+        # 2. Resolve auth
         if auth is _USE_CLIENT_DEFAULT:
             resolved_auth = self._auth
         elif auth is None:
@@ -1516,45 +1865,96 @@ class AsyncClient:
         else:
             resolved_auth = _build_auth(auth)
 
-        # 2. Initialize auth flow generator
-        use_auth = resolved_auth is not None
-        auth_flow_gen = None
-        if use_auth:
+        # If no explicit auth, check URL credentials
+        if resolved_auth is None:
+            resolved_auth = _extract_url_credentials(request.url)
+
+        # 3. Auth flow + redirect handling (HTTPX 0.28.1 order)
+        history: list[Response] = []
+
+        if resolved_auth is not None:
             auth_flow_gen = resolved_auth.async_auth_flow(request)
             try:
                 request = await auth_flow_gen.__anext__()
             except StopAsyncIteration:
                 auth_flow_gen = None
+        else:
+            auth_flow_gen = None
 
-        # 3. Per-hop dispatch loop
-        while True:
-            # 3a. Request hooks (see the transported Request)
-            request = await self._run_request_hooks(request)
+        try:
+            while True:
+                response = await self._send_handling_redirects(
+                    request,
+                    follow_redirects=effective_follow,
+                    history=history,
+                    stream=stream,
+                )
 
-            # 3b. One-hop transport dispatch
-            response = await self._dispatch_one_hop(
-                request, stream=stream,
-            )
+                if auth_flow_gen is None:
+                    break
 
-            # 3c. Response hooks (see the response before auth decides)
-            await self._run_response_hooks(response)
+                try:
+                    request = await auth_flow_gen.asend(response)
+                except StopAsyncIteration:
+                    auth_flow_gen = None
+                    break
 
-            # 3d. Auth/redirect state machine decision
-            if auth_flow_gen is None:
-                break
+                # Auth produced a follow-up — read and close intermediate response
+                await response.aread()
+                await response.aclose()
+                history.append(response)
+        finally:
+            if auth_flow_gen is not None:
+                await auth_flow_gen.aclose()
 
-            try:
-                request = await auth_flow_gen.asend(response)
-            except StopAsyncIteration:
-                auth_flow_gen = None
-                break
-
-            # Intermediate auth response — drain body and close before
-            # dispatching the follow-up request.
+        if not stream:
             await response.aread()
-            await response.aclose()
 
         return response
+
+    async def _send_handling_redirects(
+        self,
+        request: Request,
+        *,
+        follow_redirects: bool,
+        history: list[Response],
+        stream: bool = False,
+    ) -> Response:
+        """Follow redirects until a non-redirect response is received."""
+        while True:
+            if len(history) > self._max_redirects:
+                raise TooManyRedirects(
+                    "Exceeded maximum allowed redirects.", request=request
+                )
+
+            # Request hooks
+            request = await self._run_request_hooks(request)
+
+            # One transport hop
+            response = await self._send_single_request(request, stream=stream)
+            try:
+                # Response hooks
+                await self._run_response_hooks(response)
+
+                # Snapshot history
+                response.history = list(history)
+
+                if not _is_redirect_status(response.status_code):
+                    return response
+
+                # Build the redirect request
+                request = _build_redirect_request(self._cookies, request, response)
+                history = history + [response]
+
+                if follow_redirects:
+                    await response.aread()
+                else:
+                    response.next_request = request
+                    return response
+
+            except BaseException as exc:
+                await response.aclose()
+                raise exc
 
     async def request(self, method, url, *, auth=_USE_CLIENT_DEFAULT, params=None,
                       headers=None, cookies=None,

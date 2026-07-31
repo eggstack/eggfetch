@@ -2,7 +2,7 @@
 
 import pytest
 
-from eggfetch.compat.httpx import Cookies, Headers, Request
+from eggfetch.compat.httpx import Cookies, Headers, Request, Response
 
 
 class TestCookiesConstruction:
@@ -52,9 +52,16 @@ class TestCookiesMutation:
         assert "a" not in c
 
     def test_delete_with_domain_path(self):
-        c = Cookies({"a": "1"})
+        c = Cookies()
+        c.set("a", "1", domain="example.com", path="/")
         c.delete("a", domain="example.com", path="/")
         assert "a" not in c
+
+    def test_delete_with_domain_path_no_match(self):
+        c = Cookies()
+        c.set("a", "1", domain="example.com", path="/")
+        c.delete("a", domain="other.com", path="/")
+        assert "a" in c
 
     def test_clear(self):
         c = Cookies({"a": "1", "b": "2"})
@@ -154,21 +161,37 @@ class TestCookiesSetDefault:
 
 
 class TestCookiesFromRequest:
-    def test_extract_cookies(self):
-        c = Cookies()
-        h = Headers({"Cookie": "a=1; b=2"})
-        req = Request("GET", "https://example.com", headers=h)
-        c.extract_cookies(req)
-        assert c["a"] == "1"
-        assert c["b"] == "2"
-
     def test_set_cookie_header(self):
+        """set_cookie_header sets Cookie header on a request from the jar."""
         c = Cookies()
-        h = Headers({"Set-Cookie": "session=abc123; Path=/; HttpOnly"})
-        # Response-like object with headers attribute
-        class FakeResp:
-            pass
-        resp = FakeResp()
-        resp.headers = h
-        c.set_cookie_header(resp)
-        assert c["session"] == "abc123"
+        c.set("session", "abc123", domain="example.com", path="/")
+        c.set("theme", "dark", domain="example.com", path="/")
+
+        h = Headers()
+        req = Request("GET", "https://example.com/path", headers=h)
+        c.set_cookie_header(req)
+
+        cookie_header = req.headers.get("cookie") or req.headers.get("Cookie")
+        assert cookie_header is not None
+        assert "session=abc123" in cookie_header
+        assert "theme=dark" in cookie_header
+
+    def test_extract_cookies_from_response(self):
+        """extract_cookies loads Set-Cookie headers from a response."""
+        c = Cookies()
+        h = Headers({"Set-Cookie": "session=abc123; Path=/"})
+        resp = Response(200, headers=h, request=Request("GET", "https://example.com"))
+        c.extract_cookies(resp)
+        assert c.get("session") == "abc123"
+
+    def test_extract_cookies_multiple_set_cookie(self):
+        """extract_cookies handles multiple Set-Cookie headers."""
+        c = Cookies()
+        h = Headers([
+            ("Set-Cookie", "a=1; Path=/"),
+            ("Set-Cookie", "b=2; Path=/"),
+        ])
+        resp = Response(200, headers=h, request=Request("GET", "https://example.com"))
+        c.extract_cookies(resp)
+        assert c.get("a") == "1"
+        assert c.get("b") == "2"

@@ -232,9 +232,9 @@ class Response:
         else:
             self._elapsed = None
 
-        # Build cookies from headers
+        # Build cookies from Set-Cookie headers
         self._cookies = Cookies()
-        self._cookies.set_cookie_header(self)
+        self._cookies.extract_cookies(self)
 
     @property
     def status_code(self) -> int:

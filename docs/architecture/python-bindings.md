@@ -229,3 +229,19 @@ The facade converts between HTTPX-compatible objects and native types at the bou
 - **Extension preservation** (Track 5): Client and request extensions merge losslessly. Request extensions live on `response.request.extensions`, never on `response.extensions`. Response extensions from the transport handler are preserved without overwriting.
 - **Transport ownership and close** (Track 6): Duplicate mounted transport instances close exactly once. Close errors propagate (last error raised). Client close is idempotent.
 - **Transport body preservation** (Track 2): Buffered custom transport responses retain their body under `stream=True`. Streaming responses remain lazy. `HTTPTransport`/`AsyncHTTPTransport` always return stream-backed responses.
+
+### What Phase 4 Implements
+
+**Redirect, authentication, cookie, and history state machine:**
+
+- **Python-level redirect loop** (Track 1, 2): `_send_handling_redirects()` replaces the native redirect-following. Each hop runs request/response hooks, dispatches through `_send_single_request()`, and builds the next request via `_build_redirect_request()`. `follow_redirects=True` follows automatically; `False` sets `response.next_request`.
+- **Method rewriting** (Track 2.1): 303 → GET (non-HEAD), 302 → GET (non-HEAD), 301 POST → GET. 307/308 retain method and body.
+- **URL resolution** (Track 2.2): Absolute, relative, scheme-relative, and malformed Location headers resolved. Fragment inheritance per RFC 7231 7.1.2.
+- **Header stripping** (Track 2.3): `Authorization` stripped on cross-origin redirects (except HTTP→HTTPS same-host). `Host` updated. `Cookie` regenerated from client jar. Content headers stripped when method changes to GET.
+- **History management** (Track 1.2): Single authoritative history list. Redirect responses appended when followed. Auth challenge responses appended when auth yields a follow-up. Final response gets `response.history = list(history)`.
+- **Manual redirects** (Track 2.5): `response.next_request` populated for unfollowed redirects.
+- **max_redirects** (Track 2.6): `TooManyRedirects` raised with request attached.
+- **Scoped cookie jar** (Track 4): `Cookies` wraps `http.cookiejar.CookieJar` (Preferred A architecture). Domain/path/secure/expiry scoping. Multiple Set-Cookie headers parsed. `CookieConflict` on ambiguous `.get(name)`. Cookies extracted from each response, set on each request hop.
+- **Auth flow integration** (Track 3): Auth generators drive the outer loop. Auth-produced requests go through the full redirect handler. Cross-origin auth stripping matches HTTPX. Intermediate auth challenge responses added to history.
+- **Hook ordering** (Track 5): Per-hop order: auth yields → Cookie header set → request hook → transport → response hook → cookie extraction → redirect/auth decision. Each actual transport hop produces exactly one request-hook and one response-hook call.
+- **Resource cleanup** (Track 6): Auth generators closed on all exits. Intermediate redirect responses read and closed when followed. `TooManyRedirects` preserves the request reference.

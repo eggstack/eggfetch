@@ -28,14 +28,23 @@ class TestDuplicateCookiePreservation:
     """
 
     def test_set_overwrites_same_name(self):
-        """Cookies.set() with same name overwrites (dict-backed implementation)."""
+        """Cookies.set() with same name and same domain overwrites."""
+        cookies = Cookies()
+        cookies.set("session", "val1", domain=".example.com", path="/")
+        cookies.set("session", "val2", domain=".example.com", path="/")
+        items = list(cookies.items())
+        # Same name + same domain + same path: last write wins
+        assert len(items) == 1
+        assert cookies.get("session") == "val2"
+
+    def test_set_different_domain_preserves(self):
+        """Cookies.set() with same name but different domains preserves both."""
         cookies = Cookies()
         cookies.set("session", "val1", domain=".example.com")
         cookies.set("session", "val2", domain=".api.example.com")
         items = list(cookies.items())
-        # Dict-backed: last write wins
-        assert len(items) == 1
-        assert cookies.get("session") == "val2"
+        # Different domains: both preserved (scoped jar behavior)
+        assert len(items) == 2
 
     def test_different_names_preserved(self):
         """Different cookie names are preserved."""
