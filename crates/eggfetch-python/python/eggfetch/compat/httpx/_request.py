@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import json as _json
 import typing
-from urllib.parse import urlparse, urlencode
+from urllib.parse import urlencode, urlparse, urlunparse, parse_qs, quote
 
 from eggfetch.compat.httpx._urls import URL, QueryParams
 from eggfetch.compat.httpx._headers import Headers
 from eggfetch.compat.httpx._cookies import Cookies
+from eggfetch.compat.httpx._exceptions import RequestNotRead, StreamConsumed
 
 if typing.TYPE_CHECKING:
     from typing import AsyncIterator, Iterator
@@ -29,6 +31,7 @@ class Request:
         "_is_stream_consumed",
         "_stream_consumed",
         "_files",
+        "_multipart_data",
     )
 
     def __init__(
@@ -46,26 +49,45 @@ class Request:
         stream=None,
         extensions: dict | None = None,
     ) -> None:
-        # Validate mutual exclusion of body sources
-        body_sources = [
-            name
-            for name, val in [
-                ("content", content),
-                ("data", data),
-                ("files", files),
-                ("json", json),
-                ("stream", stream),
-            ]
-            if val is not None
-        ]
-        if len(body_sources) > 1:
+        # ── Body-source mutual exclusion (HTTPX rules) ──────────────
+        # content is exclusive with data, files, json
+        # json is exclusive with content, data, files
+        # data + files is VALID (multipart)
+        # stream is exclusive with everything
+        has_content = content is not None
+        has_json = json is not None
+        has_data = data is not None
+        has_files = files is not None
+        has_stream = stream is not None
+
+        if has_stream:
+            if has_content or has_json or has_data or has_files:
+                raise ValueError(
+                    "stream= is mutually exclusive with content, data, files, and json."
+                )
+        elif has_content and has_json:
             raise ValueError(
-                f"Conflicting body sources: {', '.join(body_sources)}. "
-                "Only one of content, data, files, json, or stream may be provided."
+                "content and json are mutually exclusive."
             )
+        elif has_content and has_data:
+            raise ValueError(
+                "content and data are mutually exclusive."
+            )
+        elif has_content and has_files:
+            raise ValueError(
+                "content and files are mutually exclusive."
+            )
+        elif has_json and has_data:
+            raise ValueError(
+                "json and data are mutually exclusive."
+            )
+        elif has_json and has_files:
+            raise ValueError(
+                "json and files are mutually exclusive."
+            )
+        # data + files is allowed (multipart)
 
         self._method = method.upper()
-        self._url = URL(url) if not isinstance(url, URL) else url
         self._http_version = "HTTP/1.1"
         self._is_stream_consumed = False
         self._stream_consumed = False
@@ -89,14 +111,13 @@ class Request:
         else:
             self._cookies = Cookies(cookies)
 
-        # Handle body content
+        # ── Handle body content ──────────────────────────────────────
         self._content: bytes | None = None
         self._files = None
+        self._multipart_data = None
 
-        if content is not None:
-            # Check if content is a file-like object (has .read method)
+        if has_content:
             if hasattr(content, "read") and not isinstance(content, (bytes, bytearray)):
-                # Wrap file-like object as a generator for lazy streaming
                 def _file_reader():
                     while True:
                         chunk = content.read(8192)
@@ -108,36 +129,45 @@ class Request:
 
                 self._stream = _file_reader()
             elif hasattr(content, "__iter__") and not isinstance(content, (bytes, str)):
-                # Generator or other iterable — use as stream
                 self._stream = content
             else:
                 self._content = content if isinstance(content, bytes) else content.encode("utf-8")
-        elif json is not None:
-            import json as _json
-
-            self._content = _json.dumps(json).encode("utf-8")
+        elif has_json:
+            self._content = _json.dumps(
+                json, separators=(",", ":"), ensure_ascii=False
+            ).encode("utf-8")
             if "content-type" not in self._headers:
                 self._headers["content-type"] = "application/json"
-        elif data is not None:
+        elif has_data and has_files:
+            # data + files → multipart: store both for later encoding
+            self._files = files
+            self._multipart_data = data
+            self._content = None
+        elif has_data:
             if isinstance(data, dict):
-                encoded = urlencode(data)
+                self._content = urlencode(data).encode("utf-8")
+                if "content-type" not in self._headers:
+                    self._headers["content-type"] = "application/x-www-form-urlencoded"
             elif isinstance(data, (list, tuple)):
-                encoded = urlencode(data)
+                self._content = urlencode(data).encode("utf-8")
+                if "content-type" not in self._headers:
+                    self._headers["content-type"] = "application/x-www-form-urlencoded"
             elif isinstance(data, str):
-                encoded = data
+                self._content = data.encode("utf-8")
             elif isinstance(data, bytes):
                 self._content = data
-                encoded = None
             else:
-                encoded = str(data)
-            if self._content is None and encoded is not None:
-                self._content = encoded.encode("utf-8")
-            if "content-type" not in self._headers:
-                self._headers["content-type"] = "application/x-www-form-urlencoded"
-        elif files is not None:
+                self._content = str(data).encode("utf-8")
+        elif has_files:
             self._files = files
 
-        # Auto-headers
+        # ── Apply params to URL ─────────────────────────────────────
+        self._url = self._apply_params_to_url(
+            URL(url) if not isinstance(url, URL) else url,
+            self._params,
+        )
+
+        # ── Auto-headers ────────────────────────────────────────────
         host = self._url.host
         if host is not None:
             port = self._url.port
@@ -149,10 +179,13 @@ class Request:
             if "host" not in self._headers:
                 self._headers["host"] = host
 
-        if stream is not None:
-            if "transfer-encoding" not in self._headers:
-                self._headers["transfer-encoding"] = "chunked"
-        elif self._content is not None:
+        # Only add Transfer-Encoding: chunked for stream= if it wasn't
+        # explicitly provided.  HTTPX does NOT auto-add it for low-level
+        # stream= — only for encoded content paths.
+        # (Removed auto Transfer-Encoding injection for stream=)
+
+        # Content-Length for encoded content
+        if self._content is not None:
             if "content-length" not in self._headers:
                 self._headers["content-length"] = str(len(self._content))
 
@@ -160,32 +193,111 @@ class Request:
         self._extensions: dict = extensions if extensions is not None else {}
 
     @staticmethod
-    def _encode_files(files) -> bytes:
-        """Minimal multipart encoding for files parameter."""
+    def _apply_params_to_url(url: URL, params: QueryParams) -> URL:
+        """Merge query params into the URL, matching HTTPX behavior.
+
+        HTTPX replaces existing query parameters with those provided via
+        the ``params`` argument for direct Request construction.
+        """
+        if not params or not params.multi_items():
+            return url
+
+        raw = str(url)
+        parsed = urlparse(raw)
+
+        # Merge: params replace existing query
+        new_query = urlencode(params.multi_items(), doseq=True)
+        rebuilt = urlunparse((
+            parsed.scheme,
+            parsed.netloc,
+            parsed.path,
+            parsed.params,
+            new_query,
+            "",  # fragment
+        ))
+        return URL(rebuilt)
+
+    @staticmethod
+    def _encode_files(files, data=None) -> bytes:
+        """Encode files (and optional data fields) as multipart/form-data.
+
+        Supports HTTPX file tuple forms:
+        - file object or bytes
+        - (filename, fileobj)
+        - (filename, fileobj, content_type)
+        - (filename, fileobj, content_type, headers)
+        """
         boundary = "----eggfetchboundary"
         parts: list[bytes] = []
 
+        # Encode data fields first (if any)
+        if data is not None:
+            if isinstance(data, dict):
+                items = list(data.items())
+            elif isinstance(data, (list, tuple)):
+                items = data
+            else:
+                items = []
+            for key, value in items:
+                if isinstance(value, (list, tuple)):
+                    for v in value:
+                        parts.append(
+                            (
+                                f"--{boundary}\r\n"
+                                f'Content-Disposition: form-data; name="{key}"\r\n\r\n'
+                            ).encode("utf-8")
+                            + (
+                                v.encode("utf-8") if isinstance(v, str) else str(v).encode("utf-8")
+                            )
+                            + b"\r\n"
+                        )
+                else:
+                    parts.append(
+                        (
+                            f"--{boundary}\r\n"
+                            f'Content-Disposition: form-data; name="{key}"\r\n\r\n'
+                        ).encode("utf-8")
+                        + (
+                            value.encode("utf-8")
+                            if isinstance(value, str)
+                            else str(value).encode("utf-8")
+                        )
+                        + b"\r\n"
+                    )
+
+        # Encode files
         if isinstance(files, dict):
-            file_items = files.items()
+            file_items = list(files.items())
         elif isinstance(files, (list, tuple)):
-            file_items = files
+            file_items = list(files)
         else:
             file_items = [("file", files)]
 
-        for field_name, file_tuple in file_items:
-            if isinstance(file_tuple, tuple):
-                if len(file_tuple) == 3:
-                    filename, fileobj, content_type = file_tuple
-                elif len(file_tuple) == 2:
-                    filename, fileobj = file_tuple
+        for field_name, file_spec in file_items:
+            file_headers: dict[str, str] = {}
+
+            if isinstance(file_spec, tuple):
+                if len(file_spec) >= 4:
+                    filename, fileobj, content_type, file_h = (
+                        file_spec[0],
+                        file_spec[1],
+                        file_spec[2],
+                        file_spec[3],
+                    )
+                    if isinstance(file_h, dict):
+                        file_headers = file_h
+                elif len(file_spec) == 3:
+                    filename, fileobj, content_type = file_spec
+                elif len(file_spec) == 2:
+                    filename, fileobj = file_spec
                     content_type = "application/octet-stream"
                 else:
-                    filename = file_tuple[0]
-                    fileobj = file_tuple[1] if len(file_tuple) > 1 else b""
+                    filename = file_spec[0] if file_spec else "file"
+                    fileobj = file_spec[1] if len(file_spec) > 1 else b""
                     content_type = "application/octet-stream"
             else:
                 filename = str(field_name)
-                fileobj = file_tuple
+                fileobj = file_spec
                 content_type = "application/octet-stream"
 
             if isinstance(fileobj, (bytes, bytearray)):
@@ -199,12 +311,20 @@ class Request:
             else:
                 body = str(fileobj).encode("utf-8")
 
-            part = (
-                f"--{boundary}\r\n"
-                f'Content-Disposition: form-data; name="{field_name}"; filename="{filename}"\r\n'
-                f"Content-Type: {content_type}\r\n\r\n"
-            ).encode("utf-8")
-            part += body + b"\r\n"
+            # Build part header
+            header_lines = [
+                f"--{boundary}\r\n",
+                f'Content-Disposition: form-data; name="{field_name}"',
+            ]
+            if filename:
+                header_lines[1] += f'; filename="{filename}"'
+            header_lines[1] += "\r\n"
+            header_lines.append(f"Content-Type: {content_type}\r\n")
+            for hk, hv in file_headers.items():
+                header_lines.append(f"{hk}: {hv}\r\n")
+            header_lines.append("\r\n")
+
+            part = "".join(header_lines).encode("utf-8") + body + b"\r\n"
             parts.append(part)
 
         parts.append(f"--{boundary}--\r\n".encode("utf-8"))
@@ -217,6 +337,10 @@ class Request:
     @property
     def url(self) -> URL:
         return self._url
+
+    @url.setter
+    def url(self, value: URL | str) -> None:
+        self._url = URL(value) if not isinstance(value, URL) else value
 
     @property
     def headers(self) -> Headers:
@@ -254,8 +378,14 @@ class Request:
     def http_version(self) -> str:
         return self._http_version
 
+    @http_version.setter
+    def http_version(self, value: str) -> None:
+        self._http_version = value
+
     def read(self) -> bytes:
         if self._stream is not None and self._content is None:
+            if self._stream_consumed:
+                raise StreamConsumed()
             chunks: list[bytes] = []
             for chunk in self._stream:
                 if isinstance(chunk, bytes):
@@ -273,6 +403,8 @@ class Request:
 
     async def aread(self) -> bytes:
         if self._stream is not None and self._content is None:
+            if self._stream_consumed:
+                raise StreamConsumed()
             chunks: list[bytes] = []
             async for chunk in self._stream:  # type: ignore[union-attr]
                 if isinstance(chunk, bytes):

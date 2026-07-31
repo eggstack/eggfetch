@@ -150,6 +150,8 @@ def _map_exception(native_exc, compat_request=None):
 
 
 def _wrap_response(native_resp, compat_request=None, default_encoding="utf-8"):
+    from datetime import timedelta
+
     status_code = native_resp.status_code
     native_headers = native_resp.headers
 
@@ -177,7 +179,7 @@ def _wrap_response(native_resp, compat_request=None, default_encoding="utf-8"):
     if hasattr(native_resp, "reason_phrase") and native_resp.reason_phrase:
         extensions["reason_phrase"] = native_resp.reason_phrase
 
-    return Response(
+    resp = Response(
         status_code,
         headers=header_list,
         content=content,
@@ -186,6 +188,14 @@ def _wrap_response(native_resp, compat_request=None, default_encoding="utf-8"):
         default_encoding=default_encoding,
         extensions=extensions if extensions else None,
     )
+
+    # Elapsed time: use native elapsed if available, else measure zero
+    if hasattr(native_resp, "elapsed") and native_resp.elapsed is not None:
+        resp.elapsed = native_resp.elapsed
+    else:
+        resp.elapsed = timedelta(0)
+
+    return resp
 
 
 def _wrap_streaming_response(native_resp, compat_request=None, default_encoding="utf-8"):
@@ -196,6 +206,7 @@ def _wrap_streaming_response(native_resp, compat_request=None, default_encoding=
         header_list = native_resp.headers.multi_items()
         stream_obj = native_resp._stream
         history = native_resp.history or []
+        ext = native_resp.extensions
     else:
         status_code = native_resp.status_code
         native_headers = native_resp.headers
@@ -211,11 +222,13 @@ def _wrap_streaming_response(native_resp, compat_request=None, default_encoding=
             for h in native_resp.history:
                 history.append(_wrap_response(h, default_encoding=default_encoding))
         stream_obj = native_resp
+        ext = {}
 
     # Build extensions: preserve request extensions + map standard keys
     extensions: dict = {}
     if compat_request is not None and hasattr(compat_request, "extensions"):
         extensions.update(compat_request.extensions)
+    extensions.update(ext)
 
     if hasattr(native_resp, "http_version") and native_resp.http_version:
         extensions["http_version"] = native_resp.http_version
@@ -236,6 +249,12 @@ def _wrap_streaming_response(native_resp, compat_request=None, default_encoding=
     # iteration instead.
     if hasattr(stream_obj, "read"):
         response._native_stream = stream_obj
+
+    # Elapsed time for streaming: set to zero initially (will be updated
+    # after close/read per HTTPX semantics)
+    from datetime import timedelta
+    response.elapsed = timedelta(0)
+
     return response
 
 
@@ -254,6 +273,10 @@ def _build_native_kwargs(request, follow_redirects=None, timeout=_USE_CLIENT_DEF
             kwargs["content"] = request.content
         if request._files is not None:
             kwargs["files"] = request._files
+            # When data + files are both present (multipart), pass the
+            # data fields so the native multipart encoder can include them.
+            if hasattr(request, "_multipart_data") and request._multipart_data is not None:
+                kwargs["data"] = request._multipart_data
         if request.cookies:
             kwargs["cookies"] = _convert_cookies(request.cookies)
     else:

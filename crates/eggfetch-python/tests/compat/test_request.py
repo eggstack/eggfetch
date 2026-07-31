@@ -35,7 +35,7 @@ class TestBodyMutualExclusion:
 
     def test_json_only(self):
         req = Request("POST", "https://example.com", json={"key": "value"})
-        assert req.content == json.dumps({"key": "value"}).encode()
+        assert req.content == json.dumps({"key": "value"}, separators=(",", ":"), ensure_ascii=False).encode()
 
     def test_data_dict(self):
         req = Request("POST", "https://example.com", data={"key": "value"})
@@ -46,11 +46,11 @@ class TestBodyMutualExclusion:
         assert req.content == b"raw body"
 
     def test_content_and_json_raises(self):
-        with pytest.raises(ValueError, match="Conflicting"):
+        with pytest.raises(ValueError, match="mutually exclusive"):
             Request("POST", "https://example.com", content=b"body", json={"k": "v"})
 
     def test_content_and_data_raises(self):
-        with pytest.raises(ValueError, match="Conflicting"):
+        with pytest.raises(ValueError, match="mutually exclusive"):
             Request("POST", "https://example.com", content=b"body", data={"k": "v"})
 
 
@@ -84,12 +84,12 @@ class TestAutoHeaders:
         )
         assert req.headers["content-type"] == "application/custom"
 
-    def test_transfer_encoding_stream(self):
+    def test_no_transfer_encoding_for_explicit_stream(self):
         async def gen():
             yield b"chunk"
 
         req = Request("POST", "https://example.com", stream=gen())
-        assert req.headers["transfer-encoding"] == "chunked"
+        assert "transfer-encoding" not in req.headers
 
 
 class TestParamsMerging:

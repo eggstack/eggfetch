@@ -85,11 +85,11 @@ class TestRequestConstruction:
         req = Request("GET", "http://example.com:8080/path")
         assert req.headers["host"] == "example.com:8080"
 
-    def test_request_transfer_encoding_for_stream(self):
+    def test_no_transfer_encoding_for_explicit_stream(self):
         def gen():
             yield b"data"
         req = Request("POST", "http://example.com", stream=gen())
-        assert req.headers["transfer-encoding"] == "chunked"
+        assert "transfer-encoding" not in req.headers
 
     def test_request_content_length_for_bytes(self):
         req = Request("POST", "http://example.com", content=b"hello")

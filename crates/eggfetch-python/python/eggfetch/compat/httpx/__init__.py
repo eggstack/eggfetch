@@ -155,6 +155,33 @@ def stream(*args, **kwargs):
 
 USE_CLIENT_DEFAULT = _USE_CLIENT_DEFAULT
 
+
+def main():
+    """HTTPX CLI entry point stub.
+
+    eggfetch does not implement the HTTPX command-line interface.
+    """
+    raise NotImplementedError(
+        "eggfetch does not implement the httpx CLI entry point."
+    )
+
+
+def create_ssl_context(
+    verify=True,
+    cert=None,
+    trust_env=True,
+):
+    """Create an SSL context stub.
+
+    eggfetch manages TLS internally via the Rust engine. This function
+    exists for API compatibility but does not create a usable context
+    for external consumers.
+    """
+    raise NotImplementedError(
+        "eggfetch manages TLS internally; create_ssl_context is not supported."
+    )
+
+
 __all__ = [
     "__description__",
     "__title__",
@@ -177,6 +204,7 @@ __all__ = [
     "ConnectTimeout",
     "CookieConflict",
     "Cookies",
+    "create_ssl_context",
     "DecodingError",
     "delete",
     "diagnostics_summary",
@@ -191,6 +219,7 @@ __all__ = [
     "InvalidURL",
     "Limits",
     "LocalProtocolError",
+    "main",
     "MockTransport",
     "NetRCAuth",
     "NetworkError",

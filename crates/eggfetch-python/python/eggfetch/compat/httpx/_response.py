@@ -5,14 +5,17 @@ from __future__ import annotations
 import json as _json
 import typing
 from datetime import timedelta
+from typing import Any, AsyncIterator, Iterator
 
 from eggfetch.compat.httpx._urls import URL
 from eggfetch.compat.httpx._headers import Headers
 from eggfetch.compat.httpx._cookies import Cookies
-from eggfetch.compat.httpx._exceptions import HTTPStatusError
-
-if typing.TYPE_CHECKING:
-    from typing import Any, AsyncIterator, Iterator
+from eggfetch.compat.httpx._exceptions import (
+    HTTPStatusError,
+    ResponseNotRead,
+    StreamClosed,
+    StreamConsumed,
+)
 
 
 class Response:
@@ -39,6 +42,7 @@ class Response:
         "_is_closed",
         "_stream_consumed",
         "_native_stream",
+        "_next_request",
     )
 
     _REASON_PHRASES: dict[int, str] = {
@@ -119,7 +123,7 @@ class Response:
         request=None,
         extensions: dict | None = None,
         history: list | None = None,
-        default_encoding: str = "utf-8",
+        default_encoding: str | typing.Callable[[bytes], str] = "utf-8",
     ) -> None:
         # Validate mutual exclusion of content sources
         body_sources = [
@@ -149,6 +153,7 @@ class Response:
         self._stream = stream
         self._native_stream = None
         self._num_bytes_downloaded = 0
+        self._next_request = None
 
         # Build headers
         if isinstance(headers, Headers):
@@ -167,7 +172,11 @@ class Response:
             self._num_bytes_downloaded = len(self._content)
         elif text is not None:
             self._text = text
-            enc = self.charset_encoding or default_encoding
+            enc = self.charset_encoding or (
+                self._default_encoding
+                if isinstance(self._default_encoding, str)
+                else "utf-8"
+            )
             self._content = text.encode(enc)
             self._num_bytes_downloaded = len(self._content)
         elif html is not None:
@@ -187,15 +196,37 @@ class Response:
             self._content = b""
             self._num_bytes_downloaded = 0
 
-        # Derived properties
-        self._reason_phrase = self._REASON_PHRASES.get(status_code, "")
-        self._http_version = "HTTP/1.1"
-        self._url = URL("")
-        self._elapsed = timedelta(0)
+        # ── Protocol metadata from extensions ───────────────────────
+        ext_http_version = self._extensions.get("http_version")
+        if ext_http_version is not None:
+            if isinstance(ext_http_version, bytes):
+                self._http_version = ext_http_version.decode("ascii", errors="replace")
+            else:
+                self._http_version = str(ext_http_version)
+        else:
+            self._http_version = "HTTP/1.1"
 
-        # Extract URL from request
+        ext_reason = self._extensions.get("reason_phrase")
+        if ext_reason is not None:
+            if isinstance(ext_reason, bytes):
+                self._reason_phrase = ext_reason.decode("utf-8", errors="replace")
+            else:
+                self._reason_phrase = str(ext_reason)
+        else:
+            self._reason_phrase = self._REASON_PHRASES.get(status_code, "")
+
+        # URL derives from request (Track 3.2)
         if request is not None and hasattr(request, "url"):
             self._url = request.url
+        else:
+            self._url = URL("")
+
+        # Elapsed — undefined until read/close for streaming,
+        # timedelta(0) for buffered responses
+        if stream is None:
+            self._elapsed: timedelta | None = timedelta(0)
+        else:
+            self._elapsed = None
 
         # Build cookies from headers
         self._cookies = Cookies()
@@ -213,6 +244,10 @@ class Response:
     def url(self) -> URL:
         return self._url
 
+    @url.setter
+    def url(self, value: URL | str) -> None:
+        self._url = URL(value) if not isinstance(value, URL) else value
+
     @property
     def reason_phrase(self) -> str:
         return self._reason_phrase
@@ -227,6 +262,11 @@ class Response:
 
     @encoding.setter
     def encoding(self, value: str) -> None:
+        if self._text is not None:
+            raise ValueError(
+                "The `response.encoding` cannot be set after "
+                "`response.text` has been accessed."
+            )
         self._encoding = value
 
     @property
@@ -240,26 +280,45 @@ class Response:
                 return part.split("=", 1)[1].strip()
         return None
 
+    def _resolve_encoding(self) -> str:
+        """Resolve the effective encoding string."""
+        if self._encoding is not None:
+            return self._encoding
+        cs = self.charset_encoding
+        if cs is not None:
+            return cs
+        if callable(self._default_encoding):
+            # HTTPX calls the callable with the content bytes
+            if self._content is not None:
+                return self._default_encoding(self._content)
+            return "utf-8"
+        return self._default_encoding
+
     @property
     def content(self) -> bytes:
         if self._content is None:
-            if self._stream is not None:
-                raise RuntimeError(
-                    "Response content has not been read. Call .read() or .aread() first."
+            if self._stream is not None or self._native_stream is not None:
+                raise ResponseNotRead(
+                    "Response content has not been read. "
+                    "Call .read() or .aread() first."
                 )
             return b""
         return self._content
 
     @property
     def text(self) -> str:
+        if self._text is not None:
+            return self._text
         if self._content is None:
-            if self._stream is not None:
-                raise RuntimeError(
-                    "Response content has not been read. Call .read() or .aread() first."
+            if self._stream is not None or self._native_stream is not None:
+                raise ResponseNotRead(
+                    "Response content has not been read. "
+                    "Call .read() or .aread() first."
                 )
             return ""
-        enc = self._encoding or self.charset_encoding or self._default_encoding
-        return self._content.decode(enc)
+        enc = self._resolve_encoding()
+        self._text = self._content.decode(enc)
+        return self._text
 
     @property
     def cookies(self) -> Cookies:
@@ -267,15 +326,42 @@ class Response:
 
     @property
     def elapsed(self) -> timedelta:
+        if self._elapsed is None:
+            raise RuntimeError(
+                "The `response.elapsed` attribute is not available until "
+                "the response has been read or closed."
+            )
         return self._elapsed
+
+    @elapsed.setter
+    def elapsed(self, value: timedelta) -> None:
+        self._elapsed = value
 
     @property
     def history(self) -> list[Response]:
         return self._history
 
+    @history.setter
+    def history(self, value: list[Response]) -> None:
+        self._history = list(value) if value is not None else []
+
     @property
     def request(self):
         return self._request
+
+    @request.setter
+    def request(self, value) -> None:
+        self._request = value
+        if value is not None and hasattr(value, "url"):
+            self._url = value.url
+
+    @property
+    def next_request(self):
+        return self._next_request
+
+    @next_request.setter
+    def next_request(self, value) -> None:
+        self._next_request = value
 
     @property
     def extensions(self) -> dict:
@@ -313,9 +399,7 @@ class Response:
 
     @property
     def is_redirect(self) -> bool:
-        return self._status_code in (301, 302, 303, 307, 308) or (
-            300 <= self._status_code < 400
-        )
+        return self._status_code in (301, 302, 303, 307, 308)
 
     @property
     def is_client_error(self) -> bool:
@@ -334,26 +418,62 @@ class Response:
         return 100 <= self._status_code < 200
 
     @property
+    def is_closed(self) -> bool:
+        return self._is_closed
+
+    @property
+    def is_stream_consumed(self) -> bool:
+        return self._stream_consumed
+
+    @property
     def has_redirect_location(self) -> bool:
-        return "location" in self._headers and self.is_redirect
+        # HTTPX: only True for redirect statuses where Location is present
+        # and the status is one HTTPX treats as a "has redirect location"
+        if not (300 <= self._status_code < 400):
+            return False
+        return "location" in self._headers
 
     def json(self, **kwargs) -> Any:
         if self._json is not None:
             return self._json
         if self._content is None:
-            if self._stream is not None:
-                raise RuntimeError(
-                    "Response content has not been read. Call .read() or .aread() first."
+            if self._stream is not None or self._native_stream is not None:
+                raise ResponseNotRead(
+                    "Response content has not been read. "
+                    "Call .read() or .aread() first."
                 )
             raise RuntimeError("Response content is empty.")
         return _json.loads(self._content, **kwargs)
 
     def raise_for_status(self) -> Response:
-        if self.is_error:
-            message = f"Server error {self._status_code}"
-            if self._reason_phrase:
-                message = f"Client error {self._status_code}" if self.is_client_error else f"Server error {self._status_code}"
-            raise HTTPStatusError(message=message, request=self._request, response=self)
+        if not self.is_success:
+            if self._request is None:
+                raise RuntimeError(
+                    "No request has been attached to this response. "
+                    "Cannot call raise_for_status() without a request."
+                )
+            if self.is_informational:
+                message = (
+                    f"Informational response {self._status_code}"
+                )
+            elif self.is_redirect:
+                loc = self.headers.get("location", "")
+                message = (
+                    f"Redirect response {self._status_code}"
+                )
+                if loc:
+                    message += f" to {loc}"
+            elif self.is_client_error:
+                message = f"Client error {self._status_code}"
+            elif self.is_server_error:
+                message = f"Server error {self._status_code}"
+            else:
+                message = f"Response {self._status_code}"
+            raise HTTPStatusError(
+                message=message,
+                request=self._request,
+                response=self,
+            )
         return self
 
     def read(self) -> bytes:
@@ -365,8 +485,12 @@ class Response:
                 self._content = bytes(content)
             self._num_bytes_downloaded = len(self._content)
             self._stream_consumed = True
+            if self._elapsed is None:
+                self._elapsed = timedelta(0)
             return self._content
         if self._stream is not None and not self._stream_consumed:
+            if self._is_closed:
+                raise StreamClosed()
             chunks: list[bytes] = []
             for chunk in self._stream:
                 if isinstance(chunk, bytes):
@@ -378,6 +502,8 @@ class Response:
             self._content = b"".join(chunks)
             self._num_bytes_downloaded = len(self._content)
             self._stream_consumed = True
+            if self._elapsed is None:
+                self._elapsed = timedelta(0)
         if self._content is None:
             return b""
         return self._content
@@ -391,8 +517,12 @@ class Response:
                 self._content = bytes(content)
             self._num_bytes_downloaded = len(self._content)
             self._stream_consumed = True
+            if self._elapsed is None:
+                self._elapsed = timedelta(0)
             return self._content
         if self._stream is not None and not self._stream_consumed:
+            if self._is_closed:
+                raise StreamClosed()
             chunks: list[bytes] = []
             async for chunk in self._stream:  # type: ignore[union-attr]
                 if isinstance(chunk, bytes):
@@ -404,6 +534,8 @@ class Response:
             self._content = b"".join(chunks)
             self._num_bytes_downloaded = len(self._content)
             self._stream_consumed = True
+            if self._elapsed is None:
+                self._elapsed = timedelta(0)
         if self._content is None:
             return b""
         return self._content
@@ -422,70 +554,104 @@ class Response:
         if hasattr(self._stream, "aclose"):
             await self._stream.aclose()
 
-    def iter_bytes(self, chunk_size: int = 8192) -> Iterator[bytes]:
+    def iter_bytes(self, chunk_size: int | None = 8192) -> Iterator[bytes]:
         if self._native_stream is not None and not self._stream_consumed:
             yield from self._native_stream.iter_bytes(chunk_size=chunk_size)
             return
+        if self._content is None and (self._stream is not None or self._native_stream is not None):
+            raise ResponseNotRead(
+                "Response content has not been read. "
+                "Call .read() or .aread() first."
+            )
         data = self.content
-        for i in range(0, len(data), chunk_size):
-            yield data[i : i + chunk_size]
+        size = chunk_size or 8192
+        for i in range(0, len(data), size):
+            yield data[i : i + size]
 
-    def iter_text(self, chunk_size: int = 8192) -> Iterator[str]:
+    def iter_text(self, chunk_size: int | None = 8192) -> Iterator[str]:
         if self._native_stream is not None and not self._stream_consumed:
             yield from self._native_stream.iter_text(chunk_size=chunk_size)
             return
-        enc = self._encoding or self.charset_encoding or self._default_encoding
+        if self._content is None and (self._stream is not None or self._native_stream is not None):
+            raise ResponseNotRead(
+                "Response content has not been read. "
+                "Call .read() or .aread() first."
+            )
+        enc = self._resolve_encoding()
         data = self.content.decode(enc)
-        for i in range(0, len(data), chunk_size):
-            yield data[i : i + chunk_size]
+        size = chunk_size or 8192
+        for i in range(0, len(data), size):
+            yield data[i : i + size]
 
     def iter_lines(self) -> Iterator[str]:
         if self._native_stream is not None and not self._stream_consumed:
             yield from self._native_stream.iter_lines()
             return
+        if self._content is None and (self._stream is not None or self._native_stream is not None):
+            raise ResponseNotRead(
+                "Response content has not been read. "
+                "Call .read() or .aread() first."
+            )
         text = self.text
         for line in text.split("\n"):
             if line.endswith("\r"):
                 line = line[:-1]
             yield line
 
-    def iter_raw(self, chunk_size: int = 8192) -> Iterator[bytes]:
+    def iter_raw(self, chunk_size: int | None = 8192) -> Iterator[bytes]:
         if self._native_stream is not None and not self._stream_consumed:
             yield from self._native_stream.iter_raw(chunk_size=chunk_size)
             return
         yield from self.iter_bytes(chunk_size)
 
-    async def aiter_bytes(self, chunk_size: int = 8192) -> AsyncIterator[bytes]:
+    async def aiter_bytes(self, chunk_size: int | None = 8192) -> AsyncIterator[bytes]:
         if self._native_stream is not None and not self._stream_consumed:
             async for chunk in self._native_stream.aiter_bytes(chunk_size=chunk_size):
                 yield chunk
             return
+        if self._content is None and (self._stream is not None or self._native_stream is not None):
+            raise ResponseNotRead(
+                "Response content has not been read. "
+                "Call .read() or .aread() first."
+            )
         data = self.content
-        for i in range(0, len(data), chunk_size):
-            yield data[i : i + chunk_size]
+        size = chunk_size or 8192
+        for i in range(0, len(data), size):
+            yield data[i : i + size]
 
-    async def aiter_text(self, chunk_size: int = 8192) -> AsyncIterator[str]:
+    async def aiter_text(self, chunk_size: int | None = 8192) -> AsyncIterator[str]:
         if self._native_stream is not None and not self._stream_consumed:
             async for chunk in self._native_stream.aiter_text(chunk_size=chunk_size):
                 yield chunk
             return
-        enc = self._encoding or self.charset_encoding or self._default_encoding
+        if self._content is None and (self._stream is not None or self._native_stream is not None):
+            raise ResponseNotRead(
+                "Response content has not been read. "
+                "Call .read() or .aread() first."
+            )
+        enc = self._resolve_encoding()
         data = self.content.decode(enc)
-        for i in range(0, len(data), chunk_size):
-            yield data[i : i + chunk_size]
+        size = chunk_size or 8192
+        for i in range(0, len(data), size):
+            yield data[i : i + size]
 
     async def aiter_lines(self) -> AsyncIterator[str]:
         if self._native_stream is not None and not self._stream_consumed:
             async for line in self._native_stream.aiter_lines():
                 yield line
             return
+        if self._content is None and (self._stream is not None or self._native_stream is not None):
+            raise ResponseNotRead(
+                "Response content has not been read. "
+                "Call .read() or .aread() first."
+            )
         text = self.text
         for line in text.split("\n"):
             if line.endswith("\r"):
                 line = line[:-1]
             yield line
 
-    async def aiter_raw(self, chunk_size: int = 8192) -> AsyncIterator[bytes]:
+    async def aiter_raw(self, chunk_size: int | None = 8192) -> AsyncIterator[bytes]:
         if self._native_stream is not None and not self._stream_consumed:
             async for chunk in self._native_stream.aiter_raw(chunk_size=chunk_size):
                 yield chunk
@@ -494,4 +660,4 @@ class Response:
             yield chunk
 
     def __repr__(self) -> str:
-        return f"<Response [{self._status_code}]>"
+        return f"<Response [{self._status_code} {self._reason_phrase}]>"

@@ -130,9 +130,25 @@ class TestEncoding:
 
 
 class TestElapsed:
-    def test_default_zero(self):
-        resp = Response(200)
-        assert resp.elapsed == timedelta(0)
+    def test_raises_before_read_streaming(self):
+        def gen():
+            yield b"data"
+
+        resp = Response(200, stream=gen())
+        with pytest.raises(RuntimeError, match="not available until"):
+            _ = resp.elapsed
+
+    def test_available_for_buffered(self):
+        resp = Response(200, content=b"hello")
+        assert resp.elapsed is not None
+
+    def test_available_after_read_streaming(self):
+        def gen():
+            yield b"data"
+
+        resp = Response(200, stream=gen())
+        resp.read()
+        assert resp.elapsed is not None
 
 
 class TestHistory:

@@ -184,6 +184,23 @@ The facade converts between HTTPX-compatible objects and native types at the bou
 
 - Pure-Python value objects with exact HTTPX semantics for URL, QueryParams, Headers, Cookies, Timeout, Limits, Proxy.
 - Request and Response objects with HTTPX-compatible construction, properties, and state machines.
+- **Request URL params**: `params` argument merges into `request.url` matching HTTPX replacement semantics.
+- **Body source exclusion**: `content`, `json`, `data`, `files`, `stream` follow HTTPX mutual-exclusion rules; `data` + `files` is valid (multipart).
+- **JSON serialization**: Compact format with `separators=(",", ":")`, UTF-8 encoding, correct headers.
+- **Multipart**: `data` + `files` combined in one body; 4-tuple file spec `(filename, fileobj, content_type, headers)` supported.
+- **Auto-headers**: No auto `Transfer-Encoding: chunked` for explicit `stream=`; Content-Length for encoded bodies.
+- **Response extensions**: `http_version` and `reason_phrase` read from response extensions (bytes or strings).
+- **Response.request**: Attaches request; URL derives from attached request.
+- **Response.elapsed**: Raises before read/close for streaming; available for buffered responses.
+- **Status predicates**: `is_informational`, `is_success`, `is_redirect`, `is_client_error`, `is_server_error`, `is_error`, `has_redirect_location` match HTTPX.
+- **raise_for_status()**: Raises for all non-success statuses (informational, redirect, client-error, server-error) with request attachment.
+- **next_request**: Exposed and defaults to `None` for Phase 4 redirect support.
+- **History**: Copied at construction; setter replaces the list.
+- **Stream exceptions**: `ResponseNotRead`, `StreamClosed`, `StreamConsumed` raised at correct state boundaries.
+- **Stream state**: `is_closed`, `is_stream_consumed`, `num_bytes_downloaded` updated on all completion/failure paths.
+- **Encoding**: Callable `default_encoding`; `encoding` setter raises after `text` access.
+- **Repr**: Response includes status and reason phrase; URL redacts passwords.
+- **Exports**: `main()` and `create_ssl_context()` stubs added for API compatibility.
 - Full exception hierarchy (HTTPError → RequestError/TransportError → specific subclasses) with MRO matching the pinned manifest.
 - Client and AsyncClient constructors with all HTTPX parameters (auth, params, headers, cookies, verify, cert, trust_env, proxy, timeout, limits, follow_redirects, max_redirects, base_url, default_encoding, event_hooks).
 - Configuration merge semantics: client-level defaults merge with per-request overrides for params, headers, cookies, auth, timeout, extensions, and redirect policy.

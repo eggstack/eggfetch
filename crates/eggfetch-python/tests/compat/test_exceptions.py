@@ -198,10 +198,11 @@ class TestRaiseForStatus:
         result = resp.raise_for_status()
         assert result is resp
 
-    def test_informational_returns_self(self):
-        resp = Response(100)
-        result = resp.raise_for_status()
-        assert result is resp
+    def test_informational_raises(self):
+        resp = Response(100, request=Request("GET", "https://example.com"))
+        with pytest.raises(HTTPStatusError) as exc_info:
+            resp.raise_for_status()
+        assert exc_info.value.response is resp
 
     def test_4xx_raises(self):
         resp = Response(404, request=Request("GET", "https://example.com"))
@@ -216,7 +217,8 @@ class TestRaiseForStatus:
             resp.raise_for_status()
         assert exc_info.value.response is resp
 
-    def test_redirect_not_error(self):
-        resp = Response(301)
-        result = resp.raise_for_status()
-        assert result is resp
+    def test_redirect_raises(self):
+        resp = Response(301, request=Request("GET", "https://example.com"))
+        with pytest.raises(HTTPStatusError) as exc_info:
+            resp.raise_for_status()
+        assert exc_info.value.response is resp
