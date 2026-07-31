@@ -43,6 +43,9 @@ if typing.TYPE_CHECKING:
 
 _USE_CLIENT_DEFAULT = object()
 
+# Sentinel distinguishing "no match found" from "matched a None transport".
+_MOUNT_NO_MATCH = object()
+
 
 # ── Client state ────────────────────────────────────────────────────────
 
@@ -319,16 +322,15 @@ def _wrap_response(native_resp, compat_request=None, default_encoding="utf-8"):
         for h in native_resp.history:
             history.append(_wrap_response(h, default_encoding=default_encoding))
 
-    # Build extensions: preserve request extensions + map standard keys
+    # Start with handler-provided extensions, then overlay standard keys.
     extensions: dict = {}
-    if compat_request is not None and hasattr(compat_request, "extensions"):
-        extensions.update(compat_request.extensions)
+    if hasattr(native_resp, "extensions") and native_resp.extensions:
+        extensions.update(native_resp.extensions)
 
-    # Map standard extension keys from native response
     if hasattr(native_resp, "http_version") and native_resp.http_version:
-        extensions["http_version"] = native_resp.http_version
+        extensions.setdefault("http_version", native_resp.http_version)
     if hasattr(native_resp, "reason_phrase") and native_resp.reason_phrase:
-        extensions["reason_phrase"] = native_resp.reason_phrase
+        extensions.setdefault("reason_phrase", native_resp.reason_phrase)
 
     return Response(
         status_code,
@@ -342,13 +344,12 @@ def _wrap_response(native_resp, compat_request=None, default_encoding="utf-8"):
 
 
 def _wrap_streaming_response(native_resp, compat_request=None, default_encoding="utf-8"):
-    # If native_resp is already a compat Response (e.g. from MockTransport),
-    # extract its stream for proper iteration.
     if isinstance(native_resp, Response):
         status_code = native_resp.status_code
         header_list = native_resp.headers.multi_items()
         stream_obj = native_resp._stream
         history = native_resp.history or []
+        existing_content = native_resp._content
     else:
         status_code = native_resp.status_code
         native_headers = native_resp.headers
@@ -364,16 +365,26 @@ def _wrap_streaming_response(native_resp, compat_request=None, default_encoding=
             for h in native_resp.history:
                 history.append(_wrap_response(h, default_encoding=default_encoding))
         stream_obj = native_resp
+        existing_content = None
 
-    # Build extensions: preserve request extensions + map standard keys
+    # Start with handler-provided extensions, then overlay standard keys.
     extensions: dict = {}
-    if compat_request is not None and hasattr(compat_request, "extensions"):
-        extensions.update(compat_request.extensions)
+    if hasattr(native_resp, "extensions") and native_resp.extensions:
+        extensions.update(native_resp.extensions)
 
     if hasattr(native_resp, "http_version") and native_resp.http_version:
-        extensions["http_version"] = native_resp.http_version
+        extensions.setdefault("http_version", native_resp.http_version)
     if hasattr(native_resp, "reason_phrase") and native_resp.reason_phrase:
-        extensions["reason_phrase"] = native_resp.reason_phrase
+        extensions.setdefault("reason_phrase", native_resp.reason_phrase)
+
+    # Preserve buffered content when wrapping a compat Response that was
+    # constructed with content= but is being streamed.  This matches
+    # HTTPX's expectation that a buffered response still yields its body
+    # through streaming iteration.
+    if existing_content is not None and stream_obj is None:
+        def _buffer_iter():
+            yield existing_content
+        stream_obj = _buffer_iter()
 
     response = Response(
         status_code,
@@ -384,9 +395,6 @@ def _wrap_streaming_response(native_resp, compat_request=None, default_encoding=
         default_encoding=default_encoding,
         extensions=extensions if extensions else None,
     )
-    # Only set _native_stream for objects with a .read() method (native
-    # eggfetch streams).  Python generators/iterables go through _stream
-    # iteration instead.
     if hasattr(stream_obj, "read"):
         response._native_stream = stream_obj
     return response
@@ -415,10 +423,8 @@ def _build_native_kwargs(request, follow_redirects=None, timeout=_USE_CLIENT_DEF
     if follow_redirects is not None:
         kwargs["follow_redirects"] = follow_redirects
     if timeout is _USE_CLIENT_DEFAULT:
-        # Use client default — don't add to kwargs
         pass
     elif timeout is None:
-        # Explicit None — disable all timeouts (pass None to native)
         kwargs["timeout"] = None
     else:
         kwargs["timeout"] = _convert_timeout(timeout)
@@ -426,45 +432,81 @@ def _build_native_kwargs(request, follow_redirects=None, timeout=_USE_CLIENT_DEF
     return kwargs
 
 
-def _parse_mount_pattern(pattern: str):
-    """Parse a mount pattern into (scheme, host, port, path) components.
+# ── Mount pattern matching (Track 3) ───────────────────────────────────
 
-    Handles patterns like:
-    - ``all://`` → ("", None, None, "")
-    - ``http://`` → ("http", None, None, "")
-    - ``https://`` → ("https", None, None, "")
-    - ``http://example.com`` → ("http", "example.com", None, "")
-    - ``http://example.com:8080`` → ("http", "example.com", 8080, "")
-    - ``http://example.com/api`` → ("http", "example.com", None, "/api")
+def _parse_mount_pattern(pattern: str):
+    """Parse a mount pattern into ``(scheme, host, port, path)`` components.
+
+    Supports HTTPX 0.28.1 patterns:
+    - ``all://`` → catch-all
+    - ``http://`` / ``https://`` → scheme-only
+    - ``http://example.com`` → exact host
+    - ``http://example.com:8080`` → host + port
+    - ``all://*.example.com`` → wildcard domain
+    - ``http://example.com/api`` → host + path prefix
     """
     if pattern == "all://":
-        return ("", None, None, "")
+        return ("", None, None, "", False)
 
     parsed = urllib.parse.urlsplit(pattern)
     scheme = parsed.scheme.lower()
     host = parsed.hostname
     port = parsed.port
     path = parsed.path.rstrip("/") or ""
-    return (scheme, host, port, path)
+
+    # Detect wildcard domain: all://*.example.com
+    raw_host = parsed.hostname or ""
+    is_wildcard = False
+    if raw_host.startswith("*."):
+        is_wildcard = True
+        host = raw_host[2:]
+    elif raw_host == "*":
+        is_wildcard = True
+        host = ""
+
+    # Normalize "all" scheme to empty string for scheme-agnostic matching
+    if scheme == "all":
+        scheme = ""
+
+    return (scheme, host, port, path, is_wildcard)
+
+
+def _host_matches(url_host: str | None, pat_host: str | None, is_wildcard: bool) -> bool:
+    """Check whether *url_host* matches *pat_host* (with optional wildcard)."""
+    if pat_host is None:
+        return True
+    if url_host is None:
+        return False
+    if is_wildcard:
+        url_host_lower = url_host.lower()
+        pat_host_lower = pat_host.lower()
+        return url_host_lower.endswith("." + pat_host_lower)
+    return pat_host.lower() == url_host.lower()
 
 
 def _match_mount(url, mounts):
     """Find the best matching transport for *url* from *mounts* dict.
 
-    Uses component-based matching (scheme, host, port, path) rather than
-    string prefix matching.  Scoring priority (highest wins):
+    Priority follows HTTPX 0.28.1 ordering (highest wins):
 
-    - Full URL match (scheme + host + port + path)             — 10 000
-    - Scheme + host + path                                      — 200 + len(path)
-    - Scheme + host + port                                      — 205
-    - Scheme + host                                             — 200
-    - Scheme only (``http://`` or ``https://``)                  — 10
-    - Catch-all (``all://``)                                    — 0
+    1. Exact host + port + path                                      — 10 000
+    2. Wildcard domain + port + path                                  — 9 500
+    3. Exact host + port (no path)                                    — 500
+    4. Wildcard domain + port (no path)                               — 450
+    5. Exact host + path (no port)                                    — 200 + len(path)
+    6. Wildcard domain + path (no port)                               — 150 + len(path)
+    7. Exact host only                                                — 200
+    8. Wildcard domain only                                           — 150
+    9. Scheme only (``http://`` or ``https://``)                       — 10
+    10. Catch-all (``all://``)                                         — 0
 
-    If no mount matches, return ``None``.
+    Returns:
+    - The matched transport object, or
+    - ``None`` if a pattern matched ``None`` (explicit bypass), or
+    - ``_MOUNT_NO_MATCH`` if nothing matched.
     """
     if not mounts:
-        return None
+        return _MOUNT_NO_MATCH
 
     url_str = str(url)
     url_parts = urllib.parse.urlsplit(url_str)
@@ -477,7 +519,12 @@ def _match_mount(url, mounts):
     best_score: int = -1
 
     for pattern in mounts:
-        pat_scheme, pat_host, pat_port, pat_path = _parse_mount_pattern(pattern)
+        parsed = _parse_mount_pattern(pattern)
+        pat_scheme = parsed[0]
+        pat_host = parsed[1]
+        pat_port = parsed[2]
+        pat_path = parsed[3]
+        is_wildcard = parsed[4]
 
         # Catch-all: always matches, lowest priority
         if pat_scheme == "" and pat_host is None:
@@ -487,16 +534,13 @@ def _match_mount(url, mounts):
                 best_match = pattern
             continue
 
-        # Scheme must match (or pattern has no scheme)
-        if pat_scheme and pat_scheme != url_scheme:
+        # Scheme must match — "all" is scheme-agnostic
+        if pat_scheme and pat_scheme != "all" and pat_scheme != url_scheme:
             continue
 
-        # Host must match (or pattern has no host)
-        if pat_host is not None:
-            if url_host is None:
-                continue
-            if pat_host.lower() != url_host.lower():
-                continue
+        # Host must match
+        if not _host_matches(url_host, pat_host, is_wildcard):
+            continue
 
         # Port must match (or pattern has no port)
         if pat_port is not None:
@@ -505,27 +549,31 @@ def _match_mount(url, mounts):
 
         # Path must be a prefix (or pattern has no path)
         if pat_path:
-            # Exact match or prefix followed by /
             if url_path != pat_path and not url_path.startswith(pat_path + "/"):
                 continue
 
-        # Compute score — more specific matches get higher scores.
-        # Each additional component (host, port, path) adds specificity.
+        # Compute score
         if pat_host is None and not pat_path:
-            # Scheme-only pattern (e.g. ``http://``)
             score = 10
-        elif pat_host is not None and not pat_path and pat_port is None:
-            # Host pattern without port or path
-            score = 200
-        elif pat_host is not None and pat_port is not None and not pat_path:
-            # Host + port pattern
-            score = 205
-        elif pat_host is not None and pat_path:
-            # Host + path (with or without port)
-            base = 205 if pat_port is not None else 200
-            score = base + len(pat_path)
+        elif is_wildcard:
+            if pat_port is not None and not pat_path:
+                score = 450
+            elif pat_port is not None and pat_path:
+                score = 9500
+            elif pat_path:
+                score = 150 + len(pat_path)
+            else:
+                score = 150
         else:
-            score = 0
+            if pat_port is not None and not pat_path:
+                score = 500
+            elif pat_port is not None and pat_path:
+                score = 10000
+            elif pat_path:
+                base = 200
+                score = base + len(pat_path)
+            else:
+                score = 200
 
         if score > best_score:
             best_score = score
@@ -533,8 +581,52 @@ def _match_mount(url, mounts):
 
     if best_match is not None:
         return mounts[best_match]
-    return None
+    return _MOUNT_NO_MATCH
 
+
+def _validate_mount_pattern(pattern: str) -> None:
+    """Validate a mount pattern at client construction time."""
+    if pattern == "all://":
+        return
+    parsed = urllib.parse.urlsplit(pattern)
+    if not parsed.scheme:
+        raise ValueError(
+            f"Mount pattern must include a scheme: {pattern!r}"
+        )
+    raw_host = parsed.hostname or ""
+    if raw_host == "*" or raw_host.startswith("*."):
+        remainder = raw_host[2:] if raw_host.startswith("*.") else ""
+        if not remainder or "." not in remainder:
+            raise ValueError(
+                f"Wildcard mount pattern requires a valid domain after '*.': {pattern!r}"
+            )
+    if parsed.port is not None and parsed.port < 0:
+        raise ValueError(
+            f"Invalid port in mount pattern: {pattern!r}"
+        )
+
+
+# ── Effective timeout extension (Track 1.3) ────────────────────────────
+
+def _ensure_timeout_extension(request: Request, timeout) -> None:
+    """Put effective timeout into request extensions if not already set.
+
+    Custom transports may read ``extensions["timeout"]`` to configure
+    their own timeout logic, matching HTTPX's transport contract.
+    """
+    if "timeout" in request.extensions:
+        return
+    if timeout is _USE_CLIENT_DEFAULT:
+        return
+    if timeout is None:
+        request.extensions["timeout"] = Timeout(None)
+    elif isinstance(timeout, Timeout):
+        request.extensions["timeout"] = timeout
+    elif isinstance(timeout, (int, float)):
+        request.extensions["timeout"] = Timeout(timeout)
+
+
+# ── Client ──────────────────────────────────────────────────────────────
 
 class Client:
     def __init__(
@@ -584,10 +676,19 @@ class Client:
         self._native_client = None
         self._state = _ClientState.UNOPENED
 
+        # Track which transport objects we own for close deduplication.
+        self._owned_transports: set[int] = set()
+
         self._mounts: dict[str, Any] = {}
         if mounts:
             for pattern, transport_obj in mounts.items():
+                _validate_mount_pattern(pattern)
                 self._mounts[pattern] = transport_obj
+                if transport_obj is not None:
+                    self._owned_transports.add(id(transport_obj))
+
+        if self._transport is not None:
+            self._owned_transports.add(id(self._transport))
 
     def _ensure_client(self):
         if self._transport is not None:
@@ -737,36 +838,63 @@ class Client:
             extensions=merged_extensions if merged_extensions else None,
         )
 
-    def _dispatch_request(self, request, *, stream=False, follow_redirects=None,
-                          timeout=None):
+    # ── One-hop dispatch (Track 1) ──────────────────────────────────────
+
+    def _dispatch_one_hop(self, request, *, stream=False):
+        """Send exactly one prepared Request through exactly one transport.
+
+        This function must not:
+        - apply auth
+        - follow redirects
+        - run user event hooks
+        - mutate cookie state
+        - append history
+
+        Native dispatches always use ``follow_redirects=False``.
+        """
+        _ensure_timeout_extension(request, self._timeout)
+
         transport = _match_mount(request.url, self._mounts)
-        if transport is not None:
-            return self._send_via_transport(
-                transport, request, stream=stream
+        if transport is _MOUNT_NO_MATCH:
+            # No mount matched — use default transport or native client.
+            if self._transport is not None:
+                return self._send_via_transport(
+                    self._transport, request, stream=stream
+                )
+            return self._send_via_native(
+                request, stream=stream,
             )
-        if self._transport is not None:
-            return self._send_via_transport(
-                self._transport, request, stream=stream
+        if transport is None:
+            # Explicit None mount — bypass to default direct transport.
+            if self._transport is not None:
+                return self._send_via_transport(
+                    self._transport, request, stream=stream
+                )
+            return self._send_via_native(
+                request, stream=stream,
             )
-        return self._send_via_native(
-            request, stream=stream,
-            follow_redirects=follow_redirects, timeout=timeout,
+        # A specific transport was matched.
+        return self._send_via_transport(
+            transport, request, stream=stream
         )
 
     def _send_via_transport(self, transport, request, *, stream=False):
         try:
             native_resp = transport.handle_request(request)
         except Exception as exc:
-            raise _map_exception(exc, request) from exc
+            if not isinstance(exc, (RequestError, TransportError)):
+                raise _map_exception(exc, request) from exc
+            raise
         if stream:
             return _wrap_streaming_response(native_resp, request, self._default_encoding)
         return _wrap_response(native_resp, request, self._default_encoding)
 
-    def _send_via_native(self, request, *, stream=False, follow_redirects=None,
-                         timeout=None):
+    def _send_via_native(self, request, *, stream=False):
         self._ensure_client()
-        kwargs = _build_native_kwargs(request, follow_redirects=follow_redirects,
-                                       timeout=timeout)
+        # Track 1.2: Force one-hop mode — never follow redirects internally.
+        kwargs = _build_native_kwargs(
+            request, follow_redirects=False, timeout=self._timeout,
+        )
         try:
             if stream:
                 native_resp = self._native_client.stream(**kwargs)
@@ -777,6 +905,29 @@ class Client:
         if stream:
             return _wrap_streaming_response(native_resp, request, self._default_encoding)
         return _wrap_response(native_resp, request, self._default_encoding)
+
+    # ── Per-hop send (Track 4) ──────────────────────────────────────────
+
+    def _run_request_hooks(self, request):
+        """Run request hooks, returning the (possibly mutated) request.
+
+        If a hook raises, no dispatch occurs and the exception propagates.
+        """
+        for hook in self._event_hooks.get("request", []):
+            hook(request)
+        return request
+
+    def _run_response_hooks(self, response):
+        """Run response hooks on the final response.
+
+        If a hook raises, the response is closed and the exception propagates.
+        """
+        for hook in self._event_hooks.get("response", []):
+            try:
+                hook(response)
+            except Exception:
+                response.close()
+                raise
 
     def send(self, request, *, stream=False, auth=_USE_CLIENT_DEFAULT,
              follow_redirects=None, timeout=_USE_CLIENT_DEFAULT):
@@ -790,20 +941,12 @@ class Client:
         if auth is _USE_CLIENT_DEFAULT:
             resolved_auth = self._auth
         elif auth is None:
-            # Explicit auth=None disables auth entirely
             resolved_auth = None
         else:
             resolved_auth = _build_auth(auth)
 
-        # 2. Execute request hooks BEFORE auth and dispatch
-        for hook in self._event_hooks.get("request", []):
-            hook(request)
-
-        # 3. Run auth flow via sync_auth_flow (generator pattern)
-        # Auth is ALWAYS applied by the client regardless of transport.
-        # The transport simply sends whatever request the client gives it.
+        # 2. Initialize auth flow generator
         use_auth = resolved_auth is not None
-
         auth_flow_gen = None
         if use_auth:
             auth_flow_gen = resolved_auth.sync_auth_flow(request)
@@ -812,37 +955,37 @@ class Client:
             except StopIteration:
                 auth_flow_gen = None
 
-        # 4. Dispatch loop — feed each auth response back and dispatch follow-ups
+        # 3. Per-hop dispatch loop
+        #    For each hop: hooks → dispatch → response hooks → auth/redirect decision
         while True:
-            response = self._dispatch_request(
+            # 3a. Request hooks (see the transported Request)
+            request = self._run_request_hooks(request)
+
+            # 3b. One-hop transport dispatch
+            response = self._dispatch_one_hop(
                 request, stream=stream,
-                follow_redirects=follow_redirects, timeout=timeout,
             )
 
+            # 3c. Response hooks (see the response before auth decides)
+            self._run_response_hooks(response)
+
+            # 3d. Auth/redirect state machine decision
             if auth_flow_gen is None:
                 break
 
-            # Try to get the next request from the auth flow.
-            # If StopIteration, the current response is final.
             try:
                 request = auth_flow_gen.send(response)
+            except StopAsyncIteration:
+                auth_flow_gen = None
+                break
             except StopIteration:
                 auth_flow_gen = None
                 break
 
             # Intermediate auth response — drain body and close before
-            # dispatching the follow-up request.  The generator already
-            # yielded the next request above.
+            # dispatching the follow-up request.
             response.read()
             response.close()
-
-        # 5. Execute response hooks (only the final response)
-        for hook in self._event_hooks.get("response", []):
-            try:
-                hook(response)
-            except Exception:
-                response.close()
-                raise
 
         return response
 
@@ -910,24 +1053,47 @@ class Client:
             if response is not None:
                 response.close()
 
+    # ── Ownership and close (Track 6) ───────────────────────────────────
+
     def close(self) -> None:
-        if self._transport is not None and hasattr(self._transport, "close"):
-            try:
-                self._transport.close()
-            except Exception:
-                pass
+        if self._state == _ClientState.CLOSED:
+            return
+
+        last_error: Exception | None = None
+
+        # Close default transport (if owned).
+        if self._transport is not None and id(self._transport) in self._owned_transports:
+            if hasattr(self._transport, "close"):
+                try:
+                    self._transport.close()
+                except Exception as exc:
+                    last_error = exc
+
+        # Close mounted transports — deduplicate by id.
+        seen: set[int] = set()
         for transport in self._mounts.values():
+            if transport is None:
+                continue
+            tid = id(transport)
+            if tid in seen:
+                continue
+            seen.add(tid)
             if hasattr(transport, "close"):
                 try:
                     transport.close()
-                except Exception:
-                    pass
+                except Exception as exc:
+                    last_error = exc
+
+        # Close native client.
         if self._native_client is not None:
             try:
                 self._native_client.close()
-            except Exception:
-                pass
+            except Exception as exc:
+                last_error = exc
+
         self._state = _ClientState.CLOSED
+        if last_error is not None:
+            raise last_error
 
     def __enter__(self) -> Client:
         self._ensure_client()
@@ -1036,10 +1202,21 @@ class AsyncClient:
         self._native_client = None
         self._state = _ClientState.UNOPENED
 
+        # Track which transport objects we own for close deduplication.
+        self._owned_transports: set[int] = set()
+
         self._mounts: dict[str, Any] = {}
         if mounts:
             for pattern, transport_obj in mounts.items():
+                _validate_mount_pattern(pattern)
                 self._mounts[pattern] = transport_obj
+                if transport_obj is not None:
+                    self._owned_transports.add(id(transport_obj))
+
+        if self._transport is not None:
+            self._owned_transports.add(id(self._transport))
+        if self._async_transport is not None:
+            self._owned_transports.add(id(self._async_transport))
 
     def _ensure_client(self):
         if self._transport is not None or self._async_transport is not None:
@@ -1189,31 +1366,60 @@ class AsyncClient:
             extensions=merged_extensions if merged_extensions else None,
         )
 
-    async def _dispatch_request(self, request, *, stream=False, follow_redirects=None,
-                                timeout=None):
+    # ── One-hop dispatch (Track 1) ──────────────────────────────────────
+
+    async def _dispatch_one_hop(self, request, *, stream=False):
+        """Send exactly one prepared Request through exactly one transport.
+
+        This function must not:
+        - apply auth
+        - follow redirects
+        - run user event hooks
+        - mutate cookie state
+        - append history
+
+        Native dispatches always use ``follow_redirects=False``.
+        """
+        _ensure_timeout_extension(request, self._timeout)
+
         transport = _match_mount(request.url, self._mounts)
-        if transport is not None:
-            return await self._send_via_transport(
-                transport, request, stream=stream
+        if transport is _MOUNT_NO_MATCH:
+            if self._async_transport is not None:
+                return await self._send_via_transport(
+                    self._async_transport, request, stream=stream
+                )
+            if self._transport is not None:
+                return self._send_via_transport_sync(
+                    self._transport, request, stream=stream
+                )
+            return await self._send_via_native(
+                request, stream=stream,
             )
-        if self._async_transport is not None:
-            return await self._send_via_transport(
-                self._async_transport, request, stream=stream
+        if transport is None:
+            # Explicit None mount — bypass to default direct transport.
+            if self._async_transport is not None:
+                return await self._send_via_transport(
+                    self._async_transport, request, stream=stream
+                )
+            if self._transport is not None:
+                return self._send_via_transport_sync(
+                    self._transport, request, stream=stream
+                )
+            return await self._send_via_native(
+                request, stream=stream,
             )
-        if self._transport is not None:
-            return self._send_via_transport_sync(
-                self._transport, request, stream=stream
-            )
-        return await self._send_via_native(
-            request, stream=stream,
-            follow_redirects=follow_redirects, timeout=timeout,
+        # A specific transport was matched.
+        return await self._send_via_transport(
+            transport, request, stream=stream
         )
 
     async def _send_via_transport(self, transport, request, *, stream=False):
         try:
             native_resp = await transport.handle_async_request(request)
         except Exception as exc:
-            raise _map_exception(exc, request) from exc
+            if not isinstance(exc, (RequestError, TransportError)):
+                raise _map_exception(exc, request) from exc
+            raise
         if stream:
             return _wrap_streaming_response(native_resp, request, self._default_encoding)
         return _wrap_response(native_resp, request, self._default_encoding)
@@ -1222,16 +1428,19 @@ class AsyncClient:
         try:
             native_resp = transport.handle_request(request)
         except Exception as exc:
-            raise _map_exception(exc, request) from exc
+            if not isinstance(exc, (RequestError, TransportError)):
+                raise _map_exception(exc, request) from exc
+            raise
         if stream:
             return _wrap_streaming_response(native_resp, request, self._default_encoding)
         return _wrap_response(native_resp, request, self._default_encoding)
 
-    async def _send_via_native(self, request, *, stream=False, follow_redirects=None,
-                               timeout=None):
+    async def _send_via_native(self, request, *, stream=False):
         self._ensure_client()
-        kwargs = _build_native_kwargs(request, follow_redirects=follow_redirects,
-                                       timeout=timeout)
+        # Track 1.2: Force one-hop mode — never follow redirects internally.
+        kwargs = _build_native_kwargs(
+            request, follow_redirects=False, timeout=self._timeout,
+        )
         try:
             if stream:
                 native_resp = await self._native_client.stream(**kwargs)
@@ -1242,6 +1451,34 @@ class AsyncClient:
         if stream:
             return _wrap_streaming_response(native_resp, request, self._default_encoding)
         return _wrap_response(native_resp, request, self._default_encoding)
+
+    # ── Per-hop send (Track 4) ──────────────────────────────────────────
+
+    async def _run_request_hooks(self, request):
+        """Run request hooks, awaiting if necessary.
+
+        Matches HTTPX: callable objects returning awaitables are awaited
+        in async mode.  Plain callables are called directly.
+        """
+        for hook in self._event_hooks.get("request", []):
+            result = hook(request)
+            if asyncio.iscoroutine(result) or asyncio.isfuture(result):
+                await result
+        return request
+
+    async def _run_response_hooks(self, response):
+        """Run response hooks on the final response.
+
+        If a hook raises, the response is closed and the exception propagates.
+        """
+        for hook in self._event_hooks.get("response", []):
+            try:
+                result = hook(response)
+                if asyncio.iscoroutine(result) or asyncio.isfuture(result):
+                    await result
+            except Exception:
+                await response.aclose()
+                raise
 
     async def send(self, request, *, stream=False, auth=_USE_CLIENT_DEFAULT,
                    follow_redirects=None, timeout=_USE_CLIENT_DEFAULT):
@@ -1259,18 +1496,8 @@ class AsyncClient:
         else:
             resolved_auth = _build_auth(auth)
 
-        # 2. Execute request hooks BEFORE auth and dispatch
-        for hook in self._event_hooks.get("request", []):
-            if asyncio.iscoroutinefunction(hook):
-                await hook(request)
-            else:
-                hook(request)
-
-        # 3. Run auth flow via async_auth_flow (async generator pattern)
-        # Auth is ALWAYS applied by the client regardless of transport.
-        # The transport simply sends whatever request the client gives it.
+        # 2. Initialize auth flow generator
         use_auth = resolved_auth is not None
-
         auth_flow_gen = None
         if use_auth:
             auth_flow_gen = resolved_auth.async_auth_flow(request)
@@ -1279,18 +1506,23 @@ class AsyncClient:
             except StopAsyncIteration:
                 auth_flow_gen = None
 
-        # 4. Dispatch loop — feed each auth response back and dispatch follow-ups
+        # 3. Per-hop dispatch loop
         while True:
-            response = await self._dispatch_request(
+            # 3a. Request hooks (see the transported Request)
+            request = await self._run_request_hooks(request)
+
+            # 3b. One-hop transport dispatch
+            response = await self._dispatch_one_hop(
                 request, stream=stream,
-                follow_redirects=follow_redirects, timeout=timeout,
             )
 
+            # 3c. Response hooks (see the response before auth decides)
+            await self._run_response_hooks(response)
+
+            # 3d. Auth/redirect state machine decision
             if auth_flow_gen is None:
                 break
 
-            # Try to get the next request from the auth flow.
-            # If StopAsyncIteration, the current response is final.
             try:
                 request = await auth_flow_gen.asend(response)
             except StopAsyncIteration:
@@ -1298,21 +1530,9 @@ class AsyncClient:
                 break
 
             # Intermediate auth response — drain body and close before
-            # dispatching the follow-up request.  The generator already
-            # yielded the next request above.
+            # dispatching the follow-up request.
             await response.aread()
             await response.aclose()
-
-        # 5. Execute response hooks (only the final response)
-        for hook in self._event_hooks.get("response", []):
-            try:
-                if asyncio.iscoroutinefunction(hook):
-                    await hook(response)
-                else:
-                    hook(response)
-            except Exception:
-                await response.aclose()
-                raise
 
         return response
 
@@ -1383,34 +1603,60 @@ class AsyncClient:
                 else:
                     response.close()
 
+    # ── Ownership and close (Track 6) ───────────────────────────────────
+
     async def close(self) -> None:
-        if self._async_transport is not None and hasattr(self._async_transport, "aclose"):
-            try:
-                await self._async_transport.aclose()
-            except Exception:
-                pass
-        if self._transport is not None and hasattr(self._transport, "close"):
-            try:
-                self._transport.close()
-            except Exception:
-                pass
+        if self._state == _ClientState.CLOSED:
+            return
+
+        last_error: Exception | None = None
+
+        # Close async default transport (if owned).
+        if self._async_transport is not None and id(self._async_transport) in self._owned_transports:
+            if hasattr(self._async_transport, "aclose"):
+                try:
+                    await self._async_transport.aclose()
+                except Exception as exc:
+                    last_error = exc
+
+        # Close sync default transport (if owned).
+        if self._transport is not None and id(self._transport) in self._owned_transports:
+            if hasattr(self._transport, "close"):
+                try:
+                    self._transport.close()
+                except Exception as exc:
+                    last_error = exc
+
+        # Close mounted transports — deduplicate by id.
+        seen: set[int] = set()
         for transport in self._mounts.values():
+            if transport is None:
+                continue
+            tid = id(transport)
+            if tid in seen:
+                continue
+            seen.add(tid)
             if hasattr(transport, "aclose"):
                 try:
                     await transport.aclose()
-                except Exception:
-                    pass
+                except Exception as exc:
+                    last_error = exc
             elif hasattr(transport, "close"):
                 try:
                     transport.close()
-                except Exception:
-                    pass
+                except Exception as exc:
+                    last_error = exc
+
+        # Close native client.
         if self._native_client is not None:
             try:
                 await self._native_client.aclose()
-            except Exception:
-                pass
+            except Exception as exc:
+                last_error = exc
+
         self._state = _ClientState.CLOSED
+        if last_error is not None:
+            raise last_error
 
     async def aclose(self) -> None:
         await self.close()

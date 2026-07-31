@@ -28,9 +28,10 @@ def _capture_handler():
 
 
 class TestExtensionPassthrough:
-    """Extensions set on the request survive through send to the response."""
+    """Extensions survive through send.  Request extensions live on
+    ``response.request.extensions``, not on ``response.extensions``."""
 
-    def test_extensions_on_build_request_survive_to_response(self):
+    def test_request_extensions_on_request_object(self):
         handler, captured = _capture_handler()
         with Client(transport=MockTransport(handler)) as client:
             req = client.build_request(
@@ -39,13 +40,14 @@ class TestExtensionPassthrough:
             )
             resp = client.send(req)
 
-        # Response should contain the request extension
-        assert "trace_id" in resp.extensions
-        assert resp.extensions["trace_id"] == "abc-123"
-        # Standard keys from the handler response should also be present
+        # Request extensions are on the request attached to the response
+        assert resp.request is not None
+        assert "trace_id" in resp.request.extensions
+        assert resp.request.extensions["trace_id"] == "abc-123"
+        # Standard response extensions from the handler are present
         assert resp.extensions.get("http_version") == "HTTP/1.1"
 
-    def test_extensions_on_request_method(self):
+    def test_request_extensions_on_request_method(self):
         handler, captured = _capture_handler()
         with Client(transport=MockTransport(handler)) as client:
             resp = client.request(
@@ -53,7 +55,8 @@ class TestExtensionPassthrough:
                 extensions={"custom_key": "value"},
             )
 
-        assert resp.extensions.get("custom_key") == "value"
+        assert resp.request is not None
+        assert resp.request.extensions.get("custom_key") == "value"
 
     def test_client_level_extensions_merge_with_request(self):
         handler, captured = _capture_handler()
@@ -67,9 +70,10 @@ class TestExtensionPassthrough:
             )
             resp = client.send(req)
 
-        # Both client and request extensions should be present
-        assert resp.extensions.get("client_ext") == "from_client"
-        assert resp.extensions.get("request_ext") == "from_request"
+        # Both client and request extensions survive on the request object
+        assert resp.request is not None
+        assert resp.request.extensions.get("client_ext") == "from_client"
+        assert resp.request.extensions.get("request_ext") == "from_request"
 
     def test_request_extensions_override_client(self):
         handler, captured = _capture_handler()
@@ -84,15 +88,15 @@ class TestExtensionPassthrough:
             resp = client.send(req)
 
         # Request extensions override client extensions for same key
-        assert resp.extensions.get("shared_key") == "request_value"
+        assert resp.request is not None
+        assert resp.request.extensions.get("shared_key") == "request_value"
 
     def test_no_extensions_returns_empty_dict(self):
         handler, _ = _capture_handler()
         with Client(transport=MockTransport(handler)) as client:
             resp = client.get("http://example.com/")
 
-        # Even with no user extensions, http_version/reason_phrase may be present
-        # The response should not crash
+        # Response extensions may have http_version/reason_phrase from handler
         assert isinstance(resp.extensions, dict)
 
     def test_extensions_through_streaming_path(self):
@@ -106,7 +110,8 @@ class TestExtensionPassthrough:
                 "GET", "http://example.com/",
                 extensions={"stream_key": "stream_val"},
             ) as resp:
-                assert resp.extensions.get("stream_key") == "stream_val"
+                assert resp.request is not None
+                assert resp.request.extensions.get("stream_key") == "stream_val"
                 resp.read()
 
 
@@ -115,7 +120,7 @@ class TestExtensionPassthroughTransport:
 
     def test_extensions_through_custom_transport(self):
         def handler(request):
-            # Verify the transport received the request with extensions
+            # The transport receives the request with extensions intact
             return Response(
                 200,
                 content=b"transport-ok",
@@ -129,7 +134,8 @@ class TestExtensionPassthroughTransport:
             )
             resp = client.send(req)
 
-        assert resp.extensions.get("transport_test") is True
+        assert resp.request is not None
+        assert resp.request.extensions.get("transport_test") is True
         assert resp.extensions.get("http_version") == "HTTP/1.1"
 
     def test_extensions_through_mount_dispatch(self):
@@ -154,7 +160,8 @@ class TestExtensionPassthroughTransport:
                 extensions={"mount_key": "mount_value"},
             )
 
-        assert resp.extensions.get("mount_key") == "mount_value"
+        assert resp.request is not None
+        assert resp.request.extensions.get("mount_key") == "mount_value"
 
 
 class TestExtensionPassthroughAsync:
@@ -178,7 +185,8 @@ class TestExtensionPassthroughAsync:
             )
             resp = await client.send(req)
 
-        assert resp.extensions.get("async_key") == "async_val"
+        assert resp.request is not None
+        assert resp.request.extensions.get("async_key") == "async_val"
 
     @pytest.mark.asyncio
     async def test_extensions_through_async_mount(self):
@@ -197,7 +205,8 @@ class TestExtensionPassthroughAsync:
                 extensions={"async_mount": True},
             )
 
-        assert resp.extensions.get("async_mount") is True
+        assert resp.request is not None
+        assert resp.request.extensions.get("async_mount") is True
 
     @pytest.mark.asyncio
     async def test_client_extensions_merge_async(self):
@@ -217,5 +226,58 @@ class TestExtensionPassthroughAsync:
                 extensions={"request_level": "yes"},
             )
 
-        assert resp.extensions.get("client_level") == "yes"
-        assert resp.extensions.get("request_level") == "yes"
+        assert resp.request is not None
+        assert resp.request.extensions.get("client_level") == "yes"
+        assert resp.request.extensions.get("request_level") == "yes"
+
+
+class TestResponseExtensionIsolation:
+    """Response extensions must not contain request-only keys (Track 5.3)."""
+
+    def test_request_extensions_not_on_response(self):
+        def handler(request):
+            return Response(200, content=b"ok")
+
+        with Client(transport=MockTransport(handler)) as client:
+            resp = client.get(
+                "http://example.com/",
+                extensions={"request_only": True},
+            )
+
+        # Request-only extension must NOT leak into response extensions
+        assert "request_only" not in resp.extensions
+        # But it IS on the request object
+        assert resp.request is not None
+        assert resp.request.extensions.get("request_only") is True
+
+    def test_response_handler_extensions_preserved(self):
+        def handler(request):
+            return Response(
+                200,
+                content=b"ok",
+                extensions={"http_version": "HTTP/2", "reason_phrase": "OK"},
+            )
+
+        with Client(transport=MockTransport(handler)) as client:
+            resp = client.get("http://example.com/")
+
+        assert resp.extensions.get("http_version") == "HTTP/2"
+        assert resp.extensions.get("reason_phrase") == "OK"
+
+    def test_timeout_extension_preserved_on_request(self):
+        """Timeout extension is placed on the request by the one-hop dispatch."""
+        from eggfetch.compat.httpx._timeout import Timeout as CompatTimeout
+
+        captured = []
+
+        def handler(request):
+            captured.append(request)
+            return Response(200, content=b"ok")
+
+        with Client(
+            transport=MockTransport(handler),
+            timeout=CompatTimeout(10.0),
+        ) as client:
+            resp = client.get("http://example.com/")
+
+        assert captured[0].extensions.get("timeout") == CompatTimeout(10.0)

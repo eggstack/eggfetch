@@ -1172,8 +1172,8 @@ class TestIntermediateResponseCleanup:
         finally:
             Response.aclose = original_aclose
 
-    def test_response_hooks_only_see_final_sync(self):
-        """Response hooks receive only the final response, not intermediates."""
+    def test_response_hooks_run_on_every_hop_sync(self):
+        """Per Track 4.2: response hooks run on every hop before auth decides."""
         hook_responses = []
 
         def on_response(response):
@@ -1201,12 +1201,12 @@ class TestIntermediateResponseCleanup:
             response = client.get("http://testserver/")
 
         assert response.status_code == 200
-        # Response hook should only see the final 200, not the intermediate 401
-        assert hook_responses == [200]
+        # Response hooks run on every hop: 401 then 200
+        assert hook_responses == [401, 200]
 
     @pytest.mark.asyncio
-    async def test_response_hooks_only_see_final_async(self):
-        """Async response hooks receive only the final response."""
+    async def test_response_hooks_run_on_every_hop_async(self):
+        """Async per Track 4.2: response hooks run on every hop."""
         hook_responses = []
 
         async def on_response(response):
@@ -1234,7 +1234,7 @@ class TestIntermediateResponseCleanup:
             response = await client.get("http://testserver/")
 
         assert response.status_code == 200
-        assert hook_responses == [200]
+        assert hook_responses == [401, 200]
 
 
 class TestPerRequestAuthDisable:

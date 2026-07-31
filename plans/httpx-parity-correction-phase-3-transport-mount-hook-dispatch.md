@@ -1,6 +1,6 @@
 # HTTPX Parity Correction Phase 3 — Transport, Mount, Hook, and One-Hop Dispatch Boundaries
 
-Status: ready for implementation handoff
+Status: implemented
 
 Depends on:
 

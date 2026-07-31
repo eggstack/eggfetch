@@ -11,7 +11,12 @@ from eggfetch.compat.httpx import (
     Request,
     Response,
 )
-from eggfetch.compat.httpx._client import _match_mount, _parse_mount_pattern
+from eggfetch.compat.httpx._client import (
+    _match_mount,
+    _parse_mount_pattern,
+    _MOUNT_NO_MATCH,
+    _validate_mount_pattern,
+)
 
 
 def _make_handler(response_text: str):
@@ -23,32 +28,42 @@ def _make_handler(response_text: str):
 
 class TestParseMountPattern:
     def test_all_catchall(self):
-        assert _parse_mount_pattern("all://") == ("", None, None, "")
+        assert _parse_mount_pattern("all://") == ("", None, None, "", False)
 
     def test_http_scheme_only(self):
-        assert _parse_mount_pattern("http://") == ("http", None, None, "")
+        assert _parse_mount_pattern("http://") == ("http", None, None, "", False)
 
     def test_https_scheme_only(self):
-        assert _parse_mount_pattern("https://") == ("https", None, None, "")
+        assert _parse_mount_pattern("https://") == ("https", None, None, "", False)
 
     def test_scheme_and_host(self):
         assert _parse_mount_pattern("http://example.com") == (
-            "http", "example.com", None, "",
+            "http", "example.com", None, "", False,
         )
 
     def test_scheme_host_port(self):
         assert _parse_mount_pattern("http://example.com:8080") == (
-            "http", "example.com", 8080, "",
+            "http", "example.com", 8080, "", False,
         )
 
     def test_scheme_host_path(self):
         assert _parse_mount_pattern("http://example.com/api") == (
-            "http", "example.com", None, "/api",
+            "http", "example.com", None, "/api", False,
         )
 
     def test_full_pattern(self):
         assert _parse_mount_pattern("https://example.com:443/api/v1") == (
-            "https", "example.com", 443, "/api/v1",
+            "https", "example.com", 443, "/api/v1", False,
+        )
+
+    def test_wildcard_domain(self):
+        assert _parse_mount_pattern("all://*.example.com") == (
+            "", "example.com", None, "", True,
+        )
+
+    def test_wildcard_domain_with_scheme(self):
+        assert _parse_mount_pattern("https://*.example.com") == (
+            "https", "example.com", None, "", True,
         )
 
 
@@ -205,9 +220,9 @@ class TestComponentBasedMountRouting:
             resp = client.get("http://example.com/api/endpoint")
             assert resp.content == b"path"
 
-    def test_no_mount_returns_none(self):
+    def test_no_mount_returns_no_match(self):
         result = _match_mount("http://example.com/", {})
-        assert result is None
+        assert result is _MOUNT_NO_MATCH
 
     def test_scheme_mismatch_skips(self):
         https_handler = _make_handler("https")
@@ -223,7 +238,7 @@ class TestComponentBasedMountRouting:
             assert resp.content == b"default"
 
     def test_host_port_beats_host_path(self):
-        """host+port (score 205) beats host+path (score 200+len)."""
+        """host+port beats host+path."""
         port_handler = _make_handler("port")
         path_handler = _make_handler("path")
 
@@ -237,7 +252,7 @@ class TestComponentBasedMountRouting:
             assert resp.content == b"port"
 
     def test_full_url_beats_all(self):
-        """Full URL pattern (score 10000) beats catch-all."""
+        """Full URL pattern beats catch-all."""
         full_handler = _make_handler("full")
         catchall_handler = _make_handler("catchall")
 
@@ -393,6 +408,104 @@ class TestMountPriorityEdgeCases:
             assert resp.content == b"matched"
 
 
+class TestMountPatternValidation:
+    """Test that malformed mount patterns are rejected at construction."""
+
+    def test_valid_patterns_accepted(self):
+        for pattern in [
+            "all://", "http://", "https://",
+            "http://example.com", "https://example.com:8080",
+            "all://*.example.com", "https://*.example.com",
+        ]:
+            _validate_mount_pattern(pattern)
+
+    def test_missing_scheme_rejected(self):
+        with pytest.raises(ValueError, match="scheme"):
+            Client(mounts={"example.com": MockTransport(_make_handler("x"))})
+
+    def test_bad_wildcard_rejected(self):
+        with pytest.raises(ValueError, match="Wildcard"):
+            Client(mounts={"all://*": MockTransport(_make_handler("x"))})
+
+    def test_bare_wildcard_rejected(self):
+        with pytest.raises(ValueError, match="Wildcard"):
+            Client(mounts={"all://*": MockTransport(_make_handler("x"))})
+
+    def test_bare_wildcard_dot_rejected(self):
+        with pytest.raises(ValueError, match="Wildcard"):
+            Client(mounts={"all://*.": MockTransport(_make_handler("x"))})
+
+
+class TestWildcardDomainMounts:
+    """Tests for wildcard domain mount patterns (Track 3)."""
+
+    def test_wildcard_matches_subdomain(self):
+        handler = _make_handler("wildcard")
+        with Client(
+            mounts={"all://*.example.com": MockTransport(handler)}
+        ) as client:
+            resp = client.get("http://sub.example.com/")
+            assert resp.content == b"wildcard"
+
+    def test_wildcard_matches_deep_subdomain(self):
+        handler = _make_handler("deep")
+        with Client(
+            mounts={"all://*.example.com": MockTransport(handler)}
+        ) as client:
+            resp = client.get("http://a.b.example.com/")
+            assert resp.content == b"deep"
+
+    def test_wildcard_does_not_match_apex(self):
+        handler = _make_handler("wildcard")
+        default = _make_handler("default")
+        with Client(
+            mounts={
+                "all://*.example.com": MockTransport(handler),
+                "all://": MockTransport(default),
+            }
+        ) as client:
+            resp = client.get("http://example.com/")
+            assert resp.content == b"default"
+
+    def test_wildcard_scheme_specific(self):
+        handler = _make_handler("https-wildcard")
+        default = _make_handler("default")
+        with Client(
+            mounts={
+                "https://*.example.com": MockTransport(handler),
+                "all://": MockTransport(default),
+            }
+        ) as client:
+            resp = client.get("https://sub.example.com/")
+            assert resp.content == b"https-wildcard"
+            resp2 = client.get("http://sub.example.com/")
+            assert resp2.content == b"default"
+
+    def test_wildcard_beats_catchall(self):
+        handler = _make_handler("wildcard")
+        catchall = _make_handler("catchall")
+        with Client(
+            mounts={
+                "all://*.example.com": MockTransport(handler),
+                "all://": MockTransport(catchall),
+            }
+        ) as client:
+            resp = client.get("http://sub.example.com/")
+            assert resp.content == b"wildcard"
+
+    def test_exact_host_beats_wildcard(self):
+        exact = _make_handler("exact")
+        wildcard = _make_handler("wildcard")
+        with Client(
+            mounts={
+                "http://foo.example.com": MockTransport(exact),
+                "all://*.example.com": MockTransport(wildcard),
+            }
+        ) as client:
+            resp = client.get("http://foo.example.com/")
+            assert resp.content == b"exact"
+
+
 class TestMountPriorityAsync:
     """Async mount priority edge cases."""
 
@@ -447,3 +560,53 @@ class TestAsyncMountRouting:
         ) as client:
             resp = await client.get("http://example.com/")
             assert resp.content == b"async-transport"
+
+
+class TestTransportOwnership:
+    """Tests for transport close deduplication (Track 6)."""
+
+    def test_duplicate_mount_instance_closed_once(self):
+        close_count = []
+
+        class CountingTransport:
+            def handle_request(self, request):
+                return Response(200)
+
+            def close(self):
+                close_count.append(1)
+
+        transport = CountingTransport()
+        with Client(
+            mounts={
+                "http://a.example.com": transport,
+                "http://b.example.com": transport,
+            }
+        ) as client:
+            client.get("http://a.example.com/")
+        # The same transport instance should only be closed once.
+        assert sum(close_count) == 1
+
+    def test_different_mount_instances_closed_separately(self):
+        close_count = []
+
+        class CountingTransport:
+            def __init__(self):
+                pass
+
+            def handle_request(self, request):
+                return Response(200)
+
+            def close(self):
+                close_count.append(1)
+
+        t1 = CountingTransport()
+        t2 = CountingTransport()
+        with Client(
+            mounts={
+                "http://a.example.com": t1,
+                "http://b.example.com": t2,
+            }
+        ) as client:
+            client.get("http://a.example.com/")
+        # Two different instances → closed twice.
+        assert sum(close_count) == 2
