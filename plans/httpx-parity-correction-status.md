@@ -3,13 +3,13 @@
 ## Implementation SHA
 
 <!-- Updated on commit -->
-SHA: corrective implementation in progress
+SHA: d419267
 
 ## Corrective closure baseline
 
 - Audited baseline: `7de195716ef64787535d089020a99891bae4aa8e`.
 - Corrective plan: `plans/httpx-parity-narrow-corrective-closure.md`.
-- Current result: reopened — narrow corrective pass required.
+- Current result: corrective implementation complete locally; remote CI verification pending.
 - The earlier phase counts below are historical evidence, not closure proof.
 
 ## Phase-by-Phase Completion
@@ -21,7 +21,7 @@ SHA: corrective implementation in progress
 | 3 | Transport, mount, hook dispatch | Complete |
 | 4 | Redirect, auth, cookie state | Complete |
 | 5 | Differential closure (historical phase) | Complete |
-| Corrective closure | Timeout, state, cookie, replay, transport, and Tier 1 parity corrections | In progress |
+| Corrective closure | Timeout, state, cookie, replay, transport, and Tier 1 parity corrections | Complete locally |
 
 ## Focused Test Command
 
@@ -30,9 +30,11 @@ EGGFETCH_COMPAT_REQUIRED=1 \
   python -m pytest crates/eggfetch-python/tests/compat/ -q --strict-markers
 ```
 
-Result: 33 required compat tests pass, 0 failures, 0 skips, 0 xfails.
+Result: full pinned suite passes — 1,314 tests, 0 failures, 2 pytest deprecation warnings.
 
-Extended compat suite: 170+ focused tests across all phases pass.
+Tier 1: `/./scripts/check.sh` passes with 532 non-compat tests and 95 routine compatibility-kernel tests.
+
+Extended validation also passes the Rust workspace, feature and API checks locally; MSRV remains skipped when the configured toolchain is unavailable.
 
 ## API Oracle
 
@@ -71,12 +73,12 @@ All existing downstream behavioral fixtures pass:
 
 ## Remaining Blockers
 
-Corrective closure is in progress. The final exact-SHA Tier 1, extended, API-oracle, and visible CI evidence has not yet been recorded.
+Local corrective closure is complete at `d419267`; visible CI verification is pending the pushed commit.
 
 ## Final Claim Decision
 
 **Stage C candidate — corrective closure in progress.** Do not infer complete parity from the historical Phase 5 evidence above. The `eggfetch.compat.httpx` module is a Stage C candidate with:
-- All roadmap findings linked to passing focused test cases
+- All roadmap findings linked to passing focused and full-suite test cases
 - All behavioral differences documented with narrow intentional-difference records
 - API oracle clean (zero unexplained, zero stale)
 - `./scripts/check.sh` Tier 1 validation passes
