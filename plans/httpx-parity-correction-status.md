@@ -73,7 +73,7 @@ All existing downstream behavioral fixtures pass:
 
 ## Remaining Blockers
 
-Local corrective closure is complete at `d419267`; visible CI verification is pending the pushed commit.
+Local corrective closure is complete at `d419267`; GitHub Actions CI run `30688525760` passed.
 
 ## Final Claim Decision
 
