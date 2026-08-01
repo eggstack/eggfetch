@@ -82,7 +82,7 @@ from eggfetch.compat.httpx import Client, AsyncClient, Request, Response
 - WSGI/ASGI transport: local app dispatch via `WSGITransport`, `ASGITransport`
 
 **Phase 5 implements:**
-- Downstream validation, expanded behavior corpus (29 cases), upstream HTTPX test inventory (36 derived cases), evidence report generation, compatibility-stage decision (Stage C justified)
+- Downstream validation, expanded behavior corpus (30 cases), evidence report generation, compatibility-stage decision (Stage C justified)
 
 **Phase 6 / Corrective Closure implements:**
 - Typed difference records in API oracle (`scripts/compare_httpx_api_manifest.py --validate`)
@@ -91,7 +91,7 @@ from eggfetch.compat.httpx import Client, AsyncClient, Request, Response
 - Behavioral downstream fixtures (`compat/downstream/behavioral_fixtures/`)
 - Native lifecycle proof fixtures (`test_native_timeout_classification.py`, `test_soak.py`, proxy and TLS tests)
 
-**Phase 1 / HTTPX Parity Correction implements:**
+**Corrective Closure Phases 1-4 implements:**
 - Explicit top-level function signatures matching HTTPX 0.28.1 (`request`, `get`, `post`, `put`, `patch`, `delete`, `head`, `options`, `stream`)
 - Client-only options (`cookies`, `proxy`, `verify`, `timeout`, `trust_env`) separated from request args in top-level helpers
 - `stream()` implemented as real `@contextmanager` yielding open response
@@ -102,6 +102,22 @@ from eggfetch.compat.httpx import Client, AsyncClient, Request, Response
 - Protocol validation: `http1=False, http2=False` raises `ValueError`, `http1=False, http2=True` raises `NotImplementedError`
 - Transport unsupported option rejection: `uds`, `local_address`, `socket_options` raise `NotImplementedError`
 - `Response.is_closed` public property for stream context manager compatibility
+- Request construction: params-in-URL with duplicates, `data`+`files` multipart, compact JSON, stream auto-headers
+- Response metadata: HTTP version, reason phrase, elapsed, `raise_for_status()` return, `next_request`
+- Stream state: raw/decoded/text/line boundaries, exception handling, encoding
+- One-hop native/custom transport boundary, mount matching, hook per-hop ordering
+- Redirect state machine: method/body rewriting, cross-origin auth stripping, max_redirects
+- Auth lifecycle: Basic, Digest, NetRC, callable, custom sync/async, auth through all transport types
+- Scoped cookie jar: domain/path/secure/expiry selection, CookieConflict, multiple Set-Cookie
+- Event hooks: request/response per-hop ordering, hook exception cleanup
+- Cleanup: intermediate response cleanup, stream consumed state, close-once behavior
+
+**Corrective Closure Phase 5 (differential closure) implements:**
+- Compact parity case registry (`compat/httpx/0.28.1/parity-cases.toml`)
+- API oracle reconciliation: 0 unexplained, 0 stale, 0 resolved-in-active
+- Resolved difference ledger: Cookies base-class fix, `main` export restored
+- Runtime diagnostics: unsupported surfaces listed
+- Closure status file (`plans/httpx-parity-correction-status.md`)
 
 **Testing the compat layer:**
 
@@ -110,13 +126,7 @@ cd crates/eggfetch-python && maturin develop
 EGGFETCH_COMPAT_REQUIRED=1 pytest crates/eggfetch-python/tests/compat/ -v --strict-markers
 ```
 
-Phase 4 test files:
-
-```sh
-EGGFETCH_COMPAT_REQUIRED=1 pytest crates/eggfetch-python/tests/compat/test_transports.py crates/eggfetch-python/tests/compat/test_mock_transport.py crates/eggfetch-python/tests/compat/test_mounts.py crates/eggfetch-python/tests/compat/test_auth.py crates/eggfetch-python/tests/compat/test_hooks.py crates/eggfetch-python/tests/compat/test_wsgi.py crates/eggfetch-python/tests/compat/test_asgi.py -v --strict-markers
-```
-
-Phase 1 corrective closure test files:
+Focused corrective closure tests:
 
 ```sh
 EGGFETCH_COMPAT_REQUIRED=1 pytest \
@@ -125,17 +135,21 @@ EGGFETCH_COMPAT_REQUIRED=1 pytest \
   crates/eggfetch-python/tests/compat/test_auth_input_normalization.py \
   crates/eggfetch-python/tests/compat/test_client_mutability_and_state.py \
   crates/eggfetch-python/tests/compat/test_protocol_and_unsupported_options.py \
+  crates/eggfetch-python/tests/compat/test_request_construction_parity.py \
+  crates/eggfetch-python/tests/compat/test_response_stream_state_parity.py \
+  crates/eggfetch-python/tests/compat/test_redirect_state_machine_parity.py \
+  crates/eggfetch-python/tests/compat/test_hook_cookie_auth_ordering.py \
+  crates/eggfetch-python/tests/compat/test_cookie_scope_parity.py \
   -v --strict-markers
 ```
 
 Validate profiles and manifests:
 
 ```sh
-python scripts/generate_httpx_api_manifest.py --package httpx --output /tmp/httpx.json
-python scripts/generate_httpx_api_manifest.py --package eggfetch --output /tmp/eggfetch.json
+python scripts/generate_httpx_api_manifest.py --package eggfetch.compat.httpx --output /tmp/eggfetch-api.json
 python scripts/compare_httpx_api_manifest.py \
-  --reference /tmp/httpx.json \
-  --candidate /tmp/eggfetch.json \
+  --reference compat/httpx/0.28.1/reference-api.json \
+  --candidate /tmp/eggfetch-api.json \
   --allowed compat/httpx/0.28.1/allowed-differences.toml
 ```
 

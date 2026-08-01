@@ -420,3 +420,35 @@ owner = "eggfetch-team"
 review-milestone = "corrective-closure"
 tests = ["test_transports.py"]
 non_expiring = true
+
+[[difference]]
+id = "MUTABLE-MAPPING-002-RESOLVED"
+category = "resolved"
+symbol = "Cookies"
+behavior-case = "cookies-inheritance"
+reference-behavior = "HTTPX Cookies inherits Generic, MutableMapping"
+eggfetch-behavior = "eggfetch Cookies now inherits both Generic and MutableMapping, matching HTTPX exactly"
+rationale = "Cookies was updated to inherit Generic[str, str] and MutableMapping. The base class and pop/popitem methods now match HTTPX."
+compatibility-stage-impact = "resolved"
+security-improvement = "false"
+migration-impact = "None; fully resolved"
+owner = "eggfetch-team"
+review-milestone = "corrective-closure"
+tests = ["test_cookies.py"]
+non_expiring = true
+
+[[difference]]
+id = "PRIVATE-SYMBOLS-002-RESOLVED"
+category = "resolved"
+symbol = "main"
+behavior-case = "private-internal-symbols"
+reference-behavior = "HTTPX exposes main as a public symbol"
+eggfetch-behavior = "eggfetch now exposes main in the compat module"
+rationale = "main is now exported from eggfetch.compat.httpx, matching HTTPX."
+compatibility-stage-impact = "resolved"
+security-improvement = "false"
+migration-impact = "None; fully resolved"
+owner = "eggfetch-team"
+review-milestone = "corrective-closure"
+tests = []
+non_expiring = true

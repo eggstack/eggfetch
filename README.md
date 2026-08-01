@@ -237,12 +237,19 @@ See [`docs/cli/guide.md`](docs/cli/guide.md) for the full CLI reference.
 
 ## HTTPX Compatibility
 
-eggfetch provides an HTTPX 0.28.1-compatible asyncio facade via `eggfetch.compat.httpx`. The compatibility profile is pinned in `compat/httpx/0.28.1/` with machine-readable API manifests and allowed-difference tracking.
+eggfetch provides an HTTPX 0.28.1-compatible asyncio facade via `eggfetch.compat.httpx`. The compatibility profile is pinned in `compat/httpx/0.28.1/` with machine-readable API manifests, allowed-difference tracking, and a parity case registry.
+
+The facade is a **Stage C candidate** — all roadmap behavioral findings have focused test coverage, the API oracle passes with zero unexplained differences, and all retained downstream behavioral fixtures pass.
 
 Key differences from HTTPX:
-- Redirects are not followed by default (security-first; HTTPX 0.28.1 also defaults to `follow_redirects=False`)
 - Trio/AnyIO not supported (asyncio only, tokio-based)
 - SOCKS proxy not supported
+- Unix Domain Socket (UDS) transport not supported
+- `local_address` / `socket_options` transport parameters not supported
+- `ssl_context` transport parameter not supported (TLS handled by Rust engine)
+- Python 3.8/3.9 not supported (requires 3.10+)
+
+All remaining differences are narrow, documented in `compat/httpx/0.28.1/allowed-differences.toml`, and affect only parameter styles, base class inheritance, extra additive properties, or internal stream constructors — not behavioral semantics.
 
 See [`docs/reference/compatibility.md`](docs/reference/compatibility.md) for the full feature matrix.
 

@@ -1,0 +1,460 @@
+# Parity case registry — HTTPX 0.28.1 corrective closure
+# Maps each roadmap finding to its test coverage and resolution status.
+# Each case has a stable ID, description, sync/async applicability,
+# test references, and required result (parity or intentional-difference).
+
+# ── Phase 1: Entrypoints & client lifecycle ────────────────────────────
+
+[[case]]
+id = "ENTRYPOINT-001"
+description = "top-level stream() yields an open response"
+sync = false
+async = true
+tests = ["test_top_level_helpers_parity.py"]
+result = "parity"
+phase = 1
+
+[[case]]
+id = "CLIENT-001"
+description = "proxy, verify, timeout, trust_env argument routing"
+sync = true
+async = true
+tests = ["test_client.py", "test_client_mutability_and_state.py"]
+result = "parity"
+phase = 1
+
+[[case]]
+id = "CLIENT-002"
+description = "method-specific top-level signatures"
+sync = true
+async = true
+tests = ["test_top_level_helpers_parity.py"]
+result = "parity"
+phase = 1
+
+[[case]]
+id = "CLIENT-003"
+description = "stream-level auth, redirect, timeout overrides"
+sync = true
+async = true
+tests = ["test_client_stream_overrides.py"]
+result = "parity"
+phase = 1
+
+[[case]]
+id = "CLIENT-004"
+description = "tuple, callable, URL, explicit-none, and object auth"
+sync = true
+async = true
+tests = ["test_auth_input_normalization.py"]
+result = "parity"
+phase = 1
+
+[[case]]
+id = "CLIENT-005"
+description = "closed-client permanence"
+sync = true
+async = true
+tests = ["test_client_mutability_and_state.py", "test_backends.py"]
+result = "parity"
+phase = 1
+
+[[case]]
+id = "CLIENT-006"
+description = "property setters and default headers"
+sync = true
+async = true
+tests = ["test_client_mutability_and_state.py"]
+result = "parity"
+phase = 1
+
+[[case]]
+id = "CLIENT-007"
+description = "protocol boolean validation"
+sync = true
+async = true
+tests = ["test_protocol_and_unsupported_options.py"]
+result = "parity"
+phase = 1
+
+[[case]]
+id = "CLIENT-008"
+description = "unsupported UDS/local-address/socket-option failure"
+sync = true
+async = true
+tests = ["test_protocol_and_unsupported_options.py"]
+result = "intentional-difference"
+phase = 1
+difference-id = "CLIENT-EXTENSIONS-001"
+
+# ── Phase 2: Request/response semantics ────────────────────────────────
+
+[[case]]
+id = "REQUEST-001"
+description = "direct Request params in URL with duplicates"
+sync = true
+async = true
+tests = ["test_request_construction_parity.py"]
+result = "parity"
+phase = 2
+
+[[case]]
+id = "REQUEST-002"
+description = "data plus files multipart encoding"
+sync = true
+async = true
+tests = ["test_request_construction_parity.py"]
+result = "parity"
+phase = 2
+
+[[case]]
+id = "REQUEST-003"
+description = "compact JSON encoding"
+sync = true
+async = true
+tests = ["test_request_construction_parity.py"]
+result = "parity"
+phase = 2
+
+[[case]]
+id = "REQUEST-004"
+description = "explicit stream auto-header behavior"
+sync = true
+async = true
+tests = ["test_request_streaming.py"]
+result = "parity"
+phase = 2
+
+[[case]]
+id = "REQUEST-005"
+description = "empty POST/PUT/PATCH content length"
+sync = true
+async = true
+tests = ["test_request_construction_parity.py"]
+result = "parity"
+phase = 2
+
+[[case]]
+id = "REQUEST-006"
+description = "RequestNotRead and ResponseNotRead exceptions"
+sync = true
+async = true
+tests = ["test_response_stream_state_parity.py", "test_exceptions.py"]
+result = "parity"
+phase = 2
+
+[[case]]
+id = "REQUEST-007"
+description = "HTTP/2 metadata through compatibility Response"
+sync = false
+async = true
+tests = ["test_response_metadata_parity.py"]
+result = "parity"
+phase = 2
+
+[[case]]
+id = "RESPONSE-001"
+description = "reason phrase and elapsed state"
+sync = true
+async = true
+tests = ["test_response_metadata_parity.py"]
+result = "parity"
+phase = 2
+
+[[case]]
+id = "RESPONSE-002"
+description = "raise_for_status for 1xx, 3xx, 4xx, 5xx"
+sync = true
+async = true
+tests = ["test_response_status_and_redirect_state.py"]
+result = "parity"
+phase = 2
+
+[[case]]
+id = "RESPONSE-003"
+description = "next_request public state"
+sync = true
+async = true
+tests = ["test_response_status_and_redirect_state.py"]
+result = "parity"
+phase = 2
+
+[[case]]
+id = "RESPONSE-004"
+description = "callable default encoding and encoding setter restriction"
+sync = true
+async = true
+tests = ["test_response_encoding_parity.py"]
+result = "parity"
+phase = 2
+
+[[case]]
+id = "STREAM-001"
+description = "raw/decoded/text/line streaming boundaries"
+sync = true
+async = true
+tests = ["test_response_stream_state_parity.py", "test_response_streaming.py"]
+result = "parity"
+phase = 2
+
+[[case]]
+id = "STREAM-002"
+description = "buffered custom response body preservation"
+sync = true
+async = true
+tests = ["test_mock_transport.py"]
+result = "parity"
+phase = 2
+
+# ── Phase 3: Transport, mount, hook dispatch ────────────────────────────
+
+[[case]]
+id = "TRANSPORT-001"
+description = "native one-hop redirect-disabled dispatch"
+sync = true
+async = true
+tests = ["test_transports.py"]
+result = "parity"
+phase = 3
+
+[[case]]
+id = "TRANSPORT-002"
+description = "sync and async custom transport stream typing"
+sync = true
+async = true
+tests = ["test_transports.py", "test_mock_transport.py"]
+result = "parity"
+phase = 3
+
+[[case]]
+id = "TRANSPORT-003"
+description = "mounted buffered and streaming body preservation"
+sync = true
+async = true
+tests = ["test_mock_transport.py"]
+result = "parity"
+phase = 3
+
+[[case]]
+id = "TRANSPORT-004"
+description = "HTTPTransport and AsyncHTTPTransport streaming"
+sync = true
+async = true
+tests = ["test_transports.py"]
+result = "parity"
+phase = 3
+
+[[case]]
+id = "MOUNT-001"
+description = "mount wildcard and priority behavior"
+sync = true
+async = true
+tests = ["test_mounts.py"]
+result = "parity"
+phase = 3
+
+[[case]]
+id = "MOUNT-002"
+description = "explicit None mount bypass"
+sync = true
+async = true
+tests = ["test_mounts.py"]
+result = "parity"
+phase = 3
+
+[[case]]
+id = "HOOK-001"
+description = "request/response hook per-hop order"
+sync = true
+async = true
+tests = ["test_hooks.py", "test_hook_auth_ordering.py"]
+result = "parity"
+phase = 3
+
+[[case]]
+id = "HOOK-002"
+description = "hook exception cleanup"
+sync = true
+async = true
+tests = ["test_multihop_cleanup.py"]
+result = "parity"
+phase = 3
+
+[[case]]
+id = "HOOK-003"
+description = "request versus response extension separation"
+sync = true
+async = true
+tests = ["test_extensions.py"]
+result = "parity"
+phase = 3
+
+[[case]]
+id = "TRANSPORT-005"
+description = "duplicate mounted transport close-once behavior"
+sync = true
+async = true
+tests = ["test_multihop_cleanup.py"]
+result = "parity"
+phase = 3
+
+# ── Phase 4: Redirect, auth, cookie state ──────────────────────────────
+
+[[case]]
+id = "REDIRECT-001"
+description = "redirect method/body rewriting for 301/302/303/307/308"
+sync = true
+async = true
+tests = ["test_redirect_state_machine_parity.py"]
+result = "parity"
+phase = 4
+
+[[case]]
+id = "REDIRECT-002"
+description = "cross-origin auth stripping"
+sync = true
+async = true
+tests = ["test_httpx_required.py::TestCrossOriginHeaderStripping"]
+result = "parity"
+phase = 4
+
+[[case]]
+id = "REDIRECT-003"
+description = "manual next_request redirect flow"
+sync = true
+async = true
+tests = ["test_redirect_state_machine_parity.py"]
+result = "parity"
+phase = 4
+
+[[case]]
+id = "REDIRECT-004"
+description = "max redirect boundary"
+sync = true
+async = true
+tests = ["test_redirect_state_machine_parity.py"]
+result = "parity"
+phase = 4
+
+[[case]]
+id = "REDIRECT-005"
+description = "replayable versus one-shot body redirects"
+sync = true
+async = true
+tests = ["test_redirect_state_machine_parity.py"]
+result = "parity"
+phase = 4
+
+[[case]]
+id = "AUTH-001"
+description = "Basic, Digest, NetRC, callable auth flows"
+sync = true
+async = true
+tests = ["test_auth.py", "test_auth_replay.py"]
+result = "parity"
+phase = 4
+
+[[case]]
+id = "AUTH-002"
+description = "auth through native, mounted, custom, Mock, WSGI, ASGI transports"
+sync = true
+async = true
+tests = ["test_auth.py"]
+result = "parity"
+phase = 4
+
+[[case]]
+id = "COOKIE-001"
+description = "domain/path/secure/expiry cookie selection"
+sync = true
+async = true
+tests = ["test_cookie_scope_parity.py"]
+result = "parity"
+phase = 4
+
+[[case]]
+id = "COOKIE-002"
+description = "duplicate-name CookieConflict"
+sync = true
+async = true
+tests = ["test_cookie_scope_parity.py"]
+result = "parity"
+phase = 4
+
+[[case]]
+id = "COOKIE-003"
+description = "multiple Set-Cookie processing"
+sync = true
+async = true
+tests = ["test_cookie_scope_parity.py"]
+result = "parity"
+phase = 4
+
+[[case]]
+id = "COOKIE-004"
+description = "cookie-before-redirect and cookie-before-auth follow-up"
+sync = true
+async = true
+tests = ["test_hook_cookie_auth_ordering.py"]
+result = "parity"
+phase = 4
+
+[[case]]
+id = "EVENT-001"
+description = "hook/auth/cookie/redirect event ordering"
+sync = true
+async = true
+tests = ["test_hook_cookie_auth_ordering.py"]
+result = "parity"
+phase = 4
+
+[[case]]
+id = "CLEANUP-001"
+description = "intermediate response cleanup and cancellation"
+sync = true
+async = true
+tests = ["test_multihop_cleanup.py", "test_lifecycle.py"]
+result = "parity"
+phase = 4
+
+# ── Intentional differences (unsupported features) ──────────────────────
+
+[[case]]
+id = "UNSUPPORTED-001"
+description = "Trio/AnyIO backend support"
+sync = false
+async = false
+tests = []
+result = "intentional-difference"
+phase = "n/a"
+difference-id = "TRIO-ANYIO-001"
+
+[[case]]
+id = "UNSUPPORTED-002"
+description = "SOCKS proxy support"
+sync = false
+async = false
+tests = []
+result = "intentional-difference"
+phase = "n/a"
+difference-id = "SOCKS-001"
+
+[[case]]
+id = "UNSUPPORTED-003"
+description = "Unix Domain Socket transport"
+sync = false
+async = false
+tests = []
+result = "intentional-difference"
+phase = "n/a"
+difference-id = "UDS-001"
+
+[[case]]
+id = "UNSUPPORTED-004"
+description = "local_address / socket_options transport params"
+sync = false
+async = false
+tests = []
+result = "intentional-difference"
+phase = "n/a"
+difference-id = "TRANSPORT-PARAMS-001"
