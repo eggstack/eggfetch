@@ -58,7 +58,10 @@ class Cookies(typing.MutableMapping[str, str]):
         """Load cookies from a response's ``Set-Cookie`` headers."""
         if response is None:
             return
-        req = getattr(response, "request", None)
+        try:
+            req = response.request
+        except RuntimeError:
+            req = None
         urllib_response = self._CookieCompatResponse(response)
         urllib_request = self._CookieCompatRequest(req)
         self.jar.extract_cookies(urllib_response, urllib_request)  # type: ignore[arg-type]

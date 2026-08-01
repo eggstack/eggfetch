@@ -43,15 +43,18 @@ class TestEmptyBodyMethodBehavior:
         req = Request("POST", "https://example.test")
         # HTTPX adds Content-Length: 0 for empty POST at client level,
         # not at Request construction level
-        assert req.content is None
+        assert req.content == b""
+        assert req.headers["content-length"] == "0"
 
     def test_empty_put_no_content_length(self):
         req = Request("PUT", "https://example.test")
-        assert req.content is None
+        assert req.content == b""
+        assert req.headers["content-length"] == "0"
 
     def test_empty_patch_no_content_length(self):
         req = Request("PATCH", "https://example.test")
-        assert req.content is None
+        assert req.content == b""
+        assert req.headers["content-length"] == "0"
 
 
 class TestHostConstruction:
@@ -119,7 +122,7 @@ class TestStreamConsumptionState:
         req = Request("POST", "https://example.test", stream=gen())
         import asyncio
 
-        data = asyncio.get_event_loop().run_until_complete(req.aread())
+        data = asyncio.run(req.aread())
         assert data == b"chunk1chunk2"
         assert req.is_stream_consumed
 

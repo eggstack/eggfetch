@@ -222,4 +222,5 @@ class TestResponseRequest:
 
     def test_no_request(self):
         resp = Response(200)
-        assert resp.request is None
+        with pytest.raises(RuntimeError, match="request instance has not been set"):
+            _ = resp.request

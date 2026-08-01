@@ -3,7 +3,14 @@
 ## Implementation SHA
 
 <!-- Updated on commit -->
-SHA: 2b69d30
+SHA: corrective implementation in progress
+
+## Corrective closure baseline
+
+- Audited baseline: `7de195716ef64787535d089020a99891bae4aa8e`.
+- Corrective plan: `plans/httpx-parity-narrow-corrective-closure.md`.
+- Current result: reopened — narrow corrective pass required.
+- The earlier phase counts below are historical evidence, not closure proof.
 
 ## Phase-by-Phase Completion
 
@@ -13,7 +20,8 @@ SHA: 2b69d30
 | 2 | Request/response semantics | Complete |
 | 3 | Transport, mount, hook dispatch | Complete |
 | 4 | Redirect, auth, cookie state | Complete |
-| 5 | Differential closure (this pass) | Complete |
+| 5 | Differential closure (historical phase) | Complete |
+| Corrective closure | Timeout, state, cookie, replay, transport, and Tier 1 parity corrections | In progress |
 
 ## Focused Test Command
 
@@ -63,11 +71,11 @@ All existing downstream behavioral fixtures pass:
 
 ## Remaining Blockers
 
-None. All global closure criteria satisfied.
+Corrective closure is in progress. The final exact-SHA Tier 1, extended, API-oracle, and visible CI evidence has not yet been recorded.
 
 ## Final Claim Decision
 
-**Complete** — all global closure criteria pass. The `eggfetch.compat.httpx` module is a Stage C candidate with:
+**Stage C candidate — corrective closure in progress.** Do not infer complete parity from the historical Phase 5 evidence above. The `eggfetch.compat.httpx` module is a Stage C candidate with:
 - All roadmap findings linked to passing focused test cases
 - All behavioral differences documented with narrow intentional-difference records
 - API oracle clean (zero unexplained, zero stale)

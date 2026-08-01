@@ -6,6 +6,7 @@ import asyncio
 import enum
 import typing
 import urllib.parse
+import time
 from contextlib import contextmanager, asynccontextmanager
 
 import eggfetch
@@ -19,6 +20,7 @@ from eggfetch.compat.httpx._proxy import Proxy
 from eggfetch.compat.httpx._auth import Auth, BasicAuth
 from eggfetch.compat.httpx._request import Request
 from eggfetch.compat.httpx._response import Response
+from eggfetch.compat.httpx._stream import ByteStream
 from eggfetch.compat.httpx._exceptions import (
     ConnectTimeout,
     ConnectError,
@@ -317,7 +319,10 @@ def _wrap_response(native_resp, compat_request=None, default_encoding="utf-8"):
     elif hasattr(native_headers, "items"):
         header_list = native_headers.items()
 
-    content = native_resp.content
+    try:
+        content = native_resp.content
+    except ResponseNotRead:
+        content = native_resp.read()
 
     history = []
     if hasattr(native_resp, "history") and native_resp.history:
@@ -344,11 +349,11 @@ def _wrap_response(native_resp, compat_request=None, default_encoding="utf-8"):
         extensions=extensions if extensions else None,
     )
 
-    # Elapsed time: use native elapsed if available, else measure zero
-    if hasattr(native_resp, "elapsed") and native_resp.elapsed is not None:
+    start = compat_request.extensions.get("_eggfetch_started_at") if compat_request is not None else None
+    if start is not None:
+        resp.elapsed = timedelta(seconds=max(0.0, time.monotonic() - start))
+    elif hasattr(native_resp, "elapsed") and native_resp.elapsed is not None:
         resp.elapsed = native_resp.elapsed
-    else:
-        resp.elapsed = timedelta(0)
 
     return resp
 
@@ -408,10 +413,8 @@ def _wrap_streaming_response(native_resp, compat_request=None, default_encoding=
     if hasattr(stream_obj, "read"):
         response._native_stream = stream_obj
 
-    # Elapsed time for streaming: set to zero initially (will be updated
-    # after close/read per HTTPX semantics)
-    from datetime import timedelta
-    response.elapsed = timedelta(0)
+    if compat_request is not None and "_eggfetch_started_at" in compat_request.extensions:
+        response.extensions["_eggfetch_started_at"] = compat_request.extensions["_eggfetch_started_at"]
 
     return response
 
@@ -427,16 +430,14 @@ def _build_native_kwargs(request, follow_redirects=None, timeout=_USE_CLIENT_DEF
             kwargs["params"] = _convert_params(request.params)
         if request._stream is not None and request._content is None:
             kwargs["content"] = request._stream
-        elif request.content is not None:
-            kwargs["content"] = request.content
+        elif request._content is not None:
+            kwargs["content"] = request._content
         if request._files is not None:
             kwargs["files"] = request._files
             # When data + files are both present (multipart), pass the
             # data fields so the native multipart encoder can include them.
             if hasattr(request, "_multipart_data") and request._multipart_data is not None:
                 kwargs["data"] = request._multipart_data
-        if request.cookies:
-            kwargs["cookies"] = _convert_cookies(request.cookies)
     else:
         raise TypeError(f"send() requires a Request object, got {type(request).__name__}")
 
@@ -628,22 +629,26 @@ def _validate_mount_pattern(pattern: str) -> None:
 
 # ── Effective timeout extension (Track 1.3) ────────────────────────────
 
-def _ensure_timeout_extension(request: Request, timeout) -> None:
-    """Put effective timeout into request extensions if not already set.
-
-    Custom transports may read ``extensions["timeout"]`` to configure
-    their own timeout logic, matching HTTPX's transport contract.
-    """
-    if "timeout" in request.extensions:
-        return
-    if timeout is _USE_CLIENT_DEFAULT:
-        return
+def _timeout_mapping(timeout):
+    if isinstance(timeout, Timeout):
+        return timeout.as_dict
+    if isinstance(timeout, (int, float)):
+        return Timeout(timeout).as_dict
     if timeout is None:
-        request.extensions["timeout"] = Timeout(None)
-    elif isinstance(timeout, Timeout):
-        request.extensions["timeout"] = timeout
-    elif isinstance(timeout, (int, float)):
-        request.extensions["timeout"] = Timeout(timeout)
+        return Timeout(None).as_dict
+    raise TypeError(f"Invalid timeout value: {type(timeout).__name__}")
+
+def _request_timeout(request, fallback):
+    value = request.extensions.get("timeout")
+    if isinstance(value, dict):
+        if isinstance(fallback, Timeout) and value == fallback.as_dict:
+            return fallback
+        return Timeout(connect=value.get("connect"), read=value.get("read"), write=value.get("write"), pool=value.get("pool"))
+    return fallback
+
+def _ensure_timeout_extension(request: Request, timeout) -> None:
+    if "timeout" not in request.extensions:
+        request.extensions["timeout"] = _timeout_mapping(timeout)
 
 
 # ── Redirect helpers (Phase 4, Track 2) ────────────────────────────────
@@ -773,15 +778,15 @@ def _redirect_headers(request: Request, url: URL, method: str) -> Headers:
 
 
 def _redirect_stream(request: Request, method: str):
-    """Return the body stream for a redirect, or None if switching to GET."""
     if method != request.method and method == "GET":
         return None
-    # For methods that keep the body, we need to be able to replay it.
-    # If the body is buffered content, it can be replayed.
-    # If it's a stream, it may not be replayable.
-    if request._stream is not None and request._content is None:
-        # Streaming body — may not be replayable
-        return request._stream
+    if request._content is not None:
+        return ByteStream(request._content)
+    if isinstance(request._stream, ByteStream):
+        return ByteStream(request._stream._content)
+    if request._stream is not None:
+        raise StreamConsumed("Cannot replay a consumed request body on a redirect")
+    return None
     return request._stream
 
 
@@ -803,6 +808,7 @@ def _build_redirect_request(
         url=url,
         headers=headers,
         cookies=cookies,
+        content=request._content if method == request.method else None,
         stream=stream,
         extensions=request.extensions,
     )
@@ -883,8 +889,6 @@ class Client:
             kwargs = {}
             if self._headers:
                 kwargs["headers"] = _convert_headers(self._headers)
-            if self._cookies:
-                kwargs["cookies"] = _convert_cookies(self._cookies)
             if self._timeout:
                 kwargs["timeout"] = _convert_timeout(self._timeout)
             if self._follow_redirects:
@@ -1034,6 +1038,7 @@ class Client:
 
         Native dispatches always use ``follow_redirects=False``.
         """
+        request.extensions.setdefault("_eggfetch_started_at", time.monotonic())
         _ensure_timeout_extension(request, self._timeout)
 
         transport = _match_mount(request.url, self._mounts)
@@ -1075,7 +1080,7 @@ class Client:
         self._ensure_client()
         # Track 1.2: Force one-hop mode — never follow redirects internally.
         kwargs = _build_native_kwargs(
-            request, follow_redirects=False, timeout=self._timeout,
+            request, follow_redirects=False, timeout=_request_timeout(request, self._timeout),
         )
         try:
             if stream:
@@ -1100,6 +1105,7 @@ class Client:
 
         This matches HTTPX's ``_send_single_request``.
         """
+        request.extensions.setdefault("_eggfetch_started_at", time.monotonic())
         _ensure_timeout_extension(request, self._timeout)
 
         # Set Cookie header from client jar for this request URL
@@ -1128,7 +1134,7 @@ class Client:
         else:
             self._ensure_client()
             kwargs = _build_native_kwargs(
-                request, follow_redirects=False, timeout=self._timeout,
+                request, follow_redirects=False, timeout=_request_timeout(request, self._timeout),
             )
             try:
                 if stream:
@@ -1176,6 +1182,9 @@ class Client:
 
         if not isinstance(request, Request):
             raise TypeError(f"send() requires a Request object, got {type(request).__name__}")
+
+        effective_timeout = self._timeout if timeout is _USE_CLIENT_DEFAULT else timeout
+        _ensure_timeout_extension(request, effective_timeout)
 
         # 1. Resolve effective follow_redirects
         effective_follow = (
@@ -1533,8 +1542,6 @@ class AsyncClient:
             kwargs = {}
             if self._headers:
                 kwargs["headers"] = _convert_headers(self._headers)
-            if self._cookies:
-                kwargs["cookies"] = _convert_cookies(self._cookies)
             if self._timeout:
                 kwargs["timeout"] = _convert_timeout(self._timeout)
             if self._follow_redirects:
@@ -1684,6 +1691,7 @@ class AsyncClient:
 
         Native dispatches always use ``follow_redirects=False``.
         """
+        request.extensions.setdefault("_eggfetch_started_at", time.monotonic())
         _ensure_timeout_extension(request, self._timeout)
 
         transport = _match_mount(request.url, self._mounts)
@@ -1743,7 +1751,7 @@ class AsyncClient:
         self._ensure_client()
         # Track 1.2: Force one-hop mode — never follow redirects internally.
         kwargs = _build_native_kwargs(
-            request, follow_redirects=False, timeout=self._timeout,
+            request, follow_redirects=False, timeout=_request_timeout(request, self._timeout),
         )
         try:
             if stream:
@@ -1764,6 +1772,7 @@ class AsyncClient:
         After receiving the response:
         - Extract cookies from ``Set-Cookie`` headers into the client jar.
         """
+        request.extensions.setdefault("_eggfetch_started_at", time.monotonic())
         _ensure_timeout_extension(request, self._timeout)
 
         # Set Cookie header from client jar for this request URL
@@ -1801,7 +1810,7 @@ class AsyncClient:
         else:
             self._ensure_client()
             kwargs = _build_native_kwargs(
-                request, follow_redirects=False, timeout=self._timeout,
+                request, follow_redirects=False, timeout=_request_timeout(request, self._timeout),
             )
             try:
                 if stream:

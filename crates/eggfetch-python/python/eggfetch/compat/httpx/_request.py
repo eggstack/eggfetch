@@ -10,6 +10,7 @@ from eggfetch.compat.httpx._urls import URL, QueryParams
 from eggfetch.compat.httpx._headers import Headers
 from eggfetch.compat.httpx._cookies import Cookies
 from eggfetch.compat.httpx._exceptions import RequestNotRead, StreamConsumed
+from eggfetch.compat.httpx._stream import ByteStream
 
 if typing.TYPE_CHECKING:
     from typing import AsyncIterator, Iterator
@@ -169,7 +170,7 @@ class Request:
 
         # ── Auto-headers ────────────────────────────────────────────
         host = self._url.host
-        if host is not None:
+        if host is not None and not has_stream:
             port = self._url.port
             scheme = self._url.scheme
             if port and (
@@ -188,6 +189,10 @@ class Request:
         if self._content is not None:
             if "content-length" not in self._headers:
                 self._headers["content-length"] = str(len(self._content))
+
+        elif self._stream is None and self._method in {"POST", "PUT", "PATCH"}:
+            if "content-length" not in self._headers and "transfer-encoding" not in self._headers:
+                self._headers["content-length"] = "0"
 
         # Extensions
         self._extensions: dict = extensions if extensions is not None else {}
@@ -355,8 +360,10 @@ class Request:
         return self._params
 
     @property
-    def content(self) -> bytes | None:
-        return self._content
+    def content(self) -> bytes:
+        if self._content is None and self._stream is not None:
+            raise RequestNotRead("Attempted to access streaming request content, without having called `read()`.")
+        return self._content or b""
 
     @property
     def stream(self):
@@ -397,6 +404,7 @@ class Request:
             self._content = b"".join(chunks)
             self._is_stream_consumed = True
             self._stream_consumed = True
+            self._stream = ByteStream(self._content)
         if self._content is None:
             return b""
         return self._content
@@ -416,6 +424,7 @@ class Request:
             self._content = b"".join(chunks)
             self._is_stream_consumed = True
             self._stream_consumed = True
+            self._stream = ByteStream(self._content)
         if self._content is None:
             return b""
         return self._content

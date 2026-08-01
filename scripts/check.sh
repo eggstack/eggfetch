@@ -122,6 +122,7 @@ tier1_compat_smoke() {
         "$REPO_ROOT/crates/eggfetch-python/tests/compat/test_imports.py" \
         "$REPO_ROOT/crates/eggfetch-python/tests/compat/test_client.py" \
         "$REPO_ROOT/crates/eggfetch-python/tests/compat/test_exceptions.py" \
+        "$REPO_ROOT/crates/eggfetch-python/tests/compat/test_corrective_kernel.py" \
         -v
 }
 

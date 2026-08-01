@@ -58,7 +58,9 @@ class TestRequestConstruction:
             yield b"world"
         req = Request("POST", "http://example.com", stream=gen())
         assert req.stream is not None
-        assert req.content is None
+        from eggfetch.compat.httpx._exceptions import RequestNotRead
+        with pytest.raises(RequestNotRead):
+            _ = req.content
 
     def test_request_read_consumes_stream(self):
         def gen():

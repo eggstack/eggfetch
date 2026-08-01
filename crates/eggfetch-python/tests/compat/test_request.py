@@ -25,7 +25,8 @@ class TestRequestConstruction:
 
     def test_empty_body(self):
         req = Request("GET", "https://example.com")
-        assert req.content is None
+        assert req.content == b""
+        assert "content-length" not in req.headers
 
 
 class TestBodyMutualExclusion:

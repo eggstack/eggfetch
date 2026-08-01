@@ -458,3 +458,41 @@ tests = []
 result = "intentional-difference"
 phase = "n/a"
 difference-id = "TRANSPORT-PARAMS-001"
+
+# Narrow corrective closure kernel
+
+[[case]]
+id = "CORRECTIVE-001"
+description = "request timeout overrides use HTTPX four-phase mappings"
+sync = true
+async = true
+tests = ["test_corrective_kernel.py", "test_extensions.py"]
+result = "parity"
+phase = "corrective"
+
+[[case]]
+id = "CORRECTIVE-002"
+description = "request/response stream state and empty-body headers"
+sync = true
+async = true
+tests = ["test_corrective_kernel.py", "test_request_construction_parity.py", "test_response_stream_state_parity.py"]
+result = "parity"
+phase = "corrective"
+
+[[case]]
+id = "CORRECTIVE-003"
+description = "facade cookie authority and retained-body redirect safety"
+sync = true
+async = true
+tests = ["test_corrective_kernel.py", "test_cookie_scope_parity.py", "test_redirect_state_machine_parity.py"]
+result = "parity"
+phase = "corrective"
+
+[[case]]
+id = "CORRECTIVE-004"
+description = "built-in transport protocol validation and permanent close"
+sync = true
+async = true
+tests = ["test_corrective_kernel.py", "test_transports.py", "test_protocol_and_unsupported_options.py"]
+result = "parity"
+phase = "corrective"

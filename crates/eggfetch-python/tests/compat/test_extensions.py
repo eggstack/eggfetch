@@ -280,4 +280,4 @@ class TestResponseExtensionIsolation:
         ) as client:
             resp = client.get("http://example.com/")
 
-        assert captured[0].extensions.get("timeout") == CompatTimeout(10.0)
+        assert captured[0].extensions.get("timeout") == {"connect": 10.0, "read": 10.0, "write": 10.0, "pool": 10.0}

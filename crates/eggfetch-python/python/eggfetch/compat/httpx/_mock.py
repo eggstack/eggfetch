@@ -51,7 +51,9 @@ class MockTransport:
             raise TypeError(
                 f"Handler must return a Response, got {type(response)}"
             )
-        if response.request is None:
+        try:
+            response.request
+        except RuntimeError:
             response._request = request  # type: ignore[attr-defined]
         return response
 
@@ -71,7 +73,9 @@ class MockTransport:
             raise TypeError(
                 f"Handler must return a Response, got {type(response)}"
             )
-        if response.request is None:
+        try:
+            response.request
+        except RuntimeError:
             response._request = request  # type: ignore[attr-defined]
         return response
 

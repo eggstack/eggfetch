@@ -176,3 +176,7 @@ Detailed architecture docs live in `docs/architecture/`. Use this index to find 
 | Vulnerability response and CVE process | [docs/architecture/incident-runbook.md](docs/architecture/incident-runbook.md) |
 
 > Do not add CI jobs, matrices, evidence formats, release workflows, or publication automation without an explicit user request. Prefer direct tests in the existing local check path.
+
+### HTTPX corrective closure
+
+The compatibility facade must keep timeout extensions as HTTPX-style four-phase mappings, emit cookies only from its scoped facade jar, and preserve explicit Request/Response stream state. Body-preserving redirects may not redispatch one-shot bodies. The compact `test_corrective_kernel.py` is part of Tier 1; full compat and API-oracle validation remain extended.

@@ -245,3 +245,7 @@ The facade converts between HTTPX-compatible objects and native types at the bou
 - **Auth flow integration** (Track 3): Auth generators drive the outer loop. Auth-produced requests go through the full redirect handler. Cross-origin auth stripping matches HTTPX. Intermediate auth challenge responses added to history.
 - **Hook ordering** (Track 5): Per-hop order: auth yields → Cookie header set → request hook → transport → response hook → cookie extraction → redirect/auth decision. Each actual transport hop produces exactly one request-hook and one response-hook call.
 - **Resource cleanup** (Track 6): Auth generators closed on all exits. Intermediate redirect responses read and closed when followed. `TooManyRedirects` preserves the request reference.
+
+### Corrective parity closure
+
+The facade has one authoritative Python cookie jar, request-relative timeout mapping, explicit buffered/live response state, and replayability checks for body-preserving redirects. `scripts/check.sh` Tier 1 runs `tests/compat/test_corrective_kernel.py`; the complete pinned HTTPX suite and API oracle remain extended validation. Keep `plans/httpx-parity-narrow-corrective-closure.md` and `plans/httpx-parity-correction-status.md` exact-SHA-bound when changing compatibility claims.

@@ -112,12 +112,20 @@ from eggfetch.compat.httpx import Client, AsyncClient, Request, Response
 - Event hooks: request/response per-hop ordering, hook exception cleanup
 - Cleanup: intermediate response cleanup, stream consumed state, close-once behavior
 
-**Corrective Closure Phase 5 (differential closure) implements:**
+**Corrective Closure Phase 5 (historical differential closure) implemented:**
 - Compact parity case registry (`compat/httpx/0.28.1/parity-cases.toml`)
 - API oracle reconciliation: 0 unexplained, 0 stale, 0 resolved-in-active
 - Resolved difference ledger: Cookies base-class fix, `main` export restored
 - Runtime diagnostics: unsupported surfaces listed
 - Closure status file (`plans/httpx-parity-correction-status.md`)
+
+**Narrow corrective closure (current):**
+
+- Per-request timeout overrides use HTTPX's four-value extension mapping.
+- Request and Response state follows HTTPX for empty bodies, unread streams, buffered responses, live iteration, and redirect-location detection.
+- Compatibility cookies are emitted by the facade jar only; native cookie kwargs are not used.
+- Retained-body redirects reject one-shot streams before a second dispatch.
+- The compact `test_corrective_kernel.py` suite runs in Tier 1; the full compatibility suite and API oracle remain Tier 2 gates.
 
 **Testing the compat layer:**
 

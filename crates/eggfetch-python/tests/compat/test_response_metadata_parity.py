@@ -68,8 +68,8 @@ class TestRequestAttachment:
 
     def test_url_no_request(self):
         resp = Response(200, content=b"ok")
-        # URL("") creates a non-absolute URL with empty parts
-        assert not resp.url.is_absolute_url
+        with pytest.raises(RuntimeError, match="request instance has not been set"):
+            _ = resp.url
 
     def test_request_setter(self):
         req1 = Request("GET", "https://example.com/a")

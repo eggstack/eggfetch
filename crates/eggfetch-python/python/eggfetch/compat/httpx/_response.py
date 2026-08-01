@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json as _json
+import time
 import typing
 from datetime import timedelta
 from typing import Any, AsyncIterator, Iterator
@@ -152,8 +153,8 @@ class Response:
         self._request = request
         self._extensions: dict = extensions if extensions is not None else {}
         self._history: list[Response] = list(history) if history else []
-        self._is_closed = False
-        self._stream_consumed = False
+        self._is_closed = stream is None
+        self._stream_consumed = stream is None
         self._stream = stream
         self._native_stream = None
         self._num_bytes_downloaded = 0
@@ -173,7 +174,7 @@ class Response:
 
         if content is not None:
             self._content = content if isinstance(content, bytes) else content.encode("utf-8")
-            self._num_bytes_downloaded = len(self._content)
+            self._num_bytes_downloaded = 0
         elif text is not None:
             self._text = text
             enc = self.charset_encoding or (
@@ -182,23 +183,26 @@ class Response:
                 else "utf-8"
             )
             self._content = text.encode(enc)
-            self._num_bytes_downloaded = len(self._content)
+            self._num_bytes_downloaded = 0
         elif html is not None:
             self._text = html
             self._encoding = "utf-8"
             self._content = html.encode("utf-8")
-            self._num_bytes_downloaded = len(self._content)
+            self._num_bytes_downloaded = 0
             if "content-type" not in self._headers:
                 self._headers["content-type"] = "text/html; charset=utf-8"
         elif json is not None:
             self._json = json
             self._content = _json.dumps(json).encode("utf-8")
-            self._num_bytes_downloaded = len(self._content)
+            self._num_bytes_downloaded = 0
             if "content-type" not in self._headers:
                 self._headers["content-type"] = "application/json"
         elif stream is None:
             self._content = b""
             self._num_bytes_downloaded = 0
+
+        if stream is None and "content-length" not in self._headers:
+            self._headers["content-length"] = str(len(self._content or b""))
 
         # ── Protocol metadata from extensions ───────────────────────
         ext_http_version = self._extensions.get("http_version")
@@ -223,7 +227,7 @@ class Response:
         if request is not None and hasattr(request, "url"):
             self._url = request.url
         else:
-            self._url = URL("")
+            self._url = None
 
         # Elapsed — undefined until read/close for streaming,
         # timedelta(0) for buffered responses
@@ -246,6 +250,8 @@ class Response:
 
     @property
     def url(self) -> URL:
+        if self._request is None:
+            raise RuntimeError("The request instance has not been set on this response.")
         return self._url
 
     @url.setter
@@ -351,6 +357,8 @@ class Response:
 
     @property
     def request(self):
+        if self._request is None:
+            raise RuntimeError("The request instance has not been set on this response.")
         return self._request
 
     @request.setter
@@ -433,9 +441,7 @@ class Response:
     def has_redirect_location(self) -> bool:
         # HTTPX: only True for redirect statuses where Location is present
         # and the status is one HTTPX treats as a "has redirect location"
-        if not (300 <= self._status_code < 400):
-            return False
-        return "location" in self._headers
+        return self._status_code in {301, 302, 303, 307, 308} and "location" in self._headers
 
     def json(self, **kwargs) -> Any:
         if self._json is not None:
@@ -481,185 +487,135 @@ class Response:
         return self
 
     def read(self) -> bytes:
-        if self._native_stream is not None and not self._stream_consumed:
-            content = self._native_stream.read()
-            if isinstance(content, bytes):
-                self._content = content
-            else:
-                self._content = bytes(content)
-            self._num_bytes_downloaded = len(self._content)
-            self._stream_consumed = True
-            if self._elapsed is None:
-                self._elapsed = timedelta(0)
-            return self._content
-        if self._stream is not None and not self._stream_consumed:
-            if self._is_closed:
-                raise StreamClosed()
-            chunks: list[bytes] = []
-            for chunk in self._stream:
-                if isinstance(chunk, bytes):
-                    chunks.append(chunk)
-                elif isinstance(chunk, str):
-                    chunks.append(chunk.encode("utf-8"))
-                else:
-                    chunks.append(str(chunk).encode("utf-8"))
-            self._content = b"".join(chunks)
-            self._num_bytes_downloaded = len(self._content)
-            self._stream_consumed = True
-            if self._elapsed is None:
-                self._elapsed = timedelta(0)
-        if self._content is None:
-            return b""
+        if self._stream_consumed:
+            if self._content is not None:
+                return self._content
+            raise StreamConsumed()
+        if self._native_stream is not None:
+            self._content = self._native_stream.read()
+        elif self._stream is not None:
+            self._content = b"".join(chunk if isinstance(chunk, bytes) else str(chunk).encode() for chunk in self._stream)
+        else:
+            self._content = self._content or b""
+        self._num_bytes_downloaded = len(self._content)
+        self._stream_consumed = True
+        self.close()
         return self._content
 
     async def aread(self) -> bytes:
-        if self._native_stream is not None and not self._stream_consumed:
-            content = await self._native_stream.aread()
-            if isinstance(content, bytes):
-                self._content = content
-            else:
-                self._content = bytes(content)
-            self._num_bytes_downloaded = len(self._content)
-            self._stream_consumed = True
-            if self._elapsed is None:
-                self._elapsed = timedelta(0)
-            return self._content
-        if self._stream is not None and not self._stream_consumed:
-            if self._is_closed:
-                raise StreamClosed()
-            chunks: list[bytes] = []
-            async for chunk in self._stream:  # type: ignore[union-attr]
-                if isinstance(chunk, bytes):
-                    chunks.append(chunk)
-                elif isinstance(chunk, str):
-                    chunks.append(chunk.encode("utf-8"))
-                else:
-                    chunks.append(str(chunk).encode("utf-8"))
+        if self._stream_consumed:
+            if self._content is not None:
+                return self._content
+            raise StreamConsumed()
+        if self._native_stream is not None:
+            self._content = await self._native_stream.aread()
+        elif self._stream is not None:
+            chunks = []
+            async for chunk in self._stream:
+                chunks.append(chunk if isinstance(chunk, bytes) else str(chunk).encode())
             self._content = b"".join(chunks)
-            self._num_bytes_downloaded = len(self._content)
-            self._stream_consumed = True
-            if self._elapsed is None:
-                self._elapsed = timedelta(0)
-        if self._content is None:
-            return b""
+        else:
+            self._content = self._content or b""
+        self._num_bytes_downloaded = len(self._content)
+        self._stream_consumed = True
+        await self.aclose()
         return self._content
 
     def close(self) -> None:
+        if self._is_closed:
+            return
         self._is_closed = True
         if self._native_stream is not None and hasattr(self._native_stream, "close"):
             self._native_stream.close()
         if hasattr(self._stream, "close"):
             self._stream.close()
+        if self._elapsed is None:
+            start = self._extensions.get("_eggfetch_started_at")
+            self._elapsed = timedelta(seconds=max(0.0, time.monotonic() - start)) if start is not None else timedelta(0)
 
     async def aclose(self) -> None:
+        if self._is_closed:
+            return
         self._is_closed = True
         if self._native_stream is not None and hasattr(self._native_stream, "aclose"):
             await self._native_stream.aclose()
         if hasattr(self._stream, "aclose"):
             await self._stream.aclose()
+        if self._elapsed is None:
+            start = self._extensions.get("_eggfetch_started_at")
+            self._elapsed = timedelta(seconds=max(0.0, time.monotonic() - start)) if start is not None else timedelta(0)
 
     def iter_bytes(self, chunk_size: int | None = 8192) -> Iterator[bytes]:
-        if self._native_stream is not None and not self._stream_consumed:
-            yield from self._native_stream.iter_bytes(chunk_size=chunk_size)
-            return
-        if self._content is None and (self._stream is not None or self._native_stream is not None):
-            raise ResponseNotRead(
-                "Response content has not been read. "
-                "Call .read() or .aread() first."
-            )
-        data = self.content
-        size = chunk_size or 8192
-        for i in range(0, len(data), size):
-            yield data[i : i + size]
+        if self._stream_consumed and self._content is None:
+            raise StreamConsumed()
+        try:
+            if self._native_stream is not None:
+                yield from self._native_stream.iter_bytes(chunk_size=chunk_size)
+            elif self._stream is not None:
+                yield from self._stream
+            else:
+                data = self._content or b""
+                size = chunk_size or 8192
+                yield from (data[i:i + size] for i in range(0, len(data), size))
+            self._stream_consumed = True
+        finally:
+            self.close()
 
     def iter_text(self, chunk_size: int | None = 8192) -> Iterator[str]:
-        if self._native_stream is not None and not self._stream_consumed:
-            yield from self._native_stream.iter_text(chunk_size=chunk_size)
-            return
-        if self._content is None and (self._stream is not None or self._native_stream is not None):
-            raise ResponseNotRead(
-                "Response content has not been read. "
-                "Call .read() or .aread() first."
-            )
         enc = self._resolve_encoding()
-        data = self.content.decode(enc)
-        size = chunk_size or 8192
-        for i in range(0, len(data), size):
-            yield data[i : i + size]
+        for chunk in self.iter_bytes(chunk_size):
+            yield chunk.decode(enc)
 
     def iter_lines(self) -> Iterator[str]:
-        if self._native_stream is not None and not self._stream_consumed:
-            yield from self._native_stream.iter_lines()
-            return
-        if self._content is None and (self._stream is not None or self._native_stream is not None):
-            raise ResponseNotRead(
-                "Response content has not been read. "
-                "Call .read() or .aread() first."
-            )
-        text = self.text
-        for line in text.split("\n"):
-            if line.endswith("\r"):
-                line = line[:-1]
-            yield line
+        pending = ""
+        for chunk in self.iter_text():
+            pending += chunk
+            lines = pending.split("\n")
+            pending = lines.pop()
+            for line in lines:
+                yield line.removesuffix("\r")
+        if pending:
+            yield pending.removesuffix("\r")
 
     def iter_raw(self, chunk_size: int | None = 8192) -> Iterator[bytes]:
-        if self._native_stream is not None and not self._stream_consumed:
-            yield from self._native_stream.iter_raw(chunk_size=chunk_size)
-            return
         yield from self.iter_bytes(chunk_size)
 
     async def aiter_bytes(self, chunk_size: int | None = 8192) -> AsyncIterator[bytes]:
-        if self._native_stream is not None and not self._stream_consumed:
-            async for chunk in self._native_stream.aiter_bytes(chunk_size=chunk_size):
-                yield chunk
-            return
-        if self._content is None and (self._stream is not None or self._native_stream is not None):
-            raise ResponseNotRead(
-                "Response content has not been read. "
-                "Call .read() or .aread() first."
-            )
-        data = self.content
-        size = chunk_size or 8192
-        for i in range(0, len(data), size):
-            yield data[i : i + size]
+        if self._stream_consumed and self._content is None:
+            raise StreamConsumed()
+        try:
+            if self._native_stream is not None:
+                async for chunk in self._native_stream.aiter_bytes(chunk_size=chunk_size):
+                    yield chunk
+            elif self._stream is not None:
+                async for chunk in self._stream:
+                    yield chunk
+            else:
+                data = self._content or b""
+                size = chunk_size or 8192
+                for i in range(0, len(data), size):
+                    yield data[i:i + size]
+            self._stream_consumed = True
+        finally:
+            await self.aclose()
 
     async def aiter_text(self, chunk_size: int | None = 8192) -> AsyncIterator[str]:
-        if self._native_stream is not None and not self._stream_consumed:
-            async for chunk in self._native_stream.aiter_text(chunk_size=chunk_size):
-                yield chunk
-            return
-        if self._content is None and (self._stream is not None or self._native_stream is not None):
-            raise ResponseNotRead(
-                "Response content has not been read. "
-                "Call .read() or .aread() first."
-            )
         enc = self._resolve_encoding()
-        data = self.content.decode(enc)
-        size = chunk_size or 8192
-        for i in range(0, len(data), size):
-            yield data[i : i + size]
+        async for chunk in self.aiter_bytes(chunk_size):
+            yield chunk.decode(enc)
 
     async def aiter_lines(self) -> AsyncIterator[str]:
-        if self._native_stream is not None and not self._stream_consumed:
-            async for line in self._native_stream.aiter_lines():
-                yield line
-            return
-        if self._content is None and (self._stream is not None or self._native_stream is not None):
-            raise ResponseNotRead(
-                "Response content has not been read. "
-                "Call .read() or .aread() first."
-            )
-        text = self.text
-        for line in text.split("\n"):
-            if line.endswith("\r"):
-                line = line[:-1]
-            yield line
+        pending = ""
+        async for chunk in self.aiter_text():
+            pending += chunk
+            lines = pending.split("\n")
+            pending = lines.pop()
+            for line in lines:
+                yield line.removesuffix("\r")
+        if pending:
+            yield pending.removesuffix("\r")
 
     async def aiter_raw(self, chunk_size: int | None = 8192) -> AsyncIterator[bytes]:
-        if self._native_stream is not None and not self._stream_consumed:
-            async for chunk in self._native_stream.aiter_raw(chunk_size=chunk_size):
-                yield chunk
-            return
         async for chunk in self.aiter_bytes(chunk_size):
             yield chunk
 

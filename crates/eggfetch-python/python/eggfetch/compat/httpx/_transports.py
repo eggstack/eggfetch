@@ -40,6 +40,7 @@ from eggfetch.compat.httpx._client import (
     _wrap_response,
     _wrap_streaming_response,
     _validate_transport_options,
+    _validate_protocol_options,
 )
 
 if typing.TYPE_CHECKING:
@@ -104,6 +105,7 @@ class HTTPTransport(BaseTransport):
         socket_options: typing.Any | None = None,
         uds: str | None = None,
     ) -> None:
+        _validate_protocol_options(http1, http2)
         _validate_transport_options(
             uds=uds, local_address=local_address, socket_options=socket_options,
         )
@@ -133,7 +135,9 @@ class HTTPTransport(BaseTransport):
         self._is_closed: bool = False
 
     def _ensure_client(self) -> eggfetch.Client:
-        if self._native_client is None or self._is_closed:
+        if self._is_closed:
+            raise RuntimeError("Transport is closed")
+        if self._native_client is None:
             kwargs: dict[str, typing.Any] = {}
             if self._verify is not True:
                 kwargs["verify"] = self._verify
@@ -152,7 +156,6 @@ class HTTPTransport(BaseTransport):
             if self._retries:
                 kwargs["retries"] = self._retries
             self._native_client = eggfetch.Client(**kwargs)
-            self._is_closed = False
         return self._native_client
 
     def handle_request(self, request: Request) -> Response:
@@ -163,19 +166,20 @@ class HTTPTransport(BaseTransport):
         }
         if request.headers:
             kwargs["headers"] = _convert_headers(request.headers)
+        if isinstance(request.extensions.get("timeout"), dict):
+            t = request.extensions["timeout"]
+            kwargs["timeout"] = Timeout(connect=t.get("connect"), read=t.get("read"), write=t.get("write"), pool=t.get("pool"))
         if request.params:
             kwargs["params"] = _convert_params(request.params)
         if request._stream is not None and request._content is None:
             kwargs["content"] = request._stream
-        elif request.content is not None:
-            kwargs["content"] = request.content
+        elif request._content is not None:
+            kwargs["content"] = request._content
         if request._files is not None:
             kwargs["files"] = request._files
-        if request.cookies:
-            kwargs["cookies"] = _convert_cookies(request.cookies)
 
         try:
-            native_resp = client.request(**kwargs)
+            native_resp = client.stream(**kwargs)
         except Exception as exc:
             raise _map_exception(exc, request) from exc
 
@@ -216,6 +220,7 @@ class AsyncHTTPTransport(AsyncBaseTransport):
         socket_options: typing.Any | None = None,
         uds: str | None = None,
     ) -> None:
+        _validate_protocol_options(http1, http2)
         _validate_transport_options(
             uds=uds, local_address=local_address, socket_options=socket_options,
         )
@@ -245,7 +250,9 @@ class AsyncHTTPTransport(AsyncBaseTransport):
         self._is_closed: bool = False
 
     def _ensure_client(self) -> eggfetch.AsyncClient:
-        if self._native_client is None or self._is_closed:
+        if self._is_closed:
+            raise RuntimeError("Transport is closed")
+        if self._native_client is None:
             kwargs: dict[str, typing.Any] = {}
             if self._verify is not True:
                 kwargs["verify"] = self._verify
@@ -264,7 +271,6 @@ class AsyncHTTPTransport(AsyncBaseTransport):
             if self._retries:
                 kwargs["retries"] = self._retries
             self._native_client = eggfetch.AsyncClient(**kwargs)
-            self._is_closed = False
         return self._native_client
 
     async def handle_async_request(self, request: Request) -> Response:
@@ -275,19 +281,20 @@ class AsyncHTTPTransport(AsyncBaseTransport):
         }
         if request.headers:
             kwargs["headers"] = _convert_headers(request.headers)
+        if isinstance(request.extensions.get("timeout"), dict):
+            t = request.extensions["timeout"]
+            kwargs["timeout"] = Timeout(connect=t.get("connect"), read=t.get("read"), write=t.get("write"), pool=t.get("pool"))
         if request.params:
             kwargs["params"] = _convert_params(request.params)
         if request._stream is not None and request._content is None:
             kwargs["content"] = request._stream
-        elif request.content is not None:
-            kwargs["content"] = request.content
+        elif request._content is not None:
+            kwargs["content"] = request._content
         if request._files is not None:
             kwargs["files"] = request._files
-        if request.cookies:
-            kwargs["cookies"] = _convert_cookies(request.cookies)
 
         try:
-            native_resp = await client.request(**kwargs)
+            native_resp = await client.stream(**kwargs)
         except Exception as exc:
             raise _map_exception(exc, request) from exc
 
