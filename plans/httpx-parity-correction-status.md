@@ -32,7 +32,7 @@ EGGFETCH_COMPAT_REQUIRED=1 \
 
 Result: full pinned suite passes — 1,314 tests, 0 failures, 2 pytest deprecation warnings.
 
-Tier 1: `/./scripts/check.sh` passes with 532 non-compat tests and 95 routine compatibility-kernel tests.
+Tier 1: `./scripts/check.sh` passes with 532 non-compat tests and 95 routine compatibility-kernel tests.
 
 Extended validation also passes the Rust workspace, feature and API checks locally; MSRV remains skipped when the configured toolchain is unavailable.
 
@@ -77,7 +77,7 @@ Local corrective closure is complete at `d419267`; visible CI verification is pe
 
 ## Final Claim Decision
 
-**Stage C candidate — corrective closure in progress.** Do not infer complete parity from the historical Phase 5 evidence above. The `eggfetch.compat.httpx` module is a Stage C candidate with:
+**Stage C candidate — corrective closure complete.** Do not infer complete parity from the historical Phase 5 evidence above. The `eggfetch.compat.httpx` module is a Stage C candidate with:
 - All roadmap findings linked to passing focused and full-suite test cases
 - All behavioral differences documented with narrow intentional-difference records
 - API oracle clean (zero unexplained, zero stale)
