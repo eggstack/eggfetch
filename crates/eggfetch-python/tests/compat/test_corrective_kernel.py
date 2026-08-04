@@ -109,3 +109,166 @@ def test_timeout_none_native_conversion_remains_disabled():
     assert timeout.as_dict == {"connect": None, "read": None, "write": None, "pool": None}
     native = _convert_timeout(timeout)
     assert native.connect is None and native.read is None and native.write is None and native.pool is None
+
+
+# ── Redirect cookie security regressions (final closure 01) ───────────
+
+
+@pytest.mark.parametrize("redirect_status", [302, 301, 303])
+def test_cross_origin_redirect_does_not_carry_explicit_cookie(redirect_status):
+    """Explicit Cookie header must not leak across origins on redirect."""
+    seen = []
+
+    def handler(request):
+        seen.append((str(request.url), request.headers.get("cookie")))
+        if "/redirect" in str(request.url):
+            return Response(redirect_status, headers={"Location": "http://other-server/target"})
+        return Response(200)
+
+    with Client(transport=MockTransport(handler), follow_redirects=True) as client:
+        client.get("http://testserver/redirect", headers={"Cookie": "secret=value"})
+
+    # First hop has the explicit cookie
+    assert seen[0][1] == "secret=value"
+    # Second hop must NOT have the cookie
+    assert seen[1][1] is None
+
+
+@pytest.mark.parametrize("redirect_status", [302, 301, 303])
+def test_same_origin_redirect_does_not_carry_explicit_cookie(redirect_status):
+    """Explicit Cookie header is not carried on same-origin redirects either."""
+    seen = []
+
+    def handler(request):
+        seen.append((str(request.url), request.headers.get("cookie")))
+        if "/redirect" in str(request.url):
+            return Response(redirect_status, headers={"Location": "/target"})
+        return Response(200)
+
+    with Client(transport=MockTransport(handler), follow_redirects=True) as client:
+        client.get("http://testserver/redirect", headers={"Cookie": "explicit=val"})
+
+    assert seen[0][1] == "explicit=val"
+    assert seen[1][1] is None
+
+
+def test_intermediate_set_cookie_visible_on_next_hop():
+    """Cookie set by a redirect response must be available on the next hop."""
+    seen = []
+
+    def handler(request):
+        seen.append((str(request.url), request.headers.get("cookie")))
+        if "/redirect" in str(request.url):
+            return Response(
+                302,
+                headers=[
+                    ("Location", "/target"),
+                    ("Set-Cookie", "hop_cookie=yes; Path=/"),
+                ],
+            )
+        return Response(200)
+
+    with Client(transport=MockTransport(handler), follow_redirects=True) as client:
+        client.get("http://testserver/redirect")
+
+    assert seen[1][1] is not None and "hop_cookie=yes" in seen[1][1]
+
+
+# ── Body replay regressions (final closure 01) ─────────────────────────
+
+
+def test_multipart_retained_body_not_lost_on_307():
+    """Multipart data+files must survive a 307 redirect."""
+    seen = []
+
+    def handler(request):
+        seen.append({
+            "files": request._files,
+            "multipart_data": request._multipart_data,
+        })
+        if "/redirect" in str(request.url):
+            return Response(307, headers={"Location": "/target"})
+        return Response(200)
+
+    with Client(transport=MockTransport(handler), follow_redirects=True) as client:
+        client.post(
+            "http://testserver/redirect",
+            files={"file": ("test.txt", b"content", "text/plain")},
+            data={"field": "value"},
+        )
+
+    assert seen[0]["files"] is not None
+    assert seen[1]["files"] is not None
+    assert seen[0]["multipart_data"] == seen[1]["multipart_data"]
+
+
+def test_multipart_retained_body_not_lost_on_308():
+    """Multipart data+files must survive a 308 redirect."""
+    seen = []
+
+    def handler(request):
+        seen.append({
+            "files": request._files,
+            "multipart_data": request._multipart_data,
+        })
+        if "/redirect" in str(request.url):
+            return Response(308, headers={"Location": "/target"})
+        return Response(200)
+
+    with Client(transport=MockTransport(handler), follow_redirects=True) as client:
+        client.post(
+            "http://testserver/redirect",
+            files={"file": ("test.txt", b"content", "text/plain")},
+            data={"field": "value"},
+        )
+
+    assert seen[0]["files"] is not None
+    assert seen[1]["files"] is not None
+    assert seen[0]["multipart_data"] == seen[1]["multipart_data"]
+
+
+def test_unreplayable_body_fails_before_second_dispatch():
+    """A generator body through 307 must fail before a second dispatch."""
+    dispatch_count = 0
+
+    def handler(request):
+        nonlocal dispatch_count
+        dispatch_count += 1
+        if dispatch_count == 1:
+            return Response(307, headers={"Location": "/target"})
+        return Response(200)
+
+    with Client(transport=MockTransport(handler), follow_redirects=True) as client:
+        with pytest.raises(StreamConsumed):
+            client.post(
+                "http://testserver/redirect",
+                content=iter([b"chunk1", b"chunk2"]),
+            )
+
+    assert dispatch_count == 1
+
+
+def test_method_rewrite_to_get_drops_body():
+    """303 redirect from POST to GET drops the body and related headers."""
+    seen = []
+
+    def handler(request):
+        seen.append((
+            request.method,
+            request.headers.get("content-length", "none"),
+            request.headers.get("transfer-encoding", "none"),
+        ))
+        if "/redirect" in str(request.url):
+            return Response(303, headers={"Location": "/target"})
+        return Response(200)
+
+    with Client(transport=MockTransport(handler), follow_redirects=True) as client:
+        client.post("http://testserver/redirect", content=b"body")
+
+    # First hop: POST with body
+    assert seen[0][0] == "POST"
+    assert seen[0][1] == "4"
+    # Second hop: GET without body headers
+    assert seen[1][0] == "GET"
+    assert seen[1][1] == "none"
+    assert seen[1][2] == "none"

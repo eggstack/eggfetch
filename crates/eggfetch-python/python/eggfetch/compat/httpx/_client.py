@@ -33,6 +33,7 @@ from eggfetch.compat.httpx._exceptions import (
     ProxyError,
     ReadTimeout,
     RequestError,
+    StreamConsumed,
     TimeoutException,
     TooManyRedirects,
     TransportError,
@@ -705,6 +706,125 @@ def _is_https_redirect(url: URL, location: URL) -> bool:
     )
 
 
+# ── Body replay classifier (Track 3) ──────────────────────────────────
+
+class _BodyReplay:
+    """Classify a Request body for redirect replay.
+
+    Classifications:
+    - ``empty``: no body present
+    - ``buffered``: stable ``_content`` bytes, always replayable
+    - ``reusable-stream``: ``ByteStream`` with known-good content
+    - ``multipart-reconstructable``: ``_files`` + ``_multipart_data`` with
+      all-immutable parts (bytes/tuple with bytes content)
+    - ``one-shot``: generator or iterator that cannot be replayed
+    - ``unsupported``: body state that cannot be safely replayed
+    """
+
+    __slots__ = ("kind", "content", "files", "multipart_data")
+
+    def __init__(
+        self,
+        kind: str,
+        *,
+        content: bytes | None = None,
+        files=None,
+        multipart_data=None,
+    ) -> None:
+        self.kind = kind
+        self.content = content
+        self.files = files
+        self.multipart_data = multipart_data
+
+    def __repr__(self) -> str:
+        return f"_BodyReplay(kind={self.kind!r})"
+
+
+def _classify_body(request: Request) -> _BodyReplay:
+    """Classify a Request body for redirect replay."""
+    # Multipart (data + files): check if all parts are immutable/reconstructable
+    if request._files is not None:
+        if _is_multipart_reconstructable(request._files, request._multipart_data):
+            return _BodyReplay(
+                "multipart-reconstructable",
+                files=request._files,
+                multipart_data=request._multipart_data,
+            )
+        return _BodyReplay("unsupported")
+
+    # Buffered bytes
+    if request._content is not None:
+        return _BodyReplay("buffered", content=request._content)
+
+    # ByteStream (reusable)
+    if isinstance(request._stream, ByteStream):
+        return _BodyReplay(
+            "reusable-stream",
+            content=request._stream._content,
+        )
+
+    # Generator or iterator (one-shot)
+    if request._stream is not None:
+        return _BodyReplay("one-shot")
+
+    return _BodyReplay("empty")
+
+
+def _is_multipart_reconstructable(files, multipart_data) -> bool:
+    """Check if multipart data can be safely reconstructed.
+
+    Returns True only when every part is represented by immutable reusable
+    values (bytes, str, or tuples with bytes/str content).
+    """
+    if files is None:
+        return False
+
+    # Check data fields
+    if multipart_data is not None:
+        if isinstance(multipart_data, dict):
+            items = list(multipart_data.items())
+        elif isinstance(multipart_data, (list, tuple)):
+            items = multipart_data
+        else:
+            return False
+        for _key, value in items:
+            if isinstance(value, (list, tuple)):
+                for v in value:
+                    if not _is_immutable_value(v):
+                        return False
+            elif not _is_immutable_value(value):
+                return False
+
+    # Check file fields
+    file_items = files if isinstance(files, (list, tuple)) else list(files.items()) if isinstance(files, dict) else [("file", files)]
+    for field_name, file_spec in file_items:
+        if isinstance(file_spec, tuple):
+            if len(file_spec) >= 2:
+                fileobj = file_spec[1]
+                if not _is_immutable_file_value(fileobj):
+                    return False
+            # tuple with 3+: filename, fileobj, content_type, headers
+        elif not _is_immutable_file_value(file_spec):
+            return False
+
+    return True
+
+
+def _is_immutable_value(value) -> bool:
+    """Check if a form value is immutable and safe for reconstruction."""
+    return isinstance(value, (bytes, str, int, float))
+
+
+def _is_immutable_file_value(fileobj) -> bool:
+    """Check if a file value is immutable and safe for reconstruction."""
+    if isinstance(fileobj, (bytes, bytearray)):
+        return True
+    if isinstance(fileobj, str):
+        return True
+    # file-like objects, generators, etc. are NOT safe
+    return False
+
+
 def _redirect_method(request: Request, response: Response) -> str:
     """Determine the method for a redirect request (HTTPX 0.28.1 rules)."""
     method = request.method
@@ -766,6 +886,12 @@ def _redirect_headers(request: Request, url: URL, method: str) -> Headers:
     """Build headers for a redirect request, stripping sensitive headers."""
     headers = Headers(request.headers)
 
+    # Always strip Cookie header on redirect — it will be regenerated from
+    # the client jar for the destination URL.  This matches HTTPX 0.28.1:
+    # explicit Cookie headers are not carried across redirects.
+    headers.pop("Cookie", None)
+    headers.pop("cookie", None)
+
     if not _same_origin(url, request.url):
         if not _is_https_redirect(request.url, url):
             # Strip Authorization when redirecting away from origin
@@ -787,6 +913,16 @@ def _redirect_headers(request: Request, url: URL, method: str) -> Headers:
 
 
 def _redirect_stream(request: Request, method: str):
+    """Determine the body source for a redirect request.
+
+    Returns:
+    - ``None`` when the body should be dropped (method rewrite to GET)
+    - ``None`` when ``request._content`` exists (replay via content kwarg)
+    - A fresh ``ByteStream`` for ``ByteStream`` streams
+    - Raises ``StreamConsumed`` for unreplayable streams
+
+    For multipart and other complex bodies, use ``_classify_body()`` instead.
+    """
     if method != request.method and method == "GET":
         return None
     if request._content is not None:
@@ -807,24 +943,70 @@ def _build_redirect_request(
     method = _redirect_method(request, response)
     url = _redirect_url(request, response)
     headers = _redirect_headers(request, url, method)
-    stream = _redirect_stream(request, method)
 
-    cookies = Cookies(client_cookies)
-    cookies.update(request._cookies)
+    # Classify the body before building the redirect request.
+    body = _classify_body(request)
+
+    # Method rewrites (301→GET for POST, 302, 303): drop body
+    if method != request.method and method == "GET":
+        return Request(
+            method=method,
+            url=url,
+            headers=headers,
+            cookies=Cookies(client_cookies),
+            extensions=_clean_redirect_extensions(request),
+        )
+
+    # Retained method: must have a valid body source
+    if body.kind == "empty":
+        return Request(
+            method=method,
+            url=url,
+            headers=headers,
+            cookies=Cookies(client_cookies),
+            extensions=_clean_redirect_extensions(request),
+        )
+
+    if body.kind == "buffered":
+        return Request(
+            method=method,
+            url=url,
+            headers=headers,
+            cookies=Cookies(client_cookies),
+            content=body.content,
+            extensions=_clean_redirect_extensions(request),
+        )
+
+    if body.kind == "reusable-stream":
+        return Request(
+            method=method,
+            url=url,
+            headers=headers,
+            cookies=Cookies(client_cookies),
+            stream=ByteStream(body.content),
+            extensions=_clean_redirect_extensions(request),
+        )
+
+    if body.kind == "multipart-reconstructable":
+        return Request(
+            method=method,
+            url=url,
+            headers=headers,
+            cookies=Cookies(client_cookies),
+            data=body.multipart_data,
+            files=body.files,
+            extensions=_clean_redirect_extensions(request),
+        )
+
+    # One-shot or unsupported: fail before second dispatch
+    raise StreamConsumed("Cannot replay a consumed request body on a redirect")
+
+
+def _clean_redirect_extensions(request: Request) -> dict:
+    """Build extensions dict for a redirect request."""
     extensions = dict(request.extensions)
     extensions.pop("_eggfetch_started_at", None)
-    body_kwargs = {"content": request._content} if method == request.method and request._content is not None else {}
-    if stream is not None:
-        body_kwargs = {"stream": stream}
-
-    return Request(
-        method=method,
-        url=url,
-        headers=headers,
-        cookies=cookies,
-        extensions=extensions,
-        **body_kwargs,
-    )
+    return extensions
 
 
 # ── Client ──────────────────────────────────────────────────────────────

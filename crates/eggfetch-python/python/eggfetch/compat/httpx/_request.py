@@ -33,6 +33,7 @@ class Request:
         "_stream_consumed",
         "_files",
         "_multipart_data",
+        "_explicit_cookie_header",
     )
 
     def __init__(
@@ -94,11 +95,20 @@ class Request:
         self._stream_consumed = False
         self._stream = stream
 
+        # Track whether the Cookie header was explicitly provided by the user.
+        # This is used during redirects to decide whether to carry the header
+        # or regenerate from the client jar.
+        self._explicit_cookie_header: str | None = None
+
         # Build headers from user-provided value
         if isinstance(headers, Headers):
             self._headers = headers
         else:
             self._headers = Headers(headers)
+
+        # Capture explicit Cookie header before jar merge happens.
+        # Used during redirects to decide whether to carry or regenerate.
+        self._explicit_cookie_header = self._headers.get("cookie")
 
         # Build params
         if isinstance(params, QueryParams):

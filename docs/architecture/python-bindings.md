@@ -238,7 +238,7 @@ The facade converts between HTTPX-compatible objects and native types at the bou
 - **Python-level redirect loop** (Track 1, 2): `_send_handling_redirects()` replaces the native redirect-following. Each hop runs request/response hooks, dispatches through `_send_single_request()`, and builds the next request via `_build_redirect_request()`. `follow_redirects=True` follows automatically; `False` sets `response.next_request`.
 - **Method rewriting** (Track 2.1): 303 → GET (non-HEAD), 302 → GET (non-HEAD), 301 POST → GET. 307/308 retain method and body.
 - **URL resolution** (Track 2.2): Absolute, relative, scheme-relative, and malformed Location headers resolved. Fragment inheritance per RFC 7231 7.1.2.
-- **Header stripping** (Track 2.3): `Authorization` stripped on cross-origin redirects (except HTTP→HTTPS same-host). `Host` updated. `Cookie` regenerated from client jar. Content headers stripped when method changes to GET.
+- **Header stripping** (Track 2.3): `Authorization` stripped on cross-origin redirects (except HTTP→HTTPS same-host). `Host` updated. `Cookie` header stripped on all redirects (same-origin and cross-origin) and regenerated from the client jar for the destination URL. Content headers stripped when method changes to GET.
 - **History management** (Track 1.2): Single authoritative history list. Redirect responses appended when followed. Auth challenge responses appended when auth yields a follow-up. Final response gets `response.history = list(history)`.
 - **Manual redirects** (Track 2.5): `response.next_request` populated for unfollowed redirects.
 - **max_redirects** (Track 2.6): `TooManyRedirects` raised with request attached.
@@ -249,4 +249,4 @@ The facade converts between HTTPX-compatible objects and native types at the bou
 
 ### Corrective parity closure
 
-The facade has one authoritative Python cookie jar, request-relative timeout mapping, explicit buffered/live response state, and replayability checks for body-preserving redirects. `scripts/check.sh` Tier 1 runs `tests/compat/test_corrective_kernel.py`; the complete pinned HTTPX suite and API oracle remain extended validation. Keep `plans/httpx-parity-narrow-corrective-closure.md` and `plans/httpx-parity-correction-status.md` exact-SHA-bound when changing compatibility claims.
+The facade has one authoritative Python cookie jar, request-relative timeout mapping, explicit buffered/live response state, body replay classification (buffered, reusable-stream, multipart-reconstructable, one-shot), and explicit Cookie header stripping on redirects. `scripts/check.sh` Tier 1 runs `tests/compat/test_corrective_kernel.py`; the complete pinned HTTPX suite and API oracle remain extended validation. Keep `plans/httpx-parity-narrow-corrective-closure.md` and `plans/httpx-parity-correction-status.md` exact-SHA-bound when changing compatibility claims.

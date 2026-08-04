@@ -106,7 +106,7 @@ from eggfetch.compat.httpx import Client, AsyncClient, Request, Response
 - Response metadata: HTTP version, reason phrase, elapsed, `raise_for_status()` return, `next_request`
 - Stream state: raw/decoded/text/line boundaries, exception handling, encoding
 - One-hop native/custom transport boundary, mount matching, hook per-hop ordering
-- Redirect state machine: method/body rewriting, cross-origin auth stripping, max_redirects
+- Redirect state machine: method/body rewriting, cross-origin auth stripping, Cookie header stripping on all redirects, max_redirects
 - Auth lifecycle: Basic, Digest, NetRC, callable, custom sync/async, auth through all transport types
 - Scoped cookie jar: domain/path/secure/expiry selection, CookieConflict, multiple Set-Cookie
 - Event hooks: request/response per-hop ordering, hook exception cleanup
@@ -126,7 +126,7 @@ from eggfetch.compat.httpx import Client, AsyncClient, Request, Response
 - Compatibility cookies are emitted by the facade jar only; native cookie kwargs are not used.
 - Retained-body redirects replay buffered bytes through exactly one body source and reject one-shot streams before a second dispatch.
 - Native dispatch converts compatibility timeout mappings explicitly and serializes URL parameters only once.
-- Request-local and explicit Cookie state is merged with the scoped facade jar per hop.
+- Request-local and explicit Cookie state is merged with the scoped facade jar per hop; explicit Cookie headers are stripped on every redirect and regenerated from the jar.
 - Live response iteration coalesces chunk sizes, decodes split text incrementally, and updates stream accounting and state.
 - The compact `test_corrective_kernel.py` suite runs in Tier 1; the full compatibility suite and API oracle remain Tier 2 gates.
 

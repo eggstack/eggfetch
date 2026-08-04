@@ -14,7 +14,7 @@ Use this skill when performing security reviews or addressing security findings 
 
 - `unsafe_code = "forbid"` workspace-wide (FFI/Node exceptions).
 - All Debug/Display/error output redacts secrets via `eggfetch_core::redact`.
-- Cross-origin redirects strip Authorization, Cookie, and Proxy-Authorization headers.
+- Cross-origin redirects strip Authorization, Cookie, and Proxy-Authorization headers. The Python facade strips explicit Cookie headers on all redirects and regenerates from the jar.
 - URL credentials (`user:pass@host`) are rejected.
 - Decompression bombs limited by `max_decoded_body_size` and `max_decompression_ratio`.
 - Multipart boundaries validated (no CR/LF injection). Filenames basename-only (no path traversal).

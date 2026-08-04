@@ -9,6 +9,12 @@ Follow-up starting SHA: 40c036f
 Follow-up audited baseline: 4d46edc0b1609430d7b053e6376121b746ba0cd1
 Follow-up plan: `plans/httpx-parity-follow-up-corrective-pass.md`
 
+Final redirect and raw-stream closure in progress.
+Starting SHA: `6ae10308b9db1e215eca19027d4ca9b7575900f6`.
+Plan: `plans/httpx-parity-final-closure-01-redirect-security-replay.md`.
+Previous CI run remains historical evidence.
+Stage C candidate designation unchanged.
+
 ## Corrective closure baseline
 
 - Audited baseline: `7de195716ef64787535d089020a99891bae4aa8e`.
