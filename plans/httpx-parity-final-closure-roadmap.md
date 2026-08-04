@@ -122,11 +122,11 @@ Required result:
 - every retained body is either replayed through one authoritative source or rejected before the next transport dispatch;
 - multipart/file-backed bodies are never silently converted to empty bodies.
 
-### Phase 2 — Raw streaming lifecycle parity
+### Phase 2 — Raw streaming lifecycle parity ✓
 
-Implement `httpx-parity-final-closure-02-raw-stream-lifecycle.md` after Phase 1.
+Implemented `httpx-parity-final-closure-02-raw-stream-lifecycle.md`.
 
-Required result:
+Result:
 
 - sync and async raw iterators use distinct raw paths;
 - raw iteration owns wrapper state and accounting;

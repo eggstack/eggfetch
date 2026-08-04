@@ -105,7 +105,7 @@ The compatibility profile is in `compat/httpx/0.28.1/`. Allowed differences are 
 
 ## Tests
 
-Colocated `#[cfg(test)] mod tests` blocks. ~685 Rust, ~513 Python (non-compat), ~1220 Python (compat), 30 FFI tests.
+Colocated `#[cfg(test)] mod tests` blocks. ~685 Rust, ~513 Python (non-compat), ~1280 Python (compat), 30 FFI tests.
 
 The full validation pass (pre-release) runs feature-gated subsets:
 
@@ -179,4 +179,4 @@ Detailed architecture docs live in `docs/architecture/`. Use this index to find 
 
 ### HTTPX corrective closure
 
-The compatibility facade preserves four-phase timeout mappings through native conversion, serializes request parameters exactly once, merges scoped client and request-local cookies without a second native jar, strips explicit Cookie headers on all redirects and regenerates from the client jar, classifies body replay (buffered, reusable-stream, multipart-reconstructable, one-shot) for retained-method redirects, and uses one authoritative body source for each redirect hop. Live sync and async response iteration honors chunk sizing, incremental decoding, byte accounting, and close/consumed state. The compact `test_corrective_kernel.py` is part of Tier 1; full pinned-reference compat and API-oracle validation remain extended.
+The compatibility facade preserves four-phase timeout mappings through native conversion, serializes request parameters exactly once, merges scoped client and request-local cookies without a second native jar, strips explicit Cookie headers on all redirects and regenerates from the client jar, classifies body replay (buffered, reusable-stream, multipart-reconstructable, one-shot) for retained-method redirects, and uses one authoritative body source for each redirect hop. Live sync and async raw iteration marks streams consumed at the correct point, counts raw transport bytes, handles chunk-size splitting and coalescing, and closes exactly once on exhaustion or partial break. The compact `test_corrective_kernel.py` is part of Tier 1; full pinned-reference compat and API-oracle validation remain extended.

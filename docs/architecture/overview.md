@@ -200,6 +200,6 @@ Client::send()
 
 ## Current Status
 
-All milestones A–Z are complete. The workspace provides ~685 Rust tests, ~513 Python tests (non-compat), ~934 Python tests (compat), and 30 FFI tests. MSRV is Rust 1.80. CI enforces `RUSTFLAGS=-D warnings` with pedantic clippy.
+All milestones A–Z are complete. The workspace provides ~685 Rust tests, ~513 Python tests (non-compat), ~1280 Python tests (compat), and 30 FFI tests. MSRV is Rust 1.80. CI enforces `RUSTFLAGS=-D warnings` with pedantic clippy.
 
 The `test-util` feature enables `tokio/test-util` for deterministic time testing in timeout-related tests.

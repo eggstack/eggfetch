@@ -2,7 +2,7 @@
 
 import pytest
 
-from eggfetch.compat.httpx import Client, MockTransport, Request, Response
+from eggfetch.compat.httpx import AsyncClient, Client, MockTransport, Request, Response
 from eggfetch.compat.httpx._exceptions import RequestNotRead, StreamConsumed
 
 
@@ -272,3 +272,58 @@ def test_method_rewrite_to_get_drops_body():
     assert seen[1][0] == "GET"
     assert seen[1][1] == "none"
     assert seen[1][2] == "none"
+
+
+# ── Raw stream lifecycle regressions (final closure 02) ────────────────
+
+
+def test_raw_iteration_marks_consumed_and_closes():
+    resp = Response(200, stream=iter([b"abc", b"def"]))
+    chunks = list(resp.iter_raw())
+    assert b"".join(chunks) == b"abcdef"
+    assert resp.is_stream_consumed
+    assert resp.is_closed
+
+
+def test_raw_iteration_increments_byte_accounting():
+    resp = Response(200, stream=iter([b"abc", b"def"]))
+    list(resp.iter_raw())
+    assert resp.num_bytes_downloaded == 6
+
+
+def test_raw_partial_iteration_then_close():
+    resp = Response(200, stream=iter([b"a", b"b", b"c"]))
+    gen = resp.iter_raw(chunk_size=1)
+    next(gen)
+    gen.close()
+    assert resp.is_stream_consumed
+    assert resp.is_closed
+
+
+def test_async_raw_uses_native_path():
+    import asyncio
+
+    def handler(request):
+        return Response(200, content=b"hello")
+
+    async def consume():
+        async with AsyncClient(transport=MockTransport(handler)) as client:
+            async with client.stream("GET", "https://example.com") as resp:
+                chunks = []
+                async for chunk in resp.aiter_raw():
+                    chunks.append(chunk)
+                return b"".join(chunks)
+
+    loop = asyncio.new_event_loop()
+    try:
+        result = loop.run_until_complete(consume())
+    finally:
+        loop.close()
+    assert result == b"hello"
+
+
+def test_raw_and_decoded_paths_are_distinct():
+    resp = Response(200, stream=iter([b"abc"]))
+    list(resp.iter_raw())
+    with pytest.raises(StreamConsumed):
+        list(resp.iter_bytes())

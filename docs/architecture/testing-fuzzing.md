@@ -14,7 +14,7 @@ All tests are colocated in `#[cfg(test)] mod tests` blocks within each source fi
 |----------|-------------------|
 | Rust unit/integration | ~685 |
 | Python (non-compat) | ~513 |
-| Python (compat) | ~934 |
+| Python (compat) | ~1280 |
 | FFI | 30 |
 
 ## Running Tests
@@ -62,7 +62,7 @@ The compatibility test suite lives in `crates/eggfetch-python/tests/compat/` and
 
 Run with `EGGFETCH_COMPAT_REQUIRED=1` for fail-closed behavior. The CI `compat-httpx` job enforces this.
 
-Compatibility profiles and allowed differences live in `compat/httpx/0.28.1/`. The corrective kernel also covers buffered/one-shot redirect replay, disabled and structured timeout conversion, request-local cookies, single query serialization, incremental response decoding, and fail-closed lint tooling.
+Compatibility profiles and allowed differences live in `compat/httpx/0.28.1/`. The corrective kernel also covers buffered/one-shot redirect replay, disabled and structured timeout conversion, request-local cookies, single query serialization, incremental response decoding, raw stream lifecycle (consumed state, byte accounting, chunk-size adaptation, exactly-once close), and fail-closed lint tooling.
 
 Direct differential tests against the pinned HTTPX reference remain Tier 2; Tier 1 does not install the reference package.
 
