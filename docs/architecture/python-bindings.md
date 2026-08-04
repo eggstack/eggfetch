@@ -172,7 +172,7 @@ The facade converts between HTTPX-compatible objects and native types at the bou
 
 - **URL → core URL**: Pure-Python `URL` normalizes to a string; passed to native `Client.request()`.
 - **Headers → native headers**: `Headers` exposes duplicate-preserving iteration; flattened to a list of `(name, value)` pairs for native calls.
-- **QueryParams → dict/list**: Encoded to query parameters passed as kwargs.
+- **QueryParams → URL**: Request construction materializes merged query pairs into the URL; native dispatch does not forward them a second time.
 - **Timeout → native timeout**: `Timeout` fields map to scalar/phase-aware native timeout config.
 - **Limits → native limits**: `Limits` fields map to `PoolConfig`.
 - **Proxy → native proxy**: `Proxy.url` maps to the native proxy string.
@@ -197,7 +197,8 @@ The facade converts between HTTPX-compatible objects and native types at the bou
 - **next_request**: Exposed and defaults to `None` for Phase 4 redirect support.
 - **History**: Copied at construction; setter replaces the list.
 - **Stream exceptions**: `ResponseNotRead`, `StreamClosed`, `StreamConsumed` raised at correct state boundaries.
-- **Stream state**: `is_closed`, `is_stream_consumed`, `num_bytes_downloaded` updated on all completion/failure paths.
+- **Stream state**: `is_closed`, `is_stream_consumed`, and `num_bytes_downloaded` update during sync/async chunked iteration, read, close, and failure paths.
+- **Corrective boundaries**: Redirect body replay uses one source, timeout mappings cross as native timeout objects, cookies are merged per hop, and query pairs are serialized once.
 - **Encoding**: Callable `default_encoding`; `encoding` setter raises after `text` access.
 - **Repr**: Response includes status and reason phrase; URL redacts passwords.
 - **Exports**: `main()` and `create_ssl_context()` stubs added for API compatibility.

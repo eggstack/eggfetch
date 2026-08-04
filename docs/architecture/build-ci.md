@@ -46,7 +46,7 @@ See [verification-policy.md](../verification-policy.md) for the normative policy
 | Rust tests | `cargo test --workspace --exclude eggfetch-python --all-features` |
 | Python build | `maturin develop -m crates/eggfetch-python/Cargo.toml` |
 | Python tests | `pytest crates/eggfetch-python/tests/ -q --ignore=.../compat` |
-| HTTPX compat smoke | `pytest .../test_imports.py .../test_client.py .../test_exceptions.py` |
+| HTTPX compat smoke | `pytest .../test_imports.py .../test_client.py .../test_exceptions.py .../test_corrective_kernel.py` |
 
 ### Extended Validation (Tier 2)
 

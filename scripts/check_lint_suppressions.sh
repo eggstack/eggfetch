@@ -33,6 +33,11 @@ EXIT_CODE=0
 
 echo "Checking for forbidden broad lint suppressions..."
 
+if ! command -v rg &>/dev/null; then
+    echo "ERROR: ripgrep (rg) is required for lint-suppression checks." >&2
+    exit 2
+fi
+
 # Check for allow(warnings) — forbidden everywhere
 if rg -n '#!\[allow\(warnings\)\]|#\[allow\(warnings\)\]' "$REPO_ROOT/crates/" -g '*.rs'; then
     echo "ERROR: Found 'allow(warnings)' — forbidden in all Rust files."

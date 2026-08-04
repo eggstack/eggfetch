@@ -248,6 +248,9 @@ Key differences from HTTPX:
 - `local_address` / `socket_options` transport parameters not supported
 - `ssl_context` transport parameter not supported (TLS handled by Rust engine)
 - Python 3.8/3.9 not supported (requires 3.10+)
+- Redirects with buffered retained bodies replay correctly; arbitrary one-shot body iterators are rejected before the next hop
+- Request-local cookies and explicit Cookie headers are preserved within the facade jar model; native cookie kwargs are not used
+- Response streaming is asyncio-compatible and supports incremental text decoding and chunk-size control
 
 Remaining differences are documented in `compat/httpx/0.28.1/allowed-differences.toml`; the compatibility claim is limited to the pinned HTTPX 0.28.1 profile and the supported asyncio surface.
 

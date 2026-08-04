@@ -1,6 +1,6 @@
 # HTTPX 0.28.1 Parity — Follow-up Corrective Pass
 
-Status: ready for implementation handoff
+Status: implementation in progress
 
 Date: 2026-08-03
 

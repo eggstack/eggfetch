@@ -70,3 +70,42 @@ def test_transport_close_is_permanent():
     transport.close()
     with pytest.raises(RuntimeError):
         transport.handle_request(Request("GET", "https://example.com"))
+
+
+def test_buffered_redirect_replay_uses_one_body_source():
+    seen = []
+    def handler(request):
+        seen.append((request.method, request.content))
+        if len(seen) == 1:
+            return Response(307, headers={"location": "https://example.com/next"})
+        return Response(200, content=b"ok")
+    with Client(transport=MockTransport(handler), follow_redirects=True) as client:
+        response = client.post("https://example.com/start", content=b"body")
+    assert response.status_code == 200
+    assert seen == [("POST", b"body"), ("POST", b"body")]
+
+
+def test_request_local_cookie_and_query_are_not_lost_or_duplicated():
+    seen = []
+    def handler(request):
+        seen.append((str(request.url), request.headers.get("cookie")))
+        return Response(200)
+    with Client(transport=MockTransport(handler), cookies={"client": "one"}) as client:
+        client.get("https://example.com/path", params={"a": "1"}, cookies={"request": "two"}, headers={"Cookie": "explicit=three"})
+    assert seen == [("https://example.com/path?a=1", "explicit=three; client=one; request=two")]
+
+
+def test_split_utf8_stream_is_decoded_incrementally():
+    value = "€".encode("utf-8")
+    response = Response(200, stream=iter([value[:1], value[1:]]))
+    assert list(response.iter_text(chunk_size=1)) == ["€"]
+    assert response.num_bytes_downloaded == len(value)
+
+
+def test_timeout_none_native_conversion_remains_disabled():
+    from eggfetch.compat.httpx._client import _convert_timeout, _request_timeout
+    request = Request("GET", "https://example.com", extensions={"timeout": {"connect": None, "read": None, "write": None, "pool": None}})
+    timeout = _request_timeout(request, 5)
+    assert timeout.as_dict == {"connect": None, "read": None, "write": None, "pool": None}
+    native = _convert_timeout(timeout)
+    assert native.connect is None and native.read is None and native.write is None and native.pool is None

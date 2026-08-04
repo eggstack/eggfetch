@@ -124,7 +124,10 @@ from eggfetch.compat.httpx import Client, AsyncClient, Request, Response
 - Per-request timeout overrides use HTTPX's four-value extension mapping.
 - Request and Response state follows HTTPX for empty bodies, unread streams, buffered responses, live iteration, and redirect-location detection.
 - Compatibility cookies are emitted by the facade jar only; native cookie kwargs are not used.
-- Retained-body redirects reject one-shot streams before a second dispatch.
+- Retained-body redirects replay buffered bytes through exactly one body source and reject one-shot streams before a second dispatch.
+- Native dispatch converts compatibility timeout mappings explicitly and serializes URL parameters only once.
+- Request-local and explicit Cookie state is merged with the scoped facade jar per hop.
+- Live response iteration coalesces chunk sizes, decodes split text incrementally, and updates stream accounting and state.
 - The compact `test_corrective_kernel.py` suite runs in Tier 1; the full compatibility suite and API oracle remain Tier 2 gates.
 
 **Testing the compat layer:**

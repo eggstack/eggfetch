@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import codecs
 import json as _json
 import time
 import typing
@@ -550,21 +551,49 @@ class Response:
             raise StreamConsumed()
         try:
             if self._native_stream is not None:
-                yield from self._native_stream.iter_bytes(chunk_size=chunk_size)
+                for chunk in self._native_stream.iter_bytes(chunk_size=chunk_size):
+                    self._num_bytes_downloaded += len(chunk)
+                    yield chunk
             elif self._stream is not None:
-                yield from self._stream
+                iterator = iter(self._stream)
+                if chunk_size is None:
+                    for chunk in iterator:
+                        self._num_bytes_downloaded += len(chunk)
+                        yield chunk
+                else:
+                    pending = bytearray()
+                    for chunk in iterator:
+                        pending.extend(chunk)
+                        while len(pending) >= chunk_size:
+                            chunk = bytes(pending[:chunk_size])
+                            self._num_bytes_downloaded += len(chunk)
+                            yield chunk
+                            del pending[:chunk_size]
+                    if pending:
+                        chunk = bytes(pending)
+                        self._num_bytes_downloaded += len(chunk)
+                        yield chunk
             else:
                 data = self._content or b""
                 size = chunk_size or 8192
-                yield from (data[i:i + size] for i in range(0, len(data), size))
+                for i in range(0, len(data), size):
+                    chunk = data[i:i + size]
+                    self._num_bytes_downloaded += len(chunk)
+                    yield chunk
             self._stream_consumed = True
         finally:
+            self._stream_consumed = True
             self.close()
 
     def iter_text(self, chunk_size: int | None = 8192) -> Iterator[str]:
-        enc = self._resolve_encoding()
+        decoder = codecs.getincrementaldecoder(self._resolve_encoding())()
         for chunk in self.iter_bytes(chunk_size):
-            yield chunk.decode(enc)
+            text = decoder.decode(chunk, final=False)
+            if text:
+                yield text
+        tail = decoder.decode(b"", final=True)
+        if tail:
+            yield tail
 
     def iter_lines(self) -> Iterator[str]:
         pending = ""
@@ -578,7 +607,10 @@ class Response:
             yield pending.removesuffix("\r")
 
     def iter_raw(self, chunk_size: int | None = 8192) -> Iterator[bytes]:
-        yield from self.iter_bytes(chunk_size)
+        if self._native_stream is not None and hasattr(self._native_stream, "iter_raw"):
+            yield from self._native_stream.iter_raw(chunk_size=chunk_size)
+        else:
+            yield from self.iter_bytes(chunk_size)
 
     async def aiter_bytes(self, chunk_size: int | None = 8192) -> AsyncIterator[bytes]:
         if self._stream_consumed and self._content is None:
@@ -586,23 +618,48 @@ class Response:
         try:
             if self._native_stream is not None:
                 async for chunk in self._native_stream.aiter_bytes(chunk_size=chunk_size):
+                    self._num_bytes_downloaded += len(chunk)
                     yield chunk
             elif self._stream is not None:
+                pending = bytearray()
                 async for chunk in self._stream:
+                    pending.extend(chunk)
+                    if chunk_size is None:
+                        chunk = bytes(pending)
+                        self._num_bytes_downloaded += len(chunk)
+                        yield chunk
+                        pending.clear()
+                    else:
+                        while len(pending) >= chunk_size:
+                            chunk = bytes(pending[:chunk_size])
+                            self._num_bytes_downloaded += len(chunk)
+                            yield chunk
+                            del pending[:chunk_size]
+                if pending:
+                    chunk = bytes(pending)
+                    self._num_bytes_downloaded += len(chunk)
                     yield chunk
             else:
                 data = self._content or b""
                 size = chunk_size or 8192
                 for i in range(0, len(data), size):
-                    yield data[i:i + size]
+                    chunk = data[i:i + size]
+                    self._num_bytes_downloaded += len(chunk)
+                    yield chunk
             self._stream_consumed = True
         finally:
+            self._stream_consumed = True
             await self.aclose()
 
     async def aiter_text(self, chunk_size: int | None = 8192) -> AsyncIterator[str]:
-        enc = self._resolve_encoding()
+        decoder = codecs.getincrementaldecoder(self._resolve_encoding())()
         async for chunk in self.aiter_bytes(chunk_size):
-            yield chunk.decode(enc)
+            text = decoder.decode(chunk, final=False)
+            if text:
+                yield text
+        tail = decoder.decode(b"", final=True)
+        if tail:
+            yield tail
 
     async def aiter_lines(self) -> AsyncIterator[str]:
         pending = ""

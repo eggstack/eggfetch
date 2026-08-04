@@ -179,4 +179,4 @@ Detailed architecture docs live in `docs/architecture/`. Use this index to find 
 
 ### HTTPX corrective closure
 
-The compatibility facade must keep timeout extensions as HTTPX-style four-phase mappings, emit cookies only from its scoped facade jar, and preserve explicit Request/Response stream state. Body-preserving redirects may not redispatch one-shot bodies. The compact `test_corrective_kernel.py` is part of Tier 1; full compat and API-oracle validation remain extended.
+The compatibility facade preserves four-phase timeout mappings through native conversion, serializes request parameters exactly once, merges scoped client and request-local cookies without a second native jar, and uses one authoritative body source for retained-body redirects. Live sync and async response iteration honors chunk sizing, incremental decoding, byte accounting, and close/consumed state. The compact `test_corrective_kernel.py` is part of Tier 1; full pinned-reference compat and API-oracle validation remain extended.

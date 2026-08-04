@@ -3,13 +3,17 @@
 ## Implementation SHA
 
 <!-- Updated on commit -->
-SHA: d419267
+SHA: 40c036f
+
+Follow-up starting SHA: 40c036f
+Follow-up audited baseline: 4d46edc0b1609430d7b053e6376121b746ba0cd1
+Follow-up plan: `plans/httpx-parity-follow-up-corrective-pass.md`
 
 ## Corrective closure baseline
 
 - Audited baseline: `7de195716ef64787535d089020a99891bae4aa8e`.
 - Corrective plan: `plans/httpx-parity-narrow-corrective-closure.md`.
-- Current result: corrective implementation complete locally; remote CI verification pending.
+- Current result: follow-up corrective pass in progress; prior corrective evidence below remains historical.
 - The earlier phase counts below are historical evidence, not closure proof.
 
 ## Phase-by-Phase Completion
@@ -73,7 +77,7 @@ All existing downstream behavioral fixtures pass:
 
 ## Remaining Blockers
 
-Local corrective closure is complete at `d419267`; GitHub Actions CI run `30688525760` passed.
+Prior corrective closure completed at `d419267`; its CI run `30688525760` is historical and does not validate this follow-up pass.
 
 ## Final Claim Decision
 

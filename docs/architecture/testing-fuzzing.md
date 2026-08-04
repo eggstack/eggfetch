@@ -62,7 +62,9 @@ The compatibility test suite lives in `crates/eggfetch-python/tests/compat/` and
 
 Run with `EGGFETCH_COMPAT_REQUIRED=1` for fail-closed behavior. The CI `compat-httpx` job enforces this.
 
-Compatibility profiles and allowed differences live in `compat/httpx/0.28.1/`.
+Compatibility profiles and allowed differences live in `compat/httpx/0.28.1/`. The corrective kernel also covers buffered/one-shot redirect replay, disabled and structured timeout conversion, request-local cookies, single query serialization, incremental response decoding, and fail-closed lint tooling.
+
+Direct differential tests against the pinned HTTPX reference remain Tier 2; Tier 1 does not install the reference package.
 
 ## Phase 5 Downstream Validation
 

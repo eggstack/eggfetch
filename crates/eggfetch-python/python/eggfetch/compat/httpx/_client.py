@@ -208,8 +208,7 @@ def _convert_timeout(timeout):
             "write": timeout.write,
             "pool": timeout.pool,
         }
-        if timeout.total is not None:
-            kwargs["total"] = timeout.total
+        kwargs["total"] = timeout.total
         return eggfetch.Timeout(**kwargs)
     if isinstance(timeout, (int, float)):
         return eggfetch.Timeout(connect=timeout, read=timeout, write=timeout, pool=timeout, total=timeout)
@@ -426,8 +425,7 @@ def _build_native_kwargs(request, follow_redirects=None, timeout=_USE_CLIENT_DEF
         kwargs["url"] = str(request.url)
         if request.headers:
             kwargs["headers"] = _convert_headers(request.headers)
-        if request.params:
-            kwargs["params"] = _convert_params(request.params)
+        # Request construction already serialized params into request.url.
         if request._stream is not None and request._content is None:
             kwargs["content"] = request._stream
         elif request._content is not None:
@@ -638,12 +636,26 @@ def _timeout_mapping(timeout):
         return Timeout(None).as_dict
     raise TypeError(f"Invalid timeout value: {type(timeout).__name__}")
 
+def _prepare_cookie_header(request):
+    """Merge request-local, explicit, and scoped jar cookies once."""
+    explicit = request.headers.get("cookie")
+    request.headers.pop("cookie", None)
+    request._cookies.set_cookie_header(request)
+    generated = request.headers.get("cookie")
+    if explicit and generated:
+        names = {part.split("=", 1)[0].strip() for part in explicit.split(";")}
+        additions = [part.strip() for part in generated.split(";") if part.split("=", 1)[0].strip() not in names]
+        request.headers["cookie"] = "; ".join([explicit, *additions]) if additions else explicit
+    elif explicit:
+        request.headers["cookie"] = explicit
+
+
 def _request_timeout(request, fallback):
     value = request.extensions.get("timeout")
     if isinstance(value, dict):
         if isinstance(fallback, Timeout) and value == fallback.as_dict:
             return fallback
-        return Timeout(connect=value.get("connect"), read=value.get("read"), write=value.get("write"), pool=value.get("pool"))
+        return Timeout(timeout=None, connect=value.get("connect"), read=value.get("read"), write=value.get("write"), pool=value.get("pool"))
     return fallback
 
 def _ensure_timeout_extension(request: Request, timeout) -> None:
@@ -771,9 +783,6 @@ def _redirect_headers(request: Request, url: URL, method: str) -> Headers:
         headers.pop("Content-Length", None)
         headers.pop("Transfer-Encoding", None)
 
-    # Cookie header is regenerated from the client jar, not carried over
-    headers.pop("Cookie", None)
-
     return headers
 
 
@@ -781,13 +790,12 @@ def _redirect_stream(request: Request, method: str):
     if method != request.method and method == "GET":
         return None
     if request._content is not None:
-        return ByteStream(request._content)
+        return None
     if isinstance(request._stream, ByteStream):
         return ByteStream(request._stream._content)
     if request._stream is not None:
         raise StreamConsumed("Cannot replay a consumed request body on a redirect")
     return None
-    return request._stream
 
 
 def _build_redirect_request(
@@ -802,15 +810,20 @@ def _build_redirect_request(
     stream = _redirect_stream(request, method)
 
     cookies = Cookies(client_cookies)
+    cookies.update(request._cookies)
+    extensions = dict(request.extensions)
+    extensions.pop("_eggfetch_started_at", None)
+    body_kwargs = {"content": request._content} if method == request.method and request._content is not None else {}
+    if stream is not None:
+        body_kwargs = {"stream": stream}
 
     return Request(
         method=method,
         url=url,
         headers=headers,
         cookies=cookies,
-        content=request._content if method == request.method else None,
-        stream=stream,
-        extensions=request.extensions,
+        extensions=extensions,
+        **body_kwargs,
     )
 
 
@@ -1108,10 +1121,7 @@ class Client:
         request.extensions.setdefault("_eggfetch_started_at", time.monotonic())
         _ensure_timeout_extension(request, self._timeout)
 
-        # Set Cookie header from client jar for this request URL
-        request.headers.pop("Cookie", None)
-        request.headers.pop("cookie", None)
-        self._cookies.set_cookie_header(request)
+        _prepare_cookie_header(request)
 
         transport = _match_mount(request.url, self._mounts)
 
@@ -1775,10 +1785,7 @@ class AsyncClient:
         request.extensions.setdefault("_eggfetch_started_at", time.monotonic())
         _ensure_timeout_extension(request, self._timeout)
 
-        # Set Cookie header from client jar for this request URL
-        request.headers.pop("Cookie", None)
-        request.headers.pop("cookie", None)
-        self._cookies.set_cookie_header(request)
+        _prepare_cookie_header(request)
 
         transport = _match_mount(request.url, self._mounts)
 
@@ -1858,6 +1865,9 @@ class AsyncClient:
 
         if not isinstance(request, Request):
             raise TypeError(f"send() requires a Request object, got {type(request).__name__}")
+
+        effective_timeout = self._timeout if timeout is _USE_CLIENT_DEFAULT else timeout
+        _ensure_timeout_extension(request, effective_timeout)
 
         # 1. Resolve effective follow_redirects
         effective_follow = (

@@ -168,9 +168,7 @@ class HTTPTransport(BaseTransport):
             kwargs["headers"] = _convert_headers(request.headers)
         if isinstance(request.extensions.get("timeout"), dict):
             t = request.extensions["timeout"]
-            kwargs["timeout"] = Timeout(connect=t.get("connect"), read=t.get("read"), write=t.get("write"), pool=t.get("pool"))
-        if request.params:
-            kwargs["params"] = _convert_params(request.params)
+            kwargs["timeout"] = _convert_timeout(Timeout(timeout=None, connect=t.get("connect"), read=t.get("read"), write=t.get("write"), pool=t.get("pool")))
         if request._stream is not None and request._content is None:
             kwargs["content"] = request._stream
         elif request._content is not None:
@@ -283,9 +281,7 @@ class AsyncHTTPTransport(AsyncBaseTransport):
             kwargs["headers"] = _convert_headers(request.headers)
         if isinstance(request.extensions.get("timeout"), dict):
             t = request.extensions["timeout"]
-            kwargs["timeout"] = Timeout(connect=t.get("connect"), read=t.get("read"), write=t.get("write"), pool=t.get("pool"))
-        if request.params:
-            kwargs["params"] = _convert_params(request.params)
+            kwargs["timeout"] = _convert_timeout(Timeout(timeout=None, connect=t.get("connect"), read=t.get("read"), write=t.get("write"), pool=t.get("pool")))
         if request._stream is not None and request._content is None:
             kwargs["content"] = request._stream
         elif request._content is not None:
