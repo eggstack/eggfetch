@@ -1,6 +1,6 @@
 # HTTPX 0.28.1 Parity — Follow-up Corrective Pass
 
-Status: implementation in progress
+Status: implementation complete locally; remote CI verification pending
 
 Date: 2026-08-03
 

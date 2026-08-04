@@ -3,7 +3,7 @@
 ## Implementation SHA
 
 <!-- Updated on commit -->
-SHA: 40c036f
+SHA: 429ebe4
 
 Follow-up starting SHA: 40c036f
 Follow-up audited baseline: 4d46edc0b1609430d7b053e6376121b746ba0cd1
@@ -13,7 +13,7 @@ Follow-up plan: `plans/httpx-parity-follow-up-corrective-pass.md`
 
 - Audited baseline: `7de195716ef64787535d089020a99891bae4aa8e`.
 - Corrective plan: `plans/httpx-parity-narrow-corrective-closure.md`.
-- Current result: follow-up corrective pass in progress; prior corrective evidence below remains historical.
+- Current result: follow-up corrective implementation complete locally; remote CI verification pending. Prior corrective evidence below remains historical.
 - The earlier phase counts below are historical evidence, not closure proof.
 
 ## Phase-by-Phase Completion
