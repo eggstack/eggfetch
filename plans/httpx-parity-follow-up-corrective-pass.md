@@ -1,6 +1,6 @@
 # HTTPX 0.28.1 Parity — Follow-up Corrective Pass
 
-Status: implementation complete locally; remote CI verification pending
+Status: implementation complete; CI run `30923645200` passed for final pushed tree `a83c315`
 
 Date: 2026-08-03
 

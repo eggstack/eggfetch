@@ -13,7 +13,7 @@ Follow-up plan: `plans/httpx-parity-follow-up-corrective-pass.md`
 
 - Audited baseline: `7de195716ef64787535d089020a99891bae4aa8e`.
 - Corrective plan: `plans/httpx-parity-narrow-corrective-closure.md`.
-- Current result: follow-up corrective implementation complete locally; remote CI verification pending. Prior corrective evidence below remains historical.
+- Current result: follow-up corrective implementation complete; CI verification passed for final pushed tree. Prior corrective evidence below remains historical.
 - The earlier phase counts below are historical evidence, not closure proof.
 
 ## Phase-by-Phase Completion
@@ -77,7 +77,7 @@ All existing downstream behavioral fixtures pass:
 
 ## Remaining Blockers
 
-Prior corrective closure completed at `d419267`; its CI run `30688525760` is historical and does not validate this follow-up pass.
+Follow-up implementation SHA `429ebe4`; final pushed tree `a83c315`; CI run `30923645200` passed. The implementation SHA is the code commit; the final pushed tree adds only the portable lint-tool correction and status-boundary commits.
 
 ## Final Claim Decision
 
