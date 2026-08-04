@@ -33,39 +33,48 @@ EXIT_CODE=0
 
 echo "Checking for forbidden broad lint suppressions..."
 
-if ! command -v rg &>/dev/null; then
-    echo "ERROR: ripgrep (rg) is required for lint-suppression checks." >&2
+if ! command -v rg &>/dev/null && ! command -v grep &>/dev/null; then
+    echo "ERROR: either ripgrep (rg) or grep is required for lint-suppression checks." >&2
     exit 2
 fi
 
+search_suppressions() {
+    local pattern="$1"
+    if command -v rg &>/dev/null; then
+        rg -n "$pattern" "$REPO_ROOT/crates/" -g "*.rs"
+    else
+        grep -RInE --include="*.rs" "$pattern" "$REPO_ROOT/crates/"
+    fi
+}
+
 # Check for allow(warnings) — forbidden everywhere
-if rg -n '#!\[allow\(warnings\)\]|#\[allow\(warnings\)\]' "$REPO_ROOT/crates/" -g '*.rs'; then
+if search_suppressions '#!\[allow\(warnings\)\]|#\[allow\(warnings\)\]'; then
     echo "ERROR: Found 'allow(warnings)' — forbidden in all Rust files."
     EXIT_CODE=1
 fi
 
 # Check for allow(clippy::all) — forbidden everywhere
-if rg -n '#!\[allow\(clippy::all\)\]|#\[allow\(clippy::all\)\]' "$REPO_ROOT/crates/" -g '*.rs'; then
+if search_suppressions '#!\[allow\(clippy::all\)\]|#\[allow\(clippy::all\)\]'; then
     echo "ERROR: Found 'allow(clippy::all)' — use specific lint names instead."
     EXIT_CODE=1
 fi
 
 # Check for allow(clippy::pedantic) — forbidden (use specific lints)
 # Exception: crates/eggfetch-ffi and crates/eggfetch-node may use it
-if rg -n '#!\[allow\(clippy::pedantic\)\]|#\[allow\(clippy::pedantic\)\]' "$REPO_ROOT/crates/" -g '*.rs' \
+if search_suppressions '#!\[allow\(clippy::pedantic\)\]|#\[allow\(clippy::pedantic\)\]' \
     | grep -v 'crates/eggfetch-ffi/' | grep -v 'crates/eggfetch-node/'; then
     echo "ERROR: Found 'allow(clippy::pedantic)' outside FFI/Node crates — use specific lint names."
     EXIT_CODE=1
 fi
 
 # Check for allow(clippy::nursery) — forbidden (unstable lints)
-if rg -n '#!\[allow\(clippy::nursery\)\]|#\[allow\(clippy::nursery\)\]' "$REPO_ROOT/crates/" -g '*.rs'; then
+if search_suppressions '#!\[allow\(clippy::nursery\)\]|#\[allow\(clippy::nursery\)\]'; then
     echo "ERROR: Found 'allow(clippy::nursery)' — nursery lints are unstable."
     EXIT_CODE=1
 fi
 
 # Check for allow(clippy::restriction) — forbidden (restrictive lints)
-if rg -n '#!\[allow\(clippy::restriction\)\]|#\[allow\(clippy::restriction\)\]' "$REPO_ROOT/crates/" -g '*.rs'; then
+if search_suppressions '#!\[allow\(clippy::restriction\)\]|#\[allow\(clippy::restriction\)\]'; then
     echo "ERROR: Found 'allow(clippy::restriction)' — restriction lints conflict with pedantic."
     EXIT_CODE=1
 fi
