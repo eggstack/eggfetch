@@ -1,7 +1,7 @@
 # HTTPX 0.28.1 Native Compressed-Raw Adapter — Closure Record
 
-Status: adapter implementation complete; final corrective closure remains
-open in `plans/httpx-parity-correction-status.md`.
+Status: adapter implementation and final corrective closure complete for the
+documented HTTPX 0.28.1 asyncio-supported surface.
 
 The complete detailed planning record from PR #20 is preserved at
 [`plans/httpx-native-compressed-raw-adapter-implementation-plan.md`](httpx-native-compressed-raw-adapter-implementation-plan.md).
@@ -30,10 +30,14 @@ selection, immediate source failure, cancellation, close, and normal versus
 partial finalization. The buffered raw behavior is explicitly aligned with
 HTTPX 0.28.1: buffered responses reject raw iteration as already consumed.
 
-The existing core policy of removing `Content-Encoding` and
-`Content-Length` after automatic decoded-response processing remains
-unchanged and is documented as a bounded core policy; this closure is about
-body-byte selection only.
+The core decoded-header policy of removing `Content-Encoding` and
+`Content-Length` after automatic decoded-response processing remains unchanged.
+Core retains a narrow read-only snapshot of the original wire values for those
+two headers. The HTTPX compatibility facade restores only those two original
+wire values without deriving wire length from decoded bytes or changing decoder
+selection. Raw and decoded body selection remains one-shot and unchanged. No
+Python decompression stack, generalized metadata framework, or transport
+redesign was added.
 
 Out of scope remains a second independently consumable body, a Python
 decompression stack, transport/pool redesign, HTTPX version rebasing, new CI

@@ -30,6 +30,10 @@ Closure record: `plans/httpx-native-compressed-raw-adapter-closure.md`.
 PR #20 is closed with preservation comment `5195664156`; its conflicting file
 was not merged.
 
+Prior documentation-only evidence-binding SHA:
+`0ad2275c0fae50140d87c5b2f9b6da07d08dde3c`. This commit is a documentation-only
+descendant of the final executable SHA and contains only status/metadata changes.
+
 The core response retains only the original wire `Content-Encoding` and
 `Content-Length` values in read-only metadata. Automatic decompression still
 removes those headers from visible core response headers; the compatibility
@@ -56,7 +60,8 @@ Routine command: `./scripts/check.sh`.
 
 Result: passed on the executable SHA. Rust formatting, lint suppression
 policy, clippy, 471 core tests, workspace tests/doctests, extension build,
-532 Python behavior tests, and 117 compatibility smoke tests passed.
+532 collected Python behavior tests (492 passed, 40 skipped), and 117
+compatibility smoke tests passed.
 
 Full pinned command:
 
@@ -93,6 +98,10 @@ routine path.
 - Job completed: `2026-08-05T18:28:29Z`
 - Conclusion: passed
 - Attempt: 1 (no retry)
+
+## Current designation
+
+**Stage C candidate — deterministic compressed raw-stream body and metadata closure complete for the documented HTTPX 0.28.1 asyncio-supported surface.**
 
 ## Historical superseded final closure evidence
 
