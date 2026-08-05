@@ -75,7 +75,7 @@ Phase 5 validates eggfetch against real-world downstream consumers to ensure com
 The `compat/downstream/` directory contains a 12-package consumer portfolio — real Python packages that depend on HTTPX or requests — tested against eggfetch to detect regressions:
 
 ```sh
-python scripts/validate_downstream_compat.py
+python scripts/run_downstream_compat.py
 ```
 
 ### Expanded Behavior Corpus

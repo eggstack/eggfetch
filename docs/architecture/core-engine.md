@@ -13,7 +13,7 @@ See also: [overview.md](overview.md) for the high-level map.
 | `response` | Yes | `Response`, `HistoryEntry` — response + redirect history |
 | `body` | Yes | `RequestBody`, `ResponseBody`, `BoxBytesStream` |
 | `headers` | Yes | `Headers` — case-insensitive header map wrapper |
-| `error` | Yes | `Error` enum (30+ variants), `Result<T>` alias |
+| `error` | Yes | `Error` enum (46 variants), `Result<T>` alias |
 | `pipeline` | Crate-internal | Full request lifecycle orchestration |
 | `transport` | Crate-internal | Direct, proxy, HTTP/3 transport dispatch |
 | `stream` | Crate-internal | Per-chunk read/write timeout wrappers |
@@ -62,7 +62,7 @@ Body sources are mutually exclusive: `body()`, `bytes()`, `stream()`, `json()`, 
 Key methods:
 - `status()` → `StatusCode`
 - `version()` → `http::Version`
-- `headers()` → `&Headers`
+- `headers()` → `&HeaderMap`
 - `url()` → `&Url`
 - `bytes()` → buffered body as `Bytes`
 - `text()` → buffered body as `String`
@@ -100,7 +100,7 @@ send_with_retry()           ← retry loop
 
 ## Error Taxonomy
 
-`Error` is a single `thiserror`-derived enum with 30+ variants. Each variant has a `kind()` method returning a static string for programmatic matching.
+`Error` is a single `thiserror`-derived enum with 46 variants. Each variant has a `kind()` method returning a static string for programmatic matching.
 
 | Category | Variants |
 |----------|----------|
@@ -108,12 +108,12 @@ send_with_retry()           ← retry loop
 | **Connection** | `Connect`, `Tls`, `Protocol`, `Hyper`, `HyperClient`, `Io` |
 | **Timeout** | `Timeout { phase, elapsed }` — phase is `Pool`, `Connect`, `ProxyConnect`, `ProxyTls`, `Write`, `Read`, or `Total` |
 | **Pool** | `Pool` |
-| **Redirect** | `InvalidRedirectLocation`, `TooManyRedirects`, `BodyNotReplayableForRedirect` |
+| **Redirect** | `InvalidRedirectLocation`, `TooManyRedirects { followed, max }`, `BodyNotReplayableForRedirect` |
 | **Auth** | `InvalidAuthHeader`, `ConflictingAuth` |
-| **Body** | `Body`, `Decompression`, `UnsupportedContentEncoding`, `DecodedBodyTooLarge`, `DecompressionRatioExceeded` |
+| **Body** | `Body`, `Decompression`, `UnsupportedContentEncoding`, `DecodedBodyTooLarge`, `DecompressionRatioExceeded`, `Unsupported` |
 | **Proxy** | `InvalidProxyUrl`, `ProxyConnect`, `ProxyAuthRequired`, `ProxyConnectRejected`, `MalformedProxyResponse` |
 | **TLS** | `TlsConfig`, `CaBundle`, `ClientCert`, `PrivateKey`, `CertificateVerification`, `HostnameVerification` |
-| **Retry** | `BodyNotReplayableForRetry`, `RetryBudgetExhausted`, `RetryNotConfigured` |
+| **Retry** | `BodyNotReplayableForRetry`, `RetryBudgetExhausted { attempts }`, `RetryNotConfigured` |
 | **HTTP/2** | `Http2GoAway`, `Http2StreamReset`, `Http2FlowControl`, `Http2Protocol` |
 | **HTTP/3** | `H3Connect`, `H3ConnectionClosed`, `H3Stream`, `H3Protocol` |
 

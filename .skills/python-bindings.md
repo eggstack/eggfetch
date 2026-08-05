@@ -44,7 +44,9 @@ EggfetchError
 │   │   ├── Http2GoAway
 │   │   ├── Http2StreamReset
 │   │   └── Http2FlowControlError
-│   └── Http3Error
+│   └── H3Error
+│       ├── H3ConnectError
+│       └── H3ProtocolError
 ├── BodyError
 └── HTTPStatusError
 ```

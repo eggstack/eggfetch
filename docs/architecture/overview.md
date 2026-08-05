@@ -72,7 +72,7 @@ This `overview.md` is the entry point. For a focused review of any component, fo
 
 ### eggfetch-core (the engine)
 
-All HTTP behavior lives here. 24 source modules (including `stream` and `transport` submodules):
+All HTTP behavior lives here. 23 source modules (including `stream` and `transport` submodules):
 
 | Module | Public? | Purpose |
 |--------|---------|---------|
@@ -81,25 +81,24 @@ All HTTP behavior lives here. 24 source modules (including `stream` and `transpo
 | `response` | Yes | `Response`, `HistoryEntry` — response + redirect history |
 | `body` | Yes | `RequestBody`, `ResponseBody`, `BoxBytesStream` |
 | `headers` | Yes | `Headers` — case-insensitive header map wrapper |
-| `error` | Yes | `Error` enum (30+ variants), `Result<T>` alias |
+| `error` | Yes | `Error` enum (46 variants), `Result<T>` alias |
+| `auth` | Yes | Basic/Bearer auth, secret redaction, precedence resolution |
+| `compression` | Yes | Streaming decompression (gzip, brotli, zstd, deflate) |
+| `cookie` | Yes | RFC 6265 cookie jar, domain/path matching (cfg `cookies`) |
+| `http_version` | Yes | HTTP/1.1, HTTP/2, HTTP/3 version negotiation |
+| `limits` | Yes | Pool concurrency limits (HTTPX-compatible) |
+| `multipart` | Yes | Streaming multipart/form-data encoder (cfg `multipart`) |
+| `pool` | Yes | Semaphore-based concurrency pool, origin keying |
+| `proxy` | Yes | HTTP proxy, CONNECT tunneling, NO_PROXY (cfg `proxy`) |
+| `redact` | Yes | Credential redaction for Debug/Display output |
+| `redirect` | Yes | Redirect policy, method rewriting, header stripping |
+| `retry` | Yes | Retry policy, exponential backoff, body replay check |
+| `timeout` | Yes | Phase-aware timeout configuration and enforcement |
+| `tls` | Yes | TLS configuration, trust store, mTLS, verification toggle |
 | `pipeline` | No | Full request lifecycle orchestration (retry → redirect → send) |
 | `transport` | No | Direct, proxy, HTTP/3 transport dispatch |
 | `stream` | No | Per-chunk read/write timeout wrappers |
-| `pool` | No | Semaphore-based concurrency pool, origin keying |
-| `timeouts` | No | Phase-aware timeout configuration and enforcement |
-| `auth` | No | Basic/Bearer auth, secret redaction, precedence resolution |
-| `redirect` | No | Redirect policy, method rewriting, header stripping |
-| `retry` | No | Retry policy, exponential backoff, body replay check |
-| `cookies` | No | RFC 6265 cookie jar, domain/path matching |
-| `multipart` | No | Streaming multipart/form-data encoder |
-| `compression` | No | Streaming decompression (gzip, brotli, zstd, deflate) |
-| `proxy` | No | HTTP proxy, CONNECT tunneling, NO_PROXY |
-| `tls` | No | TLS configuration, trust store, mTLS, verification toggle |
-| `redact` | No | Credential redaction for Debug/Display output |
-| `config` | No | Shared configuration types |
-| `limits` | No | Pool concurrency limits (HTTPX-compatible) |
 | `h2_headers` | No | HTTP/2 forbidden header stripping |
-| `http_version` | No | HTTP/1.1, HTTP/2, HTTP/3 version negotiation |
 | `response_decode` | No | Content-Encoding parsing and decompression dispatch |
 
 **Deep dive:** [core-engine.md](core-engine.md) · [core-body-streaming.md](core-body-streaming.md) · [core-timeout-pool.md](core-timeout-pool.md) · [core-auth-redirect-retry.md](core-auth-redirect-retry.md) · [core-tls-proxy-protocols.md](core-tls-proxy-protocols.md) · [core-cookies-multipart-compression.md](core-cookies-multipart-compression.md)
@@ -135,7 +134,8 @@ Single source file (`main.rs`). Thin binary over `eggfetch-core`:
 | `multipart.rs` | `File` wrapper for multipart uploads |
 | `streaming.rs` | `StreamingResponse` — sync/async iterators |
 | `conversion.rs` | Python↔Rust type conversion (shared by sync/async) |
-| `errors.py` | Exception hierarchy |
+| `errors.rs` | Exception hierarchy |
+| `limits.rs` | `PyLimits` — pool concurrency limits |
 
 Plus the HTTPX compatibility facade in `eggfetch/compat/httpx/`.
 

@@ -13,7 +13,7 @@ See also: [overview.md](overview.md).
 | `async_client.rs` | `AsyncClient` — async adapter targeting asyncio |
 | `response.rs` | `PyResponse` — buffered response surface |
 | `headers.rs` | `PyHeaders` — header wrapper |
-| `errors.py` | Exception hierarchy |
+| `errors.rs` | Exception hierarchy |
 | `auth.rs` | `BasicAuth`, `BearerAuth` |
 | `cookies.rs` | Cookie handling |
 | `proxy.rs` | Proxy configuration |
@@ -23,6 +23,7 @@ See also: [overview.md](overview.md).
 | `multipart.rs` | `File` wrapper for multipart uploads |
 | `streaming.rs` | `StreamingResponse` — sync/async iterators |
 | `conversion.rs` | Python↔Rust type conversion (shared by sync/async) |
+| `limits.rs` | `PyLimits` — pool concurrency limits |
 
 ## Sync Adapter
 
@@ -101,8 +102,23 @@ EggfetchError
 │   │   ├── Http2GoAway
 │   │   ├── Http2StreamReset
 │   │   └── Http2FlowControlError
-│   └── Http3Error
+│   └── H3Error
+│       ├── H3ConnectError
+│       └── H3ProtocolError
+├── ProxyError
+│   ├── ProxyConnectError
+│   └── ProxyAuthError
+├── TooManyRedirects
 ├── BodyError
+├── DecompressionError
+├── UnsupportedContentEncoding
+├── StreamConsumed
+├── StreamClosed
+├── ResponseNotRead
+├── BodyNotReplayableForRetry
+├── RetryBudgetExhausted
+├── RetryNotConfigured
+├── UnsupportedKwarg
 └── HTTPStatusError
 ```
 

@@ -54,7 +54,7 @@ Enables HTTP/2 support. When enabled, the client can negotiate HTTP/2 via ALPN f
 ### http3
 
 **Status:** implemented (experimental).
-Enables HTTP/3 support over QUIC. When enabled, the client can negotiate HTTP/3 using the `quinn` crate for QUIC transport and the `h3` crate for the HTTP/3 protocol layer. The `HttpVersionPolicy` enum gains an `Http3Only` variant. `Auto` does not automatically negotiate HTTP/3; callers must explicitly select `Http3Only` or use `Client(http3=True)` in Python. QUIC mandates TLS 1.3, so this feature requires `tls-rustls`. 0-RTT (early data) is disabled in the initial implementation. The Python crate exposes `Client(http3=True)` and `AsyncClient(http3=True)`, plus `Http3Error` and `Http3ConnectionError` exception types. This feature is experimental; API surfaces may change as the QUIC/h3 ecosystem matures.
+Enables HTTP/3 support over QUIC. When enabled, the client can negotiate HTTP/3 using the `quinn` crate for QUIC transport and the `h3` crate for the HTTP/3 protocol layer. The `HttpVersionPolicy` enum gains an `Http3Only` variant. `Auto` does not automatically negotiate HTTP/3; callers must explicitly select `Http3Only` or use `Client(http3=True)` in Python. QUIC mandates TLS 1.3, so this feature requires `tls-rustls`. 0-RTT (early data) is disabled in the initial implementation. The Python crate exposes `Client(http3=True)` and `AsyncClient(http3=True)`, plus `H3Error`, `H3ConnectError`, and `H3ProtocolError` exception types. This feature is experimental; API surfaces may change as the QUIC/h3 ecosystem matures.
 
 ### tls-rustls
 
