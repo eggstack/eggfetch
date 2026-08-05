@@ -14,7 +14,7 @@ Raw-stream implementation SHA: `11eb77a` (`fix: raw stream lifecycle parity (fin
 
 Final implementation SHA: `11eb77a7e121d4b83e75a1bd87ebf7ac240e9046`
 
-Final pushed tree SHA (CI-tested): `d4967f110247db659e5c48bbfca0acb3fb1e84bc`
+Final pushed tree SHA (CI-tested): `fd2c0bd141eb284e14b52af929eb949d62483dfb`
 
 Final-closure plan: `plans/httpx-parity-final-closure-03-verification-status-hygiene.md`
 
@@ -98,18 +98,17 @@ The existing CI workflow runs only routine Tier 1 validation through
 `./scripts/check.sh`. It does not prove the complete pinned compatibility
 matrix or API oracle; those are the manual/local results above.
 
-CI run ID: `30969434477`
+CI run ID: `30969985491`
 
-CI checked-out SHA: `d4967f110247db659e5c48bbfca0acb3fb1e84bc`
+CI checked-out SHA: `fd2c0bd141eb284e14b52af929eb949d62483dfb`
 
-CI conclusion: passed on retry. Workflow `CI`, retry job `ci`
-(`92191448150`), duration 3m34s. The initial attempt in the same run failed
-only in the existing RSS-based `test_repeated_client_creation_stabilizes`
-resource test; the retry passed without code changes.
+CI conclusion: passed. Workflow `CI`, job `ci` (`92192018602`), duration
+3m35s. The immediately preceding documentation-only tree had one flaky RSS
+resource-test attempt and a successful retry (`30969660204`, job
+`92191448150`); no code changes were made.
 
-The successful retry executed the existing `./scripts/check.sh` routine path.
-GitHub reported only the platform-level Node.js 20 action deprecation
-annotation.
+The final run executed the existing `./scripts/check.sh` routine path. GitHub
+reported only the platform-level Node.js 20 action deprecation annotation.
 
 PR #16: closed with a supersession comment; obsolete planning branch not merged.
 
