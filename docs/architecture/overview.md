@@ -2,6 +2,25 @@
 
 eggfetch is a Rust-native async HTTP client engine with Python bindings and a CLI tool. The core crate owns all HTTP behavior; every other crate is a thin adapter.
 
+## Table of Contents
+
+- [Design Principles](#design-principles)
+- [Workspace Layout](#workspace-layout)
+- [Crate Dependency Graph](#crate-dependency-graph)
+- [How to Use This Documentation](#how-to-use-this-documentation)
+- [Module Map](#module-map)
+  - [eggfetch-core (the engine)](#eggfetch-core-the-engine)
+  - [eggfetch-cli (the CLI)](#eggfetch-cli-the-cli)
+  - [eggfetch-python (the Python bindings)](#eggfetch-python-the-python-bindings)
+  - [eggfetch-ffi (the C ABI)](#eggfetch-ffi-the-c-abi)
+  - [eggfetch-node (the Node.js prototype)](#eggfetch-node-the-nodejs-prototype)
+  - [eggfetch-bench (benchmarks)](#eggfetch-bench-benchmarks)
+- [Deep-Dive Index](#deep-dive-index)
+- [Cross-Cutting Concerns](#cross-cutting-concerns)
+- [Request Lifecycle (Summary)](#request-lifecycle-summary)
+- [Key External Dependencies](#key-external-dependencies)
+- [Current Status](#current-status)
+
 ## Design Principles
 
 1. **Single networking implementation** — all HTTP logic lives in `eggfetch-core`. CLI, Python, FFI, and Node never touch the network directly.
@@ -37,6 +56,18 @@ eggfetch-core  ←  eggfetch-cli
 
 **Hard rule**: no parallel synchronous networking path. Python sync blocks on async Rust engine.
 
+## How to Use This Documentation
+
+This `overview.md` is the entry point. For a focused review of any component, follow the links in the [Deep-Dive Index](#deep-dive-index). Each deep-dive document is self-contained and links back here.
+
+**Review workflow:**
+
+1. Start here for the bird's eye view of all modules and their responsibilities.
+2. Pick a component from the Deep-Dive Index to understand implementation details.
+3. For cross-cutting concerns (security, features, dependencies), see [Cross-Cutting Concerns](#cross-cutting-concerns).
+
+**Navigation between docs:** Every deep-dive document links back to this overview. Cross-references between related deep-dives are included where relevant (e.g., `core-engine.md` links to `core-body-streaming.md` for body details).
+
 ## Module Map
 
 ### eggfetch-core (the engine)
@@ -64,13 +95,14 @@ All HTTP behavior lives here. 24 source modules (including `stream` and `transpo
 | `compression` | No | Streaming decompression (gzip, brotli, zstd, deflate) |
 | `proxy` | No | HTTP proxy, CONNECT tunneling, NO_PROXY |
 | `tls` | No | TLS configuration, trust store, mTLS, verification toggle |
-| `transport` | No | Direct, proxy, HTTP/3 transport dispatch |
 | `redact` | No | Credential redaction for Debug/Display output |
 | `config` | No | Shared configuration types |
 | `limits` | No | Pool concurrency limits (HTTPX-compatible) |
 | `h2_headers` | No | HTTP/2 forbidden header stripping |
 | `http_version` | No | HTTP/1.1, HTTP/2, HTTP/3 version negotiation |
 | `response_decode` | No | Content-Encoding parsing and decompression dispatch |
+
+**Deep dive:** [core-engine.md](core-engine.md) · [core-body-streaming.md](core-body-streaming.md) · [core-timeout-pool.md](core-timeout-pool.md) · [core-auth-redirect-retry.md](core-auth-redirect-retry.md) · [core-tls-proxy-protocols.md](core-tls-proxy-protocols.md) · [core-cookies-multipart-compression.md](core-cookies-multipart-compression.md)
 
 ### eggfetch-cli (the CLI)
 
@@ -80,6 +112,8 @@ Single source file (`main.rs`). Thin binary over `eggfetch-core`:
 - **Output formatting**: human, headers-only, JSON, NDJSON modes
 - **Exit codes**: 7 distinct codes for success, usage, connect, timeout, protocol, status, I/O
 - **Streaming**: body streams to stdout incrementally via `bytes_stream()`
+
+**Deep dive:** [cli.md](cli.md)
 
 ### eggfetch-python (the Python bindings)
 
@@ -105,6 +139,8 @@ Single source file (`main.rs`). Thin binary over `eggfetch-core`:
 
 Plus the HTTPX compatibility facade in `eggfetch/compat/httpx/`.
 
+**Deep dive:** [python-bindings.md](python-bindings.md)
+
 ### eggfetch-ffi (the C ABI)
 
 10 source modules. Sole `unsafe_code = "allow"` crate:
@@ -122,6 +158,8 @@ Plus the HTTPX compatibility facade in `eggfetch/compat/httpx/`.
 | `streaming` | Streaming body support |
 | `lib` | C API entry points, string/memory management |
 
+**Deep dive:** [ffi-and-node.md](ffi-and-node.md)
+
 ### eggfetch-node (the Node.js prototype)
 
 3 source modules. Prototype stage:
@@ -131,6 +169,8 @@ Plus the HTTPX compatibility facade in `eggfetch/compat/httpx/`.
 | `client` | `EggfetchClient` — wraps FFI client |
 | `response` | Response wrapper |
 | `lib` | N-API module registration |
+
+**Deep dive:** [ffi-and-node.md](ffi-and-node.md)
 
 ### eggfetch-bench (benchmarks)
 
