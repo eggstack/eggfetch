@@ -6,56 +6,47 @@ and referenced plans; counts below are only from the runs named here.
 
 ## Current corrective pass
 
-The prior raw-stream completion statement below is superseded by the corrective
-closure in `plans/httpx-parity-raw-stream-final-corrective-closure.md`. The
-redirect closure remains accepted. This record is reopened while the raw-stream
-state, accounting, modality, and finalization behavior are corrected and
-re-verified.
+The native compressed-raw adapter closure described in
+`plans/httpx-native-compressed-raw-adapter-closure.md` is implemented and
+verified. The prior blocker is closed by a deferred core-owned one-shot body
+selector: compressed streaming responses retain the encoded source until the
+first consumer selects raw or decoded mode. The Python binding selects the
+matching core mode without buffering, teeing, or adding a decompressor.
 
-Corrective baseline SHA: `eb397395f8a2a0bf0621fbcd9deece98647a85cb`
+Audited baseline SHA: `63d839a0405ca4b89f6f1f43a1c57e537db3f0be`
 
-Status: raw-stream corrective closure in progress; the pure-Python raw-stream
-semantics are corrected, but final native compressed-raw parity is blocked by a
-missing core raw-body boundary.
+Executable implementation SHA:
+`1aa5cb986bbdb03b92588eb1c7b7ad7070d9ffe7`
 
-Plan: `plans/httpx-parity-raw-stream-final-corrective-closure.md`
+Status: native compressed raw-stream corrective closure complete for the
+documented HTTPX 0.28.1 asyncio-supported surface. The existing decoded
+header policy remains deliberately bounded: automatic core decompression
+removes `Content-Encoding` and `Content-Length` as before.
 
-Executable corrective implementation SHA:
-`20a6a2c66ba8d10449d36d1fcc9f575cd6660554`
+Validation bound to the implementation SHA:
 
-Validation bound to that implementation:
-
-- Focused raw-stream differential, lifecycle, metadata, and response tests:
-  `86 passed`.
-- Tier 1 compatibility smoke kernel: `117 passed`.
+- Canonical `./scripts/check.sh`: passed. Rust formatting, lint policy,
+  clippy, workspace tests/doctests, extension build, 532 Python behavior
+  tests, and the 117-test compatibility smoke kernel all passed.
+- Full pinned compatibility suite: `1379 passed, 0 failed, 0 skipped,
+  0 xfailed` with `httpx==0.28.1`.
+- Native raw differential module and lifecycle/response focused tests passed,
+  including sync/async gzip parity, one-shot selection, source accounting,
+  immediate source failure, cancellation, and close behavior.
 - API oracle: `0 unexplained`, `0 stale`, and `0 unresolved` differences;
   all 121 reported differences match the active documented allowlist.
-- Rust formatting, lint-suppression policy, clippy, Rust workspace tests and
-  doctests, and the Python extension rebuild passed through the canonical
-  `./scripts/check.sh` run. The aggregate 532-test non-compat Python phase
-  stalled in this environment during local-server tests and was interrupted;
-  isolated reruns of the affected auth file passed (`31 passed`).
-- The full pinned compatibility suite was attempted but not completed after
-  the same environment-level stall; it is not claimed as passing evidence.
+- Feature-gated core suites passed: gzip, brotli, zstd, deflate, and proxy.
+  The timeout test server was made deterministic for feature configurations
+  that do not enable `test-util`.
+- Extended supporting checks passed: documentation examples/links, FFI (30
+  tests), resource monitor, lifecycle (44), soak (11), merge-lossless (12),
+  and benchmarks. Rust 1.80 MSRV was skipped because that toolchain is not
+  installed locally.
 
-### Stop-condition blocker
-
-The native Python response is created from
-`eggfetch_core::Response::bytes_stream()` after the core pipeline has applied
-content decompression. That is the only current native stream owner exposed to
-`PyStreamingResponse`; consequently native `iter_raw()` and `aiter_raw()` can
-only observe decoded chunks for a compressed response. The Python facade cannot
-recover the encoded bytes without adding a second decompressor, and sending a
-request with decompression disabled would break the decoded iterator on the
-same response.
-
-The smallest separately reviewable adapter surface is a core-owned response
-boundary that preserves the pre-decompression raw stream (or an authoritative
-raw stream/counter) alongside the existing decoded stream, with the Python
-binding selecting the raw stream for `iter_raw()` and `aiter_raw()`. A broad
-transport redesign is not justified by this pass. The focused differential
-suite proves the mismatch against a gzip loopback response before any such
-adapter is claimed complete.
+The downstream portfolio requires its separate isolated shim-installation
+runner; invoking its fixture directory directly against the ordinary
+`httpx==0.28.1` environment is not valid shim evidence and was not used to
+claim closure.
 
 ## Historical superseded final closure evidence
 
