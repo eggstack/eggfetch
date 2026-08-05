@@ -4,7 +4,60 @@ This record is the exact-SHA-bound status for the HTTPX 0.28.1 compatibility
 facade. Historical phase and corrective-pass records remain in the git history
 and referenced plans; counts below are only from the runs named here.
 
-## Final closure evidence
+## Current corrective pass
+
+The prior raw-stream completion statement below is superseded by the corrective
+closure in `plans/httpx-parity-raw-stream-final-corrective-closure.md`. The
+redirect closure remains accepted. This record is reopened while the raw-stream
+state, accounting, modality, and finalization behavior are corrected and
+re-verified.
+
+Corrective baseline SHA: `eb397395f8a2a0bf0621fbcd9deece98647a85cb`
+
+Status: raw-stream corrective closure in progress; the pure-Python raw-stream
+semantics are corrected, but final native compressed-raw parity is blocked by a
+missing core raw-body boundary.
+
+Plan: `plans/httpx-parity-raw-stream-final-corrective-closure.md`
+
+Executable corrective implementation SHA:
+`20a6a2c66ba8d10449d36d1fcc9f575cd6660554`
+
+Validation bound to that implementation:
+
+- Focused raw-stream differential, lifecycle, metadata, and response tests:
+  `86 passed`.
+- Tier 1 compatibility smoke kernel: `117 passed`.
+- API oracle: `0 unexplained`, `0 stale`, and `0 unresolved` differences;
+  all 121 reported differences match the active documented allowlist.
+- Rust formatting, lint-suppression policy, clippy, Rust workspace tests and
+  doctests, and the Python extension rebuild passed through the canonical
+  `./scripts/check.sh` run. The aggregate 532-test non-compat Python phase
+  stalled in this environment during local-server tests and was interrupted;
+  isolated reruns of the affected auth file passed (`31 passed`).
+- The full pinned compatibility suite was attempted but not completed after
+  the same environment-level stall; it is not claimed as passing evidence.
+
+### Stop-condition blocker
+
+The native Python response is created from
+`eggfetch_core::Response::bytes_stream()` after the core pipeline has applied
+content decompression. That is the only current native stream owner exposed to
+`PyStreamingResponse`; consequently native `iter_raw()` and `aiter_raw()` can
+only observe decoded chunks for a compressed response. The Python facade cannot
+recover the encoded bytes without adding a second decompressor, and sending a
+request with decompression disabled would break the decoded iterator on the
+same response.
+
+The smallest separately reviewable adapter surface is a core-owned response
+boundary that preserves the pre-decompression raw stream (or an authoritative
+raw stream/counter) alongside the existing decoded stream, with the Python
+binding selecting the raw stream for `iter_raw()` and `aiter_raw()`. A broad
+transport redesign is not justified by this pass. The focused differential
+suite proves the mismatch against a gzip loopback response before any such
+adapter is claimed complete.
+
+## Historical superseded final closure evidence
 
 Starting SHA: `6ae10308b9db1e215eca19027d4ca9b7575900f6`
 
@@ -23,7 +76,7 @@ Related implementation plans:
 - `plans/httpx-parity-final-closure-01-redirect-security-replay.md`
 - `plans/httpx-parity-final-closure-02-raw-stream-lifecycle.md`
 
-Current status: complete.
+Historical status: complete (superseded evidence; retained for history).
 
 The implementation SHA contains all executable changes for this closure. The
 verification/status commits after it are documentation-only unless explicitly
