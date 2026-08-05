@@ -6,49 +6,93 @@ and referenced plans; counts below are only from the runs named here.
 
 ## Current corrective pass
 
-Native compressed raw body selection is implemented; final metadata, native
-cancellation, CI evidence, and planning-hygiene closure remain open.
+Native compressed raw body selection, wire metadata parity, native async
+cancellation/lease release, planning preservation, and final CI verification
+are complete for the documented HTTPX 0.28.1 asyncio-supported surface.
 
 Corrective baseline SHA: `52f540483322a47db11ebff5e17079d21370473f`
 
 Adapter executable baseline SHA:
 `1aa5cb986bbdb03b92588eb1c7b7ad7070d9ffe7`
 
+Metadata/cancellation final executable SHA:
+`cf4680ac056bf241ca4f4e8fa0e076459bccc9e3`
+
+Archived implementation-plan preservation SHA:
+`cf4680ac056bf241ca4f4e8fa0e076459bccc9e3`
+
 Corrective plan: `plans/httpx-final-metadata-ci-hygiene-corrective-pass.md`
 
-Open planning-hygiene item: PR #20 must be preserved under a unique plan path
-on `main` and then closed without merging its conflicting closure-record path.
+Archived implementation plan:
+`plans/httpx-native-compressed-raw-adapter-implementation-plan.md`
 
-The prior local evidence below is provisional for this corrective pass. It is
-retained as evidence for the adapter executable baseline, but it does not
-close the metadata, native cancellation, planning-hygiene, or CI obligations.
-The existing decoded-header policy remains deliberately bounded: automatic
-core decompression removes `Content-Encoding` and `Content-Length` as before.
+Closure record: `plans/httpx-native-compressed-raw-adapter-closure.md`.
+PR #20 is closed with preservation comment `5195664156`; its conflicting file
+was not merged.
 
-Provisional validation bound to the adapter executable baseline:
+The core response retains only the original wire `Content-Encoding` and
+`Content-Length` values in read-only metadata. Automatic decompression still
+removes those headers from visible core response headers; the compatibility
+facade overlays the retained values without deriving wire length from decoded
+bytes or changing decoder selection.
 
-- Canonical `./scripts/check.sh`: passed. Rust formatting, lint policy,
-  clippy, workspace tests/doctests, extension build, 532 Python behavior
-  tests, and the 117-test compatibility smoke kernel all passed.
-- Full pinned compatibility suite: `1379 passed, 0 failed, 0 skipped,
-  0 xfailed` with `httpx==0.28.1`.
-- Native raw differential module and lifecycle/response focused tests passed,
-  including sync/async gzip parity, one-shot selection, source accounting,
-  immediate source failure, cancellation, and close behavior.
-- API oracle: `0 unexplained`, `0 stale`, and `0 unresolved` differences;
-  all 121 reported differences match the active documented allowlist.
-- Feature-gated core suites passed: gzip, brotli, zstd, deflate, and proxy.
-  The timeout test server was made deterministic for feature configurations
-  that do not enable `test-util`.
-- Extended supporting checks passed: documentation examples/links, FFI (30
-  tests), resource monitor, lifecycle (44), soak (11), merge-lossless (12),
-  and benchmarks. Rust 1.80 MSRV was skipped because that toolchain is not
-  installed locally.
+## Final validation bound to executable SHA
+
+Focused command:
+
+```sh
+python -m pytest \
+  crates/eggfetch-python/tests/compat/test_raw_stream_httpx_differential.py \
+  crates/eggfetch-python/tests/compat/test_raw_stream_lifecycle.py \
+  crates/eggfetch-python/tests/compat/test_response.py \
+  crates/eggfetch-python/tests/compat/test_response_metadata_parity.py \
+  -q --strict-markers
+```
+
+Result: `98 passed, 0 failed, 0 skipped, 0 xfailed`. The final native
+differential rerun after test-only assertion tightening was `40 passed`.
+
+Routine command: `./scripts/check.sh`.
+
+Result: passed on the executable SHA. Rust formatting, lint suppression
+policy, clippy, 471 core tests, workspace tests/doctests, extension build,
+532 Python behavior tests, and 117 compatibility smoke tests passed.
+
+Full pinned command:
+
+```sh
+EGGFETCH_COMPAT_REQUIRED=1 \
+  python -m pytest crates/eggfetch-python/tests/compat/ -q --strict-markers
+```
+
+Result: `1384 passed, 0 failed, 0 skipped, 0 xfailed` in 57.73 seconds with
+`httpx==0.28.1`. The two existing `PytestRemovedIn10Warning` warnings remain
+non-failing fixture deprecations.
+
+API-oracle result: 121 allowed matches, 0 stale allowed entries, 0
+unexplained differences, 0 resolved-in-active entries, and 0
+requires-resolution differences.
 
 The downstream portfolio requires its separate isolated shim-installation
 runner; invoking its fixture directory directly against the ordinary
 `httpx==0.28.1` environment is not valid shim evidence and was not used to
 claim closure.
+
+## Final CI and repository hygiene evidence
+
+The existing single Ubuntu `ci` job ran the unchanged `./scripts/check.sh`
+routine path.
+
+- Workflow: `CI`
+- Run ID: `31034568903`
+- Checked-out SHA: `cf4680ac056bf241ca4f4e8fa0e076459bccc9e3`
+- Run started: `2026-08-05T18:24:23Z`
+- Job: `ci`
+- Job ID: `92403300331`
+- Job started: `2026-08-05T18:24:30Z`
+- Job completed: `2026-08-05T18:28:29Z`
+- Conclusion: passed
+- Attempt: 1 (no retry)
 
 ## Historical superseded final closure evidence
 
@@ -160,7 +204,7 @@ PR #16: closed with a supersession comment; obsolete planning branch not merged.
 
 PR #17: closed with a supersession comment; obsolete planning branch not merged.
 
-## Provisional designation
+## Historical superseded designation
 
 **Stage C candidate — final deterministic closure remains open pending
 metadata, native cancellation, planning-hygiene, and CI evidence.**
