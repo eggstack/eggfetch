@@ -6,24 +6,26 @@ and referenced plans; counts below are only from the runs named here.
 
 ## Current corrective pass
 
-The native compressed-raw adapter closure described in
-`plans/httpx-native-compressed-raw-adapter-closure.md` is implemented and
-verified. The prior blocker is closed by a deferred core-owned one-shot body
-selector: compressed streaming responses retain the encoded source until the
-first consumer selects raw or decoded mode. The Python binding selects the
-matching core mode without buffering, teeing, or adding a decompressor.
+Native compressed raw body selection is implemented; final metadata, native
+cancellation, CI evidence, and planning-hygiene closure remain open.
 
-Audited baseline SHA: `63d839a0405ca4b89f6f1f43a1c57e537db3f0be`
+Corrective baseline SHA: `52f540483322a47db11ebff5e17079d21370473f`
 
-Executable implementation SHA:
+Adapter executable baseline SHA:
 `1aa5cb986bbdb03b92588eb1c7b7ad7070d9ffe7`
 
-Status: native compressed raw-stream corrective closure complete for the
-documented HTTPX 0.28.1 asyncio-supported surface. The existing decoded
-header policy remains deliberately bounded: automatic core decompression
-removes `Content-Encoding` and `Content-Length` as before.
+Corrective plan: `plans/httpx-final-metadata-ci-hygiene-corrective-pass.md`
 
-Validation bound to the implementation SHA:
+Open planning-hygiene item: PR #20 must be preserved under a unique plan path
+on `main` and then closed without merging its conflicting closure-record path.
+
+The prior local evidence below is provisional for this corrective pass. It is
+retained as evidence for the adapter executable baseline, but it does not
+close the metadata, native cancellation, planning-hygiene, or CI obligations.
+The existing decoded-header policy remains deliberately bounded: automatic
+core decompression removes `Content-Encoding` and `Content-Length` as before.
+
+Provisional validation bound to the adapter executable baseline:
 
 - Canonical `./scripts/check.sh`: passed. Rust formatting, lint policy,
   clippy, workspace tests/doctests, extension build, 532 Python behavior
@@ -158,10 +160,10 @@ PR #16: closed with a supersession comment; obsolete planning branch not merged.
 
 PR #17: closed with a supersession comment; obsolete planning branch not merged.
 
-## Final designation
+## Provisional designation
 
-**Stage C candidate — final deterministic closure complete for the documented
-HTTPX 0.28.1 asyncio-supported surface.**
+**Stage C candidate — final deterministic closure remains open pending
+metadata, native cancellation, planning-hygiene, and CI evidence.**
 
 The final status updates are documentation-only. No executable files changed
 between the implementation SHA and the CI-tested tree; the successful retry

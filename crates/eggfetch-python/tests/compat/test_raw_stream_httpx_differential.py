@@ -11,7 +11,7 @@ from http.server import BaseHTTPRequestHandler
 import httpx
 import pytest
 
-from eggfetch.compat.httpx import AsyncClient, Client, Response
+from eggfetch.compat.httpx import AsyncClient, Client, Limits, Response
 
 assert httpx.__version__ == "0.28.1", (
     f"Expected httpx 0.28.1, got {httpx.__version__}"
@@ -408,6 +408,7 @@ def test_actual_native_sync_raw_stream_reaches_unadapted_path():
                 actual_chunks = list(actual.iter_raw())
                 assert b"".join(actual_chunks) == b"".join(expected_chunks)
                 assert actual.num_bytes_downloaded == expected.num_bytes_downloaded
+                assert actual.headers.multi_items() == expected.headers.multi_items()
 
 
 @pytest.mark.asyncio
@@ -421,6 +422,7 @@ async def test_actual_native_async_raw_stream_reaches_unadapted_path():
                 actual_chunks = [chunk async for chunk in actual.aiter_raw()]
                 assert b"".join(actual_chunks) == b"".join(expected_chunks)
                 assert actual.num_bytes_downloaded == expected.num_bytes_downloaded
+                assert actual.headers.multi_items() == expected.headers.multi_items()
 
 
 def test_actual_native_sync_compressed_raw_and_decoded_match_httpx():
@@ -445,6 +447,36 @@ def test_actual_native_sync_compressed_raw_and_decoded_match_httpx():
                 assert actual_decoded == expected_decoded == original
                 assert actual.is_closed
 
+
+def _sync_compressed_metadata(response, mode):
+    before = (
+        response.headers.get("content-encoding"),
+        response.headers.get("content-length"),
+    )
+    body = b"".join(response.iter_raw()) if mode == "raw" else response.read()
+    after = (
+        response.headers.get("content-encoding"),
+        response.headers.get("content-length"),
+    )
+    return before, after, len(body)
+
+
+@pytest.mark.parametrize("mode", ["raw", "decoded"])
+def test_actual_native_sync_compressed_metadata_matches_httpx(mode):
+    with _native_server() as base:
+        with httpx.Client() as reference, Client() as candidate:
+            with reference.stream("GET", f"{base}/gzip") as expected:
+                expected_observation = _sync_compressed_metadata(expected, mode)
+            with candidate.stream("GET", f"{base}/gzip") as actual:
+                actual_observation = _sync_compressed_metadata(actual, mode)
+            assert actual_observation == expected_observation
+            assert actual_observation[0][0] == "gzip"
+            assert actual_observation[0][1] is not None
+            assert actual_observation[0][1] == actual_observation[1][1]
+            if mode == "raw":
+                assert actual_observation[2] == int(actual_observation[0][1])
+            else:
+                assert actual_observation[2] != int(actual_observation[0][1])
 
 def test_actual_native_sync_compressed_raw_chunk_adaptation_matches_httpx():
     with _native_server() as base:
@@ -481,6 +513,40 @@ async def test_actual_native_async_compressed_raw_and_decoded_match_httpx():
                 assert actual.is_closed
 
 
+async def _async_compressed_metadata(response, mode):
+    before = (
+        response.headers.get("content-encoding"),
+        response.headers.get("content-length"),
+    )
+    if mode == "raw":
+        body = b"".join([chunk async for chunk in response.aiter_raw()])
+    else:
+        body = await response.aread()
+    after = (
+        response.headers.get("content-encoding"),
+        response.headers.get("content-length"),
+    )
+    return before, after, len(body)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mode", ["raw", "decoded"])
+async def test_actual_native_async_compressed_metadata_matches_httpx(mode):
+    with _native_server() as base:
+        async with httpx.AsyncClient() as reference, AsyncClient() as candidate:
+            async with reference.stream("GET", f"{base}/gzip") as expected:
+                expected_observation = await _async_compressed_metadata(expected, mode)
+            async with candidate.stream("GET", f"{base}/gzip") as actual:
+                actual_observation = await _async_compressed_metadata(actual, mode)
+            assert actual_observation == expected_observation
+            assert actual_observation[0][0] == "gzip"
+            assert actual_observation[0][1] is not None
+            assert actual_observation[0][1] == actual_observation[1][1]
+            if mode == "raw":
+                assert actual_observation[2] == int(actual_observation[0][1])
+            else:
+                assert actual_observation[2] != int(actual_observation[0][1])
+
 @pytest.mark.asyncio
 async def test_actual_native_async_compressed_raw_chunk_adaptation_matches_httpx():
     with _native_server() as base:
@@ -503,3 +569,53 @@ def test_native_compressed_stream_selection_is_one_shot():
             with client.stream("GET", f"{base}/gzip") as response:
                 assert response.read() == b"hello " * 100
                 assert _exception(lambda: list(response.iter_raw()))[0] == "StreamConsumed"
+
+
+async def _native_async_cancellation_case(client_type, limits):
+    from .native_fixtures import blocking_gzip_handler, local_http_server
+
+    handler = blocking_gzip_handler()
+    with local_http_server(handler) as (host, port):
+        base = f"http://{host}:{port}"
+        async with client_type(limits=limits) as client:
+            response_context = client.stream("GET", f"{base}/gzip-blocked")
+            response = await response_context.__aenter__()
+            iterator = response.aiter_raw()
+            first = await asyncio.wait_for(anext(iterator), timeout=1)
+            assert first.startswith(b"\x1f")
+            assert handler.first_body_sent.is_set()
+
+            pending = asyncio.create_task(anext(iterator))
+            assert handler.body_blocked.is_set()
+            await asyncio.sleep(0)
+            pending.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await pending
+
+            await iterator.aclose()
+            await response.aclose()
+            second_selection = _async_exception(lambda: anext(response.aiter_raw()))
+            handler.release_body.set()
+            follow_up = await asyncio.wait_for(client.get(f"{base}/follow-up"), timeout=2)
+            return (
+                first,
+                response.is_stream_consumed,
+                response.is_closed,
+                await second_selection,
+                follow_up.status_code,
+                follow_up.content,
+            )
+        handler.release_body.set()
+
+
+@pytest.mark.asyncio
+async def test_native_async_compressed_cancellation_releases_pool_lease():
+    reference = await _native_async_cancellation_case(
+        httpx.AsyncClient,
+        httpx.Limits(max_connections=1, max_keepalive_connections=1),
+    )
+    candidate = await _native_async_cancellation_case(
+        AsyncClient,
+        Limits(max_connections=1, max_keepalive_connections=1),
+    )
+    assert candidate == reference

@@ -69,3 +69,32 @@ pub(crate) fn apply_decompression(
 
     Ok(response)
 }
+
+#[cfg(all(test, feature = "compression-gzip"))]
+mod tests {
+    use super::*;
+    use http::{HeaderMap, HeaderValue, StatusCode, Version};
+    use url::Url;
+
+    #[test]
+    fn automatic_decompression_strips_visible_headers_but_keeps_wire_metadata() {
+        let mut headers = HeaderMap::new();
+        headers.insert("content-encoding", HeaderValue::from_static("gzip"));
+        headers.insert("content-length", HeaderValue::from_static("42"));
+        let response = Response::new(
+            StatusCode::OK,
+            Version::HTTP_11,
+            headers,
+            Url::parse("http://example.com").unwrap(),
+            ResponseBody::streaming(Box::pin(futures_util::stream::empty())),
+        );
+
+        let response =
+            apply_decompression(response, Some("gzip"), DecompressionLimit::default()).unwrap();
+
+        assert!(response.headers().get("content-encoding").is_none());
+        assert!(response.headers().get("content-length").is_none());
+        assert_eq!(response.wire_content_encoding(), Some("gzip"));
+        assert_eq!(response.wire_content_length(), Some("42"));
+    }
+}

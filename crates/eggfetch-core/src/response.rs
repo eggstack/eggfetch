@@ -101,6 +101,12 @@ pub struct Response {
     version: Version,
     headers: HeaderMap,
     url: Url,
+    /// Original wire value retained for compatibility adapters that expose
+    /// response metadata after automatic decompression.
+    wire_content_encoding: Option<String>,
+    /// Original wire value retained for compatibility adapters that expose
+    /// response metadata after automatic decompression.
+    wire_content_length: Option<String>,
     pub(crate) body: ResponseBody,
     history: Vec<HistoryEntry>,
 }
@@ -112,6 +118,8 @@ impl std::fmt::Debug for Response {
             .field("version", &self.version)
             .field("headers", &redacted_headers(&self.headers))
             .field("url", &redacted_url(&self.url))
+            .field("wire_content_encoding", &self.wire_content_encoding)
+            .field("wire_content_length", &self.wire_content_length)
             .field("body", &self.body)
             .field("history", &self.history)
             .finish()
@@ -135,11 +143,21 @@ impl Response {
         url: Url,
         body: ResponseBody,
     ) -> Self {
+        let wire_content_encoding = headers
+            .get("content-encoding")
+            .and_then(|value| value.to_str().ok())
+            .map(ToOwned::to_owned);
+        let wire_content_length = headers
+            .get("content-length")
+            .and_then(|value| value.to_str().ok())
+            .map(ToOwned::to_owned);
         Self {
             status,
             version,
             headers,
             url,
+            wire_content_encoding,
+            wire_content_length,
             body,
             history: Vec::new(),
         }
@@ -178,6 +196,25 @@ impl Response {
     /// Returns a mutable reference to the response headers.
     pub fn headers_mut(&mut self) -> &mut HeaderMap {
         &mut self.headers
+    }
+
+    /// Returns the original wire `Content-Encoding` value, if present.
+    ///
+    /// Automatic decompression may remove this value from [`Self::headers`];
+    /// compatibility adapters can use this read-only snapshot to preserve
+    /// wire metadata without changing the core decoded-header policy.
+    #[must_use]
+    pub fn wire_content_encoding(&self) -> Option<&str> {
+        self.wire_content_encoding.as_deref()
+    }
+
+    /// Returns the original wire `Content-Length` value, if present.
+    ///
+    /// The value describes encoded wire bytes and is never derived from the
+    /// decompressed response body.
+    #[must_use]
+    pub fn wire_content_length(&self) -> Option<&str> {
+        self.wire_content_length.as_deref()
     }
 
     /// Returns the final URL of the response (after any redirects).
@@ -364,6 +401,31 @@ mod tests {
         assert!(!rendered.contains("secret"));
         assert!(!rendered.contains("user:pass"));
         assert!(rendered.contains("https://example.com/path"));
+    }
+
+    #[test]
+    fn response_retains_wire_content_metadata_without_changing_headers() {
+        let mut headers = HeaderMap::new();
+        headers.insert("content-encoding", HeaderValue::from_static("gzip"));
+        headers.insert("content-length", HeaderValue::from_static("42"));
+        let response = Response::new(
+            StatusCode::OK,
+            Version::HTTP_11,
+            headers,
+            Url::parse("http://example.com").unwrap(),
+            ResponseBody::buffered(Bytes::new()),
+        );
+
+        assert_eq!(response.wire_content_encoding(), Some("gzip"));
+        assert_eq!(response.wire_content_length(), Some("42"));
+        assert_eq!(
+            response.headers().get("content-encoding"),
+            Some(&HeaderValue::from_static("gzip"))
+        );
+        assert_eq!(
+            response.headers().get("content-length"),
+            Some(&HeaderValue::from_static("42"))
+        );
     }
     use futures_util::StreamExt;
 

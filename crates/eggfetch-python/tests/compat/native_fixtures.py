@@ -4,6 +4,7 @@ All fixtures use real local TCP sockets. No external internet access required.
 Fixtures expose synchronization barriers rather than relying on sleeps.
 """
 import http.server
+import gzip
 import json
 import os
 import socket
@@ -81,6 +82,50 @@ class HeadersStallHandler(http.server.BaseHTTPRequestHandler):
 
     def log_message(self, format, *args):
         pass
+
+
+def blocking_gzip_handler():
+    """Return a handler that blocks after sending the first gzip byte."""
+
+    class BlockingGzipHandler(http.server.BaseHTTPRequestHandler):
+        first_body_sent = threading.Event()
+        body_blocked = threading.Event()
+        release_body = threading.Event()
+
+        def do_GET(self):
+            if self.path == "/gzip-blocked":
+                original = b"native cancellation body " * 2048
+                body = gzip.compress(original, mtime=0)
+                self.send_response(200)
+                self.send_header("Content-Encoding", "gzip")
+                self.send_header("Content-Length", str(len(body)))
+                self.send_header("Connection", "close")
+                self.end_headers()
+                self.wfile.write(body[:1])
+                self.wfile.flush()
+                self.__class__.first_body_sent.set()
+                self.__class__.body_blocked.set()
+                self.__class__.release_body.wait()
+                try:
+                    self.wfile.write(body[1:])
+                    self.wfile.flush()
+                except OSError:
+                    pass
+            elif self.path == "/follow-up":
+                body = b"follow-up ok"
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                self.wfile.flush()
+            else:
+                self.send_response(404)
+                self.end_headers()
+
+        def log_message(self, format, *args):
+            pass
+
+    return BlockingGzipHandler
 
 
 @contextmanager

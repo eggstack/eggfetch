@@ -127,6 +127,13 @@ Feature-gated behind `compression-gzip`, `compression-brotli`, `compression-zstd
 - **Streaming**: `decompress_stream()` wraps the response body stream with an async decoder.
 - **Buffered**: `decompress_buffered()` decodes a collected `Bytes` buffer synchronously via `flate2`.
 
+Automatic decompression removes `Content-Encoding` and `Content-Length` from
+the visible core response headers. The response retains only the original
+wire values of those two headers as narrow read-only metadata for adapters
+that need HTTPX-compatible visibility; the values are never inferred from
+decoded body length. The compatibility facade overlays that metadata while
+core remains authoritative for decoder selection.
+
 ### Python API
 
 ```python

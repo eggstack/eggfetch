@@ -1,6 +1,14 @@
 # HTTPX 0.28.1 Native Compressed-Raw Adapter — Closure Record
 
-Status: implementation complete; final local evidence recorded below.
+Status: adapter implementation complete; final corrective closure remains
+open in `plans/httpx-parity-correction-status.md`.
+
+The complete detailed planning record from PR #20 is preserved at
+[`plans/httpx-native-compressed-raw-adapter-implementation-plan.md`](httpx-native-compressed-raw-adapter-implementation-plan.md).
+Original planning PR: #20. Adapter executable SHA:
+`1aa5cb986bbdb03b92588eb1c7b7ad7070d9ffe7`. The final corrective status is
+bound to the corrective plan at
+[`plans/httpx-final-metadata-ci-hygiene-corrective-pass.md`](httpx-final-metadata-ci-hygiene-corrective-pass.md).
 
 This plan closes the native compressed-response raw-stream gap while keeping
 the encoded transport body single-owner. Core now defers decompression for

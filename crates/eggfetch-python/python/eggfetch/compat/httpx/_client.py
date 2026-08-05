@@ -318,6 +318,7 @@ def _wrap_response(native_resp, compat_request=None, default_encoding="utf-8"):
         header_list = native_headers.multi_items()
     elif hasattr(native_headers, "items"):
         header_list = native_headers.items()
+    _overlay_wire_headers(header_list, native_resp)
 
     try:
         content = native_resp.content
@@ -358,6 +359,19 @@ def _wrap_response(native_resp, compat_request=None, default_encoding="utf-8"):
     return resp
 
 
+def _overlay_wire_headers(header_list, native_resp):
+    """Restore only wire metadata hidden by core automatic decompression."""
+    present = {str(name).lower() for name, _value in header_list}
+    for attribute, name in (
+        ("_wire_content_encoding", "content-encoding"),
+        ("_wire_content_length", "content-length"),
+    ):
+        value = getattr(native_resp, attribute, None)
+        if value is not None and name not in present:
+            header_list.append((name, value))
+            present.add(name)
+
+
 def _wrap_streaming_response(native_resp, compat_request=None, default_encoding="utf-8"):
     if isinstance(native_resp, Response):
         status_code = native_resp.status_code
@@ -374,6 +388,7 @@ def _wrap_streaming_response(native_resp, compat_request=None, default_encoding=
             header_list = native_headers.multi_items()
         elif hasattr(native_headers, "items"):
             header_list = native_headers.items()
+        _overlay_wire_headers(header_list, native_resp)
 
         history = []
         if hasattr(native_resp, "history") and native_resp.history:

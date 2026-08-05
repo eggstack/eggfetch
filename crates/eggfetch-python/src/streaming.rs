@@ -83,6 +83,12 @@ pub(crate) struct PyStreamingResponse {
     history: Vec<crate::response::PyResponse>,
     #[pyo3(get)]
     cookies: PyCookies,
+    /// Original wire `Content-Encoding`, for the HTTPX compatibility facade.
+    #[pyo3(get)]
+    _wire_content_encoding: Option<String>,
+    /// Original wire `Content-Length`, for the HTTPX compatibility facade.
+    #[pyo3(get)]
+    _wire_content_length: Option<String>,
     body_state: AtomicU8,
     response: std::sync::Mutex<Option<eggfetch_core::Response>>,
     stream_cancel: tokio::sync::watch::Sender<bool>,
@@ -100,6 +106,8 @@ impl PyStreamingResponse {
         let headers = PyHeaders::from_header_map(response.headers().clone());
         let response_url = response.url().to_string();
         let encoding = extract_charset(response.headers());
+        let wire_content_encoding = response.wire_content_encoding().map(ToOwned::to_owned);
+        let wire_content_length = response.wire_content_length().map(ToOwned::to_owned);
 
         let core_history = std::mem::take(response.history_mut());
         let history: Vec<crate::response::PyResponse> = core_history
@@ -145,6 +153,8 @@ impl PyStreamingResponse {
                 url: response_url,
                 history,
                 cookies,
+                _wire_content_encoding: wire_content_encoding,
+                _wire_content_length: wire_content_length,
                 body_state: AtomicU8::new(STATE_STREAMING),
                 response: std::sync::Mutex::new(Some(response)),
                 stream_cancel,

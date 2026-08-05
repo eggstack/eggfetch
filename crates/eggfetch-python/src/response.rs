@@ -85,6 +85,12 @@ pub struct PyResponse {
     /// responses).
     #[pyo3(get)]
     _stream_consumed: bool,
+    /// Original wire `Content-Encoding`, for the HTTPX compatibility facade.
+    #[pyo3(get)]
+    _wire_content_encoding: Option<String>,
+    /// Original wire `Content-Length`, for the HTTPX compatibility facade.
+    #[pyo3(get)]
+    _wire_content_length: Option<String>,
 }
 
 impl PyResponse {
@@ -120,6 +126,8 @@ impl PyResponse {
     ) -> PyResult<Self> {
         let status = response.status().as_u16();
         let headers = PyHeaders::from_header_map(response.headers().clone());
+        let wire_content_encoding = response.wire_content_encoding().map(ToOwned::to_owned);
+        let wire_content_length = response.wire_content_length().map(ToOwned::to_owned);
         let reason_phrase = response
             .status()
             .canonical_reason()
@@ -179,6 +187,8 @@ impl PyResponse {
             history,
             cookies,
             _stream_consumed: false,
+            _wire_content_encoding: wire_content_encoding,
+            _wire_content_length: wire_content_length,
         })
     }
 
@@ -206,6 +216,8 @@ impl PyResponse {
             history: Vec::new(),
             cookies: PyCookies::from_jar(eggfetch_core::cookie::CookieJar::new()),
             _stream_consumed: false,
+            _wire_content_encoding: None,
+            _wire_content_length: None,
         }
     }
 }
