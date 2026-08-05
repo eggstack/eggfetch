@@ -14,7 +14,7 @@ Raw-stream implementation SHA: `11eb77a` (`fix: raw stream lifecycle parity (fin
 
 Final implementation SHA: `11eb77a7e121d4b83e75a1bd87ebf7ac240e9046`
 
-Final pushed tree SHA: pending final documentation/CI pass
+Final pushed tree SHA (CI-tested): `d4967f110247db659e5c48bbfca0acb3fb1e84bc`
 
 Final-closure plan: `plans/httpx-parity-final-closure-03-verification-status-hygiene.md`
 
@@ -23,7 +23,7 @@ Related implementation plans:
 - `plans/httpx-parity-final-closure-01-redirect-security-replay.md`
 - `plans/httpx-parity-final-closure-02-raw-stream-lifecycle.md`
 
-Current status: verification in progress.
+Current status: complete.
 
 The implementation SHA contains all executable changes for this closure. The
 verification/status commits after it are documentation-only unless explicitly
@@ -98,15 +98,25 @@ The existing CI workflow runs only routine Tier 1 validation through
 `./scripts/check.sh`. It does not prove the complete pinned compatibility
 matrix or API oracle; those are the manual/local results above.
 
-CI run ID: pending push
+CI run ID: `30969434477`
 
-CI checked-out SHA: pending push
+CI checked-out SHA: `d4967f110247db659e5c48bbfca0acb3fb1e84bc`
 
-CI conclusion: pending push
+CI conclusion: passed. Workflow `CI`, job `ci` (`92190362078`), duration 3m31s.
 
-PR #16 and PR #17: pending supersession comments and closure.
+The run executed the existing `./scripts/check.sh` routine path. GitHub
+reported only the platform-level Node.js 20 action deprecation annotation; no
+validation failure occurred.
+
+PR #16: closed with a supersession comment; obsolete planning branch not merged.
+
+PR #17: closed with a supersession comment; obsolete planning branch not merged.
 
 ## Final designation
 
-Final designation is intentionally withheld until the pushed-tree CI result and
-planning-PR cleanup are recorded.
+**Stage C candidate — final deterministic closure complete for the documented
+HTTPX 0.28.1 asyncio-supported surface.**
+
+The final status commit after the CI-tested tree is documentation-only; CI was
+not rerun for that status-only change. No executable files changed between the
+implementation SHA and the CI-tested tree.
