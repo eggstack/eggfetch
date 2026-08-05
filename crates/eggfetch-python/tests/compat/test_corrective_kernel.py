@@ -2,7 +2,7 @@
 
 import pytest
 
-from eggfetch.compat.httpx import AsyncClient, Client, MockTransport, Request, Response
+from eggfetch.compat.httpx import Client, MockTransport, Request, Response
 from eggfetch.compat.httpx._exceptions import RequestNotRead, StreamConsumed
 
 
@@ -43,6 +43,29 @@ def test_buffered_response_and_live_iteration_state():
     assert live.is_closed and live.is_stream_consumed
     with pytest.raises(StreamConsumed):
         list(live.iter_bytes())
+
+
+def test_raw_iteration_marks_consumed_and_counts_source_bytes_before_adaptation():
+    response = Response(200, stream=iter([b"abcd"]))
+    iterator = response.iter_raw(chunk_size=1)
+    assert next(iterator) == b"a"
+    assert response.is_stream_consumed
+    assert response.num_bytes_downloaded == 4
+
+
+def test_buffered_raw_iteration_is_not_a_repeatable_decoded_read():
+    response = Response(200, content=b"body")
+    with pytest.raises(StreamConsumed):
+        list(response.iter_raw())
+    assert response.content == b"body"
+
+
+@pytest.mark.asyncio
+async def test_async_raw_iteration_rejects_sync_stream_modality():
+    response = Response(200, stream=iter([b"body"]))
+    with pytest.raises(RuntimeError, match="async iterator on an sync stream"):
+        await anext(response.aiter_raw())
+    assert not response.is_stream_consumed
 
 
 def test_unattached_response_request_is_an_error():
@@ -297,29 +320,9 @@ def test_raw_partial_iteration_then_close():
     next(gen)
     gen.close()
     assert resp.is_stream_consumed
+    assert not resp.is_closed
+    resp.close()
     assert resp.is_closed
-
-
-def test_async_raw_uses_native_path():
-    import asyncio
-
-    def handler(request):
-        return Response(200, content=b"hello")
-
-    async def consume():
-        async with AsyncClient(transport=MockTransport(handler)) as client:
-            async with client.stream("GET", "https://example.com") as resp:
-                chunks = []
-                async for chunk in resp.aiter_raw():
-                    chunks.append(chunk)
-                return b"".join(chunks)
-
-    loop = asyncio.new_event_loop()
-    try:
-        result = loop.run_until_complete(consume())
-    finally:
-        loop.close()
-    assert result == b"hello"
 
 
 def test_raw_and_decoded_paths_are_distinct():

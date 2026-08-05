@@ -85,7 +85,7 @@ Streaming uses `StreamingResponse` with a four-state machine: `streaming` → `b
 
 ### Raw byte iterators
 
-`iter_raw(chunk_size)` and `aiter_raw(chunk_size)` yield undecoded transport-level bytes, bypassing content-encoding decompression. These are exposed as `StreamingRawBytesIterator` and `AsyncStreamingRawBytesIterator` in the native Python module. All streaming iterators accept a `chunk_size` parameter (default 8192) controlling the maximum bytes yielded per iteration.
+The compatibility facade's `iter_raw(chunk_size=None)` and `aiter_raw(chunk_size=None)` are intended to yield undecoded transport-level bytes, with bounded splitting/coalescing performed after each source chunk. Live compatibility streams become consumed before the first source read; normal exhaustion closes them, while partial iterator finalization and source failure remain distinguishable from explicit response close. The native Python `StreamingRawBytesIterator` and `AsyncStreamingRawBytesIterator` now accept an optional chunk size and expose native source boundaries when available. A compressed native response still needs a core-owned pre-decompression raw-body boundary before the facade can claim complete raw parity; Python must not add a second decompressor.
 
 ### Request streaming
 

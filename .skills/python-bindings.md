@@ -69,7 +69,7 @@ from eggfetch.compat.httpx import Client, AsyncClient, Request, Response
 - Stream base classes: `SyncByteStream`, `AsyncByteStream`, `ByteStream`
 - Response streaming delegation to native engine
 - `iter_raw()`/`aiter_raw()` for undecoded transport bytes
-- Chunk size parameter on all iterators (default 8192)
+- Chunk size parameter on all iterators; compatibility raw iterators default to `None` and native decoded iterators retain their existing defaults
 - Request streaming bodies (iterables, file-like, custom streams)
 - Multipart passthrough to native encoder
 - `StreamingRawBytesIterator` and `AsyncStreamingRawBytesIterator` types
@@ -128,7 +128,7 @@ from eggfetch.compat.httpx import Client, AsyncClient, Request, Response
 - Native dispatch converts compatibility timeout mappings explicitly and serializes URL parameters only once.
 - Request-local and explicit Cookie state is merged with the scoped facade jar per hop; explicit Cookie headers are stripped on every redirect and regenerated from the jar.
 - Live response iteration coalesces chunk sizes, decodes split text incrementally, and updates stream accounting and state.
-- Raw iteration marks streams consumed at the correct point, counts raw transport bytes, handles chunk-size splitting and coalescing, and closes exactly once on exhaustion or partial break.
+- Raw iteration marks streams consumed at the correct point, counts raw source bytes before chunk-size splitting/coalescing, closes on normal exhaustion, and leaves partial finalization/source failure distinguishable from explicit response close. Native compressed raw parity remains blocked on a core-owned pre-decompression stream boundary.
 - The compact `test_corrective_kernel.py` suite runs in Tier 1; the full pinned `httpx==0.28.1` compatibility suite and API oracle remain Tier 2/manual gates. The designation is a bounded Stage C candidate for the asyncio-supported surface, not unrestricted HTTPX replacement.
 
 **Testing the compat layer:**
@@ -153,6 +153,15 @@ EGGFETCH_COMPAT_REQUIRED=1 pytest \
   crates/eggfetch-python/tests/compat/test_hook_cookie_auth_ordering.py \
   crates/eggfetch-python/tests/compat/test_cookie_scope_parity.py \
   -v --strict-markers
+
+Pinned raw-stream differential and native-boundary checks:
+
+```sh
+EGGFETCH_COMPAT_REQUIRED=1 pytest \
+  crates/eggfetch-python/tests/compat/test_raw_stream_httpx_differential.py \
+  crates/eggfetch-python/tests/compat/test_raw_stream_lifecycle.py \
+  -q --strict-markers
+```
 ```
 
 Validate profiles and manifests:

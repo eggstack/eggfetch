@@ -20,6 +20,41 @@ from eggfetch.compat.httpx._exceptions import (
 )
 
 
+class _RawByteChunker:
+    """Adapt raw source chunks without changing source-byte accounting."""
+
+    def __init__(self, chunk_size: int | None) -> None:
+        self._buffer = bytearray()
+        self._chunk_size = chunk_size
+
+    def decode(self, content: bytes) -> list[bytes]:
+        """Return complete output chunks for one consumed source chunk."""
+        if self._chunk_size is None:
+            return [content] if content else []
+
+        self._buffer.extend(content)
+        if len(self._buffer) >= self._chunk_size:
+            value = bytes(self._buffer)
+            chunks = [
+                value[index : index + self._chunk_size]
+                for index in range(0, len(value), self._chunk_size)
+            ]
+            if len(chunks[-1]) == self._chunk_size:
+                self._buffer.clear()
+                return chunks
+
+            self._buffer.clear()
+            self._buffer.extend(chunks[-1])
+            return chunks[:-1]
+        return []
+
+    def flush(self) -> list[bytes]:
+        """Return the final incomplete chunk, if any."""
+        value = bytes(self._buffer)
+        self._buffer.clear()
+        return [value] if value else []
+
+
 class Response:
     """HTTPX-compatible Response object."""
 
@@ -532,7 +567,8 @@ class Response:
             self._stream.close()
         if self._elapsed is None:
             start = self._extensions.get("_eggfetch_started_at")
-            self._elapsed = timedelta(seconds=max(0.0, time.monotonic() - start)) if start is not None else timedelta(0)
+            if start is not None:
+                self._elapsed = timedelta(seconds=max(0.0, time.monotonic() - start))
 
     async def aclose(self) -> None:
         if self._is_closed:
@@ -544,7 +580,8 @@ class Response:
             await self._stream.aclose()
         if self._elapsed is None:
             start = self._extensions.get("_eggfetch_started_at")
-            self._elapsed = timedelta(seconds=max(0.0, time.monotonic() - start)) if start is not None else timedelta(0)
+            if start is not None:
+                self._elapsed = timedelta(seconds=max(0.0, time.monotonic() - start))
 
     def iter_bytes(self, chunk_size: int | None = 8192) -> Iterator[bytes]:
         if self._stream_consumed and self._content is None:
@@ -606,48 +643,34 @@ class Response:
         if pending:
             yield pending.removesuffix("\r")
 
-    def iter_raw(self, chunk_size: int | None = 8192) -> Iterator[bytes]:
-        if self._stream_consumed and self._content is None:
+    def iter_raw(self, chunk_size: int | None = None) -> Iterator[bytes]:
+        if self._stream_consumed:
             raise StreamConsumed()
-        try:
-            if self._native_stream is not None and hasattr(self._native_stream, "iter_raw"):
-                for chunk in self._native_stream.iter_raw(chunk_size=chunk_size):
-                    self._num_bytes_downloaded += len(chunk)
-                    yield chunk
-            elif self._native_stream is not None:
-                for chunk in self._native_stream.iter_bytes(chunk_size=chunk_size):
-                    self._num_bytes_downloaded += len(chunk)
-                    yield chunk
-            elif self._stream is not None:
-                iterator = iter(self._stream)
-                if chunk_size is None:
-                    for chunk in iterator:
-                        self._num_bytes_downloaded += len(chunk)
-                        yield chunk
-                else:
-                    pending = bytearray()
-                    for chunk in iterator:
-                        pending.extend(chunk)
-                        while len(pending) >= chunk_size:
-                            chunk = bytes(pending[:chunk_size])
-                            self._num_bytes_downloaded += len(chunk)
-                            yield chunk
-                            del pending[:chunk_size]
-                    if pending:
-                        chunk = bytes(pending)
-                        self._num_bytes_downloaded += len(chunk)
-                        yield chunk
-            else:
-                data = self._content or b""
-                size = chunk_size or 8192
-                for i in range(0, len(data), size):
-                    chunk = data[i:i + size]
-                    self._num_bytes_downloaded += len(chunk)
-                    yield chunk
-            self._stream_consumed = True
-        finally:
-            self._stream_consumed = True
-            self.close()
+        if self._is_closed:
+            raise StreamClosed()
+        if self._native_stream is None and self._stream is not None and not hasattr(
+            self._stream, "__iter__"
+        ):
+            raise RuntimeError("Attempted to call a sync iterator on an async stream.")
+
+        self._stream_consumed = True
+        self._num_bytes_downloaded = 0
+        chunker = _RawByteChunker(chunk_size)
+
+        if self._native_stream is not None:
+            source = self._native_stream.iter_raw(chunk_size=None)
+        elif self._stream is not None:
+            source = iter(self._stream)
+        else:
+            # Buffered responses are consumed and closed at construction.
+            raise StreamConsumed()
+
+        for raw_stream_bytes in source:
+            self._num_bytes_downloaded += len(raw_stream_bytes)
+            yield from chunker.decode(raw_stream_bytes)
+
+        yield from chunker.flush()
+        self.close()
 
     async def aiter_bytes(self, chunk_size: int | None = 8192) -> AsyncIterator[bytes]:
         if self._stream_consumed and self._content is None:
@@ -736,75 +759,36 @@ class Response:
         if pending:
             yield pending.removesuffix("\r")
 
-    async def aiter_raw(self, chunk_size: int | None = 8192) -> AsyncIterator[bytes]:
-        if self._stream_consumed and self._content is None:
+    async def aiter_raw(self, chunk_size: int | None = None) -> AsyncIterator[bytes]:
+        if self._stream_consumed:
             raise StreamConsumed()
-        try:
-            if self._native_stream is not None and hasattr(self._native_stream, "aiter_raw"):
-                async for chunk in self._native_stream.aiter_raw(chunk_size=chunk_size):
-                    self._num_bytes_downloaded += len(chunk)
-                    yield chunk
-            elif self._native_stream is not None:
-                async for chunk in self._native_stream.aiter_bytes(chunk_size=chunk_size):
-                    self._num_bytes_downloaded += len(chunk)
-                    yield chunk
-            elif self._content is not None:
-                data = self._content
-                size = chunk_size or 8192
-                for i in range(0, len(data), size):
-                    chunk = data[i:i + size]
-                    self._num_bytes_downloaded += len(chunk)
-                    yield chunk
-            elif self._stream is not None:
-                if hasattr(self._stream, '__aiter__'):
-                    pending = bytearray()
-                    async for chunk in self._stream:
-                        pending.extend(chunk)
-                        if chunk_size is None:
-                            chunk = bytes(pending)
-                            self._num_bytes_downloaded += len(chunk)
-                            yield chunk
-                            pending.clear()
-                        else:
-                            while len(pending) >= chunk_size:
-                                chunk = bytes(pending[:chunk_size])
-                                self._num_bytes_downloaded += len(chunk)
-                                yield chunk
-                                del pending[:chunk_size]
-                    if pending:
-                        chunk = bytes(pending)
-                        self._num_bytes_downloaded += len(chunk)
-                        yield chunk
-                else:
-                    pending = bytearray()
-                    for chunk in self._stream:
-                        pending.extend(chunk)
-                        if chunk_size is None:
-                            chunk = bytes(pending)
-                            self._num_bytes_downloaded += len(chunk)
-                            yield chunk
-                            pending.clear()
-                        else:
-                            while len(pending) >= chunk_size:
-                                chunk = bytes(pending[:chunk_size])
-                                self._num_bytes_downloaded += len(chunk)
-                                yield chunk
-                                del pending[:chunk_size]
-                    if pending:
-                        chunk = bytes(pending)
-                        self._num_bytes_downloaded += len(chunk)
-                        yield chunk
-            else:
-                data = self._content or b""
-                size = chunk_size or 8192
-                for i in range(0, len(data), size):
-                    chunk = data[i:i + size]
-                    self._num_bytes_downloaded += len(chunk)
-                    yield chunk
-            self._stream_consumed = True
-        finally:
-            self._stream_consumed = True
-            await self.aclose()
+        if self._is_closed:
+            raise StreamClosed()
+        if self._native_stream is None and self._stream is not None and not hasattr(
+            self._stream, "__aiter__"
+        ):
+            raise RuntimeError("Attempted to call an async iterator on an sync stream.")
+
+        self._stream_consumed = True
+        self._num_bytes_downloaded = 0
+        chunker = _RawByteChunker(chunk_size)
+
+        if self._native_stream is not None:
+            source = self._native_stream.aiter_raw(chunk_size=None)
+        elif self._stream is not None:
+            source = self._stream
+        else:
+            # Buffered responses are consumed and closed at construction.
+            raise StreamConsumed()
+
+        async for raw_stream_bytes in source:
+            self._num_bytes_downloaded += len(raw_stream_bytes)
+            for chunk in chunker.decode(raw_stream_bytes):
+                yield chunk
+
+        for chunk in chunker.flush():
+            yield chunk
+        await self.aclose()
 
     def __repr__(self) -> str:
         return f"<Response [{self._status_code} {self._reason_phrase}]>"

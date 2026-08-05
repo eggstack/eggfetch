@@ -95,13 +95,14 @@ class TestElapsedTiming:
         resp = Response(200, content=b"data")
         assert resp.elapsed is not None
 
-    def test_elapsed_after_read_streaming(self):
+    def test_elapsed_remains_unavailable_for_unattached_stream(self):
         def gen():
             yield b"data"
 
         resp = Response(200, stream=gen())
         resp.read()
-        assert resp.elapsed is not None
+        with pytest.raises(RuntimeError, match="not available until"):
+            _ = resp.elapsed
 
     def test_elapsed_non_negative(self):
         resp = Response(200, content=b"data")

@@ -251,6 +251,8 @@ Key differences from HTTPX:
 - Redirects with buffered retained bodies replay correctly; arbitrary one-shot body iterators are rejected before the next hop
 - Request-local cookies and explicit Cookie headers are preserved within the facade jar model; native cookie kwargs are not used
 - Response streaming is asyncio-compatible and supports incremental text decoding and chunk-size control
+- Compatibility raw iteration defaults to `chunk_size=None`, marks live streams consumed before the first source read, counts consumed source bytes before chunk adaptation, and closes automatically only on normal exhaustion; close a partially consumed response explicitly.
+- Native compressed-response raw parity remains pending a core-owned pre-decompression stream boundary; the Stage C candidate designation does not claim unrestricted HTTPX replacement.
 
 Remaining differences are documented in `compat/httpx/0.28.1/allowed-differences.toml`; the compatibility claim is limited to the pinned HTTPX 0.28.1 profile and the supported asyncio surface.
 
