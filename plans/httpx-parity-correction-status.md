@@ -99,6 +99,14 @@ routine path.
 - Conclusion: passed
 - Attempt: 1 (no retry)
 
+Documentation-only CI evidence for the consistency correction:
+
+- Substantive correction SHA: `1a4ac12a29ae005d0c4a6dacf0936aab50b72c27`
+- Documentation-only CI run ID: `31037562941`
+- Documentation-only CI job ID: `92413466674`
+- Conclusion: passed (3m41s)
+- This commit is documentation-only and does not alter executable evidence.
+
 ## Current designation
 
 **Stage C candidate — deterministic compressed raw-stream body and metadata closure complete for the documented HTTPX 0.28.1 asyncio-supported surface.**
