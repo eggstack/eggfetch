@@ -102,11 +102,14 @@ CI run ID: `30969434477`
 
 CI checked-out SHA: `d4967f110247db659e5c48bbfca0acb3fb1e84bc`
 
-CI conclusion: passed. Workflow `CI`, job `ci` (`92190362078`), duration 3m31s.
+CI conclusion: passed on retry. Workflow `CI`, retry job `ci`
+(`92191448150`), duration 3m34s. The initial attempt in the same run failed
+only in the existing RSS-based `test_repeated_client_creation_stabilizes`
+resource test; the retry passed without code changes.
 
-The run executed the existing `./scripts/check.sh` routine path. GitHub
-reported only the platform-level Node.js 20 action deprecation annotation; no
-validation failure occurred.
+The successful retry executed the existing `./scripts/check.sh` routine path.
+GitHub reported only the platform-level Node.js 20 action deprecation
+annotation.
 
 PR #16: closed with a supersession comment; obsolete planning branch not merged.
 
@@ -117,6 +120,6 @@ PR #17: closed with a supersession comment; obsolete planning branch not merged.
 **Stage C candidate — final deterministic closure complete for the documented
 HTTPX 0.28.1 asyncio-supported surface.**
 
-The final status commit after the CI-tested tree is documentation-only; CI was
-not rerun for that status-only change. No executable files changed between the
-implementation SHA and the CI-tested tree.
+The final status updates are documentation-only. No executable files changed
+between the implementation SHA and the CI-tested tree; the successful retry
+therefore validates the same executable implementation.
