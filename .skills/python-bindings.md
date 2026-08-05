@@ -129,7 +129,7 @@ from eggfetch.compat.httpx import Client, AsyncClient, Request, Response
 - Request-local and explicit Cookie state is merged with the scoped facade jar per hop; explicit Cookie headers are stripped on every redirect and regenerated from the jar.
 - Live response iteration coalesces chunk sizes, decodes split text incrementally, and updates stream accounting and state.
 - Raw iteration marks streams consumed at the correct point, counts raw transport bytes, handles chunk-size splitting and coalescing, and closes exactly once on exhaustion or partial break.
-- The compact `test_corrective_kernel.py` suite runs in Tier 1; the full compatibility suite and API oracle remain Tier 2 gates.
+- The compact `test_corrective_kernel.py` suite runs in Tier 1; the full pinned `httpx==0.28.1` compatibility suite and API oracle remain Tier 2/manual gates. The designation is a bounded Stage C candidate for the asyncio-supported surface, not unrestricted HTTPX replacement.
 
 **Testing the compat layer:**
 

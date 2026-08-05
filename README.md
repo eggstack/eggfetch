@@ -117,12 +117,12 @@ client = eggfetch.Client(
 )
 ```
 
-### HTTPX drop-in
+### HTTPX-compatible facade
 
 ```python
 from eggfetch.compat.httpx import Client, AsyncClient
 
-# Drop-in replacement for httpx
+# HTTPX 0.28.1 asyncio-compatible facade
 client = Client()
 response = client.get("https://example.com")
 ```
@@ -239,7 +239,7 @@ See [`docs/cli/guide.md`](docs/cli/guide.md) for the full CLI reference.
 
 eggfetch provides an HTTPX 0.28.1-compatible asyncio facade via `eggfetch.compat.httpx`. The compatibility profile is pinned in `compat/httpx/0.28.1/` with machine-readable API manifests, allowed-difference tracking, and a parity case registry.
 
-The facade is a **Stage C candidate**. Its corrective parity kernel is required in routine validation; full HTTPX compatibility and the API oracle remain extended validation gates.
+The facade is a **Stage C candidate**, bounded to the pinned HTTPX 0.28.1 asyncio-supported surface. Its corrective parity kernel is required in routine validation; full HTTPX compatibility and the API oracle remain extended validation gates. This is not an unrestricted replacement for every HTTPX transport or concurrency backend.
 
 Key differences from HTTPX:
 - Trio/AnyIO not supported (asyncio only, tokio-based)

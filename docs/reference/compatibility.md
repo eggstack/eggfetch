@@ -1,6 +1,8 @@
 # Feature compatibility matrix
 
-This page tracks compatibility with requests and HTTPX across features.
+This page tracks compatibility with requests and HTTPX across features. HTTPX
+claims refer specifically to the pinned 0.28.1 asyncio-supported facade, not
+all HTTPX transports or concurrency backends.
  eggfetch Node.js bindings are experimental and not included in this matrix.
 
 ## Supported and tested
@@ -102,7 +104,11 @@ eggfetch targets HTTPX 0.28.1 compatibility in phases. The current status:
 - **Phase 5**: Downstream validation, 12-package consumer portfolio, expanded behavior corpus, upstream test inventory, evidence reporting, performance budgets, compatibility-stage decision (Stage C)
 - **Phase 6 / Corrective Closure**: Typed difference records in API oracle, lossless merge semantics, separate sync/async auth drivers, behavioral downstream fixtures, native lifecycle proof fixtures
 
-**Current status: Stage C candidate** (asyncio drop-in). The corrective closure pass applies typed difference records, lossless merge semantics, native lifecycle proof fixtures (including proxy and TLS), and behavioral downstream fixtures. See `scripts/compare_httpx_api_manifest.py` for the API comparison tool.
+**Current status: Stage C candidate** (pinned HTTPX 0.28.1 asyncio-supported
+surface). The corrective closure pass applies typed difference records,
+lossless merge semantics, native lifecycle proof fixtures (including proxy and
+TLS), and behavioral downstream fixtures. See
+`scripts/compare_httpx_api_manifest.py` for the API comparison tool.
 
 See `compat/httpx/0.28.1/` for the machine-readable profile and allowed differences.
 
