@@ -128,7 +128,7 @@ from eggfetch.compat.httpx import Client, AsyncClient, Request, Response
 - Native dispatch converts compatibility timeout mappings explicitly and serializes URL parameters only once.
 - Request-local and explicit Cookie state is merged with the scoped facade jar per hop; explicit Cookie headers are stripped on every redirect and regenerated from the jar.
 - Live response iteration coalesces chunk sizes, decodes split text incrementally, and updates stream accounting and state.
-- Raw iteration marks streams consumed at the correct point, counts raw source bytes before chunk-size splitting/coalescing, closes on normal exhaustion, and leaves partial finalization/source failure distinguishable from explicit response close. Native compressed raw parity remains blocked on a core-owned pre-decompression stream boundary.
+- Raw iteration marks streams consumed at the correct point, counts raw source bytes before chunk-size splitting/coalescing, closes on normal exhaustion, and leaves partial finalization/source failure distinguishable from explicit response close. Native compressed responses retain the encoded source in core until first body consumption; raw iterators select it exactly once, while decoded operations select the existing decompressor path. Core's decoded-header policy still removes `Content-Encoding` and `Content-Length` when automatic decompression is enabled.
 - The compact `test_corrective_kernel.py` suite runs in Tier 1; the full pinned `httpx==0.28.1` compatibility suite and API oracle remain Tier 2/manual gates. The designation is a bounded Stage C candidate for the asyncio-supported surface, not unrestricted HTTPX replacement.
 
 **Testing the compat layer:**

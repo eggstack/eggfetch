@@ -1,0 +1,38 @@
+# HTTPX 0.28.1 Native Compressed-Raw Adapter — Closure Record
+
+Status: implementation complete; final local evidence recorded below.
+
+This plan closes the native compressed-response raw-stream gap while keeping
+the encoded transport body single-owner. Core now defers decompression for
+compressed streaming responses until a consumer selects one mode:
+
+- decoded mode uses the existing `compression::decompress_stream()` path;
+- raw mode returns the encoded source through the narrow
+  `Response::raw_bytes_stream()` accessor.
+
+The Python binding selects the mode at the first body-consuming operation.
+Native raw iteration uses the raw accessor; decoded iteration, reads, text,
+and line operations use the decoded accessor. Pool leases and read timeouts
+remain attached to the selected source, and no buffering, tee, or second
+decompression implementation was added.
+
+The compatibility tests cover deterministic sync and async gzip loopback
+responses, source-byte accounting before chunk adaptation, one-shot mode
+selection, immediate source failure, cancellation, close, and normal versus
+partial finalization. The buffered raw behavior is explicitly aligned with
+HTTPX 0.28.1: buffered responses reject raw iteration as already consumed.
+
+The existing core policy of removing `Content-Encoding` and
+`Content-Length` after automatic decoded-response processing remains
+unchanged and is documented as a bounded core policy; this closure is about
+body-byte selection only.
+
+Out of scope remains a second independently consumable body, a Python
+decompression stack, transport/pool redesign, HTTPX version rebasing, new CI
+jobs, and promotion beyond the Stage C candidate designation.
+
+## Evidence
+
+The executable implementation SHA and exact final routine/extended evidence
+are recorded in [httpx-parity-correction-status.md](httpx-parity-correction-status.md)
+after the implementation commit and final documentation-only status commit.

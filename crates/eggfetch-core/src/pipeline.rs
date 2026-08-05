@@ -560,6 +560,26 @@ pub(crate) fn apply_read_timeout_and_lease(
             }
             ResponseBody::streaming_with_lease(stream, Arc::new(guard))
         }
+        ResponseBody::EncodedStreaming {
+            mut stream,
+            content_encoding,
+            limit,
+            ..
+        } => {
+            if let Some(dur) = read_timeout {
+                let inner = std::mem::replace(
+                    &mut stream,
+                    Box::pin(futures_util::stream::empty::<crate::error::Result<Bytes>>()),
+                );
+                stream = read_timeout_stream(inner, dur);
+            }
+            ResponseBody::encoded_streaming_with_lease(
+                stream,
+                Arc::new(guard),
+                content_encoding,
+                limit,
+            )
+        }
         other => {
             drop(guard);
             other

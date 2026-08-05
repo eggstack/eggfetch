@@ -4,12 +4,14 @@
 //! body handle. The body can be consumed in two ways:
 //!
 //! - **Buffered**: `bytes()` or `text()` collects the entire body.
-//! - **Streaming**: `bytes_stream()` yields body chunks incrementally.
+//! - **Streaming**: `bytes_stream()` yields decoded body chunks incrementally;
+//!   `raw_bytes_stream()` selects encoded chunks for compressed responses.
 //!
 //! # Body ownership
 //!
 //! The body can be consumed exactly once. After calling `bytes()`,
-//! `text()`, or `bytes_stream()`, further reads return an error.
+//! `text()`, `bytes_stream()`, or `raw_bytes_stream()`, further reads return
+//! an error.
 
 use std::pin::Pin;
 use std::task::{Context, Poll};
@@ -250,6 +252,19 @@ impl Response {
     /// Returns an error if the body has already been consumed.
     pub fn bytes_stream(&mut self) -> Result<BoxBytesStream> {
         self.body.bytes_stream()
+    }
+
+    /// Consume the response body and return encoded byte chunks.
+    ///
+    /// Compressed streaming responses select the original encoded transport
+    /// body. Raw and decoded body selection are mutually exclusive and
+    /// single-consumption operations.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the response body has already been consumed.
+    pub fn raw_bytes_stream(&mut self) -> Result<BoxBytesStream> {
+        self.body.raw_bytes_stream()
     }
 
     /// Consume the response body and return a stream of text lines.

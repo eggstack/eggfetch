@@ -45,6 +45,7 @@ use futures_util::StreamExt;
 use http_body::Frame;
 use pin_project_lite::pin_project;
 
+use crate::compression::DecompressionLimit;
 use crate::error::{Error, Result};
 
 // ---------------------------------------------------------------------------
@@ -321,8 +322,10 @@ impl Stream for LeasedResponseStream {
 ///
 /// # Single-consumption semantics
 ///
-/// A response body can be consumed once via `bytes()`, `text()`, or
-/// `bytes_stream()`. After consumption, further reads return an error.
+/// A response body can be consumed once via `bytes()`, `text()`,
+/// `bytes_stream()`, or `raw_bytes_stream()`. For compressed streaming bodies,
+/// raw and decoded selection are mutually exclusive. After consumption,
+/// further reads return an error.
 pub enum ResponseBody {
     /// Fully buffered body.
     Buffered {
@@ -336,6 +339,18 @@ pub enum ResponseBody {
         /// Optional pool permit holder. Released on drop.
         lease: Option<PoolGuardArc>,
     },
+    /// A compressed streaming body whose encoded source is retained until
+    /// the caller selects raw or decoded consumption.
+    EncodedStreaming {
+        /// The encoded body stream.
+        stream: BoxBytesStream,
+        /// Optional pool permit holder. Released on drop.
+        lease: Option<PoolGuardArc>,
+        /// The original `Content-Encoding` header value.
+        content_encoding: String,
+        /// Limits applied when decoded mode is selected.
+        limit: DecompressionLimit,
+    },
     /// The streaming body has already been consumed.
     Consumed,
 }
@@ -348,6 +363,9 @@ impl std::fmt::Debug for ResponseBody {
                 .field("len", &bytes.len())
                 .finish(),
             Self::Streaming { .. } => f.debug_struct("Streaming").finish_non_exhaustive(),
+            Self::EncodedStreaming { .. } => {
+                f.debug_struct("EncodedStreaming").finish_non_exhaustive()
+            }
             Self::Consumed => f.debug_struct("Consumed").finish(),
         }
     }
@@ -376,12 +394,42 @@ impl ResponseBody {
         }
     }
 
+    /// Create a deferred-decode streaming response body.
+    pub(crate) fn encoded_streaming(
+        stream: BoxBytesStream,
+        content_encoding: String,
+        limit: DecompressionLimit,
+    ) -> Self {
+        Self::EncodedStreaming {
+            stream,
+            lease: None,
+            content_encoding,
+            limit,
+        }
+    }
+
+    /// Create a deferred-decode streaming response body with an attached
+    /// pool permit.
+    pub(crate) fn encoded_streaming_with_lease(
+        stream: BoxBytesStream,
+        lease: PoolGuardArc,
+        content_encoding: String,
+        limit: DecompressionLimit,
+    ) -> Self {
+        Self::EncodedStreaming {
+            stream,
+            lease: Some(lease),
+            content_encoding,
+            limit,
+        }
+    }
+
     /// Returns `true` if the body is empty.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         match self {
             Self::Buffered { bytes } => bytes.is_empty(),
-            Self::Streaming { .. } => false, // unknown until consumed
+            Self::Streaming { .. } | Self::EncodedStreaming { .. } => false, // unknown until consumed
             Self::Consumed => true,
         }
     }
@@ -394,7 +442,7 @@ impl ResponseBody {
     pub fn len(&self) -> Option<usize> {
         match self {
             Self::Buffered { bytes } => Some(bytes.len()),
-            Self::Streaming { .. } => None,
+            Self::Streaming { .. } | Self::EncodedStreaming { .. } => None,
             Self::Consumed => Some(0),
         }
     }
@@ -428,6 +476,25 @@ impl ResponseBody {
                 drop(lease);
                 Ok(buf.freeze())
             }
+            Self::EncodedStreaming {
+                stream,
+                lease,
+                content_encoding,
+                limit,
+            } => {
+                let mut stream = crate::compression::decompress_stream(
+                    stream,
+                    Some(&content_encoding),
+                    true,
+                    limit,
+                )?;
+                let mut buf = BytesMut::new();
+                while let Some(chunk) = stream.next().await {
+                    buf.extend_from_slice(&chunk?);
+                }
+                drop(lease);
+                Ok(buf.freeze())
+            }
             Self::Consumed => Err(Error::Body("body already consumed".into())),
         }
     }
@@ -452,6 +519,26 @@ impl ResponseBody {
     ///
     /// Returns an error if the body has already been consumed.
     pub fn bytes_stream(&mut self) -> Result<BoxBytesStream> {
+        self.take_stream(false)
+    }
+
+    /// Consume the body and return the encoded response byte stream.
+    ///
+    /// For compressed streaming responses, this selects the original encoded
+    /// transport body and bypasses the existing decoder chain. The selection
+    /// is one-shot; a body cannot subsequently be consumed in decoded mode.
+    /// Buffered bodies follow the ordinary streaming path because their
+    /// encoded representation is no longer available.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the body has already been consumed or if the
+    /// decoder configuration is invalid while selecting a stream.
+    pub fn raw_bytes_stream(&mut self) -> Result<BoxBytesStream> {
+        self.take_stream(true)
+    }
+
+    fn take_stream(&mut self, raw: bool) -> Result<BoxBytesStream> {
         match self {
             Self::Buffered { bytes } => {
                 let bytes = std::mem::take(bytes);
@@ -463,6 +550,33 @@ impl ResponseBody {
             Self::Streaming { .. } => {
                 let old = std::mem::replace(self, Self::Consumed);
                 if let Self::Streaming { stream, lease } = old {
+                    Ok(Box::pin(LeasedResponseStream {
+                        inner: stream,
+                        _lease: lease,
+                    }))
+                } else {
+                    unreachable!()
+                }
+            }
+            Self::EncodedStreaming { .. } => {
+                let old = std::mem::replace(self, Self::Consumed);
+                if let Self::EncodedStreaming {
+                    stream,
+                    lease,
+                    content_encoding,
+                    limit,
+                } = old
+                {
+                    let stream = if raw {
+                        Ok(stream)
+                    } else {
+                        crate::compression::decompress_stream(
+                            stream,
+                            Some(&content_encoding),
+                            true,
+                            limit,
+                        )
+                    }?;
                     Ok(Box::pin(LeasedResponseStream {
                         inner: stream,
                         _lease: lease,
@@ -623,6 +737,59 @@ mod tests {
         let _ = body.bytes_stream().unwrap();
         let err = body.bytes_stream();
         assert!(err.is_err());
+    }
+
+    #[cfg(feature = "compression-gzip")]
+    fn gzip_bytes(input: &[u8]) -> Bytes {
+        use std::io::Write;
+
+        let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::fast());
+        encoder.write_all(input).unwrap();
+        Bytes::from(encoder.finish().unwrap())
+    }
+
+    #[cfg(feature = "compression-gzip")]
+    #[tokio::test]
+    async fn encoded_streaming_selects_raw_once() {
+        let encoded = gzip_bytes(b"compressed body");
+        let expected = encoded.clone();
+        let stream = Box::pin(futures_util::stream::iter(vec![Ok(encoded)]));
+        let mut body = ResponseBody::encoded_streaming(
+            stream,
+            "gzip".to_owned(),
+            DecompressionLimit::default(),
+        );
+
+        let mut raw = body.raw_bytes_stream().unwrap();
+        assert_eq!(raw.next().await.unwrap().unwrap(), expected);
+        assert!(raw.next().await.is_none());
+        assert!(body.bytes_stream().is_err());
+    }
+
+    #[cfg(feature = "compression-gzip")]
+    #[tokio::test]
+    async fn encoded_streaming_selects_decoded_once() {
+        let encoded = gzip_bytes(b"compressed body");
+        let stream = Box::pin(futures_util::stream::iter(vec![Ok(encoded)]));
+        let mut body = ResponseBody::encoded_streaming(
+            stream,
+            "gzip".to_owned(),
+            DecompressionLimit::default(),
+        );
+
+        let mut decoded = body.bytes_stream().unwrap();
+        assert_eq!(decoded.next().await.unwrap().unwrap(), "compressed body");
+        assert!(decoded.next().await.is_none());
+        assert!(body.raw_bytes_stream().is_err());
+    }
+
+    #[tokio::test]
+    async fn uncompressed_raw_selection_is_passthrough() {
+        let stream = Box::pin(futures_util::stream::iter(vec![Ok(Bytes::from("body"))]));
+        let mut body = ResponseBody::streaming(stream);
+        let mut raw = body.raw_bytes_stream().unwrap();
+        assert_eq!(raw.next().await.unwrap().unwrap(), "body");
+        assert!(raw.next().await.is_none());
     }
 
     #[tokio::test]

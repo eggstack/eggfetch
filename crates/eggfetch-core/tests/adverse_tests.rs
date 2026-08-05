@@ -123,13 +123,8 @@ async fn read_timeout_fires_during_slow_chunks() {
 
     tokio::spawn(async move {
         let (mut stream, _) = listener.accept().await.unwrap();
-        let mut request_line = Vec::new();
-        stream.read_buf(&mut request_line).await.ok();
-        while {
-            let mut line = Vec::new();
-            let n = stream.read_buf(&mut line).await.unwrap_or(0);
-            n > 0 && line.windows(2).position(|w| w == b"\r\n").is_none()
-        } {}
+        let mut request = [0_u8; 1024];
+        let _ = stream.read(&mut request).await;
         let response = b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n";
         stream.write_all(response).await.ok();
         tokio::time::sleep(Duration::from_secs(10)).await;

@@ -24,11 +24,27 @@ pub(crate) fn apply_decompression(
     let old_body = std::mem::replace(&mut response.body, ResponseBody::buffered(Bytes::new()));
     let new_body = match old_body {
         ResponseBody::Streaming { stream, lease } => {
-            let decoded_stream =
-                crate::compression::decompress_stream(stream, content_encoding, true, limit)?;
-            ResponseBody::Streaming {
-                stream: decoded_stream,
-                lease,
+            if let Some(ce) = content_encoding.filter(|value| !value.trim().is_empty()) {
+                let mut body = ResponseBody::encoded_streaming(stream, ce.to_owned(), limit);
+                if let Some(lease) = lease {
+                    body = match body {
+                        ResponseBody::EncodedStreaming {
+                            stream,
+                            content_encoding,
+                            limit,
+                            ..
+                        } => ResponseBody::encoded_streaming_with_lease(
+                            stream,
+                            lease,
+                            content_encoding,
+                            limit,
+                        ),
+                        _ => unreachable!(),
+                    };
+                }
+                body
+            } else {
+                ResponseBody::Streaming { stream, lease }
             }
         }
         ResponseBody::Buffered { bytes } => {
@@ -44,6 +60,7 @@ pub(crate) fn apply_decompression(
             }
         }
         ResponseBody::Consumed => ResponseBody::Consumed,
+        body @ ResponseBody::EncodedStreaming { .. } => body,
     };
     response.set_body(new_body);
 

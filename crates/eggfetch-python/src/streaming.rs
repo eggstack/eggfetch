@@ -60,6 +60,12 @@ const STATE_BUFFERED: u8 = 1;
 const STATE_CONSUMED: u8 = 2;
 const STATE_CLOSED: u8 = 3;
 
+#[derive(Clone, Copy)]
+enum StreamMode {
+    Decoded,
+    Raw,
+}
+
 // ---------------------------------------------------------------------------
 // PyStreamingResponse
 // ---------------------------------------------------------------------------
@@ -78,7 +84,7 @@ pub(crate) struct PyStreamingResponse {
     #[pyo3(get)]
     cookies: PyCookies,
     body_state: AtomicU8,
-    stream: std::sync::Mutex<Option<eggfetch_core::body::BoxBytesStream>>,
+    response: std::sync::Mutex<Option<eggfetch_core::Response>>,
     stream_cancel: tokio::sync::watch::Sender<bool>,
     encoding_name: Option<String>,
     cached_content: std::sync::Mutex<Option<Bytes>>,
@@ -129,7 +135,6 @@ impl PyStreamingResponse {
         }
         let cookies = PyCookies::from_jar(jar);
 
-        let stream = response.bytes_stream().map_err(map_err)?;
         let (stream_cancel, _) = tokio::sync::watch::channel(false);
 
         Py::new(
@@ -141,7 +146,7 @@ impl PyStreamingResponse {
                 history,
                 cookies,
                 body_state: AtomicU8::new(STATE_STREAMING),
-                stream: std::sync::Mutex::new(Some(stream)),
+                response: std::sync::Mutex::new(Some(response)),
                 stream_cancel,
                 encoding_name: encoding,
                 cached_content: std::sync::Mutex::new(None),
@@ -151,9 +156,9 @@ impl PyStreamingResponse {
         .map(|inner| inner.into_bound(py))
     }
 
-    fn take_stream(&self) -> PyResult<eggfetch_core::body::BoxBytesStream> {
-        let mut stream_guard = self
-            .stream
+    fn take_stream(&self, mode: StreamMode) -> PyResult<eggfetch_core::body::BoxBytesStream> {
+        let mut response_guard = self
+            .response
             .lock()
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
         let state = self.body_state.load(Ordering::Acquire);
@@ -180,9 +185,14 @@ impl PyStreamingResponse {
                 }
                 _ => unreachable!(),
             })?;
-        let stream = stream_guard
+        let mut response = response_guard
             .take()
             .ok_or_else(|| StreamConsumed::new_err("streaming body has already been consumed"))?;
+        let stream = match mode {
+            StreamMode::Decoded => response.bytes_stream(),
+            StreamMode::Raw => response.raw_bytes_stream(),
+        }
+        .map_err(map_err)?;
         // Taking ownership transfers the body to a reader/iterator. If the
         // reader is cancelled or dropped, the stream is terminally consumed
         // and its core lease is released by dropping the stream.
@@ -190,7 +200,7 @@ impl PyStreamingResponse {
     }
 
     fn drain_all_bytes(&self) -> PyResult<Bytes> {
-        let mut stream = self.take_stream()?;
+        let mut stream = self.take_stream(StreamMode::Decoded)?;
         let mut cancellation = self.stream_cancel.subscribe();
         // Use the shared runtime. If we are already inside a Tokio worker
         // thread (e.g. called from an async Python task), spawning a task
@@ -284,8 +294,8 @@ impl PyStreamingResponse {
         // Wake any reader/iterator that already owns the body. Its select
         // branch will drop the stream and release the core pool lease.
         let _ = self.stream_cancel.send(true);
-        let mut stream_guard = self
-            .stream
+        let mut response_guard = self
+            .response
             .lock()
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
         if self
@@ -301,7 +311,7 @@ impl PyStreamingResponse {
             // Dropping the live body is sufficient to release the core lease
             // and lets the transport discard the unread response. Blocking
             // here to drain an untrusted server would defeat close().
-            drop(stream_guard.take());
+            drop(response_guard.take());
         } else {
             // Closing is terminal even when a reader or iterator has already
             // moved the body out of the response object.
@@ -312,7 +322,7 @@ impl PyStreamingResponse {
 
     fn take_stream_or_err(&self) -> PyResult<eggfetch_core::body::BoxBytesStream> {
         self.ensure_streaming()?;
-        self.take_stream()
+        self.take_stream(StreamMode::Decoded)
     }
 }
 
@@ -625,12 +635,12 @@ impl PyStreamingResponse {
     ) -> PyResult<bool> {
         // HTTPX discards unread body on context exit — do NOT drain.
         let _ = self.stream_cancel.send(true);
-        let mut stream_guard = self
-            .stream
+        let mut response_guard = self
+            .response
             .lock()
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
         // Drop the stream to release the pool lease without draining.
-        drop(stream_guard.take());
+        drop(response_guard.take());
         self.body_state.store(STATE_CLOSED, Ordering::Release);
         Ok(false)
     }
@@ -655,10 +665,10 @@ impl PyStreamingResponse {
             let result: PyResult<()> = Python::with_gil(|py| {
                 let borrowed = slf.borrow(py);
                 let _ = borrowed.stream_cancel.send(true);
-                let mut stream_guard = borrowed.stream.lock().map_err(|e| {
+                let mut response_guard = borrowed.response.lock().map_err(|e| {
                     PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string())
                 })?;
-                drop(stream_guard.take());
+                drop(response_guard.take());
                 borrowed.body_state.store(STATE_CLOSED, Ordering::Release);
                 Ok(())
             });
@@ -711,7 +721,7 @@ impl PyBytesChunkIterator {
         let stream = {
             let borrowed = resp.borrow(py);
             borrowed.ensure_streaming()?;
-            borrowed.take_stream()?
+            borrowed.take_stream(StreamMode::Decoded)?
         };
         let (cancel, mut cancellation) = tokio::sync::watch::channel(false);
 
@@ -834,7 +844,7 @@ impl PyTextChunkIterator {
         let (stream, enc_name) = {
             let borrowed = resp.borrow(py);
             borrowed.ensure_streaming()?;
-            let stream = borrowed.take_stream()?;
+            let stream = borrowed.take_stream(StreamMode::Decoded)?;
             let enc_name = encoding_override.or_else(|| borrowed.encoding_name.clone());
             (stream, enc_name)
         };
@@ -941,7 +951,7 @@ impl PyLinesChunkIterator {
         let (stream, enc_name) = {
             let borrowed = resp.borrow(py);
             borrowed.ensure_streaming()?;
-            let stream = borrowed.take_stream()?;
+            let stream = borrowed.take_stream(StreamMode::Decoded)?;
             let enc_name = encoding_override.or_else(|| borrowed.encoding_name.clone());
             (stream, enc_name)
         };
@@ -1058,7 +1068,10 @@ impl PyAsyncBytesIterator {
         let (stream, mut cancellation) = {
             let borrowed = resp.borrow(py);
             borrowed.ensure_streaming()?;
-            Ok::<_, PyErr>((borrowed.take_stream()?, borrowed.stream_cancel.subscribe()))?
+            Ok::<_, PyErr>((
+                borrowed.take_stream(StreamMode::Decoded)?,
+                borrowed.stream_cancel.subscribe(),
+            ))?
         };
 
         let (tx, rx) = tokio::sync::mpsc::channel(16);
@@ -1175,7 +1188,7 @@ impl PyAsyncTextIterator {
         let (stream, enc_name, mut cancellation) = {
             let borrowed = resp.borrow(py);
             borrowed.ensure_streaming()?;
-            let stream = borrowed.take_stream()?;
+            let stream = borrowed.take_stream(StreamMode::Decoded)?;
             let enc_name = encoding_override.or_else(|| borrowed.encoding_name.clone());
             (stream, enc_name, borrowed.stream_cancel.subscribe())
         };
@@ -1274,7 +1287,7 @@ impl PyAsyncLinesIterator {
         let (stream, enc_name, mut cancellation) = {
             let borrowed = resp.borrow(py);
             borrowed.ensure_streaming()?;
-            let stream = borrowed.take_stream()?;
+            let stream = borrowed.take_stream(StreamMode::Decoded)?;
             let enc_name = encoding_override.or_else(|| borrowed.encoding_name.clone());
             (stream, enc_name, borrowed.stream_cancel.subscribe())
         };
@@ -1385,7 +1398,7 @@ impl PyRawBytesChunkIterator {
         let stream = {
             let borrowed = resp.borrow(py);
             borrowed.ensure_streaming()?;
-            borrowed.take_stream()?
+            borrowed.take_stream(StreamMode::Raw)?
         };
         let (cancel, mut cancellation) = tokio::sync::watch::channel(false);
 
@@ -1515,7 +1528,10 @@ impl PyAsyncRawBytesIterator {
         let (stream, mut cancellation) = {
             let borrowed = resp.borrow(py);
             borrowed.ensure_streaming()?;
-            Ok::<_, PyErr>((borrowed.take_stream()?, borrowed.stream_cancel.subscribe()))?
+            Ok::<_, PyErr>((
+                borrowed.take_stream(StreamMode::Raw)?,
+                borrowed.stream_cancel.subscribe(),
+            ))?
         };
 
         let (tx, rx) = tokio::sync::mpsc::channel(16);

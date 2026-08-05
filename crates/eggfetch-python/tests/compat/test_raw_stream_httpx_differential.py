@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import gzip
 import inspect
+import asyncio
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler
 
@@ -18,12 +19,20 @@ assert httpx.__version__ == "0.28.1", (
 
 
 class _SyncChunks(httpx.SyncByteStream):
-    def __init__(self, chunks: list[bytes], fail_after: int | None = None) -> None:
+    def __init__(
+        self,
+        chunks: list[bytes],
+        fail_after: int | None = None,
+        fail_before: bool = False,
+    ) -> None:
         self.chunks = chunks
         self.fail_after = fail_after
+        self.fail_before = fail_before
         self.close_count = 0
 
     def __iter__(self):
+        if self.fail_before:
+            raise ValueError("source failure")
         for index, chunk in enumerate(self.chunks):
             yield chunk
             if self.fail_after == index:
@@ -34,16 +43,39 @@ class _SyncChunks(httpx.SyncByteStream):
 
 
 class _AsyncChunks(httpx.AsyncByteStream):
-    def __init__(self, chunks: list[bytes], fail_after: int | None = None) -> None:
+    def __init__(
+        self,
+        chunks: list[bytes],
+        fail_after: int | None = None,
+        fail_before: bool = False,
+    ) -> None:
         self.chunks = chunks
         self.fail_after = fail_after
+        self.fail_before = fail_before
         self.close_count = 0
 
     async def __aiter__(self):
+        if self.fail_before:
+            raise ValueError("source failure")
         for index, chunk in enumerate(self.chunks):
             yield chunk
             if self.fail_after == index:
                 raise ValueError("source failure")
+
+    async def aclose(self) -> None:
+        self.close_count += 1
+
+
+class _BlockingAsyncChunks(httpx.AsyncByteStream):
+    def __init__(self) -> None:
+        self.started = asyncio.Event()
+        self.release = asyncio.Event()
+        self.close_count = 0
+
+    async def __aiter__(self):
+        self.started.set()
+        await self.release.wait()
+        yield b"released"
 
     async def aclose(self) -> None:
         self.close_count += 1
@@ -70,6 +102,17 @@ def _state(response, source) -> tuple[bool, bool, int, bool, int]:
 def _exception(action) -> tuple[str, str]:
     try:
         action()
+    except Exception as exc:  # noqa: BLE001 - normalize both public runtimes.
+        name = type(exc).__name__
+        if name == "StreamConsumed":
+            return name, "stream-consumed"
+        return name, (str(exc).splitlines() or [""])[0]
+    return "", ""
+
+
+async def _async_exception(action) -> tuple[str, str]:
+    try:
+        await action()
     except Exception as exc:  # noqa: BLE001 - normalize both public runtimes.
         name = type(exc).__name__
         if name == "StreamConsumed":
@@ -141,6 +184,16 @@ def test_sync_source_failure_preserves_primary_exception_and_state():
     assert observations[1] == observations[0]
 
 
+def test_sync_immediate_source_failure_matches_httpx():
+    observations = []
+    for response_type in (httpx.Response, Response):
+        source = _SyncChunks([], fail_before=True)
+        response = response_type(200, stream=source)
+        error = _exception(lambda: list(response.iter_raw()))
+        observations.append((error, _state(response, source)))
+    assert observations[1] == observations[0]
+
+
 @pytest.mark.parametrize("chunk_size", [0, -1, 1.5, "1", False])
 def test_sync_invalid_chunk_sizes_match_httpx(chunk_size):
     observations = []
@@ -195,7 +248,7 @@ async def test_async_partial_finalization_and_explicit_close_match_httpx():
         partial = _state(response, source)
         await iterator.aclose()
         finalized = _state(response, source)
-        second = _exception(lambda: response.aiter_raw())
+        second = await _async_exception(lambda: anext(response.aiter_raw()))
         await response.aclose()
         closed = _state(response, source)
         observations.append((partial, finalized, second, closed))
@@ -215,6 +268,38 @@ async def test_async_source_failure_preserves_primary_exception_and_state():
         except Exception as exc:  # noqa: BLE001 - public exception comparison.
             error = (type(exc).__name__, (str(exc).splitlines() or [""])[0])
         observations.append((error, _state(response, source)))
+    assert observations[1] == observations[0]
+
+
+@pytest.mark.asyncio
+async def test_async_immediate_source_failure_matches_httpx():
+    observations = []
+    for response_type in (httpx.Response, Response):
+        source = _AsyncChunks([], fail_before=True)
+        response = response_type(200, stream=source)
+        try:
+            await anext(response.aiter_raw())
+        except Exception as exc:  # noqa: BLE001 - public exception comparison.
+            error = (type(exc).__name__, (str(exc).splitlines() or [""])[0])
+        observations.append((error, _state(response, source)))
+    assert observations[1] == observations[0]
+
+
+@pytest.mark.asyncio
+async def test_async_raw_cancellation_and_close_match_httpx():
+    observations = []
+    for response_type in (httpx.Response, Response):
+        source = _BlockingAsyncChunks()
+        response = response_type(200, stream=source)
+        iterator = response.aiter_raw()
+        task = asyncio.create_task(anext(iterator))
+        await source.started.wait()
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        await iterator.aclose()
+        await response.aclose()
+        observations.append(_state(response, source))
     assert observations[1] == observations[0]
 
 
@@ -290,7 +375,7 @@ class _RawHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         original = b"hello " * 100
         if self.path == "/gzip":
-            body = gzip.compress(original)
+            body = gzip.compress(original, mtime=0)
             self.send_response(200)
             self.send_header("Content-Encoding", "gzip")
         else:
@@ -338,15 +423,83 @@ async def test_actual_native_async_raw_stream_reaches_unadapted_path():
                 assert actual.num_bytes_downloaded == expected.num_bytes_downloaded
 
 
-def test_native_compressed_raw_boundary_is_explicitly_unresolved():
-    """Keep the core adapter stop condition executable until it is reviewed."""
+def test_actual_native_sync_compressed_raw_and_decoded_match_httpx():
     with _native_server() as base:
         original = b"hello " * 100
         with httpx.Client() as reference, Client() as candidate:
-            with reference.stream("GET", f"{base}/gzip") as expected, candidate.stream(
-                "GET", f"{base}/gzip"
-            ) as actual:
+            with reference.stream("GET", f"{base}/gzip") as expected:
                 expected_raw = b"".join(expected.iter_raw())
+                expected_count = expected.num_bytes_downloaded
+            with candidate.stream("GET", f"{base}/gzip") as actual:
                 actual_raw = b"".join(actual.iter_raw())
-                assert expected_raw != actual_raw
-                assert actual_raw == original
+                assert actual_raw == expected_raw
+                assert actual_raw != original
+                assert actual_raw.startswith(b"\x1f\x8b")
+                assert actual.num_bytes_downloaded == expected_count
+                assert actual.is_closed
+
+            with reference.stream("GET", f"{base}/gzip") as expected:
+                expected_decoded = expected.read()
+            with candidate.stream("GET", f"{base}/gzip") as actual:
+                actual_decoded = actual.read()
+                assert actual_decoded == expected_decoded == original
+                assert actual.is_closed
+
+
+def test_actual_native_sync_compressed_raw_chunk_adaptation_matches_httpx():
+    with _native_server() as base:
+        with httpx.Client() as reference, Client() as candidate:
+            with reference.stream("GET", f"{base}/gzip") as expected:
+                expected_chunks = list(expected.iter_raw(chunk_size=1))
+                expected_count = expected.num_bytes_downloaded
+            with candidate.stream("GET", f"{base}/gzip") as actual:
+                actual_chunks = list(actual.iter_raw(chunk_size=1))
+                assert actual_chunks == expected_chunks
+                assert actual.num_bytes_downloaded == expected_count
+
+
+@pytest.mark.asyncio
+async def test_actual_native_async_compressed_raw_and_decoded_match_httpx():
+    with _native_server() as base:
+        async with httpx.AsyncClient() as reference, AsyncClient() as candidate:
+            async with reference.stream("GET", f"{base}/gzip") as expected:
+                expected_raw = b"".join([chunk async for chunk in expected.aiter_raw()])
+                expected_count = expected.num_bytes_downloaded
+            async with candidate.stream("GET", f"{base}/gzip") as actual:
+                actual_raw = b"".join([chunk async for chunk in actual.aiter_raw()])
+                assert actual_raw == expected_raw
+                assert actual_raw != b"hello " * 100
+                assert actual_raw.startswith(b"\x1f\x8b")
+                assert actual.num_bytes_downloaded == expected_count
+                assert actual.is_closed
+
+            async with reference.stream("GET", f"{base}/gzip") as expected:
+                expected_decoded = await expected.aread()
+            async with candidate.stream("GET", f"{base}/gzip") as actual:
+                actual_decoded = await actual.aread()
+                assert actual_decoded == expected_decoded == b"hello " * 100
+                assert actual.is_closed
+
+
+@pytest.mark.asyncio
+async def test_actual_native_async_compressed_raw_chunk_adaptation_matches_httpx():
+    with _native_server() as base:
+        async with httpx.AsyncClient() as reference, AsyncClient() as candidate:
+            async with reference.stream("GET", f"{base}/gzip") as expected:
+                expected_chunks = [chunk async for chunk in expected.aiter_raw(chunk_size=1)]
+                expected_count = expected.num_bytes_downloaded
+            async with candidate.stream("GET", f"{base}/gzip") as actual:
+                actual_chunks = [chunk async for chunk in actual.aiter_raw(chunk_size=1)]
+                assert actual_chunks == expected_chunks
+                assert actual.num_bytes_downloaded == expected_count
+
+
+def test_native_compressed_stream_selection_is_one_shot():
+    with _native_server() as base:
+        with Client() as client:
+            with client.stream("GET", f"{base}/gzip") as response:
+                assert next(response.iter_raw())
+                assert _exception(response.read)[0] == "StreamConsumed"
+            with client.stream("GET", f"{base}/gzip") as response:
+                assert response.read() == b"hello " * 100
+                assert _exception(lambda: list(response.iter_raw()))[0] == "StreamConsumed"

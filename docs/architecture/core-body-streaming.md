@@ -85,7 +85,9 @@ Streaming uses `StreamingResponse` with a four-state machine: `streaming` → `b
 
 ### Raw byte iterators
 
-The compatibility facade's `iter_raw(chunk_size=None)` and `aiter_raw(chunk_size=None)` are intended to yield undecoded transport-level bytes, with bounded splitting/coalescing performed after each source chunk. Live compatibility streams become consumed before the first source read; normal exhaustion closes them, while partial iterator finalization and source failure remain distinguishable from explicit response close. The native Python `StreamingRawBytesIterator` and `AsyncStreamingRawBytesIterator` now accept an optional chunk size and expose native source boundaries when available. A compressed native response still needs a core-owned pre-decompression raw-body boundary before the facade can claim complete raw parity; Python must not add a second decompressor.
+The compatibility facade's `iter_raw(chunk_size=None)` and `aiter_raw(chunk_size=None)` yield undecoded transport-level bytes, with bounded splitting/coalescing performed after each source chunk. Live compatibility streams become consumed before the first source read; normal exhaustion closes them, while partial iterator finalization and source failure remain distinguishable from explicit response close. The native Python `StreamingRawBytesIterator` and `AsyncStreamingRawBytesIterator` accept an optional chunk size and expose native source boundaries when available.
+
+Compressed streaming responses use `ResponseBody::EncodedStreaming` internally. The encoded source remains single-owner until the first body-consuming operation selects one mode: `Response::raw_bytes_stream()` returns encoded bytes unchanged, while `bytes_stream()`, `bytes()`, and `text()` construct the existing decoder chain. The selection is mutually exclusive and one-shot; the read-timeout wrapper and pool lease remain attached to the selected source. Python must not add a second decompressor or buffer/tee the body. Automatic decompression continues to remove `Content-Encoding` and `Content-Length` from core response headers.
 
 ### Request streaming
 

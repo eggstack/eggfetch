@@ -756,6 +756,7 @@ mod tests {
         assert!(limit.max_decompression_ratio.is_none());
     }
 
+    #[cfg(any(feature = "compression-gzip", feature = "compression-deflate"))]
     #[test]
     fn decompression_limit_max_size_rejects() {
         let data = gzip_compress(b"hello world");
@@ -767,6 +768,7 @@ mod tests {
         assert_eq!(err.kind(), "decoded_body_too_large");
     }
 
+    #[cfg(any(feature = "compression-gzip", feature = "compression-deflate"))]
     #[test]
     fn decompression_limit_max_size_allows_within() {
         let data = gzip_compress(b"hi");
@@ -778,6 +780,7 @@ mod tests {
         assert_eq!(&result[..], b"hi");
     }
 
+    #[cfg(any(feature = "compression-gzip", feature = "compression-deflate"))]
     #[test]
     fn decompression_limit_ratio_rejects() {
         let data = gzip_compress(b"hello world, this is a test of compression");
@@ -789,6 +792,7 @@ mod tests {
         assert_eq!(err.kind(), "decompression_ratio_exceeded");
     }
 
+    #[cfg(any(feature = "compression-gzip", feature = "compression-deflate"))]
     #[test]
     fn decompression_limit_ratio_allows_within() {
         let data = gzip_compress(b"hello world, this is a test of compression");
@@ -800,6 +804,7 @@ mod tests {
         assert_eq!(&result[..], b"hello world, this is a test of compression");
     }
 
+    #[cfg(any(feature = "compression-gzip", feature = "compression-deflate"))]
     #[test]
     fn decompression_limit_unlimited_allows() {
         let data = gzip_compress(b"hello world");

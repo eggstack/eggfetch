@@ -123,7 +123,7 @@ class TestRawVsDecodedIteration:
         assert lines == ["line1", "line2"]
 
     def test_iter_raw_yields_bytes(self):
-        resp = Response(200, content=b"raw data")
+        resp = Response(200, stream=iter([b"raw data"]))
         chunks = list(resp.iter_raw(chunk_size=4))
         assert chunks == [b"raw ", b"data"]
 
