@@ -3,6 +3,7 @@
 import pytest
 
 from eggfetch.compat.httpx import Timeout, Limits, Proxy, codes, URL
+from eggfetch.compat.httpx._status_codes import _StatusCodeGroup
 
 
 # ── Timeout ─────────────────────────────────────────────────────────────
@@ -168,6 +169,12 @@ class TestProxyConstruction:
         p = Proxy("http://proxy.example.com")
         assert p.ssl_context is None
 
+    def test_ssl_context_stored(self):
+        import ssl
+        ctx = ssl.create_default_context()
+        p = Proxy("http://proxy.example.com", ssl_context=ctx)
+        assert p.ssl_context is ctx
+
 
 class TestProxyRepr:
     def test_repr_no_creds(self):
@@ -238,3 +245,32 @@ class TestStatusCodes:
     def test_invalid_code_raises(self):
         with pytest.raises(AttributeError):
             _ = codes.THIS_DOES_NOT_EXIST
+
+
+class TestStatusCodesIntEnum:
+    def test_is_int_enum(self):
+        from enum import IntEnum
+        assert issubclass(_StatusCodeGroup, IntEnum)
+
+    def test_ok_is_int(self):
+        assert isinstance(codes.OK, int)
+        assert codes.OK == 200
+
+    def test_int_conversion(self):
+        assert int(codes.OK) == 200
+
+    def test_construct_from_int(self):
+        assert codes(200) == codes.OK
+
+    def test_member_name(self):
+        assert codes.OK.name == "OK"
+
+    def test_member_value(self):
+        assert codes.OK.value == 200
+
+    def test_isinstance_int(self):
+        assert isinstance(codes.NOT_FOUND, int)
+
+    def test_comparison_with_int(self):
+        assert codes.OK == 200
+        assert codes.NOT_FOUND != 200

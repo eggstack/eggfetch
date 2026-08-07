@@ -9,9 +9,9 @@ class Proxy:
     Phase 2: accept and store; Phase 4 executes.
     """
 
-    __slots__ = ("_url", "_headers", "_auth")
+    __slots__ = ("_url", "_headers", "_auth", "_ssl_context")
 
-    def __init__(self, url, *, headers=None, auth=None):
+    def __init__(self, url, *, headers=None, auth=None, ssl_context=None):
         from ._urls import URL
 
         if isinstance(url, URL):
@@ -33,6 +33,7 @@ class Proxy:
                 )
 
         self._auth = auth
+        self._ssl_context = ssl_context
 
     @property
     def url(self):
@@ -56,7 +57,7 @@ class Proxy:
 
     @property
     def ssl_context(self):
-        return None
+        return self._ssl_context
 
     def __repr__(self) -> str:
         url_str = str(self._url)

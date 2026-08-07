@@ -5,258 +5,6 @@
 # Resolved entries have been moved to a separate ledger (resolved-differences.toml).
 
 [[difference]]
-id = "EXCEPTION-OPTIONAL-MSG-001"
-category = "stage-bounded"
-classification = "must-close"
-phase = "phase-2"
-symbol = "InvalidURL"
-difference-type = "parameter-name"
-member = "InvalidURL"
-reference = "['self', 'message']"
-candidate = "['self', 'message', 'kwargs']"
-behavior-case = "exception-optional-message"
-reference-behavior = "HTTPX InvalidURL requires message as a mandatory parameter"
-eggfetch-behavior = "eggfetch InvalidURL accepts message with a default of empty string"
-rationale = "eggfetch makes the message parameter optional for convenience. The behavior is identical when a message is provided."
-compatibility-stage-impact = "stage-c"
-security-improvement = "false"
-migration-impact = "Minimal; message can still be provided"
-owner = "eggfetch-team"
-review-milestone = "stage-d"
-tests = ["test_exceptions.py"]
-non_expiring = true
-[[difference]]
-id = "EXCEPTION-OPTIONAL-MSG-001-2"
-category = "stage-bounded"
-classification = "must-close"
-phase = "phase-2"
-symbol = "InvalidURL"
-difference-type = "parameter-default"
-member = "message"
-reference = "None"
-candidate = "''"
-behavior-case = "exception-optional-message"
-reference-behavior = "HTTPX InvalidURL requires message as a mandatory parameter"
-eggfetch-behavior = "eggfetch InvalidURL accepts message with a default of empty string"
-rationale = "eggfetch makes the message parameter optional for convenience. The behavior is identical when a message is provided."
-compatibility-stage-impact = "stage-c"
-security-improvement = "false"
-migration-impact = "Minimal; message can still be provided"
-owner = "eggfetch-team"
-review-milestone = "stage-d"
-tests = ["test_exceptions.py"]
-non_expiring = true
-[[difference]]
-id = "EXCEPTION-OPTIONAL-MSG-002"
-category = "stage-bounded"
-classification = "must-close"
-phase = "phase-2"
-symbol = "CookieConflict"
-difference-type = "parameter-name"
-member = "CookieConflict"
-reference = "['self', 'message']"
-candidate = "['self', 'message', 'kwargs']"
-behavior-case = "exception-optional-message"
-reference-behavior = "HTTPX CookieConflict requires message as a mandatory parameter"
-eggfetch-behavior = "eggfetch CookieConflict accepts message with a default of empty string"
-rationale = "eggfetch makes the message parameter optional for convenience."
-compatibility-stage-impact = "stage-c"
-security-improvement = "false"
-migration-impact = "Minimal; message can still be provided"
-owner = "eggfetch-team"
-review-milestone = "stage-d"
-tests = ["test_exceptions.py"]
-non_expiring = true
-[[difference]]
-id = "EXCEPTION-OPTIONAL-MSG-002-2"
-category = "stage-bounded"
-classification = "must-close"
-phase = "phase-2"
-symbol = "CookieConflict"
-difference-type = "parameter-default"
-member = "message"
-reference = "None"
-candidate = "''"
-behavior-case = "exception-optional-message"
-reference-behavior = "HTTPX CookieConflict requires message as a mandatory parameter"
-eggfetch-behavior = "eggfetch CookieConflict accepts message with a default of empty string"
-rationale = "eggfetch makes the message parameter optional for convenience."
-compatibility-stage-impact = "stage-c"
-security-improvement = "false"
-migration-impact = "Minimal; message can still be provided"
-owner = "eggfetch-team"
-review-milestone = "stage-d"
-tests = ["test_exceptions.py"]
-non_expiring = true
-[[difference]]
-id = "STREAM-ERROR-SIG-001"
-category = "stage-bounded"
-classification = "must-close"
-phase = "phase-2"
-symbol = "ResponseNotRead"
-difference-type = "parameter-name"
-member = "ResponseNotRead"
-reference = "['self']"
-candidate = "['self', 'args']"
-behavior-case = "stream-error-signature"
-reference-behavior = "HTTPX ResponseNotRead takes no arguments: ResponseNotRead()"
-eggfetch-behavior = "eggfetch ResponseNotRead accepts (*args) for compatibility"
-rationale = "eggfetch StreamError accepts *args for flexibility. Calling with no arguments still works."
-compatibility-stage-impact = "stage-c"
-security-improvement = "false"
-migration-impact = "None"
-owner = "eggfetch-team"
-review-milestone = "stage-d"
-tests = ["test_exceptions.py"]
-non_expiring = true
-[[difference]]
-id = "STREAM-ERROR-SIG-002"
-category = "stage-bounded"
-classification = "must-close"
-phase = "phase-2"
-symbol = "StreamClosed"
-difference-type = "parameter-name"
-member = "StreamClosed"
-reference = "['self']"
-candidate = "['self', 'args']"
-behavior-case = "stream-error-signature"
-reference-behavior = "HTTPX StreamClosed takes no arguments"
-eggfetch-behavior = "eggfetch StreamClosed accepts (*args) for compatibility"
-rationale = "See STREAM-ERROR-SIG-001."
-compatibility-stage-impact = "stage-c"
-security-improvement = "false"
-migration-impact = "None"
-owner = "eggfetch-team"
-review-milestone = "stage-d"
-tests = ["test_exceptions.py"]
-non_expiring = true
-[[difference]]
-id = "STREAM-ERROR-SIG-003"
-category = "stage-bounded"
-classification = "must-close"
-phase = "phase-2"
-symbol = "StreamConsumed"
-difference-type = "parameter-name"
-member = "StreamConsumed"
-reference = "['self']"
-candidate = "['self', 'args']"
-behavior-case = "stream-error-signature"
-reference-behavior = "HTTPX StreamConsumed takes no arguments"
-eggfetch-behavior = "eggfetch StreamConsumed accepts (*args) for compatibility"
-rationale = "See STREAM-ERROR-SIG-001."
-compatibility-stage-impact = "stage-c"
-security-improvement = "false"
-migration-impact = "None"
-owner = "eggfetch-team"
-review-milestone = "stage-d"
-tests = ["test_exceptions.py"]
-non_expiring = true
-[[difference]]
-id = "MUTABLE-MAPPING-003"
-category = "stage-bounded"
-classification = "must-close"
-phase = "phase-2"
-symbol = "Headers"
-difference-type = "base-class"
-member = ""
-reference = "['Generic', 'MutableMapping']"
-candidate = "['object']"
-behavior-case = "headers-inheritance"
-reference-behavior = "HTTPX Headers inherits Generic, MutableMapping"
-eggfetch-behavior = "eggfetch Headers implements the mapping protocol without inheriting MutableMapping"
-rationale = "eggfetch implements the same public interface without the internal inheritance hierarchy."
-compatibility-stage-impact = "stage-c"
-security-improvement = "false"
-migration-impact = "None; the mapping protocol is preserved"
-owner = "eggfetch-team"
-review-milestone = "stage-d"
-tests = ["test_headers.py"]
-non_expiring = true
-[[difference]]
-id = "MUTABLE-MAPPING-003-2"
-category = "stage-bounded"
-classification = "must-close"
-phase = "phase-2"
-symbol = "Headers"
-difference-type = "missing-method"
-member = "popitem"
-reference = "present"
-candidate = "absent"
-behavior-case = "headers-inheritance"
-reference-behavior = "HTTPX Headers inherits Generic, MutableMapping"
-eggfetch-behavior = "eggfetch Headers implements the mapping protocol without inheriting MutableMapping"
-rationale = "eggfetch implements the same public interface without the internal inheritance hierarchy."
-compatibility-stage-impact = "stage-c"
-security-improvement = "false"
-migration-impact = "None; the mapping protocol is preserved"
-owner = "eggfetch-team"
-review-milestone = "stage-d"
-tests = ["test_headers.py"]
-non_expiring = true
-[[difference]]
-id = "MUTABLE-MAPPING-003-3"
-category = "stage-bounded"
-classification = "must-close"
-phase = "phase-2"
-symbol = "Headers"
-difference-type = "missing-method"
-member = "setdefault"
-reference = "present"
-candidate = "absent"
-behavior-case = "headers-inheritance"
-reference-behavior = "HTTPX Headers inherits Generic, MutableMapping"
-eggfetch-behavior = "eggfetch Headers implements the mapping protocol without inheriting MutableMapping"
-rationale = "eggfetch implements the same public interface without the internal inheritance hierarchy."
-compatibility-stage-impact = "stage-c"
-security-improvement = "false"
-migration-impact = "None; the mapping protocol is preserved"
-owner = "eggfetch-team"
-review-milestone = "stage-d"
-tests = ["test_headers.py"]
-non_expiring = true
-[[difference]]
-id = "MUTABLE-MAPPING-003-4"
-category = "stage-bounded"
-classification = "must-close"
-phase = "phase-2"
-symbol = "Headers"
-difference-type = "extra-method"
-member = "append"
-reference = "absent"
-candidate = "present"
-behavior-case = "headers-inheritance"
-reference-behavior = "HTTPX Headers inherits Generic, MutableMapping"
-eggfetch-behavior = "eggfetch Headers implements the mapping protocol without inheriting MutableMapping"
-rationale = "eggfetch implements the same public interface without the internal inheritance hierarchy."
-compatibility-stage-impact = "stage-c"
-security-improvement = "false"
-migration-impact = "None; the mapping protocol is preserved"
-owner = "eggfetch-team"
-review-milestone = "stage-d"
-tests = ["test_headers.py"]
-non_expiring = true
-[[difference]]
-id = "MAPPING-001"
-category = "stage-bounded"
-classification = "must-close"
-phase = "phase-2"
-symbol = "QueryParams"
-difference-type = "base-class"
-member = ""
-reference = "['Generic', 'Mapping']"
-candidate = "['object']"
-behavior-case = "queryparams-inheritance"
-reference-behavior = "HTTPX QueryParams inherits Generic, Mapping"
-eggfetch-behavior = "eggfetch QueryParams implements the mapping protocol without inheriting Mapping"
-rationale = "eggfetch implements the same public interface without the internal inheritance hierarchy."
-compatibility-stage-impact = "stage-c"
-security-improvement = "false"
-migration-impact = "None; the mapping protocol is preserved"
-owner = "eggfetch-team"
-review-milestone = "stage-d"
-tests = ["test_url_query.py"]
-non_expiring = true
-[[difference]]
 id = "AUTH-FLOW-INTERNAL-002"
 category = "stage-bounded"
 classification = "intentional"
@@ -276,6 +24,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_auth.py"]
 non_expiring = true
+
 [[difference]]
 id = "AUTH-FLOW-INTERNAL-002-2"
 category = "stage-bounded"
@@ -296,6 +45,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_auth.py"]
 non_expiring = true
+
 [[difference]]
 id = "EXTRA-PROPS-002"
 category = "stage-bounded"
@@ -316,6 +66,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_config_objects.py"]
 non_expiring = true
+
 [[difference]]
 id = "EXTRA-PROPS-002-2"
 category = "stage-bounded"
@@ -336,6 +87,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_config_objects.py"]
 non_expiring = true
+
 [[difference]]
 id = "EXTRA-PROPS-002-3"
 category = "stage-bounded"
@@ -356,6 +108,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_config_objects.py"]
 non_expiring = true
+
 [[difference]]
 id = "EXTRA-PROPS-002-4"
 category = "stage-bounded"
@@ -376,6 +129,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_config_objects.py"]
 non_expiring = true
+
 [[difference]]
 id = "EXTRA-PROPS-002-5"
 category = "stage-bounded"
@@ -396,6 +150,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_config_objects.py"]
 non_expiring = true
+
 [[difference]]
 id = "EXTRA-PROPS-002-6"
 category = "stage-bounded"
@@ -416,6 +171,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_config_objects.py"]
 non_expiring = true
+
 [[difference]]
 id = "EXTRA-PROPS-003"
 category = "stage-bounded"
@@ -436,6 +192,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_config_objects.py"]
 non_expiring = true
+
 [[difference]]
 id = "EXTRA-PROPS-003-2"
 category = "stage-bounded"
@@ -456,6 +213,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_config_objects.py"]
 non_expiring = true
+
 [[difference]]
 id = "EXTRA-PROPS-003-3"
 category = "stage-bounded"
@@ -476,6 +234,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_config_objects.py"]
 non_expiring = true
+
 [[difference]]
 id = "EXTRA-PROPS-003-4"
 category = "stage-bounded"
@@ -496,6 +255,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_config_objects.py"]
 non_expiring = true
+
 [[difference]]
 id = "EXTRA-PROPS-003-5"
 category = "stage-bounded"
@@ -516,6 +276,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_config_objects.py"]
 non_expiring = true
+
 [[difference]]
 id = "EXTRA-PROPS-004"
 category = "stage-bounded"
@@ -536,6 +297,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_response.py"]
 non_expiring = true
+
 [[difference]]
 id = "EXTRA-PROPS-004-2"
 category = "stage-bounded"
@@ -556,6 +318,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_response.py"]
 non_expiring = true
+
 [[difference]]
 id = "EXTRA-PROPS-004-3"
 category = "stage-bounded"
@@ -576,6 +339,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_response.py"]
 non_expiring = true
+
 [[difference]]
 id = "EXTRA-PROPS-004-4"
 category = "stage-bounded"
@@ -596,6 +360,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_response.py"]
 non_expiring = true
+
 [[difference]]
 id = "HTTP-METHOD-ARGS-001"
 category = "stage-bounded"
@@ -617,6 +382,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_client.py"]
 non_expiring = true
+
 [[difference]]
 id = "HTTP-METHOD-ARGS-001-2"
 category = "stage-bounded"
@@ -638,6 +404,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_client.py"]
 non_expiring = true
+
 [[difference]]
 id = "HTTP-METHOD-ARGS-001-3"
 category = "stage-bounded"
@@ -659,6 +426,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_client.py"]
 non_expiring = true
+
 [[difference]]
 id = "HTTP-METHOD-ARGS-001-4"
 category = "stage-bounded"
@@ -680,6 +448,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_client.py"]
 non_expiring = true
+
 [[difference]]
 id = "HTTP-METHOD-ARGS-002"
 category = "stage-bounded"
@@ -701,6 +470,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_client.py"]
 non_expiring = true
+
 [[difference]]
 id = "HTTP-METHOD-ARGS-002-2"
 category = "stage-bounded"
@@ -722,6 +492,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_client.py"]
 non_expiring = true
+
 [[difference]]
 id = "HTTP-METHOD-ARGS-002-3"
 category = "stage-bounded"
@@ -743,6 +514,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_client.py"]
 non_expiring = true
+
 [[difference]]
 id = "HTTP-METHOD-ARGS-002-4"
 category = "stage-bounded"
@@ -764,6 +536,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_client.py"]
 non_expiring = true
+
 [[difference]]
 id = "HTTP-METHOD-ARGS-003"
 category = "stage-bounded"
@@ -785,6 +558,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_client.py"]
 non_expiring = true
+
 [[difference]]
 id = "HTTP-METHOD-ARGS-003-2"
 category = "stage-bounded"
@@ -806,6 +580,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_client.py"]
 non_expiring = true
+
 [[difference]]
 id = "HTTP-METHOD-ARGS-003-3"
 category = "stage-bounded"
@@ -827,6 +602,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_client.py"]
 non_expiring = true
+
 [[difference]]
 id = "HTTP-METHOD-ARGS-003-4"
 category = "stage-bounded"
@@ -848,6 +624,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_client.py"]
 non_expiring = true
+
 [[difference]]
 id = "HTTP-METHOD-ARGS-004"
 category = "stage-bounded"
@@ -869,6 +646,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_client.py"]
 non_expiring = true
+
 [[difference]]
 id = "HTTP-METHOD-ARGS-004-2"
 category = "stage-bounded"
@@ -890,6 +668,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_client.py"]
 non_expiring = true
+
 [[difference]]
 id = "HTTP-METHOD-ARGS-004-3"
 category = "stage-bounded"
@@ -911,6 +690,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_client.py"]
 non_expiring = true
+
 [[difference]]
 id = "HTTP-METHOD-ARGS-004-4"
 category = "stage-bounded"
@@ -932,6 +712,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_client.py"]
 non_expiring = true
+
 [[difference]]
 id = "HTTP-METHOD-ARGS-005"
 category = "stage-bounded"
@@ -953,6 +734,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_client.py"]
 non_expiring = true
+
 [[difference]]
 id = "HTTP-METHOD-ARGS-005-2"
 category = "stage-bounded"
@@ -974,6 +756,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_client.py"]
 non_expiring = true
+
 [[difference]]
 id = "HTTP-METHOD-ARGS-005-3"
 category = "stage-bounded"
@@ -995,6 +778,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_client.py"]
 non_expiring = true
+
 [[difference]]
 id = "HTTP-METHOD-ARGS-005-4"
 category = "stage-bounded"
@@ -1016,6 +800,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_client.py"]
 non_expiring = true
+
 [[difference]]
 id = "HTTP-METHOD-ARGS-006"
 category = "stage-bounded"
@@ -1037,6 +822,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_client.py"]
 non_expiring = true
+
 [[difference]]
 id = "HTTP-METHOD-ARGS-006-2"
 category = "stage-bounded"
@@ -1058,6 +844,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_client.py"]
 non_expiring = true
+
 [[difference]]
 id = "HTTP-METHOD-ARGS-006-3"
 category = "stage-bounded"
@@ -1079,6 +866,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_client.py"]
 non_expiring = true
+
 [[difference]]
 id = "HTTP-METHOD-ARGS-006-4"
 category = "stage-bounded"
@@ -1100,6 +888,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_client.py"]
 non_expiring = true
+
 [[difference]]
 id = "HTTP-METHOD-ARGS-007"
 category = "stage-bounded"
@@ -1121,6 +910,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_client.py"]
 non_expiring = true
+
 [[difference]]
 id = "HTTP-METHOD-ARGS-007-2"
 category = "stage-bounded"
@@ -1142,6 +932,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_client.py"]
 non_expiring = true
+
 [[difference]]
 id = "HTTP-METHOD-ARGS-007-3"
 category = "stage-bounded"
@@ -1163,6 +954,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_client.py"]
 non_expiring = true
+
 [[difference]]
 id = "HTTP-METHOD-ARGS-007-4"
 category = "stage-bounded"
@@ -1184,6 +976,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_client.py"]
 non_expiring = true
+
 [[difference]]
 id = "HTTP-METHOD-ARGS-008"
 category = "stage-bounded"
@@ -1205,6 +998,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_client.py"]
 non_expiring = true
+
 [[difference]]
 id = "HTTP-METHOD-ARGS-008-2"
 category = "stage-bounded"
@@ -1226,6 +1020,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_client.py"]
 non_expiring = true
+
 [[difference]]
 id = "HTTP-METHOD-ARGS-008-3"
 category = "stage-bounded"
@@ -1247,6 +1042,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_client.py"]
 non_expiring = true
+
 [[difference]]
 id = "HTTP-METHOD-ARGS-008-4"
 category = "stage-bounded"
@@ -1268,6 +1064,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_client.py"]
 non_expiring = true
+
 [[difference]]
 id = "HTTP-METHOD-ARGS-009"
 category = "stage-bounded"
@@ -1289,6 +1086,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_client.py"]
 non_expiring = true
+
 [[difference]]
 id = "HTTP-METHOD-ARGS-009-2"
 category = "stage-bounded"
@@ -1310,6 +1108,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_client.py"]
 non_expiring = true
+
 [[difference]]
 id = "HTTP-METHOD-ARGS-009-3"
 category = "stage-bounded"
@@ -1331,6 +1130,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_client.py"]
 non_expiring = true
+
 [[difference]]
 id = "HTTP-METHOD-ARGS-009-4"
 category = "stage-bounded"
@@ -1352,6 +1152,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_client.py"]
 non_expiring = true
+
 [[difference]]
 id = "STREAM-CTOR-001"
 category = "stage-bounded"
@@ -1373,6 +1174,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_response_streaming.py"]
 non_expiring = true
+
 [[difference]]
 id = "STREAM-CTOR-001-2"
 category = "stage-bounded"
@@ -1394,6 +1196,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_response_streaming.py"]
 non_expiring = true
+
 [[difference]]
 id = "STREAM-CTOR-001-3"
 category = "stage-bounded"
@@ -1415,6 +1218,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_response_streaming.py"]
 non_expiring = true
+
 [[difference]]
 id = "STREAM-CTOR-001-4"
 category = "stage-bounded"
@@ -1436,6 +1240,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_response_streaming.py"]
 non_expiring = true
+
 [[difference]]
 id = "STREAM-CTOR-001B"
 category = "stage-bounded"
@@ -1457,6 +1262,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_response_streaming.py"]
 non_expiring = true
+
 [[difference]]
 id = "STREAM-CTOR-001B-2"
 category = "stage-bounded"
@@ -1478,6 +1284,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_response_streaming.py"]
 non_expiring = true
+
 [[difference]]
 id = "STREAM-CTOR-001B-3"
 category = "stage-bounded"
@@ -1499,6 +1306,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_response_streaming.py"]
 non_expiring = true
+
 [[difference]]
 id = "STREAM-CTOR-001B-4"
 category = "stage-bounded"
@@ -1520,6 +1328,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_response_streaming.py"]
 non_expiring = true
+
 [[difference]]
 id = "STREAM-CTOR-001B-5"
 category = "stage-bounded"
@@ -1541,6 +1350,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_response_streaming.py"]
 non_expiring = true
+
 [[difference]]
 id = "STREAM-CTOR-001C"
 category = "stage-bounded"
@@ -1562,6 +1372,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_response_streaming.py"]
 non_expiring = true
+
 [[difference]]
 id = "STREAM-CTOR-001C-2"
 category = "stage-bounded"
@@ -1583,6 +1394,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_response_streaming.py"]
 non_expiring = true
+
 [[difference]]
 id = "STREAM-CTOR-001C-3"
 category = "stage-bounded"
@@ -1604,6 +1416,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_response_streaming.py"]
 non_expiring = true
+
 [[difference]]
 id = "STREAM-CTOR-001C-4"
 category = "stage-bounded"
@@ -1625,6 +1438,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_response_streaming.py"]
 non_expiring = true
+
 [[difference]]
 id = "TRANSPORT-PARAMS-001"
 category = "stage-bounded"
@@ -1646,6 +1460,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_transports.py"]
 non_expiring = true
+
 [[difference]]
 id = "TRANSPORT-PARAMS-001-2"
 category = "stage-bounded"
@@ -1667,6 +1482,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_transports.py"]
 non_expiring = true
+
 [[difference]]
 id = "TRANSPORT-PARAMS-001B"
 category = "stage-bounded"
@@ -1688,6 +1504,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_transports.py"]
 non_expiring = true
+
 [[difference]]
 id = "TRANSPORT-PARAMS-001B-2"
 category = "stage-bounded"
@@ -1709,6 +1526,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_transports.py"]
 non_expiring = true
+
 [[difference]]
 id = "TRANSPORT-PARAMS-001F"
 category = "stage-bounded"
@@ -1730,6 +1548,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_transports.py"]
 non_expiring = true
+
 [[difference]]
 id = "TRANSPORT-PARAMS-001G"
 category = "stage-bounded"
@@ -1751,6 +1570,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_transports.py"]
 non_expiring = true
+
 [[difference]]
 id = "PRIVATE-SYMBOLS-001"
 category = "stage-bounded"
@@ -1773,237 +1593,6 @@ tests = []
 non_expiring = true
 
 [[difference]]
-id = "CODES-KIND-001"
-category = "stage-bounded"
-classification = "must-close"
-phase = "phase-2"
-symbol = "codes"
-difference-type = "symbol-kind"
-member = ""
-reference = "class"
-candidate = "constant"
-behavior-case = "codes-type-difference"
-reference-behavior = "HTTPX codes is an IntEnum class with methods like as_integer_ratio, bit_count, etc."
-eggfetch-behavior = "eggfetch codes is a plain constant namespace with integer values"
-rationale = "eggfetch provides the same integer status codes (codes.OK = 200, etc.) without the IntEnum type. The values are identical."
-compatibility-stage-impact = "stage-c"
-security-improvement = "false"
-migration-impact = "Minimal; codes.OK == 200 works the same way"
-owner = "eggfetch-team"
-review-milestone = "stage-d"
-tests = ["test_config_objects.py"]
-non_expiring = true
-[[difference]]
-id = "CODES-KIND-001-2"
-category = "stage-bounded"
-classification = "must-close"
-phase = "phase-2"
-symbol = "codes"
-difference-type = "variadic-shape"
-member = "__init__"
-reference = "{'parameters': [{'name': 'self', 'kind': 'POSITIONAL_ONLY'}, {'name': 'args', 'kind': 'VAR_POSITIONAL'}, {'name': 'kwargs', 'kind': 'VAR_KEYWORD'}], 'return_annotation': None}"
-candidate = "None"
-behavior-case = "codes-type-difference"
-reference-behavior = "HTTPX codes is an IntEnum class with methods like as_integer_ratio, bit_count, etc."
-eggfetch-behavior = "eggfetch codes is a plain constant namespace with integer values"
-rationale = "eggfetch provides the same integer status codes (codes.OK = 200, etc.) without the IntEnum type. The values are identical."
-compatibility-stage-impact = "stage-c"
-security-improvement = "false"
-migration-impact = "Minimal; codes.OK == 200 works the same way"
-owner = "eggfetch-team"
-review-milestone = "stage-d"
-tests = ["test_config_objects.py"]
-non_expiring = true
-[[difference]]
-id = "CODES-KIND-001-11"
-category = "stage-bounded"
-classification = "must-close"
-phase = "phase-2"
-symbol = "codes"
-difference-type = "variadic-shape"
-member = "__init__"
-reference = "{'parameters': [{'name': 'self', 'kind': 'POSITIONAL_OR_KEYWORD'}, {'name': 'args', 'kind': 'VAR_POSITIONAL'}, {'name': 'kwds', 'kind': 'VAR_KEYWORD'}], 'return_annotation': None}"
-candidate = "None"
-behavior-case = "codes-type-difference"
-reference-behavior = "HTTPX codes is an IntEnum class with methods like as_integer_ratio, bit_count, etc."
-eggfetch-behavior = "eggfetch codes is a plain constant namespace with integer values"
-rationale = "Python 3.11+ exposes the HTTPX IntEnum constructor with a different inspect.signature shape; eggfetch intentionally remains a plain status-code namespace."
-compatibility-stage-impact = "stage-c"
-security-improvement = "false"
-migration-impact = "Minimal; codes.OK == 200 works the same way"
-owner = "eggfetch-team"
-review-milestone = "stage-d"
-tests = ["test_config_objects.py"]
-non_expiring = true
-[[difference]]
-id = "CODES-KIND-001-3"
-category = "stage-bounded"
-classification = "must-close"
-phase = "phase-2"
-symbol = "codes"
-difference-type = "base-class"
-member = ""
-reference = "['IntEnum']"
-candidate = "[]"
-behavior-case = "codes-type-difference"
-reference-behavior = "HTTPX codes is an IntEnum class with methods like as_integer_ratio, bit_count, etc."
-eggfetch-behavior = "eggfetch codes is a plain constant namespace with integer values"
-rationale = "eggfetch provides the same integer status codes (codes.OK = 200, etc.) without the IntEnum type. The values are identical."
-compatibility-stage-impact = "stage-c"
-security-improvement = "false"
-migration-impact = "Minimal; codes.OK == 200 works the same way"
-owner = "eggfetch-team"
-review-milestone = "stage-d"
-tests = ["test_config_objects.py"]
-non_expiring = true
-[[difference]]
-id = "CODES-KIND-001-4"
-category = "stage-bounded"
-classification = "must-close"
-phase = "phase-2"
-symbol = "codes"
-difference-type = "missing-method"
-member = "as_integer_ratio"
-reference = "present"
-candidate = "absent"
-behavior-case = "codes-type-difference"
-reference-behavior = "HTTPX codes is an IntEnum class with methods like as_integer_ratio, bit_count, etc."
-eggfetch-behavior = "eggfetch codes is a plain constant namespace with integer values"
-rationale = "eggfetch provides the same integer status codes (codes.OK = 200, etc.) without the IntEnum type. The values are identical."
-compatibility-stage-impact = "stage-c"
-security-improvement = "false"
-migration-impact = "Minimal; codes.OK == 200 works the same way"
-owner = "eggfetch-team"
-review-milestone = "stage-d"
-tests = ["test_config_objects.py"]
-non_expiring = true
-[[difference]]
-id = "CODES-KIND-001-5"
-category = "stage-bounded"
-classification = "must-close"
-phase = "phase-2"
-symbol = "codes"
-difference-type = "missing-method"
-member = "bit_count"
-reference = "present"
-candidate = "absent"
-behavior-case = "codes-type-difference"
-reference-behavior = "HTTPX codes is an IntEnum class with methods like as_integer_ratio, bit_count, etc."
-eggfetch-behavior = "eggfetch codes is a plain constant namespace with integer values"
-rationale = "eggfetch provides the same integer status codes (codes.OK = 200, etc.) without the IntEnum type. The values are identical."
-compatibility-stage-impact = "stage-c"
-security-improvement = "false"
-migration-impact = "Minimal; codes.OK == 200 works the same way"
-owner = "eggfetch-team"
-review-milestone = "stage-d"
-tests = ["test_config_objects.py"]
-non_expiring = true
-[[difference]]
-id = "CODES-KIND-001-6"
-category = "stage-bounded"
-classification = "must-close"
-phase = "phase-2"
-symbol = "codes"
-difference-type = "missing-method"
-member = "bit_length"
-reference = "present"
-candidate = "absent"
-behavior-case = "codes-type-difference"
-reference-behavior = "HTTPX codes is an IntEnum class with methods like as_integer_ratio, bit_count, etc."
-eggfetch-behavior = "eggfetch codes is a plain constant namespace with integer values"
-rationale = "eggfetch provides the same integer status codes (codes.OK = 200, etc.) without the IntEnum type. The values are identical."
-compatibility-stage-impact = "stage-c"
-security-improvement = "false"
-migration-impact = "Minimal; codes.OK == 200 works the same way"
-owner = "eggfetch-team"
-review-milestone = "stage-d"
-tests = ["test_config_objects.py"]
-non_expiring = true
-[[difference]]
-id = "CODES-KIND-001-7"
-category = "stage-bounded"
-classification = "must-close"
-phase = "phase-2"
-symbol = "codes"
-difference-type = "missing-method"
-member = "conjugate"
-reference = "present"
-candidate = "absent"
-behavior-case = "codes-type-difference"
-reference-behavior = "HTTPX codes is an IntEnum class with methods like as_integer_ratio, bit_count, etc."
-eggfetch-behavior = "eggfetch codes is a plain constant namespace with integer values"
-rationale = "eggfetch provides the same integer status codes (codes.OK = 200, etc.) without the IntEnum type. The values are identical."
-compatibility-stage-impact = "stage-c"
-security-improvement = "false"
-migration-impact = "Minimal; codes.OK == 200 works the same way"
-owner = "eggfetch-team"
-review-milestone = "stage-d"
-tests = ["test_config_objects.py"]
-non_expiring = true
-[[difference]]
-id = "CODES-KIND-001-8"
-category = "stage-bounded"
-classification = "must-close"
-phase = "phase-2"
-symbol = "codes"
-difference-type = "missing-method"
-member = "from_bytes"
-reference = "present"
-candidate = "absent"
-behavior-case = "codes-type-difference"
-reference-behavior = "HTTPX codes is an IntEnum class with methods like as_integer_ratio, bit_count, etc."
-eggfetch-behavior = "eggfetch codes is a plain constant namespace with integer values"
-rationale = "eggfetch provides the same integer status codes (codes.OK = 200, etc.) without the IntEnum type. The values are identical."
-compatibility-stage-impact = "stage-c"
-security-improvement = "false"
-migration-impact = "Minimal; codes.OK == 200 works the same way"
-owner = "eggfetch-team"
-review-milestone = "stage-d"
-tests = ["test_config_objects.py"]
-non_expiring = true
-[[difference]]
-id = "CODES-KIND-001-9"
-category = "stage-bounded"
-classification = "must-close"
-phase = "phase-2"
-symbol = "codes"
-difference-type = "missing-method"
-member = "is_integer"
-reference = "present"
-candidate = "absent"
-behavior-case = "codes-type-difference"
-reference-behavior = "HTTPX codes is an IntEnum class with methods like as_integer_ratio, bit_count, etc."
-eggfetch-behavior = "eggfetch codes is a plain constant namespace with integer values"
-rationale = "eggfetch provides the same integer status codes (codes.OK = 200, etc.) without the IntEnum type. The values are identical."
-compatibility-stage-impact = "stage-c"
-security-improvement = "false"
-migration-impact = "Minimal; codes.OK == 200 works the same way"
-owner = "eggfetch-team"
-review-milestone = "stage-d"
-tests = ["test_config_objects.py"]
-non_expiring = true
-[[difference]]
-id = "CODES-KIND-001-10"
-category = "stage-bounded"
-classification = "must-close"
-phase = "phase-2"
-symbol = "codes"
-difference-type = "missing-method"
-member = "to_bytes"
-reference = "present"
-candidate = "absent"
-behavior-case = "codes-type-difference"
-reference-behavior = "HTTPX codes is an IntEnum class with methods like as_integer_ratio, bit_count, etc."
-eggfetch-behavior = "eggfetch codes is a plain constant namespace with integer values"
-rationale = "eggfetch provides the same integer status codes (codes.OK = 200, etc.) without the IntEnum type. The values are identical."
-compatibility-stage-impact = "stage-c"
-security-improvement = "false"
-migration-impact = "Minimal; codes.OK == 200 works the same way"
-owner = "eggfetch-team"
-review-milestone = "stage-d"
-tests = ["test_config_objects.py"]
-non_expiring = true
-[[difference]]
 id = "CLIENT-EXTENSIONS-001"
 category = "stage-bounded"
 classification = "intentional"
@@ -2023,6 +1612,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_extensions.py"]
 non_expiring = true
+
 [[difference]]
 id = "CLIENT-EXTENSIONS-001-2"
 category = "stage-bounded"
@@ -2043,6 +1633,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_extensions.py"]
 non_expiring = true
+
 [[difference]]
 id = "CLIENT-EXTENSIONS-001B"
 category = "stage-bounded"
@@ -2063,6 +1654,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_extensions.py"]
 non_expiring = true
+
 [[difference]]
 id = "CLIENT-EXTENSIONS-001B-2"
 category = "stage-bounded"
@@ -2083,6 +1675,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_extensions.py"]
 non_expiring = true
+
 [[difference]]
 id = "CLIENT-EXTENSIONS-001B-3"
 category = "stage-bounded"
@@ -2103,6 +1696,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_extensions.py"]
 non_expiring = true
+
 [[difference]]
 id = "CLIENT-EXTENSIONS-001B-4"
 category = "stage-bounded"
@@ -2123,6 +1717,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_extensions.py"]
 non_expiring = true
+
 [[difference]]
 id = "BASICAUTH-ENCODING-001"
 category = "stage-bounded"
@@ -2143,6 +1738,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_auth.py"]
 non_expiring = true
+
 [[difference]]
 id = "BASICAUTH-ENCODING-001-2"
 category = "stage-bounded"
@@ -2163,6 +1759,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_auth.py"]
 non_expiring = true
+
 [[difference]]
 id = "BASICAUTH-ENCODING-001-3"
 category = "stage-bounded"
@@ -2183,6 +1780,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_auth.py"]
 non_expiring = true
+
 [[difference]]
 id = "BASICAUTH-ENCODING-001-4"
 category = "stage-bounded"
@@ -2203,69 +1801,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_auth.py"]
 non_expiring = true
-[[difference]]
-id = "STREAM-ERROR-ARGS-001"
-category = "stage-bounded"
-classification = "must-close"
-phase = "phase-2"
-symbol = "RequestNotRead"
-difference-type = "parameter-name"
-member = "RequestNotRead"
-reference = "['self']"
-candidate = "['self', 'args']"
-behavior-case = "stream-error-constructor"
-reference-behavior = "HTTPX stream error subclasses take no arguments: RequestNotRead()"
-eggfetch-behavior = "eggfetch stream error subclasses accept (*args) for compatibility"
-rationale = "eggfetch StreamError accepts *args for flexibility. Calling with no arguments still works."
-compatibility-stage-impact = "stage-c"
-security-improvement = "false"
-migration-impact = "None; both patterns work"
-owner = "eggfetch-team"
-review-milestone = "stage-d"
-tests = ["test_exceptions.py"]
-non_expiring = true
-[[difference]]
-id = "NETRC-PARAM-NAME-001"
-category = "stage-bounded"
-classification = "must-close"
-phase = "phase-2"
-symbol = "NetRCAuth"
-difference-type = "parameter-name"
-member = "NetRCAuth"
-reference = "['self', 'file']"
-candidate = "['self', 'auth_file']"
-behavior-case = "netrc-parameter-name"
-reference-behavior = "HTTPX NetRCAuth takes (file=...)"
-eggfetch-behavior = "eggfetch NetRCAuth takes (auth_file=...)"
-rationale = "The parameter is renamed to avoid shadowing the built-in file type. The behavior is identical."
-compatibility-stage-impact = "stage-c"
-security-improvement = "false"
-migration-impact = "Minimal; use auth_file= instead of file="
-owner = "eggfetch-team"
-review-milestone = "stage-d"
-tests = ["test_auth.py"]
-non_expiring = true
-[[difference]]
-id = "NETRC-PARAM-NAME-001-2"
-category = "stage-bounded"
-classification = "must-close"
-phase = "phase-2"
-symbol = "NetRCAuth"
-difference-type = "extra-property"
-member = "auth_file"
-reference = "absent"
-candidate = "present"
-behavior-case = "netrc-parameter-name"
-reference-behavior = "HTTPX NetRCAuth takes (file=...)"
-eggfetch-behavior = "eggfetch NetRCAuth takes (auth_file=...)"
-rationale = "The parameter is renamed to avoid shadowing the built-in file type. The behavior is identical."
-compatibility-stage-impact = "stage-c"
-security-improvement = "false"
-migration-impact = "Minimal; use auth_file= instead of file="
-owner = "eggfetch-team"
-review-milestone = "stage-d"
-tests = ["test_auth.py"]
-non_expiring = true
+
 [[difference]]
 id = "TIMEOUT-AS-DICT-001"
 category = "stage-bounded"
@@ -2286,6 +1822,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_config_objects.py"]
 non_expiring = true
+
 [[difference]]
 id = "TIMEOUT-AS-DICT-001-2"
 category = "stage-bounded"
@@ -2306,6 +1843,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_config_objects.py"]
 non_expiring = true
+
 [[difference]]
 id = "TIMEOUT-AS-DICT-001-3"
 category = "stage-bounded"
@@ -2326,6 +1864,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_config_objects.py"]
 non_expiring = true
+
 [[difference]]
 id = "TIMEOUT-AS-DICT-001-4"
 category = "stage-bounded"
@@ -2346,6 +1885,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_config_objects.py"]
 non_expiring = true
+
 [[difference]]
 id = "TIMEOUT-AS-DICT-001-5"
 category = "stage-bounded"
@@ -2366,6 +1906,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_config_objects.py"]
 non_expiring = true
+
 [[difference]]
 id = "TIMEOUT-AS-DICT-001-6"
 category = "stage-bounded"
@@ -2386,6 +1927,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_config_objects.py"]
 non_expiring = true
+
 [[difference]]
 id = "TIMEOUT-AS-DICT-001-7"
 category = "stage-bounded"
@@ -2406,6 +1948,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_config_objects.py"]
 non_expiring = true
+
 [[difference]]
 id = "TIMEOUT-AS-DICT-001-8"
 category = "stage-bounded"
@@ -2426,6 +1969,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_config_objects.py"]
 non_expiring = true
+
 [[difference]]
 id = "TIMEOUT-AS-DICT-001-9"
 category = "stage-bounded"
@@ -2446,6 +1990,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_config_objects.py"]
 non_expiring = true
+
 [[difference]]
 id = "TIMEOUT-AS-DICT-001-10"
 category = "stage-bounded"
@@ -2466,6 +2011,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_config_objects.py"]
 non_expiring = true
+
 [[difference]]
 id = "TIMEOUT-AS-DICT-001-11"
 category = "stage-bounded"
@@ -2486,6 +2032,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_config_objects.py"]
 non_expiring = true
+
 [[difference]]
 id = "TIMEOUT-AS-DICT-001-12"
 category = "stage-bounded"
@@ -2506,111 +2053,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_config_objects.py"]
 non_expiring = true
-[[difference]]
-id = "URL-RAW-002"
-category = "stage-bounded"
-classification = "must-close"
-phase = "phase-2"
-symbol = "URL"
-difference-type = "parameter-name"
-member = "URL"
-reference = "['self', 'url', 'kwargs']"
-candidate = "['self', 'args', 'kwargs']"
-behavior-case = "url-raw-property"
-reference-behavior = "HTTPX URL exposes a .raw property returning raw URL components"
-eggfetch-behavior = "eggfetch URL provides public properties (scheme, host, port, path, query, fragment) but no .raw"
-rationale = "The .raw property is an internal detail. The public URL properties are fully supported."
-compatibility-stage-impact = "stage-c"
-security-improvement = "false"
-migration-impact = "None; .raw is not commonly used"
-owner = "eggfetch-team"
-review-milestone = "stage-d"
-tests = ["test_url_query.py"]
-non_expiring = true
-[[difference]]
-id = "URL-RAW-002-2"
-category = "stage-bounded"
-classification = "must-close"
-phase = "phase-2"
-symbol = "URL"
-difference-type = "parameter-kind"
-member = "self"
-reference = "POSITIONAL_OR_KEYWORD"
-candidate = "POSITIONAL_ONLY"
-behavior-case = "url-raw-property"
-reference-behavior = "HTTPX URL exposes a .raw property returning raw URL components"
-eggfetch-behavior = "eggfetch URL provides public properties (scheme, host, port, path, query, fragment) but no .raw"
-rationale = "The .raw property is an internal detail. The public URL properties are fully supported."
-compatibility-stage-impact = "stage-c"
-security-improvement = "false"
-migration-impact = "None; .raw is not commonly used"
-owner = "eggfetch-team"
-review-milestone = "stage-d"
-tests = ["test_url_query.py"]
-non_expiring = true
-[[difference]]
-id = "URL-RAW-002-3"
-category = "stage-bounded"
-classification = "must-close"
-phase = "phase-2"
-symbol = "URL"
-difference-type = "parameter-kind"
-member = "url"
-reference = "POSITIONAL_OR_KEYWORD"
-candidate = "VAR_POSITIONAL"
-behavior-case = "url-raw-property"
-reference-behavior = "HTTPX URL exposes a .raw property returning raw URL components"
-eggfetch-behavior = "eggfetch URL provides public properties (scheme, host, port, path, query, fragment) but no .raw"
-rationale = "The .raw property is an internal detail. The public URL properties are fully supported."
-compatibility-stage-impact = "stage-c"
-security-improvement = "false"
-migration-impact = "None; .raw is not commonly used"
-owner = "eggfetch-team"
-review-milestone = "stage-d"
-tests = ["test_url_query.py"]
-non_expiring = true
-[[difference]]
-id = "URL-RAW-002-4"
-category = "stage-bounded"
-classification = "must-close"
-phase = "phase-2"
-symbol = "URL"
-difference-type = "parameter-default"
-member = "url"
-reference = "''"
-candidate = "None"
-behavior-case = "url-raw-property"
-reference-behavior = "HTTPX URL exposes a .raw property returning raw URL components"
-eggfetch-behavior = "eggfetch URL provides public properties (scheme, host, port, path, query, fragment) but no .raw"
-rationale = "The .raw property is an internal detail. The public URL properties are fully supported."
-compatibility-stage-impact = "stage-c"
-security-improvement = "false"
-migration-impact = "None; .raw is not commonly used"
-owner = "eggfetch-team"
-review-milestone = "stage-d"
-tests = ["test_url_query.py"]
-non_expiring = true
-[[difference]]
-id = "URL-RAW-002-5"
-category = "stage-bounded"
-classification = "must-close"
-phase = "phase-2"
-symbol = "URL"
-difference-type = "missing-property"
-member = "raw"
-reference = "present"
-candidate = "absent"
-behavior-case = "url-raw-property"
-reference-behavior = "HTTPX URL exposes a .raw property returning raw URL components"
-eggfetch-behavior = "eggfetch URL provides public properties (scheme, host, port, path, query, fragment) but no .raw"
-rationale = "The .raw property is an internal detail. The public URL properties are fully supported."
-compatibility-stage-impact = "stage-c"
-security-improvement = "false"
-migration-impact = "None; .raw is not commonly used"
-owner = "eggfetch-team"
-review-milestone = "stage-d"
-tests = ["test_url_query.py"]
-non_expiring = true
+
 [[difference]]
 id = "EXTRA-TRANSPORT-METHODS-001"
 category = "stage-bounded"
@@ -2631,6 +2074,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_asgi.py", "test_backends.py"]
 non_expiring = true
+
 [[difference]]
 id = "EXTRA-TRANSPORT-METHODS-001-2"
 category = "stage-bounded"
@@ -2651,6 +2095,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_asgi.py", "test_backends.py"]
 non_expiring = true
+
 [[difference]]
 id = "EXTRA-COLLECTION-METHODS-001"
 category = "stage-bounded"
@@ -2671,6 +2116,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = []
 non_expiring = true
+
 [[difference]]
 id = "EXTRA-COLLECTION-METHODS-001-2"
 category = "stage-bounded"
@@ -2691,6 +2137,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = []
 non_expiring = true
+
 [[difference]]
 id = "EXTRA-COLLECTION-METHODS-001-3"
 category = "stage-bounded"
@@ -2711,6 +2158,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = []
 non_expiring = true
+
 [[difference]]
 id = "EXTRA-COLLECTION-METHODS-001-4"
 category = "stage-bounded"
@@ -2731,6 +2179,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = []
 non_expiring = true
+
 [[difference]]
 id = "EXTRA-COLLECTION-METHODS-001-5"
 category = "stage-bounded"
@@ -2751,6 +2200,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = []
 non_expiring = true
+
 [[difference]]
 id = "EXTRA-COLLECTION-METHODS-001-6"
 category = "stage-bounded"
@@ -2771,6 +2221,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = []
 non_expiring = true
+
 [[difference]]
 id = "EXTRA-COLLECTION-METHODS-001-7"
 category = "stage-bounded"
@@ -2791,6 +2242,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = []
 non_expiring = true
+
 [[difference]]
 id = "EXTRA-COLLECTION-METHODS-001-8"
 category = "stage-bounded"
@@ -2811,6 +2263,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = []
 non_expiring = true
+
 [[difference]]
 id = "EXTRA-COLLECTION-METHODS-001-9"
 category = "stage-bounded"
@@ -2831,6 +2284,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = []
 non_expiring = true
+
 [[difference]]
 id = "EXTRA-COLLECTION-METHODS-001-10"
 category = "stage-bounded"
@@ -2851,69 +2305,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = []
 non_expiring = true
-[[difference]]
-id = "STREAM-ERROR-BASE-001"
-category = "stage-bounded"
-classification = "must-close"
-phase = "phase-2"
-symbol = "StreamError"
-difference-type = "parameter-name"
-member = "StreamError"
-reference = "['self', 'message']"
-candidate = "['self', 'args']"
-behavior-case = "exception-base-class"
-reference-behavior = "HTTPX StreamError inherits from RuntimeError"
-eggfetch-behavior = "eggfetch StreamError inherits from Exception"
-rationale = "eggfetch uses Exception as the base for stream errors. The public API contract is preserved."
-compatibility-stage-impact = "stage-c"
-security-improvement = "false"
-migration-impact = "Minimal; catch StreamError still works"
-owner = "eggfetch-team"
-review-milestone = "stage-d"
-tests = ["test_exceptions.py"]
-non_expiring = true
-[[difference]]
-id = "STREAM-ERROR-BASE-001-2"
-category = "stage-bounded"
-classification = "must-close"
-phase = "phase-2"
-symbol = "StreamError"
-difference-type = "parameter-kind"
-member = "message"
-reference = "POSITIONAL_OR_KEYWORD"
-candidate = "VAR_POSITIONAL"
-behavior-case = "exception-base-class"
-reference-behavior = "HTTPX StreamError inherits from RuntimeError"
-eggfetch-behavior = "eggfetch StreamError inherits from Exception"
-rationale = "eggfetch uses Exception as the base for stream errors. The public API contract is preserved."
-compatibility-stage-impact = "stage-c"
-security-improvement = "false"
-migration-impact = "Minimal; catch StreamError still works"
-owner = "eggfetch-team"
-review-milestone = "stage-d"
-tests = ["test_exceptions.py"]
-non_expiring = true
-[[difference]]
-id = "STREAM-ERROR-BASE-001-3"
-category = "stage-bounded"
-classification = "must-close"
-phase = "phase-2"
-symbol = "StreamError"
-difference-type = "base-class"
-member = ""
-reference = "['RuntimeError']"
-candidate = "['Exception']"
-behavior-case = "exception-base-class"
-reference-behavior = "HTTPX StreamError inherits from RuntimeError"
-eggfetch-behavior = "eggfetch StreamError inherits from Exception"
-rationale = "eggfetch uses Exception as the base for stream errors. The public API contract is preserved."
-compatibility-stage-impact = "stage-c"
-security-improvement = "false"
-migration-impact = "Minimal; catch StreamError still works"
-owner = "eggfetch-team"
-review-milestone = "stage-d"
-tests = ["test_exceptions.py"]
-non_expiring = true
+
 [[difference]]
 id = "EGGFETCH-EXTRA-SYMBOLS-001"
 category = "stage-bounded"
@@ -2934,6 +2326,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = []
 non_expiring = true
+
 [[difference]]
 id = "EGGFETCH-EXTRA-SYMBOLS-002"
 category = "stage-bounded"
@@ -2954,6 +2347,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = []
 non_expiring = true
+
 [[difference]]
 id = "EGGFETCH-EXTRA-SYMBOLS-003"
 category = "stage-bounded"
@@ -2974,6 +2368,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = []
 non_expiring = true
+
 [[difference]]
 id = "EGGFETCH-EXTRA-SYMBOLS-004"
 category = "stage-bounded"
@@ -2994,6 +2389,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = []
 non_expiring = true
+
 [[difference]]
 id = "EGGFETCH-EXTRA-SYMBOLS-005"
 category = "stage-bounded"
@@ -3014,6 +2410,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = []
 non_expiring = true
+
 [[difference]]
 id = "EXTRA-PROPS-004-5"
 category = "stage-bounded"
@@ -3034,6 +2431,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_client_mutability_and_state.py"]
 non_expiring = true
+
 [[difference]]
 id = "EXTRA-PROPS-004-6"
 category = "stage-bounded"
@@ -3054,6 +2452,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_response.py"]
 non_expiring = true
+
 [[difference]]
 id = "EXTRA-PROPS-004-7"
 category = "stage-bounded"
@@ -3074,6 +2473,7 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_response.py"]
 non_expiring = true
+
 [[difference]]
 id = "CREATE-SSL-CONTEXT-001"
 category = "stage-bounded"

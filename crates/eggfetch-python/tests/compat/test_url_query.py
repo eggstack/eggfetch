@@ -426,3 +426,97 @@ class TestQueryParamsDuplicateConversion:
         assert ("a", "2") in items
         assert ("a", "3") in items
         assert ("b", "4") in items
+
+
+# ── QueryParams Mapping ABC ────────────────────────────────────────────
+
+class TestQueryParamsMappingABC:
+    def test_isinstance_mapping(self):
+        from collections.abc import Mapping
+        qp = QueryParams()
+        assert isinstance(qp, Mapping)
+
+    def test_getitem(self):
+        qp = QueryParams({"a": "1"})
+        assert qp["a"] == "1"
+
+    def test_get(self):
+        qp = QueryParams({"a": "1"})
+        assert qp.get("a") == "1"
+        assert qp.get("missing", "default") == "default"
+
+    def test_keys(self):
+        qp = QueryParams([("a", "1"), ("b", "2")])
+        assert set(qp.keys()) == {"a", "b"}
+
+    def test_values(self):
+        qp = QueryParams({"a": "1", "b": "2"})
+        assert set(qp.values()) == {"1", "2"}
+
+    def test_items(self):
+        qp = QueryParams({"a": "1"})
+        assert ("a", "1") in list(qp.items())
+
+    def test_len(self):
+        assert len(QueryParams({"a": "1", "b": "2"})) == 2
+
+    def test_contains(self):
+        qp = QueryParams({"a": "1"})
+        assert "a" in qp
+        assert "b" not in qp
+
+    def test_iter(self):
+        qp = QueryParams([("a", "1"), ("b", "2")])
+        assert set(iter(qp)) == {"a", "b"}
+
+
+# ── URL.raw property ──────────────────────────────────────────────────
+
+class TestURLRaw:
+    def test_raw_returns_tuple(self):
+        raw = URL("https://example.com/path").raw
+        assert isinstance(raw, tuple)
+        assert len(raw) == 4
+
+    def test_raw_scheme(self):
+        assert URL("https://example.com").raw[0] == b"https"
+        assert URL("http://example.com").raw[0] == b"http"
+
+    def test_raw_host(self):
+        assert URL("https://example.com").raw[1] == b"example.com"
+
+    def test_raw_host_ipv6(self):
+        raw = URL("https://[::1]:8443/path").raw
+        assert raw[1] == b"::1"
+
+    def test_raw_port_explicit(self):
+        raw = URL("http://example.com:8080/path").raw
+        assert raw[2] == 8080
+
+    def test_raw_port_default_http_stripped(self):
+        raw = URL("http://example.com:80/path").raw
+        assert raw[2] is None
+
+    def test_raw_port_default_https_stripped(self):
+        raw = URL("https://example.com:443/path").raw
+        assert raw[2] is None
+
+    def test_raw_port_none_when_omitted(self):
+        raw = URL("https://example.com/path").raw
+        assert raw[2] is None
+
+    def test_raw_path(self):
+        raw = URL("https://example.com/path").raw
+        assert raw[3] == b"/path"
+
+    def test_raw_path_with_query(self):
+        raw = URL("https://example.com/path?q=1").raw
+        assert raw[3] == b"/path?q=1"
+
+    def test_raw_path_empty_defaults_slash(self):
+        raw = URL("https://example.com").raw
+        assert raw[3] == b"/"
+
+    def test_raw_percent_encoded(self):
+        raw = URL("https://example.com/path%20with%20spaces").raw
+        assert raw[3] == b"/path%20with%20spaces"

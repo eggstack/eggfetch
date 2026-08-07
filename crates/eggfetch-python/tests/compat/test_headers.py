@@ -200,3 +200,57 @@ class TestHeadersDuplicateConversion:
         items = h.multi_items()
         assert len(items) == 1
         assert items[0] == ("content-type", "text/plain")
+
+
+# ── MutableMapping ABC ──────────────────────────────────────────────────
+
+class TestHeadersMutableMappingABC:
+    def test_isinstance_mutable_mapping(self):
+        from collections.abc import MutableMapping
+        h = Headers()
+        assert isinstance(h, MutableMapping)
+
+    def test_setdefault_existing_key(self):
+        h = Headers({"x-a": "existing"})
+        result = h.setdefault("x-a", "default")
+        assert result == "existing"
+        assert h["x-a"] == "existing"
+
+    def test_setdefault_missing_key(self):
+        h = Headers()
+        result = h.setdefault("x-a", "default")
+        assert result == "default"
+        assert h["x-a"] == "default"
+
+    def test_setdefault_empty_default(self):
+        h = Headers()
+        result = h.setdefault("x-a")
+        assert result == ""
+        assert h["x-a"] == ""
+
+    def test_setdefault_case_insensitive(self):
+        h = Headers({"X-A": "val"})
+        result = h.setdefault("x-a", "default")
+        assert result == "val"
+
+    def test_popitem_nonempty(self):
+        h = Headers([("x-a", "1"), ("x-b", "2")])
+        name, value = h.popitem()
+        assert name == "x-a"
+        assert value == "1"
+        assert len(h) == 1
+
+    def test_popitem_empty_raises(self):
+        with pytest.raises(KeyError):
+            Headers().popitem()
+
+    def test_popitem_removes_from_headers(self):
+        h = Headers([("x-a", "1"), ("x-b", "2")])
+        h.popitem()
+        assert "x-a" not in h
+        assert "x-b" in h
+
+    def test_len_after_popitem(self):
+        h = Headers([("x-a", "1"), ("x-b", "2")])
+        h.popitem()
+        assert len(h) == 1

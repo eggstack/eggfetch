@@ -720,6 +720,58 @@ class TestNetRCAuth:
             finally:
                 os.unlink(f.name)
 
+    def test_file_keyword_argument(self):
+        """NetRCAuth(file=...) works as HTTPX-compatible keyword."""
+        content = "machine example.com login admin password secret\n"
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".netrc", delete=False
+        ) as f:
+            f.write(content)
+            f.flush()
+            try:
+                auth = NetRCAuth(file=f.name)
+                creds = auth._lookup_credentials("example.com")
+                assert creds == ("admin", "secret")
+            finally:
+                os.unlink(f.name)
+
+    def test_auth_file_keyword_still_works(self):
+        """NetRCAuth(auth_file=...) still works as backward-compatible alias."""
+        content = "machine example.com login admin password secret\n"
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".netrc", delete=False
+        ) as f:
+            f.write(content)
+            f.flush()
+            try:
+                auth = NetRCAuth(auth_file=f.name)
+                creds = auth._lookup_credentials("example.com")
+                assert creds == ("admin", "secret")
+            finally:
+                os.unlink(f.name)
+
+    def test_file_keyword_takes_precedence(self):
+        """When both file= and auth_file= are given, file= wins."""
+        content_file = "machine file.com login file_user password file_pass\n"
+        content_auth = "machine auth.com login auth_user password auth_pass\n"
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".netrc", delete=False
+        ) as ff, tempfile.NamedTemporaryFile(
+            mode="w", suffix=".netrc", delete=False
+        ) as fa:
+            ff.write(content_file)
+            ff.flush()
+            fa.write(content_auth)
+            fa.flush()
+            try:
+                auth = NetRCAuth(file=ff.name, auth_file=fa.name)
+                # file= is used as the netrc path
+                creds = auth._lookup_credentials("file.com")
+                assert creds == ("file_user", "file_pass")
+            finally:
+                os.unlink(ff.name)
+                os.unlink(fa.name)
+
 
 class TestAuthThroughTransport:
     """Verify auth is applied by the client regardless of transport."""

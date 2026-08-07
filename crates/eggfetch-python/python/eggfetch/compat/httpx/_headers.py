@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import MutableMapping
 
-class Headers:
+
+class Headers(MutableMapping):
     """HTTPX-compatible Headers class.
 
     Internal storage: list of (name, value) tuples.
@@ -153,6 +155,20 @@ class Headers:
                 new_items.append((k, v))
         self._items = new_items
         return result
+
+    def setdefault(self, name: str, default: str = "") -> str:
+        norm = self._normalize_name(name)
+        for k, v in self._items:
+            if k == norm:
+                return v
+        self._items.append((norm, default))
+        return default
+
+    def popitem(self) -> tuple[str, str]:
+        if not self._items:
+            raise KeyError("popitem(): Headers is empty")
+        name, value = self._items.pop(0)
+        return name, value
 
     def append(self, name: str, value: str) -> None:
         self._validate(name, value)

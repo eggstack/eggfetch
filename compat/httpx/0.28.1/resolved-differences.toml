@@ -452,3 +452,548 @@ owner = "eggfetch-team"
 review-milestone = "corrective-closure"
 tests = []
 non_expiring = true
+# --- Phase 2 resolved entries moved from allowed-differences.toml ---
+
+[[difference]]
+id = "EXCEPTION-OPTIONAL-MSG-001"
+category = "resolved"
+symbol = "InvalidURL"
+behavior-case = "exception-optional-message"
+reference-behavior = "HTTPX InvalidURL requires message as a mandatory parameter"
+eggfetch-behavior = "eggfetch now matches HTTPX 0.28.1 behavior"
+rationale = "Resolved in Phase 2: Python Object and Configuration Contracts"
+compatibility-stage-impact = "resolved"
+security-improvement = "false"
+migration-impact = "None; fully resolved"
+owner = "eggfetch-team"
+review-milestone = "phase-2"
+tests = ["test_exceptions.py"]
+non_expiring = true
+
+[[difference]]
+id = "EXCEPTION-OPTIONAL-MSG-001-2"
+category = "resolved"
+symbol = "InvalidURL"
+behavior-case = "exception-optional-message"
+reference-behavior = "HTTPX InvalidURL requires message as a mandatory parameter"
+eggfetch-behavior = "eggfetch now matches HTTPX 0.28.1 behavior"
+rationale = "Resolved in Phase 2: Python Object and Configuration Contracts"
+compatibility-stage-impact = "resolved"
+security-improvement = "false"
+migration-impact = "None; fully resolved"
+owner = "eggfetch-team"
+review-milestone = "phase-2"
+tests = ["test_exceptions.py"]
+non_expiring = true
+
+[[difference]]
+id = "EXCEPTION-OPTIONAL-MSG-002"
+category = "resolved"
+symbol = "CookieConflict"
+behavior-case = "exception-optional-message"
+reference-behavior = "HTTPX CookieConflict requires message as a mandatory parameter"
+eggfetch-behavior = "eggfetch now matches HTTPX 0.28.1 behavior"
+rationale = "Resolved in Phase 2: Python Object and Configuration Contracts"
+compatibility-stage-impact = "resolved"
+security-improvement = "false"
+migration-impact = "None; fully resolved"
+owner = "eggfetch-team"
+review-milestone = "phase-2"
+tests = ["test_exceptions.py"]
+non_expiring = true
+
+[[difference]]
+id = "EXCEPTION-OPTIONAL-MSG-002-2"
+category = "resolved"
+symbol = "CookieConflict"
+behavior-case = "exception-optional-message"
+reference-behavior = "HTTPX CookieConflict requires message as a mandatory parameter"
+eggfetch-behavior = "eggfetch now matches HTTPX 0.28.1 behavior"
+rationale = "Resolved in Phase 2: Python Object and Configuration Contracts"
+compatibility-stage-impact = "resolved"
+security-improvement = "false"
+migration-impact = "None; fully resolved"
+owner = "eggfetch-team"
+review-milestone = "phase-2"
+tests = ["test_exceptions.py"]
+non_expiring = true
+
+[[difference]]
+id = "STREAM-ERROR-SIG-001"
+category = "resolved"
+symbol = "ResponseNotRead"
+behavior-case = "stream-error-signature"
+reference-behavior = "HTTPX ResponseNotRead takes no arguments: ResponseNotRead()"
+eggfetch-behavior = "eggfetch now matches HTTPX 0.28.1 behavior"
+rationale = "Resolved in Phase 2: Python Object and Configuration Contracts"
+compatibility-stage-impact = "resolved"
+security-improvement = "false"
+migration-impact = "None; fully resolved"
+owner = "eggfetch-team"
+review-milestone = "phase-2"
+tests = ["test_exceptions.py"]
+non_expiring = true
+
+[[difference]]
+id = "STREAM-ERROR-SIG-002"
+category = "resolved"
+symbol = "StreamClosed"
+behavior-case = "stream-error-signature"
+reference-behavior = "HTTPX StreamClosed takes no arguments"
+eggfetch-behavior = "eggfetch now matches HTTPX 0.28.1 behavior"
+rationale = "Resolved in Phase 2: Python Object and Configuration Contracts"
+compatibility-stage-impact = "resolved"
+security-improvement = "false"
+migration-impact = "None; fully resolved"
+owner = "eggfetch-team"
+review-milestone = "phase-2"
+tests = ["test_exceptions.py"]
+non_expiring = true
+
+[[difference]]
+id = "STREAM-ERROR-SIG-003"
+category = "resolved"
+symbol = "StreamConsumed"
+behavior-case = "stream-error-signature"
+reference-behavior = "HTTPX StreamConsumed takes no arguments"
+eggfetch-behavior = "eggfetch now matches HTTPX 0.28.1 behavior"
+rationale = "Resolved in Phase 2: Python Object and Configuration Contracts"
+compatibility-stage-impact = "resolved"
+security-improvement = "false"
+migration-impact = "None; fully resolved"
+owner = "eggfetch-team"
+review-milestone = "phase-2"
+tests = ["test_exceptions.py"]
+non_expiring = true
+
+[[difference]]
+id = "MUTABLE-MAPPING-003"
+category = "resolved"
+symbol = "Headers"
+behavior-case = "headers-inheritance"
+reference-behavior = "HTTPX Headers inherits Generic, MutableMapping"
+eggfetch-behavior = "eggfetch now matches HTTPX 0.28.1 behavior"
+rationale = "Resolved in Phase 2: Python Object and Configuration Contracts"
+compatibility-stage-impact = "resolved"
+security-improvement = "false"
+migration-impact = "None; fully resolved"
+owner = "eggfetch-team"
+review-milestone = "phase-2"
+tests = ["test_headers.py"]
+non_expiring = true
+
+[[difference]]
+id = "MUTABLE-MAPPING-003-2"
+category = "resolved"
+symbol = "Headers"
+behavior-case = "headers-inheritance"
+reference-behavior = "HTTPX Headers inherits Generic, MutableMapping"
+eggfetch-behavior = "eggfetch now matches HTTPX 0.28.1 behavior"
+rationale = "Resolved in Phase 2: Python Object and Configuration Contracts"
+compatibility-stage-impact = "resolved"
+security-improvement = "false"
+migration-impact = "None; fully resolved"
+owner = "eggfetch-team"
+review-milestone = "phase-2"
+tests = ["test_headers.py"]
+non_expiring = true
+
+[[difference]]
+id = "MUTABLE-MAPPING-003-3"
+category = "resolved"
+symbol = "Headers"
+behavior-case = "headers-inheritance"
+reference-behavior = "HTTPX Headers inherits Generic, MutableMapping"
+eggfetch-behavior = "eggfetch now matches HTTPX 0.28.1 behavior"
+rationale = "Resolved in Phase 2: Python Object and Configuration Contracts"
+compatibility-stage-impact = "resolved"
+security-improvement = "false"
+migration-impact = "None; fully resolved"
+owner = "eggfetch-team"
+review-milestone = "phase-2"
+tests = ["test_headers.py"]
+non_expiring = true
+
+[[difference]]
+id = "MUTABLE-MAPPING-003-4"
+category = "resolved"
+symbol = "Headers"
+behavior-case = "headers-inheritance"
+reference-behavior = "HTTPX Headers inherits Generic, MutableMapping"
+eggfetch-behavior = "eggfetch now matches HTTPX 0.28.1 behavior"
+rationale = "Resolved in Phase 2: Python Object and Configuration Contracts"
+compatibility-stage-impact = "resolved"
+security-improvement = "false"
+migration-impact = "None; fully resolved"
+owner = "eggfetch-team"
+review-milestone = "phase-2"
+tests = ["test_headers.py"]
+non_expiring = true
+
+[[difference]]
+id = "MAPPING-001"
+category = "resolved"
+symbol = "QueryParams"
+behavior-case = "queryparams-inheritance"
+reference-behavior = "HTTPX QueryParams inherits Generic, Mapping"
+eggfetch-behavior = "eggfetch now matches HTTPX 0.28.1 behavior"
+rationale = "Resolved in Phase 2: Python Object and Configuration Contracts"
+compatibility-stage-impact = "resolved"
+security-improvement = "false"
+migration-impact = "None; fully resolved"
+owner = "eggfetch-team"
+review-milestone = "phase-2"
+tests = ["test_url_query.py"]
+non_expiring = true
+
+[[difference]]
+id = "CODES-KIND-001"
+category = "resolved"
+symbol = "codes"
+behavior-case = "codes-type-difference"
+reference-behavior = "HTTPX codes is an IntEnum class with methods like as_integer_ratio, bit_count, etc."
+eggfetch-behavior = "eggfetch now matches HTTPX 0.28.1 behavior"
+rationale = "Resolved in Phase 2: Python Object and Configuration Contracts"
+compatibility-stage-impact = "resolved"
+security-improvement = "false"
+migration-impact = "None; fully resolved"
+owner = "eggfetch-team"
+review-milestone = "phase-2"
+tests = ["test_config_objects.py"]
+non_expiring = true
+
+[[difference]]
+id = "CODES-KIND-001-2"
+category = "resolved"
+symbol = "codes"
+behavior-case = "codes-type-difference"
+reference-behavior = "HTTPX codes is an IntEnum class with methods like as_integer_ratio, bit_count, etc."
+eggfetch-behavior = "eggfetch now matches HTTPX 0.28.1 behavior"
+rationale = "Resolved in Phase 2: Python Object and Configuration Contracts"
+compatibility-stage-impact = "resolved"
+security-improvement = "false"
+migration-impact = "None; fully resolved"
+owner = "eggfetch-team"
+review-milestone = "phase-2"
+tests = ["test_config_objects.py"]
+non_expiring = true
+
+[[difference]]
+id = "CODES-KIND-001-11"
+category = "resolved"
+symbol = "codes"
+behavior-case = "codes-type-difference"
+reference-behavior = "HTTPX codes is an IntEnum class with methods like as_integer_ratio, bit_count, etc."
+eggfetch-behavior = "eggfetch now matches HTTPX 0.28.1 behavior"
+rationale = "Resolved in Phase 2: Python Object and Configuration Contracts"
+compatibility-stage-impact = "resolved"
+security-improvement = "false"
+migration-impact = "None; fully resolved"
+owner = "eggfetch-team"
+review-milestone = "phase-2"
+tests = ["test_config_objects.py"]
+non_expiring = true
+
+[[difference]]
+id = "CODES-KIND-001-3"
+category = "resolved"
+symbol = "codes"
+behavior-case = "codes-type-difference"
+reference-behavior = "HTTPX codes is an IntEnum class with methods like as_integer_ratio, bit_count, etc."
+eggfetch-behavior = "eggfetch now matches HTTPX 0.28.1 behavior"
+rationale = "Resolved in Phase 2: Python Object and Configuration Contracts"
+compatibility-stage-impact = "resolved"
+security-improvement = "false"
+migration-impact = "None; fully resolved"
+owner = "eggfetch-team"
+review-milestone = "phase-2"
+tests = ["test_config_objects.py"]
+non_expiring = true
+
+[[difference]]
+id = "CODES-KIND-001-4"
+category = "resolved"
+symbol = "codes"
+behavior-case = "codes-type-difference"
+reference-behavior = "HTTPX codes is an IntEnum class with methods like as_integer_ratio, bit_count, etc."
+eggfetch-behavior = "eggfetch now matches HTTPX 0.28.1 behavior"
+rationale = "Resolved in Phase 2: Python Object and Configuration Contracts"
+compatibility-stage-impact = "resolved"
+security-improvement = "false"
+migration-impact = "None; fully resolved"
+owner = "eggfetch-team"
+review-milestone = "phase-2"
+tests = ["test_config_objects.py"]
+non_expiring = true
+
+[[difference]]
+id = "CODES-KIND-001-5"
+category = "resolved"
+symbol = "codes"
+behavior-case = "codes-type-difference"
+reference-behavior = "HTTPX codes is an IntEnum class with methods like as_integer_ratio, bit_count, etc."
+eggfetch-behavior = "eggfetch now matches HTTPX 0.28.1 behavior"
+rationale = "Resolved in Phase 2: Python Object and Configuration Contracts"
+compatibility-stage-impact = "resolved"
+security-improvement = "false"
+migration-impact = "None; fully resolved"
+owner = "eggfetch-team"
+review-milestone = "phase-2"
+tests = ["test_config_objects.py"]
+non_expiring = true
+
+[[difference]]
+id = "CODES-KIND-001-6"
+category = "resolved"
+symbol = "codes"
+behavior-case = "codes-type-difference"
+reference-behavior = "HTTPX codes is an IntEnum class with methods like as_integer_ratio, bit_count, etc."
+eggfetch-behavior = "eggfetch now matches HTTPX 0.28.1 behavior"
+rationale = "Resolved in Phase 2: Python Object and Configuration Contracts"
+compatibility-stage-impact = "resolved"
+security-improvement = "false"
+migration-impact = "None; fully resolved"
+owner = "eggfetch-team"
+review-milestone = "phase-2"
+tests = ["test_config_objects.py"]
+non_expiring = true
+
+[[difference]]
+id = "CODES-KIND-001-7"
+category = "resolved"
+symbol = "codes"
+behavior-case = "codes-type-difference"
+reference-behavior = "HTTPX codes is an IntEnum class with methods like as_integer_ratio, bit_count, etc."
+eggfetch-behavior = "eggfetch now matches HTTPX 0.28.1 behavior"
+rationale = "Resolved in Phase 2: Python Object and Configuration Contracts"
+compatibility-stage-impact = "resolved"
+security-improvement = "false"
+migration-impact = "None; fully resolved"
+owner = "eggfetch-team"
+review-milestone = "phase-2"
+tests = ["test_config_objects.py"]
+non_expiring = true
+
+[[difference]]
+id = "CODES-KIND-001-8"
+category = "resolved"
+symbol = "codes"
+behavior-case = "codes-type-difference"
+reference-behavior = "HTTPX codes is an IntEnum class with methods like as_integer_ratio, bit_count, etc."
+eggfetch-behavior = "eggfetch now matches HTTPX 0.28.1 behavior"
+rationale = "Resolved in Phase 2: Python Object and Configuration Contracts"
+compatibility-stage-impact = "resolved"
+security-improvement = "false"
+migration-impact = "None; fully resolved"
+owner = "eggfetch-team"
+review-milestone = "phase-2"
+tests = ["test_config_objects.py"]
+non_expiring = true
+
+[[difference]]
+id = "CODES-KIND-001-9"
+category = "resolved"
+symbol = "codes"
+behavior-case = "codes-type-difference"
+reference-behavior = "HTTPX codes is an IntEnum class with methods like as_integer_ratio, bit_count, etc."
+eggfetch-behavior = "eggfetch now matches HTTPX 0.28.1 behavior"
+rationale = "Resolved in Phase 2: Python Object and Configuration Contracts"
+compatibility-stage-impact = "resolved"
+security-improvement = "false"
+migration-impact = "None; fully resolved"
+owner = "eggfetch-team"
+review-milestone = "phase-2"
+tests = ["test_config_objects.py"]
+non_expiring = true
+
+[[difference]]
+id = "CODES-KIND-001-10"
+category = "resolved"
+symbol = "codes"
+behavior-case = "codes-type-difference"
+reference-behavior = "HTTPX codes is an IntEnum class with methods like as_integer_ratio, bit_count, etc."
+eggfetch-behavior = "eggfetch now matches HTTPX 0.28.1 behavior"
+rationale = "Resolved in Phase 2: Python Object and Configuration Contracts"
+compatibility-stage-impact = "resolved"
+security-improvement = "false"
+migration-impact = "None; fully resolved"
+owner = "eggfetch-team"
+review-milestone = "phase-2"
+tests = ["test_config_objects.py"]
+non_expiring = true
+
+[[difference]]
+id = "STREAM-ERROR-ARGS-001"
+category = "resolved"
+symbol = "RequestNotRead"
+behavior-case = "stream-error-constructor"
+reference-behavior = "HTTPX stream error subclasses take no arguments: RequestNotRead()"
+eggfetch-behavior = "eggfetch now matches HTTPX 0.28.1 behavior"
+rationale = "Resolved in Phase 2: Python Object and Configuration Contracts"
+compatibility-stage-impact = "resolved"
+security-improvement = "false"
+migration-impact = "None; fully resolved"
+owner = "eggfetch-team"
+review-milestone = "phase-2"
+tests = ["test_exceptions.py"]
+non_expiring = true
+
+[[difference]]
+id = "NETRC-PARAM-NAME-001"
+category = "resolved"
+symbol = "NetRCAuth"
+behavior-case = "netrc-parameter-name"
+reference-behavior = "HTTPX NetRCAuth takes (file=...)"
+eggfetch-behavior = "eggfetch now matches HTTPX 0.28.1 behavior"
+rationale = "Resolved in Phase 2: Python Object and Configuration Contracts"
+compatibility-stage-impact = "resolved"
+security-improvement = "false"
+migration-impact = "None; fully resolved"
+owner = "eggfetch-team"
+review-milestone = "phase-2"
+tests = ["test_auth.py"]
+non_expiring = true
+
+[[difference]]
+id = "NETRC-PARAM-NAME-001-2"
+category = "resolved"
+symbol = "NetRCAuth"
+behavior-case = "netrc-parameter-name"
+reference-behavior = "HTTPX NetRCAuth takes (file=...)"
+eggfetch-behavior = "eggfetch now matches HTTPX 0.28.1 behavior"
+rationale = "Resolved in Phase 2: Python Object and Configuration Contracts"
+compatibility-stage-impact = "resolved"
+security-improvement = "false"
+migration-impact = "None; fully resolved"
+owner = "eggfetch-team"
+review-milestone = "phase-2"
+tests = ["test_auth.py"]
+non_expiring = true
+
+[[difference]]
+id = "URL-RAW-002"
+category = "resolved"
+symbol = "URL"
+behavior-case = "url-raw-property"
+reference-behavior = "HTTPX URL exposes a .raw property returning raw URL components"
+eggfetch-behavior = "eggfetch now matches HTTPX 0.28.1 behavior"
+rationale = "Resolved in Phase 2: Python Object and Configuration Contracts"
+compatibility-stage-impact = "resolved"
+security-improvement = "false"
+migration-impact = "None; fully resolved"
+owner = "eggfetch-team"
+review-milestone = "phase-2"
+tests = ["test_url_query.py"]
+non_expiring = true
+
+[[difference]]
+id = "URL-RAW-002-2"
+category = "resolved"
+symbol = "URL"
+behavior-case = "url-raw-property"
+reference-behavior = "HTTPX URL exposes a .raw property returning raw URL components"
+eggfetch-behavior = "eggfetch now matches HTTPX 0.28.1 behavior"
+rationale = "Resolved in Phase 2: Python Object and Configuration Contracts"
+compatibility-stage-impact = "resolved"
+security-improvement = "false"
+migration-impact = "None; fully resolved"
+owner = "eggfetch-team"
+review-milestone = "phase-2"
+tests = ["test_url_query.py"]
+non_expiring = true
+
+[[difference]]
+id = "URL-RAW-002-3"
+category = "resolved"
+symbol = "URL"
+behavior-case = "url-raw-property"
+reference-behavior = "HTTPX URL exposes a .raw property returning raw URL components"
+eggfetch-behavior = "eggfetch now matches HTTPX 0.28.1 behavior"
+rationale = "Resolved in Phase 2: Python Object and Configuration Contracts"
+compatibility-stage-impact = "resolved"
+security-improvement = "false"
+migration-impact = "None; fully resolved"
+owner = "eggfetch-team"
+review-milestone = "phase-2"
+tests = ["test_url_query.py"]
+non_expiring = true
+
+[[difference]]
+id = "URL-RAW-002-4"
+category = "resolved"
+symbol = "URL"
+behavior-case = "url-raw-property"
+reference-behavior = "HTTPX URL exposes a .raw property returning raw URL components"
+eggfetch-behavior = "eggfetch now matches HTTPX 0.28.1 behavior"
+rationale = "Resolved in Phase 2: Python Object and Configuration Contracts"
+compatibility-stage-impact = "resolved"
+security-improvement = "false"
+migration-impact = "None; fully resolved"
+owner = "eggfetch-team"
+review-milestone = "phase-2"
+tests = ["test_url_query.py"]
+non_expiring = true
+
+[[difference]]
+id = "URL-RAW-002-5"
+category = "resolved"
+symbol = "URL"
+behavior-case = "url-raw-property"
+reference-behavior = "HTTPX URL exposes a .raw property returning raw URL components"
+eggfetch-behavior = "eggfetch now matches HTTPX 0.28.1 behavior"
+rationale = "Resolved in Phase 2: Python Object and Configuration Contracts"
+compatibility-stage-impact = "resolved"
+security-improvement = "false"
+migration-impact = "None; fully resolved"
+owner = "eggfetch-team"
+review-milestone = "phase-2"
+tests = ["test_url_query.py"]
+non_expiring = true
+
+[[difference]]
+id = "STREAM-ERROR-BASE-001"
+category = "resolved"
+symbol = "StreamError"
+behavior-case = "exception-base-class"
+reference-behavior = "HTTPX StreamError inherits from RuntimeError"
+eggfetch-behavior = "eggfetch now matches HTTPX 0.28.1 behavior"
+rationale = "Resolved in Phase 2: Python Object and Configuration Contracts"
+compatibility-stage-impact = "resolved"
+security-improvement = "false"
+migration-impact = "None; fully resolved"
+owner = "eggfetch-team"
+review-milestone = "phase-2"
+tests = ["test_exceptions.py"]
+non_expiring = true
+
+[[difference]]
+id = "STREAM-ERROR-BASE-001-2"
+category = "resolved"
+symbol = "StreamError"
+behavior-case = "exception-base-class"
+reference-behavior = "HTTPX StreamError inherits from RuntimeError"
+eggfetch-behavior = "eggfetch now matches HTTPX 0.28.1 behavior"
+rationale = "Resolved in Phase 2: Python Object and Configuration Contracts"
+compatibility-stage-impact = "resolved"
+security-improvement = "false"
+migration-impact = "None; fully resolved"
+owner = "eggfetch-team"
+review-milestone = "phase-2"
+tests = ["test_exceptions.py"]
+non_expiring = true
+
+[[difference]]
+id = "STREAM-ERROR-BASE-001-3"
+category = "resolved"
+symbol = "StreamError"
+behavior-case = "exception-base-class"
+reference-behavior = "HTTPX StreamError inherits from RuntimeError"
+eggfetch-behavior = "eggfetch now matches HTTPX 0.28.1 behavior"
+rationale = "Resolved in Phase 2: Python Object and Configuration Contracts"
+compatibility-stage-impact = "resolved"
+security-improvement = "false"
+migration-impact = "None; fully resolved"
+owner = "eggfetch-team"
+review-milestone = "phase-2"
+tests = ["test_exceptions.py"]
+non_expiring = true

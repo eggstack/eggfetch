@@ -111,8 +111,8 @@ class TestExceptionHierarchy:
 
 
 class TestStreamErrorHierarchy:
-    def test_stream_error_is_exception(self):
-        assert issubclass(StreamError, Exception)
+    def test_stream_error_is_runtime_error(self):
+        assert issubclass(StreamError, RuntimeError)
 
     def test_stream_error_not_http_error(self):
         assert not issubclass(StreamError, HTTPError)
@@ -138,6 +138,50 @@ class TestStandaloneExceptions:
     def test_cookie_conflict(self):
         assert issubclass(CookieConflict, Exception)
         assert not issubclass(CookieConflict, HTTPError)
+
+    def test_invalid_url_requires_message(self):
+        """HTTPX InvalidURL requires message as mandatory parameter."""
+        with pytest.raises(TypeError):
+            InvalidURL()
+
+    def test_cookie_conflict_requires_message(self):
+        """HTTPX CookieConflict requires message as mandatory parameter."""
+        with pytest.raises(TypeError):
+            CookieConflict()
+
+
+class TestStreamExceptionConstructors:
+    def test_response_not_read_no_args(self):
+        exc = ResponseNotRead()
+        assert str(exc) == ""
+
+    def test_stream_closed_no_args(self):
+        exc = StreamClosed()
+        assert str(exc) == ""
+
+    def test_stream_consumed_no_args(self):
+        exc = StreamConsumed()
+        assert str(exc) == ""
+
+    def test_request_not_read_no_args(self):
+        exc = RequestNotRead()
+        assert str(exc) == ""
+
+    def test_response_not_read_rejects_args(self):
+        with pytest.raises(TypeError):
+            ResponseNotRead("bad")
+
+    def test_stream_closed_rejects_args(self):
+        with pytest.raises(TypeError):
+            StreamClosed("bad")
+
+    def test_stream_consumed_rejects_args(self):
+        with pytest.raises(TypeError):
+            StreamConsumed("bad")
+
+    def test_request_not_read_rejects_args(self):
+        with pytest.raises(TypeError):
+            RequestNotRead("bad")
 
 
 # ── Constructor signatures ─────────────────────────────────────────────

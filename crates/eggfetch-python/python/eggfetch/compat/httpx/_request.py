@@ -372,7 +372,7 @@ class Request:
     @property
     def content(self) -> bytes:
         if self._content is None and self._stream is not None:
-            raise RequestNotRead("Attempted to access streaming request content, without having called `read()`.")
+            raise RequestNotRead()
         return self._content or b""
 
     @property

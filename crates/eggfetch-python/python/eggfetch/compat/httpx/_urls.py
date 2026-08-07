@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import urllib.parse
+from collections.abc import Mapping
 
 
 def _is_http_url(url: str) -> bool:
@@ -13,7 +14,7 @@ def _urlsplit(url: str) -> urllib.parse.SplitResult:
     return urllib.parse.urlsplit(url)
 
 
-class QueryParams:
+class QueryParams(Mapping):
     """HTTPX-compatible QueryParams class.
 
     Internal storage: list of (key, value) tuples to preserve order and duplicates.
@@ -275,6 +276,27 @@ class URL:
     @property
     def raw_scheme(self) -> bytes:
         return self._parts.scheme.encode("utf-8")
+
+    @property
+    def raw(self) -> tuple[bytes, bytes | None, int | None, bytes]:
+        """Return raw URL components as ``(scheme, host, port, path)``.
+
+        Matches the HTTPX 0.28.1 ``URL.raw`` public property.
+        Default ports (80/http, 443/https) are returned as ``None``.
+        The path includes the query string if present.
+        """
+        scheme = self._parts.scheme.encode("ascii")
+        host = self._parts.hostname.encode("ascii") if self._parts.hostname else None
+        port = self._parts.port
+        if port is not None:
+            if (self._parts.scheme == "http" and port == 80) or (
+                self._parts.scheme == "https" and port == 443
+            ):
+                port = None
+        raw_path = self._parts.path.encode("utf-8") if self._parts.path else b"/"
+        if self._parts.query:
+            raw_path = raw_path + b"?" + self._parts.query.encode("utf-8")
+        return (scheme, host, port, raw_path)
 
     @property
     def is_absolute_url(self) -> bool:

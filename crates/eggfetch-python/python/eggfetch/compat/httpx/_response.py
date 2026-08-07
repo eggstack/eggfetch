@@ -344,10 +344,7 @@ class Response:
     def content(self) -> bytes:
         if self._content is None:
             if self._stream is not None or self._native_stream is not None:
-                raise ResponseNotRead(
-                    "Response content has not been read. "
-                    "Call .read() or .aread() first."
-                )
+                raise ResponseNotRead()
             return b""
         return self._content
 
@@ -357,10 +354,7 @@ class Response:
             return self._text
         if self._content is None:
             if self._stream is not None or self._native_stream is not None:
-                raise ResponseNotRead(
-                    "Response content has not been read. "
-                    "Call .read() or .aread() first."
-                )
+                raise ResponseNotRead()
             return ""
         enc = self._resolve_encoding()
         self._text = self._content.decode(enc)
@@ -484,10 +478,7 @@ class Response:
             return self._json
         if self._content is None:
             if self._stream is not None or self._native_stream is not None:
-                raise ResponseNotRead(
-                    "Response content has not been read. "
-                    "Call .read() or .aread() first."
-                )
+                raise ResponseNotRead()
             raise RuntimeError("Response content is empty.")
         return _json.loads(self._content, **kwargs)
 

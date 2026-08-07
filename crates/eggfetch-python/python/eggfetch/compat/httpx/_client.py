@@ -945,7 +945,7 @@ def _redirect_stream(request: Request, method: str):
     if isinstance(request._stream, ByteStream):
         return ByteStream(request._stream._content)
     if request._stream is not None:
-        raise StreamConsumed("Cannot replay a consumed request body on a redirect")
+        raise StreamConsumed()
     return None
 
 
@@ -1014,7 +1014,7 @@ def _build_redirect_request(
         )
 
     # One-shot or unsupported: fail before second dispatch
-    raise StreamConsumed("Cannot replay a consumed request body on a redirect")
+    raise StreamConsumed()
 
 
 def _clean_redirect_extensions(request: Request) -> dict:

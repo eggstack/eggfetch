@@ -140,7 +140,7 @@ class TooManyRedirects(RequestError):
     """Exception raised when too many redirects are followed."""
 
 
-class StreamError(Exception):
+class StreamError(RuntimeError):
     """Base exception for stream-related errors."""
 
     def __init__(self, *args: object) -> None:
@@ -150,23 +150,35 @@ class StreamError(Exception):
 class RequestNotRead(StreamError):
     """Exception raised when attempting to read a request that hasn't been read."""
 
+    def __init__(self) -> None:
+        super().__init__()
+
 
 class ResponseNotRead(StreamError):
     """Exception raised when attempting to read a response that hasn't been read."""
+
+    def __init__(self) -> None:
+        super().__init__()
 
 
 class StreamClosed(StreamError):
     """Exception raised when attempting to read from a closed stream."""
 
+    def __init__(self) -> None:
+        super().__init__()
+
 
 class StreamConsumed(StreamError):
     """Exception raised when attempting to read from a consumed stream."""
+
+    def __init__(self) -> None:
+        super().__init__()
 
 
 class InvalidURL(Exception):
     """Exception raised when an invalid URL is provided."""
 
-    def __init__(self, message: str = "", **kwargs: object) -> None:
+    def __init__(self, message: str, **kwargs: object) -> None:
         self.message = message if message is not None else ""
         super().__init__(self.message)
 
@@ -177,7 +189,7 @@ class InvalidURL(Exception):
 class CookieConflict(Exception):
     """Exception raised when a cookie conflict occurs."""
 
-    def __init__(self, message: str = "", **kwargs: object) -> None:
+    def __init__(self, message: str, **kwargs: object) -> None:
         self.message = message if message is not None else ""
         super().__init__(self.message)
 

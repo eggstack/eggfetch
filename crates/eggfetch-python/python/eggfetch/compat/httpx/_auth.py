@@ -319,14 +319,16 @@ class NetRCAuth(Auth):
     applies HTTP Basic authentication if found.
 
     Args:
-        auth_file: Path to the netrc file.  Defaults to ``~/.netrc``.
+        file: Path to the netrc file.  Defaults to ``~/.netrc``.
+              Also accepts ``auth_file`` as an alias.
     """
 
-    def __init__(self, auth_file: str | None = None) -> None:
-        if auth_file is None:
+    def __init__(self, file: str | None = None, *, auth_file: str | None = None) -> None:
+        path = file if file is not None else auth_file
+        if path is None:
             self._auth_file = Path.home() / ".netrc"
         else:
-            self._auth_file = Path(auth_file)
+            self._auth_file = Path(path)
 
     @property
     def auth_file(self) -> Path:

@@ -101,7 +101,7 @@ python scripts/compare_httpx_api_manifest.py \
   --json --output /tmp/api-result.json
 ```
 
-The compatibility profile is in `compat/httpx/0.28.1/`. Allowed differences are documented in `allowed-differences.toml` with `classification` (`must-close`/`intentional`/`deferred`) and `phase` fields for implementation tracking. Phase 1 contract rebaseline completed 2026-08-07: 150 active differences classified (89 must-close, 61 intentional, 0 deferred). See `plans/httpx-parity-phase-1-handoff-inventory.md` for the full implementation handoff.
+The compatibility profile is in `compat/httpx/0.28.1/`. Allowed differences are documented in `allowed-differences.toml` with `classification` (`must-close`/`intentional`/`deferred`) and `phase` fields for implementation tracking. Phase 1 contract rebaseline completed 2026-08-07: 150 active differences classified (89 must-close, 61 intentional, 0 deferred). Phase 2 object contracts completed 2026-08-07: 34 must-close resolved, 55 remain in Phase 3. See `plans/httpx-parity-phase-1-handoff-inventory.md` for the full implementation handoff.
 
 ## Tests
 
@@ -183,4 +183,4 @@ The compact `test_corrective_kernel.py` is part of Tier 1; the pinned differenti
 
 ### HTTPX corrective closure
 
-Phase 1 contract rebaseline completed 2026-08-07. All 150 active differences are classified and assigned. See `plans/httpx-parity-phase-1-handoff-inventory.md` for the implementation handoff. The pinned reference remains `httpx==0.28.1`.
+Phase 1 contract rebaseline completed 2026-08-07. All 150 active differences are classified and assigned. See `plans/httpx-parity-phase-1-handoff-inventory.md` for the implementation handoff. Phase 2 object contracts completed 2026-08-07. The pinned reference remains `httpx==0.28.1`.
