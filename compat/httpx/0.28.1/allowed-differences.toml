@@ -7,6 +7,8 @@
 [[difference]]
 id = "EXCEPTION-OPTIONAL-MSG-001"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-2"
 symbol = "InvalidURL"
 difference-type = "parameter-name"
 member = "InvalidURL"
@@ -26,6 +28,8 @@ non_expiring = true
 [[difference]]
 id = "EXCEPTION-OPTIONAL-MSG-001-2"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-2"
 symbol = "InvalidURL"
 difference-type = "parameter-default"
 member = "message"
@@ -45,6 +49,8 @@ non_expiring = true
 [[difference]]
 id = "EXCEPTION-OPTIONAL-MSG-002"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-2"
 symbol = "CookieConflict"
 difference-type = "parameter-name"
 member = "CookieConflict"
@@ -64,6 +70,8 @@ non_expiring = true
 [[difference]]
 id = "EXCEPTION-OPTIONAL-MSG-002-2"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-2"
 symbol = "CookieConflict"
 difference-type = "parameter-default"
 member = "message"
@@ -83,6 +91,8 @@ non_expiring = true
 [[difference]]
 id = "STREAM-ERROR-SIG-001"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-2"
 symbol = "ResponseNotRead"
 difference-type = "parameter-name"
 member = "ResponseNotRead"
@@ -102,6 +112,8 @@ non_expiring = true
 [[difference]]
 id = "STREAM-ERROR-SIG-002"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-2"
 symbol = "StreamClosed"
 difference-type = "parameter-name"
 member = "StreamClosed"
@@ -121,6 +133,8 @@ non_expiring = true
 [[difference]]
 id = "STREAM-ERROR-SIG-003"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-2"
 symbol = "StreamConsumed"
 difference-type = "parameter-name"
 member = "StreamConsumed"
@@ -140,6 +154,8 @@ non_expiring = true
 [[difference]]
 id = "MUTABLE-MAPPING-003"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-2"
 symbol = "Headers"
 difference-type = "base-class"
 member = ""
@@ -159,6 +175,8 @@ non_expiring = true
 [[difference]]
 id = "MUTABLE-MAPPING-003-2"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-2"
 symbol = "Headers"
 difference-type = "missing-method"
 member = "popitem"
@@ -178,6 +196,8 @@ non_expiring = true
 [[difference]]
 id = "MUTABLE-MAPPING-003-3"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-2"
 symbol = "Headers"
 difference-type = "missing-method"
 member = "setdefault"
@@ -197,6 +217,8 @@ non_expiring = true
 [[difference]]
 id = "MUTABLE-MAPPING-003-4"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-2"
 symbol = "Headers"
 difference-type = "extra-method"
 member = "append"
@@ -216,6 +238,8 @@ non_expiring = true
 [[difference]]
 id = "MAPPING-001"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-2"
 symbol = "QueryParams"
 difference-type = "base-class"
 member = ""
@@ -235,6 +259,7 @@ non_expiring = true
 [[difference]]
 id = "AUTH-FLOW-INTERNAL-002"
 category = "stage-bounded"
+classification = "intentional"
 symbol = "DigestAuth"
 difference-type = "extra-property"
 member = "password"
@@ -254,6 +279,7 @@ non_expiring = true
 [[difference]]
 id = "AUTH-FLOW-INTERNAL-002-2"
 category = "stage-bounded"
+classification = "intentional"
 symbol = "DigestAuth"
 difference-type = "extra-property"
 member = "username"
@@ -273,6 +299,7 @@ non_expiring = true
 [[difference]]
 id = "EXTRA-PROPS-002"
 category = "stage-bounded"
+classification = "intentional"
 symbol = "Limits"
 difference-type = "parameter-kind"
 member = "max_connections"
@@ -292,6 +319,7 @@ non_expiring = true
 [[difference]]
 id = "EXTRA-PROPS-002-2"
 category = "stage-bounded"
+classification = "intentional"
 symbol = "Limits"
 difference-type = "parameter-kind"
 member = "max_keepalive_connections"
@@ -311,6 +339,7 @@ non_expiring = true
 [[difference]]
 id = "EXTRA-PROPS-002-3"
 category = "stage-bounded"
+classification = "intentional"
 symbol = "Limits"
 difference-type = "parameter-kind"
 member = "keepalive_expiry"
@@ -330,6 +359,7 @@ non_expiring = true
 [[difference]]
 id = "EXTRA-PROPS-002-4"
 category = "stage-bounded"
+classification = "intentional"
 symbol = "Limits"
 difference-type = "extra-property"
 member = "keepalive_expiry"
@@ -349,6 +379,7 @@ non_expiring = true
 [[difference]]
 id = "EXTRA-PROPS-002-5"
 category = "stage-bounded"
+classification = "intentional"
 symbol = "Limits"
 difference-type = "extra-property"
 member = "max_connections"
@@ -368,6 +399,7 @@ non_expiring = true
 [[difference]]
 id = "EXTRA-PROPS-002-6"
 category = "stage-bounded"
+classification = "intentional"
 symbol = "Limits"
 difference-type = "extra-property"
 member = "max_keepalive_connections"
@@ -387,6 +419,7 @@ non_expiring = true
 [[difference]]
 id = "EXTRA-PROPS-003"
 category = "stage-bounded"
+classification = "intentional"
 symbol = "Proxy"
 difference-type = "parameter-name"
 member = "Proxy"
@@ -406,6 +439,7 @@ non_expiring = true
 [[difference]]
 id = "EXTRA-PROPS-003-2"
 category = "stage-bounded"
+classification = "intentional"
 symbol = "Proxy"
 difference-type = "extra-property"
 member = "auth"
@@ -425,6 +459,7 @@ non_expiring = true
 [[difference]]
 id = "EXTRA-PROPS-003-3"
 category = "stage-bounded"
+classification = "intentional"
 symbol = "Proxy"
 difference-type = "extra-property"
 member = "headers"
@@ -444,6 +479,7 @@ non_expiring = true
 [[difference]]
 id = "EXTRA-PROPS-003-4"
 category = "stage-bounded"
+classification = "intentional"
 symbol = "Proxy"
 difference-type = "extra-property"
 member = "ssl_context"
@@ -463,6 +499,7 @@ non_expiring = true
 [[difference]]
 id = "EXTRA-PROPS-003-5"
 category = "stage-bounded"
+classification = "intentional"
 symbol = "Proxy"
 difference-type = "extra-property"
 member = "url"
@@ -482,6 +519,7 @@ non_expiring = true
 [[difference]]
 id = "EXTRA-PROPS-004"
 category = "stage-bounded"
+classification = "intentional"
 symbol = "Response"
 difference-type = "extra-property"
 member = "extensions"
@@ -501,6 +539,7 @@ non_expiring = true
 [[difference]]
 id = "EXTRA-PROPS-004-2"
 category = "stage-bounded"
+classification = "intentional"
 symbol = "Response"
 difference-type = "extra-property"
 member = "headers"
@@ -520,6 +559,7 @@ non_expiring = true
 [[difference]]
 id = "EXTRA-PROPS-004-3"
 category = "stage-bounded"
+classification = "intentional"
 symbol = "Response"
 difference-type = "extra-property"
 member = "history"
@@ -539,6 +579,7 @@ non_expiring = true
 [[difference]]
 id = "EXTRA-PROPS-004-4"
 category = "stage-bounded"
+classification = "intentional"
 symbol = "Response"
 difference-type = "extra-property"
 member = "status_code"
@@ -558,6 +599,8 @@ non_expiring = true
 [[difference]]
 id = "HTTP-METHOD-ARGS-001"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-3"
 symbol = "get"
 difference-type = "parameter-name"
 member = "get"
@@ -577,6 +620,8 @@ non_expiring = true
 [[difference]]
 id = "HTTP-METHOD-ARGS-001-2"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-3"
 symbol = "get"
 difference-type = "parameter-kind"
 member = "url"
@@ -596,6 +641,8 @@ non_expiring = true
 [[difference]]
 id = "HTTP-METHOD-ARGS-001-3"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-3"
 symbol = "get"
 difference-type = "parameter-kind"
 member = "params"
@@ -615,6 +662,8 @@ non_expiring = true
 [[difference]]
 id = "HTTP-METHOD-ARGS-001-4"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-3"
 symbol = "get"
 difference-type = "return-annotation"
 member = "get"
@@ -634,6 +683,8 @@ non_expiring = true
 [[difference]]
 id = "HTTP-METHOD-ARGS-002"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-3"
 symbol = "post"
 difference-type = "parameter-name"
 member = "post"
@@ -653,6 +704,8 @@ non_expiring = true
 [[difference]]
 id = "HTTP-METHOD-ARGS-002-2"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-3"
 symbol = "post"
 difference-type = "parameter-kind"
 member = "url"
@@ -672,6 +725,8 @@ non_expiring = true
 [[difference]]
 id = "HTTP-METHOD-ARGS-002-3"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-3"
 symbol = "post"
 difference-type = "parameter-kind"
 member = "content"
@@ -691,6 +746,8 @@ non_expiring = true
 [[difference]]
 id = "HTTP-METHOD-ARGS-002-4"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-3"
 symbol = "post"
 difference-type = "return-annotation"
 member = "post"
@@ -710,6 +767,8 @@ non_expiring = true
 [[difference]]
 id = "HTTP-METHOD-ARGS-003"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-3"
 symbol = "put"
 difference-type = "parameter-name"
 member = "put"
@@ -729,6 +788,8 @@ non_expiring = true
 [[difference]]
 id = "HTTP-METHOD-ARGS-003-2"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-3"
 symbol = "put"
 difference-type = "parameter-kind"
 member = "url"
@@ -748,6 +809,8 @@ non_expiring = true
 [[difference]]
 id = "HTTP-METHOD-ARGS-003-3"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-3"
 symbol = "put"
 difference-type = "parameter-kind"
 member = "content"
@@ -767,6 +830,8 @@ non_expiring = true
 [[difference]]
 id = "HTTP-METHOD-ARGS-003-4"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-3"
 symbol = "put"
 difference-type = "return-annotation"
 member = "put"
@@ -786,6 +851,8 @@ non_expiring = true
 [[difference]]
 id = "HTTP-METHOD-ARGS-004"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-3"
 symbol = "patch"
 difference-type = "parameter-name"
 member = "patch"
@@ -805,6 +872,8 @@ non_expiring = true
 [[difference]]
 id = "HTTP-METHOD-ARGS-004-2"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-3"
 symbol = "patch"
 difference-type = "parameter-kind"
 member = "url"
@@ -824,6 +893,8 @@ non_expiring = true
 [[difference]]
 id = "HTTP-METHOD-ARGS-004-3"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-3"
 symbol = "patch"
 difference-type = "parameter-kind"
 member = "content"
@@ -843,6 +914,8 @@ non_expiring = true
 [[difference]]
 id = "HTTP-METHOD-ARGS-004-4"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-3"
 symbol = "patch"
 difference-type = "return-annotation"
 member = "patch"
@@ -862,6 +935,8 @@ non_expiring = true
 [[difference]]
 id = "HTTP-METHOD-ARGS-005"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-3"
 symbol = "delete"
 difference-type = "parameter-name"
 member = "delete"
@@ -881,6 +956,8 @@ non_expiring = true
 [[difference]]
 id = "HTTP-METHOD-ARGS-005-2"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-3"
 symbol = "delete"
 difference-type = "parameter-kind"
 member = "url"
@@ -900,6 +977,8 @@ non_expiring = true
 [[difference]]
 id = "HTTP-METHOD-ARGS-005-3"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-3"
 symbol = "delete"
 difference-type = "parameter-kind"
 member = "params"
@@ -919,6 +998,8 @@ non_expiring = true
 [[difference]]
 id = "HTTP-METHOD-ARGS-005-4"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-3"
 symbol = "delete"
 difference-type = "return-annotation"
 member = "delete"
@@ -938,6 +1019,8 @@ non_expiring = true
 [[difference]]
 id = "HTTP-METHOD-ARGS-006"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-3"
 symbol = "head"
 difference-type = "parameter-name"
 member = "head"
@@ -957,6 +1040,8 @@ non_expiring = true
 [[difference]]
 id = "HTTP-METHOD-ARGS-006-2"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-3"
 symbol = "head"
 difference-type = "parameter-kind"
 member = "url"
@@ -976,6 +1061,8 @@ non_expiring = true
 [[difference]]
 id = "HTTP-METHOD-ARGS-006-3"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-3"
 symbol = "head"
 difference-type = "parameter-kind"
 member = "params"
@@ -995,6 +1082,8 @@ non_expiring = true
 [[difference]]
 id = "HTTP-METHOD-ARGS-006-4"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-3"
 symbol = "head"
 difference-type = "return-annotation"
 member = "head"
@@ -1014,6 +1103,8 @@ non_expiring = true
 [[difference]]
 id = "HTTP-METHOD-ARGS-007"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-3"
 symbol = "options"
 difference-type = "parameter-name"
 member = "options"
@@ -1033,6 +1124,8 @@ non_expiring = true
 [[difference]]
 id = "HTTP-METHOD-ARGS-007-2"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-3"
 symbol = "options"
 difference-type = "parameter-kind"
 member = "url"
@@ -1052,6 +1145,8 @@ non_expiring = true
 [[difference]]
 id = "HTTP-METHOD-ARGS-007-3"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-3"
 symbol = "options"
 difference-type = "parameter-kind"
 member = "params"
@@ -1071,6 +1166,8 @@ non_expiring = true
 [[difference]]
 id = "HTTP-METHOD-ARGS-007-4"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-3"
 symbol = "options"
 difference-type = "return-annotation"
 member = "options"
@@ -1090,6 +1187,8 @@ non_expiring = true
 [[difference]]
 id = "HTTP-METHOD-ARGS-008"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-3"
 symbol = "request"
 difference-type = "parameter-name"
 member = "request"
@@ -1109,6 +1208,8 @@ non_expiring = true
 [[difference]]
 id = "HTTP-METHOD-ARGS-008-2"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-3"
 symbol = "request"
 difference-type = "parameter-kind"
 member = "method"
@@ -1128,6 +1229,8 @@ non_expiring = true
 [[difference]]
 id = "HTTP-METHOD-ARGS-008-3"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-3"
 symbol = "request"
 difference-type = "parameter-kind"
 member = "url"
@@ -1147,6 +1250,8 @@ non_expiring = true
 [[difference]]
 id = "HTTP-METHOD-ARGS-008-4"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-3"
 symbol = "request"
 difference-type = "return-annotation"
 member = "request"
@@ -1166,6 +1271,8 @@ non_expiring = true
 [[difference]]
 id = "HTTP-METHOD-ARGS-009"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-3"
 symbol = "stream"
 difference-type = "parameter-name"
 member = "stream"
@@ -1185,6 +1292,8 @@ non_expiring = true
 [[difference]]
 id = "HTTP-METHOD-ARGS-009-2"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-3"
 symbol = "stream"
 difference-type = "parameter-kind"
 member = "method"
@@ -1204,6 +1313,8 @@ non_expiring = true
 [[difference]]
 id = "HTTP-METHOD-ARGS-009-3"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-3"
 symbol = "stream"
 difference-type = "parameter-kind"
 member = "url"
@@ -1223,6 +1334,8 @@ non_expiring = true
 [[difference]]
 id = "HTTP-METHOD-ARGS-009-4"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-3"
 symbol = "stream"
 difference-type = "return-annotation"
 member = "stream"
@@ -1242,6 +1355,8 @@ non_expiring = true
 [[difference]]
 id = "STREAM-CTOR-001"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-3"
 symbol = "ByteStream"
 difference-type = "parameter-name"
 member = "ByteStream"
@@ -1261,6 +1376,8 @@ non_expiring = true
 [[difference]]
 id = "STREAM-CTOR-001-2"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-3"
 symbol = "ByteStream"
 difference-type = "parameter-default"
 member = "stream"
@@ -1280,6 +1397,8 @@ non_expiring = true
 [[difference]]
 id = "STREAM-CTOR-001-3"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-3"
 symbol = "ByteStream"
 difference-type = "base-class"
 member = ""
@@ -1299,6 +1418,8 @@ non_expiring = true
 [[difference]]
 id = "STREAM-CTOR-001-4"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-3"
 symbol = "ByteStream"
 difference-type = "missing-method"
 member = "aclose"
@@ -1318,6 +1439,8 @@ non_expiring = true
 [[difference]]
 id = "STREAM-CTOR-001B"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-3"
 symbol = "SyncByteStream"
 difference-type = "parameter-name"
 member = "SyncByteStream"
@@ -1337,6 +1460,8 @@ non_expiring = true
 [[difference]]
 id = "STREAM-CTOR-001B-2"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-3"
 symbol = "SyncByteStream"
 difference-type = "parameter-kind"
 member = "self"
@@ -1356,6 +1481,8 @@ non_expiring = true
 [[difference]]
 id = "STREAM-CTOR-001B-3"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-3"
 symbol = "SyncByteStream"
 difference-type = "parameter-kind"
 member = "args"
@@ -1375,6 +1502,8 @@ non_expiring = true
 [[difference]]
 id = "STREAM-CTOR-001B-4"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-3"
 symbol = "SyncByteStream"
 difference-type = "parameter-default"
 member = "args"
@@ -1394,6 +1523,8 @@ non_expiring = true
 [[difference]]
 id = "STREAM-CTOR-001B-5"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-3"
 symbol = "SyncByteStream"
 difference-type = "base-class"
 member = ""
@@ -1413,6 +1544,8 @@ non_expiring = true
 [[difference]]
 id = "STREAM-CTOR-001C"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-3"
 symbol = "AsyncByteStream"
 difference-type = "parameter-name"
 member = "AsyncByteStream"
@@ -1432,6 +1565,8 @@ non_expiring = true
 [[difference]]
 id = "STREAM-CTOR-001C-2"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-3"
 symbol = "AsyncByteStream"
 difference-type = "parameter-kind"
 member = "self"
@@ -1451,6 +1586,8 @@ non_expiring = true
 [[difference]]
 id = "STREAM-CTOR-001C-3"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-3"
 symbol = "AsyncByteStream"
 difference-type = "parameter-kind"
 member = "args"
@@ -1470,6 +1607,8 @@ non_expiring = true
 [[difference]]
 id = "STREAM-CTOR-001C-4"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-3"
 symbol = "AsyncByteStream"
 difference-type = "parameter-default"
 member = "args"
@@ -1489,6 +1628,8 @@ non_expiring = true
 [[difference]]
 id = "TRANSPORT-PARAMS-001"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-3"
 symbol = "HTTPTransport"
 difference-type = "parameter-name"
 member = "HTTPTransport"
@@ -1508,6 +1649,8 @@ non_expiring = true
 [[difference]]
 id = "TRANSPORT-PARAMS-001-2"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-3"
 symbol = "HTTPTransport"
 difference-type = "parameter-default"
 member = "limits"
@@ -1527,6 +1670,8 @@ non_expiring = true
 [[difference]]
 id = "TRANSPORT-PARAMS-001B"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-3"
 symbol = "AsyncHTTPTransport"
 difference-type = "parameter-name"
 member = "AsyncHTTPTransport"
@@ -1546,6 +1691,8 @@ non_expiring = true
 [[difference]]
 id = "TRANSPORT-PARAMS-001B-2"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-3"
 symbol = "AsyncHTTPTransport"
 difference-type = "parameter-default"
 member = "limits"
@@ -1565,6 +1712,8 @@ non_expiring = true
 [[difference]]
 id = "TRANSPORT-PARAMS-001F"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-3"
 symbol = "WSGITransport"
 difference-type = "base-class"
 member = ""
@@ -1584,6 +1733,8 @@ non_expiring = true
 [[difference]]
 id = "TRANSPORT-PARAMS-001G"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-3"
 symbol = "MockTransport"
 difference-type = "base-class"
 member = ""
@@ -1603,6 +1754,7 @@ non_expiring = true
 [[difference]]
 id = "PRIVATE-SYMBOLS-001"
 category = "stage-bounded"
+classification = "intentional"
 symbol = "create_ssl_context"
 difference-type = "missing-symbol"
 member = ""
@@ -1623,6 +1775,8 @@ non_expiring = true
 [[difference]]
 id = "CODES-KIND-001"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-2"
 symbol = "codes"
 difference-type = "symbol-kind"
 member = ""
@@ -1642,6 +1796,8 @@ non_expiring = true
 [[difference]]
 id = "CODES-KIND-001-2"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-2"
 symbol = "codes"
 difference-type = "variadic-shape"
 member = "__init__"
@@ -1661,6 +1817,8 @@ non_expiring = true
 [[difference]]
 id = "CODES-KIND-001-11"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-2"
 symbol = "codes"
 difference-type = "variadic-shape"
 member = "__init__"
@@ -1680,6 +1838,8 @@ non_expiring = true
 [[difference]]
 id = "CODES-KIND-001-3"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-2"
 symbol = "codes"
 difference-type = "base-class"
 member = ""
@@ -1699,6 +1859,8 @@ non_expiring = true
 [[difference]]
 id = "CODES-KIND-001-4"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-2"
 symbol = "codes"
 difference-type = "missing-method"
 member = "as_integer_ratio"
@@ -1718,6 +1880,8 @@ non_expiring = true
 [[difference]]
 id = "CODES-KIND-001-5"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-2"
 symbol = "codes"
 difference-type = "missing-method"
 member = "bit_count"
@@ -1737,6 +1901,8 @@ non_expiring = true
 [[difference]]
 id = "CODES-KIND-001-6"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-2"
 symbol = "codes"
 difference-type = "missing-method"
 member = "bit_length"
@@ -1756,6 +1922,8 @@ non_expiring = true
 [[difference]]
 id = "CODES-KIND-001-7"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-2"
 symbol = "codes"
 difference-type = "missing-method"
 member = "conjugate"
@@ -1775,6 +1943,8 @@ non_expiring = true
 [[difference]]
 id = "CODES-KIND-001-8"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-2"
 symbol = "codes"
 difference-type = "missing-method"
 member = "from_bytes"
@@ -1794,6 +1964,8 @@ non_expiring = true
 [[difference]]
 id = "CODES-KIND-001-9"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-2"
 symbol = "codes"
 difference-type = "missing-method"
 member = "is_integer"
@@ -1813,6 +1985,8 @@ non_expiring = true
 [[difference]]
 id = "CODES-KIND-001-10"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-2"
 symbol = "codes"
 difference-type = "missing-method"
 member = "to_bytes"
@@ -1832,6 +2006,7 @@ non_expiring = true
 [[difference]]
 id = "CLIENT-EXTENSIONS-001"
 category = "stage-bounded"
+classification = "intentional"
 symbol = "Client"
 difference-type = "parameter-name"
 member = "Client"
@@ -1851,6 +2026,7 @@ non_expiring = true
 [[difference]]
 id = "CLIENT-EXTENSIONS-001-2"
 category = "stage-bounded"
+classification = "intentional"
 symbol = "Client"
 difference-type = "base-class"
 member = ""
@@ -1870,6 +2046,7 @@ non_expiring = true
 [[difference]]
 id = "CLIENT-EXTENSIONS-001B"
 category = "stage-bounded"
+classification = "intentional"
 symbol = "AsyncClient"
 difference-type = "parameter-name"
 member = "AsyncClient"
@@ -1889,6 +2066,7 @@ non_expiring = true
 [[difference]]
 id = "CLIENT-EXTENSIONS-001B-2"
 category = "stage-bounded"
+classification = "intentional"
 symbol = "AsyncClient"
 difference-type = "parameter-default"
 member = "default_encoding"
@@ -1908,6 +2086,7 @@ non_expiring = true
 [[difference]]
 id = "CLIENT-EXTENSIONS-001B-3"
 category = "stage-bounded"
+classification = "intentional"
 symbol = "AsyncClient"
 difference-type = "base-class"
 member = ""
@@ -1927,6 +2106,7 @@ non_expiring = true
 [[difference]]
 id = "CLIENT-EXTENSIONS-001B-4"
 category = "stage-bounded"
+classification = "intentional"
 symbol = "AsyncClient"
 difference-type = "extra-method"
 member = "close"
@@ -1946,6 +2126,7 @@ non_expiring = true
 [[difference]]
 id = "BASICAUTH-ENCODING-001"
 category = "stage-bounded"
+classification = "intentional"
 symbol = "BasicAuth"
 difference-type = "parameter-name"
 member = "BasicAuth"
@@ -1965,6 +2146,7 @@ non_expiring = true
 [[difference]]
 id = "BASICAUTH-ENCODING-001-2"
 category = "stage-bounded"
+classification = "intentional"
 symbol = "BasicAuth"
 difference-type = "extra-property"
 member = "encoding"
@@ -1984,6 +2166,7 @@ non_expiring = true
 [[difference]]
 id = "BASICAUTH-ENCODING-001-3"
 category = "stage-bounded"
+classification = "intentional"
 symbol = "BasicAuth"
 difference-type = "extra-property"
 member = "password"
@@ -2003,6 +2186,7 @@ non_expiring = true
 [[difference]]
 id = "BASICAUTH-ENCODING-001-4"
 category = "stage-bounded"
+classification = "intentional"
 symbol = "BasicAuth"
 difference-type = "extra-property"
 member = "username"
@@ -2022,6 +2206,8 @@ non_expiring = true
 [[difference]]
 id = "STREAM-ERROR-ARGS-001"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-2"
 symbol = "RequestNotRead"
 difference-type = "parameter-name"
 member = "RequestNotRead"
@@ -2041,6 +2227,8 @@ non_expiring = true
 [[difference]]
 id = "NETRC-PARAM-NAME-001"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-2"
 symbol = "NetRCAuth"
 difference-type = "parameter-name"
 member = "NetRCAuth"
@@ -2060,6 +2248,8 @@ non_expiring = true
 [[difference]]
 id = "NETRC-PARAM-NAME-001-2"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-2"
 symbol = "NetRCAuth"
 difference-type = "extra-property"
 member = "auth_file"
@@ -2079,6 +2269,7 @@ non_expiring = true
 [[difference]]
 id = "TIMEOUT-AS-DICT-001"
 category = "stage-bounded"
+classification = "intentional"
 symbol = "Timeout"
 difference-type = "parameter-default"
 member = "timeout"
@@ -2098,6 +2289,7 @@ non_expiring = true
 [[difference]]
 id = "TIMEOUT-AS-DICT-001-2"
 category = "stage-bounded"
+classification = "intentional"
 symbol = "Timeout"
 difference-type = "parameter-default"
 member = "connect"
@@ -2117,6 +2309,7 @@ non_expiring = true
 [[difference]]
 id = "TIMEOUT-AS-DICT-001-3"
 category = "stage-bounded"
+classification = "intentional"
 symbol = "Timeout"
 difference-type = "parameter-default"
 member = "read"
@@ -2136,6 +2329,7 @@ non_expiring = true
 [[difference]]
 id = "TIMEOUT-AS-DICT-001-4"
 category = "stage-bounded"
+classification = "intentional"
 symbol = "Timeout"
 difference-type = "parameter-default"
 member = "write"
@@ -2155,6 +2349,7 @@ non_expiring = true
 [[difference]]
 id = "TIMEOUT-AS-DICT-001-5"
 category = "stage-bounded"
+classification = "intentional"
 symbol = "Timeout"
 difference-type = "parameter-default"
 member = "pool"
@@ -2174,6 +2369,7 @@ non_expiring = true
 [[difference]]
 id = "TIMEOUT-AS-DICT-001-6"
 category = "stage-bounded"
+classification = "intentional"
 symbol = "Timeout"
 difference-type = "extra-property"
 member = "as_dict"
@@ -2193,6 +2389,7 @@ non_expiring = true
 [[difference]]
 id = "TIMEOUT-AS-DICT-001-7"
 category = "stage-bounded"
+classification = "intentional"
 symbol = "Timeout"
 difference-type = "extra-property"
 member = "connect"
@@ -2212,6 +2409,7 @@ non_expiring = true
 [[difference]]
 id = "TIMEOUT-AS-DICT-001-8"
 category = "stage-bounded"
+classification = "intentional"
 symbol = "Timeout"
 difference-type = "extra-property"
 member = "pool"
@@ -2231,6 +2429,7 @@ non_expiring = true
 [[difference]]
 id = "TIMEOUT-AS-DICT-001-9"
 category = "stage-bounded"
+classification = "intentional"
 symbol = "Timeout"
 difference-type = "extra-property"
 member = "read"
@@ -2250,6 +2449,7 @@ non_expiring = true
 [[difference]]
 id = "TIMEOUT-AS-DICT-001-10"
 category = "stage-bounded"
+classification = "intentional"
 symbol = "Timeout"
 difference-type = "extra-property"
 member = "total"
@@ -2269,6 +2469,7 @@ non_expiring = true
 [[difference]]
 id = "TIMEOUT-AS-DICT-001-11"
 category = "stage-bounded"
+classification = "intentional"
 symbol = "Timeout"
 difference-type = "extra-property"
 member = "write"
@@ -2288,6 +2489,7 @@ non_expiring = true
 [[difference]]
 id = "TIMEOUT-AS-DICT-001-12"
 category = "stage-bounded"
+classification = "intentional"
 symbol = "Timeout"
 difference-type = "missing-method"
 member = "as_dict"
@@ -2307,6 +2509,8 @@ non_expiring = true
 [[difference]]
 id = "URL-RAW-002"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-2"
 symbol = "URL"
 difference-type = "parameter-name"
 member = "URL"
@@ -2326,6 +2530,8 @@ non_expiring = true
 [[difference]]
 id = "URL-RAW-002-2"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-2"
 symbol = "URL"
 difference-type = "parameter-kind"
 member = "self"
@@ -2345,6 +2551,8 @@ non_expiring = true
 [[difference]]
 id = "URL-RAW-002-3"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-2"
 symbol = "URL"
 difference-type = "parameter-kind"
 member = "url"
@@ -2364,6 +2572,8 @@ non_expiring = true
 [[difference]]
 id = "URL-RAW-002-4"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-2"
 symbol = "URL"
 difference-type = "parameter-default"
 member = "url"
@@ -2383,6 +2593,8 @@ non_expiring = true
 [[difference]]
 id = "URL-RAW-002-5"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-2"
 symbol = "URL"
 difference-type = "missing-property"
 member = "raw"
@@ -2402,6 +2614,7 @@ non_expiring = true
 [[difference]]
 id = "EXTRA-TRANSPORT-METHODS-001"
 category = "stage-bounded"
+classification = "intentional"
 symbol = "ASGITransport"
 difference-type = "base-class"
 member = ""
@@ -2421,6 +2634,7 @@ non_expiring = true
 [[difference]]
 id = "EXTRA-TRANSPORT-METHODS-001-2"
 category = "stage-bounded"
+classification = "intentional"
 symbol = "ASGITransport"
 difference-type = "extra-method"
 member = "handle_request"
@@ -2440,6 +2654,7 @@ non_expiring = true
 [[difference]]
 id = "EXTRA-COLLECTION-METHODS-001"
 category = "stage-bounded"
+classification = "intentional"
 symbol = "Request"
 difference-type = "extra-property"
 member = "cookies"
@@ -2459,6 +2674,7 @@ non_expiring = true
 [[difference]]
 id = "EXTRA-COLLECTION-METHODS-001-2"
 category = "stage-bounded"
+classification = "intentional"
 symbol = "Request"
 difference-type = "extra-property"
 member = "extensions"
@@ -2478,6 +2694,7 @@ non_expiring = true
 [[difference]]
 id = "EXTRA-COLLECTION-METHODS-001-3"
 category = "stage-bounded"
+classification = "intentional"
 symbol = "Request"
 difference-type = "extra-property"
 member = "files"
@@ -2497,6 +2714,7 @@ non_expiring = true
 [[difference]]
 id = "EXTRA-COLLECTION-METHODS-001-4"
 category = "stage-bounded"
+classification = "intentional"
 symbol = "Request"
 difference-type = "extra-property"
 member = "headers"
@@ -2516,6 +2734,7 @@ non_expiring = true
 [[difference]]
 id = "EXTRA-COLLECTION-METHODS-001-5"
 category = "stage-bounded"
+classification = "intentional"
 symbol = "Request"
 difference-type = "extra-property"
 member = "http_version"
@@ -2535,6 +2754,7 @@ non_expiring = true
 [[difference]]
 id = "EXTRA-COLLECTION-METHODS-001-6"
 category = "stage-bounded"
+classification = "intentional"
 symbol = "Request"
 difference-type = "extra-property"
 member = "is_stream_consumed"
@@ -2554,6 +2774,7 @@ non_expiring = true
 [[difference]]
 id = "EXTRA-COLLECTION-METHODS-001-7"
 category = "stage-bounded"
+classification = "intentional"
 symbol = "Request"
 difference-type = "extra-property"
 member = "method"
@@ -2573,6 +2794,7 @@ non_expiring = true
 [[difference]]
 id = "EXTRA-COLLECTION-METHODS-001-8"
 category = "stage-bounded"
+classification = "intentional"
 symbol = "Request"
 difference-type = "extra-property"
 member = "params"
@@ -2592,6 +2814,7 @@ non_expiring = true
 [[difference]]
 id = "EXTRA-COLLECTION-METHODS-001-9"
 category = "stage-bounded"
+classification = "intentional"
 symbol = "Request"
 difference-type = "extra-property"
 member = "stream"
@@ -2611,6 +2834,7 @@ non_expiring = true
 [[difference]]
 id = "EXTRA-COLLECTION-METHODS-001-10"
 category = "stage-bounded"
+classification = "intentional"
 symbol = "Request"
 difference-type = "extra-property"
 member = "url"
@@ -2630,6 +2854,8 @@ non_expiring = true
 [[difference]]
 id = "STREAM-ERROR-BASE-001"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-2"
 symbol = "StreamError"
 difference-type = "parameter-name"
 member = "StreamError"
@@ -2649,6 +2875,8 @@ non_expiring = true
 [[difference]]
 id = "STREAM-ERROR-BASE-001-2"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-2"
 symbol = "StreamError"
 difference-type = "parameter-kind"
 member = "message"
@@ -2668,6 +2896,8 @@ non_expiring = true
 [[difference]]
 id = "STREAM-ERROR-BASE-001-3"
 category = "stage-bounded"
+classification = "must-close"
+phase = "phase-2"
 symbol = "StreamError"
 difference-type = "base-class"
 member = ""
@@ -2687,6 +2917,7 @@ non_expiring = true
 [[difference]]
 id = "EGGFETCH-EXTRA-SYMBOLS-001"
 category = "stage-bounded"
+classification = "intentional"
 symbol = "get_compatibility_info"
 difference-type = "extra-symbol"
 member = ""
@@ -2706,6 +2937,7 @@ non_expiring = true
 [[difference]]
 id = "EGGFETCH-EXTRA-SYMBOLS-002"
 category = "stage-bounded"
+classification = "intentional"
 symbol = "diagnostics_summary"
 difference-type = "extra-symbol"
 member = ""
@@ -2725,6 +2957,7 @@ non_expiring = true
 [[difference]]
 id = "EGGFETCH-EXTRA-SYMBOLS-003"
 category = "stage-bounded"
+classification = "intentional"
 symbol = "CompatibilityInfo"
 difference-type = "extra-symbol"
 member = ""
@@ -2744,6 +2977,7 @@ non_expiring = true
 [[difference]]
 id = "EGGFETCH-EXTRA-SYMBOLS-004"
 category = "stage-bounded"
+classification = "intentional"
 symbol = "COMPATIBILITY_INFO"
 difference-type = "extra-symbol"
 member = ""
@@ -2763,6 +2997,7 @@ non_expiring = true
 [[difference]]
 id = "EGGFETCH-EXTRA-SYMBOLS-005"
 category = "stage-bounded"
+classification = "intentional"
 symbol = "_build_response"
 difference-type = "extra-symbol"
 member = ""
@@ -2782,6 +3017,7 @@ non_expiring = true
 [[difference]]
 id = "EXTRA-PROPS-004-5"
 category = "stage-bounded"
+classification = "intentional"
 symbol = "Response"
 difference-type = "extra-property"
 member = "is_closed"
@@ -2801,6 +3037,7 @@ non_expiring = true
 [[difference]]
 id = "EXTRA-PROPS-004-6"
 category = "stage-bounded"
+classification = "intentional"
 symbol = "Response"
 difference-type = "extra-property"
 member = "is_stream_consumed"
@@ -2820,6 +3057,7 @@ non_expiring = true
 [[difference]]
 id = "EXTRA-PROPS-004-7"
 category = "stage-bounded"
+classification = "intentional"
 symbol = "Response"
 difference-type = "extra-property"
 member = "next_request"
@@ -2839,6 +3077,7 @@ non_expiring = true
 [[difference]]
 id = "CREATE-SSL-CONTEXT-001"
 category = "stage-bounded"
+classification = "intentional"
 symbol = "create_ssl_context"
 difference-type = "return-annotation"
 member = "create_ssl_context"

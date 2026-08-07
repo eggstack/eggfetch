@@ -8,7 +8,9 @@
 | Source | https://github.com/encode/httpx |
 | Commit | 0.28.1 (tag) |
 | License | BSD-3-Clause |
-| Generated | 2026-07-23 |
+| Generated | 2026-07-23 (original) |
+| Rebaselined | 2026-08-07 |
+| Rebaseline SHA | f9eb1a455907d43210886b7b047d18bde8716652 |
 
 ---
 
@@ -189,7 +191,7 @@ Intentionally excluded from the compatibility contract.
 **HTTPX API Surface:**
 - Status-specific method changes: 301/302/303 → GET, 307/308 → preserve method
 - Cross-origin header stripping (Authorization, Cookie)
-- `follow_redirects=True/False` (default: True in HTTPX, False in eggfetch)
+- `follow_redirects=True/False` (default: False in both HTTPX 0.28.1 and eggfetch)
 - `max_redirects` limit
 - Redirect history on response
 
@@ -387,3 +389,17 @@ All HTTPX tests referenced are from the httpx 0.28.1 source distribution:
 
 The eggfetch compatibility tests are located at:
 - `crates/eggfetch-python/tests/compat/`
+
+---
+
+## 5. Phase 1 Rebaseline Notes (2026-08-07)
+
+This inventory was refreshed during the Phase 1 contract rebaseline. Key corrections:
+
+1. **Redirect default**: HTTPX 0.28.1 defaults to `follow_redirects=False`, same as eggfetch. The earlier claim that "HTTPX follows redirects by default" was incorrect for version 0.28.1.
+2. **Proxy environment**: eggfetch reads `HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY` env vars when `trust_env=True`. `ALL_PROXY` and lowercase variants are not currently supported; this gap is classified as `must-close` under Phase 5.
+3. **SOCKS proxy**: HTTPX 0.28.1 exposes SOCKS proxy support as an optional public feature (`httpx[socks]`). eggfetch does not currently support SOCKS; scheduled for Phase 5.
+4. **SSL context**: HTTPX `Proxy(..., ssl_context=...)` is a constructor parameter. eggfetch `Proxy` does not accept `ssl_context`; TLS is handled by the Rust engine. Classified as `intentional` (security boundary).
+5. **StreamError base class**: HTTPX `StreamError` inherits from `RuntimeError`; eggfetch inherits from `Exception`. Classified as `must-close` under Phase 2.
+
+The full classification of all 150 active differences is in `allowed-differences.toml`.

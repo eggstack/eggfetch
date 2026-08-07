@@ -21,7 +21,7 @@ eggfetch is a Rust-native HTTP client engine with Python bindings and a CLI tool
 - **Multipart** -- streaming multipart/form-data with known-length optimization
 - **Retries** -- policy-driven retries with exponential backoff and `Retry-After` support
 - **Python API** -- requests/HTTPX-compatible sync and async interfaces, GIL-releasing blocking I/O
-- **HTTPX drop-in** -- compatible asyncio facade for HTTPX 0.28.1 (`eggfetch.compat.httpx`)
+- **HTTPX compatibility facade** -- compatible asyncio surface targeting HTTPX 0.28.1 (`eggfetch.compat.httpx`)
 - **CLI** -- full-featured HTTP client with streaming output, machine-readable formats, and shell completions
 
 ## Installation

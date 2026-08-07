@@ -72,7 +72,7 @@ all HTTPX transports or concurrency backends.
 | --- | --- |
 | Auth tuple shorthand | requests accepts `auth=("user","pass")`. eggfetch Python supports this. eggfetch Rust requires `BasicAuth::new("user", "pass")`. |
 | Proxy configuration | requests uses a dict by scheme. eggfetch uses a single `proxy=` string. |
-| Proxy env vars | eggfetch reads `HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY` env vars when `trust_env=True` (default). |
+| Proxy env vars | eggfetch reads `HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY` env vars when `trust_env=True` (default). `ALL_PROXY` and lowercase variants are not currently supported. |
 | Timeout tuple | requests accepts `(connect, read)` tuples. eggfetch uses `Timeout` objects. |
 
 ## Intentionally unsupported
@@ -80,7 +80,7 @@ all HTTPX transports or concurrency backends.
 | Feature | Reason |
 | --- | --- |
 | UDS (Unix domain sockets) | Not available in eggfetch-core |
-| SOCKS proxy | Not in HTTPX 0.28.1 public API, deferred |
+| SOCKS proxy | HTTPX 0.28.1 optional public feature (`httpx[socks]`); currently unsupported by EggFetch and scheduled for Phase 5 |
 | Trio async backend | Deferred to Stage D |
 | requests Session hooks | Not implemented |
 | requests PreparedRequest | Not part of the public API |
@@ -127,3 +127,10 @@ The following statements from earlier documentation have been corrected:
 1. **Pool timeout**: HTTPX 0.28.1 supports pool timeout via `Timeout(pool=...)`. eggfetch also supports this. The compatibility matrix has been updated to reflect this.
 2. **Redirect default**: HTTPX 0.28.1 defaults to `follow_redirects=False`, same as eggfetch. The earlier claim that "HTTPX follows redirects by default" was incorrect for version 0.28.1.
 3. **Proxy env vars**: eggfetch reads `HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY` env vars when `trust_env=True` (default). Implemented in Phase 1.
+4. **SOCKS proxy**: HTTPX 0.28.1 exposes SOCKS proxy support as an optional public feature via `httpx[socks]`. eggfetch does not currently support SOCKS; scheduled for Phase 5. The earlier claim that SOCKS was "not in HTTPX 0.28.1 public API" was incorrect.
+5. **Proxy environment gap**: `ALL_PROXY` and lowercase proxy environment variable variants are not currently supported by eggfetch. This is classified as `must-close` under Phase 5.
+6. **SSL context**: HTTPX `Proxy(..., ssl_context=...)` is a public constructor parameter. eggfetch `Proxy` does not accept `ssl_context` because TLS is handled by the Rust engine. This is classified as `intentional` (security boundary).
+
+### Phase 1 rebaseline (2026-08-07)
+
+The active allowlist was rebaselined against the current `main` SHA `f9eb1a4...`. All 150 active differences are classified as `must-close` (89), `intentional` (61), or `deferred` (0). The `must-close` differences are assigned to implementation Phases 2 (34 entries) and 3 (55 entries). See `allowed-differences.toml` for the full classification with phase assignments.

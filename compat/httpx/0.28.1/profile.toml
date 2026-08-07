@@ -3,6 +3,8 @@ schema-version = "1"
 generator = "eggfetch-compat-profile"
 version = "1"
 created = "2026-07-21"
+rebaselined = "2026-08-07"
+rebaseline-sha = "f9eb1a455907d43210886b7b047d18bde8716652"
 reference = "httpx==0.28.1"
 stage = "stage-c-candidate"
 status = "candidate"
@@ -31,7 +33,7 @@ private-excluded = ["_transports", "_content", "_models", "_decoders", "_excepti
 http2 = { httpx = "httpx[http2]", eggfetch = "http2=True" }
 brotli = { httpx = "httpx[brotli]", eggfetch = "compression-brotli feature" }
 zstd = { httpx = "httpx[zstd]", eggfetch = "compression-zstd feature" }
-socks = { httpx = "httpx[socks]", eggfetch = "not-supported" }
+socks = { httpx = "httpx[socks]", eggfetch = "not-supported (Phase 5)" }
 
 [compatibility-categories]
 required-now = "Must match for current stage"
