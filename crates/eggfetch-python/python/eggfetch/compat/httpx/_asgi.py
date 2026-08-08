@@ -9,6 +9,7 @@ from typing import Any, Callable
 
 from eggfetch.compat.httpx._request import Request
 from eggfetch.compat.httpx._response import Response
+from eggfetch.compat.httpx._transports import AsyncBaseTransport
 
 if typing.TYPE_CHECKING:
     pass
@@ -18,7 +19,7 @@ if typing.TYPE_CHECKING:
 _CHUNK_SIZE = 65_536
 
 
-class ASGITransport:
+class ASGITransport(AsyncBaseTransport):
     """Transport for making requests to an ASGI application.
 
     Usage::

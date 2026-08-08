@@ -7,12 +7,13 @@ import typing
 
 from eggfetch.compat.httpx._request import Request
 from eggfetch.compat.httpx._response import Response
+from eggfetch.compat.httpx._transports import AsyncBaseTransport, BaseTransport
 
 if typing.TYPE_CHECKING:
     from typing import Any, Callable
 
 
-class MockTransport:
+class MockTransport(AsyncBaseTransport, BaseTransport):
     """A transport that uses a handler function to produce responses.
 
     Usage::

@@ -9,12 +9,13 @@ from typing import Callable
 
 from eggfetch.compat.httpx._request import Request
 from eggfetch.compat.httpx._response import Response
+from eggfetch.compat.httpx._transports import BaseTransport
 
 if typing.TYPE_CHECKING:
     pass
 
 
-class WSGITransport:
+class WSGITransport(BaseTransport):
     """Transport for making requests to a WSGI application.
 
     Usage::

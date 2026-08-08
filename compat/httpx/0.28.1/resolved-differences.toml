@@ -997,3 +997,1272 @@ owner = "eggfetch-team"
 review-milestone = "phase-2"
 tests = ["test_exceptions.py"]
 non_expiring = true
+
+# --- Phase 3 resolved entries (method args, transport params, stream ctors) ---
+
+[[difference]]
+id = "HTTP-METHOD-ARGS-001"
+category = "resolved"
+classification = "must-close"
+phase = "phase-3"
+symbol = "get"
+difference-type = "parameter-name"
+member = "get"
+reference = "['url', 'params', 'headers', 'cookies', 'auth', 'proxy', 'follow_redirects', 'verify', 'timeout', 'trust_env']"
+candidate = "['args', 'kwargs']"
+behavior-case = "http-method-parameter-style"
+reference-behavior = "HTTPX HTTP methods use explicit keyword parameters (url, *, params, headers, ...)"
+eggfetch-behavior = "eggfetch compat layer HTTP methods use (*args, **kwargs) and delegate to request()"
+rationale = "The compat layer wraps the native engine which accepts all parameters. Using *args/**kwargs avoids duplicating parameter documentation while preserving the call convention."
+compatibility-stage-impact = "stage-c"
+security-improvement = "false"
+migration-impact = "None; call convention is identical"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_client.py"]
+non_expiring = true
+
+
+[[difference]]
+id = "HTTP-METHOD-ARGS-001-2"
+category = "resolved"
+classification = "must-close"
+phase = "phase-3"
+symbol = "get"
+difference-type = "parameter-kind"
+member = "url"
+reference = "POSITIONAL_OR_KEYWORD"
+candidate = "VAR_POSITIONAL"
+behavior-case = "http-method-parameter-style"
+reference-behavior = "HTTPX HTTP methods use explicit keyword parameters (url, *, params, headers, ...)"
+eggfetch-behavior = "eggfetch compat layer HTTP methods use (*args, **kwargs) and delegate to request()"
+rationale = "The compat layer wraps the native engine which accepts all parameters. Using *args/**kwargs avoids duplicating parameter documentation while preserving the call convention."
+compatibility-stage-impact = "stage-c"
+security-improvement = "false"
+migration-impact = "None; call convention is identical"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_client.py"]
+non_expiring = true
+
+
+[[difference]]
+id = "HTTP-METHOD-ARGS-001-3"
+category = "resolved"
+classification = "must-close"
+phase = "phase-3"
+symbol = "get"
+difference-type = "parameter-kind"
+member = "params"
+reference = "KEYWORD_ONLY"
+candidate = "VAR_KEYWORD"
+behavior-case = "http-method-parameter-style"
+reference-behavior = "HTTPX HTTP methods use explicit keyword parameters (url, *, params, headers, ...)"
+eggfetch-behavior = "eggfetch compat layer HTTP methods use (*args, **kwargs) and delegate to request()"
+rationale = "The compat layer wraps the native engine which accepts all parameters. Using *args/**kwargs avoids duplicating parameter documentation while preserving the call convention."
+compatibility-stage-impact = "stage-c"
+security-improvement = "false"
+migration-impact = "None; call convention is identical"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_client.py"]
+non_expiring = true
+
+
+[[difference]]
+id = "HTTP-METHOD-ARGS-001-4"
+category = "resolved"
+classification = "must-close"
+phase = "phase-3"
+symbol = "get"
+difference-type = "return-annotation"
+member = "get"
+reference = "'Response'"
+candidate = "None"
+behavior-case = "http-method-parameter-style"
+reference-behavior = "HTTPX HTTP methods use explicit keyword parameters (url, *, params, headers, ...)"
+eggfetch-behavior = "eggfetch compat layer HTTP methods use (*args, **kwargs) and delegate to request()"
+rationale = "The compat layer wraps the native engine which accepts all parameters. Using *args/**kwargs avoids duplicating parameter documentation while preserving the call convention."
+compatibility-stage-impact = "stage-c"
+security-improvement = "false"
+migration-impact = "None; call convention is identical"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_client.py"]
+non_expiring = true
+
+
+[[difference]]
+id = "HTTP-METHOD-ARGS-002"
+category = "resolved"
+classification = "must-close"
+phase = "phase-3"
+symbol = "post"
+difference-type = "parameter-name"
+member = "post"
+reference = "['url', 'content', 'data', 'files', 'json', 'params', 'headers', 'cookies', 'auth', 'proxy', 'follow_redirects', 'verify', 'timeout', 'trust_env']"
+candidate = "['args', 'kwargs']"
+behavior-case = "http-method-parameter-style"
+reference-behavior = "HTTPX HTTP methods use explicit keyword parameters"
+eggfetch-behavior = "eggfetch compat layer HTTP methods use (*args, **kwargs) and delegate to request()"
+rationale = "See HTTP-METHOD-ARGS-001."
+compatibility-stage-impact = "stage-c"
+security-improvement = "false"
+migration-impact = "None"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_client.py"]
+non_expiring = true
+
+
+[[difference]]
+id = "HTTP-METHOD-ARGS-002-2"
+category = "resolved"
+classification = "must-close"
+phase = "phase-3"
+symbol = "post"
+difference-type = "parameter-kind"
+member = "url"
+reference = "POSITIONAL_OR_KEYWORD"
+candidate = "VAR_POSITIONAL"
+behavior-case = "http-method-parameter-style"
+reference-behavior = "HTTPX HTTP methods use explicit keyword parameters"
+eggfetch-behavior = "eggfetch compat layer HTTP methods use (*args, **kwargs) and delegate to request()"
+rationale = "See HTTP-METHOD-ARGS-001."
+compatibility-stage-impact = "stage-c"
+security-improvement = "false"
+migration-impact = "None"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_client.py"]
+non_expiring = true
+
+
+[[difference]]
+id = "HTTP-METHOD-ARGS-002-3"
+category = "resolved"
+classification = "must-close"
+phase = "phase-3"
+symbol = "post"
+difference-type = "parameter-kind"
+member = "content"
+reference = "KEYWORD_ONLY"
+candidate = "VAR_KEYWORD"
+behavior-case = "http-method-parameter-style"
+reference-behavior = "HTTPX HTTP methods use explicit keyword parameters"
+eggfetch-behavior = "eggfetch compat layer HTTP methods use (*args, **kwargs) and delegate to request()"
+rationale = "See HTTP-METHOD-ARGS-001."
+compatibility-stage-impact = "stage-c"
+security-improvement = "false"
+migration-impact = "None"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_client.py"]
+non_expiring = true
+
+
+[[difference]]
+id = "HTTP-METHOD-ARGS-002-4"
+category = "resolved"
+classification = "must-close"
+phase = "phase-3"
+symbol = "post"
+difference-type = "return-annotation"
+member = "post"
+reference = "'Response'"
+candidate = "None"
+behavior-case = "http-method-parameter-style"
+reference-behavior = "HTTPX HTTP methods use explicit keyword parameters"
+eggfetch-behavior = "eggfetch compat layer HTTP methods use (*args, **kwargs) and delegate to request()"
+rationale = "See HTTP-METHOD-ARGS-001."
+compatibility-stage-impact = "stage-c"
+security-improvement = "false"
+migration-impact = "None"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_client.py"]
+non_expiring = true
+
+
+[[difference]]
+id = "HTTP-METHOD-ARGS-003"
+category = "resolved"
+classification = "must-close"
+phase = "phase-3"
+symbol = "put"
+difference-type = "parameter-name"
+member = "put"
+reference = "['url', 'content', 'data', 'files', 'json', 'params', 'headers', 'cookies', 'auth', 'proxy', 'follow_redirects', 'verify', 'timeout', 'trust_env']"
+candidate = "['args', 'kwargs']"
+behavior-case = "http-method-parameter-style"
+reference-behavior = "HTTPX HTTP methods use explicit keyword parameters"
+eggfetch-behavior = "eggfetch compat layer HTTP methods use (*args, **kwargs) and delegate to request()"
+rationale = "See HTTP-METHOD-ARGS-001."
+compatibility-stage-impact = "stage-c"
+security-improvement = "false"
+migration-impact = "None"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_client.py"]
+non_expiring = true
+
+
+[[difference]]
+id = "HTTP-METHOD-ARGS-003-2"
+category = "resolved"
+classification = "must-close"
+phase = "phase-3"
+symbol = "put"
+difference-type = "parameter-kind"
+member = "url"
+reference = "POSITIONAL_OR_KEYWORD"
+candidate = "VAR_POSITIONAL"
+behavior-case = "http-method-parameter-style"
+reference-behavior = "HTTPX HTTP methods use explicit keyword parameters"
+eggfetch-behavior = "eggfetch compat layer HTTP methods use (*args, **kwargs) and delegate to request()"
+rationale = "See HTTP-METHOD-ARGS-001."
+compatibility-stage-impact = "stage-c"
+security-improvement = "false"
+migration-impact = "None"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_client.py"]
+non_expiring = true
+
+
+[[difference]]
+id = "HTTP-METHOD-ARGS-003-3"
+category = "resolved"
+classification = "must-close"
+phase = "phase-3"
+symbol = "put"
+difference-type = "parameter-kind"
+member = "content"
+reference = "KEYWORD_ONLY"
+candidate = "VAR_KEYWORD"
+behavior-case = "http-method-parameter-style"
+reference-behavior = "HTTPX HTTP methods use explicit keyword parameters"
+eggfetch-behavior = "eggfetch compat layer HTTP methods use (*args, **kwargs) and delegate to request()"
+rationale = "See HTTP-METHOD-ARGS-001."
+compatibility-stage-impact = "stage-c"
+security-improvement = "false"
+migration-impact = "None"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_client.py"]
+non_expiring = true
+
+
+[[difference]]
+id = "HTTP-METHOD-ARGS-003-4"
+category = "resolved"
+classification = "must-close"
+phase = "phase-3"
+symbol = "put"
+difference-type = "return-annotation"
+member = "put"
+reference = "'Response'"
+candidate = "None"
+behavior-case = "http-method-parameter-style"
+reference-behavior = "HTTPX HTTP methods use explicit keyword parameters"
+eggfetch-behavior = "eggfetch compat layer HTTP methods use (*args, **kwargs) and delegate to request()"
+rationale = "See HTTP-METHOD-ARGS-001."
+compatibility-stage-impact = "stage-c"
+security-improvement = "false"
+migration-impact = "None"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_client.py"]
+non_expiring = true
+
+
+[[difference]]
+id = "HTTP-METHOD-ARGS-004"
+category = "resolved"
+classification = "must-close"
+phase = "phase-3"
+symbol = "patch"
+difference-type = "parameter-name"
+member = "patch"
+reference = "['url', 'content', 'data', 'files', 'json', 'params', 'headers', 'cookies', 'auth', 'proxy', 'follow_redirects', 'verify', 'timeout', 'trust_env']"
+candidate = "['args', 'kwargs']"
+behavior-case = "http-method-parameter-style"
+reference-behavior = "HTTPX HTTP methods use explicit keyword parameters"
+eggfetch-behavior = "eggfetch compat layer HTTP methods use (*args, **kwargs) and delegate to request()"
+rationale = "See HTTP-METHOD-ARGS-001."
+compatibility-stage-impact = "stage-c"
+security-improvement = "false"
+migration-impact = "None"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_client.py"]
+non_expiring = true
+
+
+[[difference]]
+id = "HTTP-METHOD-ARGS-004-2"
+category = "resolved"
+classification = "must-close"
+phase = "phase-3"
+symbol = "patch"
+difference-type = "parameter-kind"
+member = "url"
+reference = "POSITIONAL_OR_KEYWORD"
+candidate = "VAR_POSITIONAL"
+behavior-case = "http-method-parameter-style"
+reference-behavior = "HTTPX HTTP methods use explicit keyword parameters"
+eggfetch-behavior = "eggfetch compat layer HTTP methods use (*args, **kwargs) and delegate to request()"
+rationale = "See HTTP-METHOD-ARGS-001."
+compatibility-stage-impact = "stage-c"
+security-improvement = "false"
+migration-impact = "None"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_client.py"]
+non_expiring = true
+
+
+[[difference]]
+id = "HTTP-METHOD-ARGS-004-3"
+category = "resolved"
+classification = "must-close"
+phase = "phase-3"
+symbol = "patch"
+difference-type = "parameter-kind"
+member = "content"
+reference = "KEYWORD_ONLY"
+candidate = "VAR_KEYWORD"
+behavior-case = "http-method-parameter-style"
+reference-behavior = "HTTPX HTTP methods use explicit keyword parameters"
+eggfetch-behavior = "eggfetch compat layer HTTP methods use (*args, **kwargs) and delegate to request()"
+rationale = "See HTTP-METHOD-ARGS-001."
+compatibility-stage-impact = "stage-c"
+security-improvement = "false"
+migration-impact = "None"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_client.py"]
+non_expiring = true
+
+
+[[difference]]
+id = "HTTP-METHOD-ARGS-004-4"
+category = "resolved"
+classification = "must-close"
+phase = "phase-3"
+symbol = "patch"
+difference-type = "return-annotation"
+member = "patch"
+reference = "'Response'"
+candidate = "None"
+behavior-case = "http-method-parameter-style"
+reference-behavior = "HTTPX HTTP methods use explicit keyword parameters"
+eggfetch-behavior = "eggfetch compat layer HTTP methods use (*args, **kwargs) and delegate to request()"
+rationale = "See HTTP-METHOD-ARGS-001."
+compatibility-stage-impact = "stage-c"
+security-improvement = "false"
+migration-impact = "None"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_client.py"]
+non_expiring = true
+
+
+[[difference]]
+id = "HTTP-METHOD-ARGS-005"
+category = "resolved"
+classification = "must-close"
+phase = "phase-3"
+symbol = "delete"
+difference-type = "parameter-name"
+member = "delete"
+reference = "['url', 'params', 'headers', 'cookies', 'auth', 'proxy', 'follow_redirects', 'timeout', 'verify', 'trust_env']"
+candidate = "['args', 'kwargs']"
+behavior-case = "http-method-parameter-style"
+reference-behavior = "HTTPX HTTP methods use explicit keyword parameters"
+eggfetch-behavior = "eggfetch compat layer HTTP methods use (*args, **kwargs) and delegate to request()"
+rationale = "See HTTP-METHOD-ARGS-001."
+compatibility-stage-impact = "stage-c"
+security-improvement = "false"
+migration-impact = "None"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_client.py"]
+non_expiring = true
+
+
+[[difference]]
+id = "HTTP-METHOD-ARGS-005-2"
+category = "resolved"
+classification = "must-close"
+phase = "phase-3"
+symbol = "delete"
+difference-type = "parameter-kind"
+member = "url"
+reference = "POSITIONAL_OR_KEYWORD"
+candidate = "VAR_POSITIONAL"
+behavior-case = "http-method-parameter-style"
+reference-behavior = "HTTPX HTTP methods use explicit keyword parameters"
+eggfetch-behavior = "eggfetch compat layer HTTP methods use (*args, **kwargs) and delegate to request()"
+rationale = "See HTTP-METHOD-ARGS-001."
+compatibility-stage-impact = "stage-c"
+security-improvement = "false"
+migration-impact = "None"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_client.py"]
+non_expiring = true
+
+
+[[difference]]
+id = "HTTP-METHOD-ARGS-005-3"
+category = "resolved"
+classification = "must-close"
+phase = "phase-3"
+symbol = "delete"
+difference-type = "parameter-kind"
+member = "params"
+reference = "KEYWORD_ONLY"
+candidate = "VAR_KEYWORD"
+behavior-case = "http-method-parameter-style"
+reference-behavior = "HTTPX HTTP methods use explicit keyword parameters"
+eggfetch-behavior = "eggfetch compat layer HTTP methods use (*args, **kwargs) and delegate to request()"
+rationale = "See HTTP-METHOD-ARGS-001."
+compatibility-stage-impact = "stage-c"
+security-improvement = "false"
+migration-impact = "None"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_client.py"]
+non_expiring = true
+
+
+[[difference]]
+id = "HTTP-METHOD-ARGS-005-4"
+category = "resolved"
+classification = "must-close"
+phase = "phase-3"
+symbol = "delete"
+difference-type = "return-annotation"
+member = "delete"
+reference = "'Response'"
+candidate = "None"
+behavior-case = "http-method-parameter-style"
+reference-behavior = "HTTPX HTTP methods use explicit keyword parameters"
+eggfetch-behavior = "eggfetch compat layer HTTP methods use (*args, **kwargs) and delegate to request()"
+rationale = "See HTTP-METHOD-ARGS-001."
+compatibility-stage-impact = "stage-c"
+security-improvement = "false"
+migration-impact = "None"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_client.py"]
+non_expiring = true
+
+
+[[difference]]
+id = "HTTP-METHOD-ARGS-006"
+category = "resolved"
+classification = "must-close"
+phase = "phase-3"
+symbol = "head"
+difference-type = "parameter-name"
+member = "head"
+reference = "['url', 'params', 'headers', 'cookies', 'auth', 'proxy', 'follow_redirects', 'verify', 'timeout', 'trust_env']"
+candidate = "['args', 'kwargs']"
+behavior-case = "http-method-parameter-style"
+reference-behavior = "HTTPX HTTP methods use explicit keyword parameters"
+eggfetch-behavior = "eggfetch compat layer HTTP methods use (*args, **kwargs) and delegate to request()"
+rationale = "See HTTP-METHOD-ARGS-001."
+compatibility-stage-impact = "stage-c"
+security-improvement = "false"
+migration-impact = "None"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_client.py"]
+non_expiring = true
+
+
+[[difference]]
+id = "HTTP-METHOD-ARGS-006-2"
+category = "resolved"
+classification = "must-close"
+phase = "phase-3"
+symbol = "head"
+difference-type = "parameter-kind"
+member = "url"
+reference = "POSITIONAL_OR_KEYWORD"
+candidate = "VAR_POSITIONAL"
+behavior-case = "http-method-parameter-style"
+reference-behavior = "HTTPX HTTP methods use explicit keyword parameters"
+eggfetch-behavior = "eggfetch compat layer HTTP methods use (*args, **kwargs) and delegate to request()"
+rationale = "See HTTP-METHOD-ARGS-001."
+compatibility-stage-impact = "stage-c"
+security-improvement = "false"
+migration-impact = "None"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_client.py"]
+non_expiring = true
+
+
+[[difference]]
+id = "HTTP-METHOD-ARGS-006-3"
+category = "resolved"
+classification = "must-close"
+phase = "phase-3"
+symbol = "head"
+difference-type = "parameter-kind"
+member = "params"
+reference = "KEYWORD_ONLY"
+candidate = "VAR_KEYWORD"
+behavior-case = "http-method-parameter-style"
+reference-behavior = "HTTPX HTTP methods use explicit keyword parameters"
+eggfetch-behavior = "eggfetch compat layer HTTP methods use (*args, **kwargs) and delegate to request()"
+rationale = "See HTTP-METHOD-ARGS-001."
+compatibility-stage-impact = "stage-c"
+security-improvement = "false"
+migration-impact = "None"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_client.py"]
+non_expiring = true
+
+
+[[difference]]
+id = "HTTP-METHOD-ARGS-006-4"
+category = "resolved"
+classification = "must-close"
+phase = "phase-3"
+symbol = "head"
+difference-type = "return-annotation"
+member = "head"
+reference = "'Response'"
+candidate = "None"
+behavior-case = "http-method-parameter-style"
+reference-behavior = "HTTPX HTTP methods use explicit keyword parameters"
+eggfetch-behavior = "eggfetch compat layer HTTP methods use (*args, **kwargs) and delegate to request()"
+rationale = "See HTTP-METHOD-ARGS-001."
+compatibility-stage-impact = "stage-c"
+security-improvement = "false"
+migration-impact = "None"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_client.py"]
+non_expiring = true
+
+
+[[difference]]
+id = "HTTP-METHOD-ARGS-007"
+category = "resolved"
+classification = "must-close"
+phase = "phase-3"
+symbol = "options"
+difference-type = "parameter-name"
+member = "options"
+reference = "['url', 'params', 'headers', 'cookies', 'auth', 'proxy', 'follow_redirects', 'verify', 'timeout', 'trust_env']"
+candidate = "['args', 'kwargs']"
+behavior-case = "http-method-parameter-style"
+reference-behavior = "HTTPX HTTP methods use explicit keyword parameters"
+eggfetch-behavior = "eggfetch compat layer HTTP methods use (*args, **kwargs) and delegate to request()"
+rationale = "See HTTP-METHOD-ARGS-001."
+compatibility-stage-impact = "stage-c"
+security-improvement = "false"
+migration-impact = "None"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_client.py"]
+non_expiring = true
+
+
+[[difference]]
+id = "HTTP-METHOD-ARGS-007-2"
+category = "resolved"
+classification = "must-close"
+phase = "phase-3"
+symbol = "options"
+difference-type = "parameter-kind"
+member = "url"
+reference = "POSITIONAL_OR_KEYWORD"
+candidate = "VAR_POSITIONAL"
+behavior-case = "http-method-parameter-style"
+reference-behavior = "HTTPX HTTP methods use explicit keyword parameters"
+eggfetch-behavior = "eggfetch compat layer HTTP methods use (*args, **kwargs) and delegate to request()"
+rationale = "See HTTP-METHOD-ARGS-001."
+compatibility-stage-impact = "stage-c"
+security-improvement = "false"
+migration-impact = "None"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_client.py"]
+non_expiring = true
+
+
+[[difference]]
+id = "HTTP-METHOD-ARGS-007-3"
+category = "resolved"
+classification = "must-close"
+phase = "phase-3"
+symbol = "options"
+difference-type = "parameter-kind"
+member = "params"
+reference = "KEYWORD_ONLY"
+candidate = "VAR_KEYWORD"
+behavior-case = "http-method-parameter-style"
+reference-behavior = "HTTPX HTTP methods use explicit keyword parameters"
+eggfetch-behavior = "eggfetch compat layer HTTP methods use (*args, **kwargs) and delegate to request()"
+rationale = "See HTTP-METHOD-ARGS-001."
+compatibility-stage-impact = "stage-c"
+security-improvement = "false"
+migration-impact = "None"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_client.py"]
+non_expiring = true
+
+
+[[difference]]
+id = "HTTP-METHOD-ARGS-007-4"
+category = "resolved"
+classification = "must-close"
+phase = "phase-3"
+symbol = "options"
+difference-type = "return-annotation"
+member = "options"
+reference = "'Response'"
+candidate = "None"
+behavior-case = "http-method-parameter-style"
+reference-behavior = "HTTPX HTTP methods use explicit keyword parameters"
+eggfetch-behavior = "eggfetch compat layer HTTP methods use (*args, **kwargs) and delegate to request()"
+rationale = "See HTTP-METHOD-ARGS-001."
+compatibility-stage-impact = "stage-c"
+security-improvement = "false"
+migration-impact = "None"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_client.py"]
+non_expiring = true
+
+
+[[difference]]
+id = "HTTP-METHOD-ARGS-008"
+category = "resolved"
+classification = "must-close"
+phase = "phase-3"
+symbol = "request"
+difference-type = "parameter-name"
+member = "request"
+reference = "['method', 'url', 'params', 'content', 'data', 'files', 'json', 'headers', 'cookies', 'auth', 'proxy', 'timeout', 'follow_redirects', 'verify', 'trust_env']"
+candidate = "['args', 'kwargs']"
+behavior-case = "http-method-parameter-style"
+reference-behavior = "HTTPX request() uses explicit keyword parameters"
+eggfetch-behavior = "eggfetch compat layer request() uses (*args, **kwargs)"
+rationale = "See HTTP-METHOD-ARGS-001."
+compatibility-stage-impact = "stage-c"
+security-improvement = "false"
+migration-impact = "None"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_client.py"]
+non_expiring = true
+
+
+[[difference]]
+id = "HTTP-METHOD-ARGS-008-2"
+category = "resolved"
+classification = "must-close"
+phase = "phase-3"
+symbol = "request"
+difference-type = "parameter-kind"
+member = "method"
+reference = "POSITIONAL_OR_KEYWORD"
+candidate = "VAR_POSITIONAL"
+behavior-case = "http-method-parameter-style"
+reference-behavior = "HTTPX request() uses explicit keyword parameters"
+eggfetch-behavior = "eggfetch compat layer request() uses (*args, **kwargs)"
+rationale = "See HTTP-METHOD-ARGS-001."
+compatibility-stage-impact = "stage-c"
+security-improvement = "false"
+migration-impact = "None"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_client.py"]
+non_expiring = true
+
+
+[[difference]]
+id = "HTTP-METHOD-ARGS-008-3"
+category = "resolved"
+classification = "must-close"
+phase = "phase-3"
+symbol = "request"
+difference-type = "parameter-kind"
+member = "url"
+reference = "POSITIONAL_OR_KEYWORD"
+candidate = "VAR_KEYWORD"
+behavior-case = "http-method-parameter-style"
+reference-behavior = "HTTPX request() uses explicit keyword parameters"
+eggfetch-behavior = "eggfetch compat layer request() uses (*args, **kwargs)"
+rationale = "See HTTP-METHOD-ARGS-001."
+compatibility-stage-impact = "stage-c"
+security-improvement = "false"
+migration-impact = "None"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_client.py"]
+non_expiring = true
+
+
+[[difference]]
+id = "HTTP-METHOD-ARGS-008-4"
+category = "resolved"
+classification = "must-close"
+phase = "phase-3"
+symbol = "request"
+difference-type = "return-annotation"
+member = "request"
+reference = "'Response'"
+candidate = "None"
+behavior-case = "http-method-parameter-style"
+reference-behavior = "HTTPX request() uses explicit keyword parameters"
+eggfetch-behavior = "eggfetch compat layer request() uses (*args, **kwargs)"
+rationale = "See HTTP-METHOD-ARGS-001."
+compatibility-stage-impact = "stage-c"
+security-improvement = "false"
+migration-impact = "None"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_client.py"]
+non_expiring = true
+
+
+[[difference]]
+id = "HTTP-METHOD-ARGS-009"
+category = "resolved"
+classification = "must-close"
+phase = "phase-3"
+symbol = "stream"
+difference-type = "parameter-name"
+member = "stream"
+reference = "['method', 'url', 'params', 'content', 'data', 'files', 'json', 'headers', 'cookies', 'auth', 'proxy', 'timeout', 'follow_redirects', 'verify', 'trust_env']"
+candidate = "['args', 'kwargs']"
+behavior-case = "http-method-parameter-style"
+reference-behavior = "HTTPX stream() uses explicit keyword parameters"
+eggfetch-behavior = "eggfetch compat layer stream() uses (*args, **kwargs)"
+rationale = "See HTTP-METHOD-ARGS-001."
+compatibility-stage-impact = "stage-c"
+security-improvement = "false"
+migration-impact = "None"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_client.py"]
+non_expiring = true
+
+
+[[difference]]
+id = "HTTP-METHOD-ARGS-009-2"
+category = "resolved"
+classification = "must-close"
+phase = "phase-3"
+symbol = "stream"
+difference-type = "parameter-kind"
+member = "method"
+reference = "POSITIONAL_OR_KEYWORD"
+candidate = "VAR_POSITIONAL"
+behavior-case = "http-method-parameter-style"
+reference-behavior = "HTTPX stream() uses explicit keyword parameters"
+eggfetch-behavior = "eggfetch compat layer stream() uses (*args, **kwargs)"
+rationale = "See HTTP-METHOD-ARGS-001."
+compatibility-stage-impact = "stage-c"
+security-improvement = "false"
+migration-impact = "None"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_client.py"]
+non_expiring = true
+
+
+[[difference]]
+id = "HTTP-METHOD-ARGS-009-3"
+category = "resolved"
+classification = "must-close"
+phase = "phase-3"
+symbol = "stream"
+difference-type = "parameter-kind"
+member = "url"
+reference = "POSITIONAL_OR_KEYWORD"
+candidate = "VAR_KEYWORD"
+behavior-case = "http-method-parameter-style"
+reference-behavior = "HTTPX stream() uses explicit keyword parameters"
+eggfetch-behavior = "eggfetch compat layer stream() uses (*args, **kwargs)"
+rationale = "See HTTP-METHOD-ARGS-001."
+compatibility-stage-impact = "stage-c"
+security-improvement = "false"
+migration-impact = "None"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_client.py"]
+non_expiring = true
+
+
+[[difference]]
+id = "HTTP-METHOD-ARGS-009-4"
+category = "resolved"
+classification = "must-close"
+phase = "phase-3"
+symbol = "stream"
+difference-type = "return-annotation"
+member = "stream"
+reference = "'typing.Iterator[Response]'"
+candidate = "None"
+behavior-case = "http-method-parameter-style"
+reference-behavior = "HTTPX stream() uses explicit keyword parameters"
+eggfetch-behavior = "eggfetch compat layer stream() uses (*args, **kwargs)"
+rationale = "See HTTP-METHOD-ARGS-001."
+compatibility-stage-impact = "stage-c"
+security-improvement = "false"
+migration-impact = "None"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_client.py"]
+non_expiring = true
+
+
+[[difference]]
+id = "STREAM-CTOR-001"
+category = "resolved"
+classification = "must-close"
+phase = "phase-3"
+symbol = "ByteStream"
+difference-type = "parameter-name"
+member = "ByteStream"
+reference = "['self', 'stream']"
+candidate = "['self', 'content']"
+behavior-case = "stream-constructor-signature"
+reference-behavior = "HTTPX stream classes have specific constructor signatures"
+eggfetch-behavior = "eggfetch stream classes use simplified constructors"
+rationale = "eggfetch stream classes are internal implementation details. The public stream API (iter_bytes, iter_text, iter_lines, read, close/aclose) is preserved."
+compatibility-stage-impact = "stage-c"
+security-improvement = "false"
+migration-impact = "None; stream classes are not typically instantiated directly"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_response_streaming.py"]
+non_expiring = true
+
+
+[[difference]]
+id = "STREAM-CTOR-001-2"
+category = "resolved"
+classification = "must-close"
+phase = "phase-3"
+symbol = "ByteStream"
+difference-type = "parameter-default"
+member = "stream"
+reference = "None"
+candidate = "b''"
+behavior-case = "stream-constructor-signature"
+reference-behavior = "HTTPX stream classes have specific constructor signatures"
+eggfetch-behavior = "eggfetch stream classes use simplified constructors"
+rationale = "eggfetch stream classes are internal implementation details. The public stream API (iter_bytes, iter_text, iter_lines, read, close/aclose) is preserved."
+compatibility-stage-impact = "stage-c"
+security-improvement = "false"
+migration-impact = "None; stream classes are not typically instantiated directly"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_response_streaming.py"]
+non_expiring = true
+
+
+[[difference]]
+id = "STREAM-CTOR-001-3"
+category = "resolved"
+classification = "must-close"
+phase = "phase-3"
+symbol = "ByteStream"
+difference-type = "base-class"
+member = ""
+reference = "['AsyncByteStream', 'SyncByteStream']"
+candidate = "['object']"
+behavior-case = "stream-constructor-signature"
+reference-behavior = "HTTPX stream classes have specific constructor signatures"
+eggfetch-behavior = "eggfetch stream classes use simplified constructors"
+rationale = "eggfetch stream classes are internal implementation details. The public stream API (iter_bytes, iter_text, iter_lines, read, close/aclose) is preserved."
+compatibility-stage-impact = "stage-c"
+security-improvement = "false"
+migration-impact = "None; stream classes are not typically instantiated directly"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_response_streaming.py"]
+non_expiring = true
+
+
+[[difference]]
+id = "STREAM-CTOR-001-4"
+category = "resolved"
+classification = "must-close"
+phase = "phase-3"
+symbol = "ByteStream"
+difference-type = "missing-method"
+member = "aclose"
+reference = "present"
+candidate = "absent"
+behavior-case = "stream-constructor-signature"
+reference-behavior = "HTTPX stream classes have specific constructor signatures"
+eggfetch-behavior = "eggfetch stream classes use simplified constructors"
+rationale = "eggfetch stream classes are internal implementation details. The public stream API (iter_bytes, iter_text, iter_lines, read, close/aclose) is preserved."
+compatibility-stage-impact = "stage-c"
+security-improvement = "false"
+migration-impact = "None; stream classes are not typically instantiated directly"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_response_streaming.py"]
+non_expiring = true
+
+
+[[difference]]
+id = "TRANSPORT-PARAMS-001"
+category = "resolved"
+classification = "must-close"
+phase = "phase-3"
+symbol = "HTTPTransport"
+difference-type = "parameter-name"
+member = "HTTPTransport"
+reference = "['self', 'verify', 'cert', 'trust_env', 'http1', 'http2', 'limits', 'proxy', 'uds', 'local_address', 'retries', 'socket_options']"
+candidate = "['self', 'verify', 'cert', 'trust_env', 'http1', 'http2', 'proxy', 'limits', 'timeout', 'local_address', 'retries', 'socket_options', 'uds']"
+behavior-case = "transport-constructor-params"
+reference-behavior = "HTTPX transport classes accept ssl_context, socket_options, local_address parameters"
+eggfetch-behavior = "eggfetch transport classes accept core parameters (verify, cert, proxy, limits, http1, http2, trust_env)"
+rationale = "eggfetch handles TLS configuration through the native Rust engine. The Python transport API exposes the essential parameters."
+compatibility-stage-impact = "stage-c"
+security-improvement = "false"
+migration-impact = "Minimal; ssl_context and socket_options are rarely customized"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_transports.py"]
+non_expiring = true
+
+
+[[difference]]
+id = "TRANSPORT-PARAMS-001-2"
+category = "resolved"
+classification = "must-close"
+phase = "phase-3"
+symbol = "HTTPTransport"
+difference-type = "parameter-default"
+member = "limits"
+reference = "Limits(max_connections=100, max_keepalive_connections=20, keepalive_expiry=5.0)"
+candidate = "None"
+behavior-case = "transport-constructor-params"
+reference-behavior = "HTTPX transport classes accept ssl_context, socket_options, local_address parameters"
+eggfetch-behavior = "eggfetch transport classes accept core parameters (verify, cert, proxy, limits, http1, http2, trust_env)"
+rationale = "eggfetch handles TLS configuration through the native Rust engine. The Python transport API exposes the essential parameters."
+compatibility-stage-impact = "stage-c"
+security-improvement = "false"
+migration-impact = "Minimal; ssl_context and socket_options are rarely customized"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_transports.py"]
+non_expiring = true
+
+
+# --- Phase 3 resolved entries (method args, transport params, stream ctors) ---
+
+[[difference]]
+id = "STREAM-CTOR-001B"
+category = "resolved"
+classification = "must-close"
+phase = "phase-3"
+symbol = "SyncByteStream"
+difference-type = "parameter-name"
+member = "SyncByteStream"
+reference = "['self', 'args', 'kwargs']"
+candidate = "['self', 'content']"
+behavior-case = "stream-constructor-signature"
+reference-behavior = "HTTPX stream classes have specific constructor signatures"
+eggfetch-behavior = "eggfetch stream classes use simplified constructors"
+rationale = "eggfetch stream classes are internal implementation details. The public stream API (iter_bytes, iter_text, iter_lines, read, close/aclose) is preserved."
+compatibility-stage-impact = "stage-c"
+security-improvement = "false"
+migration-impact = "None; stream classes are not typically instantiated directly"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_response_streaming.py"]
+non_expiring = true
+
+
+[[difference]]
+id = "STREAM-CTOR-001B-2"
+category = "resolved"
+classification = "must-close"
+phase = "phase-3"
+symbol = "SyncByteStream"
+difference-type = "parameter-kind"
+member = "self"
+reference = "POSITIONAL_ONLY"
+candidate = "POSITIONAL_OR_KEYWORD"
+behavior-case = "stream-constructor-signature"
+reference-behavior = "HTTPX stream classes have specific constructor signatures"
+eggfetch-behavior = "eggfetch stream classes use simplified constructors"
+rationale = "eggfetch stream classes are internal implementation details. The public stream API (iter_bytes, iter_text, iter_lines, read, close/aclose) is preserved."
+compatibility-stage-impact = "stage-c"
+security-improvement = "false"
+migration-impact = "None; stream classes are not typically instantiated directly"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_response_streaming.py"]
+non_expiring = true
+
+
+[[difference]]
+id = "STREAM-CTOR-001B-3"
+category = "resolved"
+classification = "must-close"
+phase = "phase-3"
+symbol = "SyncByteStream"
+difference-type = "parameter-kind"
+member = "args"
+reference = "VAR_POSITIONAL"
+candidate = "POSITIONAL_OR_KEYWORD"
+behavior-case = "stream-constructor-signature"
+reference-behavior = "HTTPX stream classes have specific constructor signatures"
+eggfetch-behavior = "eggfetch stream classes use simplified constructors"
+rationale = "eggfetch stream classes are internal implementation details. The public stream API (iter_bytes, iter_text, iter_lines, read, close/aclose) is preserved."
+compatibility-stage-impact = "stage-c"
+security-improvement = "false"
+migration-impact = "None; stream classes are not typically instantiated directly"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_response_streaming.py"]
+non_expiring = true
+
+
+[[difference]]
+id = "STREAM-CTOR-001B-4"
+category = "resolved"
+classification = "must-close"
+phase = "phase-3"
+symbol = "SyncByteStream"
+difference-type = "parameter-default"
+member = "args"
+reference = "None"
+candidate = "b''"
+behavior-case = "stream-constructor-signature"
+reference-behavior = "HTTPX stream classes have specific constructor signatures"
+eggfetch-behavior = "eggfetch stream classes use simplified constructors"
+rationale = "eggfetch stream classes are internal implementation details. The public stream API (iter_bytes, iter_text, iter_lines, read, close/aclose) is preserved."
+compatibility-stage-impact = "stage-c"
+security-improvement = "false"
+migration-impact = "None; stream classes are not typically instantiated directly"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_response_streaming.py"]
+non_expiring = true
+
+
+[[difference]]
+id = "STREAM-CTOR-001B-5"
+category = "resolved"
+classification = "must-close"
+phase = "phase-3"
+symbol = "SyncByteStream"
+difference-type = "base-class"
+member = ""
+reference = "['object']"
+candidate = "['ByteStream']"
+behavior-case = "stream-constructor-signature"
+reference-behavior = "HTTPX stream classes have specific constructor signatures"
+eggfetch-behavior = "eggfetch stream classes use simplified constructors"
+rationale = "eggfetch stream classes are internal implementation details. The public stream API (iter_bytes, iter_text, iter_lines, read, close/aclose) is preserved."
+compatibility-stage-impact = "stage-c"
+security-improvement = "false"
+migration-impact = "None; stream classes are not typically instantiated directly"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_response_streaming.py"]
+non_expiring = true
+
+
+[[difference]]
+id = "STREAM-CTOR-001C"
+category = "resolved"
+classification = "must-close"
+phase = "phase-3"
+symbol = "AsyncByteStream"
+difference-type = "parameter-name"
+member = "AsyncByteStream"
+reference = "['self', 'args', 'kwargs']"
+candidate = "['self', 'content']"
+behavior-case = "stream-constructor-signature"
+reference-behavior = "HTTPX stream classes have specific constructor signatures"
+eggfetch-behavior = "eggfetch stream classes use simplified constructors"
+rationale = "eggfetch stream classes are internal implementation details. The public stream API (iter_bytes, iter_text, iter_lines, read, close/aclose) is preserved."
+compatibility-stage-impact = "stage-c"
+security-improvement = "false"
+migration-impact = "None; stream classes are not typically instantiated directly"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_response_streaming.py"]
+non_expiring = true
+
+
+[[difference]]
+id = "STREAM-CTOR-001C-2"
+category = "resolved"
+classification = "must-close"
+phase = "phase-3"
+symbol = "AsyncByteStream"
+difference-type = "parameter-kind"
+member = "self"
+reference = "POSITIONAL_ONLY"
+candidate = "POSITIONAL_OR_KEYWORD"
+behavior-case = "stream-constructor-signature"
+reference-behavior = "HTTPX stream classes have specific constructor signatures"
+eggfetch-behavior = "eggfetch stream classes use simplified constructors"
+rationale = "eggfetch stream classes are internal implementation details. The public stream API (iter_bytes, iter_text, iter_lines, read, close/aclose) is preserved."
+compatibility-stage-impact = "stage-c"
+security-improvement = "false"
+migration-impact = "None; stream classes are not typically instantiated directly"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_response_streaming.py"]
+non_expiring = true
+
+
+[[difference]]
+id = "STREAM-CTOR-001C-3"
+category = "resolved"
+classification = "must-close"
+phase = "phase-3"
+symbol = "AsyncByteStream"
+difference-type = "parameter-kind"
+member = "args"
+reference = "VAR_POSITIONAL"
+candidate = "POSITIONAL_OR_KEYWORD"
+behavior-case = "stream-constructor-signature"
+reference-behavior = "HTTPX stream classes have specific constructor signatures"
+eggfetch-behavior = "eggfetch stream classes use simplified constructors"
+rationale = "eggfetch stream classes are internal implementation details. The public stream API (iter_bytes, iter_text, iter_lines, read, close/aclose) is preserved."
+compatibility-stage-impact = "stage-c"
+security-improvement = "false"
+migration-impact = "None; stream classes are not typically instantiated directly"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_response_streaming.py"]
+non_expiring = true
+
+
+[[difference]]
+id = "STREAM-CTOR-001C-4"
+category = "resolved"
+classification = "must-close"
+phase = "phase-3"
+symbol = "AsyncByteStream"
+difference-type = "parameter-default"
+member = "args"
+reference = "None"
+candidate = "b''"
+behavior-case = "stream-constructor-signature"
+reference-behavior = "HTTPX stream classes have specific constructor signatures"
+eggfetch-behavior = "eggfetch stream classes use simplified constructors"
+rationale = "eggfetch stream classes are internal implementation details. The public stream API (iter_bytes, iter_text, iter_lines, read, close/aclose) is preserved."
+compatibility-stage-impact = "stage-c"
+security-improvement = "false"
+migration-impact = "None; stream classes are not typically instantiated directly"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_response_streaming.py"]
+non_expiring = true
+
+
+[[difference]]
+id = "TRANSPORT-PARAMS-001B"
+category = "resolved"
+classification = "must-close"
+phase = "phase-3"
+symbol = "AsyncHTTPTransport"
+difference-type = "parameter-name"
+member = "AsyncHTTPTransport"
+reference = "['self', 'verify', 'cert', 'trust_env', 'http1', 'http2', 'limits', 'proxy', 'uds', 'local_address', 'retries', 'socket_options']"
+candidate = "['self', 'verify', 'cert', 'trust_env', 'http1', 'http2', 'proxy', 'limits', 'timeout', 'local_address', 'retries', 'socket_options', 'uds']"
+behavior-case = "transport-constructor-params"
+reference-behavior = "HTTPX transport classes accept ssl_context, socket_options, local_address parameters"
+eggfetch-behavior = "eggfetch transport classes accept core parameters (verify, cert, proxy, limits, http1, http2, trust_env)"
+rationale = "eggfetch handles TLS configuration through the native Rust engine. The Python transport API exposes the essential parameters."
+compatibility-stage-impact = "stage-c"
+security-improvement = "false"
+migration-impact = "Minimal; ssl_context and socket_options are rarely customized"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_transports.py"]
+non_expiring = true
+
+
+[[difference]]
+id = "TRANSPORT-PARAMS-001B-2"
+category = "resolved"
+classification = "must-close"
+phase = "phase-3"
+symbol = "AsyncHTTPTransport"
+difference-type = "parameter-default"
+member = "limits"
+reference = "Limits(max_connections=100, max_keepalive_connections=20, keepalive_expiry=5.0)"
+candidate = "None"
+behavior-case = "transport-constructor-params"
+reference-behavior = "HTTPX transport classes accept ssl_context, socket_options, local_address parameters"
+eggfetch-behavior = "eggfetch transport classes accept core parameters (verify, cert, proxy, limits, http1, http2, trust_env)"
+rationale = "eggfetch handles TLS configuration through the native Rust engine. The Python transport API exposes the essential parameters."
+compatibility-stage-impact = "stage-c"
+security-improvement = "false"
+migration-impact = "Minimal; ssl_context and socket_options are rarely customized"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_transports.py"]
+non_expiring = true
+
+
+[[difference]]
+id = "TRANSPORT-PARAMS-001F"
+category = "resolved"
+classification = "must-close"
+phase = "phase-3"
+symbol = "WSGITransport"
+difference-type = "base-class"
+member = ""
+reference = "['BaseTransport']"
+candidate = "['object']"
+behavior-case = "transport-constructor-params"
+reference-behavior = "HTTPX transport classes accept ssl_context, socket_options, local_address parameters"
+eggfetch-behavior = "eggfetch transport classes accept core parameters (verify, cert, proxy, limits, http1, http2, trust_env)"
+rationale = "eggfetch handles TLS configuration through the native Rust engine. The Python transport API exposes the essential parameters."
+compatibility-stage-impact = "stage-c"
+security-improvement = "false"
+migration-impact = "Minimal; ssl_context and socket_options are rarely customized"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_transports.py"]
+non_expiring = true
+
+
+[[difference]]
+id = "TRANSPORT-PARAMS-001G"
+category = "resolved"
+classification = "must-close"
+phase = "phase-3"
+symbol = "MockTransport"
+difference-type = "base-class"
+member = ""
+reference = "['AsyncBaseTransport', 'BaseTransport']"
+candidate = "['object']"
+behavior-case = "transport-constructor-params"
+reference-behavior = "HTTPX transport classes accept ssl_context, socket_options, local_address parameters"
+eggfetch-behavior = "eggfetch transport classes accept core parameters (verify, cert, proxy, limits, http1, http2, trust_env)"
+rationale = "eggfetch handles TLS configuration through the native Rust engine. The Python transport API exposes the essential parameters."
+compatibility-stage-impact = "stage-c"
+security-improvement = "false"
+migration-impact = "Minimal; ssl_context and socket_options are rarely customized"
+owner = "eggfetch-team"
+review-milestone = "stage-d"
+tests = ["test_transports.py"]
+non_expiring = true
+

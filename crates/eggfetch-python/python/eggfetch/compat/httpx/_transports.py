@@ -85,7 +85,7 @@ class HTTPTransport(BaseTransport):
     The transport always returns a stream-backed Response so that the
     higher-level client layer can decide whether to buffer or iterate.
 
-    Note: ``local_address``, ``socket_options``, and ``uds_path`` are
+    Note: ``local_address``, ``socket_options``, and ``uds`` are
     accepted for API compatibility but are **not forwarded** to
     eggfetch-core, which does not support them.
     """
@@ -97,13 +97,12 @@ class HTTPTransport(BaseTransport):
         trust_env: bool = True,
         http1: bool = True,
         http2: bool = False,
+        limits: Limits = Limits(max_connections=100, max_keepalive_connections=20, keepalive_expiry=5.0),
         proxy: str | Proxy | None = None,
-        limits: Limits | None = None,
-        timeout: Timeout | float | None = None,
+        uds: str | None = None,
         local_address: str | None = None,
         retries: int = 0,
         socket_options: typing.Any | None = None,
-        uds: str | None = None,
     ) -> None:
         _validate_protocol_options(http1, http2)
         _validate_transport_options(
@@ -120,13 +119,8 @@ class HTTPTransport(BaseTransport):
         elif limits is not None:
             self._limits = Limits(limits)
         else:
-            self._limits = None
-        if isinstance(timeout, Timeout):
-            self._timeout = timeout
-        elif timeout is not None:
-            self._timeout = Timeout(timeout)
-        else:
-            self._timeout = None
+            self._limits = Limits(max_connections=100, max_keepalive_connections=20, keepalive_expiry=5.0)
+        self._timeout = None
         self._local_address = local_address
         self._retries = retries
         self._socket_options = socket_options
@@ -147,8 +141,7 @@ class HTTPTransport(BaseTransport):
                 kwargs["trust_env"] = self._trust_env
             if self._http2:
                 kwargs["http2"] = self._http2
-            if self._limits is not None:
-                kwargs["limits"] = _convert_limits(self._limits)
+            kwargs["limits"] = _convert_limits(self._limits)
             if self._timeout is not None:
                 kwargs["timeout"] = _convert_timeout(self._timeout)
             if self._proxy is not None:
@@ -198,7 +191,7 @@ class AsyncHTTPTransport(AsyncBaseTransport):
     The transport always returns a stream-backed Response so that the
     higher-level client layer can decide whether to buffer or iterate.
 
-    Note: ``local_address``, ``socket_options``, and ``uds_path`` are
+    Note: ``local_address``, ``socket_options``, and ``uds`` are
     accepted for API compatibility but are **not forwarded** to
     eggfetch-core, which does not support them.
     """
@@ -210,13 +203,12 @@ class AsyncHTTPTransport(AsyncBaseTransport):
         trust_env: bool = True,
         http1: bool = True,
         http2: bool = False,
+        limits: Limits = Limits(max_connections=100, max_keepalive_connections=20, keepalive_expiry=5.0),
         proxy: str | Proxy | None = None,
-        limits: Limits | None = None,
-        timeout: Timeout | float | None = None,
+        uds: str | None = None,
         local_address: str | None = None,
         retries: int = 0,
         socket_options: typing.Any | None = None,
-        uds: str | None = None,
     ) -> None:
         _validate_protocol_options(http1, http2)
         _validate_transport_options(
@@ -233,13 +225,8 @@ class AsyncHTTPTransport(AsyncBaseTransport):
         elif limits is not None:
             self._limits = Limits(limits)
         else:
-            self._limits = None
-        if isinstance(timeout, Timeout):
-            self._timeout = timeout
-        elif timeout is not None:
-            self._timeout = Timeout(timeout)
-        else:
-            self._timeout = None
+            self._limits = Limits(max_connections=100, max_keepalive_connections=20, keepalive_expiry=5.0)
+        self._timeout = None
         self._local_address = local_address
         self._retries = retries
         self._socket_options = socket_options
@@ -260,8 +247,7 @@ class AsyncHTTPTransport(AsyncBaseTransport):
                 kwargs["trust_env"] = self._trust_env
             if self._http2:
                 kwargs["http2"] = self._http2
-            if self._limits is not None:
-                kwargs["limits"] = _convert_limits(self._limits)
+            kwargs["limits"] = _convert_limits(self._limits)
             if self._timeout is not None:
                 kwargs["timeout"] = _convert_timeout(self._timeout)
             if self._proxy is not None:

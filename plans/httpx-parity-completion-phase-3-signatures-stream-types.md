@@ -1,6 +1,6 @@
 # HTTPX 0.28.1 Parity Completion — Phase 3: Exact Signatures, Transport Inheritance, and Stream Type Surface
 
-Status: ready for implementation handoff
+Status: completed
 
 Date: 2026-08-07
 

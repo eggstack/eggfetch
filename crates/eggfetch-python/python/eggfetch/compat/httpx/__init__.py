@@ -6,6 +6,7 @@ HTTPX code can run against the eggfetch Rust engine with minimal changes.
 
 from __future__ import annotations
 
+import typing
 from contextlib import contextmanager
 
 __description__ = "A HTTPX-compatible facade for eggfetch."
@@ -128,7 +129,8 @@ def request(
     follow_redirects=False,
     verify=True,
     trust_env=True,
-):
+    extensions=None,
+) -> Response:
     with Client(
         cookies=cookies,
         proxy=proxy,
@@ -147,6 +149,7 @@ def request(
             headers=headers,
             auth=auth,
             follow_redirects=follow_redirects,
+            extensions=extensions,
         )
 
 
@@ -162,7 +165,8 @@ def get(
     verify=True,
     timeout=Timeout(5.0),
     trust_env=True,
-):
+    extensions=None,
+) -> Response:
     with Client(
         cookies=cookies,
         proxy=proxy,
@@ -176,6 +180,7 @@ def get(
             headers=headers,
             auth=auth,
             follow_redirects=follow_redirects,
+            extensions=extensions,
         )
 
 
@@ -195,7 +200,8 @@ def post(
     verify=True,
     timeout=Timeout(5.0),
     trust_env=True,
-):
+    extensions=None,
+) -> Response:
     with Client(
         cookies=cookies,
         proxy=proxy,
@@ -213,6 +219,7 @@ def post(
             headers=headers,
             auth=auth,
             follow_redirects=follow_redirects,
+            extensions=extensions,
         )
 
 
@@ -232,7 +239,8 @@ def put(
     verify=True,
     timeout=Timeout(5.0),
     trust_env=True,
-):
+    extensions=None,
+) -> Response:
     with Client(
         cookies=cookies,
         proxy=proxy,
@@ -250,6 +258,7 @@ def put(
             headers=headers,
             auth=auth,
             follow_redirects=follow_redirects,
+            extensions=extensions,
         )
 
 
@@ -269,7 +278,8 @@ def patch(
     verify=True,
     timeout=Timeout(5.0),
     trust_env=True,
-):
+    extensions=None,
+) -> Response:
     with Client(
         cookies=cookies,
         proxy=proxy,
@@ -287,6 +297,7 @@ def patch(
             headers=headers,
             auth=auth,
             follow_redirects=follow_redirects,
+            extensions=extensions,
         )
 
 
@@ -302,7 +313,8 @@ def delete(
     timeout=Timeout(5.0),
     verify=True,
     trust_env=True,
-):
+    extensions=None,
+) -> Response:
     with Client(
         cookies=cookies,
         proxy=proxy,
@@ -316,6 +328,7 @@ def delete(
             headers=headers,
             auth=auth,
             follow_redirects=follow_redirects,
+            extensions=extensions,
         )
 
 
@@ -331,7 +344,8 @@ def head(
     verify=True,
     timeout=Timeout(5.0),
     trust_env=True,
-):
+    extensions=None,
+) -> Response:
     with Client(
         cookies=cookies,
         proxy=proxy,
@@ -345,6 +359,7 @@ def head(
             headers=headers,
             auth=auth,
             follow_redirects=follow_redirects,
+            extensions=extensions,
         )
 
 
@@ -360,7 +375,8 @@ def options(
     verify=True,
     timeout=Timeout(5.0),
     trust_env=True,
-):
+    extensions=None,
+) -> Response:
     with Client(
         cookies=cookies,
         proxy=proxy,
@@ -374,6 +390,7 @@ def options(
             headers=headers,
             auth=auth,
             follow_redirects=follow_redirects,
+            extensions=extensions,
         )
 
 
@@ -395,7 +412,8 @@ def stream(
     follow_redirects=False,
     verify=True,
     trust_env=True,
-):
+    extensions=None,
+) -> typing.Iterator[Response]:
     with Client(
         cookies=cookies,
         proxy=proxy,
@@ -414,6 +432,7 @@ def stream(
             headers=headers,
             auth=auth,
             follow_redirects=follow_redirects,
+            extensions=extensions,
         ) as response:
             yield response
 

@@ -7571,6 +7571,12 @@
             "kind": "KEYWORD_ONLY",
             "default": "True",
             "annotation": "'bool'"
+          },
+          {
+            "name": "extensions",
+            "kind": "KEYWORD_ONLY",
+            "default": "None",
+            "annotation": "'RequestExtensions | None'"
           }
         ],
         "return_annotation": "'Response'"
@@ -7641,6 +7647,12 @@
             "kind": "KEYWORD_ONLY",
             "default": "True",
             "annotation": "'bool'"
+          },
+          {
+            "name": "extensions",
+            "kind": "KEYWORD_ONLY",
+            "default": "None",
+            "annotation": "'RequestExtensions | None'"
           }
         ],
         "return_annotation": "'Response'"
@@ -7711,6 +7723,12 @@
             "kind": "KEYWORD_ONLY",
             "default": "True",
             "annotation": "'bool'"
+          },
+          {
+            "name": "extensions",
+            "kind": "KEYWORD_ONLY",
+            "default": "None",
+            "annotation": "'RequestExtensions | None'"
           }
         ],
         "return_annotation": "'Response'"
@@ -7791,6 +7809,12 @@
             "kind": "KEYWORD_ONLY",
             "default": "True",
             "annotation": "'bool'"
+          },
+          {
+            "name": "extensions",
+            "kind": "KEYWORD_ONLY",
+            "default": "None",
+            "annotation": "'RequestExtensions | None'"
           }
         ],
         "return_annotation": "'Response'"
@@ -7885,6 +7909,12 @@
             "kind": "KEYWORD_ONLY",
             "default": "True",
             "annotation": "'bool'"
+          },
+          {
+            "name": "extensions",
+            "kind": "KEYWORD_ONLY",
+            "default": "None",
+            "annotation": "'RequestExtensions | None'"
           }
         ],
         "return_annotation": "'Response'"
@@ -7979,6 +8009,12 @@
             "kind": "KEYWORD_ONLY",
             "default": "True",
             "annotation": "'bool'"
+          },
+          {
+            "name": "extensions",
+            "kind": "KEYWORD_ONLY",
+            "default": "None",
+            "annotation": "'RequestExtensions | None'"
           }
         ],
         "return_annotation": "'Response'"
@@ -8073,6 +8109,12 @@
             "kind": "KEYWORD_ONLY",
             "default": "True",
             "annotation": "'bool'"
+          },
+          {
+            "name": "extensions",
+            "kind": "KEYWORD_ONLY",
+            "default": "None",
+            "annotation": "'RequestExtensions | None'"
           }
         ],
         "return_annotation": "'Response'"
@@ -8172,6 +8214,12 @@
             "kind": "KEYWORD_ONLY",
             "default": "True",
             "annotation": "'bool'"
+          },
+          {
+            "name": "extensions",
+            "kind": "KEYWORD_ONLY",
+            "default": "None",
+            "annotation": "'RequestExtensions | None'"
           }
         ],
         "return_annotation": "'Response'"
@@ -8271,6 +8319,12 @@
             "kind": "KEYWORD_ONLY",
             "default": "True",
             "annotation": "'bool'"
+          },
+          {
+            "name": "extensions",
+            "kind": "KEYWORD_ONLY",
+            "default": "None",
+            "annotation": "'RequestExtensions | None'"
           }
         ],
         "return_annotation": "'typing.Iterator[Response]'"

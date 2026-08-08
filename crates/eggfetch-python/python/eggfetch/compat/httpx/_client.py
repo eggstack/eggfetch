@@ -1526,26 +1526,81 @@ class Client:
             timeout=timeout,
         )
 
-    def get(self, url, **kwargs):
-        return self.request("GET", url, **kwargs)
+    def get(self, url, *, params=None, headers=None, cookies=None,
+            auth=_USE_CLIENT_DEFAULT, follow_redirects=None,
+            timeout=_USE_CLIENT_DEFAULT, extensions=None):
+        return self.request(
+            "GET", url,
+            params=params, headers=headers, cookies=cookies,
+            auth=auth, follow_redirects=follow_redirects,
+            timeout=timeout, extensions=extensions,
+        )
 
-    def post(self, url, **kwargs):
-        return self.request("POST", url, **kwargs)
+    def post(self, url, *, content=None, data=None, files=None, json=None,
+             params=None, headers=None, cookies=None,
+             auth=_USE_CLIENT_DEFAULT, follow_redirects=None,
+             timeout=_USE_CLIENT_DEFAULT, extensions=None):
+        return self.request(
+            "POST", url,
+            content=content, data=data, files=files, json=json,
+            params=params, headers=headers, cookies=cookies,
+            auth=auth, follow_redirects=follow_redirects,
+            timeout=timeout, extensions=extensions,
+        )
 
-    def put(self, url, **kwargs):
-        return self.request("PUT", url, **kwargs)
+    def put(self, url, *, content=None, data=None, files=None, json=None,
+            params=None, headers=None, cookies=None,
+            auth=_USE_CLIENT_DEFAULT, follow_redirects=None,
+            timeout=_USE_CLIENT_DEFAULT, extensions=None):
+        return self.request(
+            "PUT", url,
+            content=content, data=data, files=files, json=json,
+            params=params, headers=headers, cookies=cookies,
+            auth=auth, follow_redirects=follow_redirects,
+            timeout=timeout, extensions=extensions,
+        )
 
-    def patch(self, url, **kwargs):
-        return self.request("PATCH", url, **kwargs)
+    def patch(self, url, *, content=None, data=None, files=None, json=None,
+              params=None, headers=None, cookies=None,
+              auth=_USE_CLIENT_DEFAULT, follow_redirects=None,
+              timeout=_USE_CLIENT_DEFAULT, extensions=None):
+        return self.request(
+            "PATCH", url,
+            content=content, data=data, files=files, json=json,
+            params=params, headers=headers, cookies=cookies,
+            auth=auth, follow_redirects=follow_redirects,
+            timeout=timeout, extensions=extensions,
+        )
 
-    def delete(self, url, **kwargs):
-        return self.request("DELETE", url, **kwargs)
+    def delete(self, url, *, params=None, headers=None, cookies=None,
+               auth=_USE_CLIENT_DEFAULT, follow_redirects=None,
+               timeout=_USE_CLIENT_DEFAULT, extensions=None):
+        return self.request(
+            "DELETE", url,
+            params=params, headers=headers, cookies=cookies,
+            auth=auth, follow_redirects=follow_redirects,
+            timeout=timeout, extensions=extensions,
+        )
 
-    def head(self, url, **kwargs):
-        return self.request("HEAD", url, **kwargs)
+    def head(self, url, *, params=None, headers=None, cookies=None,
+             auth=_USE_CLIENT_DEFAULT, follow_redirects=None,
+             timeout=_USE_CLIENT_DEFAULT, extensions=None):
+        return self.request(
+            "HEAD", url,
+            params=params, headers=headers, cookies=cookies,
+            auth=auth, follow_redirects=follow_redirects,
+            timeout=timeout, extensions=extensions,
+        )
 
-    def options(self, url, **kwargs):
-        return self.request("OPTIONS", url, **kwargs)
+    def options(self, url, *, params=None, headers=None, cookies=None,
+                auth=_USE_CLIENT_DEFAULT, follow_redirects=None,
+                timeout=_USE_CLIENT_DEFAULT, extensions=None):
+        return self.request(
+            "OPTIONS", url,
+            params=params, headers=headers, cookies=cookies,
+            auth=auth, follow_redirects=follow_redirects,
+            timeout=timeout, extensions=extensions,
+        )
 
     @contextmanager
     def stream(self, method, url, *, content=None, data=None, files=None,
@@ -2189,26 +2244,81 @@ class AsyncClient:
             timeout=timeout,
         )
 
-    async def get(self, url, **kwargs):
-        return await self.request("GET", url, **kwargs)
+    async def get(self, url, *, params=None, headers=None, cookies=None,
+                  auth=_USE_CLIENT_DEFAULT, follow_redirects=None,
+                  timeout=_USE_CLIENT_DEFAULT, extensions=None):
+        return await self.request(
+            "GET", url,
+            params=params, headers=headers, cookies=cookies,
+            auth=auth, follow_redirects=follow_redirects,
+            timeout=timeout, extensions=extensions,
+        )
 
-    async def post(self, url, **kwargs):
-        return await self.request("POST", url, **kwargs)
+    async def post(self, url, *, content=None, data=None, files=None, json=None,
+                   params=None, headers=None, cookies=None,
+                   auth=_USE_CLIENT_DEFAULT, follow_redirects=None,
+                   timeout=_USE_CLIENT_DEFAULT, extensions=None):
+        return await self.request(
+            "POST", url,
+            content=content, data=data, files=files, json=json,
+            params=params, headers=headers, cookies=cookies,
+            auth=auth, follow_redirects=follow_redirects,
+            timeout=timeout, extensions=extensions,
+        )
 
-    async def put(self, url, **kwargs):
-        return await self.request("PUT", url, **kwargs)
+    async def put(self, url, *, content=None, data=None, files=None, json=None,
+                  params=None, headers=None, cookies=None,
+                  auth=_USE_CLIENT_DEFAULT, follow_redirects=None,
+                  timeout=_USE_CLIENT_DEFAULT, extensions=None):
+        return await self.request(
+            "PUT", url,
+            content=content, data=data, files=files, json=json,
+            params=params, headers=headers, cookies=cookies,
+            auth=auth, follow_redirects=follow_redirects,
+            timeout=timeout, extensions=extensions,
+        )
 
-    async def patch(self, url, **kwargs):
-        return await self.request("PATCH", url, **kwargs)
+    async def patch(self, url, *, content=None, data=None, files=None, json=None,
+                    params=None, headers=None, cookies=None,
+                    auth=_USE_CLIENT_DEFAULT, follow_redirects=None,
+                    timeout=_USE_CLIENT_DEFAULT, extensions=None):
+        return await self.request(
+            "PATCH", url,
+            content=content, data=data, files=files, json=json,
+            params=params, headers=headers, cookies=cookies,
+            auth=auth, follow_redirects=follow_redirects,
+            timeout=timeout, extensions=extensions,
+        )
 
-    async def delete(self, url, **kwargs):
-        return await self.request("DELETE", url, **kwargs)
+    async def delete(self, url, *, params=None, headers=None, cookies=None,
+                     auth=_USE_CLIENT_DEFAULT, follow_redirects=None,
+                     timeout=_USE_CLIENT_DEFAULT, extensions=None):
+        return await self.request(
+            "DELETE", url,
+            params=params, headers=headers, cookies=cookies,
+            auth=auth, follow_redirects=follow_redirects,
+            timeout=timeout, extensions=extensions,
+        )
 
-    async def head(self, url, **kwargs):
-        return await self.request("HEAD", url, **kwargs)
+    async def head(self, url, *, params=None, headers=None, cookies=None,
+                   auth=_USE_CLIENT_DEFAULT, follow_redirects=None,
+                   timeout=_USE_CLIENT_DEFAULT, extensions=None):
+        return await self.request(
+            "HEAD", url,
+            params=params, headers=headers, cookies=cookies,
+            auth=auth, follow_redirects=follow_redirects,
+            timeout=timeout, extensions=extensions,
+        )
 
-    async def options(self, url, **kwargs):
-        return await self.request("OPTIONS", url, **kwargs)
+    async def options(self, url, *, params=None, headers=None, cookies=None,
+                      auth=_USE_CLIENT_DEFAULT, follow_redirects=None,
+                      timeout=_USE_CLIENT_DEFAULT, extensions=None):
+        return await self.request(
+            "OPTIONS", url,
+            params=params, headers=headers, cookies=cookies,
+            auth=auth, follow_redirects=follow_redirects,
+            timeout=timeout, extensions=extensions,
+        )
 
     @asynccontextmanager
     async def stream(self, method, url, *, content=None, data=None, files=None,
