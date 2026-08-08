@@ -1,7 +1,7 @@
-"""Track 5: Protocol validation and unsupported option rejection.
+"""Track 5: Protocol validation and transport option acceptance.
 
-Tests that protocol combinations are validated and unsupported transport
-options raise NotImplementedError before any network activity.
+Tests that protocol combinations are validated and transport options
+are now accepted (previously raised NotImplementedError).
 """
 
 import pytest
@@ -59,33 +59,41 @@ class TestProtocolValidation:
 
 
 # ---------------------------------------------------------------------------
-# Transport unsupported options
+# Transport option acceptance (formerly rejected)
 # ---------------------------------------------------------------------------
 
-class TestTransportUnsupportedOptions:
-    def test_uds_raises(self):
-        with pytest.raises(NotImplementedError, match="Unix domain sockets"):
-            HTTPTransport(uds="/tmp/test.sock")
+class TestTransportOptionsAccepted:
+    def test_uds_accepted(self):
+        """UDS is now accepted in the transport constructor."""
+        transport = HTTPTransport(uds="/tmp/test.sock")
+        assert transport._uds == "/tmp/test.sock"
 
-    def test_local_address_raises(self):
-        with pytest.raises(NotImplementedError, match="local_address"):
-            HTTPTransport(local_address="127.0.0.1")
+    def test_local_address_accepted(self):
+        """local_address is now accepted in the transport constructor."""
+        transport = HTTPTransport(local_address="127.0.0.1:0")
+        assert transport._local_address == "127.0.0.1:0"
 
-    def test_socket_options_raises(self):
-        with pytest.raises(NotImplementedError, match="socket_options"):
-            HTTPTransport(socket_options={"key": "val"})
+    def test_socket_options_accepted(self):
+        """socket_options is now accepted in the transport constructor."""
+        opts = [(6, 1, b"\x01\x00\x00\x00")]  # TCP_NODELAY
+        transport = HTTPTransport(socket_options=opts)
+        assert transport._socket_options == opts
 
-    def test_async_uds_raises(self):
-        with pytest.raises(NotImplementedError, match="Unix domain sockets"):
-            AsyncHTTPTransport(uds="/tmp/test.sock")
+    def test_async_uds_accepted(self):
+        """UDS is now accepted in the async transport constructor."""
+        transport = AsyncHTTPTransport(uds="/tmp/test.sock")
+        assert transport._uds == "/tmp/test.sock"
 
-    def test_async_local_address_raises(self):
-        with pytest.raises(NotImplementedError, match="local_address"):
-            AsyncHTTPTransport(local_address="127.0.0.1")
+    def test_async_local_address_accepted(self):
+        """local_address is now accepted in the async transport constructor."""
+        transport = AsyncHTTPTransport(local_address="127.0.0.1:0")
+        assert transport._local_address == "127.0.0.1:0"
 
-    def test_async_socket_options_raises(self):
-        with pytest.raises(NotImplementedError, match="socket_options"):
-            AsyncHTTPTransport(socket_options={"key": "val"})
+    def test_async_socket_options_accepted(self):
+        """socket_options is now accepted in the async transport constructor."""
+        opts = [(6, 1, b"\x01\x00\x00\x00")]  # TCP_NODELAY
+        transport = AsyncHTTPTransport(socket_options=opts)
+        assert transport._socket_options == opts
 
     def test_default_none_values_accepted(self):
         """Default None values should be accepted for signature compatibility."""
@@ -115,13 +123,22 @@ class TestTransportUnsupportedOptions:
                                    socket_options=None)  # should not raise
 
     def test_validate_transport_options_uds(self):
-        with pytest.raises(NotImplementedError, match="Unix domain sockets"):
-            _validate_transport_options(uds="/tmp/test.sock")
+        _validate_transport_options(uds="/tmp/test.sock")  # should not raise
 
     def test_validate_transport_options_local_address(self):
-        with pytest.raises(NotImplementedError, match="local_address"):
-            _validate_transport_options(local_address="127.0.0.1")
+        _validate_transport_options(local_address="127.0.0.1:0")  # should not raise
 
     def test_validate_transport_options_socket_options(self):
-        with pytest.raises(NotImplementedError, match="socket_options"):
-            _validate_transport_options(socket_options={"key": "val"})
+        _validate_transport_options(socket_options=[(6, 1, b"\x01")])  # should not raise
+
+    def test_validate_transport_options_invalid_local_address(self):
+        with pytest.raises(ValueError, match="host:port"):
+            _validate_transport_options(local_address="bad-format")
+
+    def test_validate_transport_options_invalid_socket_options_type(self):
+        with pytest.raises(TypeError, match="list of tuples"):
+            _validate_transport_options(socket_options="not-a-list")
+
+    def test_validate_transport_options_invalid_socket_option_triple(self):
+        with pytest.raises(ValueError, match="triples"):
+            _validate_transport_options(socket_options=[(1, 2)])  # only 2 elements

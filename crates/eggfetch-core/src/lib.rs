@@ -51,7 +51,7 @@ pub mod retry;
 pub(crate) mod stream;
 pub mod timeout;
 pub mod tls;
-pub(crate) mod transport;
+pub mod transport;
 
 pub use auth::{AuthScheme, BasicAuth, BearerAuth};
 pub use body::{BoxBytesStream, RequestBody, ResponseBody};
@@ -79,3 +79,5 @@ pub use retry::{
 };
 pub use timeout::{Timeout, TimeoutBuilder, TimeoutPhase};
 pub use tls::{ClientIdentity, TlsConfig, TlsConfigBuilder, TlsVersion, TrustStore};
+/// Socket option for direct TCP connections.
+pub use transport::direct_connector::SocketOption;

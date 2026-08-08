@@ -88,6 +88,13 @@ impl std::fmt::Debug for Client {
 
 pub(crate) struct ClientInner {
     pub(crate) hyper_client: Option<crate::transport::TimeoutHyperClient>,
+    /// Direct connector for requests with advanced socket options or local
+    /// address binding. Uses a custom connector instead of the standard
+    /// hyper-rustls connector path.
+    pub(crate) direct_client: Option<crate::transport::TimeoutDirectClient>,
+    /// UDS handler for Unix domain socket requests. When set, requests to
+    /// any URL are routed through the Unix socket at this path.
+    pub(crate) uds_handler: Option<crate::transport::uds::UdsHandler>,
     pub(crate) config: ClientConfig,
     pub(crate) pool: Pool,
     #[cfg(feature = "http3")]
@@ -259,6 +266,10 @@ pub struct ClientBuilder {
     tls_config: Option<crate::tls::TlsConfig>,
     retry: Option<RetryPolicy>,
     http_version_policy: HttpVersionPolicy,
+    /// Advanced direct-connector config for socket options / local address.
+    direct_connector_config: Option<crate::transport::direct_connector::DirectConnectorConfig>,
+    /// Unix domain socket path. When set, all requests use UDS transport.
+    uds_path: Option<String>,
 }
 
 impl ClientBuilder {
@@ -283,6 +294,8 @@ impl ClientBuilder {
             tls_config: None,
             retry: None,
             http_version_policy: HttpVersionPolicy::default(),
+            direct_connector_config: None,
+            uds_path: None,
         }
     }
 
@@ -494,6 +507,58 @@ impl ClientBuilder {
         self
     }
 
+    /// Set a local address to bind outbound sockets to before connecting.
+    ///
+    /// When set, all direct (non-proxy, non-UDS) connections will bind
+    /// to the specified local address before connecting to the remote.
+    /// This uses a custom connector path instead of the standard
+    /// hyper-rustls connector.
+    #[must_use]
+    pub fn local_address(mut self, addr: std::net::SocketAddr) -> Self {
+        let config = self.direct_connector_config.get_or_insert_with(|| {
+            crate::transport::direct_connector::DirectConnectorConfig {
+                local_address: None,
+                socket_options: Vec::new(),
+            }
+        });
+        config.local_address = Some(addr);
+        self
+    }
+
+    /// Set socket options to apply to outbound TCP connections.
+    ///
+    /// Options are applied to the socket before the connect operation.
+    /// Recognized options are applied via `tokio::net::TcpSocket` setters;
+    /// unrecognized options are silently ignored.
+    #[must_use]
+    pub fn socket_options(
+        mut self,
+        options: Vec<crate::transport::direct_connector::SocketOption>,
+    ) -> Self {
+        let config = self.direct_connector_config.get_or_insert_with(|| {
+            crate::transport::direct_connector::DirectConnectorConfig {
+                local_address: None,
+                socket_options: Vec::new(),
+            }
+        });
+        config.socket_options = options;
+        self
+    }
+
+    /// Set a Unix domain socket path for all connections.
+    ///
+    /// When set, all requests are routed through the specified UDS path
+    /// instead of making TCP connections. The URL in the request still
+    /// provides HTTP scheme/authority/path semantics.
+    ///
+    /// Only supported on Unix platforms. On non-Unix platforms, this
+    /// option is accepted but will produce an error at request time.
+    #[must_use]
+    pub fn uds_path(mut self, path: String) -> Self {
+        self.uds_path = Some(path);
+        self
+    }
+
     /// Build the client.
     ///
     /// Native system roots are preferred. If the platform root store is
@@ -585,6 +650,40 @@ impl ClientBuilder {
             None
         };
 
+        // Build the direct connector client for advanced socket options / local
+        // address binding. This uses a custom connector path instead of the
+        // standard hyper-rustls connector.
+        let direct_client = if let Some(dc_config) = self.direct_connector_config {
+            let connect_timeout = self.timeout.as_ref().and_then(|t| t.connect);
+
+            // Build a TLS connector for HTTPS through the direct path.
+            let tls_connector = match self.tls_config.as_ref() {
+                Some(tls_config) => match tls_config.build_rustls_config() {
+                    Ok(rc) => Some(tokio_rustls::TlsConnector::from(Arc::new(rc))),
+                    Err(_) => None,
+                },
+                None => None,
+            };
+
+            let direct_connector =
+                crate::transport::direct_connector::DirectConnector::new(dc_config, tls_connector);
+            let direct_connector = crate::transport::connect_timeout::ConnectTimeout::new(
+                direct_connector,
+                connect_timeout,
+            );
+
+            let mut builder = hyper_util::client::legacy::Client::builder(TokioExecutor::new());
+            if let Some(timeout) = pool_config.idle_timeout {
+                builder.pool_idle_timeout(timeout);
+            }
+            Some(builder.build(direct_connector))
+        } else {
+            None
+        };
+
+        // Build the UDS handler if a path is configured.
+        let uds_handler = self.uds_path.map(crate::transport::uds::UdsHandler::new);
+
         let config = ClientConfig {
             default_headers: self.default_headers,
             user_agent: self.user_agent,
@@ -609,6 +708,8 @@ impl ClientBuilder {
         Client {
             inner: Arc::new(ClientInner {
                 hyper_client,
+                direct_client,
+                uds_handler,
                 config,
                 pool,
                 #[cfg(feature = "http3")]

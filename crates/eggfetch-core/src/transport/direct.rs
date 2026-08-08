@@ -28,6 +28,28 @@ pub(crate) async fn send_request(
     Ok(Response::new(status, resp_version, resp_headers, url, body))
 }
 
+/// Issue a request through the direct connector and return a streaming
+/// `Response`. Used for requests with advanced socket options or local
+/// address binding.
+pub(crate) async fn send_direct_request(
+    hyper_client: &crate::transport::TimeoutDirectClient,
+    request: http::Request<HyperRequestBody>,
+    url: url::Url,
+) -> Result<Response> {
+    let hyper_response = hyper_client
+        .request(request)
+        .await
+        .map_err(map_send_error)?;
+
+    let status = hyper_response.status();
+    let resp_version = hyper_response.version();
+    let resp_headers = hyper_response.headers().clone();
+    let stream: BoxBytesStream = wrap_incoming(hyper_response.into_body());
+    let body = ResponseBody::streaming(stream);
+
+    Ok(Response::new(status, resp_version, resp_headers, url, body))
+}
+
 /// Wrap a hyper `Incoming` body into a `BoxBytesStream`.
 ///
 /// # Trailers

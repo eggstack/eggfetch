@@ -725,6 +725,57 @@ pub(crate) async fn send_single_request(
         .total
         .map(|total| total.saturating_sub(started.elapsed()));
 
+    // Route through UDS handler if configured.
+    if let Some(ref uds_handler) = inner.uds_handler {
+        let response = uds_handler
+            .send_request(&method, &url, &headers, body, version)
+            .await?;
+        let mut response = response;
+        apply_read_timeout_and_lease(&mut response, guard, timeout.read);
+        return Ok(response);
+    }
+
+    // Route through direct connector if configured and no proxy.
+    #[cfg(not(feature = "proxy"))]
+    let effective_proxy_is_none = true;
+    #[cfg(feature = "proxy")]
+    let effective_proxy_is_none = effective_proxy.is_none();
+    if effective_proxy_is_none {
+        if let Some(ref direct_client) = inner.direct_client {
+            let mut http_request = http::Request::builder()
+                .method(method)
+                .uri(url.as_str())
+                .version(version);
+            for (name, value) in headers.iter() {
+                http_request = http_request.header(name, value);
+            }
+            let hyper_request = http_request
+                .body(body.into_http_body())
+                .map_err(|e| Error::RequestBuild(e.to_string()))?;
+            let send_future = crate::transport::direct::send_direct_request(
+                direct_client,
+                hyper_request,
+                url.clone(),
+            );
+            let response = match remaining_total {
+                Some(dur) => match tokio::time::timeout(dur, send_future).await {
+                    Ok(Ok(resp)) => resp,
+                    Ok(Err(e)) => return Err(e),
+                    Err(_) => {
+                        return Err(Error::Timeout {
+                            phase: TimeoutPhase::Total,
+                            elapsed: dur,
+                        });
+                    }
+                },
+                None => send_future.await?,
+            };
+            let mut response = response;
+            apply_read_timeout_and_lease(&mut response, guard, timeout.read);
+            return Ok(response);
+        }
+    }
+
     let response = match effective_proxy {
         #[cfg(feature = "proxy")]
         Some(ref proxy_config) => {

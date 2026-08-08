@@ -20,8 +20,16 @@ pub(crate) type TimeoutHyperClient = hyper_util::client::legacy::Client<
     HyperRequestBody,
 >;
 
+/// Hyper legacy client type using the direct connector with socket options.
+pub(crate) type TimeoutDirectClient = hyper_util::client::legacy::Client<
+    connect_timeout::ConnectTimeout<direct_connector::DirectConnector>,
+    HyperRequestBody,
+>;
+
 pub(crate) mod connect_timeout;
 pub(crate) mod direct;
+pub mod direct_connector;
+pub(crate) mod uds;
 
 #[cfg(feature = "proxy")]
 pub(crate) mod connect;

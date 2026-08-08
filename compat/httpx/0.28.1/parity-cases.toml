@@ -79,12 +79,12 @@ phase = 1
 
 [[case]]
 id = "CLIENT-008"
-description = "unsupported UDS/local-address/socket-option failure"
+description = "UDS/local-address/socket-option support"
 sync = true
 async = true
 tests = ["test_protocol_and_unsupported_options.py"]
-result = "intentional-difference"
-phase = 1
+result = "parity"
+phase = 4
 difference-id = "CLIENT-EXTENSIONS-001"
 
 # ── Phase 2: Request/response semantics ────────────────────────────────

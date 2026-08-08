@@ -96,7 +96,7 @@ All HTTP behavior lives here. 23 source modules (including `stream` and `transpo
 | `timeout` | Yes | Phase-aware timeout configuration and enforcement |
 | `tls` | Yes | TLS configuration, trust store, mTLS, verification toggle |
 | `pipeline` | No | Full request lifecycle orchestration (retry → redirect → send) |
-| `transport` | No | Direct, proxy, HTTP/3 transport dispatch |
+| `transport` | No | Direct, direct-with-socket-options, UDS, proxy, HTTP/3 transport dispatch |
 | `stream` | No | Per-chunk read/write timeout wrappers |
 | `h2_headers` | No | HTTP/2 forbidden header stripping |
 | `response_decode` | No | Content-Encoding parsing and decompression dispatch |
@@ -219,7 +219,7 @@ Client::send()
       → write timeout wrapping (stream bodies)
       → Content-Length application
       → HTTP/2 forbidden header stripping
-      → transport dispatch (direct / proxy / HTTP3)
+      → transport dispatch (UDS / direct / direct-with-socket-options / proxy / HTTP3)
       → decompression wrapping
       → read timeout + pool lease attachment
 ```

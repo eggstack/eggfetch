@@ -15,7 +15,7 @@ See also: [overview.md](overview.md) for the high-level map.
 | `headers` | Yes | `Headers` — case-insensitive header map wrapper |
 | `error` | Yes | `Error` enum (46 variants), `Result<T>` alias |
 | `pipeline` | Crate-internal | Full request lifecycle orchestration |
-| `transport` | Crate-internal | Direct, proxy, HTTP/3 transport dispatch |
+| `transport` | Crate-internal | Direct, direct-with-socket-options, UDS, proxy, HTTP/3 transport dispatch |
 | `stream` | Crate-internal | Per-chunk read/write timeout wrappers |
 
 ## Client
@@ -94,7 +94,7 @@ send_with_retry()           ← retry loop
 6. Write timeout wrapping (for stream bodies)
 7. Content-Length application
 8. HTTP/2 forbidden header stripping (`h2_headers`)
-9. Transport dispatch (direct / proxy / HTTP3)
+9. Transport dispatch (direct / direct-with-socket-options / UDS / proxy / HTTP3)
 10. Decompression wrapping
 11. Read timeout + pool lease attachment
 

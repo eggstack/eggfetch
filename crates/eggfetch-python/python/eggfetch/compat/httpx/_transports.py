@@ -36,6 +36,7 @@ from eggfetch.compat.httpx._client import (
     _convert_timeout,
     _convert_limits,
     _convert_proxy,
+    _convert_socket_option,
     _map_exception,
     _wrap_response,
     _wrap_streaming_response,
@@ -85,9 +86,8 @@ class HTTPTransport(BaseTransport):
     The transport always returns a stream-backed Response so that the
     higher-level client layer can decide whether to buffer or iterate.
 
-    Note: ``local_address``, ``socket_options``, and ``uds`` are
-    accepted for API compatibility but are **not forwarded** to
-    eggfetch-core, which does not support them.
+    Supports ``local_address``, ``socket_options``, and ``uds`` for
+    advanced direct-transport configuration.
     """
 
     def __init__(
@@ -148,6 +148,13 @@ class HTTPTransport(BaseTransport):
                 kwargs["proxy"] = _convert_proxy(self._proxy)
             if self._retries:
                 kwargs["retries"] = self._retries
+            if self._local_address is not None:
+                kwargs["local_address"] = self._local_address
+            if self._socket_options is not None:
+                converted = [_convert_socket_option(opt) for opt in self._socket_options]
+                kwargs["socket_options"] = converted
+            if self._uds is not None:
+                kwargs["uds"] = self._uds
             self._native_client = eggfetch.Client(**kwargs)
         return self._native_client
 
@@ -191,9 +198,8 @@ class AsyncHTTPTransport(AsyncBaseTransport):
     The transport always returns a stream-backed Response so that the
     higher-level client layer can decide whether to buffer or iterate.
 
-    Note: ``local_address``, ``socket_options``, and ``uds`` are
-    accepted for API compatibility but are **not forwarded** to
-    eggfetch-core, which does not support them.
+    Supports ``local_address``, ``socket_options``, and ``uds`` for
+    advanced direct-transport configuration.
     """
 
     def __init__(
@@ -254,6 +260,13 @@ class AsyncHTTPTransport(AsyncBaseTransport):
                 kwargs["proxy"] = _convert_proxy(self._proxy)
             if self._retries:
                 kwargs["retries"] = self._retries
+            if self._local_address is not None:
+                kwargs["local_address"] = self._local_address
+            if self._socket_options is not None:
+                converted = [_convert_socket_option(opt) for opt in self._socket_options]
+                kwargs["socket_options"] = converted
+            if self._uds is not None:
+                kwargs["uds"] = self._uds
             self._native_client = eggfetch.AsyncClient(**kwargs)
         return self._native_client
 

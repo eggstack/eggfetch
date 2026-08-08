@@ -42,7 +42,7 @@ impl PyAsyncClient {
     ///     `max_redirects`: Maximum redirects to follow (default 20).
     #[allow(clippy::too_many_arguments)]
     #[new]
-    #[pyo3(signature = (*, headers=None, timeout=None, follow_redirects=None, max_redirects=None, cookies=None, auth=None, decompress=None, proxy=None, verify=None, cert=None, retries=None, http2=None, http3=None, limits=None, trust_env=None))]
+    #[pyo3(signature = (*, headers=None, timeout=None, follow_redirects=None, max_redirects=None, cookies=None, auth=None, decompress=None, proxy=None, verify=None, cert=None, retries=None, http2=None, http3=None, limits=None, trust_env=None, local_address=None, socket_options=None, uds=None))]
     fn new(
         py: Python<'_>,
         headers: Option<&Bound<'_, PyAny>>,
@@ -60,6 +60,9 @@ impl PyAsyncClient {
         http3: Option<bool>,
         limits: Option<&Bound<'_, PyAny>>,
         trust_env: Option<bool>,
+        local_address: Option<&str>,
+        socket_options: Option<&Bound<'_, PyAny>>,
+        uds: Option<&str>,
     ) -> PyResult<Self> {
         let verify_disabled = verify
             .and_then(|v| v.extract::<bool>().ok())
@@ -143,6 +146,25 @@ impl PyAsyncClient {
         let retry_policy = retry::parse_retry_option(retries)?;
         if let Some(ref policy) = retry_policy {
             builder = builder.retry(policy.clone());
+        }
+
+        // Forward advanced transport options.
+        if let Some(addr_str) = local_address {
+            let addr: std::net::SocketAddr = addr_str.parse().map_err(|e| {
+                PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                    "invalid local_address '{addr_str}': {e}"
+                ))
+            })?;
+            builder = builder.local_address(addr);
+        }
+        if let Some(opts) = socket_options {
+            let rust_opts = crate::conversion::parse_socket_options(opts)?;
+            if !rust_opts.is_empty() {
+                builder = builder.socket_options(rust_opts);
+            }
+        }
+        if let Some(path) = uds {
+            builder = builder.uds_path(path.to_owned());
         }
 
         let client = builder.build();

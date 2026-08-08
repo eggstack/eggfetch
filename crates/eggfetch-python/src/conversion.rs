@@ -279,3 +279,33 @@ pub fn parse_timeout(
         }
     }
 }
+
+/// Parse a Python list of socket option tuples into Rust `SocketOption`s.
+///
+/// Expected format: list of `(level, option, value)` tuples where:
+/// - `level` is an int (socket level, e.g., `socket.IPPROTO_TCP`)
+/// - `option` is an int (option name, e.g., `socket.TCP_NODELAY`)
+/// - `value` is bytes or int (the option value)
+pub(crate) fn parse_socket_options(
+    py_options: &Bound<'_, PyAny>,
+) -> PyResult<Vec<eggfetch_core::SocketOption>> {
+    let mut options = Vec::new();
+    for item in py_options.try_iter()? {
+        let item = item?;
+        let tuple: Bound<'_, PyTuple> = item.downcast_into::<PyTuple>()?;
+        if tuple.len() != 3 {
+            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                "socket_options must be a list of (level, option, value) triples",
+            ));
+        }
+        let level: i32 = tuple.get_item(0)?.extract()?;
+        let option: i32 = tuple.get_item(1)?.extract()?;
+        let value: Vec<u8> = tuple.get_item(2)?.extract()?;
+        options.push(eggfetch_core::SocketOption {
+            level,
+            option,
+            value,
+        });
+    }
+    Ok(options)
+}

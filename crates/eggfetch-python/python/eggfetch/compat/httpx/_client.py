@@ -150,7 +150,68 @@ def _validate_protocol_options(http1: bool, http2: bool) -> None:
         )
 
 
-# ── Transport unsupported-option validation ─────────────────────────────
+# ── Transport option validation ───────────────────────────────────────
+
+# Common socket option constants (matching Python's socket module).
+# These are the values that httpcore/HTTPX typically uses.
+_SOCKET_OPTION_LEVELS = {
+    "SOL_SOCKET": 1,
+    "IPPROTO_TCP": 6,
+    "IPPROTO_IP": 0,
+    "IPPROTO_IPV6": 41,
+}
+
+_SOCKET_OPTION_NAMES = {
+    "TCP_NODELAY": (6, 1),       # (level, option) on Linux
+    "SO_KEEPALIVE": (1, 5),
+    "SO_RCVBUF": (1, 8),
+    "SO_SNDBUF": (1, 7),
+    "SO_REUSEADDR": (1, 2),
+}
+
+
+def _convert_socket_option(option: tuple) -> tuple[int, int, bytes]:
+    """Convert a socket option tuple to (level, option, value) ints.
+
+    Accepts:
+    - ``(level_int, option_int, value_int_or_bytes)``
+    - ``(level_str, option_str, value_int_or_bytes)``
+
+    Returns ``(level, option, value_bytes)``.
+    """
+    if len(option) != 3:
+        raise ValueError(
+            "socket_options must be a list of (level, option, value) triples"
+        )
+    level, opt, value = option
+
+    # Resolve level.
+    if isinstance(level, str):
+        level = _SOCKET_OPTION_LEVELS.get(level)
+        if level is None:
+            raise ValueError(f"unknown socket level: {level!r}")
+
+    # Resolve option.
+    if isinstance(opt, str):
+        resolved = _SOCKET_OPTION_NAMES.get(opt)
+        if resolved is None:
+            raise ValueError(f"unknown socket option: {opt!r}")
+        if level is None:
+            level = resolved[0]
+        opt = resolved[1]
+
+    # Convert value to bytes.
+    if isinstance(value, int):
+        value = value.to_bytes(4, byteorder="little")
+    elif isinstance(value, bytes):
+        pass
+    else:
+        raise ValueError(
+            f"socket option value must be int or bytes, got {type(value).__name__}"
+        )
+
+    return (int(level), int(opt), value)
+
 
 def _validate_transport_options(
     *,
@@ -158,19 +219,26 @@ def _validate_transport_options(
     local_address: str | None = None,
     socket_options: typing.Any | None = None,
 ) -> None:
-    """Reject unsupported transport options before any network activity."""
-    if uds is not None:
-        raise NotImplementedError(
-            "eggfetch does not support Unix domain sockets (uds)"
-        )
+    """Validate transport options format (no longer rejected)."""
+    if uds is not None and not isinstance(uds, str):
+        raise TypeError("uds must be a string path")
     if local_address is not None:
-        raise NotImplementedError(
-            "eggfetch does not support local_address"
-        )
+        if not isinstance(local_address, str):
+            raise TypeError("local_address must be a string")
+        # Quick format check.
+        parts = local_address.split(":")
+        if len(parts) != 2:
+            raise ValueError(
+                f"local_address must be 'host:port', got {local_address!r}"
+            )
     if socket_options is not None:
-        raise NotImplementedError(
-            "eggfetch does not support socket_options"
-        )
+        if not isinstance(socket_options, (list, tuple)):
+            raise TypeError("socket_options must be a list of tuples")
+        for opt in socket_options:
+            if not isinstance(opt, (list, tuple)) or len(opt) != 3:
+                raise ValueError(
+                    "socket_options must be a list of (level, option, value) triples"
+                )
 
 
 # ── Default headers ─────────────────────────────────────────────────────
