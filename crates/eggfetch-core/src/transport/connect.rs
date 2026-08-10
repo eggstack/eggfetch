@@ -151,13 +151,13 @@ pub(crate) async fn send_https_connect_request(
 ///
 /// Yields data from an initial buffer first, then reads from the
 /// underlying TLS stream.
-struct TlsProxyResponseStream<S> {
+pub(crate) struct TlsProxyResponseStream<S> {
     initial_buf: std::io::Cursor<Vec<u8>>,
     inner: S,
 }
 
 impl<S> TlsProxyResponseStream<S> {
-    fn new(initial_buf: Vec<u8>, inner: S) -> Self {
+    pub(crate) fn new(initial_buf: Vec<u8>, inner: S) -> Self {
         Self {
             initial_buf: std::io::Cursor::new(initial_buf),
             inner,
@@ -220,13 +220,13 @@ impl<S: tokio::io::AsyncRead + Unpin> futures_core::Stream for TlsProxyResponseS
 ///
 /// After the CONNECT handshake, the proxy may have sent some bytes
 /// that are part of the TLS stream. This wrapper preserves them.
-struct ProxyTunnel {
+pub(crate) struct ProxyTunnel {
     initial_buf: std::io::Cursor<Vec<u8>>,
     inner: tokio::net::TcpStream,
 }
 
 impl ProxyTunnel {
-    fn new(initial_buf: Vec<u8>, inner: tokio::net::TcpStream) -> Self {
+    pub(crate) fn new(initial_buf: Vec<u8>, inner: tokio::net::TcpStream) -> Self {
         Self {
             initial_buf: std::io::Cursor::new(initial_buf),
             inner,

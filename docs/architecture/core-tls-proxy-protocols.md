@@ -79,6 +79,48 @@ For HTTPS through a proxy, the transport establishes a CONNECT tunnel:
 3. Upgrade the connection to TLS.
 4. Send the actual HTTP request over the TLS tunnel.
 
+## SOCKS5 Proxy
+
+### Supported Schemes
+
+- `socks5://` — SOCKS5 with local DNS resolution (client resolves the hostname, sends IP to proxy)
+- `socks5h://` — SOCKS5 with remote DNS resolution (sends hostname to proxy for resolution)
+
+### Configuration
+
+```rust
+let proxy = Proxy::all("socks5://proxy.example.com:1080")?;
+let client = ClientBuilder::new().proxy(proxy).build()?;
+```
+
+With authentication:
+```rust
+let proxy = Proxy::all("socks5://user:pass@proxy.example.com:1080")?;
+```
+
+### Protocol Flow
+
+1. TCP connect to SOCKS5 proxy
+2. Method negotiation (no-auth or username/password)
+3. Optional username/password subnegotiation (RFC 1929)
+4. CONNECT command with destination address (IPv4, IPv6, or domain name)
+5. Parse reply — tunnel established
+6. For HTTP: speak HTTP over the tunnel
+7. For HTTPS: perform origin TLS handshake over the tunnel, then HTTP
+
+### DNS Resolution Semantics
+
+- `socks5://`: Resolves the destination hostname locally, sends the IP address to the proxy (ATYP_IPV4 or ATYP_IPV6)
+- `socks5h://`: Sends the domain name to the proxy for remote resolution (ATYP_DOMAIN)
+
+### Authentication
+
+Supports username/password authentication via URL userinfo (`socks5://user:pass@host:port`) or explicit `.auth()` on the Proxy builder. Credentials are never exposed in Debug/Display output.
+
+### Pool Isolation
+
+SOCKS proxy connections are keyed separately from direct and HTTP proxy connections. Different SOCKS proxies or different credential sets create independent pool slots.
+
 ## HTTP/2
 
 ### Feature Gating

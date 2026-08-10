@@ -80,7 +80,6 @@ all HTTPX transports or concurrency backends.
 | Feature | Reason |
 | --- | --- |
 | UDS (Unix domain sockets) | Not available in eggfetch-core |
-| SOCKS proxy | HTTPX 0.28.1 optional public feature (`httpx[socks]`); currently unsupported by EggFetch and scheduled for Phase 5 |
 | Trio async backend | Deferred to Stage D |
 | requests Session hooks | Not implemented |
 | requests PreparedRequest | Not part of the public API |
@@ -127,7 +126,7 @@ The following statements from earlier documentation have been corrected:
 1. **Pool timeout**: HTTPX 0.28.1 supports pool timeout via `Timeout(pool=...)`. eggfetch also supports this. The compatibility matrix has been updated to reflect this.
 2. **Redirect default**: HTTPX 0.28.1 defaults to `follow_redirects=False`, same as eggfetch. The earlier claim that "HTTPX follows redirects by default" was incorrect for version 0.28.1.
 3. **Proxy env vars**: eggfetch reads `HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY` env vars when `trust_env=True` (default). Implemented in Phase 1.
-4. **SOCKS proxy**: HTTPX 0.28.1 exposes SOCKS proxy support as an optional public feature via `httpx[socks]`. eggfetch does not currently support SOCKS; scheduled for Phase 5. The earlier claim that SOCKS was "not in HTTPX 0.28.1 public API" was incorrect.
+4. **SOCKS proxy**: HTTPX 0.28.1 exposes SOCKS proxy support as an optional public feature via `httpx[socks]`. eggfetch now supports SOCKS5 (`socks5://` and `socks5h://`) with local and remote DNS resolution, username/password authentication, and NO_PROXY bypass. The earlier claim that SOCKS was "not in HTTPX 0.28.1 public API" was incorrect. Implemented in Phase 5.
 5. **Proxy environment gap**: `ALL_PROXY` and lowercase proxy environment variable variants are not currently supported by eggfetch. This is classified as `must-close` under Phase 5.
 6. **SSL context**: HTTPX `Proxy(..., ssl_context=...)` is a public constructor parameter. eggfetch `Proxy` does not accept `ssl_context` because TLS is handled by the Rust engine. This is classified as `intentional` (security boundary).
 

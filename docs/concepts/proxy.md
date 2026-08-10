@@ -105,9 +105,8 @@ eggfetch does **not** read `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, or `NO_PROX
 
 ## Limitations
 
-- No SOCKS5 support (only HTTP proxies)
 - Limited connection reuse through proxies (each request opens a fresh connection)
-- Proxy URL credentials are rejected; use `.auth()` instead
+- Proxy URL credentials are rejected for HTTP proxies; use `.auth()` instead (SOCKS5 proxies accept inline credentials in the URL)
 
 ## CLI
 

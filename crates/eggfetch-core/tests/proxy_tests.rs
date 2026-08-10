@@ -1632,3 +1632,614 @@ async fn test_total_timeout_envelope_across_proxy_phases() {
         "total timeout should fire within 150ms + margin, took {elapsed:?}"
     );
 }
+
+// ---------------------------------------------------------------------------
+// SOCKS5 proxy test fixture and integration tests
+// ---------------------------------------------------------------------------
+
+/// Configuration for a local SOCKS5 test server.
+#[derive(Default)]
+struct Socks5Config {
+    /// If set, require username/password authentication.
+    auth: Option<(String, String)>,
+    /// If true, reject all CONNECT requests.
+    reject_all: bool,
+    /// If true, send malformed responses.
+    malformed: bool,
+}
+
+/// A minimal local SOCKS5 server for testing.
+///
+/// Implements enough of RFC 1928 to exercise the eggfetch SOCKS5 client:
+/// method negotiation, optional username/password auth, CONNECT command,
+/// and reply forwarding to a local origin.
+struct Socks5Server {
+    port: u16,
+    shutdown: watch::Sender<bool>,
+    /// Records the last CONNECT destination (host, port, atyp).
+    last_connect: Arc<std::sync::Mutex<Option<(String, u16, u8)>>>,
+}
+
+impl Socks5Server {
+    async fn start(config: Socks5Config) -> Self {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let (shutdown_tx, mut shutdown_rx) = watch::channel(false);
+        let last_connect = Arc::new(std::sync::Mutex::new(None));
+        let last_connect_clone = last_connect.clone();
+
+        tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    result = listener.accept() => {
+                        match result {
+                            Ok((stream, _)) => {
+                                let auth = config.auth.clone();
+                                let reject = config.reject_all;
+                                let malformed = config.malformed;
+                                let lc = last_connect_clone.clone();
+                                tokio::spawn(async move {
+                                    if let Err(e) = handle_socks5_connection(
+                                        stream, auth, reject, malformed, lc,
+                                    ).await {
+                                        eprintln!("SOCKS5 connection error: {e}");
+                                    }
+                                });
+                            }
+                            Err(e) => {
+                                eprintln!("accept error: {e}");
+                                break;
+                            }
+                        }
+                    }
+                    _ = shutdown_rx.changed() => {
+                        break;
+                    }
+                }
+            }
+        });
+
+        Self {
+            port,
+            shutdown: shutdown_tx,
+            last_connect,
+        }
+    }
+
+    fn url(&self) -> String {
+        format!("socks5://127.0.0.1:{}", self.port)
+    }
+
+    fn url_with_auth(&self, user: &str, pass: &str) -> String {
+        format!("socks5://{user}:{pass}@127.0.0.1:{}", self.port)
+    }
+
+    fn url_remote_dns(&self) -> String {
+        format!("socks5h://127.0.0.1:{}", self.port)
+    }
+
+    fn last_connect(&self) -> Option<(String, u16, u8)> {
+        self.last_connect.lock().unwrap().clone()
+    }
+
+    fn shutdown(&self) {
+        let _ = self.shutdown.send(true);
+    }
+}
+
+/// Handle a single SOCKS5 client connection.
+#[allow(clippy::too_many_lines)]
+async fn handle_socks5_connection(
+    mut stream: TcpStream,
+    required_auth: Option<(String, String)>,
+    reject_all: bool,
+    malformed: bool,
+    last_connect: Arc<std::sync::Mutex<Option<(String, u16, u8)>>>,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    // Phase 1: Read greeting.
+    let mut version = [0u8; 1];
+    stream.read_exact(&mut version).await?;
+    if version[0] != 0x05 {
+        return Err("invalid SOCKS5 version".into());
+    }
+
+    let mut nmethods = [0u8; 1];
+    stream.read_exact(&mut nmethods).await?;
+    let mut methods = vec![0u8; nmethods[0] as usize];
+    stream.read_exact(&mut methods).await?;
+
+    // Phase 2: Method selection.
+    if required_auth.is_some() {
+        // Require username/password auth.
+        stream.write_all(&[0x05, 0x02]).await?;
+    } else {
+        // No auth required.
+        stream.write_all(&[0x05, 0x00]).await?;
+    }
+
+    // Phase 3: Username/password subnegotiation (if required).
+    if let Some((ref required_user, ref required_pass)) = required_auth {
+        let mut sub_version = [0u8; 1];
+        stream.read_exact(&mut sub_version).await?;
+        if sub_version[0] != 0x01 {
+            return Err("invalid auth subnegotiation version".into());
+        }
+
+        let mut ulen = [0u8; 1];
+        stream.read_exact(&mut ulen).await?;
+        let mut username = vec![0u8; ulen[0] as usize];
+        stream.read_exact(&mut username).await?;
+
+        let mut plen = [0u8; 1];
+        stream.read_exact(&mut plen).await?;
+        let mut password = vec![0u8; plen[0] as usize];
+        stream.read_exact(&mut password).await?;
+
+        let username = String::from_utf8_lossy(&username);
+        let password = String::from_utf8_lossy(&password);
+
+        if *username == *required_user && *password == *required_pass {
+            stream.write_all(&[0x01, 0x00]).await?; // success
+        } else {
+            stream.write_all(&[0x01, 0x01]).await?; // failure
+            return Ok(());
+        }
+    }
+
+    // Phase 4: Read CONNECT request.
+    let mut req_header = [0u8; 4];
+    stream.read_exact(&mut req_header).await?;
+
+    if req_header[0] != 0x05 {
+        return Err("invalid SOCKS5 request version".into());
+    }
+    if req_header[1] != 0x01 {
+        // Only CONNECT supported.
+        stream
+            .write_all(&[0x05, 0x07, 0x00, 0x01, 0, 0, 0, 0, 0, 0])
+            .await?;
+        return Ok(());
+    }
+
+    // Read destination address.
+    let (dest_host, dest_port, atyp) = match req_header[3] {
+        0x01 => {
+            // IPv4
+            let mut addr = [0u8; 4];
+            stream.read_exact(&mut addr).await?;
+            let mut port_buf = [0u8; 2];
+            stream.read_exact(&mut port_buf).await?;
+            let port = u16::from_be_bytes(port_buf);
+            let host = std::net::Ipv4Addr::from(addr).to_string();
+            (host, port, 0x01)
+        }
+        0x03 => {
+            // Domain
+            let mut dlen = [0u8; 1];
+            stream.read_exact(&mut dlen).await?;
+            let mut domain = vec![0u8; dlen[0] as usize];
+            stream.read_exact(&mut domain).await?;
+            let mut port_buf = [0u8; 2];
+            stream.read_exact(&mut port_buf).await?;
+            let port = u16::from_be_bytes(port_buf);
+            let host = String::from_utf8_lossy(&domain).into_owned();
+            (host, port, 0x03)
+        }
+        0x04 => {
+            // IPv6
+            let mut addr = [0u8; 16];
+            stream.read_exact(&mut addr).await?;
+            let mut port_buf = [0u8; 2];
+            stream.read_exact(&mut port_buf).await?;
+            let port = u16::from_be_bytes(port_buf);
+            let host = std::net::Ipv6Addr::from(addr).to_string();
+            (host, port, 0x04)
+        }
+        other => {
+            return Err(format!("unsupported address type: {other}").into());
+        }
+    };
+
+    // Record the CONNECT destination.
+    {
+        let mut lc = last_connect.lock().unwrap();
+        *lc = Some((dest_host.clone(), dest_port, atyp));
+    }
+
+    // Send reply.
+    if malformed {
+        // Send a malformed reply.
+        stream.write_all(&[0x05, 0xFF]).await?;
+        return Ok(());
+    }
+
+    if reject_all {
+        // Send "connection refused" reply.
+        stream
+            .write_all(&[0x05, 0x05, 0x00, 0x01, 0, 0, 0, 0, 0, 0])
+            .await?;
+        return Ok(());
+    }
+
+    // Connect to the actual destination.
+    let dest_addr = format!("{dest_host}:{dest_port}");
+    match TcpStream::connect(&dest_addr).await {
+        Ok(dest_stream) => {
+            // Send success reply.
+            stream
+                .write_all(&[0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0])
+                .await?;
+
+            // Bidirectional copy.
+            let (mut client_read, mut client_write) = stream.into_split();
+            let (mut dest_read, mut dest_write) = dest_stream.into_split();
+
+            let client_to_dest = async {
+                let _ = tokio::io::copy(&mut client_read, &mut dest_write).await;
+                let _ = dest_write.shutdown().await;
+            };
+            let dest_to_client = async {
+                let _ = tokio::io::copy(&mut dest_read, &mut client_write).await;
+                let _ = client_write.shutdown().await;
+            };
+
+            tokio::select! {
+                () = client_to_dest => {}
+                () = dest_to_client => {}
+            }
+        }
+        Err(e) => {
+            // Send "connection refused" reply.
+            let _ = e; // suppress unused warning
+            stream
+                .write_all(&[0x05, 0x05, 0x00, 0x01, 0, 0, 0, 0, 0, 0])
+                .await?;
+        }
+    }
+
+    Ok(())
+}
+
+/// A minimal local HTTP server for testing SOCKS proxy connectivity.
+struct LocalHttpServer {
+    port: u16,
+    shutdown: watch::Sender<bool>,
+}
+
+impl LocalHttpServer {
+    async fn start() -> Self {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let (shutdown_tx, mut shutdown_rx) = watch::channel(false);
+
+        tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    result = listener.accept() => {
+                        match result {
+                            Ok((stream, _)) => {
+                                tokio::spawn(async move {
+                                    if let Err(e) = handle_http_request(stream).await {
+                                        eprintln!("HTTP server error: {e}");
+                                    }
+                                });
+                            }
+                            Err(e) => {
+                                eprintln!("accept error: {e}");
+                                break;
+                            }
+                        }
+                    }
+                    _ = shutdown_rx.changed() => {
+                        break;
+                    }
+                }
+            }
+        });
+
+        Self {
+            port,
+            shutdown: shutdown_tx,
+        }
+    }
+
+    fn url(&self) -> String {
+        format!("http://127.0.0.1:{}", self.port)
+    }
+
+    fn shutdown(&self) {
+        let _ = self.shutdown.send(true);
+    }
+}
+
+async fn handle_http_request(
+    mut stream: TcpStream,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    use tokio::io::AsyncWriteExt;
+
+    let mut buf_reader = BufReader::new(&mut stream);
+    let mut request_line = String::new();
+    buf_reader.read_line(&mut request_line).await?;
+
+    // Read headers until empty line.
+    loop {
+        let mut line = String::new();
+        buf_reader.read_line(&mut line).await?;
+        if line.trim().is_empty() {
+            break;
+        }
+    }
+
+    // Send a simple response.
+    let response = "HTTP/1.1 200 OK\r\nContent-Length: 13\r\n\r\nHello, World!";
+    let w = buf_reader.into_inner();
+    w.write_all(response.as_bytes()).await?;
+
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// SOCKS5 integration tests
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn test_socks5_http_through_proxy() {
+    let http_server = LocalHttpServer::start().await;
+    let socks_server = Socks5Server::start(Socks5Config::default()).await;
+
+    let client = Client::builder()
+        .proxy(Proxy::all(&socks_server.url()).unwrap())
+        .build();
+
+    // Request goes to the HTTP server through the SOCKS proxy.
+    // The SOCKS proxy connects to the HTTP server and forwards traffic.
+    let result = client
+        .get(&format!("http://127.0.0.1:{}", http_server.port))
+        .unwrap()
+        .send()
+        .await;
+
+    assert!(result.is_ok(), "SOCKS5 HTTP request failed: {result:?}");
+    let mut response = result.unwrap();
+    assert_eq!(response.status(), 200);
+
+    let body = response.text().await.unwrap();
+    assert_eq!(body, "Hello, World!");
+
+    // Verify the CONNECT destination was recorded.
+    let connect = socks_server.last_connect();
+    assert!(
+        connect.is_some(),
+        "SOCKS server should have recorded a CONNECT"
+    );
+    let (host, _port, _atyp) = connect.unwrap();
+    assert_eq!(host, "127.0.0.1");
+
+    socks_server.shutdown();
+    http_server.shutdown();
+}
+
+#[tokio::test]
+async fn test_socks5_no_auth() {
+    let http_server = LocalHttpServer::start().await;
+    let socks_server = Socks5Server::start(Socks5Config::default()).await;
+
+    let client = Client::builder()
+        .proxy(Proxy::all(&socks_server.url()).unwrap())
+        .build();
+
+    let result = client
+        .get(&format!("http://127.0.0.1:{}", http_server.port))
+        .unwrap()
+        .send()
+        .await;
+
+    assert!(result.is_ok(), "SOCKS5 no-auth request failed: {result:?}");
+    assert_eq!(result.unwrap().status(), 200);
+
+    socks_server.shutdown();
+    http_server.shutdown();
+}
+
+#[tokio::test]
+async fn test_socks5_with_auth() {
+    let http_server = LocalHttpServer::start().await;
+    let socks_server = Socks5Server::start(Socks5Config {
+        auth: Some(("testuser".into(), "testpass".into())),
+        ..Default::default()
+    })
+    .await;
+
+    let client = Client::builder()
+        .proxy(Proxy::all(&socks_server.url_with_auth("testuser", "testpass")).unwrap())
+        .build();
+
+    let result = client
+        .get(&format!("http://127.0.0.1:{}", http_server.port))
+        .unwrap()
+        .send()
+        .await;
+
+    assert!(result.is_ok(), "SOCKS5 auth request failed: {result:?}");
+    assert_eq!(result.unwrap().status(), 200);
+
+    socks_server.shutdown();
+    http_server.shutdown();
+}
+
+#[tokio::test]
+async fn test_socks5_auth_rejection() {
+    let http_server = LocalHttpServer::start().await;
+    let socks_server = Socks5Server::start(Socks5Config {
+        auth: Some(("testuser".into(), "testpass".into())),
+        ..Default::default()
+    })
+    .await;
+
+    // Wrong credentials.
+    let client = Client::builder()
+        .proxy(Proxy::all(&socks_server.url_with_auth("wrong", "creds")).unwrap())
+        .build();
+
+    let result = client
+        .get(&format!("http://127.0.0.1:{}", http_server.port))
+        .unwrap()
+        .send()
+        .await;
+
+    assert!(result.is_err(), "SOCKS5 auth rejection should fail");
+
+    socks_server.shutdown();
+    http_server.shutdown();
+}
+
+#[tokio::test]
+async fn test_socks5_connect_refusal() {
+    let http_server = LocalHttpServer::start().await;
+    let socks_server = Socks5Server::start(Socks5Config {
+        reject_all: true,
+        ..Default::default()
+    })
+    .await;
+
+    let client = Client::builder()
+        .proxy(Proxy::all(&socks_server.url()).unwrap())
+        .build();
+
+    let result = client
+        .get(&format!("http://127.0.0.1:{}", http_server.port))
+        .unwrap()
+        .send()
+        .await;
+
+    assert!(result.is_err(), "SOCKS5 connect refusal should fail");
+
+    socks_server.shutdown();
+    http_server.shutdown();
+}
+
+#[tokio::test]
+async fn test_socks5_malformed_reply() {
+    let http_server = LocalHttpServer::start().await;
+    let socks_server = Socks5Server::start(Socks5Config {
+        malformed: true,
+        ..Default::default()
+    })
+    .await;
+
+    let client = Client::builder()
+        .proxy(Proxy::all(&socks_server.url()).unwrap())
+        .build();
+
+    let result = client
+        .get(&format!("http://127.0.0.1:{}", http_server.port))
+        .unwrap()
+        .send()
+        .await;
+
+    assert!(result.is_err(), "SOCKS5 malformed reply should fail");
+
+    socks_server.shutdown();
+    http_server.shutdown();
+}
+
+#[tokio::test]
+async fn test_socks5_remote_dns() {
+    let http_server = LocalHttpServer::start().await;
+    let socks_server = Socks5Server::start(Socks5Config::default()).await;
+
+    let client = Client::builder()
+        .proxy(Proxy::all(&socks_server.url_remote_dns()).unwrap())
+        .build();
+
+    let result = client
+        .get(&format!("http://127.0.0.1:{}", http_server.port))
+        .unwrap()
+        .send()
+        .await;
+
+    assert!(
+        result.is_ok(),
+        "SOCKS5h remote DNS request failed: {result:?}"
+    );
+    assert_eq!(result.unwrap().status(), 200);
+
+    // Verify the CONNECT used domain name (ATYP_DOMAIN = 0x03).
+    let connect = socks_server.last_connect();
+    assert!(connect.is_some());
+    let (_host, _port, atyp) = connect.unwrap();
+    assert_eq!(atyp, 0x03, "socks5h should use domain name (ATYP_DOMAIN)");
+
+    socks_server.shutdown();
+    http_server.shutdown();
+}
+
+#[tokio::test]
+async fn test_socks5_connect_timeout() {
+    // Use an unreachable SOCKS proxy to trigger a connect timeout.
+    let client = Client::builder()
+        .proxy(Proxy::all("socks5://192.0.2.1:1080").unwrap())
+        .timeout(Timeout {
+            total: Some(Duration::from_millis(200)),
+            ..Default::default()
+        })
+        .build();
+
+    let start = std::time::Instant::now();
+    let result = client.get("http://example.com").unwrap().send().await;
+    let elapsed = start.elapsed();
+
+    assert!(result.is_err(), "SOCKS5 timeout should fail");
+    assert!(
+        elapsed < Duration::from_secs(2),
+        "timeout should fire quickly, took {elapsed:?}"
+    );
+
+    // The error should be a timeout or connect error.
+    let err = result.unwrap_err();
+    assert!(
+        matches!(
+            err,
+            Error::Timeout {
+                phase: TimeoutPhase::ProxyConnect | TimeoutPhase::Total,
+                ..
+            } | Error::ProxyConnect(_)
+        ),
+        "expected timeout or proxy connect error, got: {err}"
+    );
+}
+
+#[tokio::test]
+async fn test_socks5_no_proxy_bypass() {
+    let http_server = LocalHttpServer::start().await;
+    let socks_server = Socks5Server::start(Socks5Config::default()).await;
+
+    use eggfetch_core::NoProxy;
+
+    let no_proxy = NoProxy::parse("127.0.0.1").unwrap();
+    let proxy = Proxy::all(&socks_server.url()).unwrap().no_proxy(no_proxy);
+
+    let client = Client::builder().proxy(proxy).build();
+
+    // This should bypass the SOCKS proxy and go direct.
+    let result = client
+        .get(&format!("http://127.0.0.1:{}", http_server.port))
+        .unwrap()
+        .send()
+        .await;
+
+    assert!(result.is_ok(), "NO_PROXY bypass request failed: {result:?}");
+    assert_eq!(result.unwrap().status(), 200);
+
+    // Verify no CONNECT was made through the SOCKS proxy.
+    let connect = socks_server.last_connect();
+    assert!(
+        connect.is_none(),
+        "SOCKS proxy should not have been used with NO_PROXY bypass"
+    );
+
+    socks_server.shutdown();
+    http_server.shutdown();
+}

@@ -118,13 +118,14 @@ strings. This is a unconditional transitive dependency brought in by
 ### proxy
 
 **Status:** implemented.
-Enables HTTP proxy support in eggfetch-core. Provides HTTP proxying, HTTPS
-CONNECT tunneling, proxy authentication, per-request and per-client proxy
-configuration via `ClientBuilder::proxy()` and `RequestBuilder::proxy()`,
-and `NO_PROXY`-style bypass behavior. The Python crate exposes
-`Client(proxy=...)`, `AsyncClient(proxy=...)`, and per-request `proxy=`
-kwarg. The feature flag is required for proxy functionality; it pulls in
-tunnel and proxy-protocol dependencies.
+Enables HTTP proxy and SOCKS5 proxy support in eggfetch-core. Provides HTTP
+proxying, HTTPS CONNECT tunneling, SOCKS5 tunneling (socks5:// and socks5h://),
+proxy authentication, per-request and per-client proxy configuration via
+`ClientBuilder::proxy()` and `RequestBuilder::proxy()`, and `NO_PROXY`-style
+bypass behavior. The Python crate exposes `Client(proxy=...)`,
+`AsyncClient(proxy=...)`, and per-request `proxy=` kwarg. The feature flag is
+required for proxy functionality; it pulls in tunnel and proxy-protocol
+dependencies.
 
 ### tracing
 

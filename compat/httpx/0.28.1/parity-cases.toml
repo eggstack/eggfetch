@@ -432,11 +432,11 @@ difference-id = "TRIO-ANYIO-001"
 [[case]]
 id = "UNSUPPORTED-002"
 description = "SOCKS proxy support"
-sync = false
-async = false
-tests = []
-result = "intentional-difference"
-phase = "n/a"
+sync = true
+async = true
+tests = ["test_socks5_http_through_proxy", "test_socks5_no_auth", "test_socks5_with_auth"]
+result = "resolved"
+phase = "5"
 difference-id = "SOCKS-001"
 
 [[case]]

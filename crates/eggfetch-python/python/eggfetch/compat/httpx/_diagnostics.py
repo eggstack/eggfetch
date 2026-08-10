@@ -7,7 +7,6 @@ from eggfetch import __version__ as _IMPL_VERSION
 
 UNSUPPORTED_SURFACES: tuple[str, ...] = (
     "Trio/AnyIO backend (asyncio only, tokio-based)",
-    "SOCKS proxy transport",
     "Unix Domain Socket (UDS) transport",
     "local_address / socket_options transport parameters",
     "ssl_context transport parameter (TLS handled by Rust engine)",

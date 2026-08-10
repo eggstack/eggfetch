@@ -1,12 +1,14 @@
 //! Proxy subsystem for eggfetch.
 //!
-//! Provides HTTP proxy forwarding and HTTPS CONNECT tunneling with
-//! secure authentication handling. Proxy logic is feature-gated
-//! behind the `proxy` feature.
+//! Provides HTTP proxy forwarding, HTTPS CONNECT tunneling, and
+//! SOCKS5 proxy support with secure authentication handling.
+//! Proxy logic is feature-gated behind the `proxy` feature.
 //!
 //! # Supported schemes
 //!
 //! - `http://` — HTTP proxy (forward HTTP targets, CONNECT for HTTPS)
+//! - `socks5://` — SOCKS5 proxy with local DNS resolution
+//! - `socks5h://` — SOCKS5 proxy with remote DNS resolution
 //!
 //! # Environment policy
 //!
@@ -346,13 +348,30 @@ impl ProxyConfig {
     /// Returns the proxy port for pool keying.
     #[must_use]
     pub fn port(&self) -> u16 {
-        self.uri.port_or_known_default().unwrap_or(8080)
+        self.uri
+            .port_or_known_default()
+            .unwrap_or_else(|| match self.uri.scheme() {
+                "socks5" | "socks5h" => 1080,
+                _ => 80,
+            })
     }
 
     /// Returns the proxy scheme.
     #[must_use]
     pub fn scheme(&self) -> &str {
         self.uri.scheme()
+    }
+
+    /// Returns `true` if this is a SOCKS5 proxy.
+    #[must_use]
+    pub fn is_socks(&self) -> bool {
+        matches!(self.uri.scheme(), "socks5" | "socks5h")
+    }
+
+    /// Returns `true` if this is a SOCKS proxy with remote DNS resolution.
+    #[must_use]
+    pub fn socks_remote_dns(&self) -> bool {
+        self.uri.scheme() == "socks5h"
     }
 }
 
@@ -462,12 +481,42 @@ impl Proxy {
     }
 
     /// Build a resolved proxy configuration for a request.
-    #[must_use]
+    ///
+    /// For SOCKS proxies, inline URL credentials are extracted and used
+    /// when no explicit `.auth()` was set.
     pub(crate) fn config(&self) -> ProxyConfig {
-        ProxyConfig {
-            uri: self.uri.clone(),
-            auth: self.auth.clone(),
+        let auth = match self.auth {
+            Some(ref a) => Some(a.clone()),
+            None => {
+                // Extract SOCKS credentials from URL userinfo.
+                if self.is_socks_url() {
+                    let username = self.uri.username().to_owned();
+                    let password = self.uri.password().unwrap_or("").to_owned();
+                    if !username.is_empty() || !password.is_empty() {
+                        Some(ProxyAuth::Basic { username, password })
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            }
+        };
+
+        // Strip userinfo from the stored URI to avoid leaking credentials.
+        let mut uri = self.uri.clone();
+        if uri.username().is_empty() && uri.password().is_none() {
+            // No credentials to strip.
+        } else {
+            let _ = uri.set_username("");
+            let _ = uri.set_password(None);
         }
+
+        ProxyConfig { uri, auth }
+    }
+
+    fn is_socks_url(&self) -> bool {
+        matches!(self.uri.scheme(), "socks5" | "socks5h")
     }
 
     /// Returns the proxy URI.
@@ -507,11 +556,12 @@ impl fmt::Display for Proxy {
 /// Parse and validate a proxy URL.
 ///
 /// Requirements:
-/// - scheme must be `http`
+/// - scheme must be `http`, `socks5`, or `socks5h`
 /// - host must be present
-/// - no userinfo (credentials must be set via `.auth()`)
 /// - no fragment
 /// - no query string
+/// - for `http`: no userinfo (credentials must be set via `.auth()`)
+/// - for `socks5`/`socks5h`: userinfo is extracted as SOCKS credentials
 fn parse_proxy_url(url_str: &str) -> Result<url::Url> {
     let url = url::Url::parse(url_str).map_err(|e| {
         Error::InvalidProxyUrl(format!(
@@ -521,22 +571,27 @@ fn parse_proxy_url(url_str: &str) -> Result<url::Url> {
     })?;
 
     match url.scheme() {
-        "http" => {}
+        "http" => {
+            // HTTP proxies must not have inline credentials.
+            if !url.username().is_empty() || url.password().is_some() {
+                return Err(Error::InvalidProxyUrl(
+                    "proxy URL must not contain credentials; use .auth() instead".into(),
+                ));
+            }
+        }
+        "socks5" | "socks5h" => {
+            // SOCKS5 proxies accept inline credentials in the URL.
+            // Credentials are extracted during config resolution.
+        }
         other => {
             return Err(Error::InvalidProxyUrl(format!(
-                "unsupported proxy scheme '{other}'; only http is supported"
+                "unsupported proxy scheme '{other}'; supported: http, socks5, socks5h"
             )));
         }
     }
 
     if url.host_str().is_none() || url.host_str() == Some("") {
         return Err(Error::InvalidProxyUrl("proxy URL must have a host".into()));
-    }
-
-    if !url.username().is_empty() || url.password().is_some() {
-        return Err(Error::InvalidProxyUrl(
-            "proxy URL must not contain credentials; use .auth() instead".into(),
-        ));
     }
 
     if url.fragment().is_some() {
@@ -577,6 +632,72 @@ mod tests {
         let err = Proxy::all("https://proxy.example:8080").unwrap_err();
         assert_eq!(err.kind(), "invalid_proxy_url");
         assert!(err.to_string().contains("unsupported proxy scheme"));
+    }
+
+    #[test]
+    fn parse_proxy_url_accepts_socks5() {
+        let proxy = Proxy::all("socks5://proxy.example:1080").unwrap();
+        assert_eq!(proxy.uri().host_str(), Some("proxy.example"));
+        assert_eq!(proxy.uri().port(), Some(1080));
+        assert_eq!(proxy.uri().scheme(), "socks5");
+    }
+
+    #[test]
+    fn parse_proxy_url_accepts_socks5h() {
+        let proxy = Proxy::all("socks5h://proxy.example:1080").unwrap();
+        assert_eq!(proxy.uri().scheme(), "socks5h");
+    }
+
+    #[test]
+    fn parse_proxy_url_socks5_default_port() {
+        let proxy = Proxy::all("socks5://proxy.example").unwrap();
+        // The `url` crate doesn't know the default port for socks5,
+        // but ProxyConfig::port() handles it correctly.
+        let config = proxy.config();
+        assert_eq!(config.port(), 1080);
+    }
+
+    #[test]
+    fn parse_proxy_url_socks5_with_credentials() {
+        // SOCKS5 URLs with inline credentials are accepted.
+        let proxy = Proxy::all("socks5://user:pass@proxy.example:1080").unwrap();
+        let config = proxy.config();
+        assert!(config.auth().is_some());
+        if let Some(auth) = config.auth() {
+            let debug = format!("{auth:?}");
+            assert!(debug.contains("user"));
+            // The actual password value must not appear in debug output.
+            assert!(!debug.contains("pass@"), "password should be redacted");
+            assert!(debug.contains("<redacted>"));
+        }
+    }
+
+    #[test]
+    fn parse_proxy_url_socks5_no_userinfo() {
+        let proxy = Proxy::all("socks5://proxy.example:1080").unwrap();
+        let config = proxy.config();
+        assert!(config.auth().is_none());
+    }
+
+    #[test]
+    fn proxy_config_is_socks() {
+        let http_proxy = Proxy::all("http://proxy:8080").unwrap();
+        assert!(!http_proxy.config().is_socks());
+
+        let socks_proxy = Proxy::all("socks5://proxy:1080").unwrap();
+        assert!(socks_proxy.config().is_socks());
+
+        let socks5h_proxy = Proxy::all("socks5h://proxy:1080").unwrap();
+        assert!(socks5h_proxy.config().is_socks());
+    }
+
+    #[test]
+    fn proxy_config_socks_remote_dns() {
+        let socks5 = Proxy::all("socks5://proxy:1080").unwrap();
+        assert!(!socks5.config().socks_remote_dns());
+
+        let socks5h = Proxy::all("socks5h://proxy:1080").unwrap();
+        assert!(socks5h.config().socks_remote_dns());
     }
 
     #[test]
@@ -691,6 +812,13 @@ mod tests {
         let proxy = Proxy::all("http://proxy.example").unwrap();
         let config = proxy.config();
         assert_eq!(config.port(), 80);
+    }
+
+    #[test]
+    fn proxy_config_socks_default_port() {
+        let proxy = Proxy::all("socks5://proxy.example").unwrap();
+        let config = proxy.config();
+        assert_eq!(config.port(), 1080);
     }
 
     #[test]

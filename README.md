@@ -243,7 +243,6 @@ The facade is a **Stage C candidate**, bounded to the pinned HTTPX 0.28.1 asynci
 
 Key differences from HTTPX:
 - Trio/AnyIO not supported (asyncio only, tokio-based)
-- SOCKS proxy not supported
 - `ssl_context` transport parameter not supported (TLS handled by Rust engine)
 - Python 3.8/3.9 not supported (requires 3.10+)
 - Redirects with buffered retained bodies replay correctly; arbitrary one-shot body iterators are rejected before the next hop

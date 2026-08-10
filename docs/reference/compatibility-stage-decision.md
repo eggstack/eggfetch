@@ -53,7 +53,6 @@ Stage D (full supported drop-in) requires:
 1. **Trio/AnyIO Backend**: eggfetch uses asyncio only (tokio-based). Trio support is architecturally deferred.
 2. **Top-level httpx Distribution**: A separate distribution providing `import httpx` is not yet built.
 3. **Dependency Resolution**: A differently-named package cannot satisfy `httpx>=0.27` dependencies without a shim distribution.
-4. **SOCKS Proxy**: Not in HTTPX 0.28.1 public API; deferred.
 
 ## Allowed Differences
 

@@ -129,7 +129,6 @@ change before 1.0.
 
 - No Trio/AnyIO support (asyncio only).
 - No WSGI/ASGI in-process transports.
-- No SOCKS proxy support.
 - `connect` timeout is accepted but not independently enforced.
 - Encrypted private keys for mTLS produce a clear error at construction.
 - HTTP/3 is experimental; API surfaces may change.

@@ -33,7 +33,7 @@ private-excluded = ["_transports", "_content", "_models", "_decoders", "_excepti
 http2 = { httpx = "httpx[http2]", eggfetch = "http2=True" }
 brotli = { httpx = "httpx[brotli]", eggfetch = "compression-brotli feature" }
 zstd = { httpx = "httpx[zstd]", eggfetch = "compression-zstd feature" }
-socks = { httpx = "httpx[socks]", eggfetch = "not-supported (Phase 5)" }
+socks = { httpx = "httpx[socks]", eggfetch = "native Rust SOCKS5 (socks5/socks5h)" }
 
 [compatibility-categories]
 required-now = "Must match for current stage"

@@ -37,5 +37,8 @@ pub(crate) mod connect;
 #[cfg(feature = "proxy")]
 pub(crate) mod proxy;
 
+#[cfg(feature = "proxy")]
+pub(crate) mod socks;
+
 #[cfg(feature = "http3")]
 pub(crate) mod http3;
