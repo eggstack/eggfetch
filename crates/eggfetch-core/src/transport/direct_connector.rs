@@ -25,9 +25,10 @@
 //! - `SOL_SOCKET (1)` + `SO_RCVBUF (8)` → `set_recv_buffer_size`
 //! - `SOL_SOCKET (1)` + `SO_SNDBUF (7)` → `set_send_buffer_size`
 //!
-//! Unrecognized option triples are silently ignored to maintain API
-//! compatibility with HTTPX while avoiding unsafe code. Callers that need
-//! unsupported socket options should use a custom transport.
+//! Unrecognized option triples produce an error. This satisfies the plan
+//! requirement that unsupported options are never silently ignored. Callers
+//! that need platform-specific socket options beyond the recognized set
+//! should use a custom transport.
 
 use std::future::Future;
 use std::net::{SocketAddr, ToSocketAddrs};
@@ -95,39 +96,61 @@ pub struct DirectConnectorConfig {
     pub(crate) socket_options: Vec<SocketOption>,
 }
 
+impl DirectConnectorConfig {}
+
 /// Apply a socket option to a `tokio::net::TcpSocket`.
 ///
 /// Recognized options are applied via the socket's typed setters.
-/// Unrecognized options are silently ignored (maintaining HTTPX API
-/// compatibility without requiring unsafe code).
-fn apply_socket_option(socket: &tokio::net::TcpSocket, opt: &SocketOption) {
+/// Unrecognized options return an error (the plan requires that
+/// unsupported options are never silently ignored).
+fn apply_socket_option(
+    socket: &tokio::net::TcpSocket,
+    opt: &SocketOption,
+) -> std::result::Result<(), Error> {
     if opt.value.len() < 4 {
-        return;
+        return Err(Error::Connect(format!(
+            "socket option value too short: expected at least 4 bytes, got {}",
+            opt.value.len()
+        )));
     }
     match (opt.level, opt.option) {
         // TCP_NODELAY: value is a 4-byte int (non-zero = enabled).
         (sockopt_levels::IPPROTO_TCP, sockopt_names::TCP_NODELAY) => {
             let val = i32::from_ne_bytes([opt.value[0], opt.value[1], opt.value[2], opt.value[3]]);
-            let _ = socket.set_nodelay(val != 0);
+            socket
+                .set_nodelay(val != 0)
+                .map_err(|e| Error::Connect(format!("failed to set TCP_NODELAY: {e}")))?;
         }
         // SO_KEEPALIVE: value is a 4-byte int (non-zero = enabled).
         (sockopt_levels::SOL_SOCKET, sockopt_names::SO_KEEPALIVE) => {
             let val = i32::from_ne_bytes([opt.value[0], opt.value[1], opt.value[2], opt.value[3]]);
-            let _ = socket.set_keepalive(val != 0);
+            socket
+                .set_keepalive(val != 0)
+                .map_err(|e| Error::Connect(format!("failed to set SO_KEEPALIVE: {e}")))?;
         }
         // SO_RCVBUF: value is a 4-byte int (buffer size in bytes).
         (sockopt_levels::SOL_SOCKET, sockopt_names::SO_RCVBUF) => {
             let val = u32::from_ne_bytes([opt.value[0], opt.value[1], opt.value[2], opt.value[3]]);
-            let _ = socket.set_recv_buffer_size(val);
+            socket
+                .set_recv_buffer_size(val)
+                .map_err(|e| Error::Connect(format!("failed to set SO_RCVBUF: {e}")))?;
         }
         // SO_SNDBUF: value is a 4-byte int (buffer size in bytes).
         (sockopt_levels::SOL_SOCKET, sockopt_names::SO_SNDBUF) => {
             let val = u32::from_ne_bytes([opt.value[0], opt.value[1], opt.value[2], opt.value[3]]);
-            let _ = socket.set_send_buffer_size(val);
+            socket
+                .set_send_buffer_size(val)
+                .map_err(|e| Error::Connect(format!("failed to set SO_SNDBUF: {e}")))?;
         }
-        // Unrecognized: silently ignore for API compatibility.
-        _ => {}
+        // Unrecognized: return error (plan Track 2.4: never silently ignore).
+        _ => {
+            return Err(Error::Connect(format!(
+                "unsupported socket option: level={}, option={}",
+                opt.level, opt.option
+            )));
+        }
     }
+    Ok(())
 }
 
 /// A connected stream that can be either a raw TCP stream or a TLS stream.
@@ -276,7 +299,8 @@ impl Service<Uri> for DirectConnector {
 
             // Apply socket options.
             for opt in &config.socket_options {
-                apply_socket_option(&socket, opt);
+                apply_socket_option(&socket, opt)
+                    .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { e.into() })?;
             }
 
             // Bind to local address if configured.
@@ -368,7 +392,7 @@ mod tests {
             option: sockopt_names::TCP_NODELAY,
             value: 1i32.to_ne_bytes().to_vec(),
         };
-        apply_socket_option(&socket, &opt);
+        apply_socket_option(&socket, &opt).unwrap();
     }
 
     #[test]
@@ -379,18 +403,32 @@ mod tests {
             option: sockopt_names::SO_KEEPALIVE,
             value: 1i32.to_ne_bytes().to_vec(),
         };
-        apply_socket_option(&socket, &opt);
+        apply_socket_option(&socket, &opt).unwrap();
     }
 
     #[test]
-    fn apply_socket_option_unrecognized_ignored() {
+    fn apply_socket_option_unrecognized_returns_error() {
         let socket = tokio::net::TcpSocket::new_v4().unwrap();
         let opt = SocketOption {
             level: 999,
             option: 999,
             value: vec![0, 1, 2, 3],
         };
-        apply_socket_option(&socket, &opt);
-        // Should not panic.
+        let err = apply_socket_option(&socket, &opt).unwrap_err();
+        assert_eq!(err.kind(), "connect");
+        assert!(err.to_string().contains("unsupported socket option"));
+    }
+
+    #[test]
+    fn apply_socket_option_short_value_returns_error() {
+        let socket = tokio::net::TcpSocket::new_v4().unwrap();
+        let opt = SocketOption {
+            level: sockopt_levels::IPPROTO_TCP,
+            option: sockopt_names::TCP_NODELAY,
+            value: vec![1],
+        };
+        let err = apply_socket_option(&socket, &opt).unwrap_err();
+        assert_eq!(err.kind(), "connect");
+        assert!(err.to_string().contains("too short"));
     }
 }

@@ -529,7 +529,8 @@ impl ClientBuilder {
     ///
     /// Options are applied to the socket before the connect operation.
     /// Recognized options are applied via `tokio::net::TcpSocket` setters;
-    /// unrecognized options are silently ignored.
+    /// unrecognized options produce a connection error (never silently
+    /// ignored, per the plan's Track 2.4 requirement).
     #[must_use]
     pub fn socket_options(
         mut self,

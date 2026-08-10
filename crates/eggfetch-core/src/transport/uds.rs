@@ -11,6 +11,14 @@
 //! response is parsed back into an eggfetch `Response`. This keeps the
 //! implementation narrow: a single-purpose socket handler rather than a
 //! generalized connector framework.
+//!
+//! # HTTPS over UDS
+//!
+//! This transport only supports plain HTTP over Unix domain sockets.
+//! HTTPS over UDS is not supported (matching httpx 0.28.1 behavior,
+//! which also does not support TLS over UDS). Attempts to use `https://`
+//! URLs over UDS will produce a protocol error. See Track 3.3 in the
+//! plan for the rationale.
 
 use bytes::{Bytes, BytesMut};
 
@@ -49,6 +57,13 @@ impl UdsHandler {
         body: RequestBody,
         version: http::Version,
     ) -> Result<Response> {
+        // Reject HTTPS over UDS — not supported (matches httpx 0.28.1).
+        if url.scheme() == "https" {
+            return Err(Error::Unsupported(
+                "HTTPS over Unix domain sockets is not supported".into(),
+            ));
+        }
+
         // Buffer the request body.
         let body_bytes = body.into_bytes().await?;
 

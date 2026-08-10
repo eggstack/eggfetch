@@ -727,9 +727,30 @@ pub(crate) async fn send_single_request(
 
     // Route through UDS handler if configured.
     if let Some(ref uds_handler) = inner.uds_handler {
-        let response = uds_handler
-            .send_request(&method, &url, &headers, body, version)
-            .await?;
+        let response = match remaining_total {
+            Some(dur) => {
+                match tokio::time::timeout(
+                    dur,
+                    uds_handler.send_request(&method, &url, &headers, body, version),
+                )
+                .await
+                {
+                    Ok(Ok(resp)) => resp,
+                    Ok(Err(e)) => return Err(e),
+                    Err(_) => {
+                        return Err(Error::Timeout {
+                            phase: TimeoutPhase::Total,
+                            elapsed: dur,
+                        });
+                    }
+                }
+            }
+            None => {
+                uds_handler
+                    .send_request(&method, &url, &headers, body, version)
+                    .await?
+            }
+        };
         let mut response = response;
         apply_read_timeout_and_lease(&mut response, guard, timeout.read);
         return Ok(response);
