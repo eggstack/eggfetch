@@ -5,9 +5,11 @@ version = "1"
 created = "2026-07-21"
 rebaselined = "2026-08-07"
 rebaseline-sha = "f9eb1a455907d43210886b7b047d18bde8716652"
+qualified = "2026-08-10"
+qualification-sha = "40beeec09f3e88db8901f39388da665c47ab84f6"
 reference = "httpx==0.28.1"
 stage = "stage-c-candidate"
-status = "candidate"
+status = "qualified"
 
 [reference]
 distribution = "httpx"

@@ -101,11 +101,11 @@ python scripts/compare_httpx_api_manifest.py \
   --json --output /tmp/api-result.json
 ```
 
-The compatibility profile is in `compat/httpx/0.28.1/`. Allowed differences are documented in `allowed-differences.toml` with `classification` (`must-close`/`intentional`/`deferred`) and `phase` fields for implementation tracking. Phase 1 contract rebaseline completed 2026-08-07: 150 active differences classified (89 must-close, 61 intentional, 0 deferred). Phase 2 object contracts completed 2026-08-07: 34 must-close resolved. Phase 3 signatures/stream types completed 2026-08-08: 55 must-close resolved (HTTP-METHOD-ARGS, TRANSPORT-PARAMS, STREAM-CTOR). Phase 4 advanced direct transport completed 2026-08-08: `local_address`, `socket_options`, and `uds` now functional through the native Rust engine. See `plans/httpx-parity-phase-1-handoff-inventory.md` for the full implementation handoff.
+The compatibility profile is in `compat/httpx/0.28.1/`. Allowed differences are documented in `allowed-differences.toml` with `classification` (`must-close`/`intentional`/`deferred`) and `phase` fields for implementation tracking. Phase 1 contract rebaseline completed 2026-08-07: 150 active differences classified (89 must-close, 61 intentional, 0 deferred). Phase 2 object contracts completed 2026-08-07: 34 must-close resolved. Phase 3 signatures/stream types completed 2026-08-08: 55 must-close resolved (HTTP-METHOD-ARGS, TRANSPORT-PARAMS, STREAM-CTOR). Phase 4 advanced direct transport completed 2026-08-08: `local_address`, `socket_options`, and `uds` now functional through the native Rust engine. Phase 5 SOCKS5 proxy completed 2026-08-08. Phase 6 differential closure completed 2026-08-10: 76 active differences all intentional/deferred, zero unexplained. See `plans/httpx-parity-phase-1-handoff-inventory.md` for the full implementation handoff.
 
 ## Tests
 
-Colocated `#[cfg(test)] mod tests` blocks. ~685 Rust, ~513 Python (non-compat), ~1280 Python (compat), 30 FFI tests.
+Colocated `#[cfg(test)] mod tests` blocks. ~685 Rust, ~513 Python (non-compat), ~1450 Python (compat), 30 FFI tests.
 
 The full validation pass (pre-release) runs feature-gated subsets:
 

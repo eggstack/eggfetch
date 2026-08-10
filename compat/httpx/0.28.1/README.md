@@ -45,4 +45,4 @@ python scripts/compare_httpx_api_manifest.py \
 
 ## Status
 
-This profile targets HTTPX 0.28.1. The compatibility stage is **Stage C candidate**. The corrective closure pass applies typed difference records, lossless merge semantics, native lifecycle proof fixtures, and behavioral downstream fixtures.
+This profile targets HTTPX 0.28.1. The compatibility stage is **Stage C candidate** — high-fidelity HTTPX 0.28.1 compatibility for the documented Python ≥3.10 asyncio-supported surface, including the qualified low-level transport features documented here. Phase 6 qualification SHA: `40beeec09f3e88db8901f39388da665c47ab84f6`.

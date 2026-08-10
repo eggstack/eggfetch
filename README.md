@@ -239,17 +239,20 @@ See [`docs/cli/guide.md`](docs/cli/guide.md) for the full CLI reference.
 
 eggfetch provides an HTTPX 0.28.1-compatible asyncio facade via `eggfetch.compat.httpx`. The compatibility profile is pinned in `compat/httpx/0.28.1/` with machine-readable API manifests, allowed-difference tracking, and a parity case registry.
 
-The facade is a **Stage C candidate**, bounded to the pinned HTTPX 0.28.1 asyncio-supported surface. Its corrective parity kernel is required in routine validation; full HTTPX compatibility and the API oracle remain extended validation gates. This is not an unrestricted replacement for every HTTPX transport or concurrency backend.
+The facade is a **Stage C candidate** — high-fidelity HTTPX 0.28.1 compatibility for the documented Python ≥3.10 asyncio-supported surface, including the qualified low-level transport features documented here. It does not claim unrestricted HTTPX replacement for every transport or concurrency backend.
 
 Key differences from HTTPX:
 - Trio/AnyIO not supported (asyncio only, tokio-based)
-- `ssl_context` transport parameter not supported (TLS handled by Rust engine)
 - Python 3.8/3.9 not supported (requires 3.10+)
+- `ssl_context` transport parameter not supported (TLS handled by Rust engine)
+- `ALL_PROXY` and lowercase proxy env vars not supported
 - Redirects with buffered retained bodies replay correctly; arbitrary one-shot body iterators are rejected before the next hop
 - Request-local cookies and explicit Cookie headers are preserved within the facade jar model; native cookie kwargs are not used
 - Response streaming is asyncio-compatible and supports incremental text decoding and chunk-size control
 - Compatibility raw iteration defaults to `chunk_size=None`, marks live streams consumed before the first source read, counts consumed source bytes before chunk adaptation, and closes automatically only on normal exhaustion; close a partially consumed response explicitly.
-- Native compressed-response raw parity is implemented through a core-owned one-shot pre-decompression boundary: a streaming response selects either exact encoded raw bytes or the existing decoded path on first body consumption. The compatibility facade remains a bounded Stage C candidate and does not claim unrestricted HTTPX replacement. Core's existing decoded-header policy still removes `Content-Encoding` and `Content-Length` when automatic decompression is enabled; the compatibility facade restores only the original wire values for those two headers from a narrow read-only snapshot.
+- Native compressed-response raw parity is implemented through a core-owned one-shot pre-decompression boundary: a streaming response selects either exact encoded raw bytes or the existing decoded path on first body consumption. Core's existing decoded-header policy still removes `Content-Encoding` and `Content-Length` when automatic decompression is enabled; the compatibility facade restores only the original wire values for those two headers from a narrow read-only snapshot.
+
+Phase 4 added direct transport features: UDS (Unix domain sockets), `local_address` binding, and `socket_options` — all with end-to-end native proof. Phase 5 added SOCKS5 proxy support with HTTP/HTTPS through SOCKS5, username/password authentication, local/remote DNS resolution, and NO_PROXY bypass.
 
 Remaining differences are documented in `compat/httpx/0.28.1/allowed-differences.toml`; the compatibility claim is limited to the pinned HTTPX 0.28.1 profile and the supported asyncio surface.
 

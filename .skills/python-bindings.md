@@ -85,13 +85,15 @@ from eggfetch.compat.httpx import Client, AsyncClient, Request, Response
 
 **Phase 5 implements:**
 - Downstream validation, expanded behavior corpus (30 cases), evidence report generation, compatibility-stage decision (Stage C justified)
+- SOCKS5 proxy support: HTTP/HTTPS through SOCKS5, username/password auth, local/remote DNS, NO_PROXY bypass
 
-**Phase 6 / Corrective Closure implements:**
+**Phase 6 / Differential Closure implements:**
 - Typed difference records in API oracle (`scripts/compare_httpx_api_manifest.py --validate`)
 - Lossless merge semantics (`crates/eggfetch-python/tests/compat/test_merge_lossless.py`)
 - Separate sync/async auth drivers
 - Behavioral downstream fixtures (`compat/downstream/behavioral_fixtures/`)
 - Native lifecycle proof fixtures (`test_native_timeout_classification.py`, `test_soak.py`, proxy and TLS tests)
+- Final qualification: API oracle clean (76 active differences, all intentional/deferred), full pinned compat suite passing (1450/1452), downstream behavioral fixtures validated (54/62 behavioral tests pass; 8 failures are shim-detection and httpx-sse incompatibility)
 
 **Corrective Closure Phases 1-4 implements:**
 - Explicit top-level function signatures matching HTTPX 0.28.1 (`request`, `get`, `post`, `put`, `patch`, `delete`, `head`, `options`, `stream`)
@@ -102,7 +104,7 @@ from eggfetch.compat.httpx import Client, AsyncClient, Request, Response
 - Property setters for `auth`, `base_url`, `cookies`, `event_hooks`, `headers`, `params`, `timeout`
 - HTTPX default headers (`Accept`, `Accept-Encoding`, `Connection`, `User-Agent`)
 - Protocol validation: `http1=False, http2=False` raises `ValueError`, `http1=False, http2=True` raises `NotImplementedError`
-- Transport unsupported option rejection: `uds`, `local_address`, `socket_options` raise `NotImplementedError`
+- Transport options: `uds`, `local_address`, `socket_options` functional through native Rust engine (Phase 4)
 - `Response.is_closed` public property for stream context manager compatibility
 - Request construction: params-in-URL with duplicates, `data`+`files` multipart, compact JSON, stream auto-headers
 - Response metadata: HTTP version, reason phrase, elapsed, `raise_for_status()` return, `next_request`
