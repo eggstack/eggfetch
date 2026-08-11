@@ -1662,3 +1662,23 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_config_objects.py"]
 non_expiring = true
+
+[[difference]]
+id = "TRANSPORT-SOCKET-OPTIONS-004"
+category = "stage-bounded"
+classification = "intentional"
+symbol = "HTTPTransport.socket_options"
+member = "socket_options"
+reference = "four-element tuples accepted by HTTPX 0.28.1 constructor"
+candidate = "four-element tuples rejected by compatibility-boundary validation"
+behavior-case = "socket-options-four-tuple"
+reference-behavior = "HTTPX forwards a four-element option to Python setsockopt, which raises TypeError at socket use"
+eggfetch-behavior = "eggfetch accepts safe three-element options and rejects four-element options before native dispatch"
+rationale = "The fourth element has no safe portable representation in the bounded Rust socket-option API; rejecting it early avoids an unusable constructor/use split and requires no unsafe socket escape hatch."
+compatibility-stage-impact = "stage-c"
+security-improvement = "true"
+migration-impact = "Callers must use the supported three-element (level, option, value) form."
+owner = "eggfetch-team"
+review-milestone = "corrective-closure"
+tests = ["test_httpx_reference_pinning.py", "test_protocol_and_unsupported_options.py"]
+non_expiring = true

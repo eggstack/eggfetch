@@ -12,6 +12,17 @@ from eggfetch.compat.httpx import Client, AsyncClient, URL
 from eggfetch.compat.httpx._mock import MockTransport, _build_response
 from eggfetch.compat.httpx._request import Request
 from eggfetch.compat.httpx._response import Response
+from .native_fixtures import local_http_server, local_proxy_server
+
+
+def _request_with_runtime(runtime, target):
+    if runtime == "reference":
+        import httpx
+
+        with httpx.Client(trust_env=True, timeout=3) as client:
+            return client.get(target)
+    with Client(trust_env=True, timeout=3) as client:
+        return client.get(target)
 
 
 # ---------------------------------------------------------------------------
@@ -117,6 +128,49 @@ class TestExplicitProxyOverridesEnv:
     def test_explicit_proxy_wins(self):
         with Client(proxy="http://explicit-proxy:9090") as client:
             assert client.trust_env is True
+
+
+@pytest.mark.parametrize("runtime", ["reference", "candidate"])
+def test_lowercase_proxy_variables_win_over_uppercase(runtime):
+    with local_http_server() as (backend_host, backend_port):
+        with local_proxy_server(backend=(backend_host, backend_port)) as (
+            upper_host,
+            upper_port,
+            upper_handler,
+        ):
+            with local_proxy_server(backend=(backend_host, backend_port)) as (
+                lower_host,
+                lower_port,
+                lower_handler,
+            ):
+                env = {
+                    "HTTP_PROXY": f"http://{upper_host}:{upper_port}",
+                    "http_proxy": f"http://{lower_host}:{lower_port}",
+                }
+                with mock.patch.dict(os.environ, env, clear=True):
+                    response = _request_with_runtime(
+                        runtime, f"http://{backend_host}:{backend_port}/health"
+                    )
+                assert response.status_code == 200
+                assert lower_handler.recorded_requests
+                assert not upper_handler.recorded_requests
+
+
+@pytest.mark.parametrize("runtime", ["reference", "candidate"])
+def test_scheme_less_environment_proxy_is_normalized(runtime):
+    with local_http_server() as (backend_host, backend_port):
+        with local_proxy_server(backend=(backend_host, backend_port)) as (
+            proxy_host,
+            proxy_port,
+            handler,
+        ):
+            env = {"HTTP_PROXY": f"{proxy_host}:{proxy_port}"}
+            with mock.patch.dict(os.environ, env, clear=True):
+                response = _request_with_runtime(
+                    runtime, f"http://{backend_host}:{backend_port}/health"
+                )
+            assert response.status_code == 200
+            assert handler.recorded_requests
 
 
 # ---------------------------------------------------------------------------

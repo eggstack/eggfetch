@@ -14,7 +14,7 @@ All tests are colocated in `#[cfg(test)] mod tests` blocks within each source fi
 |----------|-------------------|
 | Rust unit/integration | ~685 |
 | Python (non-compat) | ~513 |
-| Python (compat) | ~1280 |
+| Python (compat) | ~1475 |
 | FFI | 30 |
 
 ## Running Tests
@@ -75,8 +75,17 @@ Phase 5 validates eggfetch against real-world downstream consumers to ensure com
 The `compat/downstream/` directory contains a 12-package consumer portfolio — real Python packages that depend on HTTPX or requests — tested against eggfetch to detect regressions:
 
 ```sh
-python scripts/run_downstream_compat.py
+python scripts/run_downstream_compat.py \
+  --artifact-manifest /path/to/artifact-manifest.json \
+  --required-only
 ```
+
+The corrective transport matrix is in `test_socks_transport.py` and
+`test_uds_transport.py`; environment precedence, socket-option boundaries,
+and pinned reference behavior are covered by adjacent compatibility tests.
+The isolated downstream runner qualified four release-blocking packages in
+the final pass. Private-module consumers and packages targeting HTTPX 0.27-era
+signatures remain informational by design.
 
 ### Expanded Behavior Corpus
 

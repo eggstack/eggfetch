@@ -7,17 +7,15 @@
 //! # Supported schemes
 //!
 //! - `http://` — HTTP proxy (forward HTTP targets, CONNECT for HTTPS)
-//! - `socks5://` — SOCKS5 proxy with local DNS resolution
-//! - `socks5h://` — SOCKS5 proxy with remote DNS resolution
+//! - `socks5://` and `socks5h://` — SOCKS5 proxying. The native API retains
+//!   the scheme distinction; the HTTPX compatibility facade normalizes both
+//!   schemes to the reference stack's hostname-at-proxy behavior.
 //!
 //! # Environment policy
 //!
-//! eggfetch does **not** read `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`,
-//! or `NO_PROXY` environment variables. Proxy configuration is explicit
-//! only: set via [`Proxy::all`], [`Proxy::http`], or [`Proxy::https`]
-//! and attach to a client with
-//! [`ClientBuilder::proxy`](crate::ClientBuilder::proxy). This avoids
-//! surprising behavior when multiple proxy libraries coexist.
+//! The native API does not read proxy environment variables. The Python
+//! compatibility facade performs HTTPX-compatible environment selection at
+//! its boundary before passing explicit routes to this crate.
 //!
 //! # TLS interception
 //!
@@ -47,14 +45,18 @@ use crate::redact::redact_url_string;
 pub enum NoProxyRule {
     /// Matches everything.
     Wildcard,
-    /// Exact host match.
+    /// Host/domain match without a leading dot.
     Host(String),
     /// Domain suffix match (leading dot, e.g. `.example.com`).
     DomainSuffix(String),
     /// Exact host + port match.
     HostPort(String, u16),
-    /// Matches localhost (`127.0.0.1`, `::1`, `localhost`).
+    /// IP network expressed in CIDR notation.
+    IpNetwork(std::net::IpAddr, u8),
+    /// Matches the hostname `localhost`.
     Localhost,
+    /// Matches only the hostname `localhost` (HTTPX environment semantics).
+    LocalhostExact,
 }
 
 /// `NO_PROXY` bypass rules for a proxy.
@@ -66,12 +68,13 @@ pub enum NoProxyRule {
 ///
 /// Supported entry formats:
 /// - `*` — wildcard, matches everything
-/// - `localhost` — matches `localhost`, `127.0.0.1`, `[::1]`
-/// - `.example.com` — domain suffix match (matches `example.com` and
-///   all subdomains)
-/// - `example.com` — exact host match
+/// - `localhost` — matches localhost and its loopback IP literals
+/// - `.example.com` — domain suffix match (matches subdomains, not the bare
+///   domain)
+/// - `example.com` — domain match (matches the bare domain and subdomains)
 /// - `example.com:8080` — host + port match (uses scheme default port
 ///   when the URL has no explicit port)
+/// - `10.0.0.0/8` — IPv4 or IPv6 CIDR network
 /// - `[::1]` or `[::1]:8080` — IPv6 literal, optionally with port
 #[derive(Debug, Clone)]
 pub struct NoProxy {
@@ -83,7 +86,7 @@ impl NoProxy {
     ///
     /// Entries can be:
     /// - `*` — wildcard, matches everything
-    /// - `localhost` — matches localhost, `127.0.0.1`, `[::1]`
+    /// - `localhost` — matches localhost and its loopback IP literals
     /// - `.example.com` — domain suffix match
     /// - `example.com` — exact host match
     /// - `example.com:8080` — host + port match
@@ -94,23 +97,62 @@ impl NoProxy {
     ///
     /// Returns an error if a port number cannot be parsed.
     pub fn parse(s: &str) -> Result<Self> {
+        Self::parse_with_localhost_mode(s, false)
+    }
+
+    /// Parse rules using HTTPX 0.28.1 environment matching semantics.
+    ///
+    /// Unlike the native parser, a `localhost` entry matches only the
+    /// hostname `localhost`; it does not implicitly include loopback IPs.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when an entry contains an invalid port or CIDR value.
+    pub fn parse_httpx(s: &str) -> Result<Self> {
+        Self::parse_with_localhost_mode(s, true)
+    }
+
+    fn parse_with_localhost_mode(s: &str, exact_localhost: bool) -> Result<Self> {
         let mut rules = Vec::new();
         for entry in s.split(',') {
             let entry = entry.trim();
             if entry.is_empty() {
                 continue;
             }
-            rules.push(Self::parse_entry(entry)?);
+            rules.push(Self::parse_entry(entry, exact_localhost)?);
         }
         Ok(Self { rules })
     }
 
-    fn parse_entry(entry: &str) -> Result<NoProxyRule> {
+    fn parse_entry(entry: &str, exact_localhost: bool) -> Result<NoProxyRule> {
         if entry == "*" {
             return Ok(NoProxyRule::Wildcard);
         }
         if entry.eq_ignore_ascii_case("localhost") {
-            return Ok(NoProxyRule::Localhost);
+            return Ok(if exact_localhost {
+                NoProxyRule::LocalhostExact
+            } else {
+                NoProxyRule::Localhost
+            });
+        }
+
+        if let Some((network, prefix)) = entry.split_once('/') {
+            let network = network.parse::<std::net::IpAddr>().map_err(|_| {
+                Error::InvalidProxyUrl(format!("invalid IP network in NO_PROXY entry: {entry}"))
+            })?;
+            let prefix = prefix.parse::<u8>().map_err(|_| {
+                Error::InvalidProxyUrl(format!("invalid CIDR prefix in NO_PROXY entry: {entry}"))
+            })?;
+            let max_prefix = match network {
+                std::net::IpAddr::V4(_) => 32,
+                std::net::IpAddr::V6(_) => 128,
+            };
+            if prefix > max_prefix {
+                return Err(Error::InvalidProxyUrl(format!(
+                    "CIDR prefix exceeds address width in NO_PROXY entry: {entry}"
+                )));
+            }
+            return Ok(NoProxyRule::IpNetwork(network, prefix));
         }
 
         // IPv6 literal: [::1] or [::1]:8080
@@ -164,12 +206,26 @@ impl NoProxy {
             match rule {
                 NoProxyRule::Wildcard => return true,
                 NoProxyRule::Localhost => {
-                    if Self::is_localhost(host) {
+                    let ip_host = host
+                        .strip_prefix('[')
+                        .and_then(|value| value.strip_suffix(']'))
+                        .unwrap_or(host);
+                    if host.eq_ignore_ascii_case("localhost")
+                        || ip_host.parse::<std::net::IpAddr>().is_ok_and(|ip| {
+                            ip == std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST)
+                                || ip == std::net::IpAddr::V6(std::net::Ipv6Addr::LOCALHOST)
+                        })
+                    {
+                        return true;
+                    }
+                }
+                NoProxyRule::LocalhostExact => {
+                    if host.eq_ignore_ascii_case("localhost") {
                         return true;
                     }
                 }
                 NoProxyRule::Host(h) => {
-                    if host.eq_ignore_ascii_case(h.as_str()) {
+                    if Self::matches_host_rule(host, h) {
                         return true;
                     }
                 }
@@ -183,7 +239,20 @@ impl NoProxy {
                         Some(pu) => pu == *p,
                         None => Self::default_port_for_scheme(url.scheme()) == *p,
                     };
-                    if port_matches && host.eq_ignore_ascii_case(h.as_str()) {
+                    let host_matches = if h.starts_with('.') {
+                        Self::matches_domain_suffix(host, h)
+                    } else {
+                        Self::matches_host_rule(host, h)
+                    };
+                    if port_matches && host_matches {
+                        return true;
+                    }
+                }
+                NoProxyRule::IpNetwork(network, prefix) => {
+                    if host
+                        .parse::<std::net::IpAddr>()
+                        .is_ok_and(|candidate| Self::ip_in_network(candidate, *network, *prefix))
+                    {
                         return true;
                     }
                 }
@@ -192,18 +261,40 @@ impl NoProxy {
         false
     }
 
-    fn is_localhost(host: &str) -> bool {
-        host == "localhost" || host == "127.0.0.1" || host == "::1" || host == "[::1]"
+    fn matches_domain_suffix(host: &str, suffix: &str) -> bool {
+        let host_lower = host.to_ascii_lowercase();
+        let suffix_lower = suffix.trim_start_matches('.').to_ascii_lowercase();
+        host_lower.ends_with(&format!(".{suffix_lower}"))
     }
 
-    fn matches_domain_suffix(host: &str, suffix: &str) -> bool {
-        if host.eq_ignore_ascii_case(suffix) {
-            return true;
-        }
+    fn matches_host_rule(host: &str, rule: &str) -> bool {
         let host_lower = host.to_ascii_lowercase();
-        let suffix_lower = suffix.to_ascii_lowercase();
-        host_lower.ends_with(&suffix_lower)
-            || (suffix_lower.starts_with('.') && host_lower == suffix_lower[1..])
+        let rule_lower = rule.trim_start_matches('.').to_ascii_lowercase();
+        host_lower == rule_lower || host_lower.ends_with(&format!(".{rule_lower}"))
+    }
+
+    fn ip_in_network(candidate: std::net::IpAddr, network: std::net::IpAddr, prefix: u8) -> bool {
+        match (candidate, network) {
+            (std::net::IpAddr::V4(candidate), std::net::IpAddr::V4(network)) => {
+                let mask = if prefix == 0 {
+                    0
+                } else {
+                    u32::MAX << (32 - u32::from(prefix))
+                };
+                u32::from(candidate) & mask == u32::from(network) & mask
+            }
+            (std::net::IpAddr::V6(candidate), std::net::IpAddr::V6(network)) => {
+                let candidate = u128::from(candidate);
+                let network = u128::from(network);
+                let mask = if prefix == 0 {
+                    0
+                } else {
+                    u128::MAX << (128 - u32::from(prefix))
+                };
+                candidate & mask == network & mask
+            }
+            _ => false,
+        }
     }
 
     fn default_port_for_scheme(scheme: &str) -> u16 {
@@ -490,8 +581,13 @@ impl Proxy {
             None => {
                 // Extract SOCKS credentials from URL userinfo.
                 if self.is_socks_url() {
-                    let username = self.uri.username().to_owned();
-                    let password = self.uri.password().unwrap_or("").to_owned();
+                    let username = percent_encoding::percent_decode_str(self.uri.username())
+                        .decode_utf8_lossy()
+                        .into_owned();
+                    let password =
+                        percent_encoding::percent_decode_str(self.uri.password().unwrap_or(""))
+                            .decode_utf8_lossy()
+                            .into_owned();
                     if !username.is_empty() || !password.is_empty() {
                         Some(ProxyAuth::Basic { username, password })
                     } else {
@@ -669,6 +765,18 @@ mod tests {
             // The actual password value must not appear in debug output.
             assert!(!debug.contains("pass@"), "password should be redacted");
             assert!(debug.contains("<redacted>"));
+        }
+    }
+
+    #[test]
+    fn parse_proxy_url_socks5_decodes_credentials() {
+        let proxy = Proxy::all("socks5://user%40name:p%40ss@proxy.example:1080").unwrap();
+        let config = proxy.config();
+        match config.auth().unwrap() {
+            ProxyAuth::Basic { username, password } => {
+                assert_eq!(username, "user@name");
+                assert_eq!(password, "p@ss");
+            }
         }
     }
 
@@ -967,10 +1075,10 @@ mod tests {
     }
 
     #[test]
-    fn nobypass_domain_suffix_exact() {
+    fn nobypass_domain_suffix_excludes_bare_domain() {
         let np = NoProxy::parse(".example.com").unwrap();
         let url = url::Url::parse("http://example.com/path").unwrap();
-        assert!(np.should_bypass(&url));
+        assert!(!np.should_bypass(&url));
     }
 
     #[test]
@@ -978,6 +1086,22 @@ mod tests {
         let np = NoProxy::parse(".example.com").unwrap();
         let url = url::Url::parse("http://notexample.com/path").unwrap();
         assert!(!np.should_bypass(&url));
+    }
+
+    #[test]
+    fn nobypass_bare_domain_includes_subdomains() {
+        let np = NoProxy::parse("example.com").unwrap();
+        for url in ["http://example.com/path", "http://api.example.com/path"] {
+            assert!(np.should_bypass(&url::Url::parse(url).unwrap()));
+        }
+        assert!(!np.should_bypass(&url::Url::parse("http://badexample.com").unwrap()));
+    }
+
+    #[test]
+    fn nobypass_cidr_matches_ip_address() {
+        let np = NoProxy::parse("10.0.0.0/8").unwrap();
+        assert!(np.should_bypass(&url::Url::parse("http://10.42.1.9").unwrap()));
+        assert!(!np.should_bypass(&url::Url::parse("http://11.42.1.9").unwrap()));
     }
 
     #[test]
@@ -1041,6 +1165,14 @@ mod tests {
         let np = NoProxy::parse("localhost").unwrap();
         let url = url::Url::parse("http://example.com/path").unwrap();
         assert!(!np.should_bypass(&url));
+    }
+
+    #[test]
+    fn httpx_localhost_does_not_match_loopback_literals() {
+        let np = NoProxy::parse_httpx("localhost").unwrap();
+        assert!(np.should_bypass(&url::Url::parse("http://localhost/path").unwrap()));
+        assert!(!np.should_bypass(&url::Url::parse("http://127.0.0.1/path").unwrap()));
+        assert!(!np.should_bypass(&url::Url::parse("http://[::1]/path").unwrap()));
     }
 
     #[test]

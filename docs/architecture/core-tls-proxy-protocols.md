@@ -64,15 +64,16 @@ Per-request override via `RequestBuilder::proxy(ProxyOverride)`:
 
 `NoProxy` bypass rules support:
 - Wildcard (`*` — bypass all)
-- `localhost` / `127.0.0.1`
-- Domain suffix (`.example.com`)
-- Host:port pairs
-- IPv6 addresses
+- host/domain and host:port entries
+- IPv4/IPv6 literals and CIDR networks
 
 The Rust core does not read proxy environment variables. The HTTPX Python
 compatibility facade may translate `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`,
 and `NO_PROXY` into explicit scheme-aware native proxy configuration when
-`trust_env=True`; native Rust callers must configure proxies explicitly.
+`trust_env=True`; native Rust callers must configure proxies explicitly. The
+facade follows HTTPX's `urllib.request` environment precedence and matching:
+lowercase names win, scheme-less proxy values are treated as HTTP URLs, and
+`localhost` is an exact hostname rule rather than an implicit loopback alias.
 
 ### CONNECT Tunnel
 
@@ -86,8 +87,11 @@ For HTTPS through a proxy, the transport establishes a CONNECT tunnel:
 
 ### Supported Schemes
 
-- `socks5://` — SOCKS5 with local DNS resolution (client resolves the hostname, sends IP to proxy)
-- `socks5h://` — SOCKS5 with remote DNS resolution (sends hostname to proxy for resolution)
+The native Rust API retains the useful `socks5://` (local resolution) versus
+`socks5h://` (proxy-side resolution) distinction. The HTTPX 0.28.1
+compatibility facade normalizes both schemes to HTTPX/httpcore's observed wire
+behavior: hostnames are sent as `ATYP_DOMAIN`, while IPv4 and IPv6 literals
+are sent as their corresponding literal address types.
 
 ### Configuration
 
@@ -104,7 +108,8 @@ let proxy = Proxy::all("socks5://user:pass@proxy.example.com:1080")?;
 ### Protocol Flow
 
 1. TCP connect to SOCKS5 proxy
-2. Method negotiation (no-auth or username/password)
+2. Method negotiation (exactly no-auth without credentials, or exactly
+   username/password with credentials)
 3. Optional username/password subnegotiation (RFC 1929)
 4. CONNECT command with destination address (IPv4, IPv6, or domain name)
 5. Parse reply — tunnel established
@@ -113,8 +118,10 @@ let proxy = Proxy::all("socks5://user:pass@proxy.example.com:1080")?;
 
 ### DNS Resolution Semantics
 
-- `socks5://`: Resolves the destination hostname locally, sends the IP address to the proxy (ATYP_IPV4 or ATYP_IPV6)
-- `socks5h://`: Sends the domain name to the proxy for remote resolution (ATYP_DOMAIN)
+The compatibility path is reference-driven rather than inferred from the
+scheme name. HTTPX 0.28.1 sends hostname destinations as `ATYP_DOMAIN` for
+both accepted SOCKS schemes, never substitutes loopback for an unresolved
+name, and sends IP literals unchanged.
 
 ### Authentication
 
@@ -122,7 +129,12 @@ Supports username/password authentication via URL userinfo (`socks5://user:pass@
 
 ### Pool Isolation
 
-SOCKS proxy connections are keyed separately from direct and HTTP proxy connections. Different SOCKS proxies or different credential sets create independent pool slots.
+The Rust client owns persistent Hyper SOCKS clients in a per-client cache
+keyed by proxy endpoint, scheme, and authentication identity. This keeps the
+SOCKS handshake and HTTP connection pool alive across compatible requests,
+while different endpoints or credentials remain isolated. Credentials are
+held only in the opaque internal key and are not included in debug/display
+output.
 
 ## HTTP/2
 

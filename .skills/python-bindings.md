@@ -85,7 +85,7 @@ from eggfetch.compat.httpx import Client, AsyncClient, Request, Response
 
 **Phase 5 implements:**
 - Downstream validation, expanded behavior corpus (30 cases), evidence report generation, compatibility-stage decision (Stage C justified)
-- SOCKS5 proxy support: HTTP/HTTPS through SOCKS5, username/password auth, local/remote DNS, NO_PROXY bypass
+- SOCKS5 proxy support: HTTP/HTTPS through SOCKS5, reference-pinned method/auth/address behavior, persistent route pools, and NO_PROXY bypass
 
 **Phase 6 / Differential Closure implements:**
 - Typed difference records in API oracle (`scripts/compare_httpx_api_manifest.py --validate`)
@@ -93,7 +93,7 @@ from eggfetch.compat.httpx import Client, AsyncClient, Request, Response
 - Separate sync/async auth drivers
 - Behavioral downstream fixtures (`compat/downstream/behavioral_fixtures/`)
 - Native lifecycle proof fixtures (`test_native_timeout_classification.py`, `test_soak.py`, proxy and TLS tests)
-- Final qualification: API oracle clean (76 active differences, all intentional/deferred), full pinned compat suite passing (1450/1452), downstream behavioral fixtures validated (54/62 behavioral tests pass; 8 failures are shim-detection and httpx-sse incompatibility)
+- Final qualification is recorded only after the current corrective transport plan's exact-SHA gates pass; historical Phase 6 counts are retained in the plan/status records, not treated as current evidence.
 
 **Corrective Closure Phases 1-4 implements:**
 - Explicit top-level function signatures matching HTTPX 0.28.1 (`request`, `get`, `post`, `put`, `patch`, `delete`, `head`, `options`, `stream`)
@@ -104,7 +104,7 @@ from eggfetch.compat.httpx import Client, AsyncClient, Request, Response
 - Property setters for `auth`, `base_url`, `cookies`, `event_hooks`, `headers`, `params`, `timeout`
 - HTTPX default headers (`Accept`, `Accept-Encoding`, `Connection`, `User-Agent`)
 - Protocol validation: `http1=False, http2=False` raises `ValueError`, `http1=False, http2=True` raises `NotImplementedError`
-- Transport options: `uds`, `local_address`, `socket_options` functional through native Rust engine (Phase 4)
+- Transport options: `uds`, `local_address`, and bounded three-tuple `socket_options` functional through the native Rust engine; four-element socket tuples remain an explicit Stage C limitation.
 - `Response.is_closed` public property for stream context manager compatibility
 - Request construction: params-in-URL with duplicates, `data`+`files` multipart, compact JSON, stream auto-headers
 - Response metadata: HTTP version, reason phrase, elapsed, `raise_for_status()` return, `next_request`
@@ -133,7 +133,7 @@ from eggfetch.compat.httpx import Client, AsyncClient, Request, Response
 - Request-local and explicit Cookie state is merged with the scoped facade jar per hop; explicit Cookie headers are stripped on every redirect and regenerated from the jar.
 - Live response iteration coalesces chunk sizes, decodes split text incrementally, and updates stream accounting and state.
 - Raw iteration marks streams consumed at the correct point, counts raw source bytes before chunk-size splitting/coalescing, closes on normal exhaustion, and leaves partial finalization/source failure distinguishable from explicit response close. Native compressed responses retain the encoded source in core until first body consumption; raw iterators select it exactly once, while decoded operations select the existing decompressor path. Core's decoded-header policy still removes `Content-Encoding` and `Content-Length` when automatic decompression is enabled; the compatibility facade overlays only the original wire values for those two headers. Native async cancellation must be tested through the built-in client path with a deterministic constrained-client follow-up proving lease release.
-- The compact `test_corrective_kernel.py` suite runs in Tier 1; the full pinned `httpx==0.28.1` compatibility suite and API oracle remain Tier 2/manual gates. The designation is a bounded Stage C candidate for the asyncio-supported surface, not unrestricted HTTPX replacement.
+- The compact `test_corrective_kernel.py` suite runs in Tier 1; the full pinned `httpx==0.28.1` compatibility suite, API oracle, and isolated downstream runner are Tier 2/manual gates. The designation is Stage C qualified for the documented asyncio-supported surface, not unrestricted HTTPX replacement.
 
 **Testing the compat layer:**
 
@@ -186,8 +186,12 @@ python scripts/compare_httpx_api_manifest.py \
 ### Corrective transport notes
 
 The Rust core keeps proxy configuration explicit; the HTTPX compatibility
-facade selects environment proxies per destination scheme. `local_address`
-uses HTTPX's host-only form and binds with an OS-selected source port.
-Socket options are classified from the running Python `socket` module rather
-than copied Linux constants. UDS traffic uses the normal Hyper HTTP/TLS path,
-and SOCKS tunnels use origin-form requests after the handshake.
+facade delegates environment discovery to Python's `urllib.request` policy.
+`local_address` uses HTTPX's host-only form and binds with an OS-selected
+source port. Socket options are classified from the running Python `socket`
+module rather than copied Linux constants. UDS traffic uses the normal Hyper
+HTTP/TLS path, and SOCKS tunnels use origin-form requests after the handshake;
+the client retains a persistent SOCKS Hyper pool per route. HTTPX 0.28.1's
+four-element socket-option form is accepted by its constructor but fails at
+use with Python's `setsockopt` API, so the facade rejects it early and supports
+the safe three-element form only.

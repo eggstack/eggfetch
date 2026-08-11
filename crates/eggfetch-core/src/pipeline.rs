@@ -806,6 +806,13 @@ pub(crate) async fn send_single_request(
         }
     }
 
+    #[cfg(feature = "proxy")]
+    let socks_client = effective_proxy
+        .as_ref()
+        .filter(|proxy| proxy.is_socks())
+        .map(|proxy| inner.socks_client(proxy))
+        .transpose()?;
+
     let response = match effective_proxy {
         #[cfg(feature = "proxy")]
         Some(ref proxy_config) => {
@@ -824,6 +831,7 @@ pub(crate) async fn send_single_request(
                 &crate::transport::proxy::ProxyRequestContext {
                     remaining_total,
                     tls_config: inner.config.tls_config.as_ref(),
+                    socks_client,
                 },
             )
             .await?

@@ -28,7 +28,7 @@ class SSEHandler(http.server.BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream")
         self.send_header("Cache-Control", "no-cache")
-        self.send_header("Connection", "keep-alive")
+        self.send_header("Connection", "close")
         self.end_headers()
 
         events = [
@@ -42,6 +42,7 @@ class SSEHandler(http.server.BaseHTTPRequestHandler):
             self.wfile.flush()
         self.wfile.write(b"event: end\ndata: {}\n\n")
         self.wfile.flush()
+        self.close_connection = True
 
     def log_message(self, format, *args):
         pass
@@ -73,7 +74,7 @@ def test_httpx_sse_event_source_iteration(sse_server):
     with httpx.Client() as client:
         with client.stream("GET", f"{sse_server}/") as response:
             es = EventSource(response)
-            for event in es:
+            for event in es.iter_sse():
                 collected_events.append({
                     "event": event.event,
                     "data": event.data,
@@ -87,9 +88,9 @@ def test_httpx_sse_event_data_parsing(sse_server):
     with httpx.Client() as client:
         with client.stream("GET", f"{sse_server}/") as response:
             es = EventSource(response)
-            events = list(es)
+            events = list(es.iter_sse())
     assert len(events) >= 3
-    assert events[1]["event"] == "update"
+    assert events[1].event == "update"
     data = json.loads(events[1].data)
     assert data["count"] == 1
 
@@ -98,5 +99,5 @@ def test_httpx_sse_end_event(sse_server):
     with httpx.Client() as client:
         with client.stream("GET", f"{sse_server}/") as response:
             es = EventSource(response)
-            events = list(es)
-    assert events[-1]["event"] == "end"
+            events = list(es.iter_sse())
+    assert events[-1].event == "end"

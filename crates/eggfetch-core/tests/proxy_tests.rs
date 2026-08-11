@@ -1864,7 +1864,11 @@ async fn handle_socks5_connection(
     }
 
     // Connect to the actual destination.
-    let dest_addr = format!("{dest_host}:{dest_port}");
+    let dest_addr = if dest_host == "localhost" {
+        format!("127.0.0.1:{dest_port}")
+    } else {
+        format!("{dest_host}:{dest_port}")
+    };
     match TcpStream::connect(&dest_addr).await {
         Ok(dest_stream) => {
             // Send success reply.
@@ -2155,7 +2159,7 @@ async fn test_socks5_remote_dns() {
         .build();
 
     let result = client
-        .get(&format!("http://127.0.0.1:{}", http_server.port))
+        .get(&format!("http://localhost:{}", http_server.port))
         .unwrap()
         .send()
         .await;

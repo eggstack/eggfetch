@@ -408,7 +408,7 @@ This inventory was refreshed during the Phase 1 contract rebaseline. Key correct
 
 1. **Redirect default**: HTTPX 0.28.1 defaults to `follow_redirects=False`, same as eggfetch. The earlier claim that "HTTPX follows redirects by default" was incorrect for version 0.28.1.
 2. **Proxy environment**: the HTTPX facade selects `HTTP_PROXY`/`HTTPS_PROXY` by request scheme, uses `ALL_PROXY` fallback, and honors lowercase forms plus `NO_PROXY` when `trust_env=True`.
-3. **SOCKS proxy**: HTTPX 0.28.1 exposes SOCKS proxy support as an optional public feature (`httpx[socks]`). eggfetch now supports SOCKS5 (`socks5://` and `socks5h://`) with local and remote DNS resolution, username/password authentication, and NO_PROXY bypass. Implemented in Phase 5.
+3. **SOCKS proxy**: HTTPX 0.28.1 exposes SOCKS proxy support as an optional public feature (`httpx[socks]`). eggfetch supports SOCKS5 (`socks5://` and `socks5h://`) with the pinned authentication method and address-type behavior, route pooling, origin TLS, and NO_PROXY bypass. Native Rust configuration retains its explicit local-versus-remote DNS distinction.
 4. **SSL context**: HTTPX `Proxy(..., ssl_context=...)` is a constructor parameter. eggfetch `Proxy` does not accept `ssl_context`; TLS is handled by the Rust engine. Classified as `intentional` (security boundary).
 5. **StreamError base class**: HTTPX `StreamError` inherits from `RuntimeError`; eggfetch inherits from `Exception`. Resolved in Phase 2.
 

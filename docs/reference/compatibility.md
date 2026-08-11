@@ -108,11 +108,11 @@ eggfetch targets HTTPX 0.28.1 compatibility in phases. The current status:
 - **Phase 5**: SOCKS5 proxy — HTTP/HTTPS through SOCKS5, auth, DNS/address-type behavior, NO_PROXY bypass, credential redaction
 - **Phase 6 / Differential Closure**: Final qualification — API oracle clean (76 active differences, all intentional/deferred), full pinned compat suite passing, downstream behavioral fixtures validated
 
-**Current status: Stage C candidate — corrective transport qualification pending.**
-The prior low-level transport qualification is historical and superseded by
-the corrective pass. The compatibility facade does not claim unrestricted
-HTTPX replacement. Trio/AnyIO, Python 3.8/3.9, and private HTTPX modules remain
-outside scope.
+**Current status: Stage C qualified for the documented asyncio surface.**
+The qualification is pinned to HTTPX 0.28.1 and the exact executable SHA in
+`compat/httpx/0.28.1/profile.toml`. The compatibility facade does not claim
+unrestricted HTTPX replacement. Trio/AnyIO, Python 3.8/3.9, and private HTTPX
+modules remain outside scope.
 
 See `compat/httpx/0.28.1/` for the machine-readable profile and allowed differences.
 
@@ -131,8 +131,8 @@ The following statements from earlier documentation have been corrected:
 1. **Pool timeout**: HTTPX 0.28.1 supports pool timeout via `Timeout(pool=...)`. eggfetch also supports this. The compatibility matrix has been updated to reflect this.
 2. **Redirect default**: HTTPX 0.28.1 defaults to `follow_redirects=False`, same as eggfetch. The earlier claim that "HTTPX follows redirects by default" was incorrect for version 0.28.1.
 3. **Proxy env vars**: the HTTPX facade selects `HTTP_PROXY`/`HTTPS_PROXY` by request scheme, uses `ALL_PROXY` fallback, and honors lowercase forms plus `NO_PROXY` when `trust_env=True`; native Rust configuration remains explicit.
-4. **SOCKS proxy**: HTTPX 0.28.1 exposes SOCKS proxy support as an optional public feature via `httpx[socks]`. eggfetch now supports SOCKS5 (`socks5://` and `socks5h://`) with local and remote DNS resolution, username/password authentication, and NO_PROXY bypass. Implemented in Phase 5.
-5. **UDS, local_address, socket_options**: HTTPX 0.28.1 exposes `UDS`, `local_address`, and `socket_options` transport parameters. eggfetch now implements these through the native Rust engine with end-to-end proof. Implemented in Phase 4.
+4. **SOCKS proxy**: HTTPX 0.28.1 exposes SOCKS proxy support as an optional public feature via `httpx[socks]`. eggfetch supports SOCKS5 (`socks5://` and `socks5h://`) with the pinned username/password method matrix, domain/IP address types, route-local pooling, origin TLS, and `NO_PROXY` bypass. Both schemes use the reference's domain ATYP for hostnames; native Rust configuration retains its explicit DNS distinction.
+5. **UDS, local_address, socket_options**: HTTPX 0.28.1 exposes `UDS`, `local_address`, and `socket_options` transport parameters. eggfetch implements these through the native Rust engine with HTTPS, fixed/chunked streaming, reuse, and host-only local-address evidence. The safe three-element socket-option form is supported; four-element tuples are a bounded intentional difference because the reference fails at socket use.
 6. **SSL context**: HTTPX `Proxy(..., ssl_context=...)` is a public constructor parameter. eggfetch `Proxy` does not accept `ssl_context` because TLS is handled by the Rust engine. This is classified as `intentional` (security boundary).
 7. **Stream exception hierarchy**: eggfetch's stream exceptions (StreamClosed, StreamConsumed, RequestNotRead, ResponseNotRead) now match HTTPX 0.28.1 exactly — inheriting from RuntimeError, accepting no arguments. Resolved in Phase 2.
 
@@ -142,4 +142,4 @@ The active allowlist was rebaselined against the current `main` SHA `f9eb1a4...`
 
 ### Historical Phase 6 differential closure (2026-08-10)
 
-Final qualification SHA: `40beeec09f3e88db8901f39388da665c47ab84f6`. The API oracle reports 76 active differences, all classified as intentional or deferred (stage-bounded). Zero unexplained, zero stale, zero requires-resolution entries. Full pinned compat suite: 1450 passed, 2 flaky (lightweight test server timeouts). Downstream behavioral fixtures: 54 passed, 8 failed (5 shim-detection expected, 3 httpx-sse incompatibility).
+Historical qualification SHA: `40beeec09f3e88db8901f39388da665c47ab84f6`. Current exact-SHA evidence is recorded in the profile and corrective closure status.

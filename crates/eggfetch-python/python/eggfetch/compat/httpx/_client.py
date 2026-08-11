@@ -35,6 +35,7 @@ from eggfetch.compat.httpx._exceptions import (
     ProxyError,
     ReadTimeout,
     RequestError,
+    ResponseNotRead,
     StreamConsumed,
     TimeoutException,
     TooManyRedirects,
@@ -308,7 +309,19 @@ def _convert_params(params):
 
 def _convert_proxy(proxy):
     if isinstance(proxy, Proxy):
-        return str(proxy.url)
+        url = str(proxy.url)
+        auth = proxy.raw_auth
+        if auth is not None and proxy.url.scheme in ("socks5", "socks5h"):
+            username, password = auth
+            parsed = urllib.parse.urlsplit(url)
+            userinfo = "{}:{}@".format(
+                urllib.parse.quote(str(username), safe=""),
+                urllib.parse.quote(str(password), safe=""),
+            )
+            url = urllib.parse.urlunsplit(
+                (parsed.scheme, userinfo + parsed.netloc, parsed.path, parsed.query, parsed.fragment)
+            )
+        return url
     if isinstance(proxy, str):
         return proxy
     return None
@@ -1821,8 +1834,11 @@ class AsyncClient:
         self._max_redirects = max_redirects
         self._event_hooks = event_hooks or {"request": [], "response": []}
         self._base_url = URL(base_url) if not isinstance(base_url, URL) else base_url
-        self._transport = transport
-        self._async_transport = async_transport
+        # HTTPX's ``transport=`` argument is the async transport for
+        # AsyncClient.  Keep the legacy explicit ``async_transport`` alias,
+        # but dispatch the public argument through the async path as well.
+        self._transport = None if transport is not None else transport
+        self._async_transport = async_transport or transport
         self._default_encoding = default_encoding
         self._extensions = extensions or {}
         self._native_client = None

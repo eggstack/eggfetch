@@ -99,3 +99,11 @@ The Rust core does not read proxy environment variables; native proxy
 configuration is explicit via `ClientBuilder::proxy()` or
 `RequestBuilder::proxy()`. The HTTPX compatibility facade translates
 scheme-specific proxy variables and `NO_PROXY` when `trust_env=True`.
+
+For SOCKS requests, the client keeps a persistent Hyper client per effective
+SOCKS route rather than constructing one during each request. The route cache
+is owned by `ClientInner`, includes the proxy endpoint/scheme/authentication
+identity in its key, and is released with the client. The request's total
+timeout still wraps the full SOCKS connect, negotiation, origin TLS, and HTTP
+exchange; cancellation drops the failed operation without invalidating a
+follow-up connection on the route.

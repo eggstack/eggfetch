@@ -427,7 +427,7 @@ fn no_proxy_matching_domain_suffix() {
     let url_no_match = url::Url::parse("http://notexample.com/path").unwrap();
 
     assert!(np.should_bypass(&url_match));
-    assert!(np.should_bypass(&url_exact));
+    assert!(!np.should_bypass(&url_exact));
     assert!(!np.should_bypass(&url_no_match));
 }
 

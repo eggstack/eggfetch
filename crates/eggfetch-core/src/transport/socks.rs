@@ -3,7 +3,8 @@
 //! Implements the SOCKS5 protocol (RFC 1928) for proxy connections,
 //! including username/password authentication (RFC 1929). The
 //! implementation is bounded to the subset required for HTTPX 0.28.1
-//! parity: `socks5://` (local DNS) and `socks5h://` (remote DNS).
+//! parity: the pinned HTTPX/httpcore stack sends hostname destinations to the
+//! proxy for both `socks5://` and `socks5h://`.
 //!
 //! # Protocol flow
 //!
@@ -16,6 +17,31 @@
 use crate::error::{Error, Result};
 use crate::proxy::{ProxyAuth, ProxyConfig};
 use crate::timeout::TimeoutPhase;
+
+/// Internal cache identity for one SOCKS route. The type deliberately does
+/// not implement `Debug` or `Display`: credentials remain memory-only key
+/// material and can never be emitted by route diagnostics.
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub(crate) struct SocksRouteKey {
+    scheme: String,
+    host: String,
+    port: u16,
+    auth: Option<(String, String)>,
+}
+
+impl SocksRouteKey {
+    pub(crate) fn from_proxy(proxy: &ProxyConfig) -> Self {
+        let auth = proxy.auth().map(|auth| match auth {
+            ProxyAuth::Basic { username, password } => (username.clone(), password.clone()),
+        });
+        Self {
+            scheme: proxy.scheme().to_owned(),
+            host: proxy.host().unwrap_or_default().to_owned(),
+            port: proxy.port(),
+            auth,
+        }
+    }
+}
 
 /// SOCKS5 protocol version.
 const SOCKS5_VERSION: u8 = 0x05;
@@ -63,9 +89,9 @@ const MAX_SOCKS5_CREDENTIAL_LEN: usize = 255;
 /// * `proxy_config` — SOCKS5 proxy configuration (host, port, auth)
 /// * `dest_host` — destination hostname or IP
 /// * `dest_port` — destination port
-/// * `remote_dns` — if `true`, send the domain name to the proxy for
-///   remote DNS resolution (`socks5h://`). If `false`, resolve locally
-///   and send the IP address (`socks5://`).
+/// * `remote_dns` — whether to send the domain name to the proxy for remote
+///   DNS resolution. The compatibility facade passes `true` for both SOCKS
+///   schemes because that is the HTTPX 0.28.1 behavior.
 /// * `remaining_total` — optional timeout for the entire handshake
 ///
 /// # Errors
@@ -284,12 +310,15 @@ async fn negotiate_method(
     auth: Option<&ProxyAuth>,
     remaining_total: Option<std::time::Duration>,
 ) -> Result<u8> {
-    // Build the method list.
-    let methods = if auth.is_some() {
-        vec![SOCKS5_METHOD_NO_AUTH, SOCKS5_METHOD_USERNAME_PASSWORD]
+    // httpcore offers exactly one method: credentials select RFC 1929,
+    // otherwise the client offers no authentication. This is intentionally
+    // narrower than the set of methods the protocol could support.
+    let expected_method = if auth.is_some() {
+        SOCKS5_METHOD_USERNAME_PASSWORD
     } else {
-        vec![SOCKS5_METHOD_NO_AUTH]
+        SOCKS5_METHOD_NO_AUTH
     };
+    let methods = vec![expected_method];
 
     // Send: version(1) + nmethods(1) + methods(nmethods)
     let mut greeting = Vec::with_capacity(2 + methods.len());
@@ -320,12 +349,12 @@ async fn negotiate_method(
     }
 
     match response[1] {
-        SOCKS5_METHOD_NO_AUTH | SOCKS5_METHOD_USERNAME_PASSWORD => Ok(response[1]),
         SOCKS5_METHOD_NO_ACCEPTABLE => Err(Error::ProxyConnect(
             "SOCKS5 proxy rejected all authentication methods".into(),
         )),
+        selected if selected == expected_method => Ok(selected),
         other => Err(Error::ProxyConnect(format!(
-            "SOCKS5 proxy selected unsupported method: {other}"
+            "SOCKS5 proxy selected method {other}, but the client offered {expected_method}"
         ))),
     }
 }
@@ -418,7 +447,18 @@ async fn send_connect(
     request.push(SOCKS5_CMD_CONNECT);
     request.push(0x00); // reserved
 
-    if remote_dns {
+    if let Ok(ip) = dest_host.parse::<std::net::IpAddr>() {
+        match ip {
+            std::net::IpAddr::V4(ip) => {
+                request.push(SOCKS5_ATYP_IPV4);
+                request.extend_from_slice(&ip.octets());
+            }
+            std::net::IpAddr::V6(ip) => {
+                request.push(SOCKS5_ATYP_IPV6);
+                request.extend_from_slice(&ip.octets());
+            }
+        }
+    } else if remote_dns {
         // Send domain name to proxy for remote resolution.
         let host_bytes = dest_host.as_bytes();
         if host_bytes.len() > MAX_SOCKS5_DOMAIN_LEN {

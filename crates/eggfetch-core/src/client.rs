@@ -1,6 +1,10 @@
 //! Async client entry point.
 
+#[cfg(feature = "proxy")]
+use std::collections::HashMap;
 use std::sync::Arc;
+#[cfg(feature = "proxy")]
+use std::sync::Mutex;
 use std::time::Duration;
 
 use http::Method;
@@ -99,10 +103,61 @@ pub(crate) struct ClientInner {
     /// Hyper client for Unix domain socket requests.
     #[cfg(unix)]
     pub(crate) uds_client: Option<crate::transport::TimeoutUdsClient>,
+    /// Persistent Hyper clients keyed by effective SOCKS route.
+    #[cfg(feature = "proxy")]
+    pub(crate) socks_clients: Mutex<
+        HashMap<crate::transport::socks::SocksRouteKey, crate::transport::TimeoutSocksClient>,
+    >,
     pub(crate) config: ClientConfig,
     pub(crate) pool: Pool,
     #[cfg(feature = "http3")]
     pub(crate) h3_connector: Option<crate::transport::http3::H3Connector>,
+}
+
+#[cfg(feature = "proxy")]
+impl ClientInner {
+    pub(crate) fn socks_client(
+        &self,
+        proxy: &crate::proxy::ProxyConfig,
+    ) -> Result<crate::transport::TimeoutSocksClient> {
+        let key = crate::transport::socks::SocksRouteKey::from_proxy(proxy);
+        let mut clients = self
+            .socks_clients
+            .lock()
+            .map_err(|_| Error::ProxyConnect("SOCKS client cache is poisoned".into()))?;
+        if let Some(client) = clients.get(&key) {
+            return Ok(client.clone());
+        }
+
+        let tls_config = if let Some(config) = self.config.tls_config.as_ref() {
+            config
+                .build_rustls_config()
+                .map_err(|e| Error::Tls(format!("failed to build SOCKS TLS config: {e}")))?
+        } else {
+            let mut roots = rustls::RootCertStore::empty();
+            roots.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+            rustls::ClientConfig::builder()
+                .with_root_certificates(roots)
+                .with_no_client_auth()
+        };
+        let connector = crate::transport::socks::SocksConnector::new(
+            proxy.clone(),
+            Some(tokio_rustls::TlsConnector::from(Arc::new(tls_config))),
+            None,
+        );
+        let connector = crate::transport::connect_timeout::ConnectTimeout::new(
+            connector,
+            self.config
+                .timeout
+                .as_ref()
+                .and_then(|timeout| timeout.connect),
+        );
+        let client =
+            hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new())
+                .build(connector);
+        clients.insert(key, client.clone());
+        Ok(client)
+    }
 }
 
 impl Client {
@@ -747,6 +802,8 @@ impl ClientBuilder {
                 direct_client,
                 #[cfg(unix)]
                 uds_client,
+                #[cfg(feature = "proxy")]
+                socks_clients: Mutex::new(HashMap::new()),
                 config,
                 pool,
                 #[cfg(feature = "http3")]

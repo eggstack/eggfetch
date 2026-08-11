@@ -135,7 +135,8 @@ impl PyClient {
 
         let proxy_override = proxy::parse_proxy(proxy)?;
         if let ProxyOverride::Override(ref url) = proxy_override {
-            let p = eggfetch_core::Proxy::all(url).map_err(map_err)?;
+            let p = eggfetch_core::Proxy::all(&proxy::normalize_compat_proxy_url(url))
+                .map_err(map_err)?;
             builder = builder.proxy(p);
         }
 
@@ -143,15 +144,16 @@ impl PyClient {
         if trust_env && proxy_override == ProxyOverride::Inherit {
             #[cfg(feature = "proxy")]
             {
-                for (scheme, env_proxy) in proxy::env_proxy_urls() {
+                for (scheme, env_proxy) in proxy::env_proxy_urls(py)? {
                     let mut p = match scheme {
                         "http" => eggfetch_core::Proxy::http(&env_proxy),
                         "https" => eggfetch_core::Proxy::https(&env_proxy),
                         _ => eggfetch_core::Proxy::all(&env_proxy),
                     }
                     .map_err(map_err)?;
-                    if let Some(no_proxy) = proxy::env_no_proxy() {
-                        let rules = eggfetch_core::NoProxy::parse(&no_proxy).map_err(map_err)?;
+                    if let Some(no_proxy) = proxy::env_no_proxy(py)? {
+                        let rules =
+                            eggfetch_core::NoProxy::parse_httpx(&no_proxy).map_err(map_err)?;
                         p = p.no_proxy(rules);
                     }
                     builder = builder.environment_proxy(p);
@@ -338,7 +340,8 @@ impl PyClient {
                         builder = builder.without_proxy();
                     }
                     ProxyOverride::Override(url) => {
-                        let p = eggfetch_core::Proxy::all(&url).map_err(map_err)?;
+                        let p = eggfetch_core::Proxy::all(&proxy::normalize_compat_proxy_url(&url))
+                            .map_err(map_err)?;
                         builder = builder.proxy(&p);
                     }
                 }
@@ -829,7 +832,8 @@ impl PyClient {
                         builder = builder.without_proxy();
                     }
                     ProxyOverride::Override(url) => {
-                        let p = eggfetch_core::Proxy::all(&url).map_err(map_err)?;
+                        let p = eggfetch_core::Proxy::all(&proxy::normalize_compat_proxy_url(&url))
+                            .map_err(map_err)?;
                         builder = builder.proxy(&p);
                     }
                 }

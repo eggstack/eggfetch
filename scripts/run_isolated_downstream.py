@@ -691,7 +691,10 @@ def main() -> int:
         # match the controlled replacement (0.28.1), causing pip to install
         # the real httpx from PyPI.
         downstream_deps = [d for d in pkg.get("optional-dependencies", []) if d != "httpx"]
-        downstream_install = pip_install_no_deps(venv_dir, [pkg["name"]] + downstream_deps, args.timeout)
+        downstream_spec = pkg.get("source-locator") or pkg["name"]
+        downstream_install = pip_install_no_deps(
+            venv_dir, [downstream_spec], args.timeout
+        )
         if downstream_install.returncode != 0:
             result["install"]["success"] = False
             result["install"]["stderr"] += "\n--- downstream install ---\n" + downstream_install.stderr
@@ -700,7 +703,15 @@ def main() -> int:
             _emit_result(result, args.output)
             return 1
 
-        # --- Step 6b: Install safe transitive deps ---
+        # --- Step 6b: Install declared helper dependencies ---
+        # The downstream package itself is installed without dependencies so
+        # pip cannot replace the controlled HTTPX wheel. Install the remaining
+        # declared helpers normally; in particular, pydantic must resolve its
+        # matching pydantic-core pair.
+        if downstream_deps:
+            pip_install(venv_dir, downstream_deps, args.timeout)
+
+        # --- Step 6c: Install safe transitive deps ---
         # The --no-deps install above skips all transitive dependencies.
         # Install safe ones (excluding httpx) so the downstream package can
         # import its own dependencies. Use --no-deps to avoid pulling httpx.
@@ -708,12 +719,15 @@ def main() -> int:
         for dep_name in ["httpcore", "anyio", "sniffio", "idna", "certifi",
                          "h11", "h2", "pydantic", "typing-extensions",
                          "distro", "docstring-parser", "jiter",
-                         "pydantic-core", "typing-inspection", "annotated-types",
                          "httpx-auth", "starlette", "anyio"]:
-            if dep_name != "httpx" and dep_name not in downstream_deps:
+            if dep_name not in {"httpx", "pydantic"} and dep_name not in downstream_deps:
                 safe_transitive.append(dep_name)
         if safe_transitive:
             pip_install_no_deps(venv_dir, safe_transitive, args.timeout)
+        # Packages without an explicit pydantic helper still receive a
+        # coherent pair for fixtures that import it transitively.
+        if "pydantic" not in downstream_deps:
+            pip_install(venv_dir, ["pydantic"], args.timeout)
 
         # --- Step 6b: Record installed distribution metadata ---
         dist_info = pip_show_dist(venv_dir, pkg["name"])

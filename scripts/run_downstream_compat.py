@@ -27,6 +27,11 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 MANIFEST_PATH = SCRIPT_DIR.parent / "compat" / "downstream" / "manifest.toml"
 ISOLATED_RUNNER = SCRIPT_DIR / "run_isolated_downstream.py"
 
+# Import shared Stage C category registry instead of duplicating it.
+from stage_c_categories import STAGE_C_CATEGORIES as _SHARED_STAGE_C_CATEGORIES
+
+STAGE_C_CATEGORIES = _SHARED_STAGE_C_CATEGORIES
+
 REQUIRED_FIELDS = {
     "name",
     "version",
@@ -59,28 +64,14 @@ REQUIRED_FIELDS = {
     "release-blocking",
 }
 
-VALID_CATEGORIES = {
-    "contract-tests",
-    "mock-transport-user",
-    "framework-test-client",
-    "framework-asgi-transport",
-    "sdk-async-client",
+VALID_CATEGORIES = set(STAGE_C_CATEGORIES) | {
     "sdk-sync-client",
-    "streaming-upload-download",
     "custom-transport-subclass",
     "async-testing-support",
-    "custom-auth-flow",
-    "event-hook-instrumentation",
     "heavy-config-user",
 }
 
 VALID_USAGES = {"required", "informational", "private", "public"}
-
-# Import shared Stage C category registry instead of duplicating.
-from stage_c_categories import STAGE_C_CATEGORIES as _SHARED_STAGE_C_CATEGORIES
-
-STAGE_C_CATEGORIES = _SHARED_STAGE_C_CATEGORIES
-
 
 def _emit_result(result: dict, output_path: str | None = None) -> None:
     """Write structured result to file or stdout."""
@@ -105,8 +96,8 @@ def validate_manifest(path: Path) -> dict:
 
     portfolio = data.get("portfolio", {})
     schema_version = portfolio.get("schema-version", "1")
-    if schema_version not in ("1", "2"):
-        errors.append(f"portfolio.schema-version must be '1' or '2', got '{schema_version}'")
+    if schema_version not in ("1", "2", "3"):
+        errors.append(f"portfolio.schema-version must be '1', '2', or '3', got '{schema_version}'")
     if schema_version == "2" and portfolio.get("status") != "phase-6":
         errors.append(f"portfolio.status must be 'phase-6' for schema v2, got '{portfolio.get('status')}'")
     if schema_version == "1" and portfolio.get("status") != "phase-5":
@@ -246,6 +237,8 @@ def run_downstream_test(package_name: str, artifact_manifest_path: Path, timeout
         )
 
         stdout = result.stdout.strip()
+        if not stdout and output_dir and result_file.exists():
+            stdout = result_file.read_text().strip()
         if stdout:
             try:
                 parsed = json.loads(stdout)

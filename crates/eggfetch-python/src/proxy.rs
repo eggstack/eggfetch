@@ -14,31 +14,70 @@ pub(crate) enum ProxyOverride {
 }
 
 /// Return the environment proxies in HTTPX's scheme-aware order.
-pub(crate) fn env_proxy_urls() -> Vec<(&'static str, String)> {
-    let value = |upper: &str, lower: &str| {
-        std::env::var(upper)
-            .ok()
-            .filter(|v| !v.is_empty())
-            .or_else(|| std::env::var(lower).ok().filter(|v| !v.is_empty()))
+///
+/// HTTPX delegates this lookup to `urllib.request.getproxies()`, which gives
+/// lowercase variables precedence and applies the platform's standard proxy
+/// environment rules. Reusing that stdlib helper keeps the facade aligned
+/// with the pinned reference instead of maintaining a second precedence table.
+pub(crate) fn env_proxy_urls(py: Python<'_>) -> PyResult<Vec<(&'static str, String)>> {
+    let urllib = py.import("urllib.request")?;
+    let values = urllib.call_method0("getproxies")?;
+    let value = |name: &str| -> PyResult<Option<String>> {
+        let value = values.call_method1("get", (name,))?;
+        if value.is_none() {
+            return Ok(None);
+        }
+        let value: String = value.extract()?;
+        Ok((!value.is_empty()).then_some(value))
     };
     let mut proxies = Vec::new();
-    if let Some(url) = value("HTTP_PROXY", "http_proxy") {
-        proxies.push(("http", url));
+    if let Some(url) = value("http")? {
+        proxies.push(("http", normalize_environment_proxy_url(&url)));
     }
-    if let Some(url) = value("HTTPS_PROXY", "https_proxy") {
-        proxies.push(("https", url));
+    if let Some(url) = value("https")? {
+        proxies.push(("https", normalize_environment_proxy_url(&url)));
     }
-    if let Some(url) = value("ALL_PROXY", "all_proxy") {
-        proxies.push(("all", url));
+    if let Some(url) = value("all")? {
+        proxies.push(("all", normalize_environment_proxy_url(&url)));
     }
-    proxies
+    Ok(proxies)
 }
 
-pub(crate) fn env_no_proxy() -> Option<String> {
-    std::env::var("NO_PROXY")
-        .ok()
-        .filter(|v| !v.is_empty())
-        .or_else(|| std::env::var("no_proxy").ok().filter(|v| !v.is_empty()))
+pub(crate) fn env_no_proxy(py: Python<'_>) -> PyResult<Option<String>> {
+    let urllib = py.import("urllib.request")?;
+    let values = urllib.call_method0("getproxies")?;
+    let value = values.call_method1("get", ("no",))?;
+    if value.is_none() {
+        return Ok(None);
+    }
+    let value: String = value.extract()?;
+    Ok((!value.is_empty()).then_some(value))
+}
+
+/// Normalize the proxy URL forms accepted by HTTPX's environment helper.
+pub(crate) fn normalize_environment_proxy_url(url: &str) -> String {
+    if url.contains("://") {
+        url.to_owned()
+    } else {
+        format!("http://{url}")
+    }
+}
+
+/// Normalize the SOCKS scheme used by the HTTPX compatibility facade.
+///
+/// httpcore 1.0.9 sends hostname destinations as SOCKS domain names for both
+/// `socks5` and `socks5h`; the native core keeps its lower-level distinction
+/// for callers outside the facade.
+pub(crate) fn normalize_compat_proxy_url(url: &str) -> String {
+    let Ok(mut parsed) = url::Url::parse(url) else {
+        return url.to_owned();
+    };
+    if parsed.scheme() == "socks5" {
+        let _ = parsed.set_scheme("socks5h");
+        parsed.to_string()
+    } else {
+        url.to_owned()
+    }
 }
 
 /// Parse a Python `proxy` argument into a `ProxyOverride`.
@@ -65,7 +104,7 @@ pub fn parse_proxy(proxy: Option<&Bound<'_, PyAny>>) -> PyResult<ProxyOverride> 
                 return Ok(ProxyOverride::Disable);
             }
             if let Ok(url) = val.extract::<String>() {
-                return Ok(ProxyOverride::Override(url));
+                return Ok(ProxyOverride::Override(normalize_compat_proxy_url(&url)));
             }
             Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
                 "proxy must be a URL string, False, or None",

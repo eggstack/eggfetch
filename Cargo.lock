@@ -548,6 +548,7 @@ dependencies = [
  "hyper-rustls",
  "hyper-util",
  "pem-rfc7468",
+ "percent-encoding",
  "pin-project-lite",
  "proptest",
  "quinn",

@@ -17,6 +17,8 @@ import typing
 import httpx
 import pytest
 
+from .native_fixtures import local_http_server
+
 
 # ── Socket option representation ────────────────────────────────────────
 
@@ -69,6 +71,16 @@ class TestSocketOptionRepresentation:
             socket_options=[(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)]
         )
         assert transport is not None
+
+    def test_four_tuple_is_accepted_until_socket_use(self):
+        """HTTPX 0.28.1 forwards four-tuples to ``setsockopt`` unchanged."""
+        transport = httpx.HTTPTransport(
+            socket_options=[(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1, 0)]
+        )
+        with local_http_server() as (host, port):
+            with httpx.Client(transport=transport, trust_env=False, timeout=2) as client:
+                with pytest.raises(TypeError, match="setsockopt"):
+                    client.get(f"http://{host}:{port}/health")
 
 
 # ── local_address ────────────────────────────────────────────────────────

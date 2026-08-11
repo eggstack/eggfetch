@@ -239,7 +239,7 @@ See [`docs/cli/guide.md`](docs/cli/guide.md) for the full CLI reference.
 
 eggfetch provides an HTTPX 0.28.1-compatible asyncio facade via `eggfetch.compat.httpx`. The compatibility profile is pinned in `compat/httpx/0.28.1/` with machine-readable API manifests, allowed-difference tracking, and a parity case registry.
 
-The facade is a **Stage C candidate** — high-fidelity HTTPX 0.28.1 compatibility for the documented Python ≥3.10 asyncio-supported surface, including the qualified low-level transport features documented here. It does not claim unrestricted HTTPX replacement for every transport or concurrency backend.
+The facade is **Stage C qualified** for the documented Python ≥3.10 asyncio-supported surface of HTTPX 0.28.1. It does not claim unrestricted HTTPX replacement for every transport or concurrency backend.
 
 Key differences from HTTPX:
 - Trio/AnyIO not supported (asyncio only, tokio-based)
@@ -254,12 +254,14 @@ Key differences from HTTPX:
 - Compatibility raw iteration defaults to `chunk_size=None`, marks live streams consumed before the first source read, counts consumed source bytes before chunk adaptation, and closes automatically only on normal exhaustion; close a partially consumed response explicitly.
 - Native compressed-response raw parity is implemented through a core-owned one-shot pre-decompression boundary: a streaming response selects either exact encoded raw bytes or the existing decoded path on first body consumption. Core's existing decoded-header policy still removes `Content-Encoding` and `Content-Length` when automatic decompression is enabled; the compatibility facade restores only the original wire values for those two headers from a narrow read-only snapshot.
 
-The corrective transport pass routes UDS through Hyper's normal HTTP/TLS
+The qualified transport pass routes UDS through Hyper's normal HTTP/TLS
 machinery, accepts HTTPX host-only `local_address` values with an ephemeral
-source port, applies a bounded set of socket options classified from the
-platform's Python `socket` constants, and validates SOCKS5 selected-method
-authentication and DNS failures. UDS/SOCKS qualification remains bounded by
-the executable transport test matrix and the pinned HTTPX 0.28.1 profile.
+source port, and maintains a persistent SOCKS Hyper pool per route. SOCKS
+authentication, address types, origin TLS, cancellation, and reuse are pinned
+to HTTPX 0.28.1. Environment proxy discovery follows Python's HTTPX-compatible
+precedence and `NO_PROXY` rules. The safe three-element `socket_options` form
+is supported; HTTPX's four-element form is rejected early because the pinned
+reference accepts it at construction but fails when Python calls `setsockopt`.
 
 Remaining differences are documented in `compat/httpx/0.28.1/allowed-differences.toml`; the compatibility claim is limited to the pinned HTTPX 0.28.1 profile and the supported asyncio surface.
 

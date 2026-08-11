@@ -1,7 +1,7 @@
 # HTTPX 0.28.1 Compatibility Profile
 
 This directory contains the machine-readable compatibility profile for
-HTTPX 0.28.1 drop-in compatibility (Stage C candidate).
+HTTPX 0.28.1 compatibility profile (Stage C qualified).
 
 ## Files
 
@@ -45,4 +45,4 @@ python scripts/compare_httpx_api_manifest.py \
 
 ## Status
 
-This profile targets HTTPX 0.28.1. The compatibility stage is **Stage C candidate** — high-fidelity HTTPX 0.28.1 compatibility for the documented Python ≥3.10 asyncio-supported surface, including the qualified low-level transport features documented here. Phase 6 qualification SHA: `40beeec09f3e88db8901f39388da665c47ab84f6`.
+This profile targets HTTPX 0.28.1. The compatibility stage is **Stage C qualified** for the documented Python ≥3.10 asyncio-supported surface. The exact qualification SHA is recorded in `profile.toml`; Trio/AnyIO, Python 3.8/3.9, and private HTTPX modules remain excluded.

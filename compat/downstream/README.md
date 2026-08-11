@@ -29,7 +29,7 @@ compat/downstream/
 3. Add a `[[package]]` entry with all required fields.
 4. Run the validation script:
    ```bash
-   python scripts/run_downstream_compat.py
+   python scripts/run_downstream_compat.py --artifact-manifest /path/to/artifact-manifest.json
    ```
 5. Run the meta-test to confirm structural validity:
    ```bash
@@ -41,7 +41,7 @@ compat/downstream/
 
 ### Validate manifest structure
 ```bash
-python scripts/run_downstream_compat.py
+python scripts/run_downstream_compat.py --artifact-manifest /path/to/artifact-manifest.json
 ```
 
 ### Run package-specific integration tests
@@ -68,7 +68,13 @@ pip install anyio==4.8.0 httpx-auth==0.22.0 httpx-ws==0.7.0 pydantic==2.10.0
 ## Update Process
 
 1. Check for new versions of pinned packages monthly.
-2. Run `python scripts/run_downstream_compat.py` after updates.
+2. Build the eggfetch wheel and controlled HTTPX replacement, write their
+   paths and SHA-256 values to an artifact manifest, and run
+   `python scripts/run_downstream_compat.py --artifact-manifest ...`.
+
+The release-blocking portfolio uses `--required-only`. Packages that import
+private HTTPX modules or target an incompatible HTTPX generation remain
+informational and are reported with their exact known incompatibility.
 3. Run the full compat test suite to catch regressions.
 4. Update `manifest.toml` with new versions and review notes.
 5. Update `review-cadence` if a package changes its httpx usage.

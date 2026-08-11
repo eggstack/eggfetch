@@ -7,17 +7,17 @@ and referenced plans; counts below are only from the runs named here.
 ## Current corrective pass
 
 The previous qualification is historical only. The current corrective
-transport pass is pending final exact-SHA qualification; do not use the
-historical SHA below as current transport evidence.
+transport pass is qualified by the exact executable SHA recorded below; do
+not use the historical SHA as current transport evidence.
 
-Corrective transport validation so far: the full pinned HTTPX 0.28.1 suite
-passes (`1452 passed, 2 warnings`), the API oracle has zero unexplained, stale,
-or resolved-in-active differences, and the local direct/UDS/SOCKS focused
-fixtures pass. The ordinary downstream fixture directory reports 54 passes
-and 8 failures: five shim-detection assertions (the unmodified `httpx` module
-is intentionally installed) and three `httpx-sse` iteration assertions that
-require the excluded shim/private integration surface. These are not counted
-as public Stage C qualification until the isolated shim runner is used.
+Corrective transport validation: the pinned HTTPX 0.28.1 suite passes, the API
+oracle has zero unexplained, stale, resolved-in-active, or requires-resolution
+differences, and the local direct/UDS/SOCKS focused fixtures pass. The isolated
+downstream runner qualifies four release-blocking packages. Its informational
+results are explicit: `pytest-httpx` and Starlette import excluded private
+HTTPX modules, while Anthropic 0.39.0 passes the removed HTTPX 0.27-era
+`proxies=` keyword. The SSE fixture uses the package's public `iter_sse()` API
+and passes.
 
 Native compressed raw body selection, wire metadata parity, native async
 cancellation/lease release, planning preservation, and final CI verification
@@ -122,7 +122,7 @@ Documentation-only CI evidence for the consistency correction:
 
 ## Current designation
 
-**Stage C candidate — deterministic compressed raw-stream body and metadata closure complete for the documented HTTPX 0.28.1 asyncio-supported surface.**
+**Historical Stage C candidate — deterministic compressed raw-stream body and metadata closure complete for the documented HTTPX 0.28.1 asyncio-supported surface.**
 
 ## Historical superseded final closure evidence
 
@@ -236,7 +236,7 @@ PR #17: closed with a supersession comment; obsolete planning branch not merged.
 
 ## Historical superseded designation
 
-**Stage C candidate — final deterministic closure remains open pending
+**Historical Stage C candidate — final deterministic closure remains open pending
 metadata, native cancellation, planning-hygiene, and CI evidence.**
 
 The final status updates are documentation-only. No executable files changed

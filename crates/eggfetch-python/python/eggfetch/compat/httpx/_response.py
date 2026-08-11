@@ -58,30 +58,6 @@ class _RawByteChunker:
 class Response:
     """HTTPX-compatible Response object."""
 
-    __slots__ = (
-        "_status_code",
-        "_headers",
-        "_url",
-        "_reason_phrase",
-        "_http_version",
-        "_encoding",
-        "_default_encoding",
-        "_content",
-        "_text",
-        "_json",
-        "_cookies",
-        "_request",
-        "_extensions",
-        "_history",
-        "_elapsed",
-        "_num_bytes_downloaded",
-        "_stream",
-        "_is_closed",
-        "_stream_consumed",
-        "_native_stream",
-        "_next_request",
-    )
-
     _REASON_PHRASES: dict[int, str] = {
         100: "Continue",
         101: "Switching Protocols",

@@ -434,29 +434,29 @@ id = "UNSUPPORTED-002"
 description = "SOCKS proxy support"
 sync = true
 async = true
-tests = ["test_socks5_http_through_proxy", "test_socks5_no_auth", "test_socks5_with_auth"]
+tests = ["test_socks_transport.py", "test_environment.py"]
 result = "resolved"
-phase = "5"
+phase = "corrective-closure"
 difference-id = "SOCKS-001"
 
 [[case]]
 id = "UNSUPPORTED-003"
 description = "Unix Domain Socket transport"
-sync = false
-async = false
-tests = []
-result = "intentional-difference"
-phase = "n/a"
+sync = true
+async = true
+tests = ["test_uds_transport.py"]
+result = "resolved"
+phase = "corrective-closure"
 difference-id = "UDS-001"
 
 [[case]]
 id = "UNSUPPORTED-004"
 description = "local_address / socket_options transport params"
-sync = false
-async = false
-tests = []
-result = "intentional-difference"
-phase = "n/a"
+sync = true
+async = true
+tests = ["test_uds_transport.py", "test_httpx_reference_pinning.py", "test_protocol_and_unsupported_options.py"]
+result = "resolved-with-bounded-difference"
+phase = "corrective-closure"
 difference-id = "TRANSPORT-PARAMS-001"
 
 # Narrow corrective closure kernel

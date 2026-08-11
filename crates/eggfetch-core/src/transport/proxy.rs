@@ -12,18 +12,7 @@ use crate::timeout::TimeoutPhase;
 pub(crate) struct ProxyRequestContext<'a> {
     pub(crate) remaining_total: Option<std::time::Duration>,
     pub(crate) tls_config: Option<&'a crate::tls::TlsConfig>,
-}
-
-fn origin_form(url: &url::Url) -> String {
-    let path = if url.path().is_empty() {
-        "/"
-    } else {
-        url.path()
-    };
-    match url.query() {
-        Some(query) => format!("{path}?{query}"),
-        None => path.to_owned(),
-    }
+    pub(crate) socks_client: Option<crate::transport::TimeoutSocksClient>,
 }
 
 /// Send a request through a proxy.
@@ -40,8 +29,7 @@ pub(crate) async fn send_proxy_request(
     ctx: &ProxyRequestContext<'_>,
 ) -> Result<Response> {
     if proxy_config.is_socks() {
-        return send_socks_request(dest_url, method, headers, body, version, proxy_config, ctx)
-            .await;
+        return send_socks_request(dest_url, method, headers, body, version, ctx).await;
     }
 
     match dest_url.scheme() {
@@ -390,31 +378,12 @@ async fn send_socks_request(
     headers: &Headers,
     body: RequestBody,
     version: http::Version,
-    proxy_config: &ProxyConfig,
     ctx: &ProxyRequestContext<'_>,
 ) -> Result<Response> {
-    let tls_config = if let Some(config) = ctx.tls_config {
-        config
-            .build_rustls_config()
-            .map_err(|e| Error::Tls(format!("failed to build SOCKS TLS config: {e}")))?
-    } else {
-        let mut roots = rustls::RootCertStore::empty();
-        roots.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
-        rustls::ClientConfig::builder()
-            .with_root_certificates(roots)
-            .with_no_client_auth()
-    };
-    let connector = super::socks::SocksConnector::new(
-        proxy_config.clone(),
-        Some(tokio_rustls::TlsConnector::from(std::sync::Arc::new(
-            tls_config,
-        ))),
-        ctx.remaining_total,
-    );
-    let connector = super::connect_timeout::ConnectTimeout::new(connector, None);
-    let client: crate::transport::TimeoutSocksClient =
-        hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new())
-            .build(connector);
+    let client = ctx
+        .socks_client
+        .as_ref()
+        .ok_or_else(|| Error::ProxyConnect("persistent SOCKS client was not initialized".into()))?;
     let mut request = http::Request::builder()
         .method(method)
         .uri(dest_url.as_str())
@@ -449,219 +418,6 @@ async fn send_socks_request(
         dest_url.clone(),
         ResponseBody::streaming(stream),
     ))
-}
-
-/// Send a request through a SOCKS5 proxy.
-///
-/// Performs the SOCKS5 handshake, then either:
-/// - Sends HTTP directly over the tunnel (for `http://` destinations)
-/// - Performs TLS over the tunnel, then sends HTTP (for `https://` destinations)
-#[allow(
-    dead_code,
-    reason = "retained only while proxy fixture migration completes"
-)]
-async fn send_socks_request_legacy(
-    dest_url: &url::Url,
-    method: &http::Method,
-    headers: &Headers,
-    body: RequestBody,
-    version: http::Version,
-    proxy_config: &ProxyConfig,
-    ctx: &ProxyRequestContext<'_>,
-) -> Result<Response> {
-    let dest_host = dest_url
-        .host_str()
-        .ok_or_else(|| Error::InvalidUrl("destination URL has no host".into()))?;
-    let dest_port = dest_url.port_or_known_default().unwrap_or(443);
-    let remote_dns = proxy_config.socks_remote_dns();
-
-    // Perform the SOCKS5 handshake.
-    let stream = super::socks::socks5_handshake(
-        proxy_config,
-        dest_host,
-        dest_port,
-        remote_dns,
-        ctx.remaining_total,
-    )
-    .await?;
-    let stream = tokio::io::BufReader::new(stream);
-
-    match dest_url.scheme() {
-        "http" => send_socks_http_request(dest_url, method, headers, body, version, stream).await,
-        "https" => {
-            send_socks_https_request(dest_url, method, headers, body, version, stream, ctx).await
-        }
-        other => Err(Error::Unsupported(format!(
-            "unsupported destination scheme '{other}' through SOCKS proxy"
-        ))),
-    }
-}
-
-/// Send an HTTP request over an established SOCKS5 tunnel.
-async fn send_socks_http_request(
-    dest_url: &url::Url,
-    method: &http::Method,
-    headers: &Headers,
-    body: RequestBody,
-    version: http::Version,
-    stream: tokio::io::BufReader<tokio::net::TcpStream>,
-) -> Result<Response> {
-    let mut stream = stream;
-
-    // A completed SOCKS CONNECT is an origin connection, so use origin-form
-    // targets rather than HTTP forward-proxy absolute-form URLs.
-    let origin_uri = origin_form(dest_url);
-    let mut origin_headers = headers.clone();
-    if !origin_headers.contains("host") {
-        let host = dest_url.host_str().unwrap_or_default();
-        let host = match dest_url.port() {
-            Some(port) => format!("{host}:{port}"),
-            None => host.to_owned(),
-        };
-        origin_headers.insert("host", &host)?;
-    }
-    write_proxy_request(
-        &mut stream,
-        method,
-        &origin_uri,
-        version,
-        &origin_headers,
-        None, // No proxy auth for the destination request.
-        body,
-    )
-    .await?;
-
-    // Read the response.
-    let (status, resp_headers, initial_buf) = read_proxy_response(&mut stream).await?;
-
-    let url = dest_url.clone();
-    let status = http::StatusCode::from_u16(status)
-        .map_err(|e| Error::MalformedProxyResponse(format!("invalid status code: {e}")))?;
-
-    let mut resp_headers_map = http::HeaderMap::new();
-    for (name, value) in &resp_headers {
-        let name = http::HeaderName::from_bytes(name.as_bytes())
-            .map_err(|e| Error::MalformedProxyResponse(format!("invalid header name: {e}")))?;
-        let value = http::HeaderValue::from_str(value)
-            .map_err(|e| Error::MalformedProxyResponse(format!("invalid header value: {e}")))?;
-        resp_headers_map.append(name, value);
-    }
-
-    let stream_reader = stream.into_inner();
-    let (read_half, _write_half) = stream_reader.into_split();
-    let body_stream = ProxyResponseStream::new(initial_buf, read_half);
-    let body_stream = Box::pin(body_stream) as BoxBytesStream;
-    let body = ResponseBody::streaming(body_stream);
-
-    Ok(Response::new(status, version, resp_headers_map, url, body))
-}
-
-/// Send an HTTPS request over an established SOCKS5 tunnel.
-///
-/// Performs TLS handshake through the tunnel, then sends the HTTP
-/// request over the encrypted connection.
-async fn send_socks_https_request(
-    dest_url: &url::Url,
-    method: &http::Method,
-    headers: &Headers,
-    body: RequestBody,
-    version: http::Version,
-    stream: tokio::io::BufReader<tokio::net::TcpStream>,
-    ctx: &ProxyRequestContext<'_>,
-) -> Result<Response> {
-    let dest_host = dest_url
-        .host_str()
-        .ok_or_else(|| Error::InvalidUrl("destination URL has no host".into()))?;
-
-    // Get the raw TCP stream from the BufReader.
-    let tcp_stream = stream.into_inner();
-
-    // The tunnel is established. Wrap with initial buffer for TLS.
-    let tunnel = super::connect::ProxyTunnel::new(Vec::new(), tcp_stream);
-
-    // Perform TLS handshake with the destination through the tunnel.
-    let rustls_config = if let Some(tc) = ctx.tls_config {
-        tc.build_rustls_config()
-            .map_err(|e| Error::Tls(format!("failed to build TLS config for SOCKS tunnel: {e}")))?
-    } else {
-        let mut root_store = rustls::RootCertStore::empty();
-        root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
-        rustls::ClientConfig::builder()
-            .with_root_certificates(root_store)
-            .with_no_client_auth()
-    };
-    let tls_connector = tokio_rustls::TlsConnector::from(std::sync::Arc::new(rustls_config));
-
-    let domain = rustls::pki_types::ServerName::try_from(dest_host.to_owned())
-        .map_err(|e| Error::Tls(format!("invalid TLS server name: {e}")))?;
-
-    let tls_handshake = tls_connector.connect(domain, tunnel);
-    let tls_stream = match ctx.remaining_total {
-        Some(dur) => match tokio::time::timeout(dur, tls_handshake).await {
-            Ok(Ok(s)) => s,
-            Ok(Err(e)) => {
-                return Err(Error::Tls(format!(
-                    "TLS handshake through SOCKS tunnel failed: {e}"
-                )))
-            }
-            Err(_) => {
-                return Err(Error::Timeout {
-                    phase: TimeoutPhase::ProxyTls,
-                    elapsed: dur,
-                });
-            }
-        },
-        None => tls_handshake
-            .await
-            .map_err(|e| Error::Tls(format!("TLS handshake through SOCKS tunnel failed: {e}")))?,
-    };
-
-    // Send the actual HTTP request over the TLS connection.
-    let origin_uri = origin_form(dest_url);
-    let mut origin_headers = headers.clone();
-    if !origin_headers.contains("host") {
-        let host = dest_url.host_str().unwrap_or_default();
-        let host = match dest_url.port() {
-            Some(port) => format!("{host}:{port}"),
-            None => host.to_owned(),
-        };
-        origin_headers.insert("host", &host)?;
-    }
-    let mut tls_buf = tokio::io::BufReader::new(tls_stream);
-
-    write_proxy_request(
-        &mut tls_buf,
-        method,
-        &origin_uri,
-        version,
-        &origin_headers,
-        None, // No proxy auth for the destination request.
-        body,
-    )
-    .await?;
-
-    // Read the response from the destination.
-    let (status, resp_headers, initial_buf) = read_proxy_response(&mut tls_buf).await?;
-
-    let url = dest_url.clone();
-    let status = http::StatusCode::from_u16(status)
-        .map_err(|e| Error::MalformedProxyResponse(format!("invalid status code: {e}")))?;
-
-    let mut resp_headers_map = http::HeaderMap::new();
-    for (name, value) in &resp_headers {
-        let name = http::HeaderName::from_bytes(name.as_bytes())
-            .map_err(|e| Error::MalformedProxyResponse(format!("invalid header name: {e}")))?;
-        let value = http::HeaderValue::from_str(value)
-            .map_err(|e| Error::MalformedProxyResponse(format!("invalid header value: {e}")))?;
-        resp_headers_map.append(name, value);
-    }
-
-    let stream_reader = tls_buf.into_inner();
-    let body_stream = super::connect::TlsProxyResponseStream::new(initial_buf, stream_reader);
-    let body_stream = Box::pin(body_stream) as BoxBytesStream;
-    let body = ResponseBody::streaming(body_stream);
-
-    Ok(Response::new(status, version, resp_headers_map, url, body))
 }
 
 impl ProxyResponseStream {

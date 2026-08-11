@@ -139,6 +139,13 @@ class TestTransportOptionsAccepted:
         with pytest.raises(TypeError, match="list of tuples"):
             _validate_transport_options(socket_options="not-a-list")
 
+    def test_four_tuple_socket_option_is_bounded(self):
+        """The facade rejects an unusable four-tuple at its safe boundary."""
+        with pytest.raises(ValueError, match="triples"):
+            HTTPTransport(
+                socket_options=[(6, 1, b"\x01", 0)],
+            )
+
     def test_validate_transport_options_invalid_socket_option_triple(self):
         with pytest.raises(ValueError, match="triples"):
             _validate_transport_options(socket_options=[(1, 2)])  # only 2 elements
