@@ -9,16 +9,16 @@ and referenced plans; counts below are only from the runs named here.
 Current designation: **Stage C candidate — final corrective qualification
 pending**.
 
-The corrective executable tree is frozen at
-`044e02f3ab5c4bafaab7aa9e91283f109b3675ba`. The profile remains pending because
-the full aggregate compatibility run exposed three intermittent fixture-order
-timeouts, although the three failures pass when isolated. Proxy headers and
+The corrective executable tree is being re-qualified at the implementation
+commit produced by this pass. The profile remains pending until three clean
+aggregate runs are recorded. This pass fixes shared fixture shutdown/response
+framing and preserves proxy headers as an explicit bounded difference. Proxy headers and
 arbitrary Python `ssl_context` objects also remain bounded differences.
 
 Environment: CPython 3.12.3, pytest 9.1.1, pytest-asyncio 1.4.0,
 `httpx==0.28.1`, `httpcore==1.0.9`, and `socksio==1.0.0`.
 
-Corrective evidence at that SHA:
+Prior corrective evidence at the superseded SHA:
 
 - Focused transport differential: **71 passed**, 3 reference deprecation warnings.
 - Python behavior suite: **532 passed**.

@@ -285,7 +285,7 @@ pub fn parse_timeout(
 /// Expected format: list of `(level, option, value)` tuples where:
 /// - `level` is an int (socket level, e.g., `socket.IPPROTO_TCP`)
 /// - `option` is an int (option name, e.g., `socket.TCP_NODELAY`)
-/// - `value` is bytes or int (the option value)
+/// - `value` is bytes, bytearray, or int (the option value)
 pub(crate) fn parse_socket_options(
     py_options: &Bound<'_, PyAny>,
 ) -> PyResult<Vec<eggfetch_core::SocketOption>> {
@@ -320,6 +320,8 @@ pub(crate) fn parse_socket_options(
         let value_obj = tuple.get_item(2)?;
         let value = if let Ok(value) = value_obj.extract::<i32>() {
             value.to_ne_bytes().to_vec()
+        } else if let Ok(value) = value_obj.downcast::<pyo3::types::PyByteArray>() {
+            value.to_vec()
         } else {
             value_obj.extract::<Vec<u8>>()?
         };

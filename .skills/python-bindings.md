@@ -104,7 +104,7 @@ from eggfetch.compat.httpx import Client, AsyncClient, Request, Response
 - Property setters for `auth`, `base_url`, `cookies`, `event_hooks`, `headers`, `params`, `timeout`
 - HTTPX default headers (`Accept`, `Accept-Encoding`, `Connection`, `User-Agent`)
 - Protocol validation: `http1=False, http2=False` raises `ValueError`, `http1=False, http2=True` raises `NotImplementedError`
-- Transport options: `uds`, `local_address`, and bounded three-tuple `socket_options` functional through the native Rust engine; four-element socket tuples remain an explicit Stage C limitation.
+- Transport options: `uds`, `local_address`, and bounded three-tuple `socket_options` functional through the native Rust engine; ordinary byte-like values include `bytearray`, while four-element socket tuples remain an explicit Stage C limitation.
 - `Response.is_closed` public property for stream context manager compatibility
 - Request construction: params-in-URL with duplicates, `data`+`files` multipart, compact JSON, stream auto-headers
 - Response metadata: HTTP version, reason phrase, elapsed, `raise_for_status()` return, `next_request`

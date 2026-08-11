@@ -9,8 +9,25 @@ use crate::proxy::{ProxyAuth, ProxyConfig};
 use crate::response::Response;
 use crate::timeout::TimeoutPhase;
 
+pub(crate) fn deadline_remaining(
+    deadline: Option<std::time::Instant>,
+    phase: TimeoutPhase,
+) -> Result<Option<std::time::Duration>> {
+    deadline
+        .map(|deadline| {
+            deadline
+                .checked_duration_since(std::time::Instant::now())
+                .ok_or(Error::Timeout {
+                    phase,
+                    elapsed: std::time::Duration::ZERO,
+                })
+        })
+        .transpose()
+}
+
 pub(crate) struct ProxyRequestContext<'a> {
     pub(crate) remaining_total: Option<std::time::Duration>,
+    pub(crate) deadline: Option<std::time::Instant>,
     pub(crate) tls_config: Option<&'a crate::tls::TlsConfig>,
     pub(crate) socks_client: Option<crate::transport::TimeoutSocksClient>,
 }
@@ -97,6 +114,7 @@ pub(crate) async fn send_proxy_request(
                 version,
                 proxy_config,
                 ctx.remaining_total,
+                ctx.deadline,
                 ctx.tls_config,
             )
             .await
@@ -123,6 +141,7 @@ pub(crate) async fn send_proxy_request(
 pub(crate) async fn connect_to_proxy(
     proxy_config: &ProxyConfig,
     remaining_total: Option<std::time::Duration>,
+    deadline: Option<std::time::Instant>,
     tls_config: Option<&crate::tls::TlsConfig>,
 ) -> Result<tokio::io::BufReader<ProxyIo>> {
     let proxy_host = proxy_config.host().unwrap_or("127.0.0.1");
@@ -138,7 +157,9 @@ pub(crate) async fn connect_to_proxy(
         Ok::<_, Error>(stream)
     };
 
-    let stream = match remaining_total {
+    let connect_timeout =
+        deadline_remaining(deadline, TimeoutPhase::ProxyConnect)?.or(remaining_total);
+    let stream = match connect_timeout {
         Some(dur) => match tokio::time::timeout(dur, connect_future).await {
             Ok(Ok(s)) => s,
             Ok(Err(e)) => return Err(e),
@@ -167,7 +188,8 @@ pub(crate) async fn connect_to_proxy(
         let domain = rustls::pki_types::ServerName::try_from(proxy_host.to_owned())
             .map_err(|e| Error::Tls(format!("invalid proxy TLS server name: {e}")))?;
         let handshake = connector.connect(domain, stream);
-        let tls_stream = match remaining_total {
+        let tls_timeout = deadline_remaining(deadline, TimeoutPhase::ProxyTls)?.or(remaining_total);
+        let tls_stream = match tls_timeout {
             Some(dur) => match tokio::time::timeout(dur, handshake).await {
                 Ok(Ok(stream)) => stream,
                 Ok(Err(e)) => return Err(Error::Tls(format!("proxy TLS handshake failed: {e}"))),
@@ -200,13 +222,14 @@ async fn send_http_proxy_request(
     version: http::Version,
     proxy_config: &ProxyConfig,
     remaining_total: Option<std::time::Duration>,
+    deadline: Option<std::time::Instant>,
     tls_config: Option<&crate::tls::TlsConfig>,
 ) -> Result<Response> {
-    let mut stream = connect_to_proxy(proxy_config, remaining_total, tls_config).await?;
+    let mut stream = connect_to_proxy(proxy_config, remaining_total, deadline, tls_config).await?;
 
     // Write the proxy request with absolute-form URI.
     let absolute_uri = dest_url.as_str();
-    write_proxy_request(
+    let write = write_proxy_request(
         &mut stream,
         method,
         absolute_uri,
@@ -214,11 +237,33 @@ async fn send_http_proxy_request(
         headers,
         proxy_config.auth(),
         body,
-    )
-    .await?;
+    );
+    match deadline_remaining(deadline, TimeoutPhase::ProxyConnect)?.or(remaining_total) {
+        Some(duration) => {
+            tokio::time::timeout(duration, write)
+                .await
+                .map_err(|_| Error::Timeout {
+                    phase: TimeoutPhase::ProxyConnect,
+                    elapsed: duration,
+                })??;
+        }
+        None => write.await?,
+    }
 
     // Read the response from the proxy.
-    let (status, resp_headers, initial_buf) = read_proxy_response(&mut stream).await?;
+    let read = read_proxy_response(&mut stream);
+    let (status, resp_headers, initial_buf) =
+        match deadline_remaining(deadline, TimeoutPhase::ProxyConnect)?.or(remaining_total) {
+            Some(duration) => {
+                tokio::time::timeout(duration, read)
+                    .await
+                    .map_err(|_| Error::Timeout {
+                        phase: TimeoutPhase::ProxyConnect,
+                        elapsed: duration,
+                    })??
+            }
+            None => read.await?,
+        };
 
     let url = dest_url.clone();
     let status = http::StatusCode::from_u16(status)

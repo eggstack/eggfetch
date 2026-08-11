@@ -187,11 +187,11 @@ def _convert_socket_option(option: tuple) -> tuple[int, int, bytes]:
     # Convert value to bytes.
     if isinstance(value, int):
         value = value.to_bytes(4, byteorder=sys.byteorder, signed=True)
-    elif isinstance(value, bytes):
-        pass
+    elif isinstance(value, (bytes, bytearray)):
+        value = bytes(value)
     else:
         raise ValueError(
-            f"socket option value must be int or bytes, got {type(value).__name__}"
+            f"socket option value must be int, bytes, or bytearray, got {type(value).__name__}"
         )
 
     return (int(level), int(opt), value)
@@ -309,6 +309,11 @@ def _convert_params(params):
 
 def _convert_proxy(proxy):
     if isinstance(proxy, Proxy):
+        if proxy.headers:
+            raise NotImplementedError(
+                "Proxy(headers=...) is accepted by HTTPX 0.28.1 but is not yet "
+                "forwarded by eggfetch's bounded native proxy API"
+            )
         url = str(proxy.url)
         auth = proxy.raw_auth
         if auth is not None and proxy.url.scheme in ("http", "https", "socks5", "socks5h"):

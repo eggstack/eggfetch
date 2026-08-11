@@ -19,6 +19,7 @@ from typing import Generator
 
 class _ThreadedHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
     daemon_threads = True
+    block_on_close = False
     allow_reuse_address = True
     request_queue_size = 32
 
@@ -26,37 +27,53 @@ class _ThreadedHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
 class DelayedResponseHandler(http.server.BaseHTTPRequestHandler):
     """HTTP handler that can delay response headers or body chunks."""
 
+    protocol_version = "HTTP/1.0"
+
     def do_GET(self):
         if self.path == "/health":
+            body = b"ok"
             self.send_response(200)
             self.send_header("Content-Type", "text/plain")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Connection", "close")
             self.end_headers()
-            self.wfile.write(b"ok")
+            self.wfile.write(body)
             self.wfile.flush()
         elif self.path == "/json":
+            body = json.dumps({"status": "ok"}).encode()
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Connection", "close")
             self.end_headers()
-            self.wfile.write(json.dumps({"status": "ok"}).encode())
+            self.wfile.write(body)
             self.wfile.flush()
         elif self.path == "/slow":
             time.sleep(3)
+            body = b"slow"
             self.send_response(200)
             self.send_header("Content-Type", "text/plain")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Connection", "close")
             self.end_headers()
-            self.wfile.write(b"slow")
+            self.wfile.write(body)
             self.wfile.flush()
         else:
             self.send_response(404)
+            self.send_header("Content-Length", "0")
+            self.send_header("Connection", "close")
             self.end_headers()
 
     def do_POST(self):
         content_length = int(self.headers.get("Content-Length", 0))
-        body = self.rfile.read(content_length) if content_length else b""
+        received_length = len(self.rfile.read(content_length)) if content_length else 0
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
+        body = json.dumps({"received": received_length}).encode()
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Connection", "close")
         self.end_headers()
-        self.wfile.write(json.dumps({"received": len(body)}).encode())
+        self.wfile.write(body)
         self.wfile.flush()
 
     def log_message(self, format, *args):
@@ -143,6 +160,8 @@ def local_http_server(
         yield "127.0.0.1", port
     finally:
         httpd.shutdown()
+        httpd.server_close()
+        thread.join(timeout=2)
 
 
 @contextmanager
@@ -324,6 +343,8 @@ def local_proxy_server(
         yield "127.0.0.1", port, handler_class
     finally:
         httpd.shutdown()
+        httpd.server_close()
+        thread.join(timeout=2)
 
 
 @contextmanager
@@ -350,6 +371,8 @@ def local_tls_proxy_server(
             yield "127.0.0.1", port, handler_class, cert_path
         finally:
             httpd.shutdown()
+            httpd.server_close()
+            thread.join(timeout=2)
 
 
 class _TLSDirectHandler(http.server.BaseHTTPRequestHandler):
@@ -426,3 +449,5 @@ def local_tls_server() -> Generator[tuple[str, int, ssl.SSLContext, str], None, 
             yield "127.0.0.1", port, client_ssl, cert_path
         finally:
             httpd.shutdown()
+            httpd.server_close()
+            thread.join(timeout=2)

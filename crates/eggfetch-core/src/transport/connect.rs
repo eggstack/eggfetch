@@ -10,10 +10,12 @@ use crate::response::Response;
 use crate::timeout::TimeoutPhase;
 
 use super::proxy::{
-    connect_to_proxy, read_proxy_response, write_proxy_request, ProxyRequestContext,
+    connect_to_proxy, deadline_remaining, read_proxy_response, write_proxy_request,
+    ProxyRequestContext,
 };
 
 /// Send an HTTPS request through an HTTP proxy using CONNECT tunneling.
+#[allow(clippy::too_many_lines)] // CONNECT owns the ordered proxy/tunnel/origin phases.
 pub(crate) async fn send_https_connect_request(
     dest_url: &url::Url,
     method: &http::Method,
@@ -25,7 +27,13 @@ pub(crate) async fn send_https_connect_request(
 ) -> Result<Response> {
     use tokio::io::AsyncWriteExt;
 
-    let mut stream = connect_to_proxy(proxy_config, ctx.remaining_total, ctx.tls_config).await?;
+    let mut stream = connect_to_proxy(
+        proxy_config,
+        ctx.remaining_total,
+        ctx.deadline,
+        ctx.tls_config,
+    )
+    .await?;
 
     // Send CONNECT request.
     let dest_host = dest_url
@@ -46,13 +54,35 @@ pub(crate) async fn send_https_connect_request(
     }
     connect_req.push_str("\r\n");
 
-    stream
-        .write_all(connect_req.as_bytes())
-        .await
-        .map_err(|e| Error::ProxyConnect(format!("failed to send CONNECT: {e}")))?;
+    let write = stream.write_all(connect_req.as_bytes());
+    match deadline_remaining(ctx.deadline, TimeoutPhase::ProxyConnect)?.or(ctx.remaining_total) {
+        Some(duration) => tokio::time::timeout(duration, write)
+            .await
+            .map_err(|_| Error::Timeout {
+                phase: TimeoutPhase::ProxyConnect,
+                elapsed: duration,
+            })?
+            .map_err(|e| Error::ProxyConnect(format!("failed to send CONNECT: {e}")))?,
+        None => write
+            .await
+            .map_err(|e| Error::ProxyConnect(format!("failed to send CONNECT: {e}")))?,
+    }
 
     // Read the CONNECT response.
-    let (status, _resp_headers, initial_buf) = read_proxy_response(&mut stream).await?;
+    let read = read_proxy_response(&mut stream);
+    let (status, _resp_headers, initial_buf) =
+        match deadline_remaining(ctx.deadline, TimeoutPhase::ProxyConnect)?.or(ctx.remaining_total)
+        {
+            Some(duration) => {
+                tokio::time::timeout(duration, read)
+                    .await
+                    .map_err(|_| Error::Timeout {
+                        phase: TimeoutPhase::ProxyConnect,
+                        elapsed: duration,
+                    })??
+            }
+            None => read.await?,
+        };
 
     if status != 200 {
         let body_str = initial_buf.iter().take(256).copied().collect::<Vec<u8>>();
@@ -86,7 +116,9 @@ pub(crate) async fn send_https_connect_request(
         .map_err(|e| Error::Tls(format!("invalid TLS server name: {e}")))?;
 
     let tls_handshake = tls_connector.connect(domain, tunnel);
-    let tls_stream = match ctx.remaining_total {
+    let tls_timeout =
+        deadline_remaining(ctx.deadline, TimeoutPhase::Connect)?.or(ctx.remaining_total);
+    let tls_stream = match tls_timeout {
         Some(dur) => match tokio::time::timeout(dur, tls_handshake).await {
             Ok(Ok(s)) => s,
             Ok(Err(e)) => {
@@ -116,7 +148,7 @@ pub(crate) async fn send_https_connect_request(
     };
     let mut tls_buf = tokio::io::BufReader::new(tls_stream);
 
-    write_proxy_request(
+    let write = write_proxy_request(
         &mut tls_buf,
         method,
         &origin_uri,
@@ -124,11 +156,33 @@ pub(crate) async fn send_https_connect_request(
         headers,
         None, // No proxy auth for the destination request.
         body,
-    )
-    .await?;
+    );
+    match deadline_remaining(ctx.deadline, TimeoutPhase::Write)?.or(ctx.remaining_total) {
+        Some(duration) => {
+            tokio::time::timeout(duration, write)
+                .await
+                .map_err(|_| Error::Timeout {
+                    phase: TimeoutPhase::Write,
+                    elapsed: duration,
+                })??;
+        }
+        None => write.await?,
+    }
 
     // Read the response from the destination.
-    let (status, resp_headers, initial_buf) = read_proxy_response(&mut tls_buf).await?;
+    let read = read_proxy_response(&mut tls_buf);
+    let (status, resp_headers, initial_buf) =
+        match deadline_remaining(ctx.deadline, TimeoutPhase::Read)?.or(ctx.remaining_total) {
+            Some(duration) => {
+                tokio::time::timeout(duration, read)
+                    .await
+                    .map_err(|_| Error::Timeout {
+                        phase: TimeoutPhase::Read,
+                        elapsed: duration,
+                    })??
+            }
+            None => read.await?,
+        };
 
     let url = dest_url.clone();
     let status = http::StatusCode::from_u16(status)

@@ -34,6 +34,13 @@ class BehaviorCase:
 class CompatTestHandler(http.server.BaseHTTPRequestHandler):
     """Deterministic test server for behavior fixtures."""
 
+    def end_headers(self):
+        if not any(b"Content-Length:" in header for header in self._headers_buffer):
+            self.send_header("Content-Length", "0")
+        if not any(b"Connection:" in header for header in self._headers_buffer):
+            self.send_header("Connection", "close")
+        super().end_headers()
+
     def _send_json(self, data, status=200):
         body = json.dumps(data).encode()
         self.send_response(status)
@@ -361,6 +368,7 @@ class CompatTestHandler(http.server.BaseHTTPRequestHandler):
 
 class _ThreadedHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
     daemon_threads = True
+    block_on_close = False
 
 
 def create_server():

@@ -84,6 +84,13 @@ verifies the proxy hostname over TLS, then uses the existing absolute-form
 forwarding or CONNECT path. For HTTPS origins, origin TLS is layered after
 CONNECT and uses the origin hostname independently.
 
+The Python compatibility facade accepts and stores HTTPX proxy metadata, but a
+non-empty `Proxy(headers=...)` is rejected before native dispatch. This is an
+explicit Stage C boundary: the current safe native API has no proxy-leg header
+channel, so metadata is never silently discarded. Ordinary three-element
+socket options accept integer, `bytes`, and `bytearray` values; the arbitrary
+four-element null-pointer form remains intentionally bounded out.
+
 ### CONNECT Tunnel
 
 For HTTPS through a proxy, the transport establishes a CONNECT tunnel:

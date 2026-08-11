@@ -78,6 +78,7 @@ class _EchoHandler(http.server.BaseHTTPRequestHandler):
 
 class _ThreadedHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
     daemon_threads = True
+    block_on_close = False
 
 
 @pytest.fixture(scope="module")
@@ -88,6 +89,8 @@ def server():
     t.start()
     yield f"http://127.0.0.1:{port}"
     srv.shutdown()
+    srv.server_close()
+    t.join(timeout=2)
 
 
 # ---------------------------------------------------------------------------

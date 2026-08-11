@@ -53,6 +53,15 @@ This enables Python bindings to map to specific exception classes (`ConnectTimeo
 
 Cancelled timeout-wrapped operations release pool permits cleanly. The pool uses `OwnedSemaphorePermit` with RAII drop semantics.
 
+### Multi-phase proxy deadlines
+
+When a request has a total timeout, the proxy transport creates one monotonic
+deadline at request dispatch. Proxy TCP connect, proxy TLS, CONNECT write/read,
+origin TLS, and proxy request/response-header setup each derive their remaining
+time from that deadline. A phase never receives a fresh copy of the original
+total duration. Phase-specific errors retain the phase that exhausted the
+shared budget.
+
 ## Connection Pool
 
 The pool controls **logical request concurrency**, not physical TCP connections. hyper manages actual TCP connections internally.

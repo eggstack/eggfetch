@@ -262,8 +262,12 @@ to HTTPX 0.28.1. Environment proxy discovery follows Python's HTTPX-compatible
 precedence and `NO_PROXY` URL-pattern rules, including scheme-qualified and
 bare-IPv6 entries. HTTP and HTTPS proxy endpoints are distinct: HTTPS proxy
 URLs establish TLS to the proxy before forward or CONNECT proxying. The safe
-three-element `socket_options` form is supported; HTTPX's valid four-element
-`(level, option, None, optlen)` form remains a narrow safe-Rust limitation.
+ three-element `socket_options` form is supported; HTTPX's valid four-element
+  `(level, option, None, optlen)` form remains a narrow safe-Rust limitation.
+  Ordinary three-element values may be `int`, `bytes`, or `bytearray`.
+  Non-empty `Proxy(headers=...)` is explicitly rejected rather than silently
+  discarded because the bounded native proxy API has no proxy-leg header
+  channel yet.
 
 Remaining differences are documented in `compat/httpx/0.28.1/allowed-differences.toml`; the compatibility claim is limited to the pinned HTTPX 0.28.1 profile and the supported asyncio surface.
 

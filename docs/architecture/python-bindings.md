@@ -191,7 +191,10 @@ The facade converts between HTTPX-compatible objects and native types at the bou
 - **QueryParams → URL**: Request construction materializes merged query pairs into the URL; native dispatch does not forward them a second time.
 - **Timeout → native timeout**: `Timeout` fields map to scalar/phase-aware native timeout config.
 - **Limits → native limits**: `Limits` fields map to `PoolConfig`.
-- **Proxy → native proxy**: `Proxy.url` maps to the native proxy string.
+- **Proxy → native proxy**: `Proxy.url` and supported URL credentials map to
+  the native proxy string/authentication path. Non-empty `Proxy(headers=...)`
+  is rejected before dispatch because the bounded native API has no proxy-leg
+  header channel; it is an explicit Stage C difference.
 - **Request → native body**: Body kwargs dispatched by mutual-exclusion rules; auto-headers computed by the facade.
 - **Response ← native response**: Status, headers, URL, body, and version extracted from native `PyResponse`.
 - **Errors ← native errors**: Exception mapping preserves the most specific HTTPX class with redacted context.
@@ -278,9 +281,13 @@ is tested against the server-observed source address. SOCKS clients are
 persistent per effective route, advertise exactly the reference-selected
 authentication method, send HTTPX-compatible destination address types, and
 preserve origin-form requests after CONNECT. The facade intentionally bounds
-`socket_options` to safe three-element tuples; HTTPX's valid four-element
+`socket_options` to safe three-element tuples; integer, `bytes`, and
+`bytearray` values are converted losslessly. HTTPX's valid four-element
 `(level, option, None, optlen)` form is accepted by its constructor and
 forwarded to the platform socket API, but EggFetch does not expose arbitrary
 null-pointer socket operations in its safe Rust boundary. HTTP and HTTPS proxy
 endpoint schemes are both supported; HTTPS proxy TLS uses the proxy hostname,
 while origin TLS after CONNECT uses the origin hostname.
+Non-empty `Proxy(headers=...)` is rejected before native dispatch because the
+bounded native API has no proxy-leg header channel; this remains an explicit
+Stage C difference rather than silently dropping metadata.

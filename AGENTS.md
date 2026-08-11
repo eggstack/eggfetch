@@ -187,3 +187,8 @@ the qualification handoff). The corrective transport profile is a Stage C
 candidate while the final qualification pass is rerun; once qualified it must
 remain bound to one exact executable SHA. Do not silently revive historical
 qualification counts.
+
+The current corrective boundary derives one monotonic request deadline for
+multi-phase HTTP/HTTPS proxy setup. `Proxy(headers=...)` remains an explicit
+Stage C bounded difference: non-empty metadata is rejected at conversion until
+it can be carried on the proxy leg without a generalized routing redesign.

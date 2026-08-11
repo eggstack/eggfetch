@@ -9,6 +9,7 @@ import pytest
 from eggfetch.compat.httpx import Client, AsyncClient, Timeout
 from eggfetch.compat.httpx._transports import HTTPTransport, AsyncHTTPTransport
 from eggfetch.compat.httpx._client import (
+    _convert_socket_option,
     _validate_protocol_options,
     _validate_transport_options,
 )
@@ -63,6 +64,10 @@ class TestProtocolValidation:
 # ---------------------------------------------------------------------------
 
 class TestTransportOptionsAccepted:
+    def test_socket_option_bytearray_is_losslessly_converted(self):
+        value = bytearray(b"\x01\x00\x00\x00")
+        assert _convert_socket_option((1, 2, value)) == (1, 2, bytes(value))
+
     def test_uds_accepted(self):
         """UDS is now accepted in the transport constructor."""
         transport = HTTPTransport(uds="/tmp/test.sock")

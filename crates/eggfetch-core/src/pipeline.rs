@@ -831,6 +831,7 @@ pub(crate) async fn send_single_request(
                 proxy_config,
                 &crate::transport::proxy::ProxyRequestContext {
                     remaining_total,
+                    deadline: timeout.total.map(|total| started + total),
                     tls_config: inner.config.tls_config.as_ref(),
                     socks_client,
                 },
