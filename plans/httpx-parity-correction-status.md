@@ -42,7 +42,10 @@ Evidence bound to the executable SHA:
   controlled replacement SHA
   `11914ce75c418d2c75acce35d12973087543b1a8a7ba4dbb9daf827c05ff2f7f`.
 
-Remote routine CI is recorded after the qualification commit is pushed below.
+Remote routine CI passed for documentation commit
+`1bb07cf5ed9d4b31d66dd5f85f1993400479ade5`: workflow run `31536326327`, job
+`93928168428`, checked out the exact pushed SHA, and completed successfully in
+4m04s. The workflow ran the unchanged `./scripts/check.sh` routine path.
 
 Native compressed raw body selection, wire metadata parity, native async
 cancellation/lease release, planning preservation, and final CI verification
