@@ -122,7 +122,12 @@ Documentation-only CI evidence for the consistency correction:
 
 ## Current designation
 
-**Historical Stage C candidate — deterministic compressed raw-stream body and metadata closure complete for the documented HTTPX 0.28.1 asyncio-supported surface.**
+**Stage C qualified — corrective transport closure complete for the documented HTTPX 0.28.1 asyncio-supported surface.**
+
+The exact executable qualification SHA is
+`ace3782ecf825dede595e2660db4905fb9145b40`. The profile is qualified on
+2026-08-11. Historical SHA `40beeec09f3e88db8901f39388da665c47ab84f6` remains
+superseded evidence only.
 
 ## Historical superseded final closure evidence
 

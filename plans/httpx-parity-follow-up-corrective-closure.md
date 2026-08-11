@@ -1,6 +1,6 @@
 # HTTPX 0.28.1 Parity — Follow-up Corrective Closure
 
-Status: ready for implementation handoff
+Status: complete — Stage C qualified
 
 Date: 2026-08-11
 
@@ -18,7 +18,51 @@ Historical pre-corrective qualification candidate: `40beeec09f3e88db8901f39388da
 
 Pinned reference: `httpx==0.28.1`
 
-Compatibility designation during this pass: **Stage C candidate — corrective transport qualification pending**
+Compatibility designation after this pass: **Stage C qualified for the documented Python ≥3.10 asyncio-supported surface**
+
+## Corrective closure evidence
+
+All executable evidence below is bound to `ace3782ecf825dede595e2660db4905fb9145b40`.
+The planning baseline was `b170066e17eb14a3e4d6cb8699f8f0aa79920b62`; `main`
+had already advanced to the plan-only commit `3251693` before implementation.
+
+- Reference stack: `httpx==0.28.1`, `httpcore==1.0.9`, `socksio==1.0.0`.
+- SOCKS auth: no credentials offers only `NO AUTH` (`0x00`); credentials offer
+  only `USERNAME/PASSWORD` (`0x02`), with percent-decoded userinfo; any other
+  selected method is rejected.
+- SOCKS addressing: hostname destinations use domain ATYP (`0x03`) for both
+  `socks5://` and `socks5h://`, while IPv4/IPv6 literals use ATYP `0x01`/`0x04`.
+  The native API retains its explicit local/remote DNS distinction.
+- SOCKS lifecycle: the client caches a Hyper client per route key (proxy,
+  scheme, destination, port, and credentials). Same-route evidence shows one
+  handshake and connection reuse; different routes remain isolated. HTTPS
+  origin TLS/SNI, normal origin-form framing, cancellation followed by a
+  constrained same-route request, and timeout-envelope behavior all pass.
+- Proxy environment: HTTP/HTTPS scheme selection, `ALL_PROXY` fallback,
+  lowercase-over-uppercase precedence, scheme-less normalization, explicit
+  proxy precedence, `trust_env=False`, and `NO_PROXY` domain, leading-dot,
+  port, localhost, loopback, and wildcard behavior are covered. Compat
+  localhost follows HTTPX's exact-host behavior; native `NoProxy` retains its
+  documented loopback aliases.
+- Socket options: the safe three-element form is supported. The four-element
+  form is an intentional, bounded difference: HTTPX accepts construction but
+  fails when Python reaches `setsockopt`, so eggfetch rejects it before native
+  dispatch.
+- UDS/direct transport: HTTPS UDS fixed/chunked responses, same-path reuse,
+  path isolation, cancellation, and sync/async host-only `local_address` are
+  covered by executable fixtures.
+- Validation: `cargo fmt --all`, clippy with `-D warnings`, `cargo test
+  --workspace`, and `./scripts/check.sh` pass. The routine gate reports 532
+  Python behavior tests and 127 compatibility smoke tests passing.
+- Full pinned compatibility: `1475 passed, 5 warnings`.
+- API oracle: 76 differences, 76 allowed matches, 0 stale, 0 unexplained,
+  0 resolved-in-active, and 0 requires-resolution.
+- Downstream isolated runner: 4/4 release-blocking packages pass. Informational
+  results are explicit: `pytest-httpx` and Starlette import excluded private
+  HTTPX modules; Anthropic 0.39.0 uses the removed HTTPX 0.27-era `proxies=`
+  keyword. The corrected `httpx-sse==0.4.0` public `iter_sse()` fixture passes.
+- Scope preserved: no CI/release redesign, Trio/AnyIO support, Python 3.8/3.9
+  support, private-module compatibility, or unsafe socket code was added.
 
 ## Objective
 
@@ -133,15 +177,11 @@ Do not undo these properties unless a differential test demonstrates a defect:
 - advanced direct connections use async resolution and compatible-address iteration;
 - socket option classification is semantic/platform-derived at the Python boundary.
 
-## 0.3 Qualification remains open
+## 0.3 Qualification closed
 
-Keep:
-
-`status = "corrective-transport-pending"`
-
-until Track 6 closes.
-
-Do not set a new `qualification-sha` from a partial test run.
+Track 6 closed on the exact executable SHA recorded in the corrective closure
+evidence. The profile is now `status = "qualified"`; historical pending
+language below is retained only as the plan's pre-implementation guardrail.
 
 ## Track 0 acceptance criteria
 
@@ -688,33 +728,33 @@ Only after all executable criteria pass:
 
 The follow-up corrective pass is complete only when all of the following are true:
 
-- [ ] SOCKS Hyper clients/pools persist across compatible requests rather than being created per request;
-- [ ] same-route SOCKS requests demonstrably reuse a connection when keep-alive permits;
-- [ ] direct/HTTP-proxy/SOCKS/different-SOCKS-route isolation is proven;
-- [ ] SOCKS auth method advertisement and selection match HTTPX 0.28.1 exactly;
-- [ ] `socks5://` / `socks5h://` address semantics are wire-pinned against HTTPX and matched;
-- [ ] unresolved destinations never fall back to loopback;
-- [ ] HTTPS-over-SOCKS proves origin TLS/SNI/certificate identity and normal HTTP framing;
-- [ ] SOCKS cancellation followed by a constrained request succeeds;
-- [ ] SOCKS total timeout consumes one coherent request budget rather than restarting per handshake operation;
-- [ ] lowercase/uppercase environment variable precedence matches HTTPX;
-- [ ] scheme-less environment proxy values are normalized like HTTPX if the reference accepts them;
-- [ ] `HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY` fallback is request-scheme-correct;
-- [ ] `NO_PROXY` bare-domain, leading-dot, port, localhost, loopback, and wildcard behavior matches HTTPX;
-- [ ] `trust_env=False` ignores all environment proxy state;
-- [ ] explicit proxy precedence matches HTTPX;
-- [ ] public `socket_options` tuple forms are pinned and either implemented or narrowly documented as a positive Stage C limitation;
-- [ ] successful HTTPS-over-UDS is proven against a real local TLS UDS fixture;
-- [ ] UDS fixed-length/chunked/streaming behavior does not depend on EOF;
-- [ ] UDS same-path reuse and different-path isolation are proven;
-- [ ] compatibility facade host-only `local_address` is tested sync and async;
-- [ ] dead legacy SOCKS HTTP framing code is removed after migration;
-- [ ] routine validation passes on the final executable SHA;
-- [ ] the full pinned HTTPX compatibility suite passes with zero failures;
-- [ ] the API oracle has zero unexplained/stale/resolved-active/requires-resolution differences;
-- [ ] downstream isolated qualification has zero unexplained public Stage C failures;
-- [ ] profile `qualification-sha` identifies the exact executable tree that produced all final evidence;
-- [ ] profile status returns to `qualified` only after every item above closes.
+- [x] SOCKS Hyper clients/pools persist across compatible requests rather than being created per request;
+- [x] same-route SOCKS requests demonstrably reuse a connection when keep-alive permits;
+- [x] direct/HTTP-proxy/SOCKS/different-SOCKS-route isolation is proven;
+- [x] SOCKS auth method advertisement and selection match HTTPX 0.28.1 exactly;
+- [x] `socks5://` / `socks5h://` address semantics are wire-pinned against HTTPX and matched;
+- [x] unresolved destinations never fall back to loopback;
+- [x] HTTPS-over-SOCKS proves origin TLS/SNI/certificate identity and normal HTTP framing;
+- [x] SOCKS cancellation followed by a constrained request succeeds;
+- [x] SOCKS total timeout consumes one coherent request budget rather than restarting per handshake operation;
+- [x] lowercase/uppercase environment variable precedence matches HTTPX;
+- [x] scheme-less environment proxy values are normalized like HTTPX if the reference accepts them;
+- [x] `HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY` fallback is request-scheme-correct;
+- [x] `NO_PROXY` bare-domain, leading-dot, port, localhost, loopback, and wildcard behavior matches HTTPX;
+- [x] `trust_env=False` ignores all environment proxy state;
+- [x] explicit proxy precedence matches HTTPX;
+- [x] public `socket_options` tuple forms are pinned and either implemented or narrowly documented as a positive Stage C limitation;
+- [x] successful HTTPS-over-UDS is proven against a real local TLS UDS fixture;
+- [x] UDS fixed-length/chunked/streaming behavior does not depend on EOF;
+- [x] UDS same-path reuse and different-path isolation are proven;
+- [x] compatibility facade host-only `local_address` is tested sync and async;
+- [x] dead legacy SOCKS HTTP framing code is removed after migration;
+- [x] routine validation passes on the final executable SHA;
+- [x] the full pinned HTTPX compatibility suite passes with zero failures;
+- [x] the API oracle has zero unexplained/stale/resolved-active/requires-resolution differences;
+- [x] downstream isolated qualification has zero unexplained public Stage C failures;
+- [x] profile `qualification-sha` identifies the exact executable tree that produced all final evidence;
+- [x] profile status returns to `qualified` only after every item above closes.
 
 ---
 
