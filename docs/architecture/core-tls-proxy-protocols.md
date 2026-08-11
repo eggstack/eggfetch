@@ -74,6 +74,15 @@ and `NO_PROXY` into explicit scheme-aware native proxy configuration when
 facade follows HTTPX's `urllib.request` environment precedence and matching:
 lowercase names win, scheme-less proxy values are treated as HTTP URLs, and
 `localhost` is an exact hostname rule rather than an implicit loopback alias.
+Scheme-qualified exclusions constrain scheme and optional port; bare IPv6 is
+recognized without treating its final colon as a port separator; CIDR-looking
+entries retain HTTPX's exact URL-pattern host behavior rather than native Rust
+subnet matching.
+
+HTTP proxy endpoints may use `http://` or `https://`. An HTTPS endpoint first
+verifies the proxy hostname over TLS, then uses the existing absolute-form
+forwarding or CONNECT path. For HTTPS origins, origin TLS is layered after
+CONNECT and uses the origin hostname independently.
 
 ### CONNECT Tunnel
 

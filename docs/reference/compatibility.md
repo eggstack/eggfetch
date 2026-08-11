@@ -36,7 +36,8 @@ all HTTPX transports or concurrency backends.
 | Custom CA bundle | Yes | Yes | Yes | Yes | Yes |
 | Client certificates (mTLS) | Yes | Yes | Yes | Yes | Yes |
 | Disable TLS verification | Yes | Yes | Yes | Yes | Yes |
-| HTTP proxy | Yes | Yes | Yes | Yes | Yes |
+| HTTP proxy endpoint (`http://`) | Yes | Yes | Yes | Yes | Yes |
+| HTTPS proxy endpoint (`https://`) | Yes | Yes | Yes | Yes | Yes |
 | HTTPS CONNECT tunnel | Yes | Yes | Yes | Yes | Yes |
 | SOCKS5 proxy | No | Yes (httpx[socks]) | Yes | Yes | Yes |
 | Proxy authentication | Yes | Yes | Yes | Yes | N/A |
@@ -108,7 +109,7 @@ eggfetch targets HTTPX 0.28.1 compatibility in phases. The current status:
 - **Phase 5**: SOCKS5 proxy — HTTP/HTTPS through SOCKS5, auth, DNS/address-type behavior, NO_PROXY bypass, credential redaction
 - **Phase 6 / Differential Closure**: Final qualification — API oracle clean (76 active differences, all intentional/deferred), full pinned compat suite passing, downstream behavioral fixtures validated
 
-**Current status: Stage C qualified for the documented asyncio surface.**
+**Current status: Stage C candidate pending final corrective qualification for the documented asyncio surface.**
 The qualification is pinned to HTTPX 0.28.1 and the exact executable SHA in
 `compat/httpx/0.28.1/profile.toml`. The compatibility facade does not claim
 unrestricted HTTPX replacement. Trio/AnyIO, Python 3.8/3.9, and private HTTPX
@@ -132,9 +133,10 @@ The following statements from earlier documentation have been corrected:
 2. **Redirect default**: HTTPX 0.28.1 defaults to `follow_redirects=False`, same as eggfetch. The earlier claim that "HTTPX follows redirects by default" was incorrect for version 0.28.1.
 3. **Proxy env vars**: the HTTPX facade selects `HTTP_PROXY`/`HTTPS_PROXY` by request scheme, uses `ALL_PROXY` fallback, and honors lowercase forms plus `NO_PROXY` when `trust_env=True`; native Rust configuration remains explicit.
 4. **SOCKS proxy**: HTTPX 0.28.1 exposes SOCKS proxy support as an optional public feature via `httpx[socks]`. eggfetch supports SOCKS5 (`socks5://` and `socks5h://`) with the pinned username/password method matrix, domain/IP address types, route-local pooling, origin TLS, and `NO_PROXY` bypass. Both schemes use the reference's domain ATYP for hostnames; native Rust configuration retains its explicit DNS distinction.
-5. **UDS, local_address, socket_options**: HTTPX 0.28.1 exposes `UDS`, `local_address`, and `socket_options` transport parameters. eggfetch implements these through the native Rust engine with HTTPS, fixed/chunked streaming, reuse, and host-only local-address evidence. The safe three-element socket-option form is supported; four-element tuples are a bounded intentional difference because the reference fails at socket use.
-6. **SSL context**: HTTPX `Proxy(..., ssl_context=...)` is a public constructor parameter. eggfetch `Proxy` does not accept `ssl_context` because TLS is handled by the Rust engine. This is classified as `intentional` (security boundary).
-7. **Stream exception hierarchy**: eggfetch's stream exceptions (StreamClosed, StreamConsumed, RequestNotRead, ResponseNotRead) now match HTTPX 0.28.1 exactly — inheriting from RuntimeError, accepting no arguments. Resolved in Phase 2.
+5. **UDS, local_address, socket_options**: HTTPX 0.28.1 exposes `UDS`, `local_address`, and `socket_options` transport parameters. eggfetch implements these through the native Rust engine with HTTPS, fixed/chunked streaming, reuse, and host-only local-address evidence. The safe three-element socket-option form is supported; the valid `(level, option, None, optlen)` form remains a bounded safe-Rust difference because arbitrary pointer semantics are not exposed.
+6. **Proxy endpoint TLS**: `https://` proxy URLs establish and verify TLS to the proxy hostname before HTTP forwarding or CONNECT. Origin TLS after CONNECT remains independently verified against the origin hostname.
+7. **Proxy metadata**: HTTPX proxy URL credentials are translated into the core proxy authentication path. Arbitrary `Proxy(headers=...)` metadata and Python `ssl_context` objects are retained by the facade but are not yet forwarded into the Rust proxy engine; default verified proxy TLS is supported. These remain bounded Stage C differences and are covered by the corrective handoff rather than silently treated as equivalent.
+8. **Stream exception hierarchy**: eggfetch's stream exceptions (StreamClosed, StreamConsumed, RequestNotRead, ResponseNotRead) now match HTTPX 0.28.1 exactly — inheriting from RuntimeError, accepting no arguments. Resolved in Phase 2.
 
 ### Phase 1 rebaseline (2026-08-07)
 

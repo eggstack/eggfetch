@@ -4,20 +4,37 @@ This record is the exact-SHA-bound status for the HTTPX 0.28.1 compatibility
 facade. Historical phase and corrective-pass records remain in the git history
 and referenced plans; counts below are only from the runs named here.
 
-## Current corrective pass
+## Current corrective pass — evidence record
 
-The previous qualification is historical only. The current corrective
-transport pass is qualified by the exact executable SHA recorded below; do
-not use the historical SHA as current transport evidence.
+Current designation: **Stage C candidate — final corrective qualification
+pending**.
 
-Corrective transport validation: the pinned HTTPX 0.28.1 suite passes, the API
-oracle has zero unexplained, stale, resolved-in-active, or requires-resolution
-differences, and the local direct/UDS/SOCKS focused fixtures pass. The isolated
-downstream runner qualifies four release-blocking packages. Its informational
-results are explicit: `pytest-httpx` and Starlette import excluded private
-HTTPX modules, while Anthropic 0.39.0 passes the removed HTTPX 0.27-era
-`proxies=` keyword. The SSE fixture uses the package's public `iter_sse()` API
-and passes.
+The corrective executable tree is frozen at
+`044e02f3ab5c4bafaab7aa9e91283f109b3675ba`. The profile remains pending because
+the full aggregate compatibility run exposed three intermittent fixture-order
+timeouts, although the three failures pass when isolated. Proxy headers and
+arbitrary Python `ssl_context` objects also remain bounded differences.
+
+Environment: CPython 3.12.3, pytest 9.1.1, pytest-asyncio 1.4.0,
+`httpx==0.28.1`, `httpcore==1.0.9`, and `socksio==1.0.0`.
+
+Corrective evidence at that SHA:
+
+- Focused transport differential: **71 passed**, 3 reference deprecation warnings.
+- Python behavior suite: **532 passed**.
+- API oracle: **76 allowed matches**, 0 stale allowed, 0 unexplained, 0 resolved-in-active.
+- Full pinned compatibility: **1479 passed, 3 failed** in aggregate; the three
+  failures are `test_read_after_close_returns_data`, `test_read_phase_timeout`,
+  and `test_real_proxy_server_forward`, and all three pass in a direct isolated
+  invocation.
+- Rust formatting, workspace clippy with `-D warnings`, and the Rust portions
+  of Tier 1 passed. The Python behavior phase also passed when run directly;
+  the first canonical shell session stalled after starting that phase and was
+  rerun by its exact command successfully.
+
+The full suite result is intentionally recorded as pending rather than claimed
+as qualification evidence until its aggregate fixture-order instability is
+resolved or the qualification policy explicitly accepts the isolated rerun.
 
 Native compressed raw body selection, wire metadata parity, native async
 cancellation/lease release, planning preservation, and final CI verification
@@ -53,7 +70,7 @@ removes those headers from visible core response headers; the compatibility
 facade overlays the retained values without deriving wire length from decoded
 bytes or changing decoder selection.
 
-## Final validation bound to executable SHA
+## Historical validation bound to prior executable SHAs
 
 Focused command:
 
@@ -96,7 +113,7 @@ runner; invoking its fixture directory directly against the ordinary
 `httpx==0.28.1` environment is not valid shim evidence and was not used to
 claim closure.
 
-## Final CI and repository hygiene evidence
+## Historical final CI and repository hygiene evidence
 
 The existing single Ubuntu `ci` job ran the unchanged `./scripts/check.sh`
 routine path.
@@ -119,15 +136,6 @@ Documentation-only CI evidence for the consistency correction:
 - Documentation-only CI job ID: `92413466674`
 - Conclusion: passed (3m41s)
 - This commit is documentation-only and does not alter executable evidence.
-
-## Current designation
-
-**Stage C qualified — corrective transport closure complete for the documented HTTPX 0.28.1 asyncio-supported surface.**
-
-The exact executable qualification SHA is
-`ace3782ecf825dede595e2660db4905fb9145b40`. The profile is qualified on
-2026-08-11. Historical SHA `40beeec09f3e88db8901f39388da665c47ab84f6` remains
-superseded evidence only.
 
 ## Historical superseded final closure evidence
 

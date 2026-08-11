@@ -278,5 +278,9 @@ is tested against the server-observed source address. SOCKS clients are
 persistent per effective route, advertise exactly the reference-selected
 authentication method, send HTTPX-compatible destination address types, and
 preserve origin-form requests after CONNECT. The facade intentionally bounds
-`socket_options` to safe three-element tuples; HTTPX's four-element form is
-accepted by its constructor but fails at use with Python's `setsockopt` API.
+`socket_options` to safe three-element tuples; HTTPX's valid four-element
+`(level, option, None, optlen)` form is accepted by its constructor and
+forwarded to the platform socket API, but EggFetch does not expose arbitrary
+null-pointer socket operations in its safe Rust boundary. HTTP and HTTPS proxy
+endpoint schemes are both supported; HTTPS proxy TLS uses the proxy hostname,
+while origin TLS after CONNECT uses the origin hostname.

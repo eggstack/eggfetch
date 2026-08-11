@@ -109,7 +109,7 @@ configuration when `trust_env=True`.
 ## Limitations
 
 - Limited connection reuse through proxies (each request opens a fresh connection)
-- Proxy URL credentials are rejected for HTTP proxies; use `.auth()` instead (SOCKS5 proxies accept inline credentials in the URL)
+- The compatibility facade accepts URL credentials for HTTP/HTTPS and SOCKS5 endpoints and redacts them from display/error output; native Rust callers use `.auth()` for explicit credentials.
 
 ## CLI
 

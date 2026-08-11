@@ -133,7 +133,7 @@ from eggfetch.compat.httpx import Client, AsyncClient, Request, Response
 - Request-local and explicit Cookie state is merged with the scoped facade jar per hop; explicit Cookie headers are stripped on every redirect and regenerated from the jar.
 - Live response iteration coalesces chunk sizes, decodes split text incrementally, and updates stream accounting and state.
 - Raw iteration marks streams consumed at the correct point, counts raw source bytes before chunk-size splitting/coalescing, closes on normal exhaustion, and leaves partial finalization/source failure distinguishable from explicit response close. Native compressed responses retain the encoded source in core until first body consumption; raw iterators select it exactly once, while decoded operations select the existing decompressor path. Core's decoded-header policy still removes `Content-Encoding` and `Content-Length` when automatic decompression is enabled; the compatibility facade overlays only the original wire values for those two headers. Native async cancellation must be tested through the built-in client path with a deterministic constrained-client follow-up proving lease release.
-- The compact `test_corrective_kernel.py` suite runs in Tier 1; the full pinned `httpx==0.28.1` compatibility suite, API oracle, and isolated downstream runner are Tier 2/manual gates. The designation is Stage C qualified for the documented asyncio-supported surface, not unrestricted HTTPX replacement.
+- The compact `test_corrective_kernel.py` suite runs in Tier 1; the full pinned `httpx==0.28.1` compatibility suite, API oracle, and isolated downstream runner are Tier 2/manual gates. The designation remains Stage C candidate until the final corrective plan's exact-SHA gates pass, not unrestricted HTTPX replacement.
 
 **Testing the compat layer:**
 
@@ -192,6 +192,7 @@ source port. Socket options are classified from the running Python `socket`
 module rather than copied Linux constants. UDS traffic uses the normal Hyper
 HTTP/TLS path, and SOCKS tunnels use origin-form requests after the handshake;
 the client retains a persistent SOCKS Hyper pool per route. HTTPX 0.28.1's
-four-element socket-option form is accepted by its constructor but fails at
-use with Python's `setsockopt` API, so the facade rejects it early and supports
-the safe three-element form only.
+valid four-element `(level, option, None, optlen)` socket-option form is
+accepted by its constructor and forwarded to the platform API; the facade
+rejects arbitrary null-pointer operations at its safe Rust boundary and
+supports the safe three-element form.
