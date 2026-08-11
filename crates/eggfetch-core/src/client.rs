@@ -283,7 +283,7 @@ impl Client {
     /// Returns an error if the request fails at any stage (connect, TLS,
     /// protocol, body) or if a timeout elapses.
     pub(crate) async fn send(&self, request: Request) -> Result<Response> {
-        crate::pipeline::send_with_retry(self, request).await
+        Box::pin(crate::pipeline::send_with_retry(self, request)).await
     }
 
     /// Send a single HTTP request and return the streaming response.

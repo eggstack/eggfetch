@@ -1700,5 +1700,5 @@ security-improvement = "true"
 migration-impact = "Callers must omit Proxy(headers=...) or use a native proxy fixture that supplies equivalent headers."
 owner = "eggfetch-team"
 review-milestone = "corrective-closure"
-tests = ["test_config_objects.py", "test_native_proxy_tls.py"]
+tests = ["test_config_objects.py", "test_native_proxy_tls.py", "test_proxy_differential.py"]
 non_expiring = true

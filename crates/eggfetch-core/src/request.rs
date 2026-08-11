@@ -434,7 +434,7 @@ impl RequestBuilder {
             crate::Error::RequestBuild("no client associated with request builder".into())
         })?;
         let request = self.build()?;
-        client.send(request).await
+        Box::pin(client.send(request)).await
     }
 }
 

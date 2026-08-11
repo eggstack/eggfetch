@@ -44,6 +44,35 @@ async fn sleep_if_budget_allows(
     Ok(())
 }
 
+/// Bound response-header acquisition by the read phase and optional native
+/// total deadline. The response body keeps its existing per-chunk read
+/// wrapper after headers are received.
+async fn send_with_header_timeout<F>(
+    send_future: F,
+    read_timeout: Option<Duration>,
+    remaining_total: Option<Duration>,
+) -> Result<Response>
+where
+    F: std::future::Future<Output = Result<Response>>,
+{
+    let (budget, phase) = match (read_timeout, remaining_total) {
+        (Some(read), Some(total)) if total < read => (Some(total), TimeoutPhase::Total),
+        (Some(read), _) => (Some(read), TimeoutPhase::Read),
+        (None, Some(total)) => (Some(total), TimeoutPhase::Total),
+        (None, None) => (None, TimeoutPhase::Read),
+    };
+
+    match budget {
+        Some(duration) => tokio::time::timeout(duration, send_future)
+            .await
+            .map_err(|_| Error::Timeout {
+                phase,
+                elapsed: duration,
+            })?,
+        None => send_future.await,
+    }
+}
+
 /// Reconstruct a request from saved parts for retry.
 fn rebuild_request(
     method: &http::Method,
@@ -99,13 +128,13 @@ pub(crate) async fn send_with_retry(client: &Client, request: Request) -> Result
     let policy = match effective_policy {
         Some(p) if p.is_enabled() => p,
         _ => {
-            return send_with_redirects(client, request).await;
+            return Box::pin(send_with_redirects(client, request)).await;
         }
     };
 
     // If the body is not replayable, we can only attempt once.
     if !body_replayable {
-        return send_with_redirects(client, request).await;
+        return Box::pin(send_with_redirects(client, request)).await;
     }
 
     // Save original request parts for replay.
@@ -155,7 +184,7 @@ pub(crate) async fn send_with_retry(client: &Client, request: Request) -> Result
             orig_version,
         )?;
 
-        let result = send_with_redirects(client, attempt_request).await;
+        let result = Box::pin(send_with_redirects(client, attempt_request)).await;
 
         match result {
             Ok(response) => {
@@ -743,24 +772,12 @@ pub(crate) async fn send_single_request(
         let request = http_request
             .body(body.into_http_body())
             .map_err(|e| Error::RequestBuild(e.to_string()))?;
-        let response = match remaining_total {
-            Some(dur) => match tokio::time::timeout(
-                dur,
-                crate::transport::uds::send_request(uds_client, request, url.clone()),
-            )
-            .await
-            {
-                Ok(Ok(resp)) => resp,
-                Ok(Err(e)) => return Err(e),
-                Err(_) => {
-                    return Err(Error::Timeout {
-                        phase: TimeoutPhase::Total,
-                        elapsed: dur,
-                    });
-                }
-            },
-            None => crate::transport::uds::send_request(uds_client, request, url.clone()).await?,
-        };
+        let response = send_with_header_timeout(
+            crate::transport::uds::send_request(uds_client, request, url.clone()),
+            timeout.read,
+            remaining_total,
+        )
+        .await?;
         let mut response = response;
         apply_read_timeout_and_lease(&mut response, guard, timeout.read);
         return Ok(response);
@@ -788,19 +805,8 @@ pub(crate) async fn send_single_request(
                 hyper_request,
                 url.clone(),
             );
-            let response = match remaining_total {
-                Some(dur) => match tokio::time::timeout(dur, send_future).await {
-                    Ok(Ok(resp)) => resp,
-                    Ok(Err(e)) => return Err(e),
-                    Err(_) => {
-                        return Err(Error::Timeout {
-                            phase: TimeoutPhase::Total,
-                            elapsed: dur,
-                        });
-                    }
-                },
-                None => send_future.await?,
-            };
+            let response =
+                send_with_header_timeout(send_future, timeout.read, remaining_total).await?;
             let mut response = response;
             apply_read_timeout_and_lease(&mut response, guard, timeout.read);
             return Ok(response);
@@ -822,7 +828,7 @@ pub(crate) async fn send_single_request(
                     "conflict: both request Proxy-Authorization header and proxy auth are configured; remove one".into(),
                 ));
             }
-            send_proxy_request(
+            Box::pin(send_proxy_request(
                 &url,
                 &method,
                 &headers,
@@ -832,10 +838,13 @@ pub(crate) async fn send_single_request(
                 &crate::transport::proxy::ProxyRequestContext {
                     remaining_total,
                     deadline: timeout.total.map(|total| started + total),
+                    connect_timeout: timeout.connect,
+                    write_timeout: timeout.write,
+                    read_timeout: timeout.read,
                     tls_config: inner.config.tls_config.as_ref(),
                     socks_client,
                 },
-            )
+            ))
             .await?
         }
         _ => {
@@ -856,19 +865,7 @@ pub(crate) async fn send_single_request(
                             .map_err(|e| Error::RequestBuild(e.to_string()))?;
 
                         let send_future = h3_connector.send_request(h3_request, url.clone());
-                        match remaining_total {
-                            Some(dur) => match tokio::time::timeout(dur, send_future).await {
-                                Ok(Ok(resp)) => resp,
-                                Ok(Err(e)) => return Err(e),
-                                Err(_) => {
-                                    return Err(Error::Timeout {
-                                        phase: TimeoutPhase::Total,
-                                        elapsed: dur,
-                                    });
-                                }
-                            },
-                            None => send_future.await?,
-                        }
+                        send_with_header_timeout(send_future, timeout.read, remaining_total).await?
                     } else {
                         return Err(Error::Unsupported(
                             "HTTP/3 connector not available; ensure http3 feature is enabled"
@@ -883,6 +880,7 @@ pub(crate) async fn send_single_request(
                         &headers,
                         body,
                         version,
+                        timeout.read,
                         remaining_total,
                     )
                     .await?
@@ -897,6 +895,7 @@ pub(crate) async fn send_single_request(
                     &headers,
                     body,
                     version,
+                    timeout.read,
                     remaining_total,
                 )
                 .await?
@@ -934,6 +933,7 @@ pub(crate) async fn send_single_request(
 ///
 /// Extracted as a helper to avoid code duplication between the http3-gated
 /// and non-http3 code paths.
+#[allow(clippy::too_many_arguments)] // Keeps the direct-send helper explicit; timeout wrapping is the only added phase input.
 async fn send_hyper_request(
     inner: &ClientInner,
     method: &http::Method,
@@ -941,6 +941,7 @@ async fn send_hyper_request(
     headers: &Headers,
     body: RequestBody,
     version: http::Version,
+    read_timeout: Option<Duration>,
     remaining_total: Option<Duration>,
 ) -> Result<Response> {
     let hyper_client = inner
@@ -969,15 +970,5 @@ async fn send_hyper_request(
     let send_future =
         crate::transport::direct::send_request(hyper_client, hyper_request, url.clone());
 
-    match remaining_total {
-        Some(dur) => match tokio::time::timeout(dur, send_future).await {
-            Ok(Ok(resp)) => Ok(resp),
-            Ok(Err(e)) => Err(e),
-            Err(_) => Err(Error::Timeout {
-                phase: TimeoutPhase::Total,
-                elapsed: dur,
-            }),
-        },
-        None => send_future.await,
-    }
+    send_with_header_timeout(send_future, read_timeout, remaining_total).await
 }

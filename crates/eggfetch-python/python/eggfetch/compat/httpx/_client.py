@@ -255,16 +255,14 @@ def _merge_default_headers(user_headers) -> Headers:
 
 def _convert_timeout(timeout):
     if isinstance(timeout, Timeout):
-        kwargs = {
-            "connect": timeout.connect,
-            "read": timeout.read,
-            "write": timeout.write,
-            "pool": timeout.pool,
-        }
-        kwargs["total"] = timeout.total
-        return eggfetch.Timeout(**kwargs)
+        return eggfetch.Timeout(
+            connect=timeout.connect,
+            read=timeout.read,
+            write=timeout.write,
+            pool=timeout.pool,
+        )
     if isinstance(timeout, (int, float)):
-        return eggfetch.Timeout(connect=timeout, read=timeout, write=timeout, pool=timeout, total=timeout)
+        return eggfetch.Timeout(connect=timeout, read=timeout, write=timeout, pool=timeout)
     return None
 
 

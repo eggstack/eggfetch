@@ -28,8 +28,8 @@ from native_fixtures import local_http_server, local_stall_server, HeadersStallH
 class TestNativeReadTimeout:
     """Read timeout classification using real local sockets."""
 
-    def test_total_timeout_on_slow_endpoint(self):
-        """Total timeout fires when server delays response."""
+    def test_read_timeout_on_slow_endpoint(self):
+        """Read timeout fires when server delays response headers."""
         with local_http_server() as (host, port):
             with Client(timeout=Timeout(0.5)) as c:
                 start = time.monotonic()
@@ -39,7 +39,7 @@ class TestNativeReadTimeout:
                 assert isinstance(exc_info.value, ReadTimeout), (
                     f"Expected ReadTimeout, got {type(exc_info.value).__name__}"
                 )
-                assert "total timeout" in str(exc_info.value).lower()
+                assert "read timeout" in str(exc_info.value).lower()
                 assert elapsed < 5.0, f"Timeout took too long: {elapsed:.2f}s"
 
     def test_read_timeout_on_headers_then_stall(self):

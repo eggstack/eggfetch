@@ -84,6 +84,12 @@ verifies the proxy hostname over TLS, then uses the existing absolute-form
 forwarding or CONNECT path. For HTTPS origins, origin TLS is layered after
 CONNECT and uses the origin hostname independently.
 
+Proxy setup maps HTTPX's phase timeouts directly: proxy TCP/TLS and origin TLS
+use `connect`, CONNECT writes and tunneled request writes use `write`, and
+CONNECT/response headers use `read`. A native `total` timeout remains an
+optional monotonic outer deadline; the compatibility facade does not synthesize
+one from HTTPX's scalar timeout.
+
 The Python compatibility facade accepts and stores HTTPX proxy metadata, but a
 non-empty `Proxy(headers=...)` is rejected before native dispatch. This is an
 explicit Stage C boundary: the current safe native API has no proxy-leg header

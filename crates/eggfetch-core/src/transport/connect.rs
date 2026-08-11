@@ -10,7 +10,7 @@ use crate::response::Response;
 use crate::timeout::TimeoutPhase;
 
 use super::proxy::{
-    connect_to_proxy, deadline_remaining, read_proxy_response, write_proxy_request,
+    connect_to_proxy, effective_timeout, read_proxy_response, write_proxy_request,
     ProxyRequestContext,
 };
 
@@ -29,7 +29,7 @@ pub(crate) async fn send_https_connect_request(
 
     let mut stream = connect_to_proxy(
         proxy_config,
-        ctx.remaining_total,
+        ctx.connect_timeout,
         ctx.deadline,
         ctx.tls_config,
     )
@@ -55,11 +55,11 @@ pub(crate) async fn send_https_connect_request(
     connect_req.push_str("\r\n");
 
     let write = stream.write_all(connect_req.as_bytes());
-    match deadline_remaining(ctx.deadline, TimeoutPhase::ProxyConnect)?.or(ctx.remaining_total) {
+    match effective_timeout(ctx.deadline, ctx.write_timeout)? {
         Some(duration) => tokio::time::timeout(duration, write)
             .await
             .map_err(|_| Error::Timeout {
-                phase: TimeoutPhase::ProxyConnect,
+                phase: TimeoutPhase::Write,
                 elapsed: duration,
             })?
             .map_err(|e| Error::ProxyConnect(format!("failed to send CONNECT: {e}")))?,
@@ -71,13 +71,12 @@ pub(crate) async fn send_https_connect_request(
     // Read the CONNECT response.
     let read = read_proxy_response(&mut stream);
     let (status, _resp_headers, initial_buf) =
-        match deadline_remaining(ctx.deadline, TimeoutPhase::ProxyConnect)?.or(ctx.remaining_total)
-        {
+        match effective_timeout(ctx.deadline, ctx.read_timeout)? {
             Some(duration) => {
                 tokio::time::timeout(duration, read)
                     .await
                     .map_err(|_| Error::Timeout {
-                        phase: TimeoutPhase::ProxyConnect,
+                        phase: TimeoutPhase::Read,
                         elapsed: duration,
                     })??
             }
@@ -116,8 +115,7 @@ pub(crate) async fn send_https_connect_request(
         .map_err(|e| Error::Tls(format!("invalid TLS server name: {e}")))?;
 
     let tls_handshake = tls_connector.connect(domain, tunnel);
-    let tls_timeout =
-        deadline_remaining(ctx.deadline, TimeoutPhase::Connect)?.or(ctx.remaining_total);
+    let tls_timeout = effective_timeout(ctx.deadline, ctx.connect_timeout)?;
     let tls_stream = match tls_timeout {
         Some(dur) => match tokio::time::timeout(dur, tls_handshake).await {
             Ok(Ok(s)) => s,
@@ -128,7 +126,7 @@ pub(crate) async fn send_https_connect_request(
             }
             Err(_) => {
                 return Err(Error::Timeout {
-                    phase: TimeoutPhase::ProxyTls,
+                    phase: TimeoutPhase::Connect,
                     elapsed: dur,
                 });
             }
@@ -157,7 +155,7 @@ pub(crate) async fn send_https_connect_request(
         None, // No proxy auth for the destination request.
         body,
     );
-    match deadline_remaining(ctx.deadline, TimeoutPhase::Write)?.or(ctx.remaining_total) {
+    match effective_timeout(ctx.deadline, ctx.write_timeout)? {
         Some(duration) => {
             tokio::time::timeout(duration, write)
                 .await
@@ -172,7 +170,7 @@ pub(crate) async fn send_https_connect_request(
     // Read the response from the destination.
     let read = read_proxy_response(&mut tls_buf);
     let (status, resp_headers, initial_buf) =
-        match deadline_remaining(ctx.deadline, TimeoutPhase::Read)?.or(ctx.remaining_total) {
+        match effective_timeout(ctx.deadline, ctx.read_timeout)? {
             Some(duration) => {
                 tokio::time::timeout(duration, read)
                     .await

@@ -27,6 +27,7 @@ pin_project! {
         #[pin]
         deadline: Sleep,
         duration: Duration,
+        started: bool,
     }
 }
 
@@ -37,6 +38,7 @@ impl<S> ReadTimeoutStream<S> {
             inner: stream,
             deadline: tokio::time::sleep_until(Instant::now() + duration),
             duration,
+            started: false,
         }
     }
 }
@@ -48,14 +50,22 @@ where
     type Item = Result<Bytes>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        let me = self.project();
+        let mut me = self.project();
+
+        // Start the per-chunk timer when the body is first consumed. The
+        // response may be handed to a different buffering runtime by the
+        // synchronous Python adapter after headers have arrived.
+        if !*me.started {
+            *me.started = true;
+            me.deadline.as_mut().reset(Instant::now() + *me.duration);
+        }
 
         // Poll the inner stream first. A ready chunk always wins over a
         // firing deadline.
         match me.inner.poll_next(cx) {
             Poll::Ready(Some(Ok(bytes))) => {
                 // Chunk arrived; reset the deadline.
-                me.deadline.reset(Instant::now() + *me.duration);
+                me.deadline.as_mut().reset(Instant::now() + *me.duration);
                 return Poll::Ready(Some(Ok(bytes)));
             }
             Poll::Ready(Some(Err(e))) => {

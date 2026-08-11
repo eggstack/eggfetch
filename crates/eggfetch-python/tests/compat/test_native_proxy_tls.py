@@ -18,7 +18,7 @@ import pytest
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parent))
 import eggfetch
 from eggfetch import BodyError, ProxyConnectError
-from eggfetch.compat.httpx import Client, Timeout
+from eggfetch.compat.httpx import AsyncClient, Client, Proxy, Timeout
 from eggfetch.compat.httpx._exceptions import (
     ConnectError,
     NetworkError,
@@ -68,6 +68,53 @@ class TestProxyForwarding:
                     assert resp.status_code == 200
                     methods = [r["method"] for r in handler.recorded_requests]
                     assert "POST" in methods
+
+    def test_proxy_headers_reference_and_bounded_candidate_difference(self):
+        """HTTPX sends proxy headers; EggFetch rejects them before dispatch."""
+        with local_http_server() as (backend_host, backend_port):
+            with local_proxy_server(backend=(backend_host, backend_port)) as (
+                proxy_host,
+                proxy_port,
+                handler,
+            ):
+                import httpx
+
+                with httpx.Client(
+                    proxy=httpx.Proxy(
+                        f"http://{proxy_host}:{proxy_port}",
+                        headers={"X-Proxy-Test": "reference"},
+                    ),
+                    trust_env=False,
+                ) as reference:
+                    response = reference.get(
+                        f"http://{backend_host}:{backend_port}/health"
+                    )
+                assert response.status_code == 200
+                assert handler.recorded_requests[0]["headers"]["x-proxy-test"] == "reference"
+
+                handler.recorded_requests.clear()
+                with pytest.raises(NotImplementedError, match="not yet"):
+                    with Client(
+                        proxy=Proxy(
+                            f"http://{proxy_host}:{proxy_port}",
+                            headers={"X-Proxy-Test": "candidate"},
+                        ),
+                        trust_env=False,
+                    ):
+                        pass
+                assert not handler.recorded_requests
+
+    @pytest.mark.asyncio
+    async def test_proxy_headers_candidate_rejected_for_async_client(self):
+        with pytest.raises(NotImplementedError, match="not yet"):
+            async with AsyncClient(
+                proxy=Proxy(
+                    "http://127.0.0.1:1",
+                    headers={"X-Proxy-Test": "candidate"},
+                ),
+                trust_env=False,
+            ):
+                pass
 
 
 class TestProxyConnect:

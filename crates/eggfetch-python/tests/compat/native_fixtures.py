@@ -211,6 +211,11 @@ class _ProxyHandler(http.server.BaseHTTPRequestHandler):
     Records all observed methods and targets for verification by tests.
     """
 
+    # Close each proxy-side request after forwarding one response. Keeping a
+    # proxy connection alive across fixture instances can leave handler
+    # threads holding loopback sockets after the context manager exits.
+    protocol_version = "HTTP/1.0"
+
     backend: tuple[str, int] | None = None
     recorded_requests: list[dict] = []
 
@@ -238,12 +243,14 @@ class _ProxyHandler(http.server.BaseHTTPRequestHandler):
         upstream.setblocking(False)
         self._tunnel(self.connection, upstream)
         upstream.close()
+        self.close_connection = True
 
     def _record_request(self, method: str, target: str = "") -> None:
         """Record method and target for test verification."""
         self.__class__.recorded_requests.append({
             "method": method,
             "target": target or self.path,
+            "headers": {name.lower(): value for name, value in self.headers.items()},
         })
 
     def _tunnel(self, client: socket.socket, upstream: socket.socket):
@@ -314,6 +321,8 @@ class _ProxyHandler(http.server.BaseHTTPRequestHandler):
             self.wfile.flush()
         except BrokenPipeError:
             pass
+        finally:
+            self.close_connection = True
 
     def log_message(self, format, *args):
         pass

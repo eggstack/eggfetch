@@ -126,6 +126,7 @@ from eggfetch.compat.httpx import Client, AsyncClient, Request, Response
 **Narrow corrective closure (current):**
 
 - Per-request timeout overrides use HTTPX's four-value extension mapping.
+- Compatibility timeout conversion forwards only HTTPX's `connect`, `read`, `write`, and `pool` values; native `total` remains an explicit EggFetch-only outer deadline.
 - Request and Response state follows HTTPX for empty bodies, unread streams, buffered responses, live iteration, and redirect-location detection.
 - Compatibility cookies are emitted by the facade jar only; native cookie kwargs are not used.
 - Retained-body redirects replay buffered bytes through exactly one body source and reject one-shot streams before a second dispatch.

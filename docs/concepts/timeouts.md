@@ -23,12 +23,12 @@ By default, all timeout phases are disabled (all `None`). A `Timeout` with no fi
 eggfetch provides two named constructors for common timeout profiles:
 
 - **`Timeout::native()`** -- eggfetch native defaults: pool, connect, write, and read each get 30 seconds. Total is not set.
-- **`Timeout::compat()`** -- HTTPX-compatible defaults: all phases (pool, connect, write, read, total) get 5 seconds, matching HTTPX 0.28.1's documented default.
+- **`Timeout::compat()`** -- HTTPX-compatible defaults: pool, connect, write, and read each get 5 seconds. HTTPX 0.28.1 has no request-wide total timeout, so `total` remains unset.
 
 ```rust
 use eggfetch_core::Timeout;
 
-// HTTPX-compatible: 5s total timeout on all phases
+// HTTPX-compatible: 5s for each operational phase, no synthetic total
 let t = Timeout::compat();
 
 // eggfetch native: 30s per-phase, no total
@@ -56,6 +56,10 @@ let t = Timeout::builder()
     .total(Duration::from_secs(60))
     .build();
 ```
+
+`total` is an EggFetch-native outer deadline. Set it explicitly only when
+using the native API; the `eggfetch.compat.httpx` facade never derives it from
+HTTPX's scalar timeout.
 
 ## Client-Level vs Request-Level
 

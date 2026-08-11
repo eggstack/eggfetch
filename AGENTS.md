@@ -192,3 +192,7 @@ The current corrective boundary derives one monotonic request deadline for
 multi-phase HTTP/HTTPS proxy setup. `Proxy(headers=...)` remains an explicit
 Stage C bounded difference: non-empty metadata is rejected at conversion until
 it can be carried on the proxy leg without a generalized routing redesign.
+HTTPX `Timeout` conversion maps only its `connect`, `read`, `write`, and `pool`
+values; it must not synthesize native `Timeout.total`. Native callers may set
+`total` explicitly as an outer deadline, and proxy setup uses the smaller of
+that deadline and each configured phase budget.

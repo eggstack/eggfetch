@@ -2,7 +2,7 @@
 
 import pytest
 
-from eggfetch.compat.httpx import Client, MockTransport, Request, Response
+from eggfetch.compat.httpx import Client, MockTransport, Request, Response, Timeout
 from eggfetch.compat.httpx._exceptions import RequestNotRead, StreamConsumed
 
 
@@ -132,6 +132,22 @@ def test_timeout_none_native_conversion_remains_disabled():
     assert timeout.as_dict == {"connect": None, "read": None, "write": None, "pool": None}
     native = _convert_timeout(timeout)
     assert native.connect is None and native.read is None and native.write is None and native.pool is None
+
+
+@pytest.mark.parametrize(
+    "timeout",
+    [
+        Timeout(5.0),
+        5.0,
+        Timeout(None, connect=1.0, read=2.0, write=3.0, pool=4.0),
+    ],
+)
+def test_compat_timeout_conversion_does_not_synthesize_native_total(timeout):
+    """HTTPX's four phase values never become EggFetch's native total budget."""
+    from eggfetch.compat.httpx._client import _convert_timeout
+
+    native = _convert_timeout(timeout)
+    assert native.total is None
 
 
 # ── Redirect cookie security regressions (final closure 01) ───────────

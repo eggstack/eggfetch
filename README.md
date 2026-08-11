@@ -245,6 +245,8 @@ Key differences from HTTPX:
 - Trio/AnyIO not supported (asyncio only, tokio-based)
 - Python 3.8/3.9 not supported (requires 3.10+)
 - `ssl_context` transport parameter not supported (TLS handled by Rust engine)
+- HTTPX timeout values map to `connect`, `read`, `write`, and `pool` only;
+  the facade does not synthesize EggFetch's native `total` deadline
 - Core proxy configuration is explicit; the HTTPX compatibility facade honors
   scheme-specific `HTTP_PROXY`/`HTTPS_PROXY` with `ALL_PROXY` fallback,
   lowercase forms, `NO_PROXY`, and `trust_env=False`.

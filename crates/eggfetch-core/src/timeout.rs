@@ -189,9 +189,10 @@ impl Timeout {
 
     /// Create an HTTPX-compatible timeout configuration.
     ///
-    /// HTTPX 0.28.1 uses 5 seconds for all phases including a total
-    /// wall-clock cap. Use this when migrating from HTTPX to preserve
-    /// the same timeout semantics.
+    /// HTTPX 0.28.1 uses 5 seconds for each operational phase. It does not
+    /// define a request-wide wall-clock timeout, so `total` remains unset.
+    /// Set `total` explicitly when an EggFetch-native outer deadline is
+    /// desired.
     ///
     /// # Examples
     ///
@@ -204,7 +205,7 @@ impl Timeout {
     /// assert_eq!(t.connect, Some(Duration::from_secs(5)));
     /// assert_eq!(t.write, Some(Duration::from_secs(5)));
     /// assert_eq!(t.read, Some(Duration::from_secs(5)));
-    /// assert_eq!(t.total, Some(Duration::from_secs(5)));
+    /// assert!(t.total.is_none());
     /// ```
     #[must_use]
     pub fn compat() -> Self {
@@ -214,7 +215,7 @@ impl Timeout {
             connect: Some(d),
             write: Some(d),
             read: Some(d),
-            total: Some(d),
+            total: None,
         }
     }
 
@@ -422,14 +423,14 @@ mod tests {
     }
 
     #[test]
-    fn timeout_compat_sets_all_phases_with_total() {
+    fn timeout_compat_sets_operational_phases_without_total() {
         let t = Timeout::compat();
         let d = Duration::from_secs(5);
         assert_eq!(t.pool, Some(d));
         assert_eq!(t.connect, Some(d));
         assert_eq!(t.write, Some(d));
         assert_eq!(t.read, Some(d));
-        assert_eq!(t.total, Some(d));
+        assert!(t.total.is_none());
     }
 
     #[test]

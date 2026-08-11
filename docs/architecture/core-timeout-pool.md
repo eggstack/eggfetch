@@ -13,9 +13,9 @@ eggfetch implements phase-aware timeouts that map to specific segments of the re
 | Phase | What It Covers |
 |-------|----------------|
 | `Pool` | Waiting for a connection slot from the concurrency pool |
-| `Connect` | TCP connection establishment + TLS handshake (including DNS) |
-| `ProxyConnect` | Waiting for proxy to establish CONNECT tunnel |
-| `ProxyTls` | TLS handshake over proxy tunnel |
+| `Connect` | TCP connection establishment + TLS handshake (including DNS); for proxy routes, also proxy TCP/TLS setup and origin TLS after CONNECT |
+| `ProxyConnect` | Internal classification for proxy TCP setup |
+| `ProxyTls` | Internal classification for TLS to an HTTPS proxy endpoint |
 | `Write` | Sending request headers and body |
 | `Read` | Waiting for response headers or body chunks |
 | `Total` | Wall-clock cap across the entire request lifecycle |
@@ -37,7 +37,7 @@ Request-level overrides are per-field: only fields present in the request-level 
 | Total | `tokio::time::timeout` around the full send |
 | Read | Per-chunk wrapper stream (`ReadTimeoutStream`) — deadline resets on each chunk |
 | Write | Per-chunk wrapper stream (`WriteTimeoutStream`) — deadline resets on each chunk delivery |
-| Connect | Accepted and merged but not independently enforced by hyper-util. `total` should be used as a backstop |
+| Connect | Enforced by the direct connector and by proxy TCP/TLS/origin-TLS setup |
 
 ### Error Model
 
@@ -57,10 +57,11 @@ Cancelled timeout-wrapped operations release pool permits cleanly. The pool uses
 
 When a request has a total timeout, the proxy transport creates one monotonic
 deadline at request dispatch. Proxy TCP connect, proxy TLS, CONNECT write/read,
-origin TLS, and proxy request/response-header setup each derive their remaining
-time from that deadline. A phase never receives a fresh copy of the original
-total duration. Phase-specific errors retain the phase that exhausted the
-shared budget.
+origin TLS, and proxy request/response-header setup each use the smaller of
+their configured phase budget and the remaining total budget. A phase never
+receives a fresh copy of the original total duration. HTTPX compatibility
+requests configure only connect/read/write/pool; native callers may set
+`total` explicitly as the outer cap.
 
 ## Connection Pool
 

@@ -67,8 +67,9 @@ t = eggfetch.Timeout(connect=5, read=30, write=5, pool=2)
 r = eggfetch.get("https://example.com", timeout=t)
 ```
 
-Both accept a plain float as a shorthand for all phases. eggfetch also
-supports `total` as a wall-clock cap across the entire request lifecycle.
+Both accept a plain float as a shorthand for all four operational phases.
+HTTPX 0.28.1 does not define a request-wide total timeout; eggfetch also
+supports `total` as a native-only wall-clock cap across the request lifecycle.
 
 ```python
 # eggfetch only: total timeout
@@ -76,8 +77,10 @@ t = eggfetch.Timeout(total=60)
 r = client.get(url, timeout=t)
 ```
 
-The `connect` phase is accepted but not independently enforced in
-eggfetch. Use `total` as a backstop.
+The `connect` phase is enforced for direct and proxy connection setup. Through
+HTTP or HTTPS proxies, `connect` also bounds proxy TCP/TLS setup and origin TLS
+after CONNECT. `total`, when explicitly configured through the native API,
+remains an outer cap.
 
 ## Streaming
 
