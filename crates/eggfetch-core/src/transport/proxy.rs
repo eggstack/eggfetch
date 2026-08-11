@@ -15,6 +15,61 @@ pub(crate) struct ProxyRequestContext<'a> {
     pub(crate) socks_client: Option<crate::transport::TimeoutSocksClient>,
 }
 
+/// Client-to-proxy stream, optionally protected by TLS for an `https://`
+/// proxy endpoint.
+pub(crate) enum ProxyIo {
+    /// Plain proxy TCP connection.
+    Tcp(tokio::net::TcpStream),
+    /// TLS-protected proxy connection.
+    Tls(Box<tokio_rustls::client::TlsStream<tokio::net::TcpStream>>),
+}
+
+impl tokio::io::AsyncRead for ProxyIo {
+    fn poll_read(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        buf: &mut tokio::io::ReadBuf<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        match &mut *self {
+            Self::Tcp(stream) => std::pin::Pin::new(stream).poll_read(cx, buf),
+            Self::Tls(stream) => std::pin::Pin::new(stream.as_mut()).poll_read(cx, buf),
+        }
+    }
+}
+
+impl tokio::io::AsyncWrite for ProxyIo {
+    fn poll_write(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        bytes: &[u8],
+    ) -> std::task::Poll<std::io::Result<usize>> {
+        match &mut *self {
+            Self::Tcp(stream) => std::pin::Pin::new(stream).poll_write(cx, bytes),
+            Self::Tls(stream) => std::pin::Pin::new(stream.as_mut()).poll_write(cx, bytes),
+        }
+    }
+
+    fn poll_flush(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        match &mut *self {
+            Self::Tcp(stream) => std::pin::Pin::new(stream).poll_flush(cx),
+            Self::Tls(stream) => std::pin::Pin::new(stream.as_mut()).poll_flush(cx),
+        }
+    }
+
+    fn poll_shutdown(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        match &mut *self {
+            Self::Tcp(stream) => std::pin::Pin::new(stream).poll_shutdown(cx),
+            Self::Tls(stream) => std::pin::Pin::new(stream.as_mut()).poll_shutdown(cx),
+        }
+    }
+}
+
 /// Send a request through a proxy.
 ///
 /// Routes to HTTP forwarding, CONNECT tunneling, or SOCKS5 tunneling
@@ -42,6 +97,7 @@ pub(crate) async fn send_proxy_request(
                 version,
                 proxy_config,
                 ctx.remaining_total,
+                ctx.tls_config,
             )
             .await
         }
@@ -67,7 +123,8 @@ pub(crate) async fn send_proxy_request(
 pub(crate) async fn connect_to_proxy(
     proxy_config: &ProxyConfig,
     remaining_total: Option<std::time::Duration>,
-) -> Result<tokio::io::BufReader<tokio::net::TcpStream>> {
+    tls_config: Option<&crate::tls::TlsConfig>,
+) -> Result<tokio::io::BufReader<ProxyIo>> {
     let proxy_host = proxy_config.host().unwrap_or("127.0.0.1");
     let proxy_port = proxy_config.port();
 
@@ -95,10 +152,46 @@ pub(crate) async fn connect_to_proxy(
         None => connect_future.await?,
     };
 
+    let stream = if proxy_config.scheme() == "https" {
+        let rustls_config = if let Some(tc) = tls_config {
+            tc.build_rustls_config()
+                .map_err(|e| Error::Tls(format!("failed to build proxy TLS config: {e}")))?
+        } else {
+            let mut root_store = rustls::RootCertStore::empty();
+            root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+            rustls::ClientConfig::builder()
+                .with_root_certificates(root_store)
+                .with_no_client_auth()
+        };
+        let connector = tokio_rustls::TlsConnector::from(std::sync::Arc::new(rustls_config));
+        let domain = rustls::pki_types::ServerName::try_from(proxy_host.to_owned())
+            .map_err(|e| Error::Tls(format!("invalid proxy TLS server name: {e}")))?;
+        let handshake = connector.connect(domain, stream);
+        let tls_stream = match remaining_total {
+            Some(dur) => match tokio::time::timeout(dur, handshake).await {
+                Ok(Ok(stream)) => stream,
+                Ok(Err(e)) => return Err(Error::Tls(format!("proxy TLS handshake failed: {e}"))),
+                Err(_) => {
+                    return Err(Error::Timeout {
+                        phase: TimeoutPhase::ProxyTls,
+                        elapsed: dur,
+                    })
+                }
+            },
+            None => handshake
+                .await
+                .map_err(|e| Error::Tls(format!("proxy TLS handshake failed: {e}")))?,
+        };
+        ProxyIo::Tls(Box::new(tls_stream))
+    } else {
+        ProxyIo::Tcp(stream)
+    };
+
     Ok(tokio::io::BufReader::new(stream))
 }
 
 /// Send an HTTP request through an HTTP forward proxy.
+#[allow(clippy::too_many_arguments)] // Forwarding needs the request and phase-specific proxy context.
 async fn send_http_proxy_request(
     dest_url: &url::Url,
     method: &http::Method,
@@ -107,8 +200,9 @@ async fn send_http_proxy_request(
     version: http::Version,
     proxy_config: &ProxyConfig,
     remaining_total: Option<std::time::Duration>,
+    tls_config: Option<&crate::tls::TlsConfig>,
 ) -> Result<Response> {
-    let mut stream = connect_to_proxy(proxy_config, remaining_total).await?;
+    let mut stream = connect_to_proxy(proxy_config, remaining_total, tls_config).await?;
 
     // Write the proxy request with absolute-form URI.
     let absolute_uri = dest_url.as_str();
@@ -141,8 +235,7 @@ async fn send_http_proxy_request(
 
     // Return the body as a streaming response.
     let stream_reader = stream.into_inner();
-    let (read_half, _write_half) = stream_reader.into_split();
-    let body_stream = ProxyResponseStream::new(initial_buf, read_half);
+    let body_stream = ProxyResponseStream::new(initial_buf, stream_reader);
     let body_stream = Box::pin(body_stream) as BoxBytesStream;
     let body = ResponseBody::streaming(body_stream);
 
@@ -357,9 +450,9 @@ pub(crate) async fn read_proxy_response<S: tokio::io::AsyncRead + Unpin>(
 ///
 /// Yields data from an initial buffer first, then reads from the
 /// underlying TCP stream.
-struct ProxyResponseStream {
+struct ProxyResponseStream<S> {
     initial_buf: std::io::Cursor<Vec<u8>>,
-    inner: tokio::net::tcp::OwnedReadHalf,
+    inner: S,
 }
 
 fn map_socks_send_error(err: hyper_util::client::legacy::Error) -> Error {
@@ -420,8 +513,8 @@ async fn send_socks_request(
     ))
 }
 
-impl ProxyResponseStream {
-    fn new(initial_buf: Vec<u8>, inner: tokio::net::tcp::OwnedReadHalf) -> Self {
+impl<S> ProxyResponseStream<S> {
+    fn new(initial_buf: Vec<u8>, inner: S) -> Self {
         Self {
             initial_buf: std::io::Cursor::new(initial_buf),
             inner,
@@ -429,7 +522,7 @@ impl ProxyResponseStream {
     }
 }
 
-impl futures_core::Stream for ProxyResponseStream {
+impl<S: tokio::io::AsyncRead + Unpin> futures_core::Stream for ProxyResponseStream<S> {
     type Item = Result<Bytes>;
 
     fn poll_next(
@@ -455,7 +548,7 @@ impl futures_core::Stream for ProxyResponseStream {
             }
         }
 
-        // Read from the inner TCP stream using poll_read.
+        // Read from the proxy stream using poll_read.
         let mut chunk = vec![0u8; 8192];
         let mut read_buf = tokio::io::ReadBuf::new(&mut chunk);
         match tokio::io::AsyncRead::poll_read(
@@ -472,9 +565,14 @@ impl futures_core::Stream for ProxyResponseStream {
                     std::task::Poll::Ready(None)
                 }
             }
-            std::task::Poll::Ready(Err(e)) => std::task::Poll::Ready(Some(Err(Error::Body(
-                format!("proxy stream read error: {e}"),
-            )))),
+            std::task::Poll::Ready(Err(e)) => {
+                if e.kind() == std::io::ErrorKind::UnexpectedEof {
+                    return std::task::Poll::Ready(None);
+                }
+                std::task::Poll::Ready(Some(Err(Error::Body(format!(
+                    "proxy stream read error: {e}"
+                )))))
+            }
             std::task::Poll::Pending => std::task::Poll::Pending,
         }
     }

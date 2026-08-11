@@ -57,6 +57,15 @@ pub enum NoProxyRule {
     Localhost,
     /// Matches only the hostname `localhost` (HTTPX environment semantics).
     LocalhostExact,
+    /// Matches one HTTPX URL-pattern exclusion with optional scheme/port.
+    SchemeHostPort {
+        /// Optional URL scheme constraint.
+        scheme: String,
+        /// Exact host constraint.
+        host: String,
+        /// Optional port constraint.
+        port: Option<u16>,
+    },
 }
 
 /// `NO_PROXY` bypass rules for a proxy.
@@ -74,7 +83,8 @@ pub enum NoProxyRule {
 /// - `example.com` — domain match (matches the bare domain and subdomains)
 /// - `example.com:8080` — host + port match (uses scheme default port
 ///   when the URL has no explicit port)
-/// - `10.0.0.0/8` — IPv4 or IPv6 CIDR network
+/// - `10.0.0.0/8` — native parser CIDR network; HTTPX compatibility
+///   parsing treats CIDR-looking entries as URL-pattern host text
 /// - `[::1]` or `[::1]:8080` — IPv6 literal, optionally with port
 #[derive(Debug, Clone)]
 pub struct NoProxy {
@@ -136,6 +146,37 @@ impl NoProxy {
             });
         }
 
+        // HTTPX treats scheme-qualified NO_PROXY values as URL patterns,
+        // rather than native CIDR or host rules.
+        if exact_localhost && entry.contains("://") {
+            let pattern = url::Url::parse(entry).map_err(|_| {
+                Error::InvalidProxyUrl(format!("invalid URL in NO_PROXY entry: {entry}"))
+            })?;
+            let host = pattern.host_str().ok_or_else(|| {
+                Error::InvalidProxyUrl(format!("NO_PROXY URL has no host: {entry}"))
+            })?;
+            return Ok(NoProxyRule::SchemeHostPort {
+                scheme: pattern.scheme().to_ascii_lowercase(),
+                host: host.to_ascii_lowercase(),
+                port: pattern.port(),
+            });
+        }
+
+        // HTTPX's is_ipv4_hostname/is_ipv6_hostname check happens before
+        // URL-pattern construction. A CIDR-looking value therefore becomes
+        // an exact host pattern for the address portion; it is not subnet
+        // matching in the compatibility facade.
+        if exact_localhost {
+            if let Some((address, _prefix)) = entry.split_once('/') {
+                if address.parse::<std::net::IpAddr>().is_ok() {
+                    return Ok(NoProxyRule::Host(address.to_ascii_lowercase()));
+                }
+            }
+            if let Ok(address) = entry.parse::<std::net::IpAddr>() {
+                return Ok(NoProxyRule::Host(address.to_string()));
+            }
+        }
+
         if let Some((network, prefix)) = entry.split_once('/') {
             let network = network.parse::<std::net::IpAddr>().map_err(|_| {
                 Error::InvalidProxyUrl(format!("invalid IP network in NO_PROXY entry: {entry}"))
@@ -162,7 +203,11 @@ impl NoProxy {
                 let remainder = &rest[close + 1..];
                 if remainder.is_empty() {
                     // bare IPv6 literal — treat as host
-                    return Ok(NoProxyRule::Host(entry.to_owned()));
+                    return Ok(NoProxyRule::Host(if exact_localhost {
+                        ipv6.to_ascii_lowercase()
+                    } else {
+                        entry.to_owned()
+                    }));
                 }
                 if let Some(port_str) = remainder.strip_prefix(':') {
                     let port = port_str.parse::<u16>().map_err(|_| {
@@ -256,6 +301,22 @@ impl NoProxy {
                         return true;
                     }
                 }
+                NoProxyRule::SchemeHostPort {
+                    scheme,
+                    host: rule_host,
+                    port: rule_port,
+                } => {
+                    if url.scheme().eq_ignore_ascii_case(scheme)
+                        && host.eq_ignore_ascii_case(rule_host)
+                        && rule_port.map_or(true, |rule_port| {
+                            port == Some(rule_port)
+                                || (port.is_none()
+                                    && Self::default_port_for_scheme(url.scheme()) == rule_port)
+                        })
+                    {
+                        return true;
+                    }
+                }
             }
         }
         false
@@ -268,8 +329,15 @@ impl NoProxy {
     }
 
     fn matches_host_rule(host: &str, rule: &str) -> bool {
-        let host_lower = host.to_ascii_lowercase();
-        let rule_lower = rule.trim_start_matches('.').to_ascii_lowercase();
+        let host_lower = host
+            .trim_start_matches('[')
+            .trim_end_matches(']')
+            .to_ascii_lowercase();
+        let rule_lower = rule
+            .trim_start_matches('.')
+            .trim_start_matches('[')
+            .trim_end_matches(']')
+            .to_ascii_lowercase();
         host_lower == rule_lower || host_lower.ends_with(&format!(".{rule_lower}"))
     }
 
@@ -507,6 +575,38 @@ impl Proxy {
         })
     }
 
+    /// Create a proxy using HTTPX-compatible URL credentials.
+    ///
+    /// This compatibility-boundary constructor extracts percent-encoded
+    /// userinfo and delegates to the native credential-safe configuration.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the URL, credentials, or proxy scheme is invalid.
+    pub fn all_compat(url: &str) -> Result<Self> {
+        let parsed = url::Url::parse(url).map_err(|e| {
+            Error::InvalidProxyUrl(format!(
+                "invalid proxy URL: {e} ({})",
+                redact_url_string(url)
+            ))
+        })?;
+        let username = percent_encoding::percent_decode_str(parsed.username())
+            .decode_utf8_lossy()
+            .into_owned();
+        let password = percent_encoding::percent_decode_str(parsed.password().unwrap_or(""))
+            .decode_utf8_lossy()
+            .into_owned();
+        let has_auth = !username.is_empty() || parsed.password().is_some();
+        let mut without_userinfo = parsed;
+        let _ = without_userinfo.set_username("");
+        let _ = without_userinfo.set_password(None);
+        let mut proxy = Self::all(without_userinfo.as_str())?;
+        if has_auth {
+            proxy = proxy.auth(ProxyAuth::basic(username, password)?);
+        }
+        Ok(proxy)
+    }
+
     /// Create a proxy that routes only HTTP requests.
     ///
     /// # Errors
@@ -573,8 +673,8 @@ impl Proxy {
 
     /// Build a resolved proxy configuration for a request.
     ///
-    /// For SOCKS proxies, inline URL credentials are extracted and used
-    /// when no explicit `.auth()` was set.
+    /// For HTTP and SOCKS proxies, inline URL credentials are extracted and
+    /// used when no explicit `.auth()` was set.
     pub(crate) fn config(&self) -> ProxyConfig {
         let auth = match self.auth {
             Some(ref a) => Some(a.clone()),
@@ -652,11 +752,11 @@ impl fmt::Display for Proxy {
 /// Parse and validate a proxy URL.
 ///
 /// Requirements:
-/// - scheme must be `http`, `socks5`, or `socks5h`
+/// - scheme must be `http`, `https`, `socks5`, or `socks5h`
 /// - host must be present
 /// - no fragment
 /// - no query string
-/// - for `http`: no userinfo (credentials must be set via `.auth()`)
+/// - for `http`/`https`: userinfo is extracted as Basic credentials
 /// - for `socks5`/`socks5h`: userinfo is extracted as SOCKS credentials
 fn parse_proxy_url(url_str: &str) -> Result<url::Url> {
     let url = url::Url::parse(url_str).map_err(|e| {
@@ -667,8 +767,7 @@ fn parse_proxy_url(url_str: &str) -> Result<url::Url> {
     })?;
 
     match url.scheme() {
-        "http" => {
-            // HTTP proxies must not have inline credentials.
+        "http" | "https" => {
             if !url.username().is_empty() || url.password().is_some() {
                 return Err(Error::InvalidProxyUrl(
                     "proxy URL must not contain credentials; use .auth() instead".into(),
@@ -677,11 +776,10 @@ fn parse_proxy_url(url_str: &str) -> Result<url::Url> {
         }
         "socks5" | "socks5h" => {
             // SOCKS5 proxies accept inline credentials in the URL.
-            // Credentials are extracted during config resolution.
         }
         other => {
             return Err(Error::InvalidProxyUrl(format!(
-                "unsupported proxy scheme '{other}'; supported: http, socks5, socks5h"
+                "unsupported proxy scheme '{other}'; supported: http, https, socks5, socks5h"
             )));
         }
     }
@@ -724,10 +822,16 @@ mod tests {
     }
 
     #[test]
-    fn parse_proxy_url_rejects_https_scheme() {
-        let err = Proxy::all("https://proxy.example:8080").unwrap_err();
-        assert_eq!(err.kind(), "invalid_proxy_url");
-        assert!(err.to_string().contains("unsupported proxy scheme"));
+    fn parse_proxy_url_accepts_https_scheme() {
+        let proxy = Proxy::all("https://proxy.example:8443").unwrap();
+        assert_eq!(proxy.uri().scheme(), "https");
+        assert_eq!(proxy.config().port(), 8443);
+    }
+
+    #[test]
+    fn parse_proxy_url_https_default_port() {
+        let proxy = Proxy::all("https://proxy.example").unwrap();
+        assert_eq!(proxy.config().port(), 443);
     }
 
     #[test]
@@ -815,12 +919,16 @@ mod tests {
     }
 
     #[test]
-    fn parse_proxy_url_rejects_userinfo() {
+    fn compat_proxy_url_extracts_http_userinfo_and_redacts_it() {
+        let proxy = Proxy::all_compat("http://user:pass@proxy.example:8080").unwrap();
+        assert!(proxy.config().auth().is_some());
+        assert!(!proxy.to_string().contains("pass"));
+    }
+
+    #[test]
+    fn parse_proxy_url_rejects_http_userinfo() {
         let err = Proxy::all("http://user:pass@proxy.example:8080").unwrap_err();
         assert_eq!(err.kind(), "invalid_proxy_url");
-        assert!(err.to_string().contains("must not contain credentials"));
-        // Ensure credentials are not echoed.
-        assert!(!err.to_string().contains("pass"));
     }
 
     #[test]
@@ -1202,6 +1310,27 @@ mod tests {
         let np = NoProxy::parse("10.0.0.1").unwrap();
         let url = url::Url::parse("http://10.0.0.1/path").unwrap();
         assert!(np.should_bypass(&url));
+    }
+
+    #[test]
+    fn httpx_scheme_qualified_no_proxy_is_scheme_specific() {
+        let np = NoProxy::parse_httpx("http://example.test:8080").unwrap();
+        assert!(np.should_bypass(&url::Url::parse("http://example.test:8080/").unwrap()));
+        assert!(!np.should_bypass(&url::Url::parse("https://example.test:8080/").unwrap()));
+        assert!(!np.should_bypass(&url::Url::parse("http://example.test:8081/").unwrap()));
+    }
+
+    #[test]
+    fn httpx_bare_ipv6_no_proxy_is_not_host_port() {
+        let np = NoProxy::parse_httpx("::1").unwrap();
+        assert!(np.should_bypass(&url::Url::parse("http://[::1]/").unwrap()));
+    }
+
+    #[test]
+    fn httpx_cidr_looking_no_proxy_is_exact_host_text() {
+        let np = NoProxy::parse_httpx("10.0.0.0/8").unwrap();
+        assert!(np.should_bypass(&url::Url::parse("http://10.0.0.0/").unwrap()));
+        assert!(!np.should_bypass(&url::Url::parse("http://10.42.1.9/").unwrap()));
     }
 
     #[test]

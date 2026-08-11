@@ -135,7 +135,7 @@ impl PyClient {
 
         let proxy_override = proxy::parse_proxy(proxy)?;
         if let ProxyOverride::Override(ref url) = proxy_override {
-            let p = eggfetch_core::Proxy::all(&proxy::normalize_compat_proxy_url(url))
+            let p = eggfetch_core::Proxy::all_compat(&proxy::normalize_compat_proxy_url(url))
                 .map_err(map_err)?;
             builder = builder.proxy(p);
         }
@@ -340,8 +340,10 @@ impl PyClient {
                         builder = builder.without_proxy();
                     }
                     ProxyOverride::Override(url) => {
-                        let p = eggfetch_core::Proxy::all(&proxy::normalize_compat_proxy_url(&url))
-                            .map_err(map_err)?;
+                        let p = eggfetch_core::Proxy::all_compat(
+                            &proxy::normalize_compat_proxy_url(&url),
+                        )
+                        .map_err(map_err)?;
                         builder = builder.proxy(&p);
                     }
                 }
@@ -832,8 +834,10 @@ impl PyClient {
                         builder = builder.without_proxy();
                     }
                     ProxyOverride::Override(url) => {
-                        let p = eggfetch_core::Proxy::all(&proxy::normalize_compat_proxy_url(&url))
-                            .map_err(map_err)?;
+                        let p = eggfetch_core::Proxy::all_compat(
+                            &proxy::normalize_compat_proxy_url(&url),
+                        )
+                        .map_err(map_err)?;
                         builder = builder.proxy(&p);
                     }
                 }

@@ -271,7 +271,10 @@ class _ProxyHandler(http.server.BaseHTTPRequestHandler):
             self.send_error(502, "Upstream unavailable")
             return
         try:
-            req_line = f"{self.command} {path} HTTP/1.1\r\nHost: {target[0]}:{target[1]}\r\n"
+            req_line = (
+                f"{self.command} {path} HTTP/1.1\r\n"
+                f"Host: {target[0]}:{target[1]}\r\nConnection: close\r\n"
+            )
             if body:
                 req_line += f"Content-Length: {len(body)}\r\n"
             req_line += "\r\n"
@@ -321,6 +324,32 @@ def local_proxy_server(
         yield "127.0.0.1", port, handler_class
     finally:
         httpd.shutdown()
+
+
+@contextmanager
+def local_tls_proxy_server(
+    backend: tuple[str, int] | None = None,
+    certificate: tuple[str, str] | None = None,
+) -> Generator[tuple[str, int, type, str], None, None]:
+    """TLS-wrapped HTTP proxy for HTTPS-proxy endpoint qualification."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        cert_path, key_path = certificate or _generate_self_signed_cert(tmpdir)
+        server_ssl = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        server_ssl.load_cert_chain(cert_path, key_path)
+        handler_class = _ProxyHandler
+        if backend is not None:
+            handler_class = type("_ConfiguredTlsProxy", (_ProxyHandler,), {"backend": backend})
+        handler_class.recorded_requests = []
+        httpd = _ThreadedHTTPServer(("127.0.0.1", 0), handler_class)
+        raw_socket = httpd.socket
+        httpd.socket = server_ssl.wrap_socket(raw_socket, server_side=True)
+        port = httpd.server_address[1]
+        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+        thread.start()
+        try:
+            yield "127.0.0.1", port, handler_class, cert_path
+        finally:
+            httpd.shutdown()
 
 
 class _TLSDirectHandler(http.server.BaseHTTPRequestHandler):

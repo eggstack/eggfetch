@@ -666,11 +666,12 @@ pub(crate) async fn send_single_request(
     let origin = match effective_proxy {
         Some(ref proxy_config) => {
             let is_tunnel = url.scheme() == "https";
-            OriginKey::from_url_with_proxy(
+            OriginKey::from_url_with_proxy_scheme(
                 url.scheme(),
                 &url,
                 proxy_config.host(),
                 Some(proxy_config.port()),
+                Some(proxy_config.scheme()),
                 is_tunnel,
             )
         }

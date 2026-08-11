@@ -60,11 +60,8 @@ class TestTrustEnv:
 class TestProxyEnvVars:
     """Test that proxy env vars are recognized when trust_env=True.
 
-    eggfetch-core reads proxy env vars natively when trust_env=True.
-    The compat layer passes trust_env through to the native client.
-
-    Note: eggfetch-core only supports HTTP proxy schemes. HTTPS_PROXY
-    env vars with ``https://`` scheme will raise ProxyError.
+    The compat layer passes HTTPX-compatible environment selection through to
+    the native client, including TLS-protected HTTP proxy endpoints.
     """
 
     @mock.patch.dict(os.environ, {"HTTP_PROXY": "http://proxy.local:8080"}, clear=False)

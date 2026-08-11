@@ -11,6 +11,7 @@ import ssl
 import sys
 import threading
 import time
+import os
 
 import pytest
 
@@ -28,6 +29,7 @@ from eggfetch.compat.httpx._exceptions import (
 from native_fixtures import (
     local_http_server,
     local_proxy_server,
+    local_tls_proxy_server,
     local_tls_server,
     local_stall_server,
 )
@@ -116,6 +118,52 @@ class TestProxyConnect:
                         pass
                     methods = [r["method"] for r in handler.recorded_requests]
                     assert "CONNECT" in methods
+
+
+class TestHttpsProxyEndpoint:
+    """HTTPX-compatible TLS-to-proxy routing combinations."""
+
+    def test_http_origin_through_https_proxy(self):
+        with local_http_server() as (backend_host, backend_port):
+            with local_tls_proxy_server(backend=(backend_host, backend_port)) as (
+                proxy_host,
+                proxy_port,
+                handler,
+                cert_path,
+            ):
+                with Client(
+                    proxy=f"https://{proxy_host}:{proxy_port}",
+                    timeout=Timeout(5.0),
+                    verify=cert_path,
+                ) as client:
+                    response = client.get(f"http://{backend_host}:{backend_port}/health")
+                assert response.status_code == 200
+                assert response.text == "ok"
+                assert handler.recorded_requests[0]["method"] == "GET"
+                assert handler.recorded_requests[0]["target"].startswith("http://")
+
+    def test_https_origin_through_https_proxy(self):
+        with local_tls_server() as (origin_host, origin_port, _ssl, cert_path):
+            with local_tls_proxy_server(
+                certificate=(cert_path, os.path.join(os.path.dirname(cert_path), "key.pem"))
+            ) as (
+                proxy_host,
+                proxy_port,
+                handler,
+                _proxy_cert_path,
+            ):
+                with Client(
+                    proxy=f"https://{proxy_host}:{proxy_port}",
+                    timeout=Timeout(5.0),
+                    verify=cert_path,
+                ) as client:
+                    response = client.get(f"https://{origin_host}:{origin_port}/health")
+                assert response.status_code == 200
+                assert response.text == "ok"
+                assert handler.recorded_requests[0]["method"] == "CONNECT"
+                assert handler.recorded_requests[0]["target"].startswith(
+                    f"{origin_host}:{origin_port}"
+                )
 
 
 class TestProxyRefusal:

@@ -125,6 +125,9 @@ pub(crate) struct OriginKey {
     proxy_host: Option<String>,
     /// Proxy port, if routed through a proxy.
     proxy_port: Option<u16>,
+    /// Proxy endpoint scheme, which distinguishes plain and TLS-to-proxy
+    /// routes even when host and port are identical.
+    proxy_scheme: Option<String>,
     /// Whether this is a CONNECT tunnel (HTTPS through proxy) as
     /// opposed to HTTP forwarding.
     is_tunnel: bool,
@@ -141,6 +144,7 @@ impl OriginKey {
             port,
             proxy_host: None,
             proxy_port: None,
+            proxy_scheme: None,
             is_tunnel: false,
         })
     }
@@ -154,6 +158,19 @@ impl OriginKey {
         proxy_port: Option<u16>,
         is_tunnel: bool,
     ) -> Option<Self> {
+        Self::from_url_with_proxy_scheme(scheme, url, proxy_host, proxy_port, None, is_tunnel)
+    }
+
+    /// Build an origin key including the proxy endpoint scheme.
+    #[allow(dead_code)]
+    pub(crate) fn from_url_with_proxy_scheme(
+        scheme: &str,
+        url: &url::Url,
+        proxy_host: Option<&str>,
+        proxy_port: Option<u16>,
+        proxy_scheme: Option<&str>,
+        is_tunnel: bool,
+    ) -> Option<Self> {
         let host = url.host_str()?.to_owned();
         let port = url.port_or_known_default()?;
         Some(Self {
@@ -162,6 +179,7 @@ impl OriginKey {
             port,
             proxy_host: proxy_host.map(str::to_owned),
             proxy_port,
+            proxy_scheme: proxy_scheme.map(str::to_owned),
             is_tunnel,
         })
     }
@@ -176,6 +194,7 @@ impl OriginKey {
             port,
             proxy_host: None,
             proxy_port: None,
+            proxy_scheme: None,
             is_tunnel: false,
         }
     }
@@ -198,6 +217,7 @@ impl OriginKey {
             port,
             proxy_host: proxy_host.map(str::to_owned),
             proxy_port,
+            proxy_scheme: None,
             is_tunnel,
         }
     }
@@ -242,7 +262,11 @@ impl fmt::Display for OriginKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}://{}:{}", self.scheme, self.host, self.port)?;
         if let (Some(ref ph), Some(pp)) = (&self.proxy_host, self.proxy_port) {
-            write!(f, " via {ph}:{pp}")?;
+            if let Some(ref scheme) = self.proxy_scheme {
+                write!(f, " via {scheme}://{ph}:{pp}")?;
+            } else {
+                write!(f, " via {ph}:{pp}")?;
+            }
             if self.is_tunnel {
                 write!(f, " tunnel")?;
             }

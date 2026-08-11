@@ -302,6 +302,14 @@ pub(crate) fn parse_socket_options(
     for item in py_options.try_iter()? {
         let item = item?;
         let tuple: Bound<'_, PyTuple> = item.downcast_into::<PyTuple>()?;
+        if tuple.len() == 4 {
+            let value = tuple.get_item(2)?;
+            if value.is_none() {
+                return Err(PyErr::new::<pyo3::exceptions::PyNotImplementedError, _>(
+                    "four-element socket_options (level, option, None, optlen) are accepted by HTTPX but intentionally unsupported by eggfetch's safe socket API",
+                ));
+            }
+        }
         if tuple.len() != 3 {
             return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
                 "socket_options must be a list of (level, option, value) triples",

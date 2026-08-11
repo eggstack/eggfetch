@@ -72,14 +72,43 @@ class TestSocketOptionRepresentation:
         )
         assert transport is not None
 
-    def test_four_tuple_is_accepted_until_socket_use(self):
-        """HTTPX 0.28.1 forwards four-tuples to ``setsockopt`` unchanged."""
+    def test_valid_four_tuple_is_accepted_until_socket_use(self):
+        """HTTPX accepts the valid ``(level, option, None, optlen)`` form."""
         transport = httpx.HTTPTransport(
-            socket_options=[(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1, 0)]
+            socket_options=[(socket.SOL_SOCKET, socket.SO_KEEPALIVE, None, 0)]
         )
         with local_http_server() as (host, port):
             with httpx.Client(transport=transport, trust_env=False, timeout=2) as client:
-                with pytest.raises(TypeError, match="setsockopt"):
+                with pytest.raises(httpx.ConnectError):
+                    client.get(f"http://{host}:{port}/health")
+
+    def test_four_tuple_with_bytearray_is_accepted(self):
+        """HTTPX accepts bytearray values in the ordinary three-tuple form."""
+        transport = httpx.HTTPTransport(
+            socket_options=[
+                (socket.SOL_SOCKET, socket.SO_KEEPALIVE, bytearray(b"\x01\x00\x00\x00"))
+            ]
+        )
+        assert transport is not None
+
+    @pytest.mark.parametrize(
+        "value",
+        [
+            (socket.SOL_SOCKET, socket.SO_KEEPALIVE),
+            (socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1, 0, 0),
+            (socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1, 0),
+            (socket.SOL_SOCKET, socket.SO_KEEPALIVE, object()),
+        ],
+    )
+    def test_invalid_socket_option_shapes_are_rejected_at_use_or_construction(self, value):
+        """Invalid shapes are not confused with the valid four-tuple contract."""
+        try:
+            transport = httpx.HTTPTransport(socket_options=[value])
+        except (TypeError, ValueError):
+            return
+        with local_http_server() as (host, port):
+            with httpx.Client(transport=transport, trust_env=False, timeout=2) as client:
+                with pytest.raises((TypeError, ValueError, OSError)):
                     client.get(f"http://{host}:{port}/health")
 
 

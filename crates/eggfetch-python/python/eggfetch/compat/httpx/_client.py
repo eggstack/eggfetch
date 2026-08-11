@@ -311,7 +311,7 @@ def _convert_proxy(proxy):
     if isinstance(proxy, Proxy):
         url = str(proxy.url)
         auth = proxy.raw_auth
-        if auth is not None and proxy.url.scheme in ("socks5", "socks5h"):
+        if auth is not None and proxy.url.scheme in ("http", "https", "socks5", "socks5h"):
             username, password = auth
             parsed = urllib.parse.urlsplit(url)
             userinfo = "{}:{}@".format(

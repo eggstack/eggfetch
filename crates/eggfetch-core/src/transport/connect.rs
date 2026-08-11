@@ -25,7 +25,7 @@ pub(crate) async fn send_https_connect_request(
 ) -> Result<Response> {
     use tokio::io::AsyncWriteExt;
 
-    let mut stream = connect_to_proxy(proxy_config, ctx.remaining_total).await?;
+    let mut stream = connect_to_proxy(proxy_config, ctx.remaining_total, ctx.tls_config).await?;
 
     // Send CONNECT request.
     let dest_host = dest_url
@@ -107,13 +107,19 @@ pub(crate) async fn send_https_connect_request(
     };
 
     // Send the actual HTTP request over the TLS connection.
-    let absolute_uri = dest_url.as_str();
+    // CONNECT switches the request to the origin connection. HTTPX/httpcore
+    // therefore uses origin-form here, while forward proxy requests retain
+    // absolute-form.
+    let origin_uri = match dest_url.query() {
+        Some(query) => format!("{}?{query}", dest_url.path()),
+        None => dest_url.path().to_owned(),
+    };
     let mut tls_buf = tokio::io::BufReader::new(tls_stream);
 
     write_proxy_request(
         &mut tls_buf,
         method,
-        absolute_uri,
+        &origin_uri,
         version,
         headers,
         None, // No proxy auth for the destination request.
@@ -208,9 +214,14 @@ impl<S: tokio::io::AsyncRead + Unpin> futures_core::Stream for TlsProxyResponseS
                     std::task::Poll::Ready(None)
                 }
             }
-            std::task::Poll::Ready(Err(e)) => std::task::Poll::Ready(Some(Err(Error::Body(
-                format!("proxy stream read error: {e}"),
-            )))),
+            std::task::Poll::Ready(Err(e)) => {
+                if e.kind() == std::io::ErrorKind::UnexpectedEof {
+                    return std::task::Poll::Ready(None);
+                }
+                std::task::Poll::Ready(Some(Err(Error::Body(format!(
+                    "proxy stream read error: {e}"
+                )))))
+            }
             std::task::Poll::Pending => std::task::Poll::Pending,
         }
     }
@@ -220,13 +231,13 @@ impl<S: tokio::io::AsyncRead + Unpin> futures_core::Stream for TlsProxyResponseS
 ///
 /// After the CONNECT handshake, the proxy may have sent some bytes
 /// that are part of the TLS stream. This wrapper preserves them.
-pub(crate) struct ProxyTunnel {
+pub(crate) struct ProxyTunnel<S> {
     initial_buf: std::io::Cursor<Vec<u8>>,
-    inner: tokio::net::TcpStream,
+    inner: S,
 }
 
-impl ProxyTunnel {
-    pub(crate) fn new(initial_buf: Vec<u8>, inner: tokio::net::TcpStream) -> Self {
+impl<S> ProxyTunnel<S> {
+    pub(crate) fn new(initial_buf: Vec<u8>, inner: S) -> Self {
         Self {
             initial_buf: std::io::Cursor::new(initial_buf),
             inner,
@@ -234,7 +245,7 @@ impl ProxyTunnel {
     }
 }
 
-impl tokio::io::AsyncRead for ProxyTunnel {
+impl<S: tokio::io::AsyncRead + Unpin> tokio::io::AsyncRead for ProxyTunnel<S> {
     fn poll_read(
         mut self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
@@ -259,7 +270,7 @@ impl tokio::io::AsyncRead for ProxyTunnel {
     }
 }
 
-impl tokio::io::AsyncWrite for ProxyTunnel {
+impl<S: tokio::io::AsyncWrite + Unpin> tokio::io::AsyncWrite for ProxyTunnel<S> {
     fn poll_write(
         mut self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
