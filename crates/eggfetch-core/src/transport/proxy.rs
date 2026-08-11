@@ -374,6 +374,15 @@ struct ProxyResponseStream {
     inner: tokio::net::tcp::OwnedReadHalf,
 }
 
+fn map_socks_send_error(err: hyper_util::client::legacy::Error) -> Error {
+    let mapped = super::direct::map_send_error(err);
+    if mapped.kind() == "hyper_client" {
+        Error::ProxyConnect("proxy connection failed".into())
+    } else {
+        mapped
+    }
+}
+
 /// Send a SOCKS request through Hyper's normal origin HTTP machinery.
 async fn send_socks_request(
     dest_url: &url::Url,
@@ -423,11 +432,11 @@ async fn send_socks_request(
                 phase: TimeoutPhase::Total,
                 elapsed: duration,
             })?
-            .map_err(super::direct::map_send_error)?,
+            .map_err(map_socks_send_error)?,
         None => client
             .request(request)
             .await
-            .map_err(super::direct::map_send_error)?,
+            .map_err(map_socks_send_error)?,
     };
     let status = response.status();
     let response_version = response.version();

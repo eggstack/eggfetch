@@ -108,9 +108,6 @@ pub(crate) fn wrap_incoming(incoming: hyper::body::Incoming) -> BoxBytesStream {
 /// cannot be determined, the error falls through to the generic
 /// `Error::Hyper` path.
 pub(crate) fn map_send_error(err: hyper_util::client::legacy::Error) -> Error {
-    if err.to_string().contains("client error (Connect)") {
-        return Error::ProxyConnect("proxy connection failed".into());
-    }
     let mut current: Option<&dyn std::error::Error> = Some(&err);
     while let Some(e) = current {
         if let Some(hyper_err) = e.downcast_ref::<hyper::Error>() {
