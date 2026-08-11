@@ -33,7 +33,7 @@ mod test_server;
 use std::net::SocketAddr;
 use std::time::Duration;
 
-use eggfetch_core::transport::direct_connector::SocketOption;
+use eggfetch_core::transport::direct_connector::{SocketOption, SocketOptionKind};
 use eggfetch_core::{Client, Error, Timeout, TimeoutPhase};
 use test_server::{TestServer, TestServerConfig};
 
@@ -43,6 +43,7 @@ fn tcp_nodelay_option() -> SocketOption {
         level: 6,  // IPPROTO_TCP
         option: 1, // TCP_NODELAY
         value: 1i32.to_ne_bytes().to_vec(),
+        kind: Some(SocketOptionKind::TcpNoDelay),
     }
 }
 
@@ -52,6 +53,7 @@ fn unrecognized_option() -> SocketOption {
         level: 999,
         option: 999,
         value: vec![0, 1, 2, 3],
+        kind: None,
     }
 }
 
@@ -61,6 +63,7 @@ fn short_value_option() -> SocketOption {
         level: 6,
         option: 1,
         value: vec![1],
+        kind: Some(SocketOptionKind::TcpNoDelay),
     }
 }
 
@@ -497,7 +500,8 @@ async fn test_short_socket_option_value_errors() {
     // direct_connector.rs prove the exact error message content.
 }
 
-/// HTTPS over UDS produces a deterministic error.
+/// HTTPS over UDS enters the normal connector and fails deterministically when
+/// the configured Unix socket is unavailable.
 #[cfg(unix)]
 #[tokio::test]
 async fn test_uds_https_rejected() {
@@ -509,9 +513,5 @@ async fn test_uds_https_rejected() {
 
     assert!(result.is_err(), "expected error for HTTPS over UDS");
     let err = result.unwrap_err();
-    assert_eq!(err.kind(), "unsupported");
-    assert!(
-        err.to_string().contains("HTTPS"),
-        "error should mention HTTPS: {err}"
-    );
+    assert!(matches!(err.kind(), "hyper_client" | "connect" | "tls"));
 }

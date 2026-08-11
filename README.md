@@ -245,14 +245,21 @@ Key differences from HTTPX:
 - Trio/AnyIO not supported (asyncio only, tokio-based)
 - Python 3.8/3.9 not supported (requires 3.10+)
 - `ssl_context` transport parameter not supported (TLS handled by Rust engine)
-- `ALL_PROXY` and lowercase proxy env vars not supported
+- Core proxy configuration is explicit; the HTTPX compatibility facade honors
+  scheme-specific `HTTP_PROXY`/`HTTPS_PROXY` with `ALL_PROXY` fallback,
+  lowercase forms, `NO_PROXY`, and `trust_env=False`.
 - Redirects with buffered retained bodies replay correctly; arbitrary one-shot body iterators are rejected before the next hop
 - Request-local cookies and explicit Cookie headers are preserved within the facade jar model; native cookie kwargs are not used
 - Response streaming is asyncio-compatible and supports incremental text decoding and chunk-size control
 - Compatibility raw iteration defaults to `chunk_size=None`, marks live streams consumed before the first source read, counts consumed source bytes before chunk adaptation, and closes automatically only on normal exhaustion; close a partially consumed response explicitly.
 - Native compressed-response raw parity is implemented through a core-owned one-shot pre-decompression boundary: a streaming response selects either exact encoded raw bytes or the existing decoded path on first body consumption. Core's existing decoded-header policy still removes `Content-Encoding` and `Content-Length` when automatic decompression is enabled; the compatibility facade restores only the original wire values for those two headers from a narrow read-only snapshot.
 
-Phase 4 added direct transport features: UDS (Unix domain sockets), `local_address` binding, and `socket_options` — all with end-to-end native proof. Phase 5 added SOCKS5 proxy support with HTTP/HTTPS through SOCKS5, username/password authentication, local/remote DNS resolution, and NO_PROXY bypass.
+The corrective transport pass routes UDS through Hyper's normal HTTP/TLS
+machinery, accepts HTTPX host-only `local_address` values with an ephemeral
+source port, applies a bounded set of socket options classified from the
+platform's Python `socket` constants, and validates SOCKS5 selected-method
+authentication and DNS failures. UDS/SOCKS qualification remains bounded by
+the executable transport test matrix and the pinned HTTPX 0.28.1 profile.
 
 Remaining differences are documented in `compat/httpx/0.28.1/allowed-differences.toml`; the compatibility claim is limited to the pinned HTTPX 0.28.1 profile and the supported asyncio surface.
 

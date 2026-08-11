@@ -31,7 +31,7 @@
 //! should use a custom transport.
 
 use std::future::Future;
-use std::net::{SocketAddr, ToSocketAddrs};
+use std::net::SocketAddr;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
@@ -42,29 +42,17 @@ use tower_service::Service;
 
 use crate::error::Error;
 
-/// Common socket option level constants (platform-dependent values).
-///
-/// These are the standard POSIX values used on Linux, macOS, and most
-/// Unix-like systems.
-#[allow(clippy::module_name_repetitions)]
-pub(crate) mod sockopt_levels {
-    /// `IPPROTO_TCP` — TCP-level options.
-    pub(crate) const IPPROTO_TCP: i32 = 6;
-    /// `SOL_SOCKET` — Socket-level options.
-    pub(crate) const SOL_SOCKET: i32 = 1;
-}
-
-/// Common socket option name constants.
-#[allow(clippy::module_name_repetitions)]
-pub(crate) mod sockopt_names {
-    /// `TCP_NODELAY` — disable Nagle's algorithm.
-    pub(crate) const TCP_NODELAY: i32 = 1;
-    /// `SO_KEEPALIVE` — enable TCP keepalive.
-    pub(crate) const SO_KEEPALIVE: i32 = 5;
-    /// `SO_RCVBUF` — receive buffer size.
-    pub(crate) const SO_RCVBUF: i32 = 8;
-    /// `SO_SNDBUF` — send buffer size.
-    pub(crate) const SO_SNDBUF: i32 = 7;
+/// Socket options that the safe connector can apply portably.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SocketOptionKind {
+    /// Disable Nagle's algorithm.
+    TcpNoDelay,
+    /// Enable or disable TCP keepalive.
+    KeepAlive,
+    /// Set the receive buffer size.
+    ReceiveBuffer,
+    /// Set the send buffer size.
+    SendBuffer,
 }
 
 /// A socket option triple `(level, option, value)`.
@@ -80,6 +68,10 @@ pub struct SocketOption {
     pub option: i32,
     /// Raw option value bytes.
     pub value: Vec<u8>,
+    /// Semantic classification performed by the compatibility boundary.
+    /// `None` deliberately represents an unsupported tuple and is rejected
+    /// before the socket is connected.
+    pub kind: Option<SocketOptionKind>,
 }
 
 /// Configuration for a direct TCP connection with advanced socket options.
@@ -113,30 +105,30 @@ fn apply_socket_option(
             opt.value.len()
         )));
     }
-    match (opt.level, opt.option) {
+    match opt.kind {
         // TCP_NODELAY: value is a 4-byte int (non-zero = enabled).
-        (sockopt_levels::IPPROTO_TCP, sockopt_names::TCP_NODELAY) => {
+        Some(SocketOptionKind::TcpNoDelay) => {
             let val = i32::from_ne_bytes([opt.value[0], opt.value[1], opt.value[2], opt.value[3]]);
             socket
                 .set_nodelay(val != 0)
                 .map_err(|e| Error::Connect(format!("failed to set TCP_NODELAY: {e}")))?;
         }
         // SO_KEEPALIVE: value is a 4-byte int (non-zero = enabled).
-        (sockopt_levels::SOL_SOCKET, sockopt_names::SO_KEEPALIVE) => {
+        Some(SocketOptionKind::KeepAlive) => {
             let val = i32::from_ne_bytes([opt.value[0], opt.value[1], opt.value[2], opt.value[3]]);
             socket
                 .set_keepalive(val != 0)
                 .map_err(|e| Error::Connect(format!("failed to set SO_KEEPALIVE: {e}")))?;
         }
         // SO_RCVBUF: value is a 4-byte int (buffer size in bytes).
-        (sockopt_levels::SOL_SOCKET, sockopt_names::SO_RCVBUF) => {
+        Some(SocketOptionKind::ReceiveBuffer) => {
             let val = u32::from_ne_bytes([opt.value[0], opt.value[1], opt.value[2], opt.value[3]]);
             socket
                 .set_recv_buffer_size(val)
                 .map_err(|e| Error::Connect(format!("failed to set SO_RCVBUF: {e}")))?;
         }
         // SO_SNDBUF: value is a 4-byte int (buffer size in bytes).
-        (sockopt_levels::SOL_SOCKET, sockopt_names::SO_SNDBUF) => {
+        Some(SocketOptionKind::SendBuffer) => {
             let val = u32::from_ne_bytes([opt.value[0], opt.value[1], opt.value[2], opt.value[3]]);
             socket
                 .set_send_buffer_size(val)
@@ -276,49 +268,54 @@ impl Service<Uri> for DirectConnector {
 
             let is_https = dst.scheme_str() == Some("https");
 
-            // DNS resolution using std's blocking resolver (thread-pool).
-            let addr = format!("{host}:{port}")
-                .to_socket_addrs()
+            let addresses = tokio::net::lookup_host((host.as_str(), port))
+                .await
                 .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> {
                     Error::Connect(format!("DNS resolution failed for {host}: {e}")).into()
-                })?
-                .next()
-                .ok_or_else(|| -> Box<dyn std::error::Error + Send + Sync> {
-                    Error::Connect(format!("no addresses found for {host}")).into()
                 })?;
-
-            // Create TCP socket with appropriate domain.
-            let socket = if addr.is_ipv4() {
-                tokio::net::TcpSocket::new_v4()
-            } else {
-                tokio::net::TcpSocket::new_v6()
+            let mut last_error = None;
+            let mut tokio_stream = None;
+            for addr in addresses {
+                if let Some(local_addr) = config.local_address {
+                    if local_addr.is_ipv4() != addr.is_ipv4() {
+                        continue;
+                    }
+                }
+                let socket = if addr.is_ipv4() {
+                    tokio::net::TcpSocket::new_v4()
+                } else {
+                    tokio::net::TcpSocket::new_v6()
+                }
+                .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> {
+                    Error::Connect(format!("failed to create socket: {e}")).into()
+                })?;
+                for opt in &config.socket_options {
+                    if let Err(error) = apply_socket_option(&socket, opt) {
+                        return Err(error.into());
+                    }
+                }
+                if let Some(local_addr) = config.local_address {
+                    if let Err(error) = socket.bind(local_addr) {
+                        last_error = Some(error.to_string());
+                        continue;
+                    }
+                }
+                match socket.connect(addr).await {
+                    Ok(stream) => {
+                        tokio_stream = Some(stream);
+                        break;
+                    }
+                    Err(error) => last_error = Some(format!("{addr}: {error}")),
+                }
             }
-            .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> {
-                Error::Connect(format!("failed to create socket: {e}")).into()
-            })?;
-
-            // Apply socket options.
-            for opt in &config.socket_options {
-                apply_socket_option(&socket, opt)
-                    .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { e.into() })?;
-            }
-
-            // Bind to local address if configured.
-            if let Some(local_addr) = config.local_address {
-                socket.bind(local_addr).map_err(
-                    |e| -> Box<dyn std::error::Error + Send + Sync> {
-                        Error::Connect(format!("failed to bind to local address {local_addr}: {e}"))
-                            .into()
-                    },
-                )?;
-            }
-
-            // Connect to remote.
-            let tokio_stream = socket.connect(addr).await.map_err(
-                |e| -> Box<dyn std::error::Error + Send + Sync> {
-                    Error::Connect(format!("TCP connect to {addr} failed: {e}")).into()
-                },
-            )?;
+            let tokio_stream =
+                tokio_stream.ok_or_else(|| -> Box<dyn std::error::Error + Send + Sync> {
+                    Error::Connect(format!(
+                        "TCP connect to {host}:{port} failed: {}",
+                        last_error.unwrap_or_else(|| "no compatible addresses".into())
+                    ))
+                    .into()
+                })?;
 
             // Set TCP_NODELAY after connect (applies even if not in socket_options).
             tokio_stream.set_nodelay(true).map_err(
@@ -366,9 +363,10 @@ mod tests {
         let config = DirectConnectorConfig {
             local_address: None,
             socket_options: vec![SocketOption {
-                level: sockopt_levels::IPPROTO_TCP,
-                option: sockopt_names::TCP_NODELAY,
+                level: 0,
+                option: 0,
                 value: 1i32.to_ne_bytes().to_vec(),
+                kind: Some(SocketOptionKind::TcpNoDelay),
             }],
         };
         let _cloned = config.clone();
@@ -377,9 +375,10 @@ mod tests {
     #[test]
     fn socket_option_stores_raw_value() {
         let opt = SocketOption {
-            level: sockopt_levels::IPPROTO_TCP,
-            option: sockopt_names::TCP_NODELAY,
+            level: 0,
+            option: 0,
             value: 1i32.to_ne_bytes().to_vec(),
+            kind: Some(SocketOptionKind::TcpNoDelay),
         };
         assert_eq!(opt.value.len(), 4);
     }
@@ -388,9 +387,10 @@ mod tests {
     fn apply_socket_option_nodelay() {
         let socket = tokio::net::TcpSocket::new_v4().unwrap();
         let opt = SocketOption {
-            level: sockopt_levels::IPPROTO_TCP,
-            option: sockopt_names::TCP_NODELAY,
+            level: 0,
+            option: 0,
             value: 1i32.to_ne_bytes().to_vec(),
+            kind: Some(SocketOptionKind::TcpNoDelay),
         };
         apply_socket_option(&socket, &opt).unwrap();
     }
@@ -399,9 +399,10 @@ mod tests {
     fn apply_socket_option_keepalive() {
         let socket = tokio::net::TcpSocket::new_v4().unwrap();
         let opt = SocketOption {
-            level: sockopt_levels::SOL_SOCKET,
-            option: sockopt_names::SO_KEEPALIVE,
+            level: 0,
+            option: 0,
             value: 1i32.to_ne_bytes().to_vec(),
+            kind: Some(SocketOptionKind::KeepAlive),
         };
         apply_socket_option(&socket, &opt).unwrap();
     }
@@ -413,6 +414,7 @@ mod tests {
             level: 999,
             option: 999,
             value: vec![0, 1, 2, 3],
+            kind: None,
         };
         let err = apply_socket_option(&socket, &opt).unwrap_err();
         assert_eq!(err.kind(), "connect");
@@ -423,9 +425,10 @@ mod tests {
     fn apply_socket_option_short_value_returns_error() {
         let socket = tokio::net::TcpSocket::new_v4().unwrap();
         let opt = SocketOption {
-            level: sockopt_levels::IPPROTO_TCP,
-            option: sockopt_names::TCP_NODELAY,
+            level: 0,
+            option: 0,
             value: vec![1],
+            kind: Some(SocketOptionKind::TcpNoDelay),
         };
         let err = apply_socket_option(&socket, &opt).unwrap_err();
         assert_eq!(err.kind(), "connect");

@@ -121,7 +121,7 @@ No critical or high-severity findings. Cross-origin credential stripping is comp
 
 ### Environment Variable Policy
 
-- **No implicit proxy**: eggfetch does not read `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, or `NO_PROXY` environment variables. Proxy configuration is always explicit via `ClientBuilder::proxy()` or `RequestBuilder::proxy()`.
+- **Explicit core proxy**: the Rust core does not read proxy environment variables. The HTTPX compatibility facade explicitly opts into scheme-aware environment translation only when `trust_env=True`.
 - **NO_PROXY available explicitly**: `NoProxy::from_env()` and `NoProxy::parse()` are available for callers who want to read environment variables explicitly.
 
 ### Findings

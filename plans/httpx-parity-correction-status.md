@@ -6,6 +6,19 @@ and referenced plans; counts below are only from the runs named here.
 
 ## Current corrective pass
 
+The previous qualification is historical only. The current corrective
+transport pass is pending final exact-SHA qualification; do not use the
+historical SHA below as current transport evidence.
+
+Corrective transport validation so far: the full pinned HTTPX 0.28.1 suite
+passes (`1452 passed, 2 warnings`), the API oracle has zero unexplained, stale,
+or resolved-in-active differences, and the local direct/UDS/SOCKS focused
+fixtures pass. The ordinary downstream fixture directory reports 54 passes
+and 8 failures: five shim-detection assertions (the unmodified `httpx` module
+is intentionally installed) and three `httpx-sse` iteration assertions that
+require the excluded shim/private integration surface. These are not counted
+as public Stage C qualification until the isolated shim runner is used.
+
 Native compressed raw body selection, wire metadata parity, native async
 cancellation/lease release, planning preservation, and final CI verification
 are complete for the documented HTTPX 0.28.1 asyncio-supported surface.

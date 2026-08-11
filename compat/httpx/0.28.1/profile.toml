@@ -9,7 +9,7 @@ qualified = "2026-08-10"
 qualification-sha = "40beeec09f3e88db8901f39388da665c47ab84f6"
 reference = "httpx==0.28.1"
 stage = "stage-c-candidate"
-status = "qualified"
+status = "corrective-transport-pending"
 
 [reference]
 distribution = "httpx"

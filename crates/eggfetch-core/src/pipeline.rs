@@ -604,13 +604,17 @@ pub(crate) fn resolve_proxy(
     match proxy_override {
         ProxyOverride::Override(config) => Some(config.clone()),
         ProxyOverride::Direct => None,
-        ProxyOverride::Inherit => inner
-            .config
-            .proxy
-            .as_ref()
-            .filter(|p| p.should_use_for_scheme(url.scheme()))
-            .filter(|p| p.no_proxy_rules().map_or(true, |np| !np.should_bypass(url)))
-            .map(Proxy::config),
+        ProxyOverride::Inherit => {
+            let candidates = inner
+                .config
+                .proxy
+                .iter()
+                .chain(inner.config.environment_proxies.iter());
+            candidates
+                .filter(|p| p.should_use_for_scheme(url.scheme()))
+                .find(|p| p.no_proxy_rules().map_or(true, |np| !np.should_bypass(url)))
+                .map(Proxy::config)
+        }
     }
 }
 
@@ -726,30 +730,35 @@ pub(crate) async fn send_single_request(
         .map(|total| total.saturating_sub(started.elapsed()));
 
     // Route through UDS handler if configured.
-    if let Some(ref uds_handler) = inner.uds_handler {
+    #[cfg(unix)]
+    if let Some(ref uds_client) = inner.uds_client {
+        let mut http_request = http::Request::builder()
+            .method(&method)
+            .uri(url.as_str())
+            .version(version);
+        for (name, value) in headers.iter() {
+            http_request = http_request.header(name, value);
+        }
+        let request = http_request
+            .body(body.into_http_body())
+            .map_err(|e| Error::RequestBuild(e.to_string()))?;
         let response = match remaining_total {
-            Some(dur) => {
-                match tokio::time::timeout(
-                    dur,
-                    uds_handler.send_request(&method, &url, &headers, body, version),
-                )
-                .await
-                {
-                    Ok(Ok(resp)) => resp,
-                    Ok(Err(e)) => return Err(e),
-                    Err(_) => {
-                        return Err(Error::Timeout {
-                            phase: TimeoutPhase::Total,
-                            elapsed: dur,
-                        });
-                    }
+            Some(dur) => match tokio::time::timeout(
+                dur,
+                crate::transport::uds::send_request(uds_client, request, url.clone()),
+            )
+            .await
+            {
+                Ok(Ok(resp)) => resp,
+                Ok(Err(e)) => return Err(e),
+                Err(_) => {
+                    return Err(Error::Timeout {
+                        phase: TimeoutPhase::Total,
+                        elapsed: dur,
+                    });
                 }
-            }
-            None => {
-                uds_handler
-                    .send_request(&method, &url, &headers, body, version)
-                    .await?
-            }
+            },
+            None => crate::transport::uds::send_request(uds_client, request, url.clone()).await?,
         };
         let mut response = response;
         apply_read_timeout_and_lease(&mut response, guard, timeout.read);

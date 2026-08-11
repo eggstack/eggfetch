@@ -42,6 +42,10 @@ impl PyClient {
     ///     `follow_redirects`: Whether to follow redirects (default False).
     ///     `max_redirects`: Maximum redirects to follow (default 20).
     #[allow(clippy::too_many_arguments)]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "constructor keeps shared binding configuration at one adapter boundary"
+    )]
     #[new]
     #[pyo3(signature = (*, headers=None, timeout=None, follow_redirects=None, max_redirects=None, cookies=None, auth=None, decompress=None, proxy=None, verify=None, cert=None, retries=None, http2=None, http3=None, limits=None, trust_env=None, local_address=None, socket_options=None, uds=None))]
     fn new(
@@ -139,9 +143,18 @@ impl PyClient {
         if trust_env && proxy_override == ProxyOverride::Inherit {
             #[cfg(feature = "proxy")]
             {
-                if let Some(env_proxy) = proxy::env_proxy_url() {
-                    let p = eggfetch_core::Proxy::all(&env_proxy).map_err(map_err)?;
-                    builder = builder.proxy(p);
+                for (scheme, env_proxy) in proxy::env_proxy_urls() {
+                    let mut p = match scheme {
+                        "http" => eggfetch_core::Proxy::http(&env_proxy),
+                        "https" => eggfetch_core::Proxy::https(&env_proxy),
+                        _ => eggfetch_core::Proxy::all(&env_proxy),
+                    }
+                    .map_err(map_err)?;
+                    if let Some(no_proxy) = proxy::env_no_proxy() {
+                        let rules = eggfetch_core::NoProxy::parse(&no_proxy).map_err(map_err)?;
+                        p = p.no_proxy(rules);
+                    }
+                    builder = builder.environment_proxy(p);
                 }
             }
         }
@@ -153,11 +166,7 @@ impl PyClient {
 
         // Forward advanced transport options.
         if let Some(addr_str) = local_address {
-            let addr: std::net::SocketAddr = addr_str.parse().map_err(|e| {
-                PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
-                    "invalid local_address '{addr_str}': {e}"
-                ))
-            })?;
+            let addr = crate::conversion::parse_local_address(addr_str)?;
             builder = builder.local_address(addr);
         }
         if let Some(opts) = socket_options {

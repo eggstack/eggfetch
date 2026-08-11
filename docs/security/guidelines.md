@@ -68,7 +68,10 @@ When either limit is exceeded, the response stream is terminated with `Error::De
 
 ## Proxy Environment Policy
 
-eggfetch does **not** read `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, or `NO_PROXY` environment variables. Proxy configuration is explicit only, set via `ClientBuilder::proxy()` or the `--proxy` CLI flag. This avoids surprising behavior when multiple proxy-aware libraries coexist in the same process.
+The Rust core does **not** read proxy environment variables; native proxy
+configuration is explicit via `ClientBuilder::proxy()` or the `--proxy` CLI
+flag. The HTTPX compatibility facade may translate environment proxies when
+`trust_env=True`, with scheme-aware selection and `NO_PROXY` bypass.
 
 The `NO_PROXY` matching rules are available through `NoProxy::from_env()` or `NoProxy::parse()` for explicit configuration. `NoProxy` supports wildcard matching, exact host match, and domain suffix matching (e.g., `.example.com`).
 

@@ -95,4 +95,7 @@ Socket-level counters (connections opened/reused/closed) were removed because hy
 
 ### Environment-Variable Proxy Policy
 
-eggfetch does **not** read `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, or `NO_PROXY` environment variables. Proxy configuration is always explicit via `ClientBuilder::proxy()` or `RequestBuilder::proxy()`. This is a deliberate design choice to avoid surprising behavior in library contexts.
+The Rust core does not read proxy environment variables; native proxy
+configuration is explicit via `ClientBuilder::proxy()` or
+`RequestBuilder::proxy()`. The HTTPX compatibility facade translates
+scheme-specific proxy variables and `NO_PROXY` when `trust_env=True`.

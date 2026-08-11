@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import enum
+import socket
+import sys
 import typing
 import urllib.parse
 import time
@@ -152,24 +154,6 @@ def _validate_protocol_options(http1: bool, http2: bool) -> None:
 
 # ── Transport option validation ───────────────────────────────────────
 
-# Common socket option constants (matching Python's socket module).
-# These are the values that httpcore/HTTPX typically uses.
-_SOCKET_OPTION_LEVELS = {
-    "SOL_SOCKET": 1,
-    "IPPROTO_TCP": 6,
-    "IPPROTO_IP": 0,
-    "IPPROTO_IPV6": 41,
-}
-
-_SOCKET_OPTION_NAMES = {
-    "TCP_NODELAY": (6, 1),       # (level, option) on Linux
-    "SO_KEEPALIVE": (1, 5),
-    "SO_RCVBUF": (1, 8),
-    "SO_SNDBUF": (1, 7),
-    "SO_REUSEADDR": (1, 2),
-}
-
-
 def _convert_socket_option(option: tuple) -> tuple[int, int, bytes]:
     """Convert a socket option tuple to (level, option, value) ints.
 
@@ -187,22 +171,21 @@ def _convert_socket_option(option: tuple) -> tuple[int, int, bytes]:
 
     # Resolve level.
     if isinstance(level, str):
-        level = _SOCKET_OPTION_LEVELS.get(level)
-        if level is None:
-            raise ValueError(f"unknown socket level: {level!r}")
+        try:
+            level = getattr(socket, level)
+        except AttributeError as exc:
+            raise ValueError(f"unknown socket level: {level!r}") from exc
 
     # Resolve option.
     if isinstance(opt, str):
-        resolved = _SOCKET_OPTION_NAMES.get(opt)
-        if resolved is None:
-            raise ValueError(f"unknown socket option: {opt!r}")
-        if level is None:
-            level = resolved[0]
-        opt = resolved[1]
+        try:
+            opt = getattr(socket, opt)
+        except AttributeError as exc:
+            raise ValueError(f"unknown socket option: {opt!r}") from exc
 
     # Convert value to bytes.
     if isinstance(value, int):
-        value = value.to_bytes(4, byteorder="little")
+        value = value.to_bytes(4, byteorder=sys.byteorder, signed=True)
     elif isinstance(value, bytes):
         pass
     else:
@@ -225,12 +208,12 @@ def _validate_transport_options(
     if local_address is not None:
         if not isinstance(local_address, str):
             raise TypeError("local_address must be a string")
-        # Quick format check.
-        parts = local_address.split(":")
-        if len(parts) != 2:
-            raise ValueError(
-                f"local_address must be 'host:port', got {local_address!r}"
-            )
+        # HTTPX accepts an address only; the OS selects the source port.
+        try:
+            import ipaddress
+            ipaddress.ip_address(local_address)
+        except ValueError as exc:
+            raise ValueError(f"invalid local_address {local_address!r}") from exc
     if socket_options is not None:
         if not isinstance(socket_options, (list, tuple)):
             raise TypeError("socket_options must be a list of tuples")

@@ -69,7 +69,10 @@ Per-request override via `RequestBuilder::proxy(ProxyOverride)`:
 - Host:port pairs
 - IPv6 addresses
 
-eggfetch does **not** read environment variables for proxy configuration.
+The Rust core does not read proxy environment variables. The HTTPX Python
+compatibility facade may translate `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`,
+and `NO_PROXY` into explicit scheme-aware native proxy configuration when
+`trust_env=True`; native Rust callers must configure proxies explicitly.
 
 ### CONNECT Tunnel
 
@@ -105,7 +108,7 @@ let proxy = Proxy::all("socks5://user:pass@proxy.example.com:1080")?;
 3. Optional username/password subnegotiation (RFC 1929)
 4. CONNECT command with destination address (IPv4, IPv6, or domain name)
 5. Parse reply — tunnel established
-6. For HTTP: speak HTTP over the tunnel
+6. For HTTP: speak origin-form HTTP over the tunnel
 7. For HTTPS: perform origin TLS handshake over the tunnel, then HTTP
 
 ### DNS Resolution Semantics

@@ -80,4 +80,4 @@ pub use retry::{
 pub use timeout::{Timeout, TimeoutBuilder, TimeoutPhase};
 pub use tls::{ClientIdentity, TlsConfig, TlsConfigBuilder, TlsVersion, TrustStore};
 /// Socket option for direct TCP connections.
-pub use transport::direct_connector::SocketOption;
+pub use transport::direct_connector::{SocketOption, SocketOptionKind};

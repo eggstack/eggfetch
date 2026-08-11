@@ -60,7 +60,7 @@ pub(crate) async fn send_direct_request(
 /// (returns `Poll::Ready(None)`) without surfacing the trailer headers.
 /// This is a known limitation; trailers may be supported in a future
 /// milestone.
-fn wrap_incoming(incoming: hyper::body::Incoming) -> BoxBytesStream {
+pub(crate) fn wrap_incoming(incoming: hyper::body::Incoming) -> BoxBytesStream {
     use futures_core::Stream;
     use http_body::Body;
     use std::pin::Pin;
@@ -107,7 +107,10 @@ fn wrap_incoming(incoming: hyper::body::Incoming) -> BoxBytesStream {
 /// specific eggfetch error variants. When the specific h2 reason code
 /// cannot be determined, the error falls through to the generic
 /// `Error::Hyper` path.
-fn map_send_error(err: hyper_util::client::legacy::Error) -> Error {
+pub(crate) fn map_send_error(err: hyper_util::client::legacy::Error) -> Error {
+    if err.to_string().contains("client error (Connect)") {
+        return Error::ProxyConnect("proxy connection failed".into());
+    }
     let mut current: Option<&dyn std::error::Error> = Some(&err);
     while let Some(e) = current {
         if let Some(hyper_err) = e.downcast_ref::<hyper::Error>() {

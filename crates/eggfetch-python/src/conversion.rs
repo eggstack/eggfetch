@@ -289,6 +289,15 @@ pub fn parse_timeout(
 pub(crate) fn parse_socket_options(
     py_options: &Bound<'_, PyAny>,
 ) -> PyResult<Vec<eggfetch_core::SocketOption>> {
+    let py = py_options.py();
+    let socket = pyo3::types::PyModule::import(py, "socket")?;
+    let constant = |name: &str| -> PyResult<i32> { socket.getattr(name)?.extract() };
+    let ipproto_tcp = constant("IPPROTO_TCP")?;
+    let sol_socket = constant("SOL_SOCKET")?;
+    let tcp_nodelay = constant("TCP_NODELAY")?;
+    let so_keepalive = constant("SO_KEEPALIVE")?;
+    let so_rcvbuf = constant("SO_RCVBUF")?;
+    let so_sndbuf = constant("SO_SNDBUF")?;
     let mut options = Vec::new();
     for item in py_options.try_iter()? {
         let item = item?;
@@ -300,12 +309,39 @@ pub(crate) fn parse_socket_options(
         }
         let level: i32 = tuple.get_item(0)?.extract()?;
         let option: i32 = tuple.get_item(1)?.extract()?;
-        let value: Vec<u8> = tuple.get_item(2)?.extract()?;
+        let value_obj = tuple.get_item(2)?;
+        let value = if let Ok(value) = value_obj.extract::<i32>() {
+            value.to_ne_bytes().to_vec()
+        } else {
+            value_obj.extract::<Vec<u8>>()?
+        };
+        let kind = if level == ipproto_tcp && option == tcp_nodelay {
+            Some(eggfetch_core::SocketOptionKind::TcpNoDelay)
+        } else if level == sol_socket && option == so_keepalive {
+            Some(eggfetch_core::SocketOptionKind::KeepAlive)
+        } else if level == sol_socket && option == so_rcvbuf {
+            Some(eggfetch_core::SocketOptionKind::ReceiveBuffer)
+        } else if level == sol_socket && option == so_sndbuf {
+            Some(eggfetch_core::SocketOptionKind::SendBuffer)
+        } else {
+            None
+        };
         options.push(eggfetch_core::SocketOption {
             level,
             option,
             value,
+            kind,
         });
     }
     Ok(options)
+}
+
+/// Convert HTTPX's host-only local address into a native ephemeral bind.
+pub(crate) fn parse_local_address(value: &str) -> PyResult<std::net::SocketAddr> {
+    let ip: std::net::IpAddr = value.parse().map_err(|_| {
+        PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+            "invalid local_address '{value}'; expected an IP address"
+        ))
+    })?;
+    Ok(std::net::SocketAddr::new(ip, 0))
 }

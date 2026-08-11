@@ -13,20 +13,32 @@ pub(crate) enum ProxyOverride {
     Override(String),
 }
 
-/// Read the effective proxy URL from environment variables.
-///
-/// Checks `HTTP_PROXY`, `http_proxy`, `HTTPS_PROXY`, `https_proxy`,
-/// `ALL_PROXY`, `all_proxy` in priority order. Returns `None` if no
-/// variable is set or all are empty.
-pub(crate) fn env_proxy_url() -> Option<String> {
-    std::env::var("HTTP_PROXY")
-        .or_else(|_| std::env::var("http_proxy"))
-        .or_else(|_| std::env::var("HTTPS_PROXY"))
-        .or_else(|_| std::env::var("https_proxy"))
-        .or_else(|_| std::env::var("ALL_PROXY"))
-        .or_else(|_| std::env::var("all_proxy"))
+/// Return the environment proxies in HTTPX's scheme-aware order.
+pub(crate) fn env_proxy_urls() -> Vec<(&'static str, String)> {
+    let value = |upper: &str, lower: &str| {
+        std::env::var(upper)
+            .ok()
+            .filter(|v| !v.is_empty())
+            .or_else(|| std::env::var(lower).ok().filter(|v| !v.is_empty()))
+    };
+    let mut proxies = Vec::new();
+    if let Some(url) = value("HTTP_PROXY", "http_proxy") {
+        proxies.push(("http", url));
+    }
+    if let Some(url) = value("HTTPS_PROXY", "https_proxy") {
+        proxies.push(("https", url));
+    }
+    if let Some(url) = value("ALL_PROXY", "all_proxy") {
+        proxies.push(("all", url));
+    }
+    proxies
+}
+
+pub(crate) fn env_no_proxy() -> Option<String> {
+    std::env::var("NO_PROXY")
         .ok()
         .filter(|v| !v.is_empty())
+        .or_else(|| std::env::var("no_proxy").ok().filter(|v| !v.is_empty()))
 }
 
 /// Parse a Python `proxy` argument into a `ProxyOverride`.

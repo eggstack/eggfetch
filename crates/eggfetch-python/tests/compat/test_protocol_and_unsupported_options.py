@@ -70,8 +70,8 @@ class TestTransportOptionsAccepted:
 
     def test_local_address_accepted(self):
         """local_address is now accepted in the transport constructor."""
-        transport = HTTPTransport(local_address="127.0.0.1:0")
-        assert transport._local_address == "127.0.0.1:0"
+        transport = HTTPTransport(local_address="127.0.0.1")
+        assert transport._local_address == "127.0.0.1"
 
     def test_socket_options_accepted(self):
         """socket_options is now accepted in the transport constructor."""
@@ -86,8 +86,8 @@ class TestTransportOptionsAccepted:
 
     def test_async_local_address_accepted(self):
         """local_address is now accepted in the async transport constructor."""
-        transport = AsyncHTTPTransport(local_address="127.0.0.1:0")
-        assert transport._local_address == "127.0.0.1:0"
+        transport = AsyncHTTPTransport(local_address="127.0.0.1")
+        assert transport._local_address == "127.0.0.1"
 
     def test_async_socket_options_accepted(self):
         """socket_options is now accepted in the async transport constructor."""
@@ -126,13 +126,13 @@ class TestTransportOptionsAccepted:
         _validate_transport_options(uds="/tmp/test.sock")  # should not raise
 
     def test_validate_transport_options_local_address(self):
-        _validate_transport_options(local_address="127.0.0.1:0")  # should not raise
+        _validate_transport_options(local_address="127.0.0.1")  # should not raise
 
     def test_validate_transport_options_socket_options(self):
         _validate_transport_options(socket_options=[(6, 1, b"\x01")])  # should not raise
 
     def test_validate_transport_options_invalid_local_address(self):
-        with pytest.raises(ValueError, match="host:port"):
+        with pytest.raises(ValueError, match="invalid local_address"):
             _validate_transport_options(local_address="bad-format")
 
     def test_validate_transport_options_invalid_socket_options_type(self):

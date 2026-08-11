@@ -26,6 +26,18 @@ pub(crate) type TimeoutDirectClient = hyper_util::client::legacy::Client<
     HyperRequestBody,
 >;
 
+#[cfg(unix)]
+pub(crate) type TimeoutUdsClient = hyper_util::client::legacy::Client<
+    connect_timeout::ConnectTimeout<uds::UdsConnector>,
+    HyperRequestBody,
+>;
+
+#[cfg(feature = "proxy")]
+pub(crate) type TimeoutSocksClient = hyper_util::client::legacy::Client<
+    connect_timeout::ConnectTimeout<socks::SocksConnector>,
+    HyperRequestBody,
+>;
+
 pub(crate) mod connect_timeout;
 pub(crate) mod direct;
 pub mod direct_connector;

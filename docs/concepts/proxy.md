@@ -101,7 +101,10 @@ Bypass rules are case-insensitive for host matching. Port matching uses the sche
 
 ## Environment Policy
 
-eggfetch does **not** read `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, or `NO_PROXY` environment variables. Proxy configuration is always explicit. This avoids surprising behavior when multiple proxy libraries coexist.
+The Rust core does not read proxy environment variables. The HTTPX
+compatibility facade may translate scheme-specific proxy variables,
+`ALL_PROXY`, lowercase forms, and `NO_PROXY` into explicit native
+configuration when `trust_env=True`.
 
 ## Limitations
 

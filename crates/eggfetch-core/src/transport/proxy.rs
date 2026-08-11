@@ -14,6 +14,18 @@ pub(crate) struct ProxyRequestContext<'a> {
     pub(crate) tls_config: Option<&'a crate::tls::TlsConfig>,
 }
 
+fn origin_form(url: &url::Url) -> String {
+    let path = if url.path().is_empty() {
+        "/"
+    } else {
+        url.path()
+    };
+    match url.query() {
+        Some(query) => format!("{path}?{query}"),
+        None => path.to_owned(),
+    }
+}
+
 /// Send a request through a proxy.
 ///
 /// Routes to HTTP forwarding, CONNECT tunneling, or SOCKS5 tunneling
@@ -362,12 +374,84 @@ struct ProxyResponseStream {
     inner: tokio::net::tcp::OwnedReadHalf,
 }
 
+/// Send a SOCKS request through Hyper's normal origin HTTP machinery.
+async fn send_socks_request(
+    dest_url: &url::Url,
+    method: &http::Method,
+    headers: &Headers,
+    body: RequestBody,
+    version: http::Version,
+    proxy_config: &ProxyConfig,
+    ctx: &ProxyRequestContext<'_>,
+) -> Result<Response> {
+    let tls_config = if let Some(config) = ctx.tls_config {
+        config
+            .build_rustls_config()
+            .map_err(|e| Error::Tls(format!("failed to build SOCKS TLS config: {e}")))?
+    } else {
+        let mut roots = rustls::RootCertStore::empty();
+        roots.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+        rustls::ClientConfig::builder()
+            .with_root_certificates(roots)
+            .with_no_client_auth()
+    };
+    let connector = super::socks::SocksConnector::new(
+        proxy_config.clone(),
+        Some(tokio_rustls::TlsConnector::from(std::sync::Arc::new(
+            tls_config,
+        ))),
+        ctx.remaining_total,
+    );
+    let connector = super::connect_timeout::ConnectTimeout::new(connector, None);
+    let client: crate::transport::TimeoutSocksClient =
+        hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new())
+            .build(connector);
+    let mut request = http::Request::builder()
+        .method(method)
+        .uri(dest_url.as_str())
+        .version(version);
+    for (name, value) in headers.iter() {
+        request = request.header(name, value);
+    }
+    let request = request
+        .body(body.into_http_body())
+        .map_err(|e| Error::RequestBuild(e.to_string()))?;
+    let response = match ctx.remaining_total {
+        Some(duration) => tokio::time::timeout(duration, client.request(request))
+            .await
+            .map_err(|_| Error::Timeout {
+                phase: TimeoutPhase::Total,
+                elapsed: duration,
+            })?
+            .map_err(super::direct::map_send_error)?,
+        None => client
+            .request(request)
+            .await
+            .map_err(super::direct::map_send_error)?,
+    };
+    let status = response.status();
+    let response_version = response.version();
+    let response_headers = response.headers().clone();
+    let stream = super::direct::wrap_incoming(response.into_body());
+    Ok(Response::new(
+        status,
+        response_version,
+        response_headers,
+        dest_url.clone(),
+        ResponseBody::streaming(stream),
+    ))
+}
+
 /// Send a request through a SOCKS5 proxy.
 ///
 /// Performs the SOCKS5 handshake, then either:
 /// - Sends HTTP directly over the tunnel (for `http://` destinations)
 /// - Performs TLS over the tunnel, then sends HTTP (for `https://` destinations)
-async fn send_socks_request(
+#[allow(
+    dead_code,
+    reason = "retained only while proxy fixture migration completes"
+)]
+async fn send_socks_request_legacy(
     dest_url: &url::Url,
     method: &http::Method,
     headers: &Headers,
@@ -391,6 +475,7 @@ async fn send_socks_request(
         ctx.remaining_total,
     )
     .await?;
+    let stream = tokio::io::BufReader::new(stream);
 
     match dest_url.scheme() {
         "http" => send_socks_http_request(dest_url, method, headers, body, version, stream).await,
@@ -414,14 +499,24 @@ async fn send_socks_http_request(
 ) -> Result<Response> {
     let mut stream = stream;
 
-    // Write the HTTP request with absolute-form URI.
-    let absolute_uri = dest_url.as_str();
+    // A completed SOCKS CONNECT is an origin connection, so use origin-form
+    // targets rather than HTTP forward-proxy absolute-form URLs.
+    let origin_uri = origin_form(dest_url);
+    let mut origin_headers = headers.clone();
+    if !origin_headers.contains("host") {
+        let host = dest_url.host_str().unwrap_or_default();
+        let host = match dest_url.port() {
+            Some(port) => format!("{host}:{port}"),
+            None => host.to_owned(),
+        };
+        origin_headers.insert("host", &host)?;
+    }
     write_proxy_request(
         &mut stream,
         method,
-        absolute_uri,
+        &origin_uri,
         version,
-        headers,
+        &origin_headers,
         None, // No proxy auth for the destination request.
         body,
     )
@@ -513,15 +608,24 @@ async fn send_socks_https_request(
     };
 
     // Send the actual HTTP request over the TLS connection.
-    let absolute_uri = dest_url.as_str();
+    let origin_uri = origin_form(dest_url);
+    let mut origin_headers = headers.clone();
+    if !origin_headers.contains("host") {
+        let host = dest_url.host_str().unwrap_or_default();
+        let host = match dest_url.port() {
+            Some(port) => format!("{host}:{port}"),
+            None => host.to_owned(),
+        };
+        origin_headers.insert("host", &host)?;
+    }
     let mut tls_buf = tokio::io::BufReader::new(tls_stream);
 
     write_proxy_request(
         &mut tls_buf,
         method,
-        absolute_uri,
+        &origin_uri,
         version,
-        headers,
+        &origin_headers,
         None, // No proxy auth for the destination request.
         body,
     )

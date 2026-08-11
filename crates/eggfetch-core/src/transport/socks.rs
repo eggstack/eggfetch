@@ -83,7 +83,7 @@ pub(crate) async fn socks5_handshake(
     dest_port: u16,
     remote_dns: bool,
     remaining_total: Option<std::time::Duration>,
-) -> Result<tokio::io::BufReader<tokio::net::TcpStream>> {
+) -> Result<tokio::net::TcpStream> {
     let proxy_host = proxy_config.host().unwrap_or("127.0.0.1");
     let proxy_port = proxy_config.port();
 
@@ -113,11 +113,17 @@ pub(crate) async fn socks5_handshake(
     };
 
     // Phase 2: Method negotiation.
-    negotiate_method(&mut stream, proxy_config.auth(), remaining_total).await?;
+    let selected_method =
+        negotiate_method(&mut stream, proxy_config.auth(), remaining_total).await?;
 
     // Phase 3: Username/password authentication (if configured).
-    if proxy_config.auth().is_some() {
-        authenticate(&mut stream, proxy_config.auth().unwrap(), remaining_total).await?;
+    if selected_method == SOCKS5_METHOD_USERNAME_PASSWORD {
+        let auth = proxy_config.auth().ok_or_else(|| {
+            Error::ProxyConnect(
+                "SOCKS5 proxy selected username/password but no credentials were configured".into(),
+            )
+        })?;
+        authenticate(&mut stream, auth, remaining_total).await?;
     }
 
     // Phase 4: CONNECT command.
@@ -130,7 +136,144 @@ pub(crate) async fn socks5_handshake(
     )
     .await?;
 
-    Ok(tokio::io::BufReader::new(stream))
+    Ok(stream)
+}
+
+/// Stream returned by the SOCKS connector after the tunnel is established.
+pub(crate) enum SocksStream {
+    /// Plain HTTP tunnel.
+    Tcp(tokio::net::TcpStream),
+    /// Origin TLS layered over the SOCKS tunnel.
+    Tls(Box<tokio_rustls::client::TlsStream<tokio::net::TcpStream>>),
+}
+
+impl tokio::io::AsyncRead for SocksStream {
+    fn poll_read(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        buf: &mut tokio::io::ReadBuf<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        match &mut *self {
+            Self::Tcp(stream) => std::pin::Pin::new(stream).poll_read(cx, buf),
+            Self::Tls(stream) => std::pin::Pin::new(stream).poll_read(cx, buf),
+        }
+    }
+}
+
+impl tokio::io::AsyncWrite for SocksStream {
+    fn poll_write(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        bytes: &[u8],
+    ) -> std::task::Poll<std::io::Result<usize>> {
+        match &mut *self {
+            Self::Tcp(stream) => std::pin::Pin::new(stream).poll_write(cx, bytes),
+            Self::Tls(stream) => std::pin::Pin::new(stream).poll_write(cx, bytes),
+        }
+    }
+
+    fn poll_flush(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        match &mut *self {
+            Self::Tcp(stream) => std::pin::Pin::new(stream).poll_flush(cx),
+            Self::Tls(stream) => std::pin::Pin::new(stream).poll_flush(cx),
+        }
+    }
+
+    fn poll_shutdown(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        match &mut *self {
+            Self::Tcp(stream) => std::pin::Pin::new(stream).poll_shutdown(cx),
+            Self::Tls(stream) => std::pin::Pin::new(stream).poll_shutdown(cx),
+        }
+    }
+}
+
+impl hyper_util::client::legacy::connect::Connection for SocksStream {
+    fn connected(&self) -> hyper_util::client::legacy::connect::Connected {
+        hyper_util::client::legacy::connect::Connected::new()
+    }
+}
+
+/// Hyper connector that establishes one SOCKS5 tunnel per origin connection.
+#[derive(Clone)]
+pub(crate) struct SocksConnector {
+    proxy: ProxyConfig,
+    tls: Option<std::sync::Arc<tokio_rustls::TlsConnector>>,
+    timeout: Option<std::time::Duration>,
+}
+
+impl SocksConnector {
+    pub(crate) fn new(
+        proxy: ProxyConfig,
+        tls: Option<tokio_rustls::TlsConnector>,
+        timeout: Option<std::time::Duration>,
+    ) -> Self {
+        Self {
+            proxy,
+            tls: tls.map(std::sync::Arc::new),
+            timeout,
+        }
+    }
+}
+
+impl tower_service::Service<http::Uri> for SocksConnector {
+    type Response = hyper_util::rt::TokioIo<SocksStream>;
+    type Error = Box<dyn std::error::Error + Send + Sync>;
+    type Future = std::pin::Pin<
+        Box<
+            dyn std::future::Future<Output = std::result::Result<Self::Response, Self::Error>>
+                + Send,
+        >,
+    >;
+
+    fn poll_ready(
+        &mut self,
+        _cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<std::result::Result<(), Self::Error>> {
+        std::task::Poll::Ready(Ok(()))
+    }
+
+    fn call(&mut self, dst: http::Uri) -> Self::Future {
+        let proxy = self.proxy.clone();
+        let tls = self.tls.clone();
+        let timeout = self.timeout;
+        Box::pin(async move {
+            let host = dst.host().ok_or_else(|| -> Self::Error {
+                Error::InvalidUrl("SOCKS destination has no host".into()).into()
+            })?;
+            let port = dst
+                .port_u16()
+                .or_else(|| (dst.scheme_str() == Some("https")).then_some(443))
+                .unwrap_or(80);
+            let stream = socks5_handshake(&proxy, host, port, proxy.socks_remote_dns(), timeout)
+                .await
+                .map_err(|e| -> Self::Error { e.into() })?;
+            if dst.scheme_str() != Some("https") {
+                return Ok(hyper_util::rt::TokioIo::new(SocksStream::Tcp(stream)));
+            }
+            let connector = tls.ok_or_else(|| -> Self::Error {
+                Error::Tls("SOCKS HTTPS requires a TLS connector".into()).into()
+            })?;
+            let name = tokio_rustls::rustls::pki_types::ServerName::try_from(host.to_owned())
+                .map_err(|e| -> Self::Error {
+                    Error::Tls(format!("invalid SOCKS TLS server name '{host}': {e}")).into()
+                })?;
+            let stream = connector
+                .connect(name, stream)
+                .await
+                .map_err(|e| -> Self::Error {
+                    Error::Tls(format!("TLS handshake through SOCKS tunnel failed: {e}")).into()
+                })?;
+            Ok(hyper_util::rt::TokioIo::new(SocksStream::Tls(Box::new(
+                stream,
+            ))))
+        })
+    }
 }
 
 /// Negotiate the authentication method with the SOCKS5 proxy.
@@ -140,7 +283,7 @@ async fn negotiate_method(
     stream: &mut tokio::net::TcpStream,
     auth: Option<&ProxyAuth>,
     remaining_total: Option<std::time::Duration>,
-) -> Result<()> {
+) -> Result<u8> {
     // Build the method list.
     let methods = if auth.is_some() {
         vec![SOCKS5_METHOD_NO_AUTH, SOCKS5_METHOD_USERNAME_PASSWORD]
@@ -177,7 +320,7 @@ async fn negotiate_method(
     }
 
     match response[1] {
-        SOCKS5_METHOD_NO_AUTH | SOCKS5_METHOD_USERNAME_PASSWORD => Ok(()),
+        SOCKS5_METHOD_NO_AUTH | SOCKS5_METHOD_USERNAME_PASSWORD => Ok(response[1]),
         SOCKS5_METHOD_NO_ACCEPTABLE => Err(Error::ProxyConnect(
             "SOCKS5 proxy rejected all authentication methods".into(),
         )),
@@ -291,7 +434,7 @@ async fn send_connect(
         request.extend_from_slice(host_bytes);
     } else {
         // Resolve locally and send IP address.
-        match resolve_dest_ip(dest_host).await {
+        match resolve_dest_ip(dest_host).await? {
             std::net::IpAddr::V4(ip) => {
                 request.push(SOCKS5_ATYP_IPV4);
                 request.extend_from_slice(&ip.octets());
@@ -314,15 +457,15 @@ async fn send_connect(
 /// Resolve a destination host to an IP address.
 ///
 /// Uses Tokio's DNS resolver. Returns both IPv4 and IPv6.
-async fn resolve_dest_ip(host: &str) -> std::net::IpAddr {
+async fn resolve_dest_ip(host: &str) -> Result<std::net::IpAddr> {
     use tokio::net::lookup_host;
 
     // Try parsing as an IP literal first.
     if let Ok(ip) = host.parse::<std::net::Ipv4Addr>() {
-        return std::net::IpAddr::V4(ip);
+        return Ok(std::net::IpAddr::V4(ip));
     }
     if let Ok(ip) = host.parse::<std::net::Ipv6Addr>() {
-        return std::net::IpAddr::V6(ip);
+        return Ok(std::net::IpAddr::V6(ip));
     }
 
     // DNS resolution.
@@ -332,20 +475,12 @@ async fn resolve_dest_ip(host: &str) -> std::net::IpAddr {
         .and_then(|mut addrs| addrs.next());
 
     match addr {
-        Some(addr) => addr.ip(),
+        Some(addr) => Ok(addr.ip()),
         None => {
-            // Fallback: return the host as-is (will fail at TCP connect).
-            if host.contains(':') {
-                host.parse::<std::net::Ipv6Addr>().map_or(
-                    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                    std::net::IpAddr::V6,
-                )
-            } else {
-                host.parse::<std::net::Ipv4Addr>().map_or(
-                    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                    std::net::IpAddr::V4,
-                )
-            }
+            // Never redirect an unresolved destination to loopback.
+            Err(Error::Connect(format!(
+                "DNS resolution failed for SOCKS destination {host}"
+            )))
         }
     }
 }

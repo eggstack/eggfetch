@@ -38,6 +38,8 @@ pub(crate) struct ClientConfig {
     pub(crate) max_decompression_ratio: Option<f64>,
     #[cfg(feature = "proxy")]
     pub(crate) proxy: Option<Proxy>,
+    #[cfg(feature = "proxy")]
+    pub(crate) environment_proxies: Vec<Proxy>,
     #[cfg(any(feature = "proxy", feature = "http3"))]
     pub(crate) tls_config: Option<crate::tls::TlsConfig>,
     pub(crate) retry: Option<RetryPolicy>,
@@ -63,6 +65,8 @@ impl Default for ClientConfig {
             max_decompression_ratio: None,
             #[cfg(feature = "proxy")]
             proxy: None,
+            #[cfg(feature = "proxy")]
+            environment_proxies: Vec::new(),
             #[cfg(any(feature = "proxy", feature = "http3"))]
             tls_config: None,
             retry: None,
@@ -92,9 +96,9 @@ pub(crate) struct ClientInner {
     /// address binding. Uses a custom connector instead of the standard
     /// hyper-rustls connector path.
     pub(crate) direct_client: Option<crate::transport::TimeoutDirectClient>,
-    /// UDS handler for Unix domain socket requests. When set, requests to
-    /// any URL are routed through the Unix socket at this path.
-    pub(crate) uds_handler: Option<crate::transport::uds::UdsHandler>,
+    /// Hyper client for Unix domain socket requests.
+    #[cfg(unix)]
+    pub(crate) uds_client: Option<crate::transport::TimeoutUdsClient>,
     pub(crate) config: ClientConfig,
     pub(crate) pool: Pool,
     #[cfg(feature = "http3")]
@@ -263,6 +267,8 @@ pub struct ClientBuilder {
     max_decompression_ratio: Option<f64>,
     #[cfg(feature = "proxy")]
     proxy: Option<Proxy>,
+    #[cfg(feature = "proxy")]
+    environment_proxies: Vec<Proxy>,
     tls_config: Option<crate::tls::TlsConfig>,
     retry: Option<RetryPolicy>,
     http_version_policy: HttpVersionPolicy,
@@ -291,6 +297,8 @@ impl ClientBuilder {
             max_decompression_ratio: None,
             #[cfg(feature = "proxy")]
             proxy: None,
+            #[cfg(feature = "proxy")]
+            environment_proxies: Vec::new(),
             tls_config: None,
             retry: None,
             http_version_policy: HttpVersionPolicy::default(),
@@ -422,6 +430,14 @@ impl ClientBuilder {
     #[must_use]
     pub fn proxy(mut self, proxy: Proxy) -> Self {
         self.proxy = Some(proxy);
+        self
+    }
+
+    /// Add a scheme-specific proxy used when no explicit proxy is configured.
+    #[cfg(feature = "proxy")]
+    #[must_use]
+    pub fn environment_proxy(mut self, proxy: Proxy) -> Self {
+        self.environment_proxies.push(proxy);
         self
     }
 
@@ -682,8 +698,25 @@ impl ClientBuilder {
             None
         };
 
-        // Build the UDS handler if a path is configured.
-        let uds_handler = self.uds_path.map(crate::transport::uds::UdsHandler::new);
+        #[cfg(unix)]
+        let uds_client = self.uds_path.map(|path| {
+            let tls_connector = self.tls_config.as_ref().and_then(|config| {
+                config
+                    .build_rustls_config()
+                    .ok()
+                    .map(|rc| tokio_rustls::TlsConnector::from(Arc::new(rc)))
+            });
+            let connector = crate::transport::uds::UdsConnector::new(path, tls_connector);
+            let connector = crate::transport::connect_timeout::ConnectTimeout::new(
+                connector,
+                self.timeout.as_ref().and_then(|timeout| timeout.connect),
+            );
+            let mut builder = hyper_util::client::legacy::Client::builder(TokioExecutor::new());
+            if let Some(timeout) = pool_config.idle_timeout {
+                builder.pool_idle_timeout(timeout);
+            }
+            builder.build(connector)
+        });
 
         let config = ClientConfig {
             default_headers: self.default_headers,
@@ -698,6 +731,8 @@ impl ClientBuilder {
             max_decompression_ratio: self.max_decompression_ratio,
             #[cfg(feature = "proxy")]
             proxy: self.proxy,
+            #[cfg(feature = "proxy")]
+            environment_proxies: self.environment_proxies,
             #[cfg(any(feature = "proxy", feature = "http3"))]
             tls_config: self.tls_config,
             retry: self.retry,
@@ -710,7 +745,8 @@ impl ClientBuilder {
             inner: Arc::new(ClientInner {
                 hyper_client,
                 direct_client,
-                uds_handler,
+                #[cfg(unix)]
+                uds_client,
                 config,
                 pool,
                 #[cfg(feature = "http3")]

@@ -182,3 +182,12 @@ python scripts/compare_httpx_api_manifest.py \
 
 - Python bindings: `docs/architecture/python-bindings.md`
 - Python API guide: `docs/python/guide.md`
+
+### Corrective transport notes
+
+The Rust core keeps proxy configuration explicit; the HTTPX compatibility
+facade selects environment proxies per destination scheme. `local_address`
+uses HTTPX's host-only form and binds with an OS-selected source port.
+Socket options are classified from the running Python `socket` module rather
+than copied Linux constants. UDS traffic uses the normal Hyper HTTP/TLS path,
+and SOCKS tunnels use origin-form requests after the handshake.

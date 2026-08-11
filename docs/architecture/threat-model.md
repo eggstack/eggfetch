@@ -206,7 +206,10 @@ Cookies are matched against requests using RFC 6265 domain/path rules. Secure co
 
 ### 12. No Silent Environment Proxy
 
-eggfetch does not read `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, or `NO_PROXY` environment variables. Proxy configuration is always explicit. This prevents surprising behavior when multiple proxy-aware libraries coexist in the same process.
+The Rust core does not read proxy environment variables. The HTTPX
+compatibility facade may translate them only when `trust_env=True`, with
+scheme-aware selection and `NO_PROXY` bypass. Native callers configure proxy
+state explicitly.
 
 ## Attack Tree Summary
 

@@ -1,6 +1,6 @@
 # HTTPX 0.28.1 Parity — Corrective Transport Closure
 
-Status: ready for implementation handoff
+Status: implementation in progress; final qualification pending
 
 Date: 2026-08-11
 
