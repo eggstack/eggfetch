@@ -4,40 +4,45 @@ This record is the exact-SHA-bound status for the HTTPX 0.28.1 compatibility
 facade. Historical phase and corrective-pass records remain in the git history
 and referenced plans; counts below are only from the runs named here.
 
-## Current corrective pass — evidence record
+## Current corrective pass — qualified evidence record
 
-Current designation: **Stage C candidate — final corrective qualification
-pending**.
+Current designation: **Stage C qualified**.
 
-The corrective executable tree is being re-qualified at the implementation
-commit produced by this pass. The profile remains pending until three clean
-aggregate runs are recorded. This pass fixes shared fixture shutdown/response
-framing and preserves proxy headers as an explicit bounded difference. Proxy headers and
-arbitrary Python `ssl_context` objects also remain bounded differences.
+Qualification was completed on 2026-08-11 from executable commit
+`52b187744d062840879f6e7752c87753021e2415`. The working tree started from
+`dfcf518` (the plan's earlier `915caa` baseline was already superseded by that
+plan-only commit). The pass fixes timeout phase accounting and shared proxy
+fixture response framing while retaining explicitly bounded proxy-header and
+arbitrary Python `ssl_context` differences.
 
 Environment: CPython 3.12.3, pytest 9.1.1, pytest-asyncio 1.4.0,
 `httpx==0.28.1`, `httpcore==1.0.9`, and `socksio==1.0.0`.
 
-Prior corrective evidence at the superseded SHA:
+Evidence bound to the executable SHA:
 
-- Focused transport differential: **71 passed**, 3 reference deprecation warnings.
-- Python behavior suite: **532 passed**.
-- API oracle: **76 allowed matches**, 0 stale allowed, 0 unexplained, 0 resolved-in-active.
-- Full pinned compatibility: **1479 passed, 3 failed** in aggregate; the three
-  failures are `test_read_after_close_returns_data`, `test_read_phase_timeout`,
-  and `test_real_proxy_server_forward`, and all three pass in a direct isolated
-  invocation.
-- Rust formatting, workspace clippy with `-D warnings`, and the Rust portions
-  of Tier 1 passed. The Python behavior phase also passed when run directly;
-  the first canonical shell session stalled after starting that phase and was
-  rerun by its exact command successfully.
-- Remote routine CI passed for documentation commit
-  `94bb4bf2f0d7b23147cf9a8e06876193a78661cb`: workflow run `31512028521`, job
-  `93847967260`, completed 2026-08-11.
+- Canonical `./scripts/check.sh`: passed, including Rust formatting, lint
+  suppression policy, clippy, workspace tests/doctests, extension build,
+  **532** Python behavior tests, and the **130**-test compatibility smoke
+  kernel.
+- Focused corrective/transport evidence: **207 passed**; the proxy-header
+  and timeout/NO_PROXY differential subsets were also rerun independently
+  with no failures.
+- Full pinned compatibility command
+  (`EGGFETCH_COMPAT_REQUIRED=1 python -m pytest crates/eggfetch-python/tests/compat/ -q --strict-markers`):
+  three consecutive clean runs, each **1526 passed**, in **108.09s**,
+  **106.65s**, and **106.79s**.
+- API oracle: **76** differences, all allowed; **0** unexplained, **0** stale
+  allowed, **0** resolved-in-active, and no requires-resolution entries.
+- Downstream command
+  (`python scripts/run_downstream_compat.py --artifact-manifest target/downstream-qualification/artifact-manifest.json --required-only`):
+  **4/4 required packages passed**, with 0 failures, errors, or skips:
+  `respx` 5/5, `httpx-sse` 4/4, `httpx-auth` 5/5, and `httpx-ws` 4/4.
+  The local manifest used the candidate wheel SHA
+  `ef07b468114f2db144699ea3dca33dc7d6555ff70deeb7576bf04d742912c419` and
+  controlled replacement SHA
+  `11914ce75c418d2c75acce35d12973087543b1a8a7ba4dbb9daf827c05ff2f7f`.
 
-The full suite result is intentionally recorded as pending rather than claimed
-as qualification evidence until its aggregate fixture-order instability is
-resolved or the qualification policy explicitly accepts the isolated rerun.
+Remote routine CI is recorded after the qualification commit is pushed below.
 
 Native compressed raw body selection, wire metadata parity, native async
 cancellation/lease release, planning preservation, and final CI verification
