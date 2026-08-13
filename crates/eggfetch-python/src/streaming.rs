@@ -25,7 +25,7 @@ type AsyncByteRx = Arc<tokio::sync::Mutex<tokio::sync::mpsc::Receiver<Result<Vec
 type AsyncTextRx = Arc<tokio::sync::Mutex<tokio::sync::mpsc::Receiver<Result<String, PyErr>>>>;
 
 use std::sync::atomic::{AtomicU8, Ordering};
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 
 use bytes::{Bytes, BytesMut};
 use futures_util::StreamExt;
@@ -37,23 +37,6 @@ use crate::errors::map_err;
 use crate::errors::{StreamClosed, StreamConsumed};
 use crate::headers::PyHeaders;
 use crate::response::{extract_charset, version_to_string};
-
-/// Shared Tokio runtime for all sync streaming iterators.
-///
-/// A single multi-threaded runtime is created lazily and shared across all
-/// sync iterators. This avoids spawning one OS thread + one Tokio runtime
-/// per response stream (the previous behavior).
-fn shared_runtime() -> &'static tokio::runtime::Runtime {
-    static RUNTIME: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
-    RUNTIME.get_or_init(|| {
-        tokio::runtime::Builder::new_multi_thread()
-            .worker_threads(2)
-            .enable_all()
-            .thread_name("eggfetch-stream-worker")
-            .build()
-            .expect("failed to create shared streaming runtime")
-    })
-}
 
 const STATE_STREAMING: u8 = 0;
 const STATE_BUFFERED: u8 = 1;
@@ -92,6 +75,7 @@ pub(crate) struct PyStreamingResponse {
     body_state: AtomicU8,
     response: std::sync::Mutex<Option<eggfetch_core::Response>>,
     stream_cancel: tokio::sync::watch::Sender<bool>,
+    runtime_handle: tokio::runtime::Handle,
     encoding_name: Option<String>,
     cached_content: std::sync::Mutex<Option<Bytes>>,
     cached_text: std::sync::Mutex<Option<String>>,
@@ -101,6 +85,7 @@ impl PyStreamingResponse {
     pub fn from_core_response(
         py: Python<'_>,
         mut response: eggfetch_core::Response,
+        runtime_handle: tokio::runtime::Handle,
     ) -> PyResult<Bound<'_, Self>> {
         let status = response.status().as_u16();
         let headers = PyHeaders::from_header_map(response.headers().clone());
@@ -158,6 +143,7 @@ impl PyStreamingResponse {
                 body_state: AtomicU8::new(STATE_STREAMING),
                 response: std::sync::Mutex::new(Some(response)),
                 stream_cancel,
+                runtime_handle,
                 encoding_name: encoding,
                 cached_content: std::sync::Mutex::new(None),
                 cached_text: std::sync::Mutex::new(None),
@@ -216,7 +202,7 @@ impl PyStreamingResponse {
         // thread (e.g. called from an async Python task), spawning a task
         // on the same runtime and blocking via a channel avoids a deadlock.
         let (tx, rx) = std::sync::mpsc::channel();
-        shared_runtime().spawn(async move {
+        self.runtime_handle.spawn(async move {
             let result: PyResult<Bytes> = async {
                 let mut buf = BytesMut::new();
                 loop {
@@ -728,16 +714,17 @@ impl PyBytesChunkIterator {
         py: Python<'py>,
         chunk_size: usize,
     ) -> PyResult<Bound<'py, Self>> {
-        let stream = {
+        let (stream, runtime_handle) = {
             let borrowed = resp.borrow(py);
             borrowed.ensure_streaming()?;
-            borrowed.take_stream(StreamMode::Decoded)?
+            let stream = borrowed.take_stream(StreamMode::Decoded)?;
+            (stream, borrowed.runtime_handle.clone())
         };
         let (cancel, mut cancellation) = tokio::sync::watch::channel(false);
 
         let (tx, rx) = std::sync::mpsc::sync_channel(16);
 
-        let producer = shared_runtime().spawn(async move {
+        let producer = runtime_handle.spawn(async move {
             let mut stream = stream;
             loop {
                 tokio::select! {
@@ -851,18 +838,19 @@ impl PyTextChunkIterator {
         _chunk_size: usize,
         encoding_override: Option<String>,
     ) -> PyResult<Bound<'py, Self>> {
-        let (stream, enc_name) = {
+        let (stream, enc_name, runtime_handle) = {
             let borrowed = resp.borrow(py);
             borrowed.ensure_streaming()?;
             let stream = borrowed.take_stream(StreamMode::Decoded)?;
             let enc_name = encoding_override.or_else(|| borrowed.encoding_name.clone());
-            (stream, enc_name)
+            let runtime_handle = borrowed.runtime_handle.clone();
+            (stream, enc_name, runtime_handle)
         };
         let (cancel, mut cancellation) = tokio::sync::watch::channel(false);
 
         let (tx, rx) = std::sync::mpsc::sync_channel(16);
 
-        let producer = shared_runtime().spawn(async move {
+        let producer = runtime_handle.spawn(async move {
             let mut stream = stream;
             let mut decoder = IncrementalDecoder::new(enc_name.as_deref());
             loop {
@@ -958,18 +946,19 @@ impl PyLinesChunkIterator {
         _chunk_size: usize,
         encoding_override: Option<String>,
     ) -> PyResult<Bound<'py, Self>> {
-        let (stream, enc_name) = {
+        let (stream, enc_name, runtime_handle) = {
             let borrowed = resp.borrow(py);
             borrowed.ensure_streaming()?;
             let stream = borrowed.take_stream(StreamMode::Decoded)?;
             let enc_name = encoding_override.or_else(|| borrowed.encoding_name.clone());
-            (stream, enc_name)
+            let runtime_handle = borrowed.runtime_handle.clone();
+            (stream, enc_name, runtime_handle)
         };
         let (cancel, mut cancellation) = tokio::sync::watch::channel(false);
 
         let (tx, rx) = std::sync::mpsc::sync_channel(16);
 
-        let producer = shared_runtime().spawn(async move {
+        let producer = runtime_handle.spawn(async move {
             let mut stream = stream;
             let mut decoder = IncrementalDecoder::new(enc_name.as_deref());
             let mut line_buffer = String::new();
@@ -1410,11 +1399,12 @@ impl PyRawBytesChunkIterator {
             borrowed.ensure_streaming()?;
             borrowed.take_stream(StreamMode::Raw)?
         };
+        let runtime_handle = resp.borrow(py).runtime_handle.clone();
         let (cancel, mut cancellation) = tokio::sync::watch::channel(false);
 
         let (tx, rx) = std::sync::mpsc::sync_channel(16);
 
-        let producer = shared_runtime().spawn(async move {
+        let producer = runtime_handle.spawn(async move {
             let mut stream = stream;
             loop {
                 tokio::select! {

@@ -795,6 +795,10 @@ impl PyClient {
         let retry_override = retry::parse_retry_option(retries)?;
 
         let client = self.clone_client()?;
+        let runtime_handle = {
+            let rt_guard = self.runtime.lock().unwrap();
+            rt_guard.as_ref().unwrap().handle().clone()
+        };
         let result = py.allow_threads(|| {
             let handle = {
                 let rt_guard = self.runtime.lock().unwrap();
@@ -868,7 +872,7 @@ impl PyClient {
         });
 
         let response = result?;
-        PyStreamingResponse::from_core_response(py, response)
+        PyStreamingResponse::from_core_response(py, response, runtime_handle)
     }
 
     /// Close the client and release all resources.

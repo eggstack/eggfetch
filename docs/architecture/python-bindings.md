@@ -40,6 +40,9 @@ Each `PyClient` owns a tokio runtime and an `eggfetch_core::Client`.
 ### Streaming Sync Flow
 
 `client.stream("GET", url)` returns a `StreamingResponse` context manager. Iterating advances the stream one chunk at a time, releasing the GIL during each read.
+Streaming responses retain the Tokio handle that created them; synchronous
+iterators and buffered reads run on that same client runtime so transport body
+state and connection-pool leases are never moved to an unrelated runtime.
 
 ### Top-Level Helpers
 

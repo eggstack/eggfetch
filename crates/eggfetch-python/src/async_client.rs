@@ -780,6 +780,7 @@ impl PyAsyncClient {
 
         let client = self.ensure_client()?.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let runtime_handle = tokio::runtime::Handle::current();
             let mut builder = client
                 .request(http_method, target_url.as_str())
                 .map_err(map_err)?;
@@ -842,7 +843,8 @@ impl PyAsyncClient {
 
             let response = Box::pin(builder.send()).await.map_err(map_err)?;
             let obj: PyObject = Python::with_gil(|py| {
-                PyStreamingResponse::from_core_response(py, response).map(|r| r.unbind().into_any())
+                PyStreamingResponse::from_core_response(py, response, runtime_handle)
+                    .map(|r| r.unbind().into_any())
             })?;
             Ok(obj)
         })
