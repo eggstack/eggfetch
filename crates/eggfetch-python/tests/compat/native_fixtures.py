@@ -243,12 +243,18 @@ def local_tls_handshake_stall_server() -> Generator[tuple[str, int], None, None]
         while not stop.is_set():
             try:
                 conn, _addr = server.accept()
-                conn.settimeout(1)
+                # Poll the stop flag without closing the connection on a
+                # socket timeout. Closing at the one-second connect budget
+                # races the reference client's TLS timeout and can turn the
+                # expected ConnectTimeout into an EOF ConnectError.
+                conn.settimeout(0.1)
                 while not stop.is_set():
                     try:
                         if not conn.recv(1024):
                             break
-                    except (socket.timeout, ConnectionResetError, OSError):
+                    except socket.timeout:
+                        continue
+                    except (ConnectionResetError, OSError):
                         break
                 conn.close()
             except (socket.timeout, OSError):
