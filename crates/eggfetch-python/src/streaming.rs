@@ -43,6 +43,27 @@ const STATE_BUFFERED: u8 = 1;
 const STATE_CONSUMED: u8 = 2;
 const STATE_CLOSED: u8 = 3;
 
+/// Keeps a synchronous client's runtime alive while a streaming response
+/// outlives that client.
+pub(crate) struct RuntimeLease(Option<Arc<tokio::runtime::Runtime>>);
+
+impl RuntimeLease {
+    pub(crate) fn new(runtime: Arc<tokio::runtime::Runtime>) -> Self {
+        Self(Some(runtime))
+    }
+}
+
+impl Drop for RuntimeLease {
+    fn drop(&mut self) {
+        let Some(runtime) = self.0.take() else {
+            return;
+        };
+        if let Ok(runtime) = Arc::try_unwrap(runtime) {
+            runtime.shutdown_background();
+        }
+    }
+}
+
 #[derive(Clone, Copy)]
 enum StreamMode {
     Decoded,
@@ -76,6 +97,7 @@ pub(crate) struct PyStreamingResponse {
     response: std::sync::Mutex<Option<eggfetch_core::Response>>,
     stream_cancel: tokio::sync::watch::Sender<bool>,
     runtime_handle: tokio::runtime::Handle,
+    _runtime_lease: Option<RuntimeLease>,
     encoding_name: Option<String>,
     cached_content: std::sync::Mutex<Option<Bytes>>,
     cached_text: std::sync::Mutex<Option<String>>,
@@ -86,6 +108,7 @@ impl PyStreamingResponse {
         py: Python<'_>,
         mut response: eggfetch_core::Response,
         runtime_handle: tokio::runtime::Handle,
+        runtime_lease: Option<RuntimeLease>,
     ) -> PyResult<Bound<'_, Self>> {
         let status = response.status().as_u16();
         let headers = PyHeaders::from_header_map(response.headers().clone());
@@ -144,6 +167,7 @@ impl PyStreamingResponse {
                 response: std::sync::Mutex::new(Some(response)),
                 stream_cancel,
                 runtime_handle,
+                _runtime_lease: runtime_lease,
                 encoding_name: encoding,
                 cached_content: std::sync::Mutex::new(None),
                 cached_text: std::sync::Mutex::new(None),

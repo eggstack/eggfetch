@@ -24,7 +24,8 @@ CI must install `pytest-asyncio` explicitly. The `PYO3_USE_ABI3_FORWARD_COMPATIB
 - Sync API blocks on async engine and releases the GIL during network I/O.
 - Sync streaming responses keep using the originating client Tokio runtime for
   body reads and iterator producers; do not introduce a shared replacement
-  runtime for transport-owned response streams.
+  runtime for transport-owned response streams. A live stream also retains a
+  runtime lease so it remains readable after `Client.close()`.
 - Async API targets asyncio via pyo3-async-runtimes.
 - Response surface must be requests/httpx-compatible.
 - Body kwargs (`content`, `data`, `json`) are mutually exclusive. `files` may combine with `data` but conflicts with `content` and `json`.

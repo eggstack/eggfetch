@@ -43,6 +43,9 @@ Each `PyClient` owns a tokio runtime and an `eggfetch_core::Client`.
 Streaming responses retain the Tokio handle that created them; synchronous
 iterators and buffered reads run on that same client runtime so transport body
 state and connection-pool leases are never moved to an unrelated runtime.
+The response also retains a runtime lease, so an open stream remains readable
+after its `Client` is closed; the runtime shuts down once the last lease is
+released.
 
 ### Top-Level Helpers
 

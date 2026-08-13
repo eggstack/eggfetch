@@ -1,6 +1,6 @@
 //! Python client wrapper.
 
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use pyo3::prelude::*;
 
@@ -24,7 +24,7 @@ use crate::streaming::PyStreamingResponse;
 /// methods concurrently on the same `Client` instance.
 #[pyclass(name = "Client")]
 pub struct PyClient {
-    runtime: std::sync::Mutex<Option<tokio::runtime::Runtime>>,
+    runtime: std::sync::Mutex<Option<Arc<tokio::runtime::Runtime>>>,
     client: Mutex<Option<eggfetch_core::Client>>,
     decompress: Option<bool>,
     verify_disabled: bool,
@@ -69,8 +69,10 @@ impl PyClient {
         socket_options: Option<&Bound<'_, PyAny>>,
         uds: Option<&str>,
     ) -> PyResult<Self> {
-        let runtime = tokio::runtime::Runtime::new()
-            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+        let runtime = Arc::new(
+            tokio::runtime::Runtime::new()
+                .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?,
+        );
 
         let verify_disabled = verify
             .and_then(|v| v.extract::<bool>().ok())
@@ -795,10 +797,11 @@ impl PyClient {
         let retry_override = retry::parse_retry_option(retries)?;
 
         let client = self.clone_client()?;
-        let runtime_handle = {
+        let runtime_guard = {
             let rt_guard = self.runtime.lock().unwrap();
-            rt_guard.as_ref().unwrap().handle().clone()
+            rt_guard.as_ref().unwrap().clone()
         };
+        let runtime_handle = runtime_guard.handle().clone();
         let result = py.allow_threads(|| {
             let handle = {
                 let rt_guard = self.runtime.lock().unwrap();
@@ -872,7 +875,12 @@ impl PyClient {
         });
 
         let response = result?;
-        PyStreamingResponse::from_core_response(py, response, runtime_handle)
+        PyStreamingResponse::from_core_response(
+            py,
+            response,
+            runtime_handle,
+            Some(crate::streaming::RuntimeLease::new(runtime_guard)),
+        )
     }
 
     /// Close the client and release all resources.
@@ -886,7 +894,9 @@ impl PyClient {
             *guard = None;
             drop(guard);
             if let Some(rt) = self.runtime.lock().unwrap().take() {
-                rt.shutdown_background();
+                if let Ok(rt) = Arc::try_unwrap(rt) {
+                    rt.shutdown_background();
+                }
             }
         }
     }

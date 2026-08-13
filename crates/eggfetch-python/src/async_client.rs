@@ -843,7 +843,7 @@ impl PyAsyncClient {
 
             let response = Box::pin(builder.send()).await.map_err(map_err)?;
             let obj: PyObject = Python::with_gil(|py| {
-                PyStreamingResponse::from_core_response(py, response, runtime_handle)
+                PyStreamingResponse::from_core_response(py, response, runtime_handle, None)
                     .map(|r| r.unbind().into_any())
             })?;
             Ok(obj)
