@@ -363,13 +363,18 @@ impl PyClient {
                     builder = builder.retry(retry_policy.clone());
                 }
 
-                let response = Box::pin(builder.send()).await.map_err(map_err)?;
-                Ok::<_, PyErr>(response)
+                let mut response = Box::pin(builder.send()).await.map_err(map_err)?;
+                // Consume the body on the client's persistent runtime.  The
+                // response owns transport state (including the pool lease),
+                // so moving it to a short-lived runtime after `send()` can
+                // strand the next pooled HTTP/1 connection.
+                let content = response.bytes().await.map_err(map_err)?;
+                Ok::<_, PyErr>((response, content))
             })
         });
 
-        let response = result?;
-        let py_response = PyResponse::from_core_response(response)?;
+        let (response, content) = result?;
+        let py_response = PyResponse::from_core_response_with_body(response, content)?;
         Ok(Py::new(py, py_response)?.into_bound(py).into_any())
     }
 

@@ -211,13 +211,14 @@ fn request<'py>(
                 builder = builder.retry(retry_policy.clone());
             }
 
-            let response = Box::pin(builder.send()).await.map_err(map_err)?;
-            Ok::<_, PyErr>(response)
+            let mut response = Box::pin(builder.send()).await.map_err(map_err)?;
+            let content = response.bytes().await.map_err(map_err)?;
+            Ok::<_, PyErr>((response, content))
         })
     });
 
-    let response = result?;
-    let py_response = PyResponse::from_core_response(response)?;
+    let (response, content) = result?;
+    let py_response = PyResponse::from_core_response_with_body(response, content)?;
     Ok(Py::new(py, py_response)?.into_bound(py).into_any())
 }
 
