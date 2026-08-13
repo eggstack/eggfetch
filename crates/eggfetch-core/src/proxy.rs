@@ -47,10 +47,14 @@ pub enum NoProxyRule {
     Wildcard,
     /// Host/domain match without a leading dot.
     Host(String),
+    /// Exact host match used by the HTTPX environment parser.
+    HostExact(String),
     /// Domain suffix match (leading dot, e.g. `.example.com`).
     DomainSuffix(String),
     /// Exact host + port match.
     HostPort(String, u16),
+    /// Exact host + port match used by the HTTPX environment parser.
+    HostPortExact(String, u16),
     /// IP network expressed in CIDR notation.
     IpNetwork(std::net::IpAddr, u8),
     /// Matches the hostname `localhost`.
@@ -169,11 +173,11 @@ impl NoProxy {
         if exact_localhost {
             if let Some((address, _prefix)) = entry.split_once('/') {
                 if address.parse::<std::net::IpAddr>().is_ok() {
-                    return Ok(NoProxyRule::Host(address.to_ascii_lowercase()));
+                    return Ok(NoProxyRule::HostExact(address.to_ascii_lowercase()));
                 }
             }
             if let Ok(address) = entry.parse::<std::net::IpAddr>() {
-                return Ok(NoProxyRule::Host(address.to_string()));
+                return Ok(NoProxyRule::HostExact(address.to_string()));
             }
         }
 
@@ -203,17 +207,21 @@ impl NoProxy {
                 let remainder = &rest[close + 1..];
                 if remainder.is_empty() {
                     // bare IPv6 literal — treat as host
-                    return Ok(NoProxyRule::Host(if exact_localhost {
-                        ipv6.to_ascii_lowercase()
+                    return Ok(if exact_localhost {
+                        NoProxyRule::HostExact(ipv6.to_ascii_lowercase())
                     } else {
-                        entry.to_owned()
-                    }));
+                        NoProxyRule::Host(entry.to_owned())
+                    });
                 }
                 if let Some(port_str) = remainder.strip_prefix(':') {
                     let port = port_str.parse::<u16>().map_err(|_| {
                         Error::InvalidProxyUrl(format!("invalid port in NO_PROXY entry: {entry}"))
                     })?;
-                    return Ok(NoProxyRule::HostPort(format!("[{ipv6}]"), port));
+                    return Ok(if exact_localhost {
+                        NoProxyRule::HostPortExact(format!("[{ipv6}]"), port)
+                    } else {
+                        NoProxyRule::HostPort(format!("[{ipv6}]"), port)
+                    });
                 }
             }
         }
@@ -233,12 +241,20 @@ impl NoProxy {
             let host = &entry[..colon_pos];
             let port_str = &entry[colon_pos + 1..];
             if let Ok(port) = port_str.parse::<u16>() {
-                return Ok(NoProxyRule::HostPort(host.to_owned(), port));
+                return Ok(if exact_localhost {
+                    NoProxyRule::HostPortExact(host.to_owned(), port)
+                } else {
+                    NoProxyRule::HostPort(host.to_owned(), port)
+                });
             }
         }
 
         // plain host
-        Ok(NoProxyRule::Host(entry.to_owned()))
+        Ok(if exact_localhost {
+            NoProxyRule::HostExact(entry.to_owned())
+        } else {
+            NoProxyRule::Host(entry.to_owned())
+        })
     }
 
     /// Returns `true` if the given URL should bypass the proxy (go direct).
@@ -274,6 +290,11 @@ impl NoProxy {
                         return true;
                     }
                 }
+                NoProxyRule::HostExact(h) => {
+                    if Self::matches_exact_host(host, h) {
+                        return true;
+                    }
+                }
                 NoProxyRule::DomainSuffix(suffix) => {
                     if Self::matches_domain_suffix(host, suffix) {
                         return true;
@@ -290,6 +311,15 @@ impl NoProxy {
                         Self::matches_host_rule(host, h)
                     };
                     if port_matches && host_matches {
+                        return true;
+                    }
+                }
+                NoProxyRule::HostPortExact(h, p) => {
+                    let port_matches = match port {
+                        Some(pu) => pu == *p,
+                        None => Self::default_port_for_scheme(url.scheme()) == *p,
+                    };
+                    if port_matches && Self::matches_exact_host(host, h) {
                         return true;
                     }
                 }
@@ -339,6 +369,12 @@ impl NoProxy {
             .trim_end_matches(']')
             .to_ascii_lowercase();
         host_lower == rule_lower || host_lower.ends_with(&format!(".{rule_lower}"))
+    }
+
+    fn matches_exact_host(host: &str, rule: &str) -> bool {
+        host.trim_start_matches('[')
+            .trim_end_matches(']')
+            .eq_ignore_ascii_case(rule.trim_start_matches('[').trim_end_matches(']'))
     }
 
     fn ip_in_network(candidate: std::net::IpAddr, network: std::net::IpAddr, prefix: u8) -> bool {

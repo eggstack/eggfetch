@@ -189,7 +189,10 @@ The facade converts between HTTPX-compatible objects and native types at the bou
 - **URL → core URL**: Pure-Python `URL` normalizes to a string; passed to native `Client.request()`.
 - **Headers → native headers**: `Headers` exposes duplicate-preserving iteration; flattened to a list of `(name, value)` pairs for native calls.
 - **QueryParams → URL**: Request construction materializes merged query pairs into the URL; native dispatch does not forward them a second time.
-- **Timeout → native timeout**: `Timeout` fields map to scalar/phase-aware native timeout config.
+- **Timeout → native timeout**: `Timeout` uses an HTTPX-compatible private
+  `UNSET` sentinel so omitted and explicit `None` phase values remain distinct;
+  its four operational fields map to native phase-aware timeout config and
+  never synthesize native `total`.
 - **Limits → native limits**: `Limits` fields map to `PoolConfig`.
 - **Proxy → native proxy**: `Proxy.url` and supported URL credentials map to
   the native proxy string/authentication path. Non-empty `Proxy(headers=...)`

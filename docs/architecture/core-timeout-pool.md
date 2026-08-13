@@ -17,7 +17,7 @@ eggfetch implements phase-aware timeouts that map to specific segments of the re
 | `ProxyConnect` | Internal classification for proxy TCP setup |
 | `ProxyTls` | Internal classification for TLS to an HTTPS proxy endpoint |
 | `Write` | Sending request headers and body |
-| `Read` | Waiting for response headers or body chunks |
+| `Read` | Waiting between response body chunks; proxy protocol reads also cover response headers |
 | `Total` | Wall-clock cap across the entire request lifecycle |
 
 ### Configuration
@@ -35,7 +35,7 @@ Request-level overrides are per-field: only fields present in the request-level 
 |-------|-------------|
 | Pool | `tokio::time::timeout` around pool acquisition |
 | Total | `tokio::time::timeout` around the full send |
-| Read | Per-chunk wrapper stream (`ReadTimeoutStream`) — deadline resets on each chunk |
+| Read | Per-chunk wrapper stream (`ReadTimeoutStream`) — deadline resets on each body chunk; direct Hyper/UDS/H3 header acquisition remains owned by the transport future |
 | Write | Per-chunk wrapper stream (`WriteTimeoutStream`) — deadline resets on each chunk delivery |
 | Connect | Enforced by the direct connector and by proxy TCP/TLS/origin-TLS setup |
 

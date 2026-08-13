@@ -50,6 +50,39 @@ def test_reference_timeout_shape_has_four_operational_dimensions():
     assert candidate.pool == 5.0
 
 
+@pytest.mark.parametrize(
+    ("kwargs", "expected"),
+    [
+        ({}, (5.0, 5.0, 5.0, 5.0)),
+        ({"connect": None}, (None, 5.0, 5.0, 5.0)),
+        ({"read": None}, (5.0, None, 5.0, 5.0)),
+        ({"write": None}, (5.0, 5.0, None, 5.0)),
+        ({"pool": None}, (5.0, 5.0, 5.0, None)),
+    ],
+)
+def test_timeout_omitted_vs_explicit_none_matches_reference(kwargs, expected):
+    reference = httpx.Timeout(5.0, **kwargs)
+    candidate = Timeout(5.0, **kwargs)
+    assert (reference.connect, reference.read, reference.write, reference.pool) == expected
+    assert (candidate.connect, candidate.read, candidate.write, candidate.pool) == expected
+
+
+def test_timeout_without_default_requires_all_phases_like_reference():
+    with pytest.raises(ValueError):
+        httpx.Timeout()
+    with pytest.raises(ValueError):
+        Timeout()
+
+    reference = httpx.Timeout(None, connect=1.0)
+    candidate = Timeout(None, connect=1.0)
+    assert candidate.as_dict == {
+        "connect": reference.connect,
+        "read": reference.read,
+        "write": reference.write,
+        "pool": reference.pool,
+    }
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize("runtime", ["reference", "candidate"])
 async def test_independent_read_phases_do_not_form_synthetic_total(runtime):

@@ -24,6 +24,12 @@ class _ThreadedHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
     request_queue_size = 32
 
 
+class _ThreadedHTTPServerV6(_ThreadedHTTPServer):
+    """Threaded HTTP server bound to the IPv6 loopback address."""
+
+    address_family = socket.AF_INET6
+
+
 class DelayedResponseHandler(http.server.BaseHTTPRequestHandler):
     """HTTP handler that can delay response headers or body chunks."""
 
@@ -165,6 +171,23 @@ def local_http_server(
 
 
 @contextmanager
+def local_ipv6_http_server(
+    handler_class=DelayedResponseHandler,
+) -> Generator[tuple[str, int], None, None]:
+    """Start a deterministic HTTP server on IPv6 loopback."""
+    httpd = _ThreadedHTTPServerV6(("::1", 0), handler_class)
+    port = httpd.server_address[1]
+    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield "::1", port
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+        thread.join(timeout=2)
+
+
+@contextmanager
 def local_stall_server() -> Generator[tuple[str, int, threading.Event], None, None]:
     """TCP server that accepts connections but never sends data (for timeout testing)."""
     ready = threading.Event()
@@ -199,6 +222,42 @@ def local_stall_server() -> Generator[tuple[str, int, threading.Event], None, No
 
     try:
         yield "127.0.0.1", port, ready
+    finally:
+        stop.set()
+        server.close()
+        thread.join(timeout=2)
+
+
+@contextmanager
+def local_tls_handshake_stall_server() -> Generator[tuple[str, int], None, None]:
+    """Accept TCP but never complete a TLS handshake."""
+    stop = threading.Event()
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    server.bind(("127.0.0.1", 0))
+    server.listen(1)
+    port = server.getsockname()[1]
+    server.settimeout(1)
+
+    def accept_loop():
+        while not stop.is_set():
+            try:
+                conn, _addr = server.accept()
+                conn.settimeout(1)
+                while not stop.is_set():
+                    try:
+                        if not conn.recv(1024):
+                            break
+                    except (socket.timeout, ConnectionResetError, OSError):
+                        break
+                conn.close()
+            except (socket.timeout, OSError):
+                break
+
+    thread = threading.Thread(target=accept_loop, daemon=True)
+    thread.start()
+    try:
+        yield "127.0.0.1", port
     finally:
         stop.set()
         server.close()
@@ -387,7 +446,12 @@ def local_tls_proxy_server(
 class _TLSDirectHandler(http.server.BaseHTTPRequestHandler):
     """Simple handler served over TLS."""
 
+    recorded_headers: list[dict[str, str]] = []
+
     def do_GET(self):
+        self.__class__.recorded_headers.append(
+            {name.lower(): value for name, value in self.headers.items()}
+        )
         if self.path == "/health":
             body = b"ok"
             self.send_response(200)
@@ -445,6 +509,7 @@ def local_tls_server() -> Generator[tuple[str, int, ssl.SSLContext, str], None, 
         server_ssl.load_cert_chain(cert_path, key_path)
 
         httpd = _ThreadedHTTPServer(("127.0.0.1", 0), _TLSDirectHandler)
+        _TLSDirectHandler.recorded_headers = []
         raw_socket = httpd.socket
         httpd.socket = server_ssl.wrap_socket(raw_socket, server_side=True)
         port = httpd.server_address[1]

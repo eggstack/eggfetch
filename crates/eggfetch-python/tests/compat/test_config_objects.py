@@ -26,8 +26,50 @@ class TestTimeoutConstruction:
         assert t.total == 10.0
 
     def test_default_timeout(self):
-        t = Timeout()
-        assert t.total == 5.0
+        with pytest.raises(ValueError, match="must either include a default"):
+            Timeout()
+
+    @pytest.mark.parametrize(
+        ("kwargs", "expected"),
+        [
+            ({}, (5.0, 5.0, 5.0, 5.0)),
+            ({"connect": None}, (None, 5.0, 5.0, 5.0)),
+            ({"read": None}, (5.0, None, 5.0, 5.0)),
+            ({"write": None}, (5.0, 5.0, None, 5.0)),
+            ({"pool": None}, (5.0, 5.0, 5.0, None)),
+        ],
+    )
+    def test_omitted_and_explicit_none_are_distinct(self, kwargs, expected):
+        timeout = Timeout(5.0, **kwargs)
+        assert (timeout.connect, timeout.read, timeout.write, timeout.pool) == expected
+
+    def test_all_phases_without_scalar(self):
+        timeout = Timeout(connect=1.0, read=None, write=3.0, pool=4.0)
+        assert timeout.as_dict == {
+            "connect": 1.0,
+            "read": None,
+            "write": 3.0,
+            "pool": 4.0,
+        }
+
+    def test_none_scalar_can_enable_one_phase(self):
+        timeout = Timeout(None, connect=1.0)
+        assert timeout.as_dict == {
+            "connect": 1.0,
+            "read": None,
+            "write": None,
+            "pool": None,
+        }
+
+    def test_tuple_and_copy_construction(self):
+        assert Timeout((1.0, 2.0, 3.0, 4.0)).as_dict == {
+            "connect": 1.0,
+            "read": 2.0,
+            "write": 3.0,
+            "pool": 4.0,
+        }
+        original = Timeout(5.0, pool=None)
+        assert Timeout(original) == original
 
     def test_integer_value(self):
         t = Timeout(3)

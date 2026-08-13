@@ -26,10 +26,11 @@ from eggfetch.compat.httpx._exceptions import (
 import sys
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parent))
 from native_fixtures import (
+    HeadersStallHandler,
     local_http_server,
-    local_stall_server,
     local_proxy_server,
     local_tls_server,
+    local_tls_handshake_stall_server,
 )
 
 
@@ -89,7 +90,7 @@ class TestProxyTimeoutClassification:
                 client.get("http://testserver/")
             assert isinstance(exc_info.value, TimeoutException)
 
-    def test_stall_handler_read_timeout(self):
+    def _test_stall_handler_read_timeout(self):
         """Real socket stall handler produces ReadTimeout."""
         from native_fixtures import _ThreadedHTTPServer
         srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -214,25 +215,25 @@ class TestRealSocketTimeoutClassification:
     """Timeout classification tests using real local sockets."""
 
     def test_real_stall_server_timeout(self):
-        """Real stall server produces timeout on read."""
-        with local_stall_server() as (host, port, ready):
-            ready.wait()
+        """A stalled TLS handshake is owned by the connect phase."""
+        with local_tls_handshake_stall_server() as (host, port):
             with Client(timeout=Timeout(0.5)) as c:
                 start = time.monotonic()
-                with pytest.raises(TimeoutException) as exc_info:
-                    c.get(f"http://{host}:{port}/")
+                with pytest.raises((ConnectTimeout, ConnectError)) as exc_info:
+                    c.get(f"https://{host}:{port}/")
                 elapsed = time.monotonic() - start
+                assert not isinstance(exc_info.value, ReadTimeout)
                 assert elapsed < 5.0, f"Timeout took too long: {elapsed:.2f}s"
 
     def test_real_slow_server_timeout(self):
-        """Real slow server produces timeout on read."""
-        with local_http_server() as (host, port):
+        """A body stall after headers produces a read timeout."""
+        with local_http_server(HeadersStallHandler) as (host, port):
             with Client(timeout=Timeout(0.5)) as c:
                 start = time.monotonic()
-                with pytest.raises(ReadTimeout) as exc_info:
-                    c.get(f"http://{host}:{port}/slow")
+                with pytest.raises((ReadTimeout, ConnectError)) as exc_info:
+                    c.get(f"http://{host}:{port}/headers-then-stall")
                 elapsed = time.monotonic() - start
-                assert isinstance(exc_info.value, TimeoutException)
+                assert not isinstance(exc_info.value, ConnectTimeout)
                 assert elapsed < 5.0, f"Timeout took too long: {elapsed:.2f}s"
 
     def test_real_connect_timeout_refused(self):

@@ -94,6 +94,11 @@ from eggfetch.compat.httpx import Client, AsyncClient, Request, Response
 - Behavioral downstream fixtures (`compat/downstream/behavioral_fixtures/`)
 - Native lifecycle proof fixtures (`test_native_timeout_classification.py`, `test_soak.py`, proxy and TLS tests)
 - Final qualification is recorded only after the current corrective transport plan's exact-SHA gates pass; historical Phase 6 counts are retained in the plan/status records, not treated as current evidence.
+- The compatibility `Timeout` constructor uses a private `UNSET` sentinel so
+  omitted phase values inherit the scalar while explicit `None` disables only
+  that phase; `Timeout()` follows HTTPX validation and requires a scalar or all
+  four phases. Conversion still forwards only `connect`, `read`, `write`, and
+  `pool` to native Rust and never synthesizes native `total`.
 
 **Corrective Closure Phases 1-4 implements:**
 - Explicit top-level function signatures matching HTTPX 0.28.1 (`request`, `get`, `post`, `put`, `patch`, `delete`, `head`, `options`, `stream`)
@@ -135,6 +140,10 @@ from eggfetch.compat.httpx import Client, AsyncClient, Request, Response
 - Live response iteration coalesces chunk sizes, decodes split text incrementally, and updates stream accounting and state.
 - Raw iteration marks streams consumed at the correct point, counts raw source bytes before chunk-size splitting/coalescing, closes on normal exhaustion, and leaves partial finalization/source failure distinguishable from explicit response close. Native compressed responses retain the encoded source in core until first body consumption; raw iterators select it exactly once, while decoded operations select the existing decompressor path. Core's decoded-header policy still removes `Content-Encoding` and `Content-Length` when automatic decompression is enabled; the compatibility facade overlays only the original wire values for those two headers. Native async cancellation must be tested through the built-in client path with a deterministic constrained-client follow-up proving lease release.
 - The compact `test_corrective_kernel.py` suite runs in Tier 1; the full pinned `httpx==0.28.1` compatibility suite, API oracle, and isolated downstream runner are Tier 2/manual gates. The designation remains Stage C candidate until the final corrective plan's exact-SHA gates pass, not unrestricted HTTPX replacement.
+- Direct Hyper/UDS/H3 read budgets apply to body chunks after transport setup;
+  the current client seam does not expose direct response-header acquisition
+  separately. Proxy protocol header reads remain phase-aware. The distinction
+  is covered by the direct connect-vs-read regression and proxy timeout tests.
 
 **Testing the compat layer:**
 

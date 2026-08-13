@@ -247,6 +247,8 @@ Key differences from HTTPX:
 - `ssl_context` transport parameter not supported (TLS handled by Rust engine)
 - HTTPX timeout values map to `connect`, `read`, `write`, and `pool` only;
   the facade does not synthesize EggFetch's native `total` deadline
+- HTTPX `Timeout` preserves omitted versus explicitly disabled (`None`) phase
+  values; `Timeout()` without a scalar or all four phases raises as in HTTPX
 - Core proxy configuration is explicit; the HTTPX compatibility facade honors
   scheme-specific `HTTP_PROXY`/`HTTPS_PROXY` with `ALL_PROXY` fallback,
   lowercase forms, `NO_PROXY`, and `trust_env=False`.

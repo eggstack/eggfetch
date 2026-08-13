@@ -11,7 +11,7 @@ eggfetch implements phase-aware timeouts that map to specific segments of the re
 | `ProxyConnect` | TCP connection to the proxy server (proxy requests only) |
 | `ProxyTls` | TLS handshake over a CONNECT tunnel (HTTPS through HTTP proxy only) |
 | `Write` | Per-chunk time for the request body producer to yield the next chunk |
-| `Read` | Per-chunk time to wait for response headers or a body chunk |
+| `Read` | Per-chunk time to wait for a response body chunk; proxy protocol reads also cover response headers |
 | `Total` | Wall-clock cap across the entire request lifecycle |
 
 ## Default Behavior
@@ -91,7 +91,7 @@ let response = client
 
 - **Pool** and **Total** are enforced with `tokio::time::timeout`
 - **Connect** is enforced by wrapping the underlying connector with a deadline that bounds DNS resolution, TCP connect, and TLS handshake
-- **Read** is enforced per chunk by a wrapper stream that fires an error if no chunk arrives within the duration. The deadline resets on every chunk arrival
+- **Read** is enforced per body chunk by a wrapper stream that fires an error if no chunk arrives within the duration. The deadline resets on every chunk arrival. Direct Hyper/UDS/H3 header acquisition is owned by the transport future; proxy protocol header reads remain phase-aware
 - **Write** is enforced per chunk by a wrapper stream that fires an error if the body producer does not yield a chunk within the duration. The deadline resets on every chunk delivery. Only applies to streamed request bodies; buffered bodies complete synchronously
 
 ## Timeout Errors

@@ -196,3 +196,8 @@ HTTPX `Timeout` conversion maps only its `connect`, `read`, `write`, and `pool`
 values; it must not synthesize native `Timeout.total`. Native callers may set
 `total` explicitly as an outer deadline, and proxy setup uses the smaller of
 that deadline and each configured phase budget.
+The compatibility constructor preserves HTTPX's omitted-vs-explicit-`None`
+phase distinction and rejects `Timeout()` unless a scalar or all four phases
+are supplied. Direct Hyper/UDS/H3 transport futures are governed only by an
+explicit native total; read timeouts attach to response body chunks after
+transport setup, while proxy protocol reads retain header-phase enforcement.

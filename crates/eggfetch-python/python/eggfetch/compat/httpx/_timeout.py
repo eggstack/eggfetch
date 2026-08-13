@@ -5,23 +5,67 @@ from __future__ import annotations
 import copy
 
 
+class _UnsetType:
+    """Private sentinel preserving whether a timeout argument was omitted."""
+
+    def __repr__(self) -> str:
+        return "UnsetType"
+
+
+_UNSET = _UnsetType()
+
+
 class Timeout:
     """HTTPX-compatible Timeout class.
 
-    Timeout(timeout=5.0, *, connect=None, read=None, write=None, pool=None)
+    Timeout(timeout=UNSET, *, connect=UNSET, read=UNSET, write=UNSET, pool=UNSET)
     """
 
     __slots__ = ("_connect", "_read", "_write", "_pool", "_total")
 
-    def __init__(self, timeout=5.0, *, connect=None, read=None, write=None, pool=None):
-        if connect is None:
-            connect = timeout
-        if read is None:
-            read = timeout
-        if write is None:
-            write = timeout
-        if pool is None:
-            pool = timeout
+    def __init__(
+        self,
+        timeout=_UNSET,
+        *,
+        connect=_UNSET,
+        read=_UNSET,
+        write=_UNSET,
+        pool=_UNSET,
+    ):
+        if isinstance(timeout, Timeout):
+            if any(value is not _UNSET for value in (connect, read, write, pool)):
+                raise TypeError(
+                    "Cannot combine a Timeout instance with explicit phase values"
+                )
+            connect, read, write, pool = (
+                timeout.connect,
+                timeout.read,
+                timeout.write,
+                timeout.pool,
+            )
+            total = timeout.total
+        elif isinstance(timeout, tuple):
+            if any(value is not _UNSET for value in (connect, read, write, pool)):
+                raise TypeError(
+                    "Cannot combine a timeout tuple with explicit phase values"
+                )
+            connect, read = timeout[0], timeout[1]
+            write = timeout[2] if len(timeout) >= 3 else None
+            pool = timeout[3] if len(timeout) >= 4 else None
+            total = None
+        elif all(value is not _UNSET for value in (connect, read, write, pool)):
+            total = None if timeout is _UNSET else timeout
+        else:
+            if timeout is _UNSET:
+                raise ValueError(
+                    "httpx.Timeout must either include a default, or set all "
+                    "four parameters explicitly."
+                )
+            connect = timeout if connect is _UNSET else connect
+            read = timeout if read is _UNSET else read
+            write = timeout if write is _UNSET else write
+            pool = timeout if pool is _UNSET else pool
+            total = timeout
 
         self._validate_value(connect, "connect")
         self._validate_value(read, "read")
@@ -32,7 +76,7 @@ class Timeout:
         self._read = read
         self._write = write
         self._pool = pool
-        self._total = timeout
+        self._total = total
 
     @staticmethod
     def _validate_value(value, name: str) -> None:
@@ -80,29 +124,16 @@ class Timeout:
                 and self._read == other._read
                 and self._write == other._write
                 and self._pool == other._pool
-                and self._total == other._total
             )
         return NotImplemented
 
     def __repr__(self) -> str:
-        if (
-            self._connect == self._total
-            and self._read == self._total
-            and self._write == self._total
-            and self._pool == self._total
-            and self._total is not None
-        ):
-            return f"Timeout(timeout={self._total!r})"
-        parts = []
-        if self._connect is not None:
-            parts.append(f"connect={self._connect!r}")
-        if self._read is not None:
-            parts.append(f"read={self._read!r}")
-        if self._write is not None:
-            parts.append(f"write={self._write!r}")
-        if self._pool is not None:
-            parts.append(f"pool={self._pool!r}")
-        return f"Timeout({', '.join(parts)})"
+        if len({self._connect, self._read, self._write, self._pool}) == 1:
+            return f"Timeout(timeout={self._connect!r})"
+        return (
+            f"Timeout(connect={self._connect!r}, read={self._read!r}, "
+            f"write={self._write!r}, pool={self._pool!r})"
+        )
 
     def __copy__(self):
         new = Timeout.__new__(Timeout)

@@ -44,29 +44,22 @@ async fn sleep_if_budget_allows(
     Ok(())
 }
 
-/// Bound response-header acquisition by the read phase and optional native
-/// total deadline. The response body keeps its existing per-chunk read
-/// wrapper after headers are received.
-async fn send_with_header_timeout<F>(
+/// Bound a complete transport future only by an explicitly configured native
+/// total deadline. Direct Hyper/UDS/H3 transports do not expose a clean
+/// response-header boundary here, so their read budget is applied by the
+/// response-body stream after transport setup has completed.
+async fn send_with_total_timeout<F>(
     send_future: F,
-    read_timeout: Option<Duration>,
     remaining_total: Option<Duration>,
 ) -> Result<Response>
 where
     F: std::future::Future<Output = Result<Response>>,
 {
-    let (budget, phase) = match (read_timeout, remaining_total) {
-        (Some(read), Some(total)) if total < read => (Some(total), TimeoutPhase::Total),
-        (Some(read), _) => (Some(read), TimeoutPhase::Read),
-        (None, Some(total)) => (Some(total), TimeoutPhase::Total),
-        (None, None) => (None, TimeoutPhase::Read),
-    };
-
-    match budget {
+    match remaining_total {
         Some(duration) => tokio::time::timeout(duration, send_future)
             .await
             .map_err(|_| Error::Timeout {
-                phase,
+                phase: TimeoutPhase::Total,
                 elapsed: duration,
             })?,
         None => send_future.await,
@@ -772,9 +765,8 @@ pub(crate) async fn send_single_request(
         let request = http_request
             .body(body.into_http_body())
             .map_err(|e| Error::RequestBuild(e.to_string()))?;
-        let response = send_with_header_timeout(
+        let response = send_with_total_timeout(
             crate::transport::uds::send_request(uds_client, request, url.clone()),
-            timeout.read,
             remaining_total,
         )
         .await?;
@@ -805,8 +797,7 @@ pub(crate) async fn send_single_request(
                 hyper_request,
                 url.clone(),
             );
-            let response =
-                send_with_header_timeout(send_future, timeout.read, remaining_total).await?;
+            let response = send_with_total_timeout(send_future, remaining_total).await?;
             let mut response = response;
             apply_read_timeout_and_lease(&mut response, guard, timeout.read);
             return Ok(response);
@@ -865,7 +856,7 @@ pub(crate) async fn send_single_request(
                             .map_err(|e| Error::RequestBuild(e.to_string()))?;
 
                         let send_future = h3_connector.send_request(h3_request, url.clone());
-                        send_with_header_timeout(send_future, timeout.read, remaining_total).await?
+                        send_with_total_timeout(send_future, remaining_total).await?
                     } else {
                         return Err(Error::Unsupported(
                             "HTTP/3 connector not available; ensure http3 feature is enabled"
@@ -880,7 +871,6 @@ pub(crate) async fn send_single_request(
                         &headers,
                         body,
                         version,
-                        timeout.read,
                         remaining_total,
                     )
                     .await?
@@ -895,7 +885,6 @@ pub(crate) async fn send_single_request(
                     &headers,
                     body,
                     version,
-                    timeout.read,
                     remaining_total,
                 )
                 .await?
@@ -941,7 +930,6 @@ async fn send_hyper_request(
     headers: &Headers,
     body: RequestBody,
     version: http::Version,
-    read_timeout: Option<Duration>,
     remaining_total: Option<Duration>,
 ) -> Result<Response> {
     let hyper_client = inner
@@ -970,5 +958,5 @@ async fn send_hyper_request(
     let send_future =
         crate::transport::direct::send_request(hyper_client, hyper_request, url.clone());
 
-    send_with_header_timeout(send_future, read_timeout, remaining_total).await
+    send_with_total_timeout(send_future, remaining_total).await
 }

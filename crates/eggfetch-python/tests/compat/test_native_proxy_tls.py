@@ -27,6 +27,7 @@ from eggfetch.compat.httpx._exceptions import (
     TimeoutException,
 )
 from native_fixtures import (
+    _TLSDirectHandler,
     local_http_server,
     local_proxy_server,
     local_tls_proxy_server,
@@ -104,6 +105,40 @@ class TestProxyForwarding:
                         pass
                 assert not handler.recorded_requests
 
+    def test_proxy_auth_is_sent_only_on_the_proxy_leg(self):
+        """Supported proxy auth is differential and never reaches the origin."""
+        with local_http_server() as (backend_host, backend_port):
+            with local_proxy_server(backend=(backend_host, backend_port)) as (
+                proxy_host,
+                proxy_port,
+                handler,
+            ):
+                proxy_url = f"http://{proxy_host}:{proxy_port}"
+                with __import__("httpx").Client(
+                    proxy=__import__("httpx").Proxy(proxy_url, auth=("user", "pass")),
+                    trust_env=False,
+                ) as reference:
+                    response = reference.get(
+                        f"http://{backend_host}:{backend_port}/health"
+                    )
+                assert response.status_code == 200
+                assert handler.recorded_requests[0]["headers"]["proxy-authorization"].startswith(
+                    "Basic "
+                )
+
+                handler.recorded_requests.clear()
+                with Client(
+                    proxy=Proxy(proxy_url, auth=("user", "pass")),
+                    trust_env=False,
+                ) as candidate:
+                    response = candidate.get(
+                        f"http://{backend_host}:{backend_port}/health"
+                    )
+                assert response.status_code == 200
+                assert handler.recorded_requests[0]["headers"]["proxy-authorization"].startswith(
+                    "Basic "
+                )
+
     @pytest.mark.asyncio
     async def test_proxy_headers_candidate_rejected_for_async_client(self):
         with pytest.raises(NotImplementedError, match="not yet"):
@@ -146,6 +181,39 @@ class TestProxyConnect:
                     assert "CONNECT" in methods, (
                         f"CONNECT method not observed; proxy saw: {methods}"
                     )
+
+    def test_connect_proxy_headers_are_proxy_only_and_bounded_for_candidate(self):
+        """CONNECT headers are evidenced on HTTPX's proxy leg only."""
+        with local_tls_server() as (tls_host, tls_port, _ssl, cert_path):
+            with local_proxy_server() as (proxy_host, proxy_port, handler):
+                import httpx
+
+                with httpx.Client(
+                    proxy=httpx.Proxy(
+                        f"http://{proxy_host}:{proxy_port}",
+                        headers={"X-Proxy-Test": "connect"},
+                    ),
+                    trust_env=False,
+                    verify=cert_path,
+                ) as reference:
+                    response = reference.get(f"https://{tls_host}:{tls_port}/health")
+                assert response.status_code == 200
+                assert handler.recorded_requests[0]["method"] == "CONNECT"
+                assert handler.recorded_requests[0]["headers"]["x-proxy-test"] == "connect"
+                assert "proxy-authorization" not in _TLSDirectHandler.recorded_headers[-1]
+
+                handler.recorded_requests.clear()
+                with pytest.raises(NotImplementedError, match="not yet"):
+                    with Client(
+                        proxy=Proxy(
+                            f"http://{proxy_host}:{proxy_port}",
+                            headers={"X-Proxy-Test": "connect"},
+                        ),
+                        trust_env=False,
+                        verify=cert_path,
+                    ) as candidate:
+                        candidate.get(f"https://{tls_host}:{tls_port}/health")
+                assert not handler.recorded_requests
 
     def test_connect_proxy_json_response(self):
         """JSON response passes through CONNECT tunnel correctly."""
@@ -211,6 +279,44 @@ class TestHttpsProxyEndpoint:
                 assert handler.recorded_requests[0]["target"].startswith(
                     f"{origin_host}:{origin_port}"
                 )
+
+    def test_https_proxy_headers_reference_and_bounded_candidate_difference(self):
+        with local_http_server() as (backend_host, backend_port):
+            with local_tls_proxy_server(backend=(backend_host, backend_port)) as (
+                proxy_host,
+                proxy_port,
+                handler,
+                cert_path,
+            ):
+                import httpx
+
+                proxy_ssl = ssl.create_default_context(cafile=cert_path)
+                with httpx.Client(
+                    proxy=httpx.Proxy(
+                        f"https://{proxy_host}:{proxy_port}",
+                        ssl_context=proxy_ssl,
+                        headers={"X-Proxy-Test": "https-proxy"},
+                    ),
+                    trust_env=False,
+                ) as reference:
+                    response = reference.get(
+                        f"http://{backend_host}:{backend_port}/health"
+                    )
+                assert response.status_code == 200
+                assert handler.recorded_requests[0]["headers"]["x-proxy-test"] == "https-proxy"
+
+                handler.recorded_requests.clear()
+                with pytest.raises(NotImplementedError, match="not yet"):
+                    with Client(
+                        proxy=Proxy(
+                            f"https://{proxy_host}:{proxy_port}",
+                            headers={"X-Proxy-Test": "https-proxy"},
+                        ),
+                        trust_env=False,
+                        verify=cert_path,
+                    ) as candidate:
+                        candidate.get(f"http://{backend_host}:{backend_port}/health")
+                assert not handler.recorded_requests
 
 
 class TestProxyRefusal:
