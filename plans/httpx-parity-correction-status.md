@@ -4,7 +4,24 @@ This record is the exact-SHA-bound status for the HTTPX 0.28.1 compatibility
 facade. Historical phase and corrective-pass records remain in the git history
 and referenced plans; counts below are only from the runs named here.
 
-## Current corrective pass — qualified evidence record
+## Current corrective pass — qualification reopened
+
+Current designation: **Stage C candidate; final semantic closure pending**.
+
+Qualification is reopened from superseded executable commit
+`52b187744d062840879f6e7752c87753021e2415`. The prior clean evidence remains
+historical and auditable below, but it did not exercise two public semantic
+requirements from `plans/httpx-parity-final-closure-pass-04.md`: direct/UDS/H3
+read timeout was still wrapped around the complete request future, allowing a
+shorter read budget to interrupt connection establishment, and the
+compatibility `Timeout` constructor did not distinguish omitted phase values
+from explicitly supplied `None` values. The final differential matrices also
+remain incomplete for the pass-04 acceptance criteria.
+
+The executable correction baseline is `00eb66d`; no current qualification SHA
+is claimed while this pass is in progress.
+
+## Historical corrective pass — superseded qualified evidence record
 
 Current designation: **Stage C qualified**.
 
