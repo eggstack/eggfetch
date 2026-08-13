@@ -82,7 +82,7 @@ The CLI enables: cookies, multipart, proxy. The Python binding enables all featu
 
 ## HTTPX Compatibility Layer
 
-The `eggfetch.compat.httpx` module provides an HTTPX 0.28.1-compatible asyncio facade (**Stage C candidate pending final corrective qualification**). Import it as:
+The `eggfetch.compat.httpx` module provides an HTTPX 0.28.1-compatible asyncio facade (**Stage C qualified for the documented Python 3.10+ asyncio surface**). Import it as:
 
 ```python
 from eggfetch.compat.httpx import Client, AsyncClient, Request, Response, URL, Headers, Cookies
@@ -187,10 +187,10 @@ The compact `test_corrective_kernel.py` is part of Tier 1; the pinned
 transport differential suite, full pinned-reference compat, API oracle, and
 downstream isolated runner are extended gates. The pinned reference remains
 `httpx==0.28.1` (with its installed `httpcore`/`socksio` versions recorded in
-the qualification handoff). The corrective transport profile is a Stage C
-candidate while the final qualification pass is rerun; once qualified it must
-remain bound to one exact executable SHA. Do not silently revive historical
-qualification counts.
+the qualification handoff). The corrective transport profile is Stage C
+qualified at the exact SHA recorded in `compat/httpx/0.28.1/profile.toml`; any
+executable change requires a fresh qualification pass. Do not silently revive
+historical qualification counts.
 
 The current corrective boundary derives one monotonic request deadline for
 multi-phase HTTP/HTTPS proxy setup. `Proxy(headers=...)` remains an explicit

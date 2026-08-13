@@ -1,8 +1,8 @@
 # HTTPX 0.28.1 Compatibility Profile
 
 This directory contains the machine-readable compatibility profile for
-HTTPX 0.28.1. It remains a Stage C candidate pending final corrective
-qualification; current executable evidence is recorded in the corrective
+HTTPX 0.28.1. It is Stage C qualified against the exact executable SHA
+recorded in `profile.toml`; current evidence is recorded in the corrective
 status plan.
 
 ## Files
@@ -48,7 +48,7 @@ python scripts/compare_httpx_api_manifest.py \
 ## Status
 
 This profile targets HTTPX 0.28.1. The compatibility stage is **Stage C
-candidate** pending final corrective qualification. Trio/AnyIO, Python 3.8/3.9,
+qualified** for the supported Python versions. Trio/AnyIO, Python 3.8/3.9,
 and private HTTPX modules remain excluded. Proxy URL credentials are covered;
 arbitrary proxy headers and Python `ssl_context` objects remain bounded
 differences.

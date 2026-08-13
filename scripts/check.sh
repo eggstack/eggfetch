@@ -169,6 +169,7 @@ tier2_api_manifest() {
     info "API manifest comparison"
     require_file "$SCRIPT_DIR/generate_httpx_api_manifest.py"
     require_file "$SCRIPT_DIR/compare_httpx_api_manifest.py"
+    require_file "$REPO_ROOT/compat/httpx/0.28.1/reference-api.json"
     require_file "$REPO_ROOT/compat/httpx/0.28.1/allowed-differences.toml"
     local tmp_dir
     tmp_dir="$(mktemp -d)"
@@ -176,9 +177,8 @@ tier2_api_manifest() {
         trap 'rm -rf "$tmp_dir"' EXIT
         cd "$REPO_ROOT"
         "$PYTHON_BIN" scripts/generate_httpx_api_manifest.py --package eggfetch.compat.httpx --output "$tmp_dir/eggfetch-manifest.json"
-        "$PYTHON_BIN" scripts/generate_httpx_api_manifest.py --package httpx --output "$tmp_dir/httpx-manifest.json"
         "$PYTHON_BIN" scripts/compare_httpx_api_manifest.py \
-            --reference "$tmp_dir/httpx-manifest.json" \
+            --reference compat/httpx/0.28.1/reference-api.json \
             --candidate "$tmp_dir/eggfetch-manifest.json" \
             --allowed compat/httpx/0.28.1/allowed-differences.toml
     )
@@ -250,7 +250,14 @@ tier2_soak() {
 
 tier2_downstream() {
     info "Downstream behavioral fixtures"
-    "$PYTHON_BIN" -m pytest "$REPO_ROOT/compat/downstream/behavioral_fixtures/" -v
+    local artifact_manifest="$REPO_ROOT/target/downstream-qualification/artifact-manifest.json"
+    if [[ ! -f "$artifact_manifest" ]]; then
+        record_skip "Downstream" "artifact manifest not present; run the downstream qualification workflow first"
+        return 0
+    fi
+    "$PYTHON_BIN" scripts/run_downstream_compat.py \
+        --artifact-manifest "$artifact_manifest" \
+        --required-only
 }
 
 tier2_merge_lossless() {

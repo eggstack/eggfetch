@@ -84,7 +84,8 @@ The corrective transport matrix is in `test_socks_transport.py` and
 `test_uds_transport.py`; environment precedence, socket-option boundaries,
 and pinned reference behavior are covered by adjacent compatibility tests.
 The isolated downstream runner qualified four release-blocking packages in
-the final pass. Private-module consumers and packages targeting HTTPX 0.27-era
+the final pass; exact-SHA evidence is recorded in the compatibility profile and
+parity closure status. Private-module consumers and packages targeting HTTPX 0.27-era
 signatures remain informational by design.
 
 ### Expanded Behavior Corpus

@@ -1,6 +1,15 @@
 # Compatibility Stage Decision
 
-**Corrective Closure — Verification, Substitution, and Lifecycle Pass**
+**Current decision — Stage C qualified**
+
+The documented Python 3.10+ asyncio-supported HTTPX 0.28.1 surface is
+qualified at exact executable SHA
+`64a1e2c3f3cea7ddc6eeabcd85a67a4d7a17cb26`. See
+`compat/httpx/0.28.1/profile.toml` and
+`plans/httpx-parity-correction-status.md` for the current evidence. The
+historical candidate decision below is retained as audit history.
+
+**Historical corrective closure — Verification, Substitution, and Lifecycle Pass**
 
 > **Correction Notice**: This document previously claimed "Stage C released" based on
 > incomplete evidence. The corrective pass
@@ -15,7 +24,7 @@
 |-------|-------|
 | Date | 2026-07-24 |
 | Stage Evaluated | Stage C (asyncio drop-in) |
-| Decision | **Stage C candidate** |
+| Decision | **Stage C candidate (historical; superseded)** |
 | Evidence | Corrective closure plan, compat tests, API manifest comparison, typed difference records, schema v3 identity, lossless merge, native lifecycle fixtures |
 
 ## Decision Rationale

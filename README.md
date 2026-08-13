@@ -239,7 +239,7 @@ See [`docs/cli/guide.md`](docs/cli/guide.md) for the full CLI reference.
 
 eggfetch provides an HTTPX 0.28.1-compatible asyncio facade via `eggfetch.compat.httpx`. The compatibility profile is pinned in `compat/httpx/0.28.1/` with machine-readable API manifests, allowed-difference tracking, and a parity case registry.
 
-The facade is currently a **Stage C candidate** while the final corrective qualification pass is rerun against one exact executable SHA. The intended claim is the documented Python ≥3.10 asyncio-supported surface of HTTPX 0.28.1; it is not unrestricted HTTPX replacement for every transport or concurrency backend.
+The facade is **Stage C qualified** against one exact executable SHA. The claim is limited to the documented Python ≥3.10 asyncio-supported surface of HTTPX 0.28.1; it is not unrestricted HTTPX replacement for every transport or concurrency backend. Qualification evidence is recorded in `compat/httpx/0.28.1/profile.toml` and `plans/httpx-parity-correction-status.md`.
 
 Key differences from HTTPX:
 - Trio/AnyIO not supported (asyncio only, tokio-based)

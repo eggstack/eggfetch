@@ -4,22 +4,49 @@ This record is the exact-SHA-bound status for the HTTPX 0.28.1 compatibility
 facade. Historical phase and corrective-pass records remain in the git history
 and referenced plans; counts below are only from the runs named here.
 
-## Current corrective pass — qualification reopened
+## Current corrective pass — qualified
 
-Current designation: **Stage C candidate; final semantic closure pending**.
+Current designation: **Stage C qualified** for the documented Python 3.10+
+asyncio-supported HTTPX 0.28.1 surface.
 
-Qualification is reopened from superseded executable commit
-`52b187744d062840879f6e7752c87753021e2415`. The prior clean evidence remains
-historical and auditable below, but it did not exercise two public semantic
-requirements from `plans/httpx-parity-final-closure-pass-04.md`: direct/UDS/H3
-read timeout was still wrapped around the complete request future, allowing a
-shorter read budget to interrupt connection establishment, and the
-compatibility `Timeout` constructor did not distinguish omitted phase values
-from explicitly supplied `None` values. The final differential matrices also
-remain incomplete for the pass-04 acceptance criteria.
+The final executable qualification SHA is
+`64a1e2c3f3cea7ddc6eeabcd85a67a4d7a17cb26`. The pass-04 corrections keep
+direct/UDS/H3 read budgets on response-body chunks after transport setup,
+preserve HTTPX's omitted-versus-explicit-`None` timeout phases, stabilize
+NO_PROXY and proxy endpoint matrices, and keep Python response and streaming
+body work on the runtime that owns the transport. Live sync streams retain a
+runtime lease so they remain readable after `Client.close()`.
 
-The executable correction baseline is `00eb66d`; no current qualification SHA
-is claimed while this pass is in progress.
+Environment: CPython 3.12.3, pytest 9.1.1, pytest-asyncio 1.4.0,
+`httpx==0.28.1`, `httpcore==1.0.9`, and `socksio==1.0.0`. IPv6 loopback was
+available; no capability-based skips were used.
+
+Evidence bound to the exact SHA:
+
+- `./scripts/check.sh`: passed, including serialized Rust workspace tests,
+  clippy, doctests, extension build, 532 Python behavior tests, and the 130
+  test compatibility smoke kernel.
+- Full pinned compatibility command: three consecutive clean runs, each
+  **1564 passed**, in **148.78s**, **128.20s**, and **130.62s**, with 11
+  non-failing warnings.
+- API oracle: 0 unexplained, 0 stale, and 0 resolved-in-active differences;
+  the manifest is valid.
+- Documentation examples and internal links: passed (122 Python blocks across
+  55 Markdown files; all internal links valid).
+- `cargo doc --workspace --all-features --no-deps` and core doctests: passed;
+  rustdoc emitted only pre-existing FFI/private-link warnings.
+- Required downstream runner: **4/4 packages passed**, with no failed, error,
+  or skipped required suites (`respx` 5/5, `httpx-sse` 4/4, `httpx-auth` 5/5,
+  `httpx-ws` 4/4). Its reported pip-check dependency warnings are diagnostic
+  only; behavioral suites passed. The refreshed candidate wheel is SHA-256
+  `69c177d4d7fa0384da99a2a3fed316f544804cc3945fa398e65f92d959b543ef`.
+
+Retained bounded differences are unchanged: non-empty `Proxy(headers=...)`
+is rejected at conversion, arbitrary Python `ssl_context` objects are not
+forwarded into the Rust proxy engine, the valid four-element socket-option
+pointer form is outside the safe-Rust boundary, and direct Hyper/UDS/H3 header
+acquisition is not separately exposed from the transport future. These are
+documented in `compat/httpx/0.28.1/allowed-differences.toml`.
 
 ## Historical corrective pass — superseded qualified evidence record
 
