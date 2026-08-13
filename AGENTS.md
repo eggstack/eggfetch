@@ -15,6 +15,10 @@ python -m pytest crates/eggfetch-python/tests/ -q --ignore=crates/eggfetch-pytho
 python -m pip install -r compat/httpx/0.28.1/requirements.txt
 ```
 
+Tier 1 serializes the Rust test harness because the resource-stabilization
+tests measure process RSS; concurrent workspace tests can otherwise make that
+measurement scheduling-dependent.
+
 ## Python Environment
 
 `./scripts/check.sh` requires an active virtual environment with Python 3.10+, maturin, pytest, and pytest-asyncio. Setup:

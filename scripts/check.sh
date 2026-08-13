@@ -102,7 +102,9 @@ tier1_clippy() {
 
 tier1_rust_tests() {
     info "Rust workspace tests"
-    cargo test --workspace --exclude eggfetch-python --all-features
+    # Resource-stabilization tests compare process RSS and must not run beside
+    # other workspace tests that allocate concurrently.
+    cargo test --workspace --exclude eggfetch-python --all-features -- --test-threads=1
 }
 
 tier1_python_build() {
