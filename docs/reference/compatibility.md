@@ -109,13 +109,12 @@ eggfetch targets HTTPX 0.28.1 compatibility in phases. The current status:
 - **Phase 5**: SOCKS5 proxy — HTTP/HTTPS through SOCKS5, auth, DNS/address-type behavior, NO_PROXY bypass, credential redaction
 - **Phase 6 / Differential Closure**: Final qualification — API oracle clean (76 active differences, all intentional/deferred), full pinned compat suite passing, downstream behavioral fixtures validated
 
-**Current status: Stage C candidate; final IPv6 `NO_PROXY` closure pending.**
-The pass-05 qualification was reopened for pass 06, which is limited to pinned
-HTTPX IPv6 environment-form parity and route/pre-dispatch evidence. The final
-qualification, when restored, will be pinned to the exact executable SHA in
-`compat/httpx/0.28.1/profile.toml`. The compatibility facade does not claim
-unrestricted HTTPX replacement. Trio/AnyIO, Python 3.8/3.9, and private HTTPX
-modules remain outside scope.
+**Current status: Stage C qualified.** Pass 06 closed the pinned HTTPX IPv6
+environment-form parity and route/pre-dispatch evidence gaps. Qualification is
+bound to the exact executable SHA in `compat/httpx/0.28.1/profile.toml`; any
+executable change requires fresh qualification. The compatibility facade does
+not claim unrestricted HTTPX replacement. Trio/AnyIO, Python 3.8/3.9, and
+private HTTPX modules remain outside scope.
 
 See `compat/httpx/0.28.1/` for the machine-readable profile and allowed differences.
 

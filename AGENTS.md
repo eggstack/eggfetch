@@ -191,11 +191,11 @@ the qualification handoff). The corrective transport profile is bound to the
 exact SHA recorded in `compat/httpx/0.28.1/profile.toml`; any executable change
 requires a fresh qualification pass. Pass 05 reopened the prior Stage C
 qualification before correcting ordinary-domain and default-port `NO_PROXY`
-semantics. Pass 06 has reopened that Stage C qualification to close IPv6
-environment-form parity and route/pre-dispatch evidence. Pass-04
-timeout/runtime/proxy work and pass-05 generic-domain/default-port fixes remain
-historical accepted evidence and are not being reopened. Do not silently
-revive historical qualification counts.
+semantics. Pass 06 closed IPv6 environment-form parity and route/pre-dispatch
+evidence on the exact SHA recorded in the profile. Pass-04 timeout/runtime/
+proxy work and pass-05 generic-domain/default-port fixes remain historical
+accepted evidence and were not reopened. Do not silently revive historical
+qualification counts.
 
 The current corrective boundary derives one monotonic request deadline for
 multi-phase HTTP/HTTPS proxy setup. `Proxy(headers=...)` remains an explicit

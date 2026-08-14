@@ -4,10 +4,10 @@ This record is the exact-SHA-bound status for the HTTPX 0.28.1 compatibility
 facade. Historical phase and corrective-pass records remain in the git history
 and referenced plans; counts below are only from the runs named here.
 
-## Current corrective pass — pass 06 IPv6 closure pending
+## Current corrective pass — pass 06 IPv6 closure qualified
 
-Current designation: **Stage C candidate; final IPv6 `NO_PROXY` closure pending**
-for the documented Python 3.10+ asyncio-supported HTTPX 0.28.1 surface.
+Current designation: **Stage C qualified** for the documented Python 3.10+
+asyncio-supported HTTPX 0.28.1 surface.
 
 Qualification was reopened from exact pass-05 qualified SHA
 `6c1013a554483f51023a0b7d534198b1c0a9229a`. Pass-05 evidence below remains
@@ -16,9 +16,9 @@ is limited to IPv6 environment-form parity and completion of route/pre-dispatch
 evidence. It does not reopen pass-04 timeout/runtime/proxy corrections or the
 pass-05 generic-domain and default-port fixes.
 
-No pass-06 executable or test correction is qualified yet. The profile is
-intentionally `stage-c-candidate` with status
-`final-ipv6-no-proxy-closure-pending` until all pass-06 gates complete.
+Pass 06 qualification is bound to executable/evidence SHA
+`516d517542b1ed23dfcb31c053c53cdc363cf05b`, qualified on 2026-08-14. Only
+documentation and status records follow that frozen executable SHA.
 
 Pass-04 timeout sentinel/runtime-ownership/proxy corrections remain accepted
 and are not being reopened. Those corrections keep direct/UDS/H3 read budgets
@@ -37,12 +37,21 @@ Evidence bound to the exact SHA:
 - `./scripts/check.sh`: passed, including serialized Rust workspace tests,
   clippy, doctests, extension build, 532 Python behavior tests, and the 130
   test compatibility smoke kernel.
-- Focused corrective suite: **208 passed**, with 6 non-failing deprecation
-  warnings and no failures, skips, or xfails.
+- Focused closure command covering the NO_PROXY, environment, timeout, and
+  proxy differential suites: **146 passed**, with no failures, skips, or
+  xfails. Native `proxy::tests` also passed **80 tests**. IPv6 loopback was
+  available, and malformed-form rows ran without capability skips.
 - Full pinned compatibility command: three consecutive clean runs, each
-  **1599 passed**, in **129.58s**, **129.88s**, and **131.63s**, with 11
+  **1623 passed**, in **151.69s**, **152.89s**, and **149.86s**, with 11
   non-failing warnings and no skips or xfails. IPv6 loopback was available;
   no capability-based skips were used.
+- IPv6 truth-table evidence matches HTTPX 0.28.1: bare `::1` bypasses;
+  bare `::1:8080` and synthetic `2001:db8::1` are accepted and route through
+  the proxy for the loopback target; `[::1]`, `[::1]:8080`, `::1/128`,
+  `[::1]/128`, and `2001:db8::1/128` fail pre-dispatch with `InvalidURL` and
+  zero origin/proxy requests. Generic bare/leading-dot domain, near-match,
+  explicit-port, default-port, scheme-qualified, and IPv4 CIDR-looking route
+  evidence also passed.
 - API oracle: **71** allowed matches, 0 unexplained, 0 stale, and 0
   resolved-in-active differences; the manifest is valid.
 - Documentation examples and internal links: passed (122 Python blocks across
@@ -53,16 +62,17 @@ Evidence bound to the exact SHA:
   or skipped required suites (`respx` 5/5, `httpx-sse` 4/4, `httpx-auth` 5/5,
   `httpx-ws` 4/4). Its reported pip-check dependency warnings are diagnostic
   only; behavioral suites passed. The candidate wheel is SHA-256
-  `73af9a8e55d9c26a04fe0ea4cf881818361d9399ac98490d08928a162ec3790a` and
+  `3a64c303b319fa26234cc872c335c081d0c9b3f77a7c52bc63bc5f2cc2d10a2a` and
   the controlled replacement wheel is
-  `11914ce75c418d2c75acce35d12973087543b1a8a7ba4dbb9daf827c05ff2f7f`.
+  `a7507fe4fb76693c1ed5022012f396c77f86b5853c9926949341c333bfbe0649`.
 
 - Explicit serialized `cargo test --workspace --all-features` passed with
-  **942 tests** across 28 suites. Documentation checks passed: 122 Python
-  blocks across 55 Markdown files, all internal links, all-features rustdoc,
-  and core doctests. The canonical `./scripts/check.sh` routine gate also
-  passed on this SHA.
-- Remote routine CI passed on documentation commit `d732453f1a3bfc3ae6a25b0bd70cd43179df02f9`: workflow run `31816676651`, job `94819916316`, completed in 4m44s.
+  **942 non-doctest tests** across the workspace plus 11 core doctests.
+  Documentation checks passed: 122 Python blocks across 55 Markdown files,
+  all internal links, all-features rustdoc, and core doctests. The canonical
+  `./scripts/check.sh` routine gate also passed on this SHA.
+- Remote routine CI is supplementary and will be recorded after the pushed
+  documentation/status descendant is observed.
 
 Retained bounded differences are unchanged: non-empty `Proxy(headers=...)`
 is rejected at conversion, arbitrary Python `ssl_context` objects are not
