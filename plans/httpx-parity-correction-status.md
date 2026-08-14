@@ -4,17 +4,21 @@ This record is the exact-SHA-bound status for the HTTPX 0.28.1 compatibility
 facade. Historical phase and corrective-pass records remain in the git history
 and referenced plans; counts below are only from the runs named here.
 
-## Current corrective pass — pass 05 qualified
+## Current corrective pass — pass 06 IPv6 closure pending
 
-Current designation: **Stage C qualified** for the documented Python 3.10+
-asyncio-supported HTTPX 0.28.1 surface.
+Current designation: **Stage C candidate; final IPv6 `NO_PROXY` closure pending**
+for the documented Python 3.10+ asyncio-supported HTTPX 0.28.1 surface.
 
-Qualification was reopened from executable SHA
-`64a1e2c3f3cea7ddc6eeabcd85a67a4d7a17cb26` before pass 05 corrections. The
-final qualification is bound to exact executable SHA
-`6c1013a554483f51023a0b7d534198b1c0a9229a`, which includes the final
-NO_PROXY implementation, differential tests, allowlist, and downstream
-verification-script isolation fix.
+Qualification was reopened from exact pass-05 qualified SHA
+`6c1013a554483f51023a0b7d534198b1c0a9229a`. Pass-05 evidence below remains
+historical and auditable, but is not current qualification evidence. Pass 06
+is limited to IPv6 environment-form parity and completion of route/pre-dispatch
+evidence. It does not reopen pass-04 timeout/runtime/proxy corrections or the
+pass-05 generic-domain and default-port fixes.
+
+No pass-06 executable or test correction is qualified yet. The profile is
+intentionally `stage-c-candidate` with status
+`final-ipv6-no-proxy-closure-pending` until all pass-06 gates complete.
 
 Pass-04 timeout sentinel/runtime-ownership/proxy corrections remain accepted
 and are not being reopened. Those corrections keep direct/UDS/H3 read budgets
