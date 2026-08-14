@@ -4,18 +4,17 @@ This record is the exact-SHA-bound status for the HTTPX 0.28.1 compatibility
 facade. Historical phase and corrective-pass records remain in the git history
 and referenced plans; counts below are only from the runs named here.
 
-## Current corrective pass — qualification reopened for pass 05
+## Current corrective pass — pass 05 qualified
 
-Current designation: **Stage C candidate; final NO_PROXY closure pending** for
-the documented Python 3.10+ asyncio-supported HTTPX 0.28.1 surface.
+Current designation: **Stage C qualified** for the documented Python 3.10+
+asyncio-supported HTTPX 0.28.1 surface.
 
 Qualification was reopened from executable SHA
-`64a1e2c3f3cea7ddc6eeabcd85a67a4d7a17cb26` for pass 05. The previous record
-did not fully cover ordinary-domain and default-port `NO_PROXY` semantics, and
-verification-script changes landed after that recorded executable SHA. The
-three `1564 passed` full-suite runs, API-oracle result, downstream 4/4 result,
-and candidate wheel hash below remain historical pass-04 evidence until a new
-exact-SHA qualification is completed.
+`64a1e2c3f3cea7ddc6eeabcd85a67a4d7a17cb26` before pass 05 corrections. The
+final qualification is bound to exact executable SHA
+`6c1013a554483f51023a0b7d534198b1c0a9229a`, which includes the final
+NO_PROXY implementation, differential tests, allowlist, and downstream
+verification-script isolation fix.
 
 Pass-04 timeout sentinel/runtime-ownership/proxy corrections remain accepted
 and are not being reopened. Those corrections keep direct/UDS/H3 read budgets
@@ -34,11 +33,14 @@ Evidence bound to the exact SHA:
 - `./scripts/check.sh`: passed, including serialized Rust workspace tests,
   clippy, doctests, extension build, 532 Python behavior tests, and the 130
   test compatibility smoke kernel.
+- Focused corrective suite: **208 passed**, with 6 non-failing deprecation
+  warnings and no failures, skips, or xfails.
 - Full pinned compatibility command: three consecutive clean runs, each
-  **1564 passed**, in **148.78s**, **128.20s**, and **130.62s**, with 11
-  non-failing warnings.
-- API oracle: 0 unexplained, 0 stale, and 0 resolved-in-active differences;
-  the manifest is valid.
+  **1599 passed**, in **129.58s**, **129.88s**, and **131.63s**, with 11
+  non-failing warnings and no skips or xfails. IPv6 loopback was available;
+  no capability-based skips were used.
+- API oracle: **71** allowed matches, 0 unexplained, 0 stale, and 0
+  resolved-in-active differences; the manifest is valid.
 - Documentation examples and internal links: passed (122 Python blocks across
   55 Markdown files; all internal links valid).
 - `cargo doc --workspace --all-features --no-deps` and core doctests: passed;
@@ -46,8 +48,16 @@ Evidence bound to the exact SHA:
 - Required downstream runner: **4/4 packages passed**, with no failed, error,
   or skipped required suites (`respx` 5/5, `httpx-sse` 4/4, `httpx-auth` 5/5,
   `httpx-ws` 4/4). Its reported pip-check dependency warnings are diagnostic
-  only; behavioral suites passed. The refreshed candidate wheel is SHA-256
-  `69c177d4d7fa0384da99a2a3fed316f544804cc3945fa398e65f92d959b543ef`.
+  only; behavioral suites passed. The candidate wheel is SHA-256
+  `73af9a8e55d9c26a04fe0ea4cf881818361d9399ac98490d08928a162ec3790a` and
+  the controlled replacement wheel is
+  `11914ce75c418d2c75acce35d12973087543b1a8a7ba4dbb9daf827c05ff2f7f`.
+
+- Explicit serialized `cargo test --workspace --all-features` passed with
+  **942 tests** across 28 suites. Documentation checks passed: 122 Python
+  blocks across 55 Markdown files, all internal links, all-features rustdoc,
+  and core doctests. The canonical `./scripts/check.sh` routine gate also
+  passed on this SHA.
 
 Retained bounded differences are unchanged: non-empty `Proxy(headers=...)`
 is rejected at conversion, arbitrary Python `ssl_context` objects are not
