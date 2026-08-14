@@ -58,6 +58,7 @@ Evidence bound to the exact SHA:
   blocks across 55 Markdown files, all internal links, all-features rustdoc,
   and core doctests. The canonical `./scripts/check.sh` routine gate also
   passed on this SHA.
+- Remote routine CI passed on documentation commit `d732453f1a3bfc3ae6a25b0bd70cd43179df02f9`: workflow run `31816676651`, job `94819916316`, completed in 4m44s.
 
 Retained bounded differences are unchanged: non-empty `Proxy(headers=...)`
 is rejected at conversion, arbitrary Python `ssl_context` objects are not
