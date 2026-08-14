@@ -4,18 +4,26 @@ This record is the exact-SHA-bound status for the HTTPX 0.28.1 compatibility
 facade. Historical phase and corrective-pass records remain in the git history
 and referenced plans; counts below are only from the runs named here.
 
-## Current corrective pass — qualified
+## Current corrective pass — qualification reopened for pass 05
 
-Current designation: **Stage C qualified** for the documented Python 3.10+
-asyncio-supported HTTPX 0.28.1 surface.
+Current designation: **Stage C candidate; final NO_PROXY closure pending** for
+the documented Python 3.10+ asyncio-supported HTTPX 0.28.1 surface.
 
-The final executable qualification SHA is
-`64a1e2c3f3cea7ddc6eeabcd85a67a4d7a17cb26`. The pass-04 corrections keep
-direct/UDS/H3 read budgets on response-body chunks after transport setup,
-preserve HTTPX's omitted-versus-explicit-`None` timeout phases, stabilize
-NO_PROXY and proxy endpoint matrices, and keep Python response and streaming
-body work on the runtime that owns the transport. Live sync streams retain a
-runtime lease so they remain readable after `Client.close()`.
+Qualification was reopened from executable SHA
+`64a1e2c3f3cea7ddc6eeabcd85a67a4d7a17cb26` for pass 05. The previous record
+did not fully cover ordinary-domain and default-port `NO_PROXY` semantics, and
+verification-script changes landed after that recorded executable SHA. The
+three `1564 passed` full-suite runs, API-oracle result, downstream 4/4 result,
+and candidate wheel hash below remain historical pass-04 evidence until a new
+exact-SHA qualification is completed.
+
+Pass-04 timeout sentinel/runtime-ownership/proxy corrections remain accepted
+and are not being reopened. Those corrections keep direct/UDS/H3 read budgets
+on response-body chunks after transport setup, preserve HTTPX's
+omitted-versus-explicit-`None` timeout phases, stabilize proxy endpoint
+matrices, and keep Python response and streaming body work on the runtime that
+owns the transport. Live sync streams retain a runtime lease so they remain
+readable after `Client.close()`.
 
 Environment: CPython 3.12.3, pytest 9.1.1, pytest-asyncio 1.4.0,
 `httpx==0.28.1`, `httpcore==1.0.9`, and `socksio==1.0.0`. IPv6 loopback was
