@@ -108,28 +108,28 @@ fn apply_socket_option(
     match opt.kind {
         // TCP_NODELAY: value is a 4-byte int (non-zero = enabled).
         Some(SocketOptionKind::TcpNoDelay) => {
-            let val = i32::from_ne_bytes([opt.value[0], opt.value[1], opt.value[2], opt.value[3]]);
+            let val = i32::from_le_bytes([opt.value[0], opt.value[1], opt.value[2], opt.value[3]]);
             socket
                 .set_nodelay(val != 0)
                 .map_err(|e| Error::Connect(format!("failed to set TCP_NODELAY: {e}")))?;
         }
         // SO_KEEPALIVE: value is a 4-byte int (non-zero = enabled).
         Some(SocketOptionKind::KeepAlive) => {
-            let val = i32::from_ne_bytes([opt.value[0], opt.value[1], opt.value[2], opt.value[3]]);
+            let val = i32::from_le_bytes([opt.value[0], opt.value[1], opt.value[2], opt.value[3]]);
             socket
                 .set_keepalive(val != 0)
                 .map_err(|e| Error::Connect(format!("failed to set SO_KEEPALIVE: {e}")))?;
         }
         // SO_RCVBUF: value is a 4-byte int (buffer size in bytes).
         Some(SocketOptionKind::ReceiveBuffer) => {
-            let val = u32::from_ne_bytes([opt.value[0], opt.value[1], opt.value[2], opt.value[3]]);
+            let val = u32::from_le_bytes([opt.value[0], opt.value[1], opt.value[2], opt.value[3]]);
             socket
                 .set_recv_buffer_size(val)
                 .map_err(|e| Error::Connect(format!("failed to set SO_RCVBUF: {e}")))?;
         }
         // SO_SNDBUF: value is a 4-byte int (buffer size in bytes).
         Some(SocketOptionKind::SendBuffer) => {
-            let val = u32::from_ne_bytes([opt.value[0], opt.value[1], opt.value[2], opt.value[3]]);
+            let val = u32::from_le_bytes([opt.value[0], opt.value[1], opt.value[2], opt.value[3]]);
             socket
                 .set_send_buffer_size(val)
                 .map_err(|e| Error::Connect(format!("failed to set SO_SNDBUF: {e}")))?;

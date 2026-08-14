@@ -408,6 +408,15 @@ mod tests {
     }
 
     #[test]
+    fn build_redirect_rejects_userinfo() {
+        let req = Request::new(Method::GET, Url::parse("https://example.com/a").unwrap());
+        let error =
+            build_redirect_request(&req, StatusCode::FOUND, "https://user:pass@example.com/b")
+                .unwrap_err();
+        assert!(matches!(error, Error::InvalidRedirectLocation(_)));
+    }
+
+    #[test]
     fn build_redirect_unsupported_scheme_errors() {
         let req = Request::new(Method::GET, Url::parse("https://example.com/a").unwrap());
 

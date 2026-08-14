@@ -162,8 +162,17 @@ impl EggfetchClient {
             }
 
             if let Some(body_str) = &body {
-                let body_c = std::ffi::CString::new(body_str.as_str())
-                    .map_err(|e| napi::Error::from_reason(format!("invalid body string: {e}")))?;
+                let body_c = match std::ffi::CString::new(body_str.as_str()) {
+                    Ok(body_c) => body_c,
+                    Err(e) => {
+                        unsafe {
+                            eggfetch_ffi::eggfetch_request_free(req);
+                        }
+                        return Err(napi::Error::from_reason(format!(
+                            "invalid body string: {e}"
+                        )));
+                    }
+                };
                 unsafe {
                     eggfetch_ffi::eggfetch_request_body_str(req, body_c.as_ptr());
                 }

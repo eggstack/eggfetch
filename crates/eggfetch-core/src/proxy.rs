@@ -183,6 +183,10 @@ impl NoProxy {
             }
         }
 
+        if let Ok(address) = entry.parse::<std::net::Ipv6Addr>() {
+            return Ok(NoProxyRule::Host(address.to_string()));
+        }
+
         if let Some((network, prefix)) = entry.split_once('/') {
             let network = network.parse::<std::net::IpAddr>().map_err(|_| {
                 Error::InvalidProxyUrl(format!("invalid IP network in NO_PROXY entry: {entry}"))
@@ -746,9 +750,7 @@ impl Proxy {
 
         // Strip userinfo from the stored URI to avoid leaking credentials.
         let mut uri = self.uri.clone();
-        if uri.username().is_empty() && uri.password().is_none() {
-            // No credentials to strip.
-        } else {
+        if !uri.username().is_empty() || uri.password().is_some() {
             let _ = uri.set_username("");
             let _ = uri.set_password(None);
         }
@@ -1410,6 +1412,12 @@ mod tests {
     #[test]
     fn httpx_bare_ipv6_no_proxy_is_not_host_port() {
         let np = NoProxy::parse_httpx("::1").unwrap();
+        assert!(np.should_bypass(&url::Url::parse("http://[::1]/").unwrap()));
+    }
+
+    #[test]
+    fn bare_ipv6_no_proxy_matches() {
+        let np = NoProxy::parse("::1").unwrap();
         assert!(np.should_bypass(&url::Url::parse("http://[::1]/").unwrap()));
     }
 

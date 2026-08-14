@@ -17,7 +17,9 @@ pub const SENSITIVE_HEADERS: &[&str] = &[
 
 /// Returns true if the given header name is considered sensitive.
 pub fn is_sensitive_header(name: &str) -> bool {
-    SENSITIVE_HEADERS.contains(&name)
+    SENSITIVE_HEADERS
+        .iter()
+        .any(|sensitive| sensitive.eq_ignore_ascii_case(name))
 }
 
 /// Clone a [`HeaderMap`], replacing all sensitive header values with
@@ -70,6 +72,7 @@ mod tests {
     #[test]
     fn sensitive_headers_list() {
         assert!(is_sensitive_header("authorization"));
+        assert!(is_sensitive_header("Authorization"));
         assert!(is_sensitive_header("proxy-authorization"));
         assert!(is_sensitive_header("cookie"));
         assert!(is_sensitive_header("set-cookie"));

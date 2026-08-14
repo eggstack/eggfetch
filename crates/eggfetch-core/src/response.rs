@@ -326,6 +326,8 @@ struct LineStream {
     buffer: BytesMut,
 }
 
+const MAX_LINE_LENGTH: usize = 1024 * 1024;
+
 impl LineStream {
     fn new(stream: BoxBytesStream) -> Self {
         Self {
@@ -355,6 +357,28 @@ impl Stream for LineStream {
         match Pin::new(&mut self.stream).poll_next(cx) {
             Poll::Ready(Some(Ok(chunk))) => {
                 self.buffer.extend_from_slice(&chunk);
+                if let Some(pos) = self.buffer.iter().position(|&b| b == b'\n') {
+                    if pos > MAX_LINE_LENGTH {
+                        return Poll::Ready(Some(Err(crate::error::Error::Body(format!(
+                            "response line exceeded maximum length of {MAX_LINE_LENGTH} bytes"
+                        )))));
+                    }
+                    let line_bytes = self.buffer.split_to(pos + 1);
+                    let mut line = &line_bytes[..line_bytes.len() - 1];
+                    if line.ends_with(b"\r") {
+                        line = &line[..line.len() - 1];
+                    }
+                    let line = String::from_utf8(line.to_vec())
+                        .map_err(|e| crate::error::Error::Body(e.to_string()));
+                    return Poll::Ready(Some(line));
+                }
+
+                if self.buffer.len() > MAX_LINE_LENGTH {
+                    return Poll::Ready(Some(Err(crate::error::Error::Body(format!(
+                        "response line exceeded maximum length of {MAX_LINE_LENGTH} bytes"
+                    )))));
+                }
+
                 // Re-schedule to check for newlines in the updated buffer.
                 cx.waker().wake_by_ref();
                 Poll::Pending
@@ -364,6 +388,10 @@ impl Stream for LineStream {
                 // Stream ended; flush remaining buffer as a final line.
                 if self.buffer.is_empty() {
                     Poll::Ready(None)
+                } else if self.buffer.len() > MAX_LINE_LENGTH {
+                    Poll::Ready(Some(Err(crate::error::Error::Body(format!(
+                        "response line exceeded maximum length of {MAX_LINE_LENGTH} bytes"
+                    )))))
                 } else {
                     let remaining = std::mem::take(&mut self.buffer);
                     let mut line = &remaining[..remaining.len()];
@@ -456,6 +484,23 @@ mod tests {
         );
         let bytes = resp.bytes().await.unwrap();
         assert_eq!(bytes, "hello world");
+    }
+
+    #[tokio::test]
+    async fn response_text_lines_rejects_unbounded_line() {
+        let stream = Box::pin(futures_util::stream::iter(vec![Ok(Bytes::from(vec![
+            b'a'; MAX_LINE_LENGTH + 1
+        ]))]));
+        let mut response = Response::new(
+            StatusCode::OK,
+            Version::HTTP_11,
+            HeaderMap::new(),
+            Url::parse("http://example.com").unwrap(),
+            ResponseBody::streaming(stream),
+        );
+        let mut lines = response.text_lines().unwrap();
+        let error = lines.next().await.unwrap().unwrap_err();
+        assert!(matches!(error, crate::error::Error::Body(_)));
     }
 
     #[tokio::test]

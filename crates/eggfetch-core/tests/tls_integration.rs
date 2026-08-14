@@ -192,6 +192,28 @@ async fn tls_version_policy() {
 }
 
 #[tokio::test]
+async fn tls13_only_client_rejects_tls12_only_server() {
+    let ca = CertAuthority::new();
+    let server = TlsTestServer::start_with_versions(
+        &ca,
+        &["localhost", "127.0.0.1"],
+        &[&rustls::version::TLS12],
+    )
+    .await;
+    let client = Client::builder()
+        .tls_config(
+            TlsConfig::builder()
+                .ca_certificate_pem(&ca.cert_pem())
+                .unwrap()
+                .min_tls_version(TlsVersion::Tls13)
+                .max_tls_version(TlsVersion::Tls13)
+                .build(),
+        )
+        .build();
+    assert!(client.get(&server.url()).unwrap().send().await.is_err());
+}
+
+#[tokio::test]
 async fn no_fallback_after_validation_failure() {
     let ca = CertAuthority::new();
     let server = TlsTestServer::start(&ca, &["wrong-hostname"]).await;

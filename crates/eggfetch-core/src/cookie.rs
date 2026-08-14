@@ -209,12 +209,8 @@ impl CookieJar {
     /// Panics if the internal lock is poisoned.
     pub fn update_from_response(&self, response_url: &Url, set_cookie_headers: &[String]) {
         let response_host = response_url.host_str().unwrap_or("");
-        let is_secure_url = response_url.scheme() == "https";
-
         for header_value in set_cookie_headers {
-            if let Some(cookie) =
-                parse_set_cookie(header_value, response_url, response_host, is_secure_url)
-            {
+            if let Some(cookie) = parse_set_cookie(header_value, response_url, response_host) {
                 if cookie.persistent {
                     if let Some(expires) = cookie.expires {
                         let now = SystemTime::now();
@@ -271,11 +267,12 @@ impl CookieJar {
             }
         });
 
-        // Deduplicate by name: keep only the best match per name.
+        // Deduplicate by case-insensitive name and path. The same cookie name
+        // may legitimately be sent for multiple matching paths.
         let mut seen = std::collections::HashSet::new();
         let mut result = Vec::new();
         for c in &matches {
-            if seen.insert(c.name.clone()) {
+            if seen.insert((c.name.to_ascii_lowercase(), c.path.clone())) {
                 result.push(format!("{}={}", c.name, c.value));
             }
         }
@@ -514,33 +511,16 @@ fn default_cookie_path(url_path: &str) -> String {
     if url_path.is_empty() || !url_path.starts_with('/') {
         return "/".to_owned();
     }
-    // Count slashes to check if there's more than one.
-    let slash_count = url_path.bytes().filter(|&b| b == b'/').count();
-    if slash_count <= 1 {
-        return "/".to_owned();
-    }
-    // Find the last "/" and return everything before it.
-    if let Some(last_pos) = url_path.rfind('/') {
-        let path = &url_path[..last_pos];
-        if path.is_empty() {
-            "/".to_owned()
-        } else {
-            path.to_owned()
-        }
-    } else {
-        "/".to_owned()
+    match url_path.rfind('/') {
+        Some(last_pos) if last_pos > 0 => url_path[..last_pos].to_owned(),
+        _ => "/".to_owned(),
     }
 }
 
 /// Parse a single `Set-Cookie` header value into a `Cookie`.
 ///
 /// Returns `None` if the header is invalid or should be rejected.
-fn parse_set_cookie(
-    header_value: &str,
-    response_url: &Url,
-    response_host: &str,
-    is_secure_url: bool,
-) -> Option<Cookie> {
+fn parse_set_cookie(header_value: &str, response_url: &Url, response_host: &str) -> Option<Cookie> {
     let parsed = cookie::Cookie::parse_encoded(header_value).ok()?;
 
     let name = parsed.name().to_owned();
@@ -589,7 +569,7 @@ fn parse_set_cookie(
     let same_site = parsed.same_site().map(SameSite::from);
 
     // Max-Age and Expires handling.
-    let (persistent, expires) = resolve_expiration(&parsed, is_secure_url);
+    let (persistent, expires) = resolve_expiration(&parsed);
 
     Some(Cookie {
         name,
@@ -610,10 +590,7 @@ fn parse_set_cookie(
 ///
 /// Max-Age takes precedence over Expires.
 /// Max-Age <= 0 means the cookie should be deleted (returns expiry in the past).
-fn resolve_expiration(
-    parsed: &cookie::Cookie<'_>,
-    _is_secure_url: bool,
-) -> (bool, Option<SystemTime>) {
+fn resolve_expiration(parsed: &cookie::Cookie<'_>) -> (bool, Option<SystemTime>) {
     if let Some(max_age) = parsed.max_age() {
         let duration_secs = max_age.whole_seconds();
 
@@ -627,8 +604,8 @@ fn resolve_expiration(
         #[allow(clippy::cast_sign_loss)]
         let secs = duration_secs as u64;
         let now = SystemTime::now();
-        let expiry = now + std::time::Duration::from_secs(secs);
-        return (true, Some(expiry));
+        let expiry = now.checked_add(std::time::Duration::from_secs(secs));
+        return (true, expiry);
     }
 
     // No Max-Age: try Expires.
@@ -649,11 +626,10 @@ fn resolve_expiration(
 /// `response_url` is the URL of the response that contained the headers.
 pub fn parse_set_cookie_headers(response_url: &Url, set_cookie_headers: &[String]) -> Vec<Cookie> {
     let response_host = response_url.host_str().unwrap_or("");
-    let is_secure_url = response_url.scheme() == "https";
 
     set_cookie_headers
         .iter()
-        .filter_map(|h| parse_set_cookie(h, response_url, response_host, is_secure_url))
+        .filter_map(|h| parse_set_cookie(h, response_url, response_host))
         .collect()
 }
 
@@ -865,6 +841,19 @@ mod tests {
     }
 
     #[test]
+    fn max_age_overflow_does_not_panic() {
+        let url = make_url("http://example.com/path");
+        let result = std::panic::catch_unwind(|| {
+            parse_set_cookie_headers(
+                &url,
+                &["key=value; Max-Age=99999999999999999999999".to_owned()],
+            )
+        });
+        let cookies = result.expect("an unrepresentable Max-Age must not panic");
+        assert!(cookies.is_empty() || cookies[0].expires().is_none());
+    }
+
+    #[test]
     fn expired_cookie_not_stored() {
         let url = make_url("http://example.com/path");
         // Expires in the past.
@@ -929,8 +918,9 @@ mod tests {
         jar.set(c2);
 
         let header = jar.cookies_for_url(&url).unwrap();
-        // Longer path wins.
-        assert_eq!(header, "key=long");
+        // Longer path is serialized first, while the shorter-path cookie is
+        // retained because it is a distinct cookie key.
+        assert_eq!(header, "key=long; key=short");
     }
 
     #[test]

@@ -17,16 +17,16 @@ use crate::timeout::TimeoutPhase;
 pub(crate) fn effective_timeout(
     deadline: Option<std::time::Instant>,
     configured: Option<std::time::Duration>,
+    now: std::time::Instant,
 ) -> Result<Option<std::time::Duration>> {
     let total = match deadline {
-        Some(deadline) => Some(
-            deadline
-                .checked_duration_since(std::time::Instant::now())
-                .ok_or(Error::Timeout {
-                    phase: TimeoutPhase::Total,
-                    elapsed: std::time::Duration::ZERO,
-                })?,
-        ),
+        Some(deadline) if deadline > now => Some(deadline.duration_since(now)),
+        Some(_) => {
+            return Err(Error::Timeout {
+                phase: TimeoutPhase::Total,
+                elapsed: std::time::Duration::ZERO,
+            });
+        }
         None => None,
     };
 
@@ -41,7 +41,10 @@ pub(crate) fn effective_timeout(
 pub(crate) struct ProxyRequestContext<'a> {
     pub(crate) remaining_total: Option<std::time::Duration>,
     pub(crate) deadline: Option<std::time::Instant>,
+    pub(crate) now: std::time::Instant,
     pub(crate) connect_timeout: Option<std::time::Duration>,
+    pub(crate) proxy_connect_timeout: Option<std::time::Duration>,
+    pub(crate) proxy_tls_timeout: Option<std::time::Duration>,
     pub(crate) write_timeout: Option<std::time::Duration>,
     pub(crate) read_timeout: Option<std::time::Duration>,
     pub(crate) tls_config: Option<&'a crate::tls::TlsConfig>,
@@ -146,8 +149,10 @@ pub(crate) async fn send_proxy_request(
 /// Connect to the proxy, returning a buffered TCP stream.
 pub(crate) async fn connect_to_proxy(
     proxy_config: &ProxyConfig,
-    connect_timeout: Option<std::time::Duration>,
+    proxy_connect_timeout: Option<std::time::Duration>,
+    proxy_tls_timeout: Option<std::time::Duration>,
     deadline: Option<std::time::Instant>,
+    now: std::time::Instant,
     tls_config: Option<&crate::tls::TlsConfig>,
 ) -> Result<tokio::io::BufReader<ProxyIo>> {
     let proxy_host = proxy_config.host().unwrap_or("127.0.0.1");
@@ -163,7 +168,7 @@ pub(crate) async fn connect_to_proxy(
         Ok::<_, Error>(stream)
     };
 
-    let connect_timeout = effective_timeout(deadline, connect_timeout)?;
+    let connect_timeout = effective_timeout(deadline, proxy_connect_timeout, now)?;
     let stream = match connect_timeout {
         Some(dur) => match tokio::time::timeout(dur, connect_future).await {
             Ok(Ok(s)) => s,
@@ -193,7 +198,7 @@ pub(crate) async fn connect_to_proxy(
         let domain = rustls::pki_types::ServerName::try_from(proxy_host.to_owned())
             .map_err(|e| Error::Tls(format!("invalid proxy TLS server name: {e}")))?;
         let handshake = connector.connect(domain, stream);
-        let tls_timeout = effective_timeout(deadline, connect_timeout)?;
+        let tls_timeout = effective_timeout(deadline, proxy_tls_timeout, now)?;
         let tls_stream = match tls_timeout {
             Some(dur) => match tokio::time::timeout(dur, handshake).await {
                 Ok(Ok(stream)) => stream,
@@ -230,8 +235,10 @@ async fn send_http_proxy_request(
 ) -> Result<Response> {
     let mut stream = connect_to_proxy(
         proxy_config,
-        ctx.connect_timeout,
+        ctx.proxy_connect_timeout,
+        ctx.proxy_tls_timeout,
         ctx.deadline,
+        ctx.now,
         ctx.tls_config,
     )
     .await?;
@@ -247,7 +254,7 @@ async fn send_http_proxy_request(
         proxy_config.auth(),
         body,
     );
-    match effective_timeout(ctx.deadline, ctx.write_timeout)? {
+    match effective_timeout(ctx.deadline, ctx.write_timeout, ctx.now)? {
         Some(duration) => {
             tokio::time::timeout(duration, write)
                 .await
@@ -262,7 +269,7 @@ async fn send_http_proxy_request(
     // Read the response from the proxy.
     let read = read_proxy_response(&mut stream);
     let (status, resp_headers, initial_buf) =
-        match effective_timeout(ctx.deadline, ctx.read_timeout)? {
+        match effective_timeout(ctx.deadline, ctx.read_timeout, ctx.now)? {
             Some(duration) => {
                 tokio::time::timeout(duration, read)
                     .await
@@ -434,7 +441,7 @@ async fn read_bounded_line<S: tokio::io::AsyncRead + Unpin>(
 pub(crate) async fn read_proxy_response<S: tokio::io::AsyncRead + Unpin>(
     stream: &mut tokio::io::BufReader<S>,
 ) -> Result<(u16, Vec<(String, String)>, Vec<u8>)> {
-    use tokio::io::AsyncReadExt;
+    use tokio::io::AsyncBufReadExt;
 
     const MAX_STATUS_LINE_LEN: usize = 4096;
     const MAX_HEADER_COUNT: usize = 100;
@@ -493,8 +500,7 @@ pub(crate) async fn read_proxy_response<S: tokio::io::AsyncRead + Unpin>(
     if !buf_ref.is_empty() {
         initial_buf.extend_from_slice(buf_ref);
         let consumed = buf_ref.len();
-        let mut discard = vec![0u8; consumed];
-        let _ = stream.read(&mut discard).await;
+        stream.consume(consumed);
     }
 
     Ok((status_code, headers, initial_buf))
@@ -634,15 +640,16 @@ impl<S: tokio::io::AsyncRead + Unpin> futures_core::Stream for ProxyResponseStre
 
 #[cfg(test)]
 mod tests {
-    use super::effective_timeout;
+    use super::{effective_timeout, read_proxy_response};
     use crate::error::Error;
     use crate::timeout::TimeoutPhase;
     use std::time::{Duration, Instant};
 
     #[test]
     fn effective_timeout_uses_the_smaller_phase_or_total_budget() {
-        let deadline = Instant::now() + Duration::from_secs(2);
-        let timeout = effective_timeout(Some(deadline), Some(Duration::from_secs(5)))
+        let now = Instant::now();
+        let deadline = now + Duration::from_secs(2);
+        let timeout = effective_timeout(Some(deadline), Some(Duration::from_secs(5)), now)
             .expect("deadline is in the future");
         assert!(timeout.is_some_and(|value| value <= Duration::from_secs(2)));
     }
@@ -650,20 +657,22 @@ mod tests {
     #[test]
     fn effective_timeout_uses_phase_budget_without_total() {
         assert_eq!(
-            effective_timeout(None, Some(Duration::from_secs(3))).expect("phase budget is valid"),
+            effective_timeout(None, Some(Duration::from_secs(3)), Instant::now())
+                .expect("phase budget is valid"),
             Some(Duration::from_secs(3))
         );
     }
 
     #[test]
     fn expired_total_budget_is_classified_as_total() {
+        let now = Instant::now();
         let error = effective_timeout(
             Some(
-                Instant::now()
-                    .checked_sub(Duration::from_millis(1))
+                now.checked_sub(Duration::from_millis(1))
                     .expect("a millisecond is representable before now"),
             ),
             Some(Duration::from_secs(3)),
+            now,
         )
         .expect_err("expired total must fail before the phase starts");
         assert!(matches!(
@@ -673,5 +682,27 @@ mod tests {
                 ..
             }
         ));
+    }
+
+    #[test]
+    fn effective_timeout_rejects_deadline_at_now() {
+        let now = Instant::now();
+        let error = effective_timeout(Some(now), Some(Duration::from_secs(3)), now).unwrap_err();
+        assert!(matches!(
+            error,
+            Error::Timeout {
+                phase: TimeoutPhase::Total,
+                ..
+            }
+        ));
+    }
+
+    #[tokio::test]
+    async fn read_proxy_response_returns_buffered_body_bytes() {
+        let mut reader = tokio::io::BufReader::new(std::io::Cursor::new(
+            b"HTTP/1.1 200 OK\r\n\r\nbody".to_vec(),
+        ));
+        let (_, _, initial) = read_proxy_response(&mut reader).await.unwrap();
+        assert_eq!(initial, b"body");
     }
 }

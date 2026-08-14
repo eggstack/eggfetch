@@ -24,8 +24,7 @@ pin_project! {
     pub struct ReadTimeoutStream<S> {
         #[pin]
         inner: S,
-        #[pin]
-        deadline: Sleep,
+        deadline: Option<Pin<Box<Sleep>>>,
         duration: Duration,
         started: bool,
     }
@@ -36,7 +35,7 @@ impl<S> ReadTimeoutStream<S> {
     pub(crate) fn new(stream: S, duration: Duration) -> Self {
         Self {
             inner: stream,
-            deadline: tokio::time::sleep_until(Instant::now() + duration),
+            deadline: None,
             duration,
             started: false,
         }
@@ -57,7 +56,7 @@ where
         // synchronous Python adapter after headers have arrived.
         if !*me.started {
             *me.started = true;
-            me.deadline.as_mut().reset(Instant::now() + *me.duration);
+            *me.deadline = Some(Box::pin(tokio::time::sleep(*me.duration)));
         }
 
         // Poll the inner stream first. A ready chunk always wins over a
@@ -65,7 +64,9 @@ where
         match me.inner.poll_next(cx) {
             Poll::Ready(Some(Ok(bytes))) => {
                 // Chunk arrived; reset the deadline.
-                me.deadline.as_mut().reset(Instant::now() + *me.duration);
+                if let Some(deadline) = me.deadline.as_mut() {
+                    deadline.as_mut().reset(Instant::now() + *me.duration);
+                }
                 return Poll::Ready(Some(Ok(bytes)));
             }
             Poll::Ready(Some(Err(e))) => {
@@ -80,12 +81,15 @@ where
         }
 
         // Inner stream is pending. Check the deadline.
-        match me.deadline.poll(cx) {
-            Poll::Ready(()) => Poll::Ready(Some(Err(Error::Timeout {
-                phase: TimeoutPhase::Read,
-                elapsed: *me.duration,
-            }))),
-            Poll::Pending => Poll::Pending,
+        match me.deadline.as_mut() {
+            Some(deadline) => match deadline.as_mut().poll(cx) {
+                Poll::Ready(()) => Poll::Ready(Some(Err(Error::Timeout {
+                    phase: TimeoutPhase::Read,
+                    elapsed: *me.duration,
+                }))),
+                Poll::Pending => Poll::Pending,
+            },
+            None => Poll::Pending,
         }
     }
 }

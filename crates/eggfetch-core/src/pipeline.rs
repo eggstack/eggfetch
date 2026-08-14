@@ -811,6 +811,8 @@ pub(crate) async fn send_single_request(
         .map(|proxy| inner.socks_client(proxy))
         .transpose()?;
 
+    #[cfg(feature = "proxy")]
+    let proxy_now = std::time::Instant::now();
     let response = match effective_proxy {
         #[cfg(feature = "proxy")]
         Some(ref proxy_config) => {
@@ -829,7 +831,10 @@ pub(crate) async fn send_single_request(
                 &crate::transport::proxy::ProxyRequestContext {
                     remaining_total,
                     deadline: timeout.total.map(|total| started + total),
+                    now: proxy_now,
                     connect_timeout: timeout.connect,
+                    proxy_connect_timeout: timeout.connect,
+                    proxy_tls_timeout: timeout.connect,
                     write_timeout: timeout.write,
                     read_timeout: timeout.read,
                     tls_config: inner.config.tls_config.as_ref(),

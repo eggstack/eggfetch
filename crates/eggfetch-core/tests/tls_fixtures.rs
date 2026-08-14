@@ -106,6 +106,19 @@ impl TlsTestServer {
         Self::start_with_config(server_config).await
     }
 
+    pub async fn start_with_versions(
+        ca: &CertAuthority,
+        hostnames: &[&str],
+        versions: &[&'static rustls::SupportedProtocolVersion],
+    ) -> Self {
+        let (cert_der, key_der) = ca.generate_server_cert(hostnames);
+        let server_config = rustls::ServerConfig::builder_with_protocol_versions(versions)
+            .with_no_client_auth()
+            .with_single_cert(vec![cert_der], key_der)
+            .unwrap();
+        Self::start_with_config(server_config).await
+    }
+
     pub async fn start_self_signed(hostnames: &[&str]) -> Self {
         let sans: Vec<String> = hostnames.iter().map(|s| s.to_string()).collect();
         let mut params = rcgen::CertificateParams::new(sans).unwrap();

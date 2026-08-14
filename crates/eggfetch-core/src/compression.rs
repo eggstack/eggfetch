@@ -21,6 +21,7 @@
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::OnceLock;
 
 use crate::body::BoxBytesStream;
 use crate::error::{Error, Result};
@@ -98,33 +99,33 @@ impl ContentCoding {
 /// features. Returns `None` if no compression features are enabled.
 #[must_use]
 pub fn accept_encoding_value() -> Option<&'static str> {
-    // Order matches mainstream client defaults (most common first).
-    #[allow(unused_mut)]
-    let mut parts: Vec<&str> = Vec::new();
+    static VALUE: OnceLock<Option<Box<str>>> = OnceLock::new();
 
-    #[cfg(feature = "compression-gzip")]
-    {
-        parts.push("gzip");
-        parts.push("deflate");
-    }
-    #[cfg(feature = "compression-deflate")]
-    {
-        // Only add deflate if gzip didn't already add it.
-        #[cfg(not(feature = "compression-gzip"))]
-        parts.push("deflate");
-    }
-    #[cfg(feature = "compression-brotli")]
-    parts.push("br");
-    #[cfg(feature = "compression-zstd")]
-    parts.push("zstd");
+    VALUE
+        .get_or_init(|| {
+            // Order matches mainstream client defaults (most common first).
+            #[allow(unused_mut)]
+            let mut parts: Vec<&str> = Vec::new();
 
-    if parts.is_empty() {
-        None
-    } else {
-        // Leak the string for the lifetime of the program. This is
-        // intentional for a small number of static values.
-        Some(Box::leak(parts.join(", ").into_boxed_str()))
-    }
+            #[cfg(feature = "compression-gzip")]
+            {
+                parts.push("gzip");
+                parts.push("deflate");
+            }
+            #[cfg(feature = "compression-deflate")]
+            {
+                // Only add deflate if gzip didn't already add it.
+                #[cfg(not(feature = "compression-gzip"))]
+                parts.push("deflate");
+            }
+            #[cfg(feature = "compression-brotli")]
+            parts.push("br");
+            #[cfg(feature = "compression-zstd")]
+            parts.push("zstd");
+
+            (!parts.is_empty()).then(|| parts.join(", ").into_boxed_str())
+        })
+        .as_deref()
 }
 
 /// Parse a `Content-Encoding` header value into an ordered list of

@@ -161,17 +161,6 @@ impl TlsConfig {
     pub fn build_rustls_config(&self) -> Result<rustls::ClientConfig> {
         let root_store = self.build_root_store()?;
 
-        let mut config = if self.verify_certificate {
-            rustls::ClientConfig::builder()
-                .with_root_certificates(root_store)
-                .with_no_client_auth()
-        } else {
-            rustls::ClientConfig::builder()
-                .dangerous()
-                .with_custom_certificate_verifier(Arc::new(NoVerifier))
-                .with_no_client_auth()
-        };
-
         let mut protocol_versions = Vec::new();
         match (self.min_version, self.max_version) {
             (Some(min), Some(max)) => {
@@ -213,7 +202,19 @@ impl TlsConfig {
             ));
         }
 
+        let mut config = if self.verify_certificate {
+            rustls::ClientConfig::builder_with_protocol_versions(&protocol_versions)
+                .with_root_certificates(root_store)
+                .with_no_client_auth()
+        } else {
+            rustls::ClientConfig::builder_with_protocol_versions(&protocol_versions)
+                .dangerous()
+                .with_custom_certificate_verifier(Arc::new(NoVerifier))
+                .with_no_client_auth()
+        };
+
         config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
+        config.enable_sni = self.sni_enabled;
 
         if let Some(identity) = &self.client_identity {
             config.client_auth_cert_resolver = Arc::new(SingleCertResolver::new(identity.clone()));
@@ -340,6 +341,7 @@ impl TlsConfig {
         };
 
         config.alpn_protocols = vec![b"h3".to_vec()];
+        config.enable_sni = self.sni_enabled;
 
         if let Some(identity) = &self.client_identity {
             config.client_auth_cert_resolver = Arc::new(SingleCertResolver::new(identity.clone()));
@@ -796,9 +798,10 @@ mod tests {
     fn build_rustls_config_no_verify() {
         let config = TlsConfig::builder()
             .danger_accept_invalid_certs(true)
+            .sni(false)
             .build();
-        let result = config.build_rustls_config();
-        assert!(result.is_ok());
+        let rustls_config = config.build_rustls_config().unwrap();
+        assert!(!rustls_config.enable_sni);
     }
 
     #[test]

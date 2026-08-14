@@ -29,8 +29,10 @@ pub(crate) async fn send_https_connect_request(
 
     let mut stream = connect_to_proxy(
         proxy_config,
-        ctx.connect_timeout,
+        ctx.proxy_connect_timeout,
+        ctx.proxy_tls_timeout,
         ctx.deadline,
+        ctx.now,
         ctx.tls_config,
     )
     .await?;
@@ -55,7 +57,7 @@ pub(crate) async fn send_https_connect_request(
     connect_req.push_str("\r\n");
 
     let write = stream.write_all(connect_req.as_bytes());
-    match effective_timeout(ctx.deadline, ctx.write_timeout)? {
+    match effective_timeout(ctx.deadline, ctx.write_timeout, ctx.now)? {
         Some(duration) => tokio::time::timeout(duration, write)
             .await
             .map_err(|_| Error::Timeout {
@@ -70,8 +72,8 @@ pub(crate) async fn send_https_connect_request(
 
     // Read the CONNECT response.
     let read = read_proxy_response(&mut stream);
-    let (status, _resp_headers, initial_buf) =
-        match effective_timeout(ctx.deadline, ctx.read_timeout)? {
+    let (status, resp_headers, initial_buf) =
+        match effective_timeout(ctx.deadline, ctx.read_timeout, ctx.now)? {
             Some(duration) => {
                 tokio::time::timeout(duration, read)
                     .await
@@ -84,11 +86,9 @@ pub(crate) async fn send_https_connect_request(
         };
 
     if status != 200 {
-        let body_str = initial_buf.iter().take(256).copied().collect::<Vec<u8>>();
-        let body_str = String::from_utf8_lossy(&body_str).into_owned();
         return Err(Error::ProxyConnectRejected {
             status,
-            body: body_str,
+            body: proxy_rejection_body(&resp_headers, &initial_buf),
         });
     }
 
@@ -115,7 +115,7 @@ pub(crate) async fn send_https_connect_request(
         .map_err(|e| Error::Tls(format!("invalid TLS server name: {e}")))?;
 
     let tls_handshake = tls_connector.connect(domain, tunnel);
-    let tls_timeout = effective_timeout(ctx.deadline, ctx.connect_timeout)?;
+    let tls_timeout = effective_timeout(ctx.deadline, ctx.connect_timeout, ctx.now)?;
     let tls_stream = match tls_timeout {
         Some(dur) => match tokio::time::timeout(dur, tls_handshake).await {
             Ok(Ok(s)) => s,
@@ -155,7 +155,7 @@ pub(crate) async fn send_https_connect_request(
         None, // No proxy auth for the destination request.
         body,
     );
-    match effective_timeout(ctx.deadline, ctx.write_timeout)? {
+    match effective_timeout(ctx.deadline, ctx.write_timeout, ctx.now)? {
         Some(duration) => {
             tokio::time::timeout(duration, write)
                 .await
@@ -170,7 +170,7 @@ pub(crate) async fn send_https_connect_request(
     // Read the response from the destination.
     let read = read_proxy_response(&mut tls_buf);
     let (status, resp_headers, initial_buf) =
-        match effective_timeout(ctx.deadline, ctx.read_timeout)? {
+        match effective_timeout(ctx.deadline, ctx.read_timeout, ctx.now)? {
             Some(duration) => {
                 tokio::time::timeout(duration, read)
                     .await
@@ -203,6 +203,36 @@ pub(crate) async fn send_https_connect_request(
     let body = ResponseBody::streaming(body_stream);
 
     Ok(Response::new(status, version, resp_headers_map, url, body))
+}
+
+fn proxy_rejection_body(headers: &[(String, String)], initial_buf: &[u8]) -> String {
+    headers
+        .iter()
+        .find(|(name, _)| {
+            name.eq_ignore_ascii_case("x-error-message")
+                || name.eq_ignore_ascii_case("x-proxy-error")
+        })
+        .map_or_else(
+            || String::from_utf8_lossy(initial_buf).into_owned(),
+            |(_, value)| value.clone(),
+        )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::proxy_rejection_body;
+
+    #[test]
+    fn proxy_rejection_body_prefers_diagnostic_header() {
+        let headers = vec![("X-Error-Message".to_owned(), "access denied".to_owned())];
+        assert_eq!(proxy_rejection_body(&headers, b"ignored"), "access denied");
+    }
+
+    #[test]
+    fn proxy_rejection_body_keeps_all_buffered_bytes() {
+        let body = "a".repeat(300);
+        assert_eq!(proxy_rejection_body(&[], body.as_bytes()), body);
+    }
 }
 
 /// Streaming response body from a TLS connection through a proxy tunnel.
