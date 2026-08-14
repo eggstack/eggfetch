@@ -187,10 +187,14 @@ The compact `test_corrective_kernel.py` is part of Tier 1; the pinned
 transport differential suite, full pinned-reference compat, API oracle, and
 downstream isolated runner are extended gates. The pinned reference remains
 `httpx==0.28.1` (with its installed `httpcore`/`socksio` versions recorded in
-the qualification handoff). The corrective transport profile is Stage C
-qualified at the exact SHA recorded in `compat/httpx/0.28.1/profile.toml`; any
-executable change requires a fresh qualification pass. Do not silently revive
-historical qualification counts.
+the qualification handoff). The corrective transport profile is bound to the
+exact SHA recorded in `compat/httpx/0.28.1/profile.toml`; any executable change
+requires a fresh qualification pass. Pass 05 reopened the prior Stage C
+qualification before correcting ordinary-domain and default-port `NO_PROXY`
+semantics. While the profile reports `stage-c-candidate` /
+`final-no-proxy-closure-pending`, pass-04 counts and wheel hashes in the status
+record are historical evidence only. Do not silently revive historical
+qualification counts.
 
 The current corrective boundary derives one monotonic request deadline for
 multi-phase HTTP/HTTPS proxy setup. `Proxy(headers=...)` remains an explicit

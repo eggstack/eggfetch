@@ -83,6 +83,26 @@ def test_timeout_without_default_requires_all_phases_like_reference():
     }
 
 
+def test_timeout_as_dict_reference_method_and_candidate_property():
+    reference = httpx.Timeout(1.0)
+    candidate = Timeout(1.0)
+
+    assert callable(reference.as_dict)
+    assert reference.as_dict() == {
+        "connect": reference.connect,
+        "read": reference.read,
+        "write": reference.write,
+        "pool": reference.pool,
+    }
+    assert not callable(candidate.as_dict)
+    assert candidate.as_dict == {
+        "connect": reference.connect,
+        "read": reference.read,
+        "write": reference.write,
+        "pool": reference.pool,
+    }
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize("runtime", ["reference", "candidate"])
 async def test_independent_read_phases_do_not_form_synthetic_total(runtime):

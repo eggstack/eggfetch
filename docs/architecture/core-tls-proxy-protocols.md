@@ -77,7 +77,13 @@ lowercase names win, scheme-less proxy values are treated as HTTP URLs, and
 Scheme-qualified exclusions constrain scheme and optional port; bare IPv6 is
 recognized without treating its final colon as a port separator; CIDR-looking
 entries retain HTTPX's exact URL-pattern host behavior rather than native Rust
-subnet matching.
+subnet matching. For ordinary bare domains, the compatibility parser matches
+the bare host and subdomains only at a label boundary; a leading-dot entry
+matches subdomains but not the bare host. Explicit host ports require an
+explicit normalized target port, so an entry such as `example.test:80` does
+not bypass an HTTP URL whose default port is omitted. These compatibility rules
+are separate from native `NoProxy::parse()`, which retains true CIDR and native
+default-port semantics.
 
 HTTP proxy endpoints may use `http://` or `https://`. An HTTPS endpoint first
 verifies the proxy hostname over TLS, then uses the existing absolute-form

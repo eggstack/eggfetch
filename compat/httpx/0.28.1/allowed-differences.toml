@@ -602,15 +602,15 @@ member = "as_dict"
 reference = "absent"
 candidate = "present"
 behavior-case = "timeout-extra-methods"
-reference-behavior = "HTTPX Timeout does not have an as_dict method"
-eggfetch-behavior = "eggfetch Timeout has an as_dict method for serialization"
-rationale = "as_dict is an eggfetch-specific convenience method. It does not conflict with HTTPX's API."
+reference-behavior = "HTTPX Timeout exposes as_dict as a callable method returning the four operational phase values"
+eggfetch-behavior = "eggfetch Timeout exposes as_dict as a non-callable property returning the four operational phase values"
+rationale = "The compatibility facade retains a property form for its native timeout mapping; the value is equivalent, but callers must read it rather than call it."
 compatibility-stage-impact = "stage-c"
 security-improvement = "false"
-migration-impact = "None; as_dict is optional"
+migration-impact = "Code calling HTTPX's as_dict() must read EggFetch's as_dict property; phase attributes and returned keys are equivalent."
 owner = "eggfetch-team"
 review-milestone = "stage-d"
-tests = ["test_config_objects.py"]
+tests = ["test_timeout_reference_differential.py"]
 non_expiring = true
 
 [[difference]]
@@ -623,15 +623,15 @@ member = "connect"
 reference = "absent"
 candidate = "present"
 behavior-case = "timeout-extra-methods"
-reference-behavior = "HTTPX Timeout does not have an as_dict method"
-eggfetch-behavior = "eggfetch Timeout has an as_dict method for serialization"
+reference-behavior = "HTTPX Timeout stores operational phase values on instances but does not expose them as public class properties in the API manifest"
+eggfetch-behavior = "eggfetch Timeout exposes connect as a public read-only property"
 rationale = "The compatibility facade exposes operational phase properties for introspection; they are additive and do not change dispatch semantics."
 compatibility-stage-impact = "stage-c"
 security-improvement = "false"
-migration-impact = "None; as_dict is optional"
+migration-impact = "None; the additive read-only property does not change request dispatch or timeout conversion."
 owner = "eggfetch-team"
 review-milestone = "stage-d"
-tests = ["test_config_objects.py"]
+tests = ["test_timeout_reference_differential.py"]
 non_expiring = true
 
 [[difference]]
@@ -644,15 +644,15 @@ member = "pool"
 reference = "absent"
 candidate = "present"
 behavior-case = "timeout-extra-methods"
-reference-behavior = "HTTPX Timeout does not have an as_dict method"
-eggfetch-behavior = "eggfetch Timeout has an as_dict method for serialization"
+reference-behavior = "HTTPX Timeout stores operational phase values on instances but does not expose them as public class properties in the API manifest"
+eggfetch-behavior = "eggfetch Timeout exposes pool as a public read-only property"
 rationale = "The compatibility facade exposes operational phase properties for introspection; they are additive and do not change dispatch semantics."
 compatibility-stage-impact = "stage-c"
 security-improvement = "false"
-migration-impact = "None; as_dict is optional"
+migration-impact = "None; the additive read-only property does not change request dispatch or timeout conversion."
 owner = "eggfetch-team"
 review-milestone = "stage-d"
-tests = ["test_config_objects.py"]
+tests = ["test_timeout_reference_differential.py"]
 non_expiring = true
 
 [[difference]]
@@ -665,15 +665,15 @@ member = "read"
 reference = "absent"
 candidate = "present"
 behavior-case = "timeout-extra-methods"
-reference-behavior = "HTTPX Timeout does not have an as_dict method"
-eggfetch-behavior = "eggfetch Timeout has an as_dict method for serialization"
+reference-behavior = "HTTPX Timeout stores operational phase values on instances but does not expose them as public class properties in the API manifest"
+eggfetch-behavior = "eggfetch Timeout exposes read as a public read-only property"
 rationale = "The compatibility facade exposes operational phase properties for introspection; they are additive and do not change dispatch semantics."
 compatibility-stage-impact = "stage-c"
 security-improvement = "false"
-migration-impact = "None; as_dict is optional"
+migration-impact = "None; the additive read-only property does not change request dispatch or timeout conversion."
 owner = "eggfetch-team"
 review-milestone = "stage-d"
-tests = ["test_config_objects.py"]
+tests = ["test_timeout_reference_differential.py"]
 non_expiring = true
 
 [[difference]]
@@ -686,15 +686,15 @@ member = "total"
 reference = "absent"
 candidate = "present"
 behavior-case = "timeout-extra-methods"
-reference-behavior = "HTTPX Timeout does not have an as_dict method"
-eggfetch-behavior = "eggfetch Timeout has an as_dict method for serialization"
+reference-behavior = "HTTPX Timeout stores no public total property in the API manifest"
+eggfetch-behavior = "eggfetch Timeout exposes total as a public read-only native outer-deadline property"
 rationale = "The native-only total property documents an optional outer deadline and is not used by compatibility conversion."
 compatibility-stage-impact = "stage-c"
 security-improvement = "false"
-migration-impact = "None; as_dict is optional"
+migration-impact = "None; total is an EggFetch-native outer deadline and is not synthesized by HTTPX compatibility conversion."
 owner = "eggfetch-team"
 review-milestone = "stage-d"
-tests = ["test_config_objects.py"]
+tests = ["test_timeout_reference_differential.py"]
 non_expiring = true
 
 [[difference]]
@@ -707,15 +707,15 @@ member = "write"
 reference = "absent"
 candidate = "present"
 behavior-case = "timeout-extra-methods"
-reference-behavior = "HTTPX Timeout does not have an as_dict method"
-eggfetch-behavior = "eggfetch Timeout has an as_dict method for serialization"
+reference-behavior = "HTTPX Timeout stores operational phase values on instances but does not expose them as public class properties in the API manifest"
+eggfetch-behavior = "eggfetch Timeout exposes write as a public read-only property"
 rationale = "The compatibility facade exposes operational phase properties for introspection; they are additive and do not change dispatch semantics."
 compatibility-stage-impact = "stage-c"
 security-improvement = "false"
-migration-impact = "None; as_dict is optional"
+migration-impact = "None; the additive read-only property does not change request dispatch or timeout conversion."
 owner = "eggfetch-team"
 review-milestone = "stage-d"
-tests = ["test_config_objects.py"]
+tests = ["test_timeout_reference_differential.py"]
 non_expiring = true
 
 [[difference]]
@@ -728,15 +728,15 @@ member = "as_dict"
 reference = "present"
 candidate = "absent"
 behavior-case = "timeout-extra-methods"
-reference-behavior = "HTTPX Timeout does not have an as_dict method"
-eggfetch-behavior = "eggfetch Timeout has an as_dict method for serialization"
-rationale = "The facade retains an additive serialization property rather than changing the HTTPX method surface; callers using the HTTPX method should use the four phase properties instead."
+reference-behavior = "HTTPX Timeout exposes as_dict as a callable method returning the four operational phase values"
+eggfetch-behavior = "eggfetch Timeout exposes as_dict as a non-callable property, so the HTTPX method shape is absent"
+rationale = "The facade retains an additive serialization property rather than changing timeout runtime semantics; callers using the HTTPX method must read the property in the compatibility layer."
 compatibility-stage-impact = "stage-c"
 security-improvement = "false"
-migration-impact = "None; as_dict is optional"
+migration-impact = "Code calling HTTPX's as_dict() must read EggFetch's as_dict property; the returned four-phase dictionary is equivalent."
 owner = "eggfetch-team"
 review-milestone = "stage-d"
-tests = ["test_config_objects.py"]
+tests = ["test_timeout_reference_differential.py"]
 non_expiring = true
 
 [[difference]]

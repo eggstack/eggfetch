@@ -239,7 +239,7 @@ See [`docs/cli/guide.md`](docs/cli/guide.md) for the full CLI reference.
 
 eggfetch provides an HTTPX 0.28.1-compatible asyncio facade via `eggfetch.compat.httpx`. The compatibility profile is pinned in `compat/httpx/0.28.1/` with machine-readable API manifests, allowed-difference tracking, and a parity case registry.
 
-The facade is **Stage C qualified** against one exact executable SHA. The claim is limited to the documented Python ≥3.10 asyncio-supported surface of HTTPX 0.28.1; it is not unrestricted HTTPX replacement for every transport or concurrency backend. Qualification evidence is recorded in `compat/httpx/0.28.1/profile.toml` and `plans/httpx-parity-correction-status.md`.
+The facade is being re-qualified for the final narrow `NO_PROXY` closure pass. The claim remains limited to the documented Python ≥3.10 asyncio-supported surface of HTTPX 0.28.1; it is not unrestricted HTTPX replacement for every transport or concurrency backend. The exact-SHA qualification state is recorded in `compat/httpx/0.28.1/profile.toml` and `plans/httpx-parity-correction-status.md`.
 
 Key differences from HTTPX:
 - Trio/AnyIO not supported (asyncio only, tokio-based)
@@ -263,7 +263,12 @@ machinery, accepts HTTPX host-only `local_address` values with an ephemeral
 source port, and maintains a persistent SOCKS Hyper pool per route. SOCKS
 authentication, address types, origin TLS, cancellation, and reuse are pinned
 to HTTPX 0.28.1. Environment proxy discovery follows Python's HTTPX-compatible
-precedence and `NO_PROXY` URL-pattern rules, including scheme-qualified and
+precedence and `NO_PROXY` URL-pattern rules: ordinary bare domains match the
+bare host and subdomains at label boundaries, leading-dot domains match
+subdomains only, localhost/IP literals remain exact, and explicit host ports
+match only normalized explicit target ports. Scheme-qualified entries retain
+their scheme and URL-pattern host/port constraints; CIDR-looking entries do
+not gain native subnet matching. The matrix includes scheme-qualified and
 bare-IPv6 entries. HTTP and HTTPS proxy endpoints are distinct: HTTPS proxy
 URLs establish TLS to the proxy before forward or CONNECT proxying. The safe
  three-element `socket_options` form is supported; HTTPX's valid four-element

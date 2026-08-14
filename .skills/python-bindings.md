@@ -98,6 +98,7 @@ from eggfetch.compat.httpx import Client, AsyncClient, Request, Response
 - Behavioral downstream fixtures (`compat/downstream/behavioral_fixtures/`)
 - Native lifecycle proof fixtures (`test_native_timeout_classification.py`, `test_soak.py`, proxy and TLS tests)
 - Final qualification is recorded only after the current corrective transport plan's exact-SHA gates pass; current evidence is bound to the SHA in `compat/httpx/0.28.1/profile.toml`, while historical Phase 6 counts remain non-current audit records.
+- The HTTPX environment facade follows `urllib.request` precedence and URL-pattern `NO_PROXY` semantics: bare domains match the bare host and subdomains at label boundaries, leading-dot domains match subdomains only, localhost/IP literals are exact, explicit host ports require an explicit normalized target port, and CIDR-looking values do not become native subnet rules. Native `NoProxy::parse()` retains its richer CIDR behavior.
 - The compatibility `Timeout` constructor uses a private `UNSET` sentinel so
   omitted phase values inherit the scalar while explicit `None` disables only
   that phase; `Timeout()` follows HTTPX validation and requires a scalar or all

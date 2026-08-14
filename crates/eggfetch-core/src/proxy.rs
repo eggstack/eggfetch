@@ -55,6 +55,8 @@ pub enum NoProxyRule {
     HostPort(String, u16),
     /// Exact host + port match used by the HTTPX environment parser.
     HostPortExact(String, u16),
+    /// Bare-domain host + explicit port match used by the HTTPX environment parser.
+    HostPortHttpx(String, u16),
     /// IP network expressed in CIDR notation.
     IpNetwork(std::net::IpAddr, u8),
     /// Matches the hostname `localhost`.
@@ -236,25 +238,27 @@ impl NoProxy {
             return Ok(NoProxyRule::DomainSuffix(entry.to_owned()));
         }
 
-        // host:port
+        // host:port. HTTPX builds an `all://*host:port` URL pattern for a
+        // non-scheme-qualified entry, so the host keeps bare-domain and
+        // subdomain matching while the port remains an explicit match. In
+        // particular, an entry such as `example.com:80` does not match an
+        // HTTP URL whose normalized port is omitted.
         if let Some(colon_pos) = entry.rfind(':') {
             let host = &entry[..colon_pos];
             let port_str = &entry[colon_pos + 1..];
             if let Ok(port) = port_str.parse::<u16>() {
                 return Ok(if exact_localhost {
-                    NoProxyRule::HostPortExact(host.to_owned(), port)
+                    NoProxyRule::HostPortHttpx(host.to_owned(), port)
                 } else {
                     NoProxyRule::HostPort(host.to_owned(), port)
                 });
             }
         }
 
-        // plain host
-        Ok(if exact_localhost {
-            NoProxyRule::HostExact(entry.to_owned())
-        } else {
-            NoProxyRule::Host(entry.to_owned())
-        })
+        // HTTPX builds an `all://*host` pattern for ordinary domains, which
+        // matches the bare domain and subdomains at a label boundary. Keep
+        // localhost and IP literals on their exact-host paths above.
+        Ok(NoProxyRule::Host(entry.to_owned()))
     }
 
     /// Returns `true` if the given URL should bypass the proxy (go direct).
@@ -320,6 +324,11 @@ impl NoProxy {
                         None => Self::default_port_for_scheme(url.scheme()) == *p,
                     };
                     if port_matches && Self::matches_exact_host(host, h) {
+                        return true;
+                    }
+                }
+                NoProxyRule::HostPortHttpx(h, p) => {
+                    if port == Some(*p) && Self::matches_host_rule(host, h) {
                         return true;
                     }
                 }
@@ -1239,6 +1248,48 @@ mod tests {
             assert!(np.should_bypass(&url::Url::parse(url).unwrap()));
         }
         assert!(!np.should_bypass(&url::Url::parse("http://badexample.com").unwrap()));
+    }
+
+    #[test]
+    fn parse_httpx_bare_domain_includes_subdomains_at_label_boundary() {
+        let np = NoProxy::parse_httpx("example.test").unwrap();
+        for url in [
+            "http://example.test/",
+            "http://www.example.test/",
+            "http://deep.www.example.test/",
+        ] {
+            assert!(np.should_bypass(&url::Url::parse(url).unwrap()), "{url}");
+        }
+        for url in [
+            "http://wwwexample.test/",
+            "http://notexample.test/",
+            "http://example.test.evil/",
+        ] {
+            assert!(!np.should_bypass(&url::Url::parse(url).unwrap()), "{url}");
+        }
+    }
+
+    #[test]
+    fn parse_httpx_leading_dot_excludes_bare_domain() {
+        let np = NoProxy::parse_httpx(".example.test").unwrap();
+        assert!(!np.should_bypass(&url::Url::parse("http://example.test/").unwrap()));
+        assert!(np.should_bypass(&url::Url::parse("http://www.example.test/").unwrap()));
+    }
+
+    #[test]
+    fn parse_httpx_host_port_requires_explicit_normalized_port() {
+        let np = NoProxy::parse_httpx("example.test:80").unwrap();
+        assert!(!np.should_bypass(&url::Url::parse("http://example.test/").unwrap()));
+        assert!(!np.should_bypass(&url::Url::parse("http://example.test:80/").unwrap()));
+        assert!(!np.should_bypass(&url::Url::parse("http://example.test:8080/").unwrap()));
+        assert!(np.should_bypass(&url::Url::parse("https://example.test:80/").unwrap()));
+
+        let non_default = NoProxy::parse_httpx("example.test:8080").unwrap();
+        assert!(non_default.should_bypass(&url::Url::parse("http://example.test:8080/").unwrap()));
+        assert!(
+            non_default.should_bypass(&url::Url::parse("http://www.example.test:8080/").unwrap())
+        );
+        assert!(!non_default.should_bypass(&url::Url::parse("http://example.test:8081/").unwrap()));
     }
 
     #[test]
