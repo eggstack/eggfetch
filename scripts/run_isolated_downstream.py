@@ -439,6 +439,10 @@ def run_tests(venv_dir: Path, pkg: dict, timeout: int) -> subprocess.CompletedPr
     env["NO_PROXY"] = "*"
     env["NOPROXY"] = "*"
     env.pop("PYTEST_ADDOPTS", None)
+    # Do not load pytest plugins from the outer environment. In particular,
+    # pytest-httpx imports private upstream httpx modules that the controlled
+    # replacement intentionally does not provide.
+    env["PYTEST_DISABLE_PLUGIN_AUTOLOAD"] = "1"
 
     site_packages = list((venv_dir / "lib").rglob("site-packages"))
     if site_packages:

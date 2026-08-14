@@ -64,6 +64,10 @@ pip install anyio==4.8.0 httpx-auth==0.22.0 httpx-ws==0.7.0 pydantic==2.10.0
 - **expected-network-isolation = false**: Package tests may require
   network access (e.g., SDKs that need a real API endpoint). Provide
   mock endpoints or skip in CI.
+- The isolated runner disables pytest plugin autoload for behavioral tests.
+  This prevents plugins from the caller's environment from importing private
+  modules from upstream HTTPX; the runner supplies the isolated package
+  environment through `PYTHONPATH`.
 
 ## Update Process
 
