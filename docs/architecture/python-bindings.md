@@ -289,7 +289,10 @@ boundary; leading-dot domains exclude the bare host; localhost and IP literals
 are exact; and an explicit host port matches only an explicit normalized target
 port. Scheme-qualified entries retain their scheme and optional URL-pattern
 port, while CIDR-looking values remain exact host text rather than native
-subnet matching. UDS uses the
+subnet matching. Bare unbracketed IPv6 literals follow the pinned HTTPX
+environment form; bracketed IPv6 and IPv6 prefix-looking values are rejected
+before dispatch. Native Rust parsing retains its richer bracketed-IPv6 and
+CIDR behavior. UDS uses the
 shared Hyper HTTP/TLS path and has executable fixed-length, chunked, TLS, and
 keep-alive coverage. `local_address` remains HTTPX's host-only bind form and
 is tested against the server-observed source address. SOCKS clients are

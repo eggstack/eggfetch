@@ -49,7 +49,7 @@ where
     type Item = Result<Bytes>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        let mut me = self.project();
+        let me = self.project();
 
         // Start the per-chunk timer when the body is first consumed. The
         // response may be handed to a different buffering runtime by the

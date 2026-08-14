@@ -10,7 +10,7 @@ use crate::conversion::{
     python_params_to_url, validate_body_kwargs_with_files,
 };
 use crate::cookies::PyCookies;
-use crate::errors::map_err;
+use crate::errors::{map_err, InvalidUrl};
 use crate::limits::PyLimits;
 use crate::proxy::{self, ProxyOverride};
 use crate::response::PyResponse;
@@ -154,8 +154,14 @@ impl PyClient {
                     }
                     .map_err(map_err)?;
                     if let Some(no_proxy) = proxy::env_no_proxy(py)? {
-                        let rules =
-                            eggfetch_core::NoProxy::parse_httpx(&no_proxy).map_err(map_err)?;
+                        let rules = eggfetch_core::NoProxy::parse_httpx(&no_proxy).map_err(
+                            |err| match err {
+                                eggfetch_core::Error::InvalidProxyUrl(message) => {
+                                    InvalidUrl::new_err(message)
+                                }
+                                other => map_err(other),
+                            },
+                        )?;
                         p = p.no_proxy(rules);
                     }
                     builder = builder.environment_proxy(p);

@@ -109,8 +109,10 @@ eggfetch targets HTTPX 0.28.1 compatibility in phases. The current status:
 - **Phase 5**: SOCKS5 proxy — HTTP/HTTPS through SOCKS5, auth, DNS/address-type behavior, NO_PROXY bypass, credential redaction
 - **Phase 6 / Differential Closure**: Final qualification — API oracle clean (76 active differences, all intentional/deferred), full pinned compat suite passing, downstream behavioral fixtures validated
 
-**Current status: Stage C qualified for the documented asyncio surface.**
-The qualification is pinned to HTTPX 0.28.1 and the exact executable SHA in
+**Current status: Stage C candidate; final IPv6 `NO_PROXY` closure pending.**
+The pass-05 qualification was reopened for pass 06, which is limited to pinned
+HTTPX IPv6 environment-form parity and route/pre-dispatch evidence. The final
+qualification, when restored, will be pinned to the exact executable SHA in
 `compat/httpx/0.28.1/profile.toml`. The compatibility facade does not claim
 unrestricted HTTPX replacement. Trio/AnyIO, Python 3.8/3.9, and private HTTPX
 modules remain outside scope.
@@ -131,7 +133,7 @@ The following statements from earlier documentation have been corrected:
 
 1. **Pool timeout**: HTTPX 0.28.1 supports pool timeout via `Timeout(pool=...)`. eggfetch also supports this. The compatibility matrix has been updated to reflect this.
 2. **Redirect default**: HTTPX 0.28.1 defaults to `follow_redirects=False`, same as eggfetch. The earlier claim that "HTTPX follows redirects by default" was incorrect for version 0.28.1.
-3. **Proxy env vars**: the HTTPX facade selects `HTTP_PROXY`/`HTTPS_PROXY` by request scheme, uses `ALL_PROXY` fallback, and honors lowercase forms plus `NO_PROXY` when `trust_env=True`; native Rust configuration remains explicit.
+3. **Proxy env vars**: the HTTPX facade selects `HTTP_PROXY`/`HTTPS_PROXY` by request scheme, uses `ALL_PROXY` fallback, and honors lowercase forms plus `NO_PROXY` when `trust_env=True`; native Rust configuration remains explicit. Bare unbracketed IPv6 environment literals match HTTPX 0.28.1; bracketed IPv6 and IPv6 prefix-looking forms fail before dispatch with `InvalidURL`, while native Rust parsing retains its richer syntax.
 4. **SOCKS proxy**: HTTPX 0.28.1 exposes SOCKS proxy support as an optional public feature via `httpx[socks]`. eggfetch supports SOCKS5 (`socks5://` and `socks5h://`) with the pinned username/password method matrix, domain/IP address types, route-local pooling, origin TLS, and `NO_PROXY` bypass. Both schemes use the reference's domain ATYP for hostnames; native Rust configuration retains its explicit DNS distinction.
 5. **UDS, local_address, socket_options**: HTTPX 0.28.1 exposes `UDS`, `local_address`, and `socket_options` transport parameters. eggfetch implements these through the native Rust engine with HTTPS, fixed/chunked streaming, reuse, and host-only local-address evidence. The safe three-element socket-option form is supported; the valid `(level, option, None, optlen)` form remains a bounded safe-Rust difference because arbitrary pointer semantics are not exposed.
 6. **Proxy endpoint TLS**: `https://` proxy URLs establish and verify TLS to the proxy hostname before HTTP forwarding or CONNECT. Origin TLS after CONNECT remains independently verified against the origin hostname.

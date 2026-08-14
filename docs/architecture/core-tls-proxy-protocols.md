@@ -74,10 +74,13 @@ and `NO_PROXY` into explicit scheme-aware native proxy configuration when
 facade follows HTTPX's `urllib.request` environment precedence and matching:
 lowercase names win, scheme-less proxy values are treated as HTTP URLs, and
 `localhost` is an exact hostname rule rather than an implicit loopback alias.
-Scheme-qualified exclusions constrain scheme and optional port; bare IPv6 is
-recognized without treating its final colon as a port separator; CIDR-looking
-entries retain HTTPX's exact URL-pattern host behavior rather than native Rust
-subnet matching. For ordinary bare domains, the compatibility parser matches
+Scheme-qualified exclusions constrain scheme and optional port; HTTPX-compatible
+bare unbracketed IPv6 is recognized without treating its final colon as a port
+separator. Bracketed IPv6 and IPv6 prefix-looking environment values are
+rejected before native routing because HTTPX 0.28.1 rejects the corresponding
+URL-pattern forms. CIDR-looking IPv4 entries retain HTTPX's exact URL-pattern
+host behavior rather than native Rust subnet matching. Native
+`NoProxy::parse()` retains bracketed IPv6 and true CIDR support. For ordinary bare domains, the compatibility parser matches
 the bare host and subdomains only at a label boundary; a leading-dot entry
 matches subdomains but not the bare host. Explicit host ports require an
 explicit normalized target port, so an entry such as `example.test:80` does

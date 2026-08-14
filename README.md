@@ -239,7 +239,10 @@ See [`docs/cli/guide.md`](docs/cli/guide.md) for the full CLI reference.
 
 eggfetch provides an HTTPX 0.28.1-compatible asyncio facade via `eggfetch.compat.httpx`. The compatibility profile is pinned in `compat/httpx/0.28.1/` with machine-readable API manifests, allowed-difference tracking, and a parity case registry.
 
-The facade is Stage C qualified for the documented Python ≥3.10 asyncio-supported surface of HTTPX 0.28.1. The claim is not unrestricted HTTPX replacement for every transport or concurrency backend; the exact-SHA qualification state is recorded in `compat/httpx/0.28.1/profile.toml` and `plans/httpx-parity-correction-status.md`.
+The facade targets Stage C for the documented Python ≥3.10 asyncio-supported
+surface of HTTPX 0.28.1. The final IPv6 `NO_PROXY` closure is currently being
+re-qualified; the exact candidate/qualification state is recorded in
+`compat/httpx/0.28.1/profile.toml` and `plans/httpx-parity-correction-status.md`.
 
 Key differences from HTTPX:
 - Trio/AnyIO not supported (asyncio only, tokio-based)
@@ -268,8 +271,11 @@ bare host and subdomains at label boundaries, leading-dot domains match
 subdomains only, localhost/IP literals remain exact, and explicit host ports
 match only normalized explicit target ports. Scheme-qualified entries retain
 their scheme and URL-pattern host/port constraints; CIDR-looking entries do
-not gain native subnet matching. The matrix includes scheme-qualified and
-bare-IPv6 entries. HTTP and HTTPS proxy endpoints are distinct: HTTPS proxy
+not gain native subnet matching. Bare unbracketed IPv6 literals use HTTPX's
+accepted environment form; bracketed IPv6 and IPv6 prefix-looking forms are
+rejected before dispatch, matching HTTPX 0.28.1 rather than native Rust's
+richer parser. The matrix includes scheme-qualified and bare-IPv6 entries.
+HTTP and HTTPS proxy endpoints are distinct: HTTPS proxy
 URLs establish TLS to the proxy before forward or CONNECT proxying. The safe
  three-element `socket_options` form is supported; HTTPX's valid four-element
   `(level, option, None, optlen)` form remains a narrow safe-Rust limitation.

@@ -1184,7 +1184,10 @@ class Client:
                 kwargs["proxy"] = _convert_proxy(self._proxy)
             if self._http2:
                 kwargs["http2"] = self._http2
-            self._native_client = eggfetch.Client(**kwargs)
+            try:
+                self._native_client = eggfetch.Client(**kwargs)
+            except eggfetch.InvalidUrl as exc:
+                raise InvalidURL(str(exc)) from exc
             self._state = _ClientState.OPENED
 
     @property
@@ -1892,7 +1895,10 @@ class AsyncClient:
                 kwargs["proxy"] = _convert_proxy(self._proxy)
             if self._http2:
                 kwargs["http2"] = self._http2
-            self._native_client = eggfetch.AsyncClient(**kwargs)
+            try:
+                self._native_client = eggfetch.AsyncClient(**kwargs)
+            except eggfetch.InvalidUrl as exc:
+                raise InvalidURL(str(exc)) from exc
             self._state = _ClientState.OPENED
 
     @property

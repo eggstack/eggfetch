@@ -218,23 +218,6 @@ fn proxy_rejection_body(headers: &[(String, String)], initial_buf: &[u8]) -> Str
         )
 }
 
-#[cfg(test)]
-mod tests {
-    use super::proxy_rejection_body;
-
-    #[test]
-    fn proxy_rejection_body_prefers_diagnostic_header() {
-        let headers = vec![("X-Error-Message".to_owned(), "access denied".to_owned())];
-        assert_eq!(proxy_rejection_body(&headers, b"ignored"), "access denied");
-    }
-
-    #[test]
-    fn proxy_rejection_body_keeps_all_buffered_bytes() {
-        let body = "a".repeat(300);
-        assert_eq!(proxy_rejection_body(&[], body.as_bytes()), body);
-    }
-}
-
 /// Streaming response body from a TLS connection through a proxy tunnel.
 ///
 /// Yields data from an initial buffer first, then reads from the
@@ -373,5 +356,22 @@ impl<S: tokio::io::AsyncWrite + Unpin> tokio::io::AsyncWrite for ProxyTunnel<S> 
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<std::io::Result<()>> {
         std::pin::Pin::new(&mut self.inner).poll_shutdown(cx)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::proxy_rejection_body;
+
+    #[test]
+    fn proxy_rejection_body_prefers_diagnostic_header() {
+        let headers = vec![("X-Error-Message".to_owned(), "access denied".to_owned())];
+        assert_eq!(proxy_rejection_body(&headers, b"ignored"), "access denied");
+    }
+
+    #[test]
+    fn proxy_rejection_body_keeps_all_buffered_bytes() {
+        let body = "a".repeat(300);
+        assert_eq!(proxy_rejection_body(&[], body.as_bytes()), body);
     }
 }

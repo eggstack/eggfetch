@@ -191,9 +191,11 @@ the qualification handoff). The corrective transport profile is bound to the
 exact SHA recorded in `compat/httpx/0.28.1/profile.toml`; any executable change
 requires a fresh qualification pass. Pass 05 reopened the prior Stage C
 qualification before correcting ordinary-domain and default-port `NO_PROXY`
-semantics. The profile now records the fresh exact-SHA Stage C qualification;
-pass-04 counts and wheel hashes in the status record remain historical
-evidence only. Do not silently revive historical qualification counts.
+semantics. Pass 06 has reopened that Stage C qualification to close IPv6
+environment-form parity and route/pre-dispatch evidence. Pass-04
+timeout/runtime/proxy work and pass-05 generic-domain/default-port fixes remain
+historical accepted evidence and are not being reopened. Do not silently
+revive historical qualification counts.
 
 The current corrective boundary derives one monotonic request deadline for
 multi-phase HTTP/HTTPS proxy setup. `Proxy(headers=...)` remains an explicit
@@ -208,3 +210,7 @@ phase distinction and rejects `Timeout()` unless a scalar or all four phases
 are supplied. Direct Hyper/UDS/H3 transport futures are governed only by an
 explicit native total; read timeouts attach to response body chunks after
 transport setup, while proxy protocol reads retain header-phase enforcement.
+The compatibility environment parser accepts HTTPX's bare unbracketed IPv6
+forms but rejects bracketed IPv6 and IPv6 prefix-looking `NO_PROXY` forms
+before native routing is constructed; native `NoProxy::parse()` retains its
+richer bracketed IPv6 and CIDR behavior.

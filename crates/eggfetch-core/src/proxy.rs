@@ -123,7 +123,8 @@ impl NoProxy {
     ///
     /// # Errors
     ///
-    /// Returns an error when an entry contains an invalid port or CIDR value.
+    /// Returns an error when an entry cannot be represented by HTTPX's
+    /// environment URL-pattern conversion.
     pub fn parse_httpx(s: &str) -> Result<Self> {
         Self::parse_with_localhost_mode(s, true)
     }
@@ -168,18 +169,9 @@ impl NoProxy {
             });
         }
 
-        // HTTPX's is_ipv4_hostname/is_ipv6_hostname check happens before
-        // URL-pattern construction. A CIDR-looking value therefore becomes
-        // an exact host pattern for the address portion; it is not subnet
-        // matching in the compatibility facade.
         if exact_localhost {
-            if let Some((address, _prefix)) = entry.split_once('/') {
-                if address.parse::<std::net::IpAddr>().is_ok() {
-                    return Ok(NoProxyRule::HostExact(address.to_ascii_lowercase()));
-                }
-            }
-            if let Ok(address) = entry.parse::<std::net::IpAddr>() {
-                return Ok(NoProxyRule::HostExact(address.to_string()));
+            if let Some(rule) = Self::parse_httpx_ip_entry(entry)? {
+                return Ok(rule);
             }
         }
 
@@ -265,6 +257,49 @@ impl NoProxy {
         Ok(NoProxyRule::Host(entry.to_owned()))
     }
 
+    fn parse_httpx_ip_entry(entry: &str) -> Result<Option<NoProxyRule>> {
+        // HTTPX checks IPv4/IPv6 hostnames before URL-pattern construction.
+        // IPv4 CIDR-looking values become exact host patterns, while IPv6
+        // prefix-looking values are bracketed and rejected by its URL parser.
+        if let Some((address, _prefix)) = entry.split_once('/') {
+            if address.parse::<std::net::Ipv4Addr>().is_ok() {
+                return Ok(Some(NoProxyRule::HostExact(address.to_ascii_lowercase())));
+            }
+            if address.parse::<std::net::Ipv6Addr>().is_ok() {
+                return Err(Error::InvalidProxyUrl(format!(
+                    "invalid IPv6 NO_PROXY entry: {entry}"
+                )));
+            }
+        }
+
+        // Bracketed IPv6 is not recognized by HTTPX as an IPv6 hostname. Its
+        // fallback URL-pattern form is invalid, so do not broaden the
+        // compatibility syntax with native IPv6 support.
+        if entry.starts_with('[') {
+            return Err(Error::InvalidProxyUrl(format!(
+                "invalid IPv6 NO_PROXY entry: {entry}"
+            )));
+        }
+
+        if let Ok(address) = entry.parse::<std::net::Ipv4Addr>() {
+            return Ok(Some(NoProxyRule::HostExact(address.to_string())));
+        }
+        if let Ok(address) = entry.parse::<std::net::Ipv6Addr>() {
+            return Ok(Some(NoProxyRule::Host(address.to_string())));
+        }
+
+        // Values with multiple colons that are not valid IPv6 literals are
+        // also rejected by HTTPX's fallback URL-pattern parser. Ordinary
+        // host:port entries have only one colon and remain supported.
+        if entry.matches(':').count() > 1 {
+            return Err(Error::InvalidProxyUrl(format!(
+                "invalid IPv6 NO_PROXY entry: {entry}"
+            )));
+        }
+
+        Ok(None)
+    }
+
     /// Returns `true` if the given URL should bypass the proxy (go direct).
     #[must_use]
     pub fn should_bypass(&self, url: &url::Url) -> bool {
@@ -338,6 +373,8 @@ impl NoProxy {
                 }
                 NoProxyRule::IpNetwork(network, prefix) => {
                     if host
+                        .trim_start_matches('[')
+                        .trim_end_matches(']')
                         .parse::<std::net::IpAddr>()
                         .is_ok_and(|candidate| Self::ip_in_network(candidate, *network, *prefix))
                     {
@@ -1413,6 +1450,20 @@ mod tests {
     fn httpx_bare_ipv6_no_proxy_is_not_host_port() {
         let np = NoProxy::parse_httpx("::1").unwrap();
         assert!(np.should_bypass(&url::Url::parse("http://[::1]/").unwrap()));
+    }
+
+    #[test]
+    fn httpx_rejects_bracketed_and_prefix_looking_ipv6_entries() {
+        for entry in ["[::1]", "[::1]:8080", "::1/128", "[::1]/128"] {
+            assert!(NoProxy::parse_httpx(entry).is_err(), "{entry}");
+        }
+    }
+
+    #[test]
+    fn native_ipv6_cidr_behavior_remains_available() {
+        let np = NoProxy::parse("2001:db8::/32").unwrap();
+        assert!(np.should_bypass(&url::Url::parse("http://[2001:db8::1]/").unwrap()));
+        assert!(!np.should_bypass(&url::Url::parse("http://[2001:db9::1]/").unwrap()));
     }
 
     #[test]
