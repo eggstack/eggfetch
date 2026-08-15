@@ -11,6 +11,7 @@ Use this skill when writing, modifying, or reviewing Rust code in the eggfetch w
 ## Pre-commit Checklist
 
 ```sh
+./scripts/check.sh              # Tier 1: routine validation (CI runs this)
 cargo fmt --all
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo test --workspace --all-features
@@ -37,6 +38,7 @@ cargo check -p eggfetch-core --all-features
 
 ## Architecture References
 
+- Overview: `docs/architecture/overview.md`
 - Core engine: `docs/architecture/core-engine.md`
 - Body & streaming: `docs/architecture/core-body-streaming.md`
 - Timeouts & pool: `docs/architecture/core-timeout-pool.md`

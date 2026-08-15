@@ -129,7 +129,7 @@ Single source file (`main.rs`, ~1600 lines). Thin binary over `eggfetch-core`:
 - **Output formatting**: human, headers-only, JSON, NDJSON modes; streaming to stdout or file (`-o`)
 - **Download mode**: filename derivation from URL/headers (`--download`)
 - **Binary encoding**: `--base64` for binary bodies
-- **Exit codes**: 7 distinct codes (0=success, 1=usage, 2=connect, 3=timeout, 4=protocol, 5=status, 6=I/O)
+- **Exit codes**: 8 codes (0=success, 2=usage, 3=connect/TLS, 4=timeout, 5=protocol, 6=status, 7=I/O, 130=interrupted)
 - **Streaming**: body streams to stdout incrementally via `bytes_stream()`
 - **Shell completions**: `--generate-completion` for bash/zsh/fish/powershell
 

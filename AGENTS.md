@@ -82,7 +82,7 @@ The CLI enables: cookies, multipart, proxy. The Python binding enables all featu
 
 ## HTTPX Compatibility Layer
 
-The `eggfetch.compat.httpx` module provides an HTTPX 0.28.1-compatible asyncio facade (**Stage C qualified for the documented Python 3.10+ asyncio surface**). Import it as:
+The `eggfetch.compat.httpx` module provides an HTTPX 0.28.1-compatible asyncio facade (**Stage C qualified**). Import it as:
 
 ```python
 from eggfetch.compat.httpx import Client, AsyncClient, Request, Response, URL, Headers, Cookies
@@ -105,7 +105,7 @@ python scripts/compare_httpx_api_manifest.py \
   --json --output /tmp/api-result.json
 ```
 
-The compatibility profile is in `compat/httpx/0.28.1/`. Allowed differences are documented in `allowed-differences.toml` with `classification` (`must-close`/`intentional`/`deferred`) and `phase` fields for implementation tracking. Phase 1 contract rebaseline completed 2026-08-07: 150 active differences classified (89 must-close, 61 intentional, 0 deferred). Phase 2 object contracts completed 2026-08-07: 34 must-close resolved. Phase 3 signatures/stream types completed 2026-08-08: 55 must-close resolved. The follow-up corrective transport plan records the reference-pinned UDS, SOCKS, direct-transport, environment, and bounded socket-option evidence; update the profile only from the exact final executable SHA.
+The compatibility profile is in `compat/httpx/0.28.1/`. Executable changes require fresh exact-SHA qualification (see `compat/httpx/0.28.1/profile.toml`). Key bounded differences: `Proxy(headers=...)` rejected, `Timeout` maps only `connect`/`read`/`write`/`pool` (no native `total` synthesis), bracketed IPv6 and CIDR `NO_PROXY` forms rejected.
 
 ## Tests
 
@@ -148,10 +148,6 @@ See `docs/releases/process.md` and `docs/releases/compatibility-policy.md`.
 - Keep commits scoped to a single logical change.
 - Do not commit without an explicit user request.
 - Public items need doc comments. For skeletal types, state which milestone fills in the real implementation.
-
-## Safety
-
-Do not add `unsafe`. Workspace uses `unsafe_code = "forbid"`. If you think you need `unsafe`, stop and ask.
 
 ## Architecture Index
 

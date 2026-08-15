@@ -106,50 +106,13 @@ from eggfetch.compat.httpx import Client, AsyncClient, Request, Response
   four phases. Conversion still forwards only `connect`, `read`, `write`, and
   `pool` to native Rust and never synthesizes native `total`.
 
-**Corrective Closure Phases 1-4 implements:**
-- Explicit top-level function signatures matching HTTPX 0.28.1 (`request`, `get`, `post`, `put`, `patch`, `delete`, `head`, `options`, `stream`)
-- Client-only options (`cookies`, `proxy`, `verify`, `timeout`, `trust_env`) separated from request args in top-level helpers
-- `stream()` implemented as real `@contextmanager` yielding open response
-- Auth normalization: tuples become `BasicAuth`, callables become `_FunctionAuth`, `None` disables auth
-- Client state enum (unopened/opened/closed) preventing reopen after close
-- Property setters for `auth`, `base_url`, `cookies`, `event_hooks`, `headers`, `params`, `timeout`
-- HTTPX default headers (`Accept`, `Accept-Encoding`, `Connection`, `User-Agent`)
-- Protocol validation: `http1=False, http2=False` raises `ValueError`, `http1=False, http2=True` raises `NotImplementedError`
-- Transport options: `uds`, `local_address`, and bounded three-tuple `socket_options` functional through the native Rust engine; ordinary byte-like values include `bytearray`, while four-element socket tuples remain an explicit Stage C limitation.
-- `Response.is_closed` public property for stream context manager compatibility
-- Request construction: params-in-URL with duplicates, `data`+`files` multipart, compact JSON, stream auto-headers
-- Response metadata: HTTP version, reason phrase, elapsed, `raise_for_status()` return, `next_request`
-- Stream state: raw/decoded/text/line boundaries, exception handling, encoding
-- One-hop native/custom transport boundary, mount matching, hook per-hop ordering
-- Redirect state machine: method/body rewriting, cross-origin auth stripping, Cookie header stripping on all redirects, max_redirects
-- Auth lifecycle: Basic, Digest, NetRC, callable, custom sync/async, auth through all transport types
-- Scoped cookie jar: domain/path/secure/expiry selection, CookieConflict, multiple Set-Cookie
-- Event hooks: request/response per-hop ordering, hook exception cleanup
-- Cleanup: intermediate response cleanup, stream consumed state, close-once behavior
+All corrective closure phases (1-6) are complete. The facade is Stage C qualified for Python 3.10+ asyncio. Key boundaries:
 
-**Corrective Closure Phase 5 (historical differential closure) implemented:**
-- Compact parity case registry (`compat/httpx/0.28.1/parity-cases.toml`)
-- API oracle reconciliation: 0 unexplained, 0 stale, 0 resolved-in-active
-- Resolved difference ledger: Cookies base-class fix, `main` export restored
-- Runtime diagnostics: unsupported surfaces listed
-- Closure status file (`plans/httpx-parity-correction-status.md`)
-
-**Narrow corrective closure (current):**
-
-- Per-request timeout overrides use HTTPX's four-value extension mapping.
-- Compatibility timeout conversion forwards only HTTPX's `connect`, `read`, `write`, and `pool` values; native `total` remains an explicit EggFetch-only outer deadline.
-- Request and Response state follows HTTPX for empty bodies, unread streams, buffered responses, live iteration, and redirect-location detection.
-- Compatibility cookies are emitted by the facade jar only; native cookie kwargs are not used.
-- Retained-body redirects replay buffered bytes through exactly one body source and reject one-shot streams before a second dispatch.
-- Native dispatch converts compatibility timeout mappings explicitly and serializes URL parameters only once.
-- Request-local and explicit Cookie state is merged with the scoped facade jar per hop; explicit Cookie headers are stripped on every redirect and regenerated from the jar.
-- Live response iteration coalesces chunk sizes, decodes split text incrementally, and updates stream accounting and state.
-- Raw iteration marks streams consumed at the correct point, counts raw source bytes before chunk-size splitting/coalescing, closes on normal exhaustion, and leaves partial finalization/source failure distinguishable from explicit response close. Native compressed responses retain the encoded source in core until first body consumption; raw iterators select it exactly once, while decoded operations select the existing decompressor path. Core's decoded-header policy still removes `Content-Encoding` and `Content-Length` when automatic decompression is enabled; the compatibility facade overlays only the original wire values for those two headers. Native async cancellation must be tested through the built-in client path with a deterministic constrained-client follow-up proving lease release.
-- The compact `test_corrective_kernel.py` suite runs in Tier 1; the full pinned `httpx==0.28.1` compatibility suite, API oracle, and isolated downstream runner are Tier 2/manual gates. The current designation is Stage C qualified for the documented Python 3.10+ asyncio surface, not unrestricted HTTPX replacement; executable changes require fresh exact-SHA qualification.
-- Direct Hyper/UDS/H3 read budgets apply to body chunks after transport setup;
-  the current client seam does not expose direct response-header acquisition
-  separately. Proxy protocol header reads remain phase-aware. The distinction
-  is covered by the direct connect-vs-read regression and proxy timeout tests.
+- Timeout conversion forwards only HTTPX's `connect`, `read`, `write`, `pool`; native `total` is EggFetch-only.
+- `Proxy(headers=...)` with non-empty metadata is rejected (Stage C bounded difference).
+- Environment proxy follows HTTPX's `NO_PROXY` URL-pattern rules; bare unbracketed IPv6 accepted, bracketed/CIDR forms rejected.
+- Raw iteration marks streams consumed before first source read, counts source bytes before chunk adaptation, closes on normal exhaustion only.
+- `test_corrective_kernel.py` runs in Tier 1; full compat suite, API oracle, and downstream runner are Tier 2/manual gates. Executable changes require fresh exact-SHA qualification (see `compat/httpx/0.28.1/profile.toml`).
 
 **Testing the compat layer:**
 
@@ -181,7 +144,6 @@ EGGFETCH_COMPAT_REQUIRED=1 pytest \
   crates/eggfetch-python/tests/compat/test_raw_stream_httpx_differential.py \
   crates/eggfetch-python/tests/compat/test_raw_stream_lifecycle.py \
   -q --strict-markers
-```
 ```
 
 Validate profiles and manifests:
