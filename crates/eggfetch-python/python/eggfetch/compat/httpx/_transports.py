@@ -108,9 +108,11 @@ class HTTPTransport(BaseTransport):
         _validate_transport_options(
             uds=uds, local_address=local_address, socket_options=socket_options,
         )
-        self._verify = verify
-        self._cert = cert
-        self._trust_env = trust_env
+        # Convert SSLContext to representable kwargs at construction time.
+        from eggfetch.compat.httpx._client import _convert_verify_cert
+        self._verify, self._cert, self._trust_env = _convert_verify_cert(
+            verify, cert, trust_env
+        )
         self._http1 = http1
         self._http2 = http2
         self._proxy = proxy
@@ -139,13 +141,11 @@ class HTTPTransport(BaseTransport):
                 kwargs["cert"] = self._cert
             if self._trust_env is not True:
                 kwargs["trust_env"] = self._trust_env
-            if self._http2:
-                kwargs["http2"] = self._http2
+            if self._proxy is not None:
+                kwargs["proxy"] = _convert_proxy(self._proxy)
             kwargs["limits"] = _convert_limits(self._limits)
             if self._timeout is not None:
                 kwargs["timeout"] = _convert_timeout(self._timeout)
-            if self._proxy is not None:
-                kwargs["proxy"] = _convert_proxy(self._proxy)
             if self._retries:
                 kwargs["retries"] = self._retries
             if self._local_address is not None:
@@ -155,6 +155,8 @@ class HTTPTransport(BaseTransport):
                 kwargs["socket_options"] = converted
             if self._uds is not None:
                 kwargs["uds"] = self._uds
+            kwargs["http1"] = self._http1
+            kwargs["http2"] = self._http2
             self._native_client = eggfetch.Client(**kwargs)
         return self._native_client
 
@@ -220,9 +222,11 @@ class AsyncHTTPTransport(AsyncBaseTransport):
         _validate_transport_options(
             uds=uds, local_address=local_address, socket_options=socket_options,
         )
-        self._verify = verify
-        self._cert = cert
-        self._trust_env = trust_env
+        # Convert SSLContext to representable kwargs at construction time.
+        from eggfetch.compat.httpx._client import _convert_verify_cert
+        self._verify, self._cert, self._trust_env = _convert_verify_cert(
+            verify, cert, trust_env
+        )
         self._http1 = http1
         self._http2 = http2
         self._proxy = proxy
@@ -251,8 +255,6 @@ class AsyncHTTPTransport(AsyncBaseTransport):
                 kwargs["cert"] = self._cert
             if self._trust_env is not True:
                 kwargs["trust_env"] = self._trust_env
-            if self._http2:
-                kwargs["http2"] = self._http2
             kwargs["limits"] = _convert_limits(self._limits)
             if self._timeout is not None:
                 kwargs["timeout"] = _convert_timeout(self._timeout)
@@ -267,6 +269,8 @@ class AsyncHTTPTransport(AsyncBaseTransport):
                 kwargs["socket_options"] = converted
             if self._uds is not None:
                 kwargs["uds"] = self._uds
+            kwargs["http1"] = self._http1
+            kwargs["http2"] = self._http2
             self._native_client = eggfetch.AsyncClient(**kwargs)
         return self._native_client
 

@@ -30,33 +30,46 @@ class TestProtocolValidation:
         assert client._http1 is True
         assert client._http2 is True
 
+    def test_http1_false_http2_true_ok(self):
+        """H2-only mode is now accepted (prior knowledge / ALPN-only)."""
+        client = Client(http1=False, http2=True)
+        assert client._http1 is False
+        assert client._http2 is True
+
     def test_http1_false_http2_false_raises(self):
         with pytest.raises(ValueError, match="At least one of http1 or http2"):
             Client(http1=False, http2=False)
-
-    def test_http1_false_http2_true_raises(self):
-        with pytest.raises(NotImplementedError, match="H2-only"):
-            Client(http1=False, http2=True)
 
     def test_async_client_protocol_validation(self):
         with pytest.raises(ValueError, match="At least one of http1 or http2"):
             AsyncClient(http1=False, http2=False)
 
-    def test_async_client_h2_only_raises(self):
-        with pytest.raises(NotImplementedError, match="H2-only"):
-            AsyncClient(http1=False, http2=True)
+    def test_async_client_h2_only_ok(self):
+        """AsyncClient H2-only mode is now accepted."""
+        client = AsyncClient(http1=False, http2=True)
+        assert client._http1 is False
+        assert client._http2 is True
 
     def test_validate_protocol_direct(self):
         _validate_protocol_options(True, False)  # should not raise
         _validate_protocol_options(True, True)   # should not raise
+        _validate_protocol_options(False, True)  # H2-only should not raise
 
     def test_validate_protocol_both_false(self):
         with pytest.raises(ValueError):
             _validate_protocol_options(False, False)
 
-    def test_validate_protocol_h2_only(self):
-        with pytest.raises(NotImplementedError):
-            _validate_protocol_options(False, True)
+    def test_transport_h2_only_ok(self):
+        """HTTPTransport H2-only mode is now accepted."""
+        transport = HTTPTransport(http1=False, http2=True)
+        assert transport._http1 is False
+        assert transport._http2 is True
+
+    def test_async_transport_h2_only_ok(self):
+        """AsyncHTTPTransport H2-only mode is now accepted."""
+        transport = AsyncHTTPTransport(http1=False, http2=True)
+        assert transport._http1 is False
+        assert transport._http2 is True
 
 
 # ---------------------------------------------------------------------------

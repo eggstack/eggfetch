@@ -70,7 +70,7 @@ phase = 1
 
 [[case]]
 id = "CLIENT-007"
-description = "protocol boolean validation"
+description = "protocol boolean validation including H2-only prior knowledge"
 sync = true
 async = true
 tests = ["test_protocol_and_unsupported_options.py"]
@@ -490,7 +490,7 @@ phase = "corrective"
 
 [[case]]
 id = "CORRECTIVE-004"
-description = "built-in transport protocol validation and permanent close"
+description = "built-in transport protocol validation, H2-only acceptance, and permanent close"
 sync = true
 async = true
 tests = ["test_corrective_kernel.py", "test_transports.py", "test_protocol_and_unsupported_options.py"]

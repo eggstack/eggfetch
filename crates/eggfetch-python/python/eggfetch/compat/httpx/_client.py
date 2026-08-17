@@ -147,10 +147,6 @@ def _validate_protocol_options(http1: bool, http2: bool) -> None:
         raise ValueError(
             "At least one of http1 or http2 must be True"
         )
-    if not http1 and http2:
-        raise NotImplementedError(
-            "eggfetch does not support http1=False, http2=True (H2-only mode)"
-        )
 
 
 # ── Transport option validation ───────────────────────────────────────
@@ -264,6 +260,26 @@ def _convert_timeout(timeout):
     if isinstance(timeout, (int, float)):
         return eggfetch.Timeout(connect=timeout, read=timeout, write=timeout, pool=timeout)
     return None
+
+
+def _convert_verify_cert(verify, cert, trust_env):
+    """Convert verify/cert/trust_env to native eggfetch kwargs.
+
+    If *verify* is an ``ssl.SSLContext``, use the snapshot translation
+    layer to convert it to representable kwargs.  Returns the possibly
+    modified (verify, cert, trust_env) tuple.
+    """
+    import ssl
+
+    if isinstance(verify, ssl.SSLContext):
+        from eggfetch.compat.httpx._ssl_context import context_to_eggfetch_kwargs
+
+        kwargs = context_to_eggfetch_kwargs(verify)
+        new_verify = kwargs.get("verify", verify)
+        new_cert = kwargs.get("cert", cert)
+        return new_verify, new_cert, trust_env
+
+    return verify, cert, trust_env
 
 
 def _convert_limits(limits):
@@ -1172,18 +1188,22 @@ class Client:
                 kwargs["follow_redirects"] = self._follow_redirects
             if self._max_redirects is not None:
                 kwargs["max_redirects"] = self._max_redirects
-            if self._verify is not True:
-                kwargs["verify"] = self._verify
-            if self._cert is not None:
-                kwargs["cert"] = self._cert
-            if self._trust_env is not True:
-                kwargs["trust_env"] = self._trust_env
+            # Convert SSLContext verify arg to representable kwargs.
+            verify, cert, trust_env = _convert_verify_cert(
+                self._verify, self._cert, self._trust_env
+            )
+            if verify is not True:
+                kwargs["verify"] = verify
+            if cert is not None:
+                kwargs["cert"] = cert
+            if trust_env is not True:
+                kwargs["trust_env"] = trust_env
             if self._limits:
                 kwargs["limits"] = _convert_limits(self._limits)
             if self._proxy is not None:
                 kwargs["proxy"] = _convert_proxy(self._proxy)
-            if self._http2:
-                kwargs["http2"] = self._http2
+            kwargs["http1"] = self._http1
+            kwargs["http2"] = self._http2
             try:
                 self._native_client = eggfetch.Client(**kwargs)
             except eggfetch.InvalidUrl as exc:
@@ -1883,18 +1903,22 @@ class AsyncClient:
                 kwargs["follow_redirects"] = self._follow_redirects
             if self._max_redirects is not None:
                 kwargs["max_redirects"] = self._max_redirects
-            if self._verify is not True:
-                kwargs["verify"] = self._verify
-            if self._cert is not None:
-                kwargs["cert"] = self._cert
-            if self._trust_env is not True:
-                kwargs["trust_env"] = self._trust_env
+            # Convert SSLContext verify arg to representable kwargs.
+            verify, cert, trust_env = _convert_verify_cert(
+                self._verify, self._cert, self._trust_env
+            )
+            if verify is not True:
+                kwargs["verify"] = verify
+            if cert is not None:
+                kwargs["cert"] = cert
+            if trust_env is not True:
+                kwargs["trust_env"] = trust_env
             if self._limits:
                 kwargs["limits"] = _convert_limits(self._limits)
             if self._proxy is not None:
                 kwargs["proxy"] = _convert_proxy(self._proxy)
-            if self._http2:
-                kwargs["http2"] = self._http2
+            kwargs["http1"] = self._http1
+            kwargs["http2"] = self._http2
             try:
                 self._native_client = eggfetch.AsyncClient(**kwargs)
             except eggfetch.InvalidUrl as exc:

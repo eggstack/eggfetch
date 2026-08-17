@@ -46,7 +46,7 @@ impl PyAsyncClient {
         reason = "constructor keeps shared binding configuration at one adapter boundary"
     )]
     #[new]
-    #[pyo3(signature = (*, headers=None, timeout=None, follow_redirects=None, max_redirects=None, cookies=None, auth=None, decompress=None, proxy=None, verify=None, cert=None, retries=None, http2=None, http3=None, limits=None, trust_env=None, local_address=None, socket_options=None, uds=None))]
+    #[pyo3(signature = (*, headers=None, timeout=None, follow_redirects=None, max_redirects=None, cookies=None, auth=None, decompress=None, proxy=None, verify=None, cert=None, retries=None, http1=None, http2=None, http3=None, limits=None, trust_env=None, local_address=None, socket_options=None, uds=None))]
     fn new(
         py: Python<'_>,
         headers: Option<&Bound<'_, PyAny>>,
@@ -60,6 +60,7 @@ impl PyAsyncClient {
         verify: Option<&Bound<'_, PyAny>>,
         cert: Option<&Bound<'_, PyAny>>,
         retries: Option<&Bound<'_, PyAny>>,
+        http1: Option<bool>,
         http2: Option<bool>,
         http3: Option<bool>,
         limits: Option<&Bound<'_, PyAny>>,
@@ -75,13 +76,22 @@ impl PyAsyncClient {
         let tls_config = crate::tls::build_tls_config(verify, cert)?;
         let mut builder = eggfetch_core::Client::builder().tls_config(tls_config);
 
-        if let Some(true) = http2 {
-            builder = builder
-                .http_version_policy(eggfetch_core::HttpVersionPolicy::Auto { allow_http3: false });
-        }
-
+        // Resolve the HTTP version policy from (http1, http2, http3) flags.
+        // When only http1 is explicitly set (http1=True, http2=False/None),
+        // use Http1Only. When only http2 is set (http1=False/None, http2=True),
+        // use Http2Only for prior-knowledge mode. When both are true,
+        // use Auto. http3=True always maps to Http3Only.
+        let http1_enabled = http1.unwrap_or(true);
+        let http2_enabled = http2.unwrap_or(false);
         if let Some(true) = http3 {
             builder = builder.http_version_policy(eggfetch_core::HttpVersionPolicy::Http3Only);
+        } else if !http1_enabled && http2_enabled {
+            builder = builder.http_version_policy(eggfetch_core::HttpVersionPolicy::Http2Only);
+        } else if http1_enabled && http2_enabled {
+            builder = builder
+                .http_version_policy(eggfetch_core::HttpVersionPolicy::Auto { allow_http3: false });
+        } else if http1_enabled && !http2_enabled {
+            builder = builder.http_version_policy(eggfetch_core::HttpVersionPolicy::Http1Only);
         }
 
         if let Some(l) = limits {
