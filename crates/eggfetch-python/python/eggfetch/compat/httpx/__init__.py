@@ -455,15 +455,103 @@ def create_ssl_context(
     cert=None,
     trust_env=True,
 ):
-    """Create an SSL context stub.
+    """Create an ``ssl.SSLContext`` matching HTTPX 0.28.1 behavior.
 
-    eggfetch manages TLS internally via the Rust engine. This function
-    exists for API compatibility but does not create a usable context
-    for external consumers.
+    Returns a genuine Python ``ssl.SSLContext`` that can be inspected
+    and classified by eggfetch's compatibility translation layer.
+
+    When a context created by this helper is passed back as the
+    ``verify`` argument to ``Client`` or ``AsyncClient``, eggfetch
+    reconstructs an equivalent ``TlsConfig`` via the weak registry
+    metadata.
+
+    Parameters match HTTPX 0.28.1:
+    - ``verify=True``: default secure context (certifi CA bundle,
+      or ``SSL_CERT_FILE``/``SSL_CERT_DIR`` when ``trust_env=True``).
+    - ``verify=False``: disable certificate and hostname verification.
+    - ``verify=<str>``: **deprecated**; load CA from path.
+    - ``verify=<ssl.SSLContext>``: use the provided context directly.
+    - ``cert=<str>`` or ``cert=(cert, key)``: **deprecated**; load
+      client certificate chain.
     """
-    raise NotImplementedError(
-        "eggfetch manages TLS internally; create_ssl_context is not supported."
+    import os
+    import ssl as _ssl
+
+    from eggfetch.compat.httpx._ssl_context import (
+        _eggfetch_ssl_registry,
     )
+
+    if verify is True:
+        if trust_env and os.environ.get("SSL_CERT_FILE"):
+            ctx = _ssl.create_default_context(
+                cafile=os.environ["SSL_CERT_FILE"]
+            )
+        elif trust_env and os.environ.get("SSL_CERT_DIR"):
+            ctx = _ssl.create_default_context(
+                capath=os.environ["SSL_CERT_DIR"]
+            )
+        else:
+            import certifi
+
+            ctx = _ssl.create_default_context(cafile=certifi.where())
+    elif verify is False:
+        ctx = _ssl.SSLContext(_ssl.PROTOCOL_TLS_CLIENT)
+        ctx.check_hostname = False
+        ctx.verify_mode = _ssl.CERT_NONE
+    elif isinstance(verify, str):
+        import warnings as _warnings
+
+        _warnings.warn(
+            "`verify=<str>` is deprecated. "
+            "Use `verify=ssl.create_default_context(cafile=...)` "
+            "or `verify=ssl.create_default_context(capath=...)` instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        if os.path.isdir(verify):
+            ctx = _ssl.create_default_context(capath=verify)
+        else:
+            ctx = _ssl.create_default_context(cafile=verify)
+    elif isinstance(verify, _ssl.SSLContext):
+        ctx = verify
+    else:
+        raise TypeError(
+            f"verify must be bool, str, or ssl.SSLContext, "
+            f"got {type(verify).__name__}"
+        )
+
+    cert_path = None
+    key_path = None
+
+    if cert:
+        import warnings as _warnings
+
+        _warnings.warn(
+            "`cert=...` is deprecated. Use `verify=<ssl_context>` "
+            "instead, with `.load_cert_chain()` to configure the "
+            "certificate chain.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        if isinstance(cert, str):
+            ctx.load_cert_chain(cert)
+            cert_path = cert
+        else:
+            ctx.load_cert_chain(*cert)
+            cert_path = cert[0]
+            key_path = cert[1]
+
+    # Register in the weak registry so eggfetch can reconstruct the
+    # equivalent TlsConfig when this context is passed back.
+    _eggfetch_ssl_registry.register(
+        ctx,
+        cert_path=cert_path,
+        key_path=key_path,
+        verify=verify if not isinstance(verify, _ssl.SSLContext) else True,
+        trust_env=trust_env,
+    )
+
+    return ctx
 
 
 __all__ = [

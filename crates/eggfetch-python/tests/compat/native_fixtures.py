@@ -531,3 +531,264 @@ def local_tls_server() -> Generator[tuple[str, int, ssl.SSLContext, str], None, 
             httpd.shutdown()
             httpd.server_close()
             thread.join(timeout=2)
+
+
+# ---------------------------------------------------------------------------
+# HTTP/2 prior-knowledge server fixtures
+# ---------------------------------------------------------------------------
+
+import h2.config
+import h2.connection
+import h2.events
+
+
+def _h2_handle_request(
+    conn: h2.connection.H2Connection,
+    event: h2.events.RequestReceived,
+) -> None:
+    """Handle a single HTTP/2 request and send a response."""
+    headers = dict(event.headers)
+    path = headers.get(b":path", b"/").decode("ascii", errors="replace")
+    method = headers.get(b":method", b"GET").decode("ascii", errors="replace")
+
+    if path == "/health":
+        body = b"ok"
+        resp_headers = [
+            (b":status", b"200"),
+            (b"content-type", b"text/plain"),
+            (b"content-length", str(len(body)).encode()),
+        ]
+        conn.send_headers(event.stream_id, resp_headers, end_stream=False)
+        conn.send_data(event.stream_id, body, end_stream=True)
+    elif path == "/json":
+        import json as _json
+        body = _json.dumps({"status": "h2-ok"}).encode()
+        resp_headers = [
+            (b":status", b"200"),
+            (b"content-type", b"application/json"),
+            (b"content-length", str(len(body)).encode()),
+        ]
+        conn.send_headers(event.stream_id, resp_headers, end_stream=False)
+        conn.send_data(event.stream_id, body, end_stream=True)
+    elif path == "/echo-body":
+        resp_headers = [
+            (b":status", b"200"),
+            (b"content-type", b"application/octet-stream"),
+        ]
+        conn.send_headers(event.stream_id, resp_headers, end_stream=False)
+    elif path == "/streaming":
+        resp_headers = [
+            (b":status", b"200"),
+            (b"content-type", b"text/plain"),
+        ]
+        conn.send_headers(event.stream_id, resp_headers, end_stream=False)
+        for i in range(3):
+            chunk = f"chunk-{i}\n".encode()
+            conn.send_data(event.stream_id, chunk, end_stream=False)
+        conn.send_data(event.stream_id, b"", end_stream=True)
+    elif path == "/close":
+        conn.close_connection()
+    else:
+        resp_headers = [
+            (b":status", b"404"),
+            (b"content-length", b"0"),
+        ]
+        conn.send_headers(event.stream_id, resp_headers, end_stream=True)
+
+
+def _h2_server_loop(
+    raw_sock: socket.socket,
+    stop: threading.Event,
+) -> None:
+    """Run an HTTP/2 server loop on a single accepted connection."""
+    config = h2.config.H2Configuration(client_side=False)
+    conn = h2.connection.H2Connection(config=config)
+    conn.initiate_connection()
+    raw_sock.sendall(conn.data_to_send())
+
+    body_buffers: dict[int, bytes] = {}
+
+    while not stop.is_set():
+        try:
+            raw_sock.settimeout(0.5)
+            data = raw_sock.recv(65535)
+            if not data:
+                break
+        except (socket.timeout, OSError):
+            continue
+
+        events = conn.receive_data(data)
+        for event in events:
+            if isinstance(event, h2.events.RequestReceived):
+                try:
+                    _h2_handle_request(conn, event)
+                except Exception:
+                    try:
+                        conn.reset_stream(
+                            event.stream_id,
+                            error_code=h2.errors.ErrorCodes.INTERNAL_ERROR,
+                        )
+                    except Exception:
+                        pass
+            elif isinstance(event, h2.events.DataReceived):
+                stream_id = event.stream_id
+                body_buffers[stream_id] = body_buffers.get(stream_id, b"") + event.data
+                conn.acknowledge_received_data(len(event.data), stream_id)
+            elif isinstance(event, h2.events.StreamEnded):
+                stream_id = event.stream_id
+                if stream_id in body_buffers:
+                    body = body_buffers.pop(stream_id)
+                    resp_headers = [
+                        (b":status", b"200"),
+                        (b"content-type", b"application/octet-stream"),
+                        (b"content-length", str(len(body)).encode()),
+                    ]
+                    conn.send_headers(stream_id, resp_headers, end_stream=True)
+                    conn.send_data(stream_id, body, end_stream=True)
+
+        try:
+            raw_sock.sendall(conn.data_to_send())
+        except OSError:
+            break
+
+    try:
+        raw_sock.close()
+    except OSError:
+        pass
+
+
+class _H2RequestCounter:
+    """Thread-safe counter for tracking requests handled by H2 server."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._count = 0
+
+    def increment(self) -> int:
+        with self._lock:
+            self._count += 1
+            return self._count
+
+    @property
+    def count(self) -> int:
+        with self._lock:
+            return self._count
+
+
+@contextmanager
+def local_h2_server() -> Generator[
+    tuple[str, int, _H2RequestCounter], None, None
+]:
+    """Start a local HTTP/2 prior-knowledge (cleartext) server.
+
+    The server speaks raw HTTP/2 without an HTTP/1.1 Upgrade handshake.
+    Clients must send the HTTP/2 connection preface directly.
+
+    Yields (host, port, request_counter).
+    """
+    stop = threading.Event()
+    counter = _H2RequestCounter()
+    server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    server_sock.bind(("127.0.0.1", 0))
+    server_sock.listen(32)
+    port = server_sock.getsockname()[1]
+    server_sock.settimeout(1)
+
+    def accept_loop() -> None:
+        while not stop.is_set():
+            try:
+                conn, _addr = server_sock.accept()
+                counter.increment()
+                t = threading.Thread(
+                    target=_h2_server_loop,
+                    args=(conn, stop),
+                    daemon=True,
+                )
+                t.start()
+            except (socket.timeout, OSError):
+                continue
+
+    thread = threading.Thread(target=accept_loop, daemon=True)
+    thread.start()
+    try:
+        yield "127.0.0.1", port, counter
+    finally:
+        stop.set()
+        server_sock.close()
+        thread.join(timeout=3)
+
+
+def _tls_h2_server_loop(
+    raw_sock: socket.socket,
+    stop: threading.Event,
+    server_ssl: ssl.SSLContext,
+) -> None:
+    """Run an HTTP/2 server loop over TLS."""
+    try:
+        tls_sock = server_ssl.wrap_socket(raw_sock, server_side=True)
+    except (ssl.SSLError, OSError):
+        raw_sock.close()
+        return
+
+    alpn = tls_sock.selected_alpn_protocol()
+    if alpn == "h2":
+        _h2_server_loop(tls_sock, stop)
+    else:
+        # Fallback: if client didn't negotiate h2, close
+        tls_sock.close()
+
+
+@contextmanager
+def local_tls_h2_server() -> Generator[
+    tuple[str, int, ssl.SSLContext, str, _H2RequestCounter], None, None
+]:
+    """TLS server that negotiates HTTP/2 via ALPN.
+
+    The server advertises ``h2`` and ``http/1.1`` in ALPN. If the client
+    selects ``h2``, the connection is served over HTTP/2. Otherwise the
+    connection is closed (no HTTP/1.1 fallback in this fixture).
+
+    Yields (host, port, client_ssl_context, cert_path, request_counter).
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        cert_path, key_path = _generate_self_signed_cert(tmpdir)
+
+        server_ssl = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        server_ssl.load_cert_chain(cert_path, key_path)
+        server_ssl.set_alpn_protocols(["h2", "http/1.1"])
+
+        client_ssl = ssl.create_default_context()
+        client_ssl.load_verify_locations(cert_path)
+
+        stop = threading.Event()
+        counter = _H2RequestCounter()
+        server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        server_sock.bind(("127.0.0.1", 0))
+        server_sock.listen(32)
+        port = server_sock.getsockname()[1]
+        server_sock.settimeout(1)
+
+        def accept_loop() -> None:
+            while not stop.is_set():
+                try:
+                    conn, _addr = server_sock.accept()
+                    counter.increment()
+                    t = threading.Thread(
+                        target=_tls_h2_server_loop,
+                        args=(conn, stop, server_ssl),
+                        daemon=True,
+                    )
+                    t.start()
+                except (socket.timeout, OSError):
+                    continue
+
+        thread = threading.Thread(target=accept_loop, daemon=True)
+        thread.start()
+        try:
+            yield "127.0.0.1", port, client_ssl, cert_path, counter
+        finally:
+            stop.set()
+            server_sock.close()
+            thread.join(timeout=3)

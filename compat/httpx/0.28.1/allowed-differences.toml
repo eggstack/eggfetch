@@ -369,17 +369,17 @@ symbol = "create_ssl_context"
 difference-type = "missing-symbol"
 member = ""
 reference = "present"
-candidate = "absent"
+candidate = "present"
 behavior-case = "private-internal-symbols"
 reference-behavior = "HTTPX exposes create_ssl_context as a public symbol"
-eggfetch-behavior = "eggfetch does not expose create_ssl_context; TLS is handled by the Rust engine"
-rationale = "create_ssl_context is an HTTPX internal detail. eggfetch delegates TLS to the native Rust engine."
+eggfetch-behavior = "eggfetch exposes create_ssl_context as a public symbol, returning a real ssl.SSLContext"
+rationale = "create_ssl_context now returns a real ssl.SSLContext matching HTTPX 0.28.1 behavior. The context is registered in a weak registry for faithful TlsConfig reconstruction."
 compatibility-stage-impact = "stage-c"
 security-improvement = "false"
-migration-impact = "None; create_ssl_context is not part of the public API contract"
+migration-impact = "None; create_ssl_context now works as in HTTPX"
 owner = "eggfetch-team"
 review-milestone = "stage-d"
-tests = []
+tests = ["test_ssl_context_translation.py"]
 non_expiring = true
 
 [[difference]]
@@ -1170,14 +1170,14 @@ reference = "'ssl.SSLContext'"
 candidate = "None"
 behavior-case = "extra-public-properties"
 reference-behavior = "HTTPX create_ssl_context returns ssl.SSLContext with return annotation"
-eggfetch-behavior = "eggfetch create_ssl_context has no return annotation"
-rationale = "eggfetch create_ssl_context delegates to the Rust engine. The return value is functionally compatible but lacks the type annotation."
+eggfetch-behavior = "eggfetch create_ssl_context returns a real ssl.SSLContext but lacks the type annotation"
+rationale = "The return value is functionally identical to HTTPX 0.28.1. The missing annotation is a cosmetic difference."
 compatibility-stage-impact = "stage-c"
 security-improvement = "false"
 migration-impact = "None; return type is functionally identical"
 owner = "eggfetch-team"
 review-milestone = "stage-d"
-tests = []
+tests = ["test_ssl_context_translation.py"]
 non_expiring = true
 
 [[difference]]

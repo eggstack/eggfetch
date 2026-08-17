@@ -151,7 +151,7 @@ fn request<'py>(
 
     let retry_override = retry::parse_retry_option(retries)?;
 
-    let tls_config = tls::build_tls_config(verify, cert)?;
+    let tls_config = tls::build_tls_config(verify, cert, None)?;
 
     let mut builder = eggfetch_core::Client::builder()
         .redirect_policy(redirect_policy)

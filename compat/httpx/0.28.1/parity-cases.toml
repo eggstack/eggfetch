@@ -496,3 +496,73 @@ async = true
 tests = ["test_corrective_kernel.py", "test_transports.py", "test_protocol_and_unsupported_options.py"]
 result = "parity"
 phase = "corrective"
+
+# ── Phase 2: HTTP/2-only differential evidence ─────────────────────────
+
+[[case]]
+id = "H2-001"
+description = "HTTPS H2-only via TLS ALPN — eggfetch matches httpx reference for GET, JSON, multiplexing"
+sync = true
+async = false
+tests = ["test_h2_differential.py::TestHttpsH2OnlyAlpn"]
+result = "parity"
+phase = 2
+notes = "Both clients negotiate h2 via ALPN, report HTTP/2 version, and reuse connections."
+
+[[case]]
+id = "H2-002"
+description = "TLS ALPN enforcement — httpx fails H2-only vs H1-only server; eggfetch silently falls back to H1"
+sync = true
+async = false
+tests = ["test_h2_differential.py::TestH2OnlyEnforcement"]
+result = "bounded-difference"
+phase = 2
+notes = "eggfetch does not enforce h2-only at the connector level. hyper-rustls advertises h2 in ALPN but does not reject h1 negotiation. Tracked as known limitation."
+
+[[case]]
+id = "H2-003"
+description = "Cleartext H2 prior knowledge — httpx supports h2c; eggfetch falls back to HTTP/1.1"
+sync = true
+async = false
+tests = ["test_h2_differential.py::TestCleartextH2PriorKnowledge"]
+result = "bounded-difference"
+phase = 2
+notes = "The hyper_rustls connector only supports HTTP/2 over TLS via ALPN. Cleartext HTTP has no h2c path. The inner HttpConnector always sends HTTP/1.1."
+
+[[case]]
+id = "H2-004"
+description = "H2-only constructor matrix — all four (http1, http2) combinations for Client, AsyncClient, HTTPTransport, AsyncHTTPTransport"
+sync = true
+async = true
+tests = ["test_h2_differential.py::TestH2OnlyConstructorMatrix"]
+result = "parity"
+phase = 2
+notes = "(False, False) raises ValueError; all other combinations accepted."
+
+[[case]]
+id = "H2-005"
+description = "H2-only streaming response — sync and async deliver all chunks over TLS H2"
+sync = true
+async = true
+tests = ["test_h2_differential.py::TestH2OnlyStreaming"]
+result = "parity"
+phase = 2
+
+[[case]]
+id = "H2-006"
+description = "http_version field reports HTTP/2 for H2-only, HTTP/1.x for H1-only, negotiated version for Auto"
+sync = true
+async = false
+tests = ["test_h2_differential.py::TestH2OnlyHttpVersion"]
+result = "parity"
+phase = 2
+
+[[case]]
+id = "H2-007"
+description = "H2-only with local_address/socket_options — direct connector falls back to HTTP/1.1"
+sync = true
+async = true
+tests = ["test_h2_differential.py::TestH2OnlySpecializedRoutes"]
+result = "bounded-difference"
+phase = 2
+notes = "The direct connector path (used when local_address or socket_options are set) does not support HTTP/2 negotiation. HttpVersionPolicy is only applied to the standard hyper_rustls connector."

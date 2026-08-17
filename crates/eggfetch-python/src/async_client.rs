@@ -73,7 +73,7 @@ impl PyAsyncClient {
             .and_then(|v| v.extract::<bool>().ok())
             .is_some_and(|b| !b);
 
-        let tls_config = crate::tls::build_tls_config(verify, cert)?;
+        let tls_config = crate::tls::build_tls_config(verify, cert, trust_env)?;
         let mut builder = eggfetch_core::Client::builder().tls_config(tls_config);
 
         // Resolve the HTTP version policy from (http1, http2, http3) flags.

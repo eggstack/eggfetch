@@ -428,6 +428,26 @@ impl TlsConfigBuilder {
         Ok(self)
     }
 
+    /// Load CA certificates from DER bytes, replacing any existing trust
+    /// store configuration.
+    ///
+    /// Each certificate is expected as raw DER-encoded X.509 data
+    /// (without PEM framing).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if no certificates are provided.
+    pub fn ca_certificate_der(mut self, der_certs: Vec<Vec<u8>>) -> Result<Self> {
+        let certs: Vec<CertificateDer<'static>> =
+            der_certs.into_iter().map(CertificateDer::from).collect();
+        if certs.is_empty() {
+            return Err(Error::CaBundle("no DER certificates provided".into()));
+        }
+        self.custom_ca_roots = certs;
+        self.trust_store = TrustStore::Custom(self.custom_ca_roots.clone());
+        Ok(self)
+    }
+
     /// Set the client identity for mTLS.
     #[must_use]
     pub fn client_identity(mut self, identity: ClientIdentity) -> Self {
