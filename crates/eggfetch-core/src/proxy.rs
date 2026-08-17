@@ -1514,7 +1514,7 @@ pub fn parse_proxy_response_bytes(
     rt.block_on(async {
         let cursor = std::io::Cursor::new(data.to_vec());
         let mut reader = BufReader::new(cursor);
-        let (status, headers, _remaining) =
+        let (status, headers, _remaining, _reason) =
             crate::transport::proxy::read_proxy_response(&mut reader).await?;
         Ok((status, headers))
     })

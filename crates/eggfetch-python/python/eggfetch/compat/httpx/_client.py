@@ -1384,6 +1384,8 @@ class Client:
         )
         try:
             if stream:
+                if request.extensions:
+                    kwargs["extensions"] = request.extensions
                 native_resp = self._native_client.stream(**kwargs)
             else:
                 native_resp = self._native_client.request(**kwargs)
@@ -1435,6 +1437,8 @@ class Client:
             )
             try:
                 if stream:
+                    if request.extensions:
+                        kwargs["extensions"] = request.extensions
                     native_resp = self._native_client.stream(**kwargs)
                 else:
                     native_resp = self._native_client.request(**kwargs)
@@ -2117,6 +2121,8 @@ class AsyncClient:
         )
         try:
             if stream:
+                if request.extensions:
+                    kwargs["extensions"] = request.extensions
                 native_resp = await self._native_client.stream(**kwargs)
             else:
                 native_resp = await self._native_client.request(**kwargs)
@@ -2173,6 +2179,8 @@ class AsyncClient:
             )
             try:
                 if stream:
+                    if request.extensions:
+                        kwargs["extensions"] = request.extensions
                     native_resp = await self._native_client.stream(**kwargs)
                 else:
                     native_resp = await self._native_client.request(**kwargs)

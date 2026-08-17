@@ -73,6 +73,7 @@ fn rebuild_request(
     headers: &Headers,
     body: &RequestBody,
     version: http::Version,
+    transport_hints: &crate::request::TransportHints,
 ) -> Result<Request> {
     let mut req = Request::new(method.clone(), url.clone());
     *req.headers_mut() = headers.clone();
@@ -84,6 +85,7 @@ fn rebuild_request(
         }
     }
     req.set_version(version);
+    req.set_transport_hints(transport_hints.clone());
     Ok(req)
 }
 
@@ -144,6 +146,7 @@ pub(crate) async fn send_with_retry(client: &Client, request: Request) -> Result
         _orig_decompress,
         _orig_proxy,
         _orig_retry,
+        orig_transport_hints,
     ) = request.into_parts();
 
     let start_time = std::time::Instant::now();
@@ -175,6 +178,7 @@ pub(crate) async fn send_with_retry(client: &Client, request: Request) -> Result
             &orig_headers,
             &orig_body,
             orig_version,
+            &orig_transport_hints,
         )?;
 
         let result = Box::pin(send_with_redirects(client, attempt_request)).await;
@@ -248,6 +252,7 @@ pub(crate) async fn send_with_redirects(client: &Client, request: Request) -> Re
         _request_decompress,
         _request_proxy,
         _request_retry,
+        request_transport_hints,
     ) = request.into_parts();
 
     let mut merged_headers = client.config().default_headers.clone().into_inner();
@@ -365,6 +370,12 @@ pub(crate) async fn send_with_redirects(client: &Client, request: Request) -> Re
         hop_request.set_body(cur_body);
         hop_request.set_version(cur_version);
         hop_request.set_timeout(Some(hop_timeout));
+
+        // Transport hints (target, sni_hostname) apply only on the first
+        // hop; redirects clear them because the destination changes.
+        if prev_url.is_none() {
+            hop_request.set_transport_hints(request_transport_hints.clone());
+        }
 
         let is_cross_origin_redirect = prev_url
             .as_ref()
@@ -505,7 +516,7 @@ pub(crate) async fn send_with_redirects(client: &Client, request: Request) -> Re
 
         let new_method = redirect::redirect_method(redirect_status, &cur_method);
 
-        let (_, new_url, new_headers, new_body, new_version, _, _, _, _, _, _, _) =
+        let (_, new_url, new_headers, new_body, new_version, _, _, _, _, _, _, _, _) =
             redirect_req.into_parts();
 
         prev_url = Some(cur_url.clone());
@@ -664,6 +675,7 @@ pub(crate) async fn send_single_request(
         request_decompress,
         proxy_override,
         _,
+        transport_hints,
     ) = request.into_parts();
 
     let decompression_enabled = request_decompress.unwrap_or(inner.config.automatic_decompression);
@@ -755,9 +767,10 @@ pub(crate) async fn send_single_request(
     // Route through UDS handler if configured.
     #[cfg(unix)]
     if let Some(ref uds_client) = inner.uds_client {
+        let uri = resolve_request_uri(&url, &transport_hints)?;
         let mut http_request = http::Request::builder()
             .method(&method)
-            .uri(url.as_str())
+            .uri(uri)
             .version(version);
         for (name, value) in headers.iter() {
             http_request = http_request.header(name, value);
@@ -782,9 +795,10 @@ pub(crate) async fn send_single_request(
     let effective_proxy_is_none = effective_proxy.is_none();
     if effective_proxy_is_none {
         if let Some(ref direct_client) = inner.direct_client {
+            let uri = resolve_request_uri(&url, &transport_hints)?;
             let mut http_request = http::Request::builder()
                 .method(method)
-                .uri(url.as_str())
+                .uri(uri)
                 .version(version);
             for (name, value) in headers.iter() {
                 http_request = http_request.header(name, value);
@@ -828,6 +842,7 @@ pub(crate) async fn send_single_request(
                 body,
                 version,
                 proxy_config,
+                &transport_hints,
                 &crate::transport::proxy::ProxyRequestContext {
                     remaining_total,
                     deadline: timeout.total.map(|total| started + total),
@@ -849,9 +864,10 @@ pub(crate) async fn send_single_request(
             {
                 if inner.config.http_version_policy.use_http3() {
                     if let Some(ref h3_connector) = inner.h3_connector {
+                        let uri = resolve_request_uri(&url, &transport_hints)?;
                         let mut h3_request = http::Request::builder()
                             .method(method)
-                            .uri(url.as_str())
+                            .uri(uri)
                             .version(version);
                         for (name, value) in headers.iter() {
                             h3_request = h3_request.header(name, value);
@@ -877,6 +893,7 @@ pub(crate) async fn send_single_request(
                         body,
                         version,
                         remaining_total,
+                        &transport_hints,
                     )
                     .await?
                 }
@@ -891,6 +908,7 @@ pub(crate) async fn send_single_request(
                     body,
                     version,
                     remaining_total,
+                    &transport_hints,
                 )
                 .await?
             }
@@ -936,16 +954,14 @@ async fn send_hyper_request(
     body: RequestBody,
     version: http::Version,
     remaining_total: Option<Duration>,
+    transport_hints: &crate::request::TransportHints,
 ) -> Result<Response> {
     let hyper_client = inner
         .hyper_client
         .as_ref()
         .ok_or_else(|| Error::Unsupported("HTTP client not available for this protocol".into()))?;
 
-    let uri: http::Uri = url
-        .as_str()
-        .parse()
-        .map_err(|e| Error::InvalidUrl(format!("failed to convert url to URI: {e}")))?;
+    let uri = resolve_request_uri(&url, transport_hints)?;
 
     let mut http_request = http::Request::builder()
         .method(method)
@@ -964,4 +980,45 @@ async fn send_hyper_request(
         crate::transport::direct::send_request(hyper_client, hyper_request, url.clone());
 
     send_with_total_timeout(send_future, remaining_total).await
+}
+
+/// Validate a `target` extension value for request smuggling safety.
+///
+/// Rejects CR (`\r`), LF (`\n`), and NUL (`\0`) bytes.
+pub(crate) fn validate_target(target: &[u8]) -> Result<()> {
+    if target.is_empty() {
+        return Err(Error::RequestBuild(
+            "target extension must not be empty".into(),
+        ));
+    }
+    if target
+        .iter()
+        .any(|&b| b == b'\r' || b == b'\n' || b == b'\0')
+    {
+        return Err(Error::RequestBuild(
+            "target extension contains forbidden characters (CR/LF/NUL)".into(),
+        ));
+    }
+    Ok(())
+}
+
+/// Build the HTTP request URI, applying `target` transport hint if present.
+///
+/// When `target` is set, the wire URI is overridden while the logical URL
+/// is preserved for routing, Host header, cookies, and auth decisions.
+fn resolve_request_uri(
+    url: &url::Url,
+    transport_hints: &crate::request::TransportHints,
+) -> Result<http::Uri> {
+    if let Some(ref target) = transport_hints.target {
+        validate_target(target)?;
+        std::str::from_utf8(target)
+            .map_err(|_| Error::InvalidUrl("target extension is not valid UTF-8".into()))?
+            .parse()
+            .map_err(|e| Error::InvalidUrl(format!("failed to convert target to URI: {e}")))
+    } else {
+        url.as_str()
+            .parse()
+            .map_err(|e| Error::InvalidUrl(format!("failed to convert url to URI: {e}")))
+    }
 }

@@ -16,6 +16,29 @@ use crate::auth::AuthScheme;
 #[cfg(feature = "proxy")]
 use crate::proxy::ProxyConfig;
 
+/// Typed transport-level hints carried on a request.
+///
+/// These are *not* HTTP headers and do not affect logical URL semantics
+/// (routing, cookies, auth-origin comparisons, redirects, proxy selection).
+/// They control only the wire-level behavior of the transport layer.
+///
+/// Timeout is kept in the existing [`Timeout`](crate::Timeout) model and
+/// must not be duplicated here.
+#[derive(Debug, Clone, Default)]
+pub struct TransportHints {
+    /// Override the wire request target (e.g. `OPTIONS *`, absolute-form).
+    ///
+    /// When present this replaces only the URI sent on the wire; the
+    /// logical URL used for connection routing, Host header defaults,
+    /// cookies, auth, redirects, and proxy selection remains unchanged.
+    pub target: Option<Bytes>,
+    /// Override the TLS Server Name Indication hostname.
+    ///
+    /// TCP connects to the URL host/IP; TLS uses this name for SNI and
+    /// certificate verification.
+    pub sni_hostname: Option<String>,
+}
+
 /// Proxy override for a specific request.
 ///
 /// Controls whether a request inherits the client-level proxy,
@@ -34,7 +57,7 @@ pub enum ProxyOverride {
 
 /// Parts returned by [`Request::into_parts`].
 ///
-/// `(method, url, headers, body, version, timeout, redirect, auth, auth_disabled, decompress, proxy_override, retry)`
+/// `(method, url, headers, body, version, timeout, redirect, auth, auth_disabled, decompress, proxy_override, retry, transport_hints)`
 pub(crate) type RequestParts = (
     http::Method,
     url::Url,
@@ -48,6 +71,7 @@ pub(crate) type RequestParts = (
     Option<bool>,
     ProxyOverride,
     Option<RetryPolicy>,
+    TransportHints,
 );
 
 /// An outgoing HTTP request.
@@ -67,6 +91,8 @@ pub struct Request {
     proxy_override: ProxyOverride,
     /// Per-request retry policy override.
     retry: Option<RetryPolicy>,
+    /// Typed transport-level hints (target override, SNI hostname, etc.).
+    transport_hints: TransportHints,
 }
 
 impl Request {
@@ -85,6 +111,7 @@ impl Request {
             decompress: None,
             proxy_override: ProxyOverride::Inherit,
             retry: None,
+            transport_hints: TransportHints::default(),
         }
     }
 
@@ -216,9 +243,20 @@ impl Request {
         self.retry = retry;
     }
 
+    /// Returns a reference to the transport hints for this request.
+    #[must_use]
+    pub fn transport_hints(&self) -> &TransportHints {
+        &self.transport_hints
+    }
+
+    /// Set the transport hints for this request.
+    pub fn set_transport_hints(&mut self, hints: TransportHints) {
+        self.transport_hints = hints;
+    }
+
     /// Decompose a request into its parts.
     ///
-    /// Returns `(method, url, headers, body, version, timeout, redirect, auth, auth_disabled, decompress, proxy_override, retry)`.
+    /// Returns `(method, url, headers, body, version, timeout, redirect, auth, auth_disabled, decompress, proxy_override, retry, transport_hints)`.
     pub(crate) fn into_parts(self) -> RequestParts {
         (
             self.method,
@@ -233,6 +271,7 @@ impl Request {
             self.decompress,
             self.proxy_override,
             self.retry,
+            self.transport_hints,
         )
     }
 }
@@ -251,6 +290,7 @@ pub struct RequestBuilder {
     decompress: Option<bool>,
     proxy_override: ProxyOverride,
     retry: Option<RetryPolicy>,
+    transport_hints: TransportHints,
     error: Option<crate::Error>,
 }
 
@@ -270,6 +310,7 @@ impl RequestBuilder {
             decompress: None,
             proxy_override: ProxyOverride::Inherit,
             retry: None,
+            transport_hints: TransportHints::default(),
             error: None,
         }
     }
@@ -401,6 +442,16 @@ impl RequestBuilder {
         self
     }
 
+    /// Set the transport hints for this request.
+    ///
+    /// Transport hints control wire-level behavior (target override,
+    /// SNI hostname) without affecting logical URL semantics.
+    #[must_use]
+    pub fn transport_hints(mut self, hints: TransportHints) -> Self {
+        self.transport_hints = hints;
+        self
+    }
+
     /// Build the request without sending it.
     ///
     /// # Errors
@@ -421,6 +472,7 @@ impl RequestBuilder {
         req.decompress = self.decompress;
         req.proxy_override = self.proxy_override;
         req.retry = self.retry;
+        req.transport_hints = self.transport_hints;
         Ok(req)
     }
 

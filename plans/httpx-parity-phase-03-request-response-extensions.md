@@ -1,6 +1,6 @@
 # HTTPX Parity Phase 03 — Request/Response Extension Surface
 
-Status: implementation handoff plan.
+Status: **Partially implemented** — target and wire reason_phrase implemented; sni_hostname, trace, stream_id deferred.
 Depends on: Phase 02 should land first so protocol policy is stable.
 Does not include: `network_stream` raw-I/O ownership; that is Phase 04.
 

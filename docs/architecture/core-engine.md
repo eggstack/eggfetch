@@ -35,7 +35,7 @@ Builder-configurable options: headers, timeout, pool, redirects, auth, cookies, 
 
 ## RequestBuilder
 
-Fluent builder for constructing requests. Supports method, URL, headers, query params, body, auth, proxy override, retry override, and timeout override.
+Fluent builder for constructing requests. Supports method, URL, headers, query params, body, auth, proxy override, retry override, timeout override, and transport hints.
 
 ```rust
 let response = client
@@ -47,6 +47,15 @@ let response = client
 ```
 
 Body sources are mutually exclusive: `body()`, `bytes()`, `stream()`, `json()`, `form()`, `multipart()`.
+
+### Transport Hints
+
+`RequestBuilder::transport_hints()` sets typed wire-level overrides via `TransportHints`:
+
+- `target: Option<Bytes>` — overrides the wire request target (e.g. `OPTIONS *`, absolute-form) without changing the logical URL used for routing, cookies, auth, and proxy selection.
+- `sni_hostname: Option<String>` — overrides TLS SNI while preserving TCP destination.
+
+Transport hints survive through retry reconstruction but are cleared on redirect hops.
 
 ### Proxy Override
 
@@ -64,6 +73,9 @@ Key methods:
 - `version()` → `http::Version`
 - `headers()` → `&HeaderMap`
 - `url()` → `&Url`
+- `wire_content_encoding()` → `Option<&str>` — original wire Content-Encoding (before decompression)
+- `wire_content_length()` → `Option<&str>` — original wire Content-Length
+- `wire_reason_phrase()` → `Option<&str>` — original wire HTTP/1.x reason phrase
 - `bytes()` → buffered body as `Bytes`
 - `text()` → buffered body as `String`
 - `bytes_stream()` → streaming `BoxBytesStream`

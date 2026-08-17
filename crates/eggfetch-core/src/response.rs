@@ -54,7 +54,11 @@ impl HistoryEntry {
     /// Create a history entry from a response that has already been
     /// drained (body consumed).
     pub(crate) fn from_response(response: &Response) -> Self {
-        let reason = response.status.canonical_reason().unwrap_or("").to_string();
+        let reason = response
+            .wire_reason_phrase
+            .clone()
+            .or_else(|| response.status.canonical_reason().map(str::to_owned))
+            .unwrap_or_default();
         Self {
             status: response.status,
             version: response.version,
@@ -107,6 +111,14 @@ pub struct Response {
     /// Original wire value retained for compatibility adapters that expose
     /// response metadata after automatic decompression.
     wire_content_length: Option<String>,
+    /// Original wire reason phrase from the HTTP status line.
+    ///
+    /// HTTP/1.x responses include a reason phrase after the status code.
+    /// This field preserves the original wire bytes so compatibility
+    /// adapters can expose the exact phrase rather than deriving one from
+    /// the status code alone. HTTP/2 has no wire reason phrase; this
+    /// field will be `None` for H2 responses.
+    wire_reason_phrase: Option<String>,
     pub(crate) body: ResponseBody,
     history: Vec<HistoryEntry>,
 }
@@ -120,6 +132,7 @@ impl std::fmt::Debug for Response {
             .field("url", &redacted_url(&self.url))
             .field("wire_content_encoding", &self.wire_content_encoding)
             .field("wire_content_length", &self.wire_content_length)
+            .field("wire_reason_phrase", &self.wire_reason_phrase)
             .field("body", &self.body)
             .field("history", &self.history)
             .finish()
@@ -158,6 +171,7 @@ impl Response {
             url,
             wire_content_encoding,
             wire_content_length,
+            wire_reason_phrase: None,
             body,
             history: Vec::new(),
         }
@@ -215,6 +229,24 @@ impl Response {
     #[must_use]
     pub fn wire_content_length(&self) -> Option<&str> {
         self.wire_content_length.as_deref()
+    }
+
+    /// Returns the original wire reason phrase, if present.
+    ///
+    /// HTTP/1.x responses include a reason phrase after the status code.
+    /// This preserves the original wire bytes rather than deriving from
+    /// the status code alone. HTTP/2 has no wire reason phrase.
+    #[must_use]
+    pub fn wire_reason_phrase(&self) -> Option<&str> {
+        self.wire_reason_phrase.as_deref()
+    }
+
+    /// Set the wire reason phrase for this response.
+    ///
+    /// Used by transports that parse the HTTP/1.x status line directly
+    /// and can extract the original reason phrase.
+    pub(crate) fn set_wire_reason_phrase(&mut self, reason: Option<String>) {
+        self.wire_reason_phrase = reason;
     }
 
     /// Returns the final URL of the response (after any redirects).

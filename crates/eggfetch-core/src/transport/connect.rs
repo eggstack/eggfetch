@@ -16,6 +16,7 @@ use super::proxy::{
 
 /// Send an HTTPS request through an HTTP proxy using CONNECT tunneling.
 #[allow(clippy::too_many_lines)] // CONNECT owns the ordered proxy/tunnel/origin phases.
+#[allow(clippy::too_many_arguments)] // Transport hints added as a typed parameter.
 pub(crate) async fn send_https_connect_request(
     dest_url: &url::Url,
     method: &http::Method,
@@ -23,6 +24,7 @@ pub(crate) async fn send_https_connect_request(
     body: RequestBody,
     version: http::Version,
     proxy_config: &ProxyConfig,
+    transport_hints: &crate::request::TransportHints,
     ctx: &ProxyRequestContext<'_>,
 ) -> Result<Response> {
     use tokio::io::AsyncWriteExt;
@@ -72,7 +74,7 @@ pub(crate) async fn send_https_connect_request(
 
     // Read the CONNECT response.
     let read = read_proxy_response(&mut stream);
-    let (status, resp_headers, initial_buf) =
+    let (status, resp_headers, initial_buf, _reason_phrase) =
         match effective_timeout(ctx.deadline, ctx.read_timeout, ctx.now)? {
             Some(duration) => {
                 tokio::time::timeout(duration, read)
@@ -139,10 +141,17 @@ pub(crate) async fn send_https_connect_request(
     // Send the actual HTTP request over the TLS connection.
     // CONNECT switches the request to the origin connection. HTTPX/httpcore
     // therefore uses origin-form here, while forward proxy requests retain
-    // absolute-form.
-    let origin_uri = match dest_url.query() {
-        Some(query) => format!("{}?{query}", dest_url.path()),
-        None => dest_url.path().to_owned(),
+    // absolute-form.  Apply target override if present.
+    let origin_uri = if let Some(ref target) = transport_hints.target {
+        crate::pipeline::validate_target(target)?;
+        std::str::from_utf8(target)
+            .map_err(|_| Error::InvalidUrl("target extension is not valid UTF-8".into()))?
+            .to_owned()
+    } else {
+        match dest_url.query() {
+            Some(query) => format!("{}?{query}", dest_url.path()),
+            None => dest_url.path().to_owned(),
+        }
     };
     let mut tls_buf = tokio::io::BufReader::new(tls_stream);
 
@@ -169,7 +178,7 @@ pub(crate) async fn send_https_connect_request(
 
     // Read the response from the destination.
     let read = read_proxy_response(&mut tls_buf);
-    let (status, resp_headers, initial_buf) =
+    let (status, resp_headers, initial_buf, reason_phrase) =
         match effective_timeout(ctx.deadline, ctx.read_timeout, ctx.now)? {
             Some(duration) => {
                 tokio::time::timeout(duration, read)
@@ -202,7 +211,9 @@ pub(crate) async fn send_https_connect_request(
     let body_stream = Box::pin(body_stream) as BoxBytesStream;
     let body = ResponseBody::streaming(body_stream);
 
-    Ok(Response::new(status, version, resp_headers_map, url, body))
+    let mut response = Response::new(status, version, resp_headers_map, url, body);
+    response.set_wire_reason_phrase(reason_phrase);
+    Ok(response)
 }
 
 fn proxy_rejection_body(headers: &[(String, String)], initial_buf: &[u8]) -> String {

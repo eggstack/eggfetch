@@ -177,6 +177,8 @@ class HTTPTransport(BaseTransport):
             kwargs["content"] = request._content
         if request._files is not None:
             kwargs["files"] = request._files
+        if request.extensions:
+            kwargs["extensions"] = request.extensions
 
         try:
             native_resp = client.stream(**kwargs)
@@ -291,6 +293,8 @@ class AsyncHTTPTransport(AsyncBaseTransport):
             kwargs["content"] = request._content
         if request._files is not None:
             kwargs["files"] = request._files
+        if request.extensions:
+            kwargs["extensions"] = request.extensions
 
         try:
             native_resp = await client.stream(**kwargs)

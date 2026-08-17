@@ -685,7 +685,7 @@ impl PyAsyncClient {
     }
 
     /// Send a streaming HTTP request asynchronously.
-    #[pyo3(signature = (method, url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None, retries=None))]
+    #[pyo3(signature = (method, url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None, retries=None, extensions=None))]
     #[allow(clippy::too_many_arguments)]
     #[allow(clippy::too_many_lines)]
     fn stream<'py>(
@@ -709,6 +709,7 @@ impl PyAsyncClient {
         verify: Option<&Bound<'py, PyAny>>,
         cert: Option<&Bound<'py, PyAny>>,
         retries: Option<&Bound<'py, PyAny>>,
+        extensions: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Bound<'py, PyAny>> {
         self.ensure_not_closed()?;
 
@@ -786,6 +787,34 @@ impl PyAsyncClient {
 
         let retry_override = retry::parse_retry_option(retries)?;
 
+        // Extract transport hints from extensions dict before the async block.
+        let transport_hints = if let Some(ext) = extensions {
+            if let Ok(dict) = ext.downcast::<pyo3::types::PyDict>() {
+                let mut hints = eggfetch_core::TransportHints::default();
+                if let Some(target_val) = dict.get_item("target").ok().flatten() {
+                    if let Ok(b) = target_val.extract::<Vec<u8>>() {
+                        hints.target = Some(bytes::Bytes::from(b));
+                    } else if let Ok(s) = target_val.extract::<String>() {
+                        hints.target = Some(bytes::Bytes::from(s.into_bytes()));
+                    }
+                }
+                if let Some(sni_val) = dict.get_item("sni_hostname").ok().flatten() {
+                    if let Ok(s) = sni_val.extract::<String>() {
+                        hints.sni_hostname = Some(s);
+                    }
+                }
+                if hints.target.is_some() || hints.sni_hostname.is_some() {
+                    Some(hints)
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
         let effective_decompress = decompress.or(self.decompress);
 
         let client = self.ensure_client()?.clone();
@@ -849,6 +878,11 @@ impl PyAsyncClient {
 
             if let Some(retry_policy) = retry_override.as_ref() {
                 builder = builder.retry(retry_policy.clone());
+            }
+
+            // Apply pre-extracted transport hints.
+            if let Some(hints) = transport_hints {
+                builder = builder.transport_hints(hints);
             }
 
             let response = Box::pin(builder.send()).await.map_err(map_err)?;

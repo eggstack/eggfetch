@@ -110,6 +110,7 @@ impl tokio::io::AsyncWrite for ProxyIo {
 ///
 /// Routes to HTTP forwarding, CONNECT tunneling, or SOCKS5 tunneling
 /// based on the proxy scheme and destination scheme.
+#[allow(clippy::too_many_arguments)] // Transport hints added as a typed parameter.
 pub(crate) async fn send_proxy_request(
     dest_url: &url::Url,
     method: &http::Method,
@@ -117,16 +118,35 @@ pub(crate) async fn send_proxy_request(
     body: RequestBody,
     version: http::Version,
     proxy_config: &ProxyConfig,
+    transport_hints: &crate::request::TransportHints,
     ctx: &ProxyRequestContext<'_>,
 ) -> Result<Response> {
     if proxy_config.is_socks() {
-        return send_socks_request(dest_url, method, headers, body, version, ctx).await;
+        return send_socks_request(
+            dest_url,
+            method,
+            headers,
+            body,
+            version,
+            transport_hints,
+            ctx,
+        )
+        .await;
     }
 
     match dest_url.scheme() {
         "http" => {
-            send_http_proxy_request(dest_url, method, headers, body, version, proxy_config, ctx)
-                .await
+            send_http_proxy_request(
+                dest_url,
+                method,
+                headers,
+                body,
+                version,
+                proxy_config,
+                transport_hints,
+                ctx,
+            )
+            .await
         }
         "https" => {
             super::connect::send_https_connect_request(
@@ -136,6 +156,7 @@ pub(crate) async fn send_proxy_request(
                 body,
                 version,
                 proxy_config,
+                transport_hints,
                 ctx,
             )
             .await
@@ -231,6 +252,7 @@ async fn send_http_proxy_request(
     body: RequestBody,
     version: http::Version,
     proxy_config: &ProxyConfig,
+    transport_hints: &crate::request::TransportHints,
     ctx: &ProxyRequestContext<'_>,
 ) -> Result<Response> {
     let mut stream = connect_to_proxy(
@@ -244,7 +266,14 @@ async fn send_http_proxy_request(
     .await?;
 
     // Write the proxy request with absolute-form URI.
-    let absolute_uri = dest_url.as_str();
+    // Apply target override if present.
+    let absolute_uri = if let Some(ref target) = transport_hints.target {
+        crate::pipeline::validate_target(target)?;
+        std::str::from_utf8(target)
+            .map_err(|_| Error::InvalidUrl("target extension is not valid UTF-8".into()))?
+    } else {
+        dest_url.as_str()
+    };
     let write = write_proxy_request(
         &mut stream,
         method,
@@ -268,7 +297,7 @@ async fn send_http_proxy_request(
 
     // Read the response from the proxy.
     let read = read_proxy_response(&mut stream);
-    let (status, resp_headers, initial_buf) =
+    let (status, resp_headers, initial_buf, reason_phrase) =
         match effective_timeout(ctx.deadline, ctx.read_timeout, ctx.now)? {
             Some(duration) => {
                 tokio::time::timeout(duration, read)
@@ -300,7 +329,9 @@ async fn send_http_proxy_request(
     let body_stream = Box::pin(body_stream) as BoxBytesStream;
     let body = ResponseBody::streaming(body_stream);
 
-    Ok(Response::new(status, version, resp_headers_map, url, body))
+    let mut response = Response::new(status, version, resp_headers_map, url, body);
+    response.set_wire_reason_phrase(reason_phrase);
+    Ok(response)
 }
 
 /// Write an HTTP request to a stream.
@@ -440,7 +471,7 @@ async fn read_bounded_line<S: tokio::io::AsyncRead + Unpin>(
 /// Returns `(status_code, headers, remaining_initial_bytes)`.
 pub(crate) async fn read_proxy_response<S: tokio::io::AsyncRead + Unpin>(
     stream: &mut tokio::io::BufReader<S>,
-) -> Result<(u16, Vec<(String, String)>, Vec<u8>)> {
+) -> Result<(u16, Vec<(String, String)>, Vec<u8>, Option<String>)> {
     use tokio::io::AsyncBufReadExt;
 
     const MAX_STATUS_LINE_LEN: usize = 4096;
@@ -456,13 +487,16 @@ pub(crate) async fn read_proxy_response<S: tokio::io::AsyncRead + Unpin>(
         ));
     }
 
-    let status_code = status_line
-        .split_whitespace()
-        .nth(1)
+    let mut parts = status_line.splitn(3, ' ');
+    let _version = parts.next();
+    let status_code = parts
+        .next()
         .and_then(|s| s.parse::<u16>().ok())
         .ok_or_else(|| {
             Error::MalformedProxyResponse(format!("invalid status line: {status_line}"))
         })?;
+    // The third part (if present) is the reason phrase.
+    let reason_phrase = parts.next().map(str::to_owned);
 
     let mut headers = Vec::new();
     let mut total_header_bytes: usize = 0;
@@ -503,7 +537,7 @@ pub(crate) async fn read_proxy_response<S: tokio::io::AsyncRead + Unpin>(
         stream.consume(consumed);
     }
 
-    Ok((status_code, headers, initial_buf))
+    Ok((status_code, headers, initial_buf, reason_phrase))
 }
 
 /// Streaming response body from an HTTP proxy.
@@ -531,15 +565,28 @@ async fn send_socks_request(
     headers: &Headers,
     body: RequestBody,
     version: http::Version,
+    transport_hints: &crate::request::TransportHints,
     ctx: &ProxyRequestContext<'_>,
 ) -> Result<Response> {
     let client = ctx
         .socks_client
         .as_ref()
         .ok_or_else(|| Error::ProxyConnect("persistent SOCKS client was not initialized".into()))?;
+    let uri: http::Uri = if let Some(ref target) = transport_hints.target {
+        crate::pipeline::validate_target(target)?;
+        std::str::from_utf8(target)
+            .map_err(|_| Error::InvalidUrl("target extension is not valid UTF-8".into()))?
+            .parse()
+            .map_err(|e| Error::InvalidUrl(format!("failed to convert target to URI: {e}")))?
+    } else {
+        dest_url
+            .as_str()
+            .parse()
+            .map_err(|e| Error::InvalidUrl(format!("failed to convert url to URI: {e}")))?
+    };
     let mut request = http::Request::builder()
         .method(method)
-        .uri(dest_url.as_str())
+        .uri(uri)
         .version(version);
     for (name, value) in headers.iter() {
         request = request.header(name, value);
@@ -702,7 +749,18 @@ mod tests {
         let mut reader = tokio::io::BufReader::new(std::io::Cursor::new(
             b"HTTP/1.1 200 OK\r\n\r\nbody".to_vec(),
         ));
-        let (_, _, initial) = read_proxy_response(&mut reader).await.unwrap();
+        let (_, _, initial, reason) = read_proxy_response(&mut reader).await.unwrap();
         assert_eq!(initial, b"body");
+        assert_eq!(reason.as_deref(), Some("OK"));
+    }
+
+    #[tokio::test]
+    async fn read_proxy_response_extracts_reason_phrase() {
+        let mut reader = tokio::io::BufReader::new(std::io::Cursor::new(
+            b"HTTP/1.1 404 Not Found\r\n\r\n".to_vec(),
+        ));
+        let (status, _, _, reason) = read_proxy_response(&mut reader).await.unwrap();
+        assert_eq!(status, 404);
+        assert_eq!(reason.as_deref(), Some("Not Found"));
     }
 }

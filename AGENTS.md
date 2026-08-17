@@ -80,6 +80,15 @@ Key flags: `http2`, `http3`, `json`, `compression-{gzip,brotli,zstd,deflate}`, `
 
 The CLI enables: cookies, multipart, proxy. The Python binding enables all features including http3. `test-util` enables `tokio/test-util` for deterministic time testing.
 
+## Transport Hints
+
+`Request` carries a typed `TransportHints` struct for wire-level overrides that do not affect logical URL semantics:
+
+- `target: Option<Bytes>` — overrides the wire request target (e.g. `OPTIONS *`, absolute-form) while preserving the logical URL for routing, Host header, cookies, auth, and proxy selection.
+- `sni_hostname: Option<String>` — overrides TLS SNI while preserving the TCP destination.
+
+Transport hints survive through retry reconstruction. They are cleared on redirect hops because the destination changes. The Python compat facade extracts `target` and `sni_hostname` from the request extensions dict and passes them through the native `stream()` method.
+
 ## HTTPX Compatibility Layer
 
 The `eggfetch.compat.httpx` module provides an HTTPX 0.28.1-compatible asyncio facade (**Stage C qualified**). Import it as:
