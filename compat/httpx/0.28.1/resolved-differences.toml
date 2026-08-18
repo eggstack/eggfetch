@@ -2266,3 +2266,25 @@ review-milestone = "stage-d"
 tests = ["test_transports.py"]
 non_expiring = true
 
+
+[[difference]]
+id = "PROXY-HEADERS-001"
+category = "resolved"
+symbol = "Proxy"
+member = "headers"
+behavior-case = "proxy-headers-forwarding"
+reference-behavior = "HTTPX 0.28.1 accepts proxy headers and keeps them on the proxy leg"
+eggfetch-behavior = "eggfetch accepts Proxy(headers=...) and forwards them to the proxy endpoint on forward-proxy and CONNECT requests"
+rationale = "Implemented in Phase 05. Proxy headers are carried on the proxy leg only and never forwarded into the tunnel or to the origin."
+compatibility-stage-impact = "resolved"
+security-improvement = "true"
+migration-impact = "None; behavior now matches HTTPX"
+owner = "eggfetch-team"
+review-milestone = "phase-05"
+tests = [
+    "test_native_proxy_tls.py::TestProxyForwarding::test_proxy_headers_reference_and_bounded_candidate_difference",
+    "test_native_proxy_tls.py::TestProxyConnect::test_connect_proxy_headers_are_proxy_only_and_bounded_for_candidate",
+    "test_native_proxy_tls.py::TestHttpsProxyEndpoint::test_https_proxy_headers_reference_and_bounded_candidate_difference",
+    "test_native_proxy_tls.py::TestProxyForwarding::test_proxy_headers_candidate_for_async_client",
+]
+non_expiring = true

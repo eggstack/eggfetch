@@ -47,7 +47,14 @@ pub(crate) struct ProxyRequestContext<'a> {
     pub(crate) proxy_tls_timeout: Option<std::time::Duration>,
     pub(crate) write_timeout: Option<std::time::Duration>,
     pub(crate) read_timeout: Option<std::time::Duration>,
-    pub(crate) tls_config: Option<&'a crate::tls::TlsConfig>,
+    /// TLS configuration for the *origin* server (used after CONNECT
+    /// tunnel establishment).
+    pub(crate) origin_tls_config: Option<&'a crate::tls::TlsConfig>,
+    /// TLS configuration for the *proxy* endpoint (used when the proxy
+    /// endpoint itself is `https://`).  When `None`, the origin TLS
+    /// config is used as a fallback (matching the current packaged-root
+    /// default).
+    pub(crate) proxy_tls_config: Option<&'a crate::tls::TlsConfig>,
     pub(crate) socks_client: Option<crate::transport::TimeoutSocksClient>,
 }
 
@@ -174,7 +181,7 @@ pub(crate) async fn connect_to_proxy(
     proxy_tls_timeout: Option<std::time::Duration>,
     deadline: Option<std::time::Instant>,
     now: std::time::Instant,
-    tls_config: Option<&crate::tls::TlsConfig>,
+    proxy_tls_config: Option<&crate::tls::TlsConfig>,
 ) -> Result<tokio::io::BufReader<ProxyIo>> {
     let proxy_host = proxy_config.host().unwrap_or("127.0.0.1");
     let proxy_port = proxy_config.port();
@@ -205,7 +212,7 @@ pub(crate) async fn connect_to_proxy(
     };
 
     let stream = if proxy_config.scheme() == "https" {
-        let rustls_config = if let Some(tc) = tls_config {
+        let rustls_config = if let Some(tc) = proxy_tls_config {
             tc.build_rustls_config()
                 .map_err(|e| Error::Tls(format!("failed to build proxy TLS config: {e}")))?
         } else {
@@ -261,7 +268,7 @@ async fn send_http_proxy_request(
         ctx.proxy_tls_timeout,
         ctx.deadline,
         ctx.now,
-        ctx.tls_config,
+        ctx.proxy_tls_config,
     )
     .await?;
 
@@ -281,6 +288,7 @@ async fn send_http_proxy_request(
         version,
         headers,
         proxy_config.auth(),
+        proxy_config.proxy_headers(),
         body,
     );
     match effective_timeout(ctx.deadline, ctx.write_timeout, ctx.now)? {
@@ -335,6 +343,7 @@ async fn send_http_proxy_request(
 }
 
 /// Write an HTTP request to a stream.
+#[allow(clippy::too_many_arguments)] // Proxy headers channel added as a typed parameter.
 pub(crate) async fn write_proxy_request<S: tokio::io::AsyncWrite + Unpin>(
     stream: &mut S,
     method: &http::Method,
@@ -342,6 +351,7 @@ pub(crate) async fn write_proxy_request<S: tokio::io::AsyncWrite + Unpin>(
     version: http::Version,
     headers: &Headers,
     proxy_auth: Option<&ProxyAuth>,
+    proxy_headers: &Headers,
     body: RequestBody,
 ) -> Result<()> {
     use std::fmt::Write;
@@ -370,6 +380,21 @@ pub(crate) async fn write_proxy_request<S: tokio::io::AsyncWrite + Unpin>(
     for (name, value) in headers.iter() {
         // Skip proxy-authorization from destination headers.
         if name.as_str().eq_ignore_ascii_case("proxy-authorization") {
+            continue;
+        }
+        if let Ok(value_str) = value.to_str() {
+            let _ = write!(request, "{}: {value_str}\r\n", name.as_str());
+        }
+    }
+
+    // Write proxy-only headers.  Skip proxy-authorization (handled
+    // separately below from configured auth) and any header that
+    // already appeared in the origin headers to avoid duplication.
+    for (name, value) in proxy_headers.iter() {
+        if name.as_str().eq_ignore_ascii_case("proxy-authorization") {
+            continue;
+        }
+        if headers.contains(name.as_str()) {
             continue;
         }
         if let Ok(value_str) = value.to_str() {

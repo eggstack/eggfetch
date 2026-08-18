@@ -35,7 +35,7 @@ pub(crate) async fn send_https_connect_request(
         ctx.proxy_tls_timeout,
         ctx.deadline,
         ctx.now,
-        ctx.tls_config,
+        ctx.proxy_tls_config,
     )
     .await?;
 
@@ -55,6 +55,17 @@ pub(crate) async fn send_https_connect_request(
             "Proxy-Authorization: {}\r\n",
             auth.header_value()
         );
+    }
+    // Write proxy-only headers on the CONNECT request.
+    for (name, value) in proxy_config.proxy_headers().iter() {
+        // Skip proxy-authorization — handled above from configured auth.
+        if name.as_str().eq_ignore_ascii_case("proxy-authorization") {
+            continue;
+        }
+        if let Ok(value_str) = value.to_str() {
+            use std::fmt::Write;
+            let _ = write!(connect_req, "{}: {value_str}\r\n", name.as_str());
+        }
     }
     connect_req.push_str("\r\n");
 
@@ -101,7 +112,7 @@ pub(crate) async fn send_https_connect_request(
     let tunnel = ProxyTunnel::new(initial_buf, tcp_stream);
 
     // Perform TLS handshake with the destination through the tunnel.
-    let rustls_config = if let Some(tc) = ctx.tls_config {
+    let rustls_config = if let Some(tc) = ctx.origin_tls_config {
         tc.build_rustls_config()
             .map_err(|e| Error::Tls(format!("failed to build TLS config for tunnel: {e}")))?
     } else {
@@ -158,6 +169,8 @@ pub(crate) async fn send_https_connect_request(
     };
     let mut tls_buf = tokio::io::BufReader::new(tls_stream);
 
+    // No proxy headers inside the tunnel — only origin headers.
+    let empty_proxy_headers = crate::headers::Headers::new();
     let write = write_proxy_request(
         &mut tls_buf,
         method,
@@ -165,6 +178,7 @@ pub(crate) async fn send_https_connect_request(
         version,
         headers,
         None, // No proxy auth for the destination request.
+        &empty_proxy_headers,
         body,
     );
     match effective_timeout(ctx.deadline, ctx.write_timeout, ctx.now)? {

@@ -552,6 +552,10 @@ pub enum ProxyRule {
 
 /// The routing decision for a request.
 #[derive(Debug, Clone)]
+#[allow(
+    clippy::large_enum_variant,
+    reason = "ProxyConfig is transient and cloning it is cheap; boxing adds unnecessary allocation"
+)]
 pub enum ProxyDecision {
     /// Send the request directly to the destination.
     Direct,
@@ -561,14 +565,19 @@ pub enum ProxyDecision {
 
 /// Resolved proxy configuration for a specific request.
 ///
-/// Contains the proxy URI and optional authentication, without the
-/// rule (which has already been evaluated).
+/// Contains the proxy URI, optional authentication, and optional
+/// proxy-only headers that must be sent to the proxy endpoint but
+/// never forwarded to the origin server.
 #[derive(Debug, Clone)]
 pub struct ProxyConfig {
     /// Proxy URI (e.g., `http://proxy.example:8080`).
     pub(crate) uri: url::Url,
     /// Optional proxy authentication.
     pub(crate) auth: Option<ProxyAuth>,
+    /// Proxy-only headers applied to proxy-leg requests (CONNECT,
+    /// forward-proxy absolute-form).  These are *not* forwarded into
+    /// the tunnel or to the origin.
+    pub(crate) proxy_headers: crate::headers::Headers,
 }
 
 impl ProxyConfig {
@@ -618,6 +627,12 @@ impl ProxyConfig {
     pub fn socks_remote_dns(&self) -> bool {
         self.uri.scheme() == "socks5h"
     }
+
+    /// Returns a reference to the proxy-only headers.
+    #[must_use]
+    pub fn proxy_headers(&self) -> &crate::headers::Headers {
+        &self.proxy_headers
+    }
 }
 
 /// An HTTP proxy configuration.
@@ -642,6 +657,13 @@ pub struct Proxy {
     rule: ProxyRule,
     /// Optional `NO_PROXY` bypass rules.
     bypass: Option<NoProxy>,
+    /// Proxy-only headers sent to the proxy endpoint but never
+    /// forwarded to the origin.
+    #[allow(
+        clippy::struct_field_names,
+        reason = "Proxy is already in the proxy context; 'headers' alone would be ambiguous with request headers"
+    )]
+    proxy_headers: crate::headers::Headers,
 }
 
 impl Proxy {
@@ -658,6 +680,7 @@ impl Proxy {
             auth: None,
             rule: ProxyRule::All,
             bypass: None,
+            proxy_headers: crate::headers::Headers::new(),
         })
     }
 
@@ -705,6 +728,7 @@ impl Proxy {
             auth: None,
             rule: ProxyRule::Http,
             bypass: None,
+            proxy_headers: crate::headers::Headers::new(),
         })
     }
 
@@ -720,6 +744,7 @@ impl Proxy {
             auth: None,
             rule: ProxyRule::Https,
             bypass: None,
+            proxy_headers: crate::headers::Headers::new(),
         })
     }
 
@@ -738,6 +763,23 @@ impl Proxy {
     pub fn no_proxy(mut self, no_proxy: NoProxy) -> Self {
         self.bypass = Some(no_proxy);
         self
+    }
+
+    /// Set proxy-only headers for this proxy.
+    ///
+    /// These headers are sent to the proxy endpoint on forward-proxy
+    /// and CONNECT requests, but are never forwarded into the tunnel
+    /// or to the origin server.
+    #[must_use]
+    pub fn proxy_headers(mut self, headers: crate::headers::Headers) -> Self {
+        self.proxy_headers = headers;
+        self
+    }
+
+    /// Returns a reference to the proxy-only headers.
+    #[must_use]
+    pub fn proxy_headers_ref(&self) -> &crate::headers::Headers {
+        &self.proxy_headers
     }
 
     /// Returns a reference to the `NO_PROXY` bypass rules, if configured.
@@ -792,7 +834,11 @@ impl Proxy {
             let _ = uri.set_password(None);
         }
 
-        ProxyConfig { uri, auth }
+        ProxyConfig {
+            uri,
+            auth,
+            proxy_headers: self.proxy_headers.clone(),
+        }
     }
 
     fn is_socks_url(&self) -> bool {
@@ -819,6 +865,7 @@ impl fmt::Debug for Proxy {
             .field("auth", &self.auth)
             .field("rule", &self.rule)
             .field("bypass", &self.bypass)
+            .field("proxy_headers", &self.proxy_headers)
             .finish()
     }
 }

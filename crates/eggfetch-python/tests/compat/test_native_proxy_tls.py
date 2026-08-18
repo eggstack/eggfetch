@@ -71,7 +71,7 @@ class TestProxyForwarding:
                     assert "POST" in methods
 
     def test_proxy_headers_reference_and_bounded_candidate_difference(self):
-        """HTTPX sends proxy headers; EggFetch rejects them before dispatch."""
+        """HTTPX sends proxy headers; EggFetch forwards them to the proxy leg."""
         with local_http_server() as (backend_host, backend_port):
             with local_proxy_server(backend=(backend_host, backend_port)) as (
                 proxy_host,
@@ -94,16 +94,18 @@ class TestProxyForwarding:
                 assert handler.recorded_requests[0]["headers"]["x-proxy-test"] == "reference"
 
                 handler.recorded_requests.clear()
-                with pytest.raises(NotImplementedError, match="not yet"):
-                    with Client(
-                        proxy=Proxy(
-                            f"http://{proxy_host}:{proxy_port}",
-                            headers={"X-Proxy-Test": "candidate"},
-                        ),
-                        trust_env=False,
-                    ):
-                        pass
-                assert not handler.recorded_requests
+                with Client(
+                    proxy=Proxy(
+                        f"http://{proxy_host}:{proxy_port}",
+                        headers={"X-Proxy-Test": "candidate"},
+                    ),
+                    trust_env=False,
+                ) as candidate:
+                    response = candidate.get(
+                        f"http://{backend_host}:{backend_port}/health"
+                    )
+                assert response.status_code == 200
+                assert handler.recorded_requests[0]["headers"]["x-proxy-test"] == "candidate"
 
     def test_proxy_auth_is_sent_only_on_the_proxy_leg(self):
         """Supported proxy auth is differential and never reaches the origin."""
@@ -140,16 +142,26 @@ class TestProxyForwarding:
                 )
 
     @pytest.mark.asyncio
-    async def test_proxy_headers_candidate_rejected_for_async_client(self):
-        with pytest.raises(NotImplementedError, match="not yet"):
-            async with AsyncClient(
-                proxy=Proxy(
-                    "http://127.0.0.1:1",
-                    headers={"X-Proxy-Test": "candidate"},
-                ),
-                trust_env=False,
+    async def test_proxy_headers_candidate_for_async_client(self):
+        """Async client accepts Proxy(headers=...) and sends them to the proxy."""
+        with local_http_server() as (backend_host, backend_port):
+            with local_proxy_server(backend=(backend_host, backend_port)) as (
+                proxy_host,
+                proxy_port,
+                handler,
             ):
-                pass
+                async with AsyncClient(
+                    proxy=Proxy(
+                        f"http://{proxy_host}:{proxy_port}",
+                        headers={"X-Proxy-Test": "async-candidate"},
+                    ),
+                    trust_env=False,
+                ) as candidate:
+                    response = await candidate.get(
+                        f"http://{backend_host}:{backend_port}/health"
+                    )
+                assert response.status_code == 200
+                assert handler.recorded_requests[0]["headers"]["x-proxy-test"] == "async-candidate"
 
 
 class TestProxyConnect:
@@ -203,17 +215,19 @@ class TestProxyConnect:
                 assert "proxy-authorization" not in _TLSDirectHandler.recorded_headers[-1]
 
                 handler.recorded_requests.clear()
-                with pytest.raises(NotImplementedError, match="not yet"):
-                    with Client(
-                        proxy=Proxy(
-                            f"http://{proxy_host}:{proxy_port}",
-                            headers={"X-Proxy-Test": "connect"},
-                        ),
-                        trust_env=False,
-                        verify=cert_path,
-                    ) as candidate:
-                        candidate.get(f"https://{tls_host}:{tls_port}/health")
-                assert not handler.recorded_requests
+                with Client(
+                    proxy=Proxy(
+                        f"http://{proxy_host}:{proxy_port}",
+                        headers={"X-Proxy-Test": "connect"},
+                    ),
+                    trust_env=False,
+                    verify=cert_path,
+                ) as candidate:
+                    response = candidate.get(f"https://{tls_host}:{tls_port}/health")
+                assert response.status_code == 200
+                assert handler.recorded_requests[0]["method"] == "CONNECT"
+                assert handler.recorded_requests[0]["headers"]["x-proxy-test"] == "connect"
+                assert "proxy-authorization" not in _TLSDirectHandler.recorded_headers[-1]
 
     def test_connect_proxy_json_response(self):
         """JSON response passes through CONNECT tunnel correctly."""
@@ -306,17 +320,17 @@ class TestHttpsProxyEndpoint:
                 assert handler.recorded_requests[0]["headers"]["x-proxy-test"] == "https-proxy"
 
                 handler.recorded_requests.clear()
-                with pytest.raises(NotImplementedError, match="not yet"):
-                    with Client(
-                        proxy=Proxy(
-                            f"https://{proxy_host}:{proxy_port}",
-                            headers={"X-Proxy-Test": "https-proxy"},
-                        ),
-                        trust_env=False,
-                        verify=cert_path,
-                    ) as candidate:
-                        candidate.get(f"http://{backend_host}:{backend_port}/health")
-                assert not handler.recorded_requests
+                with Client(
+                    proxy=Proxy(
+                        f"https://{proxy_host}:{proxy_port}",
+                        headers={"X-Proxy-Test": "https-proxy"},
+                    ),
+                    trust_env=False,
+                    verify=cert_path,
+                ) as candidate:
+                    response = candidate.get(f"http://{backend_host}:{backend_port}/health")
+                assert response.status_code == 200
+                assert handler.recorded_requests[0]["headers"]["x-proxy-test"] == "https-proxy"
 
 
 class TestProxyRefusal:

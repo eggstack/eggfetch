@@ -1578,27 +1578,4 @@ review-milestone = "corrective-closure"
 tests = ["test_httpx_reference_pinning.py", "test_protocol_and_unsupported_options.py"]
 non_expiring = true
 
-[[difference]]
-id = "PROXY-HEADERS-001"
-category = "stage-bounded"
-classification = "intentional"
-symbol = "Proxy"
-member = "headers"
-reference = "Proxy(headers=...) is accepted and applied to proxy-leg requests"
-candidate = "Proxy(headers=...) is rejected when native dispatch is configured"
-behavior-case = "proxy-headers-forwarding"
-reference-behavior = "HTTPX 0.28.1 accepts proxy headers and keeps them on the proxy leg"
-eggfetch-behavior = "EggFetch rejects non-empty Proxy(headers=...) rather than silently dropping metadata"
-rationale = "The existing safe native proxy configuration has no bounded proxy-leg header channel. Explicit rejection prevents silent data loss until that metadata can be plumbed without a generalized routing redesign."
-compatibility-stage-impact = "stage-c"
-security-improvement = "true"
-migration-impact = "Callers must omit Proxy(headers=...) or use a native proxy fixture that supplies equivalent headers."
-owner = "eggfetch-team"
-review-milestone = "corrective-closure"
-tests = [
-    "test_native_proxy_tls.py::TestProxyForwarding::test_proxy_headers_reference_and_bounded_candidate_difference",
-    "test_native_proxy_tls.py::TestProxyConnect::test_connect_proxy_headers_are_proxy_only_and_bounded_for_candidate",
-    "test_native_proxy_tls.py::TestHttpsProxyEndpoint::test_https_proxy_headers_reference_and_bounded_candidate_difference",
-    "test_native_proxy_tls.py::TestProxyForwarding::test_proxy_headers_candidate_rejected_for_async_client",
-]
-non_expiring = true
+

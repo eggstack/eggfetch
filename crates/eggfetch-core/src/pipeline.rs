@@ -858,7 +858,8 @@ pub(crate) async fn send_single_request(
                     proxy_tls_timeout: timeout.connect,
                     write_timeout: timeout.write,
                     read_timeout: timeout.read,
-                    tls_config: inner.config.tls_config.as_ref(),
+                    origin_tls_config: inner.config.tls_config.as_ref(),
+                    proxy_tls_config: inner.config.tls_config.as_ref(),
                     socks_client,
                 },
             ))

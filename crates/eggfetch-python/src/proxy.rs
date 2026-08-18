@@ -86,6 +86,7 @@ pub(crate) fn normalize_compat_proxy_url(url: &str) -> String {
 /// - Omitted or `None` → `ProxyOverride::Inherit`
 /// - `False` → `ProxyOverride::Disable`
 /// - A string URL → `ProxyOverride::Override(url_string)`
+/// - A Proxy object → extracts URL (with embedded auth) and returns `ProxyOverride::Override(url_string)`
 /// - Anything else → `Err`
 pub fn parse_proxy(proxy: Option<&Bound<'_, PyAny>>) -> PyResult<ProxyOverride> {
     match proxy {
@@ -105,6 +106,32 @@ pub fn parse_proxy(proxy: Option<&Bound<'_, PyAny>>) -> PyResult<ProxyOverride> 
             }
             if let Ok(url) = val.extract::<String>() {
                 return Ok(ProxyOverride::Override(normalize_compat_proxy_url(&url)));
+            }
+            // Handle Proxy objects: extract URL and embed auth if present.
+            if let Ok(url_obj) = val.getattr("url") {
+                if let Ok(url_string) = url_obj.str() {
+                    let mut url = url_string.to_string_lossy().to_string();
+                    // Embed raw_auth into the URL so all_compat can extract it.
+                    if let Ok(raw_auth) = val.getattr("raw_auth") {
+                        if !raw_auth.is_none() {
+                            if let Ok(auth_tuple) = raw_auth.downcast::<pyo3::types::PyTuple>() {
+                                if auth_tuple.len() == 2 {
+                                    if let (Ok(username), Ok(password)) = (
+                                        auth_tuple.get_item(0)?.extract::<String>(),
+                                        auth_tuple.get_item(1)?.extract::<String>(),
+                                    ) {
+                                        if let Ok(mut parsed) = url::Url::parse(&url) {
+                                            let _ = parsed.set_username(&username);
+                                            let _ = parsed.set_password(Some(&password));
+                                            url = parsed.to_string();
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    return Ok(ProxyOverride::Override(normalize_compat_proxy_url(&url)));
+                }
             }
             Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
                 "proxy must be a URL string, False, or None",

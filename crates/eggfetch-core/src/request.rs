@@ -64,6 +64,10 @@ impl std::fmt::Debug for TransportHints {
 /// Controls whether a request inherits the client-level proxy,
 /// bypasses the proxy entirely, or uses a specific proxy configuration.
 #[derive(Debug, Clone, Default)]
+#[allow(
+    clippy::large_enum_variant,
+    reason = "ProxyConfig is transient and cloning it is cheap; boxing adds unnecessary allocation"
+)]
 pub enum ProxyOverride {
     /// Inherit the client-level proxy configuration (default).
     #[default]

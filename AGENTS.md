@@ -136,7 +136,7 @@ python scripts/compare_httpx_api_manifest.py \
   --json --output /tmp/api-result.json
 ```
 
-The compatibility profile is in `compat/httpx/0.28.1/`. Executable changes require fresh exact-SHA qualification (see `compat/httpx/0.28.1/profile.toml`). Key bounded differences: `Proxy(headers=...)` rejected, `Timeout` maps only `connect`/`read`/`write`/`pool` (no native `total` synthesis), bracketed IPv6 and CIDR `NO_PROXY` forms rejected.
+The compatibility profile is in `compat/httpx/0.28.1/`. Executable changes require fresh exact-SHA qualification (see `compat/httpx/0.28.1/profile.toml`). Key bounded differences: `Timeout` maps only `connect`/`read`/`write`/`pool` (no native `total` synthesis), bracketed IPv6 and CIDR `NO_PROXY` forms rejected.
 
 ## Tests
 
@@ -225,10 +225,9 @@ accepted evidence and were not reopened. Do not silently revive historical
 qualification counts.
 
 The current corrective boundary derives one monotonic request deadline for
-multi-phase HTTP/HTTPS proxy setup. `Proxy(headers=...)` remains an explicit
-Stage C bounded difference: non-empty metadata is rejected at conversion until
-it can be carried on the proxy leg without a generalized routing redesign.
-HTTPX `Timeout` conversion maps only its `connect`, `read`, `write`, and `pool`
+multi-phase HTTP/HTTPS proxy setup. `Proxy(headers=...)` is resolved: proxy
+headers are carried on the proxy leg and never forwarded into the tunnel or to
+the origin. HTTPX `Timeout` conversion maps only its `connect`, `read`, `write`, and `pool`
 values; it must not synthesize native `Timeout.total`. Native callers may set
 `total` explicitly as an outer deadline, and proxy setup uses the smaller of
 that deadline and each configured phase budget.

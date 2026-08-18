@@ -142,8 +142,21 @@ impl PyAsyncClient {
 
         let proxy_override = proxy::parse_proxy(proxy)?;
         if let ProxyOverride::Override(ref url) = proxy_override {
-            let p = eggfetch_core::Proxy::all_compat(&proxy::normalize_compat_proxy_url(url))
+            let mut p = eggfetch_core::Proxy::all_compat(&proxy::normalize_compat_proxy_url(url))
                 .map_err(map_err)?;
+            if let Some(proxy_obj) = proxy {
+                if let Ok(proxy_module) = py.import("eggfetch.compat.httpx._proxy") {
+                    if let Ok(proxy_class) = proxy_module.getattr("Proxy") {
+                        if proxy_obj.is_instance(&proxy_class).unwrap_or(false) {
+                            if let Ok(headers) = proxy_obj.getattr("headers") {
+                                let rust_headers =
+                                    crate::conversion::python_headers_to_rust(py, &headers)?;
+                                p = p.proxy_headers(rust_headers);
+                            }
+                        }
+                    }
+                }
+            }
             builder = builder.proxy(p);
         }
 
@@ -785,6 +798,30 @@ impl PyAsyncClient {
 
         let proxy_override = proxy::parse_proxy(proxy)?;
 
+        // Extract proxy headers from a Python Proxy object before
+        // entering the async closure.
+        let proxy_headers = if let Some(proxy_obj) = proxy {
+            if let Ok(proxy_module) = py.import("eggfetch.compat.httpx._proxy") {
+                if let Ok(proxy_class) = proxy_module.getattr("Proxy") {
+                    if proxy_obj.is_instance(&proxy_class).unwrap_or(false) {
+                        if let Ok(headers) = proxy_obj.getattr("headers") {
+                            Some(crate::conversion::python_headers_to_rust(py, &headers)?)
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
         let retry_override = retry::parse_retry_option(retries)?;
 
         // Extract transport hints from extensions dict before the async block.
@@ -858,9 +895,12 @@ impl PyAsyncClient {
                     builder = builder.without_proxy();
                 }
                 ProxyOverride::Override(url) => {
-                    let p =
+                    let mut p =
                         eggfetch_core::Proxy::all_compat(&proxy::normalize_compat_proxy_url(&url))
                             .map_err(map_err)?;
+                    if let Some(ref hdrs) = proxy_headers {
+                        p = p.proxy_headers(hdrs.clone());
+                    }
                     builder = builder.proxy(&p);
                 }
             }

@@ -323,11 +323,6 @@ def _convert_params(params):
 
 def _convert_proxy(proxy):
     if isinstance(proxy, Proxy):
-        if proxy.headers:
-            raise NotImplementedError(
-                "Proxy(headers=...) is accepted by HTTPX 0.28.1 but is not yet "
-                "forwarded by eggfetch's bounded native proxy API"
-            )
         url = str(proxy.url)
         auth = proxy.raw_auth
         if auth is not None and proxy.url.scheme in ("http", "https", "socks5", "socks5h"):
@@ -1201,7 +1196,11 @@ class Client:
             if self._limits:
                 kwargs["limits"] = _convert_limits(self._limits)
             if self._proxy is not None:
-                kwargs["proxy"] = _convert_proxy(self._proxy)
+                from eggfetch.compat.httpx._proxy import Proxy
+                if isinstance(self._proxy, Proxy):
+                    kwargs["proxy"] = self._proxy
+                else:
+                    kwargs["proxy"] = _convert_proxy(self._proxy)
             kwargs["http1"] = self._http1
             kwargs["http2"] = self._http2
             try:
@@ -1920,7 +1919,11 @@ class AsyncClient:
             if self._limits:
                 kwargs["limits"] = _convert_limits(self._limits)
             if self._proxy is not None:
-                kwargs["proxy"] = _convert_proxy(self._proxy)
+                from eggfetch.compat.httpx._proxy import Proxy
+                if isinstance(self._proxy, Proxy):
+                    kwargs["proxy"] = self._proxy
+                else:
+                    kwargs["proxy"] = _convert_proxy(self._proxy)
             kwargs["http1"] = self._http1
             kwargs["http2"] = self._http2
             try:

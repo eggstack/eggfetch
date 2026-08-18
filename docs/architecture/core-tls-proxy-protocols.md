@@ -56,6 +56,29 @@ Per-request override via `RequestBuilder::proxy(ProxyOverride)`:
 - `Direct` — bypass proxy.
 - `Override(proxy)` — use different proxy.
 
+### Proxy-Only Headers
+
+`Proxy::proxy_headers(headers)` attaches headers that are sent to the
+proxy endpoint on forward-proxy and CONNECT requests but are never
+forwarded into the tunnel or to the origin server:
+
+```rust
+let mut headers = Headers::new();
+headers.insert("X-Custom-Proxy", "value")?;
+let proxy = Proxy::http("http://proxy:8080")?
+    .proxy_headers(headers);
+```
+
+Proxy-only headers are applied as follows:
+- **HTTP forward proxy**: headers appear on the absolute-form request
+  to the proxy.  Duplicate names from the origin request are not
+  repeated.
+- **CONNECT tunnel**: headers appear on the `CONNECT` request to the
+  proxy.  After tunnel establishment, the origin request uses only the
+  origin header set.
+- **SOCKS proxy**: proxy headers are not forwarded (matching HTTPX 0.28.1
+  reference behavior).
+
 ### Proxy Authentication
 
 `ProxyAuth` supports Basic and Bearer authentication for proxy connections.
