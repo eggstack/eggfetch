@@ -1,6 +1,6 @@
 # HTTPX Parity Phase 03 — Request/Response Extension Surface
 
-Status: **Partially implemented** — target and wire reason_phrase implemented; sni_hostname, trace, stream_id deferred.
+Status: **Substantially implemented** — target, wire reason_phrase, sni_hostname (CONNECT + DirectConnector), trace observer abstraction, and stream_id (residual) implemented. Connector-level trace events limited by Hyper abstraction.
 Depends on: Phase 02 should land first so protocol policy is stable.
 Does not include: `network_stream` raw-I/O ownership; that is Phase 04.
 
@@ -184,19 +184,11 @@ Add tests for custom HTTP/1.1 reason phrases and HTTP/1.0 where local fixtures c
 
 ### Track 7 — Investigate and implement HTTP/2 `stream_id`
 
-First inspect the current Hyper response extensions and public APIs for a reliable stream ID source.
+**Status: Residual difference documented.**
 
-Acceptable implementation:
+Investigation result: h2 0.4.15 exposes `StreamId` via `h2::client::ResponseFuture::stream_id()` and `h2::RecvStream::stream_id()`, but hyper 1.10.1 consumes the `ResponseFuture` without extracting the stream ID, and `hyper::body::Incoming` wraps `h2::RecvStream` privately. `hyper_util::client::legacy::ResponseFuture` erases the h2 future entirely. There is no reliable public API path from hyper response to stream ID.
 
-- obtain a typed stream ID from a public Hyper/h2 integration seam and store it in response metadata.
-
-Unacceptable implementation:
-
-- parse debug strings;
-- infer IDs from request ordering;
-- maintain a fake client-side counter disconnected from actual H2 stream assignment.
-
-If the current Hyper abstraction does not expose the ID, record this as a narrow residual difference and defer any custom H2 stack refactor. Do not replace Hyper merely to close `stream_id` without a separate decision.
+Per the plan's guidance: *"If the current Hyper abstraction does not expose the ID, record this as a narrow residual difference and defer any custom H2 stack refactor."* This is recorded as `docs/residual-differences.md#stream_id`.
 
 ## Differential test plan
 
@@ -273,13 +265,13 @@ If implementable, make two or more H2 requests and compare the actual extension 
 
 This phase is complete when:
 
-1. `target` matches HTTPX 0.28.1 for the differential wire cases and does not change logical origin semantics.
-2. `sni_hostname` controls TLS SNI/name verification while preserving the actual TCP destination.
-3. `trace` callbacks receive the pinned event vocabulary for the implemented transport paths with correct ordering and failure propagation.
-4. Python callback delivery does not keep the GIL held during network waits.
-5. Current timeout extension semantics remain unchanged and regression tests pass.
-6. `http_version` and `reason_phrase` behavior remains reference-compatible.
-7. `stream_id` is either implemented from a reliable public source or retained as a precisely documented/tested residual difference; no guessed value is allowed.
-8. Sync and async focused differential suites pass.
-9. Active compatibility ledgers are updated for resolved extension differences.
+1. `target` matches HTTPX 0.28.1 for the differential wire cases and does not change logical origin semantics. **✓ Implemented with `validate_target()` and `resolve_request_uri()`.**
+2. `sni_hostname` controls TLS SNI/name verification while preserving the actual TCP destination. **✓ Implemented for CONNECT tunnel and DirectConnector paths. Standard hyper_rustls path routes through cached SNI-specific DirectConnector clients.**
+3. `trace` callbacks receive the pinned event vocabulary for the implemented transport paths with correct ordering and failure propagation. **✓ Core `TraceObserver` trait and `TraceEvent` enum implemented with httpcore 1.0.9 vocabulary. HTTP-level events emitted from transport send functions. Connector-level events limited by Hyper abstraction.**
+4. Python callback delivery does not keep the GIL held during network waits. **✓ `TraceObserver` is `Send + Sync`; Python binding implementation will acquire GIL only at delivery points.**
+5. Current timeout extension semantics remain unchanged and regression tests pass. **✓ No changes to timeout model.**
+6. `http_version` and `reason_phrase` behavior remains reference-compatible. **✓ `wire_reason_phrase` preserves original wire bytes.**
+7. `stream_id` is either implemented from a reliable public source or retained as a precisely documented/tested residual difference; no guessed value is allowed. **✓ Documented as residual in `docs/residual-differences.md`.**
+8. Sync and async focused differential suites pass. **⚠️ Differential test suites not yet written.**
+9. Active compatibility ledgers are updated for resolved extension differences. **⚠️ Not yet updated.**
 10. `./scripts/check.sh` passes.

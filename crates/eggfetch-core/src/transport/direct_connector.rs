@@ -204,23 +204,28 @@ impl hyper_util::client::legacy::connect::Connection for DirectStream {
 }
 
 /// A tower service connector that establishes TCP connections with optional
-/// socket-level pre-configuration.
+/// socket-level pre-configuration and per-request TLS SNI override.
 ///
 /// This is used by the hyper client for requests that require advanced
-/// socket options or local-address binding. It performs:
+/// socket options, local-address binding, or TLS SNI override. It performs:
 ///
 /// 1. DNS resolution (via `tokio::net::lookup_host`)
 /// 2. Socket creation with `tokio::net::TcpSocket`
 /// 3. Application of recognized socket options
 /// 4. Optional local-address binding
 /// 5. TCP connect
-/// 6. Optional TLS handshake (for HTTPS)
+/// 6. Optional TLS handshake (for HTTPS), using `sni_hostname` for SNI
+///    when set, while TCP connects to the original URL host.
 ///
 /// The connector is `Clone`-able and can be shared across requests.
 #[derive(Clone)]
 pub(crate) struct DirectConnector {
     config: DirectConnectorConfig,
     tls: Option<Arc<tokio_rustls::TlsConnector>>,
+    /// Per-request TLS SNI hostname override. When set, TLS uses this
+    /// hostname for `ServerName` Indication and certificate verification,
+    /// while TCP still connects to the URL host.
+    sni_hostname: Option<String>,
 }
 
 impl DirectConnector {
@@ -232,6 +237,20 @@ impl DirectConnector {
         Self {
             config,
             tls: tls.map(Arc::new),
+            sni_hostname: None,
+        }
+    }
+
+    /// Create a clone of this connector with a TLS SNI hostname override.
+    ///
+    /// When `sni_hostname` is set, TLS uses the specified hostname for
+    /// `ServerName` Indication and certificate verification, while TCP
+    /// still connects to the URL host from the request URI.
+    pub(crate) fn with_sni(&self, sni_hostname: String) -> Self {
+        Self {
+            config: self.config.clone(),
+            tls: self.tls.clone(),
+            sni_hostname: Some(sni_hostname),
         }
     }
 }
@@ -248,6 +267,7 @@ impl Service<Uri> for DirectConnector {
     fn call(&mut self, dst: Uri) -> Self::Future {
         let config = self.config.clone();
         let tls = self.tls.clone();
+        let sni_hostname = self.sni_hostname.clone();
 
         Box::pin(async move {
             let host = dst
@@ -331,12 +351,14 @@ impl Service<Uri> for DirectConnector {
                             .into()
                     })?;
 
-                let server_name = tokio_rustls::rustls::pki_types::ServerName::try_from(
-                    host.clone(),
-                )
-                .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> {
-                    Error::Tls(format!("invalid server name '{host}': {e}")).into()
-                })?;
+                // Use sni_hostname override for TLS SNI when set; otherwise
+                // use the URL host for both TCP and TLS.
+                let tls_host = sni_hostname.as_deref().unwrap_or(&host);
+                let server_name =
+                    tokio_rustls::rustls::pki_types::ServerName::try_from(tls_host.to_owned())
+                        .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> {
+                            Error::Tls(format!("invalid server name '{tls_host}': {e}")).into()
+                        })?;
 
                 let stream = tls_connector
                     .connect(server_name, tokio_stream)

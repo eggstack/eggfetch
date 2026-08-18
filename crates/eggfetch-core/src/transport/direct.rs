@@ -5,49 +5,126 @@ use bytes::Bytes;
 use crate::body::{BoxBytesStream, ResponseBody};
 use crate::error::{Error, Result};
 use crate::response::Response;
+use crate::trace::{TraceEvent, TraceObserver, TracePhase};
 use crate::transport::{HyperRequestBody, TimeoutHyperClient};
 
 /// Issue a hyper request and return a streaming `Response` bound to the
 /// caller's URL.
+///
+/// When a trace observer is provided, emits `send_request_headers` and
+/// `receive_response_headers` lifecycle events.
 pub(crate) async fn send_request(
     hyper_client: &TimeoutHyperClient,
     request: http::Request<HyperRequestBody>,
     url: url::Url,
+    trace: Option<&dyn TraceObserver>,
 ) -> Result<Response> {
-    let hyper_response = hyper_client
-        .request(request)
-        .await
-        .map_err(map_send_error)?;
+    if let Some(observer) = trace {
+        let method = request.method().as_str().to_owned();
+        let target = request.uri().to_string();
+        observer.on_event(&TraceEvent::SendRequestHeaders {
+            phase: TracePhase::Started,
+            method,
+            target,
+        });
+    }
 
-    let status = hyper_response.status();
-    let resp_version = hyper_response.version();
-    let resp_headers = hyper_response.headers().clone();
-    let stream: BoxBytesStream = wrap_incoming(hyper_response.into_body());
-    let body = ResponseBody::streaming(stream);
+    let result = hyper_client.request(request).await.map_err(map_send_error);
 
-    Ok(Response::new(status, resp_version, resp_headers, url, body))
+    match result {
+        Ok(hyper_response) => {
+            let status = hyper_response.status().as_u16();
+            let resp_version = hyper_response.version();
+            let resp_headers = hyper_response.headers().clone();
+
+            if let Some(observer) = trace {
+                observer.on_event(&TraceEvent::ReceiveResponseHeaders {
+                    phase: TracePhase::Complete,
+                    status,
+                });
+            }
+
+            let stream: BoxBytesStream = wrap_incoming(hyper_response.into_body());
+            let body = ResponseBody::streaming(stream);
+            Ok(Response::new(
+                http::StatusCode::from_u16(status).unwrap_or(http::StatusCode::OK),
+                resp_version,
+                resp_headers,
+                url,
+                body,
+            ))
+        }
+        Err(e) => {
+            if let Some(observer) = trace {
+                observer.on_event(&TraceEvent::SendRequestHeaders {
+                    phase: TracePhase::Failed,
+                    method: String::new(),
+                    target: String::new(),
+                });
+            }
+            Err(e)
+        }
+    }
 }
 
 /// Issue a request through the direct connector and return a streaming
 /// `Response`. Used for requests with advanced socket options or local
 /// address binding.
+///
+/// When a trace observer is provided, emits `send_request_headers` and
+/// `receive_response_headers` lifecycle events.
 pub(crate) async fn send_direct_request(
     hyper_client: &crate::transport::TimeoutDirectClient,
     request: http::Request<HyperRequestBody>,
     url: url::Url,
+    trace: Option<&dyn TraceObserver>,
 ) -> Result<Response> {
-    let hyper_response = hyper_client
-        .request(request)
-        .await
-        .map_err(map_send_error)?;
+    if let Some(observer) = trace {
+        let method = request.method().as_str().to_owned();
+        let target = request.uri().to_string();
+        observer.on_event(&TraceEvent::SendRequestHeaders {
+            phase: TracePhase::Started,
+            method,
+            target,
+        });
+    }
 
-    let status = hyper_response.status();
-    let resp_version = hyper_response.version();
-    let resp_headers = hyper_response.headers().clone();
-    let stream: BoxBytesStream = wrap_incoming(hyper_response.into_body());
-    let body = ResponseBody::streaming(stream);
+    let result = hyper_client.request(request).await.map_err(map_send_error);
 
-    Ok(Response::new(status, resp_version, resp_headers, url, body))
+    match result {
+        Ok(hyper_response) => {
+            let status = hyper_response.status().as_u16();
+            let resp_version = hyper_response.version();
+            let resp_headers = hyper_response.headers().clone();
+
+            if let Some(observer) = trace {
+                observer.on_event(&TraceEvent::ReceiveResponseHeaders {
+                    phase: TracePhase::Complete,
+                    status,
+                });
+            }
+
+            let stream: BoxBytesStream = wrap_incoming(hyper_response.into_body());
+            let body = ResponseBody::streaming(stream);
+            Ok(Response::new(
+                http::StatusCode::from_u16(status).unwrap_or(http::StatusCode::OK),
+                resp_version,
+                resp_headers,
+                url,
+                body,
+            ))
+        }
+        Err(e) => {
+            if let Some(observer) = trace {
+                observer.on_event(&TraceEvent::SendRequestHeaders {
+                    phase: TracePhase::Failed,
+                    method: String::new(),
+                    target: String::new(),
+                });
+            }
+            Err(e)
+        }
+    }
 }
 
 /// Wrap a hyper `Incoming` body into a `BoxBytesStream`.

@@ -779,7 +779,12 @@ pub(crate) async fn send_single_request(
             .body(body.into_http_body())
             .map_err(|e| Error::RequestBuild(e.to_string()))?;
         let response = send_with_total_timeout(
-            crate::transport::uds::send_request(uds_client, request, url.clone()),
+            crate::transport::uds::send_request(
+                uds_client,
+                request,
+                url.clone(),
+                transport_hints.trace.as_deref(),
+            ),
             remaining_total,
         )
         .await?;
@@ -810,6 +815,7 @@ pub(crate) async fn send_single_request(
                 direct_client,
                 hyper_request,
                 url.clone(),
+                transport_hints.trace.as_deref(),
             );
             let response = send_with_total_timeout(send_future, remaining_total).await?;
             let mut response = response;
@@ -859,32 +865,72 @@ pub(crate) async fn send_single_request(
             .await?
         }
         _ => {
-            // Route through HTTP/3 when policy is Http3Only or Auto { allow_http3: true }
-            #[cfg(feature = "http3")]
-            {
-                if inner.config.http_version_policy.use_http3() {
-                    if let Some(ref h3_connector) = inner.h3_connector {
-                        let uri = resolve_request_uri(&url, &transport_hints)?;
-                        let mut h3_request = http::Request::builder()
-                            .method(method)
-                            .uri(uri)
-                            .version(version);
-                        for (name, value) in headers.iter() {
-                            h3_request = h3_request.header(name, value);
-                        }
-                        let h3_request = h3_request
-                            .body(body)
-                            .map_err(|e| Error::RequestBuild(e.to_string()))?;
+            // When sni_hostname is set, route through a cached SNI-specific
+            // client that separates DNS/TCP (to original host) from TLS
+            // (with SNI override). The CONNECT tunnel handles its own SNI
+            // in the proxy path above.
+            if let Some(ref sni_hostname) = transport_hints.sni_hostname {
+                let sni_client = inner.sni_client(sni_hostname)?;
+                let uri = resolve_request_uri(&url, &transport_hints)?;
+                let mut http_request = http::Request::builder()
+                    .method(method)
+                    .uri(uri)
+                    .version(version);
+                for (name, value) in headers.iter() {
+                    http_request = http_request.header(name, value);
+                }
+                let hyper_request = http_request
+                    .body(body.into_http_body())
+                    .map_err(|e| Error::RequestBuild(e.to_string()))?;
+                let send_future = crate::transport::direct::send_direct_request(
+                    &sni_client,
+                    hyper_request,
+                    url.clone(),
+                    transport_hints.trace.as_deref(),
+                );
+                send_with_total_timeout(send_future, remaining_total).await?
+            } else {
+                // Route through HTTP/3 when policy is Http3Only or Auto { allow_http3: true }
+                #[cfg(feature = "http3")]
+                {
+                    if inner.config.http_version_policy.use_http3() {
+                        if let Some(ref h3_connector) = inner.h3_connector {
+                            let uri = resolve_request_uri(&url, &transport_hints)?;
+                            let mut h3_request = http::Request::builder()
+                                .method(method)
+                                .uri(uri)
+                                .version(version);
+                            for (name, value) in headers.iter() {
+                                h3_request = h3_request.header(name, value);
+                            }
+                            let h3_request = h3_request
+                                .body(body)
+                                .map_err(|e| Error::RequestBuild(e.to_string()))?;
 
-                        let send_future = h3_connector.send_request(h3_request, url.clone());
-                        send_with_total_timeout(send_future, remaining_total).await?
+                            let send_future = h3_connector.send_request(h3_request, url.clone());
+                            send_with_total_timeout(send_future, remaining_total).await?
+                        } else {
+                            return Err(Error::Unsupported(
+                                "HTTP/3 connector not available; ensure http3 feature is enabled"
+                                    .into(),
+                            ));
+                        }
                     } else {
-                        return Err(Error::Unsupported(
-                            "HTTP/3 connector not available; ensure http3 feature is enabled"
-                                .into(),
-                        ));
+                        send_hyper_request(
+                            inner,
+                            &method,
+                            url,
+                            &headers,
+                            body,
+                            version,
+                            remaining_total,
+                            &transport_hints,
+                        )
+                        .await?
                     }
-                } else {
+                }
+                #[cfg(not(feature = "http3"))]
+                {
                     send_hyper_request(
                         inner,
                         &method,
@@ -897,21 +943,7 @@ pub(crate) async fn send_single_request(
                     )
                     .await?
                 }
-            }
-            #[cfg(not(feature = "http3"))]
-            {
-                send_hyper_request(
-                    inner,
-                    &method,
-                    url,
-                    &headers,
-                    body,
-                    version,
-                    remaining_total,
-                    &transport_hints,
-                )
-                .await?
-            }
+            } // end sni_hostname else
         }
     };
 
@@ -976,8 +1008,12 @@ async fn send_hyper_request(
         .body(body.into_http_body())
         .map_err(|e| Error::RequestBuild(e.to_string()))?;
 
-    let send_future =
-        crate::transport::direct::send_request(hyper_client, hyper_request, url.clone());
+    let send_future = crate::transport::direct::send_request(
+        hyper_client,
+        hyper_request,
+        url.clone(),
+        transport_hints.trace.as_deref(),
+    );
 
     send_with_total_timeout(send_future, remaining_total).await
 }

@@ -1,5 +1,7 @@
 //! Request types and builder.
 
+use std::sync::Arc;
+
 use bytes::Bytes;
 use http::Version;
 
@@ -11,6 +13,7 @@ use crate::redirect::RedirectPolicy;
 use crate::response::Response;
 use crate::retry::RetryPolicy;
 use crate::timeout::Timeout;
+use crate::trace::TraceObserver;
 
 use crate::auth::AuthScheme;
 #[cfg(feature = "proxy")]
@@ -24,7 +27,7 @@ use crate::proxy::ProxyConfig;
 ///
 /// Timeout is kept in the existing [`Timeout`](crate::Timeout) model and
 /// must not be duplicated here.
-#[derive(Debug, Clone, Default)]
+#[derive(Default, Clone)]
 pub struct TransportHints {
     /// Override the wire request target (e.g. `OPTIONS *`, absolute-form).
     ///
@@ -37,6 +40,23 @@ pub struct TransportHints {
     /// TCP connects to the URL host/IP; TLS uses this name for SNI and
     /// certificate verification.
     pub sni_hostname: Option<String>,
+    /// Optional trace observer for transport lifecycle events.
+    ///
+    /// When present, the transport layer emits typed events at each
+    /// lifecycle boundary (TCP connect, TLS handshake, request/response
+    /// headers, body chunks, connection close). The observer is invoked
+    /// synchronously within the async context and must not block.
+    pub trace: Option<Arc<dyn TraceObserver>>,
+}
+
+impl std::fmt::Debug for TransportHints {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TransportHints")
+            .field("target", &self.target)
+            .field("sni_hostname", &self.sni_hostname)
+            .field("trace", &self.trace.as_ref().map(|_| "..."))
+            .finish()
+    }
 }
 
 /// Proxy override for a specific request.

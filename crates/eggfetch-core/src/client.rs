@@ -1,9 +1,7 @@
 //! Async client entry point.
 
-#[cfg(feature = "proxy")]
 use std::collections::HashMap;
 use std::sync::Arc;
-#[cfg(feature = "proxy")]
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -100,6 +98,13 @@ pub(crate) struct ClientInner {
     /// address binding. Uses a custom connector instead of the standard
     /// hyper-rustls connector path.
     pub(crate) direct_client: Option<crate::transport::TimeoutDirectClient>,
+    /// Cached hyper clients keyed by TLS SNI hostname override.
+    ///
+    /// When a request carries `TransportHints.sni_hostname`, the pipeline
+    /// uses a DirectConnector-based client from this cache. The connector
+    /// separates DNS/TCP (to the original URL host) from TLS (with the
+    /// SNI override hostname), keeping the default path unchanged.
+    pub(crate) sni_clients: Mutex<HashMap<String, crate::transport::TimeoutDirectClient>>,
     /// Hyper client for Unix domain socket requests.
     #[cfg(unix)]
     pub(crate) uds_client: Option<crate::transport::TimeoutUdsClient>,
@@ -112,6 +117,65 @@ pub(crate) struct ClientInner {
     pub(crate) pool: Pool,
     #[cfg(feature = "http3")]
     pub(crate) h3_connector: Option<crate::transport::http3::H3Connector>,
+}
+
+impl ClientInner {
+    /// Get or create a cached hyper client with TLS SNI hostname override.
+    ///
+    /// The returned client uses a [`DirectConnector`](crate::transport::direct_connector::DirectConnector)
+    /// that separates DNS/TCP resolution (to the original URL host) from
+    /// TLS negotiation (with the SNI hostname). Clients are cached by
+    /// SNI hostname for connection reuse.
+    pub(crate) fn sni_client(
+        &self,
+        sni_hostname: &str,
+    ) -> Result<crate::transport::TimeoutDirectClient> {
+        let mut clients = self
+            .sni_clients
+            .lock()
+            .map_err(|_| Error::ProxyConnect("SNI client cache is poisoned".into()))?;
+        if let Some(client) = clients.get(sni_hostname) {
+            return Ok(client.clone());
+        }
+
+        let connect_timeout = self.config.timeout.as_ref().and_then(|t| t.connect);
+
+        #[cfg(any(feature = "proxy", feature = "http3"))]
+        let tls_connector = match self.config.tls_config.as_ref() {
+            Some(tls_config) => match tls_config.build_rustls_config() {
+                Ok(rc) => Some(tokio_rustls::TlsConnector::from(Arc::new(rc))),
+                Err(_) => None,
+            },
+            None => None,
+        };
+        #[cfg(not(any(feature = "proxy", feature = "http3")))]
+        let tls_connector = None;
+
+        let base_connector = crate::transport::direct_connector::DirectConnector::new(
+            crate::transport::direct_connector::DirectConnectorConfig {
+                local_address: None,
+                socket_options: Vec::new(),
+            },
+            tls_connector,
+        );
+        let sni_connector = base_connector.with_sni(sni_hostname.to_owned());
+        let connector =
+            crate::transport::connect_timeout::ConnectTimeout::new(sni_connector, connect_timeout);
+
+        let mut builder =
+            hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new());
+        if let Some(idle_timeout) = self.config.timeout.as_ref().and_then(|t| t.pool).or(self
+            .config
+            .timeout
+            .as_ref()
+            .and_then(|t| t.total))
+        {
+            builder.pool_idle_timeout(idle_timeout);
+        }
+        let client = builder.build(connector);
+        clients.insert(sni_hostname.to_owned(), client.clone());
+        Ok(client)
+    }
 }
 
 #[cfg(feature = "proxy")]
@@ -800,6 +864,7 @@ impl ClientBuilder {
             inner: Arc::new(ClientInner {
                 hyper_client,
                 direct_client,
+                sni_clients: Mutex::new(HashMap::new()),
                 #[cfg(unix)]
                 uds_client,
                 #[cfg(feature = "proxy")]

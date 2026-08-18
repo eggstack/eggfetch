@@ -142,22 +142,59 @@ pub(crate) async fn send_request(
     client: &crate::transport::TimeoutUdsClient,
     request: http::Request<crate::transport::HyperRequestBody>,
     url: url::Url,
+    trace: Option<&dyn crate::trace::TraceObserver>,
 ) -> Result<Response> {
-    let response = client
+    use crate::trace::{TraceEvent, TracePhase};
+
+    if let Some(observer) = trace {
+        let method = request.method().as_str().to_owned();
+        let target = request.uri().to_string();
+        observer.on_event(&TraceEvent::SendRequestHeaders {
+            phase: TracePhase::Started,
+            method,
+            target,
+        });
+    }
+
+    let result = client
         .request(request)
         .await
-        .map_err(|e| Error::HyperClient(Arc::new(e)))?;
-    let status = response.status();
-    let version = response.version();
-    let headers = response.headers().clone();
-    let body: BoxBytesStream = crate::transport::direct::wrap_incoming(response.into_body());
-    Ok(Response::new(
-        status,
-        version,
-        headers,
-        url,
-        ResponseBody::streaming(body),
-    ))
+        .map_err(|e| Error::HyperClient(Arc::new(e)));
+
+    match result {
+        Ok(response) => {
+            let status = response.status().as_u16();
+            let version = response.version();
+            let headers = response.headers().clone();
+
+            if let Some(observer) = trace {
+                observer.on_event(&TraceEvent::ReceiveResponseHeaders {
+                    phase: TracePhase::Complete,
+                    status,
+                });
+            }
+
+            let body: BoxBytesStream =
+                crate::transport::direct::wrap_incoming(response.into_body());
+            Ok(Response::new(
+                http::StatusCode::from_u16(status).unwrap_or(http::StatusCode::OK),
+                version,
+                headers,
+                url,
+                ResponseBody::streaming(body),
+            ))
+        }
+        Err(e) => {
+            if let Some(observer) = trace {
+                observer.on_event(&TraceEvent::SendRequestHeaders {
+                    phase: TracePhase::Failed,
+                    method: String::new(),
+                    target: String::new(),
+                });
+            }
+            Err(e)
+        }
+    }
 }
 
 #[cfg(not(unix))]

@@ -51,6 +51,7 @@ pub mod retry;
 pub(crate) mod stream;
 pub mod timeout;
 pub mod tls;
+pub mod trace;
 pub mod transport;
 
 pub use auth::{AuthScheme, BasicAuth, BearerAuth};
