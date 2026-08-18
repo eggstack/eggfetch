@@ -11,6 +11,7 @@ mod errors;
 mod headers;
 mod limits;
 mod multipart;
+mod network_stream;
 mod proxy;
 mod response;
 mod retry;
@@ -740,6 +741,7 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyFile>()?;
     m.add_class::<PyRetry>()?;
     m.add_class::<PyLimits>()?;
+    m.add_class::<network_stream::PyNetworkStream>()?;
 
     // Create the NOAUTH singleton instance.
     let noauth_obj = Py::new(m.py(), PyNoAuth)?;

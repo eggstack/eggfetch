@@ -38,6 +38,7 @@ pub mod http_version;
 pub mod limits;
 #[cfg(feature = "multipart")]
 pub mod multipart;
+pub mod network_stream;
 pub(crate) mod pipeline;
 pub mod pool;
 #[cfg(feature = "proxy")]
@@ -65,6 +66,9 @@ pub use http_version::HttpVersionPolicy;
 pub use limits::Limits;
 #[cfg(feature = "multipart")]
 pub use multipart::{Boundary, Multipart, MultipartEncoder, Part, PartBody};
+pub use network_stream::{
+    ConnectionMetadata, ExtraInfo, NetworkStream, TlsInfo, TransportKind, UpgradedStream,
+};
 pub use pool::{Pool, PoolConfig};
 #[cfg(feature = "proxy")]
 pub use proxy::{NoProxy, NoProxyRule, Proxy, ProxyAuth, ProxyConfig, ProxyDecision, ProxyRule};

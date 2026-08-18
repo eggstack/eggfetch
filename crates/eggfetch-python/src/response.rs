@@ -7,6 +7,7 @@ use pyo3::types::{PyBytes, PyDict, PyList, PyString};
 use crate::cookies::PyCookies;
 use crate::errors::HTTPStatusError;
 use crate::headers::PyHeaders;
+use crate::network_stream::PyNetworkStream;
 
 /// Map `http::Version` to a human-readable string.
 pub(crate) fn version_to_string(version: http::Version) -> String {
@@ -91,6 +92,11 @@ pub struct PyResponse {
     /// Original wire `Content-Length`, for the HTTPX compatibility facade.
     #[pyo3(get)]
     _wire_content_length: Option<String>,
+    /// Optional network stream handle for connection metadata and
+    /// upgraded-connection IO. Returns `None` for buffered responses
+    /// where the connection has been returned to the pool.
+    #[pyo3(get)]
+    _network_stream: Option<PyNetworkStream>,
 }
 
 impl PyResponse {
@@ -163,7 +169,7 @@ impl PyResponse {
 
         // Parse Set-Cookie headers into a Cookies mapping.
         let jar = eggfetch_core::cookie::CookieJar::new();
-        let response_url = response.url();
+        let response_url = response.url().to_string();
         let set_cookie_headers: Vec<String> = response
             .headers()
             .get_all("set-cookie")
@@ -171,14 +177,27 @@ impl PyResponse {
             .filter_map(|v| v.to_str().ok().map(ToString::to_string))
             .collect();
         if !set_cookie_headers.is_empty() {
-            jar.update_from_response(response_url, &set_cookie_headers);
+            jar.update_from_response(response.url(), &set_cookie_headers);
         }
         let cookies = PyCookies::from_jar(jar);
+
+        // Extract network stream from core response if present.
+        // For buffered responses, the connection has been returned to the
+        // pool, so the network_stream is only meaningful for upgrade
+        // responses or streaming responses.
+        let network_stream = response.into_network_stream().map(|ns| match ns {
+            eggfetch_core::network_stream::NetworkStream::Upgraded(u) => {
+                PyNetworkStream::from_upgraded(u)
+            }
+            eggfetch_core::network_stream::NetworkStream::Metadata(m) => {
+                PyNetworkStream::from_metadata(m)
+            }
+        });
 
         Ok(Self {
             status_code: status,
             headers,
-            url: response_url.to_string(),
+            url: response_url,
             content,
             text,
             reason_phrase,
@@ -189,6 +208,7 @@ impl PyResponse {
             _stream_consumed: false,
             _wire_content_encoding: wire_content_encoding,
             _wire_content_length: wire_content_length,
+            _network_stream: network_stream,
         })
     }
 
@@ -218,6 +238,7 @@ impl PyResponse {
             _stream_consumed: false,
             _wire_content_encoding: None,
             _wire_content_length: None,
+            _network_stream: None,
         }
     }
 }

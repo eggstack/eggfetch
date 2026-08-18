@@ -13,6 +13,7 @@ See also: [overview.md](overview.md) for the high-level map.
 | `response` | Yes | `Response`, `HistoryEntry` — response + redirect history |
 | `body` | Yes | `RequestBody`, `ResponseBody`, `BoxBytesStream` |
 | `headers` | Yes | `Headers` — case-insensitive header map wrapper |
+| `network_stream` | Yes | `NetworkStream`, `UpgradedStream`, `ConnectionMetadata` — upgrade IO + connection metadata |
 | `error` | Yes | `Error` enum (46 variants), `Result<T>` alias |
 | `pipeline` | Crate-internal | Full request lifecycle orchestration |
 | `transport` | Crate-internal | Direct, direct-with-socket-options, UDS, proxy, HTTP/3 transport dispatch |
@@ -109,6 +110,17 @@ send_with_retry()           ← retry loop
 9. Transport dispatch (direct / direct-with-socket-options / UDS / proxy / HTTP3)
 10. Decompression wrapping
 11. Read timeout + pool lease attachment
+
+## Network Stream and Upgrade Support
+
+`Response` carries an optional `network_stream` field of type `Option<NetworkStream>`:
+
+- For **101 Switching Protocols** responses on the direct transport path, Hyper's `OnUpgrade` is captured before consuming the response body. The upgrade future is awaited and the resulting IO is wrapped in an `UpgradedStream` (bridged via `hyper_util::rt::TokioIo`). The response body is set to an empty buffered body.
+- For **ordinary** responses, `network_stream` is `None` — the connection is managed by the pool and raw IO access would corrupt pool state.
+- The `UpgradedStream` provides async `read()`, `write_all()`, `close()`, `flush()`, and `start_tls()` operations, plus `metadata()` for connection info.
+- Leading data (bytes sent by the server in the same TCP segment as the 101 headers) is preserved inside Hyper's internal rewind buffer and yielded on the first reads.
+
+**Ownership rules**: once an upgrade handoff succeeds, the connection is removed from the HTTP pool and must never be reused. Closing the response and closing the upgraded stream are independent operations.
 
 ## Error Taxonomy
 

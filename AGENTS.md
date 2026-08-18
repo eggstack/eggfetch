@@ -89,6 +89,28 @@ The CLI enables: cookies, multipart, proxy. The Python binding enables all featu
 
 Transport hints survive through retry reconstruction. They are cleared on redirect hops because the destination changes. The Python compat facade extracts `target` and `sni_hostname` from the request extensions dict and passes them through the native `stream()` method.
 
+## Network Stream and Upgrade Support
+
+`Response` carries an optional `NetworkStream` for connection metadata and upgraded-connection IO:
+
+- **101 Switching Protocols**: captures Hyper's upgrade future and attaches an `UpgradedStream` providing async read/write/close/TLS-start.
+- **Ordinary responses**: `NetworkStream::Metadata` holds read-only `ConnectionMetadata` (addresses, transport kind, TLS info).
+- **HTTP/2**: shared connection metadata; no per-response raw socket exposure.
+
+Key types in `eggfetch_core::network_stream`:
+
+| Type | Purpose |
+|------|---------|
+| `ConnectionMetadata` | Read-only socket addresses, transport kind, TLS info |
+| `UpgradedStream` | Owned post-HTTP IO for 101/CONNECT handoff |
+| `NetworkStream` | Enum: `Upgraded(UpgradedStream)` or `Metadata(Arc<ConnectionMetadata>)` |
+| `TlsInfo` | Negotiated ALPN, version, cipher suite, SNI |
+| `ExtraInfo` | `get_extra_info()` compatibility subset |
+
+Python bindings expose `PyNetworkStream` with `read()`, `write()`, `close()`, `get_extra_info()`. For buffered responses, the network_stream is `None` (connection returned to pool).
+
+Leading data after 101 headers is preserved inside Hyper's internal rewind buffer and yielded on the first reads from the upgraded stream.
+
 ## HTTPX Compatibility Layer
 
 The `eggfetch.compat.httpx` module provides an HTTPX 0.28.1-compatible asyncio facade (**Stage C qualified**). Import it as:

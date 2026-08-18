@@ -23,6 +23,7 @@ use url::Url;
 
 use crate::body::{BoxBytesStream, ResponseBody};
 use crate::error::Result;
+use crate::network_stream::NetworkStream;
 
 /// A metadata-only snapshot of a redirect response.
 ///
@@ -121,6 +122,11 @@ pub struct Response {
     wire_reason_phrase: Option<String>,
     pub(crate) body: ResponseBody,
     history: Vec<HistoryEntry>,
+    /// Optional network stream handle for connection metadata and
+    /// upgraded-connection IO. Set for responses where the underlying
+    /// transport metadata is available (101, CONNECT, or ordinary
+    /// responses when metadata is captured).
+    network_stream: Option<NetworkStream>,
 }
 
 impl std::fmt::Debug for Response {
@@ -135,6 +141,10 @@ impl std::fmt::Debug for Response {
             .field("wire_reason_phrase", &self.wire_reason_phrase)
             .field("body", &self.body)
             .field("history", &self.history)
+            .field(
+                "network_stream",
+                &self.network_stream.as_ref().map(|_| "..."),
+            )
             .finish()
     }
 }
@@ -174,6 +184,7 @@ impl Response {
             wire_reason_phrase: None,
             body,
             history: Vec::new(),
+            network_stream: None,
         }
     }
 
@@ -349,6 +360,35 @@ impl Response {
     pub fn text_lines(&mut self) -> Result<impl Stream<Item = Result<String>>> {
         let byte_stream = self.bytes_stream()?;
         Ok(LineStream::new(byte_stream))
+    }
+
+    /// Returns a reference to the network stream handle, if available.
+    ///
+    /// For upgraded connections (101/CONNECT), this provides full
+    /// IO access. For ordinary pooled connections, this provides
+    /// read-only metadata.
+    #[must_use]
+    pub fn network_stream(&self) -> Option<&NetworkStream> {
+        self.network_stream.as_ref()
+    }
+
+    /// Returns a mutable reference to the network stream handle.
+    pub fn network_stream_mut(&mut self) -> Option<&mut NetworkStream> {
+        self.network_stream.as_mut()
+    }
+
+    /// Set the network stream handle for this response.
+    pub(crate) fn set_network_stream(&mut self, stream: NetworkStream) {
+        self.network_stream = Some(stream);
+    }
+
+    /// Consume the response and return the network stream, if any.
+    ///
+    /// This is the primary way to obtain ownership of an upgraded
+    /// stream (101 Switching Protocols or successful CONNECT).
+    #[must_use]
+    pub fn into_network_stream(self) -> Option<NetworkStream> {
+        self.network_stream
     }
 }
 

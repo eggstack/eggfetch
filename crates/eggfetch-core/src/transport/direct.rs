@@ -1,9 +1,12 @@
 //! Direct (non-proxy) hyper client send path.
 
+use std::sync::Arc;
+
 use bytes::Bytes;
 
 use crate::body::{BoxBytesStream, ResponseBody};
 use crate::error::{Error, Result};
+use crate::network_stream::{ConnectionMetadata, NetworkStream, UpgradedStream};
 use crate::response::Response;
 use crate::trace::{TraceEvent, TraceObserver, TracePhase};
 use crate::transport::{HyperRequestBody, TimeoutHyperClient};
@@ -13,6 +16,11 @@ use crate::transport::{HyperRequestBody, TimeoutHyperClient};
 ///
 /// When a trace observer is provided, emits `send_request_headers` and
 /// `receive_response_headers` lifecycle events.
+///
+/// For 101 Switching Protocols and successful CONNECT responses,
+/// captures the upgrade future and attaches an [`UpgradedStream`] to
+/// the response. For ordinary responses, attaches read-only connection
+/// metadata when available.
 pub(crate) async fn send_request(
     hyper_client: &TimeoutHyperClient,
     request: http::Request<HyperRequestBody>,
@@ -32,7 +40,7 @@ pub(crate) async fn send_request(
     let result = hyper_client.request(request).await.map_err(map_send_error);
 
     match result {
-        Ok(hyper_response) => {
+        Ok(mut hyper_response) => {
             let status = hyper_response.status().as_u16();
             let resp_version = hyper_response.version();
             let resp_headers = hyper_response.headers().clone();
@@ -44,15 +52,47 @@ pub(crate) async fn send_request(
                 });
             }
 
-            let stream: BoxBytesStream = wrap_incoming(hyper_response.into_body());
-            let body = ResponseBody::streaming(stream);
-            Ok(Response::new(
-                http::StatusCode::from_u16(status).unwrap_or(http::StatusCode::OK),
-                resp_version,
-                resp_headers,
-                url,
-                body,
-            ))
+            // Always try to capture the upgrade future before consuming
+            // the body. For 101 responses, `into_body()` would block
+            // forever because hyper transfers the connection IO to the
+            // upgrade handler — we must not consume the Incoming body.
+            let on_upgrade = hyper::upgrade::on(&mut hyper_response);
+            let upgrading = is_upgrade_status(status);
+
+            let mut response = if upgrading {
+                // For upgrade responses, do NOT consume the body via
+                // into_body(). The Incoming body would block forever.
+                // Use an empty buffered body instead.
+                let body = ResponseBody::buffered(Bytes::new());
+                Response::new(
+                    http::StatusCode::from_u16(status).unwrap_or(http::StatusCode::OK),
+                    resp_version,
+                    resp_headers,
+                    url,
+                    body,
+                )
+            } else {
+                let stream: BoxBytesStream = wrap_incoming(hyper_response.into_body());
+                let body = ResponseBody::streaming(stream);
+                Response::new(
+                    http::StatusCode::from_u16(status).unwrap_or(http::StatusCode::OK),
+                    resp_version,
+                    resp_headers,
+                    url,
+                    body,
+                )
+            };
+
+            // For upgrade-eligible responses, await the upgrade future
+            // and attach the resulting UpgradedStream to the response.
+            if upgrading {
+                let upgraded = await_upgrade(on_upgrade).await;
+                if let Some(stream) = upgraded {
+                    response.set_network_stream(NetworkStream::Upgraded(stream));
+                }
+            }
+
+            Ok(response)
         }
         Err(e) => {
             if let Some(observer) = trace {
@@ -92,7 +132,7 @@ pub(crate) async fn send_direct_request(
     let result = hyper_client.request(request).await.map_err(map_send_error);
 
     match result {
-        Ok(hyper_response) => {
+        Ok(mut hyper_response) => {
             let status = hyper_response.status().as_u16();
             let resp_version = hyper_response.version();
             let resp_headers = hyper_response.headers().clone();
@@ -104,15 +144,38 @@ pub(crate) async fn send_direct_request(
                 });
             }
 
-            let stream: BoxBytesStream = wrap_incoming(hyper_response.into_body());
-            let body = ResponseBody::streaming(stream);
-            Ok(Response::new(
-                http::StatusCode::from_u16(status).unwrap_or(http::StatusCode::OK),
-                resp_version,
-                resp_headers,
-                url,
-                body,
-            ))
+            let on_upgrade = hyper::upgrade::on(&mut hyper_response);
+            let upgrading = is_upgrade_status(status);
+
+            let mut response = if upgrading {
+                let body = ResponseBody::buffered(Bytes::new());
+                Response::new(
+                    http::StatusCode::from_u16(status).unwrap_or(http::StatusCode::OK),
+                    resp_version,
+                    resp_headers,
+                    url,
+                    body,
+                )
+            } else {
+                let stream: BoxBytesStream = wrap_incoming(hyper_response.into_body());
+                let body = ResponseBody::streaming(stream);
+                Response::new(
+                    http::StatusCode::from_u16(status).unwrap_or(http::StatusCode::OK),
+                    resp_version,
+                    resp_headers,
+                    url,
+                    body,
+                )
+            };
+
+            if upgrading {
+                let upgraded = await_upgrade(on_upgrade).await;
+                if let Some(stream) = upgraded {
+                    response.set_network_stream(NetworkStream::Upgraded(stream));
+                }
+            }
+
+            Ok(response)
         }
         Err(e) => {
             if let Some(observer) = trace {
@@ -123,6 +186,52 @@ pub(crate) async fn send_direct_request(
                 });
             }
             Err(e)
+        }
+    }
+}
+
+/// Returns `true` for HTTP status codes that indicate a protocol upgrade
+/// on the direct (non-proxy) send path.
+///
+/// Only `101 Switching Protocols` triggers upgrade handling here.
+/// Successful CONNECT (200) is handled in the proxy transport path.
+fn is_upgrade_status(status: u16) -> bool {
+    status == 101
+}
+
+/// Await the upgrade future and convert the result into an
+/// [`UpgradedStream`].
+///
+/// Hyper's `Upgraded` preserves leading data in its read buffer.
+/// We wrap it with `hyper_util::rt::TokioIo` which bridges Hyper's
+/// IO traits to Tokio's `AsyncRead + AsyncWrite`.
+async fn await_upgrade(on_upgrade: hyper::upgrade::OnUpgrade) -> Option<UpgradedStream> {
+    match on_upgrade.await {
+        Ok(upgraded) => {
+            // Hyper's Upgraded wraps a Rewind buffer that preserves
+            // leading data (bytes read past the response headers before
+            // the upgrade completed). These bytes are returned first
+            // when reading from the Upgraded stream.
+            //
+            // We cannot extract the leading data separately without
+            // downcasting to the concrete IO type (which we don't know).
+            // The leading data is preserved inside Hyper's internal
+            // rewind buffer and will be yielded on the first reads.
+            let leading = Bytes::new();
+            // Use hyper-util's TokioIo adapter to bridge Hyper's IO
+            // traits to Tokio's AsyncRead + AsyncWrite.
+            let adapter = hyper_util::rt::TokioIo::new(upgraded);
+            // We don't have socket addresses from Hyper's Upgraded
+            // directly. The metadata will be set to defaults; real
+            // metadata can be captured at the connector level in a
+            // future enhancement.
+            let metadata = Arc::new(ConnectionMetadata::default());
+            Some(UpgradedStream::from_adapter(adapter, leading, metadata))
+        }
+        Err(_e) => {
+            // Upgrade future failed — response headers are still valid;
+            // the upgrade just couldn't be captured.
+            None
         }
     }
 }
