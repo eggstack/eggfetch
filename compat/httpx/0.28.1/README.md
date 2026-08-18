@@ -49,6 +49,16 @@ python scripts/compare_httpx_api_manifest.py \
 
 This profile targets HTTPX 0.28.1. The compatibility stage is **Stage C
 qualified** for the supported Python versions. Trio/AnyIO, Python 3.8/3.9,
-and private HTTPX modules remain excluded. Proxy URL credentials are covered;
-arbitrary proxy headers and Python `ssl_context` objects remain bounded
-differences.
+and private HTTPX modules remain excluded. Proxy URL credentials, proxy
+headers, and proxy ssl_context are covered. Arbitrary Python ssl_context
+objects that cannot be represented by rustls are rejected at construction
+time with a clear TypeError.
+
+## Future Drift
+
+- **FunctionAuth**: HTTPX master (post-0.28.1) exports `FunctionAuth` in
+  `__all__` (commit `ae1b9f66`, 2025-12-10). EggFetch already has an internal
+  `_FunctionAuth` adapter for callable auth normalization. The pinned 0.28.1
+  reference does not export `FunctionAuth`. The next stable HTTPX rebaseline
+  should evaluate the public export, signature, and behavior before exporting
+  or renaming the internal adapter.

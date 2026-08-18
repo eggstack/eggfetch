@@ -107,14 +107,19 @@ eggfetch targets HTTPX 0.28.1 compatibility in phases. The current status:
 - **Phase 3**: Signature alignment — top-level helper args, Client/AsyncClient constructors, transport signatures, base-class relationships, stream types (55 must-close resolved)
 - **Phase 4**: Direct transport — local_address, socket_options, UDS end-to-end, pool isolation, timeout/cancellation/resource release
 - **Phase 5**: SOCKS5 proxy — HTTP/HTTPS through SOCKS5, auth, DNS/address-type behavior, NO_PROXY bypass, credential redaction
-- **Phase 6 / Differential Closure**: Final qualification — API oracle clean (76 active differences, all intentional/deferred), full pinned compat suite passing, downstream behavioral fixtures validated
+- **Phase 6 / Differential Closure**: Final qualification — API oracle clean (71 active differences, all intentional/deferred), full pinned compat suite passing (1735 tests), downstream behavioral fixtures validated (4/4)
+- **Phase 06 (Final Rebaseline)**: Remaining-parity program completed — proxy headers/ssl_context resolved, SSLContext translation, H2-only, transport hints, network stream all implemented. Qualification SHA `48bad19fa1bb7ab7c91bcd67787efb2e41127fff`.
 
-**Current status: Stage C qualified.** Pass 06 closed the pinned HTTPX IPv6
-environment-form parity and route/pre-dispatch evidence gaps. Qualification is
-bound to the exact executable SHA in `compat/httpx/0.28.1/profile.toml`; any
-executable change requires fresh qualification. The compatibility facade does
-not claim unrestricted HTTPX replacement. Trio/AnyIO, Python 3.8/3.9, and
-private HTTPX modules remain outside scope.
+**Current status: Stage C qualified.** Phase 06 completed the remaining-parity
+program. Proxy headers are forwarded on the proxy leg; proxy ssl_context is
+translated to native TlsConfig; create_ssl_context returns a real ssl.SSLContext;
+H2-only mode is enabled; transport hints (target, sni_hostname, trace) are
+supported; network stream metadata and upgrade lifecycle are implemented.
+Qualification is bound to the exact executable SHA in
+`compat/httpx/0.28.1/profile.toml`; any executable change requires fresh
+qualification. The compatibility facade does not claim unrestricted HTTPX
+replacement. Trio/AnyIO, Python 3.8/3.9, and private HTTPX modules remain
+outside scope.
 
 See `compat/httpx/0.28.1/` for the machine-readable profile and allowed differences.
 
@@ -136,7 +141,7 @@ The following statements from earlier documentation have been corrected:
 4. **SOCKS proxy**: HTTPX 0.28.1 exposes SOCKS proxy support as an optional public feature via `httpx[socks]`. eggfetch supports SOCKS5 (`socks5://` and `socks5h://`) with the pinned username/password method matrix, domain/IP address types, route-local pooling, origin TLS, and `NO_PROXY` bypass. Both schemes use the reference's domain ATYP for hostnames; native Rust configuration retains its explicit DNS distinction.
 5. **UDS, local_address, socket_options**: HTTPX 0.28.1 exposes `UDS`, `local_address`, and `socket_options` transport parameters. eggfetch implements these through the native Rust engine with HTTPS, fixed/chunked streaming, reuse, and host-only local-address evidence. The safe three-element socket-option form is supported; the valid `(level, option, None, optlen)` form remains a bounded safe-Rust difference because arbitrary pointer semantics are not exposed.
 6. **Proxy endpoint TLS**: `https://` proxy URLs establish and verify TLS to the proxy hostname before HTTP forwarding or CONNECT. Origin TLS after CONNECT remains independently verified against the origin hostname.
-7. **Proxy metadata**: HTTPX proxy URL credentials are translated into the core proxy authentication path. Arbitrary `Proxy(headers=...)` metadata and Python `ssl_context` objects are retained by the facade but are not yet forwarded into the Rust proxy engine; default verified proxy TLS is supported. These remain bounded Stage C differences and are covered by the corrective handoff rather than silently treated as equivalent.
+7. **Proxy metadata**: HTTPX proxy URL credentials are translated into the core proxy authentication path. `Proxy(headers=...)` metadata is forwarded on the proxy leg and never forwarded into the tunnel or to the origin. `Proxy(ssl_context=...)` is translated to a native `TlsConfig` for the proxy endpoint TLS handshake, separate from origin TLS config. Arbitrary Python ssl_context objects that cannot be represented by rustls are rejected at construction time with a clear TypeError. Default verified proxy TLS is supported. These are now resolved and tracked in `resolved-differences.toml`.
 8. **Timeout semantics**: HTTPX's scalar/default timeout maps to its four operational `connect`, `read`, `write`, and `pool` values, preserving omitted versus explicitly supplied `None` phase values. The facade does not create an EggFetch-native `total` deadline; native callers may configure that outer cap explicitly. Direct Hyper/UDS/H3 response-header acquisition remains a bounded transport limitation; body reads and proxy protocol reads are phase-aware.
 9. **Stream exception hierarchy**: eggfetch's stream exceptions (StreamClosed, StreamConsumed, RequestNotRead, ResponseNotRead) now match HTTPX 0.28.1 exactly — inheriting from RuntimeError, accepting no arguments. Resolved in Phase 2.
 10. **SSL context translation**: `eggfetch.compat.httpx.create_ssl_context()` now returns a genuine Python `ssl.SSLContext` matching HTTPX 0.28.1 construction behavior. Passing an `ssl.SSLContext` to `Client(verify=...)` or `AsyncClient(verify=...)` triggers automatic snapshot-based translation: the context is classified for representability, and exactly representable contexts (default, custom CA, disabled verification) are faithfully reconstructed as native `TlsConfig` state. Unrepresentable contexts (custom ciphers, TLS versions below 1.2, third-party subclasses) are rejected deterministically before network dispatch. A weak registry preserves metadata for contexts created through `create_ssl_context(cert=...)` to support mTLS reconstruction.

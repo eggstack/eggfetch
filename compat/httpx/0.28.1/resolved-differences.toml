@@ -345,16 +345,20 @@ non_expiring = true
 id = "PROXY-SSL-CONTEXT-001"
 category = "resolved"
 symbol = "Proxy"
-behavior-case = "proxy-missing-ssl-context"
-reference-behavior = "HTTPX Proxy accepts ssl_context parameter"
-eggfetch-behavior = "eggfetch Proxy does not accept ssl_context; TLS is handled by the Rust engine"
-rationale = "Deduplicated with EXTRA-PROPS-003 series which cover the same Proxy differences."
+behavior-case = "proxy-ssl-context"
+reference-behavior = "HTTPX Proxy accepts ssl_context parameter and uses it for TLS to the proxy endpoint"
+eggfetch-behavior = "eggfetch Proxy accepts ssl_context and translates it through Phase 01 safe translation boundary; unrepresentable contexts fail closed before dispatch"
+rationale = "Implemented in Phase 05. Proxy ssl_context is translated to a native TlsConfig for the proxy endpoint TLS handshake, separate from origin TLS config. Representable contexts work through rustls; unrepresentable ones fail closed."
 compatibility-stage-impact = "resolved"
-security-improvement = "false"
-migration-impact = "Minimal; ssl_context is rarely customized"
+security-improvement = "true"
+migration-impact = "None; behavior now matches HTTPX"
 owner = "eggfetch-team"
-review-milestone = "corrective-closure"
-tests = ["test_config_objects.py"]
+review-milestone = "phase-05"
+tests = [
+    "test_native_proxy_tls.py::TestHttpsProxyEndpoint::test_https_proxy_headers_reference_and_bounded_candidate_difference",
+    "test_proxy_phase05_tracks.py::TestDefaultHttpsProxyTrust::test_https_proxy_with_explicit_ca_matches_reference",
+    "test_proxy_phase05_tracks.py::TestDefaultHttpsProxyTrust::test_https_proxy_untrusted_ca_fails",
+]
 non_expiring = true
 
 [[difference]]

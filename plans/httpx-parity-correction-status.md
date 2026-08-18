@@ -4,29 +4,65 @@ This record is the exact-SHA-bound status for the HTTPX 0.28.1 compatibility
 facade. Historical phase and corrective-pass records remain in the git history
 and referenced plans; counts below are only from the runs named here.
 
-## Current corrective pass — pass 06 IPv6 closure qualified
+## Current corrective pass — Phase 06 final rebaseline qualified
 
 Current designation: **Stage C qualified** for the documented Python 3.10+
 asyncio-supported HTTPX 0.28.1 surface.
 
-Qualification was reopened from exact pass-05 qualified SHA
-`6c1013a554483f51023a0b7d534198b1c0a9229a`. Pass-05 evidence below remains
-historical and auditable, but is not current qualification evidence. Pass 06
-is limited to IPv6 environment-form parity and completion of route/pre-dispatch
-evidence. It does not reopen pass-04 timeout/runtime/proxy corrections or the
-pass-05 generic-domain and default-port fixes.
+Phase 06 completes the HTTPX parity remaining-parity program. It rebaselines
+the compatibility profile after Phases 01-05 implementation, eliminates stale
+or contradictory difference records, classifies residual gaps narrowly, and
+re-runs the repository's exact-SHA qualification procedure.
 
-Pass 06 qualification is bound to executable/evidence SHA
-`516d517542b1ed23dfcb31c053c53cdc363cf05b`, qualified on 2026-08-14. Only
+Phase 06 qualification is bound to executable SHA
+`48bad19fa1bb7ab7c91bcd67787efb2e41127fff`, qualified on 2026-08-18. Only
 documentation and status records follow that frozen executable SHA.
 
-Pass-04 timeout sentinel/runtime-ownership/proxy corrections remain accepted
-and are not being reopened. Those corrections keep direct/UDS/H3 read budgets
-on response-body chunks after transport setup, preserve HTTPX's
-omitted-versus-explicit-`None` timeout phases, stabilize proxy endpoint
-matrices, and keep Python response and streaming body work on the runtime that
-owns the transport. Live sync streams retain a runtime lease so they remain
-readable after `Client.close()`.
+### What changed in Phases 01-05
+
+- **Phase 01 (TLS):** Safe SSLContext translation boundary — `create_ssl_context()` returns a real `ssl.SSLContext`; arbitrary contexts are classified and rejected before dispatch if unrepresentable by rustls.
+- **Phase 02 (HTTP/2):** HTTP/2-only prior-knowledge mode enabled; ALPN protocol negotiation.
+- **Phase 03 (Transport hints):** `target`, `sni_hostname`, `trace` observer, `stream_id` via extensions dict.
+- **Phase 04 (Network stream):** `NetworkStream`, `ConnectionMetadata`, `UpgradedStream` for 101/CONNECT upgrade lifecycle.
+- **Phase 05 (Proxy):** `Proxy(headers=...)` forwarded on the proxy leg; `Proxy(ssl_context=...)` translated to native `TlsConfig` for proxy endpoint TLS; proxy TLS config separated from origin TLS config.
+
+### Evidence bound to the exact SHA
+
+- `./scripts/check.sh` (Tier 1): passed, including serialized Rust workspace tests,
+  clippy, doctests, extension build, 532 Python behavior tests, and the 130
+  test compatibility smoke kernel.
+- Full pinned compatibility command: **1735 passed**, 0 failed, 0 skipped,
+  0 xfailed, in ~230s. Environment: CPython 3.12.3, pytest 9.1.1,
+  pytest-asyncio 1.4.0, `httpx==0.28.1`, `httpcore==1.0.9`, `socksio==1.0.0`.
+  No capability-based skips were used.
+- API oracle: **71** allowed matches, 0 unexplained, 0 stale, and 0
+  resolved-in-active differences; the manifest is valid.
+- Required downstream runner: **4/4 packages passed** (`respx` 5/5,
+  `httpx-sse` 4/4, `httpx-auth` 5/5, `httpx-ws` 4/4). Candidate wheel SHA-256:
+  `16dba105efd8cdc2461e9fb3fb6cf67d62577e7fc6efa99183fbc7d9b59951f5`.
+- `resolved-differences.toml`: `PROXY-SSL-CONTEXT-001` updated to reflect
+  Phase 05 implementation; `PROXY-HEADERS-001` resolved in earlier pass.
+- All 532 non-compat Python tests pass. All core Rust tests pass (the
+  pre-existing `ordinary_response_has_no_network_stream` test was fixed to
+  use a local server instead of hitting external httpbin.org).
+
+### Retained bounded differences (unchanged)
+
+Non-empty `Proxy(headers=...)` is now forwarded to the proxy leg (resolved).
+Arbitrary Python `ssl_context` objects that cannot be represented by rustls
+are rejected at construction time with a clear TypeError (resolved for safe
+subset, residual for unrepresentable). The valid four-element socket-option
+pointer form is outside the safe-Rust boundary. Direct Hyper/UDS/H3 header
+acquisition is not separately exposed from the transport future. These are
+documented in `compat/httpx/0.28.1/allowed-differences.toml`.
+
+### FunctionAuth forward-drift note
+
+HTTPX master contains commit `ae1b9f66238f75ced3ced5e4485408435de10768`
+(`Expose FunctionAuth in __all__`, 2025-12-10). EggFetch already has an
+internal `_FunctionAuth` adapter. For this 0.28.1 closure, public `FunctionAuth`
+is not added. The next stable HTTPX rebaseline should evaluate public
+export/signature/behavior.
 
 Environment: CPython 3.12.3, pytest 9.1.1, pytest-asyncio 1.4.0,
 `httpx==0.28.1`, `httpcore==1.0.9`, and `socksio==1.0.0`. IPv6 loopback was

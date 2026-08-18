@@ -189,17 +189,16 @@ class TestProxyConstruction:
 
     def test_with_headers(self):
         p = Proxy("http://proxy.example.com", headers={"X-Key": "val"})
-        assert p.headers == {"X-Key": "val"}
+        assert p.headers == [("X-Key", "val")]
 
     def test_invalid_headers_type_raises(self):
         with pytest.raises(TypeError):
             Proxy("http://proxy.example.com", headers="not dict")
 
-    def test_headers_are_rejected_before_native_dispatch(self):
+    def test_headers_are_forwarded_to_native_dispatch(self):
         proxy = Proxy("http://proxy.example.com", headers={"X-Key": "val"})
-        with pytest.raises(NotImplementedError, match="not yet"):
-            with Client(proxy=proxy, trust_env=False):
-                pass
+        with Client(proxy=proxy, trust_env=False):
+            pass
 
     def test_with_auth(self):
         p = Proxy("http://proxy.example.com", auth=("user", "pass"))

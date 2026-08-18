@@ -199,3 +199,20 @@ pub fn build_tls_config(
 
     Ok(builder.build())
 }
+
+/// Translate a Python `ssl.SSLContext` into an `eggfetch_core::TlsConfig`.
+///
+/// Returns `None` if the context is `None` or cannot be represented.
+/// Returns `Err` if the context is explicitly unrepresentable.
+pub fn ssl_context_to_tls_config(
+    _py: Python<'_>,
+    ssl_context: Option<&Bound<'_, PyAny>>,
+) -> PyResult<Option<eggfetch_core::TlsConfig>> {
+    let ctx = match ssl_context {
+        Some(c) if !c.is_none() => c,
+        _ => return Ok(None),
+    };
+    let builder = eggfetch_core::TlsConfig::builder();
+    let builder = apply_ssl_context(builder, ctx)?;
+    Ok(Some(builder.build()))
+}

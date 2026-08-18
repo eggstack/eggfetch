@@ -140,7 +140,7 @@ The compatibility profile is in `compat/httpx/0.28.1/`. Executable changes requi
 
 ## Tests
 
-Colocated `#[cfg(test)] mod tests` blocks. ~685 Rust, ~558 Python (non-compat), ~1659 Python (compat), 30 FFI tests.
+Colocated `#[cfg(test)] mod tests` blocks. ~685 Rust, ~558 Python (non-compat), ~1735 Python (compat), 30 FFI tests.
 
 The full validation pass (pre-release) runs feature-gated subsets:
 

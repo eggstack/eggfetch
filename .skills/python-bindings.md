@@ -106,10 +106,12 @@ from eggfetch.compat.httpx import Client, AsyncClient, Request, Response
   four phases. Conversion still forwards only `connect`, `read`, `write`, and
   `pool` to native Rust and never synthesizes native `total`.
 
-All corrective closure phases (1-6) are complete. The facade is Stage C qualified for Python 3.10+ asyncio. Key boundaries:
+All corrective closure phases (1-6) are complete, plus the remaining-parity program (Phases 01-05). The facade is Stage C qualified for Python 3.10+ asyncio. Key boundaries:
 
 - Timeout conversion forwards only HTTPX's `connect`, `read`, `write`, `pool`; native `total` is EggFetch-only.
-- `Proxy(headers=...)` with non-empty metadata is rejected (Stage C bounded difference).
+- `Proxy(headers=...)` is forwarded on the proxy leg (resolved in Phase 05).
+- `Proxy(ssl_context=...)` is translated to native TlsConfig for the proxy endpoint TLS handshake (resolved in Phase 05).
+- Arbitrary Python ssl_context objects unrepresentable by rustls are rejected at construction time.
 - Environment proxy follows HTTPX's `NO_PROXY` URL-pattern rules; bare unbracketed IPv6 accepted, bracketed/CIDR forms rejected.
 - Raw iteration marks streams consumed before first source read, counts source bytes before chunk adaptation, closes on normal exhaustion only.
 - `test_corrective_kernel.py` runs in Tier 1; full compat suite, API oracle, and downstream runner are Tier 2/manual gates. Executable changes require fresh exact-SHA qualification (see `compat/httpx/0.28.1/profile.toml`).

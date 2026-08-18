@@ -578,6 +578,11 @@ pub struct ProxyConfig {
     /// forward-proxy absolute-form).  These are *not* forwarded into
     /// the tunnel or to the origin.
     pub(crate) proxy_headers: crate::headers::Headers,
+    /// TLS configuration for the *proxy* endpoint (used when the proxy
+    /// endpoint itself is `https://`).  When `None`, the origin TLS
+    /// config is used as a fallback (matching the current packaged-root
+    /// default).
+    pub(crate) proxy_tls_config: Option<crate::tls::TlsConfig>,
 }
 
 impl ProxyConfig {
@@ -633,6 +638,12 @@ impl ProxyConfig {
     pub fn proxy_headers(&self) -> &crate::headers::Headers {
         &self.proxy_headers
     }
+
+    /// Returns a reference to the proxy TLS configuration, if set.
+    #[must_use]
+    pub fn proxy_tls_config(&self) -> Option<&crate::tls::TlsConfig> {
+        self.proxy_tls_config.as_ref()
+    }
 }
 
 /// An HTTP proxy configuration.
@@ -661,9 +672,17 @@ pub struct Proxy {
     /// forwarded to the origin.
     #[allow(
         clippy::struct_field_names,
-        reason = "Proxy is already in the proxy context; 'headers' alone would be ambiguous with request headers"
+        reason = "Proxy is already in the proxy context; 'proxy_headers' and 'proxy_tls_config' are unambiguous within this scope"
     )]
     proxy_headers: crate::headers::Headers,
+    /// TLS configuration for the *proxy* endpoint (used when the proxy
+    /// endpoint itself is `https://`).  When `None`, the origin TLS
+    /// config is used as a fallback.
+    #[allow(
+        clippy::struct_field_names,
+        reason = "Proxy is already in the proxy context; 'proxy_tls_config' is unambiguous within this scope"
+    )]
+    proxy_tls_config: Option<crate::tls::TlsConfig>,
 }
 
 impl Proxy {
@@ -681,6 +700,7 @@ impl Proxy {
             rule: ProxyRule::All,
             bypass: None,
             proxy_headers: crate::headers::Headers::new(),
+            proxy_tls_config: None,
         })
     }
 
@@ -729,6 +749,7 @@ impl Proxy {
             rule: ProxyRule::Http,
             bypass: None,
             proxy_headers: crate::headers::Headers::new(),
+            proxy_tls_config: None,
         })
     }
 
@@ -745,6 +766,7 @@ impl Proxy {
             rule: ProxyRule::Https,
             bypass: None,
             proxy_headers: crate::headers::Headers::new(),
+            proxy_tls_config: None,
         })
     }
 
@@ -780,6 +802,16 @@ impl Proxy {
     #[must_use]
     pub fn proxy_headers_ref(&self) -> &crate::headers::Headers {
         &self.proxy_headers
+    }
+
+    /// Set the TLS configuration for the proxy endpoint itself.
+    ///
+    /// This governs the TLS handshake to an `https://` proxy endpoint.
+    /// When `None`, the origin TLS config is used as a fallback.
+    #[must_use]
+    pub fn with_proxy_tls_config(mut self, config: crate::tls::TlsConfig) -> Self {
+        self.proxy_tls_config = Some(config);
+        self
     }
 
     /// Returns a reference to the `NO_PROXY` bypass rules, if configured.
@@ -838,6 +870,7 @@ impl Proxy {
             uri,
             auth,
             proxy_headers: self.proxy_headers.clone(),
+            proxy_tls_config: self.proxy_tls_config.clone(),
         }
     }
 
@@ -866,6 +899,10 @@ impl fmt::Debug for Proxy {
             .field("rule", &self.rule)
             .field("bypass", &self.bypass)
             .field("proxy_headers", &self.proxy_headers)
+            .field(
+                "proxy_tls_config",
+                &self.proxy_tls_config.as_ref().map(|_| "<redacted>"),
+            )
             .finish()
     }
 }

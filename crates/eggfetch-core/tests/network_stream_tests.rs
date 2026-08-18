@@ -452,13 +452,24 @@ fn network_stream_metadata_fixture() {
 
 #[tokio::test]
 async fn ordinary_response_has_no_network_stream() {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+
+    tokio::spawn(async move {
+        loop {
+            if let Ok((mut stream, _)) = listener.accept().await {
+                let response = "HTTP/1.1 200 OK\r\n\
+                               Content-Length: 2\r\n\
+                               \r\n\
+                               ok";
+                let _ = stream.write_all(response.as_bytes()).await;
+            }
+        }
+    });
+
+    let url = format!("http://127.0.0.1:{port}/");
     let client = eggfetch_core::Client::new();
-    let mut response = client
-        .get("http://httpbin.org/get")
-        .unwrap()
-        .send()
-        .await
-        .unwrap();
+    let mut response = client.get(&url).unwrap().send().await.unwrap();
     assert_eq!(response.status().as_u16(), 200);
     // Ordinary pooled responses do NOT have a network_stream.
     // Hyper's pool retains socket ownership; exposing raw IO would
