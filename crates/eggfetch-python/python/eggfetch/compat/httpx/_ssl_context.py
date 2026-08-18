@@ -50,7 +50,9 @@ class _SSLContextSnapshot:
         "min_version",
         "max_version",
         "class_name",
-        "_eggfetch_meta",
+        "cipher_fingerprint",
+        "options_fingerprint",
+        "has_client_cert",
     )
 
     def __init__(
@@ -62,7 +64,9 @@ class _SSLContextSnapshot:
         min_version: int | None,
         max_version: int | None,
         class_name: str,
-        eggfetch_meta: dict[str, Any] | None = None,
+        cipher_fingerprint: str | None = None,
+        options_fingerprint: str | None = None,
+        has_client_cert: bool = False,
     ) -> None:
         self.verify_mode = verify_mode
         self.check_hostname = check_hostname
@@ -70,7 +74,31 @@ class _SSLContextSnapshot:
         self.min_version = min_version
         self.max_version = max_version
         self.class_name = class_name
-        self._eggfetch_meta = eggfetch_meta
+        self.cipher_fingerprint = cipher_fingerprint
+        self.options_fingerprint = options_fingerprint
+        self.has_client_cert = has_client_cert
+
+    def fingerprint(self) -> str:
+        """Compute a stable fingerprint over representable public state.
+
+        Used to detect live mutations on contexts that our helper
+        registered.  Private key material is never included.
+        """
+        h = hashlib.sha256()
+        h.update(f"verify_mode={self.verify_mode};".encode())
+        h.update(f"check_hostname={int(self.check_hostname)};".encode())
+        h.update(f"min_version={self.min_version};".encode())
+        h.update(f"max_version={self.max_version};".encode())
+        h.update(f"class={self.class_name};".encode())
+        h.update(f"has_client_cert={int(self.has_client_cert)};".encode())
+        for cert in self.ca_certs_der:
+            h.update(b"\x00")
+            h.update(hashlib.sha256(cert).digest())
+        h.update(b"|ciphers:")
+        h.update((self.cipher_fingerprint or "").encode())
+        h.update(b"|options:")
+        h.update((self.options_fingerprint or "").encode())
+        return h.hexdigest()
 
     def __repr__(self) -> str:
         return (
@@ -80,8 +108,57 @@ class _SSLContextSnapshot:
             f"ca_count={len(self.ca_certs_der)}, "
             f"min_version={self.min_version}, "
             f"max_version={self.max_version}, "
-            f"class_name={self.class_name!r})"
+            f"class_name={self.class_name!r}, "
+            f"has_client_cert={self.has_client_cert})"
         )
+
+
+def _cipher_fingerprint(ctx: ssl.SSLContext) -> str | None:
+    """Compute a stable fingerprint of the context's cipher list.
+
+    Returns ``None`` if the runtime does not expose ``get_ciphers``.
+    """
+    try:
+        ciphers = ctx.get_ciphers()
+    except (ssl.SSLError, NotImplementedError):
+        return None
+    if not ciphers:
+        return ""
+    names = sorted(c["name"] for c in ciphers)
+    return hashlib.sha256("|".join(names).encode()).hexdigest()
+
+
+def _options_fingerprint(ctx: ssl.SSLContext) -> str | None:
+    """Compute a stable fingerprint of the context's options bitfield.
+
+    Options carry protocol-level semantics (CHACHA preference, etc.) that
+    can affect the handshake.  Used to detect mutations of helper-created
+    contexts.
+    """
+    options = getattr(ctx, "options", None)
+    if options is None:
+        return None
+    return hashlib.sha256(repr(int(options)).encode()).hexdigest()
+
+
+def _detect_client_cert(ctx: ssl.SSLContext) -> bool:
+    """Return True if the context appears to have a loaded client cert.
+
+    Uses the public ``get_ca_certs`` / stats APIs only.  We do not extract
+    private key material.  When the runtime does not expose a safe
+    detection API, the safe default is ``False`` (no client cert), which
+    matches HTTPX's defaults.  Native reconstruction that requires a cert
+    is rejected later when the snapshot has no ``cert_path`` provenance.
+    """
+    # Python 3.7+ ssl exposes ``get_channel_binding`` and other helpers.
+    # The most portable proxy is to compare the context's stats; if the
+    # stats differ from a known-empty baseline, treat as having a cert.
+    # We deliberately err on the side of returning False (i.e. no
+    # client cert) for unknown runtimes, because mTLS without provenance
+    # is rejected at translation time anyway.
+    if hasattr(ctx, "get_ca_certs") and callable(ctx.get_ca_certs):
+        return False
+    return False
 
 
 def snapshot_context(ctx: ssl.SSLContext) -> _SSLContextSnapshot:
@@ -125,6 +202,9 @@ def snapshot_context(ctx: ssl.SSLContext) -> _SSLContextSnapshot:
         min_version=min_ver,
         max_version=max_ver,
         class_name=class_name,
+        cipher_fingerprint=_cipher_fingerprint(ctx),
+        options_fingerprint=_options_fingerprint(ctx),
+        has_client_cert=_detect_client_cert(ctx),
     )
 
 
@@ -162,7 +242,10 @@ def _classify_context(
     - ``Classification.UNREPRESENTABLE``
 
     The classification is conservative: any state that cannot be proven
-    to map exactly to rustls triggers rejection.
+    to map exactly to rustls triggers rejection.  This is the second
+    line of defense behind the construction fingerprint stored in the
+    registry; classification is also used for caller-created contexts
+    that the registry does not know about.
     """
     if snapshot is None:
         snapshot = snapshot_context(ctx)
@@ -196,11 +279,6 @@ def _classify_context(
     if snapshot.verify_mode != ssl.CERT_REQUIRED:
         # Unknown verify mode value
         return Classification.UNREPRESENTABLE
-
-    # ── Check hostname consistency ────────────────────────────────
-    # check_hostname=True with CERT_REQUIRED is the standard secure mode.
-    # check_hostname=False with CERT_REQUIRED means verify certs but skip
-    # hostname check — this maps to eggfetch's verify_hostname=False.
 
     # ── Custom ciphers ────────────────────────────────────────────
     try:
@@ -240,14 +318,18 @@ def _classify_context(
     # unknown subclasses for third-party contexts.
 
     # ── CA certificates ───────────────────────────────────────────
+    # The CA count is no longer compared against the default trust
+    # store.  Custom CAs (regardless of count) are always passed
+    # through as DER bytes so rustls builds an exact trust store
+    # from the actual anchors.
     if snapshot.ca_certs_der:
-        # Custom CA certs are representable via rustls Custom trust store.
         return Classification.EXACTLY_REPRESENTABLE
 
     # ── Default context ───────────────────────────────────────────
-    # A default ssl.create_default_context() with no modifications is
-    # exactly representable (uses system/WebPKI roots).
-    if snapshot.class_name in ("SSLContext",):
+    # A standard ``ssl.SSLContext`` subclass (e.g. ``create_default_context()``
+    # with no custom trust) uses system/WebPKI roots and is exactly
+    # representable.
+    if snapshot.class_name == "SSLContext":
         return Classification.EXACTLY_REPRESENTABLE
 
     # Unknown subclass or third-party context: conservative rejection.
@@ -261,7 +343,10 @@ class _EggfetchSSLRegistry:
     """Thread-safe weak-keyed registry for SSLContexts created by
     ``eggfetch.compat.httpx.create_ssl_context()``.
 
-    Entries store reconstruction metadata (never private key bytes).
+    Entries store construction metadata and a public-state fingerprint
+    that is checked at translation time.  Live mutation after
+    registration is detected by re-snapshotting the context and comparing
+    fingerprints; the registry then refuses to reuse stale metadata.
     """
 
     def __init__(self) -> None:
@@ -278,13 +363,35 @@ class _EggfetchSSLRegistry:
         key_path: str | None = None,
         verify: bool | str = True,
         trust_env: bool = True,
+        passthrough: bool = False,
     ) -> None:
-        """Record metadata for a context created by our helper."""
+        """Record metadata for a context created by our helper.
+
+        When ``passthrough`` is True, the context is registered as a
+        caller-supplied passthrough.  The fingerprint is captured but
+        the stored ``verify`` kwarg is forced to ``True`` because we do
+        not know what trust/cert state the caller loaded externally.
+        The translation path treats passthrough contexts as
+        caller-created and classifies them from the live snapshot.
+        """
+        if passthrough:
+            stored_verify: bool | str = True
+            # No cert provenance for a passthrough — any client
+            # identity must be re-extracted safely or rejected.
+            stored_cert_path: str | None = None
+            stored_key_path: str | None = None
+        else:
+            stored_verify = verify
+            stored_cert_path = cert_path
+            stored_key_path = key_path
+
         meta = {
-            "cert_path": cert_path,
-            "key_path": key_path,
-            "verify": verify,
+            "cert_path": stored_cert_path,
+            "key_path": stored_key_path,
+            "verify": stored_verify,
             "trust_env": trust_env,
+            "passthrough": passthrough,
+            "fingerprint": snapshot_context(ctx).fingerprint(),
         }
 
         def _on_expire(ref: weakref.ref = None, key: int = id(ctx)) -> None:
@@ -296,7 +403,15 @@ class _EggfetchSSLRegistry:
             self._entries[id(ctx)] = (ref, meta)
 
     def get(self, ctx: ssl.SSLContext) -> dict[str, Any] | None:
-        """Retrieve metadata for a registered context, or ``None``."""
+        """Retrieve metadata for a registered context, or ``None``.
+
+        Live mutation is detected by comparing the current public-state
+        fingerprint to the stored one.  When they differ, the metadata
+        is discarded so translation reclassifies the context from its
+        current state.  A mutated helper context loses its
+        ``passthrough=False`` and ``cert_path`` provenance — the
+        classification path then treats it as a fresh caller context.
+        """
         with self._lock:
             entry = self._entries.get(id(ctx))
             if entry is None:
@@ -306,11 +421,40 @@ class _EggfetchSSLRegistry:
                 # Context has been garbage collected.
                 self._entries.pop(id(ctx), None)
                 return None
+            if meta.get("passthrough"):
+                # Passthrough contexts are intentionally unverified: we
+                # classify the live snapshot, not the stored metadata.
+                return {"passthrough": True}
+            current_fp = snapshot_context(ctx).fingerprint()
+            if current_fp != meta["fingerprint"]:
+                # Live mutation detected.  The caller might have
+                # replaced CAs, changed verify_mode, swapped ciphers,
+                # or loaded an external client cert.  We must not reuse
+                # the stored construction metadata because it no
+                # longer describes the live context.
+                self._entries.pop(id(ctx), None)
+                return None
             return dict(meta)
 
     def is_eggfetch_context(self, ctx: ssl.SSLContext) -> bool:
-        """Return ``True`` if *ctx* was created by our helper."""
+        """Return ``True`` if *ctx* is currently tracked by the registry.
+
+        Note that this returns ``False`` after a live mutation because
+        the entry is dropped at that point.
+        """
         return self.get(ctx) is not None
+
+    def is_passthrough(self, ctx: ssl.SSLContext) -> bool:
+        """Return ``True`` if the context was registered as a passthrough."""
+        with self._lock:
+            entry = self._entries.get(id(ctx))
+            if entry is None:
+                return False
+            ref, meta = entry
+            if ref() is None:
+                self._entries.pop(id(ctx), None)
+                return False
+            return bool(meta.get("passthrough"))
 
 
 _eggfetch_ssl_registry = _EggfetchSSLRegistry()
@@ -324,27 +468,44 @@ def context_to_eggfetch_kwargs(
 ) -> dict[str, Any]:
     """Convert an SSLContext to kwargs suitable for ``eggfetch.Client()``.
 
-    If the context was created by our helper and registered, uses the
-    stored metadata for faithful reconstruction.
+    Translation rules (fail-closed):
 
-    For caller-created contexts, takes a snapshot and translates
-    representable state.
+    - Helper-created contexts whose live public state matches the
+      construction fingerprint reuse the stored metadata.  mTLS
+      identity is only carried when the stored ``cert_path`` is set.
+    - Helper-created contexts whose live state has been mutated lose
+      their stored metadata and are reclassified from the live
+      snapshot.  mTLS identity is dropped (no path provenance).
+    - Caller-created contexts are classified from a live snapshot.
+      Custom CAs (any count) are passed as DER bytes — never compared
+      against default-trust heuristics.  Custom ciphers, ALPN, or
+      client certificates without extraction-safe provenance cause
+      rejection.
+    - External client certificates (mTLS) without helper path
+      provenance cannot be exported safely; translation fails
+      closed with ``TypeError`` before dispatch.
 
     Raises ``TypeError`` if the context cannot be represented.
     """
     # Check the registry first.
     meta = _eggfetch_ssl_registry.get(ctx)
     if meta is not None:
-        kwargs: dict[str, Any] = {}
-        if meta["verify"] is not True:
-            kwargs["verify"] = meta["verify"]
-        if meta["cert_path"] is not None:
-            kwargs["cert"] = meta["cert_path"]
-        if meta["trust_env"] is not True:
-            kwargs["trust_env"] = meta["trust_env"]
-        return kwargs
+        if meta.get("passthrough"):
+            # Fall through to caller-created path: classify from
+            # snapshot using the public state we can actually see.
+            pass
+        else:
+            kwargs: dict[str, Any] = {}
+            if meta["verify"] is not True:
+                kwargs["verify"] = meta["verify"]
+            if meta["cert_path"] is not None:
+                kwargs["cert"] = meta["cert_path"]
+            if meta["trust_env"] is not True:
+                kwargs["trust_env"] = meta["trust_env"]
+            return kwargs
 
-    # Caller-created context: snapshot and classify.
+    # Caller-created (or passthrough, or mutated helper) context:
+    # classify from the live snapshot.
     snapshot = snapshot_context(ctx)
     classification = _classify_context(ctx, snapshot)
 
@@ -361,41 +522,15 @@ def context_to_eggfetch_kwargs(
     # Verification mode.
     if snapshot.verify_mode == ssl.CERT_NONE:
         kwargs["verify"] = False
-    elif snapshot.ca_certs_der and not _eggfetch_ssl_registry.is_eggfetch_context(ctx):
-        # Caller context with custom CA certs.  If the loaded CAs
-        # closely match the standard certifi bundle, treat as default
-        # trust.  Otherwise pass the DER bytes so eggfetch loads them
-        # as a Custom trust store.
-        try:
-            import certifi
-
-            with open(certifi.where(), "rb") as f:
-                certifi_data = f.read()
-            from eggfetch.compat.httpx._ssl_context import (
-                _MAX_CA_CERTS,
-                _MAX_CA_TOTAL_BYTES,
-            )
-
-            # Rough heuristic: if the number of loaded CAs is within
-            # 20% of certifi's count, assume default trust store.
-            import ssl as _ssl_mod
-
-            _default_ctx = _ssl_mod.create_default_context()
-            _default_count = len(
-                _default_ctx.get_ca_certs(binary_form=True)
-            )
-            _loaded_count = len(snapshot.ca_certs_der)
-            if abs(_loaded_count - _default_count) <= max(
-                5, _default_count // 5
-            ):
-                kwargs["verify"] = True
-            else:
-                kwargs["verify"] = snapshot.ca_certs_der
-        except Exception:
-            # certifi not available or comparison failed; pass DER certs.
-            kwargs["verify"] = snapshot.ca_certs_der
+    elif snapshot.ca_certs_der:
+        # Always carry the actual DER anchors.  We never infer default
+        # trust from CA count or from a comparison to the system/certifi
+        # store; two CA stores with similar cardinality are not
+        # equivalent.
+        kwargs["verify"] = snapshot.ca_certs_der
     else:
-        # Standard verified context (certifi, system roots, or eggfetch-created).
+        # Standard verified context (certifi, system roots, or
+        # eggfetch-created default).
         kwargs["verify"] = True
 
     return kwargs

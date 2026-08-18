@@ -513,6 +513,13 @@ def create_ssl_context(
         else:
             ctx = _ssl.create_default_context(cafile=verify)
     elif isinstance(verify, _ssl.SSLContext):
+        # Caller-supplied passthrough: we did not construct this
+        # context, so we have no cert/key path provenance.  The
+        # returned context is the caller-supplied object itself; the
+        # registry must treat it as an external context for
+        # translation purposes.  A construction fingerprint is still
+        # captured for stale-entry detection, but stored metadata
+        # carries no ``cert_path`` and no special ``verify`` kwarg.
         ctx = verify
     else:
         raise TypeError(
@@ -522,8 +529,9 @@ def create_ssl_context(
 
     cert_path = None
     key_path = None
+    passthrough = isinstance(verify, _ssl.SSLContext)
 
-    if cert:
+    if cert and not passthrough:
         import warnings as _warnings
 
         _warnings.warn(
@@ -541,15 +549,30 @@ def create_ssl_context(
             cert_path = cert[0]
             key_path = cert[1]
 
-    # Register in the weak registry so eggfetch can reconstruct the
-    # equivalent TlsConfig when this context is passed back.
-    _eggfetch_ssl_registry.register(
-        ctx,
-        cert_path=cert_path,
-        key_path=key_path,
-        verify=verify if not isinstance(verify, _ssl.SSLContext) else True,
-        trust_env=trust_env,
-    )
+    if passthrough:
+        # Register the passthrough so the registry knows the context
+        # is a caller-supplied object that we did not construct.  No
+        # verify kwarg, no cert path — those are unknowable here.
+        _eggfetch_ssl_registry.register(
+            ctx,
+            cert_path=None,
+            key_path=None,
+            verify=True,
+            trust_env=trust_env,
+            passthrough=True,
+        )
+    else:
+        # Helper-constructed context: record reconstruction metadata
+        # along with a public-state fingerprint so we can detect
+        # post-construction mutation at translation time.
+        _eggfetch_ssl_registry.register(
+            ctx,
+            cert_path=cert_path,
+            key_path=key_path,
+            verify=verify,
+            trust_env=trust_env,
+            passthrough=False,
+        )
 
     return ctx
 

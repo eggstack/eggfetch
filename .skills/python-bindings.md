@@ -112,6 +112,20 @@ All corrective closure phases (1-6) are complete, plus the remaining-parity prog
 - `Proxy(headers=...)` is forwarded on the proxy leg (resolved in Phase 05).
 - `Proxy(ssl_context=...)` is translated to native TlsConfig for the proxy endpoint TLS handshake (resolved in Phase 05).
 - Arbitrary Python ssl_context objects unrepresentable by rustls are rejected at construction time.
+- SSLContext classification uses a construction fingerprint
+  (SHA-256 over extractable public state) for helper-created contexts;
+  post-construction mutation drops the stored metadata and reclassifies
+  from the live snapshot.  Passthrough contexts are not assigned a
+  cert path or `verify` kwarg.  Two CA stores with identical
+  cardinalities but different contents produce different `verify`
+  kwargs (no CA-count heuristic).
+- Proxy endpoint TLS is sourced exclusively from the proxy
+  configuration; the origin `TlsConfig` is never used as a fallback
+  for the proxy handshake.
+- `Proxy.__repr__` and `Headers.__repr__` redact sensitive header
+  values (`authorization`, `proxy-authorization`, `cookie`,
+  `set-cookie`) to `<redacted>` so credentials do not appear in
+  diagnostic dumps.
 - Environment proxy follows HTTPX's `NO_PROXY` URL-pattern rules; bare unbracketed IPv6 accepted, bracketed/CIDR forms rejected.
 - Raw iteration marks streams consumed before first source read, counts source bytes before chunk adaptation, closes on normal exhaustion only.
 - `test_corrective_kernel.py` runs in Tier 1; full compat suite, API oracle, and downstream runner are Tier 2/manual gates. Executable changes require fresh exact-SHA qualification (see `compat/httpx/0.28.1/profile.toml`).

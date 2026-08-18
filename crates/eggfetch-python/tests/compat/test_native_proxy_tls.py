@@ -9,6 +9,7 @@ Per plan §10.3: no positive TLS test may catch and ignore errors.
 import socket
 import ssl
 import sys
+import tempfile
 import threading
 import time
 import os
@@ -28,6 +29,7 @@ from eggfetch.compat.httpx._exceptions import (
 )
 from native_fixtures import (
     _TLSDirectHandler,
+    _generate_ca_signed_server_cert,
     local_http_server,
     local_proxy_server,
     local_tls_proxy_server,
@@ -250,7 +252,13 @@ class TestProxyConnect:
 
 
 class TestHttpsProxyEndpoint:
-    """HTTPX-compatible TLS-to-proxy routing combinations."""
+    """HTTPX-compatible TLS-to-proxy routing combinations.
+
+    Proxy endpoint TLS is independent of origin TLS in eggfetch.  The
+    proxy CA must be supplied on the ``Proxy`` (e.g. via
+    ``ssl_context``); the client-level ``verify=`` controls only the
+    origin server certificate.
+    """
 
     def test_http_origin_through_https_proxy(self):
         with local_http_server() as (backend_host, backend_port):
@@ -258,12 +266,17 @@ class TestHttpsProxyEndpoint:
                 proxy_host,
                 proxy_port,
                 handler,
-                cert_path,
+                (proxy_server_cert, proxy_ca_cert),
             ):
+                proxy_ssl_ctx = ssl.create_default_context(
+                    cafile=proxy_ca_cert or proxy_server_cert
+                )
                 with Client(
-                    proxy=f"https://{proxy_host}:{proxy_port}",
+                    proxy=Proxy(
+                        f"https://{proxy_host}:{proxy_port}",
+                        ssl_context=proxy_ssl_ctx,
+                    ),
                     timeout=Timeout(5.0),
-                    verify=cert_path,
                 ) as client:
                     response = client.get(f"http://{backend_host}:{backend_port}/health")
                 assert response.status_code == 200
@@ -273,26 +286,47 @@ class TestHttpsProxyEndpoint:
 
     def test_https_origin_through_https_proxy(self):
         with local_tls_server() as (origin_host, origin_port, _ssl, cert_path):
-            with local_tls_proxy_server(
-                certificate=(cert_path, os.path.join(os.path.dirname(cert_path), "key.pem"))
-            ) as (
-                proxy_host,
-                proxy_port,
-                handler,
-                _proxy_cert_path,
-            ):
-                with Client(
-                    proxy=f"https://{proxy_host}:{proxy_port}",
-                    timeout=Timeout(5.0),
-                    verify=cert_path,
-                ) as client:
-                    response = client.get(f"https://{origin_host}:{origin_port}/health")
-                assert response.status_code == 200
-                assert response.text == "ok"
-                assert handler.recorded_requests[0]["method"] == "CONNECT"
-                assert handler.recorded_requests[0]["target"].startswith(
-                    f"{origin_host}:{origin_port}"
-                )
+            # Generate a separate CA-signed cert for the proxy so
+            # the proxy trust anchor is enumerable through
+            # ``ssl.SSLContext.get_ca_certs()``.  The origin
+            # remains a self-signed cert.
+            with tempfile.TemporaryDirectory() as tmpdir:
+                (
+                    proxy_ca_path,
+                    _proxy_ca_key,
+                    proxy_server_cert,
+                    proxy_server_key,
+                ) = _generate_ca_signed_server_cert(tmpdir)
+                with local_tls_proxy_server(
+                    certificate=(proxy_server_cert, proxy_server_key)
+                ) as (
+                    proxy_host,
+                    proxy_port,
+                    handler,
+                    (proxy_server_cert_yielded, _proxy_ca_yielded),
+                ):
+                    # Proxy TLS uses the proxy's own CA; origin TLS
+                    # uses the origin cert.  These are independent.
+                    proxy_ssl_ctx = ssl.create_default_context(
+                        cafile=proxy_ca_path
+                    )
+                    with Client(
+                        proxy=Proxy(
+                            f"https://{proxy_host}:{proxy_port}",
+                            ssl_context=proxy_ssl_ctx,
+                        ),
+                        timeout=Timeout(5.0),
+                        verify=cert_path,
+                    ) as client:
+                        response = client.get(
+                            f"https://{origin_host}:{origin_port}/health"
+                        )
+                    assert response.status_code == 200
+                    assert response.text == "ok"
+                    assert handler.recorded_requests[0]["method"] == "CONNECT"
+                    assert handler.recorded_requests[0]["target"].startswith(
+                        f"{origin_host}:{origin_port}"
+                    )
 
     def test_https_proxy_headers_reference_and_bounded_candidate_difference(self):
         with local_http_server() as (backend_host, backend_port):
@@ -300,11 +334,13 @@ class TestHttpsProxyEndpoint:
                 proxy_host,
                 proxy_port,
                 handler,
-                cert_path,
+                (proxy_server_cert, proxy_ca_cert),
             ):
                 import httpx
 
-                proxy_ssl = ssl.create_default_context(cafile=cert_path)
+                proxy_ssl = ssl.create_default_context(
+                    cafile=proxy_ca_cert or proxy_server_cert
+                )
                 with httpx.Client(
                     proxy=httpx.Proxy(
                         f"https://{proxy_host}:{proxy_port}",
@@ -320,13 +356,16 @@ class TestHttpsProxyEndpoint:
                 assert handler.recorded_requests[0]["headers"]["x-proxy-test"] == "https-proxy"
 
                 handler.recorded_requests.clear()
+                proxy_ssl_ctx = ssl.create_default_context(
+                    cafile=proxy_ca_cert or proxy_server_cert
+                )
                 with Client(
                     proxy=Proxy(
                         f"https://{proxy_host}:{proxy_port}",
+                        ssl_context=proxy_ssl_ctx,
                         headers={"X-Proxy-Test": "https-proxy"},
                     ),
                     trust_env=False,
-                    verify=cert_path,
                 ) as candidate:
                     response = candidate.get(f"http://{backend_host}:{backend_port}/health")
                 assert response.status_code == 200

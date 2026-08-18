@@ -51,9 +51,10 @@ pub(crate) struct ProxyRequestContext<'a> {
     /// tunnel establishment).
     pub(crate) origin_tls_config: Option<&'a crate::tls::TlsConfig>,
     /// TLS configuration for the *proxy* endpoint (used when the proxy
-    /// endpoint itself is `https://`).  When `None`, the origin TLS
-    /// config is used as a fallback (matching the current packaged-root
-    /// default).
+    /// endpoint itself is `https://`).  When `None`, the proxy endpoint
+    /// uses the proxy/default trust roots.  The origin TLS
+    /// configuration is independent and is never reused as a fallback
+    /// for the proxy handshake.
     pub(crate) proxy_tls_config: Option<&'a crate::tls::TlsConfig>,
     pub(crate) socks_client: Option<crate::transport::TimeoutSocksClient>,
 }

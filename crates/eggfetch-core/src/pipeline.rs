@@ -859,9 +859,15 @@ pub(crate) async fn send_single_request(
                     write_timeout: timeout.write,
                     read_timeout: timeout.read,
                     origin_tls_config: inner.config.tls_config.as_ref(),
-                    proxy_tls_config: proxy_config
-                        .proxy_tls_config()
-                        .or(inner.config.tls_config.as_ref()),
+                    // Proxy TLS config is independent from origin TLS
+                    // config.  When the proxy endpoint has no explicit
+                    // TLS configuration we use the proxy endpoint's
+                    // own default trust roots rather than reusing the
+                    // origin CA / client identity / verification policy.
+                    // This prevents a custom origin CA, origin mTLS
+                    // identity, or origin verify=False from leaking
+                    // into the proxy handshake.
+                    proxy_tls_config: proxy_config.proxy_tls_config(),
                     socks_client,
                 },
             ))

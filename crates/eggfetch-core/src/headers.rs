@@ -1,11 +1,20 @@
 //! Header container.
 
+use std::fmt;
+
 use http::header::{HeaderMap, HeaderName, HeaderValue};
 
 use crate::error::{Error, Result};
 
 /// Case-insensitive HTTP header container.
-#[derive(Debug, Default, Clone)]
+///
+/// `Debug` formatting redacts values for header names recognised as
+/// sensitive (see [`crate::redact::SENSITIVE_HEADERS`]) so that
+/// logging, error formatting, and panic messages do not leak
+/// credentials.  Ordinary iteration (`iter`, `get`, `get_all`,
+/// `keys`) is intentionally **not** redacted — diagnostics are the
+/// only output channel that needs to be safe by default.
+#[derive(Default, Clone)]
 pub struct Headers {
     inner: HeaderMap,
 }
@@ -118,6 +127,20 @@ impl Headers {
 impl From<HeaderMap> for Headers {
     fn from(inner: HeaderMap) -> Self {
         Self { inner }
+    }
+}
+
+impl fmt::Debug for Headers {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut debug = f.debug_map();
+        for (name, value) in &self.inner {
+            if crate::redact::is_sensitive_header(name.as_str()) {
+                debug.entry(&name, &"<redacted>");
+            } else {
+                debug.entry(&name, &value);
+            }
+        }
+        debug.finish()
     }
 }
 

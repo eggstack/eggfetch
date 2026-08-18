@@ -116,17 +116,31 @@ verifies the proxy hostname over TLS, then uses the existing absolute-form
 forwarding or CONNECT path. For HTTPS origins, origin TLS is layered after
 CONNECT and uses the origin hostname independently.
 
+**Proxy endpoint TLS is independent from origin TLS**.  The
+`proxy_tls_config` is sourced exclusively from the proxy configuration;
+the origin `TlsConfig` is never reused as a fallback for the proxy
+handshake.  This means an origin `verify=False`, a custom origin CA
+bundle, an origin mTLS client identity, an origin SNI override, and
+the origin TLS version policy are not propagated to the proxy
+endpoint.  Callers that need a specific trust anchor for the proxy
+must configure it explicitly via `Proxy(ssl_context=...)`; otherwise
+the proxy endpoint is verified using rustls' default trust anchors
+(system roots).
+
 Proxy setup maps HTTPX's phase timeouts directly: proxy TCP/TLS and origin TLS
 use `connect`, CONNECT writes and tunneled request writes use `write`, and
 CONNECT/response headers use `read`. A native `total` timeout remains an
 optional monotonic outer deadline; the compatibility facade does not synthesize
 one from HTTPX's scalar timeout.
 
-The Python compatibility facade accepts and stores HTTPX proxy metadata, but a
-non-empty `Proxy(headers=...)` is rejected before native dispatch. This is an
-explicit Stage C boundary: the current safe native API has no proxy-leg header
-channel, so metadata is never silently discarded. Ordinary three-element
-socket options accept integer, `bytes`, and `bytearray` values; the arbitrary
+The Python compatibility facade accepts and stores HTTPX proxy metadata,
+forwards `Proxy(headers=...)` through the native proxy-leg header
+channel, and redacts the values of `authorization`,
+`proxy-authorization`, `cookie`, and `set-cookie` in `Proxy.__repr__` and
+`Headers.__repr__` so credentials never appear in diagnostic dumps.  The
+raw values remain available to protocol code through `Proxy.headers` and
+to engine code through the native API.  Ordinary three-element socket
+options accept integer, `bytes`, and `bytearray` values; the arbitrary
 four-element null-pointer form remains intentionally bounded out.
 
 ### CONNECT Tunnel

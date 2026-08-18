@@ -2,6 +2,14 @@
 
 from __future__ import annotations
 
+_SENSITIVE_HEADER_NAMES = frozenset(
+    {"authorization", "proxy-authorization", "cookie", "set-cookie"}
+)
+
+
+def _is_sensitive_header_name(name: str) -> bool:
+    return name.lower() in _SENSITIVE_HEADER_NAMES
+
 
 class Proxy:
     """HTTPX-compatible Proxy class.
@@ -62,7 +70,11 @@ class Proxy:
             url_str = url_str.replace(f":{self._url.password}@", ":***@")
         parts = [f"url={url_str!r}"]
         if self._headers:
-            parts.append(f"headers={self._headers!r}")
+            redacted_headers = [
+                (name, "<redacted>" if _is_sensitive_header_name(name) else value)
+                for name, value in self._headers
+            ]
+            parts.append(f"headers={redacted_headers!r}")
         if self._auth is not None:
             parts.append("auth=***")
         return f"Proxy({', '.join(parts)})"

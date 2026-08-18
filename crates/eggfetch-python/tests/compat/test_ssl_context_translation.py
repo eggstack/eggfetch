@@ -370,9 +370,16 @@ class TestContextToKwargs:
     def test_default_context_returns_bool_verify(self):
         from eggfetch.compat.httpx._ssl_context import context_to_eggfetch_kwargs
 
+        # ``ssl.create_default_context()`` loads the system trust store
+        # into the context.  EggFetch must carry the actual DER anchors
+        # rather than inferring default trust from a CA-count heuristic
+        # that could mask a deliberately-narrowed custom CA set.
         ctx = ssl.create_default_context()
         kwargs = context_to_eggfetch_kwargs(ctx)
-        assert kwargs.get("verify") is True
+        verify = kwargs.get("verify")
+        assert isinstance(verify, list)
+        assert all(isinstance(cert, (bytes, bytearray)) for cert in verify)
+        assert len(verify) > 0
 
     def test_disabled_context_returns_false_verify(self):
         from eggfetch.compat.httpx._ssl_context import context_to_eggfetch_kwargs

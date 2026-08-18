@@ -240,3 +240,34 @@ The compatibility environment parser accepts HTTPX's bare unbracketed IPv6
 forms but rejects bracketed IPv6 and IPv6 prefix-looking `NO_PROXY` forms
 before native routing is constructed; native `NoProxy::parse()` retains its
 richer bracketed IPv6 and CIDR behavior.
+
+### SSLContext translation and proxy trust isolation
+
+The Python `ssl.SSLContext` translation layer must never classify
+custom CA stores using CA count, similarity, names, or ordering
+heuristics.  Two stores with identical cardinalities but different
+contents must produce different `verify` kwargs.  Helper-created
+contexts are guarded by a construction fingerprint (SHA-256 over
+extractable public state); post-construction mutation
+(`load_verify_locations`, `set_minimum_version`, `set_ciphers`,
+`set_alpn_protocols`) drops the stored metadata and reclassifies
+from the live snapshot.  Passthrough contexts (caller-supplied via
+`verify=<SSLContext>`) carry no `cert_path` and no special `verify`
+kwarg; this prevents a caller-supplied mTLS context from being
+silently downgraded to no client auth, and prevents a caller-supplied
+`verify=False` from inheriting the helper's default trust.
+
+Proxy endpoint TLS is sourced exclusively from the proxy
+configuration.  The origin `TlsConfig` is never used as a fallback
+for the proxy handshake.  An origin `verify=False`, a custom origin
+CA bundle, an origin mTLS client identity, an origin SNI override,
+or the origin TLS version policy must not influence the proxy
+endpoint.  Callers that need a specific trust anchor for the proxy
+must configure it explicitly via `Proxy(ssl_context=...)`; otherwise
+the proxy endpoint is verified using rustls' default trust anchors.
+
+`Proxy.__repr__` and `Headers.__repr__` redact the values of
+`authorization`, `proxy-authorization`, `cookie`, and `set-cookie`
+to `<redacted>` so credentials do not appear in diagnostic dumps.
+The raw values remain available to protocol code through
+`Proxy.headers` and to engine code through the native API.

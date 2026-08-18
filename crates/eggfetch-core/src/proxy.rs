@@ -579,9 +579,10 @@ pub struct ProxyConfig {
     /// the tunnel or to the origin.
     pub(crate) proxy_headers: crate::headers::Headers,
     /// TLS configuration for the *proxy* endpoint (used when the proxy
-    /// endpoint itself is `https://`).  When `None`, the origin TLS
-    /// config is used as a fallback (matching the current packaged-root
-    /// default).
+    /// endpoint itself is `https://`).  When `None`, the proxy endpoint
+    /// uses the proxy/default trust roots.  Origin TLS configuration
+    /// (custom CA, client identity, verification toggle) does **not**
+    /// fall back into the proxy handshake.
     pub(crate) proxy_tls_config: Option<crate::tls::TlsConfig>,
 }
 
@@ -676,8 +677,10 @@ pub struct Proxy {
     )]
     proxy_headers: crate::headers::Headers,
     /// TLS configuration for the *proxy* endpoint (used when the proxy
-    /// endpoint itself is `https://`).  When `None`, the origin TLS
-    /// config is used as a fallback.
+    /// endpoint itself is `https://`).  When `None`, the proxy endpoint
+    /// uses the proxy/default trust roots.  Origin TLS configuration
+    /// (custom CA, client identity, verification toggle) does **not**
+    /// fall back into the proxy handshake.
     #[allow(
         clippy::struct_field_names,
         reason = "Proxy is already in the proxy context; 'proxy_tls_config' is unambiguous within this scope"
@@ -807,7 +810,9 @@ impl Proxy {
     /// Set the TLS configuration for the proxy endpoint itself.
     ///
     /// This governs the TLS handshake to an `https://` proxy endpoint.
-    /// When `None`, the origin TLS config is used as a fallback.
+    /// When `None`, the proxy endpoint uses the proxy/default trust
+    /// roots; the origin TLS configuration is never reused as a
+    /// fallback for the proxy handshake.
     #[must_use]
     pub fn with_proxy_tls_config(mut self, config: crate::tls::TlsConfig) -> Self {
         self.proxy_tls_config = Some(config);

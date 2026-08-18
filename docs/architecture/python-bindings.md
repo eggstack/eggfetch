@@ -187,6 +187,42 @@ The facade owns all HTTPX-shaped API surfaces (URL, Headers, QueryParams, except
 | `eggfetch/compat/httpx/_request.py` | `Request` — construction and auto-headers |
 | `eggfetch/compat/httpx/_response.py` | `Response` — metadata, status helpers, raise_for_status |
 | `eggfetch/compat/httpx/_client.py` | `Client` and `AsyncClient` — constructors, merge, build_request, send |
+| `eggfetch/compat/httpx/_ssl_context.py` | SSLContext snapshot, classification, construction fingerprint |
+
+### SSLContext Translation
+
+The Python `ssl.SSLContext` API exposes a large surface (custom ciphers,
+ALPN, session tickets, custom verify flags, etc.) that rustls cannot
+represent directly.  The compat layer classifies every context before
+dispatch through three deterministic gates:
+
+1. **Construction fingerprint**: a SHA-256 over the extractable public
+   state (`verify_mode`, `check_hostname`, `min_version`, `max_version`,
+   per-cert DER hashes, cipher list, options flags, and a class-name
+   sentinel).  A helper-created context whose live state matches the
+   stored fingerprint reuses the helper-recorded metadata.
+2. **Mutation detection**: a context whose live state diverges from
+   the stored fingerprint (e.g. after `load_verify_locations`,
+   `set_minimum_version`, `set_ciphers`, `set_alpn_protocols`) loses
+   its stored metadata and is reclassified from the live snapshot.
+   This means the user's post-construction edits always win, never
+   the helper's original intent.
+3. **Representability gate**: external (caller-created) contexts are
+   classified into `EXACTLY_REPRESENTABLE`,
+   `REPRESENTABLE_WITH_DEFAULTS`, or `UNREPRESENTABLE`.  Custom cipher
+   lists, custom ALPN, client certificates without path provenance,
+   and explicit version bounds outside TLS 1.2/1.3 cause
+   `UNREPRESENTABLE` → `TypeError` before dispatch.  Two CA stores
+   with identical cardinalities but different contents produce
+   different `verify` kwargs (no CA-count heuristic).
+
+The registry distinguishes **passthrough** contexts (caller-supplied
+via `verify=<SSLContext>`) from **helper-created** contexts
+(`create_ssl_context()`).  Passthrough contexts are not assigned a
+cert path or `verify` kwarg; helper contexts are.  This prevents a
+caller-supplied mTLS context from being silently downgraded to no
+client auth, and prevents a caller-supplied `verify=False` from
+inheriting the helper's default trust.
 
 ### Bridge Pattern (Native ↔ Compat Conversion)
 
@@ -201,9 +237,15 @@ The facade converts between HTTPX-compatible objects and native types at the bou
   never synthesize native `total`.
 - **Limits → native limits**: `Limits` fields map to `PoolConfig`.
 - **Proxy → native proxy**: `Proxy.url` and supported URL credentials map to
-  the native proxy string/authentication path. Non-empty `Proxy(headers=...)`
-  is rejected before dispatch because the bounded native API has no proxy-leg
-  header channel; it is an explicit Stage C difference.
+  the native proxy string/authentication path. `Proxy(headers=...)` is
+  forwarded through the native proxy-leg header channel. `Proxy(auth=...)`
+  is sent as `Proxy-Authorization` on the proxy leg.
+- **Proxy header redaction**: `Proxy.__repr__` redacts the values of
+  `authorization`, `proxy-authorization`, `cookie`, and `set-cookie` to
+  `<redacted>` so credentials do not appear in diagnostic dumps.  The raw
+  values remain available to protocol code through `Proxy.headers` and
+  to engine code through the native API.  The `Headers` type's
+  `Debug`/`__str__` is redacted the same way.
 - **Request → native body**: Body kwargs dispatched by mutual-exclusion rules; auto-headers computed by the facade.
 - **Response ← native response**: Status, headers, URL, body, and version extracted from native `PyResponse`.
 - **Errors ← native errors**: Exception mapping preserves the most specific HTTPX class with redacted context.
@@ -305,7 +347,10 @@ preserve origin-form requests after CONNECT. The facade intentionally bounds
 forwarded to the platform socket API, but EggFetch does not expose arbitrary
 null-pointer socket operations in its safe Rust boundary. HTTP and HTTPS proxy
 endpoint schemes are both supported; HTTPS proxy TLS uses the proxy hostname,
-while origin TLS after CONNECT uses the origin hostname.
-Non-empty `Proxy(headers=...)` is rejected before native dispatch because the
-bounded native API has no proxy-leg header channel; this remains an explicit
-Stage C difference rather than silently dropping metadata.
+while origin TLS after CONNECT uses the origin hostname.  Proxy and origin
+TLS configurations are kept independent: the proxy endpoint is verified
+using `Proxy(ssl_context=...)` (or rustls' default trust when not supplied),
+never reusing the origin's `verify=` setting.  `Proxy(headers=...)` is
+forwarded through the native proxy-leg header channel; sensitive header
+values are redacted in diagnostic surfaces (`__repr__`, `__str__`) but
+remain observable to protocol code through `Proxy.headers`.

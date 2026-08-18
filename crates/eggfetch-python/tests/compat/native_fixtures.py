@@ -426,9 +426,29 @@ def local_tls_proxy_server(
     backend: tuple[str, int] | None = None,
     certificate: tuple[str, str] | None = None,
 ) -> Generator[tuple[str, int, type, str], None, None]:
-    """TLS-wrapped HTTP proxy for HTTPS-proxy endpoint qualification."""
+    """TLS-wrapped HTTP proxy for HTTPS-proxy endpoint qualification.
+
+    The default cert is a CA-signed server cert (the CA is a
+    separate ``CA:TRUE`` cert) so the client trust anchor
+    (``ca_cert_path``) is enumerable through
+    ``ssl.SSLContext.get_ca_certs()``.  See
+    ``_generate_ca_signed_server_cert``.
+
+    The yielded ``cert_path`` is the server cert; use
+    ``local_tls_proxy_server_with_ca`` if you also need the CA
+    cert as a separate trust anchor.
+    """
     with tempfile.TemporaryDirectory() as tmpdir:
-        cert_path, key_path = certificate or _generate_self_signed_cert(tmpdir)
+        if certificate is not None:
+            cert_path, key_path = certificate
+            ca_cert_path = None
+        else:
+            (
+                ca_cert_path,
+                _ca_key_path,
+                cert_path,
+                key_path,
+            ) = _generate_ca_signed_server_cert(tmpdir)
         server_ssl = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         server_ssl.load_cert_chain(cert_path, key_path)
         handler_class = _ProxyHandler
@@ -442,7 +462,7 @@ def local_tls_proxy_server(
         thread = threading.Thread(target=httpd.serve_forever, daemon=True)
         thread.start()
         try:
-            yield "127.0.0.1", port, handler_class, cert_path
+            yield "127.0.0.1", port, handler_class, (cert_path, ca_cert_path)
         finally:
             httpd.shutdown()
             httpd.server_close()
@@ -498,6 +518,121 @@ def _generate_self_signed_cert(cert_dir: str) -> tuple[str, str]:
         check=True, capture_output=True,
     )
     return cert_path, key_path
+
+
+def _generate_self_signed_ca_cert(cert_dir: str) -> tuple[str, str]:
+    """Generate a self-signed CA certificate and key file.
+
+    The cert is marked with ``CA:TRUE`` so it can act as a trust
+    anchor that the Python ``ssl`` module exposes through
+    ``SSLContext.get_ca_certs()``.  The same cert can be used as
+    both a server cert (for a TLS server fixture) and a trust
+    anchor (for the client).  Using a non-CA cert (CA:FALSE) as a
+    trust anchor is accepted by ``load_verify_locations`` but
+    hidden from ``get_ca_certs``, which prevents eggfetch's
+    translation layer from extracting the actual DER anchors.
+    """
+    cert_path = os.path.join(cert_dir, "cert.pem")
+    key_path = os.path.join(cert_dir, "key.pem")
+    import subprocess
+    subprocess.run(
+        [
+            "openssl", "req", "-x509", "-newkey", "rsa:2048",
+            "-keyout", key_path, "-out", cert_path,
+            "-days", "1", "-nodes",
+            "-subj", "/CN=127.0.0.1",
+            "-addext", "basicConstraints=critical,CA:TRUE",
+            "-addext", "subjectAltName=IP:127.0.0.1",
+        ],
+        check=True, capture_output=True,
+    )
+    return cert_path, key_path
+
+
+def _generate_ca_signed_server_cert(
+    cert_dir: str,
+) -> tuple[str, str, str, str]:
+    """Generate a CA cert and a CA-signed server cert.
+
+    Returns ``(ca_cert_path, ca_key_path, server_cert_path, server_key_path)``.
+
+    The server cert is signed by the CA and has ``CA:FALSE`` so it
+    is a valid server identity.  The CA cert has ``CA:TRUE`` so
+    it is a valid trust anchor that the Python ``ssl`` module
+    exposes through ``SSLContext.get_ca_certs()``.  The test
+    loads the CA cert into the client trust store and the server
+    uses the server cert as its identity.
+    """
+    import subprocess
+
+    ca_cert_path = os.path.join(cert_dir, "ca.cert.pem")
+    ca_key_path = os.path.join(cert_dir, "ca.key.pem")
+    server_cert_path = os.path.join(cert_dir, "server.cert.pem")
+    server_key_path = os.path.join(cert_dir, "server.key.pem")
+    server_csr_path = os.path.join(cert_dir, "server.csr.pem")
+    server_ext_path = os.path.join(cert_dir, "server.ext.cnf")
+
+    # Generate the CA cert (CA:TRUE).
+    subprocess.run(
+        [
+            "openssl", "req", "-x509", "-newkey", "rsa:2048",
+            "-keyout", ca_key_path, "-out", ca_cert_path,
+            "-days", "1", "-nodes",
+            "-subj", "/CN=Test CA",
+            "-addext", "basicConstraints=critical,CA:TRUE",
+        ],
+        check=True,
+        capture_output=True,
+    )
+
+    # Generate the server cert CSR with SAN.
+    with open(server_ext_path, "w") as f:
+        f.write("[req]\ndistinguished_name = req_dn\n")
+        f.write("req_extensions = v3_req\n")
+        f.write("prompt = no\n\n")
+        f.write("[req_dn]\nCN = 127.0.0.1\n\n")
+        f.write("[v3_req]\nsubjectAltName = IP:127.0.0.1\n")
+
+    subprocess.run(
+        [
+            "openssl", "req", "-newkey", "rsa:2048",
+            "-keyout", server_key_path, "-out", server_csr_path,
+            "-nodes", "-config", server_ext_path,
+        ],
+        check=True,
+        capture_output=True,
+    )
+
+    # Sign the server cert with the CA.  basicConstraints=CA:FALSE
+    # is the default; we only copy the SAN extension.
+    subprocess.run(
+        [
+            "openssl", "x509", "-req",
+            "-in", server_csr_path, "-out", server_cert_path,
+            "-CA", ca_cert_path, "-CAkey", ca_key_path,
+            "-CAcreateserial", "-days", "1",
+            "-copy_extensions", "copyall",
+        ],
+        check=True,
+        capture_output=True,
+    )
+
+    return ca_cert_path, ca_key_path, server_cert_path, server_key_path
+
+
+def pem_to_der_bytes(pem_path: str) -> bytes:
+    """Convert a PEM certificate to DER bytes.
+
+    Used by tests that need to pass a trust anchor to eggfetch via
+    a path that does not depend on the Python ``ssl`` module's
+    ability (or inability) to enumerate the loaded CAs.
+    """
+    from cryptography import x509
+    import cryptography.hazmat.primitives.serialization as ser
+
+    with open(pem_path, "rb") as f:
+        cert = x509.load_pem_x509_certificate(f.read())
+    return cert.public_bytes(ser.Encoding.DER)
 
 
 @contextmanager

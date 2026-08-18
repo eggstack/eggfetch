@@ -24,6 +24,7 @@ from eggfetch.compat.httpx._exceptions import ConnectError
 
 from native_fixtures import (
     _TLSDirectHandler,
+    _generate_self_signed_ca_cert,
     _generate_self_signed_cert,
     local_http_server,
     local_proxy_server,
@@ -175,7 +176,13 @@ class TestProxyAuthPrecedence:
 
 
 class TestDefaultHttpsProxyTrust:
-    """Verify default HTTPS-proxy trust matches the reference."""
+    """Verify default HTTPS-proxy trust matches the reference.
+
+    Proxy endpoint TLS is independent of origin TLS in eggfetch.  The
+    proxy CA must be supplied on the ``Proxy`` (e.g. via
+    ``ssl_context``); the client-level ``verify=`` controls only the
+    origin server certificate.
+    """
 
     def test_https_proxy_with_explicit_ca_matches_reference(self):
         """Both runtimes trust the same CA for the proxy endpoint TLS."""
@@ -186,11 +193,13 @@ class TestDefaultHttpsProxyTrust:
                 proxy_host,
                 proxy_port,
                 handler,
-                proxy_cert_path,
+                (proxy_server_cert, proxy_ca_cert),
             ):
                 import httpx
 
-                proxy_ssl = ssl.create_default_context(cafile=proxy_cert_path)
+                proxy_ssl = ssl.create_default_context(
+                    cafile=proxy_ca_cert or proxy_server_cert
+                )
                 with httpx.Client(
                     proxy=httpx.Proxy(
                         f"https://{proxy_host}:{proxy_port}",
@@ -204,9 +213,18 @@ class TestDefaultHttpsProxyTrust:
                 assert resp.status_code == 200
 
                 handler.recorded_requests.clear()
+                # eggfetch: proxy endpoint TLS is governed by the
+                # Proxy itself.  The proxy CA is supplied through
+                # ``Proxy(ssl_context=...)`` so the origin ``verify=``
+                # is not reused as a fallback for the proxy handshake.
+                proxy_ssl_ctx = ssl.create_default_context(
+                    cafile=proxy_ca_cert or proxy_server_cert
+                )
                 with Client(
-                    proxy=f"https://{proxy_host}:{proxy_port}",
-                    verify=proxy_cert_path,
+                    proxy=Proxy(
+                        f"https://{proxy_host}:{proxy_port}",
+                        ssl_context=proxy_ssl_ctx,
+                    ),
                     trust_env=False,
                 ) as candidate:
                     resp = candidate.get(
@@ -223,15 +241,21 @@ class TestDefaultHttpsProxyTrust:
                 proxy_host,
                 proxy_port,
                 handler,
-                proxy_cert_path,
+                (proxy_server_cert, proxy_ca_cert),
             ):
-                # Use a different (wrong) CA for verification
+                # Use a different (wrong) CA for the proxy endpoint.
+                # The wrong CA must be a CA:TRUE cert so the
+                # translation layer can enumerate it.
                 with tempfile.TemporaryDirectory() as tmpdir:
-                    wrong_cert, _ = _generate_self_signed_cert(tmpdir)
+                    wrong_cert, _ = _generate_self_signed_ca_cert(tmpdir)
                     with pytest.raises((ConnectError, eggfetch.EggfetchError)):
                         with Client(
-                            proxy=f"https://{proxy_host}:{proxy_port}",
-                            verify=wrong_cert,
+                            proxy=Proxy(
+                                f"https://{proxy_host}:{proxy_port}",
+                                ssl_context=ssl.create_default_context(
+                                    cafile=wrong_cert
+                                ),
+                            ),
                             trust_env=False,
                             timeout=Timeout(3.0),
                         ) as candidate:
