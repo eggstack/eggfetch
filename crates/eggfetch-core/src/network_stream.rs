@@ -437,10 +437,27 @@ impl AsyncWrite for UpgradedStream {
 /// read/write/close/TLS access. For ordinary pooled connections,
 /// this provides read-only metadata — raw IO operations are not
 /// exposed while Hyper still owns the connection.
+///
+/// # Ordinal response limitation
+///
+/// Hyper's legacy client pool retains ownership of socket connections
+/// for ordinary HTTP/1.1 and HTTP/2 responses. The pool does not expose
+/// per-response socket metadata, and raw IO operations would corrupt
+/// pool state. Therefore, `NetworkStream::Metadata` is currently only
+/// constructed for responses where socket metadata can be safely
+/// captured without interfering with the pool. For ordinary responses,
+/// `network_stream` on `Response` is `None`.
+///
+/// This is a documented bounded difference from httpcore, which owns
+/// its connections directly and can expose metadata on every response.
 pub enum NetworkStream {
     /// An upgraded stream with full IO access.
     Upgraded(UpgradedStream),
     /// Read-only metadata for an ordinary pooled connection.
+    ///
+    /// Currently reserved for future use when socket metadata can be
+    /// safely captured from Hyper's connection pool. For ordinary
+    /// responses, `Response::network_stream()` returns `None`.
     Metadata(Arc<ConnectionMetadata>),
 }
 

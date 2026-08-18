@@ -645,6 +645,7 @@ fn register_exceptions(m: &Bound<'_, PyModule>) -> PyResult<()> {
 fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     let all_items = vec![
         "AsyncClient",
+        "AsyncNetworkStream",
         "AsyncStreamingBytesIterator",
         "AsyncStreamingLinesIterator",
         "AsyncStreamingRawBytesIterator",
@@ -742,6 +743,7 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyRetry>()?;
     m.add_class::<PyLimits>()?;
     m.add_class::<network_stream::PyNetworkStream>()?;
+    m.add_class::<network_stream::PyAsyncNetworkStream>()?;
 
     // Create the NOAUTH singleton instance.
     let noauth_obj = Py::new(m.py(), PyNoAuth)?;

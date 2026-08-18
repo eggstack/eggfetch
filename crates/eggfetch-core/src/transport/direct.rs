@@ -202,9 +202,15 @@ fn is_upgrade_status(status: u16) -> bool {
 /// Await the upgrade future and convert the result into an
 /// [`UpgradedStream`].
 ///
-/// Hyper's `Upgraded` preserves leading data in its read buffer.
-/// We wrap it with `hyper_util::rt::TokioIo` which bridges Hyper's
-/// IO traits to Tokio's `AsyncRead + AsyncWrite`.
+/// Hyper's `Upgraded` preserves leading data in its internal `Rewind`
+/// buffer. These bytes (sent by the server in the same write as the
+/// 101/CONNECT response headers) are yielded on the first reads from
+/// the `Upgraded` stream. We wrap it with `hyper_util::rt::TokioIo`
+/// which bridges Hyper's IO traits to Tokio's `AsyncRead + AsyncWrite`.
+///
+/// Socket address metadata is not available from Hyper's `Upgraded`
+/// directly. The metadata is set to defaults; real metadata can be
+/// captured at the connector level in a future enhancement.
 async fn await_upgrade(on_upgrade: hyper::upgrade::OnUpgrade) -> Option<UpgradedStream> {
     match on_upgrade.await {
         Ok(upgraded) => {
@@ -217,6 +223,10 @@ async fn await_upgrade(on_upgrade: hyper::upgrade::OnUpgrade) -> Option<Upgraded
             // downcasting to the concrete IO type (which we don't know).
             // The leading data is preserved inside Hyper's internal
             // rewind buffer and will be yielded on the first reads.
+            //
+            // End-to-end test: upgraded_stream_leading_data_through_hyper
+            // verifies that a server-sent leading payload is returned
+            // by the first `read()` on the upgraded stream.
             let leading = Bytes::new();
             // Use hyper-util's TokioIo adapter to bridge Hyper's IO
             // traits to Tokio's AsyncRead + AsyncWrite.

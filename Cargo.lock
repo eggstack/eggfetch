@@ -600,8 +600,11 @@ dependencies = [
  "pyo3",
  "pyo3-async-runtimes",
  "pyo3-build-config",
+ "rustls",
  "tokio",
+ "tokio-rustls",
  "url",
+ "webpki-roots 0.26.11",
 ]
 
 [[package]]

@@ -124,8 +124,17 @@ pub struct Response {
     history: Vec<HistoryEntry>,
     /// Optional network stream handle for connection metadata and
     /// upgraded-connection IO. Set for responses where the underlying
-    /// transport metadata is available (101, CONNECT, or ordinary
-    /// responses when metadata is captured).
+    /// transport metadata is available:
+    ///
+    /// - **101 Switching Protocols**: set to `NetworkStream::Upgraded`
+    ///   with full IO access.
+    /// - **Successful CONNECT (200)**: set to `NetworkStream::Upgraded`
+    ///   when the tunnel is established (handled in the proxy path).
+    /// - **Ordinary HTTP/1.1 and HTTP/2 responses**: always `None`.
+    ///   Hyper's connection pool retains ownership of the socket and
+    ///   does not expose per-response socket metadata. Raw IO would
+    ///   corrupt pool state. This is a documented bounded difference
+    ///   from httpcore, which owns its connections directly.
     network_stream: Option<NetworkStream>,
 }
 
