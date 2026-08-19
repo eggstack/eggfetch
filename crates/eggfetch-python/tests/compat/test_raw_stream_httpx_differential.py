@@ -583,10 +583,10 @@ async def _native_async_cancellation_case(client_type, limits):
             iterator = response.aiter_raw()
             first = await asyncio.wait_for(anext(iterator), timeout=1)
             assert first.startswith(b"\x1f")
-            assert handler.first_body_sent.is_set()
+            assert handler.first_body_sent.wait(timeout=1)
 
             pending = asyncio.create_task(anext(iterator))
-            assert handler.body_blocked.is_set()
+            assert handler.body_blocked.wait(timeout=1)
             await asyncio.sleep(0)
             pending.cancel()
             with pytest.raises(asyncio.CancelledError):
