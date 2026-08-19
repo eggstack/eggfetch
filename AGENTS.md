@@ -275,3 +275,27 @@ the proxy endpoint is verified using rustls' default trust anchors.
 to `<redacted>` so credentials do not appear in diagnostic dumps.
 The raw values remain available to protocol code through
 `Proxy.headers` and to engine code through the native API.
+
+### H2-only semantics and residual classification
+
+`HttpVersionPolicy::Http2Only` is enforced at three layers: the rustls
+ALPN list is restricted to `h2` only; the hyper-util legacy client is
+built with `http2_only(true)` on the standard, direct, and UDS paths;
+and `DirectStream` / `UdsStream` signal ALPN `h2` back to hyper-util
+via `Connected::negotiated_h2()` so the connection is correctly typed
+as H2. With all three in place, H2-only over TLS correctly rejects H1
+ALPN, and H2-only over cleartext sends the H2 client preface directly
+over TCP (h2c prior knowledge). H1-only and Auto policies must not
+regress; they do not set `http2_only`. Do not introduce a parallel
+"HTTPX-only" client engine or fork hyper to add H2 capability.
+
+The `stream_id` metadata field on HTTP/2 responses remains a residual
+difference. `h2 0.4.15` exposes `StreamId` on `ResponseFuture::stream_id()`
+and `RecvStream::stream_id()`, but `hyper_util::client::legacy::ResponseFuture`
+returns `Response<hyper::body::Incoming>` and `Incoming` wraps
+`h2::RecvStream` privately, so the stream identifier is not reachable
+through the current hyper abstraction. Document this as metadata-only;
+do not synthesize a stream ID from request ordering, sequence numbers,
+or any other source. See `docs/residual-differences.md` for the
+classification rules separating protocol enforcement, h2c prior
+knowledge, specialized transport, and metadata differences.

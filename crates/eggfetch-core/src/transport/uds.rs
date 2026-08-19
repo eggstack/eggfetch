@@ -67,7 +67,19 @@ impl tokio::io::AsyncWrite for UdsStream {
 #[cfg(unix)]
 impl hyper_util::client::legacy::connect::Connection for UdsStream {
     fn connected(&self) -> hyper_util::client::legacy::connect::Connected {
-        hyper_util::client::legacy::connect::Connected::new()
+        // Inspect the negotiated ALPN protocol on TLS streams so hyper-util
+        // knows whether the connection negotiated HTTP/2. Without this
+        // signal, an HTTP/2-only legacy client could silently downgrade to
+        // HTTP/1.1 even when ALPN selected `h2`.
+        let mut connected = hyper_util::client::legacy::connect::Connected::new();
+        if let Self::Tls(tls) = self {
+            if let Some(alpn) = tls.get_ref().1.alpn_protocol() {
+                if alpn == b"h2" {
+                    connected = connected.negotiated_h2();
+                }
+            }
+        }
+        connected
     }
 }
 

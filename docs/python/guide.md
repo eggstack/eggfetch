@@ -402,14 +402,27 @@ client = eggfetch.Client(trust_env=False)
 Enable HTTP/2 or HTTP/3 on the client:
 
 ```python
-# HTTP/2
+# HTTP/2 (auto-negotiate; falls back to HTTP/1.1 if the server does not
+# support h2)
 client = eggfetch.Client(http2=True)
+response = client.get("https://example.com")
+
+# HTTP/2 only — refuses to fall back to HTTP/1.1. Fails with a
+# ConnectError / RequestError if the server does not negotiate h2.
+# Over cleartext TCP, sends the H2 client preface directly (h2c prior
+# knowledge) when the server accepts it.
+client = eggfetch.Client(http1=False, http2=True)
 response = client.get("https://example.com")
 
 # HTTP/3 (QUIC)
 client = eggfetch.Client(http3=True)
 response = client.get("https://example.com")
 ```
+
+The `stream_id` metadata field exposed by HTTPX is intentionally
+absent for H2 responses. See `docs/residual-differences.md` for the
+classification of HTTPX gaps and the differential tests that pin
+each behavior.
 
 ## Error Handling
 

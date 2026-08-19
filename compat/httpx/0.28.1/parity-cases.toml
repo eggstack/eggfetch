@@ -511,23 +511,23 @@ notes = "Both clients negotiate h2 via ALPN, report HTTP/2 version, and reuse co
 
 [[case]]
 id = "H2-002"
-description = "TLS ALPN enforcement — httpx fails H2-only vs H1-only server; eggfetch silently falls back to H1"
+description = "TLS ALPN enforcement — httpx fails H2-only vs H1-only server; eggfetch now fails too"
 sync = true
 async = false
 tests = ["test_h2_differential.py::TestH2OnlyEnforcement"]
-result = "bounded-difference"
-phase = 2
-notes = "eggfetch does not enforce h2-only at the connector level. hyper-rustls advertises h2 in ALPN but does not reject h1 negotiation. Tracked as known limitation."
+result = "parity"
+phase = 4
+notes = "H2-only enforcement added in corrective 04 by setting `http2_only(true)` on the hyper-util legacy client. hyper-util then forces the H2 handshake; when ALPN does not negotiate `h2`, the H2 handshake fails rather than silently downgrading to HTTP/1.1. H1-only and Auto policies are unchanged."
 
 [[case]]
 id = "H2-003"
-description = "Cleartext H2 prior knowledge — httpx supports h2c; eggfetch falls back to HTTP/1.1"
+description = "Cleartext H2 prior knowledge — httpx supports h2c; eggfetch now sends the H2 preface over plain TCP"
 sync = true
 async = false
-tests = ["test_h2_differential.py::TestCleartextH2PriorKnowledge"]
-result = "bounded-difference"
-phase = 2
-notes = "The hyper_rustls connector only supports HTTP/2 over TLS via ALPN. Cleartext HTTP has no h2c path. The inner HttpConnector always sends HTTP/1.1."
+tests = ["test_h2_differential.py::TestCleartextH2PriorKnowledge", "test_h2_differential.py::TestH2cWireProof"]
+result = "parity"
+phase = 4
+notes = "h2c prior knowledge added in corrective 04 by setting `http2_only(true)` on the hyper-util legacy client. When the request goes to a cleartext server, hyper-util's `connect_to` calls `h2_builder.handshake(io)` which sends the H2 client preface directly over the TCP socket. The H2 server accepts the preface and responds over HTTP/2. Multiplexing and cancellation reuse the existing body and pool abstractions."
 
 [[case]]
 id = "H2-004"
@@ -559,10 +559,20 @@ phase = 2
 
 [[case]]
 id = "H2-007"
-description = "H2-only with local_address/socket_options — direct connector falls back to HTTP/1.1"
+description = "H2-only with local_address/socket_options — direct connector now supports H2"
 sync = true
 async = true
 tests = ["test_h2_differential.py::TestH2OnlySpecializedRoutes"]
+result = "parity"
+phase = 4
+notes = "The direct connector path (used when local_address or socket_options are set) now supports H2 via `http2_only(true)` on the hyper-util legacy client and ALPN signaling from `DirectStream::connected`. `DirectStream::Tls` reads the negotiated ALPN from the `tokio_rustls::client::TlsStream::get_ref().1.alpn_protocol()` and calls `Connected::negotiated_h2()` when h2 is selected. H2-only is enforced: an H2-only direct client against an H1-only TLS server fails with a `RequestError` / `ConnectError` rather than falling back to H1."
+
+[[case]]
+id = "H2-008"
+description = "stream_id absence — httpcore exposes Response.extensions['stream_id']; eggfetch does not"
+sync = true
+async = false
+tests = ["test_h2_differential.py::TestStreamIdAbsence"]
 result = "bounded-difference"
-phase = 2
-notes = "The direct connector path (used when local_address or socket_options are set) does not support HTTP/2 negotiation. HttpVersionPolicy is only applied to the standard hyper_rustls connector."
+phase = 4
+notes = "Metadata-only residual. h2 0.4.15 exposes StreamId on `ResponseFuture::stream_id()` and `RecvStream::stream_id()`, but hyper-util 0.1.20's `ResponseFuture` returns `Response<hyper::body::Incoming>` and `hyper::body::Incoming` wraps `h2::RecvStream` privately. There is no public API path from the hyper response to the underlying h2 stream ID. The stream ID is therefore not threaded through to `eggfetch_core::Response` or to the Python `Response.extensions` dict. This is documented in `docs/residual-differences.md` as a metadata-only difference; it has no effect on request or response semantics."

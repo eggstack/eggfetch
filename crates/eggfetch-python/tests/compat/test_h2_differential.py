@@ -1,19 +1,20 @@
 """HTTP/2-only differential tests: eggfetch vs httpx reference.
 
-Tests the HTTP/2-only (prior knowledge / ALPN-only) mode implemented in
-Phase 02 of HTTPX parity. Covers:
+Tests the HTTP/2-only (prior knowledge / ALPN-only) mode. Covers:
 - HTTPS H2-only via TLS ALPN (working path)
-- Cleartext H2 prior knowledge (known limitation)
-- TLS ALPN enforcement (H2-only vs H1-only server)
+- TLS H2-only enforcement (matches httpx reference behavior)
+- Cleartext H2 prior knowledge (working path)
 - Constructor matrix for all transport types
 - Streaming and cancellation
 - http_version field verification
-- Specialized route smoke tests
+- Specialized routes (local_address, socket_options)
+- stream_id absence (residual metadata difference)
 """
 
 from __future__ import annotations
 
 import asyncio
+import socket
 import ssl
 import tempfile
 import threading
@@ -22,6 +23,7 @@ import httpx
 import pytest
 
 from eggfetch.compat.httpx import AsyncClient, Client
+from eggfetch.compat.httpx._exceptions import ConnectError, RequestError
 from eggfetch.compat.httpx._transports import AsyncHTTPTransport, HTTPTransport
 
 from .native_fixtures import (
@@ -113,7 +115,7 @@ class TestHttpsH2OnlyAlpn:
 
 
 # ---------------------------------------------------------------------------
-# TLS ALPN enforcement — H2-only vs H1-only server
+# TLS H2-only enforcement — H2-only against an H1-only server must fail.
 # ---------------------------------------------------------------------------
 
 
@@ -154,14 +156,12 @@ class TestH2OnlyEnforcement:
             httpd.server_close()
             thread.join(timeout=2)
 
-    def test_candidate_h2_only_vs_h1_only(self):
-        """eggfetch H2-only behavior vs H1-only server.
+    def test_candidate_h2_only_vs_h1_only_fails(self):
+        """eggfetch H2-only correctly fails against H1-only TLS server.
 
-        Note: eggfetch currently falls back to HTTP/1.1 silently because
-        hyper-rustls does not enforce h2-only at the connector level.
-        This test documents the current behavior. When enforcement is
-        added to the Rust core, this test should be updated to expect
-        a ConnectError.
+        With http2_only set on the legacy client, the H2 handshake fails
+        when ALPN does not negotiate `h2`. The candidate no longer silently
+        downgrades to HTTP/1.1.
         """
         host, port, cert_path, httpd, thread, tmpdir = _make_h1_only_tls_server()
         try:
@@ -169,12 +169,8 @@ class TestH2OnlyEnforcement:
                 http1=False, http2=True, verify=cert_path,
                 trust_env=False, timeout=5,
             ) as client:
-                resp = client.get(f"https://{host}:{port}/health")
-                # Current behavior: falls back to HTTP/1.1
-                # When enforcement is added, change to:
-                # with pytest.raises(eggfetch.compat.httpx._exceptions.ConnectError):
-                #     client.get(...)
-                assert resp.status_code == 200
+                with pytest.raises((RequestError, ConnectError)):
+                    client.get(f"https://{host}:{port}/health")
         finally:
             httpd.shutdown()
             httpd.server_close()
@@ -182,18 +178,12 @@ class TestH2OnlyEnforcement:
 
 
 # ---------------------------------------------------------------------------
-# Cleartext H2 prior knowledge — known limitation
+# Cleartext H2 prior knowledge — both reference and candidate work.
 # ---------------------------------------------------------------------------
 
 
 class TestCleartextH2PriorKnowledge:
-    """Cleartext H2 prior knowledge is NOT supported by eggfetch.
-
-    The Rust core's hyper_rustls connector only supports HTTP/2 over TLS
-    via ALPN. For cleartext HTTP, it falls back to HTTP/1.1. This is a
-    documented limitation. httpx supports cleartext h2 via httpcore's
-    h2 implementation.
-    """
+    """Cleartext H2 prior knowledge is supported by both clients."""
 
     def test_reference_httpx_cleartext_h2(self):
         """httpx successfully uses cleartext H2 prior knowledge."""
@@ -205,20 +195,20 @@ class TestCleartextH2PriorKnowledge:
                 assert resp.status_code == 200
                 assert resp.http_version == "HTTP/2"
 
-    def test_candidate_cleartext_h2_fallback(self):
-        """eggfetch falls back to HTTP/1.1 for cleartext H2.
+    def test_candidate_cleartext_h2_prior_knowledge(self):
+        """eggfetch now uses cleartext H2 prior knowledge.
 
-        This documents the current limitation. The hyper_rustls connector
-        does not support h2c (HTTP/2 cleartext prior knowledge).
+        With http2_only set on the legacy client, hyper-util attempts an
+        HTTP/2 handshake on the cleartext socket. The H2 server accepts the
+        preface and responds over HTTP/2.
         """
         with local_h2_server() as (host, port, _counter):
             with Client(
                 http1=False, http2=True, trust_env=False, timeout=5,
             ) as client:
-                # The H2 server only speaks HTTP/2, so this will fail
-                # because eggfetch sends HTTP/1.1 to it.
-                with pytest.raises(Exception):
-                    client.get(f"http://{host}:{port}/health")
+                resp = client.get(f"http://{host}:{port}/health")
+                assert resp.status_code == 200
+                assert resp.http_version == "HTTP/2"
 
 
 # ---------------------------------------------------------------------------
@@ -387,40 +377,22 @@ class TestH2OnlyHttpVersion:
 
 
 # ---------------------------------------------------------------------------
-# Specialized route smoke tests
+# Specialized routes — direct connector with local_address and socket_options
 # ---------------------------------------------------------------------------
 
 
 class TestH2OnlySpecializedRoutes:
     """H2-only with specialized transport options.
 
-    Note: When local_address or socket_options are specified, the Rust core
-    uses the direct connector path which does not support HTTP/2 negotiation.
-    The direct connector always falls back to HTTP/1.1. These tests verify
-    that the transport works at all with these options and document the
-    H2 limitation.
+    When local_address or socket_options are set, the Rust core uses the
+    direct connector path. The direct connector now supports HTTP/2 via
+    ALPN signaling on TLS streams and `http2_only` on the legacy client.
+    H2-only is enforced in this path as well.
     """
 
-    def test_h2_only_with_local_address(self):
-        """H2-only with local_address — direct connector falls back to H1."""
+    def test_h2_only_with_local_address_h2_server(self):
+        """H2-only + local_address against an H2-capable TLS server succeeds."""
         with local_tls_h2_server() as (host, port, _client_ssl, cert_path, _counter):
-            transport = HTTPTransport(
-                http1=False, http2=True, local_address="127.0.0.1",
-                verify=cert_path,
-            )
-            with Client(
-                transport=transport, trust_env=False, timeout=5,
-            ) as client:
-                # Direct connector does not support H2; falls back to H1.
-                # The server only handles h2 ALPN, so this will fail.
-                # Document this as a known limitation.
-                with pytest.raises(Exception):
-                    client.get(f"https://{host}:{port}/health")
-
-    def test_h2_only_with_local_address_h1_server(self):
-        """H2-only with local_address against an H1 server (direct connector)."""
-        from .native_fixtures import local_tls_server
-        with local_tls_server() as (host, port, client_ssl, cert_path):
             transport = HTTPTransport(
                 http1=False, http2=True, local_address="127.0.0.1",
                 verify=cert_path,
@@ -429,31 +401,30 @@ class TestH2OnlySpecializedRoutes:
                 transport=transport, trust_env=False, timeout=5,
             ) as client:
                 resp = client.get(f"https://{host}:{port}/health")
-                # Direct connector falls back to HTTP/1.1
                 assert resp.status_code == 200
+                assert resp.http_version == "HTTP/2"
 
-    def test_h2_only_with_socket_options(self):
-        """H2-only with TCP_NODELAY — direct connector falls back to H1."""
-        import socket
-        with local_tls_h2_server() as (host, port, _client_ssl, cert_path, _counter):
+    def test_h2_only_with_local_address_h1_only_server(self):
+        """H2-only + local_address against an H1-only TLS server fails."""
+        host, port, cert_path, httpd, thread, tmpdir = _make_h1_only_tls_server()
+        try:
             transport = HTTPTransport(
-                http1=False, http2=True, verify=cert_path,
-                socket_options=[
-                    (socket.IPPROTO_TCP, socket.TCP_NODELAY, 1),
-                ],
+                http1=False, http2=True, local_address="127.0.0.1",
+                verify=cert_path,
             )
             with Client(
                 transport=transport, trust_env=False, timeout=5,
             ) as client:
-                # Direct connector does not support H2; server only handles h2.
-                with pytest.raises(Exception):
+                with pytest.raises((RequestError, ConnectError)):
                     client.get(f"https://{host}:{port}/health")
+        finally:
+            httpd.shutdown()
+            httpd.server_close()
+            thread.join(timeout=2)
 
-    def test_h2_only_with_socket_options_h1_server(self):
-        """H2-only with TCP_NODELAY against an H1 server (direct connector)."""
-        import socket
-        from .native_fixtures import local_tls_server
-        with local_tls_server() as (host, port, client_ssl, cert_path):
+    def test_h2_only_with_socket_options_h2_server(self):
+        """H2-only + TCP_NODELAY against an H2-capable TLS server succeeds."""
+        with local_tls_h2_server() as (host, port, _client_ssl, cert_path, _counter):
             transport = HTTPTransport(
                 http1=False, http2=True, verify=cert_path,
                 socket_options=[
@@ -465,13 +436,46 @@ class TestH2OnlySpecializedRoutes:
             ) as client:
                 resp = client.get(f"https://{host}:{port}/health")
                 assert resp.status_code == 200
+                assert resp.http_version == "HTTP/2"
 
-    def test_h2_only_async_with_local_address(self):
-        """Async H2-only with local_address — direct connector falls back to H1."""
+    def test_h2_only_with_socket_options_h1_only_server(self):
+        """H2-only + TCP_NODELAY against an H1-only TLS server fails."""
+        host, port, cert_path, httpd, thread, tmpdir = _make_h1_only_tls_server()
+        try:
+            transport = HTTPTransport(
+                http1=False, http2=True, verify=cert_path,
+                socket_options=[
+                    (socket.IPPROTO_TCP, socket.TCP_NODELAY, 1),
+                ],
+            )
+            with Client(
+                transport=transport, trust_env=False, timeout=5,
+            ) as client:
+                with pytest.raises((RequestError, ConnectError)):
+                    client.get(f"https://{host}:{port}/health")
+        finally:
+            httpd.shutdown()
+            httpd.server_close()
+            thread.join(timeout=2)
+
+    def test_h1_only_with_local_address_h1_server(self):
+        """H1-only + local_address against an H1 TLS server succeeds."""
         from .native_fixtures import local_tls_server
+        with local_tls_server() as (host, port, client_ssl, cert_path):
+            transport = HTTPTransport(
+                http1=True, http2=False, local_address="127.0.0.1",
+                verify=cert_path,
+            )
+            with Client(
+                transport=transport, trust_env=False, timeout=5,
+            ) as client:
+                resp = client.get(f"https://{host}:{port}/health")
+                assert resp.status_code == 200
 
+    def test_h2_only_async_with_local_address_h2_server(self):
+        """Async H2-only + local_address against an H2 server succeeds."""
         async def run():
-            with local_tls_server() as (host, port, client_ssl, cert_path):
+            with local_tls_h2_server() as (host, port, _client_ssl, cert_path, _counter):
                 transport = AsyncHTTPTransport(
                     http1=False, http2=True, local_address="127.0.0.1",
                     verify=cert_path,
@@ -481,8 +485,112 @@ class TestH2OnlySpecializedRoutes:
                 ) as client:
                     resp = await client.get(f"https://{host}:{port}/health")
                     assert resp.status_code == 200
+                    assert resp.http_version == "HTTP/2"
 
         asyncio.run(run())
+
+
+# ---------------------------------------------------------------------------
+# Wire proof — h2c prior knowledge sends the actual H2 preface
+# ---------------------------------------------------------------------------
+
+
+class TestH2cWireProof:
+    """Wire-level proof that h2c prior knowledge sends the H2 preface."""
+
+    def test_h2c_sends_h2_preface(self):
+        """The first bytes sent by an H2-only client are the H2 client preface.
+
+        The H2 client preface begins with the bytes
+        `PRI * HTTP/2.0\\r\\n\\r\\nSM\\r\\n\\r\\n` (24 bytes).
+        """
+        from .native_fixtures import _h2_handle_request
+        captured = bytearray()
+
+        # Spin up a cleartext H2 server that captures the first bytes
+        # received before completing the H2 handshake.
+        def server_thread(host, port, captured_ref, stop):
+            server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            server_sock.bind((host, port))
+            server_sock.listen(8)
+            server_sock.settimeout(1)
+            while not stop.is_set():
+                try:
+                    conn, _ = server_sock.accept()
+                except (socket.timeout, OSError):
+                    continue
+                # Capture the first 256 bytes (enough for the H2 preface
+                # plus a SETTINGS frame).
+                conn.settimeout(2)
+                try:
+                    first = conn.recv(256)
+                except (socket.timeout, OSError):
+                    first = b""
+                captured_ref.extend(first)
+                # We captured what we need; close the socket.
+                try:
+                    conn.close()
+                except OSError:
+                    pass
+
+        host = "127.0.0.1"
+        stop = threading.Event()
+        # Bind first to learn the port, then start the server.
+        bind_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        bind_sock.bind((host, 0))
+        port = bind_sock.getsockname()[1]
+        bind_sock.close()
+
+        thread = threading.Thread(
+            target=server_thread, args=(host, port, captured, stop), daemon=True,
+        )
+        thread.start()
+        try:
+            with Client(
+                http1=False, http2=True, trust_env=False, timeout=3,
+            ) as client:
+                with pytest.raises(Exception):
+                    # The server closes the socket immediately after
+                    # capturing bytes, so the request fails. The wire
+                    # capture is what we are testing.
+                    client.get(f"http://{host}:{port}/health")
+        finally:
+            stop.set()
+            thread.join(timeout=3)
+
+        # The H2 client preface (RFC 7540 § 3.5) begins with
+        # b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n".
+        expected_preface = b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"
+        assert bytes(captured).startswith(expected_preface), (
+            f"Expected H2 preface at start of wire bytes, got: {bytes(captured)!r}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# stream_id absence — residual metadata difference
+# ---------------------------------------------------------------------------
+
+
+class TestStreamIdAbsence:
+    """`stream_id` is not exposed for H2 responses (residual difference).
+
+    HTTPX exposes `response.extensions["stream_id"]` as an integer for H2
+    responses. EggFetch cannot do this because hyper-util's legacy client
+    erases the underlying h2 future; `Response<Incoming>` does not carry
+    the stream identifier. The metadata field is intentionally absent.
+    """
+
+    def test_stream_id_absent_in_response_extensions(self):
+        """stream_id is absent from response extensions for H2 responses."""
+        with local_tls_h2_server() as (host, port, _client_ssl, cert_path, _counter):
+            with Client(
+                http1=False, http2=True, verify=cert_path,
+                trust_env=False, timeout=5,
+            ) as client:
+                resp = client.get(f"https://{host}:{port}/health")
+                # stream_id is not exposed by EggFetch for H2 responses.
+                assert "stream_id" not in resp.extensions
 
 
 # ---------------------------------------------------------------------------

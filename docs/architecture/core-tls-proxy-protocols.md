@@ -214,12 +214,47 @@ Behind the `http2` Cargo feature. When not enabled, `Http2Only` and `Auto` silen
 
 `HttpVersionPolicy` enum:
 - `Http1Only` — only HTTP/1.1.
-- `Http2Only` — only HTTP/2 (fails if server doesn't negotiate).
+- `Http2Only` — only HTTP/2 (fails if server does not negotiate). Enforced at both the ALPN layer (only `h2` is advertised) and at the hyper-util legacy client layer (`http2_only(true)`).
 - `Auto` (default) — both `h2` and `http/1.1` advertised.
 
 ### ALPN
 
-ALPN protocols are set on the rustls configuration based on the version policy. The connector builder handles `enable_http1()` / `enable_http2()`.
+ALPN protocols are set on the rustls configuration based on the version policy. The connector builder handles `enable_http1()` / `enable_http2()`:
+
+- `enable_http2()` alone → `alpn_protocols = vec![b"h2"]` (h2-only).
+- `enable_http1().enable_http2()` → `alpn_protocols = vec![b"h2", b"http/1.1"]` (auto).
+- `enable_http1()` alone → ALPN stays empty (h1-only).
+
+The standard hyper-rustls path passes an empty ALPN list to `hyper_rustls::HttpsConnectorBuilder` so the builder can populate it from the `enable_http1`/`enable_http2` calls. Direct and UDS connectors perform their own TLS handshake; the ALPN they advertise is determined by the `TlsConfig` and is shared across the three paths.
+
+### `http2_only` enforcement
+
+For `HttpVersionPolicy::Http2Only`, the legacy hyper-util client is built with `http2_only(true)`. This is what enforces the protocol contract:
+
+- For **TLS** connections, `http2_only(true)` causes hyper-util to attempt an HTTP/2 handshake on every accepted socket. When ALPN does not negotiate `h2` (or the server only advertises `http/1.1`), the H2 handshake fails and the request is rejected with a `RequestError` / `ConnectError`. There is no silent downgrade to HTTP/1.1.
+- For **cleartext** connections, `http2_only(true)` causes hyper-util to send the H2 client preface directly over the TCP socket. This is HTTP/2 prior knowledge (h2c) and matches HTTPX's behavior on cleartext H2 servers.
+
+Both the standard hyper-rustls client and the direct / UDS clients are configured with `http2_only(true)` when H2-only is selected. The `Http1Only` and `Auto` policies do not set `http2_only`.
+
+### Direct connector ALPN signaling
+
+`DirectConnector` and `UdsConnector` wrap their own TLS handshake (via `tokio_rustls::TlsConnector`) and signal the negotiated ALPN protocol back to hyper-util so the legacy client knows whether the connection is H2:
+
+```rust
+impl Connection for DirectStream {
+    fn connected(&self) -> hyper_util::client::legacy::connect::Connected {
+        let mut connected = Connected::new();
+        if let Self::Tls(tls) = self {
+            if let Some(b"h2") = tls.get_ref().1.alpn_protocol() {
+                connected = connected.negotiated_h2();
+            }
+        }
+        connected
+    }
+}
+```
+
+Without this signal, an H2-only legacy client would not see the ALPN result and could incorrectly attempt H1 framing on a connection that just negotiated h2.
 
 ### Forbidden Header Stripping
 
@@ -233,6 +268,8 @@ Per RFC 9113 §8.2.2, the pipeline strips before sending: `Connection`, `Keep-Al
 | `Http2StreamReset` | Stream reset via RST_STREAM |
 | `Http2FlowControl` | Flow-control error |
 | `Http2Protocol` | Generic HTTP/2 protocol error |
+
+The H2 classification function in `crates/eggfetch-core/src/transport/direct.rs` maps hyper error strings to these variants. `last_stream_id` is currently hardcoded to `0` because hyper does not expose the inner h2 error's stream identifier (see the `stream_id` residual in `docs/residual-differences.md`).
 
 ### Retry Classification
 

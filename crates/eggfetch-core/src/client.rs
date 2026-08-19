@@ -773,6 +773,17 @@ impl ClientBuilder {
                 crate::transport::connect_timeout::ConnectTimeout::new(https, connect_timeout);
 
             let mut builder = hyper_util::client::legacy::Client::builder(TokioExecutor::new());
+            // When HTTP/1 is disabled and HTTP/2 is enabled, mark the legacy
+            // client as HTTP/2-only. This is what enforces the protocol
+            // contract: hyper-util will attempt an HTTP/2 handshake on every
+            // socket (including cleartext, where it falls through to HTTP/2
+            // prior knowledge). When ALPN does not negotiate `h2`, the
+            // HTTP/2 handshake fails with a `Connect` error rather than
+            // silently downgrading to HTTP/1.1.
+            #[cfg(feature = "http2")]
+            if !enabler.enable_http1() && enabler.enable_http2() {
+                builder.http2_only(true);
+            }
             if let Some(timeout) = pool_config.idle_timeout {
                 builder.pool_idle_timeout(timeout);
             }
@@ -809,6 +820,15 @@ impl ClientBuilder {
             );
 
             let mut builder = hyper_util::client::legacy::Client::builder(TokioExecutor::new());
+            // Match the standard hyper-rustls path: when H2-only, force
+            // http2_only on the legacy client so HTTP/2 handshake runs even
+            // when the connector does not advertise ALPN h2. The
+            // DirectConnector itself signals ALPN h2 via `Connected::negotiated_h2`
+            // when TLS selected it.
+            #[cfg(feature = "http2")]
+            if !enabler.enable_http1() && enabler.enable_http2() {
+                builder.http2_only(true);
+            }
             if let Some(timeout) = pool_config.idle_timeout {
                 builder.pool_idle_timeout(timeout);
             }
@@ -831,6 +851,13 @@ impl ClientBuilder {
                 self.timeout.as_ref().and_then(|timeout| timeout.connect),
             );
             let mut builder = hyper_util::client::legacy::Client::builder(TokioExecutor::new());
+            // Mirror the standard and direct paths: when H2-only, force
+            // http2_only on the legacy client. The UDS connector signals ALPN
+            // h2 via `Connected::negotiated_h2` when TLS selected it.
+            #[cfg(feature = "http2")]
+            if !enabler.enable_http1() && enabler.enable_http2() {
+                builder.http2_only(true);
+            }
             if let Some(timeout) = pool_config.idle_timeout {
                 builder.pool_idle_timeout(timeout);
             }

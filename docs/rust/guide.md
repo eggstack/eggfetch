@@ -511,7 +511,11 @@ let client = Client::builder()
     .http_version_policy(HttpVersionPolicy::Http1Only)
     .build();
 
-// HTTP/2 only (requires http2 feature)
+// HTTP/2 only (requires http2 feature). Enforced end-to-end:
+// ALPN advertises only `h2`, the hyper-util legacy client is built with
+// `http2_only(true)`, and direct/UDS connectors signal ALPN h2 via
+// `Connected::negotiated_h2`. Over cleartext TCP this sends the H2
+// client preface directly (h2c prior knowledge).
 let client = Client::builder()
     .http_version_policy(HttpVersionPolicy::Http2Only)
     .build();
@@ -521,6 +525,11 @@ let client = Client::builder()
     .http_version_policy(HttpVersionPolicy::Auto { allow_http3: false })
     .build();
 ```
+
+H2-only requests that reach an H1-only server fail with a
+`RequestError` / `ConnectError` rather than silently downgrading.
+The `stream_id` metadata field exposed by HTTPX is intentionally
+absent; see `docs/residual-differences.md`.
 
 ## Connection Pool Metrics
 
