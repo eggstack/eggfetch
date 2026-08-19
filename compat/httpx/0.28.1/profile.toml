@@ -5,11 +5,16 @@ version = "1"
 created = "2026-07-21"
 rebaselined = "2026-08-07"
 rebaseline-sha = "f9eb1a455907d43210886b7b047d18bde8716652"
-qualified = "2026-08-19"
-qualification-sha = "c44d4f25ffebc1a792335163ae4bc106076b3963"
+# Corrective 06 (final semantic truthfulness) is now open. The previous
+# `c44d4f25...` qualification covers the frozen Corrective 05 executable tree
+# only and is retained as historical evidence. No `qualification-sha` is
+# assigned for the new executable tree until Corrective 07 runs against a
+# frozen SHA. See `plans/httpx-parity-corrective-06-final-semantic-truthfulness.md`
+# and `plans/httpx-parity-correction-status.md`.
+stage = "stage-c-qualified-pre-corrective-06"
+status = "corrective-06-open"
+historical-qualification-sha = "c44d4f25ffebc1a792335163ae4bc106076b3963"
 reference = "httpx==0.28.1"
-stage = "stage-c-qualified"
-status = "qualified"
 
 [reference]
 distribution = "httpx"

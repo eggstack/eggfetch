@@ -238,6 +238,10 @@ pub(crate) struct DirectConnector {
     /// hostname for `ServerName` Indication and certificate verification,
     /// while TCP still connects to the URL host.
     sni_hostname: Option<String>,
+    /// When `true`, the connector signals that ALPN `h2` is the only
+    /// acceptable protocol. This is used by SNI override paths under
+    /// H2-only policy to prevent silent HTTP/1.1 fallback.
+    alpn_h2_only: bool,
 }
 
 impl DirectConnector {
@@ -250,6 +254,7 @@ impl DirectConnector {
             config,
             tls: tls.map(Arc::new),
             sni_hostname: None,
+            alpn_h2_only: false,
         }
     }
 
@@ -263,6 +268,18 @@ impl DirectConnector {
             config: self.config.clone(),
             tls: self.tls.clone(),
             sni_hostname: Some(sni_hostname),
+            alpn_h2_only: self.alpn_h2_only,
+        }
+    }
+
+    /// Create a clone of this connector with ALPN restricted to `h2`.
+    ///
+    /// When set, the connector advertises only `h2` in the TLS ALPN
+    /// list, preventing silent HTTP/1.1 fallback under H2-only policy.
+    pub(crate) fn with_alpn_h2_only(&self) -> Self {
+        Self {
+            alpn_h2_only: true,
+            ..self.clone()
         }
     }
 }

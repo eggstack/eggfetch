@@ -287,7 +287,8 @@ fn map_error_to_exit_code(err: &eggfetch_core::Error) -> u8 {
         | Error::H3Connect(_)
         | Error::H3ConnectionClosed(_)
         | Error::H3Stream(_)
-        | Error::H3Protocol(_) => EXIT_PROTOCOL,
+        | Error::H3Protocol(_)
+        | Error::TraceCallbackAborted => EXIT_PROTOCOL,
 
         // Connect / TLS / proxy errors
         Error::Connect(_)

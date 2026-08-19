@@ -466,6 +466,57 @@ fn extra_info_dict<'py>(
 // AsyncNetworkStream
 // ---------------------------------------------------------------------------
 
+/// Internal enum that holds either a sync or async network stream wrapper.
+///
+/// This allows callers to construct the correct wrapper based on whether
+/// they are in a sync or async context, avoiding deadlocks when the
+/// wrong wrapper type is used.
+#[derive(Debug, Clone)]
+pub(crate) enum EitherNetworkStream {
+    /// Sync wrapper — uses `block_on` for IO; suitable for sync callers.
+    Sync(PyNetworkStream),
+    /// Async wrapper — uses `pyo3_async_runtimes` for IO; suitable for async callers.
+    Async(PyAsyncNetworkStream),
+}
+
+impl EitherNetworkStream {
+    /// Returns `true` if the inner stream is an upgraded connection with IO access.
+    pub fn is_upgraded(&self) -> bool {
+        match self {
+            Self::Sync(s) => s.is_upgraded(),
+            Self::Async(s) => s.is_upgraded(),
+        }
+    }
+
+    /// Insert the inner stream object into a Python dict as `network_stream`.
+    ///
+    /// For sync streams, inserts the `PyNetworkStream` directly.
+    /// For async streams, inserts the `PyAsyncNetworkStream` directly.
+    pub fn insert_into_dict<'py>(
+        &self,
+        py: Python<'py>,
+        dict: &Bound<'py, PyDict>,
+    ) -> PyResult<()> {
+        match self {
+            Self::Sync(s) => {
+                if s.is_upgraded() {
+                    dict.set_item("network_stream", s.clone())?;
+                } else {
+                    dict.set_item("network_stream", py.None())?;
+                }
+            }
+            Self::Async(s) => {
+                if s.is_upgraded() {
+                    dict.set_item("network_stream", s.clone())?;
+                } else {
+                    dict.set_item("network_stream", py.None())?;
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
 /// Type alias for the async-side stream lock.
 ///
 /// `tokio::sync::Mutex` is used (rather than `std::sync::Mutex`) so the

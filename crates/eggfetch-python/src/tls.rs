@@ -107,6 +107,13 @@ fn apply_eggfetch_registry_metadata(
     Ok(builder)
 }
 
+/// Python `ssl.TLSVersion` wire values: `TLSv1_2=771`, `TLSv1_3=772`.
+const TLS_1_2_WIRE: i32 = 771;
+const TLS_1_3_WIRE: i32 = 772;
+/// Default sentinels when `SSLContext` has not set min/max version.
+const DEFAULT_MIN_SENTINEL: i32 = -2;
+const DEFAULT_MAX_SENTINEL: i32 = -1;
+
 /// Apply snapshot values to the TLS config builder.
 fn apply_snapshot_to_builder(
     mut builder: eggfetch_core::TlsConfigBuilder,
@@ -125,6 +132,40 @@ fn apply_snapshot_to_builder(
 
     if !check_hostname {
         builder = builder.verify_hostname(false);
+    }
+
+    // Apply TLS version bounds from the snapshot.
+    let min_version: Option<i32> = snapshot.getattr("min_version")?.extract()?;
+    let max_version: Option<i32> = snapshot.getattr("max_version")?.extract()?;
+
+    if let Some(v) = min_version {
+        if v > 0 && v != DEFAULT_MIN_SENTINEL {
+            let tls_version = match v {
+                TLS_1_2_WIRE => eggfetch_core::TlsVersion::Tls12,
+                TLS_1_3_WIRE => eggfetch_core::TlsVersion::Tls13,
+                _ => {
+                    return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                        "unsupported TLS minimum version: {v}"
+                    )));
+                }
+            };
+            builder = builder.min_tls_version(tls_version);
+        }
+    }
+
+    if let Some(v) = max_version {
+        if v > 0 && v != DEFAULT_MAX_SENTINEL {
+            let tls_version = match v {
+                TLS_1_2_WIRE => eggfetch_core::TlsVersion::Tls12,
+                TLS_1_3_WIRE => eggfetch_core::TlsVersion::Tls13,
+                _ => {
+                    return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                        "unsupported TLS maximum version: {v}"
+                    )));
+                }
+            };
+            builder = builder.max_tls_version(tls_version);
+        }
     }
 
     Ok(builder)

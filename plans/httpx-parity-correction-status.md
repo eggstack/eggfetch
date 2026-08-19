@@ -4,17 +4,33 @@ This record is the exact-SHA-bound status for the HTTPX 0.28.1 compatibility
 facade. Historical phase and corrective-pass records remain in the git history
 and referenced plans; counts below are only from the runs named here.
 
-## Current corrective pass — Corrective 05 exact-SHA closure
+## Current corrective pass — Corrective 06 final semantic truthfulness
 
-Current designation: **Stage C qualified** for the documented Python 3.10+
-asyncio-supported HTTPX 0.28.1 surface.
+Current designation: **Corrective 06 open**. The previous Stage C qualification
+at `c44d4f25ffebc1a792335163ae4bc106076b3963` is retained as historical
+evidence only. Executable changes required by Corrective 06 invalidate that
+qualification; no new `qualification-sha` is assigned until Corrective 07
+runs against a frozen executable commit.
 
-Corrective 05 supersedes the stale qualification at
-`48bad19fa1bb7ab7c91bcd67787efb2e41127fff` because Correctives 01-04 changed
-executable Rust and Python compatibility code. The final executable/test SHA
-is `c44d4f25ffebc1a792335163ae4bc106076b3963`, qualified on 2026-08-19.
-Later commits in this closure are documentation/ledger-only; future
-executable changes require a fresh qualification.
+Plan: `plans/httpx-parity-corrective-06-final-semantic-truthfulness.md`.
+
+Scope (narrow):
+
+- Track A: SSLContext translation must be genuinely fail-closed and not
+  silently drop unobservable or unmapped state.
+- Track B: One native extension parser for all sync/async buffered/streaming
+  paths; truthful trace-callback support across all four quadrants.
+- Track C: 101 `network_stream` wrapper type must match the caller's API
+  mode (sync vs async), not the response conversion path.
+- Track D: H2-only policy must propagate through SNI and SOCKS routes, or
+  those routes must be explicitly classified as bounded differences.
+
+## Historical corrective pass — Corrective 05 exact-SHA closure (superseded)
+
+**Current bound execution evidence**: `c44d4f25ffebc1a792335163ae4bc106076b3963`,
+qualified on 2026-08-19. Corrective 06 is open against this baseline;
+the qualification is invalidated as soon as executable changes land for
+Corrective 06.
 
 ### Corrective 05 evidence
 

@@ -36,7 +36,7 @@ use crate::cookies::PyCookies;
 use crate::errors::map_err;
 use crate::errors::{StreamClosed, StreamConsumed};
 use crate::headers::PyHeaders;
-use crate::network_stream::PyAsyncNetworkStream;
+use crate::network_stream::{EitherNetworkStream, PyAsyncNetworkStream, PyNetworkStream};
 use crate::response::{extract_charset, version_to_string};
 
 const STATE_STREAMING: u8 = 0;
@@ -97,9 +97,9 @@ pub(crate) struct PyStreamingResponse {
     /// upgraded-connection IO.  Always `None` for non-101 streaming
     /// responses because the body iterator is the canonical accessor
     /// for the connection. For 101 Switching Protocols streaming
-    /// responses, this is `Some(PyAsyncNetworkStream)`.
-    #[pyo3(get)]
-    network_stream: Option<PyAsyncNetworkStream>,
+    /// responses, this holds the appropriate wrapper (sync or async)
+    /// based on the caller's context.
+    network_stream: Option<EitherNetworkStream>,
     #[pyo3(get)]
     history: Vec<crate::response::PyResponse>,
     #[pyo3(get)]
@@ -126,6 +126,7 @@ impl PyStreamingResponse {
         mut response: eggfetch_core::Response,
         runtime_handle: tokio::runtime::Handle,
         runtime_lease: Option<RuntimeLease>,
+        is_async: bool,
     ) -> PyResult<Bound<'_, Self>> {
         let status = response.status().as_u16();
         let headers = PyHeaders::from_header_map(response.headers().clone());
@@ -187,18 +188,33 @@ impl PyStreamingResponse {
         // body has been drained.  Upgraded (101) responses expose their
         // upgraded IO via `into_upgraded_stream()`.
         //
-        // For 101 streaming responses the canonical accessor is the
-        // async wrapper (`PyAsyncNetworkStream`), driven on the async
-        // client's shared runtime. The sync wrapper is *not* exposed
-        // here because it would be blocked by the surrounding async
-        // runtime — the sync wrapper's `block_on` would deadlock.
+        // For 101 streaming responses, create the wrapper that matches
+        // the caller's context:
+        // - Sync callers get `PyNetworkStream` (uses `block_on` for IO).
+        // - Async callers get `PyAsyncNetworkStream` (uses `pyo3_async_runtimes`).
+        //
+        // Using the wrong wrapper type would deadlock: the sync wrapper's
+        // `block_on` cannot run inside a Tokio runtime, and the async
+        // wrapper's `future_into_py` cannot be awaited from sync code.
         //
         // `take_network_stream` removes the stream from the response
         // without consuming the response itself, so the body iterator
         // can still be driven from the rest of the response.
         let network_stream = match response.take_network_stream() {
             Some(eggfetch_core::network_stream::NetworkStream::Upgraded(u)) => {
-                Some(PyAsyncNetworkStream::from_upgraded(u))
+                if is_async {
+                    Some(EitherNetworkStream::Async(
+                        PyAsyncNetworkStream::from_upgraded(u),
+                    ))
+                } else {
+                    Some(EitherNetworkStream::Sync(
+                        PyNetworkStream::from_upgraded_with_handle(
+                            u,
+                            runtime_handle.clone(),
+                            runtime_lease.clone(),
+                        ),
+                    ))
+                }
             }
             _ => None,
         };
@@ -565,13 +581,27 @@ impl PyStreamingResponse {
         dict.set_item("reason_phrase", self.reason_phrase.clone())?;
         match self.network_stream.as_ref() {
             Some(stream) if stream.is_upgraded() => {
-                dict.set_item("network_stream", stream.clone())?;
+                stream.insert_into_dict(py, &dict)?;
             }
             _ => {
                 dict.set_item("network_stream", py.None())?;
             }
         }
         Ok(dict)
+    }
+
+    /// Return the network stream handle for this response.
+    ///
+    /// For 101 Switching Protocols responses, returns the appropriate
+    /// wrapper (sync `NetworkStream` or async `AsyncNetworkStream`) based
+    /// on the caller's context. Returns `None` for non-101 responses.
+    #[getter]
+    fn network_stream<'py>(&self, py: Python<'py>) -> PyResult<PyObject> {
+        match self.network_stream.as_ref() {
+            Some(EitherNetworkStream::Sync(s)) => Ok(Py::new(py, s.clone())?.into_any()),
+            Some(EitherNetworkStream::Async(s)) => Ok(Py::new(py, s.clone())?.into_any()),
+            None => Ok(py.None()),
+        }
     }
 
     #[pyo3(signature = (*, chunk_size=8192, encoding=None))]

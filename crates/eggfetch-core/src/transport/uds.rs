@@ -161,11 +161,14 @@ pub(crate) async fn send_request(
     if let Some(observer) = trace {
         let method = request.method().as_str().to_owned();
         let target = request.uri().to_string();
-        observer.on_event(&TraceEvent::SendRequestHeaders {
+        if observer.on_event(&TraceEvent::SendRequestHeaders {
             phase: TracePhase::Started,
             method,
             target,
-        });
+        }) == crate::trace::OnEventAction::Abort
+        {
+            return Err(Error::TraceCallbackAborted);
+        }
     }
 
     let result = client

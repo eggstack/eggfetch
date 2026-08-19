@@ -302,5 +302,8 @@ pub fn map_err(err: eggfetch_core::Error) -> PyErr {
         eggfetch_core::Error::H3Protocol(msg) => {
             H3ProtocolError::new_err(format!("HTTP/3 protocol error: {msg}"))
         }
+        eggfetch_core::Error::TraceCallbackAborted => {
+            pyo3::exceptions::PyRuntimeError::new_err("trace callback aborted the request")
+        }
     }
 }

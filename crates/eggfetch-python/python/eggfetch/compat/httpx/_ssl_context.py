@@ -144,20 +144,20 @@ def _options_fingerprint(ctx: ssl.SSLContext) -> str | None:
 def _detect_client_cert(ctx: ssl.SSLContext) -> bool:
     """Return True if the context appears to have a loaded client cert.
 
-    Uses the public ``get_ca_certs`` / stats APIs only.  We do not extract
-    private key material.  When the runtime does not expose a safe
-    detection API, the safe default is ``False`` (no client cert), which
-    matches HTTPX's defaults.  Native reconstruction that requires a cert
-    is rejected later when the snapshot has no ``cert_path`` provenance.
+    This is a coarse public-API-only check. Python's ``ssl.SSLContext``
+    does not expose whether ``load_cert_chain()`` has been called through
+    any documented public API, so the only safe answer is ``False``:
+    detection of true mTLS provenance belongs to the registry layer
+    (helper-created contexts carry ``cert_path``/``key_path`` metadata),
+    and external contexts are rejected upstream in ``_classify_context``
+    when we cannot prove their exact state.
+
+    Returning ``False`` unconditionally keeps the fingerprint stable
+    across registration and lookups. The ``has_client_cert`` snapshot
+    field is therefore effectively unused for safety; the actual
+    fail-closed behavior comes from the registry's classification path
+    and the conservative external-context rejection.
     """
-    # Python 3.7+ ssl exposes ``get_channel_binding`` and other helpers.
-    # The most portable proxy is to compare the context's stats; if the
-    # stats differ from a known-empty baseline, treat as having a cert.
-    # We deliberately err on the side of returning False (i.e. no
-    # client cert) for unknown runtimes, because mTLS without provenance
-    # is rejected at translation time anyway.
-    if hasattr(ctx, "get_ca_certs") and callable(ctx.get_ca_certs):
-        return False
     return False
 
 
@@ -316,6 +316,20 @@ def _classify_context(
     # configured ALPN via public Python APIs, so we rely on the registry
     # for contexts created by our helper and conservative rejection of
     # unknown subclasses for third-party contexts.
+
+    # ── External context unobservable state ──────────────────────
+    # For external (non-EggFetch-registered) contexts, we cannot
+    # observe client cert loading, ALPN mutations, or other opaque
+    # state through public Python APIs.  We reject non-standard
+    # subclasses (class_name != "SSLContext") because we cannot
+    # prove every connection-relevant semantic is represented.
+    # Standard ssl.SSLContext instances are accepted as a bounded
+    # difference: their verify_mode, check_hostname, CA certs,
+    # min/max_version, and cipher state are all observable through
+    # documented public APIs.
+    if not _eggfetch_ssl_registry.is_eggfetch_context(ctx):
+        if snapshot.class_name != "SSLContext":
+            return Classification.UNREPRESENTABLE
 
     # ── CA certificates ───────────────────────────────────────────
     # The CA count is no longer compared against the default trust

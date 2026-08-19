@@ -10,14 +10,33 @@ EggFetch translates helper-created and external `ssl.SSLContext` objects from
 their live public state. Default verification, custom CA stores,
 `verify=False`, and provenance-bearing helper mTLS contexts are supported when
 rustls can represent them. Contexts with unrepresentable cipher suites, ALPN,
-TLS-version policy, or client-certificate provenance fail closed with
-`TypeError` before dispatch. This is intentionally narrower than HTTPX's
-arbitrary OpenSSL context acceptance and is a safety boundary, not a claim of
-unrestricted parity.
+TLS-version policy, client-certificate provenance, or non-`ssl.SSLContext`
+subclasses fail closed with `TypeError` before dispatch. This is intentionally
+narrower than HTTPX's arbitrary OpenSSL context acceptance and is a safety
+boundary, not a claim of unrestricted parity.
+
+Corrective 06 makes the translation genuinely fail-closed:
+
+- `CERT_REQUIRED + check_hostname=False` is preserved as certificate
+  verification enabled but hostname verification disabled.
+- TLS min/max version bounds from the snapshot are forwarded into the native
+  `TlsConfigBuilder` via `min_tls_version` / `max_tls_version`; arbitrary
+  Python versions outside 1.2–1.3 are rejected.
+- External (non-`ssl.SSLContext`) subclass contexts are rejected because
+  client-cert, ALPN, and trust state cannot be inspected through public APIs.
+- Helper-created contexts are tracked via a weak-keyed registry with a
+  public-state fingerprint; live mutation after construction drops the
+  metadata and re-classifies from the snapshot.
+
+The `_detect_client_cert()` accessor returns `False` unconditionally because
+the public Python `ssl.SSLContext` API does not expose whether `load_cert_chain`
+was called; relying on it would silently discard real mTLS identity. Helper
+contexts carry `cert_path`/`key_path` provenance through the registry.
 
 Evidence: `test_corrective_01_tls_and_proxy_trust_safety.py`,
-`test_corrective_01_tls_network_proof.py`, and
-`test_ssl_context_network_proof.py`.
+`test_corrective_01_tls_network_proof.py`,
+`test_ssl_context_network_proof.py`,
+`test_ssl_context_translation.py`.
 
 ## HTTP/2 response `stream_id`
 

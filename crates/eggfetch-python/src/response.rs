@@ -7,7 +7,7 @@ use pyo3::types::{PyBytes, PyDict, PyList, PyString};
 use crate::cookies::PyCookies;
 use crate::errors::HTTPStatusError;
 use crate::headers::PyHeaders;
-use crate::network_stream::PyNetworkStream;
+use crate::network_stream::{EitherNetworkStream, PyAsyncNetworkStream, PyNetworkStream};
 use crate::streaming::RuntimeLease;
 
 /// Map `http::Version` to a human-readable string.
@@ -96,8 +96,7 @@ pub struct PyResponse {
     /// Optional network stream handle for connection metadata and
     /// upgraded-connection IO. Returns `None` for buffered responses
     /// where the connection has been returned to the pool.
-    #[pyo3(get)]
-    _network_stream: Option<PyNetworkStream>,
+    _network_stream: Option<EitherNetworkStream>,
 }
 
 impl PyResponse {
@@ -121,7 +120,7 @@ impl PyResponse {
         // The short-lived runtime is dropped here; any 101 upgrade
         // extracted from this path falls back to the ambient handle
         // (None at this point) and will not be usable for IO.
-        Self::from_core_response_with_body(&mut response, content, None, None)
+        Self::from_core_response_with_body(&mut response, content, None, None, false)
     }
 
     /// Create a `PyResponse` from a core `Response` with pre-buffered body
@@ -141,6 +140,7 @@ impl PyResponse {
         content: Bytes,
         runtime_handle: Option<&tokio::runtime::Handle>,
         runtime_lease: Option<&RuntimeLease>,
+        is_async: bool,
     ) -> PyResult<Self> {
         let status = response.status().as_u16();
         let headers = PyHeaders::from_header_map(response.headers().clone());
@@ -206,18 +206,27 @@ impl PyResponse {
         // already returned to the pool and the IR generator would have
         // produced a `Metadata` variant. The `Unreachable` arm documents
         // the invariant.
+        //
+        // Create the wrapper that matches the caller's context:
+        // - Sync callers get `PyNetworkStream` (uses `block_on` for IO).
+        // - Async callers get `PyAsyncNetworkStream` (uses `pyo3_async_runtimes`).
         let network_stream = response.take_network_stream().map(|ns| match ns {
             eggfetch_core::network_stream::NetworkStream::Upgraded(u) => {
-                let handle = runtime_handle.cloned().unwrap_or_else(|| {
-                    // Fall back to the ambient handle when the caller
-                    // did not supply one. This is best-effort: the
-                    // caller must arrange a runtime if IO is needed.
-                    tokio::runtime::Handle::current()
-                });
-                PyNetworkStream::from_upgraded_with_handle(u, handle, runtime_lease.cloned())
+                if is_async {
+                    EitherNetworkStream::Async(PyAsyncNetworkStream::from_upgraded(u))
+                } else {
+                    let handle = runtime_handle
+                        .cloned()
+                        .unwrap_or_else(|| tokio::runtime::Handle::current());
+                    EitherNetworkStream::Sync(PyNetworkStream::from_upgraded_with_handle(
+                        u,
+                        handle,
+                        runtime_lease.cloned(),
+                    ))
+                }
             }
             eggfetch_core::network_stream::NetworkStream::Metadata(m) => {
-                PyNetworkStream::from_metadata(m)
+                EitherNetworkStream::Sync(PyNetworkStream::from_metadata(m))
             }
         });
 
@@ -425,7 +434,7 @@ impl PyResponse {
         #[allow(clippy::used_underscore_binding)]
         match self._network_stream.as_ref() {
             Some(stream) if stream.is_upgraded() => {
-                dict.set_item("network_stream", stream.clone())?;
+                stream.insert_into_dict(py, &dict)?;
             }
             _ => {
                 dict.set_item("network_stream", py.None())?;
@@ -453,7 +462,7 @@ impl PyResponse {
 pub(crate) fn response_extensions_from_core<'py>(
     py: Python<'py>,
     response: &eggfetch_core::Response,
-    network_stream: Option<&PyNetworkStream>,
+    network_stream: Option<&EitherNetworkStream>,
 ) -> PyResult<Bound<'py, PyDict>> {
     let dict = PyDict::new(py);
     dict.set_item("http_version", version_to_string(response.version()))?;
@@ -465,7 +474,7 @@ pub(crate) fn response_extensions_from_core<'py>(
     dict.set_item("reason_phrase", reason)?;
     match network_stream {
         Some(stream) if stream.is_upgraded() => {
-            dict.set_item("network_stream", stream.clone())?;
+            stream.insert_into_dict(py, &dict)?;
         }
         _ => {
             dict.set_item("network_stream", py.None())?;

@@ -191,9 +191,28 @@ pub enum EventValue {
 ///
 /// For Python bindings, the implementation acquires the GIL only at
 /// callback delivery points, never across network waits.
+///
+/// The return value controls whether the transport should continue or
+/// abort.  On `Abort`, the transport should short-circuit and return
+/// an error; the binding layer checks the error slot and surfaces the
+/// original callback exception.
 pub trait TraceObserver: Send + Sync + fmt::Debug {
     /// Called when a trace event occurs.
-    fn on_event(&self, event: &TraceEvent);
+    ///
+    /// Returns `Continue` to let the transport proceed, or `Abort` to
+    /// signal that the transport should stop immediately.
+    fn on_event(&self, event: &TraceEvent) -> OnEventAction;
+}
+
+/// Control result returned by [`TraceObserver::on_event`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OnEventAction {
+    /// The transport should continue processing.
+    Continue,
+    /// The transport should abort immediately.  The observer has
+    /// recorded an error in its binding-owned slot; the caller should
+    /// surface that error after stopping.
+    Abort,
 }
 
 /// A no-op trace observer that silently discards all events.
@@ -201,7 +220,9 @@ pub trait TraceObserver: Send + Sync + fmt::Debug {
 pub struct NoopTraceObserver;
 
 impl TraceObserver for NoopTraceObserver {
-    fn on_event(&self, _event: &TraceEvent) {}
+    fn on_event(&self, _event: &TraceEvent) -> OnEventAction {
+        OnEventAction::Continue
+    }
 }
 
 /// A trace observer that collects events into a shared vector.
@@ -261,11 +282,12 @@ impl CollectingTraceObserver {
 }
 
 impl TraceObserver for CollectingTraceObserver {
-    fn on_event(&self, event: &TraceEvent) {
+    fn on_event(&self, event: &TraceEvent) -> OnEventAction {
         self.events
             .lock()
             .expect("trace collector mutex poisoned")
             .push(event.clone());
+        OnEventAction::Continue
     }
 }
 
@@ -315,9 +337,10 @@ mod tests {
     #[test]
     fn collecting_observer_stores_events() {
         let observer = CollectingTraceObserver::new();
-        observer.on_event(&TraceEvent::Close {
+        let action = observer.on_event(&TraceEvent::Close {
             phase: TracePhase::Started,
         });
+        assert_eq!(action, OnEventAction::Continue);
         observer.on_event(&TraceEvent::Close {
             phase: TracePhase::Complete,
         });

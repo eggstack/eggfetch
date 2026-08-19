@@ -8,7 +8,7 @@ use crate::body::{BoxBytesStream, ResponseBody};
 use crate::error::{Error, Result};
 use crate::network_stream::{ConnectionMetadata, NetworkStream, UpgradedStream};
 use crate::response::Response;
-use crate::trace::{TraceEvent, TraceObserver, TracePhase};
+use crate::trace::{OnEventAction, TraceEvent, TraceObserver, TracePhase};
 use crate::transport::{HyperRequestBody, TimeoutHyperClient};
 
 /// Issue a hyper request and return a streaming `Response` bound to the
@@ -30,11 +30,14 @@ pub(crate) async fn send_request(
     if let Some(observer) = trace {
         let method = request.method().as_str().to_owned();
         let target = request.uri().to_string();
-        observer.on_event(&TraceEvent::SendRequestHeaders {
+        if observer.on_event(&TraceEvent::SendRequestHeaders {
             phase: TracePhase::Started,
             method,
             target,
-        });
+        }) == OnEventAction::Abort
+        {
+            return Err(Error::TraceCallbackAborted);
+        }
     }
 
     let result = hyper_client.request(request).await.map_err(map_send_error);
@@ -96,7 +99,7 @@ pub(crate) async fn send_request(
         }
         Err(e) => {
             if let Some(observer) = trace {
-                observer.on_event(&TraceEvent::SendRequestHeaders {
+                let _ = observer.on_event(&TraceEvent::SendRequestHeaders {
                     phase: TracePhase::Failed,
                     method: String::new(),
                     target: String::new(),
@@ -122,11 +125,14 @@ pub(crate) async fn send_direct_request(
     if let Some(observer) = trace {
         let method = request.method().as_str().to_owned();
         let target = request.uri().to_string();
-        observer.on_event(&TraceEvent::SendRequestHeaders {
+        if observer.on_event(&TraceEvent::SendRequestHeaders {
             phase: TracePhase::Started,
             method,
             target,
-        });
+        }) == OnEventAction::Abort
+        {
+            return Err(Error::TraceCallbackAborted);
+        }
     }
 
     let result = hyper_client.request(request).await.map_err(map_send_error);
@@ -179,7 +185,7 @@ pub(crate) async fn send_direct_request(
         }
         Err(e) => {
             if let Some(observer) = trace {
-                observer.on_event(&TraceEvent::SendRequestHeaders {
+                let _ = observer.on_event(&TraceEvent::SendRequestHeaders {
                     phase: TracePhase::Failed,
                     method: String::new(),
                     target: String::new(),

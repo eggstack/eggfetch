@@ -478,7 +478,9 @@ impl PyClient {
             })
         });
 
-        // Surface any trace-callback errors recorded during dispatch.
+        // Surface any trace-callback errors recorded during dispatch, BEFORE
+        // unwrapping the transport result so that callback errors are not
+        // shadowed by network failures.
         if let Some(slot) = trace_slot {
             if let Some(err) = take_callback_error(&slot) {
                 return Err(err);
@@ -492,6 +494,7 @@ impl PyClient {
             content,
             Some(&runtime_handle),
             Some(&runtime_lease),
+            false,
         )?;
         Ok(Py::new(py, py_response)?.into_bound(py).into_any())
     }
@@ -1063,6 +1066,7 @@ impl PyClient {
             response,
             runtime_handle,
             Some(crate::streaming::RuntimeLease::new(runtime_guard)),
+            false,
         )
     }
 

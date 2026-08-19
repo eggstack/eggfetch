@@ -139,11 +139,18 @@ impl ClientInner {
         }
 
         let connect_timeout = self.config.timeout.as_ref().and_then(|t| t.connect);
+        let policy = self.config.http_version_policy;
 
         #[cfg(any(feature = "proxy", feature = "http3"))]
         let tls_connector = match self.config.tls_config.as_ref() {
             Some(tls_config) => match tls_config.build_rustls_config() {
-                Ok(rc) => Some(tokio_rustls::TlsConnector::from(Arc::new(rc))),
+                Ok(mut rc) => {
+                    #[cfg(feature = "http2")]
+                    if matches!(policy, crate::HttpVersionPolicy::Http2Only) {
+                        rc.alpn_protocols = vec![b"h2".to_vec()];
+                    }
+                    Some(tokio_rustls::TlsConnector::from(Arc::new(rc)))
+                }
                 Err(_) => None,
             },
             None => None,
@@ -158,12 +165,20 @@ impl ClientInner {
             },
             tls_connector,
         );
-        let sni_connector = base_connector.with_sni(sni_hostname.to_owned());
+        let mut sni_connector = base_connector.with_sni(sni_hostname.to_owned());
+        #[cfg(feature = "http2")]
+        if matches!(policy, crate::HttpVersionPolicy::Http2Only) {
+            sni_connector = sni_connector.with_alpn_h2_only();
+        }
         let connector =
             crate::transport::connect_timeout::ConnectTimeout::new(sni_connector, connect_timeout);
 
         let mut builder =
             hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new());
+        #[cfg(feature = "http2")]
+        if matches!(policy, crate::HttpVersionPolicy::Http2Only) {
+            builder.http2_only(true);
+        }
         if let Some(idle_timeout) = self.config.timeout.as_ref().and_then(|t| t.pool).or(self
             .config
             .timeout
@@ -193,6 +208,8 @@ impl ClientInner {
             return Ok(client.clone());
         }
 
+        let policy = self.config.http_version_policy;
+
         let tls_config = if let Some(config) = self.config.tls_config.as_ref() {
             config
                 .build_rustls_config()
@@ -204,6 +221,11 @@ impl ClientInner {
                 .with_root_certificates(roots)
                 .with_no_client_auth()
         };
+        let mut tls_config = tls_config;
+        #[cfg(feature = "http2")]
+        if matches!(policy, crate::HttpVersionPolicy::Http2Only) {
+            tls_config.alpn_protocols = vec![b"h2".to_vec()];
+        }
         let connector = crate::transport::socks::SocksConnector::new(
             proxy.clone(),
             Some(tokio_rustls::TlsConnector::from(Arc::new(tls_config))),
@@ -216,9 +238,13 @@ impl ClientInner {
                 .as_ref()
                 .and_then(|timeout| timeout.connect),
         );
-        let client =
-            hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new())
-                .build(connector);
+        let mut builder =
+            hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new());
+        #[cfg(feature = "http2")]
+        if matches!(policy, crate::HttpVersionPolicy::Http2Only) {
+            builder.http2_only(true);
+        }
+        let client = builder.build(connector);
         clients.insert(key, client.clone());
         Ok(client)
     }

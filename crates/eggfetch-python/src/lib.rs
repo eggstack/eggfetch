@@ -223,7 +223,8 @@ fn request<'py>(
     let (mut response, content) = result?;
     // The top-level short-lived helpers do not own a persistent runtime,
     // so the network stream (if any) gets no explicit handle or lease.
-    let py_response = PyResponse::from_core_response_with_body(&mut response, content, None, None)?;
+    let py_response =
+        PyResponse::from_core_response_with_body(&mut response, content, None, None, false)?;
     Ok(Py::new(py, py_response)?.into_bound(py).into_any())
 }
 

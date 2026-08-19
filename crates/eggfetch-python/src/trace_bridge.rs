@@ -24,9 +24,9 @@ use std::sync::{Arc, Mutex};
 
 use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyString};
+use pyo3::types::PyDict;
 
-use eggfetch_core::trace::{event_to_httpcore_name, TraceEvent, TraceObserver};
+use eggfetch_core::trace::{event_to_httpcore_name, OnEventAction, TraceEvent, TraceObserver};
 
 /// Errors raised by a user-supplied trace callback.
 #[derive(Debug)]
@@ -99,6 +99,7 @@ impl fmt::Debug for CallbackErrorSlot {
 pub(crate) struct PyTraceObserver {
     callback: Py<PyAny>,
     error_slot: CallbackErrorSlot,
+    is_async: bool,
 }
 
 impl fmt::Debug for PyTraceObserver {
@@ -122,13 +123,8 @@ impl PyTraceObserver {
         let is_async = py
             .import("inspect")
             .ok()
-            .and_then(|m| {
-                m.call(
-                    (PyString::new(py, "iscoroutinefunction"), callback.clone()),
-                    None,
-                )
-                .ok()
-            })
+            .and_then(|m| m.getattr("iscoroutinefunction").ok())
+            .and_then(|func| func.call1((callback.clone(),)).ok())
             .and_then(|r| r.is_truthy().ok())
             .unwrap_or(false);
         let error_slot = CallbackErrorSlot::new();
@@ -138,13 +134,22 @@ impl PyTraceObserver {
         let observer = Self {
             callback: callback.unbind(),
             error_slot: error_slot.clone(),
+            is_async,
         };
         (observer, error_slot)
     }
 }
 
 impl TraceObserver for PyTraceObserver {
-    fn on_event(&self, event: &TraceEvent) {
+    fn on_event(&self, event: &TraceEvent) -> OnEventAction {
+        // If the callback is a coroutine function, the slot already
+        // records a `NotAwaited` error.  Do not call the callback
+        // (which would create a discarded coroutine object) and
+        // signal `Abort` so the transport stops issuing events.
+        if self.is_async {
+            return OnEventAction::Abort;
+        }
+
         // Acquire the GIL only at the callback delivery point.  We do
         // not block on user code from outside the GIL.  All event-name
         // and info construction happens inside the GIL block.
@@ -164,8 +169,12 @@ impl TraceObserver for PyTraceObserver {
             }
         });
 
-        if let Err(err) = result {
-            self.error_slot.record(err);
+        match result {
+            Ok(()) => OnEventAction::Continue,
+            Err(err) => {
+                self.error_slot.record(err);
+                OnEventAction::Abort
+            }
         }
     }
 }

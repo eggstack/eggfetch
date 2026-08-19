@@ -220,6 +220,10 @@ pub enum Error {
     /// An HTTP/3 protocol error occurred.
     #[error("HTTP/3 protocol error: {0}")]
     H3Protocol(String),
+
+    /// A trace callback signaled the transport to abort.
+    #[error("trace callback aborted the request")]
+    TraceCallbackAborted,
 }
 
 impl Error {
@@ -281,6 +285,7 @@ impl Error {
             Self::H3ConnectionClosed(_) => "h3_connection_closed",
             Self::H3Stream(_) => "h3_stream",
             Self::H3Protocol(_) => "h3_protocol",
+            Self::TraceCallbackAborted => "trace_callback_aborted",
         }
     }
 }

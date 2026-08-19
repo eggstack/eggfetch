@@ -111,7 +111,18 @@ Key types in `eggfetch_core::network_stream`:
 | `TlsInfo` | Negotiated ALPN, version, cipher suite, SNI |
 | `ExtraInfo` | `get_extra_info()` compatibility subset |
 
-Python bindings expose `PyNetworkStream` (sync, GIL-released) and `PyAsyncNetworkStream` (async, awaits on the asyncio loop). Both expose `read`, `write`, `close`, `is_upgraded`, `get_extra_info`, and `start_tls(ssl_context, server_hostname, timeout)`. Cloning a `PyNetworkStream` shares the same underlying `Arc<Mutex<>>` so the IO is shared, not duplicated. The sync wrapper carries an explicit `tokio::runtime::Handle` plus optional `RuntimeLease` so it can drive IO without relying on an ambient runtime; the async wrapper does not block from inside a running Tokio task.
+Python bindings expose `PyNetworkStream` (sync, GIL-released) and `PyAsyncNetworkStream`
+(async, awaits on the asyncio loop). Both expose
+`read`, `write`, `close`, `is_upgraded`, `get_extra_info`, and
+`start_tls(ssl_context, server_hostname, timeout)`. Wrapper selection follows
+the caller's API mode: sync `Client.stream()` 101 responses expose the sync
+wrapper, and async `AsyncClient.request()` buffered 101 responses expose the
+async wrapper. The wrapper is stored behind an `EitherNetworkStream` enum in
+the native response. Cloning a `PyNetworkStream` shares the same underlying
+`Arc<Mutex<>>` so the IO is shared, not duplicated. The sync wrapper carries
+an explicit `tokio::runtime::Handle` plus optional `RuntimeLease` so it can
+drive IO without relying on an ambient runtime; the async wrapper does not
+block from inside a running Tokio task.
 
 Leading data after 101 headers is preserved inside Hyper's internal rewind buffer and yielded on the first reads from the upgraded stream.
 
@@ -218,10 +229,11 @@ The compact `test_corrective_kernel.py` is part of Tier 1; the pinned
 transport differential suite, full pinned-reference compat, API oracle, and
 downstream isolated runner are extended gates. The pinned reference remains
 `httpx==0.28.1` (with its installed `httpcore`/`socksio` versions recorded in
-the qualification handoff). The current profile is Stage C qualified against
-`c44d4f25ffebc1a792335163ae4bc106076b3963`; documentation-only descendants may
-follow that executable SHA, but any executable change requires a fresh
-qualification pass. Earlier Pass 05/06 records are historical evidence only;
+the qualification handoff). Corrective 06 is open: the `c44d4f25ffebc1a792335163ae4bc106076b3963`
+qualification is retained as historical evidence only, and no new
+`qualification-sha` is assigned until Corrective 07 runs against a frozen
+executable commit. Any executable change invalidates the historical
+qualification. Earlier Pass 05/06 records are historical evidence only;
 do not silently revive their counts or current-language claims.
 
 The current corrective boundary derives one monotonic request deadline for
@@ -257,6 +269,17 @@ kwarg; this prevents a caller-supplied mTLS context from being
 silently downgraded to no client auth, and prevents a caller-supplied
 `verify=False` from inheriting the helper's default trust.
 
+The translator preserves representable TLS settings exactly:
+`CERT_REQUIRED + check_hostname=False` is translated as certificate
+verification enabled and hostname verification disabled; explicit
+TLS 1.2/1.3 min/max bounds from the snapshot are forwarded into the
+native `TlsConfigBuilder` via `min_tls_version` / `max_tls_version`.
+Arbitrary caller-created `ssl.SSLContext` subclasses (anything other
+than the standard `ssl.SSLContext` class itself) are rejected with
+`TypeError` before dispatch because Python's public API does not
+expose client-cert loading, ALPN state, or trust-store mutations
+through documented interfaces.
+
 Proxy endpoint TLS is sourced exclusively from the proxy
 configuration.  The origin `TlsConfig` is never used as a fallback
 for the proxy handshake.  An origin `verify=False`, a custom origin
@@ -276,14 +299,15 @@ The raw values remain available to protocol code through
 
 `HttpVersionPolicy::Http2Only` is enforced at three layers: the rustls
 ALPN list is restricted to `h2` only; the hyper-util legacy client is
-built with `http2_only(true)` on the standard, direct, and UDS paths;
-and `DirectStream` / `UdsStream` signal ALPN `h2` back to hyper-util
-via `Connected::negotiated_h2()` so the connection is correctly typed
-as H2. With all three in place, H2-only over TLS correctly rejects H1
-ALPN, and H2-only over cleartext sends the H2 client preface directly
-over TCP (h2c prior knowledge). H1-only and Auto policies must not
-regress; they do not set `http2_only`. Do not introduce a parallel
-"HTTPX-only" client engine or fork hyper to add H2 capability.
+built with `http2_only(true)` on the standard, direct, SNI, SOCKS, and
+UDS paths; and `DirectStream` / `UdsStream` / `SocksStream` signal
+ALPN `h2` back to hyper-util via `Connected::negotiated_h2()` so the
+connection is correctly typed as H2. With all five in place, H2-only
+over TLS correctly rejects H1 ALPN, and H2-only over cleartext sends
+the H2 client preface directly over TCP (h2c prior knowledge).
+H1-only and Auto policies must not regress; they do not set
+`http2_only`. Do not introduce a parallel "HTTPX-only" client engine
+or fork hyper to add H2 capability.
 
 The `stream_id` metadata field on HTTP/2 responses remains a residual
 difference. `h2 0.4.15` exposes `StreamId` on `ResponseFuture::stream_id()`

@@ -14,6 +14,7 @@ use crate::limits::PyLimits;
 use crate::proxy::{self, ProxyOverride};
 use crate::retry;
 use crate::streaming::PyStreamingResponse;
+use crate::trace_bridge::take_callback_error;
 
 /// An async HTTP client exposed to Python.
 ///
@@ -329,7 +330,7 @@ impl PyAsyncClient {
         // `extensions` dict.  Same helper as the sync `Client`.
         let extracted = extract_native_extensions(py, extensions)?;
         let transport_hints = extracted.hints;
-        let _trace_slot = extracted.trace_error_slot.clone();
+        let trace_slot = extracted.trace_error_slot;
 
         let client = self.ensure_client()?.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
@@ -396,7 +397,18 @@ impl PyAsyncClient {
             // Install transport hints from `extensions=` (no-op if absent).
             builder = builder.transport_hints(transport_hints.clone());
 
-            let mut response = Box::pin(builder.send()).await.map_err(map_err)?;
+            let response_result = Box::pin(builder.send()).await;
+
+            // Surface any trace-callback errors recorded during dispatch.
+            // Check the slot regardless of whether the transport succeeded
+            // or failed so that callback exceptions are never swallowed.
+            if let Some(slot) = trace_slot {
+                if let Some(err) = take_callback_error(&slot) {
+                    return Err(err);
+                }
+            }
+
+            let mut response = response_result.map_err(map_err)?;
             let content = response.bytes().await.map_err(map_err)?;
             // The async client backs the runtime through the ambient
             // handle; the network stream is constructed with no explicit
@@ -407,6 +419,7 @@ impl PyAsyncClient {
                 content,
                 Some(&runtime_handle),
                 None,
+                true,
             )
         })
     }
@@ -869,33 +882,12 @@ impl PyAsyncClient {
 
         let retry_override = retry::parse_retry_option(retries)?;
 
-        // Extract transport hints from extensions dict before the async block.
-        let transport_hints = if let Some(ext) = extensions {
-            if let Ok(dict) = ext.downcast::<pyo3::types::PyDict>() {
-                let mut hints = eggfetch_core::TransportHints::default();
-                if let Some(target_val) = dict.get_item("target").ok().flatten() {
-                    if let Ok(b) = target_val.extract::<Vec<u8>>() {
-                        hints.target = Some(bytes::Bytes::from(b));
-                    } else if let Ok(s) = target_val.extract::<String>() {
-                        hints.target = Some(bytes::Bytes::from(s.into_bytes()));
-                    }
-                }
-                if let Some(sni_val) = dict.get_item("sni_hostname").ok().flatten() {
-                    if let Ok(s) = sni_val.extract::<String>() {
-                        hints.sni_hostname = Some(s);
-                    }
-                }
-                if hints.target.is_some() || hints.sni_hostname.is_some() {
-                    Some(hints)
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
-        } else {
-            None
-        };
+        // Extract transport hints and trace bridge from the Python
+        // `extensions` dict.  Same helper as the sync `Client` and
+        // `AsyncClient::request()`.
+        let extracted = extract_native_extensions(py, extensions)?;
+        let transport_hints = extracted.hints;
+        let trace_slot = extracted.trace_error_slot;
 
         let effective_decompress = decompress.or(self.decompress);
 
@@ -968,14 +960,25 @@ impl PyAsyncClient {
                 builder = builder.retry(retry_policy.clone());
             }
 
-            // Apply pre-extracted transport hints.
-            if let Some(hints) = transport_hints {
-                builder = builder.transport_hints(hints);
+            // Apply pre-extracted transport hints (no-op when none were
+            // supplied via `extensions=`).
+            builder = builder.transport_hints(transport_hints);
+
+            let response_result = Box::pin(builder.send()).await;
+
+            // Surface any trace-callback errors recorded during dispatch.
+            // Check the slot regardless of whether the transport succeeded
+            // or failed so that callback exceptions are never swallowed.
+            if let Some(slot) = trace_slot {
+                if let Some(err) = take_callback_error(&slot) {
+                    return Err(err);
+                }
             }
 
-            let response = Box::pin(builder.send()).await.map_err(map_err)?;
+            let response = response_result.map_err(map_err)?;
+
             let obj: PyObject = Python::with_gil(|py| {
-                PyStreamingResponse::from_core_response(py, response, runtime_handle, None)
+                PyStreamingResponse::from_core_response(py, response, runtime_handle, None, true)
                     .map(|r| r.unbind().into_any())
             })?;
             Ok(obj)
