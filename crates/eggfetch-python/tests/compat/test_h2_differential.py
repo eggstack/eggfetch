@@ -32,6 +32,7 @@ from .native_fixtures import (
     _TLSDirectHandler,
     _ThreadedHTTPServer,
     local_h2_server,
+    local_proxy_server,
     local_tls_h2_server,
 )
 
@@ -488,6 +489,30 @@ class TestH2OnlySpecializedRoutes:
                     assert resp.http_version == "HTTP/2"
 
         asyncio.run(run())
+
+
+# ---------------------------------------------------------------------------
+# H2 through an HTTP CONNECT proxy — bounded protocol difference
+# ---------------------------------------------------------------------------
+
+
+class TestH2ProxyConnectResidual:
+    """HTTP CONNECT tunnels use HTTP/1.1 framing after establishment."""
+
+    def test_candidate_proxy_connect_remains_http1(self):
+        """The candidate does not expose H2 origin framing inside CONNECT."""
+        with local_tls_h2_server() as (host, port, _client_ssl, cert_path, _counter):
+            with local_proxy_server() as (proxy_host, proxy_port, _handler):
+                with Client(
+                    http1=False,
+                    http2=True,
+                    verify=cert_path,
+                    proxy=f"http://{proxy_host}:{proxy_port}",
+                    trust_env=False,
+                    timeout=5,
+                ) as client:
+                    with pytest.raises((RequestError, ConnectError)):
+                        client.get(f"https://{host}:{port}/health")
 
 
 # ---------------------------------------------------------------------------

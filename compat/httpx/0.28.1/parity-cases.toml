@@ -576,3 +576,13 @@ tests = ["test_h2_differential.py::TestStreamIdAbsence"]
 result = "bounded-difference"
 phase = 4
 notes = "Metadata-only residual. h2 0.4.15 exposes StreamId on `ResponseFuture::stream_id()` and `RecvStream::stream_id()`, but hyper-util 0.1.20's `ResponseFuture` returns `Response<hyper::body::Incoming>` and `hyper::body::Incoming` wraps `h2::RecvStream` privately. There is no public API path from the hyper response to the underlying h2 stream ID. The stream ID is therefore not threaded through to `eggfetch_core::Response` or to the Python `Response.extensions` dict. This is documented in `docs/residual-differences.md` as a metadata-only difference; it has no effect on request or response semantics."
+
+[[case]]
+id = "H2-009"
+description = "H2-only through an HTTP CONNECT proxy — origin framing remains HTTP/1.1"
+sync = true
+async = false
+tests = ["test_h2_differential.py::TestH2ProxyConnectResidual"]
+result = "bounded-difference"
+phase = 4
+notes = "The proxy CONNECT handshake is HTTP/1.1 and the post-CONNECT origin path remains the hand-rolled HTTP/1.1 transport. Direct TLS, cleartext prior knowledge, and specialized direct/UDS H2 paths are separately covered by H2-001 through H2-007."

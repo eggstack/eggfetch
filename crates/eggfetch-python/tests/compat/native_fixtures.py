@@ -752,7 +752,13 @@ def _h2_server_loop(
         except (socket.timeout, OSError):
             continue
 
-        events = conn.receive_data(data)
+        try:
+            events = conn.receive_data(data)
+        except h2.exceptions.ProtocolError:
+            # A negative H2-only test may deliberately send HTTP/1.1 after
+            # the TLS handshake.  Treat the invalid preamble as a completed
+            # fixture interaction instead of leaking a thread warning.
+            break
         for event in events:
             if isinstance(event, h2.events.RequestReceived):
                 try:
