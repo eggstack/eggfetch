@@ -27,6 +27,9 @@ executable changes require a fresh qualification.
   feature-gated tests, docs, FFI, resource monitor, lifecycle, soak, and
   downstream gates; the optional MSRV check was skipped because Rust 1.80 is
   not installed.
+- Remote routine CI: passed for documentation/ledger commit `7cf29e1` in
+  workflow run `32229114248`, job `95994969763`, in 4m24s; it ran the unchanged
+  `./scripts/check.sh` path.
 - Full pinned compatibility: three clean runs, each **1798 passed**, with 26
   non-failing warnings and no skips or xfails. The clean runs completed in
   456.07s, 462.35s, and 462.61s.
