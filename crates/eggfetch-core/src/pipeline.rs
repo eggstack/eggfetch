@@ -282,6 +282,10 @@ pub(crate) async fn send_with_redirects(client: &Client, request: Request) -> Re
         request.set_body(body);
         request.set_version(version);
         request.set_timeout(Some(timeout));
+        // Propagate transport hints (target, SNI, trace observer) into the
+        // reconstructed request.  Without this, the fast path silently
+        // drops any trace callback the caller installed via `extensions=`.
+        request.set_transport_hints(request_transport_hints.clone());
 
         {
             request.set_auth(req_auth);

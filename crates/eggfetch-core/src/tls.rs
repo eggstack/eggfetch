@@ -152,6 +152,22 @@ impl TlsConfig {
         Self::builder()
     }
 
+    /// Build a `tokio_rustls::TlsConnector` from this TLS configuration.
+    ///
+    /// This is the convenience entry point for [`UpgradedStream::start_tls`]
+    /// and other contexts where a generic TLS upgrade must reflect the
+    /// full configured policy (custom CA, verification, SNI, version
+    /// bounds, client identity).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the underlying rustls configuration cannot be
+    /// built (see [`Self::build_rustls_config`]).
+    pub fn tls_connector(&self) -> Result<tokio_rustls::TlsConnector> {
+        let config = self.build_rustls_config()?;
+        Ok(tokio_rustls::TlsConnector::from(Arc::new(config)))
+    }
+
     /// Build a `rustls::ClientConfig` from this TLS configuration.
     ///
     /// # Errors

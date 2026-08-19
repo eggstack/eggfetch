@@ -1440,6 +1440,11 @@ class Client:
                         kwargs["extensions"] = request.extensions
                     native_resp = self._native_client.stream(**kwargs)
                 else:
+                    # Always pass extensions on the non-stream path so
+                    # `target` / `sni_hostname` / `trace` are applied
+                    # consistently with the streaming path.
+                    if request.extensions:
+                        kwargs["extensions"] = request.extensions
                     native_resp = self._native_client.request(**kwargs)
             except Exception as exc:
                 raise _map_exception(exc, request) from exc

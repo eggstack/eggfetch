@@ -8,6 +8,7 @@ use crate::cookies::PyCookies;
 use crate::errors::HTTPStatusError;
 use crate::headers::PyHeaders;
 use crate::network_stream::PyNetworkStream;
+use crate::streaming::RuntimeLease;
 
 /// Map `http::Version` to a human-readable string.
 pub(crate) fn version_to_string(version: http::Version) -> String {
@@ -117,7 +118,10 @@ impl PyResponse {
             rt.block_on(response.bytes())
                 .map_err(crate::errors::map_err)?
         };
-        Self::from_core_response_with_body(response, content)
+        // The short-lived runtime is dropped here; any 101 upgrade
+        // extracted from this path falls back to the ambient handle
+        // (None at this point) and will not be usable for IO.
+        Self::from_core_response_with_body(&mut response, content, None, None)
     }
 
     /// Create a `PyResponse` from a core `Response` with pre-buffered body
@@ -125,20 +129,31 @@ impl PyResponse {
     ///
     /// This is safe to call from async contexts because it does not spawn
     /// a runtime. Redirect history is converted properly.
-    #[allow(clippy::unnecessary_wraps)]
-    pub fn from_core_response_with_body(
-        mut response: eggfetch_core::Response,
+    ///
+    /// `runtime_handle` and `runtime_lease` are propagated into the
+    /// extracted network stream so the 101 upgrade wrapper can outlive
+    /// the buffered response itself when the underlying client is closed.
+    /// Pass `None` for both when the caller is not backed by a persistent
+    /// runtime (e.g. internals that do not need to drive IO).
+    #[allow(clippy::unnecessary_wraps, clippy::needless_pass_by_value)]
+    pub(crate) fn from_core_response_with_body(
+        response: &mut eggfetch_core::Response,
         content: Bytes,
+        runtime_handle: Option<&tokio::runtime::Handle>,
+        runtime_lease: Option<&RuntimeLease>,
     ) -> PyResult<Self> {
         let status = response.status().as_u16();
         let headers = PyHeaders::from_header_map(response.headers().clone());
         let wire_content_encoding = response.wire_content_encoding().map(ToOwned::to_owned);
         let wire_content_length = response.wire_content_length().map(ToOwned::to_owned);
+        // Prefer the wire reason phrase as captured from the server.
+        // Falls back to the canonical reason phrase from `http::StatusCode`
+        // only when the wire reason was missing (e.g. HTTP/2 / HTTP/3).
         let reason_phrase = response
-            .status()
-            .canonical_reason()
-            .unwrap_or("")
-            .to_string();
+            .wire_reason_phrase()
+            .map(ToOwned::to_owned)
+            .or_else(|| response.status().canonical_reason().map(ToOwned::to_owned))
+            .unwrap_or_default();
         let http_version = version_to_string(response.version());
         let encoding = extract_charset(response.headers());
 
@@ -185,9 +200,21 @@ impl PyResponse {
         // For buffered responses, the connection has been returned to the
         // pool, so the network_stream is only meaningful for upgrade
         // responses or streaming responses.
-        let network_stream = response.into_network_stream().map(|ns| match ns {
+        //
+        // A buffered path that did not provide a runtime handle cannot
+        // surface a working upgrade wrapper: the underlying connection is
+        // already returned to the pool and the IR generator would have
+        // produced a `Metadata` variant. The `Unreachable` arm documents
+        // the invariant.
+        let network_stream = response.take_network_stream().map(|ns| match ns {
             eggfetch_core::network_stream::NetworkStream::Upgraded(u) => {
-                PyNetworkStream::from_upgraded(u)
+                let handle = runtime_handle.cloned().unwrap_or_else(|| {
+                    // Fall back to the ambient handle when the caller
+                    // did not supply one. This is best-effort: the
+                    // caller must arrange a runtime if IO is needed.
+                    tokio::runtime::Handle::current()
+                });
+                PyNetworkStream::from_upgraded_with_handle(u, handle, runtime_lease.cloned())
             }
             eggfetch_core::network_stream::NetworkStream::Metadata(m) => {
                 PyNetworkStream::from_metadata(m)
@@ -381,7 +408,68 @@ impl PyResponse {
     #[allow(clippy::unused_self)] // Intentional no-op: Python async instance method for API compatibility.
     fn aclose(&self) {}
 
+    /// Snapshot wire-level response metadata (http version, reason
+    /// phrase, network stream) into a dict compatible with HTTPX's
+    /// `response.extensions`.
+    ///
+    /// For 101 Switching Protocols responses, the owned upgraded stream
+    /// is exposed through `extensions["network_stream"]`. For ordinary
+    /// buffered responses where the connection has been returned to the
+    /// pool, the field is `None` — Hyper does not expose per-response
+    /// socket metadata without endangering pool safety.
+    #[getter]
+    fn extensions<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let dict = PyDict::new(py);
+        dict.set_item("http_version", self.http_version.clone())?;
+        dict.set_item("reason_phrase", self.reason_phrase.clone())?;
+        #[allow(clippy::used_underscore_binding)]
+        match self._network_stream.as_ref() {
+            Some(stream) if stream.is_upgraded() => {
+                dict.set_item("network_stream", stream.clone())?;
+            }
+            _ => {
+                dict.set_item("network_stream", py.None())?;
+            }
+        }
+        Ok(dict)
+    }
+
     fn __repr__(&self) -> String {
         format!("<Response [{} {}]>", self.status_code, self.reason_phrase)
     }
+}
+
+/// Snapshot the wire-level metadata of a [`eggfetch_core::Response`] into a
+/// Python dict compatible with HTTPX's `response.extensions`.
+///
+/// Keys mirror HTTPX's vocabulary:
+/// - `http_version`: e.g. `"HTTP/1.1"`, `"HTTP/2"`, `"HTTP/3"`.
+/// - `reason_phrase`: wire reason phrase if present (HTTP/1.x), else
+///   canonical reason phrase derived from the status code.
+/// - `network_stream`: a [`PyNetworkStream`] wrapper for 101 upgrades,
+///   or `None` for ordinary pooled responses where the connection has
+///   been returned to the pool.
+#[allow(dead_code)] // Wired into the HTTPX compatibility facade.
+pub(crate) fn response_extensions_from_core<'py>(
+    py: Python<'py>,
+    response: &eggfetch_core::Response,
+    network_stream: Option<&PyNetworkStream>,
+) -> PyResult<Bound<'py, PyDict>> {
+    let dict = PyDict::new(py);
+    dict.set_item("http_version", version_to_string(response.version()))?;
+    let reason = response
+        .wire_reason_phrase()
+        .map(ToOwned::to_owned)
+        .or_else(|| response.status().canonical_reason().map(ToOwned::to_owned))
+        .unwrap_or_default();
+    dict.set_item("reason_phrase", reason)?;
+    match network_stream {
+        Some(stream) if stream.is_upgraded() => {
+            dict.set_item("network_stream", stream.clone())?;
+        }
+        _ => {
+            dict.set_item("network_stream", py.None())?;
+        }
+    }
+    Ok(dict)
 }

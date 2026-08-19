@@ -22,6 +22,7 @@ eggfetch is a Rust-native HTTP client engine with Python bindings and a CLI tool
 - **Retries** -- policy-driven retries with exponential backoff and `Retry-After` support
 - **Python API** -- requests/HTTPX-compatible sync and async interfaces, GIL-releasing blocking I/O
 - **HTTPX compatibility facade** -- compatible asyncio surface targeting HTTPX 0.28.1 (`eggfetch.compat.httpx`)
+- **Network stream exposure** -- 101 Switching Protocols responses expose an owned upgraded stream through `extensions["network_stream"]`; `start_tls` uses the same safe TLS translation as the default client
 - **CLI** -- full-featured HTTP client with streaming output, machine-readable formats, and shell completions
 
 ## Installation
@@ -286,6 +287,23 @@ URLs establish TLS to the proxy before forward or CONNECT proxying. The safe
   channel yet.
 
 Remaining differences are documented in `compat/httpx/0.28.1/allowed-differences.toml`; the compatibility claim is limited to the pinned HTTPX 0.28.1 profile and the supported asyncio surface.
+
+### 101 Switching Protocols and `network_stream`
+
+When a request upgrades (e.g. WebSocket via `Connection: Upgrade`), the
+response carries a live owned `NetworkStream` exposed through
+`response.extensions["network_stream"]`. For ordinary pooled HTTP/1.1 and
+HTTP/2 connections, `network_stream` is `None`; the connection is returned to
+the pool and not user-writable. Internal HTTPS proxy CONNECT tunnels are also
+classified as `None` — the canonical access path is the body iterator, not
+the upgraded stream.
+
+The `NetworkStream` object supports `read`, `write`, `close`, `is_upgraded`,
+`get_extra_info`, and `start_tls(ssl_context=..., server_hostname=...,
+timeout=...)`. `start_tls` uses the same safe TLS policy as the default
+client; it is rejected for Hyper-opaque adapter streams and for streams that
+are already TLS-wrapped. Leading bytes written immediately after the 101
+headers are returned by the first reads from the upgraded stream.
 
 See [`docs/reference/compatibility.md`](docs/reference/compatibility.md) for the full feature matrix.
 

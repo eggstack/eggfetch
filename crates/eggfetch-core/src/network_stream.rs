@@ -98,6 +98,20 @@ pub struct UpgradedStream {
     leading_data: Bytes,
 }
 
+/// Classification of the concrete IO inside an [`UpgradedStream`].
+///
+/// Used by the Python bindings to refuse `start_tls` on streams where
+/// the underlying socket cannot be recovered (Hyper's opaque adapter).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UpgradedStreamVariant {
+    /// Plain TCP.
+    Tcp,
+    /// Already TLS-wrapped.
+    Tls,
+    /// Opaque adapter (Hyper's `Upgraded` wrapper).
+    Adapter,
+}
+
 /// The concrete IO inside an upgraded stream.
 enum UpgradedStreamInner {
     /// Plain TCP stream.
@@ -227,6 +241,20 @@ impl UpgradedStream {
     #[must_use]
     pub fn metadata(&self) -> &Arc<ConnectionMetadata> {
         &self.metadata
+    }
+
+    /// Returns the concrete variant of the inner stream.
+    ///
+    /// The Python bindings use this to refuse `start_tls` on streams
+    /// backed by Hyper's opaque adapter (where the underlying TCP socket
+    /// is not recoverable).
+    #[must_use]
+    pub fn variant(&self) -> UpgradedStreamVariant {
+        match &self.inner {
+            UpgradedStreamInner::Tcp(_) => UpgradedStreamVariant::Tcp,
+            UpgradedStreamInner::Tls(_) => UpgradedStreamVariant::Tls,
+            UpgradedStreamInner::Adapter(_) => UpgradedStreamVariant::Adapter,
+        }
     }
 
     /// Returns the leading data that was buffered before the upgrade.

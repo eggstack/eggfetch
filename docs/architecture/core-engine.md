@@ -55,8 +55,9 @@ Body sources are mutually exclusive: `body()`, `bytes()`, `stream()`, `json()`, 
 
 - `target: Option<Bytes>` — overrides the wire request target (e.g. `OPTIONS *`, absolute-form) without changing the logical URL used for routing, cookies, auth, and proxy selection.
 - `sni_hostname: Option<String>` — overrides TLS SNI while preserving TCP destination.
+- `trace: Option<Arc<dyn TraceObserver>>` — installs a callback observer for [`TraceEvent`](crates/eggfetch-core/src/trace.rs) emissions during dispatch.
 
-Transport hints survive through retry reconstruction but are cleared on redirect hops.
+Transport hints survive through retry reconstruction but are cleared on redirect hops.  The redirect-disabled fast path in `pipeline::send_with_redirects` also reattaches the original `TransportHints` to the reconstructed request so that `target`, `sni_hostname`, and `trace` are not silently dropped when callers disable internal redirect handling.
 
 ### Proxy Override
 
@@ -117,6 +118,8 @@ send_with_retry()           ← retry loop
 
 - For **101 Switching Protocols** responses on the direct transport path, Hyper's `OnUpgrade` is captured before consuming the response body. The upgrade future is awaited and the resulting IO is wrapped in an `UpgradedStream` (bridged via `hyper_util::rt::TokioIo`). The response body is set to an empty buffered body.
 - For **ordinary** responses, `network_stream` is `None` — the connection is managed by the pool and raw IO access would corrupt pool state.
+- For **internal HTTPS CONNECT tunnels**, `network_stream` is `None` — the tunnel is owned by the proxy implementation; the canonical access path is the body iterator.
+- `UpgradedStream` carries an `UpgradedStreamVariant` (`Tcp`/`Tls`/`Adapter`) classification so callers can detect whether `start_tls` is safe to invoke. Only inner `Tcp` variants support `start_tls`; `Adapter` (Hyper-opaque wrapping of 101 upgrades) and `Tls` (already-encrypted) are rejected before any IO is consumed.
 - The `UpgradedStream` provides async `read()`, `write_all()`, `close()`, `flush()`, and `start_tls()` operations, plus `metadata()` for connection info.
 - Leading data (bytes sent by the server in the same TCP segment as the 101 headers) is preserved inside Hyper's internal rewind buffer and yielded on the first reads.
 

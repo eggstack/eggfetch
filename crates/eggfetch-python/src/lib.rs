@@ -8,6 +8,7 @@ mod client;
 mod conversion;
 mod cookies;
 mod errors;
+mod extensions;
 mod headers;
 mod limits;
 mod multipart;
@@ -18,6 +19,7 @@ mod retry;
 mod streaming;
 mod timeout;
 mod tls;
+mod trace_bridge;
 
 use async_client::PyAsyncClient;
 use auth::{PyBasicAuth, PyBearerAuth, PyNoAuth};
@@ -218,8 +220,10 @@ fn request<'py>(
         })
     });
 
-    let (response, content) = result?;
-    let py_response = PyResponse::from_core_response_with_body(response, content)?;
+    let (mut response, content) = result?;
+    // The top-level short-lived helpers do not own a persistent runtime,
+    // so the network stream (if any) gets no explicit handle or lease.
+    let py_response = PyResponse::from_core_response_with_body(&mut response, content, None, None)?;
     Ok(Py::new(py, py_response)?.into_bound(py).into_any())
 }
 

@@ -386,6 +386,14 @@ impl Response {
         self.network_stream.as_mut()
     }
 
+    /// Take the network stream out of the response, leaving `None` in
+    /// its place. This is the canonical way to obtain ownership of an
+    /// upgraded stream while still keeping the rest of the response.
+    #[must_use]
+    pub fn take_network_stream(&mut self) -> Option<NetworkStream> {
+        self.network_stream.take()
+    }
+
     /// Set the network stream handle for this response.
     pub(crate) fn set_network_stream(&mut self, stream: NetworkStream) {
         self.network_stream = Some(stream);

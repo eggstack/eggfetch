@@ -1,34 +1,83 @@
 //! Python network stream wrappers.
 //!
-//! Provides sync and async wrappers for the core `UpgradedStream`
-//! and `ConnectionMetadata` types. These establish the HTTPX/httpcore
+//! Provides sync and async wrappers for the core [`UpgradedStream`]
+//! and [`ConnectionMetadata`] types. These establish the HTTPX/httpcore
 //! method names for `network_stream` compatibility.
 //!
-//! The sync `NetworkStream` uses `block_on` with GIL release for
-//! blocking IO operations. The async `AsyncNetworkStream` uses
-//! `pyo3_async_runtimes` to bridge Rust futures into Python coroutines
-//! without nested runtimes.
+//! The sync [`PyNetworkStream`] executes IO on the explicit runtime
+//! handle carried by the wrapper, rather than relying on the ambient
+//! [`tokio::runtime::Handle::current`]. The async [`PyAsyncNetworkStream`]
+//! uses [`pyo3_async_runtimes::tokio::future_into_py`] to bridge Rust
+//! futures into Python coroutines; the IO is dispatched on the
+//! shared Tokio runtime that drives the client's async engine.
 
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyDict};
 
 use crate::errors::map_err;
+use crate::streaming::RuntimeLease;
+
+/// Classification of an [`UpgradedStream`] for [`start_tls`](UpgradedStream::start_tls) support.
+///
+/// Hyper's `Upgraded` adapter type is opaque and cannot be unwrapped to
+/// a concrete `TcpStream`; only inner `Tcp` variants support `start_tls`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StreamVariant {
+    /// Plain TCP — supports `start_tls`.
+    Tcp,
+    /// Already TLS — `start_tls` is rejected.
+    Tls,
+    /// Hyper opaque adapter — `start_tls` is rejected.
+    Adapter,
+}
+
+impl From<eggfetch_core::network_stream::UpgradedStreamVariant> for StreamVariant {
+    fn from(value: eggfetch_core::network_stream::UpgradedStreamVariant) -> Self {
+        match value {
+            eggfetch_core::network_stream::UpgradedStreamVariant::Tcp => StreamVariant::Tcp,
+            eggfetch_core::network_stream::UpgradedStreamVariant::Tls => StreamVariant::Tls,
+            eggfetch_core::network_stream::UpgradedStreamVariant::Adapter => StreamVariant::Adapter,
+        }
+    }
+}
+
+/// Type alias for the sync-side stream lock shared between the sync
+/// and async wrappers. The sync wrapper takes a `std::Mutex` lock for
+/// Type alias kept for documentation; the sync and async wrappers each
+/// own their own `Arc<Mutex<Option<UpgradedStream>>>` (sync = std,
+/// async = tokio). They cannot share the lock because `std::sync::MutexGuard`
+/// is not `Send` across the async boundary.
+#[allow(dead_code)]
+pub(crate) type SharedStreamInner =
+    Arc<Mutex<Option<eggfetch_core::network_stream::UpgradedStream>>>;
 
 /// A Python-accessible network stream handle.
 ///
-/// For upgraded connections (101/CONNECT), provides full read/write/close
-/// access. For ordinary pooled connections, provides read-only metadata.
+/// For upgraded connections (101 Switching Protocols), provides full
+/// read/write/close access. For ordinary pooled connections, provides
+/// read-only metadata.
 ///
 /// This is the core of the HTTPX `network_stream` compatibility layer.
+/// The sync wrapper carries an explicit runtime handle so it can drive
+/// Tokio futures without relying on an ambient runtime.
 #[pyclass(name = "NetworkStream")]
 pub struct PyNetworkStream {
-    /// Inner upgraded stream, wrapped in Mutex for Sync.
-    /// `None` for metadata-only handles.
-    inner: Mutex<Option<eggfetch_core::network_stream::UpgradedStream>>,
+    /// Inner upgraded stream, wrapped in `Arc<Mutex<>>` so multiple
+    /// clones share the same IO. ``None`` for metadata-only handles.
+    inner: SharedStreamInner,
     /// Connection metadata.
-    metadata: Option<std::sync::Arc<eggfetch_core::network_stream::ConnectionMetadata>>,
+    metadata: Option<Arc<eggfetch_core::network_stream::ConnectionMetadata>>,
+    /// Concrete variant of the inner stream — used to refuse `start_tls`
+    /// on unsupported types. `None` for metadata-only handles.
+    variant: Option<StreamVariant>,
+    /// Explicit runtime handle that drives all IO operations.
+    runtime_handle: tokio::runtime::Handle,
+    /// Optional runtime lease that keeps the runtime alive after the
+    /// owning client is dropped. Only populated when the stream was
+    /// constructed from a sync client that wants to outlive the client.
+    runtime_lease: Option<RuntimeLease>,
 }
 
 impl std::fmt::Debug for PyNetworkStream {
@@ -37,38 +86,95 @@ impl std::fmt::Debug for PyNetworkStream {
         f.debug_struct("PyNetworkStream")
             .field("is_upgraded", &is_upgraded)
             .field("metadata", &self.metadata)
+            .field("variant", &self.variant)
+            .field("runtime_handle", &"<elided>")
+            .field("runtime_lease", &self.runtime_lease.is_some())
             .finish()
     }
 }
 
 impl Clone for PyNetworkStream {
-    /// Cloning a network stream creates a metadata-only copy.
-    /// The underlying IO cannot be cloned; the clone loses IO access.
+    /// Cloning a network stream shares the underlying IO. The clone
+    /// operates on the same `Arc<Mutex<Option<UpgradedStream>>>` so a
+    /// upgrade performed on either handle is visible to the other.
     fn clone(&self) -> Self {
         Self {
-            inner: Mutex::new(None),
+            inner: Arc::clone(&self.inner),
             metadata: self.metadata.clone(),
+            variant: self.variant,
+            runtime_handle: self.runtime_handle.clone(),
+            runtime_lease: self.runtime_lease.clone(),
         }
     }
 }
 
 impl PyNetworkStream {
     /// Create a metadata-only network stream (no IO access).
-    pub fn from_metadata(
-        metadata: std::sync::Arc<eggfetch_core::network_stream::ConnectionMetadata>,
-    ) -> Self {
+    pub fn from_metadata(metadata: Arc<eggfetch_core::network_stream::ConnectionMetadata>) -> Self {
+        let runtime_handle = tokio::runtime::Handle::current();
         Self {
-            inner: Mutex::new(None),
+            inner: Arc::new(Mutex::new(None)),
             metadata: Some(metadata),
+            variant: None,
+            runtime_handle,
+            runtime_lease: None,
         }
     }
 
     /// Create from an upgraded stream (full IO access).
+    ///
+    /// Uses the ambient runtime handle; preferred for callers that do not
+    /// need to outlive a particular client.
     pub fn from_upgraded(upgraded: eggfetch_core::network_stream::UpgradedStream) -> Self {
+        let variant = upgraded.variant().into();
+        let metadata = upgraded.metadata().clone();
+        let runtime_handle = tokio::runtime::Handle::current();
+        Self {
+            inner: Arc::new(Mutex::new(Some(upgraded))),
+            metadata: Some(metadata),
+            variant: Some(variant),
+            runtime_handle,
+            runtime_lease: None,
+        }
+    }
+
+    /// Create from an upgraded stream with an explicit runtime handle and
+    /// optional lease to keep the runtime alive after the client is dropped.
+    pub(crate) fn from_upgraded_with_handle(
+        upgraded: eggfetch_core::network_stream::UpgradedStream,
+        runtime_handle: tokio::runtime::Handle,
+        runtime_lease: Option<RuntimeLease>,
+    ) -> Self {
+        let variant = upgraded.variant().into();
         let metadata = upgraded.metadata().clone();
         Self {
-            inner: Mutex::new(Some(upgraded)),
+            inner: Arc::new(Mutex::new(Some(upgraded))),
             metadata: Some(metadata),
+            variant: Some(variant),
+            runtime_handle,
+            runtime_lease,
+        }
+    }
+
+    /// Create a sync wrapper that shares its `UpgradedStream` with an
+    /// async wrapper. Both wrappers hold an `Arc<>` to the same
+    /// `Mutex<Option<UpgradedStream>>` so the underlying IO is shared
+    /// and one side can drive the read while the other side drives the
+    /// write.
+    #[allow(dead_code)]
+    pub(crate) fn from_shared_inner(
+        inner: SharedStreamInner,
+        variant: StreamVariant,
+        metadata: Arc<eggfetch_core::network_stream::ConnectionMetadata>,
+        runtime_handle: tokio::runtime::Handle,
+        runtime_lease: Option<RuntimeLease>,
+    ) -> Self {
+        Self {
+            inner,
+            metadata: Some(metadata),
+            variant: Some(variant),
+            runtime_handle,
+            runtime_lease,
         }
     }
 }
@@ -99,16 +205,14 @@ impl PyNetworkStream {
             )
         })?;
 
+        let handle = self.runtime_handle.clone();
         let result = if let Some(secs) = timeout {
             let dur = std::time::Duration::from_secs_f64(secs);
             py.allow_threads(|| {
-                tokio::runtime::Handle::current()
-                    .block_on(async { tokio::time::timeout(dur, inner.read(max_bytes)).await })
+                handle.block_on(async { tokio::time::timeout(dur, inner.read(max_bytes)).await })
             })
         } else {
-            py.allow_threads(|| {
-                Ok(tokio::runtime::Handle::current().block_on(inner.read(max_bytes)))
-            })
+            Ok(py.allow_threads(|| handle.block_on(inner.read(max_bytes))))
         };
 
         match result {
@@ -122,7 +226,7 @@ impl PyNetworkStream {
     ///
     /// Args:
     ///     data: Bytes to write.
-    ///     timeout: Write timeout in seconds (optional).
+    ///     `timeout`: Write timeout in seconds (optional).
     #[pyo3(signature = (data, timeout=None))]
     fn write(
         &self,
@@ -140,16 +244,14 @@ impl PyNetworkStream {
         })?;
 
         let buf = data.as_bytes().to_vec();
+        let handle = self.runtime_handle.clone();
         let result = if let Some(secs) = timeout {
             let dur = std::time::Duration::from_secs_f64(secs);
             py.allow_threads(|| {
-                tokio::runtime::Handle::current()
-                    .block_on(async { tokio::time::timeout(dur, inner.write_all(&buf)).await })
+                handle.block_on(async { tokio::time::timeout(dur, inner.write_all(&buf)).await })
             })
         } else {
-            py.allow_threads(|| {
-                Ok(tokio::runtime::Handle::current().block_on(inner.write_all(&buf)))
-            })
+            Ok(py.allow_threads(|| handle.block_on(inner.write_all(&buf))))
         };
 
         match result {
@@ -161,12 +263,14 @@ impl PyNetworkStream {
 
     /// Close the stream (idempotent).
     fn close(&self, py: Python<'_>) {
-        if let Ok(mut guard) = self.inner.lock() {
-            if let Some(ref mut inner) = *guard {
-                let _ =
-                    py.allow_threads(|| tokio::runtime::Handle::current().block_on(inner.close()));
-            }
-        }
+        let Ok(mut guard) = self.inner.lock() else {
+            return;
+        };
+        let Some(inner) = guard.as_mut() else {
+            return;
+        };
+        let handle = self.runtime_handle.clone();
+        let _ = py.allow_threads(|| handle.block_on(inner.close()));
     }
 
     /// Get extra information about the connection.
@@ -199,16 +303,18 @@ impl PyNetworkStream {
 
     /// Returns whether this is an upgraded stream with IO access.
     #[getter]
-    fn is_upgraded(&self) -> bool {
+    pub fn is_upgraded(&self) -> bool {
         self.inner.lock().is_ok_and(|g| g.is_some())
     }
 
     /// Upgrade this stream to TLS.
     ///
-    /// Wraps the inner TCP stream with a new TLS layer. Only works
-    /// for upgraded streams backed by a concrete `TcpStream`. Adapter-based
-    /// streams (from Hyper's 101 upgrade) return an error because the
-    /// concrete type cannot be recovered.
+    /// Wraps the inner TCP stream with a new TLS layer. The supplied
+    /// `ssl_context` is translated through the Corrective 01 safe
+    /// `SSLContext` translation boundary; only the supported subset of
+    /// `SSLContext` policies can be represented. Adapter-based streams
+    /// (from Hyper's 101 upgrade) are rejected because the concrete
+    /// type cannot be recovered.
     ///
     /// This method is provided for API compatibility with HTTPX's
     /// `network_stream.start_tls()`. It will return an error for
@@ -216,7 +322,7 @@ impl PyNetworkStream {
     /// which use Hyper's opaque adapter internally.
     ///
     /// Args:
-    ///     `ssl_context`: Reserved for future use (currently unused).
+    ///     `ssl_context`: An `ssl.SSLContext` (or `None` for default).
     ///     `server_hostname`: TLS server name for SNI.
     ///     `timeout`: TLS handshake timeout in seconds (optional).
     ///
@@ -225,43 +331,81 @@ impl PyNetworkStream {
     ///
     /// Raises:
     ///     `ValueError`: If the stream does not support TLS upgrade.
-    #[pyo3(signature = (server_hostname, *, timeout=None))]
+    ///     `TypeError`: If the `SSLContext` cannot be translated.
+    #[pyo3(signature = (ssl_context, server_hostname, *, timeout=None))]
     fn start_tls(
         &self,
         py: Python<'_>,
+        ssl_context: Option<&Bound<'_, PyAny>>,
         server_hostname: &str,
         timeout: Option<f64>,
     ) -> PyResult<PyNetworkStream> {
+        // Reject variants that cannot be safely upgraded.
+        match self.variant {
+            Some(StreamVariant::Tcp) => {}
+            Some(StreamVariant::Tls) => {
+                return Err(pyo3::exceptions::PyValueError::new_err(
+                    "cannot start TLS on an already-TLS-wrapped stream",
+                ));
+            }
+            Some(StreamVariant::Adapter) => {
+                return Err(pyo3::exceptions::PyValueError::new_err(
+                    "cannot start TLS on a Hyper adapter-backed stream; the underlying \
+                     TCP socket is not recoverable from the upgrade future",
+                ));
+            }
+            None => {
+                return Err(pyo3::exceptions::PyValueError::new_err(
+                    "cannot start TLS on a metadata-only network stream",
+                ));
+            }
+        }
+
+        // Translate the SSLContext through Corrective 01: this applies
+        // the registry fingerprint check, the post-construction mutation
+        // detection, and the unsafe-representation rejection.
+        let tls_config = match ssl_context {
+            Some(ctx) if !ctx.is_none() => {
+                let cfg = crate::tls::ssl_context_to_tls_config(py, Some(ctx))?;
+                cfg.ok_or_else(|| {
+                    pyo3::exceptions::PyTypeError::new_err(
+                        "eggfetch cannot safely translate this ssl.SSLContext; \
+                         use eggfetch.compat.httpx.create_ssl_context() or pass \
+                         verify/cert kwargs directly",
+                    )
+                })?
+            }
+            _ => eggfetch_core::TlsConfig::builder().build(),
+        };
+
+        // Build a TlsConnector from the translated config.
+        let connector = tls_config.tls_connector().map_err(map_err)?;
+
+        // Take ownership of the inner stream irreversibly.
         let mut guard = self.inner.lock().map_err(|e| {
             PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("lock poisoned: {e}"))
         })?;
         let inner = guard.take().ok_or_else(|| {
             pyo3::exceptions::PyValueError::new_err(
-                "cannot start TLS on a metadata-only network stream",
+                "cannot start TLS on an already-closed or metadata-only network stream",
             )
         })?;
 
-        // Build a default TLS connector with system root certificates.
-        let mut root_store = tokio_rustls::rustls::RootCertStore::empty();
-        root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
-        let tls_config = tokio_rustls::rustls::ClientConfig::builder()
-            .with_root_certificates(root_store)
-            .with_no_client_auth();
-        let tls_connector = tokio_rustls::TlsConnector::from(std::sync::Arc::new(tls_config));
-
         let server_name_owned = server_hostname.to_owned();
+        let handle = self.runtime_handle.clone();
         let result = py.allow_threads(|| {
             let dur = timeout.map(std::time::Duration::from_secs_f64);
-            let handshake = inner.start_tls(&tls_connector, &server_name_owned);
+            let handshake = inner.start_tls(&connector, &server_name_owned);
             match dur {
-                Some(d) => tokio::runtime::Handle::current()
-                    .block_on(async { tokio::time::timeout(d, handshake).await }),
-                None => Ok(tokio::runtime::Handle::current().block_on(handshake)),
+                Some(d) => handle.block_on(async { tokio::time::timeout(d, handshake).await }),
+                None => Ok(handle.block_on(handshake)),
             }
         });
 
         match result {
-            Ok(Ok(upgraded)) => Ok(PyNetworkStream::from_upgraded(upgraded)),
+            Ok(Ok(upgraded)) => Ok(PyNetworkStream::from_upgraded_with_handle(
+                upgraded, handle, None,
+            )),
             Ok(Err(e)) => Err(crate::errors::map_err(e)),
             Err(_) => Err(pyo3::exceptions::PyTimeoutError::new_err(
                 "TLS handshake timed out",
@@ -322,42 +466,75 @@ fn extra_info_dict<'py>(
 // AsyncNetworkStream
 // ---------------------------------------------------------------------------
 
+/// Type alias for the async-side stream lock.
+///
+/// `tokio::sync::Mutex` is used (rather than `std::sync::Mutex`) so the
+/// guard can be held across `await` points inside the async futures.
+/// The inner stream is `Send` so the lock itself is `Send`.
+type AsyncStreamLock =
+    Arc<tokio::sync::Mutex<Option<eggfetch_core::network_stream::UpgradedStream>>>;
+
 /// An async Python network stream handle.
 ///
-/// Provides the same interface as `NetworkStream` but with async methods
-/// that bridge into Python coroutines. Internally delegates to the sync
-/// operations because `UpgradedStream` is not `Send` (it contains a
-/// pinned trait object), so it cannot cross tokio spawn boundaries.
-///
-/// For upgraded connections (101/CONNECT), provides full async
-/// read/write/close access. For ordinary pooled connections, provides
-/// read-only metadata.
+/// Provides genuinely awaitable `read`, `write`, `aclose` methods that
+/// bridge Tokio futures into Python coroutines through
+/// [`pyo3_async_runtimes::tokio::future_into_py`]. The Tokio IO is
+/// dispatched on the shared runtime handle carried by the wrapper; the
+/// inner stream is locked for the duration of the awaited futures.
 #[pyclass(name = "AsyncNetworkStream")]
+#[derive(Clone)]
 pub struct PyAsyncNetworkStream {
-    /// Inner upgraded stream, wrapped in Mutex for Sync.
-    /// `None` for metadata-only handles.
-    inner: Mutex<Option<eggfetch_core::network_stream::UpgradedStream>>,
+    /// Inner upgraded stream, wrapped in `Arc<tokio::sync::Mutex<>>` so
+    /// the async future can hold the lock while it is in-flight on the
+    /// Tokio runtime. `None` for metadata-only handles.
+    inner: AsyncStreamLock,
     /// Connection metadata.
-    metadata: Option<std::sync::Arc<eggfetch_core::network_stream::ConnectionMetadata>>,
+    metadata: Option<Arc<eggfetch_core::network_stream::ConnectionMetadata>>,
+    /// Concrete variant of the inner stream — used to refuse `start_tls`
+    /// on unsupported types. `None` for metadata-only handles.
+    variant: Option<StreamVariant>,
+    /// Runtime handle that drives the underlying async engine. Reserved
+    /// for future hook points (e.g. dispatching across an explicit
+    /// runtime); the `tokio::sync::Mutex` lock path currently picks
+    /// up the ambient runtime through `pyo3_async_runtimes`.
+    #[allow(dead_code)]
+    runtime_handle: tokio::runtime::Handle,
+}
+
+impl std::fmt::Debug for PyAsyncNetworkStream {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let is_upgraded = self.inner.try_lock().is_ok_and(|g| g.is_some());
+        f.debug_struct("PyAsyncNetworkStream")
+            .field("is_upgraded", &is_upgraded)
+            .field("metadata", &self.metadata)
+            .field("variant", &self.variant)
+            .field("runtime_handle", &"<elided>")
+            .finish()
+    }
 }
 
 impl PyAsyncNetworkStream {
     /// Create a metadata-only async network stream (no IO access).
-    pub fn from_metadata(
-        metadata: std::sync::Arc<eggfetch_core::network_stream::ConnectionMetadata>,
-    ) -> Self {
+    pub fn from_metadata(metadata: Arc<eggfetch_core::network_stream::ConnectionMetadata>) -> Self {
+        let runtime_handle = tokio::runtime::Handle::current();
         Self {
-            inner: Mutex::new(None),
+            inner: Arc::new(tokio::sync::Mutex::new(None)),
             metadata: Some(metadata),
+            variant: None,
+            runtime_handle,
         }
     }
 
     /// Create from an upgraded stream (full IO access).
     pub fn from_upgraded(upgraded: eggfetch_core::network_stream::UpgradedStream) -> Self {
+        let variant = upgraded.variant().into();
         let metadata = upgraded.metadata().clone();
+        let runtime_handle = tokio::runtime::Handle::current();
         Self {
-            inner: Mutex::new(Some(upgraded)),
+            inner: Arc::new(tokio::sync::Mutex::new(Some(upgraded))),
             metadata: Some(metadata),
+            variant: Some(variant),
+            runtime_handle,
         }
     }
 }
@@ -371,63 +548,88 @@ impl PyAsyncNetworkStream {
     ///     `timeout`: Read timeout in seconds (optional).
     ///
     /// Returns:
-    ///     bytes: Data read from the stream, or empty bytes on EOF.
+    ///     A coroutine resolving to bytes (or empty bytes on EOF).
     #[pyo3(signature = (max_bytes=65536, timeout=None))]
     fn read<'py>(
         &self,
         py: Python<'py>,
         max_bytes: usize,
         timeout: Option<f64>,
-    ) -> PyResult<Bound<'py, PyBytes>> {
-        let data: bytes::Bytes = self.with_inner(|inner| {
-            if let Some(secs) = timeout {
-                let dur = std::time::Duration::from_secs_f64(secs);
-                tokio::runtime::Handle::current()
-                    .block_on(async { tokio::time::timeout(dur, inner.read(max_bytes)).await })
+    ) -> PyResult<Bound<'py, pyo3::PyAny>> {
+        let inner = self.inner.clone();
+        let dur = timeout.map(std::time::Duration::from_secs_f64);
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            // Acquire the lock inside the async future so the GIL is
+            // released while the IO is in-flight.
+            let mut guard = inner.lock().await;
+            let stream = guard.as_mut().ok_or_else(|| {
+                pyo3::exceptions::PyValueError::new_err(
+                    "cannot read from a metadata-only or already-closed network stream",
+                )
+            })?;
+            let result = match dur {
+                Some(d) => tokio::time::timeout(d, stream.read(max_bytes))
+                    .await
                     .map_err(|_| eggfetch_core::Error::Timeout {
                         phase: eggfetch_core::TimeoutPhase::Read,
-                        elapsed: dur,
+                        elapsed: d,
                     })
-                    .and_then(|r| r)
-            } else {
-                tokio::runtime::Handle::current().block_on(inner.read(max_bytes))
-            }
-        })?;
-        Ok(PyBytes::new(py, &data))
+                    .and_then(|r| r),
+                None => stream.read(max_bytes).await,
+            };
+            let data = result.map_err(crate::errors::map_err)?;
+            Ok::<_, PyErr>(data.to_vec())
+        })
     }
 
     /// Write all supplied bytes to the stream (async).
     ///
     /// Args:
     ///     data: Bytes to write.
-    ///     timeout: Write timeout in seconds (optional).
+    ///     `timeout`: Write timeout in seconds (optional).
     #[pyo3(signature = (data, timeout=None))]
-    fn write(
+    fn write<'py>(
         &self,
-        _py: Python<'_>,
+        py: Python<'py>,
         data: &Bound<'_, PyBytes>,
         timeout: Option<f64>,
-    ) -> PyResult<()> {
+    ) -> PyResult<Bound<'py, pyo3::PyAny>> {
         let buf = data.as_bytes().to_vec();
-        self.with_inner(|inner| {
-            if let Some(secs) = timeout {
-                let dur = std::time::Duration::from_secs_f64(secs);
-                tokio::runtime::Handle::current()
-                    .block_on(async { tokio::time::timeout(dur, inner.write_all(&buf)).await })
+        let inner = self.inner.clone();
+        let dur = timeout.map(std::time::Duration::from_secs_f64);
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let mut guard = inner.lock().await;
+            let stream = guard.as_mut().ok_or_else(|| {
+                pyo3::exceptions::PyValueError::new_err(
+                    "cannot write to a metadata-only or already-closed network stream",
+                )
+            })?;
+            let result = match dur {
+                Some(d) => tokio::time::timeout(d, stream.write_all(&buf))
+                    .await
                     .map_err(|_| eggfetch_core::Error::Timeout {
                         phase: eggfetch_core::TimeoutPhase::Write,
-                        elapsed: dur,
+                        elapsed: d,
                     })
-                    .and_then(|r| r)
-            } else {
-                tokio::runtime::Handle::current().block_on(inner.write_all(&buf))
-            }
+                    .and_then(|r| r),
+                None => stream.write_all(&buf).await,
+            };
+            result.map_err(crate::errors::map_err)?;
+            Ok::<_, PyErr>(())
         })
     }
 
-    /// Close the stream (async, idempotent).
-    fn close(&self) -> PyResult<()> {
-        self.with_inner(|inner| tokio::runtime::Handle::current().block_on(inner.close()))
+    /// Async close (idempotent).  Drops the inner stream so subsequent
+    /// I/O methods raise a stable mapped error.
+    fn aclose<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, pyo3::PyAny>> {
+        let inner = self.inner.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let mut guard = inner.lock().await;
+            if let Some(mut stream) = guard.take() {
+                let _ = stream.close().await;
+            }
+            Ok::<_, PyErr>(())
+        })
     }
 
     /// Get extra information about the connection.
@@ -454,38 +656,95 @@ impl PyAsyncNetworkStream {
 
     /// Returns whether this is an upgraded stream with IO access.
     #[getter]
-    fn is_upgraded(&self) -> bool {
-        self.inner.lock().is_ok_and(|g| g.is_some())
+    pub fn is_upgraded(&self) -> bool {
+        self.inner.try_lock().is_ok_and(|g| g.is_some())
+    }
+
+    /// Upgrade this stream to TLS (async).
+    ///
+    /// The supplied `ssl_context` is translated through the Corrective 01
+    /// safe boundary before any irreversible ownership transition. The
+    /// returned future resolves to a dict with the new stream's metadata;
+    /// the caller is expected to wrap it in a new `AsyncNetworkStream`
+    /// through the `_wrap_after_tls` helper.
+    #[pyo3(signature = (ssl_context, server_hostname, *, timeout=None))]
+    fn start_tls<'py>(
+        &self,
+        py: Python<'py>,
+        ssl_context: Option<&Bound<'_, PyAny>>,
+        server_hostname: &str,
+        timeout: Option<f64>,
+    ) -> PyResult<Bound<'py, pyo3::PyAny>> {
+        // Reject variants that cannot be safely upgraded.
+        match self.variant {
+            Some(StreamVariant::Tcp) => {}
+            Some(StreamVariant::Tls) => {
+                return Err(pyo3::exceptions::PyValueError::new_err(
+                    "cannot start TLS on an already-TLS-wrapped stream",
+                ));
+            }
+            Some(StreamVariant::Adapter) => {
+                return Err(pyo3::exceptions::PyValueError::new_err(
+                    "cannot start TLS on a Hyper adapter-backed stream",
+                ));
+            }
+            None => {
+                return Err(pyo3::exceptions::PyValueError::new_err(
+                    "cannot start TLS on a metadata-only network stream",
+                ));
+            }
+        }
+
+        let tls_config = match ssl_context {
+            Some(ctx) if !ctx.is_none() => {
+                let cfg = crate::tls::ssl_context_to_tls_config(py, Some(ctx))?;
+                cfg.ok_or_else(|| {
+                    pyo3::exceptions::PyTypeError::new_err(
+                        "eggfetch cannot safely translate this ssl.SSLContext",
+                    )
+                })?
+            }
+            _ => eggfetch_core::TlsConfig::builder().build(),
+        };
+
+        let connector = tls_config.tls_connector().map_err(map_err)?;
+        let inner = self.inner.clone();
+        let server_name_owned = server_hostname.to_owned();
+        let dur = timeout.map(std::time::Duration::from_secs_f64);
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let mut guard = inner.lock().await;
+            let stream = guard.take().ok_or_else(|| {
+                pyo3::exceptions::PyValueError::new_err(
+                    "cannot start TLS on an already-closed or metadata-only network stream",
+                )
+            })?;
+            let handshake = stream.start_tls(&connector, &server_name_owned);
+            let result = match dur {
+                Some(d) => tokio::time::timeout(d, handshake)
+                    .await
+                    .map_err(|_| eggfetch_core::Error::Timeout {
+                        phase: eggfetch_core::TimeoutPhase::Connect,
+                        elapsed: d,
+                    })
+                    .and_then(|r| r),
+                None => handshake.await,
+            };
+            let upgraded = result.map_err(crate::errors::map_err)?;
+            // Wrap the upgraded stream in a new AsyncNetworkStream and
+            // return it as a Python object.
+            Python::with_gil(|py| {
+                let new_stream = PyAsyncNetworkStream::from_upgraded(upgraded);
+                Bound::new(py, new_stream).map(|b| b.into_any().unbind())
+            })
+        })
     }
 
     fn __repr__(&self) -> String {
-        let is_upgraded = self.inner.lock().is_ok_and(|g| g.is_some());
+        let is_upgraded = self.inner.try_lock().is_ok_and(|g| g.is_some());
         if is_upgraded {
             "<AsyncNetworkStream (upgraded)>".to_string()
         } else {
             "<AsyncNetworkStream (metadata-only)>".to_string()
         }
-    }
-}
-
-impl PyAsyncNetworkStream {
-    /// Helper to acquire the lock and access the inner stream.
-    ///
-    /// Unlike the sync `PyNetworkStream`, this does NOT release the GIL
-    /// because `UpgradedStream` is `!Send` (contains `Pin<Box<dyn TokioIoBox>>`)
-    /// and cannot cross the `allow_threads` boundary.
-    fn with_inner<T>(
-        &self,
-        f: impl FnOnce(&mut eggfetch_core::network_stream::UpgradedStream) -> eggfetch_core::Result<T>,
-    ) -> PyResult<T> {
-        let mut guard = self.inner.lock().map_err(|e| {
-            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("lock poisoned: {e}"))
-        })?;
-        let inner = guard.as_mut().ok_or_else(|| {
-            PyErr::new::<pyo3::exceptions::PyValueError, _>(
-                "cannot perform IO on a metadata-only network stream",
-            )
-        })?;
-        f(inner).map_err(map_err)
     }
 }

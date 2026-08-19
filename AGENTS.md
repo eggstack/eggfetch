@@ -93,9 +93,12 @@ Transport hints survive through retry reconstruction. They are cleared on redire
 
 `Response` carries an optional `NetworkStream` for connection metadata and upgraded-connection IO:
 
-- **101 Switching Protocols**: captures Hyper's upgrade future and attaches an `UpgradedStream` providing async read/write/close/TLS-start.
-- **Ordinary responses**: `NetworkStream::Metadata` holds read-only `ConnectionMetadata` (addresses, transport kind, TLS info).
+- **101 Switching Protocols**: captures Hyper's upgrade future and attaches an `UpgradedStream` providing async read/write/close/TLS-start. The upgrade is exposed to Python via `response.extensions["network_stream"]` (sync and async).
+- **Ordinary responses**: `NetworkStream::Metadata` holds read-only `ConnectionMetadata` (addresses, transport kind, TLS info). The buffered Python response sets `extensions["network_stream"] = None` — the connection has been returned to the pool.
 - **HTTP/2**: shared connection metadata; no per-response raw socket exposure.
+- **Internal HTTPS CONNECT tunnels**: never surfaced as a writable `NetworkStream`. The canonical access path for the tunnel is the body iterator.
+
+`UpgradedStream` carries an `UpgradedStreamVariant` (`Tcp`/`Tls`/`Adapter`) so callers can detect whether `start_tls` is safe to invoke. Only inner `Tcp` variants are eligible; `Adapter` (Hyper's opaque wrapping of 101 upgrades) and `Tls` (already-encrypted) are rejected before any IO is consumed.
 
 Key types in `eggfetch_core::network_stream`:
 
@@ -103,11 +106,12 @@ Key types in `eggfetch_core::network_stream`:
 |------|---------|
 | `ConnectionMetadata` | Read-only socket addresses, transport kind, TLS info |
 | `UpgradedStream` | Owned post-HTTP IO for 101/CONNECT handoff |
+| `UpgradedStreamVariant` | Classifies inner IO as `Tcp`/`Tls`/`Adapter` for `start_tls` safety |
 | `NetworkStream` | Enum: `Upgraded(UpgradedStream)` or `Metadata(Arc<ConnectionMetadata>)` |
 | `TlsInfo` | Negotiated ALPN, version, cipher suite, SNI |
 | `ExtraInfo` | `get_extra_info()` compatibility subset |
 
-Python bindings expose `PyNetworkStream` with `read()`, `write()`, `close()`, `get_extra_info()`. For buffered responses, the network_stream is `None` (connection returned to pool).
+Python bindings expose `PyNetworkStream` (sync, GIL-released) and `PyAsyncNetworkStream` (async, awaits on the asyncio loop). Both expose `read`, `write`, `close`, `is_upgraded`, `get_extra_info`, and `start_tls(ssl_context, server_hostname, timeout)`. Cloning a `PyNetworkStream` shares the same underlying `Arc<Mutex<>>` so the IO is shared, not duplicated. The sync wrapper carries an explicit `tokio::runtime::Handle` plus optional `RuntimeLease` so it can drive IO without relying on an ambient runtime; the async wrapper does not block from inside a running Tokio task.
 
 Leading data after 101 headers is preserved inside Hyper's internal rewind buffer and yielded on the first reads from the upgraded stream.
 
@@ -140,7 +144,7 @@ The compatibility profile is in `compat/httpx/0.28.1/`. Executable changes requi
 
 ## Tests
 
-Colocated `#[cfg(test)] mod tests` blocks. ~685 Rust, ~558 Python (non-compat), ~1735 Python (compat), 30 FFI tests.
+Colocated `#[cfg(test)] mod tests` blocks. ~959 Rust, ~558 Python (non-compat), ~1794 Python (compat), 30 FFI tests.
 
 The full validation pass (pre-release) runs feature-gated subsets:
 

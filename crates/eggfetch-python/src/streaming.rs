@@ -30,12 +30,13 @@ use std::sync::Arc;
 use bytes::{Bytes, BytesMut};
 use futures_util::StreamExt;
 use pyo3::prelude::*;
-use pyo3::types::{PyBytes, PyString};
+use pyo3::types::{PyBytes, PyDict, PyString};
 
 use crate::cookies::PyCookies;
 use crate::errors::map_err;
 use crate::errors::{StreamClosed, StreamConsumed};
 use crate::headers::PyHeaders;
+use crate::network_stream::PyAsyncNetworkStream;
 use crate::response::{extract_charset, version_to_string};
 
 const STATE_STREAMING: u8 = 0;
@@ -45,6 +46,7 @@ const STATE_CLOSED: u8 = 3;
 
 /// Keeps a synchronous client's runtime alive while a streaming response
 /// outlives that client.
+#[derive(Clone)]
 pub(crate) struct RuntimeLease(Option<Arc<tokio::runtime::Runtime>>);
 
 impl RuntimeLease {
@@ -83,6 +85,21 @@ pub(crate) struct PyStreamingResponse {
     headers: PyHeaders,
     #[pyo3(get)]
     url: String,
+    /// HTTP reason phrase (e.g. "OK", "Not Found").  Prefer the wire
+    /// reason phrase captured from the server when present; fall back
+    /// to the canonical phrase derived from the status code.
+    #[pyo3(get)]
+    reason_phrase: String,
+    /// HTTP version string (e.g. "HTTP/1.1", "HTTP/2").
+    #[pyo3(get)]
+    http_version: String,
+    /// Optional network stream handle for connection metadata and
+    /// upgraded-connection IO.  Always `None` for non-101 streaming
+    /// responses because the body iterator is the canonical accessor
+    /// for the connection. For 101 Switching Protocols streaming
+    /// responses, this is `Some(PyAsyncNetworkStream)`.
+    #[pyo3(get)]
+    network_stream: Option<PyAsyncNetworkStream>,
     #[pyo3(get)]
     history: Vec<crate::response::PyResponse>,
     #[pyo3(get)]
@@ -153,12 +170,48 @@ impl PyStreamingResponse {
 
         let (stream_cancel, _) = tokio::sync::watch::channel(false);
 
+        // Capture reason phrase / http version / network stream before
+        // we move the response into the inner Mutex so they stay available
+        // through the lifetime of the streaming response.
+        let reason_phrase = response
+            .wire_reason_phrase()
+            .map(ToOwned::to_owned)
+            .or_else(|| response.status().canonical_reason().map(ToOwned::to_owned))
+            .unwrap_or_default();
+        let http_version = version_to_string(response.version());
+
+        // For streaming responses we do not pre-extract the network
+        // stream because the underlying connection is still owned by
+        // the body stream.  Ordinary streaming responses expose
+        // connection metadata through `into_network_stream()` after the
+        // body has been drained.  Upgraded (101) responses expose their
+        // upgraded IO via `into_upgraded_stream()`.
+        //
+        // For 101 streaming responses the canonical accessor is the
+        // async wrapper (`PyAsyncNetworkStream`), driven on the async
+        // client's shared runtime. The sync wrapper is *not* exposed
+        // here because it would be blocked by the surrounding async
+        // runtime — the sync wrapper's `block_on` would deadlock.
+        //
+        // `take_network_stream` removes the stream from the response
+        // without consuming the response itself, so the body iterator
+        // can still be driven from the rest of the response.
+        let network_stream = match response.take_network_stream() {
+            Some(eggfetch_core::network_stream::NetworkStream::Upgraded(u)) => {
+                Some(PyAsyncNetworkStream::from_upgraded(u))
+            }
+            _ => None,
+        };
+
         Py::new(
             py,
             Self {
                 status_code: status,
                 headers,
                 url: response_url,
+                reason_phrase,
+                http_version,
+                network_stream,
                 history,
                 cookies,
                 _wire_content_encoding: wire_content_encoding,
@@ -494,6 +547,31 @@ impl PyStreamingResponse {
         chunk_size: usize,
     ) -> PyResult<Bound<'py, PyBytesChunkIterator>> {
         PyBytesChunkIterator::new(slf, py, chunk_size)
+    }
+
+    /// Snapshot wire-level response metadata (http version, reason
+    /// phrase, network stream) into a dict compatible with HTTPX's
+    /// `response.extensions`.
+    ///
+    /// For 101 Switching Protocols streaming responses, the upgraded
+    /// stream is exposed through `extensions["network_stream"]`.
+    /// For ordinary streaming responses the connection is held in the
+    /// body iterator; the `network_stream` field is `None` because the
+    /// dedicated `network_stream` getter is the canonical accessor.
+    #[getter]
+    fn extensions<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let dict = PyDict::new(py);
+        dict.set_item("http_version", self.http_version.clone())?;
+        dict.set_item("reason_phrase", self.reason_phrase.clone())?;
+        match self.network_stream.as_ref() {
+            Some(stream) if stream.is_upgraded() => {
+                dict.set_item("network_stream", stream.clone())?;
+            }
+            _ => {
+                dict.set_item("network_stream", py.None())?;
+            }
+        }
+        Ok(dict)
     }
 
     #[pyo3(signature = (*, chunk_size=8192, encoding=None))]

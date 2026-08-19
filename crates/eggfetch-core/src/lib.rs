@@ -68,6 +68,7 @@ pub use limits::Limits;
 pub use multipart::{Boundary, Multipart, MultipartEncoder, Part, PartBody};
 pub use network_stream::{
     ConnectionMetadata, ExtraInfo, NetworkStream, TlsInfo, TransportKind, UpgradedStream,
+    UpgradedStreamVariant,
 };
 pub use pool::{Pool, PoolConfig};
 #[cfg(feature = "proxy")]
