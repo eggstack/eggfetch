@@ -55,7 +55,7 @@ Body sources are mutually exclusive: `body()`, `bytes()`, `stream()`, `json()`, 
 
 - `target: Option<Bytes>` — overrides the wire request target (e.g. `OPTIONS *`, absolute-form) without changing the logical URL used for routing, cookies, auth, and proxy selection.
 - `sni_hostname: Option<String>` — overrides TLS SNI while preserving TCP destination.
-- `trace: Option<Arc<dyn TraceObserver>>` — installs a callback observer for [`TraceEvent`](crates/eggfetch-core/src/trace.rs) emissions during dispatch.
+- `trace: Option<Arc<dyn TraceObserver>>` — installs a callback observer for [`TraceEvent`](../../crates/eggfetch-core/src/trace.rs) emissions during dispatch.
 
 Transport hints survive through retry reconstruction but are cleared on redirect hops.  The redirect-disabled fast path in `pipeline::send_with_redirects` also reattaches the original `TransportHints` to the reconstructed request so that `target`, `sni_hostname`, and `trace` are not silently dropped when callers disable internal redirect handling.
 

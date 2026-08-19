@@ -99,7 +99,10 @@ from eggfetch.compat.httpx import Client, AsyncClient, Request, Response
 - Native lifecycle proof fixtures (`test_native_timeout_classification.py`, `test_soak.py`, proxy and TLS tests)
 - Final qualification is recorded only after the current corrective transport plan's exact-SHA gates pass; current evidence is bound to the SHA in `compat/httpx/0.28.1/profile.toml`, while historical Phase 6 counts remain non-current audit records.
 - The HTTPX environment facade follows `urllib.request` precedence and URL-pattern `NO_PROXY` semantics: bare domains match the bare host and subdomains at label boundaries, leading-dot domains match subdomains only, localhost/IP literals are exact, explicit host ports require an explicit normalized target port, and CIDR-looking values do not become native subnet rules. Bare unbracketed IPv6 literals follow the pinned HTTPX environment form; bracketed IPv6 and IPv6 prefix-looking values are rejected before dispatch. Native `NoProxy::parse()` retains its richer bracketed-IPv6 and CIDR behavior.
-- Pass 06 closed the IPv6 environment truth table and route/pre-dispatch evidence gates; Stage C is qualified on the exact SHA in `compat/httpx/0.28.1/profile.toml`, and executable changes require a new exact-SHA qualification.
+- Corrective 05 closed the exact-SHA ledger and requalification gates; Stage C
+  is qualified on `c44d4f25ffebc1a792335163ae4bc106076b3963` (also recorded in
+  `compat/httpx/0.28.1/profile.toml`), and executable changes require a new
+  exact-SHA qualification.
 - The compatibility `Timeout` constructor uses a private `UNSET` sentinel so
   omitted phase values inherit the scalar while explicit `None` disables only
   that phase; `Timeout()` follows HTTPX validation and requires a scalar or all
@@ -111,7 +114,9 @@ All corrective closure phases (1-6) are complete, plus the remaining-parity prog
 - Timeout conversion forwards only HTTPX's `connect`, `read`, `write`, `pool`; native `total` is EggFetch-only.
 - `Proxy(headers=...)` is forwarded on the proxy leg (resolved in Phase 05).
 - `Proxy(ssl_context=...)` is translated to native TlsConfig for the proxy endpoint TLS handshake (resolved in Phase 05).
-- Arbitrary Python ssl_context objects unrepresentable by rustls are rejected at construction time.
+- Arbitrary Python ssl_context objects unrepresentable by rustls are rejected
+  at construction time; helper-created and passthrough contexts are accepted
+  only when their live state and mTLS provenance are representable.
 - SSLContext classification uses a construction fingerprint
   (SHA-256 over extractable public state) for helper-created contexts;
   post-construction mutation drops the stored metadata and reclassifies
@@ -127,6 +132,11 @@ All corrective closure phases (1-6) are complete, plus the remaining-parity prog
   `set-cookie`) to `<redacted>` so credentials do not appear in
   diagnostic dumps.
 - Environment proxy follows HTTPX's `NO_PROXY` URL-pattern rules; bare unbracketed IPv6 accepted, bracketed/CIDR forms rejected.
+- H2-only is enforced for direct TLS, cleartext prior knowledge, and direct/UDS
+  specialized routes; H2 origin framing through HTTP CONNECT remains HTTP/1.1,
+  and `stream_id` remains unavailable metadata.
+- The HTTPX four-element null-pointer `socket_options` form is rejected at the
+  safe Rust boundary; the safe three-element form is supported.
 - Raw iteration marks streams consumed before first source read, counts source bytes before chunk adaptation, closes on normal exhaustion only.
 - `test_corrective_kernel.py` runs in Tier 1; full compat suite, API oracle, and downstream runner are Tier 2/manual gates. Executable changes require fresh exact-SHA qualification (see `compat/httpx/0.28.1/profile.toml`).
 

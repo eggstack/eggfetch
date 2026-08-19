@@ -76,8 +76,9 @@ Proxy-only headers are applied as follows:
 - **CONNECT tunnel**: headers appear on the `CONNECT` request to the
   proxy.  After tunnel establishment, the origin request uses only the
   origin header set.
-- **SOCKS proxy**: proxy headers are not forwarded (matching HTTPX 0.28.1
-  reference behavior).
+- **SOCKS proxy**: there is no HTTP proxy-header leg, so proxy headers are not
+  forwarded (matching HTTPX 0.28.1 reference behavior). HTTP and HTTPS proxy
+  legs do support `Proxy(headers=...)`.
 
 ### Proxy Authentication
 

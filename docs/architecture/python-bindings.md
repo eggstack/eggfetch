@@ -245,7 +245,8 @@ The facade converts between HTTPX-compatible objects and native types at the bou
   `<redacted>` so credentials do not appear in diagnostic dumps.  The raw
   values remain available to protocol code through `Proxy.headers` and
   to engine code through the native API.  The `Headers` type's
-  `Debug`/`__str__` is redacted the same way.
+  `Debug`/`__str__` redacts the same values; the raw values remain available
+  to protocol code.
 - **Request → native body**: Body kwargs dispatched by mutual-exclusion rules; auto-headers computed by the facade.
 - **Response ← native response**: Status, headers, URL, body, and version extracted from native `PyResponse`.
 - **Errors ← native errors**: Exception mapping preserves the most specific HTTPX class with redacted context.

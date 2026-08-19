@@ -249,7 +249,9 @@ qualification.
 Key differences from HTTPX:
 - Trio/AnyIO not supported (asyncio only, tokio-based)
 - Python 3.8/3.9 not supported (requires 3.10+)
-- `ssl_context` transport parameter not supported (TLS handled by Rust engine)
+- `ssl_context` and proxy `ssl_context` are translated through the safe rustls
+  boundary when representable; contexts with unrepresentable cipher, ALPN,
+  TLS-version, or client-certificate provenance fail closed with `TypeError`
 - HTTPX timeout values map to `connect`, `read`, `write`, and `pool` only;
   the facade does not synthesize EggFetch's native `total` deadline
 - HTTPX `Timeout` preserves omitted versus explicitly disabled (`None`) phase
@@ -282,9 +284,12 @@ URLs establish TLS to the proxy before forward or CONNECT proxying. The safe
  three-element `socket_options` form is supported; HTTPX's valid four-element
   `(level, option, None, optlen)` form remains a narrow safe-Rust limitation.
   Ordinary three-element values may be `int`, `bytes`, or `bytearray`.
-  Non-empty `Proxy(headers=...)` is explicitly rejected rather than silently
-  discarded because the bounded native proxy API has no proxy-leg header
-  channel yet.
+- `Proxy(headers=...)` is forwarded on the proxy leg only and is never sent
+  through a CONNECT tunnel or to the origin; sensitive values are redacted in
+  diagnostic representations.
+- HTTP/2-only works for direct TLS, cleartext prior knowledge, and the
+  specialized direct/UDS paths. HTTP CONNECT proxy origin framing remains
+  HTTP/1.1, and HTTP/2 `stream_id` remains metadata-only and unavailable.
 
 Remaining differences are documented in `compat/httpx/0.28.1/allowed-differences.toml`; the compatibility claim is limited to the pinned HTTPX 0.28.1 profile and the supported asyncio surface.
 

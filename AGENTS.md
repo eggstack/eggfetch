@@ -218,15 +218,11 @@ The compact `test_corrective_kernel.py` is part of Tier 1; the pinned
 transport differential suite, full pinned-reference compat, API oracle, and
 downstream isolated runner are extended gates. The pinned reference remains
 `httpx==0.28.1` (with its installed `httpcore`/`socksio` versions recorded in
-the qualification handoff). The corrective transport profile is bound to the
-exact SHA recorded in `compat/httpx/0.28.1/profile.toml`; any executable change
-requires a fresh qualification pass. Pass 05 reopened the prior Stage C
-qualification before correcting ordinary-domain and default-port `NO_PROXY`
-semantics. Pass 06 closed IPv6 environment-form parity and route/pre-dispatch
-evidence on the exact SHA recorded in the profile. Pass-04 timeout/runtime/
-proxy work and pass-05 generic-domain/default-port fixes remain historical
-accepted evidence and were not reopened. Do not silently revive historical
-qualification counts.
+the qualification handoff). The current profile is Stage C qualified against
+`c44d4f25ffebc1a792335163ae4bc106076b3963`; documentation-only descendants may
+follow that executable SHA, but any executable change requires a fresh
+qualification pass. Earlier Pass 05/06 records are historical evidence only;
+do not silently revive their counts or current-language claims.
 
 The current corrective boundary derives one monotonic request deadline for
 multi-phase HTTP/HTTPS proxy setup. `Proxy(headers=...)` is resolved: proxy
@@ -299,3 +295,11 @@ do not synthesize a stream ID from request ordering, sequence numbers,
 or any other source. See `docs/residual-differences.md` for the
 classification rules separating protocol enforcement, h2c prior
 knowledge, specialized transport, and metadata differences.
+
+Current retained bounded differences are: `stream_id` metadata is unavailable;
+HTTP/2 origin framing through an HTTP CONNECT proxy remains HTTP/1.1; and
+HTTPX's four-element null-pointer `socket_options` form is rejected at the
+safe Rust boundary. SSLContext state that rustls cannot represent likewise
+fails closed before dispatch. Ordinary pooled responses expose no writable
+network stream, internal CONNECT tunnels are not surfaced, and only 101
+responses own an upgraded stream.

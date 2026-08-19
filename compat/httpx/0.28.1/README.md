@@ -54,6 +54,12 @@ headers, and proxy ssl_context are covered. Arbitrary Python ssl_context
 objects that cannot be represented by rustls are rejected at construction
 time with a clear TypeError.
 
+The current bounded residuals are HTTP/2 `stream_id` metadata, HTTP/2 origin
+framing through an HTTP CONNECT proxy (the origin leg remains HTTP/1.1), and
+HTTPX's unsafe four-element null-pointer `socket_options` form. Direct TLS,
+cleartext prior-knowledge, direct-specialized, and UDS HTTP/2 cases are
+covered separately by the parity registry.
+
 ## Future Drift
 
 - **FunctionAuth**: HTTPX master (post-0.28.1) exports `FunctionAuth` in

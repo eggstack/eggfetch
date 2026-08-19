@@ -107,8 +107,8 @@ eggfetch targets HTTPX 0.28.1 compatibility in phases. The current status:
 - **Phase 3**: Signature alignment — top-level helper args, Client/AsyncClient constructors, transport signatures, base-class relationships, stream types (55 must-close resolved)
 - **Phase 4**: Direct transport — local_address, socket_options, UDS end-to-end, pool isolation, timeout/cancellation/resource release
 - **Phase 5**: SOCKS5 proxy — HTTP/HTTPS through SOCKS5, auth, DNS/address-type behavior, NO_PROXY bypass, credential redaction
-- **Phase 6 / Differential Closure**: Final qualification — API oracle clean (71 active differences, all intentional/deferred), full pinned compat suite passing (1735 tests), downstream behavioral fixtures validated (4/4)
-- **Phase 06 (Final Rebaseline)**: Remaining-parity program completed — proxy headers/ssl_context resolved, SSLContext translation, H2-only, transport hints, network stream all implemented. Qualification SHA `48bad19fa1bb7ab7c91bcd67787efb2e41127fff`.
+- **Phase 6 / Differential Closure**: Final qualification — API oracle clean (71 active differences, all intentional/deferred), full pinned compat suite passing, downstream behavioral fixtures validated (4/4)
+- **Corrective 05 (Exact-SHA closure)**: Requalification completed after Correctives 01-04. Qualification SHA `c44d4f25ffebc1a792335163ae4bc106076b3963`.
 
 **Current status: Stage C qualified.** Phase 06 completed the remaining-parity
 program. Proxy headers are forwarded on the proxy leg; proxy ssl_context is
@@ -119,7 +119,10 @@ Qualification is bound to the exact executable SHA in
 `compat/httpx/0.28.1/profile.toml`; any executable change requires fresh
 qualification. The compatibility facade does not claim unrestricted HTTPX
 replacement. Trio/AnyIO, Python 3.8/3.9, and private HTTPX modules remain
-outside scope.
+outside scope. The retained bounded differences are unrepresentable
+SSLContext state (rejected before dispatch), HTTP/2 `stream_id` metadata,
+HTTP/2 origin framing through HTTP CONNECT proxies, and HTTPX's unsafe
+four-element null-pointer socket-option form.
 
 See `compat/httpx/0.28.1/` for the machine-readable profile and allowed differences.
 
@@ -144,7 +147,7 @@ The following statements from earlier documentation have been corrected:
 7. **Proxy metadata**: HTTPX proxy URL credentials are translated into the core proxy authentication path. `Proxy(headers=...)` metadata is forwarded on the proxy leg and never forwarded into the tunnel or to the origin. `Proxy(ssl_context=...)` is translated to a native `TlsConfig` for the proxy endpoint TLS handshake, separate from origin TLS config. Arbitrary Python ssl_context objects that cannot be represented by rustls are rejected at construction time with a clear TypeError. Default verified proxy TLS is supported. These are now resolved and tracked in `resolved-differences.toml`.
 8. **Timeout semantics**: HTTPX's scalar/default timeout maps to its four operational `connect`, `read`, `write`, and `pool` values, preserving omitted versus explicitly supplied `None` phase values. The facade does not create an EggFetch-native `total` deadline; native callers may configure that outer cap explicitly. Direct Hyper/UDS/H3 response-header acquisition remains a bounded transport limitation; body reads and proxy protocol reads are phase-aware.
 9. **Stream exception hierarchy**: eggfetch's stream exceptions (StreamClosed, StreamConsumed, RequestNotRead, ResponseNotRead) now match HTTPX 0.28.1 exactly — inheriting from RuntimeError, accepting no arguments. Resolved in Phase 2.
-10. **SSL context translation**: `eggfetch.compat.httpx.create_ssl_context()` now returns a genuine Python `ssl.SSLContext` matching HTTPX 0.28.1 construction behavior. Passing an `ssl.SSLContext` to `Client(verify=...)` or `AsyncClient(verify=...)` triggers automatic snapshot-based translation: the context is classified for representability, and exactly representable contexts (default, custom CA, disabled verification) are faithfully reconstructed as native `TlsConfig` state. Unrepresentable contexts (custom ciphers, TLS versions below 1.2, third-party subclasses) are rejected deterministically before network dispatch. A weak registry preserves metadata for contexts created through `create_ssl_context(cert=...)` to support mTLS reconstruction.
+10. **SSL context translation**: `eggfetch.compat.httpx.create_ssl_context()` now returns a genuine Python `ssl.SSLContext` matching HTTPX 0.28.1 construction behavior. Passing an `ssl.SSLContext` to `Client(verify=...)` or `AsyncClient(verify=...)` triggers snapshot-based translation. Exactly representable contexts (default, custom CA, disabled verification, and provenance-bearing mTLS helpers) are reconstructed as native `TlsConfig` state. Passthrough contexts are classified from live state; unrepresentable ciphers, ALPN, TLS versions, or client-certificate provenance are rejected deterministically before dispatch because rustls cannot reproduce them safely.
 
 ### Phase 1 rebaseline (2026-08-07)
 

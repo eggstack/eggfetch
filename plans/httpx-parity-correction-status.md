@@ -4,7 +4,72 @@ This record is the exact-SHA-bound status for the HTTPX 0.28.1 compatibility
 facade. Historical phase and corrective-pass records remain in the git history
 and referenced plans; counts below are only from the runs named here.
 
-## Current corrective pass — Phase 06 final rebaseline qualified
+## Current corrective pass — Corrective 05 exact-SHA closure
+
+Current designation: **Stage C qualified** for the documented Python 3.10+
+asyncio-supported HTTPX 0.28.1 surface.
+
+Corrective 05 supersedes the stale qualification at
+`48bad19fa1bb7ab7c91bcd67787efb2e41127fff` because Correctives 01-04 changed
+executable Rust and Python compatibility code. The final executable/test SHA
+is `c44d4f25ffebc1a792335163ae4bc106076b3963`, qualified on 2026-08-19.
+Later commits in this closure are documentation/ledger-only; future
+executable changes require a fresh qualification.
+
+### Corrective 05 evidence
+
+- Focused corrective gate: **143 passed**, 0 failed/skipped/xfail (including
+  the compressed-stream cancellation fixture boundary).
+- Tier 1 `./scripts/check.sh`: passed; 942 workspace non-doctest Rust tests,
+  11 core doctests, 532 Python behavior tests, and 130 compatibility smoke
+  tests passed.
+- Tier 2 `./scripts/check.sh extended`: passed, including the feature matrix,
+  feature-gated tests, docs, FFI, resource monitor, lifecycle, soak, and
+  downstream gates; the optional MSRV check was skipped because Rust 1.80 is
+  not installed.
+- Full pinned compatibility: three clean runs, each **1798 passed**, with 26
+  non-failing warnings and no skips or xfails. The clean runs completed in
+  456.07s, 462.35s, and 462.61s.
+- API oracle: 71 allowed matches, 0 unexplained, stale, or resolved-active
+  differences; the 74-symbol manifest is valid.
+- Downstream portfolio: respx, httpx-sse, httpx-auth, and httpx-ws all pass
+  against a wheel built from the final executable SHA. Diagnostic pip-check
+  dependency warnings do not represent behavioral failures. Candidate wheel
+  SHA-256: `c6b8a6b6bdd7812cd56c15411d4d78c734115ac791ad9c86dd1803be106e9049`;
+  controlled HTTPX replacement wheel SHA-256:
+  `f22dedeff6934ad02dfa8e532fd7ed330a9c2d5a2363b45cb571dd637a3634e3`.
+
+### Retained bounded differences
+
+- SSLContext state that rustls cannot represent (including unsupported cipher,
+  ALPN, TLS-version, or client-certificate provenance) fails closed with
+  `TypeError`; representable helper-created and passthrough state is supported.
+- HTTP/2 `stream_id` remains unavailable because the current Hyper abstraction
+  does not expose it as response metadata.
+- HTTP/2 origin framing through an HTTP CONNECT proxy remains HTTP/1.1; direct
+  TLS, cleartext prior knowledge, direct-specialized, and UDS H2 paths are
+  separately covered. This residual is pinned by parity case H2-009.
+- HTTPX's four-element null-pointer `socket_options` form is outside the safe
+  Rust boundary; the safe three-element form is supported.
+- Ordinary pooled responses and internal CONNECT tunnels expose no writable
+  network stream. Only 101 responses own an upgraded stream, with
+  `start_tls` limited to safe inner TCP variants.
+
+### Resolved in this closure
+
+Proxy-leg headers, proxy/origin TLS trust isolation, target and SNI wire
+metadata, the supported trace-observer subset, 101 network-stream ownership,
+H2-only TLS ALPN enforcement, cleartext H2 prior knowledge, and direct/UDS H2
+typing/enforcement are implemented and covered by the focused and full gates.
+
+### Environment and boundary
+
+Evidence used CPython 3.12.3, pytest 9.1.1, pytest-asyncio 1.4.0,
+`httpx==0.28.1`, `httpcore==1.0.9`, and `socksio==1.0.0`, with IPv6 loopback
+available and no capability skips. The executable diff boundary is
+`4571cb55bc2ff49822608d750dfef185cff40ebc` through the final SHA above.
+
+## Historical corrective pass — Phase 06 final rebaseline qualified (superseded)
 
 Current designation: **Stage C qualified** for the documented Python 3.10+
 asyncio-supported HTTPX 0.28.1 surface.

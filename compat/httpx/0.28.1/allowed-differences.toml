@@ -173,27 +173,6 @@ tests = ["test_config_objects.py"]
 non_expiring = true
 
 [[difference]]
-id = "EXTRA-PROPS-003"
-category = "stage-bounded"
-classification = "intentional"
-symbol = "Proxy"
-difference-type = "parameter-name"
-member = "Proxy"
-reference = "['self', 'url', 'ssl_context', 'auth', 'headers']"
-candidate = "['self', 'url', 'headers', 'auth']"
-behavior-case = "extra-public-properties"
-reference-behavior = "HTTPX Proxy does not expose auth/headers/ssl_context/url as properties"
-eggfetch-behavior = "eggfetch Proxy exposes these as public properties"
-rationale = "Extra properties are additive and do not conflict with HTTPX's API."
-compatibility-stage-impact = "stage-c"
-security-improvement = "false"
-migration-impact = "None; extra properties are additive"
-owner = "eggfetch-team"
-review-milestone = "stage-d"
-tests = ["test_config_objects.py"]
-non_expiring = true
-
-[[difference]]
 id = "EXTRA-PROPS-003-2"
 category = "stage-bounded"
 classification = "intentional"
@@ -359,27 +338,6 @@ migration-impact = "None; extra properties are additive"
 owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_response.py"]
-non_expiring = true
-
-[[difference]]
-id = "PRIVATE-SYMBOLS-001"
-category = "stage-bounded"
-classification = "intentional"
-symbol = "create_ssl_context"
-difference-type = "missing-symbol"
-member = ""
-reference = "present"
-candidate = "present"
-behavior-case = "private-internal-symbols"
-reference-behavior = "HTTPX exposes create_ssl_context as a public symbol"
-eggfetch-behavior = "eggfetch exposes create_ssl_context as a public symbol, returning a real ssl.SSLContext"
-rationale = "create_ssl_context now returns a real ssl.SSLContext matching HTTPX 0.28.1 behavior. The context is registered in a weak registry for faithful TlsConfig reconstruction."
-compatibility-stage-impact = "stage-c"
-security-improvement = "false"
-migration-impact = "None; create_ssl_context now works as in HTTPX"
-owner = "eggfetch-team"
-review-milestone = "stage-d"
-tests = ["test_ssl_context_translation.py"]
 non_expiring = true
 
 [[difference]]
@@ -740,27 +698,6 @@ tests = ["test_timeout_reference_differential.py"]
 non_expiring = true
 
 [[difference]]
-id = "EXTRA-TRANSPORT-METHODS-001"
-category = "stage-bounded"
-classification = "intentional"
-symbol = "ASGITransport"
-difference-type = "base-class"
-member = ""
-reference = "['AsyncBaseTransport']"
-candidate = "['object']"
-behavior-case = "extra-methods"
-reference-behavior = "HTTPX does not expose handle_request on ASGITransport or close on AsyncClient"
-eggfetch-behavior = "eggfetch exposes handle_request on ASGITransport and close on AsyncClient"
-rationale = "handle_request is used internally by the transport dispatch. close is an eggfetch-specific convenience."
-compatibility-stage-impact = "stage-c"
-security-improvement = "false"
-migration-impact = "None; extra methods are additive"
-owner = "eggfetch-team"
-review-milestone = "stage-d"
-tests = ["test_asgi.py", "test_backends.py"]
-non_expiring = true
-
-[[difference]]
 id = "EXTRA-TRANSPORT-METHODS-001-2"
 category = "stage-bounded"
 classification = "intentional"
@@ -799,7 +736,7 @@ security-improvement = "false"
 migration-impact = "None; extra properties are additive"
 owner = "eggfetch-team"
 review-milestone = "stage-d"
-tests = []
+tests = ["test_request.py"]
 non_expiring = true
 
 [[difference]]
@@ -820,7 +757,7 @@ security-improvement = "false"
 migration-impact = "None; extra properties are additive"
 owner = "eggfetch-team"
 review-milestone = "stage-d"
-tests = []
+tests = ["test_request.py", "test_extensions.py"]
 non_expiring = true
 
 [[difference]]
@@ -841,7 +778,7 @@ security-improvement = "false"
 migration-impact = "None; extra properties are additive"
 owner = "eggfetch-team"
 review-milestone = "stage-d"
-tests = []
+tests = ["test_request.py", "test_request_construction_parity.py"]
 non_expiring = true
 
 [[difference]]
@@ -862,7 +799,7 @@ security-improvement = "false"
 migration-impact = "None; extra properties are additive"
 owner = "eggfetch-team"
 review-milestone = "stage-d"
-tests = []
+tests = ["test_request.py"]
 non_expiring = true
 
 [[difference]]
@@ -883,7 +820,7 @@ security-improvement = "false"
 migration-impact = "None; extra properties are additive"
 owner = "eggfetch-team"
 review-milestone = "stage-d"
-tests = []
+tests = ["test_request.py"]
 non_expiring = true
 
 [[difference]]
@@ -904,7 +841,7 @@ security-improvement = "false"
 migration-impact = "None; extra properties are additive"
 owner = "eggfetch-team"
 review-milestone = "stage-d"
-tests = []
+tests = ["test_request.py", "test_request_stream_state.py"]
 non_expiring = true
 
 [[difference]]
@@ -925,7 +862,7 @@ security-improvement = "false"
 migration-impact = "None; extra properties are additive"
 owner = "eggfetch-team"
 review-milestone = "stage-d"
-tests = []
+tests = ["test_request.py"]
 non_expiring = true
 
 [[difference]]
@@ -946,7 +883,7 @@ security-improvement = "false"
 migration-impact = "None; extra properties are additive"
 owner = "eggfetch-team"
 review-milestone = "stage-d"
-tests = []
+tests = ["test_request.py", "test_request_construction_parity.py"]
 non_expiring = true
 
 [[difference]]
@@ -967,7 +904,7 @@ security-improvement = "false"
 migration-impact = "None; extra properties are additive"
 owner = "eggfetch-team"
 review-milestone = "stage-d"
-tests = []
+tests = ["test_request.py", "test_request_streaming.py"]
 non_expiring = true
 
 [[difference]]
@@ -988,7 +925,7 @@ security-improvement = "false"
 migration-impact = "None; extra properties are additive"
 owner = "eggfetch-team"
 review-milestone = "stage-d"
-tests = []
+tests = ["test_request.py"]
 non_expiring = true
 
 [[difference]]
@@ -1009,7 +946,7 @@ security-improvement = "false"
 migration-impact = "None; additive"
 owner = "eggfetch-team"
 review-milestone = "stage-d"
-tests = []
+tests = ["test_imports.py"]
 non_expiring = true
 
 [[difference]]
@@ -1030,7 +967,7 @@ security-improvement = "false"
 migration-impact = "None; additive"
 owner = "eggfetch-team"
 review-milestone = "stage-d"
-tests = []
+tests = ["test_imports.py"]
 non_expiring = true
 
 [[difference]]
@@ -1051,7 +988,7 @@ security-improvement = "false"
 migration-impact = "None; additive"
 owner = "eggfetch-team"
 review-milestone = "stage-d"
-tests = []
+tests = ["test_imports.py"]
 non_expiring = true
 
 [[difference]]
@@ -1072,7 +1009,7 @@ security-improvement = "false"
 migration-impact = "None; additive"
 owner = "eggfetch-team"
 review-milestone = "stage-d"
-tests = []
+tests = ["test_imports.py"]
 non_expiring = true
 
 [[difference]]
@@ -1093,7 +1030,7 @@ security-improvement = "false"
 migration-impact = "None; additive"
 owner = "eggfetch-team"
 review-milestone = "stage-d"
-tests = []
+tests = ["test_imports.py"]
 non_expiring = true
 
 [[difference]]
@@ -1557,25 +1494,4 @@ owner = "eggfetch-team"
 review-milestone = "stage-d"
 tests = ["test_config_objects.py"]
 non_expiring = true
-
-[[difference]]
-id = "TRANSPORT-SOCKET-OPTIONS-004"
-category = "stage-bounded"
-classification = "intentional"
-symbol = "HTTPTransport.socket_options"
-member = "socket_options"
-reference = "four-element tuples accepted by HTTPX 0.28.1 constructor"
-candidate = "four-element tuples rejected by compatibility-boundary validation"
-behavior-case = "socket-options-four-tuple"
-reference-behavior = "HTTPX accepts (level, option, None, optlen) and forwards it to the platform socket API; the observed use-time result is option/platform dependent"
-eggfetch-behavior = "eggfetch accepts safe three-element options and rejects four-element options before native dispatch"
-rationale = "The valid HTTPX four-element form represents an arbitrary null-pointer setsockopt operation. EggFetch intentionally supports bounded safe three-element operations and rejects arbitrary pointer semantics at the compatibility boundary; this is a narrow safe-Rust Stage C limitation, not a claim that HTTPX rejects the valid form."
-compatibility-stage-impact = "stage-c"
-security-improvement = "true"
-migration-impact = "Callers must use the supported three-element (level, option, value) form."
-owner = "eggfetch-team"
-review-milestone = "corrective-closure"
-tests = ["test_httpx_reference_pinning.py", "test_protocol_and_unsupported_options.py"]
-non_expiring = true
-
 
