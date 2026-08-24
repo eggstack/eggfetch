@@ -250,31 +250,27 @@ impl CollectingTraceObserver {
 
     /// Drain and return all collected events.
     ///
-    /// # Panics
-    ///
-    /// Panics if the internal mutex is poisoned.
+    /// The collector protects a plain vector with no invariants, so lock
+    /// poisoning is recovered from instead of cascading panics.
     pub fn drain(&self) -> Vec<TraceEvent> {
-        std::mem::take(&mut *self.events.lock().expect("trace collector mutex poisoned"))
+        std::mem::take(
+            &mut *self
+                .events
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        )
     }
 
     /// Return the number of collected events without consuming them.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the internal mutex is poisoned.
     #[must_use]
     pub fn len(&self) -> usize {
         self.events
             .lock()
-            .expect("trace collector mutex poisoned")
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .len()
     }
 
     /// Returns `true` if no events have been collected.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the internal mutex is poisoned.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
@@ -285,7 +281,7 @@ impl TraceObserver for CollectingTraceObserver {
     fn on_event(&self, event: &TraceEvent) -> OnEventAction {
         self.events
             .lock()
-            .expect("trace collector mutex poisoned")
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .push(event.clone());
         OnEventAction::Continue
     }

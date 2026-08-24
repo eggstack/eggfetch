@@ -287,6 +287,12 @@ pub unsafe extern "C" fn eggfetch_client_send(
             // Consume the request by taking ownership of the builder.
             let request_box = Box::from_raw(request);
             let Some(rb) = request_box.0 else {
+                if !err_out.is_null() {
+                    let err = eggfetch_core::Error::RequestBuild(
+                        "request handle already consumed".into(),
+                    );
+                    *err_out = Box::into_raw(crate::handle::error_to_handle(&err));
+                }
                 return ptr::null_mut();
             };
 

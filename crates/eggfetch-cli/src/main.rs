@@ -557,6 +557,19 @@ fn build_json_response(
     obj
 }
 
+/// Reduce a server-supplied filename to a safe single path component.
+///
+/// Strips any directory components (`/` and `\`, including Windows
+/// separators), then rejects empty names, `.`, and `..` so a hostile
+/// `Content-Disposition` cannot traverse out of the working directory.
+fn sanitize_filename(name: &str) -> Option<String> {
+    let name = name.rsplit(['/', '\\']).next().unwrap_or(name).trim();
+    if name.is_empty() || name == "." || name == ".." {
+        return None;
+    }
+    Some(name.to_owned())
+}
+
 fn derive_filename(response: &eggfetch_core::Response) -> Option<String> {
     if let Some(disp) = response.headers().get("content-disposition") {
         if let Ok(s) = disp.to_str() {
@@ -564,28 +577,37 @@ fn derive_filename(response: &eggfetch_core::Response) -> Option<String> {
                 let part = part.trim();
                 if let Some(name) = part.strip_prefix("filename=") {
                     let name = name.trim_matches('"').trim_matches('\'');
-                    if !name.is_empty() {
-                        return Some(name.to_owned());
+                    if let Some(safe) = sanitize_filename(name) {
+                        return Some(safe);
                     }
                 }
             }
         }
     }
     let path = response.url().path();
-    if let Some(last) = path.rsplit('/').next() {
-        if !last.is_empty() {
-            return Some(last.to_owned());
-        }
-    }
-    None
+    sanitize_filename(path.rsplit('/').next().unwrap_or(path))
 }
 
 async fn create_output_file(path: &PathBuf, no_clobber: bool) -> Result<tokio::fs::File> {
-    if no_clobber && path.exists() {
-        anyhow::bail!(
-            "output file already exists: {} (remove --no-clobber to allow overwrite)",
-            path.display()
-        );
+    if no_clobber {
+        // create_new maps to O_CREAT|O_EXCL so the check-and-create is
+        // atomic; two concurrent invocations cannot both win.
+        return tokio::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(path)
+            .await
+            .map_err(|e| {
+                if e.kind() == std::io::ErrorKind::AlreadyExists {
+                    anyhow::Error::msg(format!(
+                        "output file already exists: {} (remove --no-clobber to allow overwrite)",
+                        path.display()
+                    ))
+                } else {
+                    anyhow::Error::new(e)
+                        .context(format!("failed to create output file: {}", path.display()))
+                }
+            });
     }
     tokio::fs::File::create(path)
         .await
@@ -1011,22 +1033,30 @@ async fn run(cli: Cli) -> Result<()> {
                         .extension()
                         .map(|e| format!(".{}", e.to_string_lossy()))
                         .unwrap_or_default();
-                    let mut counter = 1u32;
-                    let new_path;
-                    loop {
+                    // A u64 range iterator terminates instead of wrapping,
+                    // so a pathological filesystem cannot loop forever.
+                    let mut new_path: Option<PathBuf> = None;
+                    for counter in 1u64.. {
                         let candidate = format!("{} ({}){}", stem.to_string_lossy(), counter, ext);
                         let candidate_path = std::path::Path::new(&candidate);
                         if !candidate_path.exists() {
-                            new_path = PathBuf::from(candidate);
+                            new_path = Some(PathBuf::from(candidate));
                             break;
                         }
-                        counter += 1;
                     }
-                    output_path = Some(new_path.clone());
-                    let f = tokio::fs::File::create(&new_path)
-                        .await
-                        .with_context(|| format!("failed to create: {}", new_path.display()))?;
-                    output_file = Some(f);
+                    match new_path {
+                        Some(new_path) => {
+                            output_path = Some(new_path.clone());
+                            let f =
+                                tokio::fs::File::create(&new_path).await.with_context(|| {
+                                    format!("failed to create: {}", new_path.display())
+                                })?;
+                            output_file = Some(f);
+                        }
+                        None => anyhow::bail!(
+                            "could not find an unused filename for download after u64::MAX attempts"
+                        ),
+                    }
                 } else {
                     let f = tokio::fs::File::create(path)
                         .await
@@ -1081,11 +1111,10 @@ async fn run(cli: Cli) -> Result<()> {
             }
             Ok(())
         }
-        Err(err) => {
-            let exit_code = map_error_to_exit_code(&err);
-            eprintln!("Error: {err}");
-            std::process::exit(i32::from(exit_code));
-        }
+        // Return the error so main() maps it to an exit code. Using
+        // std::process::exit here would skip destructors (pool guards,
+        // buffered writers) on the error path.
+        Err(err) => Err(err.into()),
     }
 }
 
@@ -1611,5 +1640,29 @@ mod tests {
         };
         let follow = cli.follow && !cli.no_follow;
         assert!(!follow, "--no-follow should override --follow");
+    }
+
+    #[test]
+    fn sanitize_filename_strips_path_components() {
+        // A hostile Content-Disposition must not escape the output dir.
+        assert_eq!(
+            sanitize_filename("../../etc/passwd").as_deref(),
+            Some("passwd")
+        );
+        assert_eq!(
+            sanitize_filename("..\\..\\win\\secret").as_deref(),
+            Some("secret")
+        );
+        assert_eq!(
+            sanitize_filename("report.pdf").as_deref(),
+            Some("report.pdf")
+        );
+    }
+
+    #[test]
+    fn sanitize_filename_rejects_dot_names() {
+        assert_eq!(sanitize_filename(""), None);
+        assert_eq!(sanitize_filename("."), None);
+        assert_eq!(sanitize_filename(".."), None);
     }
 }

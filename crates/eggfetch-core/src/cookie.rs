@@ -204,9 +204,9 @@ impl CookieJar {
     /// `response_url` is the URL of the response that contained the headers.
     /// Each header value is parsed independently; they are never comma-split.
     ///
-    /// # Panics
-    ///
-    /// Panics if the internal lock is poisoned.
+    /// Lock poisoning is recovered from internally: the jar protects a
+    /// plain map with no cross-entry invariants, so a panicked writer
+    /// cannot leave it inconsistent.
     pub fn update_from_response(&self, response_url: &Url, set_cookie_headers: &[String]) {
         let response_host = response_url.host_str().unwrap_or("");
         for header_value in set_cookie_headers {
@@ -216,14 +216,22 @@ impl CookieJar {
                         let now = SystemTime::now();
                         if now >= expires {
                             let key = CookieKey::new(&cookie.name, &cookie.domain, &cookie.path);
-                            self.inner.write().unwrap().cookies.remove(&key);
+                            self.inner
+                                .write()
+                                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                                .cookies
+                                .remove(&key);
                             continue;
                         }
                     }
                 }
 
                 let key = CookieKey::new(&cookie.name, &cookie.domain, &cookie.path);
-                self.inner.write().unwrap().cookies.insert(key, cookie);
+                self.inner
+                    .write()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .cookies
+                    .insert(key, cookie);
             }
         }
     }
@@ -232,13 +240,16 @@ impl CookieJar {
     ///
     /// Returns `None` if no cookies match.
     ///
-    /// # Panics
-    ///
-    /// Panics if the internal lock is poisoned.
+    /// Lock poisoning is recovered from internally: the jar protects a
+    /// plain map with no cross-entry invariants, so a panicked writer
+    /// cannot leave it inconsistent.
     #[must_use]
     pub fn cookies_for_url(&self, url: &Url) -> Option<String> {
         self.expire_stale();
-        let jar = self.inner.read().unwrap();
+        let jar = self
+            .inner
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let url_host = url.host_str().unwrap_or("");
         let is_secure = url.scheme() == "https";
         let url_path = url.path();
@@ -286,13 +297,16 @@ impl CookieJar {
 
     /// Get all cookies in the jar.
     ///
-    /// # Panics
-    ///
-    /// Panics if the internal lock is poisoned.
+    /// Lock poisoning is recovered from internally: the jar protects a
+    /// plain map with no cross-entry invariants, so a panicked writer
+    /// cannot leave it inconsistent.
     #[must_use]
     pub fn all_cookies(&self) -> Vec<Cookie> {
         self.expire_stale();
-        let jar = self.inner.read().unwrap();
+        let jar = self
+            .inner
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         jar.cookies.values().cloned().collect()
     }
 
@@ -302,13 +316,16 @@ impl CookieJar {
     /// If only `name` is provided, returns a cookie only when that name is
     /// unambiguous across the jar.
     ///
-    /// # Panics
-    ///
-    /// Panics if the internal lock is poisoned.
+    /// Lock poisoning is recovered from internally: the jar protects a
+    /// plain map with no cross-entry invariants, so a panicked writer
+    /// cannot leave it inconsistent.
     #[must_use]
     pub fn get(&self, name: &str, domain: Option<&str>, path: Option<&str>) -> Option<Cookie> {
         self.expire_stale();
-        let jar = self.inner.read().unwrap();
+        let jar = self
+            .inner
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
 
         if let (Some(d), Some(p)) = (domain, path) {
             let key = CookieKey::new(name, d, p);
@@ -327,12 +344,35 @@ impl CookieJar {
 
     /// Set a cookie explicitly.
     ///
-    /// # Panics
+    /// Already-expired persistent cookies are rejected rather than
+    /// stored, so they are never transiently visible or counted before
+    /// the next lazy `expire_stale()`.
     ///
-    /// Panics if the internal lock is poisoned.
+    /// Lock poisoning is recovered from internally: the jar protects a
+    /// plain map with no cross-entry invariants, so a panicked writer
+    /// cannot leave it inconsistent.
     pub fn set(&self, cookie: Cookie) {
+        if cookie.persistent {
+            if let Some(expires) = cookie.expires {
+                if SystemTime::now() >= expires {
+                    // Drop any existing entry instead of inserting an
+                    // expired replacement.
+                    let key = CookieKey::new(&cookie.name, &cookie.domain, &cookie.path);
+                    self.inner
+                        .write()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .cookies
+                        .remove(&key);
+                    return;
+                }
+            }
+        }
         let key = CookieKey::new(&cookie.name, &cookie.domain, &cookie.path);
-        self.inner.write().unwrap().cookies.insert(key, cookie);
+        self.inner
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .cookies
+            .insert(key, cookie);
     }
 
     /// Set a "default" cookie that matches every URL.
@@ -342,9 +382,9 @@ impl CookieJar {
     /// This is used for pre-populated cookies from a dict (e.g.
     /// `Client(cookies={"name": "value"})`).
     ///
-    /// # Panics
-    ///
-    /// Panics if the internal lock is poisoned.
+    /// Lock poisoning is recovered from internally: the jar protects a
+    /// plain map with no cross-entry invariants, so a panicked writer
+    /// cannot leave it inconsistent.
     pub fn set_default_cookie(&self, name: String, value: String) {
         let cookie = Cookie {
             name,
@@ -360,56 +400,79 @@ impl CookieJar {
             creation_index: CREATION_COUNTER.fetch_add(1, Ordering::Relaxed),
         };
         let key = CookieKey::new(&cookie.name, &cookie.domain, &cookie.path);
-        self.inner.write().unwrap().cookies.insert(key, cookie);
+        self.inner
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .cookies
+            .insert(key, cookie);
     }
 
     /// Delete a cookie by name, domain, and path.
     ///
-    /// # Panics
-    ///
-    /// Panics if the internal lock is poisoned.
+    /// Lock poisoning is recovered from internally: the jar protects a
+    /// plain map with no cross-entry invariants, so a panicked writer
+    /// cannot leave it inconsistent.
     pub fn delete(&self, name: &str, domain: &str, path: &str) {
         let key = CookieKey::new(name, domain, path);
-        self.inner.write().unwrap().cookies.remove(&key);
+        self.inner
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .cookies
+            .remove(&key);
     }
 
     /// Remove all cookies from the jar.
     ///
-    /// # Panics
-    ///
-    /// Panics if the internal lock is poisoned.
+    /// Lock poisoning is recovered from internally: the jar protects a
+    /// plain map with no cross-entry invariants, so a panicked writer
+    /// cannot leave it inconsistent.
     pub fn clear(&self) {
-        self.inner.write().unwrap().cookies.clear();
+        self.inner
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .cookies
+            .clear();
     }
 
     /// Returns the number of cookies in the jar.
     ///
-    /// # Panics
-    ///
-    /// Panics if the internal lock is poisoned.
+    /// Lock poisoning is recovered from internally: the jar protects a
+    /// plain map with no cross-entry invariants, so a panicked writer
+    /// cannot leave it inconsistent.
     #[must_use]
     pub fn len(&self) -> usize {
-        self.inner.read().unwrap().cookies.len()
+        self.inner
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .cookies
+            .len()
     }
 
     /// Returns `true` if the jar is empty.
     ///
-    /// # Panics
-    ///
-    /// Panics if the internal lock is poisoned.
+    /// Lock poisoning is recovered from internally: the jar protects a
+    /// plain map with no cross-entry invariants, so a panicked writer
+    /// cannot leave it inconsistent.
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.inner.read().unwrap().cookies.is_empty()
+        self.inner
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .cookies
+            .is_empty()
     }
 
     /// Expire cookies that have passed their expiry time.
     ///
-    /// # Panics
-    ///
-    /// Panics if the internal lock is poisoned.
+    /// Lock poisoning is recovered from internally: the jar protects a
+    /// plain map with no cross-entry invariants, so a panicked writer
+    /// cannot leave it inconsistent.
     pub fn expire_stale(&self) {
         let now = SystemTime::now();
-        let mut jar = self.inner.write().unwrap();
+        let mut jar = self
+            .inner
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         jar.cookies
             .retain(|_, c| !c.persistent || c.expires.map_or(true, |exp| now < exp));
     }
@@ -1030,6 +1093,40 @@ mod tests {
         assert_eq!(jar.len(), 1);
         jar.delete("key", "example.com", "/");
         assert_eq!(jar.len(), 0);
+    }
+
+    #[test]
+    fn jar_set_rejects_already_expired_cookie() {
+        let url = make_url("http://example.com/path");
+        let headers = vec!["key=value".to_owned()];
+        let cookies = parse_set_cookie_headers(&url, &headers);
+
+        let jar = CookieJar::new();
+        // Store a live cookie first.
+        let mut live = cookies[0].clone();
+        live.domain = "example.com".to_owned();
+        live.host_only = false;
+        jar.set(live);
+        assert_eq!(jar.len(), 1);
+
+        // Setting an expired replacement must not store it, and should
+        // remove the existing entry for the same key.
+        let expired = Cookie {
+            name: "key".to_owned(),
+            value: "stale".to_owned(),
+            domain: "example.com".to_owned(),
+            host_only: false,
+            path: "/".to_owned(),
+            secure: false,
+            http_only: false,
+            same_site: None,
+            expires: Some(SystemTime::UNIX_EPOCH),
+            persistent: true,
+            creation_index: 2,
+        };
+        jar.set(expired);
+        assert_eq!(jar.len(), 0, "expired cookie must not be stored");
+        assert!(jar.get("key", Some("example.com"), Some("/")).is_none());
     }
 
     #[test]

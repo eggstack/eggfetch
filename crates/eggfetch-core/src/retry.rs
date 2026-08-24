@@ -172,7 +172,9 @@ impl RetryPolicy {
     /// Compute the delay after receiving a `Retry-After` header value.
     ///
     /// Parses `Retry-After` as either a number of seconds or an HTTP-date.
-    /// Returns `None` if parsing fails or if the value exceeds the backoff cap.
+    /// Returns `None` if parsing fails, if a past HTTP-date is supplied
+    /// (the header carries no useful information), or if the value
+    /// exceeds the backoff cap.
     #[must_use]
     pub fn retry_after_delay(&self, retry_after: &str) -> Option<Duration> {
         if !self.respect_retry_after {
@@ -181,8 +183,10 @@ impl RetryPolicy {
         let delay = if let Ok(secs) = retry_after.trim().parse::<u64>() {
             Duration::from_secs(secs)
         } else if let Ok(date) = httpdate::parse_http_date(retry_after.trim()) {
-            date.duration_since(std::time::SystemTime::now())
-                .unwrap_or_default()
+            match date.duration_since(std::time::SystemTime::now()) {
+                Ok(duration) => duration,
+                Err(_) => return None,
+            }
         } else {
             return None;
         };
@@ -380,8 +384,9 @@ impl BackoffPolicy {
     /// Compute the delay for the given attempt number (1-indexed).
     ///
     /// Attempt 1 returns `None` (no delay before the first attempt).
-    /// Attempt 2 returns the initial delay with jitter, attempt 3
-    /// doubles, etc.
+    /// Later attempts use exponential backoff with full jitter: the
+    /// delay is drawn uniformly from `[0, capped)`, where `capped` is
+    /// the exponentially increasing delay clamped to `max_delay`.
     #[must_use]
     #[allow(clippy::cast_precision_loss)]
     pub fn delay(&self, attempt: usize) -> Option<Duration> {
@@ -402,18 +407,16 @@ impl BackoffPolicy {
             Duration::from_secs_f64(raw)
         };
 
-        // Add jitter: random value between 0 and the capped delay
+        // Full jitter: uniform value in [0, capped) so retries in the
+        // saturated regime do not all collapse onto the cap (which would
+        // re-create the thundering-herd pattern jitter exists to prevent).
         let jitter = get_random_f64();
         let jittered_secs = capped.as_secs_f64() * jitter;
-        let final_secs = capped.as_secs_f64() + jittered_secs;
 
-        let final_delay = if !final_secs.is_finite()
-            || final_secs < 0.0
-            || final_secs > self.max_delay.as_secs_f64()
-        {
-            self.max_delay
+        let final_delay = if !jittered_secs.is_finite() || jittered_secs < 0.0 {
+            Duration::ZERO
         } else {
-            Duration::from_secs_f64(final_secs)
+            Duration::from_secs_f64(jittered_secs)
         };
 
         Some(final_delay)
@@ -747,19 +750,18 @@ mod tests {
     }
 
     #[test]
-    fn backoff_delay_positive_for_later_attempts() {
+    fn backoff_delay_bounded_for_later_attempts() {
         let backoff = BackoffPolicy {
             factor: 0.5,
             max_delay: Duration::from_secs(30),
             initial_delay: Duration::from_millis(100),
         };
+        // Full jitter: the delay is drawn from [0, capped).
         let d2 = backoff.delay(2).unwrap();
-        assert!(d2 >= Duration::from_millis(100));
-        assert!(d2 <= Duration::from_millis(200)); // initial + jitter
+        assert!(d2 <= Duration::from_millis(100));
 
         let d3 = backoff.delay(3).unwrap();
-        assert!(d3 >= Duration::from_millis(50)); // 100 * 0.5 + jitter
-        assert!(d3 <= Duration::from_millis(150));
+        assert!(d3 <= Duration::from_millis(50));
     }
 
     #[test]
@@ -770,7 +772,7 @@ mod tests {
             initial_delay: Duration::from_secs(1),
         };
         let d = backoff.delay(10).unwrap();
-        assert!(d <= Duration::from_secs(10)); // max_delay + jitter
+        assert!(d < Duration::from_secs(5)); // full jitter stays below cap
     }
 
     #[test]
@@ -837,6 +839,28 @@ mod tests {
         );
         let d = delay.unwrap();
         assert!(d.as_secs() > 0, "delay should be positive");
+    }
+
+    #[test]
+    fn retry_after_past_http_date_is_ignored() {
+        use std::time::UNIX_EPOCH;
+
+        let policy = RetryPolicy::builder()
+            .max_attempts(3)
+            .respect_retry_after(true)
+            .build();
+        // One hour in the past: the header carries no useful information,
+        // so it must be ignored (None) rather than mapped to zero.
+        let past_time = UNIX_EPOCH
+            + Duration::from_secs(
+                std::time::SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs()
+                    .saturating_sub(3600),
+            );
+        let formatted = httpdate::fmt_http_date(past_time);
+        assert!(policy.retry_after_delay(&formatted).is_none());
     }
 
     #[test]
@@ -1088,23 +1112,25 @@ mod tests {
     }
 
     #[test]
-    fn backoff_delay_nan_factor_returns_max_delay() {
+    fn backoff_delay_nan_factor_returns_bounded_delay() {
         let backoff = BackoffPolicy {
             factor: f64::NAN,
             max_delay: Duration::from_secs(30),
             initial_delay: Duration::from_millis(500),
         };
-        assert_eq!(backoff.delay(5), Some(Duration::from_secs(30)));
+        let d = backoff.delay(5).unwrap();
+        assert!(d <= Duration::from_secs(30));
     }
 
     #[test]
-    fn backoff_delay_infinite_factor_returns_max_delay() {
+    fn backoff_delay_infinite_factor_returns_bounded_delay() {
         let backoff = BackoffPolicy {
             factor: f64::INFINITY,
             max_delay: Duration::from_secs(30),
             initial_delay: Duration::from_millis(500),
         };
-        assert_eq!(backoff.delay(5), Some(Duration::from_secs(30)));
+        let d = backoff.delay(5).unwrap();
+        assert!(d <= Duration::from_secs(30));
     }
 
     #[test]

@@ -67,12 +67,20 @@ where
 }
 
 /// Reconstruct a request from saved parts for retry.
+#[allow(clippy::too_many_arguments)]
 fn rebuild_request(
     method: &http::Method,
     url: &url::Url,
     headers: &Headers,
     body: &RequestBody,
     version: http::Version,
+    timeout: Option<&Timeout>,
+    redirect: Option<&redirect::RedirectPolicy>,
+    auth: Option<&crate::auth::AuthScheme>,
+    auth_disabled: bool,
+    decompress: Option<bool>,
+    #[cfg(feature = "proxy")] proxy_override: &ProxyOverride,
+    #[cfg(not(feature = "proxy"))] _proxy_override: (),
     transport_hints: &crate::request::TransportHints,
 ) -> Result<Request> {
     let mut req = Request::new(method.clone(), url.clone());
@@ -85,6 +93,13 @@ fn rebuild_request(
         }
     }
     req.set_version(version);
+    req.set_timeout(timeout.copied());
+    req.set_redirect(redirect.cloned());
+    req.set_auth(auth.cloned());
+    req.set_auth_disabled(auth_disabled);
+    req.set_decompress(decompress);
+    #[cfg(feature = "proxy")]
+    req.set_proxy_override(proxy_override.clone());
     req.set_transport_hints(transport_hints.clone());
     Ok(req)
 }
@@ -111,6 +126,7 @@ fn has_budget(policy: &RetryPolicy, attempt: usize, start_time: std::time::Insta
 ///
 /// Retries restart the complete logical request (including redirects)
 /// under the original total deadline. Stream bodies are never retried.
+#[allow(clippy::too_many_lines)]
 pub(crate) async fn send_with_retry(client: &Client, request: Request) -> Result<Response> {
     let method = request.method().clone();
     let body_replayable = request.body().is_replayable();
@@ -139,15 +155,19 @@ pub(crate) async fn send_with_retry(client: &Client, request: Request) -> Result
         orig_headers,
         orig_body,
         orig_version,
-        _orig_timeout,
-        _orig_redirect,
-        _orig_auth,
-        _orig_auth_disabled,
-        _orig_decompress,
-        _orig_proxy,
+        orig_timeout,
+        orig_redirect,
+        orig_auth,
+        orig_auth_disabled,
+        orig_decompress,
+        orig_proxy,
         _orig_retry,
         orig_transport_hints,
     ) = request.into_parts();
+
+    // Without the `proxy` feature the override has no transport effect.
+    #[cfg(not(feature = "proxy"))]
+    let _ = &orig_proxy;
 
     let start_time = std::time::Instant::now();
     let mut attempt = 0usize;
@@ -178,6 +198,15 @@ pub(crate) async fn send_with_retry(client: &Client, request: Request) -> Result
             &orig_headers,
             &orig_body,
             orig_version,
+            orig_timeout.as_ref(),
+            orig_redirect.as_ref(),
+            orig_auth.as_ref(),
+            orig_auth_disabled,
+            orig_decompress,
+            #[cfg(feature = "proxy")]
+            &orig_proxy,
+            #[cfg(not(feature = "proxy"))]
+            (),
             &orig_transport_hints,
         )?;
 
@@ -249,8 +278,8 @@ pub(crate) async fn send_with_redirects(client: &Client, request: Request) -> Re
         request_redirect,
         req_auth,
         req_auth_disabled,
-        _request_decompress,
-        _request_proxy,
+        request_decompress,
+        request_proxy,
         _request_retry,
         request_transport_hints,
     ) = request.into_parts();
@@ -286,6 +315,15 @@ pub(crate) async fn send_with_redirects(client: &Client, request: Request) -> Re
         // reconstructed request.  Without this, the fast path silently
         // drops any trace callback the caller installed via `extensions=`.
         request.set_transport_hints(request_transport_hints.clone());
+        // Preserve per-request decompression and proxy overrides; without
+        // these the reconstructed request reverts to client defaults.
+        request.set_decompress(request_decompress);
+        #[cfg(feature = "proxy")]
+        {
+            request.set_proxy_override(request_proxy);
+        }
+        #[cfg(not(feature = "proxy"))]
+        let _ = request_proxy;
 
         {
             request.set_auth(req_auth);
@@ -374,6 +412,15 @@ pub(crate) async fn send_with_redirects(client: &Client, request: Request) -> Re
         hop_request.set_body(cur_body);
         hop_request.set_version(cur_version);
         hop_request.set_timeout(Some(hop_timeout));
+        // Per-request decompression and proxy overrides persist across all
+        // hops of the same logical request.
+        hop_request.set_decompress(request_decompress);
+        #[cfg(feature = "proxy")]
+        {
+            hop_request.set_proxy_override(request_proxy.clone());
+        }
+        #[cfg(not(feature = "proxy"))]
+        let _ = &request_proxy;
 
         // Transport hints (target, sni_hostname) apply only on the first
         // hop; redirects clear them because the destination changes.
@@ -486,10 +533,12 @@ pub(crate) async fn send_with_redirects(client: &Client, request: Request) -> Re
 
         let redirect_status = response.status();
         let drop_body = redirect::drops_body_on_redirect(redirect_status, &cur_method);
-        if drop_body && replay_body.is_none() {
+        if drop_body {
+            // The body is dropped on this hop. Clear any stale replay
+            // payload so a later method-preserving hop does not resurrect
+            // bytes from an earlier method-rewritten hop.
             replay_body = Some(Bytes::new());
-        }
-        if !drop_body && replay_body.is_none() {
+        } else if replay_body.is_none() {
             return Err(Error::BodyNotReplayableForRedirect);
         }
 

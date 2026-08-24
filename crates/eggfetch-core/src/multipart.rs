@@ -542,16 +542,29 @@ fn validate_filename(filename: &str) -> Result<()> {
 // Header generation
 // ---------------------------------------------------------------------------
 
+/// Escape a value for inclusion inside a quoted-string per RFC 9110
+/// §5.6.2.2 (`\` and `"` are quoted-pair escapes).
+fn quote_string_escape(value: &str) -> String {
+    let mut out = String::with_capacity(value.len());
+    for ch in value.chars() {
+        if ch == '\\' || ch == '"' {
+            out.push('\\');
+        }
+        out.push(ch);
+    }
+    out
+}
+
 fn format_part_header(boundary: &str, part: &Part) -> String {
     let mut header = String::new();
     header.push_str("--");
     header.push_str(boundary);
     header.push_str("\r\nContent-Disposition: form-data; name=\"");
-    header.push_str(&part.name);
+    header.push_str(&quote_string_escape(&part.name));
     header.push('"');
     if let Some(ref filename) = part.filename {
         header.push_str("; filename=\"");
-        header.push_str(filename);
+        header.push_str(&quote_string_escape(filename));
         header.push('"');
     }
     header.push_str("\r\n");
@@ -939,6 +952,27 @@ mod tests {
                 assert!(
                     !s.contains("filename="),
                     "should not contain filename= when none was set"
+                );
+            }
+            _ => panic!("expected bytes body"),
+        }
+    }
+
+    #[test]
+    fn backslash_escaped_in_quoted_strings() {
+        // `\` is a quoted-pair escape inside `filename="..."`; without
+        // escaping, strict parsers decode `path\to\file.txt` as
+        // `pathtofile.txt`.
+        let mp = Multipart::with_boundary(Boundary::try_new("b").unwrap())
+            .bytes("f", r"path\to\file.txt", "text/plain", Bytes::new())
+            .unwrap();
+        let body = mp.into_body();
+        match body {
+            RequestBody::Bytes(data) => {
+                let s = String::from_utf8(data.to_vec()).unwrap();
+                assert!(
+                    s.contains(r#"filename="path\\to\\file.txt""#),
+                    "backslashes must be escaped in the quoted filename, got: {s}"
                 );
             }
             _ => panic!("expected bytes body"),

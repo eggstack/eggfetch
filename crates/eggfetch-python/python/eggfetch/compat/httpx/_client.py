@@ -1871,7 +1871,9 @@ class AsyncClient:
         # HTTPX's ``transport=`` argument is the async transport for
         # AsyncClient.  Keep the legacy explicit ``async_transport`` alias,
         # but dispatch the public argument through the async path as well.
-        self._transport = None if transport is not None else transport
+        # ``_transport`` still tracks the object so it participates in
+        # ownership tracking and close deduplication.
+        self._transport = transport
         self._async_transport = async_transport or transport
         self._default_encoding = default_encoding
         self._extensions = extensions or {}
@@ -2094,10 +2096,14 @@ class AsyncClient:
             return await self._send_via_native(
                 request, stream=stream,
             )
-        # A specific transport was matched.
-        return await self._send_via_transport(
-            transport, request, stream=stream
-        )
+        # A specific transport was matched. Sync transports mounted on
+        # AsyncClient are dispatched through their sync handler, matching
+        # the default-transport branches and `_send_single_request`.
+        if hasattr(transport, "handle_async_request"):
+            return await self._send_via_transport(
+                transport, request, stream=stream
+            )
+        return self._send_via_transport_sync(transport, request, stream=stream)
 
     async def _send_via_transport(self, transport, request, *, stream=False):
         try:

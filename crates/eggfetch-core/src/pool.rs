@@ -85,6 +85,15 @@ use std::sync::Arc;
 use dashmap::DashMap;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
+/// Upper bound on tracked per-origin semaphores.
+///
+/// Long-lived processes touching many distinct origins (crawlers,
+/// aggregators) would otherwise grow this table without limit. When the
+/// cap is exceeded, idle entries (all permits available) are evicted;
+/// in-flight entries are never dropped because holders own `Arc` clones
+/// of the semaphore and a later request simply recreates the entry.
+const PER_ORIGIN_TABLE_MAX_ENTRIES: usize = 1024;
+
 /// Configuration for the connection pool.
 ///
 /// All fields are optional. When a field is `None`, the corresponding
@@ -439,6 +448,13 @@ impl Pool {
                 .entry(origin.clone())
                 .or_insert_with(|| Arc::new(Semaphore::new(max_per_origin)))
                 .clone();
+
+            // Bound table growth: drop entries with no permits in use.
+            if self.inner.per_origin.len() > PER_ORIGIN_TABLE_MAX_ENTRIES {
+                self.inner
+                    .per_origin
+                    .retain(|_, sem| sem.available_permits() < max_per_origin);
+            }
 
             // Try immediate acquire first.
             if let Ok(permit) = sem.clone().try_acquire_owned() {

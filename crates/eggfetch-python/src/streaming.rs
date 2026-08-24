@@ -392,18 +392,17 @@ impl StreamingBodyState {
         let bytes = rx
             .recv()
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))??;
-        if self
-            .body_state
-            .compare_exchange(
-                STATE_CONSUMED,
-                STATE_BUFFERED,
-                Ordering::AcqRel,
-                Ordering::Acquire,
-            )
-            .is_err()
-        {
-            return Err(StreamClosed::new_err("streaming body has been closed"));
-        }
+        // Transition CONSUMED -> BUFFERED so later reads hit the cache.
+        // A concurrent close may already have flipped the state to CLOSED
+        // between the drain completing and this transition; the bytes
+        // were fully received, so they must still be returned rather than
+        // discarded with a spurious StreamClosed error.
+        let _ = self.body_state.compare_exchange(
+            STATE_CONSUMED,
+            STATE_BUFFERED,
+            Ordering::AcqRel,
+            Ordering::Acquire,
+        );
         if let Ok(mut cache) = self.cached_content.lock() {
             *cache = Some(bytes.clone());
         }

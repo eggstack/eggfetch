@@ -386,17 +386,9 @@ impl PyClient {
 
         let client = self.clone_client()?;
         let trace_slot = extracted.trace_error_slot.clone();
-        let runtime_guard = {
-            let rt_guard = self.runtime.lock().unwrap();
-            rt_guard.as_ref().unwrap().clone()
-        };
-        let runtime_handle = runtime_guard.handle().clone();
+        let (runtime_guard, runtime_handle) = self.runtime_for_dispatch()?;
         let result = py.allow_threads(|| {
-            let handle = {
-                let rt_guard = self.runtime.lock().unwrap();
-                rt_guard.as_ref().unwrap().handle().clone()
-            };
-            handle.block_on(async {
+            runtime_handle.block_on(async {
                 let mut builder = client
                     .request(http_method, target_url.as_str())
                     .map_err(map_err)?;
@@ -966,17 +958,9 @@ impl PyClient {
         let trace_slot = extracted.trace_error_slot.clone();
 
         let client = self.clone_client()?;
-        let runtime_guard = {
-            let rt_guard = self.runtime.lock().unwrap();
-            rt_guard.as_ref().unwrap().clone()
-        };
-        let runtime_handle = runtime_guard.handle().clone();
+        let (runtime_guard, runtime_handle) = self.runtime_for_dispatch()?;
         let result = py.allow_threads(|| {
-            let handle = {
-                let rt_guard = self.runtime.lock().unwrap();
-                rt_guard.as_ref().unwrap().handle().clone()
-            };
-            handle.block_on(async {
+            runtime_handle.block_on(async {
                 let mut builder = client
                     .request(http_method, target_url.as_str())
                     .map_err(map_err)?;
@@ -1146,5 +1130,27 @@ impl PyClient {
             .as_ref()
             .cloned()
             .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyValueError, _>("client is closed"))
+    }
+
+    /// Clone the shared tokio runtime and its handle for dispatch.
+    ///
+    /// This must be the *only* runtime fetch on the request path: it
+    /// happens once, before `allow_threads`, so a concurrent `close()`
+    /// taking the runtime afterwards cannot race a second fetch. A
+    /// closed client raises `ValueError` instead of panicking.
+    fn runtime_for_dispatch(
+        &self,
+    ) -> PyResult<(
+        std::sync::Arc<tokio::runtime::Runtime>,
+        tokio::runtime::Handle,
+    )> {
+        let guard = self.runtime.lock().map_err(|_| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("client runtime lock poisoned")
+        })?;
+        let rt = guard
+            .as_ref()
+            .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyValueError, _>("client is closed"))?;
+        let handle = rt.handle().clone();
+        Ok((rt.clone(), handle))
     }
 }

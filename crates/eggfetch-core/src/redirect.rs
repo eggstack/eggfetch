@@ -46,8 +46,10 @@ impl RedirectPolicy {
 /// Sensitive headers to strip on cross-origin redirects.
 ///
 /// These headers can leak credentials or session information to
-/// third-party origins.
-const SENSITIVE_HEADERS: &[&str] = &["authorization", "cookie", "proxy-authorization"];
+/// third-party origins. `host` is included because a user-supplied
+/// `Host` header describes the original authority and must not leak
+/// to (or misdescribe) the redirect target.
+const SENSITIVE_HEADERS: &[&str] = &["authorization", "cookie", "host", "proxy-authorization"];
 
 /// Headers that should be removed when the body is dropped (e.g., on
 /// POST→GET rewrite).
@@ -86,10 +88,17 @@ pub fn redirect_method(status: http::StatusCode, current_method: &Method) -> Met
     }
 }
 
-/// Returns `true` if the redirect rewrites the method from POST to GET
-/// (and thus drops the body).
+/// Returns `true` if the redirect drops the request payload.
+///
+/// Rules (RFC 9110 §15.4.3/§15.4.4):
+/// - 303: the method is rewritten to GET (except HEAD) and the payload
+///   plus content-related headers are removed for **all** methods.
+/// - 301/302: POST→GET rewrites drop the body; other methods preserved.
 #[must_use]
 pub fn drops_body_on_redirect(status: http::StatusCode, current_method: &Method) -> bool {
+    if status.as_u16() == 303 {
+        return current_method != Method::HEAD;
+    }
     let new_method = redirect_method(status, current_method);
     current_method == Method::POST && new_method == Method::GET
 }
@@ -293,6 +302,48 @@ mod tests {
             StatusCode::TEMPORARY_REDIRECT,
             &Method::POST
         ));
+    }
+
+    #[test]
+    fn drops_body_on_303_put() {
+        // RFC 9110 §15.4.4: 303 removes the payload for all methods.
+        assert!(drops_body_on_redirect(StatusCode::SEE_OTHER, &Method::PUT));
+        assert!(drops_body_on_redirect(
+            StatusCode::SEE_OTHER,
+            &Method::DELETE
+        ));
+    }
+
+    #[test]
+    fn build_redirect_303_put_drops_payload_and_content_headers() {
+        let mut req = Request::new(Method::PUT, Url::parse("https://example.com/a").unwrap());
+        req.set_body(RequestBody::from(Bytes::from("payload")));
+        req.headers_mut().insert("content-length", "7").unwrap();
+        req.headers_mut()
+            .insert("content-type", "text/plain")
+            .unwrap();
+
+        let (redirect, _) =
+            build_redirect_request(&req, StatusCode::SEE_OTHER, "https://example.com/b").unwrap();
+
+        assert_eq!(*redirect.method(), Method::GET);
+        assert!(redirect.body().is_empty());
+        assert!(redirect.headers().get("content-length").is_none());
+        assert!(redirect.headers().get("content-type").is_none());
+    }
+
+    #[test]
+    fn build_redirect_cross_origin_strips_host() {
+        let mut req = Request::new(Method::GET, Url::parse("https://example.com/a").unwrap());
+        req.headers_mut().insert("host", "internal.corp").unwrap();
+
+        let (same_origin, _) =
+            build_redirect_request(&req, StatusCode::FOUND, "https://example.com/b").unwrap();
+        assert!(same_origin.headers().get("host").is_some());
+
+        let (cross_origin, _) =
+            build_redirect_request(&req, StatusCode::FOUND, "https://other.com/b").unwrap();
+        assert!(cross_origin.headers().get("host").is_none());
     }
 
     #[test]
@@ -501,7 +552,12 @@ mod tests {
             if let (Ok(s), Ok(m)) = (s, m) {
                 let new_method = redirect_method(s, &m);
                 let drops = drops_body_on_redirect(s, &m);
-                prop_assert_eq!(drops, m == Method::POST && new_method == Method::GET);
+                let expected = if s.as_u16() == 303 {
+                    m != Method::HEAD
+                } else {
+                    m == Method::POST && new_method == Method::GET
+                };
+                prop_assert_eq!(drops, expected);
             }
         }
 

@@ -53,6 +53,11 @@ struct HttpProxyConfig {
 
 struct HttpProxyServer {
     port: u16,
+    /// Number of client connections accepted by the proxy.
+    ///
+    /// Used to assert *which* route served a request (e.g. that a
+    /// per-request bypass produced zero proxy traffic).
+    connection_count: Arc<AtomicUsize>,
     shutdown: watch::Sender<bool>,
 }
 
@@ -62,6 +67,8 @@ impl HttpProxyServer {
         let port = listener.local_addr().unwrap().port();
         let (shutdown_tx, mut shutdown_rx) = watch::channel(false);
         let required_auth = config.required_auth;
+        let connection_count = Arc::new(AtomicUsize::new(0));
+        let counter = connection_count.clone();
 
         tokio::spawn(async move {
             loop {
@@ -69,6 +76,7 @@ impl HttpProxyServer {
                     result = listener.accept() => {
                         match result {
                             Ok((stream, _)) => {
+                                counter.fetch_add(1, Ordering::SeqCst);
                                 let auth = required_auth.clone();
                                 tokio::spawn(async move {
                                     if let Err(e) = handle_proxy_connection(stream, auth).await {
@@ -91,12 +99,17 @@ impl HttpProxyServer {
 
         Self {
             port,
+            connection_count,
             shutdown: shutdown_tx,
         }
     }
 
     fn url(&self) -> String {
         format!("http://127.0.0.1:{}", self.port)
+    }
+
+    fn connection_count(&self) -> usize {
+        self.connection_count.load(Ordering::SeqCst)
     }
 
     fn shutdown(&self) {
@@ -949,8 +962,64 @@ async fn per_request_bypass_proxy() {
     assert_eq!(resp.status().as_u16(), 200);
     let body = resp.text().await.unwrap();
     assert!(body.contains("GET"));
+    // The bypass must be observable on the wire: the proxy must have seen
+    // no connection at all for the `.without_proxy()` request.
+    assert_eq!(
+        proxy.connection_count(),
+        0,
+        ".without_proxy() request reached the client-level proxy"
+    );
+
+    // Control: a default request does route through the proxy.
+    let mut resp = client.get(&echo.url()).unwrap().send().await.unwrap();
+    assert_eq!(resp.status().as_u16(), 200);
+    let _ = resp.text().await.unwrap();
+    assert_eq!(
+        proxy.connection_count(),
+        1,
+        "default request should be routed through the client-level proxy"
+    );
 
     proxy.shutdown();
+    echo.shutdown();
+}
+
+#[tokio::test]
+async fn per_request_proxy_override_routes_through_specified_proxy() {
+    let echo = EchoHttpServer::start().await;
+    let client_proxy = HttpProxyServer::start(HttpProxyConfig::default()).await;
+    let request_proxy = HttpProxyServer::start(HttpProxyConfig::default()).await;
+
+    let client = Client::builder()
+        .proxy(Proxy::all(&client_proxy.url()).unwrap())
+        .timeout(Timeout {
+            total: Some(Duration::from_secs(5)),
+            ..Default::default()
+        })
+        .build();
+
+    let mut resp = client
+        .get(&echo.url())
+        .unwrap()
+        .proxy(&Proxy::all(&request_proxy.url()).unwrap())
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status().as_u16(), 200);
+    let _ = resp.text().await.unwrap();
+    assert_eq!(
+        client_proxy.connection_count(),
+        0,
+        ".proxy() override must not use the client-level proxy"
+    );
+    assert_eq!(
+        request_proxy.connection_count(),
+        1,
+        ".proxy() override must route through the request-level proxy"
+    );
+
+    client_proxy.shutdown();
+    request_proxy.shutdown();
     echo.shutdown();
 }
 

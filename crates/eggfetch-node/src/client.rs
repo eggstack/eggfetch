@@ -10,6 +10,19 @@ use eggfetch_ffi::ErrorHandle;
 /// The client pointer is stored as `usize` to satisfy napi's `Send` requirement
 /// for async futures. The underlying `ClientHandle` is `Send + Sync` per
 /// eggfetch-ffi documentation.
+///
+/// # Lifetime safety for in-flight requests
+///
+/// Copying the raw pointer into a `'static` future is safe here because of
+/// how napi-rs (2.x) generates async class methods: before launching the
+/// future it creates a *strong* `napi_ref` (refcount 1) on `this`
+/// (`napi_create_reference`) and releases it only when the future resolves
+/// (see `napi-derive-backend` codegen, `NapiRefContainer`). A strong
+/// reference prevents garbage collection and finalization of the JS object,
+/// so `Drop for EggfetchClient` cannot free the FFI handle while any
+/// request future is outstanding. Do not replace this with a pattern that
+/// frees the handle independently of napi's reference tracking without
+/// adding an equivalent guard.
 #[napi]
 pub struct EggfetchClient {
     inner: usize,

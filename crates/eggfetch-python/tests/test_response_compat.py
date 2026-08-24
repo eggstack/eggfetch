@@ -425,7 +425,9 @@ class TestClose:
 
     def test_aclose_is_noop(self, server):
         r = eggfetch.get(f"{server}/json")
-        r.aclose()  # should not raise
+        # aclose() returns an awaitable (consistent with the streaming
+        # response surface); awaiting it must not raise.
+        asyncio.run(r.aclose())
 
 
 # ---------------------------------------------------------------------------

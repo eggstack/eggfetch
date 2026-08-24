@@ -1,14 +1,38 @@
 //! Python response wrapper with buffered data.
 
+use std::sync::OnceLock;
+
 use bytes::Bytes;
 use pyo3::prelude::*;
-use pyo3::types::{PyBytes, PyDict, PyList, PyString};
+use pyo3::types::{PyBytes, PyDict, PyList, PyModule, PyString};
 
 use crate::cookies::PyCookies;
 use crate::errors::HTTPStatusError;
 use crate::headers::PyHeaders;
 use crate::network_stream::{EitherNetworkStream, PyAsyncNetworkStream, PyNetworkStream};
 use crate::streaming::RuntimeLease;
+
+/// Cached no-op coroutine function used by [`PyResponse::aclose`].
+///
+/// A plain Python `async def` is compiled once so that creating the
+/// awaitable does not require a running event loop (unlike
+/// `future_into_py`, which resolves the running loop eagerly).
+static NOOP_ACLOSE: OnceLock<Py<PyAny>> = OnceLock::new();
+
+fn noop_aclose_coroutine(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
+    if let Some(func) = NOOP_ACLOSE.get() {
+        return Ok(func.bind(py).clone());
+    }
+    let module = PyModule::from_code(
+        py,
+        c"async def _noop_aclose():\n    pass\n",
+        c"<eggfetch._response>",
+        c"eggfetch._response",
+    )?;
+    let func: Bound<'_, PyAny> = module.getattr("_noop_aclose")?;
+    let _ = NOOP_ACLOSE.set(func.clone().unbind());
+    Ok(func)
+}
 
 /// Map `http::Version` to a human-readable string.
 pub(crate) fn version_to_string(version: http::Version) -> String {
@@ -414,8 +438,14 @@ impl PyResponse {
     fn close(&self) {}
 
     /// Async close (no-op for buffered responses).
-    #[allow(clippy::unused_self)] // Intentional no-op: Python async instance method for API compatibility.
-    fn aclose(&self) {}
+    ///
+    /// Returns a real coroutine so `await response.aclose()` works
+    /// consistently with every other aclose implementation.
+    #[allow(clippy::unused_self)] // Intentional no-op: Python instance method for API compatibility.
+    fn aclose<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let func = noop_aclose_coroutine(py)?;
+        func.call0()
+    }
 
     /// Snapshot wire-level response metadata (http version, reason
     /// phrase, network stream) into a dict compatible with HTTPX's

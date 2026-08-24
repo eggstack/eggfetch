@@ -104,26 +104,28 @@ pub fn accept_encoding_value() -> Option<&'static str> {
     VALUE
         .get_or_init(|| {
             // Order matches mainstream client defaults (most common first).
-            #[allow(unused_mut)]
-            let mut parts: Vec<&str> = Vec::new();
-
-            #[cfg(feature = "compression-gzip")]
+            //
+            // Only advertise codings whose streaming decoder is compiled
+            // in; advertising an encoding without its decoder makes a
+            // compliant server produce responses we cannot decode.
+            // The pushes are feature-gated, so `vec![]` cannot express
+            // this sequence.
+            #[allow(clippy::vec_init_then_push)]
             {
+                #[allow(unused_mut)]
+                let mut parts: Vec<&str> = Vec::new();
+
+                #[cfg(feature = "compression-gzip")]
                 parts.push("gzip");
+                #[cfg(feature = "compression-deflate")]
                 parts.push("deflate");
-            }
-            #[cfg(feature = "compression-deflate")]
-            {
-                // Only add deflate if gzip didn't already add it.
-                #[cfg(not(feature = "compression-gzip"))]
-                parts.push("deflate");
-            }
-            #[cfg(feature = "compression-brotli")]
-            parts.push("br");
-            #[cfg(feature = "compression-zstd")]
-            parts.push("zstd");
+                #[cfg(feature = "compression-brotli")]
+                parts.push("br");
+                #[cfg(feature = "compression-zstd")]
+                parts.push("zstd");
 
-            (!parts.is_empty()).then(|| parts.join(", ").into_boxed_str())
+                (!parts.is_empty()).then(|| parts.join(", ").into_boxed_str())
+            }
         })
         .as_deref()
 }
@@ -762,6 +764,26 @@ mod tests {
             val1, val2,
             "accept_encoding_value() should return the same value across calls"
         );
+    }
+
+    #[test]
+    fn accept_encoding_advertises_only_supported_decoders() {
+        // Every coding advertised in Accept-Encoding must have a working
+        // streaming decoder for the compiled-in feature set; otherwise a
+        // compliant server can produce responses we cannot decode.
+        let Some(value) = accept_encoding_value() else {
+            return;
+        };
+        for token in value.split(", ") {
+            let coding =
+                ContentCoding::from_wire(token).unwrap_or_else(|| panic!("invalid token {token}"));
+            let stream: BoxBytesStream = Box::pin(futures_util::stream::empty());
+            let result = make_decoder(stream, coding);
+            assert!(
+                result.is_ok(),
+                "advertised encoding '{token}' has no compiled-in decoder"
+            );
+        }
     }
 
     #[test]

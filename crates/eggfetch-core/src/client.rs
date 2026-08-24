@@ -104,11 +104,17 @@ pub(crate) struct ClientInner {
     /// uses a DirectConnector-based client from this cache. The connector
     /// separates DNS/TCP (to the original URL host) from TLS (with the
     /// SNI override hostname), keeping the default path unchanged.
+    ///
+    /// Bounded by [`SNI_CLIENT_CACHE_MAX_ENTRIES`] with arbitrary-entry
+    /// eviction so long-lived processes touching many hostnames cannot
+    /// grow it without limit.
     pub(crate) sni_clients: Mutex<HashMap<String, crate::transport::TimeoutDirectClient>>,
     /// Hyper client for Unix domain socket requests.
     #[cfg(unix)]
     pub(crate) uds_client: Option<crate::transport::TimeoutUdsClient>,
     /// Persistent Hyper clients keyed by effective SOCKS route.
+    ///
+    /// Bounded like [`ClientInner::sni_clients`].
     #[cfg(feature = "proxy")]
     pub(crate) socks_clients: Mutex<
         HashMap<crate::transport::socks::SocksRouteKey, crate::transport::TimeoutSocksClient>,
@@ -117,6 +123,23 @@ pub(crate) struct ClientInner {
     pub(crate) pool: Pool,
     #[cfg(feature = "http3")]
     pub(crate) h3_connector: Option<crate::transport::http3::H3Connector>,
+}
+
+/// Upper bound on cached SNI-keyed hyper clients.
+const SNI_CLIENT_CACHE_MAX_ENTRIES: usize = 256;
+
+/// Upper bound on cached SOCKS-route hyper clients.
+#[cfg(feature = "proxy")]
+const SOCKS_CLIENT_CACHE_MAX_ENTRIES: usize = 64;
+
+/// Evict an arbitrary entry when a bounded client cache reaches capacity.
+///
+/// Entries hold pooled connections but no unsynchronized state, so any
+/// entry can be dropped safely; the next request recreates it lazily.
+fn evict_one<K: std::clone::Clone + Eq + std::hash::Hash, V>(map: &mut HashMap<K, V>) {
+    if let Some(key) = map.keys().next().cloned() {
+        map.remove(&key);
+    }
 }
 
 impl ClientInner {
@@ -188,6 +211,9 @@ impl ClientInner {
             builder.pool_idle_timeout(idle_timeout);
         }
         let client = builder.build(connector);
+        if clients.len() >= SNI_CLIENT_CACHE_MAX_ENTRIES {
+            evict_one(&mut clients);
+        }
         clients.insert(sni_hostname.to_owned(), client.clone());
         Ok(client)
     }
@@ -245,6 +271,9 @@ impl ClientInner {
             builder.http2_only(true);
         }
         let client = builder.build(connector);
+        if clients.len() >= SOCKS_CLIENT_CACHE_MAX_ENTRIES {
+            evict_one(&mut clients);
+        }
         clients.insert(key, client.clone());
         Ok(client)
     }
@@ -813,6 +842,12 @@ impl ClientBuilder {
             if let Some(timeout) = pool_config.idle_timeout {
                 builder.pool_idle_timeout(timeout);
             }
+            if let Some(max_idle) = pool_config
+                .max_idle_connections_per_host
+                .or(pool_config.max_idle_connections)
+            {
+                builder.pool_max_idle_per_host(max_idle);
+            }
             Some(builder.build(https))
         };
 
@@ -858,6 +893,12 @@ impl ClientBuilder {
             if let Some(timeout) = pool_config.idle_timeout {
                 builder.pool_idle_timeout(timeout);
             }
+            if let Some(max_idle) = pool_config
+                .max_idle_connections_per_host
+                .or(pool_config.max_idle_connections)
+            {
+                builder.pool_max_idle_per_host(max_idle);
+            }
             Some(builder.build(direct_connector))
         } else {
             None
@@ -886,6 +927,12 @@ impl ClientBuilder {
             }
             if let Some(timeout) = pool_config.idle_timeout {
                 builder.pool_idle_timeout(timeout);
+            }
+            if let Some(max_idle) = pool_config
+                .max_idle_connections_per_host
+                .or(pool_config.max_idle_connections)
+            {
+                builder.pool_max_idle_per_host(max_idle);
             }
             builder.build(connector)
         });
