@@ -249,6 +249,20 @@ specific workflow run, head SHA, and conclusion are recorded in the
 follow-up commit message at push time and cross-referenced from the
 documentation commit that records the remote CI result.
 
+The post-clippy rebaseline rebinding passed CI on the second push:
+
+- Workflow run `32739641937` for push commit `a3fd8fa131d6208ba8d6db75d0a1763e8109b729`
+  (the documentation rebind) on `2026-08-24T14:35:25Z`, job `ci`/`97470736787`
+  completed successfully in 5m51s on `2026-08-24T14:41:18Z`. The job
+  ran the unchanged `./scripts/check.sh` routine path on the pushed
+  tree, which contains the executable test fixture fix
+  `5c7899fefb6df087dfa1b3578fbef9ba64f87742` plus this documentation
+  rebind. The earlier routine CI run `32685899835` for push `24b9379`
+  failed because the same `9ffa6cd...` executable tree trips
+  `clippy::unused_async_trait_impl` on the CI toolchain; that failure
+  is fully resolved by the test fixture's extended lint allowance in
+  `5c7899fefb6df087dfa1b3578fbef9ba64f87742`.
+
 ### Closure statement
 
 Corrective 07 is complete. The HTTPX 0.28.1 compatibility facade is again
