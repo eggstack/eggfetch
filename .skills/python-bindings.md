@@ -104,8 +104,11 @@ from eggfetch.compat.httpx import Client, AsyncClient, Request, Response
   and SNI/SOCKS H2 propagation tracks.
 - Corrective 07 (final exact-SHA requalification) closed the
   remaining-parity line. Stage C is qualified on
-  `9ffa6cd85848fd16a424b65f73254351911777c4` (also recorded in
-  `compat/httpx/0.28.1/profile.toml`), and executable changes require a new
+  `5c7899fefb6df087dfa1b3578fbef9ba64f87742` (also recorded in
+  `compat/httpx/0.28.1/profile.toml`); the prior `9ffa6cd...` freeze was
+  rebaselined to absorb a single-line H3 test fixture `#[allow]`
+  extension so the same code passes clippy on both the local qualifier
+  toolchain and stable Rust 1.98+. Executable changes require a new
   exact-SHA qualification.
 - The compatibility `Timeout` constructor uses a private `UNSET` sentinel so
   omitted phase values inherit the scalar while explicit `None` disables only

@@ -8,11 +8,14 @@ and referenced plans; counts below are only from the runs named here.
 
 Current designation: **Stage C qualified** for the documented Python 3.10+
 asyncio-supported HTTPX 0.28.1 surface. The qualification is bound to the
-Corrective 06 final executable SHA `9ffa6cd85848fd16a424b65f73254351911777c4`
-and was performed on 2026-08-23. The previous Stage C qualification at
-`c44d4f25ffebc1a792335163ae4bc106076b3963` (Corrective 05) is retained as
-historical evidence only; the executable tree it covered was invalidated by
-the Corrective 06 changes documented below.
+post-clippy rebaseline executable SHA `5c7899fefb6df087dfa1b3578fbef9ba64f87742`
+and was performed on 2026-08-24. The previous Stage C qualifications at
+`9ffa6cd85848fd16a424b65f73254351911777c4` (the original Corrective 07
+freeze) and `c44d4f25ffebc1a792335163ae4bc106076b3963` (Corrective 05) are
+retained as historical evidence only; the former was rebaselined to absorb
+a single-line H3 test fixture `#[allow]` extension so the same code passes
+clippy on both the local qualifier toolchain and stable Rust 1.98+, and the
+latter was invalidated by the Corrective 06 changes documented below.
 
 Plan: `plans/httpx-parity-corrective-07-final-exact-sha-requalification.md`.
 
@@ -20,16 +23,20 @@ Corrective 06 baseline: `25c2c6f01138e2d6a59d1256076ec84972a92d83`.
 Corrective 06 executable commit: `9ffa6cd85848fd16a424b65f73254351911777c4`.
 The Corrective 06 executable tree was frozen once `./scripts/check.sh` and
 the focused semantic closure gate passed; Corrective 07 then ran the full
-qualification evidence against that same tree.
+qualification evidence against that same tree, and the post-closure clippy
+rebaseline rebinds the qualification to the SHA above.
 
 ### Frozen executable SHA evidence
 
 The final executable/test commit SHA used for every gate in this closure is
-`9ffa6cd85848fd16a424b65f73254351911777c4` (commit message
-`httpx-parity: corrective 06 — final semantic truthfulness`). No subsequent
-executable change is included in this closure record; every later commit
-after this qualification is documentation/ledger-only and is recorded in
-section 12 below.
+`5c7899fefb6df087dfa1b3578fbef9ba64f87742`. Its only executable difference
+from the original Corrective 07 freeze `9ffa6cd85848fd16a424b65f73254351911777c4`
+is a one-line extension of the `QuicTestServer::start` `#[allow]`
+attribute in `crates/eggfetch-core/tests/h3_integration.rs:58`, which is
+unrelated to any HTTPX behavior. No other executable, test, build,
+validation script, or packaging configuration is included in this closure
+record; every later commit after this qualification is
+documentation/ledger-only.
 
 ### Focused semantic closure gate
 
@@ -83,9 +90,9 @@ EGGFETCH_COMPAT_REQUIRED=1 .venv/bin/python -m pytest \
 
 | Run | Result | Duration |
 | --- | --- | --- |
-| 1 | 1810 passed, 26 warnings | 460.38 s |
-| 2 | 1810 passed, 26 warnings | 455.10 s |
-| 3 | 1810 passed, 26 warnings | 454.52 s |
+| 1 | 1810 passed, 26 warnings | 465.01 s |
+| 2 | 1810 passed, 26 warnings | 462.52 s |
+| 3 | 1810 passed, 26 warnings | 469.81 s |
 
 Counts are stable across the three runs; the 26 warnings are non-failing
 HTTPX/SQL/TLS deprecation warnings on tests that exercise the rejection
@@ -119,7 +126,7 @@ The required downstream runner was executed against a freshly built wheel
 from the frozen SHA:
 
 - `eggfetch-0.1.1-cp312-cp312-manylinux_2_34_aarch64.whl`,
-  SHA-256 `edca3f2dab86ba5ccd105643ddeeb75281894db4af2706eb87556354d44219d2`
+  SHA-256 `a4caee300fb28607dd0920077fd6561ceb738edf25b93c76d5470c7b8e500c4c`
 - Controlled `httpx-0.28.1-py3-none-any.whl` shim,
   SHA-256 `4bc06cb9aedefec7adc613a67b6d149b127c9f204be35b6e67d026ff580dfb14`
 
@@ -225,7 +232,7 @@ recorded above.
 ### Post-qualification descendant audit
 
 After the qualification was written, every change to the working tree
-between `9ffa6cd85848fd16a424b65f73254351911777c4` and the qualification
+between `5c7899fefb6df087dfa1b3578fbef9ba64f87742` and the qualification
 commit was inspected. Only documentation, ledger, and status records
 changed; no executable, test, build, validation script, or packaging
 configuration was modified. The qualification commit is therefore a
@@ -246,10 +253,43 @@ documentation commit that records the remote CI result.
 
 Corrective 07 is complete. The HTTPX 0.28.1 compatibility facade is again
 **Stage C qualified** for the documented Python 3.10+ asyncio-supported
-surface, bound to executable SHA `9ffa6cd85848fd16a424b65f73254351911777c4`.
+surface, bound to executable SHA `5c7899fefb6df087dfa1b3578fbef9ba64f87742`.
 Future HTTPX work should be triggered by a new pinned HTTPX version, a
 newly discovered concrete compatibility defect, or an intentionally
 expanded compatibility scope — not by further speculative parity expansion.
+
+### Post-closure clippy rebaseline note
+
+The original Corrective 07 qualification targeted executable SHA
+`9ffa6cd85848fd16a424b65f73254351911777c4`, which passes every local
+gate. CI uses stable Rust and the toolchain on which the CI workflow
+runs advanced between the local qualifier and the routine CI run.
+Stable Rust 1.98 introduces `clippy::unused_async_trait_impl`, which
+fails the `QuicTestServer::start` test fixture at
+`crates/eggfetch-core/tests/h3_integration.rs:58` because that async
+fn has no `.await` body. The fixture is unrelated to any HTTPX
+behavior; the test never wires into the compatibility facade.
+
+The only change required to re-freeze CI is the `#[allow]` attribute
+on `QuicTestServer::start`, extended to also list
+`clippy::unused_async_trait_impl` and `unknown_lints` so the same
+attribute compiles cleanly on both the original qualifier toolchain
+(where the new lint name is unknown) and the post-1.98 stable
+toolchain (where the new lint fires). That single-line executable
+change is committed as `5c7899fefb6df087dfa1b3578fbef9ba64f87742`
+and re-freezes the qualification on a SHA whose only difference from
+the prior `9ffa6cd...` is the H3 test fixture's lint allowance.
+
+The full Corrective 07 qualification gates — Tier 1, extended,
+three consecutive pinned compatibility runs (each 1810 passed),
+API oracle (71 allowed, 0 stale, 0 unexplained, 0 resolved-in-active),
+and the required downstream portfolio (respx 5/5, httpx-sse 4/4,
+httpx-auth 5/5, httpx-ws 4/4) — were re-run from scratch on
+`5c7899fefb6df087dfa1b3578fbef9ba64f87742` and all passed cleanly.
+The candidate wheel SHA-256 is
+`a4caee300fb28607dd0920077fd6561ceb738edf25b93c76d5470c7b8e500c4c`
+and the controlled HTTPX replacement wheel SHA-256 is unchanged at
+`4bc06cb9aedefec7adc613a67b6d149b127c9f204be35b6e67d026ff580dfb14`.
 
 ## Historical corrective pass — Corrective 06 final semantic truthfulness (closed)
 
@@ -258,8 +298,10 @@ qualification at `c44d4f25ffebc1a792335163ae4bc106076b3963` was retained as
 historical evidence only. Executable changes required by Corrective 06
 invalidated that qualification; no new `qualification-sha` was assigned
 until Corrective 07 ran against a frozen executable commit. Corrective 07
-ran against the frozen executable SHA `9ffa6cd85848fd16a424b65f73254351911777c4`
-and is the current Stage C qualification described in the section above.
+ran against the frozen executable SHA `5c7899fefb6df087dfa1b3578fbef9ba64f87742`
+(which is identical to the post-Corrective-06 SHA `9ffa6cd...` plus a
+single-line extension of the H3 test fixture's `#[allow]` attribute) and
+is the current Stage C qualification described in the section above.
 
 Plan: `plans/httpx-parity-corrective-06-final-semantic-truthfulness.md`.
 
@@ -280,6 +322,14 @@ Scope (narrow):
 qualified on 2026-08-19. Corrective 06 is open against this baseline;
 the qualification is invalidated as soon as executable changes land for
 Corrective 06.
+
+Corrective 07 was first bound to executable SHA
+`9ffa6cd85848fd16a424b65f73254351911777c4` and is the current Stage C
+qualification. The post-closure clippy rebaseline rebinds the
+qualification to executable SHA
+`5c7899fefb6df087dfa1b3578fbef9ba64f87742`, whose only difference
+from the original frozen SHA is the H3 test fixture's extended
+lint allowance; the HTTPX-compatible behavior is identical.
 
 ### Corrective 05 evidence
 

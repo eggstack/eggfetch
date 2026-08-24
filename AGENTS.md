@@ -230,9 +230,13 @@ transport differential suite, full pinned-reference compat, API oracle, and
 downstream isolated runner are extended gates. The pinned reference remains
 `httpx==0.28.1` (with its installed `httpcore`/`socksio` versions recorded in
 the qualification handoff). Corrective 07 closed the remaining-parity line
-on 2026-08-23 with `qualification-sha = 9ffa6cd85848fd16a424b65f73254351911777c4`.
-The earlier `c44d4f25ffebc1a792335163ae4bc106076b3963` qualification (Corrective 05)
-is retained as historical evidence only; its executable tree was invalidated
+on 2026-08-24 with `qualification-sha = 5c7899fefb6df087dfa1b3578fbef9ba64f87742`.
+The earlier `9ffa6cd85848fd16a424b65f73254351911777c4` (the original
+Corrective 07 freeze) and `c44d4f25ffebc1a792335163ae4bc106076b3963`
+(Corrective 05) qualifications are retained as historical evidence only;
+the former was rebaselined to absorb a single-line H3 test fixture
+`#[allow]` extension so the same code passes clippy on both the local
+qualifier toolchain and stable Rust 1.98+, and the latter was invalidated
 by the Corrective 06 changes it predated. Any future executable change
 invalidates the current qualification and requires restarting Corrective 07
 from the freeze step. Earlier Pass 05/06 records are historical evidence only;

@@ -6,17 +6,22 @@ created = "2026-07-21"
 rebaselined = "2026-08-07"
 rebaseline-sha = "f9eb1a455907d43210886b7b047d18bde8716652"
 # Corrective 07 (final exact-SHA requalification) closes the HTTPX 0.28.1
-# remaining-parity program. The qualification is bound to the final
-# Corrective 06 executable SHA `9ffa6cd...` after Tier 1, extended, three
-# consecutive pinned compatibility runs, the API oracle, and the required
-# downstream portfolio all passed on the same SHA. Earlier qualifications
-# (notably the Corrective 05 SHA `c44d4f25...`) are retained as historical
-# evidence only; their executable trees are superseded by this closure.
+# remaining-parity program. The qualification is bound to the post-clippy
+# executable SHA `5c7899f...` after Tier 1, extended, three consecutive
+# pinned compatibility runs, the API oracle, and the required downstream
+# portfolio all passed on the same SHA. The earlier `9ffa6cd...` snapshot
+# passes Tier 1 and the extended gates locally but clippy on Rust 1.98+
+# (newer than the original qualifier toolchain) rejects its H3 test
+# fixture's `async fn start` with `clippy::unused_async_trait_impl`. The
+# one-line allow-list extension that re-freezes the qualification is
+# unrelated to any HTTPX behavior. Earlier qualifications (notably the
+# Corrective 05 SHA `c44d4f25...`) are retained as historical evidence
+# only; their executable trees are superseded by this closure.
 stage = "stage-c-qualified"
 status = "stage-c-qualified"
-qualification-sha = "9ffa6cd85848fd16a424b65f73254351911777c4"
-qualification-date = "2026-08-23"
-historical-qualification-sha = "c44d4f25ffebc1a792335163ae4bc106076b3963"
+qualification-sha = "5c7899fefb6df087dfa1b3578fbef9ba64f87742"
+qualification-date = "2026-08-24"
+historical-qualification-sha = "9ffa6cd85848fd16a424b65f73254351911777c4, c44d4f25ffebc1a792335163ae4bc106076b3963"
 reference = "httpx==0.28.1"
 
 [reference]
