@@ -1,5 +1,6 @@
 //! Eggfetch Response for Node.js.
 
+use napi::bindgen_prelude::Buffer;
 use napi_derive::napi;
 use std::collections::HashMap;
 use std::ptr;
@@ -64,16 +65,18 @@ impl EggfetchResponse {
                 }
             }
 
-            let text_ptr = eggfetch_ffi::eggfetch_response_text(resp);
-            let body = if text_ptr.is_null() {
-                Vec::new()
+            let mut body_ptr = ptr::null_mut();
+            let mut body_len = 0;
+            let body = if eggfetch_ffi::eggfetch_response_body(resp, &mut body_ptr, &mut body_len)
+                == 0
+                && body_len > 0
+                && !body_ptr.is_null()
+            {
+                let body = std::slice::from_raw_parts(body_ptr, body_len).to_vec();
+                eggfetch_ffi::eggfetch_body_free(body_ptr, body_len);
+                body
             } else {
-                let s = std::ffi::CStr::from_ptr(text_ptr)
-                    .to_string_lossy()
-                    .into_owned()
-                    .into_bytes();
-                eggfetch_ffi::eggfetch_string_free(text_ptr);
-                s
+                Vec::new()
             };
 
             eggfetch_ffi::eggfetch_response_free(resp);
@@ -106,6 +109,12 @@ impl EggfetchResponse {
     #[napi(getter)]
     pub fn text(&self) -> String {
         String::from_utf8_lossy(&self.body).into_owned()
+    }
+
+    /// Response body as a Node.js `Buffer`.
+    #[napi(getter)]
+    pub fn bytes(&self) -> Buffer {
+        Buffer::from(self.body.clone())
     }
 
     /// Response body as JSON (parsed).

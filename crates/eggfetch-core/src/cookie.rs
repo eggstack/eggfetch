@@ -605,6 +605,8 @@ fn resolve_expiration(parsed: &cookie::Cookie<'_>) -> (bool, Option<SystemTime>)
         let secs = duration_secs as u64;
         let now = SystemTime::now();
         let expiry = now.checked_add(std::time::Duration::from_secs(secs));
+        let expiry = expiry
+            .or_else(|| now.checked_add(std::time::Duration::from_secs(400 * 365 * 24 * 60 * 60)));
         return (true, expiry);
     }
 
@@ -850,7 +852,9 @@ mod tests {
             )
         });
         let cookies = result.expect("an unrepresentable Max-Age must not panic");
-        assert!(cookies.is_empty() || cookies[0].expires().is_none());
+        assert_eq!(cookies.len(), 1);
+        assert!(cookies[0].persistent);
+        assert!(cookies[0].expires().is_some());
     }
 
     #[test]

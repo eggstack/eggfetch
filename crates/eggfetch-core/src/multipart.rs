@@ -429,7 +429,14 @@ impl Multipart {
     /// accordingly.
     #[must_use]
     pub fn into_body(mut self) -> RequestBody {
-        self.ensure_no_boundary_collision();
+        if !self.ensure_no_boundary_collision() {
+            return RequestBody::Stream {
+                stream: Box::pin(MultipartEncoder::error(Error::RequestBuild(
+                    "failed to generate a collision-free multipart boundary".into(),
+                ))),
+                length: None,
+            };
+        }
         if self.is_replayable() {
             let boundary_str = self.boundary.0.clone();
             let mut buf = BytesMut::new();
@@ -448,7 +455,7 @@ impl Multipart {
             let len = self.content_length();
             #[allow(clippy::cast_possible_truncation)]
             RequestBody::Stream {
-                stream: Box::pin(self.encoder()),
+                stream: Box::pin(MultipartEncoder::new(self)),
                 length: len.map(|l| l as usize),
             }
         }
@@ -461,7 +468,11 @@ impl Multipart {
     /// is regenerated. Streamed parts cannot be checked.
     #[must_use]
     pub fn encoder(mut self) -> MultipartEncoder {
-        self.ensure_no_boundary_collision();
+        if !self.ensure_no_boundary_collision() {
+            return MultipartEncoder::error(Error::RequestBuild(
+                "failed to generate a collision-free multipart boundary".into(),
+            ));
+        }
         MultipartEncoder::new(self)
     }
 
@@ -470,7 +481,7 @@ impl Multipart {
     /// If a collision is detected, the boundary is regenerated (up to 10
     /// attempts). Streamed parts are not checked because their content is
     /// not yet available; this is documented as a known limitation.
-    fn ensure_no_boundary_collision(&mut self) {
+    fn ensure_no_boundary_collision(&mut self) -> bool {
         const MAX_ATTEMPTS: usize = 10;
         for _ in 0..MAX_ATTEMPTS {
             let boundary_bytes = self.boundary.0.as_bytes();
@@ -483,10 +494,11 @@ impl Multipart {
                 }
             });
             if !collision {
-                return;
+                return true;
             }
             self.boundary = Boundary::random();
         }
+        false
     }
 }
 
@@ -589,6 +601,7 @@ pub struct MultipartEncoder {
     body: Option<PartBody>,
     state: State,
     part_idx: usize,
+    error: Option<Error>,
 }
 
 impl std::fmt::Debug for MultipartEncoder {
@@ -601,6 +614,7 @@ impl std::fmt::Debug for MultipartEncoder {
             .field("body", &self.body.is_some())
             .field("state", &self.state)
             .field("part_idx", &self.part_idx)
+            .field("has_error", &self.error.is_some())
             .finish()
     }
 }
@@ -629,6 +643,20 @@ impl MultipartEncoder {
                 State::PartHeader
             },
             part_idx: 0,
+            error: None,
+        }
+    }
+
+    fn error(error: Error) -> Self {
+        Self {
+            boundary: String::new(),
+            parts: Vec::new(),
+            header: Bytes::new(),
+            header_pos: 0,
+            body: None,
+            state: State::Done,
+            part_idx: 0,
+            error: Some(error),
         }
     }
 }
@@ -638,6 +666,10 @@ impl Stream for MultipartEncoder {
 
     fn poll_next(self: std::pin::Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let this = self.get_mut();
+
+        if let Some(error) = this.error.take() {
+            return Poll::Ready(Some(Err(error)));
+        }
 
         loop {
             match this.state {

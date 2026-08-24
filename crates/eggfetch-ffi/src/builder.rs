@@ -17,7 +17,9 @@ use crate::handle::ClientBuilderHandle;
 /// Caller must free the returned handle with [`eggfetch_client_builder_free`].
 #[no_mangle]
 pub unsafe extern "C" fn eggfetch_client_builder_new() -> *mut ClientBuilderHandle {
-    Box::into_raw(Box::new(ClientBuilderHandle(Client::builder())))
+    crate::ffi_guard!(ptr::null_mut(), {
+        Box::into_raw(Box::new(ClientBuilderHandle(Some(Client::builder()))))
+    })
 }
 
 /// Free a client builder handle.
@@ -28,9 +30,11 @@ pub unsafe extern "C" fn eggfetch_client_builder_new() -> *mut ClientBuilderHand
 /// Passing a null pointer is a no-op.
 #[no_mangle]
 pub unsafe extern "C" fn eggfetch_client_builder_free(handle: *mut ClientBuilderHandle) {
-    if !handle.is_null() {
-        drop(Box::from_raw(handle));
-    }
+    crate::ffi_guard!((), {
+        if !handle.is_null() {
+            drop(Box::from_raw(handle));
+        }
+    });
 }
 
 /// Build a client from the configured builder.
@@ -46,16 +50,18 @@ pub unsafe extern "C" fn eggfetch_client_builder_free(handle: *mut ClientBuilder
 pub unsafe extern "C" fn eggfetch_client_builder_build(
     raw: *mut ClientBuilderHandle,
 ) -> *mut crate::handle::ClientHandle {
-    let Some(handle) = raw.as_mut() else {
-        return ptr::null_mut();
-    };
-    let builder = std::ptr::read(&handle.0);
-    // Leak the box to prevent its destructor from running on the moved-out value.
-    // `raw` came from Box::into_raw, so forgetting it is safe and only leaks
-    // the small handle allocation (acceptable for FFI consume-once semantics).
-    std::mem::forget(Box::from_raw(raw));
-    let client = builder.build();
-    Box::into_raw(Box::new(crate::handle::ClientHandle(client)))
+    crate::ffi_guard!(ptr::null_mut(), {
+        let Some(handle) = raw.as_mut() else {
+            return ptr::null_mut();
+        };
+        let Some(builder) = handle.0.take() else {
+            drop(Box::from_raw(raw));
+            return ptr::null_mut();
+        };
+        drop(Box::from_raw(raw));
+        let client = builder.build();
+        Box::into_raw(Box::new(crate::handle::ClientHandle(client)))
+    })
 }
 
 /// Set the overall request timeout in seconds.
@@ -73,15 +79,14 @@ pub unsafe extern "C" fn eggfetch_client_builder_timeout(
     handle: *mut ClientBuilderHandle,
     secs: u64,
 ) -> i32 {
-    let Some(handle) = handle.as_mut() else {
-        return -1;
-    };
-    let builder = std::ptr::read(&handle.0);
-    std::ptr::write(
-        &mut handle.0,
-        builder.timeout(eggfetch_core::Timeout::from_secs(secs)),
-    );
-    0
+    crate::ffi_guard!(-1, {
+        let Some(handle) = handle.as_mut() else {
+            return -1;
+        };
+        update_builder(handle, |builder| {
+            builder.timeout(eggfetch_core::Timeout::from_secs(secs))
+        })
+    })
 }
 
 /// Set the connect timeout in seconds.
@@ -98,15 +103,15 @@ pub unsafe extern "C" fn eggfetch_client_builder_connect_timeout(
     handle: *mut ClientBuilderHandle,
     secs: u64,
 ) -> i32 {
-    let Some(handle) = handle.as_mut() else {
-        return -1;
-    };
-    let timeout = eggfetch_core::Timeout::builder()
-        .connect(std::time::Duration::from_secs(secs))
-        .build();
-    let builder = std::ptr::read(&handle.0);
-    std::ptr::write(&mut handle.0, builder.timeout(timeout));
-    0
+    crate::ffi_guard!(-1, {
+        let Some(handle) = handle.as_mut() else {
+            return -1;
+        };
+        let timeout = eggfetch_core::Timeout::builder()
+            .connect(std::time::Duration::from_secs(secs))
+            .build();
+        update_builder(handle, |builder| builder.timeout(timeout))
+    })
 }
 
 /// Set the read timeout in seconds.
@@ -123,15 +128,15 @@ pub unsafe extern "C" fn eggfetch_client_builder_read_timeout(
     handle: *mut ClientBuilderHandle,
     secs: u64,
 ) -> i32 {
-    let Some(handle) = handle.as_mut() else {
-        return -1;
-    };
-    let timeout = eggfetch_core::Timeout::builder()
-        .read(std::time::Duration::from_secs(secs))
-        .build();
-    let builder = std::ptr::read(&handle.0);
-    std::ptr::write(&mut handle.0, builder.timeout(timeout));
-    0
+    crate::ffi_guard!(-1, {
+        let Some(handle) = handle.as_mut() else {
+            return -1;
+        };
+        let timeout = eggfetch_core::Timeout::builder()
+            .read(std::time::Duration::from_secs(secs))
+            .build();
+        update_builder(handle, |builder| builder.timeout(timeout))
+    })
 }
 
 /// Set the write timeout in seconds.
@@ -148,15 +153,15 @@ pub unsafe extern "C" fn eggfetch_client_builder_write_timeout(
     handle: *mut ClientBuilderHandle,
     secs: u64,
 ) -> i32 {
-    let Some(handle) = handle.as_mut() else {
-        return -1;
-    };
-    let timeout = eggfetch_core::Timeout::builder()
-        .write(std::time::Duration::from_secs(secs))
-        .build();
-    let builder = std::ptr::read(&handle.0);
-    std::ptr::write(&mut handle.0, builder.timeout(timeout));
-    0
+    crate::ffi_guard!(-1, {
+        let Some(handle) = handle.as_mut() else {
+            return -1;
+        };
+        let timeout = eggfetch_core::Timeout::builder()
+            .write(std::time::Duration::from_secs(secs))
+            .build();
+        update_builder(handle, |builder| builder.timeout(timeout))
+    })
 }
 
 /// Enable or disable automatic redirect following.
@@ -171,12 +176,12 @@ pub unsafe extern "C" fn eggfetch_client_builder_follow_redirects(
     handle: *mut ClientBuilderHandle,
     follow: i32,
 ) -> i32 {
-    let Some(handle) = handle.as_mut() else {
-        return -1;
-    };
-    let builder = std::ptr::read(&handle.0);
-    std::ptr::write(&mut handle.0, builder.follow_redirects(follow != 0));
-    0
+    crate::ffi_guard!(-1, {
+        let Some(handle) = handle.as_mut() else {
+            return -1;
+        };
+        update_builder(handle, |builder| builder.follow_redirects(follow != 0))
+    })
 }
 
 /// Set the maximum number of redirects to follow.
@@ -191,12 +196,12 @@ pub unsafe extern "C" fn eggfetch_client_builder_max_redirects(
     handle: *mut ClientBuilderHandle,
     max: usize,
 ) -> i32 {
-    let Some(handle) = handle.as_mut() else {
-        return -1;
-    };
-    let builder = std::ptr::read(&handle.0);
-    std::ptr::write(&mut handle.0, builder.max_redirects(max));
-    0
+    crate::ffi_guard!(-1, {
+        let Some(handle) = handle.as_mut() else {
+            return -1;
+        };
+        update_builder(handle, |builder| builder.max_redirects(max))
+    })
 }
 
 /// Set the User-Agent header.
@@ -212,15 +217,15 @@ pub unsafe extern "C" fn eggfetch_client_builder_user_agent(
     handle: *mut ClientBuilderHandle,
     agent: *const std::os::raw::c_char,
 ) -> i32 {
-    let Some(handle) = handle.as_mut() else {
-        return -1;
-    };
-    let Some(agent_str) = crate::handle::cstr_to_opt(agent) else {
-        return -1;
-    };
-    let builder = std::ptr::read(&handle.0);
-    std::ptr::write(&mut handle.0, builder.user_agent(agent_str));
-    0
+    crate::ffi_guard!(-1, {
+        let Some(handle) = handle.as_mut() else {
+            return -1;
+        };
+        let Some(agent_str) = crate::handle::cstr_to_opt(agent) else {
+            return -1;
+        };
+        update_builder(handle, |builder| builder.user_agent(agent_str))
+    })
 }
 
 /// Add a default header to all requests.
@@ -237,23 +242,20 @@ pub unsafe extern "C" fn eggfetch_client_builder_default_header(
     name: *const std::os::raw::c_char,
     value: *const std::os::raw::c_char,
 ) -> i32 {
-    let Some(handle) = handle.as_mut() else {
-        return -1;
-    };
-    let Some(name_str) = crate::handle::cstr_to_opt(name) else {
-        return -1;
-    };
-    let Some(value_str) = crate::handle::cstr_to_opt(value) else {
-        return -1;
-    };
-    let builder = std::ptr::read(&handle.0);
-    match builder.default_header(name_str, value_str) {
-        Ok(b) => {
-            std::ptr::write(&mut handle.0, b);
-            0
-        }
-        Err(_) => -1,
-    }
+    crate::ffi_guard!(-1, {
+        let Some(handle) = handle.as_mut() else {
+            return -1;
+        };
+        let Some(name_str) = crate::handle::cstr_to_opt(name) else {
+            return -1;
+        };
+        let Some(value_str) = crate::handle::cstr_to_opt(value) else {
+            return -1;
+        };
+        update_builder_result(handle, |builder| {
+            builder.default_header(name_str, value_str)
+        })
+    })
 }
 
 /// Set the HTTP version policy.
@@ -274,19 +276,21 @@ pub unsafe extern "C" fn eggfetch_client_builder_http_version(
     handle: *mut ClientBuilderHandle,
     policy: i32,
 ) -> i32 {
-    let Some(handle) = handle.as_mut() else {
-        return -1;
-    };
-    let version_policy = match policy {
-        0 => eggfetch_core::HttpVersionPolicy::Http1Only,
-        1 => eggfetch_core::HttpVersionPolicy::Http2Only,
-        2 => eggfetch_core::HttpVersionPolicy::Auto { allow_http3: false },
-        3 => eggfetch_core::HttpVersionPolicy::Auto { allow_http3: true },
-        _ => return -1,
-    };
-    let builder = std::ptr::read(&handle.0);
-    std::ptr::write(&mut handle.0, builder.http_version_policy(version_policy));
-    0
+    crate::ffi_guard!(-1, {
+        let Some(handle) = handle.as_mut() else {
+            return -1;
+        };
+        let version_policy = match policy {
+            0 => eggfetch_core::HttpVersionPolicy::Http1Only,
+            1 => eggfetch_core::HttpVersionPolicy::Http2Only,
+            2 => eggfetch_core::HttpVersionPolicy::Auto { allow_http3: false },
+            3 => eggfetch_core::HttpVersionPolicy::Auto { allow_http3: true },
+            _ => return -1,
+        };
+        update_builder(handle, |builder| {
+            builder.http_version_policy(version_policy)
+        })
+    })
 }
 
 /// Enable or disable automatic decompression.
@@ -301,12 +305,14 @@ pub unsafe extern "C" fn eggfetch_client_builder_automatic_decompression(
     handle: *mut ClientBuilderHandle,
     enabled: i32,
 ) -> i32 {
-    let Some(handle) = handle.as_mut() else {
-        return -1;
-    };
-    let builder = std::ptr::read(&handle.0);
-    std::ptr::write(&mut handle.0, builder.automatic_decompression(enabled != 0));
-    0
+    crate::ffi_guard!(-1, {
+        let Some(handle) = handle.as_mut() else {
+            return -1;
+        };
+        update_builder(handle, |builder| {
+            builder.automatic_decompression(enabled != 0)
+        })
+    })
 }
 
 /// Set the maximum decoded body size in bytes.
@@ -324,12 +330,12 @@ pub unsafe extern "C" fn eggfetch_client_builder_max_decoded_body_size(
     handle: *mut ClientBuilderHandle,
     max: usize,
 ) -> i32 {
-    let Some(handle) = handle.as_mut() else {
-        return -1;
-    };
-    let builder = std::ptr::read(&handle.0);
-    std::ptr::write(&mut handle.0, builder.max_decoded_body_size(max));
-    0
+    crate::ffi_guard!(-1, {
+        let Some(handle) = handle.as_mut() else {
+            return -1;
+        };
+        update_builder(handle, |builder| builder.max_decoded_body_size(max))
+    })
 }
 
 /// Set the maximum decompression ratio.
@@ -348,12 +354,12 @@ pub unsafe extern "C" fn eggfetch_client_builder_max_decompression_ratio(
     handle: *mut ClientBuilderHandle,
     ratio: f64,
 ) -> i32 {
-    let Some(handle) = handle.as_mut() else {
-        return -1;
-    };
-    let builder = std::ptr::read(&handle.0);
-    std::ptr::write(&mut handle.0, builder.max_decompression_ratio(ratio));
-    0
+    crate::ffi_guard!(-1, {
+        let Some(handle) = handle.as_mut() else {
+            return -1;
+        };
+        update_builder(handle, |builder| builder.max_decompression_ratio(ratio))
+    })
 }
 
 /// Set the maximum number of idle connections in the pool.
@@ -368,12 +374,12 @@ pub unsafe extern "C" fn eggfetch_client_builder_max_idle_connections(
     handle: *mut ClientBuilderHandle,
     max: usize,
 ) -> i32 {
-    let Some(handle) = handle.as_mut() else {
-        return -1;
-    };
-    let builder = std::ptr::read(&handle.0);
-    std::ptr::write(&mut handle.0, builder.max_idle_connections(max));
-    0
+    crate::ffi_guard!(-1, {
+        let Some(handle) = handle.as_mut() else {
+            return -1;
+        };
+        update_builder(handle, |builder| builder.max_idle_connections(max))
+    })
 }
 
 /// Set the maximum number of idle connections per host.
@@ -388,12 +394,12 @@ pub unsafe extern "C" fn eggfetch_client_builder_max_idle_connections_per_host(
     handle: *mut ClientBuilderHandle,
     max: usize,
 ) -> i32 {
-    let Some(handle) = handle.as_mut() else {
-        return -1;
-    };
-    let builder = std::ptr::read(&handle.0);
-    std::ptr::write(&mut handle.0, builder.max_idle_connections_per_host(max));
-    0
+    crate::ffi_guard!(-1, {
+        let Some(handle) = handle.as_mut() else {
+            return -1;
+        };
+        update_builder(handle, |builder| builder.max_idle_connections_per_host(max))
+    })
 }
 
 /// Enable or disable insecure TLS (skip certificate verification).
@@ -411,15 +417,15 @@ pub unsafe extern "C" fn eggfetch_client_builder_danger_accept_invalid_certs(
     handle: *mut ClientBuilderHandle,
     accept: i32,
 ) -> i32 {
-    let Some(handle) = handle.as_mut() else {
-        return -1;
-    };
-    let tls = eggfetch_core::TlsConfig::builder()
-        .danger_accept_invalid_certs(accept != 0)
-        .build();
-    let builder = std::ptr::read(&handle.0);
-    std::ptr::write(&mut handle.0, builder.tls_config(tls));
-    0
+    crate::ffi_guard!(-1, {
+        let Some(handle) = handle.as_mut() else {
+            return -1;
+        };
+        let tls = eggfetch_core::TlsConfig::builder()
+            .danger_accept_invalid_certs(accept != 0)
+            .build();
+        update_builder(handle, |builder| builder.tls_config(tls))
+    })
 }
 
 /// Set a basic auth credential on the client.
@@ -438,21 +444,21 @@ pub unsafe extern "C" fn eggfetch_client_builder_basic_auth(
     username: *const std::os::raw::c_char,
     password: *const std::os::raw::c_char,
 ) -> i32 {
-    let Some(handle) = handle.as_mut() else {
-        return -1;
-    };
-    let Some(username_str) = crate::handle::cstr_to_opt(username) else {
-        return -1;
-    };
-    let Some(password_str) = crate::handle::cstr_to_opt(password) else {
-        return -1;
-    };
-    let Ok(auth) = eggfetch_core::AuthScheme::basic(username_str, password_str) else {
-        return -1;
-    };
-    let builder = std::ptr::read(&handle.0);
-    std::ptr::write(&mut handle.0, builder.auth(auth));
-    0
+    crate::ffi_guard!(-1, {
+        let Some(handle) = handle.as_mut() else {
+            return -1;
+        };
+        let Some(username_str) = crate::handle::cstr_to_opt(username) else {
+            return -1;
+        };
+        let Some(password_str) = crate::handle::cstr_to_opt(password) else {
+            return -1;
+        };
+        let Ok(auth) = eggfetch_core::AuthScheme::basic(username_str, password_str) else {
+            return -1;
+        };
+        update_builder(handle, |builder| builder.auth(auth))
+    })
 }
 
 /// Set a bearer auth token on the client.
@@ -470,16 +476,43 @@ pub unsafe extern "C" fn eggfetch_client_builder_bearer_auth(
     handle: *mut ClientBuilderHandle,
     token: *const std::os::raw::c_char,
 ) -> i32 {
-    let Some(handle) = handle.as_mut() else {
+    crate::ffi_guard!(-1, {
+        let Some(handle) = handle.as_mut() else {
+            return -1;
+        };
+        let Some(token_str) = crate::handle::cstr_to_opt(token) else {
+            return -1;
+        };
+        let Ok(auth) = eggfetch_core::AuthScheme::bearer(token_str) else {
+            return -1;
+        };
+        update_builder(handle, |builder| builder.auth(auth))
+    })
+}
+
+fn update_builder<F>(handle: &mut ClientBuilderHandle, update: F) -> i32
+where
+    F: FnOnce(eggfetch_core::ClientBuilder) -> eggfetch_core::ClientBuilder,
+{
+    let Some(builder) = handle.0.take() else {
         return -1;
     };
-    let Some(token_str) = crate::handle::cstr_to_opt(token) else {
-        return -1;
-    };
-    let Ok(auth) = eggfetch_core::AuthScheme::bearer(token_str) else {
-        return -1;
-    };
-    let builder = std::ptr::read(&handle.0);
-    std::ptr::write(&mut handle.0, builder.auth(auth));
+    handle.0 = Some(update(builder));
     0
+}
+
+fn update_builder_result<F>(handle: &mut ClientBuilderHandle, update: F) -> i32
+where
+    F: FnOnce(eggfetch_core::ClientBuilder) -> eggfetch_core::Result<eggfetch_core::ClientBuilder>,
+{
+    let Some(builder) = handle.0.take() else {
+        return -1;
+    };
+    match update(builder) {
+        Ok(builder) => {
+            handle.0 = Some(builder);
+            0
+        }
+        Err(_) => -1,
+    }
 }

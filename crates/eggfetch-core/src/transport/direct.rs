@@ -281,8 +281,7 @@ pub(crate) fn wrap_incoming(incoming: hyper::body::Incoming) -> BoxBytesStream {
                     if let Ok(data) = frame.into_data() {
                         Poll::Ready(Some(Ok(data)))
                     } else {
-                        cx.waker().wake_by_ref();
-                        Poll::Pending
+                        Poll::Ready(None)
                     }
                 }
                 Poll::Ready(Some(Err(e))) => Poll::Ready(Some(Err(Error::Body(e.to_string())))),

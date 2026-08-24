@@ -268,31 +268,46 @@ pub fn decompress_buffered(
 
     validate_content_encodings(content_encoding)?;
 
-    // Only decode gzip and deflate synchronously. Brotli and zstd are
-    // left as-is; use the streaming path for full decompression.
-    let has_sync_encodings = encodings
-        .iter()
-        .any(|e| matches!(e, ContentCoding::Gzip | ContentCoding::Deflate));
-
-    if !has_sync_encodings {
-        return Ok(bytes::Bytes::copy_from_slice(data));
-    }
-
     let compressed_len = data.len();
+    #[cfg(any(feature = "compression-gzip", feature = "compression-deflate"))]
+    let ratio_limit = limit.max_decompression_ratio.and_then(|ratio| {
+        if ratio.is_finite() && ratio >= 0.0 {
+            #[allow(clippy::cast_precision_loss)]
+            let limit = (compressed_len as f64 * ratio).ceil();
+            #[allow(
+                clippy::cast_possible_truncation,
+                clippy::cast_sign_loss,
+                clippy::cast_precision_loss,
+                reason = "the finite non-negative ratio is clamped to the usize allocation limit"
+            )]
+            Some(limit.min(usize::MAX as f64) as usize)
+        } else {
+            None
+        }
+    });
+    #[cfg(any(feature = "compression-gzip", feature = "compression-deflate"))]
+    let output_limit = match (limit.max_decoded_body_size, ratio_limit) {
+        (Some(size), Some(ratio)) => Some(size.min(ratio)),
+        (Some(size), None) | (None, Some(size)) => Some(size),
+        (None, None) => None,
+    };
+    #[cfg(any(feature = "compression-gzip", feature = "compression-deflate"))]
+    let ratio_is_tighter = ratio_limit.is_some_and(|ratio| Some(ratio) == output_limit);
+
     #[allow(unused_mut)]
     let mut current = bytes::Bytes::copy_from_slice(data);
     for encoding in encodings.into_iter().rev() {
         match encoding {
             #[cfg(any(feature = "compression-gzip", feature = "compression-deflate"))]
             ContentCoding::Gzip | ContentCoding::Deflate => {
-                current = sync_decode_flate2(&current, encoding)?;
+                current = sync_decode_flate2(&current, encoding, output_limit, ratio_is_tighter)?;
             }
             #[cfg(not(any(feature = "compression-gzip", feature = "compression-deflate")))]
             ContentCoding::Gzip | ContentCoding::Deflate => {
-                // Cannot synchronously decode without flate2; pass through raw.
+                return Err(Error::UnsupportedContentEncoding(encoding.as_str().into()));
             }
             ContentCoding::Brotli | ContentCoding::Zstd => {
-                // Cannot synchronously decode brotli/zstd; pass through raw.
+                return Err(Error::UnsupportedContentEncoding(encoding.as_str().into()));
             }
         }
     }
@@ -317,24 +332,47 @@ pub fn decompress_buffered(
 
 /// Synchronously decode a single layer of gzip or deflate compression using flate2.
 #[cfg(any(feature = "compression-gzip", feature = "compression-deflate"))]
-fn sync_decode_flate2(data: &bytes::Bytes, encoding: ContentCoding) -> Result<bytes::Bytes> {
+fn sync_decode_flate2(
+    data: &bytes::Bytes,
+    encoding: ContentCoding,
+    output_limit: Option<usize>,
+    ratio_is_tighter: bool,
+) -> Result<bytes::Bytes> {
     use std::io::Read;
 
     match encoding {
         ContentCoding::Gzip => {
-            let mut decoder = flate2::read::GzDecoder::new(&data[..]);
+            let decoder = flate2::read::GzDecoder::new(&data[..]);
             let mut output = Vec::new();
-            decoder
+            let mut limited =
+                decoder.take(output_limit.map_or(u64::MAX, |limit| limit.saturating_add(1) as u64));
+            limited
                 .read_to_end(&mut output)
                 .map_err(|e| Error::Decompression(e.to_string()))?;
+            if output_limit.is_some_and(|limit| output.len() > limit) {
+                return Err(if ratio_is_tighter {
+                    Error::DecompressionRatioExceeded
+                } else {
+                    Error::DecodedBodyTooLarge
+                });
+            }
             Ok(bytes::Bytes::from(output))
         }
         ContentCoding::Deflate => {
-            let mut decoder = flate2::read::DeflateDecoder::new(&data[..]);
+            let decoder = flate2::read::DeflateDecoder::new(&data[..]);
             let mut output = Vec::new();
-            decoder
+            let mut limited =
+                decoder.take(output_limit.map_or(u64::MAX, |limit| limit.saturating_add(1) as u64));
+            limited
                 .read_to_end(&mut output)
                 .map_err(|e| Error::Decompression(e.to_string()))?;
+            if output_limit.is_some_and(|limit| output.len() > limit) {
+                return Err(if ratio_is_tighter {
+                    Error::DecompressionRatioExceeded
+                } else {
+                    Error::DecodedBodyTooLarge
+                });
+            }
             Ok(bytes::Bytes::from(output))
         }
         _ => unreachable!("sync_decode_flate2 called with non-flate2 encoding"),

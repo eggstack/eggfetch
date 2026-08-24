@@ -45,15 +45,6 @@ pub fn redact_url(url: &Url) -> String {
     safe.to_string()
 }
 
-/// Redact a header value for safe display.
-pub fn redact_header_value(value: &str) -> &str {
-    if value.is_empty() {
-        value
-    } else {
-        "<redacted>"
-    }
-}
-
 /// Redact credentials from a URL string for safe display in error messages.
 ///
 /// If the string parses as a valid URL, credentials are stripped. If parsing

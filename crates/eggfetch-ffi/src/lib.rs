@@ -15,6 +15,20 @@
 
 #![allow(unsafe_code)]
 
+/// Run an exported FFI operation without allowing a Rust panic to unwind
+/// across the C ABI. The operation's documented sentinel value is returned
+/// when a panic is caught.
+#[doc(hidden)]
+#[macro_export]
+macro_rules! ffi_guard {
+    ($fallback:expr, $body:block) => {{
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| $body)) {
+            Ok(value) => value,
+            Err(_) => $fallback,
+        }
+    }};
+}
+
 mod builder;
 mod client;
 mod error;

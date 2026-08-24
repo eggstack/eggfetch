@@ -710,6 +710,14 @@ async fn run(cli: Cli) -> Result<()> {
     }
     client_builder = client_builder.tls_config(tls_builder.build());
 
+    let protocol_count = [cli.http1, cli.http2, cli.http3]
+        .into_iter()
+        .filter(|enabled| *enabled)
+        .count();
+    if protocol_count > 1 {
+        anyhow::bail!("--http1, --http2, and --http3 are mutually exclusive");
+    }
+
     let http_version_policy = if cli.http2 {
         HttpVersionPolicy::Http2Only
     } else if cli.http3 {
@@ -757,20 +765,22 @@ async fn run(cli: Cli) -> Result<()> {
         req_builder = req_builder.query(key, value);
     }
 
-    if let Some(t) = cli.timeout {
-        req_builder = req_builder.timeout(Timeout::from_secs(t));
-    }
+    let mut request_timeout = cli.timeout.map(Timeout::from_secs).unwrap_or_default();
     if let Some(t) = cli.connect_timeout {
-        let timeout = Timeout::builder().connect(Duration::from_secs(t)).build();
-        req_builder = req_builder.timeout(timeout);
+        request_timeout.connect = Some(Duration::from_secs(t));
     }
     if let Some(t) = cli.total_timeout {
-        let timeout = Timeout::builder().total(Duration::from_secs(t)).build();
-        req_builder = req_builder.timeout(timeout);
+        request_timeout.total = Some(Duration::from_secs(t));
     }
     if let Some(t) = cli.read_timeout {
-        let timeout = Timeout::builder().read(Duration::from_secs(t)).build();
-        req_builder = req_builder.timeout(timeout);
+        request_timeout.read = Some(Duration::from_secs(t));
+    }
+    if cli.timeout.is_some()
+        || cli.connect_timeout.is_some()
+        || cli.total_timeout.is_some()
+        || cli.read_timeout.is_some()
+    {
+        req_builder = req_builder.timeout(request_timeout);
     }
 
     let has_form = !cli.form.is_empty();
@@ -784,7 +794,7 @@ async fn run(cli: Cli) -> Result<()> {
         .filter(|&&x| x)
         .count();
 
-    if body_count > 1 && !(has_form && has_files) {
+    if body_count > 1 && !(has_form && has_files && body_count == 2) {
         anyhow::bail!("body sources (body, body-file, json, form, file) are mutually exclusive");
     }
 

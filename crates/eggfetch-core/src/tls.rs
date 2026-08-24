@@ -218,9 +218,14 @@ impl TlsConfig {
             ));
         }
 
-        let mut config = if self.verify_certificate {
+        let mut config = if self.verify_certificate && self.verify_hostname {
             rustls::ClientConfig::builder_with_protocol_versions(&protocol_versions)
                 .with_root_certificates(root_store)
+                .with_no_client_auth()
+        } else if self.verify_certificate {
+            rustls::ClientConfig::builder_with_protocol_versions(&protocol_versions)
+                .dangerous()
+                .with_custom_certificate_verifier(no_hostname_verifier(&root_store)?)
                 .with_no_client_auth()
         } else {
             rustls::ClientConfig::builder_with_protocol_versions(&protocol_versions)
@@ -337,13 +342,22 @@ impl TlsConfig {
     pub(crate) fn build_quic_rustls_config(&self) -> Result<rustls::ClientConfig> {
         let root_store = self.build_root_store()?;
 
-        let mut config = if self.verify_certificate {
+        let mut config = if self.verify_certificate && self.verify_hostname {
             rustls::ClientConfig::builder_with_provider(Arc::new(
                 rustls::crypto::ring::default_provider(),
             ))
             .with_protocol_versions(&[&rustls::version::TLS13])
             .map_err(|e| Error::Tls(format!("TLS version config: {e}")))?
             .with_root_certificates(root_store)
+            .with_no_client_auth()
+        } else if self.verify_certificate {
+            rustls::ClientConfig::builder_with_provider(Arc::new(
+                rustls::crypto::ring::default_provider(),
+            ))
+            .with_protocol_versions(&[&rustls::version::TLS13])
+            .map_err(|e| Error::Tls(format!("TLS version config: {e}")))?
+            .dangerous()
+            .with_custom_certificate_verifier(no_hostname_verifier(&root_store)?)
             .with_no_client_auth()
         } else {
             rustls::ClientConfig::builder_with_provider(Arc::new(
@@ -572,6 +586,71 @@ impl TlsConfigBuilder {
 /// A certificate verifier that accepts all certificates (unsafe).
 #[derive(Debug)]
 struct NoVerifier;
+
+/// Verify a certificate chain while intentionally skipping hostname matching.
+///
+/// This preserves certificate and signature validation for callers that need
+/// to use a trusted certificate whose name is not the request hostname.
+#[derive(Debug)]
+struct NoHostnameVerifier {
+    roots: Arc<rustls::RootCertStore>,
+    delegate: Arc<rustls::client::WebPkiServerVerifier>,
+}
+
+fn no_hostname_verifier(
+    roots: &rustls::RootCertStore,
+) -> Result<Arc<dyn rustls::client::danger::ServerCertVerifier>> {
+    let roots = Arc::new(roots.clone());
+    let delegate = rustls::client::WebPkiServerVerifier::builder(roots.clone())
+        .build()
+        .map_err(|e| Error::TlsConfig(format!("failed to build certificate verifier: {e}")))?;
+    Ok(Arc::new(NoHostnameVerifier { roots, delegate }))
+}
+
+impl rustls::client::danger::ServerCertVerifier for NoHostnameVerifier {
+    fn verify_server_cert(
+        &self,
+        end_entity: &CertificateDer<'_>,
+        intermediates: &[CertificateDer<'_>],
+        _server_name: &rustls::pki_types::ServerName<'_>,
+        _ocsp_response: &[u8],
+        now: rustls::pki_types::UnixTime,
+    ) -> std::result::Result<rustls::client::danger::ServerCertVerified, rustls::Error> {
+        let cert = rustls::server::ParsedCertificate::try_from(end_entity)?;
+        rustls::client::verify_server_cert_signed_by_trust_anchor(
+            &cert,
+            &self.roots,
+            intermediates,
+            now,
+            rustls::crypto::ring::default_provider()
+                .signature_verification_algorithms
+                .all,
+        )?;
+        Ok(rustls::client::danger::ServerCertVerified::assertion())
+    }
+
+    fn verify_tls12_signature(
+        &self,
+        message: &[u8],
+        cert: &CertificateDer<'_>,
+        dss: &rustls::DigitallySignedStruct,
+    ) -> std::result::Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
+        self.delegate.verify_tls12_signature(message, cert, dss)
+    }
+
+    fn verify_tls13_signature(
+        &self,
+        message: &[u8],
+        cert: &CertificateDer<'_>,
+        dss: &rustls::DigitallySignedStruct,
+    ) -> std::result::Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
+        self.delegate.verify_tls13_signature(message, cert, dss)
+    }
+
+    fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
+        self.delegate.supported_verify_schemes()
+    }
+}
 
 impl rustls::client::danger::ServerCertVerifier for NoVerifier {
     fn verify_server_cert(

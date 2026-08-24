@@ -390,11 +390,6 @@ pub(crate) async fn send_with_redirects(client: &Client, request: Request) -> Re
             {
                 cookie_header_allowed = false;
             }
-        } else if prev_url.is_some() {
-            #[cfg(feature = "cookies")]
-            {
-                cookie_header_allowed = true;
-            }
         }
 
         hop_request.set_auth(if credentials_allowed {

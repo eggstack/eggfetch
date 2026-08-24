@@ -143,6 +143,7 @@ impl PyAsyncClient {
         }
 
         let proxy_override = proxy::parse_proxy(proxy)?;
+
         if let ProxyOverride::Override(ref url) = proxy_override {
             let mut p = eggfetch_core::Proxy::all_compat(&proxy::normalize_compat_proxy_url(url))
                 .map_err(map_err)?;
@@ -322,6 +323,33 @@ impl PyAsyncClient {
 
         let proxy_override = proxy::parse_proxy(proxy)?;
 
+        // Preserve proxy-leg headers and TLS configuration for per-request
+        // HTTPX Proxy overrides, just as the sync path does.
+        let (proxy_headers, proxy_ssl_context) = if let Some(proxy_obj) = proxy {
+            if let Ok(proxy_module) = py.import("eggfetch.compat.httpx._proxy") {
+                if let Ok(proxy_class) = proxy_module.getattr("Proxy") {
+                    if proxy_obj.is_instance(&proxy_class).unwrap_or(false) {
+                        let headers = proxy_obj
+                            .getattr("headers")
+                            .ok()
+                            .and_then(|h| crate::conversion::python_headers_to_rust(py, &h).ok());
+                        let ssl_ctx = proxy_obj.getattr("ssl_context").ok();
+                        (headers, ssl_ctx)
+                    } else {
+                        (None, None)
+                    }
+                } else {
+                    (None, None)
+                }
+            } else {
+                (None, None)
+            }
+        } else {
+            (None, None)
+        };
+        let proxy_tls_config =
+            crate::tls::ssl_context_to_tls_config(py, proxy_ssl_context.as_ref())?;
+
         let retry_override = retry::parse_retry_option(retries)?;
 
         let effective_decompress = decompress.or(self.decompress);
@@ -372,9 +400,15 @@ impl PyAsyncClient {
                     builder = builder.without_proxy();
                 }
                 ProxyOverride::Override(url) => {
-                    let p =
+                    let mut p =
                         eggfetch_core::Proxy::all_compat(&proxy::normalize_compat_proxy_url(&url))
                             .map_err(map_err)?;
+                    if let Some(ref hdrs) = proxy_headers {
+                        p = p.proxy_headers(hdrs.clone());
+                    }
+                    if let Some(ref tls) = proxy_tls_config {
+                        p = p.with_proxy_tls_config(tls.clone());
+                    }
                     builder = builder.proxy(&p);
                 }
             }

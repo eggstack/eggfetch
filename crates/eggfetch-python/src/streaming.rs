@@ -110,14 +110,25 @@ pub(crate) struct PyStreamingResponse {
     /// Original wire `Content-Length`, for the HTTPX compatibility facade.
     #[pyo3(get)]
     _wire_content_length: Option<String>,
-    body_state: AtomicU8,
-    response: std::sync::Mutex<Option<eggfetch_core::Response>>,
+    body_state: Arc<AtomicU8>,
+    response: Arc<std::sync::Mutex<Option<eggfetch_core::Response>>>,
     stream_cancel: tokio::sync::watch::Sender<bool>,
     runtime_handle: tokio::runtime::Handle,
     _runtime_lease: Option<RuntimeLease>,
     encoding_name: Option<String>,
-    cached_content: std::sync::Mutex<Option<Bytes>>,
-    cached_text: std::sync::Mutex<Option<String>>,
+    cached_content: Arc<std::sync::Mutex<Option<Bytes>>>,
+    cached_text: Arc<std::sync::Mutex<Option<String>>>,
+}
+
+#[derive(Clone)]
+struct StreamingBodyState {
+    body_state: Arc<AtomicU8>,
+    response: Arc<std::sync::Mutex<Option<eggfetch_core::Response>>>,
+    stream_cancel: tokio::sync::watch::Sender<bool>,
+    runtime_handle: tokio::runtime::Handle,
+    encoding_name: Option<String>,
+    cached_content: Arc<std::sync::Mutex<Option<Bytes>>>,
+    cached_text: Arc<std::sync::Mutex<Option<String>>>,
 }
 
 impl PyStreamingResponse {
@@ -232,19 +243,84 @@ impl PyStreamingResponse {
                 cookies,
                 _wire_content_encoding: wire_content_encoding,
                 _wire_content_length: wire_content_length,
-                body_state: AtomicU8::new(STATE_STREAMING),
-                response: std::sync::Mutex::new(Some(response)),
+                body_state: Arc::new(AtomicU8::new(STATE_STREAMING)),
+                response: Arc::new(std::sync::Mutex::new(Some(response))),
                 stream_cancel,
                 runtime_handle,
                 _runtime_lease: runtime_lease,
                 encoding_name: encoding,
-                cached_content: std::sync::Mutex::new(None),
-                cached_text: std::sync::Mutex::new(None),
+                cached_content: Arc::new(std::sync::Mutex::new(None)),
+                cached_text: Arc::new(std::sync::Mutex::new(None)),
             },
         )
         .map(|inner| inner.into_bound(py))
     }
 
+    fn take_stream(&self, mode: StreamMode) -> PyResult<eggfetch_core::body::BoxBytesStream> {
+        self.body_state().take_stream(mode)
+    }
+
+    fn body_state(&self) -> StreamingBodyState {
+        StreamingBodyState {
+            body_state: self.body_state.clone(),
+            response: self.response.clone(),
+            stream_cancel: self.stream_cancel.clone(),
+            runtime_handle: self.runtime_handle.clone(),
+            encoding_name: self.encoding_name.clone(),
+            cached_content: self.cached_content.clone(),
+            cached_text: self.cached_text.clone(),
+        }
+    }
+
+    fn ensure_streaming(&self) -> PyResult<()> {
+        match self.body_state.load(Ordering::SeqCst) {
+            STATE_STREAMING => Ok(()),
+            STATE_BUFFERED => Err(StreamConsumed::new_err(
+                "streaming body has already been buffered",
+            )),
+            STATE_CONSUMED => Err(StreamConsumed::new_err("streaming body has been consumed")),
+            STATE_CLOSED => Err(StreamClosed::new_err("streaming body has been closed")),
+            _ => unreachable!(),
+        }
+    }
+
+    fn drain_and_close(&self) -> PyResult<()> {
+        // Wake any reader/iterator that already owns the body. Its select
+        // branch will drop the stream and release the core pool lease.
+        let _ = self.stream_cancel.send(true);
+        let mut response_guard = self
+            .response
+            .lock()
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+        if self
+            .body_state
+            .compare_exchange(
+                STATE_STREAMING,
+                STATE_CLOSED,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            )
+            .is_ok()
+        {
+            // Dropping the live body is sufficient to release the core lease
+            // and lets the transport discard the unread response. Blocking
+            // here to drain an untrusted server would defeat close().
+            drop(response_guard.take());
+        } else {
+            // Closing is terminal even when a reader or iterator has already
+            // moved the body out of the response object.
+            self.body_state.store(STATE_CLOSED, Ordering::Release);
+        }
+        Ok(())
+    }
+
+    fn take_stream_or_err(&self) -> PyResult<eggfetch_core::body::BoxBytesStream> {
+        self.ensure_streaming()?;
+        self.take_stream(StreamMode::Decoded)
+    }
+}
+
+impl StreamingBodyState {
     fn take_stream(&self, mode: StreamMode) -> PyResult<eggfetch_core::body::BoxBytesStream> {
         let mut response_guard = self
             .response
@@ -282,18 +358,12 @@ impl PyStreamingResponse {
             StreamMode::Raw => response.raw_bytes_stream(),
         }
         .map_err(map_err)?;
-        // Taking ownership transfers the body to a reader/iterator. If the
-        // reader is cancelled or dropped, the stream is terminally consumed
-        // and its core lease is released by dropping the stream.
         Ok(stream)
     }
 
     fn drain_all_bytes(&self) -> PyResult<Bytes> {
         let mut stream = self.take_stream(StreamMode::Decoded)?;
         let mut cancellation = self.stream_cancel.subscribe();
-        // Use the shared runtime. If we are already inside a Tokio worker
-        // thread (e.g. called from an async Python task), spawning a task
-        // on the same runtime and blocking via a channel avoids a deadlock.
         let (tx, rx) = std::sync::mpsc::channel();
         self.runtime_handle.spawn(async move {
             let result: PyResult<Bytes> = async {
@@ -349,7 +419,6 @@ impl PyStreamingResponse {
                 return Ok(text.clone());
             }
         }
-        // If the content is already buffered, decode from it instead of re-reading the stream.
         if let Ok(cache) = self.cached_content.lock() {
             if let Some(ref bytes) = *cache {
                 let text = decode_bytes(self.encoding_name.as_deref(), bytes);
@@ -365,53 +434,6 @@ impl PyStreamingResponse {
             *cache = Some(text.clone());
         }
         Ok(text)
-    }
-
-    fn ensure_streaming(&self) -> PyResult<()> {
-        match self.body_state.load(Ordering::SeqCst) {
-            STATE_STREAMING => Ok(()),
-            STATE_BUFFERED => Err(StreamConsumed::new_err(
-                "streaming body has already been buffered",
-            )),
-            STATE_CONSUMED => Err(StreamConsumed::new_err("streaming body has been consumed")),
-            STATE_CLOSED => Err(StreamClosed::new_err("streaming body has been closed")),
-            _ => unreachable!(),
-        }
-    }
-
-    fn drain_and_close(&self) -> PyResult<()> {
-        // Wake any reader/iterator that already owns the body. Its select
-        // branch will drop the stream and release the core pool lease.
-        let _ = self.stream_cancel.send(true);
-        let mut response_guard = self
-            .response
-            .lock()
-            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
-        if self
-            .body_state
-            .compare_exchange(
-                STATE_STREAMING,
-                STATE_CLOSED,
-                Ordering::AcqRel,
-                Ordering::Acquire,
-            )
-            .is_ok()
-        {
-            // Dropping the live body is sufficient to release the core lease
-            // and lets the transport discard the unread response. Blocking
-            // here to drain an untrusted server would defeat close().
-            drop(response_guard.take());
-        } else {
-            // Closing is terminal even when a reader or iterator has already
-            // moved the body out of the response object.
-            self.body_state.store(STATE_CLOSED, Ordering::Release);
-        }
-        Ok(())
-    }
-
-    fn take_stream_or_err(&self) -> PyResult<eggfetch_core::body::BoxBytesStream> {
-        self.ensure_streaming()?;
-        self.take_stream(StreamMode::Decoded)
     }
 }
 
@@ -672,18 +694,18 @@ impl PyStreamingResponse {
     }
 
     fn read(slf: Py<Self>, py: Python<'_>) -> PyResult<PyObject> {
-        let bytes = py.allow_threads(|| {
-            Python::with_gil(|py| {
-                let borrowed = slf.borrow(py);
-                borrowed.ensure_streaming()?;
-                borrowed.drain_all_bytes()
-            })
+        let state = Python::with_gil(|py| {
+            let borrowed = slf.borrow(py);
+            borrowed.ensure_streaming()?;
+            Ok::<_, PyErr>(borrowed.body_state())
         })?;
+        let bytes = py.allow_threads(|| state.drain_all_bytes())?;
         Ok(PyBytes::new(py, &bytes).into())
     }
 
     fn text(slf: Py<Self>, py: Python<'_>) -> PyResult<String> {
-        py.allow_threads(|| Python::with_gil(|py| slf.borrow(py).drain_all_text()))
+        let state = Python::with_gil(|py| Ok::<_, PyErr>(slf.borrow(py).body_state()))?;
+        py.allow_threads(|| state.drain_all_text())
     }
 
     fn aread<'py>(slf: Py<Self>, py: Python<'py>) -> PyResult<Bound<'py, pyo3::PyAny>> {
@@ -701,7 +723,7 @@ impl PyStreamingResponse {
             loop {
                 tokio::select! {
                     changed = cancellation.changed() => {
-                        if changed.is_ok() || cancellation.borrow_and_update().to_owned() {
+                        if changed.is_err() || *cancellation.borrow_and_update() {
                             return Err(StreamClosed::new_err("streaming body has been closed"));
                         }
                     }

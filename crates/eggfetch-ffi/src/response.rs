@@ -10,9 +10,11 @@ use crate::handle::ResponseHandle;
 /// Passing a null pointer is a no-op.
 #[no_mangle]
 pub unsafe extern "C" fn eggfetch_response_free(handle: *mut ResponseHandle) {
-    if !handle.is_null() {
-        drop(Box::from_raw(handle));
-    }
+    crate::ffi_guard!((), {
+        if !handle.is_null() {
+            drop(Box::from_raw(handle));
+        }
+    });
 }
 
 /// Get the HTTP status code of the response.
@@ -24,7 +26,7 @@ pub unsafe extern "C" fn eggfetch_response_free(handle: *mut ResponseHandle) {
 /// `handle` must be a valid, non-freed response handle.
 #[no_mangle]
 pub unsafe extern "C" fn eggfetch_response_status(handle: *const ResponseHandle) -> u16 {
-    handle.as_ref().map_or(0, |h| h.status)
+    crate::ffi_guard!(0, { handle.as_ref().map_or(0, |h| h.status) })
 }
 
 /// Get the response URL as a newly allocated C string.
@@ -42,10 +44,12 @@ pub unsafe extern "C" fn eggfetch_response_status(handle: *const ResponseHandle)
 pub unsafe extern "C" fn eggfetch_response_url(
     handle: *const ResponseHandle,
 ) -> *mut std::os::raw::c_char {
-    let Some(handle) = handle.as_ref() else {
-        return std::ptr::null_mut();
-    };
-    crate::handle::FfiString::from_string(handle.url.clone()).into_raw()
+    crate::ffi_guard!(std::ptr::null_mut(), {
+        let Some(handle) = handle.as_ref() else {
+            return std::ptr::null_mut();
+        };
+        crate::handle::FfiString::from_string(handle.url.clone()).into_raw()
+    })
 }
 
 /// Get the number of response headers.
@@ -57,7 +61,7 @@ pub unsafe extern "C" fn eggfetch_response_url(
 /// `handle` must be a valid, non-freed response handle.
 #[no_mangle]
 pub unsafe extern "C" fn eggfetch_response_header_count(handle: *const ResponseHandle) -> usize {
-    handle.as_ref().map_or(0, |h| h.headers.len())
+    crate::ffi_guard!(0, { handle.as_ref().map_or(0, |h| h.headers.len()) })
 }
 
 /// Get a response header by index.
@@ -82,18 +86,20 @@ pub unsafe extern "C" fn eggfetch_response_header(
     name_out: *mut *mut std::os::raw::c_char,
     value_out: *mut *mut std::os::raw::c_char,
 ) -> i32 {
-    let Some(handle) = handle.as_ref() else {
-        return -1;
-    };
-    if name_out.is_null() || value_out.is_null() {
-        return -1;
-    }
-    let Some((name, value)) = handle.headers.get(index) else {
-        return -1;
-    };
-    *name_out = crate::handle::FfiString::from_string(name.clone()).into_raw();
-    *value_out = crate::handle::FfiString::from_string(value.clone()).into_raw();
-    0
+    crate::ffi_guard!(-1, {
+        let Some(handle) = handle.as_ref() else {
+            return -1;
+        };
+        if name_out.is_null() || value_out.is_null() {
+            return -1;
+        }
+        let Some((name, value)) = handle.headers.get(index) else {
+            return -1;
+        };
+        *name_out = crate::handle::FfiString::from_string(name.clone()).into_raw();
+        *value_out = crate::handle::FfiString::from_string(value.clone()).into_raw();
+        0
+    })
 }
 
 /// Get the response body as a newly allocated byte buffer.
@@ -113,21 +119,29 @@ pub unsafe extern "C" fn eggfetch_response_body(
     data_out: *mut *mut u8,
     len_out: *mut usize,
 ) -> i32 {
-    let Some(handle) = handle.as_ref() else {
-        return -1;
-    };
-    if data_out.is_null() || len_out.is_null() {
-        return -1;
-    }
-    let len = handle.body.len();
-    // Safety: We check len > 0 implicitly — alloc with len=0 returns a non-null dangling pointer
-    // which is valid for zero-length reads. We use abort-on-layout-error for safety.
-    let layout = std::alloc::Layout::array::<u8>(len).unwrap_or_else(|_| std::process::abort());
-    let buf = std::alloc::alloc(layout);
-    std::ptr::copy_nonoverlapping(handle.body.as_ptr(), buf, len);
-    *data_out = buf;
-    *len_out = len;
-    0
+    crate::ffi_guard!(-1, {
+        let Some(handle) = handle.as_ref() else {
+            return -1;
+        };
+        if data_out.is_null() || len_out.is_null() {
+            return -1;
+        }
+        let len = handle.body.len();
+        if len == 0 {
+            *data_out = std::ptr::null_mut();
+            *len_out = 0;
+            return 0;
+        }
+        let layout = std::alloc::Layout::array::<u8>(len).unwrap_or_else(|_| std::process::abort());
+        let buf = std::alloc::alloc(layout);
+        if buf.is_null() {
+            return -1;
+        }
+        std::ptr::copy_nonoverlapping(handle.body.as_ptr(), buf, len);
+        *data_out = buf;
+        *len_out = len;
+        0
+    })
 }
 
 /// Free a body buffer allocated by [`eggfetch_response_body`].
@@ -138,8 +152,11 @@ pub unsafe extern "C" fn eggfetch_response_body(
 /// Passing a null pointer is a no-op.
 #[no_mangle]
 pub unsafe extern "C" fn eggfetch_body_free(data: *mut u8, len: usize) {
-    if !data.is_null() && len > 0 {
-        let layout = std::alloc::Layout::array::<u8>(len).unwrap_or_else(|_| std::process::abort());
-        std::alloc::dealloc(data, layout);
-    }
+    crate::ffi_guard!((), {
+        if !data.is_null() && len > 0 {
+            let layout =
+                std::alloc::Layout::array::<u8>(len).unwrap_or_else(|_| std::process::abort());
+            std::alloc::dealloc(data, layout);
+        }
+    });
 }

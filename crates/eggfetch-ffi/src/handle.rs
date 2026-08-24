@@ -8,7 +8,7 @@ use eggfetch_core::Client;
 /// Opaque handle to a client builder.
 ///
 /// Single-thread, single-use. Must be consumed by building a client or freed.
-pub struct ClientBuilderHandle(pub(crate) eggfetch_core::ClientBuilder);
+pub struct ClientBuilderHandle(pub(crate) Option<eggfetch_core::ClientBuilder>);
 
 /// Opaque handle to an HTTP client.
 ///
@@ -18,7 +18,7 @@ pub struct ClientHandle(pub(crate) Client);
 /// Opaque handle to a request builder.
 ///
 /// Single-thread, single-use. Must be freed after use.
-pub struct RequestHandle(pub(crate) eggfetch_core::RequestBuilder);
+pub struct RequestHandle(pub(crate) Option<eggfetch_core::RequestBuilder>);
 
 /// Opaque handle to a completed response.
 ///
@@ -107,9 +107,11 @@ impl Drop for FfiString {
 /// Passing a null pointer is a no-op.
 #[no_mangle]
 pub unsafe extern "C" fn eggfetch_string_free(s: *mut c_char) {
-    if !s.is_null() {
-        drop(CString::from_raw(s));
-    }
+    crate::ffi_guard!((), {
+        if !s.is_null() {
+            drop(CString::from_raw(s));
+        }
+    });
 }
 
 /// Read a C string from a pointer, returning `None` if null.

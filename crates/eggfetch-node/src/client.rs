@@ -148,76 +148,80 @@ impl EggfetchClient {
         let body = body.map(String::from);
 
         async move {
-            let client = client_ptr as *mut eggfetch_ffi::ClientHandle;
-            let method_c = std::ffi::CString::new(method)
-                .map_err(|e| napi::Error::from_reason(format!("invalid method string: {e}")))?;
-            let url_c = std::ffi::CString::new(url)
-                .map_err(|e| napi::Error::from_reason(format!("invalid url string: {e}")))?;
+            napi::bindgen_prelude::spawn_blocking(move || {
+                let client = client_ptr as *mut eggfetch_ffi::ClientHandle;
+                let method_c = std::ffi::CString::new(method)
+                    .map_err(|e| napi::Error::from_reason(format!("invalid method string: {e}")))?;
+                let url_c = std::ffi::CString::new(url)
+                    .map_err(|e| napi::Error::from_reason(format!("invalid url string: {e}")))?;
 
-            let req = unsafe {
-                eggfetch_ffi::eggfetch_client_request(client, method_c.as_ptr(), url_c.as_ptr())
-            };
-            if req.is_null() {
-                return Err(napi::Error::from_reason("failed to create request"));
-            }
-
-            if let Some(body_str) = &body {
-                let body_c = match std::ffi::CString::new(body_str.as_str()) {
-                    Ok(body_c) => body_c,
-                    Err(e) => {
-                        unsafe {
-                            eggfetch_ffi::eggfetch_request_free(req);
-                        }
-                        return Err(napi::Error::from_reason(format!(
-                            "invalid body string: {e}"
-                        )));
-                    }
+                let req = unsafe {
+                    eggfetch_ffi::eggfetch_client_request(client, method_c.as_ptr(), url_c.as_ptr())
                 };
-                unsafe {
-                    eggfetch_ffi::eggfetch_request_body_str(req, body_c.as_ptr());
+                if req.is_null() {
+                    return Err(napi::Error::from_reason("failed to create request"));
                 }
-            }
 
-            let mut err: *mut ErrorHandle = ptr::null_mut();
-            let resp = unsafe { eggfetch_ffi::eggfetch_client_send(client, req, &mut err) };
-
-            if resp.is_null() {
-                if !err.is_null() {
-                    let kind = unsafe { eggfetch_ffi::eggfetch_error_kind(err) };
-                    let msg = unsafe { eggfetch_ffi::eggfetch_error_message(err) };
-                    let kind_str = if kind.is_null() {
-                        "unknown".to_owned()
-                    } else {
-                        unsafe { std::ffi::CStr::from_ptr(kind) }
-                            .to_string_lossy()
-                            .into_owned()
-                    };
-                    let msg_str = if msg.is_null() {
-                        "unknown error".to_owned()
-                    } else {
-                        unsafe { std::ffi::CStr::from_ptr(msg) }
-                            .to_string_lossy()
-                            .into_owned()
+                if let Some(body_str) = &body {
+                    let body_c = match std::ffi::CString::new(body_str.as_str()) {
+                        Ok(body_c) => body_c,
+                        Err(e) => {
+                            unsafe {
+                                eggfetch_ffi::eggfetch_request_free(req);
+                            }
+                            return Err(napi::Error::from_reason(format!(
+                                "invalid body string: {e}"
+                            )));
+                        }
                     };
                     unsafe {
-                        if !kind.is_null() {
-                            eggfetch_ffi::eggfetch_string_free(kind);
-                        }
-                        if !msg.is_null() {
-                            eggfetch_ffi::eggfetch_string_free(msg);
-                        }
-                        eggfetch_ffi::eggfetch_error_free(err);
+                        eggfetch_ffi::eggfetch_request_body_str(req, body_c.as_ptr());
                     }
-                    return Err(napi::Error::from_reason(format!(
-                        "eggfetch error [{kind_str}]: {msg_str}"
-                    )));
                 }
-                return Err(napi::Error::from_reason(
-                    "request failed with unknown error",
-                ));
-            }
 
-            Ok(crate::EggfetchResponse::from_raw(resp))
+                let mut err: *mut ErrorHandle = ptr::null_mut();
+                let resp = unsafe { eggfetch_ffi::eggfetch_client_send(client, req, &mut err) };
+
+                if resp.is_null() {
+                    if !err.is_null() {
+                        let kind = unsafe { eggfetch_ffi::eggfetch_error_kind(err) };
+                        let msg = unsafe { eggfetch_ffi::eggfetch_error_message(err) };
+                        let kind_str = if kind.is_null() {
+                            "unknown".to_owned()
+                        } else {
+                            unsafe { std::ffi::CStr::from_ptr(kind) }
+                                .to_string_lossy()
+                                .into_owned()
+                        };
+                        let msg_str = if msg.is_null() {
+                            "unknown error".to_owned()
+                        } else {
+                            unsafe { std::ffi::CStr::from_ptr(msg) }
+                                .to_string_lossy()
+                                .into_owned()
+                        };
+                        unsafe {
+                            if !kind.is_null() {
+                                eggfetch_ffi::eggfetch_string_free(kind);
+                            }
+                            if !msg.is_null() {
+                                eggfetch_ffi::eggfetch_string_free(msg);
+                            }
+                            eggfetch_ffi::eggfetch_error_free(err);
+                        }
+                        return Err(napi::Error::from_reason(format!(
+                            "eggfetch error [{kind_str}]: {msg_str}"
+                        )));
+                    }
+                    return Err(napi::Error::from_reason(
+                        "request failed with unknown error",
+                    ));
+                }
+
+                Ok(crate::EggfetchResponse::from_raw(resp))
+            })
+            .await
+            .map_err(|e| napi::Error::from_reason(format!("request worker failed: {e}")))?
         }
     }
 }

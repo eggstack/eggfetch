@@ -18,13 +18,15 @@ use crate::handle::ResponseHandle;
 pub unsafe extern "C" fn eggfetch_response_text(
     handle: *const ResponseHandle,
 ) -> *mut std::os::raw::c_char {
-    let Some(handle) = handle.as_ref() else {
-        return std::ptr::null_mut();
-    };
-    match std::str::from_utf8(&handle.body) {
-        Ok(s) => crate::handle::FfiString::from_string(s.to_owned()).into_raw(),
-        Err(_) => std::ptr::null_mut(),
-    }
+    crate::ffi_guard!(std::ptr::null_mut(), {
+        let Some(handle) = handle.as_ref() else {
+            return std::ptr::null_mut();
+        };
+        match std::str::from_utf8(&handle.body) {
+            Ok(s) => crate::handle::FfiString::from_string(s.to_owned()).into_raw(),
+            Err(_) => std::ptr::null_mut(),
+        }
+    })
 }
 
 /// Check if the response status indicates success (2xx).
@@ -36,7 +38,9 @@ pub unsafe extern "C" fn eggfetch_response_text(
 /// `handle` may be null.
 #[no_mangle]
 pub unsafe extern "C" fn eggfetch_response_is_success(handle: *const ResponseHandle) -> i32 {
-    handle
-        .as_ref()
-        .map_or(0, |h| i32::from((200..300).contains(&h.status)))
+    crate::ffi_guard!(0, {
+        handle
+            .as_ref()
+            .map_or(0, |h| i32::from((200..300).contains(&h.status)))
+    })
 }

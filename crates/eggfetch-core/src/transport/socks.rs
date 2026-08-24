@@ -110,6 +110,7 @@ pub(crate) async fn socks5_handshake(
     remote_dns: bool,
     remaining_total: Option<std::time::Duration>,
 ) -> Result<tokio::net::TcpStream> {
+    let deadline = remaining_total.map(|duration| std::time::Instant::now() + duration);
     let proxy_host = proxy_config.host().unwrap_or("127.0.0.1");
     let proxy_port = proxy_config.port();
 
@@ -124,23 +125,25 @@ pub(crate) async fn socks5_handshake(
         Ok::<_, Error>(stream)
     };
 
-    let mut stream = match remaining_total {
-        Some(dur) => match tokio::time::timeout(dur, connect_future).await {
-            Ok(Ok(s)) => s,
-            Ok(Err(e)) => return Err(e),
-            Err(_) => {
-                return Err(Error::Timeout {
-                    phase: TimeoutPhase::ProxyConnect,
-                    elapsed: dur,
-                });
+    let mut stream = match deadline {
+        Some(deadline) => {
+            let dur = deadline.saturating_duration_since(std::time::Instant::now());
+            match tokio::time::timeout(dur, connect_future).await {
+                Ok(Ok(s)) => s,
+                Ok(Err(e)) => return Err(e),
+                Err(_) => {
+                    return Err(Error::Timeout {
+                        phase: TimeoutPhase::ProxyConnect,
+                        elapsed: dur,
+                    });
+                }
             }
-        },
+        }
         None => connect_future.await?,
     };
 
     // Phase 2: Method negotiation.
-    let selected_method =
-        negotiate_method(&mut stream, proxy_config.auth(), remaining_total).await?;
+    let selected_method = negotiate_method(&mut stream, proxy_config.auth(), deadline).await?;
 
     // Phase 3: Username/password authentication (if configured).
     if selected_method == SOCKS5_METHOD_USERNAME_PASSWORD {
@@ -149,18 +152,11 @@ pub(crate) async fn socks5_handshake(
                 "SOCKS5 proxy selected username/password but no credentials were configured".into(),
             )
         })?;
-        authenticate(&mut stream, auth, remaining_total).await?;
+        authenticate(&mut stream, auth, deadline).await?;
     }
 
     // Phase 4: CONNECT command.
-    send_connect(
-        &mut stream,
-        dest_host,
-        dest_port,
-        remote_dns,
-        remaining_total,
-    )
-    .await?;
+    send_connect(&mut stream, dest_host, dest_port, remote_dns, deadline).await?;
 
     Ok(stream)
 }
@@ -316,7 +312,7 @@ impl tower_service::Service<http::Uri> for SocksConnector {
 async fn negotiate_method(
     stream: &mut tokio::net::TcpStream,
     auth: Option<&ProxyAuth>,
-    remaining_total: Option<std::time::Duration>,
+    deadline: Option<std::time::Instant>,
 ) -> Result<u8> {
     // httpcore offers exactly one method: credentials select RFC 1929,
     // otherwise the client offers no authentication. This is intentionally
@@ -337,17 +333,11 @@ async fn negotiate_method(
     );
     greeting.extend_from_slice(&methods);
 
-    write_all_timeout(stream, &greeting, remaining_total, "SOCKS5 greeting").await?;
+    write_all_timeout(stream, &greeting, deadline, "SOCKS5 greeting").await?;
 
     // Read: version(1) + method(1)
     let mut response = [0u8; 2];
-    read_exact_timeout(
-        stream,
-        &mut response,
-        remaining_total,
-        "SOCKS5 method response",
-    )
-    .await?;
+    read_exact_timeout(stream, &mut response, deadline, "SOCKS5 method response").await?;
 
     if response[0] != SOCKS5_VERSION {
         return Err(Error::ProxyConnect(format!(
@@ -371,7 +361,7 @@ async fn negotiate_method(
 async fn authenticate(
     stream: &mut tokio::net::TcpStream,
     auth: &ProxyAuth,
-    remaining_total: Option<std::time::Duration>,
+    deadline: Option<std::time::Instant>,
 ) -> Result<()> {
     let (username, password) = match auth {
         ProxyAuth::Basic { username, password } => (username.as_bytes(), password.as_bytes()),
@@ -402,23 +392,11 @@ async fn authenticate(
     );
     auth_request.extend_from_slice(password);
 
-    write_all_timeout(
-        stream,
-        &auth_request,
-        remaining_total,
-        "SOCKS5 auth request",
-    )
-    .await?;
+    write_all_timeout(stream, &auth_request, deadline, "SOCKS5 auth request").await?;
 
     // Read: version(1) + status(1)
     let mut auth_response = [0u8; 2];
-    read_exact_timeout(
-        stream,
-        &mut auth_response,
-        remaining_total,
-        "SOCKS5 auth response",
-    )
-    .await?;
+    read_exact_timeout(stream, &mut auth_response, deadline, "SOCKS5 auth response").await?;
 
     if auth_response[0] != SOCKS5_SUBNEG_VERSION {
         return Err(Error::ProxyConnect(format!(
@@ -447,7 +425,7 @@ async fn send_connect(
     dest_host: &str,
     dest_port: u16,
     remote_dns: bool,
-    remaining_total: Option<std::time::Duration>,
+    deadline: Option<std::time::Instant>,
 ) -> Result<()> {
     // Build the CONNECT request.
     let mut request = Vec::with_capacity(64);
@@ -482,7 +460,7 @@ async fn send_connect(
         request.extend_from_slice(host_bytes);
     } else {
         // Resolve locally and send IP address.
-        match resolve_dest_ip(dest_host).await? {
+        match resolve_dest_ip(dest_host, deadline).await? {
             std::net::IpAddr::V4(ip) => {
                 request.push(SOCKS5_ATYP_IPV4);
                 request.extend_from_slice(&ip.octets());
@@ -496,16 +474,19 @@ async fn send_connect(
 
     request.extend_from_slice(&dest_port.to_be_bytes());
 
-    write_all_timeout(stream, &request, remaining_total, "SOCKS5 CONNECT").await?;
+    write_all_timeout(stream, &request, deadline, "SOCKS5 CONNECT").await?;
 
     // Parse the reply.
-    parse_connect_reply(stream, remaining_total).await
+    parse_connect_reply(stream, deadline).await
 }
 
 /// Resolve a destination host to an IP address.
 ///
 /// Uses Tokio's DNS resolver. Returns both IPv4 and IPv6.
-async fn resolve_dest_ip(host: &str) -> Result<std::net::IpAddr> {
+async fn resolve_dest_ip(
+    host: &str,
+    deadline: Option<std::time::Instant>,
+) -> Result<std::net::IpAddr> {
     use tokio::net::lookup_host;
 
     // Try parsing as an IP literal first.
@@ -517,10 +498,20 @@ async fn resolve_dest_ip(host: &str) -> Result<std::net::IpAddr> {
     }
 
     // DNS resolution.
-    let addr = lookup_host(format!("{host}:0"))
+    let lookup = lookup_host(format!("{host}:0"));
+    let result = match deadline {
+        Some(deadline) => tokio::time::timeout(
+            deadline.saturating_duration_since(std::time::Instant::now()),
+            lookup,
+        )
         .await
-        .ok()
-        .and_then(|mut addrs| addrs.next());
+        .map_err(|_| Error::Timeout {
+            phase: TimeoutPhase::ProxyConnect,
+            elapsed: deadline.saturating_duration_since(std::time::Instant::now()),
+        })?,
+        None => lookup.await,
+    };
+    let addr = result.ok().and_then(|mut addrs| addrs.next());
 
     match addr {
         Some(addr) => Ok(addr.ip()),
@@ -539,11 +530,11 @@ async fn resolve_dest_ip(host: &str) -> Result<std::net::IpAddr> {
 /// for any non-success reply.
 async fn parse_connect_reply(
     stream: &mut tokio::net::TcpStream,
-    remaining_total: Option<std::time::Duration>,
+    deadline: Option<std::time::Instant>,
 ) -> Result<()> {
     // Read: version(1) + rep(1) + rsv(1) + atyp(1)
     let mut header = [0u8; 4];
-    read_exact_timeout(stream, &mut header, remaining_total, "SOCKS5 CONNECT reply").await?;
+    read_exact_timeout(stream, &mut header, deadline, "SOCKS5 CONNECT reply").await?;
 
     if header[0] != SOCKS5_VERSION {
         return Err(Error::ProxyConnect(format!(
@@ -575,30 +566,18 @@ async fn parse_connect_reply(
     match header[3] {
         SOCKS5_ATYP_IPV4 => {
             let mut addr = [0u8; 4 + 2]; // IPv4 + port
-            read_exact_timeout(
-                stream,
-                &mut addr,
-                remaining_total,
-                "SOCKS5 bound IPv4 address",
-            )
-            .await?;
+            read_exact_timeout(stream, &mut addr, deadline, "SOCKS5 bound IPv4 address").await?;
         }
         SOCKS5_ATYP_IPV6 => {
             let mut addr = [0u8; 16 + 2]; // IPv6 + port
-            read_exact_timeout(
-                stream,
-                &mut addr,
-                remaining_total,
-                "SOCKS5 bound IPv6 address",
-            )
-            .await?;
+            read_exact_timeout(stream, &mut addr, deadline, "SOCKS5 bound IPv6 address").await?;
         }
         SOCKS5_ATYP_DOMAIN => {
             let mut domain_len = [0u8; 1];
             read_exact_timeout(
                 stream,
                 &mut domain_len,
-                remaining_total,
+                deadline,
                 "SOCKS5 bound domain length",
             )
             .await?;
@@ -607,7 +586,7 @@ async fn parse_connect_reply(
             read_exact_timeout(
                 stream,
                 &mut domain_and_port,
-                remaining_total,
+                deadline,
                 "SOCKS5 bound domain address",
             )
             .await?;
@@ -626,11 +605,12 @@ async fn parse_connect_reply(
 async fn write_all_timeout(
     stream: &mut tokio::net::TcpStream,
     data: &[u8],
-    remaining_total: Option<std::time::Duration>,
+    deadline: Option<std::time::Instant>,
     phase: &str,
 ) -> Result<()> {
-    let write_result: std::result::Result<(), std::io::Error> = match remaining_total {
-        Some(dur) => {
+    let write_result: std::result::Result<(), std::io::Error> = match deadline {
+        Some(deadline) => {
+            let dur = deadline.saturating_duration_since(std::time::Instant::now());
             let fut = tokio::io::AsyncWriteExt::write_all(stream, data);
             match tokio::time::timeout(dur, fut).await {
                 Ok(r) => r,
@@ -652,11 +632,12 @@ async fn write_all_timeout(
 async fn read_exact_timeout(
     stream: &mut tokio::net::TcpStream,
     buf: &mut [u8],
-    remaining_total: Option<std::time::Duration>,
+    deadline: Option<std::time::Instant>,
     phase: &str,
 ) -> Result<()> {
-    let read_result: std::result::Result<usize, std::io::Error> = match remaining_total {
-        Some(dur) => {
+    let read_result: std::result::Result<usize, std::io::Error> = match deadline {
+        Some(deadline) => {
+            let dur = deadline.saturating_duration_since(std::time::Instant::now());
             let fut = tokio::io::AsyncReadExt::read_exact(stream, buf);
             match tokio::time::timeout(dur, fut).await {
                 Ok(r) => r,
