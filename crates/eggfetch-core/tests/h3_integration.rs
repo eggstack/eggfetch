@@ -54,7 +54,7 @@ struct QuicTestServer {
 
 impl QuicTestServer {
     /// Start a server that responds to every request with `body`.
-    #[allow(clippy::unused_async)]
+    #[allow(unknown_lints, clippy::unused_async, clippy::unused_async_trait_impl)]
     async fn start(body: Vec<u8>) -> Self {
         let cert_key =
             rcgen::generate_simple_self_signed(vec!["localhost".into()]).expect("rcgen cert");
