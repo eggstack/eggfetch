@@ -586,3 +586,23 @@ tests = ["test_h2_differential.py::TestH2ProxyConnectResidual"]
 result = "bounded-difference"
 phase = 4
 notes = "The proxy CONNECT handshake is HTTP/1.1 and the post-CONNECT origin path remains the hand-rolled HTTP/1.1 transport. Direct TLS, cleartext prior knowledge, and specialized direct/UDS H2 paths are separately covered by H2-001 through H2-007."
+
+[[case]]
+id = "H2-010"
+description = "H2-only through SNI override — TLS ALPN restricted to h2 via DirectConnector::with_alpn_h2_only"
+sync = true
+async = true
+tests = ["test_h2_differential.py::TestHttpsH2OnlyAlpn", "test_corrective_02_extensions_and_wire_metadata.py"]
+result = "parity"
+phase = 6
+notes = "ClientInner::sni_client() now reads self.config.http_version_policy and calls builder.http2_only(true) when Http2Only is active. The SNI client further restricts the connector's TLS ALPN list to h2 (via DirectConnector::with_alpn_h2_only()) so no silent H1 fallback is possible. The SNI cache key remains the hostname string alone; HttpVersionPolicy is currently client-level immutable, so a single cache key per hostname is still sound. Closed in Corrective 06."
+
+[[case]]
+id = "H2-011"
+description = "H2-only through SOCKS HTTPS — ALPN restricted to h2; SocksStream signals negotiated_h2 from inner TLS"
+sync = true
+async = true
+tests = ["test_socks_transport.py", "test_h2_differential.py"]
+result = "parity"
+phase = 6
+notes = "ClientInner::socks_client() reads self.config.http_version_policy and calls builder.http2_only(true) when Http2Only is active. For HTTPS through SOCKS, the rustls ALPN list is restricted to h2. SocksStream::connected() inspects ALPN on the inner TLS stream and calls Connected::negotiated_h2() when h2 is negotiated, mirroring DirectStream behavior. Cleartext H2 prior knowledge through SOCKS is out of scope because the SOCKS route is exclusively a TCP tunnel used by HTTPS transports. Closed in Corrective 06."

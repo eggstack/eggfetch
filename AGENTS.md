@@ -229,11 +229,13 @@ The compact `test_corrective_kernel.py` is part of Tier 1; the pinned
 transport differential suite, full pinned-reference compat, API oracle, and
 downstream isolated runner are extended gates. The pinned reference remains
 `httpx==0.28.1` (with its installed `httpcore`/`socksio` versions recorded in
-the qualification handoff). Corrective 06 is open: the `c44d4f25ffebc1a792335163ae4bc106076b3963`
-qualification is retained as historical evidence only, and no new
-`qualification-sha` is assigned until Corrective 07 runs against a frozen
-executable commit. Any executable change invalidates the historical
-qualification. Earlier Pass 05/06 records are historical evidence only;
+the qualification handoff). Corrective 07 closed the remaining-parity line
+on 2026-08-23 with `qualification-sha = 9ffa6cd85848fd16a424b65f73254351911777c4`.
+The earlier `c44d4f25ffebc1a792335163ae4bc106076b3963` qualification (Corrective 05)
+is retained as historical evidence only; its executable tree was invalidated
+by the Corrective 06 changes it predated. Any future executable change
+invalidates the current qualification and requires restarting Corrective 07
+from the freeze step. Earlier Pass 05/06 records are historical evidence only;
 do not silently revive their counts or current-language claims.
 
 The current corrective boundary derives one monotonic request deadline for
@@ -326,4 +328,10 @@ HTTPX's four-element null-pointer `socket_options` form is rejected at the
 safe Rust boundary. SSLContext state that rustls cannot represent likewise
 fails closed before dispatch. Ordinary pooled responses expose no writable
 network stream, internal CONNECT tunnels are not surfaced, and only 101
-responses own an upgraded stream.
+responses own an upgraded stream. Coroutine trace callbacks on AsyncClient
+(and on sync `Client`) are rejected with a `TypeError` before dispatch
+because the core `TraceObserver` is synchronous and core cannot await a
+Python coroutine without unbounded reentrancy risk; sync callbacks work
+on both sync `Client` and `AsyncClient`. The SNI override and SOCKS HTTPS
+H2-only routes are now closed; they are recorded as `parity` rather than
+residual in `compat/httpx/0.28.1/parity-cases.toml`.

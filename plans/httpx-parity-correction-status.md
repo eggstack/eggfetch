@@ -4,13 +4,262 @@ This record is the exact-SHA-bound status for the HTTPX 0.28.1 compatibility
 facade. Historical phase and corrective-pass records remain in the git history
 and referenced plans; counts below are only from the runs named here.
 
-## Current corrective pass — Corrective 06 final semantic truthfulness
+## Current corrective pass — Corrective 07 final exact-SHA requalification
 
-Current designation: **Corrective 06 open**. The previous Stage C qualification
-at `c44d4f25ffebc1a792335163ae4bc106076b3963` is retained as historical
-evidence only. Executable changes required by Corrective 06 invalidate that
-qualification; no new `qualification-sha` is assigned until Corrective 07
-runs against a frozen executable commit.
+Current designation: **Stage C qualified** for the documented Python 3.10+
+asyncio-supported HTTPX 0.28.1 surface. The qualification is bound to the
+Corrective 06 final executable SHA `9ffa6cd85848fd16a424b65f73254351911777c4`
+and was performed on 2026-08-23. The previous Stage C qualification at
+`c44d4f25ffebc1a792335163ae4bc106076b3963` (Corrective 05) is retained as
+historical evidence only; the executable tree it covered was invalidated by
+the Corrective 06 changes documented below.
+
+Plan: `plans/httpx-parity-corrective-07-final-exact-sha-requalification.md`.
+
+Corrective 06 baseline: `25c2c6f01138e2d6a59d1256076ec84972a92d83`.
+Corrective 06 executable commit: `9ffa6cd85848fd16a424b65f73254351911777c4`.
+The Corrective 06 executable tree was frozen once `./scripts/check.sh` and
+the focused semantic closure gate passed; Corrective 07 then ran the full
+qualification evidence against that same tree.
+
+### Frozen executable SHA evidence
+
+The final executable/test commit SHA used for every gate in this closure is
+`9ffa6cd85848fd16a424b65f73254351911777c4` (commit message
+`httpx-parity: corrective 06 — final semantic truthfulness`). No subsequent
+executable change is included in this closure record; every later commit
+after this qualification is documentation/ledger-only and is recorded in
+section 12 below.
+
+### Focused semantic closure gate
+
+The Corrective 06 acceptance behaviors were exercised end-to-end against
+the frozen SHA via the targeted compatibility tests:
+
+| Track | Tests | Result |
+| --- | --- | --- |
+| A — SSLContext safety | `test_corrective_01_tls_and_proxy_trust_safety.py`, `test_ssl_context_network_proof.py`, `test_ssl_context_translation.py` | 52 passed, 0 failed, 0 skipped |
+| B — Extensions and trace | `test_corrective_02_extensions_and_wire_metadata.py`, `test_trace_detection.py` | 29 passed, 0 failed, 0 skipped |
+| C — Network stream | `test_corrective_03_network_stream_upgrade.py` | 19 passed, 0 failed, 0 skipped |
+| D — H2 routes | `test_h2_differential.py`, `test_socks_transport.py` | 33 passed, 0 failed, 0 skipped |
+
+Aggregated focused semantic result: **133 passed**, with 11 non-failing
+warnings (HTTPX `verify=<str>` deprecation and `ssl.TLSVersion.TLSv1_1`
+deprecation in tests that exercise the rejection boundary).
+
+### Tier 1 (`./scripts/check.sh`)
+
+Tier 1 passed on the frozen SHA. Counts from `tier1_rust_tests` plus
+`tier1_python_tests` plus `tier1_compat_smoke`:
+
+- 975 workspace non-doctest Rust tests across all crates
+- 11 core doctests
+- 532 Python behavior tests
+- 130 compatibility smoke kernel tests
+- 0 failures, 0 skipped, 0 xfailed
+- Lint suppression policy, clippy pedantic, formatting, and extension build: passed.
+
+### Extended verification (`./scripts/check.sh extended`)
+
+Extended verification passed on the frozen SHA. The Tier 2 path reruns Tier 1
+and adds the feature matrix, feature-gated tests, doctests, FFI tests,
+lifecycle tests, soak tests, lossless merge tests, benchmarks, and the
+required downstream gate (via the rebuilt artifact manifest, see below).
+Optional MSRV (Rust 1.80) was skipped because the toolchain is not
+installed; this is the existing repository policy. One retry was required
+because `retry_respects_total_timeout` in `eggfetch-core/tests/retry_integration.rs`
+exceeded its 2-second assertion under transient parallel load; the second
+run passed deterministically without any executable change. Per the plan,
+the unrelated retry-test flake was not modified during Corrective 07.
+
+### Full pinned HTTPX compatibility suite — three clean runs
+
+Command:
+
+```sh
+EGGFETCH_COMPAT_REQUIRED=1 .venv/bin/python -m pytest \
+  crates/eggfetch-python/tests/compat/ -q --strict-markers
+```
+
+| Run | Result | Duration |
+| --- | --- | --- |
+| 1 | 1810 passed, 26 warnings | 460.38 s |
+| 2 | 1810 passed, 26 warnings | 455.10 s |
+| 3 | 1810 passed, 26 warnings | 454.52 s |
+
+Counts are stable across the three runs; the 26 warnings are non-failing
+HTTPX/SQL/TLS deprecation warnings on tests that exercise the rejection
+boundary. Zero skips, zero xfails, zero failed tests.
+
+### API oracle and ledger validation
+
+Command:
+
+```sh
+.venv/bin/python scripts/generate_httpx_api_manifest.py \
+  --package eggfetch.compat.httpx --output /tmp/eggfetch-api.json
+.venv/bin/python scripts/compare_httpx_api_manifest.py \
+  --reference compat/httpx/0.28.1/reference-api.json \
+  --candidate /tmp/eggfetch-api.json \
+  --allowed compat/httpx/0.28.1/allowed-differences.toml \
+  --json --output /tmp/api-result.json
+```
+
+Result against the frozen SHA:
+
+- 71 allowed matches, all `stage-bounded`.
+- 0 stale allowed entries.
+- 0 unexplained differences.
+- 0 resolved-in-active entries.
+- 74-symbol manifest valid.
+
+### Required downstream portfolio qualification
+
+The required downstream runner was executed against a freshly built wheel
+from the frozen SHA:
+
+- `eggfetch-0.1.1-cp312-cp312-manylinux_2_34_aarch64.whl`,
+  SHA-256 `edca3f2dab86ba5ccd105643ddeeb75281894db4af2706eb87556354d44219d2`
+- Controlled `httpx-0.28.1-py3-none-any.whl` shim,
+  SHA-256 `4bc06cb9aedefec7adc613a67b6d149b127c9f204be35b6e67d026ff580dfb14`
+
+Command:
+
+```sh
+.venv/bin/python scripts/run_downstream_compat.py \
+  --artifact-manifest target/downstream-qualification/artifact-manifest.json \
+  --required-only
+```
+
+Result: 4/4 required packages passed.
+
+| Package | Tests | Result |
+| --- | --- | --- |
+| respx 0.21.1 | 5/5 | passed |
+| httpx-sse 0.4.0 | 4/4 | passed |
+| httpx-auth 0.22.0 | 5/5 | passed |
+| httpx-ws 0.7.0 | 4/4 | passed |
+
+Diagnostic `pip check` warnings (`httpx-ws 0.7.0 requires wsproto`,
+`h2 4.4.1 requires hpack/hyperframe`, `httpx-auth 0.22.0 has requirement
+httpx==0.27.*`) are reported by `pip check` but do not represent behavioral
+failures; the controlled httpx replacement is verified by the isolated
+runner before each downstream suite runs, and each suite's behavioral tests
+passed. `httpx-ws` exercises the 101/network-stream boundary that was the
+focus of Corrective 06 Track C and exercises it through the sync and async
+upgrade APIs.
+
+### Retained bounded differences (final)
+
+The supported HTTPX 0.28.1 surface after Corrective 06 covers:
+
+- helper-created contexts (default, custom CA, `verify=False`, and
+  provenance-bearing mTLS) translated exactly;
+- passthrough `ssl.SSLContext` classified from live public state;
+- one native extension parser used by sync/async buffered/streaming paths
+  (`target`, `sni_hostname`, `trace`);
+- sync-only trace callbacks on sync `Client` and on `AsyncClient`;
+- 101 upgraded stream wrappers chosen by caller API mode (sync wrapper
+  for sync `Client` buffered/streaming, async wrapper for async
+  `AsyncClient` buffered/streaming);
+- H2-only enforcement on standard TLS, SNI override, direct-specialized
+  (local_address / socket_options), UDS, and SOCKS HTTPS routes; cleartext
+  H2 prior knowledge; HTTP/2 reported in `Response.http_version`;
+- proxy headers and proxy ssl_context forwarded on the proxy leg only;
+- ordinary pooled HTTP/1.x and HTTP/2 connections expose no writable
+  network stream; only 101 responses own an upgraded stream.
+
+Active bounded differences against HTTPX 0.28.1:
+
+- **SSLContext state that rustls cannot represent** — cipher suite, ALPN,
+  TLS-version policy, client-certificate provenance, and arbitrary
+  non-`ssl.SSLContext` subclass contexts fail closed with `TypeError`
+  before dispatch. The intentional narrowing from HTTPX's arbitrary
+  OpenSSL context acceptance is a safety boundary, not a regression.
+  Evidence: `test_corrective_01_tls_and_proxy_trust_safety.py`,
+  `test_ssl_context_network_proof.py`, `test_ssl_context_translation.py`.
+- **HTTP/2 `stream_id` metadata** — the h2 stream identifier is not
+  exposed in `Response.extensions` because the current hyper-util
+  `ResponseFuture` returns `Response<hyper::body::Incoming>` and
+  `Incoming` wraps `h2::RecvStream` privately. Metadata-only.
+  Evidence: `test_h2_differential.py::TestStreamIdAbsence`,
+  parity case `H2-008`.
+- **HTTP/2 origin framing through an HTTP CONNECT proxy** — the
+  hand-rolled CONNECT path remains HTTP/1.1; H2-only enforcement
+  correctly fails in this route rather than silently downgrading.
+  Evidence: `test_h2_differential.py::TestH2ProxyConnectResidual`,
+  parity case `H2-009`.
+- **HTTPX's four-element null-pointer `socket_options` form** —
+  `(level, option, None, optlen)` carries null-pointer semantics and is
+  outside the safe Rust boundary. The safe three-element form is
+  supported. Evidence: `test_uds_transport.py`,
+  parity case `UNSUPPORTED-004`/`TRANSPORT-PARAMS-001`.
+- **Ordinary pooled `network_stream` absence** — pooled HTTP/1.x and
+  HTTP/2 connections return their sockets to the pool; only 101
+  responses own an upgraded stream with sync/async read/write/close,
+  `get_extra_info`, and `start_tls` (for inner TCP variants only).
+  Evidence: `test_corrective_03_network_stream_upgrade.py`,
+  `test_raw_stream_lifecycle.py`.
+- **Internal proxy CONNECT tunnel non-exposure** — never surfaced as a
+  writable network stream; the body iterator is the canonical access
+  path.
+- **Async coroutine trace callbacks** — `inspect.iscoroutinefunction`
+  detection is correct, but async callbacks are rejected deterministically
+  with a `TypeError` before dispatch because the core `TraceObserver` is
+  synchronous and core cannot await a Python coroutine without an
+  unbounded reentrancy risk. Sync callbacks work on both sync `Client`
+  and `AsyncClient`. Evidence: `test_trace_detection.py`,
+  `test_corrective_02_extensions_and_wire_metadata.py`.
+
+No SNI-override or SOCKS H2 residual remains; Corrective 06 closed those
+routes and they are recorded as `parity` in `compat/httpx/0.28.1/parity-cases.toml`.
+
+### Environment
+
+Evidence used CPython 3.12.3, pytest 9.1.1, pytest-asyncio 1.4.0,
+`httpx==0.28.1`, `httpcore==1.0.9`, `socksio==1.0.0`, with IPv6 loopback
+available and no capability-based skips. The required downstream shim and
+candidate wheel were rebuilt from the frozen SHA; their SHA-256 hashes are
+recorded above.
+
+### Post-qualification descendant audit
+
+After the qualification was written, every change to the working tree
+between `9ffa6cd85848fd16a424b65f73254351911777c4` and the qualification
+commit was inspected. Only documentation, ledger, and status records
+changed; no executable, test, build, validation script, or packaging
+configuration was modified. The qualification commit is therefore a
+documentation-only descendant of the frozen executable SHA, and the
+profile's `qualification-sha` equals the exact frozen SHA.
+
+### Remote CI
+
+Existing routine CI runs `./scripts/check.sh` and therefore covers Tier 1
+on every push. The frozen executable tree was pushed through the routine
+CI; the documentation/ledger update that records this closure is a
+documentation-only descendant and its CI run is secondary evidence. The
+specific workflow run, head SHA, and conclusion are recorded in the
+follow-up commit message at push time and cross-referenced from the
+documentation commit that records the remote CI result.
+
+### Closure statement
+
+Corrective 07 is complete. The HTTPX 0.28.1 compatibility facade is again
+**Stage C qualified** for the documented Python 3.10+ asyncio-supported
+surface, bound to executable SHA `9ffa6cd85848fd16a424b65f73254351911777c4`.
+Future HTTPX work should be triggered by a new pinned HTTPX version, a
+newly discovered concrete compatibility defect, or an intentionally
+expanded compatibility scope — not by further speculative parity expansion.
+
+## Historical corrective pass — Corrective 06 final semantic truthfulness (closed)
+
+Current designation (at the time): **Corrective 06 open**. The previous Stage C
+qualification at `c44d4f25ffebc1a792335163ae4bc106076b3963` was retained as
+historical evidence only. Executable changes required by Corrective 06
+invalidated that qualification; no new `qualification-sha` was assigned
+until Corrective 07 ran against a frozen executable commit. Corrective 07
+ran against the frozen executable SHA `9ffa6cd85848fd16a424b65f73254351911777c4`
+and is the current Stage C qualification described in the section above.
 
 Plan: `plans/httpx-parity-corrective-06-final-semantic-truthfulness.md`.
 

@@ -3,6 +3,9 @@
 The HTTPX compatibility profile is Stage C qualified for its documented
 Python 3.10+ asyncio surface. These are the retained, tested bounded
 differences; the active ledger and parity registry are authoritative.
+The current qualification is bound to executable SHA
+`9ffa6cd85848fd16a424b65f73254351911777c4`, recorded in
+`compat/httpx/0.28.1/profile.toml`.
 
 ## SSLContext representability
 
@@ -38,6 +41,25 @@ Evidence: `test_corrective_01_tls_and_proxy_trust_safety.py`,
 `test_ssl_context_network_proof.py`,
 `test_ssl_context_translation.py`.
 
+## Coroutine trace callbacks
+
+`inspect.iscoroutinefunction` correctly identifies `async def` callbacks,
+callable objects with async `__call__`, and `functools.partial` wrappers
+where Python's introspection applies. The HTTPX 0.28.1 compatibility
+facade rejects coroutine trace callbacks on both sync `Client` and
+`AsyncClient` with `TypeError` before dispatch, because the core
+`TraceObserver` is synchronous and core cannot await a Python coroutine
+without unbounded reentrancy risk. Sync callbacks work on both APIs.
+
+This is a bounded difference, not a hidden feature: no coroutine is
+discarded without the user seeing the rejection. Removing it would
+require either a binding-only async bridge (kept feasible in design but
+deliberately deferred) or an async-aware core observer (out of scope for
+this closure).
+
+Evidence: `test_trace_detection.py`,
+`test_corrective_02_extensions_and_wire_metadata.py`.
+
 ## HTTP/2 response `stream_id`
 
 HTTPX exposes the h2 stream identifier in `Response.extensions`; EggFetch does
@@ -55,7 +77,8 @@ For an HTTPS origin reached through an HTTP proxy, the CONNECT handshake and
 post-CONNECT origin path remain the hand-rolled HTTP/1.1 transport. Thus an
 H2-only request through this proxy route does not use HTTP/2 framing at the
 origin. Direct TLS, cleartext prior knowledge, direct/local-address and
-socket-option routes, and UDS H2 are separately enforced and tested.
+socket-option routes, SNI override, SOCKS, and UDS H2 are separately enforced
+and tested.
 
 Evidence: `TestH2ProxyConnectResidual::test_candidate_proxy_connect_remains_http1`
 and parity case `H2-009`.
@@ -77,6 +100,9 @@ residuals:
   async read/write/close operations. Leading bytes are preserved. `start_tls`
   is allowed only for an inner TCP stream; Hyper adapter and already-TLS
   variants are rejected before I/O is consumed.
+- The wrapper type is selected by the calling API mode (sync `Client` returns
+  a sync wrapper; async `AsyncClient` returns an async wrapper) for both
+  buffered and streaming 101 responses.
 - Ordinary HTTP/1.1 and HTTP/2 responses return their connections to the pool,
   so `extensions["network_stream"]` is `None`; shared connection metadata is
   read-only and no raw socket is exposed.
@@ -87,7 +113,9 @@ residuals:
 
 Corrective 04 closed the prior H2-only TLS, cleartext prior-knowledge, and
 direct-specialized-route gaps (parity cases `H2-002`, `H2-003`, and `H2-007`).
-There is no active residual for direct `verify=False` routing, UDS custom ALPN,
-or server push: those claims were either implemented, outside the public
-contract, or not a client-surface requirement and were pruned from the active
-residual list.
+Corrective 06 closed the SNI override and SOCKS H2-only routes; they are
+recorded as `parity` in `compat/httpx/0.28.1/parity-cases.toml` rather than
+as bounded differences. There is no active residual for direct `verify=False`
+routing, UDS custom ALPN, or server push: those claims were either
+implemented, outside the public contract, or not a client-surface
+requirement and were pruned from the active residual list.

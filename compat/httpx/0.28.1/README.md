@@ -2,8 +2,9 @@
 
 This directory contains the machine-readable compatibility profile for
 HTTPX 0.28.1. It is Stage C qualified against the exact executable SHA
-recorded in `profile.toml`; current evidence is recorded in the corrective
-status plan. Executable changes require fresh qualification.
+`9ffa6cd85848fd16a424b65f73254351911777c4` recorded in `profile.toml`;
+current evidence is recorded in `plans/httpx-parity-correction-status.md`.
+Executable changes require fresh qualification.
 
 ## Files
 
@@ -48,17 +49,36 @@ python scripts/compare_httpx_api_manifest.py \
 ## Status
 
 This profile targets HTTPX 0.28.1. The compatibility stage is **Stage C
-qualified** for the supported Python versions. Trio/AnyIO, Python 3.8/3.9,
-and private HTTPX modules remain excluded. Proxy URL credentials, proxy
-headers, and proxy ssl_context are covered. Arbitrary Python ssl_context
-objects that cannot be represented by rustls are rejected at construction
-time with a clear TypeError.
+qualified** for the documented Python 3.10+ asyncio-supported surface.
+Trio/AnyIO, Python 3.8/3.9, and private HTTPX modules remain excluded.
+Proxy URL credentials, proxy headers, and proxy ssl_context are covered.
+Arbitrary Python ssl_context objects that cannot be represented by
+rustls are rejected at construction time with a clear TypeError.
 
-The current bounded residuals are HTTP/2 `stream_id` metadata, HTTP/2 origin
-framing through an HTTP CONNECT proxy (the origin leg remains HTTP/1.1), and
-HTTPX's unsafe four-element null-pointer `socket_options` form. Direct TLS,
-cleartext prior-knowledge, direct-specialized, and UDS HTTP/2 cases are
-covered separately by the parity registry.
+The current bounded residuals are:
+
+- SSLContext state that rustls cannot represent (cipher suite, ALPN,
+  TLS-version policy, client-certificate provenance, and arbitrary
+  non-`ssl.SSLContext` subclass contexts) fails closed with `TypeError`
+  before dispatch.
+- HTTP/2 `stream_id` metadata is unavailable because the current
+  hyper-util abstraction does not expose the underlying h2 stream ID.
+- HTTP/2 origin framing through an HTTP CONNECT proxy remains HTTP/1.1
+  (parity case `H2-009`).
+- HTTPX's unsafe four-element null-pointer `socket_options` form is
+  rejected at the safe Rust boundary.
+- Ordinary pooled HTTP/1.x and HTTP/2 connections expose no writable
+  network stream; only 101 responses own an upgraded stream.
+- Internal proxy CONNECT tunnels are never surfaced as writable network
+  streams.
+- Async coroutine trace callbacks are rejected deterministically with
+  a `TypeError` before dispatch; sync callbacks work on both sync
+  `Client` and `AsyncClient`.
+
+Direct TLS, cleartext prior-knowledge, direct-specialized (local_address
+/ socket_options), SNI override, SOCKS HTTPS, and UDS HTTP/2 routes are
+enforced and tested. They are recorded as `parity` cases in
+`parity-cases.toml` rather than as bounded differences.
 
 ## Future Drift
 

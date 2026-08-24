@@ -287,9 +287,17 @@ URLs establish TLS to the proxy before forward or CONNECT proxying. The safe
 - `Proxy(headers=...)` is forwarded on the proxy leg only and is never sent
   through a CONNECT tunnel or to the origin; sensitive values are redacted in
   diagnostic representations.
-- HTTP/2-only works for direct TLS, cleartext prior knowledge, and the
-  specialized direct/UDS paths. HTTP CONNECT proxy origin framing remains
-  HTTP/1.1, and HTTP/2 `stream_id` remains metadata-only and unavailable.
+- HTTP/2-only works for direct TLS, cleartext prior knowledge, the SNI override
+  route, the SOCKS HTTPS route, and the specialized direct/UDS paths. HTTP
+  CONNECT proxy origin framing remains HTTP/1.1, and HTTP/2 `stream_id` remains
+  metadata-only and unavailable.
+- Sync trace callbacks work on both `Client` and `AsyncClient`; coroutine
+  trace callbacks are rejected with `TypeError` before dispatch because
+  the core `TraceObserver` is synchronous and cannot await a Python
+  coroutine without unbounded reentrancy risk.
+- One native extension parser serves sync/async buffered/streaming paths
+  for `target`, `sni_hostname`, and `trace`. Callback errors are surfaced
+  on every path (success or failure) at the declared boundary.
 
 Remaining differences are documented in `compat/httpx/0.28.1/allowed-differences.toml`; the compatibility claim is limited to the pinned HTTPX 0.28.1 profile and the supported asyncio surface.
 
@@ -297,11 +305,14 @@ Remaining differences are documented in `compat/httpx/0.28.1/allowed-differences
 
 When a request upgrades (e.g. WebSocket via `Connection: Upgrade`), the
 response carries a live owned `NetworkStream` exposed through
-`response.extensions["network_stream"]`. For ordinary pooled HTTP/1.1 and
-HTTP/2 connections, `network_stream` is `None`; the connection is returned to
-the pool and not user-writable. Internal HTTPS proxy CONNECT tunnels are also
-classified as `None` — the canonical access path is the body iterator, not
-the upgraded stream.
+`response.extensions["network_stream"]`. The wrapper type follows the
+caller's API mode: sync `Client.stream()` and `Client.request()` 101
+responses expose the sync `NetworkStream`; async `AsyncClient.stream()`
+and `AsyncClient.request()` 101 responses expose the async wrapper.
+For ordinary pooled HTTP/1.1 and HTTP/2 connections, `network_stream` is
+`None`; the connection is returned to the pool and not user-writable.
+Internal HTTPS proxy CONNECT tunnels are also classified as `None` — the
+canonical access path is the body iterator, not the upgraded stream.
 
 The `NetworkStream` object supports `read`, `write`, `close`, `is_upgraded`,
 `get_extra_info`, and `start_tls(ssl_context=..., server_hostname=...,
