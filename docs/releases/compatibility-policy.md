@@ -2,7 +2,7 @@
 
 ## Rust MSRV Policy
 
-The minimum supported Rust version (MSRV) is specified in `workspace.package.rust-version` and enforced by `rust-toolchain.toml`. The current MSRV is **1.80**.
+The minimum supported Rust version (MSRV) is declared in `workspace.package.rust-version` (currently **1.80**) and checked in extended validation via a `cargo check` with the 1.80 toolchain; `rust-toolchain.toml` pins the stable channel for day-to-day development.
 
 - The MSRV may be raised in minor releases. A MSRV bump is announced at least one minor release in advance.
 - The MSRV is never raised in a patch release.
@@ -22,9 +22,11 @@ The supported Python versions are **3.10 through 3.13**. The PyPI release workfl
 
 | Tier | Platforms | CI Coverage | PyPI Wheels |
 |------|-----------|-------------|-------------|
-| Tier 1 | Ubuntu x86_64, macOS x86_64, macOS aarch64, Windows x86_64 | Full CI matrix | Native wheels, smoke-tested |
-| Tier 2 | Ubuntu aarch64 | Tested in CI | Cross-built wheels (maturin-action) |
-| Tier 3 | FreeBSD, other Unix variants | Community-supported, not CI-tested | No wheels |
+| Tier 1 | Linux x86_64, macOS arm64, Windows x86_64 | Wheel build + smoke test in the PyPI release workflow | Native wheels, smoke-tested |
+| Tier 2 | macOS x86_64, Linux aarch64 | Not built or tested in CI | None (build from source) |
+| Tier 3 | FreeBSD, other Unix variants | Community-supported, not tested | No wheels |
+
+Routine CI runs on a single Ubuntu runner; platform breadth comes from the PyPI wheel matrix, not from routine CI.
 
 ## CLI Machine-Output Schema Versioning
 

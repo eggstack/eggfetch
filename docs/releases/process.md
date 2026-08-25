@@ -63,12 +63,10 @@ PyPI publication is performed via the manually dispatched `.github/workflows/pyp
 | Operating system | Architecture | Python versions |
 |---|---|---|
 | Linux manylinux2014 | x86_64 | 3.10, 3.11, 3.12, 3.13 |
-| Linux manylinux2014 | aarch64 | 3.10, 3.11, 3.12, 3.13 |
-| macOS | x86_64 | 3.10, 3.11, 3.12, 3.13 |
 | macOS | arm64 | 3.10, 3.11, 3.12, 3.13 |
 | Windows | x86_64 | 3.10, 3.11, 3.12, 3.13 |
 
-20 wheels + 1 source distribution = 21 distributions per release.
+12 wheels + 1 source distribution = 13 distributions per release.
 
 ### Dispatch Procedure
 
@@ -105,7 +103,7 @@ Tagging is manual and separate from publication. After successful crates.io publ
 
 ```sh
 git tag -s v<VERSION> -m "Release v<VERSION>"
-git push origin v<VERSION>"
+git push origin v<VERSION>
 ```
 
 A GitHub Release is optional and manual. It must not be described as an automated or required output.

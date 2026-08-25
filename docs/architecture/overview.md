@@ -160,7 +160,7 @@ Single source file (`main.rs`, ~1700 lines). Thin binary over `eggfetch-core`:
 | `extensions.rs` | Request-extension extraction (`target`, `sni_hostname`, `trace`) into core `TransportHints`. |
 | `network_stream.rs` | `PyNetworkStream` (sync) / `PyAsyncNetworkStream` (async) wrappers behind `EitherNetworkStream`; `start_tls`, `get_extra_info`. |
 | `trace_bridge.rs` | `PyTraceObserver` — wraps sync Python callables as core `TraceObserver`; rejects coroutine callbacks eagerly. |
-| `errors.rs` | Exception hierarchy: `EggfetchError` → `RequestError`, `InvalidUrl`, `TimeoutException`, `NetworkError`, `ProtocolError`, `BodyError`, `HTTPStatusError`, `ProxyError`, etc. |
+| `errors.rs` | Exception hierarchy: `EggfetchError` → `RequestError` (nesting `InvalidUrl`, `TimeoutException`, `NetworkError`, `ProtocolError`, `BodyError`, `ProxyError`, retry/H2/H3 errors) plus direct subclasses `HTTPStatusError`, `UnsupportedKwarg`, stream-state errors. See [python-bindings.md](python-bindings.md). |
 | `limits.rs` | `PyLimits` — pool concurrency limits. |
 
 Plus the HTTPX compatibility facade in `eggfetch/compat/httpx/`.

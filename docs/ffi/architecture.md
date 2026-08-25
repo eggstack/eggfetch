@@ -25,12 +25,14 @@ safe API.
 
 ## Runtime Strategy
 
-A global `OnceLock<Runtime>` provides a shared tokio runtime. The
+A global `OnceLock<Runtime>` provides a shared multi-thread tokio runtime. The
 `blocking_send` helper detects the caller's context:
 
 - **Non-tokio thread**: calls `ffi_runtime().block_on()` directly
-- **Tokio thread**: spawns a dedicated thread with its own runtime to prevent
-  nested `block_on` panics
+- **Multi-thread tokio thread** (e.g. napi-rs): uses `tokio::task::block_in_place`
+  on the ambient handle
+- **Current-thread tokio runtime**: spawns the future on the global FFI runtime
+  and blocks the caller on a channel, preventing nested `block_on` panics
 
 ## Response Lifecycle
 

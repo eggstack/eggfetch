@@ -21,16 +21,24 @@ Use this skill when working on the eggfetch-ffi or eggfetch-node crates.
 
 | Handle | Thread Safety | Lifetime |
 |--------|--------------|----------|
+| `ClientBuilderHandle` | Single-thread, single-use | Consumed by `build()` or freed |
 | `ClientHandle` | `Send + Sync` (shared via `Arc`) | Process-long, freed explicitly |
 | `RequestHandle` | Single-thread, single-use | Consumed by `send()` or freed |
 | `ResponseHandle` | Single-thread, single-use | Freed after body is read |
+| `StreamingResponseHandle` | Single-thread, single-use | Freed after final chunk is read |
 | `ErrorHandle` | Single-thread, single-use | Freed after inspection |
 
 ## Runtime Bridge
 
-FFI manages a global tokio runtime (`OnceLock<Runtime>`). The `blocking_send` helper:
-- Outside tokio: calls `ffi_runtime().block_on()` directly.
-- Inside tokio: spawns a dedicated thread with its own runtime.
+FFI manages a global tokio runtime (`OnceLock<Runtime>`, multi-thread flavor,
+never shut down). The `blocking_send` helper picks a strategy from the ambient
+context (`crates/eggfetch-ffi/src/runtime.rs`):
+
+- Outside any runtime: calls `ffi_runtime().block_on()` directly.
+- Inside a multi-thread runtime (e.g. napi-rs): `tokio::task::block_in_place`
+  on the ambient handle.
+- Inside a current-thread runtime: spawns the future on the global FFI runtime
+  and blocks the caller on a channel (avoids `block_in_place` panics).
 
 ## Architecture References
 

@@ -40,6 +40,13 @@ docs/
 └── security/           Security guidelines and troubleshooting
 ```
 
+## Plans Directory (`plans/`)
+
+- Completed plans are **historical records, not active requirements** (verification-policy principle 9). Do not treat their step lists as current CI or release gates.
+- The one live ledger is `plans/httpx-parity-correction-status.md`: it records the exact executable SHA that the HTTPX Stage C qualification is bound to. Any change to executable code (Rust sources, tests, build/validation scripts, packaging config) invalidates that binding and requires restarting Corrective 07 requalification from the freeze step.
+- Docs-only commits do not invalidate the SHA binding.
+- When finishing new work that changes a compatibility claim, update the status ledger and `compat/httpx/0.28.1/profile.toml` together; never hand-edit generated manifests.
+
 ## Key Constraints
 
 - Keep documentation accurate against the current codebase state.

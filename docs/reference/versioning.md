@@ -95,7 +95,9 @@ Release artifacts and CI workflows are triggered by tags matching this pattern.
 ## MSRV policy
 
 The minimum supported Rust version (MSRV) is documented in
-`workspace.package.rust-version` and enforced by `rust-toolchain.toml`. MSRV
+`workspace.package.rust-version` and checked in extended validation with the
+declared toolchain; `rust-toolchain.toml` pins the stable channel for
+development. MSRV
 changes are treated as breaking changes and require a minor version bump.
 
 ## Feature-flag stability

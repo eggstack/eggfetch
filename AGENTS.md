@@ -212,8 +212,30 @@ Key types: `eggfetch_core::network_stream` (`ConnectionMetadata`, `UpgradedStrea
 
 ## Architecture Docs
 
-Deep dives live in `docs/architecture/` (filenames match topics). Start points:
-`overview.md` (crate graph, module map), `core-engine.md` (client/pipeline),
-`core-timeout-pool.md`, `core-tls-proxy-protocols.md`, `build-ci.md` (CI/lint/MSRV/release),
-`feature-flags.md` (validation matrix), `threat-model.md`. Residual-difference policy:
-`docs/residual-differences.md`.
+Deep dives live in `docs/architecture/` (filenames match topics); `overview.md` is the entry
+point and links every deep dive. Index:
+
+**Engine**
+- `overview.md` — crate graph, module maps, request lifecycle summary, deep-dive index
+- `core-engine.md` — Client/builder, pipeline lifecycle, error taxonomy
+- `core-body-streaming.md` — body model, streaming adapters, pool-permit lifetime
+- `core-timeout-pool.md` — phase-aware timeouts, semaphore pool, origin keying
+- `core-auth-redirect-retry.md` — auth schemes, redirect policy, retry/backoff
+- `core-tls-proxy-protocols.md` — TLS config, HTTP proxy/CONNECT/SOCKS, HTTP/2, HTTP/3
+- `core-cookies-multipart-compression.md` — cookie jar, multipart encoder, decompression
+
+**Adapters & tooling**
+- `cli.md` — argument model, output modes, exit codes
+- `python-bindings.md` — sync/async adapters, compat facade internals, exception hierarchy
+- `ffi-and-node.md` — C ABI handles, runtime bridge, N-API prototype
+- `testing-fuzzing.md`, `benchmarks.md` — test strategy, fuzz targets, Criterion suites
+
+**Cross-cutting**
+- `feature-flags.md` (validation matrix), `dependency-policy.md` (adding deps),
+  `build-ci.md` (CI/lint/MSRV/release), `threat-model.md`,
+  `security-findings.md`, `security-reviews.md`, `incident-runbook.md`,
+  `release-security-checklist.md`
+
+Residual-difference policy: `docs/residual-differences.md`. Verification tiers:
+`docs/verification-policy.md`. Historical plans in `plans/` are non-normative records;
+the live exact-SHA qualification ledger is `plans/httpx-parity-correction-status.md`.

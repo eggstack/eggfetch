@@ -93,17 +93,29 @@ Priority: explicit `encoding` kwarg > Content-Type charset > UTF-8 fallback. Use
 
 ## Exception Hierarchy
 
+Source of truth: `crates/eggfetch-python/src/errors.rs`.
+
 ```
 EggfetchError
 ├── RequestError
-├── InvalidUrl
-├── TimeoutException
-│   ├── ConnectTimeout
-│   ├── ReadTimeout
-│   ├── WriteTimeout
-│   └── PoolTimeout
-├── NetworkError
-├── ProtocolError
+│   ├── InvalidUrl
+│   ├── TimeoutException
+│   │   ├── ConnectTimeout
+│   │   ├── ReadTimeout
+│   │   ├── WriteTimeout
+│   │   └── PoolTimeout
+│   ├── NetworkError
+│   ├── ProtocolError
+│   ├── BodyError
+│   ├── TooManyRedirects
+│   ├── DecompressionError
+│   ├── UnsupportedContentEncoding
+│   ├── ProxyError
+│   │   ├── ProxyConnectError
+│   │   └── ProxyAuthError
+│   ├── BodyNotReplayableForRetry
+│   ├── RetryBudgetExhausted
+│   ├── RetryNotConfigured
 │   ├── Http2Error
 │   │   ├── Http2GoAway
 │   │   ├── Http2StreamReset
@@ -111,21 +123,11 @@ EggfetchError
 │   └── H3Error
 │       ├── H3ConnectError
 │       └── H3ProtocolError
-├── ProxyError
-│   ├── ProxyConnectError
-│   └── ProxyAuthError
-├── TooManyRedirects
-├── BodyError
-├── DecompressionError
-├── UnsupportedContentEncoding
+├── HTTPStatusError
+├── UnsupportedKwarg
 ├── StreamConsumed
 ├── StreamClosed
-├── ResponseNotRead
-├── BodyNotReplayableForRetry
-├── RetryBudgetExhausted
-├── RetryNotConfigured
-├── UnsupportedKwarg
-└── HTTPStatusError
+└── ResponseNotRead
 ```
 
 ## Kwargs Reference

@@ -76,12 +76,14 @@ somewhere on your `PATH`.
 
 | Platform | Status |
 | --- | --- |
-| Linux (x86_64, aarch64) | Fully supported, CI tested |
-| macOS (x86_64, aarch64) | Fully supported, CI tested |
-| Windows (x86_64) | Fully supported, CI tested |
+| Linux x86_64 | Fully supported, wheel + smoke tested at release |
+| macOS arm64 (Apple silicon) | Fully supported, wheel + smoke tested at release |
+| Windows x86_64 | Fully supported, wheel + smoke tested at release |
+| macOS x86_64, Linux aarch64 | Build from source; no prebuilt wheels |
 | Other platforms | May work, not release-tested |
 
 ## Rust version
 
-The minimum supported Rust version (MSRV) is **1.80**, specified in
-`workspace.package.rust-version` and enforced by `rust-toolchain.toml`.
+The minimum supported Rust version (MSRV) is **1.80**, declared in
+`workspace.package.rust-version` and checked in extended validation.
+`rust-toolchain.toml` pins the stable channel for development.

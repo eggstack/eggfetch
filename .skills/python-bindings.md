@@ -33,17 +33,29 @@ CI must install `pytest-asyncio` explicitly. The `PYO3_USE_ABI3_FORWARD_COMPATIB
 
 ## Exception Hierarchy
 
+Source of truth: `crates/eggfetch-python/src/errors.rs`.
+
 ```
 EggfetchError
 ├── RequestError
-├── InvalidUrl
-├── TimeoutException
-│   ├── ConnectTimeout
-│   ├── ReadTimeout
-│   ├── WriteTimeout
-│   └── PoolTimeout
-├── NetworkError
-├── ProtocolError
+│   ├── InvalidUrl
+│   ├── TimeoutException
+│   │   ├── ConnectTimeout
+│   │   ├── ReadTimeout
+│   │   ├── WriteTimeout
+│   │   └── PoolTimeout
+│   ├── NetworkError
+│   ├── ProtocolError
+│   ├── BodyError
+│   ├── TooManyRedirects
+│   ├── DecompressionError
+│   ├── UnsupportedContentEncoding
+│   ├── ProxyError
+│   │   ├── ProxyConnectError
+│   │   └── ProxyAuthError
+│   ├── BodyNotReplayableForRetry
+│   ├── RetryBudgetExhausted
+│   ├── RetryNotConfigured
 │   ├── Http2Error
 │   │   ├── Http2GoAway
 │   │   ├── Http2StreamReset
@@ -51,8 +63,11 @@ EggfetchError
 │   └── H3Error
 │       ├── H3ConnectError
 │       └── H3ProtocolError
-├── BodyError
-└── HTTPStatusError
+├── HTTPStatusError
+├── UnsupportedKwarg
+├── StreamConsumed
+├── StreamClosed
+└── ResponseNotRead
 ```
 
 ## HTTPX Compatibility Layer
@@ -63,62 +78,26 @@ The `eggfetch.compat.httpx` module provides an HTTPX 0.28.1 drop-in facade over 
 from eggfetch.compat.httpx import Client, AsyncClient, Request, Response
 ```
 
-**Phase 2 implements:**
-- Value objects: `URL`, `QueryParams`, `Headers`, `Cookies`, `Timeout`, `Limits`, `Proxy`
-- Status code helpers (`codes`)
-- Request and Response objects with full HTTPX-compatible metadata
-- `Client` and `AsyncClient` with constructor signatures, merge semantics, `build_request()`, `send()`
-- Top-level helpers: `get`, `post`, `put`, `patch`, `delete`, `head`, `options`, `request`, `stream`
-- Complete exception hierarchy matching HTTPX MRO
+**Implemented surface** (historical phase detail lives in `docs/architecture/python-bindings.md`):
 
-**Phase 3 implements:**
-- Stream base classes: `SyncByteStream`, `AsyncByteStream`, `ByteStream`
-- Response streaming delegation to native engine
-- `iter_raw()`/`aiter_raw()` for undecoded transport bytes
-- Chunk size parameter on all iterators; compatibility raw iterators default to `None` and native decoded iterators retain their existing defaults
-- Request streaming bodies (iterables, file-like, custom streams)
-- Multipart passthrough to native encoder
-- `StreamingRawBytesIterator` and `AsyncStreamingRawBytesIterator` types
+- Value objects: `URL`, `QueryParams`, `Headers`, `Cookies`, `Timeout`, `Limits`, `Proxy`; status helpers (`codes`)
+- Request/Response with full HTTPX-compatible metadata; `Client`/`AsyncClient` constructors, merge semantics, `build_request()`, `send()`; top-level helpers (`get`, `post`, `put`, `patch`, `delete`, `head`, `options`, `request`, `stream`)
+- Complete exception hierarchy matching the HTTPX MRO
+- Streaming both directions: `SyncByteStream`/`AsyncByteStream` base classes, request streaming bodies (iterables, file-like, custom streams), multipart passthrough to the native encoder, raw iterators with chunk-size control
+- Transport layer: `BaseTransport`, `AsyncBaseTransport`, `Transport`, `AsyncTransport`, `MockTransport`; named mounts via `Client.mount()`/`Client.unmount()`
+- Auth: `Auth`, `BasicAuth`, digest auth, netrc integration; request/event hooks on `Client` and `Request`
+- WSGI/ASGI local transports
+- SOCKS5 proxy support with persistent per-route pools and NO_PROXY bypass
+- Typed difference records in the API oracle, lossless merge tests, behavioral downstream fixtures, native lifecycle proof fixtures
 
-**Phase 4 implements:**
-- Transport layer: `BaseTransport`, `AsyncBaseTransport`, `Transport`, `AsyncTransport`, `MockTransport`
-- Mounts: named transport routing with `Client.mount()` / `Client.unmount()`
-- Auth: `Auth` base class, `BasicAuth`, digest auth, netrc integration
-- Hooks: request/event hooks on `Client` and `Request`
-- WSGI/ASGI transport: local app dispatch via `WSGITransport`, `ASGITransport`
+**Differential closure / corrective passes (current state):**
 
-**Phase 5 implements:**
-- Downstream validation, expanded behavior corpus (30 cases), evidence report generation, compatibility-stage decision (Stage C justified)
-- SOCKS5 proxy support: HTTP/HTTPS through SOCKS5, reference-pinned method/auth/address behavior, persistent route pools, and NO_PROXY bypass
+- Corrective passes 01–06 plus the remaining-parity program are complete; Stage C is qualified on `5c7899fefb6df087dfa1b3578fbef9ba64f87742` (also recorded in `compat/httpx/0.28.1/profile.toml` and `plans/httpx-parity-correction-status.md`). Executable changes require a new exact-SHA qualification.
+- Closure evidence: typed difference records gated by `allowed-differences.toml`, lossless merge semantics (`crates/eggfetch-python/tests/compat/test_merge_lossless.py`), separate sync/async auth drivers, behavioral downstream fixtures (`compat/downstream/behavioral_fixtures/`), and native lifecycle proof fixtures (`test_native_timeout_classification.py`, `test_soak.py`, proxy and TLS tests).
 
-**Phase 6 / Differential Closure implements:**
-- Typed difference records in API oracle (`scripts/compare_httpx_api_manifest.py --validate`)
-- Lossless merge semantics (`crates/eggfetch-python/tests/compat/test_merge_lossless.py`)
-- Separate sync/async auth drivers
-- Behavioral downstream fixtures (`compat/downstream/behavioral_fixtures/`)
-- Native lifecycle proof fixtures (`test_native_timeout_classification.py`, `test_soak.py`, proxy and TLS tests)
-- Final qualification is recorded only after the current corrective transport plan's exact-SHA gates pass; current evidence is bound to the SHA in `compat/httpx/0.28.1/profile.toml`, while historical Phase 6 counts remain non-current audit records.
-- The HTTPX environment facade follows `urllib.request` precedence and URL-pattern `NO_PROXY` semantics: bare domains match the bare host and subdomains at label boundaries, leading-dot domains match subdomains only, localhost/IP literals are exact, explicit host ports require an explicit normalized target port, and CIDR-looking values do not become native subnet rules. Bare unbracketed IPv6 literals follow the pinned HTTPX environment form; bracketed IPv6 and IPv6 prefix-looking values are rejected before dispatch. Native `NoProxy::parse()` retains its richer bracketed-IPv6 and CIDR behavior.
-- Corrective 06 (final semantic truthfulness) closed the SSLContext
-  fail-closed, extension/trace unification, network-stream wrapper mode,
-  and SNI/SOCKS H2 propagation tracks.
-- Corrective 07 (final exact-SHA requalification) closed the
-  remaining-parity line. Stage C is qualified on
-  `5c7899fefb6df087dfa1b3578fbef9ba64f87742` (also recorded in
-  `compat/httpx/0.28.1/profile.toml`); the prior `9ffa6cd...` freeze was
-  rebaselined to absorb a single-line H3 test fixture `#[allow]`
-  extension so the same code passes clippy on both the local qualifier
-  toolchain and stable Rust 1.98+. Executable changes require a new
-  exact-SHA qualification.
-- The compatibility `Timeout` constructor uses a private `UNSET` sentinel so
-  omitted phase values inherit the scalar while explicit `None` disables only
-  that phase; `Timeout()` follows HTTPX validation and requires a scalar or all
-  four phases. Conversion still forwards only `connect`, `read`, `write`, and
-  `pool` to native Rust and never synthesizes native `total`.
+The facade is Stage C qualified for Python 3.10+ asyncio. Key boundaries:
 
-All corrective closure phases (1-6) are complete, plus the remaining-parity program (Phases 01-05). The facade is Stage C qualified for Python 3.10+ asyncio. Key boundaries:
-
-- Timeout conversion forwards only HTTPX's `connect`, `read`, `write`, `pool`; native `total` is EggFetch-only.
+- Timeout conversion forwards only HTTPX's `connect`, `read`, `write`, `pool`; native `total` is EggFetch-only. The compat `Timeout` constructor uses a private `UNSET` sentinel so omitted phase values inherit the scalar while explicit `None` disables only that phase; `Timeout()` follows HTTPX validation and requires a scalar or all four phases.
 - `Proxy(headers=...)` is forwarded on the proxy leg (resolved in Phase 05).
 - `Proxy(ssl_context=...)` is translated to native TlsConfig for the proxy endpoint TLS handshake (resolved in Phase 05).
 - Arbitrary Python ssl_context objects unrepresentable by rustls are rejected
@@ -180,6 +159,7 @@ EGGFETCH_COMPAT_REQUIRED=1 pytest \
   crates/eggfetch-python/tests/compat/test_hook_cookie_auth_ordering.py \
   crates/eggfetch-python/tests/compat/test_cookie_scope_parity.py \
   -v --strict-markers
+```
 
 Pinned raw-stream differential and native-boundary checks:
 
