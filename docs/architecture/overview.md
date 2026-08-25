@@ -40,7 +40,8 @@ eggfetch/
 │   ├── eggfetch-ffi/       C ABI bindings — opaque handle pattern
 │   ├── eggfetch-node/      Node.js N-API prototype (wraps FFI)
 │   └── eggfetch-bench/     Criterion benchmarks (not published)
-├── compat/                 HTTPX compatibility profiles
+├── compat/                 HTTPX compatibility profiles (httpx/0.28.1) + downstream
+│                            fixtures, shim, and controlled-replacement suites
 ├── docs/
 │   └── architecture/       This directory — internal architecture docs
 ├── examples/               Usage examples
@@ -75,30 +76,31 @@ This `overview.md` is the entry point. For a focused review of any component, fo
 
 ### eggfetch-core (the engine)
 
-All HTTP behavior lives here. 23 source modules including `stream` and `transport` submodules. This is the single authority for networking — no other crate performs I/O.
+All HTTP behavior lives here. 26 source modules including `stream` and `transport` submodules. This is the single authority for networking — no other crate performs I/O.
 
 | Module | Public? | Purpose |
 |--------|---------|---------|
 | `client` | Yes | `Client`, `ClientBuilder` — entry point for all requests. Holds hyper clients (standard, direct, UDS, SOCKS, H3), pool, config. Builder pattern with comprehensive configuration. |
-| `request` | Yes | `Request`, `RequestBuilder` — fluent request construction. Methods: `header()`, `query()`, `body()`, `timeout()`, `auth()`, `decompress()`, `proxy()`, `retry()`. `send()` delegates to client. |
+| `request` | Yes | `Request`, `RequestBuilder`, `ProxyOverride`, `TransportHints` — fluent request construction. Methods: `header()`, `query()`, `body()`, `timeout()`, `auth()`, `decompress()`, `proxy()`, `retry()`. `TransportHints` carries wire-level overrides (`target`, `sni_hostname`, `trace`) that do not affect logical URL semantics; hints survive retry reconstruction and are cleared on redirect hops. `send()` delegates to client. |
 | `response` | Yes | `Response`, `HistoryEntry` — incoming response with status, version, headers, URL, body, redirect history. Consumption: `bytes()`, `text()`, `bytes_stream()`, `raw_bytes_stream()`, `text_lines()`. |
 | `body` | Yes | `RequestBody`, `ResponseBody`, `BoxBytesStream` — single-consumption body model. Request: `Empty | Bytes | Stream`. Response: `Buffered | Streaming | EncodedStreaming | Consumed`. Streaming bodies carry pool permits via `PoolGuardArc` (RAII). |
 | `headers` | Yes | `Headers` — case-insensitive header map wrapper around `http::HeaderMap`. |
-| `error` | Yes | `Error` enum (46 variants), `Result<T>` alias. Comprehensive error taxonomy with `kind()` method returning static strings for programmatic matching. |
+| `error` | Yes | `Error` enum (47 variants), `Result<T>` alias. Comprehensive error taxonomy with `kind()` method returning static strings for programmatic matching. |
 | `auth` | Yes | `AuthScheme`, `BasicAuth`, `BearerAuth` — CR/LF injection prevention, redacted `Debug`/`Display`. Precedence: request > disabled > client > none. |
 | `compression` | Yes | `ContentCoding`, `DecompressionLimit` — streaming decompression (gzip, brotli, zstd, deflate). Zip-bomb protection via max decoded size and ratio. |
 | `cookie` | Yes | `CookieJar`, `Cookie`, `SameSite` — RFC 6265 cookie jar with domain/path matching, cross-origin stripping, thread-safe storage. (cfg `cookies`) |
 | `http_version` | Yes | `HttpVersionPolicy` — HTTP/1.1, HTTP/2, HTTP/3 version negotiation. |
 | `limits` | Yes | `Limits` — resource limits (max connections, idle connections, per-host limits). HTTPX-compatible. |
 | `multipart` | Yes | `Multipart`, `Boundary`, `Part`, `PartBody`, `MultipartEncoder` — streaming multipart/form-data with known-length optimization. (cfg `multipart`) |
+| `network_stream` | Yes | `NetworkStream`, `UpgradedStream`, `UpgradedStreamVariant` (`Tcp`/`Tls`/`Adapter`), `ConnectionMetadata`, `TlsInfo`, `ExtraInfo` — writable IO for 101 Switching Protocols responses only; gates `start_tls` eligibility and carries connection metadata surfaced to adapters. |
 | `pool` | Yes | `Pool`, `PoolConfig`, `PoolGuard`, `OriginKey`, `PoolMetrics` — semaphore-based concurrency limiter. Global + per-origin limits. Origin keyed by `(scheme, host, port)` + optional proxy route. |
 | `proxy` | Yes | `Proxy`, `ProxyConfig`, `ProxyAuth`, `NoProxy`, `NoProxyRule`, `ProxyDecision` — HTTP forwarding, HTTPS CONNECT tunneling, SOCKS5. Per-request override model. NO_PROXY with 12 rule types. (cfg `proxy`) |
 | `redact` | Yes | `redact_headers()`, `redact_url()`, `SENSITIVE_HEADERS` — centralized secret redaction for all `Debug`/`Display`/error output. |
 | `redirect` | Yes | `RedirectPolicy`, `redirect_method()`, `build_redirect_request()` — redirect following: method rewrites (303→GET), cross-origin header stripping, body replayability checks. |
-| `request` | Yes | `Request`, `RequestBuilder`, `ProxyOverride` — outgoing HTTP request builder. |
 | `retry` | Yes | `RetryPolicy`, `RetryPolicyBuilder`, `BackoffPolicy`, `MethodPolicy`, `StatusPolicy`, `RetryCause` — policy-driven retry with exponential backoff+jitter. Respects `Retry-After` headers. POST/PATCH not retried by default. |
 | `timeout` | Yes | `Timeout`, `TimeoutBuilder`, `TimeoutPhase` — 7 distinct phases (Pool, Connect, ProxyConnect, ProxyTls, Write, Read, Total). Request-level overrides merge with client-level per-field. |
 | `tls` | Yes | `TlsConfig`, `TlsConfigBuilder`, `TlsVersion`, `TrustStore`, `ClientIdentity` — custom CA bundles, mTLS client certs, verification toggle, TLS version bounds. |
+| `trace` | Yes | `TraceObserver`, `TraceEvent` — synchronous callback observer for dispatch events (request/response/redirect/retry). Coroutine callbacks are rejected at adapter boundaries; core only ever sees sync observers. |
 | `pipeline` | No | `send_with_retry()`, `send_with_redirects()`, `send_single_request()` — full request lifecycle orchestration. Retry loop → redirect loop → header merge → cookie injection → auth → pool acquire → timeout → transport → decompression. |
 | `transport` | No | 9 submodules: `direct`, `direct_connector`, `proxy`, `socks`, `uds`, `http3`, `connect`, `connect_timeout`, `mod`. Type aliases for hyper clients with timeout wrappers. |
 | `stream` | No | Per-chunk read/write timeout wrappers. |
@@ -122,7 +124,7 @@ All HTTP behavior lives here. 23 source modules including `stream` and `transpor
 
 ### eggfetch-cli (the CLI)
 
-Single source file (`main.rs`, ~1600 lines). Thin binary over `eggfetch-core`:
+Single source file (`main.rs`, ~1700 lines). Thin binary over `eggfetch-core`:
 
 - **Argument parsing**: clap-based (`#[derive(Parser)]`), maps flags to `ClientBuilder`/`RequestBuilder` calls
 - **Body modes**: `--body`, `--body-file`, `--json`, `--form`, `--file @path`
@@ -137,7 +139,7 @@ Single source file (`main.rs`, ~1600 lines). Thin binary over `eggfetch-core`:
 
 ### eggfetch-python (the Python bindings)
 
-16 source modules via PyO3/maturin. Enables all core features including HTTP/3.
+18 source modules via PyO3/maturin. Enables all core features including HTTP/3.
 
 | Module | Purpose |
 |--------|---------|
@@ -155,6 +157,9 @@ Single source file (`main.rs`, ~1600 lines). Thin binary over `eggfetch-core`:
 | `multipart.rs` | `File` wrapper for multipart uploads. |
 | `streaming.rs` | `StreamingResponse` — sync/async iterators for bytes, text, lines, raw bytes. |
 | `conversion.rs` | Python↔Rust type conversion (shared by sync/async). |
+| `extensions.rs` | Request-extension extraction (`target`, `sni_hostname`, `trace`) into core `TransportHints`. |
+| `network_stream.rs` | `PyNetworkStream` (sync) / `PyAsyncNetworkStream` (async) wrappers behind `EitherNetworkStream`; `start_tls`, `get_extra_info`. |
+| `trace_bridge.rs` | `PyTraceObserver` — wraps sync Python callables as core `TraceObserver`; rejects coroutine callbacks eagerly. |
 | `errors.rs` | Exception hierarchy: `EggfetchError` → `RequestError`, `InvalidUrl`, `TimeoutException`, `NetworkError`, `ProtocolError`, `BodyError`, `HTTPStatusError`, `ProxyError`, etc. |
 | `limits.rs` | `PyLimits` — pool concurrency limits. |
 
@@ -197,7 +202,7 @@ Thread safety: `ClientHandle` is `Send + Sync` (shared). `RequestHandle`, `Respo
 
 ### eggfetch-bench (benchmarks)
 
-Criterion-based benchmarks in three suites: `microbench`, `e2e`, `resources`. Not published. Includes `resource_monitor.rs` binary for RSS monitoring.
+Criterion-based benchmarks in `benchmarks/` — three suites (`microbench`, `e2e`, `resources`) plus a `resource_monitor.rs` binary for RSS monitoring. Not published.
 
 ## Deep-Dive Index
 
@@ -283,6 +288,6 @@ The pipeline tries transports in this order within `send_single_request()`:
 
 ## Current Status
 
-All milestones A–Z are complete. The workspace provides ~685 Rust tests, ~513 Python tests (non-compat), ~1475 Python tests (compat), and 30 FFI tests. MSRV is Rust 1.80. CI enforces `RUSTFLAGS=-D warnings` with pedantic clippy.
+All milestones A–Z are complete. The workspace provides ~980 Rust tests, ~520 Python tests (non-compat), ~1590 Python tests (compat), and 31 FFI tests. MSRV is Rust 1.80. CI enforces `RUSTFLAGS=-D warnings` with pedantic clippy.
 
 The `test-util` feature enables `tokio/test-util` for deterministic time testing in timeout-related tests.
