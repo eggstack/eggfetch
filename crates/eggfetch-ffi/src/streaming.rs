@@ -26,8 +26,10 @@ pub struct StreamingResponseHandle {
     headers: Vec<(String, String)>,
     /// Body chunk source, behind a mutex so `next` and `cancel` never form
     /// aliasing `&mut` borrows when called concurrently from different
-    /// threads.
-    rx: Mutex<mpsc::Receiver<Result<Bytes, eggfetch_core::Error>>>,
+    /// threads. `next` temporarily takes the receiver out of the slot so
+    /// `cancel` can lock the handle and close the channel while `next` is
+    /// parked on an owned receiver.
+    rx: Mutex<Option<mpsc::Receiver<Result<Bytes, eggfetch_core::Error>>>>,
     /// Description of the error that ended the stream early, if any.
     /// Set when the producer observes a mid-stream failure; query via
     /// [`eggfetch_response_stream_error`]. Behind a mutex for the same
@@ -151,7 +153,7 @@ pub unsafe extern "C" fn eggfetch_client_send_streaming(
                     status,
                     url,
                     headers,
-                    rx: Mutex::new(rx),
+                    rx: Mutex::new(Some(rx)),
                     last_error: Mutex::new(None),
                     cancel,
                 })
@@ -280,7 +282,15 @@ pub unsafe extern "C" fn eggfetch_response_stream_header(
 /// Read the next chunk from the streaming response.
 ///
 /// Blocks until a chunk is available. Returns null when the stream is
-/// exhausted or has been cancelled.
+/// exhausted or has been cancelled; query
+/// [`eggfetch_response_stream_error`] to distinguish cancellation and
+/// mid-stream failures from a clean end-of-body.
+///
+/// While this call is parked, the receiver is removed from the shared
+/// slot, so [`eggfetch_response_stream_cancel`] can close the channel
+/// immediately instead of waiting for the producer. A concurrent `next`
+/// call from another thread finds the empty slot and returns null rather
+/// than interleaving with the parked reader.
 ///
 /// Caller must free the returned chunk with [`eggfetch_stream_chunk_free`].
 ///
@@ -295,13 +305,33 @@ pub unsafe extern "C" fn eggfetch_response_stream_next(
         let Some(handle) = handle.as_ref() else {
             return ptr::null_mut();
         };
-        let Ok(mut rx) = handle.rx.lock() else {
-            return ptr::null_mut();
+        // Take the receiver out of the mutex so a concurrent `cancel` can
+        // lock the handle and close the channel while we are blocked below.
+        let mut rx = {
+            let Ok(mut guard) = handle.rx.lock() else {
+                return ptr::null_mut();
+            };
+            match guard.take() {
+                Some(rx) => rx,
+                None => return ptr::null_mut(),
+            }
         };
         match rx.blocking_recv() {
             Some(Ok(data)) => {
                 if handle.cancel.load(Ordering::Acquire) {
+                    // A chunk raced with cancellation: end the stream here
+                    // (the receiver stays taken) and surface why via
+                    // `last_error` so hosts can distinguish this from a
+                    // natural end-of-body.
+                    if let Ok(mut last) = handle.last_error.lock() {
+                        *last = Some("stream cancelled".to_owned());
+                    }
                     return ptr::null_mut();
+                }
+                // The stream continues: hand the receiver back for the
+                // next call.
+                if let Ok(mut guard) = handle.rx.lock() {
+                    *guard = Some(rx);
                 }
                 let len = data.len();
                 let buf = if len > 0 {
@@ -337,7 +367,8 @@ pub unsafe extern "C" fn eggfetch_response_stream_next(
 ///
 /// Returns null when the stream ended cleanly, has not been consumed to
 /// completion, or the handle is invalid. When a mid-stream failure
-/// occurred (network reset, decompression error, ...), returns a newly
+/// occurred (network reset, decompression error, ...) or the stream was
+/// cancelled via [`eggfetch_response_stream_cancel`], returns a newly
 /// allocated C string describing it; caller must free with
 /// [`crate::handle::eggfetch_string_free`].
 ///
@@ -389,8 +420,9 @@ pub unsafe extern "C" fn eggfetch_stream_chunk_free(chunk: *mut StreamChunk) {
 /// Cancel an in-progress streaming response.
 ///
 /// Subsequent calls to [`eggfetch_response_stream_next`] will return null.
-/// A `next` call that is currently blocked wakes up when the next chunk
-/// arrives or the stream ends; it never aliases the handle mutably.
+/// Because a blocked `next` parks on an owned receiver, this call can
+/// lock the shared slot and close the channel immediately, waking the
+/// parked reader; it never aliases the handle mutably.
 ///
 /// # Safety
 ///
@@ -402,11 +434,13 @@ pub unsafe extern "C" fn eggfetch_response_stream_cancel(handle: *mut StreamingR
             return;
         };
         handle.cancel.store(true, Ordering::Release);
-        // Wake a blocked `next` if the receiver is not currently locked by
-        // one; otherwise the flag alone makes that call return null on the
+        // Wake a blocked `next` if it has parked on the owned receiver;
+        // otherwise the flag alone makes that call return null on the
         // next chunk.
         if let Ok(mut rx) = handle.rx.try_lock() {
-            rx.close();
+            if let Some(receiver) = rx.as_mut() {
+                receiver.close();
+            }
         }
     });
 }

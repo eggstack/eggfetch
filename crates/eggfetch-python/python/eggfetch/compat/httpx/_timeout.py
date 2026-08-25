@@ -110,6 +110,13 @@ class Timeout:
 
     @property
     def total(self) -> float | None:
+        """The scalar timeout recorded at construction, if any.
+
+        Informational only: like HTTPX, this layer enforces the four
+        phases (connect/read/write/pool) and does not synthesize a
+        native outer deadline from ``total``. Native callers may set an
+        explicit engine-level total separately.
+        """
         return self._total
 
     @property

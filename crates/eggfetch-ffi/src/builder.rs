@@ -76,6 +76,10 @@ pub unsafe extern "C" fn eggfetch_client_builder_build(
 /// This is the total time limit for a complete request-response cycle,
 /// including connection, sending, and receiving.
 ///
+/// Like the per-phase setters, this merges into the current timeout
+/// configuration: only the `total` phase is set; connect/read/write/pool
+/// values from earlier calls are preserved.
+///
 /// Returns 0 on success, -1 if handle is invalid.
 ///
 /// # Safety
@@ -90,9 +94,12 @@ pub unsafe extern "C" fn eggfetch_client_builder_timeout(
         let Some(handle) = handle.as_mut() else {
             return -1;
         };
-        update_builder(handle, |builder| {
-            builder.timeout(eggfetch_core::Timeout::from_secs(secs))
-        })
+        let timeout = eggfetch_core::Timeout::builder()
+            .total(std::time::Duration::from_secs(secs))
+            .build();
+        // Merge instead of replace so setting one phase does not clobber
+        // phases configured by earlier calls.
+        update_builder(handle, |builder| builder.merge_timeout(timeout))
     })
 }
 

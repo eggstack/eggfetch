@@ -343,6 +343,17 @@ async fn send_http_proxy_request(
     Ok(response)
 }
 
+/// Append one header line, writing the value's raw bytes.
+///
+/// Values may carry HTTP/1.1 obs-text (0x80..=0xFF); dropping them would
+/// silently diverge from hyper's direct path, which preserves the bytes.
+fn push_header_line(out: &mut Vec<u8>, name: &str, value: &[u8]) {
+    out.extend_from_slice(name.as_bytes());
+    out.extend_from_slice(b": ");
+    out.extend_from_slice(value);
+    out.extend_from_slice(b"\r\n");
+}
+
 /// Write an HTTP request to a stream.
 #[allow(clippy::too_many_arguments)] // Proxy headers channel added as a typed parameter.
 pub(crate) async fn write_proxy_request<S: tokio::io::AsyncWrite + Unpin>(
@@ -355,7 +366,6 @@ pub(crate) async fn write_proxy_request<S: tokio::io::AsyncWrite + Unpin>(
     proxy_headers: &Headers,
     body: RequestBody,
 ) -> Result<()> {
-    use std::fmt::Write;
     use tokio::io::AsyncWriteExt;
 
     let version_str = match version {
@@ -363,7 +373,11 @@ pub(crate) async fn write_proxy_request<S: tokio::io::AsyncWrite + Unpin>(
         _ => "HTTP/1.1",
     };
 
-    let mut request = format!("{method} {uri} {version_str}\r\n");
+    // The head is assembled as raw bytes: header values may carry valid
+    // HTTP/1.1 obs-text that must reach the wire unchanged, matching
+    // hyper's direct path.
+    let mut request = Vec::new();
+    request.extend_from_slice(format!("{method} {uri} {version_str}\r\n").as_bytes());
 
     // Add Host header if not present.
     if !headers.contains("host") {
@@ -373,7 +387,7 @@ pub(crate) async fn write_proxy_request<S: tokio::io::AsyncWrite + Unpin>(
             } else {
                 parsed.host_str().unwrap_or("").to_string()
             };
-            let _ = write!(request, "Host: {host}\r\n");
+            request.extend_from_slice(format!("Host: {host}\r\n").as_bytes());
         }
     }
 
@@ -383,9 +397,7 @@ pub(crate) async fn write_proxy_request<S: tokio::io::AsyncWrite + Unpin>(
         if name.as_str().eq_ignore_ascii_case("proxy-authorization") {
             continue;
         }
-        if let Ok(value_str) = value.to_str() {
-            let _ = write!(request, "{}: {value_str}\r\n", name.as_str());
-        }
+        push_header_line(&mut request, name.as_str(), value.as_bytes());
     }
 
     // Write proxy-only headers.  Skip proxy-authorization (handled
@@ -398,20 +410,20 @@ pub(crate) async fn write_proxy_request<S: tokio::io::AsyncWrite + Unpin>(
         if headers.contains(name.as_str()) {
             continue;
         }
-        if let Ok(value_str) = value.to_str() {
-            let _ = write!(request, "{}: {value_str}\r\n", name.as_str());
-        }
+        push_header_line(&mut request, name.as_str(), value.as_bytes());
     }
 
     // Add Proxy-Authorization if configured.
     if let Some(auth) = proxy_auth {
-        let _ = write!(request, "Proxy-Authorization: {}\r\n", auth.header_value());
+        request.extend_from_slice(
+            format!("Proxy-Authorization: {}\r\n", auth.header_value()).as_bytes(),
+        );
     }
 
-    request.push_str("\r\n");
+    request.extend_from_slice(b"\r\n");
 
     stream
-        .write_all(request.as_bytes())
+        .write_all(&request)
         .await
         .map_err(|e| Error::ProxyConnect(format!("failed to write request: {e}")))?;
 
@@ -788,5 +800,47 @@ mod tests {
         let (status, _, _, reason) = read_proxy_response(&mut reader).await.unwrap();
         assert_eq!(status, 404);
         assert_eq!(reason.as_deref(), Some("Not Found"));
+    }
+
+    #[tokio::test]
+    async fn write_proxy_request_preserves_obs_text_header_values() {
+        use crate::body::RequestBody;
+        use crate::headers::Headers;
+        use tokio::io::AsyncReadExt;
+
+        // obs-text (0x80..=0xFF) is valid HTTP/1.1; the manually
+        // serialized proxy request must emit the raw bytes rather than
+        // silently dropping the header (hyper's direct path preserves
+        // them).
+        let mut map = http::HeaderMap::new();
+        map.insert(
+            http::HeaderName::from_static("x-note"),
+            http::HeaderValue::from_bytes(&[b'h', b'i', 0x80]).expect("obs-text is a valid value"),
+        );
+        let headers = Headers::from(map);
+
+        let (mut client_io, mut server_io) = tokio::io::duplex(1024);
+        super::write_proxy_request(
+            &mut client_io,
+            &http::Method::GET,
+            "http://origin.example/path",
+            http::Version::HTTP_11,
+            &headers,
+            None,
+            &Headers::new(),
+            RequestBody::Empty,
+        )
+        .await
+        .unwrap();
+        drop(client_io);
+
+        let mut wire = Vec::new();
+        server_io.read_to_end(&mut wire).await.unwrap();
+        let needle: &[u8] = b"x-note: hi\x80\r\n";
+        assert!(
+            wire.windows(needle.len()).any(|w| w == needle),
+            "raw obs-text value must reach the wire, got: {:?}",
+            String::from_utf8_lossy(&wire)
+        );
     }
 }

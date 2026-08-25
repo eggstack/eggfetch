@@ -483,12 +483,19 @@ impl ProxyAuth {
     ///
     /// # Errors
     ///
-    /// Returns [`Error::InvalidProxyUrl`] if the username or password
-    /// contains invalid characters.
+    /// Returns [`Error::InvalidProxyUrl`] if:
+    /// - The username contains `:` (it delimits the password, mirroring
+    ///   [`BasicAuth::new`](crate::auth::BasicAuth::new) and URL userinfo)
+    /// - The username or password contains CR (`\r`) or LF (`\n`)
     pub fn basic(username: impl Into<String>, password: impl Into<String>) -> Result<Self> {
         let username = username.into();
         let password = password.into();
 
+        if username.contains(':') {
+            return Err(Error::InvalidProxyUrl(
+                "proxy auth username must not contain ':'".into(),
+            ));
+        }
         if username.contains('\r') || username.contains('\n') {
             return Err(Error::InvalidProxyUrl(
                 "proxy auth username must not contain CR/LF".into(),
@@ -1201,6 +1208,14 @@ mod tests {
     #[test]
     fn proxy_auth_rejects_lf() {
         let err = ProxyAuth::basic("user", "pass\n").unwrap_err();
+        assert_eq!(err.kind(), "invalid_proxy_url");
+    }
+
+    #[test]
+    fn proxy_auth_rejects_colon_in_username() {
+        // Mirrors `BasicAuth::new`: ':' delimits the password, so a
+        // username containing it would produce ambiguous credentials.
+        let err = ProxyAuth::basic("user:name", "pass").unwrap_err();
         assert_eq!(err.kind(), "invalid_proxy_url");
     }
 

@@ -363,7 +363,11 @@ def _map_exception(native_exc, compat_request=None):
             return ConnectTimeout(message=msg, request=compat_request)
         if "write timeout" in msg_lower:
             return WriteTimeout(message=msg, request=compat_request)
-        if "read timeout" in msg_lower or "total timeout" in msg_lower:
+        # A native total-phase expiry is a whole-request wall-clock
+        # deadline, not a read-phase failure; it stays the generic
+        # TimeoutException (matching httpx, where `total` has no
+        # dedicated exception subclass).
+        if "read timeout" in msg_lower:
             return ReadTimeout(message=msg, request=compat_request)
         return TimeoutException(message=msg, request=compat_request)
 

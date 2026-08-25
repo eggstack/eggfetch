@@ -475,7 +475,7 @@ impl Multipart {
             let mut buf = BytesMut::new();
             for part in &self.parts {
                 let header = format_part_header(&boundary_str, part);
-                buf.extend_from_slice(header.as_bytes());
+                buf.extend_from_slice(&header);
                 if let PartBody::Bytes(ref data) = part.body {
                     buf.extend_from_slice(data);
                 }
@@ -602,7 +602,7 @@ fn quote_string_escape(value: &str) -> String {
     out
 }
 
-fn format_part_header(boundary: &str, part: &Part) -> String {
+fn format_part_header(boundary: &str, part: &Part) -> Vec<u8> {
     let mut header = String::new();
     header.push_str("--");
     header.push_str(boundary);
@@ -620,17 +620,18 @@ fn format_part_header(boundary: &str, part: &Part) -> String {
         header.push_str(ct.to_str().unwrap_or("application/octet-stream"));
         header.push_str("\r\n");
     }
+    let mut out = header.into_bytes();
     for (name, value) in part.headers.iter() {
-        header.push_str(name.as_str());
-        header.push_str(": ");
-        // Mirror `Part::header`: values were stored losslessly from the
-        // original bytes, so decode as UTF-8 rather than blanking
-        // non-ASCII values via `to_str()`.
-        header.push_str(std::str::from_utf8(value.as_bytes()).unwrap_or(""));
-        header.push_str("\r\n");
+        out.extend_from_slice(name.as_str().as_bytes());
+        out.extend_from_slice(b": ");
+        // Values were stored losslessly from the original bytes and may
+        // carry valid HTTP/1.1 obs-text; emit them raw rather than
+        // replacing them with an empty string.
+        out.extend_from_slice(value.as_bytes());
+        out.extend_from_slice(b"\r\n");
     }
-    header.push_str("\r\n");
-    header
+    out.extend_from_slice(b"\r\n");
+    out
 }
 
 // ---------------------------------------------------------------------------
@@ -691,7 +692,7 @@ impl MultipartEncoder {
         let header = if is_empty {
             Bytes::new()
         } else {
-            Bytes::from(format_part_header(&boundary, &parts[0]).into_bytes())
+            Bytes::from(format_part_header(&boundary, &parts[0]))
         };
 
         Self {
@@ -784,10 +785,10 @@ impl Stream for MultipartEncoder {
                     this.body = None;
                     if this.part_idx + 1 < this.parts.len() {
                         this.part_idx += 1;
-                        this.header = Bytes::from(
-                            format_part_header(&this.boundary, &this.parts[this.part_idx])
-                                .into_bytes(),
-                        );
+                        this.header = Bytes::from(format_part_header(
+                            &this.boundary,
+                            &this.parts[this.part_idx],
+                        ));
                         this.header_pos = 0;
                         this.state = State::PartHeader;
                     } else {
@@ -1163,6 +1164,29 @@ mod tests {
             RequestBody::Bytes(data) => {
                 let s = String::from_utf8(data.to_vec()).unwrap();
                 assert!(s.contains("x-note: café"), "got: {s}");
+            }
+            _ => panic!("expected bytes body"),
+        }
+    }
+
+    #[test]
+    fn custom_part_header_obs_text_value_is_never_blanked() {
+        // Raw obs-text bytes decode lossily in the String-backed part
+        // header store, but the encoder must still emit a value; a
+        // failed UTF-8 conversion must never collapse it to "".
+        let part = Part::new("field", PartBody::Bytes(Bytes::from("data")))
+            .header("X-Note", HeaderValue::from_bytes(&[0x80]).unwrap());
+        let mp = Multipart::with_boundary(Boundary::try_new("b").unwrap())
+            .part(part)
+            .unwrap();
+        match mp.into_body() {
+            RequestBody::Bytes(data) => {
+                let s = String::from_utf8(data.to_vec()).unwrap();
+                let line = s
+                    .lines()
+                    .find_map(|l| l.strip_prefix("x-note: "))
+                    .expect("custom header line present");
+                assert!(!line.is_empty(), "header value must not be blanked");
             }
             _ => panic!("expected bytes body"),
         }

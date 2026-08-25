@@ -141,9 +141,10 @@ impl PyResponse {
             rt.block_on(response.bytes())
                 .map_err(crate::errors::map_err)?
         };
-        // The short-lived runtime is dropped here; any 101 upgrade
-        // extracted from this path falls back to the ambient handle
-        // (None at this point) and will not be usable for IO.
+        // The short-lived runtime is dropped here; a 101 upgrade
+        // extracted on this path has no handle to drive IO with and is
+        // rejected with a clear error inside
+        // `from_core_response_with_body`.
         Self::from_core_response_with_body(&mut response, content, None, None, false)
     }
 
@@ -225,34 +226,45 @@ impl PyResponse {
         // pool, so the network_stream is only meaningful for upgrade
         // responses or streaming responses.
         //
-        // A buffered path that did not provide a runtime handle cannot
-        // surface a working upgrade wrapper: the underlying connection is
-        // already returned to the pool and the IR generator would have
-        // produced a `Metadata` variant. The `Unreachable` arm documents
-        // the invariant.
-        //
         // Create the wrapper that matches the caller's context:
         // - Sync callers get `PyNetworkStream` (uses `block_on` for IO).
         // - Async callers get `PyAsyncNetworkStream` (uses `pyo3_async_runtimes`).
-        let network_stream = response.take_network_stream().map(|ns| match ns {
-            eggfetch_core::network_stream::NetworkStream::Upgraded(u) => {
-                if is_async {
-                    EitherNetworkStream::Async(PyAsyncNetworkStream::from_upgraded(u))
-                } else {
-                    let handle = runtime_handle
-                        .cloned()
-                        .unwrap_or_else(|| tokio::runtime::Handle::current());
-                    EitherNetworkStream::Sync(PyNetworkStream::from_upgraded_with_handle(
-                        u,
-                        handle,
-                        runtime_lease.cloned(),
-                    ))
+        let network_stream = response
+            .take_network_stream()
+            .map(|ns| -> PyResult<_> {
+                match ns {
+                    eggfetch_core::network_stream::NetworkStream::Upgraded(u) => {
+                        if is_async {
+                            Ok(EitherNetworkStream::Async(
+                                PyAsyncNetworkStream::from_upgraded(u),
+                            ))
+                        } else if let Some(handle) = runtime_handle {
+                            Ok(EitherNetworkStream::Sync(
+                                PyNetworkStream::from_upgraded_with_handle(
+                                    u,
+                                    handle.clone(),
+                                    runtime_lease.cloned(),
+                                ),
+                            ))
+                        } else {
+                            // No ambient runtime exists on this thread and
+                            // no explicit handle was supplied; there is
+                            // nothing to drive IO with. Fail clearly
+                            // instead of panicking inside
+                            // `Handle::current()`.
+                            Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+                                "received a 101 upgrade response but no runtime handle is \
+                                 available to drive upgraded-stream IO; use a Client instance \
+                                 instead of the one-shot helpers for upgrade responses",
+                            ))
+                        }
+                    }
+                    eggfetch_core::network_stream::NetworkStream::Metadata(m) => {
+                        Ok(EitherNetworkStream::Sync(PyNetworkStream::from_metadata(m)))
+                    }
                 }
-            }
-            eggfetch_core::network_stream::NetworkStream::Metadata(m) => {
-                EitherNetworkStream::Sync(PyNetworkStream::from_metadata(m))
-            }
-        });
+            })
+            .transpose()?;
 
         Ok(Self {
             status_code: status,

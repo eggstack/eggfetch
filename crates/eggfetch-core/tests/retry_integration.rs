@@ -346,3 +346,78 @@ async fn retry_stream_body_sends_once() {
     assert_eq!(server.request_count.load(Ordering::SeqCst), 1);
     server.shutdown();
 }
+
+#[tokio::test]
+async fn retry_honors_retry_after_over_backoff() {
+    // First response is a retryable 503 carrying `Retry-After: 1`.
+    // With respect_retry_after enabled, the server-directed delay must
+    // take precedence over the configured backoff (whose initial delay
+    // alone would exceed the whole-test bound below).
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let request_count = Arc::new(AtomicUsize::new(0));
+    let rc = request_count.clone();
+    tokio::spawn(async move {
+        loop {
+            let Ok((mut stream, _)) = listener.accept().await else {
+                break;
+            };
+            let rc = rc.clone();
+            tokio::spawn(async move {
+                let mut buf_reader = BufReader::new(&mut stream);
+                let mut request_line = String::new();
+                buf_reader.read_line(&mut request_line).await.ok();
+                loop {
+                    let mut line = String::new();
+                    buf_reader.read_line(&mut line).await.ok();
+                    if line.trim().is_empty() {
+                        break;
+                    }
+                }
+                let count = rc.fetch_add(1, Ordering::SeqCst);
+                if count == 0 {
+                    stream
+                        .write_all(
+                            b"HTTP/1.1 503 Service Unavailable\r\nRetry-After: 1\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+                        )
+                        .await
+                        .ok();
+                } else {
+                    let body = b"ok".as_slice();
+                    let response = format!(
+                        "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                        body.len()
+                    );
+                    stream.write_all(response.as_bytes()).await.ok();
+                    stream.write_all(body).await.ok();
+                }
+            });
+        }
+    });
+
+    let policy = RetryPolicy::builder()
+        .max_attempts(2)
+        .respect_retry_after(true)
+        .initial_delay(Duration::from_secs(30))
+        .max_delay(Duration::from_secs(30))
+        .build();
+
+    let client = Client::builder().build();
+    let url = format!("http://127.0.0.1:{port}/");
+    let start = std::time::Instant::now();
+    let resp = client
+        .get(&url)
+        .unwrap()
+        .retry(policy)
+        .send()
+        .await
+        .unwrap();
+    let elapsed = start.elapsed();
+
+    assert_eq!(resp.status(), 200);
+    assert_eq!(request_count.load(Ordering::SeqCst), 2);
+    assert!(
+        elapsed < Duration::from_secs(15),
+        "Retry-After (1s) should replace the 30s backoff delay, took {elapsed:?}"
+    );
+}

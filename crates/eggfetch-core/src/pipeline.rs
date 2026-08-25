@@ -277,11 +277,19 @@ pub(crate) async fn send_with_retry(client: &Client, request: Request) -> Result
                     }
 
                     let mut resp = response;
+                    // Capture the header before the body drain consumes it.
+                    let retry_after = resp
+                        .headers()
+                        .get("retry-after")
+                        .and_then(|v| v.to_str().ok())
+                        .map(str::to_owned);
                     // Drain errors are intentionally ignored: the body is
                     // being discarded and the request retried regardless.
                     drain_response_body(&mut resp).await;
 
-                    if let Some(dur) = compute_retry_delay(&policy, &cause, attempt) {
+                    if let Some(dur) =
+                        compute_retry_delay(&policy, &cause, attempt, retry_after.as_deref())
+                    {
                         sleep_if_budget_allows(&policy, dur, attempt, start_time).await?;
                     }
                     continue;
@@ -294,7 +302,9 @@ pub(crate) async fn send_with_retry(client: &Client, request: Request) -> Result
                         return Err(err);
                     }
 
-                    if let Some(dur) = compute_retry_delay(&policy, &cause, attempt) {
+                    // No response is available on the error path; only the
+                    // configured backoff applies.
+                    if let Some(dur) = compute_retry_delay(&policy, &cause, attempt, None) {
                         sleep_if_budget_allows(&policy, dur, attempt, start_time).await?;
                     }
                     continue;
@@ -306,11 +316,21 @@ pub(crate) async fn send_with_retry(client: &Client, request: Request) -> Result
 }
 
 /// Compute the backoff delay for a retry attempt.
+///
+/// When the failed attempt carried a `Retry-After` response header and
+/// the policy respects it, the server-directed delay takes precedence
+/// over the configured exponential backoff.
 fn compute_retry_delay(
     policy: &RetryPolicy,
     _cause: &RetryCause,
     attempt: usize,
+    retry_after: Option<&str>,
 ) -> Option<Duration> {
+    if let Some(value) = retry_after {
+        if let Some(delay) = policy.retry_after_delay(value) {
+            return Some(delay);
+        }
+    }
     policy.backoff_delay(attempt)
 }
 

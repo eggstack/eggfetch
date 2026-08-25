@@ -17,9 +17,6 @@ pub struct EggfetchResponse {
     body: Vec<u8>,
 }
 
-// Safety: Response data is fully consumed at creation and owned by this struct
-unsafe impl Send for EggfetchResponse {}
-
 impl EggfetchResponse {
     /// Create from a raw FFI response handle, consuming it immediately.
     pub(crate) fn from_raw(resp: *mut eggfetch_ffi::ResponseHandle) -> Self {

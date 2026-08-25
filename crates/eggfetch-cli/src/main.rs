@@ -740,6 +740,12 @@ async fn run(cli: Cli) -> Result<()> {
         anyhow::bail!("--http1, --http2, and --http3 are mutually exclusive");
     }
 
+    // mTLS requires both halves; one-sided configuration would silently
+    // produce a client without client-auth.
+    if cli.cert.is_some() != cli.key.is_some() {
+        anyhow::bail!("--cert and --key must be provided together for mTLS");
+    }
+
     let http_version_policy = if cli.http2 {
         HttpVersionPolicy::Http2Only
     } else if cli.http3 {
@@ -766,9 +772,10 @@ async fn run(cli: Cli) -> Result<()> {
     if let Some(attempts) = cli.retry {
         let mut retry_builder = RetryPolicy::builder().max_attempts(attempts);
         if let Some(delay) = cli.retry_delay {
-            retry_builder = retry_builder
-                .backoff_factor(delay as f64)
-                .initial_delay(Duration::from_secs(delay));
+            // Plain inter-retry delay: keep the default backoff factor of 1
+            // so each retry waits `delay` seconds rather than growing
+            // geometrically (`delay^n`).
+            retry_builder = retry_builder.initial_delay(Duration::from_secs(delay));
         }
         client_builder = client_builder.retry(retry_builder.build());
     }
