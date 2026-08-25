@@ -31,11 +31,8 @@ pub unsafe extern "C" fn eggfetch_response_status(handle: *const ResponseHandle)
 
 /// Get the response URL as a newly allocated C string.
 ///
-/// Returns null if handle is null. Caller must free with [`crate::handle::eggfetch_string_free`].
-///
-/// # Panics
-///
-/// Panics if the URL string contains an interior null byte.
+/// Returns null if handle is null or the URL contains an interior null
+/// byte. Caller must free with [`crate::handle::eggfetch_string_free`].
 ///
 /// # Safety
 ///
@@ -48,7 +45,8 @@ pub unsafe extern "C" fn eggfetch_response_url(
         let Some(handle) = handle.as_ref() else {
             return std::ptr::null_mut();
         };
-        crate::handle::FfiString::from_string(handle.url.clone()).into_raw()
+        crate::handle::FfiString::from_string(handle.url.clone())
+            .map_or_else(std::ptr::null_mut, crate::handle::FfiString::into_raw)
     })
 }
 
@@ -69,11 +67,8 @@ pub unsafe extern "C" fn eggfetch_response_header_count(handle: *const ResponseH
 /// On success, sets `*name_out` and `*value_out` to newly allocated C strings.
 /// Caller must free both with [`crate::handle::eggfetch_string_free`].
 ///
-/// Returns 0 on success, -1 on error (invalid index or null handle).
-///
-/// # Panics
-///
-/// Panics if the header name or value contains an interior null byte.
+/// Returns 0 on success, -1 on error (invalid index, null handle, or a
+/// name/value containing an interior null byte).
 ///
 /// # Safety
 ///
@@ -96,8 +91,14 @@ pub unsafe extern "C" fn eggfetch_response_header(
         let Some((name, value)) = handle.headers.get(index) else {
             return -1;
         };
-        *name_out = crate::handle::FfiString::from_string(name.clone()).into_raw();
-        *value_out = crate::handle::FfiString::from_string(value.clone()).into_raw();
+        let Some(name_str) = crate::handle::FfiString::from_string(name.clone()) else {
+            return -1;
+        };
+        let Some(value_str) = crate::handle::FfiString::from_string(value.clone()) else {
+            return -1;
+        };
+        *name_out = name_str.into_raw();
+        *value_out = value_str.into_raw();
         0
     })
 }

@@ -6,7 +6,7 @@
 
 use std::ptr;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use bytes::Bytes;
 use futures_util::StreamExt;
@@ -24,7 +24,10 @@ pub struct StreamingResponseHandle {
     status: u16,
     url: String,
     headers: Vec<(String, String)>,
-    rx: mpsc::Receiver<Result<Bytes, eggfetch_core::Error>>,
+    /// Body chunk source, behind a mutex so `next` and `cancel` never form
+    /// aliasing `&mut` borrows when called concurrently from different
+    /// threads.
+    rx: Mutex<mpsc::Receiver<Result<Bytes, eggfetch_core::Error>>>,
     cancel: Arc<AtomicBool>,
 }
 
@@ -143,7 +146,7 @@ pub unsafe extern "C" fn eggfetch_client_send_streaming(
                     status,
                     url,
                     headers,
-                    rx,
+                    rx: Mutex::new(rx),
                     cancel,
                 })
             });
@@ -194,7 +197,8 @@ pub unsafe extern "C" fn eggfetch_response_stream_status(
 
 /// Get the response URL as a newly allocated C string.
 ///
-/// Returns null if handle is null. Caller must free with [`crate::handle::eggfetch_string_free`].
+/// Returns null if handle is null or the URL contains an interior null
+/// byte. Caller must free with [`crate::handle::eggfetch_string_free`].
 ///
 /// # Safety
 ///
@@ -207,7 +211,8 @@ pub unsafe extern "C" fn eggfetch_response_stream_url(
         let Some(handle) = handle.as_ref() else {
             return ptr::null_mut();
         };
-        crate::handle::FfiString::from_string(handle.url.clone()).into_raw()
+        crate::handle::FfiString::from_string(handle.url.clone())
+            .map_or_else(ptr::null_mut, crate::handle::FfiString::into_raw)
     })
 }
 
@@ -230,7 +235,8 @@ pub unsafe extern "C" fn eggfetch_response_stream_header_count(
 /// On success, sets `*name_out` and `*value_out` to newly allocated C strings.
 /// Caller must free both with [`crate::handle::eggfetch_string_free`].
 ///
-/// Returns 0 on success, -1 on error.
+/// Returns 0 on success, -1 on error (invalid index, null handle, or a
+/// name/value containing an interior null byte).
 ///
 /// # Safety
 ///
@@ -253,8 +259,14 @@ pub unsafe extern "C" fn eggfetch_response_stream_header(
         let Some((name, value)) = handle.headers.get(index) else {
             return -1;
         };
-        *name_out = crate::handle::FfiString::from_string(name.clone()).into_raw();
-        *value_out = crate::handle::FfiString::from_string(value.clone()).into_raw();
+        let Some(name_str) = crate::handle::FfiString::from_string(name.clone()) else {
+            return -1;
+        };
+        let Some(value_str) = crate::handle::FfiString::from_string(value.clone()) else {
+            return -1;
+        };
+        *name_out = name_str.into_raw();
+        *value_out = value_str.into_raw();
         0
     })
 }
@@ -274,10 +286,13 @@ pub unsafe extern "C" fn eggfetch_response_stream_next(
     handle: *mut StreamingResponseHandle,
 ) -> *mut StreamChunk {
     crate::ffi_guard!(ptr::null_mut(), {
-        let Some(handle) = handle.as_mut() else {
+        let Some(handle) = handle.as_ref() else {
             return ptr::null_mut();
         };
-        match handle.rx.blocking_recv() {
+        let Ok(mut rx) = handle.rx.lock() else {
+            return ptr::null_mut();
+        };
+        match rx.blocking_recv() {
             Some(Ok(data)) => {
                 if handle.cancel.load(Ordering::Acquire) {
                     return ptr::null_mut();
@@ -329,6 +344,8 @@ pub unsafe extern "C" fn eggfetch_stream_chunk_free(chunk: *mut StreamChunk) {
 /// Cancel an in-progress streaming response.
 ///
 /// Subsequent calls to [`eggfetch_response_stream_next`] will return null.
+/// A `next` call that is currently blocked wakes up when the next chunk
+/// arrives or the stream ends; it never aliases the handle mutably.
 ///
 /// # Safety
 ///
@@ -336,9 +353,15 @@ pub unsafe extern "C" fn eggfetch_stream_chunk_free(chunk: *mut StreamChunk) {
 #[no_mangle]
 pub unsafe extern "C" fn eggfetch_response_stream_cancel(handle: *mut StreamingResponseHandle) {
     crate::ffi_guard!((), {
-        if let Some(handle) = handle.as_mut() {
-            handle.cancel.store(true, Ordering::Release);
-            handle.rx.close();
+        let Some(handle) = handle.as_ref() else {
+            return;
+        };
+        handle.cancel.store(true, Ordering::Release);
+        // Wake a blocked `next` if the receiver is not currently locked by
+        // one; otherwise the flag alone makes that call return null on the
+        // next chunk.
+        if let Ok(mut rx) = handle.rx.try_lock() {
+            rx.close();
         }
     });
 }

@@ -280,7 +280,10 @@ impl PyStreamingResponse {
             )),
             STATE_CONSUMED => Err(StreamConsumed::new_err("streaming body has been consumed")),
             STATE_CLOSED => Err(StreamClosed::new_err("streaming body has been closed")),
-            _ => unreachable!(),
+            // Unknown states must surface as an error, not a panic.
+            _ => Err(StreamClosed::new_err(
+                "streaming body is in an invalid state",
+            )),
         }
     }
 
@@ -333,7 +336,8 @@ impl StreamingBodyState {
                 STATE_BUFFERED | STATE_CONSUMED => {
                     StreamConsumed::new_err("streaming body has already been consumed")
                 }
-                _ => unreachable!(),
+                // Unknown states must surface as an error, not a panic.
+                _ => StreamClosed::new_err("streaming body is in an invalid state"),
             });
         }
         self.body_state
@@ -348,7 +352,7 @@ impl StreamingBodyState {
                 STATE_BUFFERED | STATE_CONSUMED => {
                     StreamConsumed::new_err("streaming body has already been consumed")
                 }
-                _ => unreachable!(),
+                _ => StreamClosed::new_err("streaming body is in an invalid state"),
             })?;
         let mut response = response_guard
             .take()
@@ -835,7 +839,7 @@ impl PyStreamingResponse {
     }
 }
 
-fn safe_url_for_display(url: &str) -> String {
+pub(crate) fn safe_url_for_display(url: &str) -> String {
     let Ok(mut parsed) = url::Url::parse(url) else {
         return "<invalid-url>".to_owned();
     };

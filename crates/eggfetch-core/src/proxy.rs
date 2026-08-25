@@ -898,8 +898,13 @@ impl Proxy {
 
 impl fmt::Debug for Proxy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Redact any userinfo in the debug output; SOCKS URLs intentionally
+        // keep inline credentials in `self.uri`, so the raw URL would leak.
+        let mut url = self.uri.clone();
+        let _ = url.set_username("");
+        let _ = url.set_password(None);
         f.debug_struct("Proxy")
-            .field("uri", &self.uri)
+            .field("uri", &url)
             .field("auth", &self.auth)
             .field("rule", &self.rule)
             .field("bypass", &self.bypass)
@@ -1209,6 +1214,17 @@ mod tests {
         let display = format!("{proxy}");
         assert!(display.contains("proxy.example"));
         assert!(display.contains("Proxy("));
+    }
+
+    #[test]
+    fn proxy_debug_redacts_socks_url_credentials() {
+        // SOCKS URLs intentionally retain inline credentials in `uri`;
+        // the Debug output must still strip them.
+        let proxy = Proxy::all("socks5://user:secret123@proxy.example:1080").unwrap();
+        let debug = format!("{proxy:?}");
+        assert!(debug.contains("proxy.example"));
+        assert!(!debug.contains("secret123"));
+        assert!(!debug.contains("user:"));
     }
 
     #[test]

@@ -29,7 +29,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-use eggfetch_core::{Client, Error, RequestBody, RetryPolicy};
+use eggfetch_core::{Client, Error, RequestBody, RetryPolicy, Timeout, TimeoutPhase};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpListener;
 use tokio::sync::watch;
@@ -266,6 +266,65 @@ async fn retry_respects_total_timeout() {
     assert!(count >= 2, "expected at least 2 attempts, got {count}");
     assert!(count < 50, "expected fewer than 50 attempts, got {count}");
     server.shutdown();
+}
+
+#[tokio::test]
+async fn retry_total_deadline_caps_across_attempts() {
+    // Every response is a delayed retryable 503. The original total
+    // deadline of 250ms must cap the whole retry sequence; restarting
+    // the full `total` per attempt would spend ~1s across 10 attempts.
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    tokio::spawn(async move {
+        loop {
+            let Ok((mut stream, _)) = listener.accept().await else {
+                break;
+            };
+            tokio::spawn(async move {
+                let mut buf_reader = BufReader::new(&mut stream);
+                let mut request_line = String::new();
+                buf_reader.read_line(&mut request_line).await.ok();
+                loop {
+                    let mut line = String::new();
+                    buf_reader.read_line(&mut line).await.ok();
+                    if line.trim().is_empty() {
+                        break;
+                    }
+                }
+                tokio::time::sleep(Duration::from_millis(100)).await;
+                let body = b"unavailable".as_slice();
+                let response = format!(
+                    "HTTP/1.1 503 Service Unavailable\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                    body.len()
+                );
+                stream.write_all(response.as_bytes()).await.ok();
+                stream.write_all(body).await.ok();
+            });
+        }
+    });
+
+    let policy = RetryPolicy::builder()
+        .max_attempts(10)
+        .backoff_factor(0.0)
+        .initial_delay(Duration::from_millis(1))
+        .max_delay(Duration::from_millis(1))
+        .build();
+    let timeout = Timeout::builder().total(Duration::from_millis(250)).build();
+
+    let client = Client::builder().retry(policy).build();
+    let url = format!("http://127.0.0.1:{port}/");
+    let start = std::time::Instant::now();
+    let result = client.get(&url).unwrap().timeout(timeout).send().await;
+    let elapsed = start.elapsed();
+
+    assert!(
+        elapsed < Duration::from_millis(500),
+        "total deadline should cap retries across attempts, took {elapsed:?}"
+    );
+    match result {
+        Err(Error::Timeout { phase, .. }) => assert_eq!(phase, TimeoutPhase::Total),
+        other => panic!("expected total-deadline timeout error, got {other:?}"),
+    }
 }
 
 #[tokio::test]

@@ -17,6 +17,7 @@
 //! # }
 //! ```
 
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::task::{Context, Poll};
 
 use bytes::{Bytes, BytesMut};
@@ -26,6 +27,10 @@ use http::HeaderValue;
 use crate::body::{BoxBytesStream, RequestBody};
 use crate::error::{Error, Result};
 use crate::headers::Headers;
+
+/// Counter mixed into fallback boundary seeds when the system RNG is
+/// unavailable.
+static FALLBACK_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 
 // ---------------------------------------------------------------------------
 // Boundary
@@ -40,19 +45,40 @@ pub struct Boundary(String);
 impl Boundary {
     /// Generate a random boundary.
     ///
-    /// # Panics
-    ///
-    /// Panics if the system random number generator fails.
+    /// Falls back to a time- and counter-seeded value if the system RNG
+    /// fails, so multipart construction never aborts the process.
+    // The fallback seed mixes a u128 nanosecond timestamp into a u64 state
+    // and truncates hashed bytes to u8; both truncations are intentional
+    // for this non-cryptographic degradation path.
+    #[allow(clippy::cast_possible_truncation)]
     #[must_use]
     pub fn random() -> Self {
         let mut bytes = [0u8; 50];
-        getrandom::getrandom(&mut bytes).expect("getrandom failed");
+        if getrandom::getrandom(&mut bytes).is_err() {
+            // Degraded mode: derive pseudo-random bytes from the current
+            // time plus a process-wide counter. Uniqueness within this
+            // process is preserved, which is what boundary safety needs.
+            let nanos = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |d| d.as_nanos() as u64);
+            let mut state = nanos
+                ^ FALLBACK_SEQUENCE
+                    .fetch_add(1, Ordering::Relaxed)
+                    .wrapping_mul(0x9E37_79B9_7F4A_7C15);
+            for byte in &mut bytes {
+                state = state
+                    .wrapping_mul(6_364_136_223_846_793_005)
+                    .wrapping_add(1_442_695_040_888_963_407);
+                *byte = (state >> 33) as u8;
+            }
+        }
         for byte in &mut bytes {
             *byte = BOUNDARY_CHARS[usize::from(*byte % 64)];
         }
 
-        // All chars are from BOUNDARY_CHARS which are valid ASCII/UTF-8.
-        Self(String::from_utf8(bytes.to_vec()).expect("boundary chars are valid UTF-8"))
+        // BOUNDARY_CHARS are ASCII, so mapping through `char::from` is
+        // lossless and cannot fail.
+        Self(bytes.iter().map(|&byte| char::from(byte)).collect())
     }
 
     /// Create a boundary from a user-provided string.
@@ -453,10 +479,12 @@ impl Multipart {
             RequestBody::Bytes(buf.freeze())
         } else {
             let len = self.content_length();
-            #[allow(clippy::cast_possible_truncation)]
             RequestBody::Stream {
                 stream: Box::pin(MultipartEncoder::new(self)),
-                length: len.map(|l| l as usize),
+                // A length beyond `usize::MAX` cannot be represented as a
+                // framing hint; report an unknown length rather than a
+                // truncated (wrong) one.
+                length: len.and_then(|l| usize::try_from(l).ok()),
             }
         }
     }
@@ -479,8 +507,16 @@ impl Multipart {
     /// Check that the boundary does not appear within any buffered part body.
     ///
     /// If a collision is detected, the boundary is regenerated (up to 10
-    /// attempts). Streamed parts are not checked because their content is
-    /// not yet available; this is documented as a known limitation.
+    /// attempts).
+    ///
+    /// Streamed part content is not checked because it is not yet
+    /// available; this remains a documented limitation.
+    ///
+    /// Part names and filenames are deliberately not scanned: they are
+    /// always emitted inside quoted `Content-Disposition` parameter
+    /// values, and quote/CR/LF characters are rejected during
+    /// validation, so they can never form the `--boundary` + CRLF
+    /// delimiter sequence that would confuse a parser.
     fn ensure_no_boundary_collision(&mut self) -> bool {
         const MAX_ATTEMPTS: usize = 10;
         for _ in 0..MAX_ATTEMPTS {
@@ -807,6 +843,29 @@ mod tests {
     fn boundary_try_new_max_length_accepted() {
         let max = "a".repeat(69);
         assert!(Boundary::try_new(&max).is_ok());
+    }
+
+    #[test]
+    fn boundary_substring_in_part_name_does_not_trigger_regeneration() {
+        // Names live inside quoted Content-Disposition values and cannot
+        // contain CR/LF, so a substring match with the boundary is not a
+        // framing hazard and the explicit boundary must be preserved.
+        let seed = Boundary::try_new("b").unwrap();
+        let mp = Multipart::with_boundary(seed)
+            .text("name-with-b-inside", "v")
+            .unwrap();
+        let body = mp.into_body();
+        match body {
+            RequestBody::Bytes(data) => {
+                let text = std::str::from_utf8(&data).unwrap();
+                // The explicit boundary is preserved as the framing
+                // delimiter; it also appears inside the quoted name,
+                // which is harmless.
+                assert!(text.starts_with("--b\r\n"));
+                assert!(text.contains("\r\n--b--\r\n"));
+            }
+            _ => panic!("expected bytes body"),
+        }
     }
 
     #[test]

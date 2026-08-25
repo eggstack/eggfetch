@@ -900,11 +900,15 @@ async fn run(cli: Cli) -> Result<()> {
             let is_success = status.is_success();
 
             if cli.json_output || cli.ndjson {
-                let body_bytes = response.bytes().await.ok();
-                let body_len = body_bytes.as_ref().map(bytes::Bytes::len);
+                let body_result = response.bytes().await;
+                let body_len = body_result.as_ref().ok().map(bytes::Bytes::len);
+                let mut json_errors: Vec<String> = Vec::new();
+                if let Err(ref e) = body_result {
+                    json_errors.push(e.to_string());
+                }
 
                 let body_b64 = if cli.base64 {
-                    body_bytes.as_ref().map(|b| base64_encode(b))
+                    body_result.as_ref().ok().map(|b| base64_encode(b))
                 } else {
                     None
                 };
@@ -915,7 +919,7 @@ async fn run(cli: Cli) -> Result<()> {
                     body_len,
                     cli.base64,
                     body_b64.as_deref(),
-                    &[],
+                    &json_errors,
                 );
 
                 if cli.json_output {
@@ -956,6 +960,12 @@ async fn run(cli: Cli) -> Result<()> {
                             println!("{}", serde_json::to_string(line)?);
                         }
                     }
+                }
+                // A body read failure is a real error: the JSON record has
+                // been emitted (with the message in `errors`), but the
+                // process must still exit non-zero with the mapped code.
+                if let Err(e) = body_result {
+                    return Err(e.into());
                 }
                 if cli.check_status && !is_success {
                     return Err(StatusError(status.as_u16()).into());

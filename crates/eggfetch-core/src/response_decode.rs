@@ -25,24 +25,14 @@ pub(crate) fn apply_decompression(
     let new_body = match old_body {
         ResponseBody::Streaming { stream, lease } => {
             if let Some(ce) = content_encoding.filter(|value| !value.trim().is_empty()) {
-                let mut body = ResponseBody::encoded_streaming(stream, ce.to_owned(), limit);
+                // Construct the encoded body once, attaching the pool
+                // lease directly when present so ownership is never
+                // routed through a destructure/rebuild round-trip.
                 if let Some(lease) = lease {
-                    body = match body {
-                        ResponseBody::EncodedStreaming {
-                            stream,
-                            content_encoding,
-                            limit,
-                            ..
-                        } => ResponseBody::encoded_streaming_with_lease(
-                            stream,
-                            lease,
-                            content_encoding,
-                            limit,
-                        ),
-                        _ => unreachable!(),
-                    };
+                    ResponseBody::encoded_streaming_with_lease(stream, lease, ce.to_owned(), limit)
+                } else {
+                    ResponseBody::encoded_streaming(stream, ce.to_owned(), limit)
                 }
-                body
             } else {
                 ResponseBody::Streaming { stream, lease }
             }

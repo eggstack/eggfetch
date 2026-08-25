@@ -20,11 +20,8 @@ pub unsafe extern "C" fn eggfetch_error_free(handle: *mut ErrorHandle) {
 /// Get the error kind as a newly allocated C string.
 ///
 /// Caller must free with [`crate::handle::eggfetch_string_free`].
-/// Returns null if handle is null.
-///
-/// # Panics
-///
-/// Panics if the error kind string contains an interior null byte.
+/// Returns null if handle is null or the kind contains an interior
+/// null byte.
 ///
 /// # Safety
 ///
@@ -37,18 +34,16 @@ pub unsafe extern "C" fn eggfetch_error_kind(
         let Some(handle) = handle.as_ref() else {
             return std::ptr::null_mut();
         };
-        crate::handle::FfiString::from_string(handle.kind.clone()).into_raw()
+        crate::handle::FfiString::from_string(handle.kind.clone())
+            .map_or_else(std::ptr::null_mut, crate::handle::FfiString::into_raw)
     })
 }
 
 /// Get the error message as a newly allocated C string.
 ///
 /// Caller must free with [`crate::handle::eggfetch_string_free`].
-/// Returns null if handle is null.
-///
-/// # Panics
-///
-/// Panics if the error message string contains an interior null byte.
+/// Returns null if handle is null or the message contains an interior
+/// null byte.
 ///
 /// # Safety
 ///
@@ -61,7 +56,8 @@ pub unsafe extern "C" fn eggfetch_error_message(
         let Some(handle) = handle.as_ref() else {
             return std::ptr::null_mut();
         };
-        crate::handle::FfiString::from_string(handle.message.clone()).into_raw()
+        crate::handle::FfiString::from_string(handle.message.clone())
+            .map_or_else(std::ptr::null_mut, crate::handle::FfiString::into_raw)
     })
 }
 

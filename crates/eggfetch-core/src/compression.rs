@@ -569,6 +569,24 @@ impl CountingStream {
     }
 }
 
+/// Atomically add `amount` to `counter`, saturating at `usize::MAX`
+/// instead of wrapping. A wrapped counter would under-report compressed
+/// bytes and silently disable a configured decompression-ratio limit
+/// mid-stream.
+fn saturating_fetch_add(counter: &AtomicUsize, amount: usize) {
+    let mut current = counter.load(Ordering::Relaxed);
+    loop {
+        let Some(next) = current.checked_add(amount) else {
+            counter.store(usize::MAX, Ordering::Relaxed);
+            return;
+        };
+        match counter.compare_exchange_weak(current, next, Ordering::Relaxed, Ordering::Relaxed) {
+            Ok(_) => return,
+            Err(actual) => current = actual,
+        }
+    }
+}
+
 impl futures_core::Stream for CountingStream {
     type Item = <BoxBytesStream as futures_core::Stream>::Item;
 
@@ -580,7 +598,7 @@ impl futures_core::Stream for CountingStream {
 
         match Pin::new(&mut self.inner).poll_next(cx) {
             std::task::Poll::Ready(Some(Ok(chunk))) => {
-                self.count.fetch_add(chunk.len(), Ordering::Relaxed);
+                saturating_fetch_add(&self.count, chunk.len());
                 std::task::Poll::Ready(Some(Ok(chunk)))
             }
             other => other,
@@ -640,7 +658,10 @@ impl futures_core::Stream for LimitingStream {
 
         match Pin::new(&mut self.inner).poll_next(cx) {
             std::task::Poll::Ready(Some(Ok(chunk))) => {
-                self.decoded_bytes += chunk.len();
+                // Saturate instead of wrapping: a wrapped counter would
+                // permanently disable the limit mid-stream on targets
+                // where `usize` is narrower than the body size.
+                self.decoded_bytes = self.decoded_bytes.saturating_add(chunk.len());
                 if let Err(e) = self.check_limit() {
                     return std::task::Poll::Ready(Some(Err(e)));
                 }
@@ -978,6 +999,41 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(chunk2, "b");
+    }
+
+    #[test]
+    fn saturating_fetch_add_saturates_instead_of_wrapping() {
+        let counter = AtomicUsize::new(usize::MAX - 2);
+        saturating_fetch_add(&counter, 1);
+        assert_eq!(counter.load(Ordering::Relaxed), usize::MAX - 1);
+        saturating_fetch_add(&counter, 5);
+        assert_eq!(counter.load(Ordering::Relaxed), usize::MAX);
+        // Further adds stay pinned at the maximum.
+        saturating_fetch_add(&counter, 5);
+        assert_eq!(counter.load(Ordering::Relaxed), usize::MAX);
+    }
+
+    #[test]
+    fn limiting_stream_saturated_counter_still_enforces_size_limit() {
+        let limit = DecompressionLimit {
+            max_decoded_body_size: Some(10),
+            max_decompression_ratio: None,
+        };
+        let stream: BoxBytesStream = Box::pin(futures_util::stream::iter(vec![Ok(
+            bytes::Bytes::from("x"),
+        )]));
+        let counter = Arc::new(AtomicUsize::new(0));
+        let mut limited = LimitingStream::new(stream, limit, counter);
+        // Simulate a saturated counter (e.g. >4 GiB decoded on a 32-bit
+        // target): the size limit must still trip instead of wrapping to a
+        // small value and passing.
+        limited.decoded_bytes = usize::MAX;
+        let err = futures_util::StreamExt::next(&mut limited)
+            .now_or_never()
+            .unwrap()
+            .unwrap()
+            .unwrap_err();
+        assert_eq!(err.kind(), "decoded_body_too_large");
     }
 
     fn gzip_compress(data: &[u8]) -> Vec<u8> {

@@ -63,6 +63,20 @@ impl PyRetry {
         allow_patch: bool,
         max_elapsed: Option<f64>,
     ) -> PyResult<Self> {
+        for (name, val) in [
+            ("max_delay", Some(max_delay)),
+            ("initial_delay", Some(initial_delay)),
+            ("max_elapsed", max_elapsed),
+        ] {
+            if let Some(v) = val {
+                if !v.is_finite() || v < 0.0 {
+                    return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                        "{name} must be a finite, non-negative number"
+                    )));
+                }
+            }
+        }
+
         let mut builder = eggfetch_core::RetryPolicy::builder()
             .max_attempts(max_attempts)
             .backoff_factor(backoff_factor)

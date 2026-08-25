@@ -498,7 +498,15 @@ impl ClientBuilder {
         self
     }
 
-    /// Set the maximum number of idle (unused) connections in the pool.
+    /// Set the maximum number of idle (unused) connections kept per host.
+    ///
+    /// This is a convenience alias for [`max_idle_connections_per_host`]:
+    /// the transport enforces the limit on a per-host basis, so total
+    /// idle connections grow with the number of distinct origins. Use
+    /// [`max_connections`] for a global concurrency cap.
+    ///
+    /// [`max_idle_connections_per_host`]: Self::max_idle_connections_per_host
+    /// [`max_connections`]: Self::max_connections
     #[must_use]
     pub fn max_idle_connections(mut self, max: usize) -> Self {
         self.pool_config.max_idle_connections = Some(max);
@@ -1014,6 +1022,10 @@ impl Default for ClientBuilder {
 }
 
 fn parse_url(url_str: &str) -> Result<url::Url> {
+    // Deliberately do not echo `url_str` into the error: parsing has
+    // failed, so `redact_url_string` would fall back to the raw input
+    // (potentially containing credentials). `url::ParseError` renders
+    // only a static description and never embeds the input.
     let url = url::Url::parse(url_str).map_err(|e| Error::InvalidUrl(e.to_string()))?;
     if !url.username().is_empty() || url.password().is_some() {
         // URL userinfo is both easy to leak through diagnostics and

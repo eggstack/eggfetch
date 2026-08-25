@@ -10,7 +10,7 @@ use crate::cookies::PyCookies;
 use crate::errors::HTTPStatusError;
 use crate::headers::PyHeaders;
 use crate::network_stream::{EitherNetworkStream, PyAsyncNetworkStream, PyNetworkStream};
-use crate::streaming::RuntimeLease;
+use crate::streaming::{safe_url_for_display, RuntimeLease};
 
 /// Cached no-op coroutine function used by [`PyResponse::aclose`].
 ///
@@ -301,6 +301,43 @@ impl PyResponse {
             _network_stream: None,
         }
     }
+
+    /// Build the `raise_for_status` error message, with the URL passed
+    /// through `safe_url_for_display` so credentials never appear in
+    /// exception text.
+    fn raise_for_status_message(&self) -> String {
+        format!(
+            "{} {} for url '{}'",
+            self.status_code,
+            self.reason_phrase,
+            safe_url_for_display(&self.url)
+        )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The buffered `raise_for_status` message must redact URL
+    /// credentials the same way the streaming response reprs do.
+    #[test]
+    fn raise_for_status_message_redacts_url_credentials() {
+        let resp = PyResponse::from_parts(
+            404,
+            PyHeaders::from_header_map(http::HeaderMap::new()),
+            "https://user:secret@host.example/path?q=hush".to_owned(),
+            Bytes::new(),
+            "Not Found".to_owned(),
+            "HTTP/1.1".to_owned(),
+            None,
+        );
+        let msg = resp.raise_for_status_message();
+        assert!(msg.contains("host.example"));
+        assert!(!msg.contains("secret"), "leaked password: {msg}");
+        assert!(!msg.contains("user:"), "leaked username: {msg}");
+        assert!(!msg.contains("q=hush"), "leaked query: {msg}");
+    }
 }
 
 #[pymethods]
@@ -308,10 +345,7 @@ impl PyResponse {
     /// Raise an exception if the status code indicates an error (4xx/5xx).
     fn raise_for_status(&self) -> PyResult<()> {
         if self.status_code >= 400 {
-            return Err(HTTPStatusError::new_err(format!(
-                "{} {} for url '{}'",
-                self.status_code, self.reason_phrase, self.url
-            )));
+            return Err(HTTPStatusError::new_err(self.raise_for_status_message()));
         }
         Ok(())
     }

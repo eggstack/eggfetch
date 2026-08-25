@@ -14,6 +14,8 @@ impl PyLimits {
     /// Args:
     ///     `max_connections`: Maximum concurrent connections (optional).
     ///     `max_keepalive_connections`: Maximum idle keep-alive connections (optional).
+    ///         Applied on a per-host basis; total idle connections grow with
+    ///         the number of distinct origins.
     ///     `keepalive_expiry`: Keep-alive timeout in seconds (optional).
     ///     `max_connections_per_host`: Maximum connections per host (optional).
     #[new]
@@ -26,9 +28,9 @@ impl PyLimits {
     ) -> PyResult<Self> {
         let keepalive_expiry_duration = match keepalive_expiry {
             Some(secs) => {
-                if secs < 0.0 {
+                if !secs.is_finite() || secs < 0.0 {
                     return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
-                        "keepalive_expiry must be non-negative",
+                        "keepalive_expiry must be a finite, non-negative number",
                     ));
                 }
                 Some(std::time::Duration::from_secs_f64(secs))

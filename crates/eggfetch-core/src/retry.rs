@@ -410,8 +410,12 @@ impl BackoffPolicy {
         // Full jitter: uniform value in [0, capped) so retries in the
         // saturated regime do not all collapse onto the cap (which would
         // re-create the thundering-herd pattern jitter exists to prevent).
-        let jitter = get_random_f64();
-        let jittered_secs = capped.as_secs_f64() * jitter;
+        // If the system RNG fails, degrade to the deterministic capped
+        // delay instead of panicking.
+        let jittered_secs = match get_random_f64() {
+            Some(jitter) => capped.as_secs_f64() * jitter,
+            None => capped.as_secs_f64(),
+        };
 
         let final_delay = if !jittered_secs.is_finite() || jittered_secs < 0.0 {
             Duration::ZERO
@@ -666,15 +670,18 @@ pub fn should_retry(
 }
 
 /// Get a random f64 in [0, 1) using getrandom.
+///
+/// Returns `None` if the system RNG fails so callers can degrade
+/// gracefully (e.g. to a deterministic delay) instead of panicking.
 #[allow(clippy::cast_precision_loss)]
-fn get_random_f64() -> f64 {
+fn get_random_f64() -> Option<f64> {
     let mut buf = [0u8; 8];
-    getrandom::getrandom(&mut buf).expect("getrandom should not fail");
+    getrandom::getrandom(&mut buf).ok()?;
     let val = u64::from_le_bytes(buf);
     // Use the top 53 bits so the value is exactly representable and the
     // result stays strictly below 1.0 (dividing a rounded u64 by
     // `u64::MAX as f64` could round up to exactly 1.0).
-    ((val >> 11) as f64) / ((1u64 << 53) as f64)
+    Some(((val >> 11) as f64) / ((1u64 << 53) as f64))
 }
 
 #[cfg(test)]
@@ -694,7 +701,12 @@ mod tests {
         // The documented contract is [0, 1); a sample that rounds up to
         // exactly 1.0 would let the backoff delay reach the capped max.
         for _ in 0..10_000 {
-            let jitter = get_random_f64();
+            let Some(jitter) = get_random_f64() else {
+                // RNG unavailable in this environment: the production
+                // path degrades to a deterministic delay, so there is
+                // nothing to assert here.
+                return;
+            };
             assert!((0.0..1.0).contains(&jitter));
         }
     }

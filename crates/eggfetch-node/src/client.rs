@@ -187,8 +187,15 @@ impl EggfetchClient {
                             )));
                         }
                     };
-                    unsafe {
-                        eggfetch_ffi::eggfetch_request_body_str(req, body_c.as_ptr());
+                    let rc =
+                        unsafe { eggfetch_ffi::eggfetch_request_body_str(req, body_c.as_ptr()) };
+                    if rc != 0 {
+                        unsafe {
+                            eggfetch_ffi::eggfetch_request_free(req);
+                        }
+                        return Err(napi::Error::from_reason(format!(
+                            "failed to set request body (code {rc})"
+                        )));
                     }
                 }
 

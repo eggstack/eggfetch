@@ -191,6 +191,26 @@ pub(crate) async fn send_with_retry(client: &Client, request: Request) -> Result
             });
         }
 
+        // Enforce the original total deadline across attempts: each attempt
+        // receives only the remaining wall-clock budget, mirroring how the
+        // redirect loop shrinks per-hop deadlines. Without this, an attempt
+        // would restart with the full original `total` and the aggregate
+        // elapsed time could reach `max_attempts * total`.
+        if let Some(total) = orig_timeout.as_ref().and_then(|t| t.total) {
+            if start_time.elapsed() >= total {
+                return Err(Error::Timeout {
+                    phase: TimeoutPhase::Total,
+                    elapsed: total,
+                });
+            }
+        }
+        let attempt_timeout = orig_timeout.map(|mut t| {
+            if let Some(total) = t.total {
+                t.total = Some(total.saturating_sub(start_time.elapsed()));
+            }
+            t
+        });
+
         // Reconstruct the request from saved parts.
         let attempt_request = rebuild_request(
             &orig_method,
@@ -198,7 +218,7 @@ pub(crate) async fn send_with_retry(client: &Client, request: Request) -> Result
             &orig_headers,
             &orig_body,
             orig_version,
-            orig_timeout.as_ref(),
+            attempt_timeout.as_ref(),
             orig_redirect.as_ref(),
             orig_auth.as_ref(),
             orig_auth_disabled,
@@ -226,6 +246,8 @@ pub(crate) async fn send_with_retry(client: &Client, request: Request) -> Result
                     }
 
                     let mut resp = response;
+                    // Drain errors are intentionally ignored: the body is
+                    // being discarded and the request retried regardless.
                     let _ = resp.bytes().await;
 
                     if let Some(dur) = compute_retry_delay(&policy, &cause, attempt) {

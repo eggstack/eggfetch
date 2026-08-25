@@ -19,6 +19,25 @@ use pyo3::types::{PyBytes, PyDict};
 use crate::errors::map_err;
 use crate::streaming::RuntimeLease;
 
+/// Validate an optional timeout in seconds and convert it to a [`Duration`].
+///
+/// `Duration::from_secs_f64` panics on negative, NaN, or infinite input;
+/// reject those at the boundary with `ValueError` instead.
+fn validated_timeout(timeout: Option<f64>) -> PyResult<Option<std::time::Duration>> {
+    match timeout {
+        Some(secs) => {
+            if !secs.is_finite() || secs < 0.0 {
+                Err(pyo3::exceptions::PyValueError::new_err(
+                    "timeout must be a finite, non-negative number",
+                ))
+            } else {
+                Ok(Some(std::time::Duration::from_secs_f64(secs)))
+            }
+        }
+        None => Ok(None),
+    }
+}
+
 /// Classification of an [`UpgradedStream`] for [`start_tls`](UpgradedStream::start_tls) support.
 ///
 /// Hyper's `Upgraded` adapter type is opaque and cannot be unwrapped to
@@ -205,9 +224,10 @@ impl PyNetworkStream {
             )
         })?;
 
+        let dur = validated_timeout(timeout)?;
+
         let handle = self.runtime_handle.clone();
-        let result = if let Some(secs) = timeout {
-            let dur = std::time::Duration::from_secs_f64(secs);
+        let result = if let Some(dur) = dur {
             py.allow_threads(|| {
                 handle.block_on(async { tokio::time::timeout(dur, inner.read(max_bytes)).await })
             })
@@ -245,8 +265,7 @@ impl PyNetworkStream {
 
         let buf = data.as_bytes().to_vec();
         let handle = self.runtime_handle.clone();
-        let result = if let Some(secs) = timeout {
-            let dur = std::time::Duration::from_secs_f64(secs);
+        let result = if let Some(dur) = validated_timeout(timeout)? {
             py.allow_threads(|| {
                 handle.block_on(async { tokio::time::timeout(dur, inner.write_all(&buf)).await })
             })
@@ -393,8 +412,8 @@ impl PyNetworkStream {
 
         let server_name_owned = server_hostname.to_owned();
         let handle = self.runtime_handle.clone();
+        let dur = validated_timeout(timeout)?;
         let result = py.allow_threads(|| {
-            let dur = timeout.map(std::time::Duration::from_secs_f64);
             let handshake = inner.start_tls(&connector, &server_name_owned);
             match dur {
                 Some(d) => handle.block_on(async { tokio::time::timeout(d, handshake).await }),
@@ -608,7 +627,7 @@ impl PyAsyncNetworkStream {
         timeout: Option<f64>,
     ) -> PyResult<Bound<'py, pyo3::PyAny>> {
         let inner = self.inner.clone();
-        let dur = timeout.map(std::time::Duration::from_secs_f64);
+        let dur = validated_timeout(timeout)?;
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             // Acquire the lock inside the async future so the GIL is
             // released while the IO is in-flight.
@@ -647,7 +666,7 @@ impl PyAsyncNetworkStream {
     ) -> PyResult<Bound<'py, pyo3::PyAny>> {
         let buf = data.as_bytes().to_vec();
         let inner = self.inner.clone();
-        let dur = timeout.map(std::time::Duration::from_secs_f64);
+        let dur = validated_timeout(timeout)?;
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let mut guard = inner.lock().await;
             let stream = guard.as_mut().ok_or_else(|| {
@@ -761,7 +780,7 @@ impl PyAsyncNetworkStream {
         let connector = tls_config.tls_connector().map_err(map_err)?;
         let inner = self.inner.clone();
         let server_name_owned = server_hostname.to_owned();
-        let dur = timeout.map(std::time::Duration::from_secs_f64);
+        let dur = validated_timeout(timeout)?;
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let mut guard = inner.lock().await;
             let stream = guard.take().ok_or_else(|| {

@@ -100,7 +100,10 @@ const PER_ORIGIN_TABLE_MAX_ENTRIES: usize = 1024;
 /// limit is not applied.
 #[derive(Debug, Clone, Default)]
 pub struct PoolConfig {
-    /// Maximum number of idle (unused) connections to keep in the pool.
+    /// Maximum number of idle (unused) connections kept per host.
+    ///
+    /// Applied as a per-host cap (the transport has no global idle
+    /// limit); see [`Self::max_connections`] for a global bound.
     pub max_idle_connections: Option<usize>,
     /// Maximum number of idle connections per individual host.
     pub max_idle_connections_per_host: Option<usize>,

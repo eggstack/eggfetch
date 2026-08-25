@@ -39,10 +39,6 @@ pub struct ErrorHandle {
 }
 
 /// Owned C string returned by FFI. Must be freed with [`eggfetch_string_free`].
-///
-/// # Panics
-///
-/// Panics if the Rust string contains an interior null byte.
 #[repr(C)]
 pub struct FfiString {
     ptr: *mut c_char,
@@ -51,30 +47,28 @@ pub struct FfiString {
 impl FfiString {
     /// Create an owned C string from a Rust [`String`].
     ///
-    /// # Panics
-    ///
-    /// Panics if the string contains an interior null byte.
+    /// Returns `None` if the string contains an interior null byte. Callers
+    /// must surface that case as a null pointer or error code; silently
+    /// substituting placeholder content would corrupt the reported value.
     ///
     /// # Safety
     ///
     /// Caller must free the returned [`FfiString`] with [`eggfetch_string_free`].
     #[must_use]
-    pub unsafe fn from_string(s: String) -> Self {
-        let c = CString::new(s).unwrap_or_else(|_| CString::new("<invalid utf8>").unwrap());
-        Self { ptr: c.into_raw() }
+    pub unsafe fn from_string(s: String) -> Option<Self> {
+        let c = CString::new(s).ok()?;
+        Some(Self { ptr: c.into_raw() })
     }
 
     /// Create an owned C string from a static str.
     ///
-    /// # Panics
-    ///
-    /// Panics if the string contains an interior null byte.
+    /// Returns `None` if the string contains an interior null byte.
     ///
     /// # Safety
     ///
     /// Caller must free the returned [`FfiString`] with [`eggfetch_string_free`].
     #[must_use]
-    pub unsafe fn from_static(s: &'static str) -> Self {
+    pub unsafe fn from_static(s: &'static str) -> Option<Self> {
         Self::from_string(s.to_owned())
     }
 

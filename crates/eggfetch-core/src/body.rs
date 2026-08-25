@@ -555,7 +555,10 @@ impl ResponseBody {
                         _lease: lease,
                     }))
                 } else {
-                    unreachable!()
+                    // Defensive: the outer match guarantees this arm, but
+                    // a future variant addition must surface as an error,
+                    // not a panic.
+                    Err(Error::Body("response body state mismatch".into()))
                 }
             }
             Self::EncodedStreaming { .. } => {
@@ -582,7 +585,10 @@ impl ResponseBody {
                         _lease: lease,
                     }))
                 } else {
-                    unreachable!()
+                    // Defensive: the outer match guarantees this arm, but
+                    // a future variant addition must surface as an error,
+                    // not a panic.
+                    Err(Error::Body("response body state mismatch".into()))
                 }
             }
             Self::Consumed => Err(Error::Body("streaming body already consumed".into())),

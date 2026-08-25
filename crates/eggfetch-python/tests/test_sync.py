@@ -301,6 +301,24 @@ class TestTimeout:
 
 
 # ---------------------------------------------------------------------------
+# Limits validation
+# ---------------------------------------------------------------------------
+
+class TestLimitsValidation:
+    def test_keepalive_expiry_rejects_non_finite_and_negative(self):
+        with pytest.raises(ValueError):
+            eggfetch.Limits(keepalive_expiry=-1.0)
+        with pytest.raises(ValueError):
+            eggfetch.Limits(keepalive_expiry=float("nan"))
+        with pytest.raises(ValueError):
+            eggfetch.Limits(keepalive_expiry=float("inf"))
+
+    def test_keepalive_expiry_accepts_zero(self):
+        limits = eggfetch.Limits(keepalive_expiry=0.0)
+        assert limits.keepalive_expiry == 0.0
+
+
+# ---------------------------------------------------------------------------
 # Error mapping
 # ---------------------------------------------------------------------------
 

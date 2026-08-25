@@ -5,11 +5,8 @@ use crate::handle::ResponseHandle;
 /// Convenience: get the response body as a text string.
 ///
 /// Returns a newly allocated C string. Caller must free with [`crate::handle::eggfetch_string_free`].
-/// Returns null on error or if handle is null.
-///
-/// # Panics
-///
-/// Panics if the body contains valid UTF-8 with an interior null byte.
+/// Returns null on error, if handle is null, if the body is not valid
+/// UTF-8, or if it contains an interior null byte.
 ///
 /// # Safety
 ///
@@ -23,7 +20,8 @@ pub unsafe extern "C" fn eggfetch_response_text(
             return std::ptr::null_mut();
         };
         match std::str::from_utf8(&handle.body) {
-            Ok(s) => crate::handle::FfiString::from_string(s.to_owned()).into_raw(),
+            Ok(s) => crate::handle::FfiString::from_string(s.to_owned())
+                .map_or_else(std::ptr::null_mut, crate::handle::FfiString::into_raw),
             Err(_) => std::ptr::null_mut(),
         }
     })

@@ -159,6 +159,20 @@ class TestRetryConstruction:
         r = eggfetch.Retry(statuses={500, 502})
         assert sorted(r.statuses) == [500, 502]
 
+    def test_invalid_floats_raise_value_error(self):
+        # Negative, NaN, and infinite values must raise ValueError rather
+        # than panicking inside Duration::from_secs_f64.
+        with pytest.raises(ValueError):
+            eggfetch.Retry(max_delay=-1.0)
+        with pytest.raises(ValueError):
+            eggfetch.Retry(initial_delay=float("nan"))
+        with pytest.raises(ValueError):
+            eggfetch.Retry(initial_delay=float("inf"))
+        with pytest.raises(ValueError):
+            eggfetch.Retry(max_elapsed=-0.5)
+        with pytest.raises(ValueError):
+            eggfetch.Retry(max_elapsed=float("inf"))
+
 
 # ---------------------------------------------------------------------------
 # Sync retry tests
