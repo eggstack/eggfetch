@@ -456,13 +456,15 @@ impl Pool {
                     .retain(|_, sem| sem.available_permits() < max_per_origin);
             }
 
-            // Try immediate acquire first.
+            // Try immediate acquire first. `try_acquire_owned` consumes an
+            // `Arc`, so the fast path clones once; the wait path then moves
+            // `sem` into `acquire_owned` without a further bump.
             if let Ok(permit) = sem.clone().try_acquire_owned() {
                 origin_permit = Some(permit);
             } else {
                 // Must wait for a slot.
                 waited = true;
-                if let Ok(permit) = sem.clone().acquire_owned().await {
+                if let Ok(permit) = sem.acquire_owned().await {
                     origin_permit = Some(permit);
                 } else {
                     // Semaphore closed (shouldn't happen in practice).
@@ -477,7 +479,8 @@ impl Pool {
 
         // Acquire global permit if configured.
         if let Some(ref sem) = self.inner.global_semaphore {
-            // Try immediate acquire first.
+            // Try immediate acquire first; on failure, move the `Arc` into
+            // the awaited acquire instead of cloning again.
             if let Ok(permit) = sem.clone().try_acquire_owned() {
                 global_permit = Some(permit);
             } else {

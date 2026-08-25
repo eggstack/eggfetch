@@ -39,13 +39,19 @@ pub unsafe extern "C" fn eggfetch_client_builder_free(handle: *mut ClientBuilder
 
 /// Build a client from the configured builder.
 ///
-/// Consumes the builder. Returns null on allocation failure.
-/// Caller must free with [`crate::handle::eggfetch_client_free`].
+/// The builder handle is **not** freed by this call. Release it with
+/// [`eggfetch_client_builder_free`] exactly once regardless of outcome;
+/// freeing an already-built builder is a safe no-op on the inner state.
+///
+/// Returns null when:
+/// - `raw` is NULL or the builder was already built (programmer error), or
+/// - allocating the client handle fails (resource exhaustion).
+///
+/// Caller must free a successful result with [`crate::handle::eggfetch_client_free`].
 ///
 /// # Safety
 ///
-/// - `handle` must be a valid, non-freed builder handle.
-/// - The builder is consumed (freed) by this call.
+/// `raw` must be NULL or a valid, non-freed builder handle.
 #[no_mangle]
 pub unsafe extern "C" fn eggfetch_client_builder_build(
     raw: *mut ClientBuilderHandle,
@@ -55,10 +61,11 @@ pub unsafe extern "C" fn eggfetch_client_builder_build(
             return ptr::null_mut();
         };
         let Some(builder) = handle.0.take() else {
-            drop(Box::from_raw(raw));
+            // Already built: leave the shell allocation in place so the
+            // caller can still release it exactly once via
+            // eggfetch_client_builder_free (no dangling handle).
             return ptr::null_mut();
         };
-        drop(Box::from_raw(raw));
         let client = builder.build();
         Box::into_raw(Box::new(crate::handle::ClientHandle(client)))
     })
@@ -221,10 +228,10 @@ pub unsafe extern "C" fn eggfetch_client_builder_user_agent(
         let Some(handle) = handle.as_mut() else {
             return -1;
         };
-        let Some(agent_str) = crate::handle::cstr_to_opt(agent) else {
+        let Some(agent_str) = crate::handle::cstr_to_string(agent) else {
             return -1;
         };
-        update_builder(handle, |builder| builder.user_agent(agent_str))
+        update_builder(handle, |builder| builder.user_agent(&agent_str))
     })
 }
 
@@ -246,14 +253,14 @@ pub unsafe extern "C" fn eggfetch_client_builder_default_header(
         let Some(handle) = handle.as_mut() else {
             return -1;
         };
-        let Some(name_str) = crate::handle::cstr_to_opt(name) else {
+        let Some(name_str) = crate::handle::cstr_to_string(name) else {
             return -1;
         };
-        let Some(value_str) = crate::handle::cstr_to_opt(value) else {
+        let Some(value_str) = crate::handle::cstr_to_string(value) else {
             return -1;
         };
         update_builder_result(handle, |builder| {
-            builder.default_header(name_str, value_str)
+            builder.default_header(&name_str, &value_str)
         })
     })
 }
@@ -448,10 +455,10 @@ pub unsafe extern "C" fn eggfetch_client_builder_basic_auth(
         let Some(handle) = handle.as_mut() else {
             return -1;
         };
-        let Some(username_str) = crate::handle::cstr_to_opt(username) else {
+        let Some(username_str) = crate::handle::cstr_to_string(username) else {
             return -1;
         };
-        let Some(password_str) = crate::handle::cstr_to_opt(password) else {
+        let Some(password_str) = crate::handle::cstr_to_string(password) else {
             return -1;
         };
         let Ok(auth) = eggfetch_core::AuthScheme::basic(username_str, password_str) else {
@@ -480,7 +487,7 @@ pub unsafe extern "C" fn eggfetch_client_builder_bearer_auth(
         let Some(handle) = handle.as_mut() else {
             return -1;
         };
-        let Some(token_str) = crate::handle::cstr_to_opt(token) else {
+        let Some(token_str) = crate::handle::cstr_to_string(token) else {
             return -1;
         };
         let Ok(auth) = eggfetch_core::AuthScheme::bearer(token_str) else {

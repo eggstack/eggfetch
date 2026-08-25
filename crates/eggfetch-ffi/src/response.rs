@@ -132,7 +132,9 @@ pub unsafe extern "C" fn eggfetch_response_body(
             *len_out = 0;
             return 0;
         }
-        let layout = std::alloc::Layout::array::<u8>(len).unwrap_or_else(|_| std::process::abort());
+        let Ok(layout) = std::alloc::Layout::array::<u8>(len) else {
+            return -1;
+        };
         let buf = std::alloc::alloc(layout);
         if buf.is_null() {
             return -1;
@@ -148,15 +150,19 @@ pub unsafe extern "C" fn eggfetch_response_body(
 ///
 /// # Safety
 ///
-/// `data` must have been returned by [`eggfetch_response_body`].
-/// Passing a null pointer is a no-op.
+/// - `data` must have been returned by [`eggfetch_response_body`].
+/// - `len` must be the length returned with that buffer.
+/// - Passing a null pointer is a no-op.
 #[no_mangle]
 pub unsafe extern "C" fn eggfetch_body_free(data: *mut u8, len: usize) {
     crate::ffi_guard!((), {
         if !data.is_null() && len > 0 {
-            let layout =
-                std::alloc::Layout::array::<u8>(len).unwrap_or_else(|_| std::process::abort());
-            std::alloc::dealloc(data, layout);
+            // A buffer this API allocated always had a computable layout,
+            // so failure here implies caller corruption; leak rather than
+            // abort the host process.
+            if let Ok(layout) = std::alloc::Layout::array::<u8>(len) {
+                std::alloc::dealloc(data, layout);
+            }
         }
     });
 }

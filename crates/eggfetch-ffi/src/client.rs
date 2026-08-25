@@ -55,16 +55,16 @@ pub unsafe extern "C" fn eggfetch_client_request(
         let Some(client) = client.as_ref() else {
             return ptr::null_mut();
         };
-        let Some(method_str) = crate::handle::cstr_to_opt(method) else {
+        let Some(method_str) = crate::handle::cstr_to_string(method) else {
             return ptr::null_mut();
         };
-        let Some(url_str) = crate::handle::cstr_to_opt(url) else {
+        let Some(url_str) = crate::handle::cstr_to_string(url) else {
             return ptr::null_mut();
         };
         let Ok(http_method) = method_str.parse() else {
             return ptr::null_mut();
         };
-        match client.0.request(http_method, url_str) {
+        match client.0.request(http_method, &url_str) {
             Ok(rb) => Box::into_raw(Box::new(RequestHandle(Some(rb)))),
             Err(_) => ptr::null_mut(),
         }
@@ -85,10 +85,10 @@ pub unsafe extern "C" fn eggfetch_client_get(
         let Some(client) = client.as_ref() else {
             return ptr::null_mut();
         };
-        let Some(url_str) = crate::handle::cstr_to_opt(url) else {
+        let Some(url_str) = crate::handle::cstr_to_string(url) else {
             return ptr::null_mut();
         };
-        match client.0.get(url_str) {
+        match client.0.get(&url_str) {
             Ok(rb) => Box::into_raw(Box::new(RequestHandle(Some(rb)))),
             Err(_) => ptr::null_mut(),
         }
@@ -109,10 +109,10 @@ pub unsafe extern "C" fn eggfetch_client_post(
         let Some(client) = client.as_ref() else {
             return ptr::null_mut();
         };
-        let Some(url_str) = crate::handle::cstr_to_opt(url) else {
+        let Some(url_str) = crate::handle::cstr_to_string(url) else {
             return ptr::null_mut();
         };
-        match client.0.post(url_str) {
+        match client.0.post(&url_str) {
             Ok(rb) => Box::into_raw(Box::new(RequestHandle(Some(rb)))),
             Err(_) => ptr::null_mut(),
         }
@@ -133,10 +133,10 @@ pub unsafe extern "C" fn eggfetch_client_put(
         let Some(client) = client.as_ref() else {
             return ptr::null_mut();
         };
-        let Some(url_str) = crate::handle::cstr_to_opt(url) else {
+        let Some(url_str) = crate::handle::cstr_to_string(url) else {
             return ptr::null_mut();
         };
-        match client.0.put(url_str) {
+        match client.0.put(&url_str) {
             Ok(rb) => Box::into_raw(Box::new(RequestHandle(Some(rb)))),
             Err(_) => ptr::null_mut(),
         }
@@ -157,10 +157,10 @@ pub unsafe extern "C" fn eggfetch_client_patch(
         let Some(client) = client.as_ref() else {
             return ptr::null_mut();
         };
-        let Some(url_str) = crate::handle::cstr_to_opt(url) else {
+        let Some(url_str) = crate::handle::cstr_to_string(url) else {
             return ptr::null_mut();
         };
-        match client.0.patch(url_str) {
+        match client.0.patch(&url_str) {
             Ok(rb) => Box::into_raw(Box::new(RequestHandle(Some(rb)))),
             Err(_) => ptr::null_mut(),
         }
@@ -181,10 +181,10 @@ pub unsafe extern "C" fn eggfetch_client_delete(
         let Some(client) = client.as_ref() else {
             return ptr::null_mut();
         };
-        let Some(url_str) = crate::handle::cstr_to_opt(url) else {
+        let Some(url_str) = crate::handle::cstr_to_string(url) else {
             return ptr::null_mut();
         };
-        match client.0.delete(url_str) {
+        match client.0.delete(&url_str) {
             Ok(rb) => Box::into_raw(Box::new(RequestHandle(Some(rb)))),
             Err(_) => ptr::null_mut(),
         }
@@ -205,10 +205,10 @@ pub unsafe extern "C" fn eggfetch_client_head(
         let Some(client) = client.as_ref() else {
             return ptr::null_mut();
         };
-        let Some(url_str) = crate::handle::cstr_to_opt(url) else {
+        let Some(url_str) = crate::handle::cstr_to_string(url) else {
             return ptr::null_mut();
         };
-        match client.0.head(url_str) {
+        match client.0.head(&url_str) {
             Ok(rb) => Box::into_raw(Box::new(RequestHandle(Some(rb)))),
             Err(_) => ptr::null_mut(),
         }
@@ -229,10 +229,10 @@ pub unsafe extern "C" fn eggfetch_client_options(
         let Some(client) = client.as_ref() else {
             return ptr::null_mut();
         };
-        let Some(url_str) = crate::handle::cstr_to_opt(url) else {
+        let Some(url_str) = crate::handle::cstr_to_string(url) else {
             return ptr::null_mut();
         };
-        match client.0.options(url_str) {
+        match client.0.options(&url_str) {
             Ok(rb) => Box::into_raw(Box::new(RequestHandle(Some(rb)))),
             Err(_) => ptr::null_mut(),
         }

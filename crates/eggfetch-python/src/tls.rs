@@ -31,7 +31,17 @@ fn apply_verify(
         }
         builder = builder.ca_certificate_der(der_certs).map_err(map_err)?;
     } else {
-        // ssl.SSLContext or other object: extract snapshot via Python-side helper.
+        // Anything that is not an ssl.SSLContext (or subclass) is
+        // unsupported; fail with an explicit TypeError instead of
+        // falling into the snapshot helper's import machinery.
+        let ssl_context_cls = v.py().import("ssl")?.getattr("SSLContext")?;
+        if !v.is_instance(&ssl_context_cls)? {
+            return Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
+                "verify must be bool, a CA bundle path or file-like object, \
+                 a list of DER certificates, or an ssl.SSLContext",
+            ));
+        }
+        // Extract snapshot via Python-side helper.
         builder = apply_ssl_context(builder, v)?;
     }
     Ok(builder)

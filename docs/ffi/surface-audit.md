@@ -9,7 +9,7 @@ This document records the FFI safety audit performed during Milestone Z. It cove
 | Handle | Inner Type | Ownership | Thread Safety |
 |--------|-----------|-----------|---------------|
 | `ClientHandle` | `Client` (Arc-backed) | Owned, caller frees with `eggfetch_client_free` | `Send + Sync` |
-| `ClientBuilderHandle` | `ClientBuilder` | Owned, consumed by build or freed with `eggfetch_client_builder_free` | Single-thread |
+| `ClientBuilderHandle` | `ClientBuilder` | Owned; inner builder taken by build, shell freed with `eggfetch_client_builder_free` | Single-thread |
 | `RequestHandle` | `RequestBuilder` | Owned, consumed by send or freed with `eggfetch_request_free` | Single-thread |
 | `ResponseHandle` | Flattened `status + url + headers + body` | Owned, caller frees with `eggfetch_response_free` | Single-thread |
 | `StreamingResponseHandle` | Flattened headers + `mpsc::Receiver` | Owned, caller frees with `eggfetch_response_stream_free` | Single-thread |
@@ -18,14 +18,14 @@ This document records the FFI safety audit performed during Milestone Z. It cove
 ### Consumption Patterns
 
 - **RequestBuilder consumption**: `eggfetch_client_send` and `eggfetch_client_send_streaming` consume the `RequestHandle` via `ptr::read` + `mem::forget`. The handle must not be used after sending.
-- **ClientBuilder consumption**: `eggfetch_client_builder_build` consumes the builder via `ptr::read` + `mem::forget`. The handle must not be used after building.
+- **ClientBuilder build semantics**: `eggfetch_client_builder_build` takes the builder value out of the handle but does **not** free the handle allocation. The handle stays valid until `eggfetch_client_builder_free` is called exactly once; rebuilding returns null instead of dangling. This keeps the consumed state distinguishable from allocation failure without a use-after-free window.
 - **Response ownership**: `ResponseHandle` eagerly buffers the entire body. `StreamingResponseHandle` holds the body stream via an `mpsc::Receiver`.
 
 ### Memory Safety Rules
 
 1. All handles must be freed exactly once via their respective `_free` functions.
 2. Null pointer arguments are handled as no-ops or return null/ -1 as documented.
-3. Consumed handles (request, builder) must not be used after the consuming call.
+3. Consumed request handles must not be used after the consuming call. Builder handles remain valid after `build` and must still be freed exactly once.
 4. `FfiString` values must be freed with `eggfetch_string_free`.
 5. Body buffers from `eggfetch_response_body` must be freed with `eggfetch_body_free`.
 

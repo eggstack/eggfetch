@@ -671,8 +671,10 @@ fn get_random_f64() -> f64 {
     let mut buf = [0u8; 8];
     getrandom::getrandom(&mut buf).expect("getrandom should not fail");
     let val = u64::from_le_bytes(buf);
-    // Convert to [0, 1). Precision loss is acceptable for jitter.
-    (val as f64) / (u64::MAX as f64)
+    // Use the top 53 bits so the value is exactly representable and the
+    // result stays strictly below 1.0 (dividing a rounded u64 by
+    // `u64::MAX as f64` could round up to exactly 1.0).
+    ((val >> 11) as f64) / ((1u64 << 53) as f64)
 }
 
 #[cfg(test)]
@@ -685,6 +687,16 @@ mod tests {
         let policy = RetryPolicy::default();
         assert!(!policy.is_enabled());
         assert_eq!(policy.max_attempts(), 1);
+    }
+
+    #[test]
+    fn jitter_is_strictly_below_one() {
+        // The documented contract is [0, 1); a sample that rounds up to
+        // exactly 1.0 would let the backoff delay reach the capped max.
+        for _ in 0..10_000 {
+            let jitter = get_random_f64();
+            assert!((0.0..1.0).contains(&jitter));
+        }
     }
 
     #[test]

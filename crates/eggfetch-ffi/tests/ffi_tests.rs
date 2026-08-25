@@ -363,6 +363,7 @@ fn client_builder_lifecycle() {
 
         let client = eggfetch_ffi::eggfetch_client_builder_build(builder);
         assert!(!client.is_null());
+        eggfetch_ffi::eggfetch_client_builder_free(builder);
 
         eggfetch_ffi::eggfetch_client_free(client);
         eggfetch_ffi::eggfetch_client_builder_free(ptr::null_mut());
@@ -392,6 +393,7 @@ fn client_builder_timeout() {
 
         let client = eggfetch_ffi::eggfetch_client_builder_build(builder);
         assert!(!client.is_null());
+        eggfetch_ffi::eggfetch_client_builder_free(builder);
 
         let url = CString::new("http://example.com").unwrap();
         let req = eggfetch_ffi::eggfetch_client_get(client, url.as_ptr());
@@ -416,6 +418,7 @@ fn client_builder_redirects() {
 
         let client = eggfetch_ffi::eggfetch_client_builder_build(builder);
         assert!(!client.is_null());
+        eggfetch_ffi::eggfetch_client_builder_free(builder);
         eggfetch_ffi::eggfetch_client_free(client);
     }
 }
@@ -432,6 +435,7 @@ fn client_builder_user_agent() {
 
         let client = eggfetch_ffi::eggfetch_client_builder_build(builder);
         assert!(!client.is_null());
+        eggfetch_ffi::eggfetch_client_builder_free(builder);
 
         let url = CString::new("http://example.com").unwrap();
         let req = eggfetch_ffi::eggfetch_client_get(client, url.as_ptr());
@@ -460,6 +464,7 @@ fn client_builder_http_version() {
 
         let client = eggfetch_ffi::eggfetch_client_builder_build(builder);
         assert!(!client.is_null());
+        eggfetch_ffi::eggfetch_client_builder_free(builder);
         eggfetch_ffi::eggfetch_client_free(client);
     }
 }
@@ -483,6 +488,7 @@ fn client_builder_decompression() {
 
         let client = eggfetch_ffi::eggfetch_client_builder_build(builder);
         assert!(!client.is_null());
+        eggfetch_ffi::eggfetch_client_builder_free(builder);
         eggfetch_ffi::eggfetch_client_free(client);
     }
 }
@@ -502,7 +508,25 @@ fn client_builder_pool() {
 
         let client = eggfetch_ffi::eggfetch_client_builder_build(builder);
         assert!(!client.is_null());
+        eggfetch_ffi::eggfetch_client_builder_free(builder);
         eggfetch_ffi::eggfetch_client_free(client);
+    }
+}
+
+#[test]
+fn client_builder_double_build_returns_null_and_keeps_handle_freeable() {
+    unsafe {
+        let builder = eggfetch_ffi::eggfetch_client_builder_new();
+
+        let client = eggfetch_ffi::eggfetch_client_builder_build(builder);
+        assert!(!client.is_null());
+        eggfetch_ffi::eggfetch_client_free(client);
+
+        // The builder handle stays valid after a build: a second build
+        // returns null (programmer error) without dangling, and the
+        // handle is released by exactly one builder_free.
+        assert!(eggfetch_ffi::eggfetch_client_builder_build(builder).is_null());
+        eggfetch_ffi::eggfetch_client_builder_free(builder);
     }
 }
 
@@ -517,6 +541,7 @@ fn client_builder_insecure_tls() {
 
         let client = eggfetch_ffi::eggfetch_client_builder_build(builder);
         assert!(!client.is_null());
+        eggfetch_ffi::eggfetch_client_builder_free(builder);
         eggfetch_ffi::eggfetch_client_free(client);
     }
 }
@@ -541,10 +566,12 @@ fn client_builder_auth() {
 
         let client = eggfetch_ffi::eggfetch_client_builder_build(builder);
         assert!(!client.is_null());
+        eggfetch_ffi::eggfetch_client_builder_free(builder);
         eggfetch_ffi::eggfetch_client_free(client);
 
         let client2 = eggfetch_ffi::eggfetch_client_builder_build(builder2);
         assert!(!client2.is_null());
+        eggfetch_ffi::eggfetch_client_builder_free(builder2);
         eggfetch_ffi::eggfetch_client_free(client2);
     }
 }

@@ -284,8 +284,9 @@ pub unsafe extern "C" fn eggfetch_response_stream_next(
                 }
                 let len = data.len();
                 let buf = if len > 0 {
-                    let layout = std::alloc::Layout::array::<u8>(len)
-                        .unwrap_or_else(|_| std::process::abort());
+                    let Ok(layout) = std::alloc::Layout::array::<u8>(len) else {
+                        return ptr::null_mut();
+                    };
                     let buf = std::alloc::alloc(layout);
                     if buf.is_null() {
                         return ptr::null_mut();
@@ -306,17 +307,20 @@ pub unsafe extern "C" fn eggfetch_response_stream_next(
 ///
 /// # Safety
 ///
-/// `chunk` must have been returned by [`eggfetch_response_stream_next`].
-/// Passing a null pointer is a no-op.
+/// - `chunk` must have been returned by [`eggfetch_response_stream_next`].
+/// - Passing a null pointer is a no-op.
 #[no_mangle]
 pub unsafe extern "C" fn eggfetch_stream_chunk_free(chunk: *mut StreamChunk) {
     crate::ffi_guard!((), {
         if !chunk.is_null() {
             let c = Box::from_raw(chunk);
             if !c.data.is_null() && c.len > 0 {
-                let layout = std::alloc::Layout::array::<u8>(c.len)
-                    .unwrap_or_else(|_| std::process::abort());
-                std::alloc::dealloc(c.data, layout);
+                // A chunk this API allocated always had a computable
+                // layout, so failure here implies caller corruption;
+                // leak rather than abort the host process.
+                if let Ok(layout) = std::alloc::Layout::array::<u8>(c.len) {
+                    std::alloc::dealloc(c.data, layout);
+                }
             }
         }
     });

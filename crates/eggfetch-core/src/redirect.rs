@@ -121,12 +121,29 @@ pub fn build_redirect_request(
     status: http::StatusCode,
     location: &str,
 ) -> Result<(Request, Option<Vec<u8>>)> {
+    let new_method = redirect_method(status, original.method());
+    let drop_body = drops_body_on_redirect(status, original.method());
+    build_redirect_request_with_policy(original, location, new_method, drop_body)
+}
+
+/// Build a follow-up request using a precomputed redirect method and
+/// body-dropping decision.
+///
+/// Internal fast path for the pipeline, which already evaluated
+/// [`redirect_method`] and [`drops_body_on_redirect`] for the hop.
+///
+/// # Errors
+///
+/// Same as [`build_redirect_request`].
+pub(crate) fn build_redirect_request_with_policy(
+    original: &Request,
+    location: &str,
+    new_method: Method,
+    drop_body: bool,
+) -> Result<(Request, Option<Vec<u8>>)> {
     let new_url = resolve_redirect_url(original.url(), location)?;
 
     validate_redirect_url(&new_url)?;
-
-    let new_method = redirect_method(status, original.method());
-    let drop_body = drops_body_on_redirect(status, original.method());
 
     // Build new headers.
     let mut new_headers = original.headers().clone();

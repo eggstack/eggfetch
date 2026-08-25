@@ -117,8 +117,8 @@ struct Cli {
     #[arg(long = "follow", default_value_t = true)]
     follow: bool,
 
-    /// Do not follow redirects.
-    #[arg(long = "no-follow")]
+    /// Do not follow redirects (conflicts with `--follow`).
+    #[arg(long = "no-follow", conflicts_with = "follow")]
     no_follow: bool,
 
     /// Maximum number of redirects.
@@ -927,8 +927,9 @@ async fn run(cli: Cli) -> Result<()> {
                         println!("{output}");
                     }
                 } else {
+                    // NDJSON records are chronological: redirect hops
+                    // oldest-first, then the final response.
                     let mut lines: Vec<Value> = Vec::new();
-                    lines.push(json_val);
                     for entry in response.history() {
                         lines.push(json!({
                             "type": "redirect",
@@ -937,6 +938,7 @@ async fn run(cli: Cli) -> Result<()> {
                             "version": version_string(entry.version()),
                         }));
                     }
+                    lines.push(json_val);
                     if let Some(ref path) = cli.output {
                         let output: String = lines
                             .iter()

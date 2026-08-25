@@ -541,8 +541,13 @@ fn domain_matches(host: &str, domain: &str) -> bool {
     if host.eq_ignore_ascii_case(domain) {
         return true;
     }
-    let suffix = format!(".{domain}");
-    host.len() > suffix.len() && host.to_lowercase().ends_with(&suffix.to_lowercase())
+    // RFC 6265 domain matching is ASCII case-insensitive; compare bytes
+    // directly so the hot cookie-jar path performs no heap allocation.
+    let host = host.as_bytes();
+    let domain = domain.as_bytes();
+    host.len() > domain.len() + 1
+        && host[host.len() - domain.len() - 1] == b'.'
+        && host[host.len() - domain.len()..].eq_ignore_ascii_case(domain)
 }
 
 /// Determine if a string is an IP address (v4 or v6).

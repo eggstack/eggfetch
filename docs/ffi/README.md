@@ -36,7 +36,7 @@ panics).
 | `eggfetch_client_new` | Create a client with default settings |
 | `eggfetch_client_free` | Free a client handle |
 | `eggfetch_client_builder_new` | Create a client builder |
-| `eggfetch_client_builder_build` | Build a client from the builder (consumes builder) |
+| `eggfetch_client_builder_build` | Build a client from the builder (builder handle stays freeable) |
 | `eggfetch_client_builder_free` | Free a client builder |
 | `eggfetch_request_free` | Free a request handle |
 | `eggfetch_response_free` | Free a buffered response handle |
@@ -61,6 +61,8 @@ eggfetch_client_builder_max_redirects(builder, 10);
 eggfetch_client_builder_user_agent(builder, "my-app/1.0");
 eggfetch_client_builder_http_version(builder, 2); // HTTP/2
 eggfetch_client *client = eggfetch_client_builder_build(builder);
+// The builder handle is not consumed by build; free it exactly once:
+eggfetch_client_builder_free(builder);
 ```
 
 Per-request overrides are available on `RequestHandle`:

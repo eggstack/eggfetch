@@ -430,58 +430,50 @@ impl Stream for LineStream {
     type Item = Result<String>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        // Try to find a newline in the buffer first.
-        if let Some(pos) = self.buffer.iter().position(|&b| b == b'\n') {
-            let line_bytes = self.buffer.split_to(pos + 1);
-            let mut line = &line_bytes[..line_bytes.len() - 1]; // strip \n
-            if line.ends_with(b"\r") {
-                line = &line[..line.len() - 1];
-            }
-            let line = String::from_utf8(line.to_vec())
-                .map_err(|e| crate::error::Error::Body(e.to_string()))?;
-            return Poll::Ready(Some(Ok(line)));
-        }
-
-        // No newline in buffer; try to pull more data.
-        match Pin::new(&mut self.stream).poll_next(cx) {
-            Poll::Ready(Some(Ok(chunk))) => {
-                self.buffer.extend_from_slice(&chunk);
-                if let Some(pos) = self.buffer.iter().position(|&b| b == b'\n') {
-                    if pos > MAX_LINE_LENGTH {
-                        return Poll::Ready(Some(Err(crate::error::Error::Body(format!(
-                            "response line exceeded maximum length of {MAX_LINE_LENGTH} bytes"
-                        )))));
-                    }
-                    let line_bytes = self.buffer.split_to(pos + 1);
-                    let mut line = &line_bytes[..line_bytes.len() - 1];
-                    if line.ends_with(b"\r") {
-                        line = &line[..line.len() - 1];
-                    }
-                    let line = String::from_utf8(line.to_vec())
-                        .map_err(|e| crate::error::Error::Body(e.to_string()));
-                    return Poll::Ready(Some(line));
-                }
-
-                if self.buffer.len() > MAX_LINE_LENGTH {
+        loop {
+            // Fast path: emit a line already sitting in the buffer. The
+            // length cap applies here too — a single chunk may carry an
+            // over-long line piggybacked behind a valid one.
+            if let Some(pos) = self.buffer.iter().position(|&b| b == b'\n') {
+                if pos > MAX_LINE_LENGTH {
                     return Poll::Ready(Some(Err(crate::error::Error::Body(format!(
                         "response line exceeded maximum length of {MAX_LINE_LENGTH} bytes"
                     )))));
                 }
-
-                // Re-schedule to check for newlines in the updated buffer.
-                cx.waker().wake_by_ref();
-                Poll::Pending
+                let line_bytes = self.buffer.split_to(pos + 1);
+                let mut line = &line_bytes[..line_bytes.len() - 1]; // strip \n
+                if line.ends_with(b"\r") {
+                    line = &line[..line.len() - 1];
+                }
+                let line = String::from_utf8(line.to_vec())
+                    .map_err(|e| crate::error::Error::Body(e.to_string()))?;
+                return Poll::Ready(Some(Ok(line)));
             }
-            Poll::Ready(Some(Err(e))) => Poll::Ready(Some(Err(e))),
-            Poll::Ready(None) => {
-                // Stream ended; flush remaining buffer as a final line.
-                if self.buffer.is_empty() {
-                    Poll::Ready(None)
-                } else if self.buffer.len() > MAX_LINE_LENGTH {
-                    Poll::Ready(Some(Err(crate::error::Error::Body(format!(
-                        "response line exceeded maximum length of {MAX_LINE_LENGTH} bytes"
-                    )))))
-                } else {
+
+            // No newline yet; a partially assembled line must stay bounded.
+            if self.buffer.len() > MAX_LINE_LENGTH {
+                return Poll::Ready(Some(Err(crate::error::Error::Body(format!(
+                    "response line exceeded maximum length of {MAX_LINE_LENGTH} bytes"
+                )))));
+            }
+
+            // Pull more data. Ready chunks are drained in this loop rather
+            // than rescheduling through the executor per chunk.
+            match Pin::new(&mut self.stream).poll_next(cx) {
+                Poll::Ready(Some(Ok(chunk))) => {
+                    if chunk.is_empty() {
+                        // Zero-progress chunk: avoid spinning inside poll.
+                        cx.waker().wake_by_ref();
+                        return Poll::Pending;
+                    }
+                    self.buffer.extend_from_slice(&chunk);
+                }
+                Poll::Ready(Some(Err(e))) => return Poll::Ready(Some(Err(e))),
+                Poll::Ready(None) => {
+                    // Stream ended; flush remaining buffer as a final line.
+                    if self.buffer.is_empty() {
+                        return Poll::Ready(None);
+                    }
                     let remaining = std::mem::take(&mut self.buffer);
                     let mut line = &remaining[..remaining.len()];
                     if line.ends_with(b"\r") {
@@ -489,10 +481,10 @@ impl Stream for LineStream {
                     }
                     let line = String::from_utf8(line.to_vec())
                         .map_err(|e| crate::error::Error::Body(e.to_string()))?;
-                    Poll::Ready(Some(Ok(line)))
+                    return Poll::Ready(Some(Ok(line)));
                 }
+                Poll::Pending => return Poll::Pending,
             }
-            Poll::Pending => Poll::Pending,
         }
     }
 }
@@ -588,6 +580,28 @@ mod tests {
             ResponseBody::streaming(stream),
         );
         let mut lines = response.text_lines().unwrap();
+        let error = lines.next().await.unwrap().unwrap_err();
+        assert!(matches!(error, crate::error::Error::Body(_)));
+    }
+
+    #[tokio::test]
+    async fn response_text_lines_rejects_overlong_line_after_valid_line() {
+        // A single chunk carrying a valid line followed by an over-long
+        // line must not smuggle the second line past MAX_LINE_LENGTH via
+        // the buffered fast path.
+        let mut payload = b"ok\n".to_vec();
+        payload.extend_from_slice(&vec![b'a'; MAX_LINE_LENGTH + 1]);
+        payload.push(b'\n');
+        let stream = Box::pin(futures_util::stream::iter(vec![Ok(Bytes::from(payload))]));
+        let mut resp = Response::new(
+            StatusCode::OK,
+            Version::HTTP_11,
+            HeaderMap::new(),
+            Url::parse("http://example.com").unwrap(),
+            ResponseBody::streaming(stream),
+        );
+        let mut lines = resp.text_lines().unwrap();
+        assert_eq!(lines.next().await.unwrap().unwrap(), "ok");
         let error = lines.next().await.unwrap().unwrap_err();
         assert!(matches!(error, crate::error::Error::Body(_)));
     }

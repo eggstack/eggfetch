@@ -114,16 +114,19 @@ pub unsafe extern "C" fn eggfetch_string_free(s: *mut c_char) {
     });
 }
 
-/// Read a C string from a pointer, returning `None` if null.
+/// Read a C string from a pointer, returning an owned copy (`None` if null).
+///
+/// Returns owned data because a raw pointer carries no lifetime to borrow
+/// against; every caller immediately consumes the value into owned state.
 ///
 /// # Safety
 ///
 /// `ptr` must be null or point to a valid null-terminated C string.
-pub(crate) unsafe fn cstr_to_opt(ptr: *const c_char) -> Option<&'static str> {
+pub(crate) unsafe fn cstr_to_string(ptr: *const c_char) -> Option<String> {
     if ptr.is_null() {
         None
     } else {
-        CStr::from_ptr(ptr).to_str().ok()
+        String::from_utf8(CStr::from_ptr(ptr).to_bytes().to_vec()).ok()
     }
 }
 

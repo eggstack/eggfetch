@@ -35,13 +35,13 @@ pub unsafe extern "C" fn eggfetch_request_header(
         let Some(handle) = handle.as_mut() else {
             return -1;
         };
-        let Some(name) = crate::handle::cstr_to_opt(name) else {
+        let Some(name) = crate::handle::cstr_to_string(name) else {
             return -1;
         };
-        let Some(value) = crate::handle::cstr_to_opt(value) else {
+        let Some(value) = crate::handle::cstr_to_string(value) else {
             return -1;
         };
-        update_request(handle, |rb| rb.header(name, value))
+        update_request(handle, |rb| rb.header(&name, &value))
     })
 }
 
@@ -63,13 +63,13 @@ pub unsafe extern "C" fn eggfetch_request_query(
         let Some(handle) = handle.as_mut() else {
             return -1;
         };
-        let Some(key) = crate::handle::cstr_to_opt(key) else {
+        let Some(key) = crate::handle::cstr_to_string(key) else {
             return -1;
         };
-        let Some(value) = crate::handle::cstr_to_opt(value) else {
+        let Some(value) = crate::handle::cstr_to_string(value) else {
             return -1;
         };
-        update_request(handle, |rb| rb.query(key, value))
+        update_request(handle, |rb| rb.query(&key, &value))
     })
 }
 
@@ -116,10 +116,10 @@ pub unsafe extern "C" fn eggfetch_request_body_str(
         let Some(handle) = handle.as_mut() else {
             return -1;
         };
-        let Some(body) = crate::handle::cstr_to_opt(body) else {
+        let Some(body) = crate::handle::cstr_to_string(body) else {
             return -1;
         };
-        update_request(handle, |rb| rb.bytes(body.as_bytes()))
+        update_request(handle, |rb| rb.bytes(body.into_bytes()))
     })
 }
 
@@ -164,10 +164,10 @@ pub unsafe extern "C" fn eggfetch_request_auth_basic(
         let Some(handle) = handle.as_mut() else {
             return -1;
         };
-        let Some(username_str) = crate::handle::cstr_to_opt(username) else {
+        let Some(username_str) = crate::handle::cstr_to_string(username) else {
             return -1;
         };
-        let Some(password_str) = crate::handle::cstr_to_opt(password) else {
+        let Some(password_str) = crate::handle::cstr_to_string(password) else {
             return -1;
         };
         let Ok(auth) = eggfetch_core::AuthScheme::basic(username_str, password_str) else {
@@ -196,7 +196,7 @@ pub unsafe extern "C" fn eggfetch_request_auth_bearer(
         let Some(handle) = handle.as_mut() else {
             return -1;
         };
-        let Some(token_str) = crate::handle::cstr_to_opt(token) else {
+        let Some(token_str) = crate::handle::cstr_to_string(token) else {
             return -1;
         };
         let Ok(auth) = eggfetch_core::AuthScheme::bearer(token_str) else {

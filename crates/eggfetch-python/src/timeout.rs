@@ -37,7 +37,9 @@ impl PyTimeout {
         read: Option<f64>,
         total: Option<f64>,
     ) -> PyResult<Self> {
-        // Validate all provided values are finite and positive
+        // Validate all provided values are finite and non-negative.
+        // Zero is valid (an immediately-expiring deadline), matching
+        // `parse_timeout` and the HTTPX-compatible Timeout class.
         for (name, val) in [
             ("pool", pool),
             ("connect", connect),
@@ -46,18 +48,18 @@ impl PyTimeout {
             ("total", total),
         ] {
             if let Some(v) = val {
-                if !v.is_finite() || v <= 0.0 {
+                if !v.is_finite() || v < 0.0 {
                     return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
-                        "{name} timeout must be a finite, positive number"
+                        "{name} timeout must be a finite, non-negative number"
                     )));
                 }
             }
         }
 
         if let Some(s) = seconds {
-            if !s.is_finite() || s <= 0.0 {
+            if !s.is_finite() || s < 0.0 {
                 return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
-                    "timeout must be a finite, positive number",
+                    "timeout must be a finite, non-negative number",
                 ));
             }
             // Scalar mode: apply to pool, connect, write, read; respect any explicit per-phase

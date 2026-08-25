@@ -302,7 +302,21 @@ pub fn decompress_buffered(
         match encoding {
             #[cfg(any(feature = "compression-gzip", feature = "compression-deflate"))]
             ContentCoding::Gzip | ContentCoding::Deflate => {
+                // Enforce the expansion ratio against *each layer's* own
+                // input size. Comparing only the final size against the
+                // outermost compressed length lets stacked encodings
+                // accumulate expansion beyond the configured limit.
+                let layer_input_len = current.len();
                 current = sync_decode_flate2(&current, encoding, output_limit, ratio_is_tighter)?;
+                if let Some(max_ratio) = limit.max_decompression_ratio {
+                    if layer_input_len > 0 {
+                        #[allow(clippy::cast_precision_loss)]
+                        let layer_ratio = current.len() as f64 / layer_input_len as f64;
+                        if layer_ratio > max_ratio {
+                            return Err(Error::DecompressionRatioExceeded);
+                        }
+                    }
+                }
             }
             #[cfg(not(any(feature = "compression-gzip", feature = "compression-deflate")))]
             ContentCoding::Gzip | ContentCoding::Deflate => {
@@ -872,6 +886,43 @@ mod tests {
         let limit = DecompressionLimit::new();
         let result = decompress_buffered(&data, "gzip", limit).unwrap();
         assert_eq!(&result[..], b"hello world");
+    }
+
+    #[cfg(feature = "compression-gzip")]
+    #[test]
+    fn decompression_limit_ratio_enforced_per_layer() {
+        // Stacked encodings: the middle layer stores near-incompressible
+        // data, so the cumulative expansion measured against the wire size
+        // is *smaller* than the inner layer's own expansion. A per-layer
+        // limit between the two must reject even though the old
+        // final-size-vs-outermost-length check would have passed.
+        let payload = vec![b'a'; 5000];
+        let inner = gzip_compress(&payload);
+        let outer = gzip_compress(&inner);
+        #[allow(clippy::cast_precision_loss)]
+        let (total_ratio, inner_step) = {
+            (
+                payload.len() as f64 / outer.len() as f64,
+                payload.len() as f64 / inner.len() as f64,
+            )
+        };
+        assert!(
+            inner_step > total_ratio + 1.0,
+            "expected the inner step to dominate: {inner_step} vs {total_ratio}"
+        );
+
+        #[allow(clippy::cast_precision_loss)]
+        let limit_value = ((total_ratio + inner_step) / 2.0).ceil();
+        let limit = DecompressionLimit {
+            max_decoded_body_size: None,
+            max_decompression_ratio: Some(limit_value),
+        };
+        let err = decompress_buffered(&outer, "gzip, gzip", limit).unwrap_err();
+        assert_eq!(err.kind(), "decompression_ratio_exceeded");
+
+        // With no ratio limit both layers decode fine.
+        let ok = decompress_buffered(&outer, "gzip, gzip", DecompressionLimit::default()).unwrap();
+        assert_eq!(&ok[..], &payload[..]);
     }
 
     #[test]

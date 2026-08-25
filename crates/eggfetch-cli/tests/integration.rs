@@ -663,6 +663,32 @@ fn test_ndjson_output() {
 }
 
 #[test]
+fn test_ndjson_redirect_records_are_chronological() {
+    let server = TestServer::start();
+    let url = format!("{}/redirect-to?to=/json", server.url());
+    let (stdout, _stderr, code) = run_cli(&[&url, "--ndjson", "--follow"]);
+    assert_eq!(code, Some(0));
+    let lines: Vec<serde_json::Value> = stdout
+        .lines()
+        .filter(|l| !l.is_empty())
+        .map(|l| serde_json::from_str(l).expect("invalid NDJSON line"))
+        .collect();
+    // Records must be oldest-first: any redirect hop precedes the final
+    // response record.
+    let final_idx = lines
+        .iter()
+        .position(|l| l.get("type") != Some(&serde_json::Value::String("redirect".into())));
+    if let Some(final_idx) = final_idx {
+        assert!(
+            lines[..final_idx]
+                .iter()
+                .all(|l| l.get("type") == Some(&serde_json::Value::String("redirect".into()))),
+            "redirect records must precede the final response"
+        );
+    }
+}
+
+#[test]
 fn test_json_output_base64() {
     let server = TestServer::start();
     let url = format!("{}/binary", server.url());

@@ -532,6 +532,9 @@ pub(crate) async fn send_with_redirects(client: &Client, request: Request) -> Re
         }
 
         let redirect_status = response.status();
+        // Evaluate the hop's method/body policy once and share it with
+        // the redirect request builder below.
+        let new_method = redirect::redirect_method(redirect_status, &cur_method);
         let drop_body = redirect::drops_body_on_redirect(redirect_status, &cur_method);
         if drop_body {
             // The body is dropped on this hop. Clear any stale replay
@@ -557,12 +560,14 @@ pub(crate) async fn send_with_redirects(client: &Client, request: Request) -> Re
         temp_request.set_body(temp_body);
         temp_request.set_version(cur_version);
 
-        let (redirect_req, _) =
-            redirect::build_redirect_request(&temp_request, redirect_status, &location)?;
+        let (redirect_req, _) = redirect::build_redirect_request_with_policy(
+            &temp_request,
+            &location,
+            new_method.clone(),
+            drop_body,
+        )?;
 
         history.push(HistoryEntry::from_response(&response));
-
-        let new_method = redirect::redirect_method(redirect_status, &cur_method);
 
         let (_, new_url, new_headers, new_body, new_version, _, _, _, _, _, _, _, _) =
             redirect_req.into_parts();

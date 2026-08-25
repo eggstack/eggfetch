@@ -949,6 +949,21 @@ fn parse_proxy_url(url_str: &str) -> Result<url::Url> {
         }
         "socks5" | "socks5h" => {
             // SOCKS5 proxies accept inline credentials in the URL.
+            // Validate them at construction so CR/LF never reaches the
+            // SOCKS5 username/password subnegotiation payload (the
+            // `config()` extractor cannot fail).
+            let username = percent_encoding::percent_decode_str(url.username()).decode_utf8_lossy();
+            let password = percent_encoding::percent_decode_str(url.password().unwrap_or(""))
+                .decode_utf8_lossy();
+            if username.contains('\r')
+                || username.contains('\n')
+                || password.contains('\r')
+                || password.contains('\n')
+            {
+                return Err(Error::InvalidProxyUrl(
+                    "proxy auth credentials must not contain CR/LF".into(),
+                ));
+            }
         }
         other => {
             return Err(Error::InvalidProxyUrl(format!(
@@ -1055,6 +1070,15 @@ mod tests {
                 assert_eq!(password, "p@ss");
             }
         }
+    }
+
+    #[test]
+    fn parse_proxy_url_socks5_rejects_crlf_credentials() {
+        // Percent-encoded CR/LF in userinfo must fail construction instead
+        // of flowing into the SOCKS5 subnegotiation payload.
+        assert!(Proxy::all("socks5://user%0D%0Ax:pass@proxy.example:1080").is_err());
+        assert!(Proxy::all("socks5://user:p%0Aass@proxy.example:1080").is_err());
+        assert!(Proxy::all("socks5h://user%0dname:pass@proxy.example:1080").is_err());
     }
 
     #[test]

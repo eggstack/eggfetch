@@ -285,6 +285,20 @@ class TestTimeout:
             r = client.get(f"{server}/hello", timeout=10.0)
             assert r.status_code == 200
 
+    def test_timeout_zero_is_valid_everywhere(self):
+        """Zero timeouts are accepted consistently by all native paths."""
+        t = eggfetch.Timeout(0)
+        assert t.pool == 0.0
+        assert t.connect == 0.0
+        assert t.read == 0.0
+        assert t.write == 0.0
+        with pytest.raises(ValueError, match="non-negative"):
+            eggfetch.Timeout(-1)
+
+    def test_negative_timeout_raises(self, server):
+        with pytest.raises(ValueError, match="non-negative"):
+            eggfetch.get(f"{server}/hello", timeout=-5.0)
+
 
 # ---------------------------------------------------------------------------
 # Error mapping

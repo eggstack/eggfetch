@@ -233,8 +233,15 @@ pub(crate) async fn send_https_connect_request(
     Ok(response)
 }
 
+/// Maximum characters retained from a proxy-controlled rejection body.
+///
+/// The rejection text is attacker-controllable when the proxy is hostile;
+/// bounding and sanitizing it keeps credential-looking material and
+/// terminal escape sequences out of logs and error displays.
+const MAX_PROXY_REJECTION_BODY_CHARS: usize = 256;
+
 fn proxy_rejection_body(headers: &[(String, String)], initial_buf: &[u8]) -> String {
-    headers
+    let raw = headers
         .iter()
         .find(|(name, _)| {
             name.eq_ignore_ascii_case("x-error-message")
@@ -243,7 +250,11 @@ fn proxy_rejection_body(headers: &[(String, String)], initial_buf: &[u8]) -> Str
         .map_or_else(
             || String::from_utf8_lossy(initial_buf).into_owned(),
             |(_, value)| value.clone(),
-        )
+        );
+    raw.chars()
+        .filter(|c| !c.is_control())
+        .take(MAX_PROXY_REJECTION_BODY_CHARS)
+        .collect()
 }
 
 /// Streaming response body from a TLS connection through a proxy tunnel.
@@ -398,8 +409,24 @@ mod tests {
     }
 
     #[test]
-    fn proxy_rejection_body_keeps_all_buffered_bytes() {
+    fn proxy_rejection_body_truncates_buffered_bytes() {
         let body = "a".repeat(300);
-        assert_eq!(proxy_rejection_body(&[], body.as_bytes()), body);
+        let sanitized = proxy_rejection_body(&[], body.as_bytes());
+        assert_eq!(sanitized.len(), 256);
+        assert!(sanitized.chars().all(|c| c == 'a'));
+    }
+
+    #[test]
+    fn proxy_rejection_body_strips_control_characters() {
+        // Terminal escape sequences and CR/LF from a hostile proxy must
+        // not survive into error Display/Debug output.
+        let headers = vec![(
+            "x-proxy-error".to_owned(),
+            "denied\u{1b}[31m\r\nsecret: hunter2".to_owned(),
+        )];
+        assert_eq!(
+            proxy_rejection_body(&headers, b"ignored"),
+            "denied[31msecret: hunter2"
+        );
     }
 }
