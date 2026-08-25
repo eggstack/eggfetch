@@ -204,6 +204,8 @@ Thread safety: `ClientHandle` is `Send + Sync` (shared). `RequestHandle`, `Respo
 
 Criterion-based benchmarks in `benchmarks/` — three suites (`microbench`, `e2e`, `resources`) plus a `resource_monitor.rs` binary for RSS monitoring. Not published.
 
+**Deep dive:** [benchmarks.md](benchmarks.md)
+
 ## Deep-Dive Index
 
 Each component has a dedicated document for detailed review:
@@ -220,6 +222,7 @@ Each component has a dedicated document for detailed review:
 | **Python Bindings** | [python-bindings.md](python-bindings.md) | Sync/async adapter, PyO3 bridge, Python API surface |
 | **FFI & Node** | [ffi-and-node.md](ffi-and-node.md) | C ABI handles, runtime bridge, N-API prototype |
 | **Testing & Fuzzing** | [testing-fuzzing.md](testing-fuzzing.md) | Unit/integration tests, property tests, fuzz targets |
+| **Benchmarks** | [benchmarks.md](benchmarks.md) | Criterion suites, BenchServer harness, RSS regression monitor |
 | **Build & CI** | [build-ci.md](build-ci.md) | CI pipeline, lint policy, MSRV, release process |
 
 ## Cross-Cutting Concerns

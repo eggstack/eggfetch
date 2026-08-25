@@ -134,6 +134,21 @@ that need HTTPX-compatible visibility; the values are never inferred from
 decoded body length. The compatibility facade overlays that metadata while
 core remains authoritative for decoder selection.
 
+### Response Decode Pipeline (`response_decode`)
+
+The crate-internal `response_decode` module is the single dispatch point where decompression is applied to a completed response. `pipeline::send_single_request` calls it after transport dispatch (step 10 of the lifecycle in [core-engine.md](core-engine.md)).
+
+Entry point: `apply_decompression(response, content_encoding, limit)`:
+
+1. **Validate first**: unsupported `Content-Encoding` values fail with `UnsupportedContentEncoding` before any body transformation.
+2. **Transform the body** according to its variant:
+   - `Streaming` + encoding → `ResponseBody::EncodedStreaming`. When the streaming body carries a pool lease, it is attached directly to the encoded wrapper so lease ownership never routes through a destructure/rebuild round-trip.
+   - `Buffered` + non-empty bytes → decoded synchronously via `decompress_buffered()`.
+   - Empty buffered bodies and already-encoded bodies pass through unchanged.
+3. **Strip visible headers**: `Content-Encoding` and `Content-Length` are removed from the header map; their original wire values remain available via `Response::wire_content_encoding()` / `wire_content_length()` (see above).
+
+The empty-body special case matters: a zero-length body with a `Content-Encoding` header is left untouched rather than fed through a decoder, matching how encoders emit empty payloads.
+
 ### Python API
 
 ```python

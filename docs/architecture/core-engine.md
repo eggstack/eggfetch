@@ -14,7 +14,8 @@ See also: [overview.md](overview.md) for the high-level map.
 | `body` | Yes | `RequestBody`, `ResponseBody`, `BoxBytesStream` |
 | `headers` | Yes | `Headers` — case-insensitive header map wrapper |
 | `network_stream` | Yes | `NetworkStream`, `UpgradedStream`, `ConnectionMetadata` — upgrade IO + connection metadata |
-| `error` | Yes | `Error` enum (46 variants), `Result<T>` alias |
+| `trace` | Yes | `TraceObserver`, `TraceEvent` — synchronous lifecycle event callbacks |
+| `error` | Yes | `Error` enum (47 variants), `Result<T>` alias |
 | `pipeline` | Crate-internal | Full request lifecycle orchestration |
 | `transport` | Crate-internal | Direct, direct-with-socket-options, UDS, proxy, HTTP/3 transport dispatch |
 | `stream` | Crate-internal | Per-chunk read/write timeout wrappers |
@@ -125,9 +126,45 @@ send_with_retry()           ← retry loop
 
 **Ownership rules**: once an upgrade handoff succeeds, the connection is removed from the HTTP pool and must never be reused. Closing the response and closing the upgraded stream are independent operations.
 
+## Trace Observer
+
+The `trace` module defines a typed event vocabulary (derived from httpcore 1.0.9's `Trace` context manager) and the callback trait transports use to emit lifecycle events. Observers are installed per request via `TransportHints::trace` — they survive retry reconstruction and are cleared on redirect hops like all transport hints.
+
+### Events
+
+`TraceEvent` has ten variants, each carrying a `TracePhase` (`Started`/`Complete`/`Failed`) plus structured metadata:
+
+| Event | Extra fields | httpcore dotted name |
+|-------|--------------|----------------------|
+| `ConnectTcp` | `host`, `port` | `connect_tcp.<phase>` |
+| `ConnectUnixSocket` | `path` | `connect_unix_socket.<phase>` |
+| `StartTls` | `server_hostname` | `start_tls.<phase>` |
+| `Retry` | `delay_ms` | `retry.<phase>` |
+| `Close` | — | `close.<phase>` |
+| `SendRequestHeaders` | `method`, `target` | `send_request_headers.<phase>` |
+| `SendRequestBody` | — | `send_request_body.<phase>` |
+| `ReceiveResponseHeaders` | `status` | `receive_response_headers.<phase>` |
+| `ReceiveResponseBody` | — | `receive_response_body.<phase>` |
+| `ResponseClosed` | — | `response_closed.<phase>` |
+
+Connection-level events map to the `"connection"` logger prefix; HTTP message events map to `"http11"`. `event_to_httpcore_name()` produces these names and `event_to_info()` produces the flat info dictionary (values are opaque `EventValue::{String, U16, U64}`) that the Python compatibility layer forwards to user callbacks.
+
+### Observer Contract
+
+`TraceObserver` is a synchronous, `Send + Sync` callback trait: `on_event(&self, &TraceEvent) -> OnEventAction`. It is invoked inside the transport's async context and **must not block or perform I/O**; for the Python binding, the GIL is acquired only at delivery points, never across network waits.
+
+- `OnEventAction::Continue` lets the transport proceed.
+- `OnEventAction::Abort` makes the transport short-circuit and return an error. The observer has already recorded the failure in its binding-owned error slot; callers surface that error after unwinding. This is how a raising Python callback stops dispatch without producing discarded work.
+
+Built-in implementations: `NoopTraceObserver` (discard everything) and `CollectingTraceObserver` (thread-safe event vector with `drain()`/`len()`, used by tests). A callback failure surfaces as `Error::TraceCallbackAborted`.
+
+### Python Bridge
+
+Python callables never enter `eggfetch-core`: `crates/eggfetch-python/src/trace_bridge.rs` wraps them in `PyTraceObserver`. Only sync callables are accepted — coroutine functions are detected via `inspect.iscoroutinefunction()` and rejected eagerly with `TypeError` before dispatch (the core trait is synchronous; an un-awaited coroutine would be silently dropped). Details in [python-bindings.md](python-bindings.md).
+
 ## Error Taxonomy
 
-`Error` is a single `thiserror`-derived enum with 46 variants. Each variant has a `kind()` method returning a static string for programmatic matching.
+`Error` is a single `thiserror`-derived enum with 47 variants. Each variant has a `kind()` method returning a static string for programmatic matching.
 
 | Category | Variants |
 |----------|----------|
@@ -143,6 +180,7 @@ send_with_retry()           ← retry loop
 | **Retry** | `BodyNotReplayableForRetry`, `RetryBudgetExhausted { attempts }`, `RetryNotConfigured` |
 | **HTTP/2** | `Http2GoAway`, `Http2StreamReset`, `Http2FlowControl`, `Http2Protocol` |
 | **HTTP/3** | `H3Connect`, `H3ConnectionClosed`, `H3Stream`, `H3Protocol` |
+| **Trace** | `TraceCallbackAborted` |
 
 `Error` is `Clone` — hyper/IO errors are wrapped in `Arc` to enable cloning.
 

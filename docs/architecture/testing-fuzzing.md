@@ -12,10 +12,10 @@ All tests are colocated in `#[cfg(test)] mod tests` blocks within each source fi
 
 | Category | Approximate Count |
 |----------|-------------------|
-| Rust unit/integration | ~685 |
-| Python (non-compat) | ~513 |
-| Python (compat) | ~1475 |
-| FFI | 30 |
+| Rust unit/integration | ~980 |
+| Python (non-compat) | ~520 |
+| Python (compat) | ~1590 |
+| FFI | 31 |
 
 ## Running Tests
 
@@ -184,3 +184,5 @@ cargo build --release -p eggfetch-bench --bin resource_monitor
 ```
 
 Outputs a JSON report with pass/fail status against predefined thresholds.
+
+The benchmark suites themselves (Criterion `microbench`/`e2e`/`resources`, the shared `BenchServer`) are documented in [benchmarks.md](benchmarks.md).
