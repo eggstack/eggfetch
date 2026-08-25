@@ -28,6 +28,11 @@ pub struct StreamingResponseHandle {
     /// aliasing `&mut` borrows when called concurrently from different
     /// threads.
     rx: Mutex<mpsc::Receiver<Result<Bytes, eggfetch_core::Error>>>,
+    /// Description of the error that ended the stream early, if any.
+    /// Set when the producer observes a mid-stream failure; query via
+    /// [`eggfetch_response_stream_error`]. Behind a mutex for the same
+    /// aliasing reason as `rx`.
+    last_error: Mutex<Option<String>>,
     cancel: Arc<AtomicBool>,
 }
 
@@ -147,6 +152,7 @@ pub unsafe extern "C" fn eggfetch_client_send_streaming(
                     url,
                     headers,
                     rx: Mutex::new(rx),
+                    last_error: Mutex::new(None),
                     cancel,
                 })
             });
@@ -313,7 +319,46 @@ pub unsafe extern "C" fn eggfetch_response_stream_next(
                 };
                 Box::into_raw(Box::new(StreamChunk { data: buf, len }))
             }
-            _ => ptr::null_mut(),
+            Some(Err(e)) => {
+                // Record the failure so hosts can distinguish a truncated
+                // stream from a clean end-of-body via
+                // `eggfetch_response_stream_error`.
+                if let Ok(mut last) = handle.last_error.lock() {
+                    *last = Some(e.to_string());
+                }
+                ptr::null_mut()
+            }
+            None => ptr::null_mut(),
+        }
+    })
+}
+
+/// Get the error that ended the stream early, if any.
+///
+/// Returns null when the stream ended cleanly, has not been consumed to
+/// completion, or the handle is invalid. When a mid-stream failure
+/// occurred (network reset, decompression error, ...), returns a newly
+/// allocated C string describing it; caller must free with
+/// [`crate::handle::eggfetch_string_free`].
+///
+/// # Safety
+///
+/// `handle` must be a valid, non-freed streaming response handle.
+#[no_mangle]
+pub unsafe extern "C" fn eggfetch_response_stream_error(
+    handle: *const StreamingResponseHandle,
+) -> *mut std::os::raw::c_char {
+    crate::ffi_guard!(ptr::null_mut(), {
+        let Some(handle) = handle.as_ref() else {
+            return ptr::null_mut();
+        };
+        let Ok(last) = handle.last_error.lock() else {
+            return ptr::null_mut();
+        };
+        match last.as_ref() {
+            Some(message) => crate::handle::FfiString::from_string(message.clone())
+                .map_or_else(ptr::null_mut, crate::handle::FfiString::into_raw),
+            None => ptr::null_mut(),
         }
     })
 }

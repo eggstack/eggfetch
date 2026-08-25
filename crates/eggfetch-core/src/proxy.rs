@@ -606,14 +606,23 @@ impl ProxyConfig {
     }
 
     /// Returns the proxy port for pool keying.
+    ///
+    /// # Panics
+    ///
+    /// Only if a `ProxyConfig` somehow carries a scheme without a known
+    /// default port. `parse_proxy_url` admits exactly `http`, `https`,
+    /// `socks5`, and `socks5h` (all with known defaults), so this is
+    /// unreachable for constructed configs; failing loudly beats
+    /// silently assuming port 80 when a new scheme is added.
     #[must_use]
     pub fn port(&self) -> u16 {
-        self.uri
-            .port_or_known_default()
-            .unwrap_or_else(|| match self.uri.scheme() {
+        match self.uri.port_or_known_default() {
+            Some(port) => port,
+            None => match self.uri.scheme() {
                 "socks5" | "socks5h" => 1080,
-                _ => 80,
-            })
+                other => unreachable!("unvalidated proxy scheme '{other}' has no known port"),
+            },
+        }
     }
 
     /// Returns the proxy scheme.

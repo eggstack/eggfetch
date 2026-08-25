@@ -168,6 +168,39 @@ class TestHeadersEq:
         assert Headers({"a": "1"}) != "not headers"
 
 
+class TestHeadersReprRedaction:
+    """repr() must redact credential-bearing headers (project rule)."""
+
+    @pytest.mark.parametrize(
+        ("name", "value"),
+        [
+            ("authorization", "Bearer sk-live-secret"),
+            ("proxy-authorization", "Basic dXNlcjpwYXNz"),
+            ("cookie", "session=secret"),
+            ("set-cookie", "session=secret; Path=/"),
+        ],
+    )
+    def test_sensitive_values_redacted(self, name, value):
+        h = Headers([(name, value)])
+        r = repr(h)
+        assert "<redacted>" in r
+        assert value not in r
+
+    def test_repr_is_case_insensitive(self):
+        h = Headers([("Authorization", "Bearer token")])
+        assert "<redacted>" in repr(h)
+
+    def test_non_sensitive_values_visible(self):
+        h = Headers({"content-type": "text/plain"})
+        assert "'content-type': 'text/plain'" in repr(h)
+
+    def test_repr_does_not_mutate(self):
+        h = Headers([("authorization", "Bearer token"), ("x-ok", "visible")])
+        repr(h)
+        assert h["authorization"] == "Bearer token"
+        assert h.get("authorization") == "Bearer token"
+
+
 class TestHeadersMisc:
     def test_encoding(self):
         h = Headers(encoding="latin-1")

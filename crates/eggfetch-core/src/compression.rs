@@ -93,6 +93,12 @@ impl ContentCoding {
             _ => None,
         }
     }
+
+    /// Returns `true` when the token is the RFC 9110 §8.4 `identity`
+    /// content-coding, which means "no encoding" and decodes to itself.
+    fn is_identity(token: &str) -> bool {
+        token.trim().eq_ignore_ascii_case("identity")
+    }
 }
 
 /// Generate the `Accept-Encoding` header value for the compiled-in
@@ -133,12 +139,16 @@ pub fn accept_encoding_value() -> Option<&'static str> {
 /// Parse a `Content-Encoding` header value into an ordered list of
 /// content codings. The list is in wire order (outermost first).
 ///
-/// Returns `None` if the header is empty or contains only whitespace.
+/// `identity` tokens (RFC 9110 §8.4, meaning "no encoding") are no-ops
+/// and are skipped.
+///
+/// Returns `None` if the header is empty, contains only whitespace, or
+/// contains only no-op codings such as bare `identity`.
 fn parse_content_encodings(header: &str) -> Option<Vec<ContentCoding>> {
     let encodings: Vec<ContentCoding> = header
         .split(',')
         .map(str::trim)
-        .filter(|s| !s.is_empty())
+        .filter(|s| !s.is_empty() && !ContentCoding::is_identity(s))
         .filter_map(ContentCoding::from_wire)
         .collect();
 
@@ -152,6 +162,8 @@ fn parse_content_encodings(header: &str) -> Option<Vec<ContentCoding>> {
 /// Check whether a `Content-Encoding` header value contains only
 /// supported encodings.
 ///
+/// `identity` (RFC 9110 §8.4) is a valid no-op coding and is accepted.
+///
 /// Returns `Ok(())` if the header is absent, empty, or all encodings
 /// are supported.
 ///
@@ -162,7 +174,7 @@ fn parse_content_encodings(header: &str) -> Option<Vec<ContentCoding>> {
 pub fn validate_content_encodings(header_value: &str) -> Result<()> {
     for token in header_value.split(',') {
         let token = token.trim();
-        if token.is_empty() {
+        if token.is_empty() || ContentCoding::is_identity(token) {
             continue;
         }
         if ContentCoding::from_wire(token).is_none() {
@@ -257,8 +269,16 @@ pub fn decompress_buffered(
     content_encoding: &str,
     limit: DecompressionLimit,
 ) -> Result<bytes::Bytes> {
-    let encodings = parse_content_encodings(content_encoding)
-        .ok_or_else(|| Error::Decompression("empty content encoding".into()))?;
+    // Validate before the pass-through so unsupported codings still fail.
+    validate_content_encodings(content_encoding)?;
+
+    let encodings = parse_content_encodings(content_encoding);
+    let Some(encodings) = encodings else {
+        // Validation accepted every token; reaching this arm means only
+        // no-op codings (e.g. bare `identity`) were present, so the body
+        // is served unchanged.
+        return Ok(bytes::Bytes::copy_from_slice(data));
+    };
 
     if encodings.len() > MAX_NESTING_DEPTH {
         return Err(Error::Decompression(format!(
@@ -267,8 +287,6 @@ pub fn decompress_buffered(
             MAX_NESTING_DEPTH
         )));
     }
-
-    validate_content_encodings(content_encoding)?;
 
     let compressed_len = data.len();
     #[cfg(any(feature = "compression-gzip", feature = "compression-deflate"))]
@@ -747,6 +765,22 @@ mod tests {
     }
 
     #[test]
+    fn validate_content_encodings_accepts_identity() {
+        // RFC 9110 §8.4: `identity` is a valid no-op content-coding.
+        assert!(validate_content_encodings("identity").is_ok());
+        assert!(validate_content_encodings("IDENTITY").is_ok());
+        assert!(validate_content_encodings("identity, gzip").is_ok());
+        assert!(validate_content_encodings("gzip, identity").is_ok());
+    }
+
+    #[test]
+    fn parse_content_encodings_identity_only_is_none() {
+        assert!(parse_content_encodings("identity").is_none());
+        let encs = parse_content_encodings("gzip, identity, br").unwrap();
+        assert_eq!(encs, vec![ContentCoding::Gzip, ContentCoding::Brotli]);
+    }
+
+    #[test]
     fn validate_content_encodings_unsupported() {
         let err = validate_content_encodings("gzip, weird").unwrap_err();
         assert_eq!(err.kind(), "unsupported_content_encoding");
@@ -842,6 +876,18 @@ mod tests {
         let result =
             decompress_stream(stream, Some("  "), true, DecompressionLimit::new()).unwrap();
         drop(result);
+    }
+
+    #[test]
+    fn decompress_buffered_identity_passthrough() {
+        // RFC 9110 §8.4: `identity` means "no encoding"; the body must be
+        // served unchanged instead of raising UnsupportedContentEncoding.
+        assert_eq!(
+            &decompress_buffered(b"plain body", "identity", DecompressionLimit::new()).unwrap()[..],
+            b"plain body"
+        );
+        let err = decompress_buffered(b"x", "weird", DecompressionLimit::new()).unwrap_err();
+        assert_eq!(err.kind(), "unsupported_content_encoding");
     }
 
     #[test]

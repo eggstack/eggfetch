@@ -90,7 +90,7 @@ struct Cli {
     json_output: bool,
 
     /// Newline-delimited JSON output.
-    #[arg(long = "ndjson")]
+    #[arg(long = "ndjson", conflicts_with = "json_output")]
     ndjson: bool,
 
     /// Encode binary body as base64 in JSON output.

@@ -4,6 +4,12 @@ from __future__ import annotations
 
 from collections.abc import MutableMapping
 
+# Header names whose values are redacted by ``__repr__`` so that logging a
+# response never dumps credentials (mirrors the native PyHeaders rule).
+_REDACTED_HEADER_NAMES = frozenset(
+    {"authorization", "proxy-authorization", "cookie", "set-cookie"}
+)
+
 
 class Headers(MutableMapping):
     """HTTPX-compatible Headers class.
@@ -196,5 +202,8 @@ class Headers(MutableMapping):
         return NotImplemented
 
     def __repr__(self) -> str:
-        items_str = ", ".join(f"{k!r}: {v!r}" for k, v in self._items)
+        items_str = ", ".join(
+            f"{k!r}: '<redacted>'" if k in _REDACTED_HEADER_NAMES else f"{k!r}: {v!r}"
+            for k, v in self._items
+        )
         return f"Headers({items_str})"

@@ -424,6 +424,16 @@ impl Pool {
         }
     }
 
+    /// Returns the configured idle-connection timeout, if any.
+    ///
+    /// Transport paths that build their own hyper client (SNI override)
+    /// use this instead of the request `Timeout.pool`/`total` phases,
+    /// which mean "wait to acquire", not "idle lifetime".
+    #[must_use]
+    pub(crate) fn idle_timeout(&self) -> Option<std::time::Duration> {
+        self.inner.config.idle_timeout
+    }
+
     /// Acquire a pool slot for the given origin.
     ///
     /// If a per-origin limit is configured, a per-origin permit is
@@ -445,19 +455,22 @@ impl Pool {
         if let (Some(max_per_origin), Some(origin)) =
             (self.inner.config.max_connections_per_host, origin)
         {
+            // Bound table growth before inserting so the entry created
+            // below can never be evicted immediately after creation
+            // (which would let the next request to this origin build a
+            // fresh semaphore and briefly bypass the per-host limit).
+            if self.inner.per_origin.len() >= PER_ORIGIN_TABLE_MAX_ENTRIES {
+                self.inner
+                    .per_origin
+                    .retain(|_, sem| sem.available_permits() < max_per_origin);
+            }
+
             let sem = self
                 .inner
                 .per_origin
                 .entry(origin.clone())
                 .or_insert_with(|| Arc::new(Semaphore::new(max_per_origin)))
                 .clone();
-
-            // Bound table growth: drop entries with no permits in use.
-            if self.inner.per_origin.len() > PER_ORIGIN_TABLE_MAX_ENTRIES {
-                self.inner
-                    .per_origin
-                    .retain(|_, sem| sem.available_permits() < max_per_origin);
-            }
 
             // Try immediate acquire first. `try_acquire_owned` consumes an
             // `Arc`, so the fast path clones once; the wait path then moves

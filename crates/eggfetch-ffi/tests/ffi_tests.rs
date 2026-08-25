@@ -883,9 +883,100 @@ fn streaming_null_safety() {
             0
         );
         assert!(eggfetch_ffi::eggfetch_response_stream_next(ptr::null_mut()).is_null());
+        assert!(eggfetch_ffi::eggfetch_response_stream_error(ptr::null()).is_null());
         eggfetch_ffi::eggfetch_response_stream_free(ptr::null_mut());
         eggfetch_ffi::eggfetch_stream_chunk_free(ptr::null_mut());
         eggfetch_ffi::eggfetch_response_stream_cancel(ptr::null_mut());
+    }
+}
+
+#[test]
+fn streaming_error_distinguishable_from_clean_eof() {
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+
+    // Server announces more body than it sends, then slams the socket
+    // shut: the client must surface a mid-stream error instead of
+    // silently treating truncation as end-of-body.
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap();
+
+    let _server = std::thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let _ = stream.set_read_timeout(Some(std::time::Duration::from_secs(2)));
+        let mut buf = vec![0u8; 4096];
+        let _n = stream.read(&mut buf).unwrap();
+
+        let response = "\
+            HTTP/1.1 200 OK\r\n\
+            Content-Type: text/plain\r\n\
+            Content-Length: 100\r\n\
+            \r\n\
+            partial";
+        let _ = stream.write_all(response.as_bytes());
+        let _ = stream.flush();
+        drop(stream);
+    });
+
+    let url = format!("http://{addr}/test");
+    let url_c = CString::new(url).unwrap();
+
+    unsafe {
+        let client = eggfetch_ffi::eggfetch_client_new();
+        let req = eggfetch_ffi::eggfetch_client_get(client, url_c.as_ptr());
+
+        let mut err: *mut eggfetch_ffi::ErrorHandle = ptr::null_mut();
+        let resp = eggfetch_ffi::eggfetch_client_send_streaming(client, req, &mut err);
+        assert!(!resp.is_null(), "truncated-stream test: request failed");
+
+        let mut got_chunk = false;
+        loop {
+            let chunk = eggfetch_ffi::eggfetch_response_stream_next(resp);
+            if chunk.is_null() {
+                break;
+            }
+            got_chunk = true;
+            eggfetch_ffi::eggfetch_stream_chunk_free(chunk);
+        }
+        assert!(got_chunk, "should receive the partial chunk before the cut");
+
+        let error_msg = eggfetch_ffi::eggfetch_response_stream_error(resp);
+        assert!(
+            !error_msg.is_null(),
+            "truncated stream must expose an error, not look like clean EOF"
+        );
+        let msg_str = std::ffi::CStr::from_ptr(error_msg)
+            .to_string_lossy()
+            .into_owned();
+        eggfetch_ffi::eggfetch_string_free(error_msg);
+        assert!(!msg_str.is_empty());
+
+        eggfetch_ffi::eggfetch_response_stream_free(resp);
+        eggfetch_ffi::eggfetch_client_free(client);
+    }
+}
+
+#[test]
+fn streaming_error_null_after_clean_eof() {
+    let addr = start_echo_server(b"complete body");
+
+    let url = format!("http://{addr}/test");
+    let url_c = CString::new(url).unwrap();
+
+    unsafe {
+        let client = eggfetch_ffi::eggfetch_client_new();
+        let req = eggfetch_ffi::eggfetch_client_get(client, url_c.as_ptr());
+
+        let mut err: *mut eggfetch_ffi::ErrorHandle = ptr::null_mut();
+        let resp = eggfetch_ffi::eggfetch_client_send_streaming(client, req, &mut err);
+        assert!(!resp.is_null());
+
+        while !eggfetch_ffi::eggfetch_response_stream_next(resp).is_null() {}
+
+        assert!(eggfetch_ffi::eggfetch_response_stream_error(resp).is_null());
+
+        eggfetch_ffi::eggfetch_response_stream_free(resp);
+        eggfetch_ffi::eggfetch_client_free(client);
     }
 }
 

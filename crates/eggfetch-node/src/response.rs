@@ -10,7 +10,10 @@ use std::ptr;
 pub struct EggfetchResponse {
     status: u32,
     url: String,
-    headers: HashMap<String, String>,
+    /// All header pairs in wire order. Duplicates (e.g. multiple
+    /// `Set-Cookie` headers) are preserved; use `getAll` to observe
+    /// every value for a name.
+    headers: Vec<(String, String)>,
     body: Vec<u8>,
 }
 
@@ -35,7 +38,7 @@ impl EggfetchResponse {
             }
 
             let header_count = eggfetch_ffi::eggfetch_response_header_count(resp);
-            let mut headers = HashMap::with_capacity(header_count);
+            let mut headers = Vec::with_capacity(header_count);
             for i in 0..header_count {
                 let mut name: *mut std::os::raw::c_char = ptr::null_mut();
                 let mut value: *mut std::os::raw::c_char = ptr::null_mut();
@@ -61,7 +64,7 @@ impl EggfetchResponse {
                     if !value.is_null() {
                         eggfetch_ffi::eggfetch_string_free(value);
                     }
-                    headers.insert(n, v);
+                    headers.push((n, v));
                 }
             }
 
@@ -129,9 +132,42 @@ impl EggfetchResponse {
     }
 
     /// Response headers as an object.
+    ///
+    /// When a header appears multiple times, the object joins the values
+    /// with `", "` (standard HTTP combining). Use [`Self::get_all`] to
+    /// retrieve every value individually.
     #[napi(getter)]
     pub fn headers(&self) -> HashMap<String, String> {
-        self.headers.clone()
+        let mut map: HashMap<String, String> = HashMap::with_capacity(self.headers.len());
+        for (name, value) in &self.headers {
+            match map.entry(name.clone()) {
+                std::collections::hash_map::Entry::Occupied(mut existing) => {
+                    let joined = existing.get_mut();
+                    joined.push_str(", ");
+                    joined.push_str(value);
+                }
+                std::collections::hash_map::Entry::Vacant(slot) => {
+                    slot.insert(value.clone());
+                }
+            }
+        }
+        map
+    }
+
+    /// All values for a response header, case-insensitively.
+    ///
+    /// Unlike the `headers` object, this preserves duplicate headers
+    /// such as multiple `Set-Cookie` lines.
+    // N-API method arguments must be owned (`FromNapiValue`) values;
+    // taking `&str` is not expressible here.
+    #[allow(clippy::needless_pass_by_value)]
+    #[napi]
+    pub fn get_all(&self, name: String) -> Vec<String> {
+        self.headers
+            .iter()
+            .filter(|(header_name, _)| header_name.eq_ignore_ascii_case(&name))
+            .map(|(_, value)| value.clone())
+            .collect()
     }
 
     /// Whether the response status is 2xx.

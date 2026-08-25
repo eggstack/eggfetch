@@ -663,6 +663,20 @@ fn test_ndjson_output() {
 }
 
 #[test]
+fn test_json_output_and_ndjson_conflict() {
+    // The two output formats are mutually exclusive; passing both must
+    // fail fast at argument parsing instead of silently dropping
+    // `--ndjson`.
+    let (_stdout, stderr, code) =
+        run_cli_clean(&["http://127.0.0.1:1/x", "--json-output", "--ndjson"]);
+    assert_ne!(code, Some(0), "conflicting flags must be rejected");
+    assert!(
+        stderr.contains("cannot be used with") || stderr.contains("conflict"),
+        "expected a clap conflict diagnostic, got: {stderr}"
+    );
+}
+
+#[test]
 fn test_ndjson_redirect_records_are_chronological() {
     let server = TestServer::start();
     let url = format!("{}/redirect-to?to=/json", server.url());

@@ -129,6 +129,18 @@ impl Clone for PyNetworkStream {
 
 impl PyNetworkStream {
     /// Create a metadata-only network stream (no IO access).
+    ///
+    /// # Panics
+    ///
+    /// Calls [`tokio::runtime::Handle::current()`], which panics when no
+    /// tokio runtime is active on the calling thread. This constructor is
+    /// currently unreachable from Python: the core
+    /// `NetworkStream::Metadata` variant is reserved and never attached
+    /// to responses. Two constraints to resolve before that variant goes
+    /// live: this method always builds the **sync** wrapper (wrong IO
+    /// model for async callers), and it relies on the ambient runtime
+    /// rather than an explicit handle — thread both through as
+    /// parameters at that point.
     pub fn from_metadata(metadata: Arc<eggfetch_core::network_stream::ConnectionMetadata>) -> Self {
         let runtime_handle = tokio::runtime::Handle::current();
         Self {

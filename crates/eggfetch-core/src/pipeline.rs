@@ -66,6 +66,37 @@ where
     }
 }
 
+/// Upper bound on how much of a discarded response body is drained so
+/// the underlying connection can be returned to the pool. Bodies larger
+/// than this are abandoned (the connection closes instead), matching
+/// common client practice (e.g. Go's `net/http` 256 KiB drain cap) and
+/// guaranteeing retry/redirect processing cannot be stalled indefinitely
+/// by a slow-dripping server when no read timeout is configured.
+const DRAIN_MAX_BYTES: usize = 256 * 1024;
+
+/// Best-effort drain of a discarded response body.
+///
+/// Drain errors are intentionally ignored: the body is being discarded
+/// regardless of outcome. Draining stops after [`DRAIN_MAX_BYTES`].
+async fn drain_response_body(response: &mut Response) {
+    let Ok(stream) = response.bytes_stream() else {
+        return; // body already consumed; nothing to drain
+    };
+    let mut remaining = DRAIN_MAX_BYTES;
+    let mut stream = std::pin::pin!(stream);
+    while let Some(chunk) = futures_util::StreamExt::next(&mut stream).await {
+        match chunk {
+            Ok(bytes) => {
+                if bytes.len() >= remaining {
+                    break;
+                }
+                remaining -= bytes.len();
+            }
+            Err(_) => break,
+        }
+    }
+}
+
 /// Reconstruct a request from saved parts for retry.
 #[allow(clippy::too_many_arguments)]
 fn rebuild_request(
@@ -248,7 +279,7 @@ pub(crate) async fn send_with_retry(client: &Client, request: Request) -> Result
                     let mut resp = response;
                     // Drain errors are intentionally ignored: the body is
                     // being discarded and the request retried regardless.
-                    let _ = resp.bytes().await;
+                    drain_response_body(&mut resp).await;
 
                     if let Some(dur) = compute_retry_delay(&policy, &cause, attempt) {
                         sleep_if_budget_allows(&policy, dur, attempt, start_time).await?;
@@ -542,7 +573,7 @@ pub(crate) async fn send_with_redirects(client: &Client, request: Request) -> Re
                 });
             }
         } else {
-            let _ = response.bytes().await;
+            drain_response_body(&mut response).await;
         }
 
         redirect_count += 1;

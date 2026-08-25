@@ -159,7 +159,11 @@ pub(crate) fn build_redirect_request_with_policy(
     let mut redirect_request = Request::new(new_method, new_url);
     *redirect_request.headers_mut() = new_headers;
     redirect_request.set_body(new_body);
-    redirect_request.set_version(original.version());
+    // Deliberately do not carry the original request's wire version:
+    // the redirect target may be a different host whose negotiated
+    // protocol differs (matching httpx, which rebuilds the request).
+    // ALPN governs TLS paths and the version policy lives on the
+    // client config.
 
     Ok((redirect_request, None))
 }
@@ -493,14 +497,18 @@ mod tests {
     }
 
     #[test]
-    fn build_redirect_preserves_version() {
+    fn build_redirect_does_not_preserve_original_version() {
+        // The redirect target may negotiate a different protocol than the
+        // original host; the rebuilt request must not inherit the old
+        // wire version.
         let mut req = Request::new(Method::GET, Url::parse("https://example.com/a").unwrap());
         req.set_version(http::Version::HTTP_2);
 
         let (redirect, _) =
             build_redirect_request(&req, StatusCode::FOUND, "https://example.com/b").unwrap();
 
-        assert_eq!(redirect.version(), http::Version::HTTP_2);
+        assert_ne!(redirect.version(), http::Version::HTTP_2);
+        assert_eq!(redirect.version(), http::Version::HTTP_11);
     }
 
     #[test]

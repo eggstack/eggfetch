@@ -239,7 +239,14 @@ impl Part {
         if let Ok(n) = name.try_into() {
             if let Ok(v) = value.try_into() {
                 let hv: HeaderValue = v;
-                let _ = self.headers.insert(n.as_str(), hv.to_str().unwrap_or(""));
+                // Keep the raw bytes: `HeaderValue` admits obs-text
+                // (0x80..=0xFF), so converting with `to_str()` would
+                // silently blank legitimate non-ASCII values. The
+                // lossy conversion preserves every valid UTF-8 value
+                // exactly; `format_part_header` mirrors it on output.
+                let _ = self
+                    .headers
+                    .insert(n.as_str(), String::from_utf8_lossy(hv.as_bytes()).as_ref());
             }
         }
         self
@@ -549,7 +556,10 @@ fn validate_field_name(name: &str) -> Result<()> {
         ));
     }
     for ch in name.chars() {
-        if ch == '"' || ch == '\r' || ch == '\n' {
+        // `"` would terminate the quoted-string; C0 controls (including
+        // CR/LF/NUL) are not valid qdtext per RFC 9110 §5.6.4 and break
+        // strict Content-Disposition parsers.
+        if ch == '"' || ch.is_control() {
             return Err(Error::RequestBuild(format!(
                 "multipart field name contains invalid character: {ch:?}"
             )));
@@ -565,7 +575,8 @@ fn validate_filename(filename: &str) -> Result<()> {
         ));
     }
     for ch in filename.chars() {
-        if ch == '"' || ch == '\r' || ch == '\n' {
+        // Same quoted-string rules as `validate_field_name`.
+        if ch == '"' || ch.is_control() {
             return Err(Error::RequestBuild(format!(
                 "multipart filename contains invalid character: {ch:?}"
             )));
@@ -612,7 +623,10 @@ fn format_part_header(boundary: &str, part: &Part) -> String {
     for (name, value) in part.headers.iter() {
         header.push_str(name.as_str());
         header.push_str(": ");
-        header.push_str(value.to_str().unwrap_or(""));
+        // Mirror `Part::header`: values were stored losslessly from the
+        // original bytes, so decode as UTF-8 rather than blanking
+        // non-ASCII values via `to_str()`.
+        header.push_str(std::str::from_utf8(value.as_bytes()).unwrap_or(""));
         header.push_str("\r\n");
     }
     header.push_str("\r\n");
@@ -1132,6 +1146,48 @@ mod tests {
             }
             _ => panic!("expected bytes body"),
         }
+    }
+
+    #[test]
+    fn custom_part_header_preserves_non_ascii_value() {
+        // `HeaderValue` admits obs-text, so a non-ASCII value must be
+        // emitted verbatim rather than silently blanked by a
+        // failed `to_str()` conversion.
+        let part =
+            Part::new("field", PartBody::Bytes(Bytes::from("data"))).header("X-Note", "café");
+        let mp = Multipart::with_boundary(Boundary::try_new("b").unwrap())
+            .part(part)
+            .unwrap();
+        let body = mp.into_body();
+        match body {
+            RequestBody::Bytes(data) => {
+                let s = String::from_utf8(data.to_vec()).unwrap();
+                assert!(s.contains("x-note: café"), "got: {s}");
+            }
+            _ => panic!("expected bytes body"),
+        }
+    }
+
+    #[test]
+    fn part_field_name_rejects_control_characters() {
+        // C0 controls (beyond the previously rejected CR/LF) would be
+        // emitted raw into the quoted-string of Content-Disposition,
+        // which strict RFC 9110 parsers reject.
+        assert!(Multipart::new().text("nul\x00field", "v").is_err());
+        assert!(Multipart::new().text("tab\tfield", "v").is_err());
+        assert!(Multipart::new().text("del\x7ffield", "v").is_err());
+    }
+
+    #[test]
+    fn multipart_filename_rejects_control_characters() {
+        let result = Multipart::new().bytes(
+            "f",
+            "bad\x1bname",
+            "application/octet-stream",
+            Bytes::from_static(b"d"),
+        );
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("invalid character"));
     }
 
     #[tokio::test]

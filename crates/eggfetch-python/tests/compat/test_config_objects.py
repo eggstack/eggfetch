@@ -96,6 +96,17 @@ class TestTimeoutValidation:
         with pytest.raises(TypeError):
             Timeout("five")
 
+    @pytest.mark.parametrize("bad", [float("inf"), float("-inf"), float("nan")])
+    def test_non_finite_raises(self, bad):
+        # ±inf and NaN must be rejected at construction (the layer the
+        # caller used) instead of surfacing a confusing native error.
+        with pytest.raises(ValueError, match="finite"):
+            Timeout(bad)
+
+    def test_non_finite_per_phase_raises(self):
+        with pytest.raises(ValueError, match="finite"):
+            Timeout(5.0, connect=float("inf"))
+
 
 class TestTimeoutEq:
     def test_equal(self):

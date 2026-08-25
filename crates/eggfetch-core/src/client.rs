@@ -202,12 +202,11 @@ impl ClientInner {
         if matches!(policy, crate::HttpVersionPolicy::Http2Only) {
             builder.http2_only(true);
         }
-        if let Some(idle_timeout) = self.config.timeout.as_ref().and_then(|t| t.pool).or(self
-            .config
-            .timeout
-            .as_ref()
-            .and_then(|t| t.total))
-        {
+        // Idle-connection lifetime comes from the pool configuration
+        // (`Limits::keepalive_expiry`), matching the standard, direct,
+        // and UDS paths. `Timeout.pool`/`total` are acquisition budgets
+        // and must not close idle connections early.
+        if let Some(idle_timeout) = self.pool.idle_timeout() {
             builder.pool_idle_timeout(idle_timeout);
         }
         let client = builder.build(connector);
@@ -545,6 +544,23 @@ impl ClientBuilder {
     #[must_use]
     pub fn timeout(mut self, timeout: Timeout) -> Self {
         self.timeout = Some(timeout);
+        self
+    }
+
+    /// Merge a partial timeout configuration into the currently configured
+    /// timeout.
+    ///
+    /// Unlike [`timeout`](Self::timeout), which replaces the entire
+    /// configuration, each phase set in `timeout` overrides only that
+    /// phase; unset phases keep any previously configured value (or
+    /// remain unset when no timeout was configured yet).
+    #[must_use]
+    pub fn merge_timeout(mut self, timeout: Timeout) -> Self {
+        let merged = match self.timeout {
+            Some(existing) => existing.merge(Some(timeout)),
+            None => timeout,
+        };
+        self.timeout = Some(merged);
         self
     }
 
@@ -1062,6 +1078,51 @@ mod tests {
     #[test]
     fn client_builder() {
         let _client = Client::builder().user_agent("test-agent").build();
+    }
+
+    #[test]
+    fn client_builder_merge_timeout_preserves_other_phases() {
+        // Phase-specific setters must merge into any existing timeout
+        // configuration instead of replacing it wholesale.
+        let client = Client::builder()
+            .timeout(Timeout::from_secs(30))
+            .merge_timeout(
+                Timeout::builder()
+                    .connect(std::time::Duration::from_secs(5))
+                    .build(),
+            )
+            .merge_timeout(
+                Timeout::builder()
+                    .read(std::time::Duration::from_secs(10))
+                    .build(),
+            )
+            .build();
+
+        let timeout = client.inner.config.timeout.expect("timeout configured");
+        let d = |secs: u64| std::time::Duration::from_secs(secs);
+        assert_eq!(timeout.connect, Some(d(5)), "last connect wins");
+        assert_eq!(timeout.read, Some(d(10)), "last read wins");
+        assert_eq!(
+            timeout.write,
+            Some(d(30)),
+            "unset phases keep earlier values"
+        );
+        assert_eq!(timeout.pool, Some(d(30)));
+    }
+
+    #[test]
+    fn client_builder_merge_timeout_without_prior_config() {
+        let client = Client::builder()
+            .merge_timeout(
+                Timeout::builder()
+                    .connect(std::time::Duration::from_secs(5))
+                    .build(),
+            )
+            .build();
+
+        let timeout = client.inner.config.timeout.expect("timeout configured");
+        assert_eq!(timeout.connect, Some(std::time::Duration::from_secs(5)));
+        assert_eq!(timeout.read, None);
     }
 
     #[test]

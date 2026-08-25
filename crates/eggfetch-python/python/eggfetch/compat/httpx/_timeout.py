@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import math
 
 
 class _UnsetType:
@@ -83,10 +84,13 @@ class Timeout:
         if value is not None:
             if not isinstance(value, (int, float)):
                 raise TypeError(f"Timeout {name} must be None or a number, got {type(value).__name__}")
+            if not math.isfinite(value):
+                # Reject NaN and ±inf here so callers get a consistent
+                # error from the layer they constructed the Timeout in;
+                # the native engine rejects non-finite values too.
+                raise ValueError(f"Timeout {name} must be a finite number, got {value}")
             if value < 0:
                 raise ValueError(f"Timeout {name} must be a positive number, got {value}")
-            if isinstance(value, float) and (value != value):  # NaN check
-                raise ValueError(f"Timeout {name} must be a finite number, got NaN")
 
     @property
     def connect(self) -> float | None:

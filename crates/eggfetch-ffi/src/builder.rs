@@ -117,7 +117,9 @@ pub unsafe extern "C" fn eggfetch_client_builder_connect_timeout(
         let timeout = eggfetch_core::Timeout::builder()
             .connect(std::time::Duration::from_secs(secs))
             .build();
-        update_builder(handle, |builder| builder.timeout(timeout))
+        // Merge instead of replace so setting one phase does not clobber
+        // phases configured by earlier calls.
+        update_builder(handle, |builder| builder.merge_timeout(timeout))
     })
 }
 
@@ -142,7 +144,9 @@ pub unsafe extern "C" fn eggfetch_client_builder_read_timeout(
         let timeout = eggfetch_core::Timeout::builder()
             .read(std::time::Duration::from_secs(secs))
             .build();
-        update_builder(handle, |builder| builder.timeout(timeout))
+        // Merge instead of replace so setting one phase does not clobber
+        // phases configured by earlier calls.
+        update_builder(handle, |builder| builder.merge_timeout(timeout))
     })
 }
 
@@ -167,7 +171,9 @@ pub unsafe extern "C" fn eggfetch_client_builder_write_timeout(
         let timeout = eggfetch_core::Timeout::builder()
             .write(std::time::Duration::from_secs(secs))
             .build();
-        update_builder(handle, |builder| builder.timeout(timeout))
+        // Merge instead of replace so setting one phase does not clobber
+        // phases configured by earlier calls.
+        update_builder(handle, |builder| builder.merge_timeout(timeout))
     })
 }
 

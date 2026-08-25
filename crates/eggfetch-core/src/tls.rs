@@ -761,6 +761,11 @@ impl rustls::client::ResolvesClientCert for SingleCertResolver {
 
 // PEM parsing utilities.
 
+/// Byte sequence opening a PEM section (`-----BEGIN `).
+const PEM_BEGIN: &[u8] = b"-----BEGIN ";
+/// Byte sequence closing a PEM section (`-----END `).
+const PEM_END: &[u8] = b"-----END ";
+
 /// Load PEM-encoded certificates from a file.
 fn load_pem_certs_from_path(path: &Path) -> Result<Vec<CertificateDer<'static>>> {
     let data = std::fs::read(path)
@@ -769,58 +774,84 @@ fn load_pem_certs_from_path(path: &Path) -> Result<Vec<CertificateDer<'static>>>
 }
 
 /// Parse PEM-encoded certificate data into DER certificates.
+///
+/// Iterates over every `-----BEGIN`/`-----END` section in the input.
+/// Corrupted or non-PEM content between sections is skipped, so a
+/// partially-corrupt bundle still yields every parseable certificate
+/// instead of being silently truncated at the first bad block. Sections
+/// other than `CERTIFICATE` (keys, etc.) are ignored.
 fn parse_pem_certificates(pem_bytes: &[u8]) -> Vec<CertificateDer<'static>> {
     let mut certs = Vec::new();
-    let mut pem = pem_bytes;
+    let mut rest = pem_bytes;
 
-    while let Ok((label, data)) = pem_rfc7468::decode_vec(pem) {
-        // Advance past this PEM block.
-        // Find the next -----BEGIN or end of input.
-        if let Some(pos) = find_next_pem_start(pem) {
-            pem = &pem[pos..];
-        } else {
-            pem = &[];
+    while let Some(pos) = find_pem_start(rest) {
+        // Feed `decode_vec` exactly one section: it rejects input with
+        // trailing content after the END marker, so handing it the whole
+        // remaining bundle would fail on multi-certificate files.
+        let section = &rest[pos..];
+        let Some(section_len) = pem_section_len(section) else {
+            break; // unterminated final block; nothing more to parse
+        };
+        if let Ok((label, data)) = pem_rfc7468::decode_vec(&section[..section_len]) {
+            if label == "CERTIFICATE" {
+                certs.push(CertificateDer::from(data));
+            }
         }
-
-        if label == "CERTIFICATE" {
-            certs.push(CertificateDer::from(data));
-        }
-        // Skip other PEM types (keys, etc.)
+        // A section that fails to decode is skipped; scanning continues
+        // after its END marker. `section_len` is always non-zero, so
+        // every iteration makes forward progress.
+        rest = &section[section_len..];
     }
 
     certs
 }
 
-/// Find the start of the next PEM block.
-fn find_next_pem_start(data: &[u8]) -> Option<usize> {
-    let pattern = b"-----BEGIN ";
-    if data.len() <= pattern.len() {
+/// Find the offset of the next `-----BEGIN ` marker in the input.
+fn find_pem_start(data: &[u8]) -> Option<usize> {
+    if data.len() < PEM_BEGIN.len() {
         return None;
     }
-    // Search from after the current block.
-    data[pattern.len()..]
-        .windows(pattern.len())
-        .position(|w| w == pattern)
-        .map(|p| p + pattern.len())
+    data.windows(PEM_BEGIN.len()).position(|w| w == PEM_BEGIN)
+}
+
+/// Length of the PEM section starting at the beginning of `data` (which
+/// must start with a BEGIN marker): from that marker through the end of
+/// the first following END-marker line.
+///
+/// Returns `None` when no END marker exists (truncated block). The base64
+/// body cannot contain the `-----END ` byte sequence, so the first match
+/// after BEGIN closes the section.
+fn pem_section_len(data: &[u8]) -> Option<usize> {
+    let after_begin = &data[PEM_BEGIN.len()..];
+    let end_marker = after_begin
+        .windows(PEM_END.len())
+        .position(|w| w == PEM_END)?
+        + PEM_BEGIN.len();
+    let line_end = data[end_marker..]
+        .iter()
+        .position(|&b| b == b'\n')
+        .map_or(data.len(), |p| end_marker + p + 1);
+    Some(line_end)
 }
 
 /// Parse a PEM-encoded private key, returning raw DER bytes and the PEM label.
+///
+/// Like [`parse_pem_certificates`], skips corrupted or non-PEM sections
+/// between valid blocks instead of stopping at the first one.
 fn parse_private_key(key_bytes: &[u8]) -> Result<(Vec<u8>, String)> {
-    let mut pem = key_bytes;
+    let mut rest = key_bytes;
 
-    while let Ok((label, data)) = pem_rfc7468::decode_vec(pem) {
-        if let Some(pos) = find_next_pem_start(pem) {
-            pem = &pem[pos..];
-        } else {
-            pem = &[];
-        }
-
-        match label {
-            "PRIVATE KEY" | "RSA PRIVATE KEY" | "EC PRIVATE KEY" => {
+    while let Some(pos) = find_pem_start(rest) {
+        let section = &rest[pos..];
+        let Some(section_len) = pem_section_len(section) else {
+            break;
+        };
+        if let Ok((label, data)) = pem_rfc7468::decode_vec(&section[..section_len]) {
+            if matches!(label, "PRIVATE KEY" | "RSA PRIVATE KEY" | "EC PRIVATE KEY") {
                 return Ok((data, label.to_string()));
             }
-            _ => {}
         }
+        rest = &section[section_len..];
     }
 
     Err(Error::PrivateKey("no private key found in PEM data".into()))
@@ -939,6 +970,51 @@ mod tests {
     fn parse_invalid_pem_certificates() {
         let result = parse_pem_certificates(b"not valid pem data");
         assert!(result.is_empty());
+    }
+
+    #[test]
+    fn parse_pem_certificates_skip_garbage_between_blocks() {
+        // A corrupted/comment section between two certificates must not
+        // silently discard the rest of the bundle.
+        let valid_block = |body: &[u8]| -> Vec<u8> {
+            let mut block = b"-----BEGIN CERTIFICATE-----\n".to_vec();
+            block.extend_from_slice(body);
+            block.extend_from_slice(b"\n-----END CERTIFICATE-----\n");
+            block
+        };
+        // Valid base64 bodies (pem_rfc7468 validates base64 content).
+        let first = valid_block(b"AAAA");
+        let second = valid_block(b"BBBB");
+        let mut pem = first;
+        pem.extend_from_slice(b"\nthis is not valid PEM \x01\x02 data\n");
+        pem.extend_from_slice(&second);
+
+        let certs = parse_pem_certificates(&pem);
+        assert_eq!(certs.len(), 2, "both certificates must be recovered");
+    }
+
+    #[test]
+    fn parse_pem_certificates_multi_block_bundle() {
+        // A plain concatenated bundle (the standard CA-bundle shape)
+        // must yield every certificate.
+        let mut pem = b"-----BEGIN CERTIFICATE-----\nAAAA\n-----END CERTIFICATE-----\n".to_vec();
+        pem.extend_from_slice(b"-----BEGIN CERTIFICATE-----\nBBBB\n-----END CERTIFICATE-----\n");
+        pem.extend_from_slice(b"-----BEGIN PRIVATE KEY-----\nAAAA\n-----END PRIVATE KEY-----\n");
+
+        let certs = parse_pem_certificates(&pem);
+        assert_eq!(certs.len(), 2, "both certificates, key section skipped");
+    }
+
+    #[test]
+    fn parse_private_key_skips_leading_garbage() {
+        let key_block = b"-----BEGIN PRIVATE KEY-----\nAAAA\n-----END PRIVATE KEY-----\n";
+        let mut pem = b"corrupt \x03 preamble\n".to_vec();
+        pem.extend_from_slice(key_block);
+
+        let (der, label) = parse_private_key(&pem).unwrap();
+        assert_eq!(label, "PRIVATE KEY");
+        // Base64 "AAAA" decodes to three NUL bytes.
+        assert_eq!(der, vec![0u8, 0, 0]);
     }
 
     #[test]
