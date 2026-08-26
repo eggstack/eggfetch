@@ -36,9 +36,12 @@ class TestHeadersLookup:
         assert h.get("missing") is None
         assert h.get("missing", "fallback") == "fallback"
 
-    def test_get_returns_last_value(self):
+    def test_duplicate_values_are_comma_joined(self):
+        # HTTPX 0.28.1 joins duplicate header values with ", " through the
+        # single-value API; multi_items()/get_list() preserve each value.
         h = Headers([("x-dup", "first"), ("x-dup", "second")])
-        assert h["x-dup"] == "second"
+        assert h["x-dup"] == "first, second"
+        assert h.get("x-dup") == "first, second"
 
     def test_contains_case_insensitive(self):
         h = Headers({"X-Custom": "val"})

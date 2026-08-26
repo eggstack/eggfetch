@@ -883,7 +883,8 @@ async fn streaming_body_drop_after_first_chunk_no_deadlock() {
 fn backoff_policy_default_values() {
     let policy = RetryPolicy::builder().build();
     let backoff = policy.backoff();
-    assert!((backoff.factor() - 0.5).abs() < f64::EPSILON);
+    // The default factor must be >= 1 so delays grow between retries.
+    assert!((backoff.factor() - 2.0).abs() < f64::EPSILON);
     assert_eq!(backoff.max_delay(), Duration::from_secs(30));
     assert_eq!(backoff.initial_delay(), Duration::from_millis(500));
 }

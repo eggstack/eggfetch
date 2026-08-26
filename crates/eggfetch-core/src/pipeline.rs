@@ -74,27 +74,37 @@ where
 /// by a slow-dripping server when no read timeout is configured.
 const DRAIN_MAX_BYTES: usize = 256 * 1024;
 
+/// Upper bound on how long a best-effort drain may run when no explicit
+/// total deadline governs it. Without this, a slow-drip server could
+/// stall retry/redirect processing indefinitely even though only a
+/// bounded number of bytes would ever be drained.
+const DRAIN_MAX_TIME: Duration = Duration::from_secs(30);
+
 /// Best-effort drain of a discarded response body.
 ///
 /// Drain errors are intentionally ignored: the body is being discarded
-/// regardless of outcome. Draining stops after [`DRAIN_MAX_BYTES`].
+/// regardless of outcome. Draining stops after [`DRAIN_MAX_BYTES`] or
+/// [`DRAIN_MAX_TIME`], whichever comes first.
 async fn drain_response_body(response: &mut Response) {
     let Ok(stream) = response.bytes_stream() else {
         return; // body already consumed; nothing to drain
     };
     let mut remaining = DRAIN_MAX_BYTES;
     let mut stream = std::pin::pin!(stream);
-    while let Some(chunk) = futures_util::StreamExt::next(&mut stream).await {
-        match chunk {
-            Ok(bytes) => {
-                if bytes.len() >= remaining {
-                    break;
+    let drain = async {
+        while let Some(chunk) = futures_util::StreamExt::next(&mut stream).await {
+            match chunk {
+                Ok(bytes) => {
+                    if bytes.len() >= remaining {
+                        break;
+                    }
+                    remaining -= bytes.len();
                 }
-                remaining -= bytes.len();
+                Err(_) => break,
             }
-            Err(_) => break,
         }
-    }
+    };
+    let _ = tokio::time::timeout(DRAIN_MAX_TIME, drain).await;
 }
 
 /// Reconstruct a request from saved parts for retry.
@@ -585,8 +595,14 @@ pub(crate) async fn send_with_redirects(client: &Client, request: Request) -> Re
         };
 
         if let Some(total) = timeout.total {
+            // Bound the drain by the remaining total deadline, but drain
+            // with the byte-capped helper rather than buffering the whole
+            // redirect body in memory just to release the connection.
             let dur = total.saturating_sub(start_time.elapsed());
-            if tokio::time::timeout(dur, response.bytes()).await.is_err() {
+            if tokio::time::timeout(dur, drain_response_body(&mut response))
+                .await
+                .is_err()
+            {
                 return Err(Error::Timeout {
                     phase: TimeoutPhase::Total,
                     elapsed: dur,
@@ -957,8 +973,6 @@ pub(crate) async fn send_single_request(
         .map(|proxy| inner.socks_client(proxy))
         .transpose()?;
 
-    #[cfg(feature = "proxy")]
-    let proxy_now = std::time::Instant::now();
     let response = match effective_proxy {
         #[cfg(feature = "proxy")]
         Some(ref proxy_config) => {
@@ -978,7 +992,6 @@ pub(crate) async fn send_single_request(
                 &crate::transport::proxy::ProxyRequestContext {
                     remaining_total,
                     deadline: timeout.total.map(|total| started + total),
-                    now: proxy_now,
                     connect_timeout: timeout.connect,
                     proxy_connect_timeout: timeout.connect,
                     proxy_tls_timeout: timeout.connect,

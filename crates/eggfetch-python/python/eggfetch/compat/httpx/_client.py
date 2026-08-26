@@ -80,7 +80,7 @@ class _FunctionAuth(Auth):
         elif hasattr(result, "__iter__"):
             yield from result
         else:
-            yield request
+            raise TypeError(f"Invalid return type for auth function: {type(result)}")
 
     async def async_auth_flow(self, request: Request):  # type: ignore[override]
         if asyncio.iscoroutinefunction(self._func):
@@ -96,7 +96,7 @@ class _FunctionAuth(Auth):
             for req in result:
                 yield req
         else:
-            yield request
+            raise TypeError(f"Invalid return type for auth function: {type(result)}")
 
     def __repr__(self) -> str:
         return f"_FunctionAuth({self._func!r})"
@@ -948,7 +948,11 @@ def _redirect_url(request: Request, response: Response) -> URL:
         return request.url
 
     try:
-        url = URL(location)
+        # RFC 3986 reference resolution against the current request URL.
+        # This handles relative locations ("./b", "../baz"), absolute
+        # paths ("/b"), and protocol-relative locations ("//other.com/x",
+        # which inherits the scheme from the base URL).
+        url = URL(urllib.parse.urljoin(str(request.url), location))
     except Exception:
         raise InvalidURL(f"Invalid URL in location header: {location}")
 
@@ -963,10 +967,6 @@ def _redirect_url(request: Request, response: Response) -> URL:
             parts.scheme, new_netloc, parts.path, parts.query, parts.fragment,
         ))
         url = URL(reconstructed)
-
-    # Handle relative URLs
-    if url.is_relative_url:
-        url = request.url.join(url)
 
     # Attach previous fragment if needed (RFC 7231 7.1.2)
     if request.url.fragment and not url.fragment:

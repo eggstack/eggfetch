@@ -484,11 +484,14 @@ impl Pool {
                     origin_permit = Some(permit);
                 } else {
                     // Semaphore closed (shouldn't happen in practice).
+                    // Record it and continue without an origin permit so
+                    // the request remains bounded by at least the global
+                    // concurrency limit instead of proceeding with no
+                    // permits at all.
                     self.inner
                         .metrics
                         .acquisition_cancellations
                         .fetch_add(1, Ordering::Relaxed);
-                    return PoolGuard::new(self.inner.clone(), Some(origin.clone()), None, None);
                 }
             }
         }

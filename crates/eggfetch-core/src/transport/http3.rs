@@ -28,6 +28,13 @@ struct CachedH3Sender {
     _driver: tokio::task::JoinHandle<()>,
 }
 
+/// Per-origin cache cell. The [`tokio::sync::OnceCell`] guarantees only
+/// one caller per origin establishes the QUIC connection; concurrent
+/// requests to the same origin await the same initialization instead of
+/// racing get-then-insert (which duplicated connections and orphaned the
+/// loser's driver task).
+type CachedH3SenderCell = Arc<tokio::sync::OnceCell<CachedH3Sender>>;
+
 /// A shared QUIC endpoint for HTTP/3 connections.
 ///
 /// The endpoint is cloneable and manages the underlying UDP socket.
@@ -38,7 +45,7 @@ struct CachedH3Sender {
 pub(crate) struct H3Connector {
     endpoint: quinn::Endpoint,
     tls_config: Option<crate::tls::TlsConfig>,
-    sender_cache: Arc<DashMap<String, CachedH3Sender>>,
+    sender_cache: Arc<DashMap<String, CachedH3SenderCell>>,
 }
 
 impl H3Connector {
@@ -74,35 +81,35 @@ impl H3Connector {
             .next()
             .ok_or_else(|| Error::Connect("no addresses resolved".into()))?;
 
-        // Get or create the cached h3 sender for this origin.
-        let sender = if let Some(entry) = self.sender_cache.get(&cache_key) {
-            entry.sender.clone()
-        } else {
-            // Establish a new QUIC connection.
-            let quinn_conn = self.connect_new(addr, host).await?;
+        // Get or create the cached h3 sender for this origin. The
+        // OnceCell serializes connection establishment per origin: the
+        // first caller connects, concurrent callers await the same cell
+        // and reuse the resulting sender.
+        let cell = self.sender_cache.entry(cache_key).or_default().clone();
+        let cached = cell
+            .get_or_try_init(|| async {
+                // Establish a new QUIC connection.
+                let quinn_conn = self.connect_new(addr, host).await?;
 
-            // Build the h3 client – returns (driver, sender).
-            let h3_conn = h3_quinn::Connection::new(quinn_conn);
-            let (mut driver, sender) = h3::client::new(h3_conn)
-                .await
-                .map_err(|e| Error::H3Protocol(format!("h3 client init: {e}")))?;
+                // Build the h3 client – returns (driver, sender).
+                let h3_conn = h3_quinn::Connection::new(quinn_conn);
+                let (mut driver, sender) = h3::client::new(h3_conn)
+                    .await
+                    .map_err(|e| Error::H3Protocol(format!("h3 client init: {e}")))?;
 
-            // Drive the h3 connection in the background.
-            let driver_handle = tokio::spawn(async move {
-                use futures_util::future;
-                let _ = future::poll_fn(|cx| driver.poll_close(cx)).await;
-            });
+                // Drive the h3 connection in the background.
+                let driver_handle = tokio::spawn(async move {
+                    use futures_util::future;
+                    let _ = future::poll_fn(|cx| driver.poll_close(cx)).await;
+                });
 
-            self.sender_cache.insert(
-                cache_key.clone(),
-                CachedH3Sender {
-                    sender: sender.clone(),
+                Ok::<_, Error>(CachedH3Sender {
+                    sender,
                     _driver: driver_handle,
-                },
-            );
-
-            sender
-        };
+                })
+            })
+            .await?;
+        let sender = cached.sender.clone();
 
         // Decompose the incoming request
         let (parts, body) = request.into_parts();

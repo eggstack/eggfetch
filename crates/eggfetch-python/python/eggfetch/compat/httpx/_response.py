@@ -553,6 +553,8 @@ class Response:
     def iter_bytes(self, chunk_size: int | None = 8192) -> Iterator[bytes]:
         if self._stream_consumed and self._content is None:
             raise StreamConsumed()
+        if self._is_closed and self._content is None:
+            raise StreamClosed()
         try:
             if self._native_stream is not None:
                 for chunk in self._native_stream.iter_bytes(chunk_size=chunk_size):
@@ -642,6 +644,8 @@ class Response:
     async def aiter_bytes(self, chunk_size: int | None = 8192) -> AsyncIterator[bytes]:
         if self._stream_consumed and self._content is None:
             raise StreamConsumed()
+        if self._is_closed and self._content is None:
+            raise StreamClosed()
         try:
             if self._native_stream is not None:
                 async for chunk in self._native_stream.aiter_bytes(chunk_size=chunk_size):

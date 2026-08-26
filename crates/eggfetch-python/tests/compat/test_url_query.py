@@ -174,7 +174,16 @@ class TestURLJoin:
     def test_join_relative(self):
         base = URL("https://example.com/a/b")
         joined = base.join(URL("c/d"))
-        assert "c/d" in str(joined)
+        # RFC 3986 reference resolution, not string concatenation.
+        assert str(joined) == "https://example.com/a/c/d"
+
+    def test_join_absolute_path(self):
+        base = URL("http://example.com/foo/bar")
+        assert str(base.join(URL("/new/path"))) == "http://example.com/new/path"
+
+    def test_join_protocol_relative(self):
+        base = URL("http://example.com/foo/")
+        assert str(base.join(URL("//other.com/x"))) == "http://other.com/x"
 
     def test_join_queryparams_obj(self):
         from eggfetch.compat.httpx import QueryParams

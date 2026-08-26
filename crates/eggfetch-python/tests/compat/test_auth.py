@@ -1407,3 +1407,31 @@ class TestAuthExceptionRetainsContext:
         ) as client:
             with pytest.raises(ValueError, match="async auth broken"):
                 await client.get("http://testserver/")
+
+
+class TestCallableAuthBadReturn:
+    def test_non_request_return_raises(self):
+        """A callable returning neither a Request nor an iterable raises
+        TypeError instead of silently sending an unauthenticated request."""
+
+        def bad_auth(request):
+            return 42
+
+        with Client(
+            auth=bad_auth,
+            transport=MockTransport(lambda r: Response(200)),
+        ) as client:
+            with pytest.raises(TypeError, match="Invalid return type"):
+                client.get("http://testserver/")
+
+    @pytest.mark.asyncio
+    async def test_async_non_request_return_raises(self):
+        async def bad_auth(request):
+            return 42
+
+        async with AsyncClient(
+            auth=bad_auth,
+            async_transport=MockTransport(lambda r: Response(200)),
+        ) as client:
+            with pytest.raises(TypeError, match="Invalid return type"):
+                await client.get("http://testserver/")

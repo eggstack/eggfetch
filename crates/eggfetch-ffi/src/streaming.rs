@@ -5,15 +5,52 @@
 //! as the network delivers them.
 
 use std::ptr;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use bytes::Bytes;
 use futures_util::StreamExt;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, watch};
 
 use crate::handle::{ClientHandle, ErrorHandle, RequestHandle};
 use crate::runtime::blocking_send;
+
+/// State shared between a streaming handle and any in-flight `next` call.
+///
+/// `Arc`-shared so [`eggfetch_response_stream_free`] only releases the
+/// caller's reference: a concurrently parked `next` keeps its own clone,
+/// so freeing the handle can never tear down state that call still uses.
+struct StreamState {
+    /// Body chunk source, behind a mutex so `next` and `cancel` never form
+    /// aliasing `&mut` borrows when called concurrently from different
+    /// threads. `next` temporarily takes the receiver out of the slot so
+    /// a concurrent `next` finds it empty and returns null instead of
+    /// interleaving chunk reads.
+    rx: Mutex<Option<mpsc::Receiver<Result<Bytes, eggfetch_core::Error>>>>,
+    /// Description of the error that ended the stream early, if any.
+    /// Set when the producer observes a mid-stream failure; query via
+    /// [`eggfetch_response_stream_error`]. Behind a mutex for the same
+    /// aliasing reason as `rx`.
+    last_error: Mutex<Option<String>>,
+    /// Cancellation flag. Writers set it via
+    /// [`eggfetch_response_stream_cancel`]; the parked reader and the
+    /// producer task observe it through the paired watch receivers.
+    cancel_tx: watch::Sender<bool>,
+}
+
+impl StreamState {
+    fn new(rx: mpsc::Receiver<Result<Bytes, eggfetch_core::Error>>) -> Self {
+        let (cancel_tx, _) = watch::channel(false);
+        Self {
+            rx: Mutex::new(Some(rx)),
+            last_error: Mutex::new(None),
+            cancel_tx,
+        }
+    }
+
+    fn subscribe(&self) -> watch::Receiver<bool> {
+        self.cancel_tx.subscribe()
+    }
+}
 
 /// Opaque handle to a streaming response.
 ///
@@ -24,18 +61,7 @@ pub struct StreamingResponseHandle {
     status: u16,
     url: String,
     headers: Vec<(String, String)>,
-    /// Body chunk source, behind a mutex so `next` and `cancel` never form
-    /// aliasing `&mut` borrows when called concurrently from different
-    /// threads. `next` temporarily takes the receiver out of the slot so
-    /// `cancel` can lock the handle and close the channel while `next` is
-    /// parked on an owned receiver.
-    rx: Mutex<Option<mpsc::Receiver<Result<Bytes, eggfetch_core::Error>>>>,
-    /// Description of the error that ended the stream early, if any.
-    /// Set when the producer observes a mid-stream failure; query via
-    /// [`eggfetch_response_stream_error`]. Behind a mutex for the same
-    /// aliasing reason as `rx`.
-    last_error: Mutex<Option<String>>,
-    cancel: Arc<AtomicBool>,
+    state: Arc<StreamState>,
 }
 
 /// A single chunk from a streaming response.
@@ -107,8 +133,9 @@ pub unsafe extern "C" fn eggfetch_client_send_streaming(
                 return ptr::null_mut();
             };
 
-            let cancel = Arc::new(AtomicBool::new(false));
-            let cancel_clone = cancel.clone();
+            let (tx, rx) = mpsc::channel(16);
+            let state = Arc::new(StreamState::new(rx));
+            let mut cancel_watch = state.subscribe();
 
             let result = blocking_send(async move {
                 let mut resp = Box::pin(rb.send()).await?;
@@ -127,11 +154,10 @@ pub unsafe extern "C" fn eggfetch_client_send_streaming(
 
                 let stream = resp.bytes_stream()?;
 
-                let (tx, rx) = mpsc::channel(16);
                 tokio::spawn(async move {
                     let mut stream = stream;
                     while let Some(chunk) = stream.next().await {
-                        if cancel_clone.load(Ordering::Relaxed) {
+                        if *cancel_watch.borrow_and_update() {
                             break;
                         }
                         match chunk {
@@ -153,9 +179,7 @@ pub unsafe extern "C" fn eggfetch_client_send_streaming(
                     status,
                     url,
                     headers,
-                    rx: Mutex::new(Some(rx)),
-                    last_error: Mutex::new(None),
-                    cancel,
+                    state,
                 })
             });
 
@@ -174,6 +198,14 @@ pub unsafe extern "C" fn eggfetch_client_send_streaming(
 
 /// Free a streaming response handle.
 ///
+/// Cancels the stream and releases the caller's reference to the shared
+/// state. Because that state is `Arc`-shared with any in-flight `next`
+/// call, freeing the handle while another thread is parked in
+/// [`eggfetch_response_stream_next`] is safe: the parked call finishes
+/// against the surviving clone (observing the cancellation) and the
+/// state is released when it returns. Using the handle pointer itself
+/// after `free` remains forbidden, as with every eggfetch handle.
+///
 /// # Safety
 ///
 /// `handle` must have been returned by [`eggfetch_client_send_streaming`] and not freed yet.
@@ -183,8 +215,10 @@ pub unsafe extern "C" fn eggfetch_response_stream_free(handle: *mut StreamingRes
     crate::ffi_guard!((), {
         if !handle.is_null() {
             let h = Box::from_raw(handle);
-            h.cancel.store(true, Ordering::Relaxed);
-            drop(h.rx);
+            // See `cancel`: record the flag even with no live receivers.
+            h.state.cancel_tx.send_replace(true);
+            // Dropping `h` releases only the caller's Arc reference; a
+            // parked `next` holds its own clone of `h.state`.
         }
     });
 }
@@ -283,14 +317,15 @@ pub unsafe extern "C" fn eggfetch_response_stream_header(
 ///
 /// Blocks until a chunk is available. Returns null when the stream is
 /// exhausted or has been cancelled; query
-/// [`eggfetch_response_stream_error`] to distinguish cancellation and
-/// mid-stream failures from a clean end-of-body.
+/// [`eggfetch_response_stream_error`] to distinguish cancellation,
+/// mid-stream failures, and allocation failures from a clean end-of-body.
 ///
-/// While this call is parked, the receiver is removed from the shared
-/// slot, so [`eggfetch_response_stream_cancel`] can close the channel
-/// immediately instead of waiting for the producer. A concurrent `next`
-/// call from another thread finds the empty slot and returns null rather
-/// than interleaving with the parked reader.
+/// While this call is parked it waits on both the chunk channel and the
+/// cancellation watch, so [`eggfetch_response_stream_cancel`] (or
+/// [`eggfetch_response_stream_free`]) wakes it immediately instead of
+/// waiting for the producer to deliver another chunk. A concurrent `next`
+/// call from another thread finds the empty receiver slot and returns
+/// null rather than interleaving with the parked reader.
 ///
 /// Caller must free the returned chunk with [`eggfetch_stream_chunk_free`].
 ///
@@ -302,13 +337,27 @@ pub unsafe extern "C" fn eggfetch_response_stream_next(
     handle: *mut StreamingResponseHandle,
 ) -> *mut StreamChunk {
     crate::ffi_guard!(ptr::null_mut(), {
+        // What a parked receive resolved to. The receiver comes back
+        // only when the stream should continue after this chunk.
+        struct RecvOutcome {
+            chunk: Option<Result<Bytes, eggfetch_core::Error>>,
+            rx: Option<mpsc::Receiver<Result<Bytes, eggfetch_core::Error>>>,
+        }
         let Some(handle) = handle.as_ref() else {
             return ptr::null_mut();
         };
-        // Take the receiver out of the mutex so a concurrent `cancel` can
-        // lock the handle and close the channel while we are blocked below.
+        // Clone the shared state up-front: everything below works only
+        // with this Arc, so a concurrent `free` releasing the caller's
+        // reference cannot invalidate memory this call still touches.
+        let state = Arc::clone(&handle.state);
+
+        // Take the receiver out of the slot so a concurrent `next` sees
+        // an empty slot and returns null instead of interleaving reads.
         let mut rx = {
-            let Ok(mut guard) = handle.rx.lock() else {
+            let Ok(mut guard) = state.rx.lock() else {
+                if let Ok(mut last) = state.last_error.lock() {
+                    *last = Some("stream receiver mutex poisoned".to_owned());
+                }
                 return ptr::null_mut();
             };
             match guard.take() {
@@ -316,30 +365,64 @@ pub unsafe extern "C" fn eggfetch_response_stream_next(
                 None => return ptr::null_mut(),
             }
         };
-        match rx.blocking_recv() {
+
+        // Observe any cancellation that already happened before we start
+        // waiting, then select on the watch so a later cancel cannot be
+        // lost between the check and the park.
+        let mut cancelled = state.subscribe();
+        let outcome: Option<RecvOutcome> = if *cancelled.borrow_and_update() {
+            None
+        } else {
+            Some(blocking_send(async move {
+                tokio::select! {
+                    chunk = rx.recv() => RecvOutcome { chunk, rx: Some(rx) },
+                    () = async { let _ = cancelled.changed().await; } => {
+                        RecvOutcome { chunk: None, rx: None }
+                    }
+                }
+            }))
+        };
+
+        let (chunk, rx) = match outcome {
+            // Pre-existing or in-flight cancellation: the receiver was
+            // dropped inside the future (or never moved), ending it.
+            None
+            | Some(RecvOutcome {
+                chunk: None,
+                rx: None,
+            }) => {
+                if let Ok(mut last) = state.last_error.lock() {
+                    *last = Some("stream cancelled".to_owned());
+                }
+                return ptr::null_mut();
+            }
+            Some(RecvOutcome { chunk, rx }) => (chunk, rx),
+        };
+
+        match chunk {
             Some(Ok(data)) => {
-                if handle.cancel.load(Ordering::Acquire) {
-                    // A chunk raced with cancellation: end the stream here
-                    // (the receiver stays taken) and surface why via
-                    // `last_error` so hosts can distinguish this from a
-                    // natural end-of-body.
-                    if let Ok(mut last) = handle.last_error.lock() {
+                if *state.subscribe().borrow_and_update() {
+                    // A chunk raced with cancellation: end the stream
+                    // here and surface why via `last_error` so hosts
+                    // can distinguish this from a natural end-of-body.
+                    if let Ok(mut last) = state.last_error.lock() {
                         *last = Some("stream cancelled".to_owned());
                     }
                     return ptr::null_mut();
                 }
-                // The stream continues: hand the receiver back for the
-                // next call.
-                if let Ok(mut guard) = handle.rx.lock() {
-                    *guard = Some(rx);
-                }
                 let len = data.len();
                 let buf = if len > 0 {
                     let Ok(layout) = std::alloc::Layout::array::<u8>(len) else {
+                        if let Ok(mut last) = state.last_error.lock() {
+                            *last = Some("out of memory: chunk layout unusable".to_owned());
+                        }
                         return ptr::null_mut();
                     };
                     let buf = std::alloc::alloc(layout);
                     if buf.is_null() {
+                        if let Ok(mut last) = state.last_error.lock() {
+                            *last = Some("out of memory allocating chunk buffer".to_owned());
+                        }
                         return ptr::null_mut();
                     }
                     std::ptr::copy_nonoverlapping(data.as_ptr(), buf, len);
@@ -347,13 +430,29 @@ pub unsafe extern "C" fn eggfetch_response_stream_next(
                 } else {
                     ptr::null_mut()
                 };
+                // The stream continues: hand the receiver back for the
+                // next call.
+                if let Some(rx) = rx {
+                    match state.rx.lock() {
+                        Ok(mut guard) => *guard = Some(rx),
+                        Err(_) => {
+                            // Poisoned lock: the stream cannot continue
+                            // after this chunk; record why so the host's
+                            // final null return is distinguishable from
+                            // clean EOF.
+                            if let Ok(mut last) = state.last_error.lock() {
+                                *last = Some("stream receiver mutex poisoned".to_owned());
+                            }
+                        }
+                    }
+                }
                 Box::into_raw(Box::new(StreamChunk { data: buf, len }))
             }
             Some(Err(e)) => {
                 // Record the failure so hosts can distinguish a truncated
                 // stream from a clean end-of-body via
                 // `eggfetch_response_stream_error`.
-                if let Ok(mut last) = handle.last_error.lock() {
+                if let Ok(mut last) = state.last_error.lock() {
                     *last = Some(e.to_string());
                 }
                 ptr::null_mut()
@@ -383,7 +482,7 @@ pub unsafe extern "C" fn eggfetch_response_stream_error(
         let Some(handle) = handle.as_ref() else {
             return ptr::null_mut();
         };
-        let Ok(last) = handle.last_error.lock() else {
+        let Ok(last) = handle.state.last_error.lock() else {
             return ptr::null_mut();
         };
         match last.as_ref() {
@@ -420,9 +519,11 @@ pub unsafe extern "C" fn eggfetch_stream_chunk_free(chunk: *mut StreamChunk) {
 /// Cancel an in-progress streaming response.
 ///
 /// Subsequent calls to [`eggfetch_response_stream_next`] will return null.
-/// Because a blocked `next` parks on an owned receiver, this call can
-/// lock the shared slot and close the channel immediately, waking the
-/// parked reader; it never aliases the handle mutably.
+/// The cancellation is published on a watch channel that a parked `next`
+/// selects on, so a blocked reader wakes immediately — even when the
+/// producer is itself parked waiting for an idle server to send more
+/// data. This call never aliases the handle mutably and may be called
+/// from any thread while `next` is blocked.
 ///
 /// # Safety
 ///
@@ -433,14 +534,11 @@ pub unsafe extern "C" fn eggfetch_response_stream_cancel(handle: *mut StreamingR
         let Some(handle) = handle.as_ref() else {
             return;
         };
-        handle.cancel.store(true, Ordering::Release);
-        // Wake a blocked `next` if it has parked on the owned receiver;
-        // otherwise the flag alone makes that call return null on the
-        // next chunk.
-        if let Ok(mut rx) = handle.rx.try_lock() {
-            if let Some(receiver) = rx.as_mut() {
-                receiver.close();
-            }
-        }
+        // Publishing the flag wakes a parked `next` through its watch
+        // receiver and makes the producer task stop forwarding chunks.
+        // `send_replace` (not `send`) so the flag is recorded even when
+        // every current receiver is gone — a later `next` must still
+        // observe the cancellation.
+        handle.state.cancel_tx.send_replace(true);
     });
 }

@@ -227,27 +227,34 @@ impl PyNetworkStream {
         max_bytes: usize,
         timeout: Option<f64>,
     ) -> PyResult<Bound<'py, PyBytes>> {
-        let mut guard = self.inner.lock().map_err(|e| {
-            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("lock poisoned: {e}"))
-        })?;
-        let inner = guard.as_mut().ok_or_else(|| {
-            pyo3::exceptions::PyValueError::new_err(
-                "cannot read from a metadata-only network stream",
-            )
-        })?;
-
         let dur = validated_timeout(timeout)?;
-
         let handle = self.runtime_handle.clone();
-        let result = if let Some(dur) = dur {
-            py.allow_threads(|| {
-                handle.block_on(async { tokio::time::timeout(dur, inner.read(max_bytes)).await })
-            })
-        } else {
-            Ok(py.allow_threads(|| handle.block_on(inner.read(max_bytes))))
-        };
 
-        match result {
+        // The OS-mutex acquire and the blocking IO both happen with the
+        // GIL released: if a cloned stream handle is contended from
+        // another Python thread, this thread must not hold the GIL while
+        // it waits for the lock or for IO to complete.
+        let result: PyResult<
+            Result<Result<bytes::Bytes, eggfetch_core::Error>, tokio::time::error::Elapsed>,
+        > = py.allow_threads(|| {
+            let mut guard = self.inner.lock().map_err(|e| {
+                pyo3::exceptions::PyRuntimeError::new_err(format!("lock poisoned: {e}"))
+            })?;
+            let inner = guard.as_mut().ok_or_else(|| {
+                pyo3::exceptions::PyValueError::new_err(
+                    "cannot read from a metadata-only network stream",
+                )
+            })?;
+
+            if let Some(dur) = dur {
+                Ok(handle
+                    .block_on(async { tokio::time::timeout(dur, inner.read(max_bytes)).await }))
+            } else {
+                Ok(Ok(handle.block_on(inner.read(max_bytes))))
+            }
+        });
+
+        match result? {
             Ok(Ok(data)) => Ok(PyBytes::new(py, &data)),
             Ok(Err(e)) => Err(map_err(e)),
             Err(_) => Err(pyo3::exceptions::PyTimeoutError::new_err("read timed out")),
@@ -266,26 +273,33 @@ impl PyNetworkStream {
         data: &Bound<'_, PyBytes>,
         timeout: Option<f64>,
     ) -> PyResult<()> {
-        let mut guard = self.inner.lock().map_err(|e| {
-            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("lock poisoned: {e}"))
-        })?;
-        let inner = guard.as_mut().ok_or_else(|| {
-            pyo3::exceptions::PyValueError::new_err(
-                "cannot write to a metadata-only network stream",
-            )
-        })?;
-
+        let dur = validated_timeout(timeout)?;
         let buf = data.as_bytes().to_vec();
         let handle = self.runtime_handle.clone();
-        let result = if let Some(dur) = validated_timeout(timeout)? {
-            py.allow_threads(|| {
-                handle.block_on(async { tokio::time::timeout(dur, inner.write_all(&buf)).await })
-            })
-        } else {
-            Ok(py.allow_threads(|| handle.block_on(inner.write_all(&buf))))
-        };
 
-        match result {
+        // See `read`: lock acquisition and blocking IO happen with the
+        // GIL released so a contended mutex cannot stall other threads.
+        let result: PyResult<
+            Result<Result<(), eggfetch_core::Error>, tokio::time::error::Elapsed>,
+        > = py.allow_threads(|| {
+            let mut guard = self.inner.lock().map_err(|e| {
+                pyo3::exceptions::PyRuntimeError::new_err(format!("lock poisoned: {e}"))
+            })?;
+            let inner = guard.as_mut().ok_or_else(|| {
+                pyo3::exceptions::PyValueError::new_err(
+                    "cannot write to a metadata-only network stream",
+                )
+            })?;
+
+            if let Some(dur) = dur {
+                Ok(handle
+                    .block_on(async { tokio::time::timeout(dur, inner.write_all(&buf)).await }))
+            } else {
+                Ok(Ok(handle.block_on(inner.write_all(&buf))))
+            }
+        });
+
+        match result? {
             Ok(Ok(())) => Ok(()),
             Ok(Err(e)) => Err(map_err(e)),
             Err(_) => Err(pyo3::exceptions::PyTimeoutError::new_err("write timed out")),

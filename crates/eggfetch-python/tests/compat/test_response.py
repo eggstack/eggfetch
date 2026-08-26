@@ -11,6 +11,7 @@ from eggfetch.compat.httpx import (
     Headers,
     URL,
     HTTPStatusError,
+    StreamClosed,
 )
 
 
@@ -201,6 +202,33 @@ class TestIterators:
         resp = Response(200, text="line1\r\nline2")
         lines = list(resp.iter_lines())
         assert lines == ["line1", "line2"]
+
+    def test_iter_bytes_on_closed_stream_raises(self):
+        # Iterating a closed *streaming* response must raise StreamClosed
+        # instead of silently yielding nothing (parity with iter_raw).
+        def stream():
+            yield b"never read"
+            yield b""  # pragma: no cover
+
+        resp = Response(200, stream=stream())
+        resp.close()
+        with pytest.raises(StreamClosed):
+            list(resp.iter_bytes())
+
+    @pytest.mark.asyncio
+    async def test_aiter_bytes_on_closed_stream_raises(self):
+        class AsyncStream:
+            def __aiter__(self):
+                return self
+
+            async def __anext__(self):
+                raise StopAsyncIteration()
+
+        resp = Response(200, stream=AsyncStream())
+        await resp.aclose()
+        with pytest.raises(StreamClosed):
+            async for _ in resp.aiter_bytes():
+                pass
 
 
 class TestResponseHeaders:

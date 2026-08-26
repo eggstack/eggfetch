@@ -871,6 +871,97 @@ fn streaming_cancel() {
 }
 
 #[test]
+fn streaming_cancel_wakes_blocked_next() {
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
+    use std::time::{Duration, Instant};
+
+    // Server that sends response headers and then goes idle: the body
+    // never arrives, so a parked `next` can only be woken by `cancel`.
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap();
+
+    let server_done = Arc::new(AtomicBool::new(false));
+    let server_flag = server_done.clone();
+    let _server = std::thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let _ = stream.set_read_timeout(Some(Duration::from_secs(5)));
+        let mut buf = vec![0u8; 4096];
+        let _ = stream.read(&mut buf).unwrap();
+        let response = "\
+            HTTP/1.1 200 OK\r\n\
+            Content-Type: text/plain\r\n\
+            Transfer-Encoding: chunked\r\n\
+            \r\n";
+        let _ = stream.write_all(response.as_bytes());
+        let _ = stream.flush();
+        while !server_flag.load(Ordering::SeqCst) {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    });
+
+    let url = format!("http://{addr}/idle");
+    let url_c = CString::new(url).unwrap();
+
+    unsafe {
+        let client = eggfetch_ffi::eggfetch_client_new();
+        let req = eggfetch_ffi::eggfetch_client_get(client, url_c.as_ptr());
+
+        let mut err: *mut eggfetch_ffi::ErrorHandle = ptr::null_mut();
+        let resp = eggfetch_ffi::eggfetch_client_send_streaming(client, req, &mut err);
+        assert!(!resp.is_null(), "idle-stream test: request failed");
+
+        // Raw handle pointers are not `Send`; this cross-thread watchdog
+        // scenario is exactly the invited usage the cancellation API
+        // documents, so the test moves the pointer explicitly.
+        #[derive(Clone, Copy)]
+        struct SendPtr(*mut eggfetch_ffi::StreamingResponseHandle);
+        unsafe impl Send for SendPtr {}
+
+        // Park a reader on the idle stream in another thread.
+        let resp_for_reader = SendPtr(resp);
+        let reader = {
+            // Bind the wrapper (not its raw-pointer field) so the move
+            // closure captures the `Send` newtype.
+            let handle_ptr = resp_for_reader;
+            std::thread::spawn(move || {
+                // Reference the wrapper as a whole so the closure
+                // captures the `Send` newtype rather than its raw field.
+                let handle = handle_ptr;
+                let start = Instant::now();
+                let chunk = eggfetch_ffi::eggfetch_response_stream_next(handle.0);
+                (chunk.is_null(), start.elapsed())
+            })
+        };
+
+        // Give the reader time to park, then cancel from this thread —
+        // simulating a watchdog. The parked `next` must return promptly
+        // instead of waiting for a chunk the idle server never sends.
+        std::thread::sleep(Duration::from_millis(300));
+        eggfetch_ffi::eggfetch_response_stream_cancel(resp);
+
+        let (was_null, elapsed) = reader.join().unwrap();
+        assert!(was_null, "parked next must end on cancellation");
+        assert!(
+            elapsed < Duration::from_secs(3),
+            "cancel must wake a blocked next promptly, took {elapsed:?}"
+        );
+
+        // The failure must be distinguishable from clean EOF.
+        let msg = eggfetch_ffi::eggfetch_response_stream_error(resp);
+        assert!(!msg.is_null(), "cancellation must be reported via error");
+        let text = CString::from_raw(msg).into_string().unwrap();
+        assert!(text.contains("cancelled"), "unexpected error: {text}");
+
+        eggfetch_ffi::eggfetch_response_stream_free(resp);
+        eggfetch_ffi::eggfetch_client_free(client);
+        server_done.store(true, Ordering::SeqCst);
+    }
+}
+
+#[test]
 fn streaming_null_safety() {
     unsafe {
         assert_eq!(

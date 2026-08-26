@@ -418,7 +418,13 @@ fn detect_method(cli: &Cli) -> &str {
     if let Some(ref method) = cli.method {
         return method;
     }
-    if cli.body.is_some() || cli.body_file.is_some() || cli.json.is_some() || !cli.form.is_empty() {
+    // Any body-carrying option implies POST (curl's -d/-F semantics).
+    if cli.body.is_some()
+        || cli.body_file.is_some()
+        || cli.json.is_some()
+        || !cli.form.is_empty()
+        || !cli.file.is_empty()
+    {
         "POST"
     } else {
         "GET"
@@ -772,10 +778,12 @@ async fn run(cli: Cli) -> Result<()> {
     if let Some(attempts) = cli.retry {
         let mut retry_builder = RetryPolicy::builder().max_attempts(attempts);
         if let Some(delay) = cli.retry_delay {
-            // Plain inter-retry delay: keep the default backoff factor of 1
-            // so each retry waits `delay` seconds rather than growing
-            // geometrically (`delay^n`).
-            retry_builder = retry_builder.initial_delay(Duration::from_secs(delay));
+            // Plain inter-retry delay: pin the backoff factor to 1
+            // explicitly so each retry waits `delay` seconds rather than
+            // growing geometrically (`delay^n`).
+            retry_builder = retry_builder
+                .initial_delay(Duration::from_secs(delay))
+                .backoff_factor(1.0);
         }
         client_builder = client_builder.retry(retry_builder.build());
     }
@@ -920,7 +928,7 @@ async fn run(cli: Cli) -> Result<()> {
                     None
                 };
 
-                let json_val = build_json_response(
+                let mut json_val = build_json_response(
                     &response,
                     elapsed,
                     body_len,
@@ -928,6 +936,16 @@ async fn run(cli: Cli) -> Result<()> {
                     body_b64.as_deref(),
                     &json_errors,
                 );
+
+                if !cli.json_output {
+                    // NDJSON mode: redirect hops are emitted as their own
+                    // chronological records below, so embedding them again
+                    // in the final record's `history` would double-report
+                    // each hop.
+                    if let Some(obj) = json_val.as_object_mut() {
+                        obj.remove("history");
+                    }
+                }
 
                 if cli.json_output {
                     let output = serde_json::to_string_pretty(&json_val)?;

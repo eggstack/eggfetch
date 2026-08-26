@@ -211,7 +211,12 @@ class URL:
             if parts.scheme:
                 self._parts = parts
             else:
-                self._parts = _urlsplit(f"http://{url}")
+                # Relative reference ("/a", "./b", "../baz",
+                # "//other.com/x"): keep the parsed components as-is
+                # instead of fabricating an "http://" authority, so
+                # resolution against a base URL (join(), redirect
+                # Location headers) behaves like RFC 3986.
+                self._parts = parts
 
     @property
     def scheme(self) -> str:
@@ -355,7 +360,8 @@ class URL:
         return self.copy_with(params=params)
 
     def join(self, other: "URL") -> "URL":
-        return URL(str(self) + str(other))
+        """Resolve *other* against *self* using RFC 3986 reference resolution."""
+        return URL(urllib.parse.urljoin(str(self), str(other)))
 
     def _default_port(self):
         if self._parts.port is None:
@@ -368,6 +374,13 @@ class URL:
 
     def _display_str(self) -> str:
         parts = self._parts
+        query = f"?{parts.query}" if parts.query else ""
+        fragment = f"#{parts.fragment}" if parts.fragment else ""
+        if not parts.scheme:
+            # Relative reference (possibly protocol-relative).
+            if parts.netloc:
+                return f"//{parts.netloc}{parts.path}{query}{fragment}"
+            return f"{parts.path}{query}{fragment}"
         netloc = parts.netloc
         default_port = self._default_port()
         if default_port is not None and parts.port is not None:
@@ -378,8 +391,6 @@ class URL:
                 netloc = f"{parts.username}@{hostname}"
             else:
                 netloc = hostname
-        query = f"?{parts.query}" if parts.query else ""
-        fragment = f"#{parts.fragment}" if parts.fragment else ""
         return f"{parts.scheme}://{netloc}{parts.path}{query}{fragment}"
 
     def __str__(self) -> str:

@@ -254,7 +254,9 @@ impl RetryPolicyBuilder {
 
     /// Set the backoff factor for exponential backoff.
     ///
-    /// The delay for attempt `n` is `factor * 2^(n-1)` with jitter.
+    /// The delay before retry attempt `n` (`n >= 2`) is
+    /// `initial_delay * factor^(n - 2)`, capped at `max_delay` and
+    /// reduced by full jitter. The default factor is `2.0`.
     #[must_use]
     pub fn backoff_factor(mut self, factor: f64) -> Self {
         self.backoff = self.backoff.factor(factor);
@@ -373,7 +375,7 @@ pub struct BackoffPolicy {
 impl Default for BackoffPolicy {
     fn default() -> Self {
         Self {
-            factor: 0.5,
+            factor: 2.0,
             max_delay: Duration::from_secs(30),
             initial_delay: Duration::from_millis(500),
         }
@@ -386,7 +388,7 @@ impl BackoffPolicy {
     /// Attempt 1 returns `None` (no delay before the first attempt).
     /// Later attempts use exponential backoff with full jitter: the
     /// delay is drawn uniformly from `[0, capped)`, where `capped` is
-    /// the exponentially increasing delay clamped to `max_delay`.
+    /// `initial_delay * factor^(attempt - 2)` clamped to `max_delay`.
     #[must_use]
     #[allow(clippy::cast_precision_loss)]
     pub fn delay(&self, attempt: usize) -> Option<Duration> {
@@ -456,7 +458,7 @@ impl BackoffPolicyBuilder {
     #[must_use]
     fn new() -> Self {
         Self {
-            factor: 0.5,
+            factor: 2.0,
             max_delay: Duration::from_secs(30),
             initial_delay: Duration::from_millis(500),
         }
@@ -786,6 +788,18 @@ mod tests {
 
         let d3 = backoff.delay(3).unwrap();
         assert!(d3 <= Duration::from_millis(50));
+    }
+
+    #[test]
+    fn default_backoff_grows_exponentially() {
+        // The default policy must back off, not speed up: the cap for
+        // attempt n is `initial_delay * 2^(n - 2)`. Jitter draws below
+        // the cap, so only upper bounds are asserted.
+        let backoff = BackoffPolicy::default();
+        assert!((backoff.factor() - 2.0).abs() < f64::EPSILON);
+        assert!(backoff.delay(2).unwrap() <= Duration::from_millis(500));
+        assert!(backoff.delay(3).unwrap() <= Duration::from_secs(1));
+        assert!(backoff.delay(4).unwrap() <= Duration::from_secs(2));
     }
 
     #[test]

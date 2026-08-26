@@ -153,6 +153,53 @@ class TestRedirectURLResolution:
             resp = c.get("http://testserver/a#frag")
             assert resp.text == "frag"
 
+    def test_dot_relative_location_keeps_host(self):
+        """Location "./b" resolves against the current directory on the
+        same host (regression: it used to dispatch to a literal "."
+        hostname)."""
+        seen = []
+
+        def handler(request):
+            seen.append(str(request.url))
+            if request.url.path == "/a":
+                return Response(302, headers={"Location": "./b"})
+            return Response(200)
+
+        with Client(transport=MockTransport(handler), follow_redirects=True) as c:
+            c.get("http://testserver/a")
+        assert seen == ["http://testserver/a", "http://testserver/b"]
+
+    def test_parent_relative_location_keeps_host(self):
+        """Location "../baz" resolves against the parent directory."""
+        seen = []
+
+        def handler(request):
+            seen.append(str(request.url))
+            if request.url.path == "/dir/x":
+                return Response(302, headers={"Location": "../baz"})
+            return Response(200)
+
+        with Client(transport=MockTransport(handler), follow_redirects=True) as c:
+            c.get("http://testserver/dir/x")
+        assert seen == ["http://testserver/dir/x", "http://testserver/baz"]
+
+    def test_protocol_relative_location_switches_host(self):
+        """Location "//other.com/x" inherits the scheme and switches host."""
+        seen = []
+
+        def handler(request):
+            seen.append(str(request.url))
+            if request.url.host == "testserver":
+                return Response(302, headers={"Location": "//other-server/x"})
+            return Response(200)
+
+        with Client(transport=MockTransport(handler), follow_redirects=True) as c:
+            c.get("http://testserver/a")
+        assert seen == [
+            "http://testserver/a",
+            "http://other-server/x",
+        ]
+
 
 # ── Header stripping across origins ──────────────────────────────────
 

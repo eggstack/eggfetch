@@ -34,7 +34,6 @@ pub(crate) async fn send_https_connect_request(
         ctx.proxy_connect_timeout,
         ctx.proxy_tls_timeout,
         ctx.deadline,
-        ctx.now,
         ctx.proxy_tls_config,
     )
     .await?;
@@ -44,7 +43,7 @@ pub(crate) async fn send_https_connect_request(
         .host_str()
         .ok_or_else(|| Error::InvalidUrl("destination URL has no host".into()))?;
     let dest_port = dest_url.port_or_known_default().unwrap_or(443);
-    let connect_target = format!("{dest_host}:{dest_port}");
+    let connect_target = authority_form_target(dest_host, dest_port);
 
     let mut connect_req =
         format!("CONNECT {connect_target} HTTP/1.1\r\nHost: {connect_target}\r\n");
@@ -70,7 +69,7 @@ pub(crate) async fn send_https_connect_request(
     connect_req.push_str("\r\n");
 
     let write = stream.write_all(connect_req.as_bytes());
-    match effective_timeout(ctx.deadline, ctx.write_timeout, ctx.now)? {
+    match effective_timeout(ctx.deadline, ctx.write_timeout)? {
         Some(duration) => tokio::time::timeout(duration, write)
             .await
             .map_err(|_| Error::Timeout {
@@ -86,7 +85,7 @@ pub(crate) async fn send_https_connect_request(
     // Read the CONNECT response.
     let read = read_proxy_response(&mut stream);
     let (status, resp_headers, initial_buf, _reason_phrase) =
-        match effective_timeout(ctx.deadline, ctx.read_timeout, ctx.now)? {
+        match effective_timeout(ctx.deadline, ctx.read_timeout)? {
             Some(duration) => {
                 tokio::time::timeout(duration, read)
                     .await
@@ -131,7 +130,7 @@ pub(crate) async fn send_https_connect_request(
         .map_err(|e| Error::Tls(format!("invalid TLS server name: {e}")))?;
 
     let tls_handshake = tls_connector.connect(domain, tunnel);
-    let tls_timeout = effective_timeout(ctx.deadline, ctx.connect_timeout, ctx.now)?;
+    let tls_timeout = effective_timeout(ctx.deadline, ctx.connect_timeout)?;
     let tls_stream = match tls_timeout {
         Some(dur) => match tokio::time::timeout(dur, tls_handshake).await {
             Ok(Ok(s)) => s,
@@ -181,7 +180,7 @@ pub(crate) async fn send_https_connect_request(
         &empty_proxy_headers,
         body,
     );
-    match effective_timeout(ctx.deadline, ctx.write_timeout, ctx.now)? {
+    match effective_timeout(ctx.deadline, ctx.write_timeout)? {
         Some(duration) => {
             tokio::time::timeout(duration, write)
                 .await
@@ -196,7 +195,7 @@ pub(crate) async fn send_https_connect_request(
     // Read the response from the destination.
     let read = read_proxy_response(&mut tls_buf);
     let (status, resp_headers, initial_buf, reason_phrase) =
-        match effective_timeout(ctx.deadline, ctx.read_timeout, ctx.now)? {
+        match effective_timeout(ctx.deadline, ctx.read_timeout)? {
             Some(duration) => {
                 tokio::time::timeout(duration, read)
                     .await
@@ -231,6 +230,18 @@ pub(crate) async fn send_https_connect_request(
     let mut response = Response::new(status, version, resp_headers_map, url, body);
     response.set_wire_reason_phrase(reason_phrase);
     Ok(response)
+}
+
+/// Build an authority-form `host:port` target for a CONNECT request.
+///
+/// Authority-form requires brackets around IPv6 literals; the url crate
+/// strips them from `host_str()`, so they are restored here.
+fn authority_form_target(host: &str, port: u16) -> String {
+    if host.contains(':') {
+        format!("[{host}]:{port}")
+    } else {
+        format!("{host}:{port}")
+    }
 }
 
 /// Maximum characters retained from a proxy-controlled rejection body.
@@ -400,7 +411,18 @@ impl<S: tokio::io::AsyncWrite + Unpin> tokio::io::AsyncWrite for ProxyTunnel<S> 
 
 #[cfg(test)]
 mod tests {
-    use super::proxy_rejection_body;
+    use super::{authority_form_target, proxy_rejection_body};
+
+    #[test]
+    fn authority_form_target_brackets_ipv6() {
+        assert_eq!(authority_form_target("::1", 8080), "[::1]:8080");
+        assert_eq!(
+            authority_form_target("2001:db8::1", 443),
+            "[2001:db8::1]:443"
+        );
+        assert_eq!(authority_form_target("example.com", 80), "example.com:80");
+        assert_eq!(authority_form_target("127.0.0.1", 9090), "127.0.0.1:9090");
+    }
 
     #[test]
     fn proxy_rejection_body_prefers_diagnostic_header() {

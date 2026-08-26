@@ -62,11 +62,10 @@ class Headers(MutableMapping):
 
     def get(self, name: str, default=None):
         norm = self._normalize_name(name)
-        result = None
-        for k, v in self._items:
-            if k == norm:
-                result = v
-        return result if result is not None else default
+        values = [v for k, v in self._items if k == norm]
+        if not values:
+            return default
+        return ", ".join(values)
 
     def get_list(self, name: str) -> list[str]:
         norm = self._normalize_name(name)
@@ -121,13 +120,10 @@ class Headers(MutableMapping):
 
     def __getitem__(self, name: str) -> str:
         norm = self._normalize_name(name)
-        result = None
-        for k, v in self._items:
-            if k == norm:
-                result = v
-        if result is None:
+        values = [v for k, v in self._items if k == norm]
+        if not values:
             raise KeyError(name)
-        return result
+        return ", ".join(values)
 
     def update(self, headers) -> None:
         if isinstance(headers, Headers):

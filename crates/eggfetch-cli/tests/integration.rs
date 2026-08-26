@@ -703,6 +703,31 @@ fn test_ndjson_redirect_records_are_chronological() {
 }
 
 #[test]
+fn test_ndjson_does_not_double_report_redirects() {
+    // Redirect hops are emitted as their own records; the final record
+    // must not embed them again in a `history` array.
+    let server = TestServer::start();
+    let url = format!("{}/redirect-to?to=/json", server.url());
+    let (stdout, _stderr, code) = run_cli(&[&url, "--ndjson", "--follow"]);
+    assert_eq!(code, Some(0));
+    let lines: Vec<serde_json::Value> = stdout
+        .lines()
+        .filter(|l| !l.is_empty())
+        .map(|l| serde_json::from_str(l).expect("invalid NDJSON line"))
+        .collect();
+    assert!(
+        lines.len() >= 2,
+        "expected redirect record plus final record"
+    );
+    for line in &lines {
+        assert!(
+            line.get("history").is_none(),
+            "NDJSON records must not duplicate hops in a history array: {line}"
+        );
+    }
+}
+
+#[test]
 fn test_json_output_base64() {
     let server = TestServer::start();
     let url = format!("{}/binary", server.url());
@@ -1122,6 +1147,24 @@ fn test_file_upload() {
         "multipart body should contain file contents"
     );
     assert!(stdout.contains("file contents here"));
+}
+
+#[test]
+fn test_file_upload_implies_post() {
+    // curl's -F implies POST; `--file` without an explicit method must
+    // not send a GET with a multipart body.
+    let server = TestServer::start();
+    let url = format!("{}/post-body", server.url());
+    let dir = tempfile::tempdir().unwrap();
+    let file_path = dir.path().join("upload.txt");
+    std::fs::write(&file_path, "file contents here").unwrap();
+    let path = file_path.to_str().unwrap();
+    let file_arg = format!("upload=@{path}");
+    let (_stdout, _stderr, code) = run_cli(&[&url, "--file", &file_arg]);
+    assert_eq!(code, Some(0));
+    let reqs = server.captured_requests();
+    assert_eq!(reqs.len(), 1);
+    assert_eq!(reqs[0].method, "POST", "--file must imply POST");
 }
 
 #[test]
