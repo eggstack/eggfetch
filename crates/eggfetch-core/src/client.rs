@@ -94,6 +94,12 @@ impl std::fmt::Debug for Client {
 
 pub(crate) struct ClientInner {
     pub(crate) hyper_client: Option<crate::transport::TimeoutHyperClient>,
+    /// Error captured while building the configured TLS policy, if any.
+    ///
+    /// `ClientBuilder::build` is intentionally infallible, so HTTPS requests
+    /// surface this error at dispatch time instead of falling back to a
+    /// different trust policy.
+    pub(crate) tls_config_error: Option<String>,
     /// Direct connector for requests with advanced socket options or local
     /// address binding. Uses a custom connector instead of the standard
     /// hyper-rustls connector path.
@@ -166,16 +172,16 @@ impl ClientInner {
 
         #[cfg(any(feature = "proxy", feature = "http3"))]
         let tls_connector = match self.config.tls_config.as_ref() {
-            Some(tls_config) => match tls_config.build_rustls_config() {
-                Ok(mut rc) => {
-                    #[cfg(feature = "http2")]
-                    if matches!(policy, crate::HttpVersionPolicy::Http2Only) {
-                        rc.alpn_protocols = vec![b"h2".to_vec()];
-                    }
-                    Some(tokio_rustls::TlsConnector::from(Arc::new(rc)))
+            Some(tls_config) => {
+                let mut rc = tls_config
+                    .build_rustls_config()
+                    .map_err(|e| Error::Tls(format!("failed to build TLS config: {e}")))?;
+                #[cfg(feature = "http2")]
+                if matches!(policy, crate::HttpVersionPolicy::Http2Only) {
+                    rc.alpn_protocols = vec![b"h2".to_vec()];
                 }
-                Err(_) => None,
-            },
+                Some(tokio_rustls::TlsConnector::from(Arc::new(rc)))
+            }
             None => None,
         };
         #[cfg(not(any(feature = "proxy", feature = "http3")))]
@@ -488,6 +494,15 @@ impl ClientBuilder {
     pub fn default_header(mut self, name: &str, value: &str) -> Result<Self> {
         self.default_headers.insert(name, value)?;
         Ok(self)
+    }
+
+    /// Set the default headers for all requests made by this client.
+    ///
+    /// This preserves valid header values containing HTTP `obs-text` bytes.
+    #[must_use]
+    pub fn default_headers(mut self, headers: Headers) -> Self {
+        self.default_headers = headers;
+        self
     }
 
     /// Set the default user-agent header.
@@ -810,6 +825,12 @@ impl ClientBuilder {
         let cookie_jar = self.cookie_jar.unwrap_or_default();
 
         let automatic_decompression = self.automatic_decompression.unwrap_or(true);
+        let tls_config_error = self.tls_config.as_ref().and_then(|config| {
+            config
+                .build_rustls_config()
+                .err()
+                .map(|error| format!("failed to build TLS config: {error}"))
+        });
 
         // When HTTP/3 is selected, we skip building the hyper client
         let hyper_client = if enabler.use_http3() {
@@ -987,6 +1008,7 @@ impl ClientBuilder {
         Client {
             inner: Arc::new(ClientInner {
                 hyper_client,
+                tls_config_error,
                 direct_client,
                 sni_clients: Mutex::new(HashMap::new()),
                 #[cfg(unix)]

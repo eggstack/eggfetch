@@ -381,6 +381,12 @@ struct PoolInner {
     global_semaphore: Option<Arc<Semaphore>>,
     /// Per-origin concurrency semaphores, created lazily on first use.
     per_origin: DashMap<OriginKey, Arc<Semaphore>>,
+    /// Serializes per-origin table eviction with the immediate acquire path.
+    ///
+    /// Without this guard, an idle semaphore could be removed after a
+    /// request cloned it but before that request acquired its permit. A new
+    /// semaphore for the same origin could then admit a second request.
+    per_origin_table_lock: std::sync::Mutex<()>,
     /// Pool configuration.
     config: PoolConfig,
     /// Observable metrics.
@@ -418,6 +424,7 @@ impl Pool {
             inner: Arc::new(PoolInner {
                 global_semaphore,
                 per_origin: DashMap::new(),
+                per_origin_table_lock: std::sync::Mutex::new(()),
                 config,
                 metrics: PoolMetrics::default(),
             }),
@@ -459,6 +466,11 @@ impl Pool {
             // below can never be evicted immediately after creation
             // (which would let the next request to this origin build a
             // fresh semaphore and briefly bypass the per-host limit).
+            let table_lock = self
+                .inner
+                .per_origin_table_lock
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             if self.inner.per_origin.len() >= PER_ORIGIN_TABLE_MAX_ENTRIES {
                 self.inner
                     .per_origin
@@ -477,7 +489,9 @@ impl Pool {
             // `sem` into `acquire_owned` without a further bump.
             if let Ok(permit) = sem.clone().try_acquire_owned() {
                 origin_permit = Some(permit);
+                drop(table_lock);
             } else {
+                drop(table_lock);
                 // Must wait for a slot.
                 waited = true;
                 if let Ok(permit) = sem.acquire_owned().await {

@@ -34,6 +34,12 @@ class _EchoHandler(http.server.BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
+        elif self.path == "/header":
+            body = self.headers.get("X-Obs", "").encode("latin-1")
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
         elif self.path == "/lines":
             body = b"line1\nline2\nline3\nline4\nline5\n"
             self.send_response(200)
@@ -63,8 +69,19 @@ class _EchoHandler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
 
     def do_POST(self):
-        content_length = int(self.headers.get("Content-Length", 0))
-        body = self.rfile.read(content_length) if content_length else b""
+        if self.headers.get("Transfer-Encoding", "").lower() == "chunked":
+            chunks = []
+            while True:
+                size = int(self.rfile.readline().strip(), 16)
+                if size == 0:
+                    self.rfile.readline()
+                    break
+                chunks.append(self.rfile.read(size))
+                self.rfile.readline()
+            body = b"".join(chunks)
+        else:
+            content_length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_length) if content_length else b""
         self.send_response(200)
         self.send_header("Content-Type", "text/plain")
         self.send_header("Content-Length", str(len(body)))
@@ -129,6 +146,12 @@ class TestFileBodyOwnership:
 # ---------------------------------------------------------------------------
 
 class TestRequestProducerFailures:
+    def test_obs_text_header_is_preserved(self, server):
+        with Client(headers={"X-Obs": "\u0080"}) as client:
+            response = client.get(f"{server}/header", headers={"X-Obs": "\u0081"})
+
+        assert response.content == b"\xc2\x81"
+
     def test_sync_iterator_yields_non_bytes(self, server):
         """Iterator yielding non-bytes/str types should fail or coerce."""
         def bad_iter():

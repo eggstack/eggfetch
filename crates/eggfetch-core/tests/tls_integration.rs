@@ -69,6 +69,26 @@ async fn untrusted_cert_fails() {
 }
 
 #[tokio::test]
+async fn invalid_tls_config_is_reported_before_https_dispatch() {
+    let client = Client::builder()
+        .tls_config(
+            TlsConfig::builder()
+                .min_tls_version(TlsVersion::Tls13)
+                .max_tls_version(TlsVersion::Tls12)
+                .build(),
+        )
+        .build();
+
+    let err = client
+        .get("https://localhost/")
+        .unwrap()
+        .send()
+        .await
+        .unwrap_err();
+    assert_eq!(err.kind(), "tls");
+}
+
+#[tokio::test]
 async fn hostname_mismatch_fails() {
     let ca = CertAuthority::new();
     let server = TlsTestServer::start(&ca, &["wrong-hostname"]).await;

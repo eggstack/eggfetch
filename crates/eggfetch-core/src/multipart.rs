@@ -241,12 +241,8 @@ impl Part {
                 let hv: HeaderValue = v;
                 // Keep the raw bytes: `HeaderValue` admits obs-text
                 // (0x80..=0xFF), so converting with `to_str()` would
-                // silently blank legitimate non-ASCII values. The
-                // lossy conversion preserves every valid UTF-8 value
-                // exactly; `format_part_header` mirrors it on output.
-                let _ = self
-                    .headers
-                    .insert(n.as_str(), String::from_utf8_lossy(hv.as_bytes()).as_ref());
+                // silently blank legitimate non-ASCII values.
+                self.headers.insert_raw(n, hv);
             }
         }
         self
@@ -1171,9 +1167,8 @@ mod tests {
 
     #[test]
     fn custom_part_header_obs_text_value_is_never_blanked() {
-        // Raw obs-text bytes decode lossily in the String-backed part
-        // header store, but the encoder must still emit a value; a
-        // failed UTF-8 conversion must never collapse it to "".
+        // Raw obs-text bytes must be retained by the part header store; a
+        // failed UTF-8 conversion must never collapse them to "".
         let part = Part::new("field", PartBody::Bytes(Bytes::from("data")))
             .header("X-Note", HeaderValue::from_bytes(&[0x80]).unwrap());
         let mp = Multipart::with_boundary(Boundary::try_new("b").unwrap())
@@ -1181,12 +1176,9 @@ mod tests {
             .unwrap();
         match mp.into_body() {
             RequestBody::Bytes(data) => {
-                let s = String::from_utf8(data.to_vec()).unwrap();
-                let line = s
-                    .lines()
-                    .find_map(|l| l.strip_prefix("x-note: "))
-                    .expect("custom header line present");
-                assert!(!line.is_empty(), "header value must not be blanked");
+                assert!(data
+                    .windows(b"x-note: \x80\r\n".len())
+                    .any(|window| { window == b"x-note: \x80\r\n" }));
             }
             _ => panic!("expected bytes body"),
         }

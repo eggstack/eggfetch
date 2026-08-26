@@ -56,12 +56,15 @@ where
     F: std::future::Future<Output = Result<Response>>,
 {
     match remaining_total {
-        Some(duration) => tokio::time::timeout(duration, send_future)
-            .await
-            .map_err(|_| Error::Timeout {
-                phase: TimeoutPhase::Total,
-                elapsed: duration,
-            })?,
+        Some(duration) => {
+            let started = std::time::Instant::now();
+            tokio::time::timeout(duration, send_future)
+                .await
+                .map_err(|_| Error::Timeout {
+                    phase: TimeoutPhase::Total,
+                    elapsed: started.elapsed(),
+                })?
+        }
         None => send_future.await,
     }
 }
@@ -819,6 +822,12 @@ pub(crate) async fn send_single_request(
         _,
         transport_hints,
     ) = request.into_parts();
+
+    if url.scheme() == "https" {
+        if let Some(error) = &inner.tls_config_error {
+            return Err(Error::Tls(error.clone()));
+        }
+    }
 
     let decompression_enabled = request_decompress.unwrap_or(inner.config.automatic_decompression);
 

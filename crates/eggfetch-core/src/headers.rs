@@ -42,6 +42,10 @@ impl Headers {
         Ok(())
     }
 
+    pub(crate) fn insert_raw(&mut self, name: HeaderName, value: HeaderValue) {
+        self.inner.insert(name, value);
+    }
+
     /// Append a header value, allowing multiple values for the same name.
     ///
     /// # Errors

@@ -245,7 +245,16 @@ impl CookieJar {
     /// cannot leave it inconsistent.
     #[must_use]
     pub fn cookies_for_url(&self, url: &Url) -> Option<String> {
-        self.expire_stale();
+        let has_persistent = self
+            .inner
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .cookies
+            .values()
+            .any(|cookie| cookie.persistent);
+        if has_persistent {
+            self.expire_stale();
+        }
         let jar = self
             .inner
             .read()

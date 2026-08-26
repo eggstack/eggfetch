@@ -275,7 +275,7 @@ fn add_tuple_file_part(
                         PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string())
                     })?);
             for (name, value) in headers.iter() {
-                part = part.header(name.as_str(), value.to_str().unwrap_or(""));
+                part = part.header(name.as_str(), value.clone());
             }
             *multipart = std::mem::replace(multipart, Multipart::new())
                 .part(part)

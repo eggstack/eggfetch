@@ -103,11 +103,7 @@ impl PyAsyncClient {
 
         if let Some(hdrs) = headers {
             let rust_headers = python_headers_to_rust(py, hdrs)?;
-            for (name, value) in rust_headers.iter() {
-                builder = builder
-                    .default_header(name.as_str(), value.to_str().unwrap_or(""))
-                    .map_err(map_err)?;
-            }
+            builder = builder.default_headers(rust_headers);
         }
 
         if let Some(t) = timeout {
@@ -366,9 +362,7 @@ impl PyAsyncClient {
                 .request(http_method, target_url.as_str())
                 .map_err(map_err)?;
 
-            for (name, value) in rust_headers.iter() {
-                builder = builder.header(name.as_str(), value.to_str().unwrap_or(""));
-            }
+            builder = builder.headers(rust_headers);
 
             if let Some(bytes) = body_bytes {
                 builder = builder.bytes(bytes);
@@ -932,9 +926,7 @@ impl PyAsyncClient {
                 .request(http_method, target_url.as_str())
                 .map_err(map_err)?;
 
-            for (name, value) in rust_headers.iter() {
-                builder = builder.header(name.as_str(), value.to_str().unwrap_or(""));
-            }
+            builder = builder.headers(rust_headers);
 
             if let Some(bytes) = body_bytes {
                 builder = builder.bytes(bytes);

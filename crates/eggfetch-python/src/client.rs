@@ -108,11 +108,7 @@ impl PyClient {
 
         if let Some(hdrs) = headers {
             let rust_headers = python_headers_to_rust(py, hdrs)?;
-            for (name, value) in rust_headers.iter() {
-                builder = builder
-                    .default_header(name.as_str(), value.to_str().unwrap_or(""))
-                    .map_err(map_err)?;
-            }
+            builder = builder.default_headers(rust_headers);
         }
 
         if let Some(t) = timeout {
@@ -393,9 +389,7 @@ impl PyClient {
                     .request(http_method, target_url.as_str())
                     .map_err(map_err)?;
 
-                for (name, value) in rust_headers.iter() {
-                    builder = builder.header(name.as_str(), value.to_str().unwrap_or(""));
-                }
+                builder = builder.headers(rust_headers);
 
                 if let Some(bytes) = body_bytes {
                     builder = builder.bytes(bytes);
@@ -965,9 +959,7 @@ impl PyClient {
                     .request(http_method, target_url.as_str())
                     .map_err(map_err)?;
 
-                for (name, value) in rust_headers.iter() {
-                    builder = builder.header(name.as_str(), value.to_str().unwrap_or(""));
-                }
+                builder = builder.headers(rust_headers);
 
                 if let Some(bytes) = body_bytes {
                     builder = builder.bytes(bytes);
@@ -1060,11 +1052,19 @@ impl PyClient {
     /// and shuts down the tokio runtime. Subsequent requests raise
     /// `ValueError`. Idempotent.
     fn close(&self) {
-        let mut guard = self.client.lock().unwrap();
+        let mut guard = self
+            .client
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if guard.is_some() {
             *guard = None;
             drop(guard);
-            if let Some(rt) = self.runtime.lock().unwrap().take() {
+            if let Some(rt) = self
+                .runtime
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .take()
+            {
                 if let Ok(rt) = Arc::try_unwrap(rt) {
                     rt.shutdown_background();
                 }
@@ -1075,7 +1075,10 @@ impl PyClient {
     /// Returns True if the client has been closed.
     #[getter]
     fn is_closed(&self) -> bool {
-        self.client.lock().unwrap().is_none()
+        self.client
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .is_none()
     }
 
     /// The client's cookie jar.
@@ -1103,7 +1106,12 @@ impl PyClient {
     }
 
     fn __repr__(&self) -> String {
-        if self.client.lock().unwrap().is_none() {
+        if self
+            .client
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .is_none()
+        {
             "Client(closed=true)".to_string()
         } else if self.verify_disabled {
             "Client(verify=False) [UNSAFE: TLS verification disabled]".to_string()
@@ -1115,7 +1123,10 @@ impl PyClient {
 
 impl PyClient {
     fn ensure_not_closed(&self) -> PyResult<()> {
-        let guard = self.client.lock().unwrap();
+        let guard = self
+            .client
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if guard.is_none() {
             return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
                 "client is closed",
@@ -1125,7 +1136,10 @@ impl PyClient {
     }
 
     fn clone_client(&self) -> PyResult<eggfetch_core::Client> {
-        let guard = self.client.lock().unwrap();
+        let guard = self
+            .client
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         guard
             .as_ref()
             .cloned()

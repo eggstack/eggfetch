@@ -1,7 +1,7 @@
 //! Conversion utilities between Python and Rust types.
 
 use pyo3::prelude::*;
-use pyo3::types::PyTuple;
+use pyo3::types::{PyIterator, PyTuple};
 
 use bytes::Bytes;
 
@@ -211,34 +211,48 @@ pub fn python_iterable_to_request_body<'py>(
 ) -> PyResult<eggfetch_core::RequestBody> {
     use futures_util::stream;
 
-    // Eagerly collect the iterable into a Vec of chunks on the Python thread.
-    // This is necessary because the Python iterator is not Send and cannot be
-    // moved into an async task. For true lazy iteration, the caller should
-    // use the native client's streaming API directly.
-    let mut chunks: Vec<Bytes> = Vec::new();
-    for item in iterable.try_iter()? {
-        let item = item?;
-        let chunk: Vec<u8> = if let Ok(b) = item.extract::<Vec<u8>>() {
-            b
-        } else if let Ok(s) = item.extract::<String>() {
-            s.into_bytes()
-        } else {
-            return Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
-                "iterable must yield bytes or str items",
-            ));
-        };
-        chunks.push(Bytes::from(chunk));
-    }
+    let iterator: Py<PyIterator> = iterable.try_iter()?.unbind();
+    let (sender, receiver) = tokio::sync::mpsc::channel(8);
 
-    if chunks.is_empty() {
-        return Ok(eggfetch_core::RequestBody::Empty);
-    }
+    std::thread::spawn(move || loop {
+        let next_chunk: PyResult<Option<Vec<u8>>> = Python::with_gil(|py| {
+            let mut iterator = iterator.bind(py).clone();
+            let item = match iterator.next() {
+                Some(item) => item?,
+                None => return Ok(None),
+            };
+            let chunk = if let Ok(bytes) = item.extract::<Vec<u8>>() {
+                bytes
+            } else if let Ok(string) = item.extract::<String>() {
+                string.into_bytes()
+            } else {
+                return Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
+                    "iterable must yield bytes or str items",
+                ));
+            };
+            Ok(Some(chunk))
+        });
 
-    let total_len: usize = chunks.iter().map(bytes::Bytes::len).sum();
-    let stream = stream::iter(chunks.into_iter().map(Ok::<_, eggfetch_core::error::Error>));
+        match next_chunk {
+            Ok(Some(chunk)) => {
+                if sender.blocking_send(Ok(Bytes::from(chunk))).is_err() {
+                    break;
+                }
+            }
+            Ok(None) => break,
+            Err(error) => {
+                let _ = sender.blocking_send(Err(eggfetch_core::Error::Body(error.to_string())));
+                break;
+            }
+        }
+    });
+
+    let stream = stream::unfold(receiver, |mut receiver| async {
+        receiver.recv().await.map(|item| (item, receiver))
+    });
     Ok(eggfetch_core::RequestBody::from_stream(
         Box::pin(stream),
-        Some(total_len),
+        None,
     ))
 }
 

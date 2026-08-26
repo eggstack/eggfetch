@@ -185,9 +185,7 @@ fn request<'py>(
                 .request(http_method, target_url.as_str())
                 .map_err(map_err)?;
 
-            for (name, value) in rust_headers.iter() {
-                builder = builder.header(name.as_str(), value.to_str().unwrap_or(""));
-            }
+            builder = builder.headers(rust_headers);
 
             if let Some(bytes) = body_bytes {
                 builder = builder.bytes(bytes);
