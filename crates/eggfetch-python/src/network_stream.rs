@@ -130,26 +130,21 @@ impl Clone for PyNetworkStream {
 impl PyNetworkStream {
     /// Create a metadata-only network stream (no IO access).
     ///
-    /// # Panics
-    ///
-    /// Calls [`tokio::runtime::Handle::current()`], which panics when no
-    /// tokio runtime is active on the calling thread. This constructor is
-    /// currently unreachable from Python: the core
-    /// `NetworkStream::Metadata` variant is reserved and never attached
-    /// to responses. Two constraints to resolve before that variant goes
-    /// live: this method always builds the **sync** wrapper (wrong IO
-    /// model for async callers), and it relies on the ambient runtime
-    /// rather than an explicit handle — thread both through as
-    /// parameters at that point.
-    pub fn from_metadata(metadata: Arc<eggfetch_core::network_stream::ConnectionMetadata>) -> Self {
-        let runtime_handle = tokio::runtime::Handle::current();
-        Self {
+    pub fn from_metadata(
+        metadata: Arc<eggfetch_core::network_stream::ConnectionMetadata>,
+    ) -> PyResult<Self> {
+        let runtime_handle = tokio::runtime::Handle::try_current().map_err(|_| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+                "network stream metadata requires a Tokio runtime",
+            )
+        })?;
+        Ok(Self {
             inner: Arc::new(Mutex::new(None)),
             metadata: Some(metadata),
             variant: None,
             runtime_handle,
             runtime_lease: None,
-        }
+        })
     }
 
     /// Create from an upgraded stream (full IO access).
@@ -611,14 +606,20 @@ impl std::fmt::Debug for PyAsyncNetworkStream {
 
 impl PyAsyncNetworkStream {
     /// Create a metadata-only async network stream (no IO access).
-    pub fn from_metadata(metadata: Arc<eggfetch_core::network_stream::ConnectionMetadata>) -> Self {
-        let runtime_handle = tokio::runtime::Handle::current();
-        Self {
+    pub fn from_metadata(
+        metadata: Arc<eggfetch_core::network_stream::ConnectionMetadata>,
+    ) -> PyResult<Self> {
+        let runtime_handle = tokio::runtime::Handle::try_current().map_err(|_| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+                "network stream metadata requires a Tokio runtime",
+            )
+        })?;
+        Ok(Self {
             inner: Arc::new(tokio::sync::Mutex::new(None)),
             metadata: Some(metadata),
             variant: None,
             runtime_handle,
-        }
+        })
     }
 
     /// Create from an upgraded stream (full IO access).

@@ -611,12 +611,12 @@ fn format_part_header(boundary: &str, part: &Part) -> Vec<u8> {
         header.push('"');
     }
     header.push_str("\r\n");
-    if let Some(ref ct) = part.content_type {
-        header.push_str("Content-Type: ");
-        header.push_str(ct.to_str().unwrap_or("application/octet-stream"));
-        header.push_str("\r\n");
-    }
     let mut out = header.into_bytes();
+    if let Some(ref ct) = part.content_type {
+        out.extend_from_slice(b"Content-Type: ");
+        out.extend_from_slice(ct.as_bytes());
+        out.extend_from_slice(b"\r\n");
+    }
     for (name, value) in part.headers.iter() {
         out.extend_from_slice(name.as_str().as_bytes());
         out.extend_from_slice(b": ");
@@ -1180,6 +1180,21 @@ mod tests {
                     .windows(b"x-note: \x80\r\n".len())
                     .any(|window| { window == b"x-note: \x80\r\n" }));
             }
+            _ => panic!("expected bytes body"),
+        }
+    }
+
+    #[test]
+    fn content_type_obs_text_value_is_preserved() {
+        let part = Part::new("field", PartBody::Bytes(Bytes::from("data")))
+            .content_type(HeaderValue::from_bytes(b"text/plain; charset=\xFF").unwrap());
+        let mp = Multipart::with_boundary(Boundary::try_new("b").unwrap())
+            .part(part)
+            .unwrap();
+        match mp.into_body() {
+            RequestBody::Bytes(data) => assert!(data
+                .windows(b"\xFF\r\n".len())
+                .any(|window| { window == b"\xFF\r\n" })),
             _ => panic!("expected bytes body"),
         }
     }

@@ -87,4 +87,33 @@ mod tests {
         assert_eq!(response.wire_content_encoding(), Some("gzip"));
         assert_eq!(response.wire_content_length(), Some("42"));
     }
+
+    #[test]
+    fn buffered_decompression_keeps_wire_metadata() {
+        use std::io::Write;
+
+        let mut gzip_encoder =
+            flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::fast());
+        gzip_encoder.write_all(b"body").unwrap();
+        let encoded = gzip_encoder.finish().unwrap();
+        let mut headers = HeaderMap::new();
+        headers.insert("content-encoding", HeaderValue::from_static("gzip"));
+        headers.insert(
+            "content-length",
+            HeaderValue::from_str(&encoded.len().to_string()).unwrap(),
+        );
+        let response = Response::new(
+            StatusCode::OK,
+            Version::HTTP_11,
+            headers,
+            Url::parse("http://example.com").unwrap(),
+            ResponseBody::buffered(Bytes::from(encoded)),
+        );
+
+        let response =
+            apply_decompression(response, Some("gzip"), DecompressionLimit::default()).unwrap();
+
+        assert_eq!(response.wire_content_encoding(), Some("gzip"));
+        assert!(response.wire_content_length().is_some());
+    }
 }

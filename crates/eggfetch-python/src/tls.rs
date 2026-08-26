@@ -189,9 +189,10 @@ fn apply_trust_env(
         if !cafile.is_empty() {
             builder = builder.ca_certificate_path(&cafile).map_err(map_err)?;
         }
-    } else if let Ok(capath) = std::env::var("SSL_CERT_DIR") {
+    }
+    if let Ok(capath) = std::env::var("SSL_CERT_DIR") {
         if !capath.is_empty() {
-            builder = builder.ca_certificate_path(&capath).map_err(map_err)?;
+            builder = builder.add_ca_certificate_path(&capath).map_err(map_err)?;
         }
     }
     Ok(builder)

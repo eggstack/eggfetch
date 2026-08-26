@@ -482,14 +482,10 @@ def create_ssl_context(
     )
 
     if verify is True:
-        if trust_env and os.environ.get("SSL_CERT_FILE"):
-            ctx = _ssl.create_default_context(
-                cafile=os.environ["SSL_CERT_FILE"]
-            )
-        elif trust_env and os.environ.get("SSL_CERT_DIR"):
-            ctx = _ssl.create_default_context(
-                capath=os.environ["SSL_CERT_DIR"]
-            )
+        cafile = os.environ.get("SSL_CERT_FILE") if trust_env else None
+        capath = os.environ.get("SSL_CERT_DIR") if trust_env else None
+        if cafile or capath:
+            ctx = _ssl.create_default_context(cafile=cafile, capath=capath)
         else:
             import certifi
 

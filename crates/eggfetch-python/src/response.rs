@@ -260,7 +260,15 @@ impl PyResponse {
                         }
                     }
                     eggfetch_core::network_stream::NetworkStream::Metadata(m) => {
-                        Ok(EitherNetworkStream::Sync(PyNetworkStream::from_metadata(m)))
+                        if is_async {
+                            Ok(EitherNetworkStream::Async(
+                                PyAsyncNetworkStream::from_metadata(m)?,
+                            ))
+                        } else {
+                            Ok(EitherNetworkStream::Sync(PyNetworkStream::from_metadata(
+                                m,
+                            )?))
+                        }
                     }
                 }
             })

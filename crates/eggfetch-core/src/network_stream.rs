@@ -354,19 +354,9 @@ impl UpgradedStream {
         let tcp = match std::mem::replace(
             &mut self.inner,
             // Placeholder that we'll immediately replace.
-            UpgradedStreamInner::Tcp({
-                // This code path is only reached for Tcp variant; the
-                // placeholder is never actually used.
-                let listener = std::net::TcpListener::bind("127.0.0.1:0").map_err(|e| {
-                    Error::Tls(format!("failed to create dummy socket for TLS: {e}"))
-                })?;
-                let (std_stream, _) = listener
-                    .accept()
-                    .map_err(|e| Error::Tls(format!("failed to accept on dummy socket: {e}")))?;
-                tokio::net::TcpStream::from_std(std_stream).map_err(|e| {
-                    Error::Tls(format!("failed to create tokio socket for TLS: {e}"))
-                })?
-            }),
+            // A zero-capacity in-memory stream avoids allocating a real
+            // socket solely to move the enum value out.
+            UpgradedStreamInner::Adapter(Box::pin(tokio::io::duplex(0).0)),
         ) {
             UpgradedStreamInner::Tcp(s) => s,
             UpgradedStreamInner::Tls(_) => {

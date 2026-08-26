@@ -432,12 +432,53 @@ impl TlsConfigBuilder {
     pub fn ca_certificate_path(mut self, path: impl AsRef<Path>) -> Result<Self> {
         let certs = load_pem_certs_from_path(path.as_ref())?;
         if certs.is_empty() {
+            if path.as_ref().is_dir() {
+                return Ok(self);
+            }
             return Err(Error::CaBundle(format!(
                 "no certificates found in {}",
                 path.as_ref().display()
             )));
         }
         self.custom_ca_roots = certs;
+        self.trust_store = TrustStore::Custom(self.custom_ca_roots.clone());
+        Ok(self)
+    }
+
+    /// Add CA certificates from a PEM file or certificate directory to the
+    /// configured custom trust store, replacing the default trust store if
+    /// this is the first custom source.
+    ///
+    /// Duplicate certificates are ignored. This is useful when multiple
+    /// environment-provided CA sources are combined.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the path cannot be read or contains no PEM
+    /// certificates. Empty directories are ignored.
+    pub fn add_ca_certificate_path(mut self, path: impl AsRef<Path>) -> Result<Self> {
+        let certs = load_pem_certs_from_path(path.as_ref())?;
+        if certs.is_empty() {
+            if path.as_ref().is_dir() {
+                return Ok(self);
+            }
+            return Err(Error::CaBundle(format!(
+                "no certificates found in {}",
+                path.as_ref().display()
+            )));
+        }
+        if !matches!(&self.trust_store, TrustStore::Custom(_)) {
+            self.custom_ca_roots.clear();
+        }
+        for cert in certs {
+            if !self
+                .custom_ca_roots
+                .iter()
+                .any(|existing| existing.as_ref() == cert.as_ref())
+            {
+                self.custom_ca_roots.push(cert);
+            }
+        }
         self.trust_store = TrustStore::Custom(self.custom_ca_roots.clone());
         Ok(self)
     }
@@ -768,6 +809,25 @@ const PEM_END: &[u8] = b"-----END ";
 
 /// Load PEM-encoded certificates from a file.
 fn load_pem_certs_from_path(path: &Path) -> Result<Vec<CertificateDer<'static>>> {
+    if path.is_dir() {
+        let mut entries = std::fs::read_dir(path)
+            .map_err(|e| Error::CaBundle(format!("failed to read {}: {e}", path.display())))?
+            .filter_map(std::result::Result::ok)
+            .collect::<Vec<_>>();
+        entries.sort_by_key(std::fs::DirEntry::file_name);
+
+        let mut certs = Vec::new();
+        for entry in entries {
+            if !entry.metadata().is_ok_and(|metadata| metadata.is_file()) {
+                continue;
+            }
+            if let Ok(data) = std::fs::read(entry.path()) {
+                certs.extend(parse_pem_certificates(&data));
+            }
+        }
+        return Ok(certs);
+    }
+
     let data = std::fs::read(path)
         .map_err(|e| Error::CaBundle(format!("failed to read {}: {e}", path.display())))?;
     Ok(parse_pem_certificates(&data))
@@ -926,6 +986,42 @@ mod tests {
             .ca_certificate_pem(b"")
             .map(super::TlsConfigBuilder::build);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn add_ca_certificate_path_combines_files_and_directories() {
+        let make_ca_pem = || {
+            let mut params = rcgen::CertificateParams::default();
+            params.is_ca = rcgen::IsCa::Ca(rcgen::BasicConstraints::Unconstrained);
+            let key = rcgen::KeyPair::generate().unwrap();
+            params.self_signed(&key).unwrap().pem()
+        };
+        let first = make_ca_pem();
+        let second = make_ca_pem();
+        let tempdir = tempfile::tempdir().unwrap();
+        let first_path = tempdir.path().join("first.pem");
+        let cert_dir = tempdir.path().join("certs");
+        std::fs::create_dir(&cert_dir).unwrap();
+        std::fs::write(&first_path, first).unwrap();
+        std::fs::write(cert_dir.join("second.pem"), second).unwrap();
+
+        let config = TlsConfig::builder()
+            .ca_certificate_path(first_path)
+            .unwrap()
+            .add_ca_certificate_path(cert_dir)
+            .unwrap()
+            .build();
+        assert_eq!(config.custom_ca_roots.len(), 2);
+
+        let empty_dir = tempdir.path().join("empty");
+        std::fs::create_dir(&empty_dir).unwrap();
+        let config = TlsConfig::builder()
+            .ca_certificate_path(tempdir.path().join("first.pem"))
+            .unwrap()
+            .add_ca_certificate_path(empty_dir)
+            .unwrap()
+            .build();
+        assert_eq!(config.custom_ca_roots.len(), 1);
     }
 
     #[test]

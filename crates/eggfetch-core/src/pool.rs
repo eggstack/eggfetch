@@ -492,10 +492,9 @@ impl Pool {
                 drop(table_lock);
             } else {
                 drop(table_lock);
-                // Must wait for a slot.
-                waited = true;
                 if let Ok(permit) = sem.acquire_owned().await {
                     origin_permit = Some(permit);
+                    waited = true;
                 } else {
                     // Semaphore closed (shouldn't happen in practice).
                     // Record it and continue without an origin permit so
@@ -516,23 +515,15 @@ impl Pool {
             // the awaited acquire instead of cloning again.
             if let Ok(permit) = sem.clone().try_acquire_owned() {
                 global_permit = Some(permit);
-            } else {
-                // Must wait for a slot.
+            } else if let Ok(permit) = sem.clone().acquire_owned().await {
+                global_permit = Some(permit);
                 waited = true;
-                if let Ok(permit) = sem.clone().acquire_owned().await {
-                    global_permit = Some(permit);
-                } else {
-                    self.inner
-                        .metrics
-                        .acquisition_cancellations
-                        .fetch_add(1, Ordering::Relaxed);
-                    return PoolGuard::new(
-                        self.inner.clone(),
-                        origin.cloned(),
-                        None,
-                        origin_permit,
-                    );
-                }
+            } else {
+                self.inner
+                    .metrics
+                    .acquisition_cancellations
+                    .fetch_add(1, Ordering::Relaxed);
+                return PoolGuard::new(self.inner.clone(), origin.cloned(), None, origin_permit);
             }
         }
 
@@ -636,6 +627,56 @@ mod tests {
         assert_eq!(pool.metrics().acquisition_waits.load(Ordering::Relaxed), 0);
 
         drop(g1);
+    }
+
+    #[tokio::test]
+    async fn closed_semaphores_count_cancellation_without_a_wait() {
+        let global_pool = Pool::new(PoolConfig {
+            max_connections: Some(1),
+            ..Default::default()
+        });
+        let global_guard = global_pool.acquire(None).await;
+        global_pool.inner.global_semaphore.as_ref().unwrap().close();
+        drop(global_pool.acquire(None).await);
+        assert_eq!(
+            global_pool
+                .metrics()
+                .acquisition_waits
+                .load(Ordering::Relaxed),
+            0
+        );
+        assert_eq!(
+            global_pool
+                .metrics()
+                .acquisition_cancellations
+                .load(Ordering::Relaxed),
+            1
+        );
+        drop(global_guard);
+
+        let origin_pool = Pool::new(PoolConfig {
+            max_connections_per_host: Some(1),
+            ..Default::default()
+        });
+        let origin = OriginKey::from_parts("http", "example.com", 80);
+        let origin_guard = origin_pool.acquire(Some(&origin)).await;
+        origin_pool.inner.per_origin.get(&origin).unwrap().close();
+        drop(origin_pool.acquire(Some(&origin)).await);
+        assert_eq!(
+            origin_pool
+                .metrics()
+                .acquisition_waits
+                .load(Ordering::Relaxed),
+            0
+        );
+        assert_eq!(
+            origin_pool
+                .metrics()
+                .acquisition_cancellations
+                .load(Ordering::Relaxed),
+            1
+        );
+        drop(origin_guard);
     }
 
     #[test]

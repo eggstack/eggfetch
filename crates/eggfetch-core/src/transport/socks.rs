@@ -500,15 +500,15 @@ async fn resolve_dest_ip(
     // DNS resolution.
     let lookup = lookup_host(format!("{host}:0"));
     let result = match deadline {
-        Some(deadline) => tokio::time::timeout(
-            deadline.saturating_duration_since(std::time::Instant::now()),
-            lookup,
-        )
-        .await
-        .map_err(|_| Error::Timeout {
-            phase: TimeoutPhase::ProxyConnect,
-            elapsed: deadline.saturating_duration_since(std::time::Instant::now()),
-        })?,
+        Some(deadline) => {
+            let dur = deadline.saturating_duration_since(std::time::Instant::now());
+            tokio::time::timeout(dur, lookup)
+                .await
+                .map_err(|_| Error::Timeout {
+                    phase: TimeoutPhase::ProxyConnect,
+                    elapsed: dur,
+                })?
+        }
         None => lookup.await,
     };
     let addr = result.ok().and_then(|mut addrs| addrs.next());

@@ -128,6 +128,14 @@ class TestCreateSSLContextConstruction:
         except ssl.SSLError:
             pass  # Empty cert dir is acceptable
 
+    def test_ssl_cert_file_and_dir_env_are_both_accepted(self, monkeypatch, tmp_path):
+        import certifi
+
+        monkeypatch.setenv("SSL_CERT_FILE", certifi.where())
+        monkeypatch.setenv("SSL_CERT_DIR", str(tmp_path))
+        ctx = create_ssl_context(verify=True, trust_env=True)
+        assert isinstance(ctx, ssl.SSLContext)
+
     def test_trust_env_false_ignores_env(self, monkeypatch):
         import certifi
 
