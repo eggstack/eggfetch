@@ -8,7 +8,7 @@ use crate::conversion::{
     python_params_to_url, validate_body_kwargs_with_files,
 };
 use crate::cookies::PyCookies;
-use crate::errors::map_err;
+use crate::errors::{map_err, InvalidUrl};
 use crate::extensions::extract_native_extensions;
 use crate::limits::PyLimits;
 use crate::proxy::{self, ProxyOverride};
@@ -178,8 +178,14 @@ impl PyAsyncClient {
                     }
                     .map_err(map_err)?;
                     if let Some(no_proxy) = proxy::env_no_proxy(py)? {
-                        let rules =
-                            eggfetch_core::NoProxy::parse_httpx(&no_proxy).map_err(map_err)?;
+                        let rules = eggfetch_core::NoProxy::parse_httpx(&no_proxy).map_err(
+                            |err| match err {
+                                eggfetch_core::Error::InvalidProxyUrl(message) => {
+                                    InvalidUrl::new_err(message)
+                                }
+                                other => map_err(other),
+                            },
+                        )?;
                         p = p.no_proxy(rules);
                     }
                     builder = builder.environment_proxy(p);
@@ -325,10 +331,12 @@ impl PyAsyncClient {
             if let Ok(proxy_module) = py.import("eggfetch.compat.httpx._proxy") {
                 if let Ok(proxy_class) = proxy_module.getattr("Proxy") {
                     if proxy_obj.is_instance(&proxy_class).unwrap_or(false) {
-                        let headers = proxy_obj
-                            .getattr("headers")
-                            .ok()
-                            .and_then(|h| crate::conversion::python_headers_to_rust(py, &h).ok());
+                        let headers = if proxy_obj.hasattr("headers")? {
+                            let h = proxy_obj.getattr("headers")?;
+                            Some(crate::conversion::python_headers_to_rust(py, &h)?)
+                        } else {
+                            None
+                        };
                         let ssl_ctx = proxy_obj.getattr("ssl_context").ok();
                         (headers, ssl_ctx)
                     } else {
@@ -886,10 +894,12 @@ impl PyAsyncClient {
             if let Ok(proxy_module) = py.import("eggfetch.compat.httpx._proxy") {
                 if let Ok(proxy_class) = proxy_module.getattr("Proxy") {
                     if proxy_obj.is_instance(&proxy_class).unwrap_or(false) {
-                        let headers = proxy_obj
-                            .getattr("headers")
-                            .ok()
-                            .and_then(|h| crate::conversion::python_headers_to_rust(py, &h).ok());
+                        let headers = if proxy_obj.hasattr("headers")? {
+                            let h = proxy_obj.getattr("headers")?;
+                            Some(crate::conversion::python_headers_to_rust(py, &h)?)
+                        } else {
+                            None
+                        };
                         let ssl_ctx = proxy_obj.getattr("ssl_context").ok();
                         (headers, ssl_ctx)
                     } else {

@@ -120,7 +120,7 @@ pub fn build_redirect_request(
     original: &Request,
     status: http::StatusCode,
     location: &str,
-) -> Result<(Request, Option<Vec<u8>>)> {
+) -> Result<Request> {
     let new_method = redirect_method(status, original.method());
     let drop_body = drops_body_on_redirect(status, original.method());
     build_redirect_request_with_policy(original, location, new_method, drop_body)
@@ -140,7 +140,7 @@ pub(crate) fn build_redirect_request_with_policy(
     location: &str,
     new_method: Method,
     drop_body: bool,
-) -> Result<(Request, Option<Vec<u8>>)> {
+) -> Result<Request> {
     let new_url = resolve_redirect_url(original.url(), location)?;
 
     validate_redirect_url(&new_url)?;
@@ -165,7 +165,7 @@ pub(crate) fn build_redirect_request_with_policy(
     // ALPN governs TLS paths and the version policy lives on the
     // client config.
 
-    Ok((redirect_request, None))
+    Ok(redirect_request)
 }
 
 /// Resolve a redirect Location against the original URL.
@@ -198,7 +198,17 @@ fn strip_headers_for_redirect(
     new_url: &Url,
     drop_body: bool,
 ) {
-    // Strip sensitive headers on cross-origin redirects.
+    // Always strip `authorization` and `proxy-authorization`. The pipeline
+    // re-applies configured auth via `resolve_request_auth`, and leaving
+    // the prior hop's header in place would trigger `ConflictingAuth` on
+    // same-origin redirects that inherit the header. Stripping here is
+    // safe because the pipeline decides whether to re-attach credentials
+    // based on the `credentials_allowed` flag for the hop.
+    for name in ["authorization", "proxy-authorization"] {
+        headers.remove(name);
+    }
+
+    // Strip remaining sensitive headers on cross-origin redirects.
     let cross_origin = original_url.origin() != new_url.origin();
     if cross_origin {
         for name in SENSITIVE_HEADERS {
@@ -344,7 +354,7 @@ mod tests {
             .insert("content-type", "text/plain")
             .unwrap();
 
-        let (redirect, _) =
+        let redirect =
             build_redirect_request(&req, StatusCode::SEE_OTHER, "https://example.com/b").unwrap();
 
         assert_eq!(*redirect.method(), Method::GET);
@@ -358,11 +368,11 @@ mod tests {
         let mut req = Request::new(Method::GET, Url::parse("https://example.com/a").unwrap());
         req.headers_mut().insert("host", "internal.corp").unwrap();
 
-        let (same_origin, _) =
+        let same_origin =
             build_redirect_request(&req, StatusCode::FOUND, "https://example.com/b").unwrap();
         assert!(same_origin.headers().get("host").is_some());
 
-        let (cross_origin, _) =
+        let cross_origin =
             build_redirect_request(&req, StatusCode::FOUND, "https://other.com/b").unwrap();
         assert!(cross_origin.headers().get("host").is_none());
     }
@@ -375,19 +385,24 @@ mod tests {
     // --- build_redirect_request tests ---
 
     #[test]
-    fn build_redirect_same_origin_preserves_auth() {
+    fn build_redirect_same_origin_strips_authorization() {
+        // The pipeline re-applies configured auth via `resolve_request_auth`;
+        // leaving the prior hop's `Authorization` in place would trigger
+        // `ConflictingAuth` on a same-origin redirect that inherits the
+        // header. `cookie` and `host` survive same-origin redirects so the
+        // server sees the same session state.
         let mut req = Request::new(Method::GET, Url::parse("https://example.com/a").unwrap());
         req.headers_mut()
             .insert("authorization", "Bearer tok")
             .unwrap();
         req.headers_mut().insert("cookie", "session=abc").unwrap();
 
-        let (redirect, _) =
+        let redirect =
             build_redirect_request(&req, StatusCode::FOUND, "https://example.com/b").unwrap();
 
         assert_eq!(*redirect.method(), Method::GET);
         assert_eq!(redirect.url().as_str(), "https://example.com/b");
-        assert!(redirect.headers().get("authorization").is_some());
+        assert!(redirect.headers().get("authorization").is_none());
         assert!(redirect.headers().get("cookie").is_some());
     }
 
@@ -403,7 +418,7 @@ mod tests {
             .unwrap();
         req.headers_mut().insert("x-custom", "keep").unwrap();
 
-        let (redirect, _) =
+        let redirect =
             build_redirect_request(&req, StatusCode::FOUND, "https://other.com/b").unwrap();
 
         assert!(redirect.headers().get("authorization").is_none());
@@ -424,7 +439,7 @@ mod tests {
             .insert("transfer-encoding", "chunked")
             .unwrap();
 
-        let (redirect, _) =
+        let redirect =
             build_redirect_request(&req, StatusCode::MOVED_PERMANENTLY, "https://example.com/b")
                 .unwrap();
 
@@ -444,7 +459,7 @@ mod tests {
             .insert("content-type", "text/plain")
             .unwrap();
 
-        let (redirect, _) = build_redirect_request(
+        let redirect = build_redirect_request(
             &req,
             StatusCode::TEMPORARY_REDIRECT,
             "https://example.com/b",
@@ -464,7 +479,7 @@ mod tests {
     fn build_redirect_relative_url() {
         let req = Request::new(Method::GET, Url::parse("https://example.com/a/b").unwrap());
 
-        let (redirect, _) = build_redirect_request(&req, StatusCode::FOUND, "/c/d").unwrap();
+        let redirect = build_redirect_request(&req, StatusCode::FOUND, "/c/d").unwrap();
 
         assert_eq!(redirect.url().as_str(), "https://example.com/c/d");
     }
@@ -473,8 +488,7 @@ mod tests {
     fn build_redirect_scheme_relative_url() {
         let req = Request::new(Method::GET, Url::parse("https://example.com/a").unwrap());
 
-        let (redirect, _) =
-            build_redirect_request(&req, StatusCode::FOUND, "//other.com/b").unwrap();
+        let redirect = build_redirect_request(&req, StatusCode::FOUND, "//other.com/b").unwrap();
 
         assert_eq!(redirect.url().as_str(), "https://other.com/b");
     }
@@ -504,7 +518,7 @@ mod tests {
         let mut req = Request::new(Method::GET, Url::parse("https://example.com/a").unwrap());
         req.set_version(http::Version::HTTP_2);
 
-        let (redirect, _) =
+        let redirect =
             build_redirect_request(&req, StatusCode::FOUND, "https://example.com/b").unwrap();
 
         assert_ne!(redirect.version(), http::Version::HTTP_2);
@@ -515,7 +529,7 @@ mod tests {
     fn build_redirect_empty_body_preserved() {
         let req = Request::new(Method::POST, Url::parse("https://example.com/a").unwrap());
 
-        let (redirect, _) = build_redirect_request(
+        let redirect = build_redirect_request(
             &req,
             StatusCode::TEMPORARY_REDIRECT,
             "https://example.com/b",

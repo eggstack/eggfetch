@@ -219,6 +219,18 @@ pub(crate) async fn send_with_retry(client: &Client, request: Request) -> Result
     loop {
         attempt += 1;
 
+        // Check max attempts budget first so the `attempts` field in the
+        // error reports the same count regardless of which constraint
+        // (max_attempts or max_elapsed) ends the loop. Without this order,
+        // a tight `max_elapsed` can return `attempts: 0` for the same
+        // logical situation that `max_attempts` would report as
+        // `attempts: attempt - 1`.
+        if attempt > policy.max_attempts() {
+            return Err(Error::RetryBudgetExhausted {
+                attempts: attempt - 1,
+            });
+        }
+
         // Check total budget before attempting.
         if let Some(max_elapsed) = policy.max_elapsed() {
             if start_time.elapsed() >= max_elapsed {
@@ -226,13 +238,6 @@ pub(crate) async fn send_with_retry(client: &Client, request: Request) -> Result
                     attempts: attempt - 1,
                 });
             }
-        }
-
-        // Check max attempts budget.
-        if attempt > policy.max_attempts() {
-            return Err(Error::RetryBudgetExhausted {
-                attempts: attempt - 1,
-            });
         }
 
         // Enforce the original total deadline across attempts: each attempt
@@ -244,7 +249,7 @@ pub(crate) async fn send_with_retry(client: &Client, request: Request) -> Result
             if start_time.elapsed() >= total {
                 return Err(Error::Timeout {
                     phase: TimeoutPhase::Total,
-                    elapsed: total,
+                    elapsed: start_time.elapsed(),
                 });
             }
         }
@@ -482,7 +487,7 @@ pub(crate) async fn send_with_redirects(client: &Client, request: Request) -> Re
             if elapsed >= total_dur {
                 return Err(Error::Timeout {
                     phase: TimeoutPhase::Total,
-                    elapsed: total_dur,
+                    elapsed,
                 });
             }
             let remaining = total_dur.saturating_sub(elapsed);
@@ -608,7 +613,7 @@ pub(crate) async fn send_with_redirects(client: &Client, request: Request) -> Re
             {
                 return Err(Error::Timeout {
                     phase: TimeoutPhase::Total,
-                    elapsed: dur,
+                    elapsed: start_time.elapsed(),
                 });
             }
         } else {
@@ -652,7 +657,7 @@ pub(crate) async fn send_with_redirects(client: &Client, request: Request) -> Re
         temp_request.set_body(temp_body);
         temp_request.set_version(cur_version);
 
-        let (redirect_req, _) = redirect::build_redirect_request_with_policy(
+        let redirect_req = redirect::build_redirect_request_with_policy(
             &temp_request,
             &location,
             new_method.clone(),
@@ -1007,6 +1012,7 @@ pub(crate) async fn send_single_request(
                     proxy_tls_timeout: timeout.connect,
                     write_timeout: timeout.write,
                     read_timeout: timeout.read,
+                    http_version_policy: inner.config.http_version_policy,
                     origin_tls_config: inner.config.tls_config.as_ref(),
                     // Proxy TLS config is independent from origin TLS
                     // config.  When the proxy endpoint has no explicit

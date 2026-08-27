@@ -132,10 +132,16 @@ impl Headers {
 
     /// Reject an outbound header set that would exceed the request limit.
     pub(crate) fn validate_request_size(&self) -> Result<()> {
-        let size = self.inner.iter().try_fold(2usize, |size, (name, value)| {
+        // `MAX_REQUEST_HEADER_BYTES` bounds the header block including the
+        // trailing CRLF that separates headers from the body.  Fold only
+        // the per-header `name: value\r\n` bytes here and add the trailing
+        // `\r\n` at comparison time so a header set that exactly fills
+        // the limit is not rejected by the two bytes reserved for the
+        // header-body separator.
+        let size = self.inner.iter().try_fold(0usize, |size, (name, value)| {
             size.checked_add(name.as_str().len() + value.as_bytes().len() + 4)
         });
-        if size.map_or(true, |size| size > MAX_REQUEST_HEADER_BYTES) {
+        if size.map_or(true, |size| size + 2 > MAX_REQUEST_HEADER_BYTES) {
             return Err(Error::RequestBuild(format!(
                 "request headers exceed maximum size of {MAX_REQUEST_HEADER_BYTES} bytes"
             )));

@@ -409,7 +409,9 @@ impl UpgradedStream {
         Ok(UpgradedStream {
             inner: UpgradedStreamInner::Tls(Box::new(tls_stream)),
             metadata,
-            leading_data: Bytes::new(),
+            // Carry any leading data buffered before the TLS handshake so
+            // pipelined bytes from the 101 upgrade are not dropped.
+            leading_data: std::mem::take(&mut self.leading_data),
         })
     }
 }

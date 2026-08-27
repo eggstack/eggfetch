@@ -52,6 +52,10 @@ pub(crate) struct ProxyRequestContext<'a> {
     pub(crate) proxy_tls_timeout: Option<std::time::Duration>,
     pub(crate) write_timeout: Option<std::time::Duration>,
     pub(crate) read_timeout: Option<std::time::Duration>,
+    /// HTTP version policy from the client.  Used to reject unsupported
+    /// combinations (e.g. `Http2Only` through an HTTP forward proxy)
+    /// before any wire I/O is attempted.
+    pub(crate) http_version_policy: crate::http_version::HttpVersionPolicy,
     /// TLS configuration for the *origin* server (used after CONNECT
     /// tunnel establishment).
     pub(crate) origin_tls_config: Option<&'a crate::tls::TlsConfig>,
@@ -267,6 +271,19 @@ async fn send_http_proxy_request(
     transport_hints: &crate::request::TransportHints,
     ctx: &ProxyRequestContext<'_>,
 ) -> Result<Response> {
+    // HTTP/2-only policy cannot be satisfied through an HTTP forward
+    // proxy: the proxy leg is inherently HTTP/1.x (no HTTP/2 framing over
+    // an absolute-form request line).  Reject before opening any
+    // connection rather than silently downgrading.
+    if matches!(
+        ctx.http_version_policy,
+        crate::http_version::HttpVersionPolicy::Http2Only
+    ) {
+        return Err(Error::Unsupported(
+            "HTTP/2-only policy is not supported through an HTTP forward proxy".into(),
+        ));
+    }
+
     let mut stream = connect_to_proxy(
         proxy_config,
         ctx.proxy_connect_timeout,

@@ -460,6 +460,18 @@ impl ResponseBody {
     /// For buffered bodies, this is O(1). For streaming bodies, this
     /// collects all chunks into a single `Bytes` buffer.
     ///
+    /// # Limits
+    ///
+    /// For `EncodedStreaming` bodies the configured
+    /// [`DecompressionLimit`] is enforced via the decompression pipeline.
+    /// `Streaming` and `Buffered` bodies (e.g. a non-encoded `identity`
+    /// response) do not carry a `DecompressionLimit`, so this method
+    /// will buffer the entire body in memory.  Callers expecting large
+    /// unencoded bodies should use [`Self::bytes_stream`] and apply
+    /// their own size cap instead.
+    ///
+    /// [`DecompressionLimit`]: crate::compression::DecompressionLimit
+    ///
     /// # Errors
     ///
     /// Returns an error if the body has already been consumed or if a

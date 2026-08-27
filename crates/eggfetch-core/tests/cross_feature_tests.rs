@@ -877,12 +877,14 @@ async fn handle_redirect_request(
     let parts: Vec<&str> = request_line.split_whitespace().collect();
     let path = parts.get(1).copied().unwrap_or("/");
 
+    let mut req_headers = String::new();
     loop {
         let mut line = String::new();
         reader.read_line(&mut line).await?;
         if line.trim().is_empty() {
             break;
         }
+        req_headers.push_str(&line);
     }
 
     match path {
@@ -905,6 +907,23 @@ async fn handle_redirect_request(
                 "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
                 body.len()
             );
+            stream.write_all(resp.as_bytes()).await?;
+        }
+        "/echo-headers" => {
+            // Echo back the request headers as a JSON-like map so tests
+            // can assert which credentials arrived on a hop.
+            let body = format!("headers=\"{req_headers}\"");
+            let resp = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            );
+            stream.write_all(resp.as_bytes()).await?;
+        }
+        "/redirect-echo-headers" => {
+            // 302 redirect to the echo-headers endpoint on the same
+            // origin. Tests use this to verify that the second hop
+            // receives credentials configured at the client level.
+            let resp = "HTTP/1.1 302 Found\r\nLocation: /echo-headers\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
             stream.write_all(resp.as_bytes()).await?;
         }
         _ => {
@@ -1407,6 +1426,39 @@ async fn redirect_cross_origin_through_proxy() {
     proxy.shutdown();
     origin_server.shutdown();
     cross_server.shutdown();
+}
+
+/// Client-level auth must survive a same-origin redirect. The
+/// redirect clone previously inherited the prior hop's `Authorization`
+/// header, which then collided with the re-applied client auth and
+/// produced `ConflictingAuth`. The fix strips `authorization` (and
+/// `proxy-authorization`) from the redirect hop so the pipeline can
+/// re-attach configured credentials cleanly.
+#[tokio::test]
+async fn client_auth_survives_same_origin_redirect() {
+    let redirect_server = RedirectServer::start(None).await;
+
+    let client = Client::builder()
+        .auth(eggfetch_core::AuthScheme::basic("testuser", "testpass").unwrap())
+        .follow_redirects(true)
+        .timeout(Timeout {
+            total: Some(Duration::from_secs(5)),
+            ..Default::default()
+        })
+        .build();
+
+    let dest = format!("{}/redirect-echo-headers", redirect_server.url());
+    let mut resp = client.get(&dest).unwrap().send().await.unwrap();
+    assert_eq!(resp.status().as_u16(), 200);
+    let body = resp.text().await.unwrap();
+    assert!(
+        body.to_lowercase().contains("authorization: basic"),
+        "client auth must be re-applied on same-origin redirect hop, body={body}"
+    );
+    assert_eq!(resp.history().len(), 1);
+    assert_eq!(resp.history()[0].status().as_u16(), 302);
+
+    redirect_server.shutdown();
 }
 
 #[tokio::test]

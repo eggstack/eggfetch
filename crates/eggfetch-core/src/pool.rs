@@ -479,9 +479,19 @@ impl Pool {
                 .per_origin_table_lock
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            self.inner
-                .per_origin
-                .retain(|_, sem| sem.available_permits() < max_per_origin);
+            self.inner.per_origin.retain(|_, sem| {
+                // Keep entries that are either holding a permit or have
+                // an outstanding waiter. The strong-count guard closes
+                // the eviction-during-wait race: between releasing the
+                // table lock and `acquire_owned` resolving, a waiter
+                // holds a clone of this `Arc`, so the strong count is
+                // at least 2 (table + waiter). On common 64-bit
+                // platforms the strong count read is naturally atomic
+                // for an aligned word, matching the only platforms
+                // where `Arc::strong_count` reads can race with
+                // concurrent `Arc::clone`/`Arc::drop`.
+                sem.available_permits() < max_per_origin || Arc::strong_count(sem) > 1
+            });
 
             let sem = self
                 .inner

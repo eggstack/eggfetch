@@ -150,10 +150,12 @@ impl PyClient {
             if let Ok(proxy_module) = py.import("eggfetch.compat.httpx._proxy") {
                 if let Ok(proxy_class) = proxy_module.getattr("Proxy") {
                     if proxy_obj.is_instance(&proxy_class).unwrap_or(false) {
-                        let headers = proxy_obj
-                            .getattr("headers")
-                            .ok()
-                            .and_then(|h| crate::conversion::python_headers_to_rust(py, &h).ok());
+                        let headers = if proxy_obj.hasattr("headers")? {
+                            let h = proxy_obj.getattr("headers")?;
+                            Some(crate::conversion::python_headers_to_rust(py, &h)?)
+                        } else {
+                            None
+                        };
                         let ssl_ctx = proxy_obj.getattr("ssl_context").ok();
                         (headers, ssl_ctx)
                     } else {
@@ -350,10 +352,12 @@ impl PyClient {
             if let Ok(proxy_module) = py.import("eggfetch.compat.httpx._proxy") {
                 if let Ok(proxy_class) = proxy_module.getattr("Proxy") {
                     if proxy_obj.is_instance(&proxy_class).unwrap_or(false) {
-                        let headers = proxy_obj
-                            .getattr("headers")
-                            .ok()
-                            .and_then(|h| crate::conversion::python_headers_to_rust(py, &h).ok());
+                        let headers = if proxy_obj.hasattr("headers")? {
+                            let h = proxy_obj.getattr("headers")?;
+                            Some(crate::conversion::python_headers_to_rust(py, &h)?)
+                        } else {
+                            None
+                        };
                         let ssl_ctx = proxy_obj.getattr("ssl_context").ok();
                         (headers, ssl_ctx)
                     } else {
@@ -920,10 +924,12 @@ impl PyClient {
             if let Ok(proxy_module) = py.import("eggfetch.compat.httpx._proxy") {
                 if let Ok(proxy_class) = proxy_module.getattr("Proxy") {
                     if proxy_obj.is_instance(&proxy_class).unwrap_or(false) {
-                        let headers = proxy_obj
-                            .getattr("headers")
-                            .ok()
-                            .and_then(|h| crate::conversion::python_headers_to_rust(py, &h).ok());
+                        let headers = if proxy_obj.hasattr("headers")? {
+                            let h = proxy_obj.getattr("headers")?;
+                            Some(crate::conversion::python_headers_to_rust(py, &h)?)
+                        } else {
+                            None
+                        };
                         let ssl_ctx = proxy_obj.getattr("ssl_context").ok();
                         (headers, ssl_ctx)
                     } else {

@@ -477,6 +477,11 @@ impl Stream for LineStream {
                         return Poll::Ready(None);
                     }
                     let remaining = std::mem::take(&mut self.buffer);
+                    if remaining.len() > MAX_LINE_LENGTH {
+                        return Poll::Ready(Some(Err(crate::error::Error::Body(format!(
+                            "response line exceeded maximum length of {MAX_LINE_LENGTH} bytes"
+                        )))));
+                    }
                     let mut line = &remaining[..remaining.len()];
                     if line.ends_with(b"\r") {
                         line = &line[..line.len() - 1];
@@ -605,6 +610,26 @@ mod tests {
         );
         let mut lines = resp.text_lines().unwrap();
         assert_eq!(lines.next().await.unwrap().unwrap(), "ok");
+        let error = lines.next().await.unwrap().unwrap_err();
+        assert!(matches!(error, crate::error::Error::Body(_)));
+    }
+
+    #[tokio::test]
+    async fn response_text_lines_rejects_unbounded_terminal_line() {
+        // The terminal flush path (`Poll::Ready(None)`) must enforce
+        // `MAX_LINE_LENGTH` even when the over-long buffer never sees a
+        // trailing newline.
+        let stream = Box::pin(futures_util::stream::iter(vec![Ok(Bytes::from(vec![
+            b'a'; MAX_LINE_LENGTH + 1
+        ]))]));
+        let mut resp = Response::new(
+            StatusCode::OK,
+            Version::HTTP_11,
+            HeaderMap::new(),
+            Url::parse("http://example.com").unwrap(),
+            ResponseBody::streaming(stream),
+        );
+        let mut lines = resp.text_lines().unwrap();
         let error = lines.next().await.unwrap().unwrap_err();
         assert!(matches!(error, crate::error::Error::Body(_)));
     }

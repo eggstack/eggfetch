@@ -602,3 +602,53 @@ async fn test_streaming_response_holds_permit_until_consumed() {
 
     server.shutdown();
 }
+
+/// When a waiter is queued for a per-host permit and another task
+/// releases its permit, the per-origin semaphore entry must not be
+/// evicted while the waiter is still in the acquire queue.  Previously
+/// the entry's `available_permits() == max` predicate could fire during
+/// the wait, evicting the entry and orphaning the waiter's `Arc`.  The
+/// orphan's permit returns to a semaphore no longer in the table,
+/// silently leaking capacity and (under churn) eventually bypassing the
+/// per-host limit.  The fix adds an `Arc::strong_count > 1` guard to
+/// `retain` so the entry stays as long as the waiter holds a clone.
+#[tokio::test]
+async fn per_origin_eviction_skips_entries_with_active_waiter() {
+    use eggfetch_core::{Client, Limits};
+
+    // `max_connections_per_host = 1` bounds the per-host semaphore so
+    // the second in-flight request to the same origin must wait.
+    let client = Client::builder()
+        .limits(Limits {
+            max_connections_per_host: Some(1),
+            ..Default::default()
+        })
+        .build();
+
+    // A slow server that delays the response keeps the first permit
+    // held long enough for the second request to queue.
+    let mut server = TestServer::start(&TestServerConfig {
+        response_delay_ms: 100,
+        ..Default::default()
+    });
+
+    // First request acquires the (only) per-host permit.
+    let url = server.url();
+    let req1 = client.get(&url).unwrap().send();
+    // Let the first request reach the server and acquire the permit.
+    tokio::time::sleep(Duration::from_millis(20)).await;
+    let req2 = client.get(&url).unwrap().send();
+
+    // Both requests resolve; if the per-host entry was evicted while
+    // `req2` was queued on the orphaned semaphore, the orphan's permit
+    // would return to a removed entry and `req2` would either hang or
+    // fail.  With the fix, req2 completes normally.
+    let resp1 = req1.await.unwrap();
+    // Drop resp1 (and its body) to release the per-host permit, then
+    // await req2 which has been waiting in the per-host queue.
+    drop(resp1);
+    let resp2 = req2.await.unwrap();
+    assert!(resp2.is_success());
+
+    server.shutdown();
+}

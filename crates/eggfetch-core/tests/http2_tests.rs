@@ -396,6 +396,41 @@ fn http2_feature_is_enabled() {
     drop(client);
 }
 
+/// `Http2Only` policy is incompatible with an HTTP forward proxy: the
+/// proxy leg is inherently HTTP/1.x (absolute-form request line). The
+/// pipeline must reject this combination with `Error::Unsupported`
+/// before any wire I/O is attempted, rather than silently downgrading
+/// the request to HTTP/1.1.
+#[cfg(feature = "proxy")]
+#[tokio::test]
+async fn h2_only_rejects_http_forward_proxy() {
+    use eggfetch_core::Proxy;
+
+    let client = Client::builder()
+        .http_version_policy(HttpVersionPolicy::Http2Only)
+        .proxy(Proxy::all("http://127.0.0.1:1").unwrap())
+        .timeout(eggfetch_core::Timeout {
+            total: Some(Duration::from_secs(3)),
+            ..Default::default()
+        })
+        .build();
+
+    let err = client
+        .get("http://destination.example/path")
+        .unwrap()
+        .send()
+        .await
+        .expect_err("h2-only + http forward proxy must error");
+    assert!(
+        matches!(err, Error::Unsupported(_)),
+        "expected Error::Unsupported, got {err:?}"
+    );
+    assert!(
+        err.to_string().contains("HTTP/2-only"),
+        "error should mention HTTP/2-only policy: {err}"
+    );
+}
+
 // ── Load test and proxy limitations ───────────────────────────────
 //
 // # Load test: h1 vs h2 connection count comparison

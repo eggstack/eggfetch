@@ -216,7 +216,7 @@ fn redirect_cross_origin_strips_all_credentials() {
         .build()
         .unwrap();
 
-    let (redirect, _) =
+    let redirect =
         build_redirect_request(&req, http::StatusCode::FOUND, "https://other.com/b").unwrap();
 
     assert!(redirect.headers().get("authorization").is_none());
@@ -237,7 +237,7 @@ fn redirect_drops_body_headers_on_post_to_get() {
         .build()
         .unwrap();
 
-    let (redirect, _) = build_redirect_request(
+    let redirect = build_redirect_request(
         &req,
         http::StatusCode::MOVED_PERMANENTLY,
         "https://example.com/b",
@@ -803,7 +803,7 @@ fn redirect_build_cross_origin_preserves_non_sensitive_headers() {
         .build()
         .unwrap();
 
-    let (redirect, _) =
+    let redirect =
         build_redirect_request(&req, http::StatusCode::FOUND, "https://other.com/b").unwrap();
 
     assert_eq!(redirect.headers().get("x-custom").unwrap(), "value");
