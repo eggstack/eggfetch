@@ -32,6 +32,9 @@ eggfetch-core has the following direct dependencies:
 - **httpdate** -- HTTP-date parsing for Retry-After header support.
 - **pem-rfc7468** -- PEM parsing for custom CA bundles and client certificates (optional, behind `tls-rustls` feature).
 - **webpki-roots** -- packaged Mozilla/WebPKI root certificates as a fallback when native roots are unavailable.
+- **rustls-native-certs** -- platform-native certificate store loading for
+  `TrustStore::NativeOnly` on platforms without a portable PEM bundle,
+  including Windows.
 
 These are small, well-audited crates with minimal transitive trees. They are the minimum required to build a working HTTPS client.
 

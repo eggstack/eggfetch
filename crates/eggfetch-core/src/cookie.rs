@@ -703,6 +703,7 @@ fn resolve_expiration(parsed: &cookie::Cookie<'_>) -> (bool, Option<SystemTime>)
 /// skipped.
 ///
 /// `response_url` is the URL of the response that contained the headers.
+#[must_use]
 pub fn parse_set_cookie_headers(response_url: &Url, set_cookie_headers: &[String]) -> Vec<Cookie> {
     let response_host = response_url.host_str().unwrap_or("");
 

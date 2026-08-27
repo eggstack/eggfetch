@@ -16,6 +16,7 @@ pub const SENSITIVE_HEADERS: &[&str] = &[
 ];
 
 /// Returns true if the given header name is considered sensitive.
+#[must_use]
 pub fn is_sensitive_header(name: &str) -> bool {
     SENSITIVE_HEADERS
         .iter()
@@ -24,6 +25,7 @@ pub fn is_sensitive_header(name: &str) -> bool {
 
 /// Clone a [`HeaderMap`], replacing all sensitive header values with
 /// `<redacted>`.
+#[must_use]
 pub fn redact_headers(headers: &HeaderMap) -> HeaderMap {
     let mut redacted = headers.clone();
     for name in SENSITIVE_HEADERS {
@@ -36,6 +38,7 @@ pub fn redact_headers(headers: &HeaderMap) -> HeaderMap {
 }
 
 /// Sanitize a URL by stripping userinfo, query parameters, and fragments.
+#[must_use]
 pub fn redact_url(url: &Url) -> String {
     let mut safe = url.clone();
     let _ = safe.set_username("");
@@ -49,6 +52,7 @@ pub fn redact_url(url: &Url) -> String {
 ///
 /// If the string parses as a valid URL, credentials are stripped. If parsing
 /// fails, the original string is returned unchanged.
+#[must_use]
 pub fn redact_url_string(url_str: &str) -> String {
     match Url::parse(url_str) {
         Ok(url) => redact_url(&url),

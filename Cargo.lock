@@ -554,6 +554,7 @@ dependencies = [
  "quinn",
  "rcgen",
  "rustls",
+ "rustls-native-certs",
  "tempfile",
  "thiserror",
  "tokio",

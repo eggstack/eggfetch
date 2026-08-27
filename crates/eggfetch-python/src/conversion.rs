@@ -1,7 +1,7 @@
 //! Conversion utilities between Python and Rust types.
 
 use pyo3::prelude::*;
-use pyo3::types::{PyIterator, PyTuple};
+use pyo3::types::{PyByteArray, PyByteArrayMethods, PyIterator, PyMemoryView, PyTuple};
 
 use bytes::Bytes;
 
@@ -23,7 +23,7 @@ pub(crate) fn python_cookies_to_header(
         return Ok(None);
     }
     let jar = eggfetch_core::cookie::CookieJar::new();
-    for (name, value) in iter_kv_pairs(cookies.py(), cookies)? {
+    for (name, value) in iter_kv_pairs(cookies, "cookies")? {
         jar.set_default_cookie(name, value);
     }
     Ok(jar.cookies_for_url(target_url))
@@ -33,7 +33,7 @@ pub(crate) fn python_cookies_to_header(
 ///
 /// For Mapping objects (dict, etc.), calls `.items()`.
 /// For other iterables (list of tuples, etc.), iterates directly.
-fn iter_kv_pairs(_py: Python<'_>, obj: &Bound<'_, PyAny>) -> PyResult<Vec<(String, String)>> {
+fn iter_kv_pairs(obj: &Bound<'_, PyAny>, field: &str) -> PyResult<Vec<(String, String)>> {
     let items = if obj.get_type().hasattr("__getitem__")? && obj.hasattr("items")? {
         obj.call_method0("items")?
     } else {
@@ -44,9 +44,9 @@ fn iter_kv_pairs(_py: Python<'_>, obj: &Bound<'_, PyAny>) -> PyResult<Vec<(Strin
         let item = item?;
         let tuple: Bound<'_, PyTuple> = item.downcast_into::<PyTuple>()?;
         if tuple.len() != 2 {
-            return Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
-                "expected a mapping or sequence of 2-tuples",
-            ));
+            return Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(format!(
+                "{field} must be a mapping or sequence of 2-tuples"
+            )));
         }
         let key: String = tuple.get_item(0)?.extract()?;
         let value: String = tuple.get_item(1)?.extract()?;
@@ -57,11 +57,11 @@ fn iter_kv_pairs(_py: Python<'_>, obj: &Bound<'_, PyAny>) -> PyResult<Vec<(Strin
 
 /// Convert a Python dict/Mapping/sequence-of-pairs to Rust `eggfetch_core::Headers`.
 pub fn python_headers_to_rust(
-    py: Python,
+    _py: Python,
     headers: &Bound<'_, PyAny>,
 ) -> PyResult<eggfetch_core::Headers> {
     let mut rust_headers = eggfetch_core::Headers::new();
-    let pairs = iter_kv_pairs(py, headers)?;
+    let pairs = iter_kv_pairs(headers, "headers")?;
     for (key, value) in &pairs {
         rust_headers.insert(key, value).map_err(map_err)?;
     }
@@ -70,11 +70,11 @@ pub fn python_headers_to_rust(
 
 /// Append query parameters from a Python dict/Mapping/sequence-of-pairs to a `url::Url`.
 pub fn python_params_to_url(
-    py: Python,
+    _py: Python,
     url: &mut url::Url,
     params: &Bound<'_, PyAny>,
 ) -> PyResult<()> {
-    let pairs = iter_kv_pairs(py, params)?;
+    let pairs = iter_kv_pairs(params, "params")?;
     for (key, value) in &pairs {
         url.query_pairs_mut().append_pair(key, value);
     }
@@ -84,8 +84,8 @@ pub fn python_params_to_url(
 /// Encode a Python Mapping or sequence-of-pairs as `application/x-www-form-urlencoded` bytes.
 ///
 /// Uses `url::form_urlencoded` for proper percent-encoding of keys and values.
-pub fn encode_form_body(py: Python, data: &Bound<'_, PyAny>) -> PyResult<Vec<u8>> {
-    let pairs = iter_kv_pairs(py, data)?;
+pub fn encode_form_body(_py: Python, data: &Bound<'_, PyAny>) -> PyResult<Vec<u8>> {
+    let pairs = iter_kv_pairs(data, "data")?;
     let mut serializer = url::form_urlencoded::Serializer::new(String::new());
     for (key, value) in &pairs {
         serializer.append_pair(key, value);
@@ -171,7 +171,7 @@ pub fn build_request_body<'py>(
         if let Ok(s) = c.extract::<String>() {
             return Ok((Some(s.into_bytes()), None));
         }
-        if let Ok(b) = c.extract::<Vec<u8>>() {
+        if let Some(b) = extract_bytes_like(c)? {
             return Ok((Some(b), None));
         }
         // If it's an iterable/generator, signal to caller to treat as stream.
@@ -194,7 +194,11 @@ pub fn build_request_body<'py>(
 
 /// Check if a Python object is an iterable/generator (not bytes or str).
 pub fn is_python_iterable(obj: &Bound<'_, PyAny>) -> PyResult<bool> {
-    if obj.extract::<Vec<u8>>().is_ok() || obj.extract::<String>().is_ok() {
+    if obj.is_instance_of::<pyo3::types::PyBytes>()
+        || obj.is_instance_of::<pyo3::types::PyString>()
+        || obj.is_instance_of::<PyByteArray>()
+        || obj.is_instance_of::<PyMemoryView>()
+    {
         return Ok(false);
     }
     Ok(obj.hasattr("__iter__")? || obj.hasattr("__aiter__")?)
@@ -202,53 +206,76 @@ pub fn is_python_iterable(obj: &Bound<'_, PyAny>) -> PyResult<bool> {
 
 /// Create a `RequestBody` from a Python sync iterable.
 ///
-/// The iterable is consumed lazily via a bounded channel bridge: a Tokio task
-/// calls `next()` on the Python iterator and sends chunks through a bounded
-/// channel. This avoids eagerly buffering the entire body.
+/// The iterable is consumed lazily when the async body stream is polled. This
+/// keeps production tied to transport backpressure and avoids creating a
+/// detached operating-system thread for every request.
+struct PythonBodyIterator {
+    iterator: Py<PyIterator>,
+}
+
+impl Drop for PythonBodyIterator {
+    fn drop(&mut self) {
+        Python::with_gil(|py| {
+            let iterator = self.iterator.bind(py);
+            if let Ok(close) = iterator.as_any().getattr("close") {
+                let _ = close.call0();
+            }
+        });
+    }
+}
+
+/// Convert a Python buffer-like value to owned bytes.
+fn extract_bytes_like(obj: &Bound<'_, PyAny>) -> PyResult<Option<Vec<u8>>> {
+    if let Ok(bytes) = obj.extract::<Vec<u8>>() {
+        return Ok(Some(bytes));
+    }
+    if let Ok(bytearray) = obj.downcast::<PyByteArray>() {
+        return Ok(Some(bytearray.to_vec()));
+    }
+    if let Ok(memoryview) = obj.downcast::<PyMemoryView>() {
+        return Ok(Some(
+            memoryview.call_method0("tobytes")?.extract::<Vec<u8>>()?,
+        ));
+    }
+    Ok(None)
+}
+
+/// Create a `RequestBody` from a Python sync iterable.
 pub fn python_iterable_to_request_body<'py>(
     _py: Python<'py>,
     iterable: &Bound<'py, PyAny>,
 ) -> PyResult<eggfetch_core::RequestBody> {
     use futures_util::stream;
 
-    let iterator: Py<PyIterator> = iterable.try_iter()?.unbind();
-    let (sender, receiver) = tokio::sync::mpsc::channel(8);
-
-    std::thread::spawn(move || loop {
-        let next_chunk: PyResult<Option<Vec<u8>>> = Python::with_gil(|py| {
-            let mut iterator = iterator.bind(py).clone();
-            let item = match iterator.next() {
-                Some(item) => item?,
-                None => return Ok(None),
-            };
-            let chunk = if let Ok(bytes) = item.extract::<Vec<u8>>() {
-                bytes
-            } else if let Ok(string) = item.extract::<String>() {
-                string.into_bytes()
-            } else {
-                return Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
-                    "iterable must yield bytes or str items",
-                ));
-            };
-            Ok(Some(chunk))
+    let state = PythonBodyIterator {
+        iterator: iterable.try_iter()?.unbind(),
+    };
+    let stream = stream::unfold(Some(state), |state| async move {
+        let state = state?;
+        let next_chunk = Python::with_gil(|py| {
+            let mut iterator = state.iterator.bind(py).clone();
+            match iterator.next() {
+                Some(item) => {
+                    let item = item?;
+                    if let Some(bytes) = extract_bytes_like(&item)? {
+                        Ok(Some(Bytes::from(bytes)))
+                    } else if let Ok(string) = item.extract::<String>() {
+                        Ok(Some(Bytes::from(string.into_bytes())))
+                    } else {
+                        Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
+                            "iterable must yield bytes or str items",
+                        ))
+                    }
+                }
+                None => Ok(None),
+            }
         });
 
         match next_chunk {
-            Ok(Some(chunk)) => {
-                if sender.blocking_send(Ok(Bytes::from(chunk))).is_err() {
-                    break;
-                }
-            }
-            Ok(None) => break,
-            Err(error) => {
-                let _ = sender.blocking_send(Err(eggfetch_core::Error::Body(error.to_string())));
-                break;
-            }
+            Ok(Some(chunk)) => Some((Ok(chunk), Some(state))),
+            Ok(None) => None,
+            Err(error) => Some((Err(eggfetch_core::Error::Body(error.to_string())), None)),
         }
-    });
-
-    let stream = stream::unfold(receiver, |mut receiver| async {
-        receiver.recv().await.map(|item| (item, receiver))
     });
     Ok(eggfetch_core::RequestBody::from_stream(
         Box::pin(stream),

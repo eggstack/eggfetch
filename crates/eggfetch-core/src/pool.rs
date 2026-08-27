@@ -85,15 +85,6 @@ use std::sync::Arc;
 use dashmap::DashMap;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
-/// Upper bound on tracked per-origin semaphores.
-///
-/// Long-lived processes touching many distinct origins (crawlers,
-/// aggregators) would otherwise grow this table without limit. When the
-/// cap is exceeded, idle entries (all permits available) are evicted;
-/// in-flight entries are never dropped because holders own `Arc` clones
-/// of the semaphore and a later request simply recreates the entry.
-const PER_ORIGIN_TABLE_MAX_ENTRIES: usize = 1024;
-
 /// Configuration for the connection pool.
 ///
 /// All fields are optional. When a field is `None`, the corresponding
@@ -443,8 +434,8 @@ impl Pool {
 
     /// Acquire a pool slot for the given origin.
     ///
-    /// If a per-origin limit is configured, a per-origin permit is
-    /// acquired first, then a global permit. The returned [`PoolGuard`]
+    /// If a global and per-origin limit are configured, the global permit is
+    /// acquired first, then the per-origin permit. The returned [`PoolGuard`]
     /// holds both permits and releases them on drop.
     ///
     /// If no limits are configured, returns a guard that does nothing on drop.
@@ -457,6 +448,23 @@ impl Pool {
         let mut waited = false;
         let mut global_permit: Option<OwnedSemaphorePermit> = None;
         let mut origin_permit: Option<OwnedSemaphorePermit> = None;
+
+        // Acquire the global permit first. A request waiting for global
+        // capacity must not hold a per-origin slot while it waits.
+        if let Some(ref sem) = self.inner.global_semaphore {
+            if let Ok(permit) = sem.clone().try_acquire_owned() {
+                global_permit = Some(permit);
+            } else if let Ok(permit) = sem.clone().acquire_owned().await {
+                global_permit = Some(permit);
+                waited = true;
+            } else {
+                self.inner
+                    .metrics
+                    .acquisition_cancellations
+                    .fetch_add(1, Ordering::Relaxed);
+                return PoolGuard::new(self.inner.clone(), origin.cloned(), None, None);
+            }
+        }
 
         // Acquire per-origin permit if configured and origin is known.
         if let (Some(max_per_origin), Some(origin)) =
@@ -471,11 +479,9 @@ impl Pool {
                 .per_origin_table_lock
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if self.inner.per_origin.len() >= PER_ORIGIN_TABLE_MAX_ENTRIES {
-                self.inner
-                    .per_origin
-                    .retain(|_, sem| sem.available_permits() < max_per_origin);
-            }
+            self.inner
+                .per_origin
+                .retain(|_, sem| sem.available_permits() < max_per_origin);
 
             let sem = self
                 .inner
@@ -506,24 +512,6 @@ impl Pool {
                         .acquisition_cancellations
                         .fetch_add(1, Ordering::Relaxed);
                 }
-            }
-        }
-
-        // Acquire global permit if configured.
-        if let Some(ref sem) = self.inner.global_semaphore {
-            // Try immediate acquire first; on failure, move the `Arc` into
-            // the awaited acquire instead of cloning again.
-            if let Ok(permit) = sem.clone().try_acquire_owned() {
-                global_permit = Some(permit);
-            } else if let Ok(permit) = sem.clone().acquire_owned().await {
-                global_permit = Some(permit);
-                waited = true;
-            } else {
-                self.inner
-                    .metrics
-                    .acquisition_cancellations
-                    .fetch_add(1, Ordering::Relaxed);
-                return PoolGuard::new(self.inner.clone(), origin.cloned(), None, origin_permit);
             }
         }
 
@@ -872,6 +860,47 @@ mod tests {
         let g2 = pool.acquire(Some(&proxied)).await;
         assert!(g1.origin().is_some());
         assert!(g2.origin().is_some());
+    }
+
+    #[tokio::test]
+    async fn global_wait_does_not_hold_per_origin_slot() {
+        let pool = Pool::new(PoolConfig {
+            max_connections: Some(1),
+            max_connections_per_host: Some(1),
+            ..Default::default()
+        });
+        let first_origin = OriginKey::from_parts("http", "first.example", 80);
+        let waiting_origin = OriginKey::from_parts("http", "waiting.example", 80);
+        let first = pool.acquire(Some(&first_origin)).await;
+
+        let pool_for_task = pool.clone();
+        let waiting_origin_for_task = waiting_origin.clone();
+        let waiter =
+            tokio::spawn(
+                async move { pool_for_task.acquire(Some(&waiting_origin_for_task)).await },
+            );
+        for _ in 0..3 {
+            tokio::task::yield_now().await;
+        }
+
+        assert!(pool.inner.per_origin.get(&waiting_origin).is_none());
+        drop(first);
+        drop(waiter.await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn idle_per_origin_entries_are_swept_on_acquire() {
+        let pool = Pool::new(PoolConfig {
+            max_connections_per_host: Some(1),
+            ..Default::default()
+        });
+
+        for index in 0..8 {
+            let origin = OriginKey::from_parts("http", &format!("host-{index}.example"), 80);
+            drop(pool.acquire(Some(&origin)).await);
+        }
+
+        assert!(pool.inner.per_origin.len() <= 1);
     }
 
     #[cfg(feature = "proxy")]

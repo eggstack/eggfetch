@@ -833,7 +833,7 @@ impl ClientBuilder {
         });
 
         // When HTTP/3 is selected, we skip building the hyper client
-        let hyper_client = if enabler.use_http3() {
+        let hyper_client = if enabler.use_http3() || tls_config_error.is_some() {
             None
         } else {
             let https = match self.tls_config.as_ref() {

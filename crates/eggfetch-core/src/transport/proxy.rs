@@ -425,6 +425,13 @@ pub(crate) async fn write_proxy_request<S: tokio::io::AsyncWrite + Unpin>(
 
     request.extend_from_slice(b"\r\n");
 
+    if request.len() > crate::headers::MAX_REQUEST_HEADER_BYTES {
+        return Err(Error::RequestBuild(format!(
+            "request headers exceed maximum size of {} bytes",
+            crate::headers::MAX_REQUEST_HEADER_BYTES
+        )));
+    }
+
     stream
         .write_all(&request)
         .await

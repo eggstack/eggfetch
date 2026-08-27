@@ -6,6 +6,9 @@ use http::header::{HeaderMap, HeaderName, HeaderValue};
 
 use crate::error::{Error, Result};
 
+/// Maximum serialized size of an outbound request's headers.
+pub(crate) const MAX_REQUEST_HEADER_BYTES: usize = 64 * 1024;
+
 /// Case-insensitive HTTP header container.
 ///
 /// `Debug` formatting redacts values for header names recognised as
@@ -126,6 +129,19 @@ impl Headers {
     pub fn into_inner(self) -> HeaderMap {
         self.inner
     }
+
+    /// Reject an outbound header set that would exceed the request limit.
+    pub(crate) fn validate_request_size(&self) -> Result<()> {
+        let size = self.inner.iter().try_fold(2usize, |size, (name, value)| {
+            size.checked_add(name.as_str().len() + value.as_bytes().len() + 4)
+        });
+        if size.map_or(true, |size| size > MAX_REQUEST_HEADER_BYTES) {
+            return Err(Error::RequestBuild(format!(
+                "request headers exceed maximum size of {MAX_REQUEST_HEADER_BYTES} bytes"
+            )));
+        }
+        Ok(())
+    }
 }
 
 impl From<HeaderMap> for Headers {
@@ -224,6 +240,15 @@ mod tests {
         hm.insert("X-Test", HeaderValue::from_static("hello"));
         let h = Headers::from(hm);
         assert_eq!(h.get("x-test").unwrap().to_str().unwrap(), "hello");
+    }
+
+    #[test]
+    fn request_header_size_is_bounded() {
+        let mut headers = Headers::new();
+        headers
+            .insert("x-large", &"x".repeat(MAX_REQUEST_HEADER_BYTES))
+            .unwrap();
+        assert!(headers.validate_request_size().is_err());
     }
 
     proptest::proptest! {

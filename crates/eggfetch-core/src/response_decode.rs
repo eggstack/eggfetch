@@ -22,6 +22,7 @@ pub(crate) fn apply_decompression(
     }
 
     let old_body = std::mem::replace(&mut response.body, ResponseBody::buffered(Bytes::new()));
+    let mut decoder_applied = false;
     let new_body = match old_body {
         ResponseBody::Streaming { stream, lease } => {
             if let Some(ce) = content_encoding.filter(|value| !value.trim().is_empty()) {
@@ -29,8 +30,10 @@ pub(crate) fn apply_decompression(
                 // lease directly when present so ownership is never
                 // routed through a destructure/rebuild round-trip.
                 if let Some(lease) = lease {
+                    decoder_applied = crate::compression::parse_content_encodings(ce).is_some();
                     ResponseBody::encoded_streaming_with_lease(stream, lease, ce.to_owned(), limit)
                 } else {
+                    decoder_applied = crate::compression::parse_content_encodings(ce).is_some();
                     ResponseBody::encoded_streaming(stream, ce.to_owned(), limit)
                 }
             } else {
@@ -43,6 +46,7 @@ pub(crate) fn apply_decompression(
                     ResponseBody::Buffered { bytes }
                 } else {
                     let decompressed = crate::compression::decompress_buffered(&bytes, ce, limit)?;
+                    decoder_applied = crate::compression::parse_content_encodings(ce).is_some();
                     ResponseBody::buffered(decompressed)
                 }
             } else {
@@ -54,8 +58,10 @@ pub(crate) fn apply_decompression(
     };
     response.set_body(new_body);
 
-    response.headers_mut().remove("content-encoding");
-    response.headers_mut().remove("content-length");
+    if decoder_applied {
+        response.headers_mut().remove("content-encoding");
+        response.headers_mut().remove("content-length");
+    }
 
     Ok(response)
 }
@@ -115,5 +121,31 @@ mod tests {
 
         assert_eq!(response.wire_content_encoding(), Some("gzip"));
         assert!(response.wire_content_length().is_some());
+    }
+
+    #[test]
+    fn identity_encoding_preserves_visible_headers() {
+        let mut headers = HeaderMap::new();
+        headers.insert("content-encoding", HeaderValue::from_static("identity"));
+        headers.insert("content-length", HeaderValue::from_static("4"));
+        let response = Response::new(
+            StatusCode::OK,
+            Version::HTTP_11,
+            headers,
+            Url::parse("http://example.com").unwrap(),
+            ResponseBody::buffered(Bytes::from_static(b"body")),
+        );
+
+        let response =
+            apply_decompression(response, Some("identity"), DecompressionLimit::default()).unwrap();
+
+        assert_eq!(
+            response.headers().get("content-encoding"),
+            Some(&HeaderValue::from_static("identity"))
+        );
+        assert_eq!(
+            response.headers().get("content-length"),
+            Some(&HeaderValue::from_static("4"))
+        );
     }
 }

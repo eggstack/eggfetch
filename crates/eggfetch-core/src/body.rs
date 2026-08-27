@@ -373,11 +373,13 @@ impl std::fmt::Debug for ResponseBody {
 
 impl ResponseBody {
     /// Create a buffered response body.
+    #[must_use]
     pub fn buffered(bytes: Bytes) -> Self {
         Self::Buffered { bytes }
     }
 
     /// Create a streaming response body from a type-erased stream.
+    #[must_use]
     pub fn streaming(stream: BoxBytesStream) -> Self {
         Self::Streaming {
             stream,

@@ -16,6 +16,8 @@
 //! Uses bounded exponential backoff with jitter. Tests can use
 //! deterministic policies by injecting a fixed random source.
 
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::OnceLock;
 use std::time::Duration;
 
 use http::Method;
@@ -671,15 +673,29 @@ pub fn should_retry(
     None
 }
 
-/// Get a random f64 in [0, 1) using getrandom.
+/// Get a random f64 in [0, 1) from a process-local PRNG.
 ///
 /// Returns `None` if the system RNG fails so callers can degrade
 /// gracefully (e.g. to a deterministic delay) instead of panicking.
 #[allow(clippy::cast_precision_loss)]
 fn get_random_f64() -> Option<f64> {
-    let mut buf = [0u8; 8];
-    getrandom::getrandom(&mut buf).ok()?;
-    let val = u64::from_le_bytes(buf);
+    static STATE: OnceLock<Option<AtomicU64>> = OnceLock::new();
+
+    let state = STATE.get_or_init(|| {
+        let mut buf = [0u8; 8];
+        getrandom::getrandom(&mut buf)
+            .ok()
+            .map(|()| AtomicU64::new(u64::from_le_bytes(buf).max(1)))
+    });
+    let state = state.as_ref()?;
+    let val = state
+        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |mut value| {
+            value ^= value << 13;
+            value ^= value >> 7;
+            value ^= value << 17;
+            Some(value.max(1))
+        })
+        .ok()?;
     // Use the top 53 bits so the value is exactly representable and the
     // result stays strictly below 1.0 (dividing a rounded u64 by
     // `u64::MAX as f64` could round up to exactly 1.0).

@@ -69,7 +69,6 @@ class TestRawStreamKernel:
         await response.aclose()
         assert response.is_closed
 
-
 class TestNativeRawStreamKernel:
     """These cases use the repository's loopback server and Rust transport."""
 

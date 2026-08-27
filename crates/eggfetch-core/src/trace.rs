@@ -113,6 +113,7 @@ impl fmt::Display for TracePhase {
 /// Returns `(prefix, event_name)` where `prefix` is the httpcore
 /// logger name suffix (e.g. `"http11"`, `"connection"`) and
 /// `event_name` is the full dotted name (e.g. `"send_request_headers.started"`).
+#[must_use]
 pub fn event_to_httpcore_name(event: &TraceEvent) -> (&'static str, String) {
     match event {
         TraceEvent::ConnectTcp { phase, .. } => ("connection", format!("connect_tcp.{phase}")),

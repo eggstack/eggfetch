@@ -144,7 +144,7 @@ pub fn accept_encoding_value() -> Option<&'static str> {
 ///
 /// Returns `None` if the header is empty, contains only whitespace, or
 /// contains only no-op codings such as bare `identity`.
-fn parse_content_encodings(header: &str) -> Option<Vec<ContentCoding>> {
+pub(crate) fn parse_content_encodings(header: &str) -> Option<Vec<ContentCoding>> {
     let encodings: Vec<ContentCoding> = header
         .split(',')
         .map(str::trim)
@@ -218,6 +218,11 @@ pub fn decompress_stream(
         _ => return Ok(stream),
     };
 
+    // Validate the complete wire value before parsing recognized codings.
+    // This keeps unsupported encodings and nesting-depth errors ordered the
+    // same way for streaming and buffered bodies.
+    validate_content_encodings(header)?;
+
     let Some(encodings) = parse_content_encodings(header) else {
         return Ok(stream);
     };
@@ -229,9 +234,6 @@ pub fn decompress_stream(
             MAX_NESTING_DEPTH
         )));
     }
-
-    // Validate all encodings are supported before building the chain.
-    validate_content_encodings(header)?;
 
     // Wrap the original compressed stream with a counter so we can
     // track compressed bytes consumed through the decoder chain.

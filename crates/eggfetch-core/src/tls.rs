@@ -28,6 +28,7 @@
 
 use std::path::Path;
 use std::sync::Arc;
+use std::sync::OnceLock;
 
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 
@@ -112,6 +113,7 @@ pub struct TlsConfig {
     min_version: Option<TlsVersion>,
     max_version: Option<TlsVersion>,
     sni_enabled: bool,
+    root_store: Arc<OnceLock<Result<rustls::RootCertStore>>>,
 }
 
 impl std::fmt::Debug for TlsConfig {
@@ -246,6 +248,12 @@ impl TlsConfig {
 
     /// Build the root certificate store from the configured trust policy.
     fn build_root_store(&self) -> Result<rustls::RootCertStore> {
+        self.root_store
+            .get_or_init(|| self.build_root_store_uncached())
+            .clone()
+    }
+
+    fn build_root_store_uncached(&self) -> Result<rustls::RootCertStore> {
         match &self.trust_store {
             TrustStore::NativeWithWebPkiFallback => match Self::try_native_roots() {
                 Ok(store) if !store.is_empty() => Ok(store),
@@ -271,24 +279,31 @@ impl TlsConfig {
     fn try_native_roots() -> Result<rustls::RootCertStore> {
         let mut roots = rustls::RootCertStore::empty();
 
-        #[cfg(not(any(target_os = "linux", target_os = "macos")))]
-        let pem_paths: &[&str] = &[];
+        #[cfg(any(target_os = "linux", target_os = "macos"))]
+        {
+            #[cfg(target_os = "linux")]
+            let pem_paths: &[&str] = &[
+                "/etc/ssl/certs/ca-certificates.crt",
+                "/etc/pki/tls/certs/ca-bundle.crt",
+                "/etc/ssl/ca-bundle.pem",
+            ];
 
-        #[cfg(target_os = "linux")]
-        let pem_paths: &[&str] = &[
-            "/etc/ssl/certs/ca-certificates.crt",
-            "/etc/pki/tls/certs/ca-bundle.crt",
-            "/etc/ssl/ca-bundle.pem",
-        ];
+            #[cfg(target_os = "macos")]
+            let pem_paths: &[&str] = &["/etc/ssl/cert.pem", "/usr/local/etc/openssl/cert.pem"];
 
-        #[cfg(target_os = "macos")]
-        let pem_paths: &[&str] = &["/etc/ssl/cert.pem", "/usr/local/etc/openssl/cert.pem"];
-
-        for path in pem_paths {
-            if let Ok(certs) = load_pem_certs_from_path(Path::new(path)) {
-                for cert in certs {
-                    let _ = roots.add(cert);
+            for path in pem_paths {
+                if let Ok(certs) = load_pem_certs_from_path(Path::new(path)) {
+                    for cert in certs {
+                        let _ = roots.add(cert);
+                    }
                 }
+            }
+        }
+
+        #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+        {
+            for cert in rustls_native_certs::load_native_certs().certs {
+                let _ = roots.add(cert);
             }
         }
 
@@ -620,6 +635,7 @@ impl TlsConfigBuilder {
             min_version: self.min_version,
             max_version: self.max_version,
             sni_enabled: self.sni_enabled,
+            root_store: Arc::new(OnceLock::new()),
         }
     }
 }

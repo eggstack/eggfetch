@@ -60,12 +60,31 @@ def test_buffered_raw_iteration_is_not_a_repeatable_decoded_read():
     assert response.content == b"body"
 
 
+def test_raw_iteration_rejects_response_after_decoded_iteration():
+    response = Response(200, stream=iter([b"body"]))
+    assert list(response.iter_bytes()) == [b"body"]
+    with pytest.raises(StreamConsumed):
+        list(response.iter_raw())
+
+
 @pytest.mark.asyncio
 async def test_async_raw_iteration_rejects_sync_stream_modality():
     response = Response(200, stream=iter([b"body"]))
     with pytest.raises(RuntimeError, match="async iterator on an sync stream"):
         await anext(response.aiter_raw())
     assert not response.is_stream_consumed
+
+
+@pytest.mark.asyncio
+async def test_async_raw_iteration_rejects_response_after_decoded_iteration():
+    async def source():
+        yield b"body"
+
+    response = Response(200, stream=source())
+    assert [chunk async for chunk in response.aiter_bytes()] == [b"body"]
+    with pytest.raises(StreamConsumed):
+        async for _ in response.aiter_raw():
+            pass
 
 
 def test_unattached_response_request_is_an_error():

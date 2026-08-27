@@ -445,7 +445,8 @@ impl Stream for LineStream {
                 if line.ends_with(b"\r") {
                     line = &line[..line.len() - 1];
                 }
-                let line = String::from_utf8(line.to_vec())
+                let line = std::str::from_utf8(line)
+                    .map(str::to_owned)
                     .map_err(|e| crate::error::Error::Body(e.to_string()))?;
                 return Poll::Ready(Some(Ok(line)));
             }
@@ -462,9 +463,10 @@ impl Stream for LineStream {
             match Pin::new(&mut self.stream).poll_next(cx) {
                 Poll::Ready(Some(Ok(chunk))) => {
                     if chunk.is_empty() {
-                        // Zero-progress chunk: avoid spinning inside poll.
-                        cx.waker().wake_by_ref();
-                        return Poll::Pending;
+                        // Empty chunks carry no data. Ignore them and let the
+                        // upstream stream determine whether another wake is
+                        // needed.
+                        continue;
                     }
                     self.buffer.extend_from_slice(&chunk);
                 }
@@ -479,7 +481,8 @@ impl Stream for LineStream {
                     if line.ends_with(b"\r") {
                         line = &line[..line.len() - 1];
                     }
-                    let line = String::from_utf8(line.to_vec())
+                    let line = std::str::from_utf8(line)
+                        .map(str::to_owned)
                         .map_err(|e| crate::error::Error::Body(e.to_string()))?;
                     return Poll::Ready(Some(Ok(line)));
                 }
