@@ -310,6 +310,38 @@ impl Stream for LeasedResponseStream {
     }
 }
 
+pin_project! {
+    /// A response stream that bounds the total decoded bytes collected.
+    struct LimitedResponseStream {
+        #[pin]
+        inner: BoxBytesStream,
+        max: usize,
+        decoded_bytes: usize,
+    }
+}
+
+impl Stream for LimitedResponseStream {
+    type Item = Result<Bytes>;
+
+    fn poll_next(
+        self: Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Option<Self::Item>> {
+        let mut this = self.project();
+        match this.inner.as_mut().poll_next(cx) {
+            std::task::Poll::Ready(Some(Ok(chunk))) => {
+                *this.decoded_bytes = this.decoded_bytes.saturating_add(chunk.len());
+                if *this.decoded_bytes > *this.max {
+                    std::task::Poll::Ready(Some(Err(Error::DecodedBodyTooLarge)))
+                } else {
+                    std::task::Poll::Ready(Some(Ok(chunk)))
+                }
+            }
+            other => other,
+        }
+    }
+}
+
 /// Response body handle.
 ///
 /// Supports two consumption modes:
@@ -462,13 +494,8 @@ impl ResponseBody {
     ///
     /// # Limits
     ///
-    /// For `EncodedStreaming` bodies the configured
-    /// [`DecompressionLimit`] is enforced via the decompression pipeline.
-    /// `Streaming` and `Buffered` bodies (e.g. a non-encoded `identity`
-    /// response) do not carry a `DecompressionLimit`, so this method
-    /// will buffer the entire body in memory.  Callers expecting large
-    /// unencoded bodies should use [`Self::bytes_stream`] and apply
-    /// their own size cap instead.
+    /// The configured decoded-body limit is enforced for both encoded and
+    /// unencoded response bodies.
     ///
     /// [`DecompressionLimit`]: crate::compression::DecompressionLimit
     ///
@@ -510,6 +537,23 @@ impl ResponseBody {
                 Ok(buf.freeze())
             }
             Self::Consumed => Err(Error::Body("body already consumed".into())),
+        }
+    }
+
+    /// Enforce a maximum decoded size for this body.
+    pub(crate) fn limit_decoded_size(self, max: usize) -> Result<Self> {
+        match self {
+            Self::Buffered { bytes } if bytes.len() > max => Err(Error::DecodedBodyTooLarge),
+            Self::Buffered { bytes } => Ok(Self::Buffered { bytes }),
+            Self::Streaming { stream, lease } => Ok(Self::Streaming {
+                stream: Box::pin(LimitedResponseStream {
+                    inner: stream,
+                    max,
+                    decoded_bytes: 0,
+                }),
+                lease,
+            }),
+            body @ (Self::EncodedStreaming { .. } | Self::Consumed) => Ok(body),
         }
     }
 
@@ -741,6 +785,30 @@ mod tests {
         let mut body = ResponseBody::streaming(stream);
         let bytes = body.bytes().await.unwrap();
         assert_eq!(bytes, "hello world");
+    }
+
+    #[tokio::test]
+    async fn response_body_unencoded_size_limit_is_enforced() {
+        let stream = Box::pin(futures_util::stream::iter(vec![
+            Ok(Bytes::from("ab")),
+            Ok(Bytes::from("cd")),
+        ]));
+        let mut body = ResponseBody::streaming(stream)
+            .limit_decoded_size(3)
+            .unwrap();
+        assert_eq!(
+            body.bytes().await.unwrap_err().kind(),
+            "decoded_body_too_large"
+        );
+    }
+
+    #[test]
+    fn response_body_buffered_size_limit_is_enforced() {
+        let body = ResponseBody::buffered(Bytes::from_static(b"body"));
+        assert_eq!(
+            body.limit_decoded_size(3).unwrap_err().kind(),
+            "decoded_body_too_large"
+        );
     }
 
     #[tokio::test]

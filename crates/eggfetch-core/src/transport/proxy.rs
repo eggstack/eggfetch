@@ -232,8 +232,7 @@ pub(crate) async fn connect_to_proxy(
                 .with_no_client_auth()
         };
         let connector = tokio_rustls::TlsConnector::from(std::sync::Arc::new(rustls_config));
-        let domain = rustls::pki_types::ServerName::try_from(proxy_host.to_owned())
-            .map_err(|e| Error::Tls(format!("invalid proxy TLS server name: {e}")))?;
+        let domain = proxy_server_name(proxy_host)?;
         let handshake = connector.connect(domain, stream);
         let tls_timeout = effective_timeout(deadline, proxy_tls_timeout)?;
         let tls_stream = match tls_timeout {
@@ -257,6 +256,20 @@ pub(crate) async fn connect_to_proxy(
     };
 
     Ok(tokio::io::BufReader::new(stream))
+}
+
+/// Build the TLS server name for a proxy endpoint.
+///
+/// `ServerName::try_from(&str)` handles DNS names, but IP literals must use
+/// rustls's dedicated IP variant so HTTPS proxies addressed by IP can still
+/// validate certificates containing an IP subject alternative name.
+fn proxy_server_name(proxy_host: &str) -> Result<rustls::pki_types::ServerName<'static>> {
+    if let Ok(ip) = proxy_host.parse::<std::net::IpAddr>() {
+        return Ok(rustls::pki_types::ServerName::IpAddress(ip.into()));
+    }
+
+    rustls::pki_types::ServerName::try_from(proxy_host.to_owned())
+        .map_err(|e| Error::Tls(format!("invalid proxy TLS server name: {e}")))
 }
 
 /// Send an HTTP request through an HTTP forward proxy.
@@ -421,8 +434,8 @@ pub(crate) async fn write_proxy_request<S: tokio::io::AsyncWrite + Unpin>(
     }
 
     // Write proxy-only headers.  Skip proxy-authorization (handled
-    // separately below from configured auth) and any header that
-    // already appeared in the origin headers to avoid duplication.
+    // separately below from configured auth). When a header exists in both
+    // sets, the origin request wins and the proxy-only value is omitted.
     for (name, value) in proxy_headers.iter() {
         if name.as_str().eq_ignore_ascii_case("proxy-authorization") {
             continue;
@@ -758,7 +771,7 @@ impl<S: tokio::io::AsyncRead + Unpin> futures_core::Stream for ProxyResponseStre
 
 #[cfg(test)]
 mod tests {
-    use super::{effective_timeout, read_proxy_response};
+    use super::{effective_timeout, proxy_server_name, read_proxy_response};
     use crate::error::Error;
     use crate::timeout::TimeoutPhase;
     use std::time::{Duration, Instant};
@@ -777,6 +790,12 @@ mod tests {
             effective_timeout(None, Some(Duration::from_secs(3))).expect("phase budget is valid"),
             Some(Duration::from_secs(3))
         );
+    }
+
+    #[test]
+    fn proxy_tls_server_name_accepts_ip_literals() {
+        assert!(proxy_server_name("127.0.0.1").is_ok());
+        assert!(proxy_server_name("proxy.example").is_ok());
     }
 
     #[test]

@@ -128,6 +128,9 @@ def _cipher_fingerprint(ctx: ssl.SSLContext) -> str | None:
     return hashlib.sha256("|".join(names).encode()).hexdigest()
 
 
+_DEFAULT_CIPHER_FINGERPRINT = _cipher_fingerprint(ssl.create_default_context())
+
+
 def _options_fingerprint(ctx: ssl.SSLContext) -> str | None:
     """Compute a stable fingerprint of the context's options bitfield.
 
@@ -281,18 +284,10 @@ def _classify_context(
         return Classification.UNREPRESENTABLE
 
     # ── Custom ciphers ────────────────────────────────────────────
-    try:
-        ciphers = ctx.get_ciphers()
-        if ciphers:
-            # Eggfetch uses rustls's default cipher suite. Custom cipher
-            # ordering or disabled standard ciphers cannot be represented.
-            default_ctx = ssl.create_default_context()
-            default_ciphers = {c["name"] for c in default_ctx.get_ciphers()}
-            current_ciphers = {c["name"] for c in ciphers}
-            if current_ciphers != default_ciphers:
-                return Classification.UNREPRESENTABLE
-    except (ssl.SSLError, NotImplementedError):
-        pass
+    # Compare the captured fingerprint, not a second live read.  The
+    # snapshot is the consistency boundary for all classifier decisions.
+    if snapshot.cipher_fingerprint != _DEFAULT_CIPHER_FINGERPRINT:
+        return Classification.UNREPRESENTABLE
 
     # ── Options flags ─────────────────────────────────────────────
     if hasattr(ctx, "options"):

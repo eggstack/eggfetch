@@ -148,6 +148,24 @@ fn evict_one<K: std::clone::Clone + Eq + std::hash::Hash, V>(map: &mut HashMap<K
     }
 }
 
+/// Apply the selected HTTP protocol policy to a rustls client configuration.
+///
+/// The standard hyper-rustls connector applies this policy while building its
+/// connector. Custom connectors must set the same ALPN list themselves.
+fn configure_tls_alpn(
+    mut config: rustls::ClientConfig,
+    policy: crate::http_version::HttpVersionPolicyEnabler,
+) -> rustls::ClientConfig {
+    config.alpn_protocols.clear();
+    if policy.enable_http2() {
+        config.alpn_protocols.push(b"h2".to_vec());
+    }
+    if policy.enable_http1() {
+        config.alpn_protocols.push(b"http/1.1".to_vec());
+    }
+    config
+}
+
 impl ClientInner {
     /// Get or create a cached hyper client with TLS SNI hostname override.
     ///
@@ -168,18 +186,19 @@ impl ClientInner {
         }
 
         let connect_timeout = self.config.timeout.as_ref().and_then(|t| t.connect);
+        #[cfg(any(feature = "http2", feature = "http3", feature = "proxy"))]
         let policy = self.config.http_version_policy;
 
         #[cfg(any(feature = "proxy", feature = "http3"))]
         let tls_connector = match self.config.tls_config.as_ref() {
             Some(tls_config) => {
-                let mut rc = tls_config
+                let rc = tls_config
                     .build_rustls_config()
                     .map_err(|e| Error::Tls(format!("failed to build TLS config: {e}")))?;
-                #[cfg(feature = "http2")]
-                if matches!(policy, crate::HttpVersionPolicy::Http2Only) {
-                    rc.alpn_protocols = vec![b"h2".to_vec()];
-                }
+                let rc = configure_tls_alpn(
+                    rc,
+                    crate::http_version::HttpVersionPolicyEnabler::from_policy(policy),
+                );
                 Some(tokio_rustls::TlsConnector::from(Arc::new(rc)))
             }
             None => None,
@@ -194,11 +213,7 @@ impl ClientInner {
             },
             tls_connector,
         );
-        let mut sni_connector = base_connector.with_sni(sni_hostname.to_owned());
-        #[cfg(feature = "http2")]
-        if matches!(policy, crate::HttpVersionPolicy::Http2Only) {
-            sni_connector = sni_connector.with_alpn_h2_only();
-        }
+        let sni_connector = base_connector.with_sni(sni_hostname.to_owned());
         let connector =
             crate::transport::connect_timeout::ConnectTimeout::new(sni_connector, connect_timeout);
 
@@ -252,11 +267,10 @@ impl ClientInner {
                 .with_root_certificates(roots)
                 .with_no_client_auth()
         };
-        let mut tls_config = tls_config;
-        #[cfg(feature = "http2")]
-        if matches!(policy, crate::HttpVersionPolicy::Http2Only) {
-            tls_config.alpn_protocols = vec![b"h2".to_vec()];
-        }
+        let tls_config = configure_tls_alpn(
+            tls_config,
+            crate::http_version::HttpVersionPolicyEnabler::from_policy(policy),
+        );
         let connector = crate::transport::socks::SocksConnector::new(
             proxy.clone(),
             Some(tokio_rustls::TlsConnector::from(Arc::new(tls_config))),
@@ -912,7 +926,14 @@ impl ClientBuilder {
             // Build a TLS connector for HTTPS through the direct path.
             let tls_connector = match self.tls_config.as_ref() {
                 Some(tls_config) => match tls_config.build_rustls_config() {
-                    Ok(rc) => Some(tokio_rustls::TlsConnector::from(Arc::new(rc))),
+                    Ok(rc) => Some(tokio_rustls::TlsConnector::from(Arc::new(
+                        configure_tls_alpn(
+                            rc,
+                            crate::http_version::HttpVersionPolicyEnabler::from_policy(
+                                self.http_version_policy,
+                            ),
+                        ),
+                    ))),
                     Err(_) => None,
                 },
                 None => None,
@@ -952,10 +973,14 @@ impl ClientBuilder {
         #[cfg(unix)]
         let uds_client = self.uds_path.map(|path| {
             let tls_connector = self.tls_config.as_ref().and_then(|config| {
-                config
-                    .build_rustls_config()
-                    .ok()
-                    .map(|rc| tokio_rustls::TlsConnector::from(Arc::new(rc)))
+                config.build_rustls_config().ok().map(|rc| {
+                    tokio_rustls::TlsConnector::from(Arc::new(configure_tls_alpn(
+                        rc,
+                        crate::http_version::HttpVersionPolicyEnabler::from_policy(
+                            self.http_version_policy,
+                        ),
+                    )))
+                })
             });
             let connector = crate::transport::uds::UdsConnector::new(path, tls_connector);
             let connector = crate::transport::connect_timeout::ConnectTimeout::new(
@@ -1210,6 +1235,32 @@ mod tests {
                 let _ = build_fallback_connector(enabler);
             }
         }
+    }
+
+    #[cfg(feature = "http2")]
+    #[test]
+    fn custom_connector_alpn_matches_http_version_policy() {
+        let config = rustls::ClientConfig::builder()
+            .with_root_certificates(rustls::RootCertStore::empty())
+            .with_no_client_auth();
+        let h2_only = configure_tls_alpn(
+            config.clone(),
+            crate::http_version::HttpVersionPolicyEnabler::from_policy(
+                HttpVersionPolicy::Http2Only,
+            ),
+        );
+        assert_eq!(h2_only.alpn_protocols, vec![b"h2".to_vec()]);
+
+        let auto = configure_tls_alpn(
+            config,
+            crate::http_version::HttpVersionPolicyEnabler::from_policy(HttpVersionPolicy::Auto {
+                allow_http3: false,
+            }),
+        );
+        assert_eq!(
+            auto.alpn_protocols,
+            vec![b"h2".to_vec(), b"http/1.1".to_vec()]
+        );
     }
 
     #[test]

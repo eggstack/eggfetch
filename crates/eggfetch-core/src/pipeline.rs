@@ -1132,6 +1132,10 @@ pub(crate) async fn send_single_request(
         )?;
     }
 
+    if let Some(max) = inner.config.max_decoded_body_size {
+        response.body = response.body.limit_decoded_size(max)?;
+    }
+
     apply_read_timeout_and_lease(&mut response, guard, timeout.read);
 
     Ok(response)

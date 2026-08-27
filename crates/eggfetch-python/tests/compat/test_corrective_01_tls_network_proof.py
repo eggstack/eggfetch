@@ -81,7 +81,8 @@ class TestTranslationDeterminismOverTheWire:
                 ca_key = f"{tmpdir}/ca{i}.key"
                 subprocess.run(
                     [
-                        "openssl", "req", "-x509", "-newkey", "rsa:2048",
+                        "openssl", "req", "-x509", "-newkey", "ec",
+                        "-pkeyopt", "ec_paramgen_curve:prime256v1",
                         "-keyout", ca_key, "-out", ca_path,
                         "-days", "1", "-nodes",
                         "-subj", f"/CN=wrong-ca-{i}",

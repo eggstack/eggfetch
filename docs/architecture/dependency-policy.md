@@ -153,9 +153,9 @@ origin, tunnel mode, TLS config)`.
 
 ## Decoded-Body Limits
 
-The client supports configurable limits on decompressed response bodies
-to prevent excessive memory consumption from compressed responses that
-expand to large sizes.
+The client supports configurable limits on decoded response bodies to
+prevent excessive memory consumption from large responses and compressed
+responses that expand to large sizes.
 
 - `max_decoded_body_size`: Hard limit on total decoded bytes. When
   exceeded during streaming or buffered reads, returns

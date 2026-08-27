@@ -68,10 +68,10 @@ let client = Client::builder()
 
 | Limit | Description |
 |-------|-------------|
-| `max_decoded_body_size` | Hard limit on total decoded bytes |
+| `max_decoded_body_size` | Hard limit on total decoded bytes, including unencoded responses |
 | `max_decompression_ratio` | Ratio of decoded to compressed bytes after which decompression is rejected |
 
-Both limits are checked during streaming decompression. If either is exceeded, a `DecodedBodyTooLarge` or `DecompressionRatioExceeded` error is returned. The ratio limit prevents zip bombs where a small compressed payload expands to enormous size.
+Both limits are checked during streaming response consumption. If either is exceeded, a `DecodedBodyTooLarge` or `DecompressionRatioExceeded` error is returned. The ratio limit prevents zip bombs where a small compressed payload expands to enormous size.
 
 ## Disabling Decompression
 

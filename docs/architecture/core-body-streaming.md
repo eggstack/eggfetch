@@ -95,7 +95,8 @@ Python-side request bodies support iterables, file-like objects, and custom `Byt
 
 ## Resource Limits
 
-- `max_decoded_body_size` — maximum decoded body size after decompression.
+- `max_decoded_body_size` — maximum decoded body size, including identity
+  and other unencoded responses.
 - `max_decompression_ratio` — maximum ratio of compressed to decoded size.
 
 Exceeding either limit yields `Error::DecodedBodyTooLarge` or `Error::DecompressionRatioExceeded`.

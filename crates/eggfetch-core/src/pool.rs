@@ -371,7 +371,7 @@ struct PoolInner {
     /// Global concurrency semaphore. `None` when no global limit is set.
     global_semaphore: Option<Arc<Semaphore>>,
     /// Per-origin concurrency semaphores, created lazily on first use.
-    per_origin: DashMap<OriginKey, Arc<Semaphore>>,
+    per_origin: DashMap<OriginKey, Arc<PerOriginSemaphore>>,
     /// Serializes per-origin table eviction with the immediate acquire path.
     ///
     /// Without this guard, an idle semaphore could be removed after a
@@ -382,6 +382,24 @@ struct PoolInner {
     config: PoolConfig,
     /// Observable metrics.
     metrics: PoolMetrics,
+}
+
+/// Per-origin semaphore and the number of tasks waiting to acquire it.
+///
+/// The waiter count is updated before the table lock is released, so an idle
+/// entry cannot be evicted while a task is about to await its semaphore.
+struct PerOriginSemaphore {
+    semaphore: Arc<Semaphore>,
+    waiters: AtomicUsize,
+}
+
+impl PerOriginSemaphore {
+    fn new(max_per_origin: usize) -> Self {
+        Self {
+            semaphore: Arc::new(Semaphore::new(max_per_origin)),
+            waiters: AtomicUsize::new(0),
+        }
+    }
 }
 
 /// Connection pool that limits concurrent requests.
@@ -479,36 +497,34 @@ impl Pool {
                 .per_origin_table_lock
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            self.inner.per_origin.retain(|_, sem| {
-                // Keep entries that are either holding a permit or have
-                // an outstanding waiter. The strong-count guard closes
-                // the eviction-during-wait race: between releasing the
-                // table lock and `acquire_owned` resolving, a waiter
-                // holds a clone of this `Arc`, so the strong count is
-                // at least 2 (table + waiter). On common 64-bit
-                // platforms the strong count read is naturally atomic
-                // for an aligned word, matching the only platforms
-                // where `Arc::strong_count` reads can race with
-                // concurrent `Arc::clone`/`Arc::drop`.
-                sem.available_permits() < max_per_origin || Arc::strong_count(sem) > 1
+            self.inner.per_origin.retain(|_, entry| {
+                // Keep entries that are either holding a permit or have an
+                // outstanding waiter. The waiter count is incremented while
+                // the table lock is still held, so this check does not rely
+                // on Arc reference-count timing as a synchronization signal.
+                entry.semaphore.available_permits() < max_per_origin
+                    || entry.waiters.load(Ordering::Acquire) > 0
             });
 
-            let sem = self
+            let entry = self
                 .inner
                 .per_origin
                 .entry(origin.clone())
-                .or_insert_with(|| Arc::new(Semaphore::new(max_per_origin)))
+                .or_insert_with(|| Arc::new(PerOriginSemaphore::new(max_per_origin)))
                 .clone();
 
             // Try immediate acquire first. `try_acquire_owned` consumes an
             // `Arc`, so the fast path clones once; the wait path then moves
             // `sem` into `acquire_owned` without a further bump.
-            if let Ok(permit) = sem.clone().try_acquire_owned() {
+            if let Ok(permit) = entry.semaphore.clone().try_acquire_owned() {
                 origin_permit = Some(permit);
                 drop(table_lock);
             } else {
+                entry.waiters.fetch_add(1, Ordering::AcqRel);
                 drop(table_lock);
-                if let Ok(permit) = sem.acquire_owned().await {
+                let permit = entry.semaphore.clone().acquire_owned().await;
+                entry.waiters.fetch_sub(1, Ordering::AcqRel);
+                if let Ok(permit) = permit {
                     origin_permit = Some(permit);
                     waited = true;
                 } else {
@@ -658,7 +674,13 @@ mod tests {
         });
         let origin = OriginKey::from_parts("http", "example.com", 80);
         let origin_guard = origin_pool.acquire(Some(&origin)).await;
-        origin_pool.inner.per_origin.get(&origin).unwrap().close();
+        origin_pool
+            .inner
+            .per_origin
+            .get(&origin)
+            .unwrap()
+            .semaphore
+            .close();
         drop(origin_pool.acquire(Some(&origin)).await);
         assert_eq!(
             origin_pool

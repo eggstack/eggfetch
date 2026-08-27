@@ -48,9 +48,6 @@ class TestRepresentabilityMatrix:
         silently treated similar-cardinality stores as
         ``verify=True``.  The corrective removes that heuristic.
         """
-        from cryptography import x509
-        import cryptography.hazmat.primitives.serialization as ser
-
         from eggfetch.compat.httpx._ssl_context import (
             context_to_eggfetch_kwargs,
             snapshot_context,
@@ -73,7 +70,8 @@ class TestRepresentabilityMatrix:
 
                 subprocess.run(
                     [
-                        "openssl", "req", "-x509", "-newkey", "rsa:2048",
+                        "openssl", "req", "-x509", "-newkey", "ec",
+                        "-pkeyopt", "ec_paramgen_curve:prime256v1",
                         "-keyout", ca_key, "-out", ca_path,
                         "-days", "1", "-nodes",
                         "-subj", f"/CN=test-ca-{i}",
@@ -128,7 +126,8 @@ class TestRepresentabilityMatrix:
             a_key1 = f"{tmpdir}/a1.key"
             subprocess.run(
                 [
-                    "openssl", "req", "-x509", "-newkey", "rsa:2048",
+                    "openssl", "req", "-x509", "-newkey", "ec",
+                    "-pkeyopt", "ec_paramgen_curve:prime256v1",
                     "-keyout", a_key1, "-out", a_path1,
                     "-days", "1", "-nodes",
                     "-subj", "/CN=set-A-1",
@@ -141,7 +140,8 @@ class TestRepresentabilityMatrix:
             a_key2 = f"{tmpdir}/a2.key"
             subprocess.run(
                 [
-                    "openssl", "req", "-x509", "-newkey", "rsa:2048",
+                    "openssl", "req", "-x509", "-newkey", "ec",
+                    "-pkeyopt", "ec_paramgen_curve:prime256v1",
                     "-keyout", a_key2, "-out", a_path2,
                     "-days", "1", "-nodes",
                     "-subj", "/CN=set-A-2",
@@ -156,7 +156,8 @@ class TestRepresentabilityMatrix:
             b_key1 = f"{tmpdir}/b1.key"
             subprocess.run(
                 [
-                    "openssl", "req", "-x509", "-newkey", "rsa:2048",
+                    "openssl", "req", "-x509", "-newkey", "ec",
+                    "-pkeyopt", "ec_paramgen_curve:prime256v1",
                     "-keyout", b_key1, "-out", b_path1,
                     "-days", "1", "-nodes",
                     "-subj", "/CN=set-B-1",
@@ -169,7 +170,8 @@ class TestRepresentabilityMatrix:
             b_key2 = f"{tmpdir}/b2.key"
             subprocess.run(
                 [
-                    "openssl", "req", "-x509", "-newkey", "rsa:2048",
+                    "openssl", "req", "-x509", "-newkey", "ec",
+                    "-pkeyopt", "ec_paramgen_curve:prime256v1",
                     "-keyout", b_key2, "-out", b_path2,
                     "-days", "1", "-nodes",
                     "-subj", "/CN=set-B-2",
@@ -251,7 +253,8 @@ class TestConstructionFingerprint:
             ca_key = f"{tmpdir}/extra-ca.key"
             subprocess.run(
                 [
-                    "openssl", "req", "-x509", "-newkey", "rsa:2048",
+                    "openssl", "req", "-x509", "-newkey", "ec",
+                    "-pkeyopt", "ec_paramgen_curve:prime256v1",
                     "-keyout", ca_key, "-out", ca_path,
                     "-days", "1", "-nodes",
                     "-subj", "/CN=mutated-ca",
