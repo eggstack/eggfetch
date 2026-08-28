@@ -345,7 +345,7 @@ def _map_exception(native_exc, compat_request=None):
     msg = str(native_exc)
 
     if not isinstance(native_exc, eggfetch.EggfetchError):
-        raise
+        raise native_exc
 
     if isinstance(native_exc, eggfetch.PoolTimeout):
         return PoolTimeout(message=msg, request=compat_request)

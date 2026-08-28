@@ -23,6 +23,14 @@ def test_timeout_override_uses_httpx_mapping():
     ]
 
 
+def test_map_exception_reraises_non_native_exception():
+    from eggfetch.compat.httpx._client import _map_exception
+
+    error = ValueError("not a native error")
+    with pytest.raises(ValueError, match="not a native error"):
+        _map_exception(error)
+
+
 @pytest.mark.parametrize("method", ["POST", "PUT", "PATCH"])
 def test_empty_body_header(method):
     assert Request(method, "https://example.com").headers["content-length"] == "0"

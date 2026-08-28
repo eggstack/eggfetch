@@ -51,7 +51,10 @@ pub(crate) struct H3Connector {
 impl H3Connector {
     /// Create a new H3 connector.
     pub(crate) fn new(tls_config: Option<crate::tls::TlsConfig>) -> Result<Self> {
-        let endpoint = quinn::Endpoint::client("0.0.0.0:0".parse().unwrap())
+        let bind_addr = "0.0.0.0:0"
+            .parse()
+            .map_err(|e| Error::Connect(format!("invalid QUIC bind address: {e}")))?;
+        let endpoint = quinn::Endpoint::client(bind_addr)
             .map_err(|e| Error::Connect(format!("failed to create QUIC endpoint: {e}")))?;
 
         Ok(Self {

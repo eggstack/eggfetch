@@ -411,7 +411,9 @@ fn sync_decode_flate2(
             }
             Ok(bytes::Bytes::from(output))
         }
-        _ => unreachable!("sync_decode_flate2 called with non-flate2 encoding"),
+        _ => Err(Error::UnsupportedContentEncoding(
+            encoding.as_str().to_owned(),
+        )),
     }
 }
 
@@ -890,6 +892,15 @@ mod tests {
         );
         let err = decompress_buffered(b"x", "weird", DecompressionLimit::new()).unwrap_err();
         assert_eq!(err.kind(), "unsupported_content_encoding");
+    }
+
+    #[cfg(any(feature = "compression-gzip", feature = "compression-deflate"))]
+    #[test]
+    fn sync_decode_flate2_rejects_non_flate_encoding() {
+        let err = sync_decode_flate2(&bytes::Bytes::new(), ContentCoding::Brotli, None, false)
+            .unwrap_err();
+        assert_eq!(err.kind(), "unsupported_content_encoding");
+        assert!(err.to_string().contains("br"));
     }
 
     #[test]

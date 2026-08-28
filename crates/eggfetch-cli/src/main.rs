@@ -570,10 +570,48 @@ fn build_json_response(
 /// `Content-Disposition` cannot traverse out of the working directory.
 fn sanitize_filename(name: &str) -> Option<String> {
     let name = name.rsplit(['/', '\\']).next().unwrap_or(name).trim();
-    if name.is_empty() || name == "." || name == ".." {
+    if name.is_empty()
+        || name == "."
+        || name == ".."
+        || name.contains('\0')
+        || is_windows_reserved_name(name)
+    {
         return None;
     }
     Some(name.to_owned())
+}
+
+fn is_windows_reserved_name(name: &str) -> bool {
+    let stem = name
+        .split('.')
+        .next()
+        .unwrap_or_default()
+        .trim_end_matches([' ', '.']);
+    matches!(
+        stem.to_ascii_uppercase().as_str(),
+        "CON"
+            | "PRN"
+            | "AUX"
+            | "NUL"
+            | "COM1"
+            | "COM2"
+            | "COM3"
+            | "COM4"
+            | "COM5"
+            | "COM6"
+            | "COM7"
+            | "COM8"
+            | "COM9"
+            | "LPT1"
+            | "LPT2"
+            | "LPT3"
+            | "LPT4"
+            | "LPT5"
+            | "LPT6"
+            | "LPT7"
+            | "LPT8"
+            | "LPT9"
+    )
 }
 
 fn derive_filename(response: &eggfetch_core::Response) -> Option<String> {
@@ -1701,5 +1739,15 @@ mod tests {
         assert_eq!(sanitize_filename(""), None);
         assert_eq!(sanitize_filename("."), None);
         assert_eq!(sanitize_filename(".."), None);
+    }
+
+    #[test]
+    fn sanitize_filename_rejects_invalid_device_names_and_nul() {
+        assert_eq!(sanitize_filename("report\0.txt"), None);
+        assert_eq!(sanitize_filename("CON"), None);
+        assert_eq!(sanitize_filename("con.txt"), None);
+        assert_eq!(sanitize_filename("COM1.log"), None);
+        assert_eq!(sanitize_filename("LPT9"), None);
+        assert_eq!(sanitize_filename("COM10"), Some("COM10".to_owned()));
     }
 }
