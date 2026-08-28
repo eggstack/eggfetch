@@ -441,10 +441,9 @@ pub unsafe extern "C" fn eggfetch_client_builder_danger_accept_invalid_certs(
         let Some(handle) = handle.as_mut() else {
             return -1;
         };
-        let tls = eggfetch_core::TlsConfig::builder()
-            .danger_accept_invalid_certs(accept != 0)
-            .build();
-        update_builder(handle, |builder| builder.tls_config(tls))
+        update_builder(handle, |builder| {
+            builder.danger_accept_invalid_certs(accept != 0)
+        })
     })
 }
 

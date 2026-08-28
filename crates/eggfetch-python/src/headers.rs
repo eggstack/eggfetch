@@ -65,46 +65,38 @@ impl PyHeaders {
     }
 
     /// Iterate over header names.
-    fn __iter__(&self) -> PyResult<Py<PyList>> {
-        Python::with_gil(|py| {
-            let names: Vec<String> = self.inner.keys().map(|k| k.as_str().to_owned()).collect();
-            Ok(PyList::new(py, names)?.into())
-        })
+    fn __iter__(&self, py: Python<'_>) -> PyResult<Py<PyList>> {
+        let names: Vec<String> = self.inner.keys().map(|k| k.as_str().to_owned()).collect();
+        Ok(PyList::new(py, names)?.into())
     }
 
     /// Returns a list of header names.
-    fn keys(&self) -> PyResult<Py<PyList>> {
-        Python::with_gil(|py| {
-            let names: Vec<String> = self.inner.keys().map(|k| k.as_str().to_owned()).collect();
-            Ok(PyList::new(py, names)?.into())
-        })
+    fn keys(&self, py: Python<'_>) -> PyResult<Py<PyList>> {
+        let names: Vec<String> = self.inner.keys().map(|k| k.as_str().to_owned()).collect();
+        Ok(PyList::new(py, names)?.into())
     }
 
     /// Returns a list of header values.
-    fn values(&self) -> PyResult<Py<PyList>> {
-        Python::with_gil(|py| {
-            let vals: Vec<String> = self
-                .inner
-                .values()
-                .filter_map(|v| v.to_str().ok())
-                .map(str::to_string)
-                .collect();
-            Ok(PyList::new(py, vals)?.into())
-        })
+    fn values(&self, py: Python<'_>) -> PyResult<Py<PyList>> {
+        let vals: Vec<String> = self
+            .inner
+            .values()
+            .filter_map(|v| v.to_str().ok())
+            .map(str::to_string)
+            .collect();
+        Ok(PyList::new(py, vals)?.into())
     }
 
     /// Returns a list of (name, value) tuples.
-    fn items(&self) -> PyResult<Py<PyList>> {
-        Python::with_gil(|py| {
-            let mut result: Vec<Bound<'_, PyTuple>> = Vec::new();
-            for (k, v) in &self.inner {
-                let name = k.as_str();
-                if let Ok(val) = v.to_str() {
-                    result.push(PyTuple::new(py, [name, val])?);
-                }
+    fn items(&self, py: Python<'_>) -> PyResult<Py<PyList>> {
+        let mut result: Vec<Bound<'_, PyTuple>> = Vec::new();
+        for (k, v) in &self.inner {
+            let name = k.as_str();
+            if let Ok(val) = v.to_str() {
+                result.push(PyTuple::new(py, [name, val])?);
             }
-            Ok(PyList::new(py, result)?.into())
-        })
+        }
+        Ok(PyList::new(py, result)?.into())
     }
 
     /// Get all values for a header name (case-insensitive).

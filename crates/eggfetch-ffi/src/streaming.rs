@@ -181,7 +181,8 @@ pub unsafe extern "C" fn eggfetch_client_send_streaming(
                     headers,
                     state,
                 })
-            });
+            })
+            .and_then(std::convert::identity);
 
             match result {
                 Ok(handle) => Box::into_raw(Box::new(handle)),
@@ -333,6 +334,10 @@ pub unsafe extern "C" fn eggfetch_response_stream_header(
 ///
 /// `handle` must be a valid, non-freed streaming response handle.
 #[no_mangle]
+#[allow(
+    clippy::too_many_lines,
+    reason = "FFI stream cancellation, ownership, and error state must stay in one transition"
+)]
 pub unsafe extern "C" fn eggfetch_response_stream_next(
     handle: *mut StreamingResponseHandle,
 ) -> *mut StreamChunk {
@@ -373,14 +378,24 @@ pub unsafe extern "C" fn eggfetch_response_stream_next(
         let outcome: Option<RecvOutcome> = if *cancelled.borrow_and_update() {
             None
         } else {
-            Some(blocking_send(async move {
-                tokio::select! {
-                    chunk = rx.recv() => RecvOutcome { chunk, rx: Some(rx) },
-                    () = async { let _ = cancelled.changed().await; } => {
-                        RecvOutcome { chunk: None, rx: None }
+            Some(
+                match blocking_send(async move {
+                    tokio::select! {
+                        chunk = rx.recv() => RecvOutcome { chunk, rx: Some(rx) },
+                        () = async { let _ = cancelled.changed().await; } => {
+                            RecvOutcome { chunk: None, rx: None }
+                        }
                     }
-                }
-            }))
+                }) {
+                    Ok(outcome) => outcome,
+                    Err(error) => {
+                        if let Ok(mut last) = state.last_error.lock() {
+                            *last = Some(error.to_string());
+                        }
+                        return ptr::null_mut();
+                    }
+                },
+            )
         };
 
         let (chunk, rx) = match outcome {

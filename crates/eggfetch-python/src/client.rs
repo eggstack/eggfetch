@@ -391,6 +391,7 @@ impl PyClient {
         let client = self.clone_client()?;
         let trace_slot = extracted.trace_error_slot.clone();
         let (runtime_guard, runtime_handle) = self.runtime_for_dispatch()?;
+        let effective_decompress = decompress.or(self.decompress);
         let result = py.allow_threads(|| {
             runtime_handle.block_on(async {
                 let mut builder = client
@@ -409,7 +410,7 @@ impl PyClient {
                     builder = builder.timeout(t);
                 }
 
-                if let Some(d) = decompress.or(self.decompress) {
+                if let Some(d) = effective_decompress {
                     builder = builder.decompress(d);
                 }
 
@@ -963,6 +964,7 @@ impl PyClient {
 
         let client = self.clone_client()?;
         let (runtime_guard, runtime_handle) = self.runtime_for_dispatch()?;
+        let effective_decompress = decompress.or(self.decompress);
         let result = py.allow_threads(|| {
             runtime_handle.block_on(async {
                 let mut builder = client
@@ -981,7 +983,7 @@ impl PyClient {
                     builder = builder.timeout(t);
                 }
 
-                if let Some(d) = decompress.or(self.decompress) {
+                if let Some(d) = effective_decompress {
                     builder = builder.decompress(d);
                 }
 

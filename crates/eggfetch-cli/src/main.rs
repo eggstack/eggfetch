@@ -126,11 +126,11 @@ struct Cli {
     max_redirects: usize,
 
     /// Basic auth as USER:PASS (env: `EGGFETCH_AUTH`).
-    #[arg(long = "auth", env = "EGGFETCH_AUTH")]
+    #[arg(long = "auth", env = "EGGFETCH_AUTH", conflicts_with = "bearer")]
     auth: Option<String>,
 
     /// Bearer token (env: `EGGFETCH_BEARER`).
-    #[arg(long = "bearer", env = "EGGFETCH_BEARER")]
+    #[arg(long = "bearer", env = "EGGFETCH_BEARER", conflicts_with = "auth")]
     bearer: Option<String>,
 
     /// Cookies as NAME=VALUE (repeatable).
@@ -870,7 +870,9 @@ async fn run(cli: Cli) -> Result<()> {
         .count();
 
     if body_count > 1 && !(has_form && has_files && body_count == 2) {
-        anyhow::bail!("body sources (body, body-file, json, form, file) are mutually exclusive");
+        anyhow::bail!(
+            "--body/--body-file/--json are mutually exclusive with --form/--file; --form and --file may be combined for multipart"
+        );
     }
 
     if has_json {

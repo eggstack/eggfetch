@@ -154,6 +154,15 @@ impl TlsConfig {
         Self::builder()
     }
 
+    /// Enable or disable certificate and hostname verification while
+    /// retaining the rest of this configuration.
+    #[must_use]
+    pub fn danger_accept_invalid_certs(mut self, accept: bool) -> Self {
+        self.verify_certificate = !accept;
+        self.verify_hostname = !accept;
+        self
+    }
+
     /// Build a `tokio_rustls::TlsConnector` from this TLS configuration.
     ///
     /// This is the convenience entry point for [`UpgradedStream::start_tls`]
@@ -961,6 +970,19 @@ mod tests {
             .build();
         assert!(!config.verify_hostname());
         assert!(!config.verify_certificate());
+    }
+
+    #[test]
+    fn config_disable_verification_preserves_other_settings() {
+        let config = TlsConfig::builder()
+            .sni(false)
+            .min_tls_version(TlsVersion::Tls13)
+            .build()
+            .danger_accept_invalid_certs(true);
+        assert!(!config.verify_hostname());
+        assert!(!config.verify_certificate());
+        assert!(!config.sni_enabled());
+        assert_eq!(config.min_version, Some(TlsVersion::Tls13));
     }
 
     #[test]

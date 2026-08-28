@@ -30,7 +30,7 @@ pub(crate) fn blocking_send<
     T: Send + 'static,
 >(
     future: F,
-) -> T {
+) -> eggfetch_core::Result<T> {
     match tokio::runtime::Handle::try_current() {
         Ok(handle)
             if matches!(
@@ -42,7 +42,7 @@ pub(crate) fn blocking_send<
             // async executor). block_in_place converts the current worker
             // thread into a blocking context, allowing handle.block_on to
             // run the future.
-            tokio::task::block_in_place(move || handle.block_on(future))
+            Ok(tokio::task::block_in_place(move || handle.block_on(future)))
         }
         _ => {
             // Not inside a multi-thread tokio runtime — either no runtime
@@ -51,10 +51,14 @@ pub(crate) fn blocking_send<
             // the caller's single worker stays responsive).
             let (tx, rx) = std::sync::mpsc::channel();
             ffi_runtime().spawn(async move {
-                let _ = tx.send(future.await);
+                let _ = tx.send(Ok(future.await));
             });
             rx.recv().unwrap_or_else(|e| {
-                panic!("eggfetch-ffi blocking_send: runtime task dropped ({e})")
+                Err(eggfetch_core::Error::Io(std::sync::Arc::new(
+                    std::io::Error::other(format!(
+                        "eggfetch-ffi blocking_send: runtime task dropped ({e})"
+                    )),
+                )))
             })
         }
     }

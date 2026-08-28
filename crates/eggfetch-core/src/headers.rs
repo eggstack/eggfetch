@@ -119,9 +119,9 @@ impl Headers {
     /// Callers that need replacement semantics should remove the header name
     /// first, as the request pipeline does when applying request headers over
     /// client defaults.
-    pub fn extend(&mut self, other: Self) {
+    pub fn extend(&mut self, other: &Self) {
         for name in other.inner.keys() {
-            for value in other.inner.get_all(name).iter() {
+            for value in &other.inner.get_all(name) {
                 self.inner.append(name.clone(), value.clone());
             }
         }
@@ -229,7 +229,7 @@ mod tests {
         let mut second = Headers::new();
         second.append("Set-Cookie", "b=2").unwrap();
 
-        first.extend(second);
+        first.extend(&second);
 
         let values: Vec<_> = first.inner.get_all("set-cookie").iter().collect();
         assert_eq!(values.len(), 2);

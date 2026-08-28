@@ -187,7 +187,7 @@ fn headers_extend() {
     h1.insert("A", "1").unwrap();
     let mut h2 = Headers::new();
     h2.insert("B", "2").unwrap();
-    h1.extend(h2);
+    h1.extend(&h2);
     assert_eq!(h1.get("a").unwrap().to_str().unwrap(), "1");
     assert_eq!(h1.get("b").unwrap().to_str().unwrap(), "2");
 }

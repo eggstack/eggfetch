@@ -692,6 +692,15 @@ impl ClientBuilder {
         self
     }
 
+    /// Enable or disable insecure TLS verification while retaining other
+    /// TLS configuration already applied to this builder.
+    #[must_use]
+    pub fn danger_accept_invalid_certs(mut self, accept: bool) -> Self {
+        let config = self.tls_config.take().unwrap_or_default();
+        self.tls_config = Some(config.danger_accept_invalid_certs(accept));
+        self
+    }
+
     /// Enable or disable automatic response decompression.
     ///
     /// When enabled (the default), the client sends an
@@ -1170,6 +1179,24 @@ mod tests {
         let timeout = client.inner.config.timeout.expect("timeout configured");
         assert_eq!(timeout.connect, Some(std::time::Duration::from_secs(5)));
         assert_eq!(timeout.read, None);
+    }
+
+    #[cfg(any(feature = "proxy", feature = "http3"))]
+    #[test]
+    fn client_builder_danger_accept_invalid_certs_preserves_tls_config() {
+        let client = Client::builder()
+            .tls_config(crate::tls::TlsConfig::builder().sni(false).build())
+            .danger_accept_invalid_certs(true)
+            .build();
+        let tls = client
+            .inner
+            .config
+            .tls_config
+            .as_ref()
+            .expect("TLS config should be retained");
+        assert!(!tls.sni_enabled());
+        assert!(!tls.verify_certificate());
+        assert!(!tls.verify_hostname());
     }
 
     #[test]

@@ -314,7 +314,8 @@ pub unsafe extern "C" fn eggfetch_client_send(
                     .collect();
                 let body = resp.bytes().await?;
                 Ok::<_, eggfetch_core::Error>((status, url, headers, body))
-            });
+            })
+            .and_then(std::convert::identity);
 
             match result {
                 Ok((status, url, headers, body)) => {

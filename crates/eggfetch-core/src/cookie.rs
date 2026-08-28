@@ -245,20 +245,13 @@ impl CookieJar {
     /// cannot leave it inconsistent.
     #[must_use]
     pub fn cookies_for_url(&self, url: &Url) -> Option<String> {
-        let has_persistent = self
+        let mut jar = self
             .inner
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .cookies
-            .values()
-            .any(|cookie| cookie.persistent);
-        if has_persistent {
-            self.expire_stale();
-        }
-        let jar = self
-            .inner
-            .read()
+            .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let now = SystemTime::now();
+        jar.cookies
+            .retain(|_, c| !c.persistent || c.expires.map_or(true, |exp| now < exp));
         let url_host = url.host_str().unwrap_or("");
         let is_secure = url.scheme() == "https";
         let url_path = url.path();

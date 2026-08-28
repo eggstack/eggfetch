@@ -861,6 +861,30 @@ fn test_bearer_auth() {
 }
 
 #[test]
+fn test_basic_and_bearer_auth_conflict() {
+    let (_stdout, stderr, code) = run_cli_clean(&[
+        "http://127.0.0.1:1/x",
+        "--auth",
+        "user:pass",
+        "--bearer",
+        "token",
+    ]);
+    assert_eq!(code, Some(2));
+    assert!(
+        stderr.contains("cannot be used with"),
+        "unexpected error: {stderr}"
+    );
+}
+
+#[test]
+fn test_body_source_error_explains_multipart_exception() {
+    let (_stdout, stderr, code) =
+        run_cli_clean(&["http://127.0.0.1:1/x", "--body", "body", "--form", "a=b"]);
+    assert_ne!(code, Some(0));
+    assert!(stderr.contains("--form and --file may be combined for multipart"));
+}
+
+#[test]
 fn test_redirect_follow() {
     let server = TestServer::start();
     let url = format!("{}/redirect-to?to=/get", server.url());

@@ -1,6 +1,6 @@
 //! Proxy request handling for HTTP and HTTPS destinations.
 
-use bytes::Bytes;
+use bytes::{Bytes, BytesMut};
 
 use crate::body::{BoxBytesStream, RequestBody, ResponseBody};
 use crate::error::{Error, Result};
@@ -627,6 +627,7 @@ pub(crate) async fn read_proxy_response<S: tokio::io::AsyncRead + Unpin>(
 struct ProxyResponseStream<S> {
     initial_buf: std::io::Cursor<Vec<u8>>,
     inner: S,
+    chunk: BytesMut,
 }
 
 fn map_socks_send_error(err: hyper_util::client::legacy::Error) -> Error {
@@ -705,6 +706,7 @@ impl<S> ProxyResponseStream<S> {
         Self {
             initial_buf: std::io::Cursor::new(initial_buf),
             inner,
+            chunk: BytesMut::with_capacity(8192),
         }
     }
 }
@@ -717,11 +719,13 @@ impl<S: tokio::io::AsyncRead + Unpin> futures_core::Stream for ProxyResponseStre
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Option<Self::Item>> {
         use std::io::Read as _;
+        let this = self.as_mut().get_mut();
 
         // Drain the initial buffer first.
-        if self.initial_buf.position() < self.initial_buf.get_ref().len() as u64 {
-            let mut chunk = vec![0u8; 8192];
-            let n = match self.initial_buf.read(&mut chunk) {
+        if this.initial_buf.position() < this.initial_buf.get_ref().len() as u64 {
+            this.chunk.clear();
+            this.chunk.resize(8192, 0);
+            let n = match this.initial_buf.read(&mut this.chunk) {
                 Ok(n) => n,
                 Err(e) => {
                     return std::task::Poll::Ready(Some(Err(Error::Body(format!(
@@ -730,24 +734,23 @@ impl<S: tokio::io::AsyncRead + Unpin> futures_core::Stream for ProxyResponseStre
                 }
             };
             if n > 0 {
-                chunk.truncate(n);
-                return std::task::Poll::Ready(Some(Ok(Bytes::from(chunk))));
+                return std::task::Poll::Ready(Some(Ok(this.chunk.split_to(n).freeze())));
             }
         }
 
         // Read from the proxy stream using poll_read.
-        let mut chunk = vec![0u8; 8192];
-        let mut read_buf = tokio::io::ReadBuf::new(&mut chunk);
+        this.chunk.clear();
+        this.chunk.resize(8192, 0);
+        let mut read_buf = tokio::io::ReadBuf::new(&mut this.chunk);
         match tokio::io::AsyncRead::poll_read(
-            std::pin::Pin::new(&mut self.inner),
+            std::pin::Pin::new(&mut this.inner),
             cx,
             &mut read_buf,
         ) {
             std::task::Poll::Ready(Ok(())) => {
                 let n = read_buf.filled().len();
                 if n > 0 {
-                    chunk.truncate(n);
-                    std::task::Poll::Ready(Some(Ok(Bytes::from(chunk))))
+                    std::task::Poll::Ready(Some(Ok(this.chunk.split_to(n).freeze())))
                 } else {
                     std::task::Poll::Ready(None)
                 }
