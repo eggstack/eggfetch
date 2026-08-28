@@ -289,10 +289,11 @@ impl tower_service::Service<http::Uri> for SocksConnector {
             let connector = tls.ok_or_else(|| -> Self::Error {
                 Error::Tls("SOCKS HTTPS requires a TLS connector".into()).into()
             })?;
-            let name = tokio_rustls::rustls::pki_types::ServerName::try_from(host.to_owned())
-                .map_err(|e| -> Self::Error {
+            let name = crate::transport::direct_connector::tls_server_name(host).map_err(
+                |e| -> Self::Error {
                     Error::Tls(format!("invalid SOCKS TLS server name '{host}': {e}")).into()
-                })?;
+                },
+            )?;
             let stream = connector
                 .connect(name, stream)
                 .await

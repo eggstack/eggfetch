@@ -94,6 +94,10 @@ impl PyAsyncClient {
                 .http_version_policy(eggfetch_core::HttpVersionPolicy::Auto { allow_http3: false });
         } else if http1_enabled && !http2_enabled {
             builder = builder.http_version_policy(eggfetch_core::HttpVersionPolicy::Http1Only);
+        } else {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "At least one of http1 or http2 must be True",
+            ));
         }
 
         if let Some(l) = limits {

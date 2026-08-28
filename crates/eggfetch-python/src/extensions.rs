@@ -101,12 +101,9 @@ pub(crate) fn extract_native_extensions(
                 if bytes.is_empty() {
                     return Err(PyTypeError::new_err("target extension must not be empty"));
                 }
-                if bytes
-                    .iter()
-                    .any(|&b| b == b'\r' || b == b'\n' || b == b'\0')
-                {
+                if bytes.iter().any(|&b| b < 0x20 || b == 0x7f) {
                     return Err(PyTypeError::new_err(
-                        "target extension contains forbidden characters (CR/LF/NUL)",
+                        "target extension contains forbidden characters (C0 controls/DEL; includes CR/LF/NUL)",
                     ));
                 }
                 hints.target = Some(bytes);

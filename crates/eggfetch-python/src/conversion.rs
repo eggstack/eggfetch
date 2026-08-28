@@ -176,6 +176,11 @@ pub fn build_request_body<'py>(
         }
         // If it's an iterable/generator, signal to caller to treat as stream.
         if c.hasattr("__iter__")? || c.hasattr("__aiter__")? {
+            if c.hasattr("items")? && c.hasattr("__getitem__")? {
+                return Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
+                    "content must be bytes, str, or an iterable of bytes",
+                ));
+            }
             return Ok((None, None));
         }
         Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(

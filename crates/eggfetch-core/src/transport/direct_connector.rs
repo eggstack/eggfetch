@@ -42,6 +42,24 @@ use tower_service::Service;
 
 use crate::error::Error;
 
+/// Build a rustls server name from a DNS name or IP literal.
+pub(crate) fn tls_server_name(
+    host: &str,
+) -> std::result::Result<tokio_rustls::rustls::pki_types::ServerName<'static>, String> {
+    let ip_host = host
+        .strip_prefix('[')
+        .and_then(|value| value.strip_suffix(']'))
+        .unwrap_or(host);
+    if let Ok(ip) = ip_host.parse::<std::net::IpAddr>() {
+        return Ok(tokio_rustls::rustls::pki_types::ServerName::IpAddress(
+            ip.into(),
+        ));
+    }
+
+    tokio_rustls::rustls::pki_types::ServerName::try_from(host.to_owned())
+        .map_err(|error| error.to_string())
+}
+
 /// Socket options that the safe connector can apply portably.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SocketOptionKind {
@@ -108,28 +126,28 @@ fn apply_socket_option(
     match opt.kind {
         // TCP_NODELAY: value is a 4-byte int (non-zero = enabled).
         Some(SocketOptionKind::TcpNoDelay) => {
-            let val = i32::from_le_bytes([opt.value[0], opt.value[1], opt.value[2], opt.value[3]]);
+            let val = i32::from_ne_bytes([opt.value[0], opt.value[1], opt.value[2], opt.value[3]]);
             socket
                 .set_nodelay(val != 0)
                 .map_err(|e| Error::Connect(format!("failed to set TCP_NODELAY: {e}")))?;
         }
         // SO_KEEPALIVE: value is a 4-byte int (non-zero = enabled).
         Some(SocketOptionKind::KeepAlive) => {
-            let val = i32::from_le_bytes([opt.value[0], opt.value[1], opt.value[2], opt.value[3]]);
+            let val = i32::from_ne_bytes([opt.value[0], opt.value[1], opt.value[2], opt.value[3]]);
             socket
                 .set_keepalive(val != 0)
                 .map_err(|e| Error::Connect(format!("failed to set SO_KEEPALIVE: {e}")))?;
         }
         // SO_RCVBUF: value is a 4-byte int (buffer size in bytes).
         Some(SocketOptionKind::ReceiveBuffer) => {
-            let val = u32::from_le_bytes([opt.value[0], opt.value[1], opt.value[2], opt.value[3]]);
+            let val = u32::from_ne_bytes([opt.value[0], opt.value[1], opt.value[2], opt.value[3]]);
             socket
                 .set_recv_buffer_size(val)
                 .map_err(|e| Error::Connect(format!("failed to set SO_RCVBUF: {e}")))?;
         }
         // SO_SNDBUF: value is a 4-byte int (buffer size in bytes).
         Some(SocketOptionKind::SendBuffer) => {
-            let val = u32::from_le_bytes([opt.value[0], opt.value[1], opt.value[2], opt.value[3]]);
+            let val = u32::from_ne_bytes([opt.value[0], opt.value[1], opt.value[2], opt.value[3]]);
             socket
                 .set_send_buffer_size(val)
                 .map_err(|e| Error::Connect(format!("failed to set SO_SNDBUF: {e}")))?;
@@ -366,11 +384,11 @@ impl Service<Uri> for DirectConnector {
                 // Use sni_hostname override for TLS SNI when set; otherwise
                 // use the URL host for both TCP and TLS.
                 let tls_host = sni_hostname.as_deref().unwrap_or(&host);
-                let server_name =
-                    tokio_rustls::rustls::pki_types::ServerName::try_from(tls_host.to_owned())
-                        .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> {
-                            Error::Tls(format!("invalid server name '{tls_host}': {e}")).into()
-                        })?;
+                let server_name = tls_server_name(tls_host).map_err(
+                    |e| -> Box<dyn std::error::Error + Send + Sync> {
+                        Error::Tls(format!("invalid server name '{tls_host}': {e}")).into()
+                    },
+                )?;
 
                 let stream = tls_connector
                     .connect(server_name, tokio_stream)
@@ -415,6 +433,13 @@ mod tests {
             kind: Some(SocketOptionKind::TcpNoDelay),
         };
         assert_eq!(opt.value.len(), 4);
+    }
+
+    #[test]
+    fn tls_server_name_accepts_ip_literals() {
+        assert!(tls_server_name("127.0.0.1").is_ok());
+        assert!(tls_server_name("::1").is_ok());
+        assert!(tls_server_name("[::1]").is_ok());
     }
 
     #[test]

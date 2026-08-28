@@ -68,6 +68,10 @@ def server():
 # ---------------------------------------------------------------------------
 
 class TestSyncClientHttp2:
+    def test_client_rejects_no_protocols(self):
+        with pytest.raises(ValueError, match="At least one of http1 or http2"):
+            eggfetch.Client(http1=False, http2=False)
+
     def test_client_construction_http2_true(self):
         client = eggfetch.Client(http2=True)
         assert client is not None
@@ -107,6 +111,10 @@ class TestSyncClientHttp2:
 # ---------------------------------------------------------------------------
 
 class TestAsyncClientHttp2:
+    def test_async_client_rejects_no_protocols(self):
+        with pytest.raises(ValueError, match="At least one of http1 or http2"):
+            eggfetch.AsyncClient(http1=False, http2=False)
+
     def test_async_client_construction_http2_true(self):
         client = eggfetch.AsyncClient(http2=True)
         assert client is not None

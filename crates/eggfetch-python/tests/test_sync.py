@@ -363,6 +363,10 @@ class TestUnsupportedKwargs:
 # ---------------------------------------------------------------------------
 
 class TestContent:
+    def test_content_dict_rejected(self, server):
+        with pytest.raises(TypeError, match="content must be bytes, str"):
+            eggfetch.post(f"{server}/api", content={"key": "value"})
+
     def test_content_bytes(self, server):
         r = eggfetch.post(f"{server}/api", content=b"raw bytes")
         data = json.loads(r.text)

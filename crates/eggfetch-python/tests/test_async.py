@@ -460,6 +460,13 @@ class TestAsyncUnsupportedKwargs:
 # ---------------------------------------------------------------------------
 
 class TestAsyncContent:
+    def test_content_dict_rejected(self, server):
+        async def _test():
+            with pytest.raises(TypeError, match="content must be bytes, str"):
+                async with eggfetch.AsyncClient() as client:
+                    await client.post(f"{server}/api", content={"key": "value"})
+        asyncio.run(_test())
+
     def test_content_bytes(self, server):
         async def _test():
             async with eggfetch.AsyncClient() as client:

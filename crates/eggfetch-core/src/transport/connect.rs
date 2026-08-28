@@ -126,7 +126,7 @@ pub(crate) async fn send_https_connect_request(
     // Use sni_hostname override for TLS SNI and certificate verification
     // while TCP still connects to dest_host (the URL host).
     let sni_name = transport_hints.sni_hostname.as_deref().unwrap_or(dest_host);
-    let domain = rustls::pki_types::ServerName::try_from(sni_name.to_owned())
+    let domain = crate::transport::direct_connector::tls_server_name(sni_name)
         .map_err(|e| Error::Tls(format!("invalid TLS server name: {e}")))?;
 
     let tls_handshake = tls_connector.connect(domain, tunnel);

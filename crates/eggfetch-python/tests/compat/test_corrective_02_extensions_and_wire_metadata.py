@@ -88,6 +88,14 @@ def test_target_rejects_nul_in_str():
         client.request("GET", "http://127.0.0.1:1/", extensions={"target": "bad\0value"})
 
 
+@pytest.mark.parametrize("control", ["\x01", "\x1f", "\x7f"])
+def test_target_rejects_all_other_ascii_controls(control):
+    import eggfetch
+    client = eggfetch.Client()
+    with pytest.raises(TypeError, match="CR/LF/NUL"):
+        client.request("GET", "http://127.0.0.1:1/", extensions={"target": f"bad{control}value"})
+
+
 def test_target_rejects_empty_string():
     import eggfetch
     client = eggfetch.Client()

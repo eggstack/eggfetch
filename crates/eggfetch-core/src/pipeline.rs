@@ -1188,19 +1188,17 @@ async fn send_hyper_request(
 
 /// Validate a `target` extension value for request smuggling safety.
 ///
-/// Rejects CR (`\r`), LF (`\n`), and NUL (`\0`) bytes.
+/// Rejects C0 control characters and DEL bytes.
 pub(crate) fn validate_target(target: &[u8]) -> Result<()> {
     if target.is_empty() {
         return Err(Error::RequestBuild(
             "target extension must not be empty".into(),
         ));
     }
-    if target
-        .iter()
-        .any(|&b| b == b'\r' || b == b'\n' || b == b'\0')
-    {
+    if target.iter().any(|&b| b < 0x20 || b == 0x7f) {
         return Err(Error::RequestBuild(
-            "target extension contains forbidden characters (CR/LF/NUL)".into(),
+            "target extension contains forbidden characters (C0 controls/DEL; includes CR/LF/NUL)"
+                .into(),
         ));
     }
     Ok(())

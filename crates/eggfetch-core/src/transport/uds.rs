@@ -132,10 +132,11 @@ impl Service<Uri> for UdsConnector {
                 .ok_or_else(|| -> Box<dyn std::error::Error + Send + Sync> {
                     Error::InvalidUrl("HTTPS over UDS requires an origin host".into()).into()
                 })?;
-            let name = tokio_rustls::rustls::pki_types::ServerName::try_from(host.to_owned())
-                .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> {
+            let name = crate::transport::direct_connector::tls_server_name(host).map_err(
+                |e| -> Box<dyn std::error::Error + Send + Sync> {
                     Error::Tls(format!("invalid UDS TLS server name '{host}': {e}")).into()
-                })?;
+                },
+            )?;
             let stream = connector.connect(name, stream).await.map_err(
                 |e| -> Box<dyn std::error::Error + Send + Sync> {
                     Error::Tls(format!("TLS handshake over UDS failed: {e}")).into()

@@ -114,9 +114,17 @@ impl Headers {
         self.inner.keys()
     }
 
-    /// Extend these headers with another set of headers.
+    /// Extend these headers by appending all values from another set.
+    ///
+    /// Callers that need replacement semantics should remove the header name
+    /// first, as the request pipeline does when applying request headers over
+    /// client defaults.
     pub fn extend(&mut self, other: Self) {
-        self.inner.extend(other.inner);
+        for name in other.inner.keys() {
+            for value in other.inner.get_all(name).iter() {
+                self.inner.append(name.clone(), value.clone());
+            }
+        }
     }
 
     /// Remove a header by name (case-insensitive).
@@ -211,6 +219,19 @@ mod tests {
         h.append("Set-Cookie", "a=1").unwrap();
         h.append("Set-Cookie", "b=2").unwrap();
         let values: Vec<_> = h.inner.get_all("set-cookie").iter().collect();
+        assert_eq!(values.len(), 2);
+    }
+
+    #[test]
+    fn extend_preserves_duplicate_values() {
+        let mut first = Headers::new();
+        first.append("Set-Cookie", "a=1").unwrap();
+        let mut second = Headers::new();
+        second.append("Set-Cookie", "b=2").unwrap();
+
+        first.extend(second);
+
+        let values: Vec<_> = first.inner.get_all("set-cookie").iter().collect();
         assert_eq!(values.len(), 2);
     }
 

@@ -264,11 +264,7 @@ pub(crate) async fn connect_to_proxy(
 /// rustls's dedicated IP variant so HTTPS proxies addressed by IP can still
 /// validate certificates containing an IP subject alternative name.
 fn proxy_server_name(proxy_host: &str) -> Result<rustls::pki_types::ServerName<'static>> {
-    if let Ok(ip) = proxy_host.parse::<std::net::IpAddr>() {
-        return Ok(rustls::pki_types::ServerName::IpAddress(ip.into()));
-    }
-
-    rustls::pki_types::ServerName::try_from(proxy_host.to_owned())
+    crate::transport::direct_connector::tls_server_name(proxy_host)
         .map_err(|e| Error::Tls(format!("invalid proxy TLS server name: {e}")))
 }
 

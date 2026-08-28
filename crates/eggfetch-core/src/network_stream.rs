@@ -350,7 +350,6 @@ impl UpgradedStream {
         tls_connector: &tokio_rustls::TlsConnector,
         server_name: &str,
     ) -> Result<Self> {
-        use tokio_rustls::rustls::pki_types::ServerName;
         let tcp = match std::mem::replace(
             &mut self.inner,
             // Placeholder that we'll immediately replace.
@@ -371,7 +370,7 @@ impl UpgradedStream {
             }
         };
 
-        let sn = ServerName::try_from(server_name.to_owned())
+        let sn = crate::transport::direct_connector::tls_server_name(server_name)
             .map_err(|e| Error::Tls(format!("invalid server name '{server_name}': {e}")))?;
 
         let tls_stream = tls_connector
