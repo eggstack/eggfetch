@@ -68,6 +68,13 @@ pub(crate) async fn send_https_connect_request(
     }
     connect_req.push_str("\r\n");
 
+    if connect_req.len() > crate::headers::MAX_REQUEST_HEADER_BYTES {
+        return Err(Error::RequestBuild(format!(
+            "request headers exceed maximum size of {} bytes",
+            crate::headers::MAX_REQUEST_HEADER_BYTES
+        )));
+    }
+
     let write = stream.write_all(connect_req.as_bytes());
     match effective_timeout(ctx.deadline, ctx.write_timeout)? {
         Some(duration) => tokio::time::timeout(duration, write)

@@ -85,6 +85,8 @@ use std::sync::Arc;
 use dashmap::DashMap;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
+use crate::error::{Error, Result};
+
 /// Configuration for the connection pool.
 ///
 /// All fields are optional. When a field is `None`, the corresponding
@@ -462,7 +464,7 @@ impl Pool {
     ///
     /// * `origin` - The origin derived from the request URL. Pass `None`
     ///   for malformed URLs or URLs without a host component.
-    pub(crate) async fn acquire(&self, origin: Option<&OriginKey>) -> PoolGuard {
+    pub(crate) async fn acquire(&self, origin: Option<&OriginKey>) -> Result<PoolGuard> {
         let mut waited = false;
         let mut global_permit: Option<OwnedSemaphorePermit> = None;
         let mut origin_permit: Option<OwnedSemaphorePermit> = None;
@@ -480,7 +482,7 @@ impl Pool {
                     .metrics
                     .acquisition_cancellations
                     .fetch_add(1, Ordering::Relaxed);
-                return PoolGuard::new(self.inner.clone(), origin.cloned(), None, None);
+                return Err(Error::Pool("global semaphore is closed".into()));
             }
         }
 
@@ -528,15 +530,12 @@ impl Pool {
                     origin_permit = Some(permit);
                     waited = true;
                 } else {
-                    // Semaphore closed (shouldn't happen in practice).
-                    // Record it and continue without an origin permit so
-                    // the request remains bounded by at least the global
-                    // concurrency limit instead of proceeding with no
-                    // permits at all.
                     self.inner
                         .metrics
                         .acquisition_cancellations
                         .fetch_add(1, Ordering::Relaxed);
+                    drop(global_permit);
+                    return Err(Error::Pool("per-origin semaphore is closed".into()));
                 }
             }
         }
@@ -548,12 +547,12 @@ impl Pool {
                 .fetch_add(1, Ordering::Relaxed);
         }
 
-        PoolGuard::new(
+        Ok(PoolGuard::new(
             self.inner.clone(),
             origin.cloned(),
             global_permit,
             origin_permit,
-        )
+        ))
     }
 
     /// Returns a reference to the pool metrics.
@@ -605,7 +604,7 @@ mod tests {
     #[tokio::test]
     async fn acquire_without_limits_returns_immediately() {
         let pool = Pool::new(PoolConfig::default());
-        let guard = pool.acquire(None).await;
+        let guard = pool.acquire(None).await.unwrap();
         assert!(guard.origin().is_none());
     }
 
@@ -618,8 +617,8 @@ mod tests {
         let pool = Pool::new(config);
 
         let origin = OriginKey::from_parts("http", "example.com", 80);
-        let g1 = pool.acquire(Some(&origin)).await;
-        let g2 = pool.acquire(Some(&origin)).await;
+        let g1 = pool.acquire(Some(&origin)).await.unwrap();
+        let g2 = pool.acquire(Some(&origin)).await.unwrap();
 
         // Both acquired successfully; metrics should show no waits.
         assert_eq!(pool.metrics().acquisition_waits.load(Ordering::Relaxed), 0);
@@ -637,7 +636,7 @@ mod tests {
         let pool = Pool::new(config);
 
         let origin = OriginKey::from_parts("http", "example.com", 80);
-        let g1 = pool.acquire(Some(&origin)).await;
+        let g1 = pool.acquire(Some(&origin)).await.unwrap();
         assert_eq!(pool.metrics().acquisition_waits.load(Ordering::Relaxed), 0);
 
         drop(g1);
@@ -649,9 +648,9 @@ mod tests {
             max_connections: Some(1),
             ..Default::default()
         });
-        let global_guard = global_pool.acquire(None).await;
+        let global_guard = global_pool.acquire(None).await.unwrap();
         global_pool.inner.global_semaphore.as_ref().unwrap().close();
-        drop(global_pool.acquire(None).await);
+        assert!(global_pool.acquire(None).await.is_err());
         assert_eq!(
             global_pool
                 .metrics()
@@ -673,7 +672,7 @@ mod tests {
             ..Default::default()
         });
         let origin = OriginKey::from_parts("http", "example.com", 80);
-        let origin_guard = origin_pool.acquire(Some(&origin)).await;
+        let origin_guard = origin_pool.acquire(Some(&origin)).await.unwrap();
         origin_pool
             .inner
             .per_origin
@@ -681,7 +680,7 @@ mod tests {
             .unwrap()
             .semaphore
             .close();
-        drop(origin_pool.acquire(Some(&origin)).await);
+        assert!(origin_pool.acquire(Some(&origin)).await.is_err());
         assert_eq!(
             origin_pool
                 .metrics()
@@ -716,8 +715,8 @@ mod tests {
         let pool = Pool::new(config);
         let o1 = OriginKey::from_parts("http", "host-a", 80);
         let o2 = OriginKey::from_parts("http", "host-b", 80);
-        let g1 = pool.acquire(Some(&o1)).await;
-        let g2 = pool.acquire(Some(&o2)).await;
+        let g1 = pool.acquire(Some(&o1)).await.unwrap();
+        let g2 = pool.acquire(Some(&o2)).await.unwrap();
         assert!(g1.origin().is_some());
         assert!(g2.origin().is_some());
         drop(g1);
@@ -786,8 +785,8 @@ mod tests {
         let pool = Pool::new(config);
         let a = OriginKey::from_parts("http", "example.com", 80);
         let b = OriginKey::from_parts("http", "example.com", 8080);
-        assert!(pool.acquire(Some(&a)).await.origin().is_some());
-        assert!(pool.acquire(Some(&b)).await.origin().is_some());
+        assert!(pool.acquire(Some(&a)).await.unwrap().origin().is_some());
+        assert!(pool.acquire(Some(&b)).await.unwrap().origin().is_some());
     }
 
     #[test]
@@ -888,8 +887,8 @@ mod tests {
             Some(8080),
             false,
         );
-        let g1 = pool.acquire(Some(&direct)).await;
-        let g2 = pool.acquire(Some(&proxied)).await;
+        let g1 = pool.acquire(Some(&direct)).await.unwrap();
+        let g2 = pool.acquire(Some(&proxied)).await.unwrap();
         assert!(g1.origin().is_some());
         assert!(g2.origin().is_some());
     }
@@ -903,7 +902,7 @@ mod tests {
         });
         let first_origin = OriginKey::from_parts("http", "first.example", 80);
         let waiting_origin = OriginKey::from_parts("http", "waiting.example", 80);
-        let first = pool.acquire(Some(&first_origin)).await;
+        let first = pool.acquire(Some(&first_origin)).await.unwrap();
 
         let pool_for_task = pool.clone();
         let waiting_origin_for_task = waiting_origin.clone();
@@ -917,7 +916,7 @@ mod tests {
 
         assert!(pool.inner.per_origin.get(&waiting_origin).is_none());
         drop(first);
-        drop(waiter.await.unwrap());
+        drop(waiter.await.unwrap().unwrap());
     }
 
     #[tokio::test]
@@ -929,7 +928,7 @@ mod tests {
 
         for index in 0..8 {
             let origin = OriginKey::from_parts("http", &format!("host-{index}.example"), 80);
-            drop(pool.acquire(Some(&origin)).await);
+            drop(pool.acquire(Some(&origin)).await.unwrap());
         }
 
         assert!(pool.inner.per_origin.len() <= 1);
@@ -959,8 +958,8 @@ mod tests {
             Some(8080),
             true,
         );
-        let g1 = pool.acquire(Some(&http_fwd)).await;
-        let g2 = pool.acquire(Some(&https_tunnel)).await;
+        let g1 = pool.acquire(Some(&http_fwd)).await.unwrap();
+        let g2 = pool.acquire(Some(&https_tunnel)).await.unwrap();
         assert!(g1.origin().is_some());
         assert!(g2.origin().is_some());
     }
@@ -989,8 +988,8 @@ mod tests {
             Some(8080),
             false,
         );
-        let g1 = pool.acquire(Some(&a)).await;
-        let g2 = pool.acquire(Some(&b)).await;
+        let g1 = pool.acquire(Some(&a)).await.unwrap();
+        let g2 = pool.acquire(Some(&b)).await.unwrap();
         assert!(g1.origin().is_some());
         assert!(g2.origin().is_some());
     }

@@ -985,6 +985,15 @@ fn parse_proxy_response_garbage_bytes_errors() {
     assert!(result.is_err());
 }
 
+#[cfg(feature = "proxy")]
+#[tokio::test]
+async fn parse_proxy_response_bytes_is_safe_inside_tokio_runtime() {
+    let result = eggfetch_core::proxy::parse_proxy_response_bytes(
+        b"HTTP/1.1 200 Connection established\r\n\r\n",
+    );
+    assert_eq!(result.unwrap().0, 200);
+}
+
 // ---------------------------------------------------------------------------
 // Python streaming drop/shutdown paths — exercised via core Rust API
 // ---------------------------------------------------------------------------

@@ -872,11 +872,8 @@ impl ClientBuilder {
                         {
                             match (enabler.enable_http1(), enabler.enable_http2()) {
                                 (true, true) => builder.enable_http1().enable_http2().build(),
-                                (true, false) => builder.enable_http1().build(),
+                                (true | false, false) => builder.enable_http1().build(),
                                 (false, true) => builder.enable_http2().build(),
-                                (false, false) => {
-                                    unreachable!("at least one protocol version must be enabled")
-                                }
                             }
                         }
                         #[cfg(not(feature = "http2"))]
@@ -1075,9 +1072,8 @@ fn build_fallback_connector(enabler: crate::http_version::HttpVersionPolicyEnabl
                 .enable_http1()
                 .enable_http2()
                 .build(),
-            (true, false) => builder.https_or_http().enable_http1().build(),
+            (true | false, false) => builder.https_or_http().enable_http1().build(),
             (false, true) => builder.https_or_http().enable_http2().build(),
-            (false, false) => unreachable!("at least one protocol version must be enabled"),
         }
     }
     #[cfg(not(feature = "http2"))]

@@ -876,15 +876,23 @@ async fn run(cli: Cli) -> Result<()> {
     }
 
     if has_json {
-        let json_str = cli.json.unwrap();
-        let _value: Value = serde_json::from_str(&json_str).context("invalid JSON body string")?;
+        let Some(json_str) = cli.json.as_deref() else {
+            anyhow::bail!("--json body is missing");
+        };
+        let _value: Value = serde_json::from_str(json_str).context("invalid JSON body string")?;
         req_builder = req_builder
             .header("content-type", "application/json")
             .body(json_str);
     } else if has_body {
-        req_builder = req_builder.body(cli.body.unwrap());
+        let Some(body) = cli.body else {
+            anyhow::bail!("--body is missing");
+        };
+        req_builder = req_builder.body(body);
     } else if has_body_file {
-        let body_bytes = read_body_file(&cli.body_file.unwrap()).await?;
+        let Some(body_file) = cli.body_file.as_deref() else {
+            anyhow::bail!("--body-file is missing");
+        };
+        let body_bytes = read_body_file(body_file).await?;
         req_builder = req_builder.body(body_bytes);
     } else if has_files && has_form {
         let mut multipart = Multipart::new();

@@ -880,7 +880,7 @@ pub(crate) async fn send_single_request(
     let guard = match pool_deadline {
         Some((duration, phase)) => {
             match tokio::time::timeout(duration, inner.pool.acquire(origin.as_ref())).await {
-                Ok(guard) => guard,
+                Ok(guard) => guard?,
                 Err(_) => {
                     return Err(Error::Timeout {
                         phase,
@@ -889,7 +889,7 @@ pub(crate) async fn send_single_request(
                 }
             }
         }
-        None => inner.pool.acquire(origin.as_ref()).await,
+        None => inner.pool.acquire(origin.as_ref()).await?,
     };
 
     let body = match (body, timeout.write) {
@@ -912,9 +912,9 @@ pub(crate) async fn send_single_request(
         }
     }
 
-    // Strip HTTP/2-forbidden headers unconditionally. These are
-    // hop-by-hop headers that should never be forwarded end-to-end.
-    crate::h2_headers::strip_h2_forbidden_headers(&mut headers);
+    if version == http::Version::HTTP_2 {
+        crate::h2_headers::strip_h2_forbidden_headers(&mut headers);
+    }
     headers.validate_request_size()?;
 
     let remaining_total = timeout

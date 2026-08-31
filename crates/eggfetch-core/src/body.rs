@@ -189,8 +189,8 @@ impl RequestBody {
         match self {
             Self::Empty => Ok(Bytes::new()),
             Self::Bytes(b) => Ok(b),
-            Self::Stream { mut stream, .. } => {
-                let mut buf = BytesMut::new();
+            Self::Stream { mut stream, length } => {
+                let mut buf = BytesMut::with_capacity(length.unwrap_or(0));
                 while let Some(chunk) = stream.next().await {
                     buf.extend_from_slice(&chunk?);
                 }
@@ -553,7 +553,25 @@ impl ResponseBody {
                 }),
                 lease,
             }),
-            body @ (Self::EncodedStreaming { .. } | Self::Consumed) => Ok(body),
+            Self::EncodedStreaming {
+                stream,
+                lease,
+                content_encoding,
+                limit: mut existing_limit,
+            } => {
+                existing_limit.max_decoded_body_size = Some(
+                    existing_limit
+                        .max_decoded_body_size
+                        .map_or(max, |current| current.min(max)),
+                );
+                Ok(Self::EncodedStreaming {
+                    stream,
+                    lease,
+                    content_encoding,
+                    limit: existing_limit,
+                })
+            }
+            body @ Self::Consumed => Ok(body),
         }
     }
 
@@ -871,6 +889,25 @@ mod tests {
         assert!(body.raw_bytes_stream().is_err());
     }
 
+    #[cfg(feature = "compression-gzip")]
+    #[tokio::test]
+    async fn encoded_streaming_limit_is_applied_when_added_after_construction() {
+        let encoded = gzip_bytes(b"compressed body");
+        let stream = Box::pin(futures_util::stream::iter(vec![Ok(encoded)]));
+        let mut body = ResponseBody::encoded_streaming(
+            stream,
+            "gzip".to_owned(),
+            DecompressionLimit::default(),
+        )
+        .limit_decoded_size(3)
+        .unwrap();
+
+        assert_eq!(
+            body.bytes().await.unwrap_err().kind(),
+            "decoded_body_too_large"
+        );
+    }
+
     #[tokio::test]
     async fn uncompressed_raw_selection_is_passthrough() {
         let stream = Box::pin(futures_util::stream::iter(vec![Ok(Bytes::from("body"))]));
@@ -997,7 +1034,7 @@ mod tests {
             ..Default::default()
         });
         let origin = crate::pool::OriginKey::from_parts("http", "example.com", 80);
-        let guard = pool.acquire(Some(&origin)).await;
+        let guard = pool.acquire(Some(&origin)).await.unwrap();
         let mut body = ResponseBody::streaming_with_lease(
             Box::pin(futures_util::stream::pending()),
             Arc::new(guard),

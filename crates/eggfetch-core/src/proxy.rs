@@ -1664,18 +1664,76 @@ mod tests {
 pub fn parse_proxy_response_bytes(
     data: &[u8],
 ) -> crate::error::Result<(u16, Vec<(String, String)>)> {
-    use tokio::io::BufReader;
+    const MAX_STATUS_LINE_LEN: usize = 4096;
+    const MAX_HEADER_COUNT: usize = 100;
+    const MAX_HEADER_LINE_LEN: usize = 8192;
+    const MAX_TOTAL_HEADER_BYTES: usize = 65536;
 
-    let rt = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .expect("failed to create tokio runtime for proxy response parsing");
+    fn read_line(data: &[u8], max_len: usize) -> crate::error::Result<(&[u8], &[u8])> {
+        let newline = data.iter().position(|&byte| byte == b'\n').ok_or_else(|| {
+            Error::MalformedProxyResponse("proxy closed connection before end of line".into())
+        })?;
+        let (line, remaining) = data.split_at(newline + 1);
+        let mut line = &line[..newline];
+        if line.last() == Some(&b'\r') {
+            line = &line[..line.len() - 1];
+        }
+        if line.len() > max_len {
+            return Err(Error::MalformedProxyResponse(format!(
+                "proxy response line exceeded maximum length of {max_len} bytes"
+            )));
+        }
+        Ok((line, remaining))
+    }
 
-    rt.block_on(async {
-        let cursor = std::io::Cursor::new(data.to_vec());
-        let mut reader = BufReader::new(cursor);
-        let (status, headers, _remaining, _reason) =
-            crate::transport::proxy::read_proxy_response(&mut reader).await?;
-        Ok((status, headers))
-    })
+    let (status_line, mut remaining) = read_line(data, MAX_STATUS_LINE_LEN)?;
+    let status_line = std::str::from_utf8(status_line).map_err(|_| {
+        Error::MalformedProxyResponse("proxy response contains invalid UTF-8".into())
+    })?;
+    if status_line.is_empty() {
+        return Err(Error::MalformedProxyResponse(
+            "proxy closed connection before response".into(),
+        ));
+    }
+    let mut parts = status_line.splitn(3, ' ');
+    let _version = parts.next();
+    let status_code = parts
+        .next()
+        .and_then(|part| part.parse::<u16>().ok())
+        .ok_or_else(|| {
+            Error::MalformedProxyResponse(format!("invalid status line: {status_line}"))
+        })?;
+
+    let mut headers = Vec::new();
+    let mut total_header_bytes = 0usize;
+    loop {
+        let (line, rest) = read_line(remaining, MAX_HEADER_LINE_LEN)?;
+        remaining = rest;
+        if line.is_empty() {
+            break;
+        }
+        total_header_bytes += line.len();
+        if total_header_bytes > MAX_TOTAL_HEADER_BYTES {
+            return Err(Error::MalformedProxyResponse(format!(
+                "proxy response headers exceeded maximum total size of {MAX_TOTAL_HEADER_BYTES} bytes"
+            )));
+        }
+        if headers.len() >= MAX_HEADER_COUNT {
+            return Err(Error::MalformedProxyResponse(format!(
+                "proxy response exceeded maximum header count of {MAX_HEADER_COUNT}"
+            )));
+        }
+        let line = std::str::from_utf8(line).map_err(|_| {
+            Error::MalformedProxyResponse("proxy response contains invalid UTF-8".into())
+        })?;
+        headers.push(
+            line.split_once(':')
+                .map(|(name, value)| (name.trim().to_owned(), value.trim().to_owned()))
+                .ok_or_else(|| {
+                    Error::MalformedProxyResponse(format!("invalid header line: {line}"))
+                })?,
+        );
+    }
+
+    Ok((status_code, headers))
 }
