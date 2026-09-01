@@ -245,14 +245,7 @@ impl CookieJar {
     /// cannot leave it inconsistent.
     #[must_use]
     pub fn cookies_for_url(&self, url: &Url) -> Option<String> {
-        let now = SystemTime::now();
-        let mut jar = self
-            .inner
-            .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        jar.cookies
-            .retain(|_, c| !c.persistent || c.expires.map_or(true, |exp| now < exp));
-        drop(jar);
+        self.expire_stale();
 
         let jar = self
             .inner
@@ -477,6 +470,17 @@ impl CookieJar {
     /// cannot leave it inconsistent.
     pub fn expire_stale(&self) {
         let now = SystemTime::now();
+        let has_expired = self
+            .inner
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .cookies
+            .values()
+            .any(|c| c.persistent && c.expires.is_some_and(|exp| now >= exp));
+        if !has_expired {
+            return;
+        }
+
         let mut jar = self
             .inner
             .write()

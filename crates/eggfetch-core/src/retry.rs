@@ -422,12 +422,15 @@ impl BackoffPolicy {
         };
 
         let final_delay = if !jittered_secs.is_finite() || jittered_secs < 0.0 {
-            Duration::ZERO
+            capped
         } else {
             Duration::from_secs_f64(jittered_secs)
         };
 
-        Some(final_delay)
+        // Avoid a zero-length retry loop when jitter rounds a positive
+        // budget down to zero. Preserve an explicitly zero cap as an
+        // intentional immediate retry.
+        Some(final_delay.max(Duration::from_millis(1).min(capped)))
     }
 
     /// Returns the maximum delay.
@@ -804,6 +807,16 @@ mod tests {
 
         let d3 = backoff.delay(3).unwrap();
         assert!(d3 <= Duration::from_millis(50));
+    }
+
+    #[test]
+    fn backoff_delay_has_minimum_when_cap_is_positive() {
+        let backoff = BackoffPolicy {
+            factor: 1.0,
+            max_delay: Duration::from_millis(1),
+            initial_delay: Duration::from_millis(1),
+        };
+        assert_eq!(backoff.delay(2), Some(Duration::from_millis(1)));
     }
 
     #[test]

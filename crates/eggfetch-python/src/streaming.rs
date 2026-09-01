@@ -363,7 +363,7 @@ impl StreamingBodyState {
     fn drain_all_bytes(&self) -> PyResult<Bytes> {
         let mut stream = self.take_stream(StreamMode::Decoded)?;
         let mut cancellation = self.stream_cancel.subscribe();
-        let (tx, rx) = std::sync::mpsc::channel();
+        let (tx, mut rx) = tokio::sync::mpsc::channel(1);
         self.runtime_handle.spawn(async move {
             let result: PyResult<Bytes> = async {
                 let mut buf = BytesMut::new();
@@ -386,11 +386,13 @@ impl StreamingBodyState {
                 Ok(buf.freeze())
             }
             .await;
-            let _ = tx.send(result);
+            let _ = tx.send(result).await;
         });
-        let bytes = rx
-            .recv()
-            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))??;
+        let bytes = rx.blocking_recv().ok_or_else(|| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+                "streaming body drain task ended without a result",
+            )
+        })??;
         // Transition CONSUMED -> BUFFERED so later reads hit the cache.
         // A concurrent close may already have flipped the state to CLOSED
         // between the drain completing and this transition; the bytes
@@ -738,18 +740,12 @@ impl PyStreamingResponse {
             let bytes = buf.freeze();
             Python::with_gil(|py| {
                 let borrowed = slf.borrow(py);
-                if borrowed
-                    .body_state
-                    .compare_exchange(
-                        STATE_CONSUMED,
-                        STATE_BUFFERED,
-                        Ordering::AcqRel,
-                        Ordering::Acquire,
-                    )
-                    .is_err()
-                {
-                    return Err(StreamClosed::new_err("streaming body has been closed"));
-                }
+                let _ = borrowed.body_state.compare_exchange(
+                    STATE_CONSUMED,
+                    STATE_BUFFERED,
+                    Ordering::AcqRel,
+                    Ordering::Acquire,
+                );
                 if let Ok(mut cache) = borrowed.cached_content.lock() {
                     *cache = Some(bytes.clone());
                 }

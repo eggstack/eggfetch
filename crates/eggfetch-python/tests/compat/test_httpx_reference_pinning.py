@@ -72,6 +72,16 @@ class TestSocketOptionRepresentation:
         )
         assert transport is not None
 
+    def test_large_unsigned_int_value_is_preserved(self):
+        """The adapter preserves positive values above signed int32."""
+        from eggfetch.compat.httpx._client import _convert_socket_option
+
+        value = 2**31
+        _, _, converted = _convert_socket_option(
+            (socket.SOL_SOCKET, socket.SO_RCVBUF, value)
+        )
+        assert converted == value.to_bytes(4, byteorder=sys.byteorder, signed=False)
+
     def test_valid_four_tuple_is_accepted_until_socket_use(self):
         """HTTPX accepts the valid ``(level, option, None, optlen)`` form."""
         transport = httpx.HTTPTransport(

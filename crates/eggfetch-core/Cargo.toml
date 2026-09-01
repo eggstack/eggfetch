@@ -14,7 +14,7 @@ workspace = true
 [features]
 default = ["http1", "tls-rustls"]
 http1 = ["hyper/http1", "hyper-util/http1", "hyper-rustls/http1"]
-http2 = ["hyper/http2", "hyper-util/http2", "hyper-rustls/http2"]
+http2 = ["dep:h2", "hyper/http2", "hyper-util/http2", "hyper-rustls/http2"]
 tls-rustls = []
 http3 = ["dep:quinn", "dep:h3", "dep:h3-quinn"]
 json = []
@@ -37,6 +37,7 @@ http = "1"
 http-body = "1"
 http-body-util = "0.1"
 hyper = { version = "1", features = ["client", "http1"] }
+h2 = { version = "0.4", optional = true }
 hyper-util = { version = "0.1", features = ["client", "client-legacy", "tokio", "http1"] }
 hyper-rustls = { version = "0.27", default-features = false, features = ["http1", "tls12", "ring", "logging", "native-tokio", "webpki-tokio"] }
 pin-project-lite = "0.2"

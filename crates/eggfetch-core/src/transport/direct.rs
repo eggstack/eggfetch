@@ -1,5 +1,7 @@
 //! Direct (non-proxy) hyper client send path.
 
+#[cfg(feature = "http2")]
+use std::error::Error as StdError;
 use std::sync::Arc;
 
 use bytes::Bytes;
@@ -332,31 +334,94 @@ pub(crate) fn map_send_error(err: hyper_util::client::legacy::Error) -> Error {
 
 /// Attempt to classify a `hyper::Error` as a specific HTTP/2 error.
 ///
-/// Hyper does not expose the inner `h2::Error` through a public API.
-/// We inspect the error's `Display` output for known h2 error patterns
-/// and map them to specific eggfetch error variants. When the pattern
-/// cannot be determined, returns `None` to fall through to the generic
-/// error path.
+/// Prefer the typed `h2::Error` exposed through Hyper's source chain. The
+/// message fallback is retained for Hyper errors that do not expose that
+/// cause, but it only recognizes the existing protocol markers.
 #[cfg(feature = "http2")]
 fn classify_h2_hyper_error(err: &hyper::Error) -> Option<Error> {
     let msg = err.to_string();
-    let lower = msg.to_lowercase();
+    let mut source = StdError::source(err);
+    while let Some(cause) = source {
+        if let Some(h2_err) = cause.downcast_ref::<h2::Error>() {
+            if h2_err.is_io() {
+                return None;
+            }
+            if h2_err.is_go_away() {
+                return Some(Error::Http2GoAway {
+                    last_stream_id: 0,
+                    debug_data: h2_err.to_string(),
+                });
+            }
+            if h2_err.is_reset() {
+                let reason = h2_err
+                    .reason()
+                    .map_or_else(|| h2_err.to_string(), |reason| reason.to_string());
+                return Some(Error::Http2StreamReset { reason });
+            }
+            if h2_err.reason() == Some(h2::Reason::FLOW_CONTROL_ERROR) {
+                return Some(Error::Http2FlowControl(h2_err.to_string()));
+            }
+            return Some(Error::Http2Protocol(h2_err.to_string()));
+        }
+        source = StdError::source(cause);
+    }
+
+    classify_h2_message(&msg)
+}
+
+#[cfg(feature = "http2")]
+fn classify_h2_message(msg: &str) -> Option<Error> {
+    let lower = msg.to_ascii_lowercase();
 
     if lower.contains("goaway") || lower.contains("go away") {
         return Some(Error::Http2GoAway {
             last_stream_id: 0,
-            debug_data: msg,
+            debug_data: msg.to_string(),
         });
     }
-    if lower.contains("reset") || lower.contains("rst_stream") {
-        return Some(Error::Http2StreamReset { reason: msg });
+    if lower.contains("rst_stream") || lower.contains("refused_stream") {
+        return Some(Error::Http2StreamReset {
+            reason: msg.to_string(),
+        });
     }
     if lower.contains("flow control") {
-        return Some(Error::Http2FlowControl(msg));
+        return Some(Error::Http2FlowControl(msg.to_string()));
     }
     if lower.contains("http2") || lower.contains("h2") {
-        return Some(Error::Http2Protocol(msg));
+        return Some(Error::Http2Protocol(msg.to_string()));
     }
 
     None
+}
+
+#[cfg(all(test, feature = "http2"))]
+mod tests {
+    use super::classify_h2_message;
+
+    #[test]
+    fn fallback_classifies_current_hyper_h2_messages() {
+        assert_eq!(
+            classify_h2_message("http2 error: GOAWAY received: NO_ERROR")
+                .expect("GOAWAY marker should classify")
+                .kind(),
+            "http2_go_away"
+        );
+        assert_eq!(
+            classify_h2_message("http2 error: stream error received: REFUSED_STREAM")
+                .expect("stream reset marker should classify")
+                .kind(),
+            "http2_stream_reset"
+        );
+        assert_eq!(
+            classify_h2_message("http2 error: flow control window exhausted")
+                .expect("flow-control marker should classify")
+                .kind(),
+            "http2_flow_control"
+        );
+    }
+
+    #[test]
+    fn fallback_ignores_unrelated_messages() {
+        assert!(classify_h2_message("connection reset by peer").is_none());
+    }
 }

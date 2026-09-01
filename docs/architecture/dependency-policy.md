@@ -14,6 +14,7 @@ eggfetch-core has the following direct dependencies:
 - **http-body** -- body trait abstraction.
 - **http-body-util** -- body combinators for http-body (`Full`, `Empty`).
 - **hyper** -- HTTP/1.1 and HTTP/2 protocol implementation.
+- **h2** -- typed HTTP/2 error reasons for transport error classification (optional, behind `http2`).
 - **hyper-util** -- high-level client utilities built on hyper.
 - **hyper-rustls** -- TLS integration via rustls, with native roots preferred
   and packaged Mozilla roots as a verified fallback when the host keychain is

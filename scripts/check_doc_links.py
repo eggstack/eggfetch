@@ -31,7 +31,6 @@ def check_links(docs_dir: Path) -> int:
             if not file_part:
                 # Bare anchor like [text](#section) — check anchor exists in same file
                 if anchor:
-                    _check_anchor(md_file, anchor, rel_file)
                     errors += 1 if not _anchor_exists(md_file, anchor) else 0
                 continue
 
@@ -61,11 +60,6 @@ def _anchor_exists(file_path: Path, anchor: str) -> bool:
             if heading_anchor == anchor_lower:
                 return True
     return False
-
-
-def _check_anchor(file_path: Path, anchor: str, rel_file: Path) -> None:
-    """Print a message for a broken anchor (used by caller to count errors)."""
-    # This is intentionally empty; the error is counted by the caller.
 
 
 def main() -> int:

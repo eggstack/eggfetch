@@ -182,7 +182,17 @@ def _convert_socket_option(option: tuple) -> tuple[int, int, bytes]:
 
     # Convert value to bytes.
     if isinstance(value, int):
-        value = value.to_bytes(4, byteorder=sys.byteorder, signed=True)
+        try:
+            if value < 0:
+                value = value.to_bytes(4, byteorder=sys.byteorder, signed=True)
+            else:
+                # The native connector interprets buffer sizes as u32 while
+                # boolean options read the same bytes as i32. Preserve the
+                # full four-byte socket value instead of rejecting valid
+                # values above the signed 32-bit range.
+                value = value.to_bytes(4, byteorder=sys.byteorder, signed=False)
+        except OverflowError as exc:
+            raise ValueError("socket option integer must fit in 32 bits") from exc
     elif isinstance(value, (bytes, bytearray)):
         value = bytes(value)
     else:
