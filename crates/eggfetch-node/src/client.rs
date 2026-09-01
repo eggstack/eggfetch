@@ -30,7 +30,7 @@ pub struct EggfetchClient {
 
 impl Default for EggfetchClient {
     fn default() -> Self {
-        Self::new()
+        Self::new().expect("failed to create eggfetch client")
     }
 }
 
@@ -38,16 +38,20 @@ impl Default for EggfetchClient {
 impl EggfetchClient {
     /// Create a new client with default settings.
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// Panics if the underlying FFI client allocation fails.
+    /// Returns an error if the underlying FFI client allocation fails.
     #[napi(constructor)]
-    pub fn new() -> Self {
+    pub fn new() -> napi::Result<Self> {
         let inner = unsafe { eggfetch_ffi::eggfetch_client_new() };
-        assert!(!inner.is_null(), "failed to create eggfetch client");
-        Self {
-            inner: inner as usize,
+        if inner.is_null() {
+            return Err(napi::Error::from_reason(
+                "failed to create eggfetch client: allocation failed or runtime unavailable",
+            ));
         }
+        Ok(Self {
+            inner: inner as usize,
+        })
     }
 
     /// Send a GET request and return the response.

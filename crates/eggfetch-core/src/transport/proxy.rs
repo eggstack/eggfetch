@@ -821,7 +821,9 @@ impl<S: tokio::io::AsyncRead + Unpin> futures_core::Stream for ProxyResponseStre
             }
             std::task::Poll::Ready(Err(e)) => {
                 if e.kind() == std::io::ErrorKind::UnexpectedEof {
-                    return std::task::Poll::Ready(None);
+                    return std::task::Poll::Ready(Some(Err(Error::MalformedProxyResponse(
+                        format!("proxy closed connection unexpectedly: {e}"),
+                    ))));
                 }
                 std::task::Poll::Ready(Some(Err(Error::Body(format!(
                     "proxy stream read error: {e}"

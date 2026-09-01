@@ -45,19 +45,26 @@ impl RuntimeState {
 
     fn request_shutdown(self: &Arc<Self>) {
         self.shutdown_requested.store(true, Ordering::Release);
-        self.try_shutdown(Arc::strong_count(self));
+        self.try_shutdown();
     }
 
-    fn try_shutdown(&self, state_refs: usize) {
-        if !self.shutdown_requested.load(Ordering::Acquire) || state_refs != 1 {
+    fn try_shutdown(self: &Arc<Self>) {
+        if !self.shutdown_requested.load(Ordering::Acquire) {
             return;
         }
-        if let Some(runtime) = self
+        if Arc::strong_count(self) != 1 {
+            return;
+        }
+        // Re-check after acquiring the runtime lock to narrow the race where
+        // another thread clones the Arc between the count check and the lock.
+        let mut guard = self
             .runtime
             .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .take()
-        {
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if Arc::strong_count(self) != 1 {
+            return;
+        }
+        if let Some(runtime) = guard.take() {
             runtime.shutdown_background();
         }
     }
@@ -69,7 +76,7 @@ pub(crate) struct RuntimeGuard(Arc<RuntimeState>);
 
 impl Drop for RuntimeGuard {
     fn drop(&mut self) {
-        self.0.try_shutdown(Arc::strong_count(&self.0));
+        self.0.try_shutdown();
     }
 }
 
@@ -84,8 +91,6 @@ pub struct PyClient {
     client: Mutex<Option<eggfetch_core::Client>>,
     decompress: Option<bool>,
     verify_disabled: bool,
-    #[allow(dead_code)]
-    retry: Option<eggfetch_core::RetryPolicy>,
 }
 
 #[pymethods]
@@ -297,7 +302,6 @@ impl PyClient {
             client: Mutex::new(Some(client)),
             decompress,
             verify_disabled,
-            retry: retry_policy,
         })
     }
 

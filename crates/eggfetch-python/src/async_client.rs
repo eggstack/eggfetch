@@ -26,11 +26,9 @@ use crate::trace_bridge::take_callback_error;
 /// Trio/AnyIO support is planned for a later milestone.
 #[pyclass(name = "AsyncClient")]
 pub struct PyAsyncClient {
-    client: Option<eggfetch_core::Client>,
+    client: std::sync::Mutex<Option<eggfetch_core::Client>>,
     decompress: Option<bool>,
     verify_disabled: bool,
-    #[allow(dead_code)]
-    retry: Option<eggfetch_core::RetryPolicy>,
 }
 
 #[pymethods]
@@ -220,10 +218,9 @@ impl PyAsyncClient {
         let client = builder.build();
 
         Ok(Self {
-            client: Some(client),
+            client: std::sync::Mutex::new(Some(client)),
             decompress,
             verify_disabled,
-            retry: retry_policy,
         })
     }
 
@@ -368,7 +365,7 @@ impl PyAsyncClient {
         let transport_hints = extracted.hints;
         let trace_slot = extracted.trace_error_slot;
 
-        let client = self.ensure_client()?.clone();
+        let client = self.ensure_client()?;
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let mut builder = client
                 .request(http_method, target_url.as_str())
@@ -933,7 +930,7 @@ impl PyAsyncClient {
 
         let effective_decompress = decompress.or(self.decompress);
 
-        let client = self.ensure_client()?.clone();
+        let client = self.ensure_client()?;
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let runtime_handle = tokio::runtime::Handle::current();
             let mut builder = client
@@ -1029,12 +1026,14 @@ impl PyAsyncClient {
     ///
     /// Drops the underlying `eggfetch-core` client (closing idle connections).
     /// Subsequent requests raise `ValueError`. Idempotent.
-    fn close(&mut self) {
-        self.client = None;
+    fn close(&self) {
+        if let Ok(mut guard) = self.client.lock() {
+            *guard = None;
+        }
     }
 
     /// Close the client through an awaitable API.
-    fn aclose<'py>(&mut self, py: Python<'py>) -> PyResult<Bound<'py, pyo3::PyAny>> {
+    fn aclose<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, pyo3::PyAny>> {
         self.close();
         pyo3_async_runtimes::tokio::future_into_py(py, async { Ok(()) })
     }
@@ -1042,7 +1041,7 @@ impl PyAsyncClient {
     /// Returns True if the client has been closed.
     #[getter]
     fn is_closed(&self) -> bool {
-        self.client.is_none()
+        self.client.lock().map_or(true, |g| g.is_none())
     }
 
     /// The client's cookie jar.
@@ -1063,7 +1062,7 @@ impl PyAsyncClient {
     /// Async context manager: exit. Closes the client.
     #[pyo3(signature = (_exc_type=None, _exc_value=None, _traceback=None))]
     fn __aexit__<'py>(
-        &mut self,
+        &self,
         py: Python<'py>,
         _exc_type: Option<&Bound<'_, PyAny>>,
         _exc_value: Option<&Bound<'_, PyAny>>,
@@ -1077,7 +1076,8 @@ impl PyAsyncClient {
     }
 
     fn __repr__(&self) -> String {
-        if self.client.is_none() {
+        let is_closed = self.client.lock().map_or(true, |g| g.is_none());
+        if is_closed {
             "AsyncClient(closed=true)".to_string()
         } else if self.verify_disabled {
             "AsyncClient(verify=False) [UNSAFE: TLS verification disabled]".to_string()
@@ -1089,7 +1089,10 @@ impl PyAsyncClient {
 
 impl PyAsyncClient {
     fn ensure_not_closed(&self) -> PyResult<()> {
-        if self.client.is_none() {
+        let guard = self.client.lock().map_err(|_| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("client lock poisoned")
+        })?;
+        if guard.is_none() {
             return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
                 "client is closed",
             ));
@@ -1097,9 +1100,12 @@ impl PyAsyncClient {
         Ok(())
     }
 
-    fn ensure_client(&self) -> PyResult<&eggfetch_core::Client> {
-        self.client
-            .as_ref()
+    fn ensure_client(&self) -> PyResult<eggfetch_core::Client> {
+        let guard = self.client.lock().map_err(|_| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("client lock poisoned")
+        })?;
+        guard
+            .clone()
             .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyValueError, _>("client is closed"))
     }
 }

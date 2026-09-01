@@ -685,7 +685,7 @@ impl LimitingStream {
             }
         }
         if let Some(max_ratio) = self.limit.max_decompression_ratio {
-            let compressed = self.compressed_counter.load(Ordering::Relaxed);
+            let compressed = self.compressed_counter.load(Ordering::Acquire);
             if compressed > 0 {
                 let ratio = self.decoded_bytes as f64 / compressed as f64;
                 if ratio > max_ratio {

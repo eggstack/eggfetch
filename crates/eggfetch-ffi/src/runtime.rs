@@ -10,9 +10,30 @@ static RUNTIME: OnceLock<Runtime> = OnceLock::new();
 ///
 /// The runtime is created lazily on first call with multi-thread configuration.
 /// It is never shut down — it lives for the process lifetime.
+#[allow(dead_code)]
 #[must_use]
 pub(crate) fn ffi_runtime() -> &'static Runtime {
-    RUNTIME.get_or_init(|| Runtime::new().expect("failed to create eggfetch-ffi tokio runtime"))
+    // Fallback for callers that cannot propagate errors (kept for compatibility).
+    // Prefer `try_ffi_runtime` which returns a proper `Error::Io` on resource
+    // exhaustion instead of aborting the host process.
+    try_ffi_runtime().unwrap_or_else(|e| panic!("failed to create eggfetch-ffi tokio runtime: {e}"))
+}
+
+/// Try to get or initialize the global FFI runtime.
+///
+/// Returns `Error::Io` if `Runtime::new()` fails (fd exhaustion, memory)
+/// instead of aborting the host process via `expect`.
+pub(crate) fn try_ffi_runtime() -> eggfetch_core::Result<&'static Runtime> {
+    if let Some(rt) = RUNTIME.get() {
+        return Ok(rt);
+    }
+    // Create the runtime outside the `OnceLock` so failure does not poison it.
+    let rt = Runtime::new().map_err(|e| {
+        eggfetch_core::Error::Io(std::sync::Arc::new(std::io::Error::other(format!(
+            "failed to create eggfetch-ffi tokio runtime: {e}"
+        ))))
+    })?;
+    Ok(RUNTIME.get_or_init(|| rt))
 }
 
 /// Block on an async future, safe to call from any context (tokio or not).
@@ -49,8 +70,9 @@ pub(crate) fn blocking_send<
             // at all (safe to block_on directly) or a current-thread
             // runtime (drive the future on the dedicated FFI runtime so
             // the caller's single worker stays responsive).
+            let rt = try_ffi_runtime()?;
             let (tx, rx) = std::sync::mpsc::channel();
-            ffi_runtime().spawn(async move {
+            rt.spawn(async move {
                 let _ = tx.send(Ok(future.await));
             });
             rx.recv().unwrap_or_else(|e| {

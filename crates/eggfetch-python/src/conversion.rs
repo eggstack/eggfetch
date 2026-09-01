@@ -220,12 +220,18 @@ struct PythonBodyIterator {
 
 impl Drop for PythonBodyIterator {
     fn drop(&mut self) {
-        Python::with_gil(|py| {
-            let iterator = self.iterator.bind(py);
-            if let Ok(close) = iterator.as_any().getattr("close") {
-                let _ = close.call0();
-            }
-        });
+        // `Python::with_gil` can panic during interpreter shutdown. Swallow
+        // the panic so `Drop` never unwinds, and ignore `close()` errors.
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            Python::with_gil(|py| {
+                let iterator = self.iterator.bind(py);
+                if let Ok(close) = iterator.as_any().getattr("close") {
+                    let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        let _ = close.call0();
+                    }));
+                }
+            });
+        }));
     }
 }
 

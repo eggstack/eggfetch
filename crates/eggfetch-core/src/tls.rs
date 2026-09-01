@@ -255,7 +255,20 @@ impl TlsConfig {
                 .with_no_client_auth()
         };
 
-        config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
+        // Default ALPN advertises both protocols when HTTP/2 is compiled in.
+        // Callers enforcing `HttpVersionPolicy` must override via
+        // `crate::client::configure_tls_alpn` (used by all client paths).
+        // Direct use of `build_rustls_config` without override intentionally
+        // retains this default; an empty default would silently downgrade
+        // `tls_connector`/`start_tls` users to HTTP/1.1.
+        #[cfg(feature = "http2")]
+        {
+            config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
+        }
+        #[cfg(not(feature = "http2"))]
+        {
+            config.alpn_protocols = vec![b"http/1.1".to_vec()];
+        }
         config.enable_sni = self.sni_enabled;
 
         if let Some(identity) = &self.client_identity {
@@ -313,7 +326,9 @@ impl TlsConfig {
             for path in pem_paths {
                 if let Ok(certs) = load_pem_certs_from_path(Path::new(path)) {
                     for cert in certs {
-                        let _ = roots.add(cert);
+                        if let Err(e) = roots.add(cert) {
+                            eprintln!("eggfetch: skipped invalid CA certificate in {path}: {e}");
+                        }
                     }
                 }
             }
@@ -322,7 +337,9 @@ impl TlsConfig {
         #[cfg(not(any(target_os = "linux", target_os = "macos")))]
         {
             for cert in rustls_native_certs::load_native_certs().certs {
-                let _ = roots.add(cert);
+                if let Err(e) = roots.add(cert) {
+                    eprintln!("eggfetch: skipped invalid native CA certificate: {e}");
+                }
             }
         }
 
@@ -830,7 +847,16 @@ impl rustls::client::ResolvesClientCert for SingleCertResolver {
                 self.private_key_der.clone(),
             )),
         };
-        let signing_key = rustls::crypto::ring::sign::any_supported_type(&key_der).ok()?;
+        let signing_key = match rustls::crypto::ring::sign::any_supported_type(&key_der) {
+            Ok(k) => k,
+            Err(e) => {
+                eprintln!(
+                    "eggfetch: unsupported private key type ({key_label}): {e}",
+                    key_label = self.key_label
+                );
+                return None;
+            }
+        };
         Some(Arc::new(rustls::sign::CertifiedKey::new(
             self.cert_chain.clone(),
             signing_key,
