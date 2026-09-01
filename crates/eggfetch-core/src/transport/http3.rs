@@ -237,13 +237,12 @@ fn build_quic_client_config(
         let mut root_store = rustls::RootCertStore::empty();
         root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
 
-        let mut rc = rustls::ClientConfig::builder_with_provider(Arc::new(
-            rustls::crypto::ring::default_provider(),
-        ))
-        .with_protocol_versions(&[&rustls::version::TLS13])
-        .map_err(|e| Error::Tls(format!("TLS version config: {e}")))?
-        .with_root_certificates(root_store)
-        .with_no_client_auth();
+        let provider = crate::tls::process_crypto_provider()?;
+        let mut rc = rustls::ClientConfig::builder_with_provider(provider)
+            .with_protocol_versions(&[&rustls::version::TLS13])
+            .map_err(|e| Error::Tls(format!("TLS version config: {e}")))?
+            .with_root_certificates(root_store)
+            .with_no_client_auth();
 
         rc.alpn_protocols = vec![b"h3".to_vec()];
         rc

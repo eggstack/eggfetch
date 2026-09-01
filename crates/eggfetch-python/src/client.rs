@@ -1,5 +1,6 @@
 //! Python client wrapper.
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use pyo3::prelude::*;
@@ -19,6 +20,59 @@ use crate::retry;
 use crate::streaming::PyStreamingResponse;
 use crate::trace_bridge::take_callback_error;
 
+/// Shared owner for the synchronous client's runtime.
+pub(crate) struct RuntimeState {
+    runtime: Mutex<Option<tokio::runtime::Runtime>>,
+    shutdown_requested: AtomicBool,
+}
+
+impl RuntimeState {
+    fn new(runtime: tokio::runtime::Runtime) -> Self {
+        Self {
+            runtime: Mutex::new(Some(runtime)),
+            shutdown_requested: AtomicBool::new(false),
+        }
+    }
+
+    fn handle(&self) -> Option<tokio::runtime::Handle> {
+        self.runtime
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .as_ref()
+            .map(tokio::runtime::Runtime::handle)
+            .cloned()
+    }
+
+    fn request_shutdown(self: &Arc<Self>) {
+        self.shutdown_requested.store(true, Ordering::Release);
+        self.try_shutdown(Arc::strong_count(self));
+    }
+
+    fn try_shutdown(&self, state_refs: usize) {
+        if !self.shutdown_requested.load(Ordering::Acquire) || state_refs != 1 {
+            return;
+        }
+        if let Some(runtime) = self
+            .runtime
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take()
+        {
+            runtime.shutdown_background();
+        }
+    }
+}
+
+/// A runtime reference held for the duration of one dispatch.
+#[derive(Clone)]
+pub(crate) struct RuntimeGuard(Arc<RuntimeState>);
+
+impl Drop for RuntimeGuard {
+    fn drop(&mut self) {
+        self.0.try_shutdown(Arc::strong_count(&self.0));
+    }
+}
+
 /// A synchronous HTTP client exposed to Python.
 ///
 /// Owns a `tokio` runtime and an `eggfetch-core` client. Releases the GIL
@@ -26,7 +80,7 @@ use crate::trace_bridge::take_callback_error;
 /// methods concurrently on the same `Client` instance.
 #[pyclass(name = "Client")]
 pub struct PyClient {
-    runtime: std::sync::Mutex<Option<Arc<tokio::runtime::Runtime>>>,
+    runtime: std::sync::Mutex<Option<Arc<RuntimeState>>>,
     client: Mutex<Option<eggfetch_core::Client>>,
     decompress: Option<bool>,
     verify_disabled: bool,
@@ -72,10 +126,9 @@ impl PyClient {
         socket_options: Option<&Bound<'_, PyAny>>,
         uds: Option<&str>,
     ) -> PyResult<Self> {
-        let runtime = Arc::new(
-            tokio::runtime::Runtime::new()
-                .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?,
-        );
+        let runtime = Arc::new(RuntimeState::new(tokio::runtime::Runtime::new().map_err(
+            |e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()),
+        )?));
 
         let verify_disabled = verify
             .and_then(|v| v.extract::<bool>().ok())
@@ -1071,15 +1124,13 @@ impl PyClient {
         if guard.is_some() {
             *guard = None;
             drop(guard);
-            if let Some(rt) = self
+            if let Some(runtime) = self
                 .runtime
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .take()
             {
-                if let Ok(rt) = Arc::try_unwrap(rt) {
-                    rt.shutdown_background();
-                }
+                runtime.request_shutdown();
             }
         }
     }
@@ -1164,19 +1215,17 @@ impl PyClient {
     /// happens once, before `allow_threads`, so a concurrent `close()`
     /// taking the runtime afterwards cannot race a second fetch. A
     /// closed client raises `ValueError` instead of panicking.
-    fn runtime_for_dispatch(
-        &self,
-    ) -> PyResult<(
-        std::sync::Arc<tokio::runtime::Runtime>,
-        tokio::runtime::Handle,
-    )> {
+    fn runtime_for_dispatch(&self) -> PyResult<(RuntimeGuard, tokio::runtime::Handle)> {
         let guard = self.runtime.lock().map_err(|_| {
             PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("client runtime lock poisoned")
         })?;
-        let rt = guard
+        let state = guard
             .as_ref()
             .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyValueError, _>("client is closed"))?;
-        let handle = rt.handle().clone();
-        Ok((rt.clone(), handle))
+        let state = state.clone();
+        let handle = state.handle().ok_or_else(|| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("client runtime is shut down")
+        })?;
+        Ok((RuntimeGuard(state), handle))
     }
 }

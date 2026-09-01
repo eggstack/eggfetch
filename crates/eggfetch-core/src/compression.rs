@@ -380,8 +380,9 @@ fn sync_decode_flate2(
         ContentCoding::Gzip => {
             let decoder = flate2::read::GzDecoder::new(&data[..]);
             let mut output = Vec::new();
-            let mut limited =
-                decoder.take(output_limit.map_or(u64::MAX, |limit| limit.saturating_add(1) as u64));
+            let mut limited = decoder.take(output_limit.map_or(u64::MAX, |limit| {
+                u64::try_from(limit).unwrap_or(u64::MAX).saturating_add(1)
+            }));
             limited
                 .read_to_end(&mut output)
                 .map_err(|e| Error::Decompression(e.to_string()))?;
@@ -397,8 +398,9 @@ fn sync_decode_flate2(
         ContentCoding::Deflate => {
             let decoder = flate2::read::DeflateDecoder::new(&data[..]);
             let mut output = Vec::new();
-            let mut limited =
-                decoder.take(output_limit.map_or(u64::MAX, |limit| limit.saturating_add(1) as u64));
+            let mut limited = decoder.take(output_limit.map_or(u64::MAX, |limit| {
+                u64::try_from(limit).unwrap_or(u64::MAX).saturating_add(1)
+            }));
             limited
                 .read_to_end(&mut output)
                 .map_err(|e| Error::Decompression(e.to_string()))?;

@@ -229,17 +229,24 @@ impl TlsConfig {
             ));
         }
 
+        let provider = process_crypto_provider()?;
         let mut config = if self.verify_certificate && self.verify_hostname {
-            rustls::ClientConfig::builder_with_protocol_versions(&protocol_versions)
+            rustls::ClientConfig::builder_with_provider(provider.clone())
+                .with_protocol_versions(&protocol_versions)
+                .map_err(|e| Error::TlsConfig(format!("TLS version config: {e}")))?
                 .with_root_certificates(root_store)
                 .with_no_client_auth()
         } else if self.verify_certificate {
-            rustls::ClientConfig::builder_with_protocol_versions(&protocol_versions)
+            rustls::ClientConfig::builder_with_provider(provider.clone())
+                .with_protocol_versions(&protocol_versions)
+                .map_err(|e| Error::TlsConfig(format!("TLS version config: {e}")))?
                 .dangerous()
-                .with_custom_certificate_verifier(no_hostname_verifier(&root_store)?)
+                .with_custom_certificate_verifier(no_hostname_verifier(&root_store, provider)?)
                 .with_no_client_auth()
         } else {
-            rustls::ClientConfig::builder_with_protocol_versions(&protocol_versions)
+            rustls::ClientConfig::builder_with_provider(provider)
+                .with_protocol_versions(&protocol_versions)
+                .map_err(|e| Error::TlsConfig(format!("TLS version config: {e}")))?
                 .dangerous()
                 .with_custom_certificate_verifier(Arc::new(NoVerifier))
                 .with_no_client_auth()
@@ -355,8 +362,7 @@ impl TlsConfig {
     /// Build a `rustls::ClientConfig` for QUIC (TLS 1.3 only, ALPN `h3`).
     ///
     /// This differs from [`build_rustls_config`](Self::build_rustls_config)
-    /// by restricting to TLS 1.3, using the `h3` ALPN, and requiring
-    /// the ring crypto provider for Quinn compatibility.
+    /// by restricting to TLS 1.3 and using the `h3` ALPN.
     ///
     /// # Errors
     ///
@@ -366,32 +372,27 @@ impl TlsConfig {
     pub(crate) fn build_quic_rustls_config(&self) -> Result<rustls::ClientConfig> {
         let root_store = self.build_root_store()?;
 
+        let provider = process_crypto_provider()?;
         let mut config = if self.verify_certificate && self.verify_hostname {
-            rustls::ClientConfig::builder_with_provider(Arc::new(
-                rustls::crypto::ring::default_provider(),
-            ))
-            .with_protocol_versions(&[&rustls::version::TLS13])
-            .map_err(|e| Error::Tls(format!("TLS version config: {e}")))?
-            .with_root_certificates(root_store)
-            .with_no_client_auth()
+            rustls::ClientConfig::builder_with_provider(provider.clone())
+                .with_protocol_versions(&[&rustls::version::TLS13])
+                .map_err(|e| Error::Tls(format!("TLS version config: {e}")))?
+                .with_root_certificates(root_store)
+                .with_no_client_auth()
         } else if self.verify_certificate {
-            rustls::ClientConfig::builder_with_provider(Arc::new(
-                rustls::crypto::ring::default_provider(),
-            ))
-            .with_protocol_versions(&[&rustls::version::TLS13])
-            .map_err(|e| Error::Tls(format!("TLS version config: {e}")))?
-            .dangerous()
-            .with_custom_certificate_verifier(no_hostname_verifier(&root_store)?)
-            .with_no_client_auth()
+            rustls::ClientConfig::builder_with_provider(provider.clone())
+                .with_protocol_versions(&[&rustls::version::TLS13])
+                .map_err(|e| Error::Tls(format!("TLS version config: {e}")))?
+                .dangerous()
+                .with_custom_certificate_verifier(no_hostname_verifier(&root_store, provider)?)
+                .with_no_client_auth()
         } else {
-            rustls::ClientConfig::builder_with_provider(Arc::new(
-                rustls::crypto::ring::default_provider(),
-            ))
-            .with_protocol_versions(&[&rustls::version::TLS13])
-            .map_err(|e| Error::Tls(format!("TLS version config: {e}")))?
-            .dangerous()
-            .with_custom_certificate_verifier(Arc::new(NoVerifier))
-            .with_no_client_auth()
+            rustls::ClientConfig::builder_with_provider(provider)
+                .with_protocol_versions(&[&rustls::version::TLS13])
+                .map_err(|e| Error::Tls(format!("TLS version config: {e}")))?
+                .dangerous()
+                .with_custom_certificate_verifier(Arc::new(NoVerifier))
+                .with_no_client_auth()
         };
 
         config.alpn_protocols = vec![b"h3".to_vec()];
@@ -514,7 +515,7 @@ impl TlsConfigBuilder {
     ///
     /// Returns an error if the PEM data is malformed or empty.
     pub fn ca_certificate_pem(mut self, pem_bytes: &[u8]) -> Result<Self> {
-        let certs = parse_pem_certificates(pem_bytes);
+        let certs = parse_pem_certificates(pem_bytes)?;
         if certs.is_empty() {
             return Err(Error::CaBundle("no certificates found in PEM data".into()));
         }
@@ -653,6 +654,19 @@ impl TlsConfigBuilder {
 #[derive(Debug)]
 struct NoVerifier;
 
+pub(crate) fn process_crypto_provider() -> Result<Arc<rustls::crypto::CryptoProvider>> {
+    if let Some(provider) = rustls::crypto::CryptoProvider::get_default() {
+        return Ok(provider.clone());
+    }
+
+    // Ask rustls to install the provider selected by its crate features, then
+    // use that same process-level provider for all custom verifiers.
+    let _ = rustls::ClientConfig::builder();
+    rustls::crypto::CryptoProvider::get_default()
+        .cloned()
+        .ok_or_else(|| Error::TlsConfig("no default TLS crypto provider".into()))
+}
+
 /// Verify a certificate chain while intentionally skipping hostname matching.
 ///
 /// This preserves certificate and signature validation for callers that need
@@ -661,16 +675,24 @@ struct NoVerifier;
 struct NoHostnameVerifier {
     roots: Arc<rustls::RootCertStore>,
     delegate: Arc<rustls::client::WebPkiServerVerifier>,
+    supported_algs: rustls::crypto::WebPkiSupportedAlgorithms,
 }
 
 fn no_hostname_verifier(
     roots: &rustls::RootCertStore,
+    provider: Arc<rustls::crypto::CryptoProvider>,
 ) -> Result<Arc<dyn rustls::client::danger::ServerCertVerifier>> {
     let roots = Arc::new(roots.clone());
-    let delegate = rustls::client::WebPkiServerVerifier::builder(roots.clone())
-        .build()
-        .map_err(|e| Error::TlsConfig(format!("failed to build certificate verifier: {e}")))?;
-    Ok(Arc::new(NoHostnameVerifier { roots, delegate }))
+    let supported_algs = provider.signature_verification_algorithms;
+    let delegate =
+        rustls::client::WebPkiServerVerifier::builder_with_provider(roots.clone(), provider)
+            .build()
+            .map_err(|e| Error::TlsConfig(format!("failed to build certificate verifier: {e}")))?;
+    Ok(Arc::new(NoHostnameVerifier {
+        roots,
+        delegate,
+        supported_algs,
+    }))
 }
 
 impl rustls::client::danger::ServerCertVerifier for NoHostnameVerifier {
@@ -688,9 +710,7 @@ impl rustls::client::danger::ServerCertVerifier for NoHostnameVerifier {
             &self.roots,
             intermediates,
             now,
-            rustls::crypto::ring::default_provider()
-                .signature_verification_algorithms
-                .all,
+            self.supported_algs.all,
         )?;
         Ok(rustls::client::danger::ServerCertVerified::assertion())
     }
@@ -847,7 +867,7 @@ fn load_pem_certs_from_path(path: &Path) -> Result<Vec<CertificateDer<'static>>>
                 continue;
             }
             if let Ok(data) = std::fs::read(entry.path()) {
-                certs.extend(parse_pem_certificates(&data));
+                certs.extend(parse_pem_certificates(&data)?);
             }
         }
         return Ok(certs);
@@ -855,17 +875,16 @@ fn load_pem_certs_from_path(path: &Path) -> Result<Vec<CertificateDer<'static>>>
 
     let data = std::fs::read(path)
         .map_err(|e| Error::CaBundle(format!("failed to read {}: {e}", path.display())))?;
-    Ok(parse_pem_certificates(&data))
+    parse_pem_certificates(&data)
 }
 
 /// Parse PEM-encoded certificate data into DER certificates.
 ///
 /// Iterates over every `-----BEGIN`/`-----END` section in the input.
-/// Corrupted or non-PEM content between sections is skipped, so a
-/// partially-corrupt bundle still yields every parseable certificate
-/// instead of being silently truncated at the first bad block. Sections
-/// other than `CERTIFICATE` (keys, etc.) are ignored.
-fn parse_pem_certificates(pem_bytes: &[u8]) -> Vec<CertificateDer<'static>> {
+/// Non-PEM content between sections is skipped. Malformed or unterminated
+/// PEM sections return an error instead of silently producing a partial trust
+/// store. Sections other than `CERTIFICATE` (keys, etc.) are ignored.
+fn parse_pem_certificates(pem_bytes: &[u8]) -> Result<Vec<CertificateDer<'static>>> {
     let mut certs = Vec::new();
     let mut rest = pem_bytes;
 
@@ -874,21 +893,17 @@ fn parse_pem_certificates(pem_bytes: &[u8]) -> Vec<CertificateDer<'static>> {
         // trailing content after the END marker, so handing it the whole
         // remaining bundle would fail on multi-certificate files.
         let section = &rest[pos..];
-        let Some(section_len) = pem_section_len(section) else {
-            break; // unterminated final block; nothing more to parse
-        };
-        if let Ok((label, data)) = pem_rfc7468::decode_vec(&section[..section_len]) {
-            if label == "CERTIFICATE" {
-                certs.push(CertificateDer::from(data));
-            }
+        let section_len = pem_section_len(section)
+            .ok_or_else(|| Error::CaBundle("unterminated PEM block in certificate data".into()))?;
+        let (label, data) = pem_rfc7468::decode_vec(&section[..section_len])
+            .map_err(|e| Error::CaBundle(format!("invalid PEM block in certificate data: {e}")))?;
+        if label == "CERTIFICATE" {
+            certs.push(CertificateDer::from(data));
         }
-        // A section that fails to decode is skipped; scanning continues
-        // after its END marker. `section_len` is always non-zero, so
-        // every iteration makes forward progress.
         rest = &section[section_len..];
     }
 
-    certs
+    Ok(certs)
 }
 
 /// Find the offset of the next `-----BEGIN ` marker in the input.
@@ -921,20 +936,21 @@ fn pem_section_len(data: &[u8]) -> Option<usize> {
 
 /// Parse a PEM-encoded private key, returning raw DER bytes and the PEM label.
 ///
-/// Like [`parse_pem_certificates`], skips corrupted or non-PEM sections
-/// between valid blocks instead of stopping at the first one.
+/// Like [`parse_pem_certificates`], skips non-PEM sections between valid
+/// blocks but rejects malformed or unterminated PEM sections.
 fn parse_private_key(key_bytes: &[u8]) -> Result<(Vec<u8>, String)> {
     let mut rest = key_bytes;
 
     while let Some(pos) = find_pem_start(rest) {
         let section = &rest[pos..];
-        let Some(section_len) = pem_section_len(section) else {
-            break;
-        };
-        if let Ok((label, data)) = pem_rfc7468::decode_vec(&section[..section_len]) {
-            if matches!(label, "PRIVATE KEY" | "RSA PRIVATE KEY" | "EC PRIVATE KEY") {
-                return Ok((data, label.to_string()));
-            }
+        let section_len = pem_section_len(section).ok_or_else(|| {
+            Error::PrivateKey("unterminated PEM block in private key data".into())
+        })?;
+        let (label, data) = pem_rfc7468::decode_vec(&section[..section_len]).map_err(|e| {
+            Error::PrivateKey(format!("invalid PEM block in private key data: {e}"))
+        })?;
+        if matches!(label, "PRIVATE KEY" | "RSA PRIVATE KEY" | "EC PRIVATE KEY") {
+            return Ok((data, label.to_string()));
         }
         rest = &section[section_len..];
     }
@@ -1097,13 +1113,13 @@ mod tests {
     #[test]
     fn parse_empty_pem_certificates() {
         let result = parse_pem_certificates(b"");
-        assert!(result.is_empty());
+        assert!(result.unwrap().is_empty());
     }
 
     #[test]
     fn parse_invalid_pem_certificates() {
         let result = parse_pem_certificates(b"not valid pem data");
-        assert!(result.is_empty());
+        assert!(result.unwrap().is_empty());
     }
 
     #[test]
@@ -1123,7 +1139,7 @@ mod tests {
         pem.extend_from_slice(b"\nthis is not valid PEM \x01\x02 data\n");
         pem.extend_from_slice(&second);
 
-        let certs = parse_pem_certificates(&pem);
+        let certs = parse_pem_certificates(&pem).unwrap();
         assert_eq!(certs.len(), 2, "both certificates must be recovered");
     }
 
@@ -1135,7 +1151,7 @@ mod tests {
         pem.extend_from_slice(b"-----BEGIN CERTIFICATE-----\nBBBB\n-----END CERTIFICATE-----\n");
         pem.extend_from_slice(b"-----BEGIN PRIVATE KEY-----\nAAAA\n-----END PRIVATE KEY-----\n");
 
-        let certs = parse_pem_certificates(&pem);
+        let certs = parse_pem_certificates(&pem).unwrap();
         assert_eq!(certs.len(), 2, "both certificates, key section skipped");
     }
 
@@ -1149,6 +1165,14 @@ mod tests {
         assert_eq!(label, "PRIVATE KEY");
         // Base64 "AAAA" decodes to three NUL bytes.
         assert_eq!(der, vec![0u8, 0, 0]);
+    }
+
+    #[test]
+    fn parse_pem_certificates_rejects_corrupted_blocks() {
+        let pem = b"-----BEGIN CERTIFICATE-----\nAAAA\n-----END CERTIFICATE-----\n\
+-----BEGIN CERTIFICATE-----\n%%%\n-----END CERTIFICATE-----\n";
+        let err = parse_pem_certificates(pem).unwrap_err();
+        assert_eq!(err.kind(), "ca_bundle");
     }
 
     #[test]
@@ -1200,7 +1224,7 @@ mod tests {
         #[test]
         fn parse_pem_certificates_empty_input(_ in 0u64..100) {
             let result = parse_pem_certificates(b"");
-            prop_assert!(result.is_empty());
+            prop_assert!(result.unwrap().is_empty());
         }
 
         #[test]

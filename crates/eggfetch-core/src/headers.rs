@@ -193,9 +193,12 @@ fn validate_header_name(name: &str) -> Result<()> {
 }
 
 fn validate_header_value(value: &str) -> Result<()> {
-    if value.contains('\n') || value.contains('\r') {
+    if value
+        .bytes()
+        .any(|byte| (byte < 0x20 && byte != b'\t') || byte == 0x7f)
+    {
         return Err(Error::InvalidHeaderValue(
-            "header value must not contain bare newlines (CR/LF)".into(),
+            "header value must not contain control characters".into(),
         ));
     }
     Ok(())
@@ -259,6 +262,20 @@ mod tests {
     fn newline_in_value_rejected() {
         let mut h = Headers::new();
         assert!(h.insert("X-Bad", "value\r\ninjection").is_err());
+    }
+
+    #[test]
+    fn control_characters_in_value_rejected() {
+        for value in ["value\0", "value\x1f", "value\x7f"] {
+            let mut h = Headers::new();
+            assert!(h.insert("X-Bad", value).is_err());
+        }
+    }
+
+    #[test]
+    fn horizontal_tab_in_value_allowed() {
+        let mut h = Headers::new();
+        assert!(h.insert("X-Test", "value\twith-tab").is_ok());
     }
 
     #[test]

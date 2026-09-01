@@ -193,21 +193,21 @@ pub(crate) async fn send_with_retry(client: &Client, request: Request) -> Result
     }
 
     // Save original request parts for replay.
-    let (
-        orig_method,
-        orig_url,
-        orig_headers,
-        orig_body,
-        orig_version,
-        orig_timeout,
-        orig_redirect,
-        orig_auth,
-        orig_auth_disabled,
-        orig_decompress,
-        orig_proxy,
-        _orig_retry,
-        orig_transport_hints,
-    ) = request.into_parts();
+    let crate::request::RequestParts {
+        method: orig_method,
+        url: orig_url,
+        headers: orig_headers,
+        body: orig_body,
+        version: orig_version,
+        timeout: orig_timeout,
+        redirect: orig_redirect,
+        auth: orig_auth,
+        auth_disabled: orig_auth_disabled,
+        decompress: orig_decompress,
+        proxy_override: orig_proxy,
+        retry: _orig_retry,
+        transport_hints: orig_transport_hints,
+    } = request.into_parts();
 
     // Without the `proxy` feature the override has no transport effect.
     #[cfg(not(feature = "proxy"))]
@@ -359,21 +359,21 @@ fn compute_retry_delay(
 /// authentication, the redirect loop, and response post-processing.
 #[allow(clippy::too_many_lines)]
 pub(crate) async fn send_with_redirects(client: &Client, request: Request) -> Result<Response> {
-    let (
+    let crate::request::RequestParts {
         method,
         url,
-        request_headers,
+        headers: request_headers,
         body,
         version,
-        request_timeout,
-        request_redirect,
-        req_auth,
-        req_auth_disabled,
-        request_decompress,
-        request_proxy,
-        _request_retry,
-        request_transport_hints,
-    ) = request.into_parts();
+        timeout: request_timeout,
+        redirect: request_redirect,
+        auth: req_auth,
+        auth_disabled: req_auth_disabled,
+        decompress: request_decompress,
+        proxy_override: request_proxy,
+        retry: _request_retry,
+        transport_hints: request_transport_hints,
+    } = request.into_parts();
 
     let mut merged_headers = client.config().default_headers.clone().into_inner();
     for name in request_headers.keys() {
@@ -666,8 +666,21 @@ pub(crate) async fn send_with_redirects(client: &Client, request: Request) -> Re
 
         history.push(HistoryEntry::from_response(&response));
 
-        let (_, new_url, new_headers, new_body, new_version, _, _, _, _, _, _, _, _) =
-            redirect_req.into_parts();
+        let crate::request::RequestParts {
+            method: _,
+            url: new_url,
+            headers: new_headers,
+            body: new_body,
+            version: new_version,
+            timeout: _,
+            redirect: _,
+            auth: _,
+            auth_disabled: _,
+            decompress: _,
+            proxy_override: _,
+            retry: _,
+            transport_hints: _,
+        } = redirect_req.into_parts();
 
         prev_url = Some(cur_url.clone());
 
@@ -683,14 +696,19 @@ pub(crate) async fn send_with_redirects(client: &Client, request: Request) -> Re
 /// user has not provided one. For known-size bodies with a user-supplied
 /// `Content-Length`, reject mismatches.
 pub(crate) fn apply_content_length(headers: Headers, body: &RequestBody) -> Result<Headers> {
-    let known = match body {
-        RequestBody::Empty => Some(0u64),
-        RequestBody::Bytes(b) => Some(b.len() as u64),
-        RequestBody::Stream {
-            length: Some(n), ..
-        } => Some(*n as u64),
-        RequestBody::Stream { length: None, .. } => None,
-    };
+    let known =
+        match body {
+            RequestBody::Empty => Some(0u64),
+            RequestBody::Bytes(b) => Some(u64::try_from(b.len()).map_err(|_| {
+                Error::RequestBuild("request body length does not fit in u64".into())
+            })?),
+            RequestBody::Stream {
+                length: Some(n), ..
+            } => Some(u64::try_from(*n).map_err(|_| {
+                Error::RequestBuild("request body length does not fit in u64".into())
+            })?),
+            RequestBody::Stream { length: None, .. } => None,
+        };
 
     let supplied = headers.get("content-length").map(|value| {
         value
@@ -812,21 +830,21 @@ pub(crate) async fn send_single_request(
     request: Request,
     timeout: &Timeout,
 ) -> Result<Response> {
-    let (
+    let crate::request::RequestParts {
         method,
         url,
         headers,
         body,
         version,
-        _request_timeout,
-        _request_redirect,
-        _,
-        _,
-        request_decompress,
+        timeout: _request_timeout,
+        redirect: _request_redirect,
+        auth: _,
+        auth_disabled: _,
+        decompress: request_decompress,
         proxy_override,
-        _,
+        retry: _,
         transport_hints,
-    ) = request.into_parts();
+    } = request.into_parts();
 
     if url.scheme() == "https" {
         if let Some(error) = &inner.tls_config_error {
@@ -860,7 +878,7 @@ pub(crate) async fn send_single_request(
                 url.scheme(),
                 &url,
                 proxy_config.host(),
-                Some(proxy_config.port()),
+                Some(proxy_config.port()?),
                 Some(proxy_config.scheme()),
                 is_tunnel,
             )
@@ -982,11 +1000,13 @@ pub(crate) async fn send_single_request(
     }
 
     #[cfg(feature = "proxy")]
-    let socks_client = effective_proxy
-        .as_ref()
-        .filter(|proxy| proxy.is_socks())
-        .map(|proxy| inner.socks_client(proxy))
-        .transpose()?;
+    let socks_client = {
+        let socks_proxy = effective_proxy.as_ref().filter(|proxy| proxy.is_socks());
+        match socks_proxy {
+            Some(proxy) => Some(inner.socks_client(proxy).await?),
+            None => None,
+        }
+    };
 
     let response = match effective_proxy {
         #[cfg(feature = "proxy")]
@@ -1034,7 +1054,7 @@ pub(crate) async fn send_single_request(
             // (with SNI override). The CONNECT tunnel handles its own SNI
             // in the proxy path above.
             if let Some(ref sni_hostname) = transport_hints.sni_hostname {
-                let sni_client = inner.sni_client(sni_hostname)?;
+                let sni_client = inner.sni_client(sni_hostname).await?;
                 let uri = resolve_request_uri(&url, &transport_hints)?;
                 let mut http_request = http::Request::builder()
                     .method(method)

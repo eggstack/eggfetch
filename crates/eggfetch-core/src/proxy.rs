@@ -224,16 +224,6 @@ impl NoProxy {
             }
         }
 
-        // Domain suffix: .example.com
-        if let Some(suffix) = entry.strip_prefix('.') {
-            if suffix.is_empty() {
-                return Err(Error::InvalidProxyUrl(
-                    "NO_PROXY entry cannot be just a dot".into(),
-                ));
-            }
-            return Ok(NoProxyRule::DomainSuffix(entry.to_owned()));
-        }
-
         // host:port. HTTPX builds an `all://*host:port` URL pattern for a
         // non-scheme-qualified entry, so the host keeps bare-domain and
         // subdomain matching while the port remains an explicit match. In
@@ -242,13 +232,29 @@ impl NoProxy {
         if let Some(colon_pos) = entry.rfind(':') {
             let host = &entry[..colon_pos];
             let port_str = &entry[colon_pos + 1..];
-            if let Ok(port) = port_str.parse::<u16>() {
-                return Ok(if exact_localhost {
-                    NoProxyRule::HostPortHttpx(host.to_owned(), port)
-                } else {
-                    NoProxyRule::HostPort(host.to_owned(), port)
-                });
+            if host.is_empty() || entry.matches(':').count() > 1 {
+                return Err(Error::InvalidProxyUrl(format!(
+                    "invalid NO_PROXY host/port entry: {entry}"
+                )));
             }
+            let port = port_str.parse::<u16>().map_err(|_| {
+                Error::InvalidProxyUrl(format!("invalid port in NO_PROXY entry: {entry}"))
+            })?;
+            return Ok(if exact_localhost {
+                NoProxyRule::HostPortHttpx(host.to_owned(), port)
+            } else {
+                NoProxyRule::HostPort(host.to_owned(), port)
+            });
+        }
+
+        // Domain suffix: .example.com
+        if let Some(suffix) = entry.strip_prefix('.') {
+            if suffix.is_empty() {
+                return Err(Error::InvalidProxyUrl(
+                    "NO_PROXY entry cannot be just a dot".into(),
+                ));
+            }
+            return Ok(NoProxyRule::DomainSuffix(entry.to_owned()));
         }
 
         // HTTPX builds an `all://*host` pattern for ordinary domains, which
@@ -614,16 +620,19 @@ impl ProxyConfig {
 
     /// Returns the proxy port for pool keying.
     ///
-    #[must_use]
-    pub fn port(&self) -> u16 {
+    /// # Errors
+    ///
+    /// Returns [`Error::InvalidProxyUrl`] when the proxy scheme has no
+    /// known default port.
+    pub fn port(&self) -> Result<u16> {
         match self.uri.port_or_known_default() {
-            Some(port) => port,
+            Some(port) => Ok(port),
             None => match self.uri.scheme() {
-                "socks5" | "socks5h" => 1080,
-                // Invalid schemes are rejected before normal construction.
-                // Keep this accessor total for defensive callers and let
-                // the subsequent connection attempt report the bad port.
-                _ => 0,
+                "socks5" | "socks5h" => Ok(1080),
+                _ => Err(Error::InvalidProxyUrl(format!(
+                    "proxy scheme {:?} has no known default port",
+                    self.uri.scheme()
+                ))),
             },
         }
     }
@@ -1030,13 +1039,13 @@ mod tests {
     fn parse_proxy_url_accepts_https_scheme() {
         let proxy = Proxy::all("https://proxy.example:8443").unwrap();
         assert_eq!(proxy.uri().scheme(), "https");
-        assert_eq!(proxy.config().port(), 8443);
+        assert_eq!(proxy.config().port().unwrap(), 8443);
     }
 
     #[test]
     fn parse_proxy_url_https_default_port() {
         let proxy = Proxy::all("https://proxy.example").unwrap();
-        assert_eq!(proxy.config().port(), 443);
+        assert_eq!(proxy.config().port().unwrap(), 443);
     }
 
     #[test]
@@ -1059,7 +1068,7 @@ mod tests {
         // The `url` crate doesn't know the default port for socks5,
         // but ProxyConfig::port() handles it correctly.
         let config = proxy.config();
-        assert_eq!(config.port(), 1080);
+        assert_eq!(config.port().unwrap(), 1080);
     }
 
     #[test]
@@ -1252,7 +1261,7 @@ mod tests {
         let proxy = Proxy::all("http://proxy.example:3128").unwrap();
         let config = proxy.config();
         assert_eq!(config.host(), Some("proxy.example"));
-        assert_eq!(config.port(), 3128);
+        assert_eq!(config.port().unwrap(), 3128);
         assert_eq!(config.scheme(), "http");
     }
 
@@ -1260,14 +1269,14 @@ mod tests {
     fn proxy_config_default_port() {
         let proxy = Proxy::all("http://proxy.example").unwrap();
         let config = proxy.config();
-        assert_eq!(config.port(), 80);
+        assert_eq!(config.port().unwrap(), 80);
     }
 
     #[test]
     fn proxy_config_socks_default_port() {
         let proxy = Proxy::all("socks5://proxy.example").unwrap();
         let config = proxy.config();
-        assert_eq!(config.port(), 1080);
+        assert_eq!(config.port().unwrap(), 1080);
     }
 
     #[test]
@@ -1278,7 +1287,7 @@ mod tests {
             proxy_headers: crate::headers::Headers::new(),
             proxy_tls_config: None,
         };
-        assert_eq!(config.port(), 0);
+        assert!(matches!(config.port(), Err(Error::InvalidProxyUrl(_))));
     }
 
     #[test]
@@ -1376,13 +1385,9 @@ mod tests {
     }
 
     #[test]
-    fn noparse_invalid_port_treated_as_host() {
-        let np = NoProxy::parse("example.com:notaport").unwrap();
-        assert_eq!(np.rules.len(), 1);
-        assert_eq!(
-            np.rules[0],
-            NoProxyRule::Host("example.com:notaport".into())
-        );
+    fn noparse_invalid_port_rejected() {
+        let err = NoProxy::parse("example.com:notaport").unwrap_err();
+        assert!(matches!(err, Error::InvalidProxyUrl(_)));
     }
 
     #[test]

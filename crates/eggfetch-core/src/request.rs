@@ -80,23 +80,21 @@ pub enum ProxyOverride {
 }
 
 /// Parts returned by [`Request::into_parts`].
-///
-/// `(method, url, headers, body, version, timeout, redirect, auth, auth_disabled, decompress, proxy_override, retry, transport_hints)`
-pub(crate) type RequestParts = (
-    http::Method,
-    url::Url,
-    Headers,
-    RequestBody,
-    Version,
-    Option<Timeout>,
-    Option<RedirectPolicy>,
-    Option<AuthScheme>,
-    bool,
-    Option<bool>,
-    ProxyOverride,
-    Option<RetryPolicy>,
-    TransportHints,
-);
+pub(crate) struct RequestParts {
+    pub(crate) method: http::Method,
+    pub(crate) url: url::Url,
+    pub(crate) headers: Headers,
+    pub(crate) body: RequestBody,
+    pub(crate) version: Version,
+    pub(crate) timeout: Option<Timeout>,
+    pub(crate) redirect: Option<RedirectPolicy>,
+    pub(crate) auth: Option<AuthScheme>,
+    pub(crate) auth_disabled: bool,
+    pub(crate) decompress: Option<bool>,
+    pub(crate) proxy_override: ProxyOverride,
+    pub(crate) retry: Option<RetryPolicy>,
+    pub(crate) transport_hints: TransportHints,
+}
 
 /// An outgoing HTTP request.
 #[derive(Debug)]
@@ -280,23 +278,23 @@ impl Request {
 
     /// Decompose a request into its parts.
     ///
-    /// Returns `(method, url, headers, body, version, timeout, redirect, auth, auth_disabled, decompress, proxy_override, retry, transport_hints)`.
+    /// Returns the request fields as named parts.
     pub(crate) fn into_parts(self) -> RequestParts {
-        (
-            self.method,
-            self.url,
-            self.headers,
-            self.body,
-            self.version,
-            self.timeout,
-            self.redirect,
-            self.auth,
-            self.auth_disabled,
-            self.decompress,
-            self.proxy_override,
-            self.retry,
-            self.transport_hints,
-        )
+        RequestParts {
+            method: self.method,
+            url: self.url,
+            headers: self.headers,
+            body: self.body,
+            version: self.version,
+            timeout: self.timeout,
+            redirect: self.redirect,
+            auth: self.auth,
+            auth_disabled: self.auth_disabled,
+            decompress: self.decompress,
+            proxy_override: self.proxy_override,
+            retry: self.retry,
+            transport_hints: self.transport_hints,
+        }
     }
 }
 

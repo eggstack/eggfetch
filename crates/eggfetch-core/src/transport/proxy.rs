@@ -193,7 +193,7 @@ pub(crate) async fn connect_to_proxy(
     proxy_tls_config: Option<&crate::tls::TlsConfig>,
 ) -> Result<tokio::io::BufReader<ProxyIo>> {
     let proxy_host = proxy_config.host().unwrap_or("127.0.0.1");
-    let proxy_port = proxy_config.port();
+    let proxy_port = proxy_config.port()?;
 
     let connect_future = async {
         let stream = tokio::net::TcpStream::connect((proxy_host, proxy_port))

@@ -47,22 +47,17 @@ const STATE_CLOSED: u8 = 3;
 /// Keeps a synchronous client's runtime alive while a streaming response
 /// outlives that client.
 #[derive(Clone)]
-pub(crate) struct RuntimeLease(Option<Arc<tokio::runtime::Runtime>>);
+pub(crate) struct RuntimeLease(Option<crate::client::RuntimeGuard>);
 
 impl RuntimeLease {
-    pub(crate) fn new(runtime: Arc<tokio::runtime::Runtime>) -> Self {
+    pub(crate) fn new(runtime: crate::client::RuntimeGuard) -> Self {
         Self(Some(runtime))
     }
 }
 
 impl Drop for RuntimeLease {
     fn drop(&mut self) {
-        let Some(runtime) = self.0.take() else {
-            return;
-        };
-        if let Ok(runtime) = Arc::try_unwrap(runtime) {
-            runtime.shutdown_background();
-        }
+        drop(self.0.take());
     }
 }
 

@@ -2,11 +2,11 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::sync::Mutex;
 use std::time::Duration;
 
 use http::Method;
 use hyper_util::rt::TokioExecutor;
+use tokio::sync::Mutex;
 
 use crate::error::{Error, Result};
 use crate::headers::Headers;
@@ -173,14 +173,11 @@ impl ClientInner {
     /// that separates DNS/TCP resolution (to the original URL host) from
     /// TLS negotiation (with the SNI hostname). Clients are cached by
     /// SNI hostname for connection reuse.
-    pub(crate) fn sni_client(
+    pub(crate) async fn sni_client(
         &self,
         sni_hostname: &str,
     ) -> Result<crate::transport::TimeoutDirectClient> {
-        let mut clients = self
-            .sni_clients
-            .lock()
-            .map_err(|_| Error::ProxyConnect("SNI client cache is poisoned".into()))?;
+        let mut clients = self.sni_clients.lock().await;
         if let Some(client) = clients.get(sni_hostname) {
             return Ok(client.clone());
         }
@@ -241,15 +238,12 @@ impl ClientInner {
 
 #[cfg(feature = "proxy")]
 impl ClientInner {
-    pub(crate) fn socks_client(
+    pub(crate) async fn socks_client(
         &self,
         proxy: &crate::proxy::ProxyConfig,
     ) -> Result<crate::transport::TimeoutSocksClient> {
-        let key = crate::transport::socks::SocksRouteKey::from_proxy(proxy);
-        let mut clients = self
-            .socks_clients
-            .lock()
-            .map_err(|_| Error::ProxyConnect("SOCKS client cache is poisoned".into()))?;
+        let key = crate::transport::socks::SocksRouteKey::from_proxy(proxy)?;
+        let mut clients = self.socks_clients.lock().await;
         if let Some(client) = clients.get(&key) {
             return Ok(client.clone());
         }

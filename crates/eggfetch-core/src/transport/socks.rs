@@ -30,16 +30,16 @@ pub(crate) struct SocksRouteKey {
 }
 
 impl SocksRouteKey {
-    pub(crate) fn from_proxy(proxy: &ProxyConfig) -> Self {
+    pub(crate) fn from_proxy(proxy: &ProxyConfig) -> Result<Self> {
         let auth = proxy.auth().map(|auth| match auth {
             ProxyAuth::Basic { username, password } => (username.clone(), password.clone()),
         });
-        Self {
+        Ok(Self {
             scheme: proxy.scheme().to_owned(),
             host: proxy.host().unwrap_or_default().to_owned(),
-            port: proxy.port(),
+            port: proxy.port()?,
             auth,
-        }
+        })
     }
 }
 
@@ -112,7 +112,7 @@ pub(crate) async fn socks5_handshake(
 ) -> Result<tokio::net::TcpStream> {
     let deadline = remaining_total.map(|duration| std::time::Instant::now() + duration);
     let proxy_host = proxy_config.host().unwrap_or("127.0.0.1");
-    let proxy_port = proxy_config.port();
+    let proxy_port = proxy_config.port()?;
 
     // Phase 1: TCP connect to proxy.
     let connect_future = async {

@@ -379,7 +379,7 @@ struct PoolInner {
     /// Without this guard, an idle semaphore could be removed after a
     /// request cloned it but before that request acquired its permit. A new
     /// semaphore for the same origin could then admit a second request.
-    per_origin_table_lock: std::sync::Mutex<()>,
+    per_origin_table_lock: tokio::sync::Mutex<()>,
     /// Pool configuration.
     config: PoolConfig,
     /// Observable metrics.
@@ -435,7 +435,7 @@ impl Pool {
             inner: Arc::new(PoolInner {
                 global_semaphore,
                 per_origin: DashMap::new(),
-                per_origin_table_lock: std::sync::Mutex::new(()),
+                per_origin_table_lock: tokio::sync::Mutex::new(()),
                 config,
                 metrics: PoolMetrics::default(),
             }),
@@ -494,11 +494,7 @@ impl Pool {
             // below can never be evicted immediately after creation
             // (which would let the next request to this origin build a
             // fresh semaphore and briefly bypass the per-host limit).
-            let table_lock = self
-                .inner
-                .per_origin_table_lock
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let table_lock = self.inner.per_origin_table_lock.lock().await;
             self.inner.per_origin.retain(|_, entry| {
                 // Keep entries that are either holding a permit or have an
                 // outstanding waiter. The waiter count is incremented while
