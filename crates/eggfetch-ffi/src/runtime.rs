@@ -2,22 +2,10 @@
 
 use std::sync::OnceLock;
 
+use futures_util::FutureExt as _;
 use tokio::runtime::Runtime;
 
 static RUNTIME: OnceLock<Runtime> = OnceLock::new();
-
-/// Get or initialize the global FFI runtime.
-///
-/// The runtime is created lazily on first call with multi-thread configuration.
-/// It is never shut down — it lives for the process lifetime.
-#[allow(dead_code)]
-#[must_use]
-pub(crate) fn ffi_runtime() -> &'static Runtime {
-    // Fallback for callers that cannot propagate errors (kept for compatibility).
-    // Prefer `try_ffi_runtime` which returns a proper `Error::Io` on resource
-    // exhaustion instead of aborting the host process.
-    try_ffi_runtime().unwrap_or_else(|e| panic!("failed to create eggfetch-ffi tokio runtime: {e}"))
-}
 
 /// Try to get or initialize the global FFI runtime.
 ///
@@ -73,7 +61,29 @@ pub(crate) fn blocking_send<
             let rt = try_ffi_runtime()?;
             let (tx, rx) = std::sync::mpsc::channel();
             rt.spawn(async move {
-                let _ = tx.send(Ok(future.await));
+                // Preserve the panic payload for the blocking caller.
+                // Without `catch_unwind` a panicking future merely drops
+                // `tx` and the receiver maps the disconnect to a generic
+                // "task dropped" error that hides the cause.
+                let outcome = std::panic::AssertUnwindSafe(future).catch_unwind().await;
+                let to_send = match outcome {
+                    Ok(val) => Ok(val),
+                    Err(payload) => {
+                        let msg = if let Some(s) = payload.downcast_ref::<&str>() {
+                            *s
+                        } else if let Some(s) = payload.downcast_ref::<String>() {
+                            s.as_str()
+                        } else {
+                            "task panicked"
+                        };
+                        Err(eggfetch_core::Error::Io(std::sync::Arc::new(
+                            std::io::Error::other(format!(
+                                "eggfetch-ffi blocking_send: task panicked: {msg}"
+                            )),
+                        )))
+                    }
+                };
+                let _ = tx.send(to_send);
             });
             rx.recv().unwrap_or_else(|e| {
                 Err(eggfetch_core::Error::Io(std::sync::Arc::new(

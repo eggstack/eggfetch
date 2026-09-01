@@ -401,7 +401,12 @@ impl<S: tokio::io::AsyncRead + Unpin> tokio::io::AsyncRead for ProxyTunnel<S> {
         let total = self.initial_buf.get_ref().len() as u64;
         if pos < total {
             let unfilled = buf.initialize_unfilled();
-            let pos_usize = usize::try_from(pos).expect("initial buffer position fits usize");
+            let Ok(pos_usize) = usize::try_from(pos) else {
+                return std::task::Poll::Ready(Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "initial buffer position exceeds usize",
+                )));
+            };
             let remaining = &self.initial_buf.get_ref()[pos_usize..];
             let n = std::cmp::min(remaining.len(), unfilled.len());
             unfilled[..n].copy_from_slice(&remaining[..n]);
