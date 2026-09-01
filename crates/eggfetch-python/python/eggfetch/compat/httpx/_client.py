@@ -279,7 +279,9 @@ def _convert_timeout(timeout):
         )
     if isinstance(timeout, (int, float)):
         return eggfetch.Timeout(connect=timeout, read=timeout, write=timeout, pool=timeout)
-    return None
+    if timeout is None:
+        return None
+    raise TypeError(f"timeout must be Timeout, float, int, or None, got {type(timeout).__name__}")
 
 
 def _convert_verify_cert(verify, cert, trust_env):

@@ -722,8 +722,16 @@ impl ClientBuilder {
     /// Set the maximum decompression ratio (decoded bytes / compressed bytes).
     /// When set, responses whose expansion ratio exceeds this limit produce
     /// an error. This guards against zip-bomb style attacks.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `ratio` is not finite or not positive.
     #[must_use]
     pub fn max_decompression_ratio(mut self, ratio: f64) -> Self {
+        assert!(
+            ratio.is_finite() && ratio > 0.0,
+            "max_decompression_ratio must be finite and positive, got {ratio}"
+        );
         self.max_decompression_ratio = Some(ratio);
         self
     }

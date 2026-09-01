@@ -45,6 +45,7 @@ impl Headers {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub(crate) fn insert_raw(&mut self, name: HeaderName, value: HeaderValue) {
         self.inner.insert(name, value);
     }

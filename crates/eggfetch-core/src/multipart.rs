@@ -230,6 +230,34 @@ impl Part {
     }
 
     /// Add a custom header to this part.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the header name or value is invalid.
+    pub fn try_header(
+        mut self,
+        name: impl TryInto<http::HeaderName>,
+        value: impl TryInto<HeaderValue>,
+    ) -> Result<Self> {
+        let n = name
+            .try_into()
+            .map_err(|_| Error::InvalidHeaderName("invalid multipart part header name".into()))?;
+        let v = value
+            .try_into()
+            .map_err(|_| Error::InvalidHeaderValue("invalid multipart part header value".into()))?;
+        let hv: HeaderValue = v;
+        // Keep the raw bytes: `HeaderValue` admits obs-text
+        // (0x80..=0xFF), so converting with `to_str()` would
+        // silently blank legitimate non-ASCII values.
+        self.headers.insert_raw(n, hv);
+        Ok(self)
+    }
+
+    /// Add a custom header to this part.
+    ///
+    /// Invalid header names or values are silently ignored. Prefer
+    /// [`Self::try_header`] when the caller needs to surface header
+    /// validation errors.
     #[must_use]
     pub fn header(
         mut self,

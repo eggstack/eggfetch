@@ -415,7 +415,9 @@ impl NoProxy {
     fn matches_domain_suffix(host: &str, suffix: &str) -> bool {
         let host_lower = host.to_ascii_lowercase();
         let suffix_lower = suffix.trim_start_matches('.').to_ascii_lowercase();
-        host_lower.ends_with(&format!(".{suffix_lower}"))
+        host_lower.len() > suffix_lower.len()
+            && host_lower.as_bytes()[host_lower.len() - suffix_lower.len() - 1] == b'.'
+            && host_lower.ends_with(&suffix_lower)
     }
 
     fn matches_host_rule(host: &str, rule: &str) -> bool {
@@ -428,7 +430,10 @@ impl NoProxy {
             .trim_start_matches('[')
             .trim_end_matches(']')
             .to_ascii_lowercase();
-        host_lower == rule_lower || host_lower.ends_with(&format!(".{rule_lower}"))
+        host_lower == rule_lower
+            || (host_lower.len() > rule_lower.len()
+                && host_lower.as_bytes()[host_lower.len() - rule_lower.len() - 1] == b'.'
+                && host_lower.ends_with(&rule_lower))
     }
 
     fn matches_exact_host(host: &str, rule: &str) -> bool {

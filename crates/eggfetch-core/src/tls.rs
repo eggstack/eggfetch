@@ -684,8 +684,24 @@ pub(crate) fn process_crypto_provider() -> Result<Arc<rustls::crypto::CryptoProv
         return Ok(provider.clone());
     }
 
-    // Ask rustls to install the provider selected by its crate features, then
-    // use that same process-level provider for all custom verifiers.
+    // Explicitly install the provider implied by the selected crate features.
+    // Relying on `ClientConfig::builder()` to install the provider as a side
+    // effect is fragile: a future rustls change or a pre-installed custom
+    // provider could leave `get_default()` as `None` or mismatched.
+    #[cfg(feature = "tls-rustls")]
+    {
+        // `CryptoProvider::get_default` was None above, so no provider is
+        // installed yet. Try to install the feature-selected provider
+        // explicitly before falling back to the builder side-effect.
+        let provider = rustls::crypto::ring::default_provider();
+        let _ = provider.install_default();
+        if let Some(provider) = rustls::crypto::CryptoProvider::get_default() {
+            return Ok(provider.clone());
+        }
+    }
+    // Fallback: ask rustls to install the provider selected by its crate
+    // features, then use that same process-level provider for all custom
+    // verifiers.
     let _ = rustls::ClientConfig::builder();
     rustls::crypto::CryptoProvider::get_default()
         .cloned()

@@ -265,6 +265,7 @@ impl Response {
     ///
     /// Used by transports that parse the HTTP/1.x status line directly
     /// and can extract the original reason phrase.
+    #[allow(dead_code)]
     pub(crate) fn set_wire_reason_phrase(&mut self, reason: Option<String>) {
         self.wire_reason_phrase = reason;
     }

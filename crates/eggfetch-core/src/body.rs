@@ -124,6 +124,9 @@ impl RequestBody {
     /// Returns the known length of the body, if available.
     ///
     /// Stream bodies may not have a known length until fully consumed.
+    /// Returns `0` for unknown-length streams; callers that need to
+    /// distinguish "empty" from "unknown length" must check
+    /// [`has_known_length`](Self::has_known_length) first.
     #[must_use]
     pub fn len(&self) -> usize {
         match self {

@@ -51,6 +51,29 @@ impl DecompressionLimit {
     pub fn is_unlimited(&self) -> bool {
         self.max_decoded_body_size.is_none() && self.max_decompression_ratio.is_none()
     }
+
+    /// Create a limit with validation for the decompression ratio.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `max_decompression_ratio` is not finite and
+    /// positive.
+    pub fn try_new(
+        max_decoded_body_size: Option<usize>,
+        max_decompression_ratio: Option<f64>,
+    ) -> crate::error::Result<Self> {
+        if let Some(ratio) = max_decompression_ratio {
+            if !ratio.is_finite() || ratio <= 0.0 {
+                return Err(crate::error::Error::RequestBuild(
+                    "max_decompression_ratio must be finite and positive".into(),
+                ));
+            }
+        }
+        Ok(Self {
+            max_decoded_body_size,
+            max_decompression_ratio,
+        })
+    }
 }
 
 /// Maximum number of nested content encodings we will attempt to
@@ -344,6 +367,7 @@ pub fn decompress_buffered(
 
     #[allow(unused_mut)]
     let mut current = bytes::Bytes::copy_from_slice(data);
+    #[allow(clippy::never_loop)]
     for encoding in encodings.into_iter().rev() {
         match encoding {
             #[cfg(any(feature = "compression-gzip", feature = "compression-deflate"))]
@@ -685,6 +709,9 @@ impl LimitingStream {
             }
         }
         if let Some(max_ratio) = self.limit.max_decompression_ratio {
+            if !max_ratio.is_finite() || max_ratio <= 0.0 {
+                return Ok(());
+            }
             let compressed = self.compressed_counter.load(Ordering::Acquire);
             if compressed > 0 {
                 let ratio = self.decoded_bytes as f64 / compressed as f64;
