@@ -49,6 +49,7 @@ impl RedirectPolicy {
 /// third-party origins. `host` is included because a user-supplied
 /// `Host` header describes the original authority and must not leak
 /// to (or misdescribe) the redirect target.
+#[allow(dead_code)]
 const SENSITIVE_HEADERS: &[&str] = &["authorization", "cookie", "host", "proxy-authorization"];
 
 /// Headers that should be removed when the body is dropped (e.g., on
@@ -209,9 +210,11 @@ fn strip_headers_for_redirect(
     }
 
     // Strip remaining sensitive headers on cross-origin redirects.
+    // `authorization` and `proxy-authorization` were already stripped above,
+    // so only the cross-origin-specific entries remain here.
     let cross_origin = original_url.origin() != new_url.origin();
     if cross_origin {
-        for name in SENSITIVE_HEADERS {
+        for name in ["cookie", "host"] {
             headers.remove(name);
         }
     }

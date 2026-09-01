@@ -104,6 +104,11 @@ pub(crate) struct ClientInner {
     /// address binding. Uses a custom connector instead of the standard
     /// hyper-rustls connector path.
     pub(crate) direct_client: Option<crate::transport::TimeoutDirectClient>,
+    /// Base direct-connector configuration (local address / socket options)
+    /// used to construct SNI-override clients so they preserve source
+    /// binding and socket tuning.
+    pub(crate) direct_connector_config:
+        Option<crate::transport::direct_connector::DirectConnectorConfig>,
     /// Cached hyper clients keyed by TLS SNI hostname override.
     ///
     /// When a request carries `TransportHints.sni_hostname`, the pipeline
@@ -203,13 +208,14 @@ impl ClientInner {
         #[cfg(not(any(feature = "proxy", feature = "http3")))]
         let tls_connector = None;
 
-        let base_connector = crate::transport::direct_connector::DirectConnector::new(
+        let base_config = self.direct_connector_config.clone().unwrap_or(
             crate::transport::direct_connector::DirectConnectorConfig {
                 local_address: None,
                 socket_options: Vec::new(),
             },
-            tls_connector,
         );
+        let base_connector =
+            crate::transport::direct_connector::DirectConnector::new(base_config, tls_connector);
         let sni_connector = base_connector.with_sni(sni_hostname.to_owned());
         let connector =
             crate::transport::connect_timeout::ConnectTimeout::new(sni_connector, connect_timeout);
@@ -929,6 +935,7 @@ impl ClientBuilder {
         // Build the direct connector client for advanced socket options / local
         // address binding. This uses a custom connector path instead of the
         // standard hyper-rustls connector.
+        let stored_direct_config = self.direct_connector_config.clone();
         let direct_client = if let Some(dc_config) = self.direct_connector_config {
             let connect_timeout = self.timeout.as_ref().and_then(|t| t.connect);
 
@@ -1044,6 +1051,7 @@ impl ClientBuilder {
                 hyper_client,
                 tls_config_error,
                 direct_client,
+                direct_connector_config: stored_direct_config,
                 sni_clients: Mutex::new(HashMap::new()),
                 #[cfg(unix)]
                 uds_client,

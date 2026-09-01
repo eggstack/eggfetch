@@ -46,8 +46,20 @@ pub enum NoProxyRule {
     /// Matches everything.
     Wildcard,
     /// Host/domain match without a leading dot.
+    ///
+    /// Uses label-boundary subdomain matching (`host == rule ||
+    /// host.ends_with("."+rule)`). Native `NoProxy::parse` creates this
+    /// variant for bare hosts, including IP literals like `127.0.0.1`.
     Host(String),
     /// Exact host match used by the HTTPX environment parser.
+    ///
+    /// `parse_httpx_ip_entry` maps IP literals (including bracketed IPv6)
+    /// to this variant for exact equality, while native parsing maps the
+    /// same literal to `Host`. The divergence is intentional and
+    /// documented: `should_bypass` agrees for exact hosts but `Host`
+    /// would also match subdomains (which IP literals never have). A
+    /// property test should assert that for IP literals both parsers agree
+    /// on bypass for exact matches.
     HostExact(String),
     /// Domain suffix match (leading dot, e.g. `.example.com`).
     DomainSuffix(String),

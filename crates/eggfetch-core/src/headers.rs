@@ -45,6 +45,14 @@ impl Headers {
         Ok(())
     }
 
+    /// Insert a header without validation (wire-decoded path).
+    ///
+    /// This bypasses [`validate_header_value`] intentionally: proxy and
+    /// transport decoders use `HeaderValue::from_bytes` which preserves
+    /// HTTP `obs-text` (0x80..=0xFF) and may carry wire bytes that user-
+    /// supplied validation rejects (e.g., `NUL`). User-facing `insert` /
+    /// `append` always validate; `insert_raw` is only for trusted wire
+    /// data already parsed by hyper or the proxy response reader.
     #[allow(dead_code)]
     pub(crate) fn insert_raw(&mut self, name: HeaderName, value: HeaderValue) {
         self.inner.insert(name, value);
@@ -206,6 +214,14 @@ fn validate_header_name(name: &str) -> Result<()> {
     Ok(())
 }
 
+/// Validate a header value for user-supplied headers.
+///
+/// Rejects `NUL` (`\0`) and other C0 controls except `\t`, matching the
+/// safe subset for outbound requests. Wire-decoded headers arriving via
+/// `insert_raw` bypass this check intentionally so `obs-text` (0x80..=0xFF)
+/// and proxy-decoded `HeaderValue::from_bytes` bytes are preserved
+/// (see `insert_raw` docs). The split is intentional: user input is
+/// strictly validated, trusted wire data is preserved verbatim.
 fn validate_header_value(value: &str) -> Result<()> {
     if value
         .bytes()

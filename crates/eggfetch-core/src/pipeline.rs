@@ -85,11 +85,12 @@ const DRAIN_MAX_TIME: Duration = Duration::from_secs(30);
 
 /// Best-effort drain of a discarded response body.
 ///
-/// Drain errors are intentionally ignored: the body is being discarded
-/// regardless of outcome. Draining stops after [`DRAIN_MAX_BYTES`] or
-/// [`DRAIN_MAX_TIME`], whichever comes first.
+/// Uses the raw (encoded) byte stream so a zip-bomb response does not
+/// abort the drain via `DecompressionRatioExceeded` and abandon the
+/// connection. Drain errors are ignored; draining stops after
+/// [`DRAIN_MAX_BYTES`] or [`DRAIN_MAX_TIME`].
 async fn drain_response_body(response: &mut Response) {
-    let Ok(stream) = response.bytes_stream() else {
+    let Ok(stream) = response.raw_bytes_stream() else {
         return; // body already consumed; nothing to drain
     };
     let mut remaining = DRAIN_MAX_BYTES;

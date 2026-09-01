@@ -469,6 +469,41 @@ impl Stream for LineStream {
                         // needed.
                         continue;
                     }
+                    // Bound the buffer before extending: a single chunk of
+                    // size `MAX+1` without a newline would otherwise push the
+                    // buffer to `MAX + chunk` before the next loop's limit
+                    // check. If the combined buffer would exceed `MAX` and
+                    // there is no newline within the first `MAX` bytes, reject
+                    // immediately without allocating the oversize tail.
+                    if self.buffer.len().saturating_add(chunk.len()) > MAX_LINE_LENGTH {
+                        let remaining = MAX_LINE_LENGTH.saturating_sub(self.buffer.len());
+                        // `buffer` is known to contain no newline (otherwise
+                        // we would have emitted at the top of the loop), so
+                        // only need to inspect the prefix of `chunk` that fits
+                        // within the limit.
+                        let prefix = &chunk[..remaining.min(chunk.len())];
+                        if !prefix.contains(&b'\n') {
+                            // Also check if chunk itself contains an overlong
+                            // line that straddles the boundary: if the first
+                            // newline in the full chunk is beyond `MAX`, the
+                            // first line is already overlong.
+                            if let Some(pos) = chunk.iter().position(|&b| b == b'\n') {
+                                if self.buffer.len() + pos > MAX_LINE_LENGTH {
+                                    return Poll::Ready(Some(Err(
+                                        crate::error::Error::Body(format!(
+                                            "response line exceeded maximum length of {MAX_LINE_LENGTH} bytes"
+                                        )),
+                                    )));
+                                }
+                            } else {
+                                return Poll::Ready(Some(Err(
+                                    crate::error::Error::Body(format!(
+                                        "response line exceeded maximum length of {MAX_LINE_LENGTH} bytes"
+                                    )),
+                                )));
+                            }
+                        }
+                    }
                     self.buffer.extend_from_slice(&chunk);
                 }
                 Poll::Ready(Some(Err(e))) => return Poll::Ready(Some(Err(e))),

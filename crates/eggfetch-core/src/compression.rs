@@ -259,6 +259,19 @@ pub fn decompress_stream(
     }
 
     // Apply decoders in reverse order (innermost encoding first).
+    //
+    // Threat model for stacked encodings (e.g., `gzip, gzip`):
+    // - Each layer's `CountingStream` measures that layer's compressed
+    //   input. The first decoder's counter is the wire size; inner
+    //   decoders' counters measure the outer layer's *decompressed* output.
+    // - Per-layer `LimitingStream`s enforce `max_decompression_ratio`
+    //   against each layer's own input (catches `gzip(gzip(huge))` where
+    //   inner expansion is huge but outer is small).
+    // - The final `LimitingStream` enforces both `max_decoded_body_size`
+    //   and `max_decompression_ratio` against the outermost wire size
+    //   (catches cumulative expansion that stays under per-layer limits).
+    // Both checks are required; removing either would let an attacker
+    // craft sizes that stay under the remaining threshold.
     let mut current = stream;
     let mut outer_counter = None;
     for encoding in encodings.into_iter().rev() {
@@ -309,6 +322,7 @@ pub fn decompress_stream(
 /// decompression fails. Returns [`Error::DecodedBodyTooLarge`] or
 /// [`Error::DecompressionRatioExceeded`] if the decoded body exceeds
 /// the configured limits.
+#[allow(clippy::too_many_lines)]
 pub fn decompress_buffered(
     data: &[u8],
     content_encoding: &str,
@@ -398,17 +412,51 @@ pub fn decompress_buffered(
         }
     }
 
-    if let Some(max) = limit.max_decoded_body_size {
-        if current.len() > max {
+    // Final wire-size checks are mutually exclusive with the per-layer
+    // `output_limit` enforcement to keep the error kind stable when both
+    // limits are tight. When `output_limit` was ratio-derived, the size
+    // check is redundant (ratio*compressed < size) and would otherwise
+    // flip the error kind from `DecompressionRatioExceeded` to
+    // `DecodedBodyTooLarge` for the same logical violation.
+    #[cfg(any(feature = "compression-gzip", feature = "compression-deflate"))]
+    {
+        let size_violated = limit
+            .max_decoded_body_size
+            .is_some_and(|max| current.len() > max);
+        let ratio_violated = limit.max_decompression_ratio.is_some_and(|max_ratio| {
+            compressed_len > 0 && {
+                #[allow(clippy::cast_precision_loss)]
+                let ratio = current.len() as f64 / compressed_len as f64;
+                ratio > max_ratio
+            }
+        });
+        if size_violated && ratio_violated {
+            if ratio_is_tighter {
+                return Err(Error::DecompressionRatioExceeded);
+            }
             return Err(Error::DecodedBodyTooLarge);
         }
+        if size_violated {
+            return Err(Error::DecodedBodyTooLarge);
+        }
+        if ratio_violated {
+            return Err(Error::DecompressionRatioExceeded);
+        }
     }
-    if let Some(max_ratio) = limit.max_decompression_ratio {
-        if compressed_len > 0 {
-            #[allow(clippy::cast_precision_loss)]
-            let ratio = current.len() as f64 / compressed_len as f64;
-            if ratio > max_ratio {
-                return Err(Error::DecompressionRatioExceeded);
+    #[cfg(not(any(feature = "compression-gzip", feature = "compression-deflate")))]
+    {
+        if let Some(max) = limit.max_decoded_body_size {
+            if current.len() > max {
+                return Err(Error::DecodedBodyTooLarge);
+            }
+        }
+        if let Some(max_ratio) = limit.max_decompression_ratio {
+            if compressed_len > 0 {
+                #[allow(clippy::cast_precision_loss)]
+                let ratio = current.len() as f64 / compressed_len as f64;
+                if ratio > max_ratio {
+                    return Err(Error::DecompressionRatioExceeded);
+                }
             }
         }
     }
@@ -625,6 +673,12 @@ impl tokio::io::AsyncRead for StreamReader {
 /// underlying stream. The count is exposed via a shared
 /// `Arc<AtomicUsize>` so that downstream limiters can read the
 /// compressed byte count without needing to see the raw stream.
+///
+/// For stacked decoders the *outer* `CountingStream` (first in the chain)
+/// counts wire bytes; inner counters count the outer layer's decompressed
+/// output. The outer counter is used for the final cumulative ratio
+/// check, while each inner counter drives its own per-layer ratio check
+/// (see `decompress_stream` docs).
 struct CountingStream {
     inner: BoxBytesStream,
     count: Arc<AtomicUsize>,

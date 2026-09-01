@@ -196,13 +196,33 @@ pub(crate) async fn connect_to_proxy(
     let proxy_port = proxy_config.port()?;
 
     let connect_future = async {
-        let stream = tokio::net::TcpStream::connect((proxy_host, proxy_port))
+        let addrs = tokio::net::lookup_host(format!("{proxy_host}:{proxy_port}"))
             .await
-            .map_err(|e| Error::ProxyConnect(format!("failed to connect to proxy: {e}")))?;
-        stream
-            .set_nodelay(true)
-            .map_err(|e| Error::ProxyConnect(format!("failed to set nodelay: {e}")))?;
-        Ok::<_, Error>(stream)
+            .map_err(|e| {
+                Error::ProxyConnect(format!(
+                    "DNS resolution failed for proxy {proxy_host}:{proxy_port}: {e}"
+                ))
+            })?;
+        let mut last_error: Option<String> = None;
+        let mut connected: Option<tokio::net::TcpStream> = None;
+        for addr in addrs {
+            match tokio::net::TcpStream::connect(addr).await {
+                Ok(stream) => {
+                    stream
+                        .set_nodelay(true)
+                        .map_err(|e| Error::ProxyConnect(format!("failed to set nodelay: {e}")))?;
+                    connected = Some(stream);
+                    break;
+                }
+                Err(e) => last_error = Some(e.to_string()),
+            }
+        }
+        connected.ok_or_else(|| {
+            Error::ProxyConnect(format!(
+                "TCP connect to proxy {proxy_host}:{proxy_port} failed: {}",
+                last_error.unwrap_or_else(|| "no addresses resolved".into())
+            ))
+        })
     };
 
     let connect_timeout = effective_timeout(deadline, proxy_connect_timeout)?;
