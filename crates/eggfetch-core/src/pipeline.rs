@@ -933,7 +933,8 @@ pub(crate) async fn send_single_request(
     if version == http::Version::HTTP_2 {
         crate::h2_headers::strip_h2_forbidden_headers(&mut headers);
     }
-    headers.validate_request_size()?;
+    let request_uri = resolve_request_uri(&url, &transport_hints)?;
+    headers.validate_request_size(&method, request_uri.to_string().as_bytes())?;
 
     let remaining_total = timeout
         .total

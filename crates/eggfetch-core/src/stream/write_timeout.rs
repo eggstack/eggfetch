@@ -74,8 +74,14 @@ where
                 }
                 return Poll::Ready(Some(Ok(bytes)));
             }
-            Poll::Ready(Some(Err(e))) => return Poll::Ready(Some(Err(e))),
-            Poll::Ready(None) => return Poll::Ready(None),
+            Poll::Ready(Some(Err(e))) => {
+                *me.deadline = None;
+                return Poll::Ready(Some(Err(e)));
+            }
+            Poll::Ready(None) => {
+                *me.deadline = None;
+                return Poll::Ready(None);
+            }
             Poll::Pending => {}
         }
 
@@ -129,6 +135,7 @@ mod tests {
             } => {}
             other => panic!("expected write timeout, got {other:?}"),
         }
+        assert!(s.as_ref().get_ref().deadline.is_none());
         assert!(s.next().await.is_none());
     }
 

@@ -264,6 +264,16 @@ impl NoProxy {
     }
 
     fn parse_httpx_ip_entry(entry: &str) -> Result<Option<NoProxyRule>> {
+        fn invalid_ipv6_entry(entry: &str) -> Error {
+            const MAX_ENTRY_CHARS: usize = 256;
+            let mut chars = entry.chars();
+            let mut display: String = chars.by_ref().take(MAX_ENTRY_CHARS).collect();
+            if chars.next().is_some() {
+                display.push_str("...");
+            }
+            Error::InvalidProxyUrl(format!("invalid IPv6 NO_PROXY entry: {display}"))
+        }
+
         // HTTPX checks IPv4/IPv6 hostnames before URL-pattern construction.
         // IPv4 CIDR-looking values become exact host patterns, while IPv6
         // prefix-looking values are bracketed and rejected by its URL parser.
@@ -272,9 +282,7 @@ impl NoProxy {
                 return Ok(Some(NoProxyRule::HostExact(address.to_ascii_lowercase())));
             }
             if address.parse::<std::net::Ipv6Addr>().is_ok() {
-                return Err(Error::InvalidProxyUrl(format!(
-                    "invalid IPv6 NO_PROXY entry: {entry}"
-                )));
+                return Err(invalid_ipv6_entry(entry));
             }
         }
 
@@ -282,9 +290,7 @@ impl NoProxy {
         // fallback URL-pattern form is invalid, so do not broaden the
         // compatibility syntax with native IPv6 support.
         if entry.starts_with('[') {
-            return Err(Error::InvalidProxyUrl(format!(
-                "invalid IPv6 NO_PROXY entry: {entry}"
-            )));
+            return Err(invalid_ipv6_entry(entry));
         }
 
         if let Ok(address) = entry.parse::<std::net::Ipv4Addr>() {
@@ -298,9 +304,7 @@ impl NoProxy {
         // also rejected by HTTPX's fallback URL-pattern parser. Ordinary
         // host:port entries have only one colon and remain supported.
         if entry.matches(':').count() > 1 {
-            return Err(Error::InvalidProxyUrl(format!(
-                "invalid IPv6 NO_PROXY entry: {entry}"
-            )));
+            return Err(invalid_ipv6_entry(entry));
         }
 
         Ok(None)
@@ -1622,6 +1626,14 @@ mod tests {
         for entry in ["[::1]", "[::1]:8080", "::1/128", "[::1]/128"] {
             assert!(NoProxy::parse_httpx(entry).is_err(), "{entry}");
         }
+    }
+
+    #[test]
+    fn httpx_invalid_ipv6_entry_error_is_bounded() {
+        let entry = format!("[{}]", ":".repeat(1000));
+        let error = NoProxy::parse_httpx(&entry).unwrap_err().to_string();
+        assert!(error.len() < 320);
+        assert!(!error.contains(&entry));
     }
 
     #[test]

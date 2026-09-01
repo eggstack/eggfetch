@@ -212,8 +212,8 @@ pub fn is_python_iterable(obj: &Bound<'_, PyAny>) -> PyResult<bool> {
 /// Create a `RequestBody` from a Python sync iterable.
 ///
 /// The iterable is consumed lazily when the async body stream is polled. This
-/// keeps production tied to transport backpressure and avoids creating a
-/// detached operating-system thread for every request.
+/// keeps production tied to transport backpressure while keeping Python code
+/// off the Tokio executor thread.
 struct PythonBodyIterator {
     iterator: Py<PyIterator>,
 }
@@ -257,24 +257,35 @@ pub fn python_iterable_to_request_body<'py>(
     };
     let stream = stream::unfold(Some(state), |state| async move {
         let state = state?;
-        let next_chunk = Python::with_gil(|py| {
-            let mut iterator = state.iterator.bind(py).clone();
-            match iterator.next() {
-                Some(item) => {
-                    let item = item?;
-                    if let Some(bytes) = extract_bytes_like(&item)? {
-                        Ok(Some(Bytes::from(bytes)))
-                    } else if let Ok(string) = item.extract::<String>() {
-                        Ok(Some(Bytes::from(string.into_bytes())))
-                    } else {
-                        Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
-                            "iterable must yield bytes or str items",
-                        ))
+        let result = match tokio::task::spawn_blocking(move || {
+            let next_chunk = Python::with_gil(|py| {
+                let mut iterator = state.iterator.bind(py).clone();
+                match iterator.next() {
+                    Some(item) => {
+                        let item = item?;
+                        if let Some(bytes) = extract_bytes_like(&item)? {
+                            Ok(Some(Bytes::from(bytes)))
+                        } else if let Ok(string) = item.extract::<String>() {
+                            Ok(Some(Bytes::from(string.into_bytes())))
+                        } else {
+                            Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
+                                "iterable must yield bytes or str items",
+                            ))
+                        }
                     }
+                    None => Ok(None),
                 }
-                None => Ok(None),
+            });
+            (state, next_chunk)
+        })
+        .await
+        {
+            Ok(result) => result,
+            Err(error) => {
+                return Some((Err(eggfetch_core::Error::Body(error.to_string())), None));
             }
-        });
+        };
+        let (state, next_chunk) = result;
 
         match next_chunk {
             Ok(Some(chunk)) => Some((Ok(chunk), Some(state))),

@@ -484,7 +484,13 @@ impl RequestBuilder {
         if let Some(e) = self.error.take() {
             return Err(e);
         }
-        self.headers.validate_request_size()?;
+        let request_target = self
+            .transport_hints
+            .target
+            .as_deref()
+            .unwrap_or_else(|| self.url.as_str().as_bytes());
+        self.headers
+            .validate_request_size(&self.method, request_target)?;
         let mut req = Request::new(self.method, self.url);
         req.headers = self.headers;
         req.body = self.body;

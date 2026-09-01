@@ -269,10 +269,30 @@ fn proxy_rejection_body(headers: &[(String, Vec<u8>)], initial_buf: &[u8]) -> St
             || String::from_utf8_lossy(initial_buf).into_owned(),
             |(_, value)| String::from_utf8_lossy(value).into_owned(),
         );
-    raw.chars()
-        .filter(|c| !c.is_control())
-        .take(MAX_PROXY_REJECTION_BODY_CHARS)
-        .collect()
+    let mut sanitized = String::new();
+    let mut sanitized_chars = 0;
+    let mut chars = raw.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '\x1b' {
+            if chars.next_if_eq(&'[').is_some() {
+                // Drop CSI sequences such as ESC[31m in their entirety.
+                for sequence_char in chars.by_ref() {
+                    if ('@'..='~').contains(&sequence_char) {
+                        break;
+                    }
+                }
+            }
+            continue;
+        }
+        if !c.is_control() {
+            sanitized.push(c);
+            sanitized_chars += 1;
+            if sanitized_chars >= MAX_PROXY_REJECTION_BODY_CHARS {
+                break;
+            }
+        }
+    }
+    sanitized
 }
 
 /// Streaming response body from a TLS connection through a proxy tunnel.
@@ -381,7 +401,7 @@ impl<S: tokio::io::AsyncRead + Unpin> tokio::io::AsyncRead for ProxyTunnel<S> {
         let total = self.initial_buf.get_ref().len() as u64;
         if pos < total {
             let unfilled = buf.initialize_unfilled();
-            let pos_usize = usize::try_from(pos).unwrap_or(usize::MAX);
+            let pos_usize = usize::try_from(pos).expect("initial buffer position fits usize");
             let remaining = &self.initial_buf.get_ref()[pos_usize..];
             let n = std::cmp::min(remaining.len(), unfilled.len());
             unfilled[..n].copy_from_slice(&remaining[..n]);
@@ -458,7 +478,7 @@ mod tests {
         )];
         assert_eq!(
             proxy_rejection_body(&headers, b"ignored"),
-            "denied[31msecret: hunter2"
+            "deniedsecret: hunter2"
         );
     }
 }

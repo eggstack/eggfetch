@@ -42,13 +42,9 @@ pub(crate) fn apply_decompression(
         }
         ResponseBody::Buffered { bytes } => {
             if let Some(ce) = content_encoding {
-                if bytes.is_empty() {
-                    ResponseBody::Buffered { bytes }
-                } else {
-                    let decompressed = crate::compression::decompress_buffered(&bytes, ce, limit)?;
-                    decoder_applied = crate::compression::parse_content_encodings(ce).is_some();
-                    ResponseBody::buffered(decompressed)
-                }
+                let decompressed = crate::compression::decompress_buffered(&bytes, ce, limit)?;
+                decoder_applied = crate::compression::parse_content_encodings(ce).is_some();
+                ResponseBody::buffered(decompressed)
             } else {
                 ResponseBody::Buffered { bytes }
             }
@@ -147,5 +143,23 @@ mod tests {
             response.headers().get("content-length"),
             Some(&HeaderValue::from_static("4"))
         );
+    }
+
+    #[test]
+    fn empty_encoded_buffered_body_uses_decompression_path() {
+        let mut headers = HeaderMap::new();
+        headers.insert("content-encoding", HeaderValue::from_static("gzip"));
+        let response = Response::new(
+            StatusCode::OK,
+            Version::HTTP_11,
+            headers,
+            Url::parse("http://example.com").unwrap(),
+            ResponseBody::buffered(Bytes::new()),
+        );
+
+        let response =
+            apply_decompression(response, Some("gzip"), DecompressionLimit::default()).unwrap();
+        assert!(response.body().is_empty());
+        assert!(response.headers().get("content-encoding").is_none());
     }
 }

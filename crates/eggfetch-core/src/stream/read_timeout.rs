@@ -78,9 +78,11 @@ where
             Poll::Ready(Some(Err(e))) => {
                 // Inner error: propagate immediately, do not mask with
                 // a timeout.
+                *me.deadline = None;
                 return Poll::Ready(Some(Err(e)));
             }
             Poll::Ready(None) => {
+                *me.deadline = None;
                 return Poll::Ready(None);
             }
             Poll::Pending => {}
@@ -137,6 +139,7 @@ mod tests {
             } => {}
             other => panic!("expected read timeout, got {other:?}"),
         }
+        assert!(s.as_ref().get_ref().deadline.is_none());
         assert!(s.next().await.is_none());
     }
 
@@ -153,5 +156,6 @@ mod tests {
         let inner = stream::empty::<Result<Bytes>>();
         let mut s = Box::pin(ReadTimeoutStream::new(inner, Duration::from_secs(1)));
         assert!(s.next().await.is_none());
+        assert!(s.as_ref().get_ref().deadline.is_none());
     }
 }

@@ -237,12 +237,16 @@ pub fn decompress_stream(
 
     // Apply decoders in reverse order (innermost encoding first).
     let mut current = stream;
-    let mut final_counter = None;
+    let mut outer_counter = None;
     for encoding in encodings.into_iter().rev() {
         let counting = CountingStream::new(current);
         let counter = counting.counter();
         current = make_decoder(Box::pin(counting), encoding)?;
-        final_counter = Some(Arc::clone(&counter));
+        // The first decoder consumes the wire stream, so its counter is the
+        // only one that measures the original compressed body size.
+        if outer_counter.is_none() {
+            outer_counter = Some(Arc::clone(&counter));
+        }
 
         // Check every decoder against the bytes consumed for its own input
         // layer. Comparing only the final output with the outermost wire
@@ -263,10 +267,10 @@ pub fn decompress_stream(
         return Ok(current);
     }
 
-    let Some(final_counter) = final_counter else {
+    let Some(outer_counter) = outer_counter else {
         return Ok(current);
     };
-    Ok(Box::pin(LimitingStream::new(current, limit, final_counter)))
+    Ok(Box::pin(LimitingStream::new(current, limit, outer_counter)))
 }
 
 /// Decompress a fully buffered byte slice using synchronous decoding.
@@ -304,6 +308,12 @@ pub fn decompress_buffered(
             encodings.len(),
             MAX_NESTING_DEPTH
         )));
+    }
+
+    // Preserve the existing empty-body behavior while still routing the
+    // body through the same validation path as non-empty buffered bodies.
+    if data.is_empty() {
+        return Ok(bytes::Bytes::new());
     }
 
     let compressed_len = data.len();
@@ -1047,6 +1057,42 @@ mod tests {
             .into_iter()
             .find_map(std::result::Result::err)
             .expect("streaming ratio limit must reject the inner layer");
+        assert_eq!(err.kind(), "decompression_ratio_exceeded");
+    }
+
+    #[cfg(feature = "compression-gzip")]
+    #[tokio::test]
+    async fn decompression_stream_enforces_ratio_against_wire_size() {
+        // Both individual layers stay below the limit, but their cumulative
+        // expansion exceeds it. The final check must use the original wire
+        // size rather than the inner layer's size.
+        let payload: Vec<u8> = (0usize..5000)
+            .map(|i| u8::try_from((i * 73 + i / 17) % 251).expect("value is below 251"))
+            .collect();
+        let inner = gzip_compress(&payload);
+        let outer = gzip_compress(&inner);
+        #[allow(clippy::cast_precision_loss)]
+        let (first_layer, second_layer, total) = (
+            inner.len() as f64 / outer.len() as f64,
+            payload.len() as f64 / inner.len() as f64,
+            payload.len() as f64 / outer.len() as f64,
+        );
+        let per_layer_limit = first_layer.max(second_layer);
+        assert!(total > per_layer_limit);
+        let limit = DecompressionLimit {
+            max_decoded_body_size: None,
+            max_decompression_ratio: Some((per_layer_limit + total) / 2.0),
+        };
+        let input: BoxBytesStream = Box::pin(futures_util::stream::once(async move {
+            Ok(bytes::Bytes::from(outer))
+        }));
+        let decoded = decompress_stream(input, Some("gzip, gzip"), true, limit).unwrap();
+        let err = decoded
+            .collect::<Vec<_>>()
+            .await
+            .into_iter()
+            .find_map(std::result::Result::err)
+            .expect("streaming ratio limit must include the wire size");
         assert_eq!(err.kind(), "decompression_ratio_exceeded");
     }
 

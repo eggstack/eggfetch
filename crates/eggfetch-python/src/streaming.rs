@@ -468,7 +468,11 @@ impl IncrementalDecoder {
         if let Some(decoder) = &mut self.decoder {
             // encoding_rs writes into the String's existing capacity and
             // intentionally does not reallocate for the caller.
-            let capacity = bytes.len().saturating_mul(3).max(4);
+            const MAX_INITIAL_DECODE_CAPACITY: usize = 64 * 1024;
+            let capacity = bytes
+                .len()
+                .saturating_mul(3)
+                .clamp(4, MAX_INITIAL_DECODE_CAPACITY);
             let mut output = String::with_capacity(capacity);
             let _ = decoder.decode_to_string(bytes, &mut output, last);
             return output;
