@@ -624,13 +624,13 @@ impl CountingStream {
 /// bytes and silently disable a configured decompression-ratio limit
 /// mid-stream.
 fn saturating_fetch_add(counter: &AtomicUsize, amount: usize) {
-    let mut current = counter.load(Ordering::Relaxed);
+    let mut current = counter.load(Ordering::Acquire);
     loop {
         let Some(next) = current.checked_add(amount) else {
-            counter.store(usize::MAX, Ordering::Relaxed);
+            counter.store(usize::MAX, Ordering::Release);
             return;
         };
-        match counter.compare_exchange_weak(current, next, Ordering::Relaxed, Ordering::Relaxed) {
+        match counter.compare_exchange_weak(current, next, Ordering::AcqRel, Ordering::Acquire) {
             Ok(_) => return,
             Err(actual) => current = actual,
         }

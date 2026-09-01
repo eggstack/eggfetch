@@ -156,6 +156,11 @@ impl RetryPolicy {
                 phase: crate::timeout::TimeoutPhase::Pool,
                 ..
             }
+            | Error::Timeout {
+                phase:
+                    crate::timeout::TimeoutPhase::ProxyConnect | crate::timeout::TimeoutPhase::ProxyTls,
+                ..
+            }
             | Error::H3Connect(_) => true,
             Error::Http2StreamReset { reason } if reason.starts_with("REFUSED_STREAM") => true,
             _ => false,
@@ -714,6 +719,20 @@ mod tests {
         let policy = RetryPolicy::default();
         assert!(!policy.is_enabled());
         assert_eq!(policy.max_attempts(), 1);
+    }
+
+    #[test]
+    fn proxy_timeout_phases_are_retryable() {
+        for phase in [
+            crate::timeout::TimeoutPhase::ProxyConnect,
+            crate::timeout::TimeoutPhase::ProxyTls,
+        ] {
+            let error = Error::Timeout {
+                phase,
+                elapsed: Duration::from_secs(1),
+            };
+            assert!(RetryPolicy::is_error_retryable(&error));
+        }
     }
 
     #[test]

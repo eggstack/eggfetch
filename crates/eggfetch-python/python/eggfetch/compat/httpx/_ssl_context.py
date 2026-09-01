@@ -360,9 +360,9 @@ class _EggfetchSSLRegistry:
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
-        # Use WeakValueDictionary is not suitable (keys are the contexts).
-        # Instead, use a mapping from id -> (weakref, metadata).
-        self._entries: dict[int, tuple[weakref.ref, dict[str, Any]]] = {}
+        self._entries: weakref.WeakKeyDictionary[
+            ssl.SSLContext, dict[str, Any]
+        ] = weakref.WeakKeyDictionary()
 
     def register(
         self,
@@ -403,13 +403,8 @@ class _EggfetchSSLRegistry:
             "fingerprint": snapshot_context(ctx).fingerprint(),
         }
 
-        def _on_expire(ref: weakref.ref = None, key: int = id(ctx)) -> None:
-            with self._lock:
-                self._entries.pop(key, None)
-
-        ref = weakref.ref(ctx, _on_expire)
         with self._lock:
-            self._entries[id(ctx)] = (ref, meta)
+            self._entries[ctx] = meta
 
     def get(self, ctx: ssl.SSLContext) -> dict[str, Any] | None:
         """Retrieve metadata for a registered context, or ``None``.
@@ -422,13 +417,8 @@ class _EggfetchSSLRegistry:
         classification path then treats it as a fresh caller context.
         """
         with self._lock:
-            entry = self._entries.get(id(ctx))
-            if entry is None:
-                return None
-            ref, meta = entry
-            if ref() is None:
-                # Context has been garbage collected.
-                self._entries.pop(id(ctx), None)
+            meta = self._entries.get(ctx)
+            if meta is None:
                 return None
             if meta.get("passthrough"):
                 # Passthrough contexts are intentionally unverified: we
@@ -441,7 +431,7 @@ class _EggfetchSSLRegistry:
                 # or loaded an external client cert.  We must not reuse
                 # the stored construction metadata because it no
                 # longer describes the live context.
-                self._entries.pop(id(ctx), None)
+                del self._entries[ctx]
                 return None
             return dict(meta)
 
@@ -456,12 +446,8 @@ class _EggfetchSSLRegistry:
     def is_passthrough(self, ctx: ssl.SSLContext) -> bool:
         """Return ``True`` if the context was registered as a passthrough."""
         with self._lock:
-            entry = self._entries.get(id(ctx))
-            if entry is None:
-                return False
-            ref, meta = entry
-            if ref() is None:
-                self._entries.pop(id(ctx), None)
+            meta = self._entries.get(ctx)
+            if meta is None:
                 return False
             return bool(meta.get("passthrough"))
 

@@ -1212,7 +1212,9 @@ async fn send_hyper_request(
 
 /// Validate a `target` extension value for request smuggling safety.
 ///
-/// Rejects C0 control characters and DEL bytes.
+/// Rejects C0 control characters and DEL bytes. The target must also be
+/// valid UTF-8 because it is converted to Hyper's text-based URI type before
+/// dispatch; callers should percent-encode non-ASCII octets when necessary.
 pub(crate) fn validate_target(target: &[u8]) -> Result<()> {
     if target.is_empty() {
         return Err(Error::RequestBuild(

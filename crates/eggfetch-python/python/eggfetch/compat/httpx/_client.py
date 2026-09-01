@@ -160,6 +160,11 @@ def _convert_socket_option(option: tuple) -> tuple[int, int, bytes]:
 
     Returns ``(level, option, value_bytes)``.
     """
+    if len(option) == 4:
+        raise ValueError(
+            "four-element socket_options are unsupported; "
+            "use (level, option, value) triples"
+        )
     if len(option) != 3:
         raise ValueError(
             "socket_options must be a list of (level, option, value) triples"
@@ -225,6 +230,11 @@ def _validate_transport_options(
         if not isinstance(socket_options, (list, tuple)):
             raise TypeError("socket_options must be a list of tuples")
         for opt in socket_options:
+            if isinstance(opt, (list, tuple)) and len(opt) == 4:
+                raise ValueError(
+                    "four-element socket_options are unsupported; "
+                    "use (level, option, value) triples"
+                )
             if not isinstance(opt, (list, tuple)) or len(opt) != 3:
                 raise ValueError(
                     "socket_options must be a list of (level, option, value) triples"

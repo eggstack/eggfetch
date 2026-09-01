@@ -230,6 +230,9 @@ impl TlsConfig {
         }
 
         let provider = process_crypto_provider()?;
+        let supported_schemes = provider
+            .signature_verification_algorithms
+            .supported_schemes();
         let mut config = if self.verify_certificate && self.verify_hostname {
             rustls::ClientConfig::builder_with_provider(provider.clone())
                 .with_protocol_versions(&protocol_versions)
@@ -248,7 +251,7 @@ impl TlsConfig {
                 .with_protocol_versions(&protocol_versions)
                 .map_err(|e| Error::TlsConfig(format!("TLS version config: {e}")))?
                 .dangerous()
-                .with_custom_certificate_verifier(Arc::new(NoVerifier))
+                .with_custom_certificate_verifier(Arc::new(NoVerifier { supported_schemes }))
                 .with_no_client_auth()
         };
 
@@ -373,6 +376,9 @@ impl TlsConfig {
         let root_store = self.build_root_store()?;
 
         let provider = process_crypto_provider()?;
+        let supported_schemes = provider
+            .signature_verification_algorithms
+            .supported_schemes();
         let mut config = if self.verify_certificate && self.verify_hostname {
             rustls::ClientConfig::builder_with_provider(provider.clone())
                 .with_protocol_versions(&[&rustls::version::TLS13])
@@ -391,7 +397,7 @@ impl TlsConfig {
                 .with_protocol_versions(&[&rustls::version::TLS13])
                 .map_err(|e| Error::Tls(format!("TLS version config: {e}")))?
                 .dangerous()
-                .with_custom_certificate_verifier(Arc::new(NoVerifier))
+                .with_custom_certificate_verifier(Arc::new(NoVerifier { supported_schemes }))
                 .with_no_client_auth()
         };
 
@@ -652,7 +658,9 @@ impl TlsConfigBuilder {
 
 /// A certificate verifier that accepts all certificates (unsafe).
 #[derive(Debug)]
-struct NoVerifier;
+struct NoVerifier {
+    supported_schemes: Vec<rustls::SignatureScheme>,
+}
 
 pub(crate) fn process_crypto_provider() -> Result<Arc<rustls::crypto::CryptoProvider>> {
     if let Some(provider) = rustls::crypto::CryptoProvider::get_default() {
@@ -769,18 +777,7 @@ impl rustls::client::danger::ServerCertVerifier for NoVerifier {
     }
 
     fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
-        vec![
-            rustls::SignatureScheme::RSA_PKCS1_SHA256,
-            rustls::SignatureScheme::RSA_PKCS1_SHA384,
-            rustls::SignatureScheme::RSA_PKCS1_SHA512,
-            rustls::SignatureScheme::ECDSA_NISTP256_SHA256,
-            rustls::SignatureScheme::ECDSA_NISTP384_SHA384,
-            rustls::SignatureScheme::ECDSA_NISTP521_SHA512,
-            rustls::SignatureScheme::ED25519,
-            rustls::SignatureScheme::RSA_PSS_SHA256,
-            rustls::SignatureScheme::RSA_PSS_SHA384,
-            rustls::SignatureScheme::RSA_PSS_SHA512,
-        ]
+        self.supported_schemes.clone()
     }
 }
 

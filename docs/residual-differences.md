@@ -108,6 +108,10 @@ residuals:
   read-only and no raw socket is exposed.
 - Internal proxy CONNECT tunnels are never exposed as writable network
   streams. Their body iterator is the canonical access path.
+- Cloned synchronous network-stream wrappers share a single mutable stream;
+  their read and write calls are serialized while each call drives the
+  originating Tokio runtime. This preserves ownership safety but does not
+  provide concurrent full-duplex operations from multiple sync handles.
 
 ## Historical closures and exclusions
 

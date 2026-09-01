@@ -159,7 +159,7 @@ class TestTransportOptionsAccepted:
 
     def test_four_tuple_socket_option_is_bounded(self):
         """The facade rejects an unusable four-tuple at its safe boundary."""
-        with pytest.raises(ValueError, match="triples"):
+        with pytest.raises(ValueError, match="four-element"):
             HTTPTransport(
                 socket_options=[(6, 1, b"\x01", 0)],
             )

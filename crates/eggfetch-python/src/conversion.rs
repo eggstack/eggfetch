@@ -366,6 +366,9 @@ pub(crate) fn parse_socket_options(
                     "four-element socket_options (level, option, None, optlen) are accepted by HTTPX but intentionally unsupported by eggfetch's safe socket API",
                 ));
             }
+            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                "four-element socket_options are unsupported; use (level, option, value) triples",
+            ));
         }
         if tuple.len() != 3 {
             return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(

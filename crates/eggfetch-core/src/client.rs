@@ -842,9 +842,13 @@ impl ClientBuilder {
         let cookie_jar = self.cookie_jar.unwrap_or_default();
 
         let automatic_decompression = self.automatic_decompression.unwrap_or(true);
-        let tls_config_error = self.tls_config.as_ref().and_then(|config| {
-            config
-                .build_rustls_config()
+        let tls_config_result = self
+            .tls_config
+            .as_ref()
+            .map(crate::tls::TlsConfig::build_rustls_config);
+        let tls_config_error = tls_config_result.as_ref().and_then(|result| {
+            result
+                .as_ref()
                 .err()
                 .map(|error| format!("failed to build TLS config: {error}"))
         });
@@ -853,32 +857,29 @@ impl ClientBuilder {
         let hyper_client = if enabler.use_http3() || tls_config_error.is_some() {
             None
         } else {
-            let https = match self.tls_config.as_ref() {
-                Some(tls_config) => match tls_config.build_rustls_config() {
-                    Ok(mut rc) => {
-                        // hyper-rustls requires empty ALPN; it rebuilds based
-                        // on enable_http1/enable_http2 calls.
-                        rc.alpn_protocols.clear();
-                        let builder = hyper_rustls::HttpsConnectorBuilder::new()
-                            .with_tls_config(rc)
-                            .https_or_http();
-                        #[cfg(feature = "http2")]
-                        {
-                            match (enabler.enable_http1(), enabler.enable_http2()) {
-                                (true, true) => builder.enable_http1().enable_http2().build(),
-                                (true | false, false) => builder.enable_http1().build(),
-                                (false, true) => builder.enable_http2().build(),
-                            }
-                        }
-                        #[cfg(not(feature = "http2"))]
-                        {
-                            let _ = enabler;
-                            builder.enable_http1().build()
+            let https = match tls_config_result {
+                Some(Ok(mut rc)) => {
+                    // hyper-rustls requires empty ALPN; it rebuilds based
+                    // on enable_http1/enable_http2 calls.
+                    rc.alpn_protocols.clear();
+                    let builder = hyper_rustls::HttpsConnectorBuilder::new()
+                        .with_tls_config(rc)
+                        .https_or_http();
+                    #[cfg(feature = "http2")]
+                    {
+                        match (enabler.enable_http1(), enabler.enable_http2()) {
+                            (true, true) => builder.enable_http1().enable_http2().build(),
+                            (true | false, false) => builder.enable_http1().build(),
+                            (false, true) => builder.enable_http2().build(),
                         }
                     }
-                    Err(_) => build_fallback_connector(enabler),
-                },
-                None => build_fallback_connector(enabler),
+                    #[cfg(not(feature = "http2"))]
+                    {
+                        let _ = enabler;
+                        builder.enable_http1().build()
+                    }
+                }
+                Some(Err(_)) | None => build_fallback_connector(enabler),
             };
 
             // Wrap the connector with connect-phase timeout if configured.
