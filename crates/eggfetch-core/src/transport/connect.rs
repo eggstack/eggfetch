@@ -222,7 +222,7 @@ pub(crate) async fn send_https_connect_request(
     for (name, value) in &resp_headers {
         let name = http::HeaderName::from_bytes(name.as_bytes())
             .map_err(|e| Error::MalformedProxyResponse(format!("invalid header name: {e}")))?;
-        let value = http::HeaderValue::from_str(value)
+        let value = http::HeaderValue::from_bytes(value)
             .map_err(|e| Error::MalformedProxyResponse(format!("invalid header value: {e}")))?;
         resp_headers_map.append(name, value);
     }
@@ -258,7 +258,7 @@ fn authority_form_target(host: &str, port: u16) -> String {
 /// terminal escape sequences out of logs and error displays.
 const MAX_PROXY_REJECTION_BODY_CHARS: usize = 256;
 
-fn proxy_rejection_body(headers: &[(String, String)], initial_buf: &[u8]) -> String {
+fn proxy_rejection_body(headers: &[(String, Vec<u8>)], initial_buf: &[u8]) -> String {
     let raw = headers
         .iter()
         .find(|(name, _)| {
@@ -267,7 +267,7 @@ fn proxy_rejection_body(headers: &[(String, String)], initial_buf: &[u8]) -> Str
         })
         .map_or_else(
             || String::from_utf8_lossy(initial_buf).into_owned(),
-            |(_, value)| value.clone(),
+            |(_, value)| String::from_utf8_lossy(value).into_owned(),
         );
     raw.chars()
         .filter(|c| !c.is_control())
@@ -436,7 +436,7 @@ mod tests {
 
     #[test]
     fn proxy_rejection_body_prefers_diagnostic_header() {
-        let headers = vec![("X-Error-Message".to_owned(), "access denied".to_owned())];
+        let headers = vec![("X-Error-Message".to_owned(), b"access denied".to_vec())];
         assert_eq!(proxy_rejection_body(&headers, b"ignored"), "access denied");
     }
 
@@ -454,7 +454,7 @@ mod tests {
         // not survive into error Display/Debug output.
         let headers = vec![(
             "x-proxy-error".to_owned(),
-            "denied\u{1b}[31m\r\nsecret: hunter2".to_owned(),
+            b"denied\x1b[31m\r\nsecret: hunter2".to_vec(),
         )];
         assert_eq!(
             proxy_rejection_body(&headers, b"ignored"),

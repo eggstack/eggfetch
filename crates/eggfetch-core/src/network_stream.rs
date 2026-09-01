@@ -333,9 +333,9 @@ impl UpgradedStream {
     ///
     /// Wraps the inner TCP stream with a new TLS layer using the
     /// provided connector and server name. On success, returns a new
-    /// `UpgradedStream` with TLS metadata. On failure, the original
-    /// stream state is preserved (the handshake does not consume the
-    /// stream on error).
+    /// `UpgradedStream` with TLS metadata. The stream is consumed whether
+    /// the handshake succeeds or fails; callers that need a fallback must
+    /// retain their own connection before calling this method.
     ///
     /// Only works for streams backed by a concrete `TcpStream`.
     /// Adapter-based streams (from Hyper's Upgraded) return an error

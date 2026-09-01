@@ -356,7 +356,7 @@ async fn send_http_proxy_request(
     for (name, value) in &resp_headers {
         let name = http::HeaderName::from_bytes(name.as_bytes())
             .map_err(|e| Error::MalformedProxyResponse(format!("invalid header name: {e}")))?;
-        let value = http::HeaderValue::from_str(value)
+        let value = http::HeaderValue::from_bytes(value)
             .map_err(|e| Error::MalformedProxyResponse(format!("invalid header value: {e}")))?;
         resp_headers_map.append(name, value);
     }
@@ -396,6 +396,13 @@ pub(crate) async fn write_proxy_request<S: tokio::io::AsyncWrite + Unpin>(
     body: RequestBody,
 ) -> Result<()> {
     use tokio::io::AsyncWriteExt;
+
+    let chunked_body = matches!(&body, RequestBody::Stream { length: None, .. });
+    if chunked_body && version != http::Version::HTTP_11 {
+        return Err(Error::RequestBuild(
+            "unknown-length proxy request bodies require HTTP/1.1".into(),
+        ));
+    }
 
     let version_str = match version {
         http::Version::HTTP_10 => "HTTP/1.0",
@@ -442,6 +449,21 @@ pub(crate) async fn write_proxy_request<S: tokio::io::AsyncWrite + Unpin>(
         push_header_line(&mut request, name.as_str(), value.as_bytes());
     }
 
+    if chunked_body {
+        let transfer_encoding = headers
+            .get("transfer-encoding")
+            .or_else(|| proxy_headers.get("transfer-encoding"));
+        if let Some(value) = transfer_encoding {
+            if !value.as_bytes().eq_ignore_ascii_case(b"chunked") {
+                return Err(Error::RequestBuild(
+                    "unknown-length proxy request bodies require chunked transfer encoding".into(),
+                ));
+            }
+        } else {
+            request.extend_from_slice(b"Transfer-Encoding: chunked\r\n");
+        }
+    }
+
     // Add Proxy-Authorization if configured.
     if let Some(auth) = proxy_auth {
         request.extend_from_slice(
@@ -463,7 +485,24 @@ pub(crate) async fn write_proxy_request<S: tokio::io::AsyncWrite + Unpin>(
         .await
         .map_err(|e| Error::ProxyConnect(format!("failed to write request: {e}")))?;
 
-    // Write the body.
+    write_proxy_body(stream, body, chunked_body).await?;
+
+    stream
+        .flush()
+        .await
+        .map_err(|e| Error::ProxyConnect(format!("failed to flush: {e}")))?;
+
+    Ok(())
+}
+
+async fn write_proxy_body<S: tokio::io::AsyncWrite + Unpin>(
+    stream: &mut S,
+    body: RequestBody,
+    chunked: bool,
+) -> Result<()> {
+    use futures_util::StreamExt;
+    use tokio::io::AsyncWriteExt;
+
     match body {
         RequestBody::Empty => {}
         RequestBody::Bytes(bytes) => {
@@ -476,41 +515,46 @@ pub(crate) async fn write_proxy_request<S: tokio::io::AsyncWrite + Unpin>(
             stream: mut body_stream,
             ..
         } => {
-            use bytes::BytesMut;
-            use futures_util::StreamExt;
-            let mut buf = BytesMut::with_capacity(8192);
             while let Some(chunk) = body_stream.next().await {
                 let chunk = chunk.map_err(|e| Error::Body(e.to_string()))?;
-                buf.extend_from_slice(&chunk);
-                if buf.len() >= 8192 {
+                if chunked {
+                    if chunk.is_empty() {
+                        continue;
+                    }
                     stream
-                        .write_all(&buf)
+                        .write_all(format!("{:X}\r\n", chunk.len()).as_bytes())
                         .await
                         .map_err(|e| Error::ProxyConnect(format!("failed to write body: {e}")))?;
-                    buf.clear();
+                    stream
+                        .write_all(&chunk)
+                        .await
+                        .map_err(|e| Error::ProxyConnect(format!("failed to write body: {e}")))?;
+                    stream
+                        .write_all(b"\r\n")
+                        .await
+                        .map_err(|e| Error::ProxyConnect(format!("failed to write body: {e}")))?;
+                } else {
+                    stream
+                        .write_all(&chunk)
+                        .await
+                        .map_err(|e| Error::ProxyConnect(format!("failed to write body: {e}")))?;
                 }
             }
-            if !buf.is_empty() {
+            if chunked {
                 stream
-                    .write_all(&buf)
+                    .write_all(b"0\r\n\r\n")
                     .await
                     .map_err(|e| Error::ProxyConnect(format!("failed to write body: {e}")))?;
             }
         }
     }
-
-    stream
-        .flush()
-        .await
-        .map_err(|e| Error::ProxyConnect(format!("failed to flush: {e}")))?;
-
     Ok(())
 }
 
 async fn read_bounded_line<S: tokio::io::AsyncRead + Unpin>(
     stream: &mut tokio::io::BufReader<S>,
     max_len: usize,
-) -> Result<String> {
+) -> Result<Vec<u8>> {
     use tokio::io::AsyncReadExt;
 
     let mut buf = Vec::with_capacity(256);
@@ -542,8 +586,19 @@ async fn read_bounded_line<S: tokio::io::AsyncRead + Unpin>(
     if buf.last() == Some(&b'\r') {
         buf.pop();
     }
-    String::from_utf8(buf)
-        .map_err(|_| Error::MalformedProxyResponse("proxy response contains invalid UTF-8".into()))
+    Ok(buf)
+}
+
+fn trim_ows(value: &[u8]) -> &[u8] {
+    let start = value
+        .iter()
+        .position(|byte| !matches!(byte, b' ' | b'\t'))
+        .unwrap_or(value.len());
+    let end = value
+        .iter()
+        .rposition(|byte| !matches!(byte, b' ' | b'\t'))
+        .map_or(start, |index| index + 1);
+    &value[start..end]
 }
 
 /// Read an HTTP response from a proxy or destination.
@@ -551,7 +606,7 @@ async fn read_bounded_line<S: tokio::io::AsyncRead + Unpin>(
 /// Returns `(status_code, headers, remaining_initial_bytes)`.
 pub(crate) async fn read_proxy_response<S: tokio::io::AsyncRead + Unpin>(
     stream: &mut tokio::io::BufReader<S>,
-) -> Result<(u16, Vec<(String, String)>, Vec<u8>, Option<String>)> {
+) -> Result<(u16, Vec<(String, Vec<u8>)>, Vec<u8>, Option<String>)> {
     use tokio::io::AsyncBufReadExt;
 
     const MAX_STATUS_LINE_LEN: usize = 4096;
@@ -567,16 +622,22 @@ pub(crate) async fn read_proxy_response<S: tokio::io::AsyncRead + Unpin>(
         ));
     }
 
-    let mut parts = status_line.splitn(3, ' ');
+    let mut parts = status_line.splitn(3, |byte| *byte == b' ');
     let _version = parts.next();
     let status_code = parts
         .next()
+        .and_then(|s| std::str::from_utf8(s).ok())
         .and_then(|s| s.parse::<u16>().ok())
         .ok_or_else(|| {
-            Error::MalformedProxyResponse(format!("invalid status line: {status_line}"))
+            Error::MalformedProxyResponse(format!(
+                "invalid status line: {}",
+                String::from_utf8_lossy(&status_line)
+            ))
         })?;
     // The third part (if present) is the reason phrase.
-    let reason_phrase = parts.next().map(str::to_owned);
+    let reason_phrase = parts
+        .next()
+        .map(|phrase| String::from_utf8_lossy(phrase).into_owned());
 
     let mut headers = Vec::new();
     let mut total_header_bytes: usize = 0;
@@ -600,13 +661,16 @@ pub(crate) async fn read_proxy_response<S: tokio::io::AsyncRead + Unpin>(
             )));
         }
 
-        headers.push(
-            line.split_once(':')
-                .map(|(name, value)| (name.trim().to_string(), value.trim().to_string()))
-                .ok_or_else(|| {
-                    Error::MalformedProxyResponse(format!("invalid header line: {line}"))
-                })?,
-        );
+        let colon = line.iter().position(|byte| *byte == b':').ok_or_else(|| {
+            Error::MalformedProxyResponse(format!(
+                "invalid header line: {}",
+                String::from_utf8_lossy(&line)
+            ))
+        })?;
+        let name = std::str::from_utf8(trim_ows(&line[..colon])).map_err(|_| {
+            Error::MalformedProxyResponse("proxy response header name is not ASCII".into())
+        })?;
+        headers.push((name.to_owned(), trim_ows(&line[colon + 1..]).to_vec()));
     }
 
     let mut initial_buf = Vec::new();
@@ -770,7 +834,7 @@ impl<S: tokio::io::AsyncRead + Unpin> futures_core::Stream for ProxyResponseStre
 
 #[cfg(test)]
 mod tests {
-    use super::{effective_timeout, proxy_server_name, read_proxy_response};
+    use super::{effective_timeout, proxy_server_name, read_proxy_response, write_proxy_request};
     use crate::error::Error;
     use crate::timeout::TimeoutPhase;
     use std::time::{Duration, Instant};
@@ -838,6 +902,50 @@ mod tests {
         let (_, _, initial, reason) = read_proxy_response(&mut reader).await.unwrap();
         assert_eq!(initial, b"body");
         assert_eq!(reason.as_deref(), Some("OK"));
+    }
+
+    #[tokio::test]
+    async fn read_proxy_response_preserves_obs_text_header_values() {
+        let mut reader = tokio::io::BufReader::new(std::io::Cursor::new(
+            b"HTTP/1.1 200 OK\r\nX-Note: hi\x80\xff\r\n\r\nbody".to_vec(),
+        ));
+        let (_, headers, initial, _) = read_proxy_response(&mut reader).await.unwrap();
+        assert_eq!(headers, vec![("X-Note".to_owned(), b"hi\x80\xff".to_vec())]);
+        assert_eq!(initial, b"body");
+    }
+
+    #[tokio::test]
+    async fn write_proxy_request_chunks_unknown_length_streams() {
+        use crate::body::RequestBody;
+        use crate::headers::Headers;
+        use bytes::Bytes;
+        use futures_util::stream;
+        use tokio::io::AsyncReadExt;
+
+        let (mut client_io, mut server_io) = tokio::io::duplex(1024);
+        write_proxy_request(
+            &mut client_io,
+            &http::Method::POST,
+            "http://origin.example/upload",
+            http::Version::HTTP_11,
+            &Headers::new(),
+            None,
+            &Headers::new(),
+            RequestBody::from_stream(
+                stream::iter(vec![Ok(Bytes::from_static(b"ab")), Ok(Bytes::new())]),
+                None,
+            ),
+        )
+        .await
+        .unwrap();
+        drop(client_io);
+
+        let mut wire = Vec::new();
+        server_io.read_to_end(&mut wire).await.unwrap();
+        assert!(wire
+            .windows(b"Transfer-Encoding: chunked\r\n".len())
+            .any(|w| { w == b"Transfer-Encoding: chunked\r\n" }));
+        assert!(wire.ends_with(b"\r\n\r\n2\r\nab\r\n0\r\n\r\n"));
     }
 
     #[tokio::test]

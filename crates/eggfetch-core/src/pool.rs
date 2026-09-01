@@ -214,6 +214,7 @@ impl OriginKey {
         port: u16,
         proxy_host: Option<&str>,
         proxy_port: Option<u16>,
+        proxy_scheme: Option<&str>,
         is_tunnel: bool,
     ) -> Self {
         Self {
@@ -222,7 +223,7 @@ impl OriginKey {
             port,
             proxy_host: proxy_host.map(str::to_owned),
             proxy_port,
-            proxy_scheme: None,
+            proxy_scheme: proxy_scheme.map(str::to_owned),
             is_tunnel,
         }
     }
@@ -490,36 +491,43 @@ impl Pool {
         if let (Some(max_per_origin), Some(origin)) =
             (self.inner.config.max_connections_per_host, origin)
         {
-            // Bound table growth before inserting so the entry created
-            // below can never be evicted immediately after creation
-            // (which would let the next request to this origin build a
-            // fresh semaphore and briefly bypass the per-host limit).
-            let table_lock = self.inner.per_origin_table_lock.lock().await;
-            self.inner.per_origin.retain(|_, entry| {
-                // Keep entries that are either holding a permit or have an
-                // outstanding waiter. The waiter count is incremented while
-                // the table lock is still held, so this check does not rely
-                // on Arc reference-count timing as a synchronization signal.
-                entry.semaphore.available_permits() < max_per_origin
-                    || entry.waiters.load(Ordering::Acquire) > 0
-            });
-
-            let entry = self
-                .inner
-                .per_origin
-                .entry(origin.clone())
-                .or_insert_with(|| Arc::new(PerOriginSemaphore::new(max_per_origin)))
-                .clone();
-
-            // Try immediate acquire first. `try_acquire_owned` consumes an
-            // `Arc`, so the fast path clones once; the wait path then moves
-            // `sem` into `acquire_owned` without a further bump.
-            if let Ok(permit) = entry.semaphore.clone().try_acquire_owned() {
-                origin_permit = Some(permit);
-                drop(table_lock);
+            // Existing origins avoid the table lock entirely. Incrementing
+            // the waiter count while the DashMap reference is held keeps an
+            // eviction sweep from removing the entry between lookup and
+            // semaphore acquisition.
+            let entry = if let Some(entry) = self.inner.per_origin.get(origin) {
+                let entry = entry.clone();
+                entry.waiters.fetch_add(1, Ordering::AcqRel);
+                entry
             } else {
+                // Bound table growth before inserting so the entry created
+                // below can never be evicted immediately after creation.
+                let table_lock = self.inner.per_origin_table_lock.lock().await;
+                let entry = if let Some(entry) = self.inner.per_origin.get(origin) {
+                    entry.clone()
+                } else {
+                    self.inner.per_origin.retain(|_, entry| {
+                        entry.semaphore.available_permits() < max_per_origin
+                            || entry.waiters.load(Ordering::Acquire) > 0
+                    });
+                    self.inner
+                        .per_origin
+                        .entry(origin.clone())
+                        .or_insert_with(|| Arc::new(PerOriginSemaphore::new(max_per_origin)))
+                        .clone()
+                };
                 entry.waiters.fetch_add(1, Ordering::AcqRel);
                 drop(table_lock);
+                entry
+            };
+
+            // Try immediate acquire first. `try_acquire_owned` consumes an
+            // `Arc`, so the fast path clones once. The waiter marker is held
+            // across both the fast and waiting paths to coordinate eviction.
+            if let Ok(permit) = entry.semaphore.clone().try_acquire_owned() {
+                origin_permit = Some(permit);
+                entry.waiters.fetch_sub(1, Ordering::AcqRel);
+            } else {
                 let permit = entry.semaphore.clone().acquire_owned().await;
                 entry.waiters.fetch_sub(1, Ordering::AcqRel);
                 if let Ok(permit) = permit {
@@ -847,6 +855,34 @@ mod tests {
 
     #[cfg(feature = "proxy")]
     #[test]
+    fn origin_key_parts_preserves_proxy_scheme() {
+        let http = OriginKey::from_parts_with_proxy(
+            "https",
+            "example.com",
+            443,
+            Some("proxy"),
+            Some(8080),
+            Some("http"),
+            true,
+        );
+        let https = OriginKey::from_parts_with_proxy(
+            "https",
+            "example.com",
+            443,
+            Some("proxy"),
+            Some(8080),
+            Some("https"),
+            true,
+        );
+        assert_ne!(http, https);
+        assert_eq!(
+            http.to_string(),
+            "https://example.com:443 via http://proxy:8080 tunnel"
+        );
+    }
+
+    #[cfg(feature = "proxy")]
+    #[test]
     fn origin_key_display_with_proxy() {
         let url = url::Url::parse("https://example.com/path").unwrap();
         let key =
@@ -881,6 +917,7 @@ mod tests {
             80,
             Some("proxy"),
             Some(8080),
+            None,
             false,
         );
         let g1 = pool.acquire(Some(&direct)).await.unwrap();
@@ -944,6 +981,7 @@ mod tests {
             80,
             Some("proxy"),
             Some(8080),
+            None,
             false,
         );
         let https_tunnel = OriginKey::from_parts_with_proxy(
@@ -952,6 +990,7 @@ mod tests {
             80,
             Some("proxy"),
             Some(8080),
+            None,
             true,
         );
         let g1 = pool.acquire(Some(&http_fwd)).await.unwrap();
@@ -974,6 +1013,7 @@ mod tests {
             80,
             Some("proxy-a"),
             Some(8080),
+            None,
             false,
         );
         let b = OriginKey::from_parts_with_proxy(
@@ -982,6 +1022,7 @@ mod tests {
             80,
             Some("proxy-b"),
             Some(8080),
+            None,
             false,
         );
         let g1 = pool.acquire(Some(&a)).await.unwrap();

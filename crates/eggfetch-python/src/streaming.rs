@@ -568,8 +568,9 @@ impl PyStreamingResponse {
     fn raise_for_status(&self) -> PyResult<()> {
         if self.status_code >= 400 {
             return Err(crate::errors::HTTPStatusError::new_err(format!(
-                "{} for url '{}'",
+                "{} {} for url '{}'",
                 self.status_code,
+                self.reason_phrase,
                 safe_url_for_display(&self.url)
             )));
         }

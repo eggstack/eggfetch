@@ -235,22 +235,38 @@ pub fn decompress_stream(
         )));
     }
 
-    // Wrap the original compressed stream with a counter so we can
-    // track compressed bytes consumed through the decoder chain.
-    let counting = CountingStream::new(stream);
-    let counter = counting.counter();
-
     // Apply decoders in reverse order (innermost encoding first).
-    let mut current: BoxBytesStream = Box::pin(counting);
+    let mut current = stream;
+    let mut final_counter = None;
     for encoding in encodings.into_iter().rev() {
-        current = make_decoder(current, encoding)?;
+        let counting = CountingStream::new(current);
+        let counter = counting.counter();
+        current = make_decoder(Box::pin(counting), encoding)?;
+        final_counter = Some(Arc::clone(&counter));
+
+        // Check every decoder against the bytes consumed for its own input
+        // layer. Comparing only the final output with the outermost wire
+        // size lets stacked encodings hide a large intermediate expansion.
+        if let Some(max_ratio) = limit.max_decompression_ratio {
+            current = Box::pin(LimitingStream::new(
+                current,
+                DecompressionLimit {
+                    max_decoded_body_size: None,
+                    max_decompression_ratio: Some(max_ratio),
+                },
+                counter,
+            ));
+        }
     }
 
     if limit.is_unlimited() {
         return Ok(current);
     }
 
-    Ok(Box::pin(LimitingStream::new(current, limit, counter)))
+    let Some(final_counter) = final_counter else {
+        return Ok(current);
+    };
+    Ok(Box::pin(LimitingStream::new(current, limit, final_counter)))
 }
 
 /// Decompress a fully buffered byte slice using synchronous decoding.
@@ -701,7 +717,7 @@ impl futures_core::Stream for LimitingStream {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use futures_util::FutureExt;
+    use futures_util::{FutureExt, StreamExt};
 
     #[test]
     fn content_coding_from_wire() {
@@ -1005,6 +1021,33 @@ mod tests {
         // With no ratio limit both layers decode fine.
         let ok = decompress_buffered(&outer, "gzip, gzip", DecompressionLimit::default()).unwrap();
         assert_eq!(&ok[..], &payload[..]);
+    }
+
+    #[cfg(feature = "compression-gzip")]
+    #[tokio::test]
+    async fn decompression_stream_enforces_ratio_per_layer() {
+        let payload = vec![b'a'; 5000];
+        let inner = gzip_compress(&payload);
+        let outer = gzip_compress(&inner);
+        #[allow(clippy::cast_precision_loss)]
+        let limit_value = ((payload.len() as f64 / outer.len() as f64)
+            + (payload.len() as f64 / inner.len() as f64))
+            / 2.0;
+        let limit = DecompressionLimit {
+            max_decoded_body_size: None,
+            max_decompression_ratio: Some(limit_value.ceil()),
+        };
+        let input: BoxBytesStream = Box::pin(futures_util::stream::once(async move {
+            Ok(bytes::Bytes::from(outer))
+        }));
+        let decoded = decompress_stream(input, Some("gzip, gzip"), true, limit).unwrap();
+        let err = decoded
+            .collect::<Vec<_>>()
+            .await
+            .into_iter()
+            .find_map(std::result::Result::err)
+            .expect("streaming ratio limit must reject the inner layer");
+        assert_eq!(err.kind(), "decompression_ratio_exceeded");
     }
 
     #[test]

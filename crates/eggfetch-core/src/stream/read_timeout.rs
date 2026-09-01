@@ -27,6 +27,7 @@ pin_project! {
         deadline: Option<Pin<Box<Sleep>>>,
         duration: Duration,
         started: bool,
+        timed_out: bool,
     }
 }
 
@@ -38,6 +39,7 @@ impl<S> ReadTimeoutStream<S> {
             deadline: None,
             duration,
             started: false,
+            timed_out: false,
         }
     }
 }
@@ -50,6 +52,10 @@ where
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let me = self.project();
+
+        if *me.timed_out {
+            return Poll::Ready(None);
+        }
 
         // Start the per-chunk timer when the body is first consumed. The
         // response may be handed to a different buffering runtime by the
@@ -83,10 +89,14 @@ where
         // Inner stream is pending. Check the deadline.
         match me.deadline.as_mut() {
             Some(deadline) => match deadline.as_mut().poll(cx) {
-                Poll::Ready(()) => Poll::Ready(Some(Err(Error::Timeout {
-                    phase: TimeoutPhase::Read,
-                    elapsed: *me.duration,
-                }))),
+                Poll::Ready(()) => {
+                    *me.deadline = None;
+                    *me.timed_out = true;
+                    Poll::Ready(Some(Err(Error::Timeout {
+                        phase: TimeoutPhase::Read,
+                        elapsed: *me.duration,
+                    })))
+                }
                 Poll::Pending => Poll::Pending,
             },
             None => Poll::Pending,
@@ -127,6 +137,7 @@ mod tests {
             } => {}
             other => panic!("expected read timeout, got {other:?}"),
         }
+        assert!(s.next().await.is_none());
     }
 
     #[tokio::test]
