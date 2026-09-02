@@ -942,7 +942,12 @@ pub(crate) async fn send_single_request(
     let enabler = crate::http_version::HttpVersionPolicyEnabler::from_policy(
         inner.config.http_version_policy,
     );
-    if version == http::Version::HTTP_2 || enabler.enable_http2() {
+    // Only strip H2-forbidden headers when the request is known to use
+    // HTTP/2 (explicit version or H2-only policy). For `Auto`, ALPN
+    // negotiation is per-connection; stripping here would drop
+    // `Connection: close` etc. on H1.1. Hyper will enforce H2 header
+    // validity if `Auto` negotiates h2.
+    if version == http::Version::HTTP_2 || (!enabler.enable_http1() && enabler.enable_http2()) {
         crate::h2_headers::strip_h2_forbidden_headers(&mut headers);
     }
     let request_uri = resolve_request_uri(&url, &transport_hints)?;
@@ -1240,6 +1245,19 @@ pub(crate) fn validate_target(target: &[u8]) -> Result<()> {
         return Err(Error::RequestBuild(
             "target extension contains forbidden characters (C0 controls/DEL; includes CR/LF/NUL)"
                 .into(),
+        ));
+    }
+    // Reject whitespace-only or leading/trailing whitespace targets that would
+    // otherwise pass the C0 check (space 0x20) and produce a late `InvalidUrl`
+    // or bypass proxy routing checks.
+    if target.iter().all(|&b| b == b' ') {
+        return Err(Error::RequestBuild(
+            "target extension must not be whitespace-only".into(),
+        ));
+    }
+    if target.first() == Some(&b' ') || target.last() == Some(&b' ') {
+        return Err(Error::RequestBuild(
+            "target extension must not contain leading or trailing whitespace".into(),
         ));
     }
     Ok(())

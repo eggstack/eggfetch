@@ -30,10 +30,10 @@ use crate::error::{Error, Result};
 #[derive(Debug, Clone, Copy, Default)]
 pub struct DecompressionLimit {
     /// Hard limit on total decoded bytes.
-    pub max_decoded_body_size: Option<usize>,
+    pub(crate) max_decoded_body_size: Option<usize>,
     /// Ratio of decoded bytes to compressed bytes after which
     /// decompression is rejected.
-    pub max_decompression_ratio: Option<f64>,
+    pub(crate) max_decompression_ratio: Option<f64>,
 }
 
 impl DecompressionLimit {
@@ -50,6 +50,36 @@ impl DecompressionLimit {
     #[must_use]
     pub fn is_unlimited(&self) -> bool {
         self.max_decoded_body_size.is_none() && self.max_decompression_ratio.is_none()
+    }
+
+    /// Returns the configured maximum decoded body size, if any.
+    #[must_use]
+    pub fn max_decoded_body_size(&self) -> Option<usize> {
+        self.max_decoded_body_size
+    }
+
+    /// Returns the configured maximum decompression ratio, if any.
+    #[must_use]
+    pub fn max_decompression_ratio(&self) -> Option<f64> {
+        self.max_decompression_ratio
+    }
+
+    /// Validate the decompression ratio.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Decompression`] if `max_decompression_ratio` is not
+    /// finite and positive. This is the runtime counterpart to
+    /// [`Self::try_new`] for limits constructed via struct literal.
+    pub fn validate(&self) -> Result<()> {
+        if let Some(ratio) = self.max_decompression_ratio {
+            if !ratio.is_finite() || ratio <= 0.0 {
+                return Err(Error::Decompression(
+                    "invalid max_decompression_ratio: must be finite and positive".into(),
+                ));
+            }
+        }
+        Ok(())
     }
 
     /// Create a limit with validation for the decompression ratio.
@@ -241,6 +271,11 @@ pub fn decompress_stream(
         _ => return Ok(stream),
     };
 
+    // Centralized validation so buffered and streaming paths handle invalid
+    // ratios identically (previously buffered treated NaN/inf/negative as
+    // unlimited while streaming errored per poll).
+    limit.validate()?;
+
     // Validate the complete wire value before parsing recognized codings.
     // This keeps unsupported encodings and nesting-depth errors ordered the
     // same way for streaming and buffered bodies.
@@ -327,6 +362,10 @@ pub fn decompress_buffered(
     content_encoding: &str,
     limit: DecompressionLimit,
 ) -> Result<bytes::Bytes> {
+    // Validate decompression limit first so invalid ratios (NaN/inf/negative)
+    // are handled identically to the streaming path (previously buffered
+    // treated them as unlimited).
+    limit.validate()?;
     // Validate before the pass-through so unsupported codings still fail.
     validate_content_encodings(content_encoding)?;
 
@@ -354,7 +393,7 @@ pub fn decompress_buffered(
 
     let compressed_len = data.len();
     let ratio_limit = limit.max_decompression_ratio.and_then(|ratio| {
-        if ratio.is_finite() && ratio >= 0.0 {
+        if ratio.is_finite() && ratio > 0.0 {
             #[allow(clippy::cast_precision_loss)]
             let limit = (compressed_len as f64 * ratio).ceil();
             #[allow(
@@ -766,17 +805,14 @@ impl CountingStream {
 /// instead of wrapping. A wrapped counter would under-report compressed
 /// bytes and silently disable a configured decompression-ratio limit
 /// mid-stream.
-///
-/// Ordering is `Relaxed` because the counter is monotonic and only checked
-/// after chunks have been observed; exact synchronization is not required.
 fn saturating_fetch_add(counter: &AtomicUsize, amount: usize) {
-    let mut current = counter.load(Ordering::Relaxed);
+    let mut current = counter.load(Ordering::Acquire);
     loop {
         let Some(next) = current.checked_add(amount) else {
-            counter.store(usize::MAX, Ordering::Relaxed);
+            counter.store(usize::MAX, Ordering::Release);
             return;
         };
-        match counter.compare_exchange_weak(current, next, Ordering::Relaxed, Ordering::Relaxed) {
+        match counter.compare_exchange_weak(current, next, Ordering::AcqRel, Ordering::Acquire) {
             Ok(_) => return,
             Err(actual) => current = actual,
         }
@@ -836,7 +872,7 @@ impl LimitingStream {
                     "invalid max_decompression_ratio: must be finite and positive".into(),
                 ));
             }
-            let compressed = self.compressed_counter.load(Ordering::Relaxed);
+            let compressed = self.compressed_counter.load(Ordering::Acquire);
             if compressed > 0 {
                 let ratio = self.decoded_bytes as f64 / compressed as f64;
                 if ratio > max_ratio {

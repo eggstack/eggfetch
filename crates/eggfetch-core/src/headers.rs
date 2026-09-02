@@ -125,11 +125,29 @@ impl Headers {
 
     /// Extend these headers by appending all values from another set.
     ///
-    /// Callers that need replacement semantics should remove the header name
-    /// first, as the request pipeline does when applying request headers over
-    /// client defaults.
+    /// This is **append-only**: existing values for a name are preserved and
+    /// values from `other` are appended, potentially creating duplicates
+    /// (e.g. two `Content-Type` values). This preserves multi-value headers
+    /// like `Set-Cookie`. Callers that need replacement semantics should
+    /// remove the header name first, as the request pipeline does when
+    /// applying request headers over client defaults, or use
+    /// [`Self::extend_replacing`].
     pub fn extend(&mut self, other: &Self) {
         for name in other.inner.keys() {
+            for value in other.inner.get_all(name) {
+                self.inner.append(name.clone(), value.clone());
+            }
+        }
+    }
+
+    /// Extend by replacing values for names present in `other`.
+    ///
+    /// For each header name in `other`, any existing values in `self` are
+    /// removed before appending the values from `other`. Multi-value headers
+    /// from `other` (e.g. `Set-Cookie`) are preserved.
+    pub fn extend_replacing(&mut self, other: &Self) {
+        for name in other.inner.keys() {
+            self.inner.remove(name);
             for value in other.inner.get_all(name) {
                 self.inner.append(name.clone(), value.clone());
             }

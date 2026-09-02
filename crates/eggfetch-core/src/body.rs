@@ -116,12 +116,18 @@ impl std::fmt::Debug for RequestBody {
 
 impl RequestBody {
     /// Returns `true` if the body is empty.
+    ///
+    /// For `Stream` bodies the length hint is not authoritative — a
+    /// `Some(0)` stream may still produce bytes and an unbounded stream
+    /// may be empty. This method returns `false` for all stream bodies;
+    /// callers must not use it to decide `Content-Length` (see
+    /// [`Self::len`] and [`Self::has_known_length`]).
     #[must_use]
     pub fn is_empty(&self) -> bool {
         match self {
             Self::Empty => true,
             Self::Bytes(b) => b.is_empty(),
-            Self::Stream { length, .. } => matches!(length, Some(0)),
+            Self::Stream { .. } => false,
         }
     }
 

@@ -950,6 +950,15 @@ fn parse_pem_certificates(pem_bytes: &[u8]) -> Result<Vec<CertificateDer<'static
             .map_err(|e| Error::CaBundle(format!("invalid PEM block in certificate data: {e}")))?;
         if label == "CERTIFICATE" {
             certs.push(CertificateDer::from(data));
+        } else {
+            // CA bundles should contain only certificates; a key block here
+            // likely means the user passed a private-key file as a CA path,
+            // which would otherwise yield a confusing "no certificates found"
+            // error. Emit a diagnostic to aid troubleshooting.
+            #[cfg(feature = "tracing")]
+            tracing::warn!("eggfetch: ignoring non-certificate PEM block `{label}` in CA bundle");
+            #[cfg(not(feature = "tracing"))]
+            let _ = &label;
         }
         rest = &section[section_len..];
     }

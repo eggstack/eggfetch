@@ -341,7 +341,9 @@ impl RequestBuilder {
     #[must_use]
     pub fn header(mut self, name: &str, value: &str) -> Self {
         if let Err(e) = self.headers.insert(name, value) {
-            self.error = Some(e);
+            if self.error.is_none() {
+                self.error = Some(e);
+            }
         }
         self
     }

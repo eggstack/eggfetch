@@ -17,6 +17,11 @@ pub(crate) fn apply_decompression(
     content_encoding: Option<&str>,
     limit: DecompressionLimit,
 ) -> Result<Response> {
+    // Validate limit before any decompression work so buffered and streaming
+    // paths diverge no longer on invalid ratios.
+    if content_encoding.is_some() {
+        limit.validate()?;
+    }
     if let Some(ce) = content_encoding {
         crate::compression::validate_content_encodings(ce)?;
     }

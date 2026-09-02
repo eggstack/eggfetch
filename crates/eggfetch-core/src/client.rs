@@ -119,6 +119,13 @@ pub(crate) struct ClientInner {
     /// Bounded by [`SNI_CLIENT_CACHE_MAX_ENTRIES`] with arbitrary-entry
     /// eviction so long-lived processes touching many hostnames cannot
     /// grow it without limit.
+    ///
+    /// The cache is keyed only by hostname because `ClientInner::config`
+    /// (including `http_version_policy` and `tls_config` ALPN) is immutable
+    /// after `ClientBuilder::build`. If the TLS ALPN ever became mutable,
+    /// this cache would need to include `HttpVersionPolicy` (and
+    /// `tls_config` identity) in the key to avoid serving a client with
+    /// stale ALPN (e.g. H2 vs H1) for the same hostname.
     pub(crate) sni_clients: Mutex<HashMap<String, crate::transport::TimeoutDirectClient>>,
     /// Hyper client for Unix domain socket requests.
     #[cfg(unix)]

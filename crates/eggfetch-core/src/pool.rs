@@ -517,6 +517,14 @@ impl Pool {
             } else {
                 // Bound table growth before inserting so the entry created
                 // below can never be evicted immediately after creation.
+                //
+                // `retain` iterates `DashMap` shards while holding
+                // `per_origin_table_lock`; `available_permits()` is lock-free
+                // but the iteration still blocks concurrent `acquire` fast-paths
+                // that need the table lock for eviction. With many origins this
+                // is a scalability bottleneck but not a correctness bug; it is
+                // mitigated by the per-origin lock and the bounded eviction
+                // (only idle entries are removed).
                 let table_lock = self.inner.per_origin_table_lock.lock().await;
                 let entry = if let Some(entry) = self.inner.per_origin.get(origin) {
                     entry.clone()
