@@ -118,7 +118,11 @@ impl RequestBody {
     /// Returns `true` if the body is empty.
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        matches!(self, Self::Empty)
+        match self {
+            Self::Empty => true,
+            Self::Bytes(b) => b.is_empty(),
+            Self::Stream { length, .. } => matches!(length, Some(0)),
+        }
     }
 
     /// Returns the known length of the body, if available.
@@ -274,7 +278,7 @@ impl From<String> for RequestBody {
 
 impl From<&str> for RequestBody {
     fn from(s: &str) -> Self {
-        Self::Bytes(Bytes::from(s.to_owned()))
+        Self::Bytes(Bytes::copy_from_slice(s.as_bytes()))
     }
 }
 

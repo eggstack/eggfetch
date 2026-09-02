@@ -341,7 +341,7 @@ pub(crate) async fn send_with_retry(client: &Client, request: Request) -> Result
 /// over the configured exponential backoff.
 fn compute_retry_delay(
     policy: &RetryPolicy,
-    _cause: &RetryCause,
+    cause: &RetryCause,
     attempt: usize,
     retry_after: Option<&str>,
 ) -> Option<Duration> {
@@ -350,7 +350,15 @@ fn compute_retry_delay(
             return Some(delay);
         }
     }
-    policy.backoff_delay(attempt)
+    let base = policy.backoff_delay(attempt)?;
+    // 429 (Too Many Requests) without a server-directed Retry-After should
+    // back off longer than other retryable statuses per conventional policy.
+    if matches!(cause, RetryCause::Status(429)) {
+        let max = policy.backoff().max_delay().as_secs_f64();
+        let increased = (base.as_secs_f64() * 1.5).min(max);
+        return Some(Duration::from_secs_f64(increased));
+    }
+    Some(base)
 }
 
 /// Send a request through the client, following redirects if enabled.
@@ -931,7 +939,10 @@ pub(crate) async fn send_single_request(
         }
     }
 
-    if version == http::Version::HTTP_2 {
+    let enabler = crate::http_version::HttpVersionPolicyEnabler::from_policy(
+        inner.config.http_version_policy,
+    );
+    if version == http::Version::HTTP_2 || enabler.enable_http2() {
         crate::h2_headers::strip_h2_forbidden_headers(&mut headers);
     }
     let request_uri = resolve_request_uri(&url, &transport_hints)?;
@@ -1013,7 +1024,10 @@ pub(crate) async fn send_single_request(
     let response = match effective_proxy {
         #[cfg(feature = "proxy")]
         Some(ref proxy_config) => {
-            if headers.contains("proxy-authorization") && proxy_config.auth().is_some() {
+            if !proxy_config.is_socks()
+                && headers.contains("proxy-authorization")
+                && proxy_config.auth().is_some()
+            {
                 return Err(Error::ConflictingAuth(
                     "conflict: both request Proxy-Authorization header and proxy auth are configured; remove one".into(),
                 ));

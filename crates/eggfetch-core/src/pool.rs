@@ -154,20 +154,8 @@ impl OriginKey {
         })
     }
 
-    /// Build an `OriginKey` that includes proxy route information.
-    #[allow(dead_code)]
-    pub(crate) fn from_url_with_proxy(
-        scheme: &str,
-        url: &url::Url,
-        proxy_host: Option<&str>,
-        proxy_port: Option<u16>,
-        is_tunnel: bool,
-    ) -> Option<Self> {
-        Self::from_url_with_proxy_scheme(scheme, url, proxy_host, proxy_port, None, is_tunnel)
-    }
-
     /// Build an origin key including the proxy endpoint scheme.
-    #[allow(dead_code)]
+    #[cfg(feature = "proxy")]
     pub(crate) fn from_url_with_proxy_scheme(
         scheme: &str,
         url: &url::Url,
@@ -191,7 +179,8 @@ impl OriginKey {
 
     /// Build an `OriginKey` for tests or callers that already have the
     /// components.
-    #[allow(dead_code)] // Kept for future callers; tests cover the path via from_url.
+    #[cfg(any(test, feature = "test-util"))]
+    #[allow(dead_code)]
     pub(crate) fn from_parts(scheme: &str, host: &str, port: u16) -> Self {
         Self {
             scheme: scheme.to_owned(),
@@ -206,7 +195,7 @@ impl OriginKey {
 
     /// Build an `OriginKey` with proxy route info for tests or callers
     /// that already have all components.
-    #[cfg(feature = "proxy")]
+    #[cfg(all(feature = "proxy", any(test, feature = "test-util")))]
     #[allow(dead_code)]
     pub(crate) fn from_parts_with_proxy(
         scheme: &str,
@@ -229,6 +218,7 @@ impl OriginKey {
     }
 
     /// Returns the scheme.
+    #[cfg(any(test, feature = "test-util"))]
     #[allow(dead_code)]
     pub(crate) fn scheme(&self) -> &str {
         &self.scheme
@@ -240,24 +230,28 @@ impl OriginKey {
     }
 
     /// Returns the effective port.
-    #[allow(dead_code)] // Exposed for future diagnostics and metrics.
+    #[cfg(any(test, feature = "test-util"))]
+    #[allow(dead_code)]
     pub(crate) fn port(&self) -> u16 {
         self.port
     }
 
     /// Returns the proxy hostname, if any.
+    #[cfg(any(test, feature = "test-util"))]
     #[allow(dead_code)]
     pub(crate) fn proxy_host(&self) -> Option<&str> {
         self.proxy_host.as_deref()
     }
 
     /// Returns the proxy port, if any.
+    #[cfg(any(test, feature = "test-util"))]
     #[allow(dead_code)]
     pub(crate) fn proxy_port(&self) -> Option<u16> {
         self.proxy_port
     }
 
     /// Returns whether this key represents a CONNECT tunnel.
+    #[cfg(any(test, feature = "test-util"))]
     #[allow(dead_code)]
     pub(crate) fn is_tunnel(&self) -> bool {
         self.is_tunnel
@@ -847,10 +841,24 @@ mod tests {
     #[test]
     fn origin_key_proxy_a_not_equal_proxy_b() {
         let url = url::Url::parse("http://example.com/path").unwrap();
-        let a = OriginKey::from_url_with_proxy("http", &url, Some("proxy-a"), Some(8080), false)
-            .unwrap();
-        let b = OriginKey::from_url_with_proxy("http", &url, Some("proxy-b"), Some(8080), false)
-            .unwrap();
+        let a = OriginKey::from_url_with_proxy_scheme(
+            "http",
+            &url,
+            Some("proxy-a"),
+            Some(8080),
+            None,
+            false,
+        )
+        .unwrap();
+        let b = OriginKey::from_url_with_proxy_scheme(
+            "http",
+            &url,
+            Some("proxy-b"),
+            Some(8080),
+            None,
+            false,
+        )
+        .unwrap();
         assert_ne!(a, b);
     }
 
@@ -858,10 +866,24 @@ mod tests {
     #[test]
     fn origin_key_tunnel_not_equal_non_tunnel() {
         let url = url::Url::parse("http://example.com/path").unwrap();
-        let tunnel =
-            OriginKey::from_url_with_proxy("http", &url, Some("proxy"), Some(8080), true).unwrap();
-        let direct =
-            OriginKey::from_url_with_proxy("http", &url, Some("proxy"), Some(8080), false).unwrap();
+        let tunnel = OriginKey::from_url_with_proxy_scheme(
+            "http",
+            &url,
+            Some("proxy"),
+            Some(8080),
+            None,
+            true,
+        )
+        .unwrap();
+        let direct = OriginKey::from_url_with_proxy_scheme(
+            "http",
+            &url,
+            Some("proxy"),
+            Some(8080),
+            None,
+            false,
+        )
+        .unwrap();
         assert_ne!(tunnel, direct);
     }
 
@@ -869,10 +891,24 @@ mod tests {
     #[test]
     fn origin_key_proxy_same_route_equal() {
         let url = url::Url::parse("http://example.com/path").unwrap();
-        let a =
-            OriginKey::from_url_with_proxy("http", &url, Some("proxy"), Some(8080), false).unwrap();
-        let b =
-            OriginKey::from_url_with_proxy("http", &url, Some("proxy"), Some(8080), false).unwrap();
+        let a = OriginKey::from_url_with_proxy_scheme(
+            "http",
+            &url,
+            Some("proxy"),
+            Some(8080),
+            None,
+            false,
+        )
+        .unwrap();
+        let b = OriginKey::from_url_with_proxy_scheme(
+            "http",
+            &url,
+            Some("proxy"),
+            Some(8080),
+            None,
+            false,
+        )
+        .unwrap();
         assert_eq!(a, b);
     }
 
@@ -908,8 +944,15 @@ mod tests {
     #[test]
     fn origin_key_display_with_proxy() {
         let url = url::Url::parse("https://example.com/path").unwrap();
-        let key =
-            OriginKey::from_url_with_proxy("https", &url, Some("proxy"), Some(8080), true).unwrap();
+        let key = OriginKey::from_url_with_proxy_scheme(
+            "https",
+            &url,
+            Some("proxy"),
+            Some(8080),
+            None,
+            true,
+        )
+        .unwrap();
         assert_eq!(
             key.to_string(),
             "https://example.com:443 via proxy:8080 tunnel"
@@ -920,8 +963,15 @@ mod tests {
     #[test]
     fn origin_key_display_without_tunnel() {
         let url = url::Url::parse("http://example.com/path").unwrap();
-        let key =
-            OriginKey::from_url_with_proxy("http", &url, Some("proxy"), Some(8080), false).unwrap();
+        let key = OriginKey::from_url_with_proxy_scheme(
+            "http",
+            &url,
+            Some("proxy"),
+            Some(8080),
+            None,
+            false,
+        )
+        .unwrap();
         assert_eq!(key.to_string(), "http://example.com:80 via proxy:8080");
     }
 

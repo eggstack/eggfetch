@@ -28,12 +28,6 @@ pub struct EggfetchClient {
     inner: usize,
 }
 
-impl Default for EggfetchClient {
-    fn default() -> Self {
-        Self::new().expect("failed to create eggfetch client")
-    }
-}
-
 #[napi]
 impl EggfetchClient {
     /// Create a new client with default settings.

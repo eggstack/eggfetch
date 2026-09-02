@@ -328,7 +328,12 @@ impl TlsConfig {
                 if let Ok(certs) = load_pem_certs_from_path(Path::new(path)) {
                     for cert in certs {
                         if let Err(e) = roots.add(cert) {
-                            eprintln!("eggfetch: skipped invalid CA certificate in {path}: {e}");
+                            #[cfg(feature = "tracing")]
+                            tracing::warn!(
+                                "eggfetch: skipped invalid CA certificate in {path}: {e}"
+                            );
+                            #[cfg(not(feature = "tracing"))]
+                            let _ = (path, &e);
                         }
                     }
                 }
@@ -339,7 +344,10 @@ impl TlsConfig {
         {
             for cert in rustls_native_certs::load_native_certs().certs {
                 if let Err(e) = roots.add(cert) {
-                    eprintln!("eggfetch: skipped invalid native CA certificate: {e}");
+                    #[cfg(feature = "tracing")]
+                    tracing::warn!("eggfetch: skipped invalid native CA certificate: {e}");
+                    #[cfg(not(feature = "tracing"))]
+                    let _ = &e;
                 }
             }
         }
@@ -867,10 +875,13 @@ impl rustls::client::ResolvesClientCert for SingleCertResolver {
         let signing_key = match rustls::crypto::ring::sign::any_supported_type(&key_der) {
             Ok(k) => k,
             Err(e) => {
-                eprintln!(
+                #[cfg(feature = "tracing")]
+                tracing::warn!(
                     "eggfetch: unsupported private key type ({key_label}): {e}",
                     key_label = self.key_label
                 );
+                #[cfg(not(feature = "tracing"))]
+                let _ = (&self.key_label, &e);
                 return None;
             }
         };

@@ -294,6 +294,7 @@ impl Service<Uri> for DirectConnector {
         Poll::Ready(Ok(()))
     }
 
+    #[allow(clippy::too_many_lines)]
     fn call(&mut self, dst: Uri) -> Self::Future {
         let config = self.config.clone();
         let tls = self.tls.clone();
@@ -367,12 +368,20 @@ impl Service<Uri> for DirectConnector {
                     .into()
                 })?;
 
-            // Set TCP_NODELAY after connect (applies even if not in socket_options).
-            tokio_stream.set_nodelay(true).map_err(
-                |e| -> Box<dyn std::error::Error + Send + Sync> {
-                    Error::Connect(format!("failed to set TCP_NODELAY: {e}")).into()
-                },
-            )?;
+            // Set TCP_NODELAY after connect only if the caller did not
+            // explicitly configure it via socket_options. An explicit
+            // `TcpNoDelay=0` disables Nagle and must be respected.
+            let has_nodelay = config
+                .socket_options
+                .iter()
+                .any(|opt| opt.kind == Some(SocketOptionKind::TcpNoDelay));
+            if !has_nodelay {
+                tokio_stream.set_nodelay(true).map_err(
+                    |e| -> Box<dyn std::error::Error + Send + Sync> {
+                        Error::Connect(format!("failed to set TCP_NODELAY: {e}")).into()
+                    },
+                )?;
+            }
 
             let direct_stream = if is_https {
                 let tls_connector =

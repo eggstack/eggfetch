@@ -312,9 +312,8 @@ pub fn decompress_stream(
 /// Decompress a fully buffered byte slice using synchronous decoding.
 ///
 /// Used for response bodies that have already been collected into memory.
-/// Currently supports gzip and deflate via `flate2`. For brotli and zstd,
-/// the raw bytes are returned unchanged (use the streaming path for full
-/// decompression).
+/// Supports gzip/deflate via `flate2` and, when the corresponding
+/// features are enabled, brotli (`brotli` crate) and zstd (`zstd` crate).
 ///
 /// # Errors
 ///
@@ -354,7 +353,6 @@ pub fn decompress_buffered(
     }
 
     let compressed_len = data.len();
-    #[cfg(any(feature = "compression-gzip", feature = "compression-deflate"))]
     let ratio_limit = limit.max_decompression_ratio.and_then(|ratio| {
         if ratio.is_finite() && ratio >= 0.0 {
             #[allow(clippy::cast_precision_loss)]
@@ -370,13 +368,11 @@ pub fn decompress_buffered(
             None
         }
     });
-    #[cfg(any(feature = "compression-gzip", feature = "compression-deflate"))]
     let output_limit = match (limit.max_decoded_body_size, ratio_limit) {
         (Some(size), Some(ratio)) => Some(size.min(ratio)),
         (Some(size), None) | (None, Some(size)) => Some(size),
         (None, None) => None,
     };
-    #[cfg(any(feature = "compression-gzip", feature = "compression-deflate"))]
     let ratio_is_tighter = ratio_limit.is_some_and(|ratio| Some(ratio) == output_limit);
 
     #[allow(unused_mut)]
@@ -384,30 +380,66 @@ pub fn decompress_buffered(
     #[allow(clippy::never_loop)]
     for encoding in encodings.into_iter().rev() {
         match encoding {
-            #[cfg(any(feature = "compression-gzip", feature = "compression-deflate"))]
             ContentCoding::Gzip | ContentCoding::Deflate => {
-                // Enforce the expansion ratio against *each layer's* own
-                // input size. Comparing only the final size against the
-                // outermost compressed length lets stacked encodings
-                // accumulate expansion beyond the configured limit.
-                let layer_input_len = current.len();
-                current = sync_decode_flate2(&current, encoding, output_limit, ratio_is_tighter)?;
-                if let Some(max_ratio) = limit.max_decompression_ratio {
-                    if layer_input_len > 0 {
-                        #[allow(clippy::cast_precision_loss)]
-                        let layer_ratio = current.len() as f64 / layer_input_len as f64;
-                        if layer_ratio > max_ratio {
-                            return Err(Error::DecompressionRatioExceeded);
+                #[cfg(any(feature = "compression-gzip", feature = "compression-deflate"))]
+                {
+                    let layer_input_len = current.len();
+                    current =
+                        sync_decode_flate2(&current, encoding, output_limit, ratio_is_tighter)?;
+                    if let Some(max_ratio) = limit.max_decompression_ratio {
+                        if layer_input_len > 0 {
+                            #[allow(clippy::cast_precision_loss)]
+                            let layer_ratio = current.len() as f64 / layer_input_len as f64;
+                            if layer_ratio > max_ratio {
+                                return Err(Error::DecompressionRatioExceeded);
+                            }
                         }
                     }
                 }
+                #[cfg(not(any(feature = "compression-gzip", feature = "compression-deflate")))]
+                {
+                    return Err(Error::UnsupportedContentEncoding(encoding.as_str().into()));
+                }
             }
-            #[cfg(not(any(feature = "compression-gzip", feature = "compression-deflate")))]
-            ContentCoding::Gzip | ContentCoding::Deflate => {
-                return Err(Error::UnsupportedContentEncoding(encoding.as_str().into()));
+            ContentCoding::Brotli => {
+                #[cfg(feature = "compression-brotli")]
+                {
+                    let layer_input_len = current.len();
+                    current = sync_decode_brotli(&current, output_limit, ratio_is_tighter)?;
+                    if let Some(max_ratio) = limit.max_decompression_ratio {
+                        if layer_input_len > 0 {
+                            #[allow(clippy::cast_precision_loss)]
+                            let layer_ratio = current.len() as f64 / layer_input_len as f64;
+                            if layer_ratio > max_ratio {
+                                return Err(Error::DecompressionRatioExceeded);
+                            }
+                        }
+                    }
+                }
+                #[cfg(not(feature = "compression-brotli"))]
+                {
+                    return Err(Error::UnsupportedContentEncoding(encoding.as_str().into()));
+                }
             }
-            ContentCoding::Brotli | ContentCoding::Zstd => {
-                return Err(Error::UnsupportedContentEncoding(encoding.as_str().into()));
+            ContentCoding::Zstd => {
+                #[cfg(feature = "compression-zstd")]
+                {
+                    let layer_input_len = current.len();
+                    current = sync_decode_zstd(&current, output_limit, ratio_is_tighter)?;
+                    if let Some(max_ratio) = limit.max_decompression_ratio {
+                        if layer_input_len > 0 {
+                            #[allow(clippy::cast_precision_loss)]
+                            let layer_ratio = current.len() as f64 / layer_input_len as f64;
+                            if layer_ratio > max_ratio {
+                                return Err(Error::DecompressionRatioExceeded);
+                            }
+                        }
+                    }
+                }
+                #[cfg(not(feature = "compression-zstd"))]
+                {
+                    return Err(Error::UnsupportedContentEncoding(encoding.as_str().into()));
+                }
             }
         }
     }
@@ -418,47 +450,27 @@ pub fn decompress_buffered(
     // check is redundant (ratio*compressed < size) and would otherwise
     // flip the error kind from `DecompressionRatioExceeded` to
     // `DecodedBodyTooLarge` for the same logical violation.
-    #[cfg(any(feature = "compression-gzip", feature = "compression-deflate"))]
-    {
-        let size_violated = limit
-            .max_decoded_body_size
-            .is_some_and(|max| current.len() > max);
-        let ratio_violated = limit.max_decompression_ratio.is_some_and(|max_ratio| {
-            compressed_len > 0 && {
-                #[allow(clippy::cast_precision_loss)]
-                let ratio = current.len() as f64 / compressed_len as f64;
-                ratio > max_ratio
-            }
-        });
-        if size_violated && ratio_violated {
-            if ratio_is_tighter {
-                return Err(Error::DecompressionRatioExceeded);
-            }
-            return Err(Error::DecodedBodyTooLarge);
+    let size_violated = limit
+        .max_decoded_body_size
+        .is_some_and(|max| current.len() > max);
+    let ratio_violated = limit.max_decompression_ratio.is_some_and(|max_ratio| {
+        compressed_len > 0 && {
+            #[allow(clippy::cast_precision_loss)]
+            let ratio = current.len() as f64 / compressed_len as f64;
+            ratio > max_ratio
         }
-        if size_violated {
-            return Err(Error::DecodedBodyTooLarge);
-        }
-        if ratio_violated {
+    });
+    if size_violated && ratio_violated {
+        if ratio_is_tighter {
             return Err(Error::DecompressionRatioExceeded);
         }
+        return Err(Error::DecodedBodyTooLarge);
     }
-    #[cfg(not(any(feature = "compression-gzip", feature = "compression-deflate")))]
-    {
-        if let Some(max) = limit.max_decoded_body_size {
-            if current.len() > max {
-                return Err(Error::DecodedBodyTooLarge);
-            }
-        }
-        if let Some(max_ratio) = limit.max_decompression_ratio {
-            if compressed_len > 0 {
-                #[allow(clippy::cast_precision_loss)]
-                let ratio = current.len() as f64 / compressed_len as f64;
-                if ratio > max_ratio {
-                    return Err(Error::DecompressionRatioExceeded);
-                }
-            }
-        }
+    if size_violated {
+        return Err(Error::DecodedBodyTooLarge);
+    }
+    if ratio_violated {
+        return Err(Error::DecompressionRatioExceeded);
     }
 
     Ok(current)
@@ -515,6 +527,59 @@ fn sync_decode_flate2(
             encoding.as_str().to_owned(),
         )),
     }
+}
+
+#[cfg(feature = "compression-brotli")]
+fn sync_decode_brotli(
+    data: &bytes::Bytes,
+    output_limit: Option<usize>,
+    ratio_is_tighter: bool,
+) -> Result<bytes::Bytes> {
+    use std::io::Read;
+
+    let decoder = brotli::Decompressor::new(&data[..], 4096);
+    let mut output = Vec::new();
+    let mut limited = decoder.take(output_limit.map_or(u64::MAX, |limit| {
+        u64::try_from(limit).unwrap_or(u64::MAX).saturating_add(1)
+    }));
+    limited
+        .read_to_end(&mut output)
+        .map_err(|e| Error::Decompression(e.to_string()))?;
+    if output_limit.is_some_and(|limit| output.len() > limit) {
+        return Err(if ratio_is_tighter {
+            Error::DecompressionRatioExceeded
+        } else {
+            Error::DecodedBodyTooLarge
+        });
+    }
+    Ok(bytes::Bytes::from(output))
+}
+
+#[cfg(feature = "compression-zstd")]
+fn sync_decode_zstd(
+    data: &bytes::Bytes,
+    output_limit: Option<usize>,
+    ratio_is_tighter: bool,
+) -> Result<bytes::Bytes> {
+    use std::io::Read;
+
+    let decoder = zstd::stream::read::Decoder::new(&data[..])
+        .map_err(|e| Error::Decompression(e.to_string()))?;
+    let mut output = Vec::new();
+    let mut limited = decoder.take(output_limit.map_or(u64::MAX, |limit| {
+        u64::try_from(limit).unwrap_or(u64::MAX).saturating_add(1)
+    }));
+    limited
+        .read_to_end(&mut output)
+        .map_err(|e| Error::Decompression(e.to_string()))?;
+    if output_limit.is_some_and(|limit| output.len() > limit) {
+        return Err(if ratio_is_tighter {
+            Error::DecompressionRatioExceeded
+        } else {
+            Error::DecodedBodyTooLarge
+        });
+    }
+    Ok(bytes::Bytes::from(output))
 }
 
 /// Create a decoder for a single content coding.
@@ -701,14 +766,17 @@ impl CountingStream {
 /// instead of wrapping. A wrapped counter would under-report compressed
 /// bytes and silently disable a configured decompression-ratio limit
 /// mid-stream.
+///
+/// Ordering is `Relaxed` because the counter is monotonic and only checked
+/// after chunks have been observed; exact synchronization is not required.
 fn saturating_fetch_add(counter: &AtomicUsize, amount: usize) {
-    let mut current = counter.load(Ordering::Acquire);
+    let mut current = counter.load(Ordering::Relaxed);
     loop {
         let Some(next) = current.checked_add(amount) else {
-            counter.store(usize::MAX, Ordering::Release);
+            counter.store(usize::MAX, Ordering::Relaxed);
             return;
         };
-        match counter.compare_exchange_weak(current, next, Ordering::AcqRel, Ordering::Acquire) {
+        match counter.compare_exchange_weak(current, next, Ordering::Relaxed, Ordering::Relaxed) {
             Ok(_) => return,
             Err(actual) => current = actual,
         }
@@ -764,9 +832,11 @@ impl LimitingStream {
         }
         if let Some(max_ratio) = self.limit.max_decompression_ratio {
             if !max_ratio.is_finite() || max_ratio <= 0.0 {
-                return Ok(());
+                return Err(Error::Decompression(
+                    "invalid max_decompression_ratio: must be finite and positive".into(),
+                ));
             }
-            let compressed = self.compressed_counter.load(Ordering::Acquire);
+            let compressed = self.compressed_counter.load(Ordering::Relaxed);
             if compressed > 0 {
                 let ratio = self.decoded_bytes as f64 / compressed as f64;
                 if ratio > max_ratio {

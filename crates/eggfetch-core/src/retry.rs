@@ -475,6 +475,10 @@ impl BackoffPolicyBuilder {
 
     #[must_use]
     fn factor(mut self, factor: f64) -> Self {
+        assert!(
+            factor.is_finite() && factor > 0.0,
+            "backoff factor must be finite and positive, got {factor}"
+        );
         self.factor = factor;
         self
     }

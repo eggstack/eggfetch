@@ -43,15 +43,6 @@ impl RedirectPolicy {
     }
 }
 
-/// Sensitive headers to strip on cross-origin redirects.
-///
-/// These headers can leak credentials or session information to
-/// third-party origins. `host` is included because a user-supplied
-/// `Host` header describes the original authority and must not leak
-/// to (or misdescribe) the redirect target.
-#[allow(dead_code)]
-const SENSITIVE_HEADERS: &[&str] = &["authorization", "cookie", "host", "proxy-authorization"];
-
 /// Headers that should be removed when the body is dropped (e.g., on
 /// POST→GET rewrite).
 const BODY_HEADERS: &[&str] = &["content-length", "content-type", "transfer-encoding"];

@@ -130,7 +130,7 @@ impl Headers {
     /// client defaults.
     pub fn extend(&mut self, other: &Self) {
         for name in other.inner.keys() {
-            for value in &other.inner.get_all(name) {
+            for value in other.inner.get_all(name) {
                 self.inner.append(name.clone(), value.clone());
             }
         }
