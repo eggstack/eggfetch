@@ -13,7 +13,7 @@ use crate::runtime::blocking_send;
 ///
 /// # Safety
 ///
-/// Caller must free the returned handle with [`client_free`].
+/// Caller must free the returned handle with [`crate::eggfetch_client_free`].
 #[no_mangle]
 pub unsafe extern "C" fn eggfetch_client_new() -> *mut ClientHandle {
     crate::ffi_guard!(ptr::null_mut(), {
@@ -44,7 +44,7 @@ pub unsafe extern "C" fn eggfetch_client_free(handle: *mut ClientHandle) {
 ///
 /// - `client` must be a valid, non-freed handle.
 /// - `method` and `url` must be valid null-terminated C strings.
-/// - Caller must free the returned handle with [`request_free`].
+/// - Caller must free the returned handle with [`crate::eggfetch_request_free`].
 #[no_mangle]
 pub unsafe extern "C" fn eggfetch_client_request(
     client: *const ClientHandle,
@@ -257,8 +257,12 @@ pub unsafe extern "C" fn eggfetch_client_send(
     request: *mut RequestHandle,
     err_out: *mut *mut ErrorHandle,
 ) -> *mut crate::handle::ResponseHandle {
+    let mut request_ptr = request;
     crate::ffi_guard!(
         {
+            if !request_ptr.is_null() {
+                drop(Box::from_raw(request_ptr));
+            }
             if !err_out.is_null() {
                 let err = eggfetch_core::Error::Connect("panic at FFI boundary".into());
                 *err_out = Box::into_raw(crate::handle::error_to_handle(&err));
@@ -267,8 +271,9 @@ pub unsafe extern "C" fn eggfetch_client_send(
         },
         {
             if client.is_null() {
-                if !request.is_null() {
-                    drop(Box::from_raw(request));
+                if !request_ptr.is_null() {
+                    drop(Box::from_raw(request_ptr));
+                    request_ptr = ptr::null_mut();
                 }
                 if !err_out.is_null() {
                     let err = eggfetch_core::Error::Connect("null client handle".into());
@@ -276,16 +281,17 @@ pub unsafe extern "C" fn eggfetch_client_send(
                 }
                 return ptr::null_mut();
             }
-            let Some(request) = request.as_mut() else {
+            if request_ptr.is_null() {
                 if !err_out.is_null() {
                     let err = eggfetch_core::Error::Connect("null request handle".into());
                     *err_out = Box::into_raw(crate::handle::error_to_handle(&err));
                 }
                 return ptr::null_mut();
-            };
+            }
 
             // Consume the request by taking ownership of the builder.
-            let request_box = Box::from_raw(request);
+            let request_box = Box::from_raw(request_ptr);
+            request_ptr = ptr::null_mut();
             let Some(rb) = request_box.0 else {
                 if !err_out.is_null() {
                     let err = eggfetch_core::Error::RequestBuild(

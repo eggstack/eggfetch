@@ -25,8 +25,8 @@ use crate::proxy::ProxyConfig;
 /// (routing, cookies, auth-origin comparisons, redirects, proxy selection).
 /// They control only the wire-level behavior of the transport layer.
 ///
-/// Timeout is kept in the existing [`Timeout`](crate::Timeout) model and
-/// must not be duplicated here.
+/// Timeout is kept in the existing [`Timeout`] model and must not be
+/// duplicated here.
 #[derive(Default, Clone)]
 pub struct TransportHints {
     /// Override the wire request target (e.g. `OPTIONS *`, absolute-form).

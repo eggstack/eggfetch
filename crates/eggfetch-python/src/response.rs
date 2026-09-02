@@ -458,14 +458,23 @@ impl PyResponse {
                 "chunk_size must be greater than zero",
             ));
         }
-        let chars: Vec<char> = self.text.chars().collect();
-        let chunks: Vec<PyObject> = chars
-            .chunks(chunk_size)
-            .map(|c| {
-                let s: String = c.iter().collect();
-                Ok(PyString::new(py, &s).into())
-            })
-            .collect::<PyResult<Vec<_>>>()?;
+        // Slice by char count without materializing `Vec<char>`: iterate
+        // char boundaries and cut every `chunk_size` chars, preserving UTF-8.
+        let mut chunks: Vec<PyObject> = Vec::new();
+        let mut byte_start = 0;
+        let mut count = 0;
+        for (byte_idx, c) in self.text.char_indices() {
+            count += 1;
+            if count == chunk_size {
+                let byte_end = byte_idx + c.len_utf8();
+                chunks.push(PyString::new(py, &self.text[byte_start..byte_end]).into());
+                byte_start = byte_end;
+                count = 0;
+            }
+        }
+        if byte_start < self.text.len() {
+            chunks.push(PyString::new(py, &self.text[byte_start..]).into());
+        }
         let list = PyList::new(py, chunks)?;
         py.import("builtins")?
             .getattr("iter")?

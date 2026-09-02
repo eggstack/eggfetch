@@ -207,34 +207,7 @@ impl PyClient {
 
         let proxy_override = proxy::parse_proxy(proxy)?;
 
-        // Extract proxy headers and ssl_context from a Python Proxy object.
-        let (proxy_headers, proxy_ssl_context) = if let Some(proxy_obj) = proxy {
-            if let Ok(proxy_module) = py.import("eggfetch.compat.httpx._proxy") {
-                if let Ok(proxy_class) = proxy_module.getattr("Proxy") {
-                    if proxy_obj.is_instance(&proxy_class).unwrap_or(false) {
-                        let headers = if proxy_obj.hasattr("headers")? {
-                            let h = proxy_obj.getattr("headers")?;
-                            Some(crate::conversion::python_headers_to_rust(py, &h)?)
-                        } else {
-                            None
-                        };
-                        let ssl_ctx = proxy_obj.getattr("ssl_context").ok();
-                        (headers, ssl_ctx)
-                    } else {
-                        (None, None)
-                    }
-                } else {
-                    (None, None)
-                }
-            } else {
-                (None, None)
-            }
-        } else {
-            (None, None)
-        };
-
-        let proxy_tls_config =
-            crate::tls::ssl_context_to_tls_config(py, proxy_ssl_context.as_ref())?;
+        let (proxy_headers, proxy_tls_config) = proxy::extract_proxy_extras(py, proxy)?;
 
         if let ProxyOverride::Override(ref url) = proxy_override {
             let mut p = eggfetch_core::Proxy::all_compat(&proxy::normalize_compat_proxy_url(url))
@@ -407,35 +380,7 @@ impl PyClient {
 
         let proxy_override = proxy::parse_proxy(proxy)?;
 
-        // Extract proxy headers and ssl_context from a Python Proxy object before
-        // entering allow_threads (which releases the GIL).
-        let (proxy_headers, proxy_ssl_context) = if let Some(proxy_obj) = proxy {
-            if let Ok(proxy_module) = py.import("eggfetch.compat.httpx._proxy") {
-                if let Ok(proxy_class) = proxy_module.getattr("Proxy") {
-                    if proxy_obj.is_instance(&proxy_class).unwrap_or(false) {
-                        let headers = if proxy_obj.hasattr("headers")? {
-                            let h = proxy_obj.getattr("headers")?;
-                            Some(crate::conversion::python_headers_to_rust(py, &h)?)
-                        } else {
-                            None
-                        };
-                        let ssl_ctx = proxy_obj.getattr("ssl_context").ok();
-                        (headers, ssl_ctx)
-                    } else {
-                        (None, None)
-                    }
-                } else {
-                    (None, None)
-                }
-            } else {
-                (None, None)
-            }
-        } else {
-            (None, None)
-        };
-
-        let proxy_tls_config =
-            crate::tls::ssl_context_to_tls_config(py, proxy_ssl_context.as_ref())?;
+        let (proxy_headers, proxy_tls_config) = proxy::extract_proxy_extras(py, proxy)?;
 
         let retry_override = retry::parse_retry_option(retries)?;
 
@@ -980,35 +925,7 @@ impl PyClient {
 
         let proxy_override = proxy::parse_proxy(proxy)?;
 
-        // Extract proxy headers and ssl_context from a Python Proxy object before
-        // entering allow_threads (which releases the GIL).
-        let (proxy_headers, proxy_ssl_context) = if let Some(proxy_obj) = proxy {
-            if let Ok(proxy_module) = py.import("eggfetch.compat.httpx._proxy") {
-                if let Ok(proxy_class) = proxy_module.getattr("Proxy") {
-                    if proxy_obj.is_instance(&proxy_class).unwrap_or(false) {
-                        let headers = if proxy_obj.hasattr("headers")? {
-                            let h = proxy_obj.getattr("headers")?;
-                            Some(crate::conversion::python_headers_to_rust(py, &h)?)
-                        } else {
-                            None
-                        };
-                        let ssl_ctx = proxy_obj.getattr("ssl_context").ok();
-                        (headers, ssl_ctx)
-                    } else {
-                        (None, None)
-                    }
-                } else {
-                    (None, None)
-                }
-            } else {
-                (None, None)
-            }
-        } else {
-            (None, None)
-        };
-
-        let proxy_tls_config =
-            crate::tls::ssl_context_to_tls_config(py, proxy_ssl_context.as_ref())?;
+        let (proxy_headers, proxy_tls_config) = proxy::extract_proxy_extras(py, proxy)?;
 
         let retry_override = retry::parse_retry_option(retries)?;
 

@@ -94,10 +94,10 @@ pub struct SocketOption {
 
 /// Configuration for a direct TCP connection with advanced socket options.
 ///
-/// This is stored in [`ClientInner`](crate::client::ClientInner) when the
-/// caller requests local-address binding, socket options, or both. The
-/// connector is only used for requests that need these options; ordinary
-/// requests continue through the standard hyper connector path.
+/// This is stored in `ClientInner` when the caller requests local-address
+/// binding, socket options, or both. The connector is only used for requests
+/// that need these options; ordinary requests continue through the standard
+/// hyper connector path.
 #[derive(Debug, Clone)]
 pub struct DirectConnectorConfig {
     /// Optional local address to bind before connecting.

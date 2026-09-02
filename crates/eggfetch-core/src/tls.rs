@@ -165,10 +165,11 @@ impl TlsConfig {
 
     /// Build a `tokio_rustls::TlsConnector` from this TLS configuration.
     ///
-    /// This is the convenience entry point for [`UpgradedStream::start_tls`]
-    /// and other contexts where a generic TLS upgrade must reflect the
-    /// full configured policy (custom CA, verification, SNI, version
-    /// bounds, client identity).
+    /// This is the convenience entry point for
+    /// [`crate::network_stream::UpgradedStream::start_tls`] and other
+    /// contexts where a generic TLS upgrade must reflect the full
+    /// configured policy (custom CA, verification, SNI, version bounds,
+    /// client identity).
     ///
     /// # Errors
     ///

@@ -209,30 +209,31 @@ impl CookieJar {
     /// cannot leave it inconsistent.
     pub fn update_from_response(&self, response_url: &Url, set_cookie_headers: &[String]) {
         let response_host = response_url.host_str().unwrap_or("");
+        let now = SystemTime::now();
+        let mut to_insert: Vec<Cookie> = Vec::new();
+        let mut to_remove: Vec<CookieKey> = Vec::new();
         for header_value in set_cookie_headers {
             if let Some(cookie) = parse_set_cookie(header_value, response_url, response_host) {
-                if cookie.persistent {
-                    if let Some(expires) = cookie.expires {
-                        let now = SystemTime::now();
-                        if now >= expires {
-                            let key = CookieKey::new(&cookie.name, &cookie.domain, &cookie.path);
-                            self.inner
-                                .write()
-                                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                                .cookies
-                                .remove(&key);
-                            continue;
-                        }
-                    }
+                if cookie.persistent && cookie.expires.is_some_and(|exp| now >= exp) {
+                    to_remove.push(CookieKey::new(&cookie.name, &cookie.domain, &cookie.path));
+                } else {
+                    to_insert.push(cookie);
                 }
-
-                let key = CookieKey::new(&cookie.name, &cookie.domain, &cookie.path);
-                self.inner
-                    .write()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .cookies
-                    .insert(key, cookie);
             }
+        }
+        if to_insert.is_empty() && to_remove.is_empty() {
+            return;
+        }
+        let mut jar = self
+            .inner
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        for key in to_remove {
+            jar.cookies.remove(&key);
+        }
+        for cookie in to_insert {
+            let key = CookieKey::new(&cookie.name, &cookie.domain, &cookie.path);
+            jar.cookies.insert(key, cookie);
         }
     }
 

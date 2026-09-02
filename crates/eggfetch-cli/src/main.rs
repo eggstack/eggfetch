@@ -453,6 +453,7 @@ fn version_string(v: http::Version) -> &'static str {
         http::Version::HTTP_10 => "1.0",
         http::Version::HTTP_11 => "1.1",
         http::Version::HTTP_2 => "2",
+        http::Version::HTTP_3 => "3",
         _ => "unknown",
     }
 }
@@ -1523,6 +1524,7 @@ mod tests {
         assert_eq!(version_string(http::Version::HTTP_11), "1.1");
         assert_eq!(version_string(http::Version::HTTP_10), "1.0");
         assert_eq!(version_string(http::Version::HTTP_2), "2");
+        assert_eq!(version_string(http::Version::HTTP_3), "3");
     }
 
     #[test]

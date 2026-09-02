@@ -903,7 +903,7 @@ pub(crate) async fn send_single_request(
                 Err(_) => {
                     return Err(Error::Timeout {
                         phase,
-                        elapsed: duration,
+                        elapsed: started.elapsed(),
                     })
                 }
             }

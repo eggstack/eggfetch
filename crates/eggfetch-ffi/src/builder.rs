@@ -47,7 +47,7 @@ pub unsafe extern "C" fn eggfetch_client_builder_free(handle: *mut ClientBuilder
 /// - `raw` is NULL or the builder was already built (programmer error), or
 /// - allocating the client handle fails (resource exhaustion).
 ///
-/// Caller must free a successful result with [`crate::handle::eggfetch_client_free`].
+/// Caller must free a successful result with [`crate::eggfetch_client_free`].
 ///
 /// # Safety
 ///

@@ -139,3 +139,39 @@ pub fn parse_proxy(proxy: Option<&Bound<'_, PyAny>>) -> PyResult<ProxyOverride> 
         }
     }
 }
+
+/// Extract proxy-leg headers and TLS config from a Python `Proxy` object.
+///
+/// Returns `(headers, tls_config)` when `proxy` is an instance of
+/// `eggfetch.compat.httpx.Proxy`; otherwise `(None, None)`. Import failures
+/// are treated as absent metadata so callers do not fail when the compat
+/// facade is unavailable.
+pub(crate) fn extract_proxy_extras(
+    py: Python<'_>,
+    proxy: Option<&Bound<'_, PyAny>>,
+) -> PyResult<(
+    Option<eggfetch_core::Headers>,
+    Option<eggfetch_core::TlsConfig>,
+)> {
+    let Some(proxy_obj) = proxy else {
+        return Ok((None, None));
+    };
+    let Ok(proxy_module) = py.import("eggfetch.compat.httpx._proxy") else {
+        return Ok((None, None));
+    };
+    let Ok(proxy_class) = proxy_module.getattr("Proxy") else {
+        return Ok((None, None));
+    };
+    if !proxy_obj.is_instance(&proxy_class).unwrap_or(false) {
+        return Ok((None, None));
+    }
+    let headers = if proxy_obj.hasattr("headers")? {
+        let h = proxy_obj.getattr("headers")?;
+        Some(crate::conversion::python_headers_to_rust(py, &h)?)
+    } else {
+        None
+    };
+    let ssl_ctx = proxy_obj.getattr("ssl_context").ok();
+    let tls = crate::tls::ssl_context_to_tls_config(py, ssl_ctx.as_ref())?;
+    Ok((headers, tls))
+}

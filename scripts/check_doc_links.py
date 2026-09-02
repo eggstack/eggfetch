@@ -7,6 +7,7 @@ Does not fetch external URLs to avoid CI flakiness from network issues.
 
 import re
 import sys
+import urllib.parse
 from pathlib import Path
 
 
@@ -28,6 +29,8 @@ def check_links(docs_dir: Path) -> int:
 
             # Strip anchor from target
             file_part, _, anchor = target.partition("#")
+            # Decode percent-encoded anchors before comparison.
+            anchor = urllib.parse.unquote(anchor) if anchor else anchor
             if not file_part:
                 # Bare anchor like [text](#section) — check anchor exists in same file
                 if anchor:

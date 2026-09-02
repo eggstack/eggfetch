@@ -513,7 +513,7 @@ impl ProxyAuth {
     /// Returns [`Error::InvalidProxyUrl`] if:
     /// - The username contains `:` (it delimits the password, mirroring
     ///   [`BasicAuth::new`](crate::auth::BasicAuth::new) and URL userinfo)
-    /// - The username or password contains CR (`\r`) or LF (`\n`)
+    /// - The username or password contains CR (`\r`), LF (`\n`), or NUL (`\0`)
     pub fn basic(username: impl Into<String>, password: impl Into<String>) -> Result<Self> {
         let username = username.into();
         let password = password.into();
@@ -531,6 +531,11 @@ impl ProxyAuth {
         if password.contains('\r') || password.contains('\n') {
             return Err(Error::InvalidProxyUrl(
                 "proxy auth password must not contain CR/LF".into(),
+            ));
+        }
+        if username.contains('\0') || password.contains('\0') {
+            return Err(Error::InvalidProxyUrl(
+                "proxy auth credentials must not contain NUL".into(),
             ));
         }
 
@@ -1006,9 +1011,11 @@ fn parse_proxy_url(url_str: &str) -> Result<url::Url> {
                 || username.contains('\n')
                 || password.contains('\r')
                 || password.contains('\n')
+                || username.contains('\0')
+                || password.contains('\0')
             {
                 return Err(Error::InvalidProxyUrl(
-                    "proxy auth credentials must not contain CR/LF".into(),
+                    "proxy auth credentials must not contain CR/LF or NUL".into(),
                 ));
             }
         }

@@ -147,6 +147,9 @@ const SOCKS_CLIENT_CACHE_MAX_ENTRIES: usize = 64;
 ///
 /// Entries hold pooled connections but no unsynchronized state, so any
 /// entry can be dropped safely; the next request recreates it lazily.
+/// Eviction is hash-order arbitrary via `HashMap::keys().next()`; with the
+/// bounded caps (`256` for SNI, `64` for SOCKS) this is acceptable and
+/// avoids an extra LRU dependency for a low-churn cache.
 fn evict_one<K: std::clone::Clone + Eq + std::hash::Hash, V>(map: &mut HashMap<K, V>) {
     if let Some(key) = map.keys().next().cloned() {
         map.remove(&key);
