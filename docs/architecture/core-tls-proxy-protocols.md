@@ -152,6 +152,13 @@ For HTTPS through a proxy, the transport establishes a CONNECT tunnel:
 3. Upgrade the connection to TLS.
 4. Send the actual HTTP request over the TLS tunnel.
 
+The tunneled body stream knows the declared `Content-Length` (when the
+response carries an explicit non-chunked length) and uses it only to tell
+a truncated body apart from a complete one: EOF short of the declared
+length is an error, while EOF after every declared byte — or EOF on a
+close-delimited body — ends the stream cleanly. An abrupt close without
+TLS `close_notify` is normal for real servers once all bytes arrived.
+
 ## SOCKS5 Proxy
 
 ### Supported Schemes

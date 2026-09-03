@@ -92,7 +92,7 @@ from eggfetch.compat.httpx import Client, AsyncClient, Request, Response
 
 **Differential closure / corrective passes (current state):**
 
-- Corrective passes 01–06 plus the remaining-parity program are complete; Stage C is qualified on `5c7899fefb6df087dfa1b3578fbef9ba64f87742` (also recorded in `compat/httpx/0.28.1/profile.toml` and `plans/httpx-parity-correction-status.md`). Executable changes require a new exact-SHA qualification.
+- Corrective passes 01–08 are complete; Stage C is qualified on `d24101be6ed7be64463813750da5b4043d9905ec` (also recorded in `compat/httpx/0.28.1/profile.toml` and `plans/httpx-parity-correction-status.md`). Executable changes require a new exact-SHA qualification.
 - Closure evidence: typed difference records gated by `allowed-differences.toml`, lossless merge semantics (`crates/eggfetch-python/tests/compat/test_merge_lossless.py`), separate sync/async auth drivers, behavioral downstream fixtures (`compat/downstream/behavioral_fixtures/`), and native lifecycle proof fixtures (`test_native_timeout_classification.py`, `test_soak.py`, proxy and TLS tests).
 
 The facade is Stage C qualified for Python 3.10+ asyncio. Key boundaries:

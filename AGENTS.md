@@ -109,8 +109,9 @@ EGGFETCH_COMPAT_REQUIRED=1 python -m pytest crates/eggfetch-python/tests/compat/
 
 The compatibility profile lives in `compat/httpx/0.28.1/` (`profile.toml`, API manifests,
 `allowed-differences.toml`, `parity-cases.toml`). The qualification is bound to an exact
-executable SHA recorded there; **any executable change invalidates it** and requires restarting
-Corrective 07 from the freeze step (see `plans/httpx-parity-correction-status.md`). Extended-tier
+executable SHA recorded there; **any executable change invalidates it** and requires a fresh
+exact-SHA requalification from a new freeze, following the current closure plan and status
+procedure (see `plans/httpx-parity-correction-status.md`). Extended-tier
 gates regenerate and compare the API manifest via `scripts/generate_httpx_api_manifest.py` +
 `scripts/compare_httpx_api_manifest.py`; do not hand-edit generated manifests.
 

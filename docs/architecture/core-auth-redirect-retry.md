@@ -15,7 +15,7 @@ See also: [overview.md](overview.md), [core-engine.md](core-engine.md).
 
 ### Security Properties
 
-- **Secret redaction**: `AuthScheme`, `BasicAuth`, `BearerAuth` implement custom `Debug`/`Display` that redact sensitive values. Credentials are never printed in logs or error messages.
+- **Secret redaction**: `AuthScheme`, `BasicAuth`, `BearerAuth` implement custom `Debug`/`Display` that redact sensitive values. `Cookie` redacts its value, `CookieJar` reports entry counts only, `Request` renders a redacted URL with length-only body summary, and `ClientConfig` uses a manual redacting `Debug`. Credentials are never printed in logs or error messages.
 - **Input validation**: Usernames must not contain `:`. CR/LF is rejected. Violations return `Error::InvalidAuthHeader`.
 - **URL credentials rejected**: `https://user:pass@host/` returns an error. Use `BasicAuth` explicitly.
 

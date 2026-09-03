@@ -4,7 +4,304 @@ This record is the exact-SHA-bound status for the HTTPX 0.28.1 compatibility
 facade. Historical phase and corrective-pass records remain in the git history
 and referenced plans; counts below are only from the runs named here.
 
-## Current corrective pass — Corrective 07 final exact-SHA requalification
+## Current corrective pass — Corrective 08 post-hardening requalification and closure
+
+Current designation: **Stage C qualified** for the documented Python 3.10+
+asyncio-supported HTTPX 0.28.1 surface. The qualification is bound to the
+post-hardening executable SHA `d24101be6ed7be64463813750da5b4043d9905ec`
+and was performed on 2026-09-03. The Corrective 07 qualification at
+`5c7899fefb6df087dfa1b3578fbef9ba64f87742` (2026-08-24) is retained as
+historical evidence only; 38 post-qualification hardening commits changed
+core transport behavior, Python bindings, the HTTPX facade, tests,
+dependencies, and qualification-relevant semantics, invalidating the prior
+executable binding per the exact-SHA rule.
+
+Plan: `plans/httpx-parity-corrective-08-post-hardening-requalification-and-closure.md`.
+Planning baseline: `bd78c9a1d2f9aecfc7ee8f2c56bad2b74ec1c3f9` (`main`, 2026-09-03).
+Prior qualified executable SHA: `5c7899fefb6df087dfa1b3578fbef9ba64f87742` (Corrective 07).
+
+### Post-qualification audit (Corrective 08 Section 2)
+
+The `5c7899f...HEAD` change set was audited by behavior cluster before
+freezing. Every changed high-risk cluster has direct regression coverage;
+no test encodes eggfetch-only behavior where the contract requires HTTPX
+parity:
+
+| Cluster | Changed areas | Direct regression evidence |
+| --- | --- | --- |
+| Pool/lifecycle | waiter cancellation/RAII, per-origin retention/eviction, shutdown/close | `pool_tests.rs`, `test_close_races.py`, Tier 1 |
+| Timeouts/streaming | read/write wrappers, body stream lifecycle, raw-vs-decoded | `test_stream_resources.py`, `test_raw_stream_lifecycle.py`, corrective kernel |
+| Compression | buffered/streaming limits, ratio validation, stacked decoding | compression unit tests, `test_response*.py` |
+| Headers/framing | H2 forbidden headers, multi-value extension, target validation | `test_headers.py`, `test_h2_differential.py` |
+| Redirect/auth/cookies | header stripping, auth reapplication, retained-body replay | `test_redirect_state_machine_parity.py`, `test_auth*.py`, corrective kernel |
+| Proxy/SOCKS/TLS | DNS, auth, header isolation, endpoint TLS, SNI/ALPN, socket opts | `proxy_tests.rs`, `tls_integration.rs`, `test_socks_transport.py`, `test_native_proxy_tls.py` |
+| Retries | classification, backoff, `Retry-After`, total-timeout interaction | `retry_integration.rs`, `test_retry.py` |
+| Python native API | close races, response iterators, exception/proxy/TLS conversion | `test_sync.py`, `test_async.py`, native proxy/timeout tests |
+| HTTPX facade | auth/config/headers/URL/timeout/SSL/redirect/response/extensions | full compat suite + focused gate below |
+| FFI/Node | adapters only; no independent networking path | `ffi_tests.rs`, Tier 1/2 |
+
+### Pre-freeze corrections (Corrective 08 Section 3)
+
+The audit found concrete defects; all were fixed before the freeze
+(no feature work, no new CI/workflows, no parity-surface expansion):
+
+- **Secret redaction hardening** (hard-parity `redact` rule): `Cookie`
+  now redacts `value` in `Debug`; `JarInner`/`CookieJar` report entry
+  counts only; `Request` has a manual `Debug` (redacted URL/headers,
+  length-only body); `RequestBody::Bytes` and `PartBody::Bytes` render
+  length only; `ClientConfig` has a manual redacting `Debug`; proxy URL
+  parse failures (`Proxy::all`, `Proxy::all_compat`) no longer echo the
+  input, mirroring the client-side URL parser. Regression tests:
+  `cookie_debug_redacts_value`, `cookie_jar_debug_redacts_values`,
+  `request_debug_redacts_secrets`,
+  `request_body_bytes_debug_redacts_contents`,
+  `part_body_bytes_debug_redacts_contents`,
+  `client_config_debug_redacts_secrets`,
+  `unparseable_proxy_url_error_redacts_credentials`,
+  `unparseable_compat_proxy_url_error_redacts_credentials`.
+- **Native `socket_options` uniformity**: both four-element rejection
+  arms now raise `ValueError`, matching the facade's uniform rejection
+  (previously the null-pointer form raised `NotImplementedError`).
+  Regression test: `TestSocketOptionsValidation` in `test_sync.py`.
+- **Proxy EOF truncation boundary** (regression from `bd78c9a`): the
+  CONNECT+TLS and forward-proxy body streams now distinguish a truncated
+  body (EOF short of the declared `Content-Length` stays an error) from
+  a complete body followed by an abrupt close without TLS `close_notify`
+  (ends the stream cleanly, matching real-server behavior and HTTPX
+  parity). Fixed `test_https_through_proxy_response_has_no_network_stream`,
+  which failed deterministically after `bd78c9a`. Regression tests:
+  `tls_tunnel_complete_body_survives_abrupt_close`,
+  `tls_tunnel_truncated_body_still_errors`,
+  `proxy_body_stream_complete_body_survives_abrupt_close`,
+  `proxy_body_stream_truncated_body_still_errors`,
+  `proxy_body_stream_close_delimited_ends_at_eof`,
+  `response_content_length_*` (3).
+- **Package scanner false positive**: `validate_package_content.py`
+  flagged auth-tuple unpacking (`username, password = auth`) and runtime
+  URL-password derivation as leaked secrets. Exclusions added for those
+  two shapes. Tier 3 had never run against this facade code (no Tier 3
+  evidence exists for Corrective 07), so this is the first execution of
+  the package gate on the qualified tree.
+- **Raw-stream `Date` determinism**: the sync/async differential tests
+  compared full header multi-items across two sequential live requests
+  and raced the server's per-request `Date` stamp at second boundaries
+  (one observed failure: `...16:59:18` vs `...16:59:19 GMT` with
+  identical bodies). Both variants now assert `Date` presence and
+  compare all other headers exactly.
+
+Out of scope and intentionally not done: performance refactors,
+trio/AnyIO, new HTTPX versions, new transports, FFI panic-payload
+diagnostics polish (B-04, no behavioral impact).
+
+### Freeze history
+
+- `500587c0b8f87fe463a13f199391e3f40f1dac6c` — redaction, socket-option,
+  and proxy-EOF corrections. Tier 1 passed; Tier 2 passed after one
+  load-induced retry (see below); focused gate green.
+- `94fe4ce6431194a937a68405ea652cc63e4814aa` — package-scanner
+  exclusion fix (validation script only; executable tree identical).
+  Evidence restarted per the freeze rule.
+- `d24101be6ed7be64463813750da5b4043d9905ec` — raw-stream `Date`
+  determinism fix (compat test only). **Final freeze: all qualification
+  evidence below was collected on this exact SHA with a clean worktree.**
+  Earlier freeze evidence is discarded per the plan, except the focused
+  gate, which ran on an executable-identical tree (the two re-freezes
+  touch only a validation script and a compat test).
+
+### Focused post-hardening semantic gate
+
+602 passed, 0 failed, on the frozen executable tree, covering auth/config
+objects, headers, URL/query, timeouts, SSLContext translation and network
+proof, proxy trust safety, redirect state machine, response/raw-stream
+lifecycle, extensions/trace, 101 network-stream upgrades, H2
+differentials, and SOCKS transport:
+
+- `test_corrective_01_tls_and_proxy_trust_safety.py`,
+  `test_ssl_context_network_proof.py`, `test_ssl_context_translation.py`,
+  `test_corrective_02_extensions_and_wire_metadata.py`,
+  `test_trace_detection.py`,
+  `test_corrective_03_network_stream_upgrade.py`,
+  `test_h2_differential.py`, `test_socks_transport.py`, `test_auth.py`,
+  `test_config_objects.py`, `test_headers.py`, `test_url_query.py`,
+  `test_redirect_state_machine_parity.py`, `test_response.py`,
+  `test_raw_stream_lifecycle.py`, `test_raw_stream_httpx_differential.py`.
+- 13 non-failing warnings (HTTPX `verify=<str>`/TLS-version deprecations
+  on rejection-boundary tests).
+- One initial failure during this gate
+  (`test_https_through_proxy_response_has_no_network_stream`,
+  rustls `close_notify` EOF surfaced as `BodyError`) was investigated to
+  the `bd78c9a` regression above, fixed, and the file re-ran green
+  (22 passed) before freezing.
+
+### Tier 1 (`./scripts/check.sh`) on `d24101b`
+
+Tier 1 passed on the frozen SHA:
+
+- 1082 workspace non-doctest Rust tests, 0 failed
+- 11 core doctests
+- 542 Python behavior tests (541 inherited + 1 new socket-options test)
+- 133 compatibility smoke kernel tests
+- 0 failures, 0 skipped, 0 xfailed
+- Lint suppression policy, clippy pedantic, formatting, extension build: passed
+- Toolchain: rustc 1.97.1, CPython 3.12.3, pytest 9.1.1
+
+### Extended verification (`./scripts/check.sh extended`) on `d24101b`
+
+Extended verification passed on the frozen SHA. Tier 2 reruns Tier 1 and
+adds the full compatibility suite, API oracle, feature matrix,
+feature-gated tests, doctests, FFI tests, lifecycle/soak checks, lossless
+merge, benchmarks, and the required downstream gate.
+
+- Full compat within Tier 2: **1839 passed**, 26 non-failing warnings
+  (HTTPX/SQL/TLS deprecations on rejection-boundary tests), 0 skipped,
+  0 xfailed, in 313.02 s.
+- Optional MSRV (Rust 1.80) skipped: toolchain not installed (existing
+  repository policy, same as Corrective 07).
+- One retry was required on the first freeze (`500587c`):
+  `test_pool_isolation_uds_vs_tcp` failed under parallel feature-matrix
+  load with `UDS connect ... No such file or directory` (the fixture's
+  fixed 50 ms bind sleep raced a loaded scheduler). The test passes
+  serialized (Tier 1), standalone, and 5/5 repeated parallel runs
+  (6/6 UDS-isolation runs green in the final Tier 2 evidence); the retry
+  passed without any executable change. The fixture was not modified:
+  UDS bind timing is not product behavior, and the failure mode is
+  load-dependent, matching the Corrective 07 retry precedent
+  (`retry_respects_total_timeout`).
+
+### Tier 3 package validation (`./scripts/check.sh package`) on `d24101b`
+
+Package validation passed from the clean frozen tree: crate packaging,
+wheel build, wheel smoke, and package-content validation
+(`eggfetch-0.1.1-cp312-cp312-manylinux_2_34_aarch64.whl`). No
+`--allow-dirty`, no publication. This is the first Tier 3 execution on
+a qualified tree (Corrective 07 has no Tier 3 evidence).
+
+### Full pinned HTTPX compatibility suite — three consecutive clean runs on `d24101b`
+
+Command:
+
+```sh
+EGGFETCH_COMPAT_REQUIRED=1 .venv/bin/python -m pytest \
+  crates/eggfetch-python/tests/compat/ -q --strict-markers
+```
+
+| Run | Result | Duration |
+| --- | --- | --- |
+| 1 | 1839 passed, 26 warnings | 318.96 s |
+| 2 | 1839 passed, 26 warnings | 311.91 s |
+| 3 | 1839 passed, 26 warnings | 311.18 s |
+
+Counts are stable (1839 vs 1810 at Corrective 07 reflects 29 added
+regression tests since); zero skips, xfails, or failures. Two earlier
+runs on freeze `94fe4ce` (1839 passed each) were discarded after the
+`Date`-determinism test fix required a new freeze; one run-3 attempt on
+that SHA exposed the `Date` race and is recorded above rather than
+cherry-picked around.
+
+Environment for all runs: CPython 3.12.3, pytest 9.1.1,
+pytest-asyncio 1.4.0, `httpx==0.28.1`, `httpcore==1.0.9`,
+`socksio==1.0.0`, IPv6 loopback available, no capability skips.
+
+### Differential high-risk spot checks
+
+Covered by the focused gate (602 passed) and the differential suites in
+the full runs: headers/multi-value, URL/query normalization,
+redirect/auth stripping and retained bodies, timeout conversion,
+SSLContext supported/rejected states, proxy precedence and `NO_PROXY`
+edges, SOCKS behavior, H2-only routes and the CONNECT residual, raw
+iteration and stream state transitions, 101 `network_stream` ownership
+and sync/async wrapper selection. Intentional differences remain linked
+to stable allowed-difference/parity-case IDs; no new retained
+difference was introduced.
+
+### API oracle and ledger validation on `d24101b`
+
+```sh
+.venv/bin/python scripts/generate_httpx_api_manifest.py \
+  --package eggfetch.compat.httpx --output /tmp/eggfetch-api.json
+.venv/bin/python scripts/compare_httpx_api_manifest.py \
+  --reference compat/httpx/0.28.1/reference-api.json \
+  --candidate /tmp/eggfetch-api.json \
+  --allowed compat/httpx/0.28.1/allowed-differences.toml \
+  --json --output /tmp/api-result.json
+```
+
+- 71 allowed matches, all `stage-bounded`
+- 0 stale allowed entries, 0 unexplained, 0 resolved-in-active
+- 74-symbol manifest valid
+- `allowed-differences.toml` (71 IDs), `resolved-differences.toml`, and
+  `parity-cases.toml` agree with tested behavior; no ledger change was
+  required (socket-option uniformity and the EOF boundary preserve the
+  documented bounded differences).
+
+### Required downstream portfolio qualification on `d24101b`
+
+Fresh wheel built from the frozen SHA via the Tier 3 procedure:
+
+- `eggfetch-0.1.1-cp312-cp312-manylinux_2_34_aarch64.whl`,
+  SHA-256 `d424642e7d4ecb5a61456f6e4a46706b149e4b9c7e005018d1d8c96892135de2`
+- Controlled `httpx-0.28.1-py3-none-any.whl` shim reused byte-identical
+  from Corrective 07,
+  SHA-256 `4bc06cb9aedefec7adc613a67b6d149b127c9f204be35b6e67d026ff580dfb14`
+  (pure re-export of `eggfetch.compat.httpx`; content is independent of
+  the executable SHA, so rebuilding would only re-stamp metadata)
+
+```sh
+.venv/bin/python scripts/run_downstream_compat.py \
+  --artifact-manifest target/downstream-qualification/artifact-manifest.json \
+  --required-only
+```
+
+Result: 4/4 required packages passed, 0 failed/skipped/errors.
+
+| Package | Tests | Result |
+| --- | --- | --- |
+| respx 0.21.1 | 5/5 | passed |
+| httpx-sse 0.4.0 | 4/4 | passed |
+| httpx-auth 0.22.0 | 5/5 | passed |
+| httpx-ws 0.7.0 | 4/4 | passed |
+
+`pip check` notes missing `wsproto`/`hpack`/`hyperframe` (same diagnostic
+class as Corrective 07); behavioral suites passed in isolated venvs
+against the candidate wheel (no source-tree shadowing).
+
+### Retained bounded differences (unchanged)
+
+Same seven as Corrective 07: rustls-unrepresentable SSLContext state
+fails closed; HTTP/2 `stream_id` absent; HTTP/2 origin framing through
+HTTP CONNECT remains HTTP/1.1; four-element null-pointer
+`socket_options` rejected (now uniformly `ValueError`); ordinary pooled
+`network_stream` absent; internal CONNECT tunnels not exposed; coroutine
+trace callbacks rejected (`TypeError`), sync callbacks supported. SNI
+override and SOCKS H2 routes remain `parity` (closed in Corrective 06).
+
+### Environment
+
+CPython 3.12.3, pytest 9.1.1, pytest-asyncio 1.4.0, `httpx==0.28.1`,
+`httpcore==1.0.9`, `socksio==1.0.0`, rustc 1.97.1, IPv6 loopback
+available, no capability-based skips. MSRV 1.80 skipped (toolchain not
+installed; repository policy).
+
+### Post-qualification descendant audit
+
+(TODO after the qualification-record commit: compare `d24101b` to the
+record commit and confirm documentation/ledger-only changes.)
+
+### Remote CI
+
+(TODO: existing routine CI runs `./scripts/check.sh`; record workflow
+run, head SHA, and conclusion after pushing.)
+
+### Closure statement
+
+Corrective 08 is complete on the evidence above. The HTTPX 0.28.1
+compatibility facade is again **Stage C qualified** for the documented
+Python 3.10+ asyncio-supported surface, bound to executable SHA
+`d24101be6ed7be64463813750da5b4043d9905ec`. Future HTTPX work should be
+triggered by a new pinned HTTPX version, a newly discovered concrete
+compatibility defect, or an intentionally expanded compatibility scope.
+
+## Historical corrective pass — Corrective 07 final exact-SHA requalification
 
 Current designation: **Stage C qualified** for the documented Python 3.10+
 asyncio-supported HTTPX 0.28.1 surface. The qualification is bound to the
