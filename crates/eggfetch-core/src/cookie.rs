@@ -39,7 +39,15 @@ impl From<cookie::SameSite> for SameSite {
 }
 
 /// A stored HTTP cookie with all relevant attributes.
-#[derive(Debug, Clone)]
+///
+/// # Security
+///
+/// The `Debug` implementation redacts the cookie `value`: cookie values
+/// routinely carry session identifiers and CSRF tokens, so they must never
+/// appear in logs, panic messages, or test snapshots. Use [`Cookie::value`]
+/// or [`Cookie::name_value_pair`] to access the raw value when actually
+/// serializing a `Cookie` header.
+#[derive(Clone)]
 #[allow(clippy::struct_excessive_bools)]
 pub struct Cookie {
     /// Cookie name.
@@ -64,6 +72,24 @@ pub struct Cookie {
     pub(crate) persistent: bool,
     /// Monotonic creation index for ordering among same-name cookies.
     pub(crate) creation_index: u64,
+}
+
+impl std::fmt::Debug for Cookie {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Cookie")
+            .field("name", &self.name)
+            .field("value", &"<redacted>")
+            .field("domain", &self.domain)
+            .field("host_only", &self.host_only)
+            .field("path", &self.path)
+            .field("secure", &self.secure)
+            .field("http_only", &self.http_only)
+            .field("same_site", &self.same_site)
+            .field("expires", &self.expires)
+            .field("persistent", &self.persistent)
+            .field("creation_index", &self.creation_index)
+            .finish()
+    }
 }
 
 impl Cookie {
@@ -159,9 +185,19 @@ impl CookieKey {
 }
 
 /// Inner state of the cookie jar, protected by a read-write lock.
-#[derive(Debug)]
+///
+/// `Debug` reports only the entry count: the entries themselves hold
+/// secret cookie values (see [`Cookie`]).
 struct JarInner {
     cookies: HashMap<CookieKey, Cookie>,
+}
+
+impl std::fmt::Debug for JarInner {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("JarInner")
+            .field("len", &self.cookies.len())
+            .finish_non_exhaustive()
+    }
 }
 
 /// A thread-safe cookie jar.
@@ -169,9 +205,23 @@ struct JarInner {
 /// The jar stores cookies and answers queries about which cookies should
 /// be sent for a given URL. It is safe to share across threads via `Clone`
 /// (the inner state is `Arc`-wrapped).
-#[derive(Debug, Clone)]
+///
+/// `Debug` reports only the entry count, never cookie values.
+#[derive(Clone)]
 pub struct CookieJar {
     inner: Arc<RwLock<JarInner>>,
+}
+
+impl std::fmt::Debug for CookieJar {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // `try_read` so diagnostics never block (or deadlock when a panic
+        // message is rendered while the jar lock is already held).
+        // `None` means the length was unavailable without blocking.
+        let len = self.inner.try_read().map(|inner| inner.cookies.len()).ok();
+        f.debug_struct("CookieJar")
+            .field("len", &len)
+            .finish_non_exhaustive()
+    }
 }
 
 impl Default for CookieJar {
@@ -1582,5 +1632,36 @@ mod tests {
         fn is_valid_cookie_name_rejects_empty(name in "") {
             prop_assert!(!is_valid_cookie_name(&name));
         }
+    }
+
+    #[test]
+    fn cookie_debug_redacts_value() {
+        let url = make_url("http://example.com/path");
+        let cookies = parse_set_cookie_headers(&url, &["session=super-secret-token".to_owned()]);
+        assert_eq!(cookies.len(), 1);
+        let debug = format!("{:?}", cookies[0]);
+        assert!(
+            !debug.contains("super-secret-token"),
+            "Cookie Debug must not leak the value: {debug}"
+        );
+        assert!(
+            debug.contains("session"),
+            "Cookie Debug keeps the name: {debug}"
+        );
+        assert!(
+            debug.contains("<redacted>"),
+            "Cookie Debug marks redaction: {debug}"
+        );
+    }
+
+    #[test]
+    fn cookie_jar_debug_redacts_values() {
+        let jar = CookieJar::new();
+        jar.set_default_cookie("session".to_owned(), "super-secret-token".to_owned());
+        let debug = format!("{jar:?}");
+        assert!(
+            !debug.contains("super-secret-token"),
+            "CookieJar Debug must not leak values: {debug}"
+        );
     }
 }

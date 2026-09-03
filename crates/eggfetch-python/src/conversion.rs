@@ -366,9 +366,15 @@ pub(crate) fn parse_socket_options(
         let item = item?;
         let tuple: Bound<'_, PyTuple> = item.downcast_into::<PyTuple>()?;
         if tuple.len() == 4 {
+            // Both four-element shapes are rejected uniformly with
+            // `ValueError`, matching the HTTPX compatibility facade
+            // (`_client.py`): the valid null-pointer `(level, option, None,
+            // optlen)` form is outside the safe socket API, and any other
+            // four-element shape is malformed. A single exception type keeps
+            // `except ValueError` catch paths consistent.
             let value = tuple.get_item(2)?;
             if value.is_none() {
-                return Err(PyErr::new::<pyo3::exceptions::PyNotImplementedError, _>(
+                return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
                     "four-element socket_options (level, option, None, optlen) are accepted by HTTPX but intentionally unsupported by eggfetch's safe socket API",
                 ));
             }

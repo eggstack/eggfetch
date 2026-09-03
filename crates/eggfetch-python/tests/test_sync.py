@@ -301,6 +301,30 @@ class TestTimeout:
 
 
 # ---------------------------------------------------------------------------
+# Socket options validation
+# ---------------------------------------------------------------------------
+
+class TestSocketOptionsValidation:
+    def test_four_element_forms_rejected_uniformly_with_value_error(self):
+        """Both four-element shapes fail closed with ValueError.
+
+        The null-pointer ``(level, option, None, optlen)`` form is outside
+        the safe socket API and any other four-element shape is malformed;
+        both must surface as ``ValueError`` (matching the HTTPX facade) so
+        a single ``except ValueError`` catches every user mistake.
+        """
+        import socket
+
+        null_pointer = [(socket.SOL_SOCKET, socket.SO_KEEPALIVE, None, 0)]
+        with pytest.raises(ValueError, match="four-element"):
+            eggfetch.Client(socket_options=null_pointer)
+
+        malformed = [(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1, 0)]
+        with pytest.raises(ValueError, match="four-element"):
+            eggfetch.Client(socket_options=malformed)
+
+
+# ---------------------------------------------------------------------------
 # Limits validation
 # ---------------------------------------------------------------------------
 

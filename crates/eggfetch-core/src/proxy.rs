@@ -35,7 +35,6 @@
 use std::fmt;
 
 use crate::error::{Error, Result};
-use crate::redact::redact_url_string;
 
 /// A single `NO_PROXY` bypass rule.
 ///
@@ -763,12 +762,10 @@ impl Proxy {
     ///
     /// Returns an error when the URL, credentials, or proxy scheme is invalid.
     pub fn all_compat(url: &str) -> Result<Self> {
-        let parsed = url::Url::parse(url).map_err(|e| {
-            Error::InvalidProxyUrl(format!(
-                "invalid proxy URL: {e} ({})",
-                redact_url_string(url)
-            ))
-        })?;
+        // As in `parse_proxy_url`: never echo `url` on parse failure, since
+        // the redactor falls back to the raw input when parsing fails.
+        let parsed = url::Url::parse(url)
+            .map_err(|e| Error::InvalidProxyUrl(format!("invalid proxy URL: {e}")))?;
         let username = percent_encoding::percent_decode_str(parsed.username())
             .decode_utf8_lossy()
             .into_owned();
@@ -984,12 +981,13 @@ impl fmt::Display for Proxy {
 /// - for `http`/`https`: userinfo is extracted as Basic credentials
 /// - for `socks5`/`socks5h`: userinfo is extracted as SOCKS credentials
 fn parse_proxy_url(url_str: &str) -> Result<url::Url> {
-    let url = url::Url::parse(url_str).map_err(|e| {
-        Error::InvalidProxyUrl(format!(
-            "invalid proxy URL: {e} ({})",
-            redact_url_string(url_str)
-        ))
-    })?;
+    // Deliberately do not echo `url_str` into the error: parsing has
+    // failed, so `redact_url_string` would fall back to the raw input
+    // (potentially containing credentials). `url::ParseError` renders
+    // only a static description and never embeds the input. This mirrors
+    // the client-side URL parser's handling of the same hazard.
+    let url = url::Url::parse(url_str)
+        .map_err(|e| Error::InvalidProxyUrl(format!("invalid proxy URL: {e}")))?;
 
     match url.scheme() {
         "http" | "https" => {
@@ -1055,6 +1053,29 @@ mod tests {
         let proxy = Proxy::all("http://proxy.example:8080").unwrap();
         assert_eq!(proxy.uri().host_str(), Some("proxy.example"));
         assert_eq!(proxy.uri().port(), Some(8080));
+    }
+
+    #[test]
+    fn unparseable_proxy_url_error_redacts_credentials() {
+        // The input fails `Url::parse` (unterminated IPv6 literal), so the
+        // redactor would fall back to the raw input: the error must not echo
+        // it. See the client-side URL parser for the same hazard.
+        let err = Proxy::all("http://user:proxy-secret-1@[::1").unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            !msg.contains("proxy-secret-1"),
+            "proxy parse error must not leak credentials: {msg}"
+        );
+    }
+
+    #[test]
+    fn unparseable_compat_proxy_url_error_redacts_credentials() {
+        let err = Proxy::all_compat("http://user:proxy-secret-2@[::1").unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            !msg.contains("proxy-secret-2"),
+            "compat proxy parse error must not leak credentials: {msg}"
+        );
     }
 
     #[test]

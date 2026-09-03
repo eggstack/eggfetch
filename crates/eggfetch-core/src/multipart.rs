@@ -139,7 +139,9 @@ pub enum PartBody {
 impl std::fmt::Debug for PartBody {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Bytes(b) => f.debug_tuple("Bytes").field(b).finish(),
+            // Render only the length: part bytes are file contents, which
+            // must not appear in logs or panic messages.
+            Self::Bytes(b) => f.debug_tuple("Bytes").field(&b.len()).finish(),
             Self::Stream { length, .. } => f
                 .debug_struct("Stream")
                 .field("length", length)
@@ -1619,5 +1621,19 @@ mod tests {
             }
             _ => panic!("expected bytes body"),
         }
+    }
+
+    #[test]
+    fn part_body_bytes_debug_redacts_contents() {
+        let part = PartBody::Bytes(Bytes::from("file-secret-contents"));
+        let debug = format!("{part:?}");
+        assert!(
+            !debug.contains("file-secret-contents"),
+            "PartBody Debug must not leak byte contents: {debug}"
+        );
+        assert!(
+            debug.contains("Bytes(20)"),
+            "PartBody Debug reports the length only: {debug}"
+        );
     }
 }

@@ -97,7 +97,13 @@ pub(crate) struct RequestParts {
 }
 
 /// An outgoing HTTP request.
-#[derive(Debug)]
+///
+/// # Security
+///
+/// The `Debug` implementation redacts secrets: the URL is rendered without
+/// userinfo, query parameters, or fragments (query strings routinely carry
+/// API keys), sensitive headers use the redacted form, and the body is
+/// summarized by length only. See [`crate::redact`].
 pub struct Request {
     method: http::Method,
     url: url::Url,
@@ -115,6 +121,26 @@ pub struct Request {
     retry: Option<RetryPolicy>,
     /// Typed transport-level hints (target override, SNI hostname, etc.).
     transport_hints: TransportHints,
+}
+
+impl std::fmt::Debug for Request {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Request")
+            .field("method", &self.method)
+            .field("url", &crate::redact::redact_url(&self.url))
+            .field("headers", &self.headers)
+            .field("body", &self.body)
+            .field("version", &self.version)
+            .field("timeout", &self.timeout)
+            .field("redirect", &self.redirect)
+            .field("auth", &self.auth)
+            .field("auth_disabled", &self.auth_disabled)
+            .field("decompress", &self.decompress)
+            .field("proxy_override", &self.proxy_override)
+            .field("retry", &self.retry)
+            .field("transport_hints", &self.transport_hints)
+            .finish()
+    }
 }
 
 impl Request {
@@ -525,6 +551,10 @@ impl RequestBuilder {
 mod tests {
     use proptest::prelude::*;
 
+    use super::Request;
+    use crate::auth::{AuthScheme, BasicAuth};
+    use bytes::Bytes;
+
     proptest::proptest! {
         #[test]
         fn url_parse_round_trip(scheme in "https?", host in "[a-z]{2,10}\\.[a-z]{2,5}", path in "/[a-z]{0,20}") {
@@ -548,5 +578,39 @@ mod tests {
             // Must not panic
             let _ = url::Url::parse(&url_str);
         }
+    }
+
+    #[test]
+    fn request_debug_redacts_secrets() {
+        let url = url::Url::parse("https://example.com/submit?api_key=top-secret-key").unwrap();
+        let mut req = Request::new(http::Method::POST, url);
+        req.headers_mut()
+            .insert("authorization", "Bearer bearer-secret-token")
+            .unwrap();
+        req.headers_mut()
+            .insert("cookie", "session=cookie-secret")
+            .unwrap();
+        req.set_body(crate::body::RequestBody::Bytes(Bytes::from(
+            "password=form-secret",
+        )));
+        req.set_auth(Some(AuthScheme::Basic(
+            BasicAuth::new("user", "auth-secret").unwrap(),
+        )));
+        let debug = format!("{req:?}");
+        for leaked in [
+            "top-secret-key",
+            "bearer-secret-token",
+            "cookie-secret",
+            "form-secret",
+            "auth-secret",
+        ] {
+            assert!(
+                !debug.contains(leaked),
+                "Request Debug must not leak {leaked:?}: {debug}"
+            );
+        }
+        // Non-secret structure is still visible for diagnostics.
+        assert!(debug.contains("example.com"), "keeps the host: {debug}");
+        assert!(debug.contains("POST"), "keeps the method: {debug}");
     }
 }

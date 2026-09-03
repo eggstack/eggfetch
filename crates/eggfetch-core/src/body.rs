@@ -105,7 +105,10 @@ impl std::fmt::Debug for RequestBody {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Empty => f.debug_tuple("Empty").finish(),
-            Self::Bytes(b) => f.debug_tuple("Bytes").field(b).finish(),
+            // Render only the length: byte bodies routinely carry form
+            // passwords and tokens, which must not appear in logs or
+            // panic messages (see `crate::redact`).
+            Self::Bytes(b) => f.debug_tuple("Bytes").field(&b.len()).finish(),
             Self::Stream { length, .. } => f
                 .debug_struct("Stream")
                 .field("length", length)
@@ -753,6 +756,20 @@ mod tests {
         let stream = futures_util::stream::empty::<Result<Bytes>>();
         let body = RequestBody::from_stream(stream, None);
         assert!(body.try_clone_for_redirect().is_err());
+    }
+
+    #[test]
+    fn request_body_bytes_debug_redacts_contents() {
+        let body = RequestBody::from(Bytes::from("form-password=hunter2"));
+        let debug = format!("{body:?}");
+        assert!(
+            !debug.contains("hunter2"),
+            "RequestBody Debug must not leak byte contents: {debug}"
+        );
+        assert!(
+            debug.contains("Bytes(21)"),
+            "RequestBody Debug reports the length only: {debug}"
+        );
     }
 
     #[test]

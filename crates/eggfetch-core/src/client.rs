@@ -26,7 +26,11 @@ use crate::transport::Connector;
 use crate::cookie::CookieJar;
 
 /// Shared client configuration.
-#[derive(Debug, Clone)]
+///
+/// `Debug` is intentionally manual: several fields hold secrets (notably
+/// the cookie jar), so the implementation redacts them instead of deriving
+/// a verbatim dump. See [`crate::redact`].
+#[derive(Clone)]
 pub(crate) struct ClientConfig {
     pub(crate) default_headers: Headers,
     pub(crate) user_agent: Option<String>,
@@ -50,6 +54,34 @@ pub(crate) struct ClientConfig {
         reason = "stored for inspection and future request-level use"
     )]
     pub(crate) http_version_policy: HttpVersionPolicy,
+}
+
+impl std::fmt::Debug for ClientConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut debug = f.debug_struct("ClientConfig");
+        debug
+            .field("default_headers", &self.default_headers)
+            .field("user_agent", &self.user_agent)
+            .field("timeout", &self.timeout)
+            .field("redirect", &self.redirect)
+            .field("auth", &self.auth);
+        #[cfg(feature = "cookies")]
+        debug.field("cookie_jar", &self.cookie_jar);
+        debug
+            .field("automatic_decompression", &self.automatic_decompression)
+            .field("max_decoded_body_size", &self.max_decoded_body_size)
+            .field("max_decompression_ratio", &self.max_decompression_ratio);
+        #[cfg(feature = "proxy")]
+        debug
+            .field("proxy", &self.proxy)
+            .field("environment_proxies", &self.environment_proxies);
+        #[cfg(any(feature = "proxy", feature = "http3"))]
+        debug.field("tls_config", &self.tls_config);
+        debug
+            .field("retry", &self.retry)
+            .field("http_version_policy", &self.http_version_policy)
+            .finish_non_exhaustive()
+    }
 }
 
 impl Default for ClientConfig {
@@ -1141,6 +1173,29 @@ mod tests {
     #[test]
     fn client_constructs() {
         let _client = Client::new();
+    }
+
+    #[test]
+    fn client_config_debug_redacts_secrets() {
+        let mut config = ClientConfig::default();
+        config
+            .default_headers
+            .insert("authorization", "Bearer header-secret-token")
+            .unwrap();
+        #[cfg(feature = "cookies")]
+        config
+            .cookie_jar
+            .set_default_cookie("session".to_owned(), "jar-secret-token".to_owned());
+        let debug = format!("{config:?}");
+        assert!(
+            !debug.contains("header-secret-token"),
+            "ClientConfig Debug must not leak header secrets: {debug}"
+        );
+        #[cfg(feature = "cookies")]
+        assert!(
+            !debug.contains("jar-secret-token"),
+            "ClientConfig Debug must not leak jar secrets: {debug}"
+        );
     }
 
     #[test]

@@ -239,7 +239,11 @@ pub(crate) async fn send_https_connect_request(
     let stream_reader = tls_buf.into_inner();
     // For TLS streams, we can't easily extract the inner stream.
     // Use the initial_buf approach with the TLS stream wrapped.
-    let body_stream = TlsProxyResponseStream::new(initial_buf, stream_reader);
+    // The declared length lets the stream tell a truncated body apart
+    // from a complete body followed by an abrupt close without TLS
+    // `close_notify` (normal for real servers; see `response_content_length`).
+    let expected_len = super::proxy::response_content_length(&resp_headers);
+    let body_stream = TlsProxyResponseStream::new(initial_buf, stream_reader, expected_len);
     let body_stream = Box::pin(body_stream) as BoxBytesStream;
     let body = ResponseBody::streaming(body_stream);
 
@@ -312,15 +316,28 @@ pub(crate) struct TlsProxyResponseStream<S> {
     initial_buf: std::io::Cursor<Vec<u8>>,
     inner: S,
     chunk: BytesMut,
+    /// Declared `Content-Length`, if the response carried an explicit
+    /// non-chunked length. Used only to tell a truncated body apart from
+    /// a complete body followed by an abrupt close.
+    expected_len: Option<u64>,
+    /// Body bytes yielded so far.
+    delivered: u64,
 }
 
 impl<S> TlsProxyResponseStream<S> {
-    pub(crate) fn new(initial_buf: Vec<u8>, inner: S) -> Self {
+    pub(crate) fn new(initial_buf: Vec<u8>, inner: S, expected_len: Option<u64>) -> Self {
         Self {
             initial_buf: std::io::Cursor::new(initial_buf),
             inner,
             chunk: BytesMut::with_capacity(8192),
+            expected_len,
+            delivered: 0,
         }
+    }
+
+    /// Returns `true` once every declared body byte has been delivered.
+    fn body_is_complete(&self) -> bool {
+        self.expected_len.is_some_and(|n| self.delivered >= n)
     }
 }
 
@@ -347,6 +364,7 @@ impl<S: tokio::io::AsyncRead + Unpin> futures_core::Stream for TlsProxyResponseS
                 }
             };
             if n > 0 {
+                this.delivered += n as u64;
                 return std::task::Poll::Ready(Some(Ok(this.chunk.split_to(n).freeze())));
             }
         }
@@ -363,6 +381,7 @@ impl<S: tokio::io::AsyncRead + Unpin> futures_core::Stream for TlsProxyResponseS
             std::task::Poll::Ready(Ok(())) => {
                 let n = read_buf.filled().len();
                 if n > 0 {
+                    this.delivered += n as u64;
                     std::task::Poll::Ready(Some(Ok(this.chunk.split_to(n).freeze())))
                 } else {
                     std::task::Poll::Ready(None)
@@ -370,9 +389,18 @@ impl<S: tokio::io::AsyncRead + Unpin> futures_core::Stream for TlsProxyResponseS
             }
             std::task::Poll::Ready(Err(e)) => {
                 if e.kind() == std::io::ErrorKind::UnexpectedEof {
-                    return std::task::Poll::Ready(Some(Err(Error::Body(format!(
-                        "proxy closed connection unexpectedly: {e}"
-                    )))));
+                    // Truncated declared body: EOF before every
+                    // `Content-Length` byte arrived. Otherwise the body is
+                    // complete (abrupt closes without TLS `close_notify`
+                    // are normal once all bytes arrived) or
+                    // close-delimited (EOF is the framing), so end the
+                    // stream cleanly.
+                    if this.expected_len.is_some() && !this.body_is_complete() {
+                        return std::task::Poll::Ready(Some(Err(Error::Body(format!(
+                            "proxy closed connection unexpectedly: {e}"
+                        )))));
+                    }
+                    return std::task::Poll::Ready(None);
                 }
                 std::task::Poll::Ready(Some(Err(Error::Body(format!(
                     "proxy stream read error: {e}"
@@ -457,7 +485,66 @@ impl<S: tokio::io::AsyncWrite + Unpin> tokio::io::AsyncWrite for ProxyTunnel<S> 
 
 #[cfg(test)]
 mod tests {
-    use super::{authority_form_target, proxy_rejection_body};
+    use super::{authority_form_target, proxy_rejection_body, TlsProxyResponseStream};
+    use futures_util::StreamExt as _;
+
+    /// Simulates a tunneled peer that sends `data` then closes abruptly
+    /// (no TLS `close_notify`), surfacing `UnexpectedEof` like rustls does.
+    struct AbruptReader {
+        data: std::io::Cursor<Vec<u8>>,
+    }
+
+    impl AbruptReader {
+        fn new(data: &[u8]) -> Self {
+            Self {
+                data: std::io::Cursor::new(data.to_vec()),
+            }
+        }
+    }
+
+    impl tokio::io::AsyncRead for AbruptReader {
+        fn poll_read(
+            mut self: std::pin::Pin<&mut Self>,
+            _cx: &mut std::task::Context<'_>,
+            buf: &mut tokio::io::ReadBuf<'_>,
+        ) -> std::task::Poll<std::io::Result<()>> {
+            use std::io::Read as _;
+            let mut tmp = [0u8; 1024];
+            match self.data.read(&mut tmp) {
+                Ok(0) => std::task::Poll::Ready(Err(std::io::Error::new(
+                    std::io::ErrorKind::UnexpectedEof,
+                    "peer closed connection without sending TLS close_notify",
+                ))),
+                Ok(n) => {
+                    buf.put_slice(&tmp[..n]);
+                    std::task::Poll::Ready(Ok(()))
+                }
+                Err(e) => std::task::Poll::Ready(Err(e)),
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn tls_tunnel_complete_body_survives_abrupt_close() {
+        // Full declared body arrives, then the origin closes without TLS
+        // `close_notify` (normal for real servers): the stream ends
+        // cleanly instead of failing the already-complete body.
+        let mut stream =
+            TlsProxyResponseStream::new(b"ok".to_vec(), AbruptReader::new(b""), Some(2));
+        let first = stream.next().await.expect("body chunk").expect("no error");
+        assert_eq!(first.as_ref(), b"ok");
+        assert!(stream.next().await.is_none());
+    }
+
+    #[tokio::test]
+    async fn tls_tunnel_truncated_body_still_errors() {
+        // Only 1 of 2 declared bytes arrives before the abrupt close:
+        // this is a genuine truncation and must stay an error.
+        let mut stream = TlsProxyResponseStream::new(Vec::new(), AbruptReader::new(b"o"), Some(2));
+        let first = stream.next().await.expect("body chunk").expect("no error");
+        assert_eq!(first.as_ref(), b"o");
+        assert!(stream.next().await.expect("stream item").is_err());
+    }
 
     #[test]
     fn authority_form_target_brackets_ipv6() {

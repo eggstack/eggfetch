@@ -391,7 +391,8 @@ async fn send_http_proxy_request(
 
     // Return the body as a streaming response.
     let stream_reader = stream.into_inner();
-    let body_stream = ProxyResponseStream::new(initial_buf, stream_reader);
+    let expected_len = response_content_length(&resp_headers);
+    let body_stream = ProxyResponseStream::new(initial_buf, stream_reader, expected_len);
     let body_stream = Box::pin(body_stream) as BoxBytesStream;
     let body = ResponseBody::streaming(body_stream);
 
@@ -720,6 +721,22 @@ struct ProxyResponseStream<S> {
     initial_buf: std::io::Cursor<Vec<u8>>,
     inner: S,
     chunk: BytesMut,
+    /// Declared `Content-Length`, if the response carried an explicit
+    /// non-chunked length. Used only to tell a truncated body apart from
+    /// a complete body followed by an abrupt close.
+    expected_len: Option<u64>,
+    /// Body bytes yielded so far.
+    delivered: u64,
+}
+
+impl<S> ProxyResponseStream<S> {
+    /// Returns `true` once every declared body byte has been delivered.
+    ///
+    /// Close-delimited bodies (`expected_len == None`) report complete
+    /// only when the peer actually closes: EOF is their framing.
+    fn body_is_complete(&self) -> bool {
+        self.expected_len.is_some_and(|n| self.delivered >= n)
+    }
 }
 
 fn map_socks_send_error(err: hyper_util::client::legacy::Error) -> Error {
@@ -794,11 +811,13 @@ async fn send_socks_request(
 }
 
 impl<S> ProxyResponseStream<S> {
-    fn new(initial_buf: Vec<u8>, inner: S) -> Self {
+    fn new(initial_buf: Vec<u8>, inner: S, expected_len: Option<u64>) -> Self {
         Self {
             initial_buf: std::io::Cursor::new(initial_buf),
             inner,
             chunk: BytesMut::with_capacity(8192),
+            expected_len,
+            delivered: 0,
         }
     }
 }
@@ -826,6 +845,7 @@ impl<S: tokio::io::AsyncRead + Unpin> futures_core::Stream for ProxyResponseStre
                 }
             };
             if n > 0 {
+                this.delivered += n as u64;
                 return std::task::Poll::Ready(Some(Ok(this.chunk.split_to(n).freeze())));
             }
         }
@@ -842,6 +862,7 @@ impl<S: tokio::io::AsyncRead + Unpin> futures_core::Stream for ProxyResponseStre
             std::task::Poll::Ready(Ok(())) => {
                 let n = read_buf.filled().len();
                 if n > 0 {
+                    this.delivered += n as u64;
                     std::task::Poll::Ready(Some(Ok(this.chunk.split_to(n).freeze())))
                 } else {
                     std::task::Poll::Ready(None)
@@ -849,9 +870,18 @@ impl<S: tokio::io::AsyncRead + Unpin> futures_core::Stream for ProxyResponseStre
             }
             std::task::Poll::Ready(Err(e)) => {
                 if e.kind() == std::io::ErrorKind::UnexpectedEof {
-                    return std::task::Poll::Ready(Some(Err(Error::MalformedProxyResponse(
-                        format!("proxy closed connection unexpectedly: {e}"),
-                    ))));
+                    // Truncated declared body: EOF before every
+                    // `Content-Length` byte arrived. Otherwise the body is
+                    // complete (abrupt closes without TLS `close_notify`
+                    // are normal once all bytes arrived) or
+                    // close-delimited (EOF is the framing), so end the
+                    // stream cleanly.
+                    if this.expected_len.is_some() && !this.body_is_complete() {
+                        return std::task::Poll::Ready(Some(Err(Error::MalformedProxyResponse(
+                            format!("proxy closed connection unexpectedly: {e}"),
+                        ))));
+                    }
+                    return std::task::Poll::Ready(None);
                 }
                 std::task::Poll::Ready(Some(Err(Error::Body(format!(
                     "proxy stream read error: {e}"
@@ -862,12 +892,141 @@ impl<S: tokio::io::AsyncRead + Unpin> futures_core::Stream for ProxyResponseStre
     }
 }
 
+/// Declared body length for a hand-rolled proxy response.
+///
+/// Returns the `Content-Length` value when the response has an explicit,
+/// non-chunked length so body streams can distinguish a truncated body
+/// (EOF before every declared byte arrived) from a complete body followed
+/// by an abrupt close. Returns `None` for chunked or close-delimited
+/// bodies, where this layer has no declared length to check against.
+pub(crate) fn response_content_length(headers: &[(String, Vec<u8>)]) -> Option<u64> {
+    let mut content_length: Option<u64> = None;
+    let mut chunked = false;
+    for (name, value) in headers {
+        if name.eq_ignore_ascii_case("transfer-encoding")
+            && std::str::from_utf8(value)
+                .unwrap_or_default()
+                .split(',')
+                .any(|token| token.trim().eq_ignore_ascii_case("chunked"))
+        {
+            chunked = true;
+        }
+        if name.eq_ignore_ascii_case("content-length") && content_length.is_none() {
+            content_length = std::str::from_utf8(value).ok()?.trim().parse().ok();
+        }
+    }
+    if chunked {
+        None
+    } else {
+        content_length
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{effective_timeout, proxy_server_name, read_proxy_response, write_proxy_request};
+    use super::{
+        effective_timeout, proxy_server_name, read_proxy_response, response_content_length,
+        write_proxy_request, ProxyResponseStream,
+    };
     use crate::error::Error;
     use crate::timeout::TimeoutPhase;
     use std::time::{Duration, Instant};
+
+    /// Simulates a peer that sends `data` then closes abruptly (no TLS
+    /// `close_notify`), surfacing `UnexpectedEof` like rustls does.
+    struct AbruptReader {
+        data: std::io::Cursor<Vec<u8>>,
+    }
+
+    impl AbruptReader {
+        fn new(data: &[u8]) -> Self {
+            Self {
+                data: std::io::Cursor::new(data.to_vec()),
+            }
+        }
+    }
+
+    impl tokio::io::AsyncRead for AbruptReader {
+        fn poll_read(
+            mut self: std::pin::Pin<&mut Self>,
+            _cx: &mut std::task::Context<'_>,
+            buf: &mut tokio::io::ReadBuf<'_>,
+        ) -> std::task::Poll<std::io::Result<()>> {
+            use std::io::Read as _;
+            let mut tmp = [0u8; 1024];
+            match self.data.read(&mut tmp) {
+                Ok(0) => std::task::Poll::Ready(Err(std::io::Error::new(
+                    std::io::ErrorKind::UnexpectedEof,
+                    "peer closed connection without sending TLS close_notify",
+                ))),
+                Ok(n) => {
+                    buf.put_slice(&tmp[..n]);
+                    std::task::Poll::Ready(Ok(()))
+                }
+                Err(e) => std::task::Poll::Ready(Err(e)),
+            }
+        }
+    }
+
+    #[test]
+    fn response_content_length_parses_declared_length() {
+        let headers = vec![("Content-Length".to_owned(), b"42".to_vec())];
+        assert_eq!(response_content_length(&headers), Some(42));
+    }
+
+    #[test]
+    fn response_content_length_prefers_explicit_over_chunked() {
+        // Chunked framing owns the body boundaries; a stale
+        // `Content-Length` must not be treated as the declared length.
+        let headers = vec![
+            ("Content-Length".to_owned(), b"42".to_vec()),
+            ("Transfer-Encoding".to_owned(), b"chunked".to_vec()),
+        ];
+        assert_eq!(response_content_length(&headers), None);
+    }
+
+    #[test]
+    fn response_content_length_absent_without_length() {
+        let headers = vec![("Content-Type".to_owned(), b"text/plain".to_vec())];
+        assert_eq!(response_content_length(&headers), None);
+    }
+
+    #[tokio::test]
+    async fn proxy_body_stream_complete_body_survives_abrupt_close() {
+        use futures_util::StreamExt as _;
+        // Full declared body arrives, then the peer closes without TLS
+        // `close_notify` (normal for real servers): the stream ends
+        // cleanly instead of failing the already-complete body.
+        let mut stream = ProxyResponseStream::new(b"ok".to_vec(), AbruptReader::new(b""), Some(2));
+        let first = stream.next().await.expect("body chunk").expect("no error");
+        assert_eq!(first.as_ref(), b"ok");
+        assert!(stream.next().await.is_none());
+    }
+
+    #[tokio::test]
+    async fn proxy_body_stream_truncated_body_still_errors() {
+        use futures_util::StreamExt as _;
+        // Only 1 of 2 declared bytes arrives before the abrupt close:
+        // this is a genuine truncation and must stay an error.
+        let mut stream = ProxyResponseStream::new(Vec::new(), AbruptReader::new(b"o"), Some(2));
+        let first = stream.next().await.expect("body chunk").expect("no error");
+        assert_eq!(first.as_ref(), b"o");
+        let err = stream.next().await.expect("stream item").unwrap_err();
+        assert!(
+            matches!(err, Error::MalformedProxyResponse(_)),
+            "truncation must stay an error, got: {err:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn proxy_body_stream_close_delimited_ends_at_eof() {
+        use futures_util::StreamExt as _;
+        // No declared length: EOF is the framing, abrupt or not.
+        let mut stream = ProxyResponseStream::new(Vec::new(), AbruptReader::new(b"data"), None);
+        let first = stream.next().await.expect("body chunk").expect("no error");
+        assert_eq!(first.as_ref(), b"data");
+        assert!(stream.next().await.is_none());
+    }
 
     #[test]
     fn effective_timeout_uses_the_smaller_phase_or_total_budget() {
