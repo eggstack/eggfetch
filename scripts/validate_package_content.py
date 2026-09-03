@@ -224,6 +224,10 @@ def _check_secrets(namelist: list[str], zf: zipfile.ZipFile) -> list[ValidationE
                         continue
                     if "login, password =" in stripped or "password=password" in stripped:
                         continue
+                    if stripped.startswith("username, password ="):
+                        continue
+                    if "password=urllib.parse.unquote(" in stripped:
+                        continue
                     if "BasicAuth(" in stripped and "password=" in stripped:
                         continue
                     if "token = tokens[" in stripped:
