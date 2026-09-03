@@ -69,10 +69,13 @@ r = eggfetch.get("https://example.com", timeout=t)
 ```
 
 eggfetch has phases requests does not: `pool` (time waiting for a
-connection slot) and `total` (wall-clock cap across the entire request).
+connection slot) and `total` (native-only wall-clock cap across the entire
+request).
 
-The `connect` phase is accepted but not independently enforced. Use
-`total` as a backstop.
+Each configured phase is independently enforced: `connect` bounds direct and
+proxy connection setup (through HTTP/HTTPS proxies it also bounds proxy
+TCP/TLS setup and origin TLS after CONNECT), while `total`, when explicitly
+configured through the native API, remains an outer cap.
 
 ## Streaming
 
@@ -120,8 +123,11 @@ with eggfetch.Client(auth=eggfetch.BasicAuth("user", "pass")) as client:
     r = client.get("https://example.com")
 ```
 
-eggfetch strips `Authorization` headers on cross-origin redirects by
-default. requests forwards them unless you use a redirect hook.
+Both libraries strip `Authorization` on cross-origin redirects by default:
+requests drops it when the host changes (`Session.rebuild_auth`), and
+eggfetch strips `Authorization`/`Proxy-Authorization` on every redirect hop
+(plus `Cookie`/`Host` on cross-origin hops) before re-applying configured
+client-level auth.
 
 To disable auth on a per-request basis when the client has auth configured:
 
@@ -167,15 +173,16 @@ r = requests.get("https://example.com", proxies=proxies)
 r = eggfetch.get("https://example.com", proxy="http://proxy.example.com:8080")
 ```
 
-eggfetch does **not** read `HTTP_PROXY` or `HTTPS_PROXY` environment
-variables. Proxy configuration is explicit only. To bypass the proxy for
-certain hosts:
+The Rust core configures proxies explicitly and never reads proxy
+environment variables. The native Python `Client`/`AsyncClient` read
+`HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, and `NO_PROXY` by default
+(`trust_env=True`; pass `trust_env=False` for explicit-only configuration).
+To bypass the proxy for certain hosts with an explicit proxy:
 
 ```python
-client = eggfetch.Client(
-    proxy="http://proxy.example.com:8080",
-    no_proxy="localhost,127.0.0.1,.internal.example.com",
-)
+import os
+os.environ["NO_PROXY"] = "localhost,127.0.0.1,.internal.example.com"
+client = eggfetch.Client(proxy="http://proxy.example.com:8080")
 ```
 
 ## SSL/TLS
@@ -220,6 +227,23 @@ Max redirects:
 ```python
 r = client.get(url, follow_redirects=True, max_redirects=5)
 ```
+
+## Retry
+
+requests itself ships no built-in retry; retries are configured through the
+urllib3 `Retry` adapter mounted on a `Session` (backoff, status allowlist,
+method allowlist). eggfetch ships a native `Retry` policy instead:
+
+```python
+retry = eggfetch.Retry(max_attempts=3, backoff_factor=0.2, statuses={429, 503})
+r = client.get(url, retries=retry)
+
+# Disable retries per-request
+r = client.get(url, retries=False)
+```
+
+Only safe methods (GET, HEAD, OPTIONS) are retried by default; POST/PUT
+require explicit opt-in, and one-shot streaming bodies are not retried.
 
 ## Error handling
 
@@ -297,11 +321,11 @@ r = client.post("https://example.com/upload", files={"file": eggfetch.File("/pat
 | --- | --- | --- |
 | Redirects | Follow by default | **Do not follow** by default |
 | Streaming | `stream=True` + `iter_content` | `client.stream()` context manager |
-| Auth types | Tuple `(user, pass)` | `BasicAuth` / `BearerAuth` objects |
-| Timeout phases | `timeout` float or tuple | `Timeout` object with per-phase control |
-| Proxy env vars | Reads `HTTP_PROXY` etc. | **Does not** read proxy env vars |
+| Auth types | Tuple `(user, pass)` | `BasicAuth` / `BearerAuth` objects (tuple shorthand also accepted) |
+| Timeout phases | `timeout` float or `(connect, read)` tuple | `Timeout` object with per-phase control (`pool`, `connect`, `read`, `write`, native `total`) |
+| Proxy env vars | Reads `HTTP_PROXY` etc. | Native Python reads env by default (`trust_env=True`); Rust core/CLI are explicit-only |
 | Async | No built-in async | Built-in `AsyncClient` |
 | HTTP/2 | No | Yes (opt-in) |
 | HTTP/3 | No | Experimental (opt-in) |
-| Retry | Manual or via `urllib3` | Built-in `Retry` policy |
-| Compression | Manual via `Accept-Encoding` | Automatic decompression |
+| Retry | Via urllib3 adapter mounted on `Session` | Built-in `Retry` policy |
+| Compression | Decoded `iter_content`, raw via `stream + raw` | Automatic decoded iteration; raw encoded path selectable |

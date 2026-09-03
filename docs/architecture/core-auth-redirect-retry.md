@@ -35,7 +35,12 @@ See also: [overview.md](overview.md), [core-engine.md](core-engine.md).
 
 ### Cross-Origin Redirect Stripping
 
-The redirect engine strips `Authorization` headers on cross-origin redirects via `SENSITIVE_HEADERS`. Client-level auth is NOT reapplied on cross-origin redirect hops. Same-origin redirects do reapply client-level auth.
+The redirect engine always strips `Authorization` and `Proxy-Authorization`
+from the cloned header set, and additionally strips `Cookie` and `Host` on
+cross-origin redirects. Client-level auth is NOT reapplied on cross-origin
+redirect hops. Same-origin redirects reapply client-level auth after the
+strip, so effective credentials survive while server-mutated header values
+do not.
 
 ## Redirect Following
 
@@ -57,8 +62,8 @@ The redirect engine strips `Authorization` headers on cross-origin redirects via
 ### Header Handling
 
 On redirect:
-- **Same-origin**: headers are preserved (except `Authorization` if stripped).
-- **Cross-origin**: `Authorization`, `Cookie`, and `Proxy-Authorization` are stripped.
+- **Same-origin**: `Authorization`/`Proxy-Authorization` are stripped from the cloned set, then configured client-level auth is re-applied; `Cookie`/`Host` survive.
+- **Cross-origin**: `Authorization`, `Cookie`, and `Proxy-Authorization` are stripped, plus `Host` is reset to the new destination; client-level auth is not reapplied.
 - `Host` header is updated to the new destination.
 - `Content-Length` and `Content-Type` are stripped if the method changes from POST.
 
@@ -91,7 +96,8 @@ The total timeout applies across the entire redirect chain, not per-hop. A chain
 |-----------|-----------|
 | Network errors (connect, TLS, I/O) | Yes (for replayable requests) |
 | 429 Too Many Requests | Yes (with Retry-After) |
-| 500, 502, 503, 504 | Yes (for replayable requests) |
+| 408, 502, 503, 504 | Yes (for replayable requests) |
+| 500 Internal Server Error | No (not in the default retryable set) |
 | `REFUSED_STREAM` (HTTP/2) | Yes |
 | `CANCEL`, `GOAWAY` (HTTP/2) | No |
 | Body not replayable | No |

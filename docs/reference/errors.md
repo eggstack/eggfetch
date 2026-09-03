@@ -139,7 +139,8 @@ Exception
 | `Http2FlowControl` | `Http2FlowControlError` |
 | `Http2Protocol` | `Http2Error` |
 | `H3Connect` | `H3ConnectError` |
-| `H3ConnectionClosed`, `H3Protocol`, `H3Stream` | `H3ProtocolError` or `H3Error` |
+| `H3ConnectionClosed`, `H3Protocol` | `H3ProtocolError` |
+| `H3Stream` | `H3Error` |
 
 ## CLI Exit Codes
 

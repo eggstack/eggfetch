@@ -90,7 +90,9 @@ artifacts.
 ## Tag format
 
 Git tags use the format `vMAJOR.MINOR.PATCH` (e.g., `v0.1.0`, `v0.2.1`).
-Release artifacts and CI workflows are triggered by tags matching this pattern.
+Routine CI runs on pushes and pull requests, not on tags. The PyPI wheel
+workflow is manually dispatched from a `v<VERSION>` tag (never triggered by
+pushing one); see `docs/releases/process.md`.
 
 ## MSRV policy
 

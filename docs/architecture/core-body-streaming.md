@@ -26,12 +26,13 @@ Stream bodies are wrapped in a hyper `StreamBody` and piped to the transport inc
 
 ## Response Body
 
-`ResponseBody` has three variants:
+`ResponseBody` has four variants:
 
 | Variant | Description |
 |---------|-------------|
 | `Buffered(Bytes)` | Collected body — fully in memory |
 | `Streaming(LeasedResponseStream)` | Live chunk stream with pool permit |
+| `EncodedStreaming` | Encoded source for streaming compressed responses; first body-consuming operation selects decoded vs raw mode one-shot |
 | `Consumed` | Body already consumed — second access returns error |
 
 ### Single-Consumption Semantics

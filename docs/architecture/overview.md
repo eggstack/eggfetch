@@ -139,7 +139,7 @@ Single source file (`main.rs`, ~1700 lines). Thin binary over `eggfetch-core`:
 
 ### eggfetch-python (the Python bindings)
 
-18 source modules via PyO3/maturin. Enables all core features including HTTP/3.
+19 source modules via PyO3/maturin. Enables all core features including HTTP/3.
 
 | Module | Purpose |
 |--------|---------|
@@ -291,6 +291,8 @@ The pipeline tries transports in this order within `send_single_request()`:
 
 ## Current Status
 
-All milestones A–Z are complete. The workspace provides ~980 Rust tests, ~520 Python tests (non-compat), ~1590 Python tests (compat), and 31 FFI tests. MSRV is Rust 1.80. CI enforces `RUSTFLAGS=-D warnings` with pedantic clippy.
+All milestones A–Z are complete. Test counts change with every commit; the
+evidence bound to the qualified executable SHA is recorded in
+`plans/httpx-parity-correction-status.md`. MSRV is Rust 1.80. CI enforces `RUSTFLAGS=-D warnings` with pedantic clippy.
 
 The `test-util` feature enables `tokio/test-util` for deterministic time testing in timeout-related tests.

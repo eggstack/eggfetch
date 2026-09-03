@@ -157,13 +157,13 @@ with client:
 ```python
 import eggfetch
 
+# Proxy credentials travel in the proxy URL; hosts that bypass the proxy
+# come from NO_PROXY in the environment (trust_env=True, the default).
 client = eggfetch.Client(
-    proxy="http://proxy.corp.example.com:8080",
-    proxy_auth="proxyuser:proxypass",
-    no_proxy="localhost,127.0.0.1,.internal.corp.example.com",
+    proxy="http://proxyuser:proxypass@proxy.corp.example.com:8080",
 )
 with client:
-    # Bypasses proxy
+    # Bypasses proxy when covered by NO_PROXY
     r = client.get("https://internal.corp.example.com/api")
     # Uses proxy
     r = client.get("https://external.example.com")

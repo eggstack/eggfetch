@@ -9,7 +9,7 @@ Node.js (eggfetch-node, experimental).
 | Feature flag | Default | Python default | CLI default |
 | --- | --- | --- | --- |
 | `http1` | Yes | Yes | Yes |
-| `http2` | No | Yes | Yes |
+| `http2` | No | Yes | No |
 | `http3` | No | Yes | No |
 | `tls-rustls` | Yes | Yes | Yes |
 | `cookies` | No | Yes | Yes |
@@ -66,7 +66,6 @@ Node.js (eggfetch-node, experimental).
 | `Headers` (case-insensitive) | Yes |
 | `Cookies` | Yes |
 | `proxy=` kwarg | Yes |
-| `no_proxy=` kwarg | Yes |
 | `verify=` / `cert=` kwarg | Yes |
 | `http2=` / `http3=` kwarg | Yes |
 | `decompress=` kwarg | Yes |
@@ -128,8 +127,8 @@ change before 1.0.
 ### Python
 
 - No Trio/AnyIO support (asyncio only).
-- No WSGI/ASGI in-process transports.
-- `connect` timeout is accepted but not independently enforced.
+- No WSGI/ASGI in-process transports in the native API (the HTTPX compatibility facade provides `WSGITransport`/`ASGITransport`).
+- Native proxy bypass comes from `NO_PROXY` in the environment (`trust_env=True`, the default); proxy credentials travel in the proxy URL. There is no `no_proxy=`/`proxy_auth=` kwarg on the native `Client`.
 - Encrypted private keys for mTLS produce a clear error at construction.
 - HTTP/3 is experimental; API surfaces may change.
 

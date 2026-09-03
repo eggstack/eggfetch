@@ -276,6 +276,11 @@ eggfetch --http2 https://example.com
 eggfetch --http3 https://example.com
 ```
 
+`--http2`/`--http3` require a CLI build with the corresponding core feature
+compiled in. The default build enables `cookies`, `multipart`, and `proxy`
+but **not** `http2` or `http3`; requesting an uncompiled protocol fails
+instead of silently downgrading.
+
 ## Decompression
 
 ```sh
@@ -291,7 +296,7 @@ eggfetch --max-decompression-ratio 100.0 https://example.com
 
 ## Status Checking
 
-Exit with code 6 on 4xx/5xx responses:
+Exit with code 6 on any non-2xx response:
 
 ```sh
 eggfetch --check-status https://example.com/404
@@ -334,7 +339,7 @@ eggfetch --generate-completion fish > ~/.config/fish/completions/eggfetch.fish
 | 3 | Connection error (network, TLS, proxy) |
 | 4 | Timeout |
 | 5 | Protocol error (HTTP/2, decompression, redirects) |
-| 6 | HTTP status error (with `--check-status`, on 4xx/5xx) |
+| 6 | HTTP status error (with `--check-status`, on any non-2xx) |
 | 7 | I/O error |
 | 130 | Interrupted (Ctrl+C) |
 

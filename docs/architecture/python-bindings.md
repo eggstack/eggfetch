@@ -24,6 +24,9 @@ See also: [overview.md](overview.md).
 | `streaming.rs` | `StreamingResponse` — sync/async iterators |
 | `conversion.rs` | Python↔Rust type conversion (shared by sync/async) |
 | `limits.rs` | `PyLimits` — pool concurrency limits |
+| `extensions.rs` | Request extension extraction (`target`, `sni_hostname`, `trace`) |
+| `network_stream.rs` | `PyNetworkStream` / `PyAsyncNetworkStream` upgrade wrappers |
+| `trace_bridge.rs` | `PyTraceObserver` — sync trace-callback bridge |
 
 ## Sync Adapter
 
@@ -156,6 +159,8 @@ Body kwargs (`content`, `data`, `json`) are mutually exclusive. `files` may comb
 ## HTTPX Compatibility Facade
 
 The `eggfetch.compat.httpx` module provides an HTTPX 0.28.1-compatible facade over the native eggfetch bindings. This enables existing HTTPX code to run against the eggfetch Rust engine with minimal changes.
+
+The facade is Stage C qualified for the documented Python 3.10+ asyncio-supported surface. The current qualification SHA, scope, and evidence live in `compat/httpx/0.28.1/profile.toml` and `plans/httpx-parity-correction-status.md`; phase/corrective plan documents below are historical records of how that state was reached, not the current claim.
 
 ### Architecture Overview
 

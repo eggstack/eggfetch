@@ -55,13 +55,13 @@ No critical or high-severity findings. The trust store fallback is well-scoped a
 
 ### Cross-Origin Redirect Stripping
 
-- **Headers stripped**: `Authorization`, `Proxy-Authorization`, `Cookie`, and `Set-Cookie` are stripped on every cross-origin redirect hop. This prevents credential leakage to third-party origins.
+- **Headers stripped**: `Authorization` and `Proxy-Authorization` are stripped on every redirect hop; `Cookie` is additionally stripped (and `Host` reset) on cross-origin hops. (`Set-Cookie` is a response header and never appears on redirect requests.) This prevents credential leakage to third-party origins.
 - **Origin determination**: Origin is computed from scheme, host, and port. Port changes are treated as cross-origin (e.g., `https://example.com:443` to `https://example.com:8443`).
 - **Chained redirects**: Each hop in a redirect chain is evaluated independently. Credentials are stripped on each cross-origin hop, not just the first.
 
 ### Same-Origin Redirects
 
-- **Headers preserved**: Same-origin redirects preserve all headers, including `Authorization` and `Cookie`.
+- **Headers handled**: Same-origin redirects strip `Authorization`/`Proxy-Authorization` from the cloned set, then re-apply configured client-level auth; `Cookie`/`Host` survive.
 - **Client auth reapplied**: Client-level auth is reapplied on same-origin redirects, ensuring the credentials are present even if the original header was modified by the server.
 
 ### User-Provided Headers

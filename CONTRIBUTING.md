@@ -28,7 +28,10 @@ CI enforces a lint-suppression policy via `scripts/check_lint_suppressions.sh` t
 
 ## Unsafe
 
-The workspace sets `unsafe_code = "forbid"`. There is no `#[allow(unsafe_code)]` anywhere in the project. Any new use of `unsafe` requires a strong justification, a separate decision, and likely a dedicated review. Do not add `unsafe` without explicit discussion.
+The workspace sets `unsafe_code = "forbid"`. The sole exceptions are the
+`eggfetch-ffi` and `eggfetch-node` crates, which override it to `"allow"`
+for their checked FFI/N-API boundaries. Do not add new `unsafe` without
+explicit discussion and a strong justification.
 
 ## Documentation
 
@@ -52,7 +55,10 @@ Tests live next to the code they cover, using `#[cfg(test)] mod tests` blocks wi
 cargo test --workspace --all-features
 ```
 
-Prefer small, focused tests that exercise one behavior. The workspace has ~685 Rust tests, ~513 Python tests (non-compat), ~1280 Python tests (compat), and 30 FFI tests covering construction, streaming, timeouts, pools, headers, integration scenarios, sync/async API parity, redirect replay, total timeout across redirects, response decoding, cookie subsystem, authentication subsystem, multipart uploads, decompression, proxy tunneling, retry policies, raw stream lifecycle, and true network streaming via `client.stream()`. As the project grows, tests should cover protocol correctness, edge cases, and error paths.
+Prefer small, focused tests that exercise one behavior. Test counts change
+with every commit; the live qualification evidence (Rust/Python/compat/FFI
+counts for the qualified SHA) is recorded in
+`plans/httpx-parity-correction-status.md`. As the project grows, tests should cover protocol correctness, edge cases, and error paths.
 
 ### Python tests
 

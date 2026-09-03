@@ -68,10 +68,14 @@ let proxy = Proxy::all("http://proxy:8080")?.auth(auth);
 
 ```python
 client = eggfetch.Client(
-    proxy="http://proxy:8080",
-    proxy_auth=("proxyuser", "proxypass"),
+    proxy="http://proxyuser:proxypass@proxy:8080",
 )
 ```
+
+The native Python `proxy=` string is parsed with HTTPX-compatible userinfo
+handling (credentials become proxy auth). Strict Rust `Proxy::all()` rejects
+URL userinfo; use `.auth(ProxyAuth::basic(...))` or `Proxy::all_compat()`
+there instead.
 
 Proxy passwords are redacted in `Debug`, `Display`, logs, and error messages. Credentials in proxy URLs are rejected.
 

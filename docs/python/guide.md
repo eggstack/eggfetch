@@ -139,8 +139,8 @@ Streaming responses also support a buffered fallback:
 ```python
 async with eggfetch.AsyncClient() as client:
     async with client.stream("GET", "https://example.com/data") as response:
-        # Buffer the entire body into text
-        text = await response.text()
+        # Buffer the entire body into text (sync call; releases the GIL)
+        text = response.text()
 ```
 
 The sync client supports streaming too:
@@ -167,7 +167,7 @@ if "x-request-id" in response.headers:
     print(response.headers["x-request-id"])
 
 # Iterate
-for name, value in response.headers:
+for name, value in response.headers.items():
     print(f"{name}: {value}")
 ```
 
@@ -276,7 +276,7 @@ response = client.get("https://example.com")
 response = client.get("https://internal.example.com", proxy=False)
 ```
 
-eggfetch reads `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, and `NO_PROXY` environment variables when `trust_env=True` (the default for the compatibility layer). Set `trust_env=False` to disable environment variable discovery.
+eggfetch reads `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, and `NO_PROXY` environment variables when `trust_env=True` (the default). Set `trust_env=False` to disable environment variable discovery. (The Rust core and CLI are explicit-only: Rust takes `Proxy` configuration in code, the CLI takes `--proxy`/`EGGFETCH_PROXY`.)
 
 ## TLS/SSL
 
@@ -499,7 +499,7 @@ Streaming responses also support context managers:
 ```python
 async with eggfetch.AsyncClient() as client:
     async with client.stream("GET", "https://example.com") as response:
-        async for chunk in response.bytes():
+        async for chunk in response.aiter_bytes():
             process(chunk)
 ```
 
@@ -538,6 +538,6 @@ with eggfetch.Client(
 with eggfetch.Client() as client:
     with client.stream("GET", "https://example.com/large-file") as resp:
         with open("download.bin", "wb") as f:
-            for chunk in resp.bytes():
+            for chunk in resp.iter_bytes():
                 f.write(chunk)
 ```

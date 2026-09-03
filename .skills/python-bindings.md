@@ -72,7 +72,7 @@ EggfetchError
 
 ## HTTPX Compatibility Layer
 
-The `eggfetch.compat.httpx` module provides an HTTPX 0.28.1 drop-in facade over the eggfetch Rust engine. Import path:
+The `eggfetch.compat.httpx` module provides an HTTPX 0.28.1 compatibility facade over the eggfetch Rust engine (Stage C qualified for the documented asyncio surface at the exact SHA in `compat/httpx/0.28.1/profile.toml`). Import path:
 
 ```python
 from eggfetch.compat.httpx import Client, AsyncClient, Request, Response

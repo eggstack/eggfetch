@@ -19,7 +19,7 @@ cargo test --workspace --all-features
 
 ## Key Constraints
 
-- `unsafe_code = "forbid"` workspace-wide. Never add `unsafe`. If you think you need it, stop and ask.
+- `unsafe_code = "forbid"` workspace-wide, except `eggfetch-ffi` and `eggfetch-node` (sole exceptions for their FFI/N-API boundaries). Never add `unsafe` elsewhere. If you think you need it, stop and ask.
 - All HTTP logic belongs in `eggfetch-core`. CLI, Python, FFI, and Node are adapters.
 - No parallel synchronous networking path. Python sync blocks on async Rust engine.
 - Public items need doc comments. For skeletal types, state which milestone fills in the real implementation.

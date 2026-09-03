@@ -44,7 +44,7 @@ This checklist must be completed before any release of eggfetch. Each item has a
 
 ## Redirect and Authentication
 
-- [ ] Cross-origin redirect stripping tests pass (`Authorization`, `Proxy-Authorization`, `Cookie`, `Set-Cookie` stripped)
+- [ ] Cross-origin redirect stripping tests pass (`Authorization`, `Proxy-Authorization` always stripped; `Cookie` stripped and `Host` reset cross-origin)
 - [ ] Same-origin redirect header preservation tests pass
 - [ ] Port changes correctly treated as cross-origin
 - [ ] Client-level auth not reapplied on cross-origin redirects

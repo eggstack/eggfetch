@@ -11,8 +11,8 @@
 | Generated | 2026-07-23 (original) |
 | Rebaselined | 2026-08-07 |
 | Rebaseline SHA | f9eb1a455907d43210886b7b047d18bde8716652 |
-| Qualified | 2026-08-10 |
-| Qualification SHA | 40beeec09f3e88db8901f39388da665c47ab84f6 |
+| Qualified | 2026-08-10 (historical; superseded) |
+| Qualification SHA | 40beeec09f3e88db8901f39388da665c47ab84f6 (historical; current SHA in `profile.toml`) |
 
 ---
 
@@ -409,7 +409,7 @@ This inventory was refreshed during the Phase 1 contract rebaseline. Key correct
 1. **Redirect default**: HTTPX 0.28.1 defaults to `follow_redirects=False`, same as eggfetch. The earlier claim that "HTTPX follows redirects by default" was incorrect for version 0.28.1.
 2. **Proxy environment**: the HTTPX facade selects `HTTP_PROXY`/`HTTPS_PROXY` by request scheme, uses `ALL_PROXY` fallback, and honors lowercase forms plus `NO_PROXY` when `trust_env=True`.
 3. **SOCKS proxy**: HTTPX 0.28.1 exposes SOCKS proxy support as an optional public feature (`httpx[socks]`). eggfetch supports SOCKS5 (`socks5://` and `socks5h://`) with the pinned authentication method and address-type behavior, route pooling, origin TLS, and NO_PROXY bypass. Native Rust configuration retains its explicit local-versus-remote DNS distinction.
-4. **SSL context**: HTTPX `Proxy(..., ssl_context=...)` is a constructor parameter. eggfetch `Proxy` does not accept `ssl_context`; TLS is handled by the Rust engine. Classified as `intentional` (security boundary).
+4. **SSL context**: HTTPX `Proxy(..., ssl_context=...)` is a constructor parameter. eggfetch `Proxy(ssl_context=...)` is translated to a native `TlsConfig` for the proxy endpoint TLS handshake, separate from origin TLS config (resolved in Phase 05; see `resolved-differences.toml`). Arbitrary Python ssl_context objects unrepresentable by rustls are rejected at construction with `TypeError`.
 5. **StreamError base class**: HTTPX `StreamError` inherits from `RuntimeError`; eggfetch inherits from `Exception`. Resolved in Phase 2.
 
 The full classification of all active differences is in `allowed-differences.toml`.

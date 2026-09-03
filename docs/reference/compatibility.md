@@ -51,24 +51,24 @@ all HTTPX transports or concurrency backends.
 | Response decompression (deflate) | Yes | Yes | Yes | Yes | Yes |
 | Multipart file upload | Yes | Yes | Yes | Yes | Yes |
 | Timeouts (connect, read, write) | Partial | Yes | Yes | Yes | Yes |
-| Timeout (total wall-clock) | No | Yes | Yes | Yes | Yes |
+| Timeout (total wall-clock) | No | No | Yes (native `total`; facade maps 4 phases only) | Yes | Yes |
 | Timeout (pool wait) | No | Yes | Yes | Yes | Yes |
 | Retry policy | No | No | Yes | Yes | Yes |
 | Retry-After header | No | No | Yes | N/A | Yes |
 | HTTP/2 | No | Yes | Yes | Yes | Yes |
 | HTTP/3 (experimental) | No | No | Yes | Yes | Yes |
-| Cross-origin header stripping | Manual | Manual | Automatic | Automatic | Automatic |
-| Proxy env vars (HTTP_PROXY) | Yes | Yes | Yes | Yes | Yes |
-| Custom transports (sync/async) | No | Yes | Yes | N/A | N/A |
-| HTTP transport (HTTPTransport/AsyncHTTPTransport) | No | Yes | Yes | N/A | N/A |
-| URL-pattern mount routing (priority matching) | No | Yes | Yes | N/A | N/A |
-| MockTransport (no-network testing) | No | Yes | Yes | N/A | N/A |
-| WSGITransport (WSGI app testing) | No | Yes | Yes | N/A | N/A |
-| ASGITransport (ASGI app testing) | No | Yes | Yes | N/A | N/A |
-| Event hooks (request/response sequencing) | No | Yes | Yes | N/A | N/A |
-| DigestAuth (MD5/SHA-256) | No | Yes | Yes | N/A | N/A |
-| NetRCAuth | No | Yes | Yes | N/A | N/A |
-| Auth flow generator pattern | No | Yes | Yes | N/A | N/A |
+| Cross-origin credential stripping | Automatic (host change) | Automatic (cross-origin) | Automatic | Automatic | Automatic |
+| Proxy env vars (HTTP_PROXY) | Yes | Yes | Facade Yes (`trust_env=True`); native Python Yes by default (`trust_env=True`), Rust/CLI explicit-only | CLI explicit (`--proxy`/`EGGFETCH_PROXY` only) | Explicit-only |
+| Custom transports (sync/async) | No | Yes | Facade Yes (native: N/A) | N/A | N/A |
+| HTTP transport (HTTPTransport/AsyncHTTPTransport) | No | Yes | Facade Yes (native: N/A) | N/A | N/A |
+| URL-pattern mount routing (priority matching) | No | Yes | Facade Yes (native: N/A) | N/A | N/A |
+| MockTransport (no-network testing) | No | Yes | Facade Yes (native: N/A) | N/A | N/A |
+| WSGITransport (WSGI app testing) | No | Yes | Facade Yes (native: N/A) | N/A | N/A |
+| ASGITransport (ASGI app testing) | No | Yes | Facade Yes (native: N/A) | N/A | N/A |
+| Event hooks (request/response sequencing) | No | Yes | Facade Yes (native: N/A) | N/A | N/A |
+| DigestAuth (MD5/SHA-256) | No | Yes | Facade Yes (native: Basic/Bearer only) | N/A | N/A |
+| NetRCAuth | No | Yes | Facade Yes (native: N/A) | N/A | N/A |
+| Auth flow generator pattern | No | Yes | Facade Yes (native: N/A) | N/A | N/A |
 | Async API | No | Yes | Yes | N/A | Yes (native) |
 
 ## Partially supported with differences
@@ -77,7 +77,7 @@ all HTTPX transports or concurrency backends.
 | --- | --- |
 | Auth tuple shorthand | requests accepts `auth=("user","pass")`. eggfetch Python supports this. eggfetch Rust requires `BasicAuth::new("user", "pass")`. |
 | Proxy configuration | requests uses a dict by scheme. eggfetch uses a single `proxy=` string. |
-| Proxy env vars | The HTTPX facade selects `HTTP_PROXY`/`HTTPS_PROXY` by request scheme, uses `ALL_PROXY` as fallback, and honors lowercase forms plus `NO_PROXY` when `trust_env=True`; native Rust configuration remains explicit. |
+| Proxy env vars | The HTTPX facade selects `HTTP_PROXY`/`HTTPS_PROXY` by request scheme, uses `ALL_PROXY` as fallback, and honors lowercase forms plus `NO_PROXY` when `trust_env=True`; native Python also reads env by default (`trust_env=True`); native Rust configuration and the CLI (`--proxy`/`EGGFETCH_PROXY`) remain explicit. |
 | Timeout tuple | requests accepts `(connect, read)` tuples. eggfetch uses `Timeout` objects. |
 
 ## Intentionally unsupported
@@ -87,8 +87,8 @@ all HTTPX transports or concurrency backends.
 | Trio async backend | Deferred to Stage D |
 | Python 3.8/3.9 | Requires Python 3.10+ (tokio runtime requirement) |
 | Private HTTPX modules | `_transports`, `_content`, `_models`, `_decoders`, `_exceptions`, `_multipart`, `_urlparse`, `_config` excluded from contract |
-| SSL context on Proxy | TLS handled by Rust engine (security boundary) |
-| ALL_PROXY env var | Supported by the HTTPX facade as the scheme-specific fallback; native Rust callers configure proxies explicitly |
+| HTTPX four-element null-pointer `socket_options` | Outside the safe Rust boundary; safe three-element form is supported |
+| Unrepresentable `ssl.SSLContext` state | Fails closed with `TypeError` (safety boundary; representable state translates exactly) |
 
 ## Sync/async parity
 

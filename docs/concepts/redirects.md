@@ -44,7 +44,10 @@ On cross-origin redirects (different scheme, host, or port), the following heade
 - `Cookie`
 - `Proxy-Authorization`
 
-Same-origin redirects preserve all headers. Client-level auth is not reapplied on cross-origin redirect hops. This prevents accidental credential forwarding to third-party origins.
+Same-origin redirects strip `Authorization` and `Proxy-Authorization` from
+the cloned header set and then re-apply configured client-level auth, so the
+effective credentials survive while server-mutated header values do not.
+Client-level auth is not reapplied on cross-origin redirect hops. This prevents accidental credential forwarding to third-party origins.
 
 ## Body Replayability
 

@@ -166,7 +166,7 @@ All credential-carrying types (`BasicAuth`, `BearerAuth`, `ProxyAuth`) implement
 
 ### 2. Cross-Origin Redirect Strips Sensitive Headers
 
-On cross-origin redirects (scheme, host, or port mismatch), the redirect engine strips `Authorization`, `Proxy-Authorization`, `Cookie`, and `Set-Cookie` headers from the redirected request. Client-level auth is not reapplied on cross-origin hops. Same-origin redirects preserve headers and reapply client-level auth. Port changes are treated as cross-origin.
+On cross-origin redirects (scheme, host, or port mismatch), the redirect engine always strips `Authorization` and `Proxy-Authorization`, and additionally strips `Cookie` while resetting `Host` to the new destination. (`Set-Cookie` is a response header and never appears on redirect requests.) Client-level auth is not reapplied on cross-origin hops. Same-origin redirects strip `Authorization`/`Proxy-Authorization` from the cloned set and then re-apply configured client-level auth. Port changes are treated as cross-origin.
 
 ### 3. Proxy Auth Never Forwarded to Destination
 

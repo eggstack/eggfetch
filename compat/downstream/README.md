@@ -6,8 +6,8 @@ release selected for what it tests—not for popularity.
 
 ## Why This Exists
 
-Phase 5 validates that eggfetch works as a drop-in httpx replacement for
-real-world consumers. This manifest defines the test matrix:
+Phase 5 validates that eggfetch's HTTPX compatibility facade serves
+real-world consumers of the documented asyncio surface. This manifest defines the test matrix:
 
 - Which packages to install alongside eggfetch
 - Which API surfaces each package exercises

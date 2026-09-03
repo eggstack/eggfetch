@@ -59,7 +59,7 @@ eggfetch_client_builder_connect_timeout(builder, 5);
 eggfetch_client_builder_follow_redirects(builder, 1);
 eggfetch_client_builder_max_redirects(builder, 10);
 eggfetch_client_builder_user_agent(builder, "my-app/1.0");
-eggfetch_client_builder_http_version(builder, 2); // HTTP/2
+eggfetch_client_builder_http_version(builder, 2); // Auto (negotiate; 0 = HTTP/1 only, 1 = HTTP/2 only, 3 = auto with HTTP/3)
 eggfetch_client *client = eggfetch_client_builder_build(builder);
 // The builder handle is not consumed by build; free it exactly once:
 eggfetch_client_builder_free(builder);

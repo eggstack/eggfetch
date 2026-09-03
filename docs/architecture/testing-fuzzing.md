@@ -10,12 +10,9 @@ All tests are colocated in `#[cfg(test)] mod tests` blocks within each source fi
 
 ### Test Counts
 
-| Category | Approximate Count |
-|----------|-------------------|
-| Rust unit/integration | ~980 |
-| Python (non-compat) | ~520 |
-| Python (compat) | ~1590 |
-| FFI | 31 |
+Test counts change with every commit and are not duplicated here. The
+evidence bound to the qualified executable SHA (Rust, Python, compat, FFI
+counts) is recorded in `plans/httpx-parity-correction-status.md`.
 
 ## Running Tests
 

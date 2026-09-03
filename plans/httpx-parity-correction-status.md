@@ -307,6 +307,24 @@ special qualification workflow was created.
 - Relationship to `FROZEN_EXECUTABLE_SHA`: executable-identical
   descendant (proven by the descendant audit above).
 
+### Post-documentation-refresh descendant note
+
+After the Corrective 08 closure above, the broad documentation truth
+refresh (`plans/documentation-broad-truth-refresh-after-requalification.md`)
+landed as a further documentation-only descendant: migration guides
+(raw iteration, WSGI/ASGI, proxy-env, redirect-default, timeout,
+compression semantics), the compatibility matrix (total-timeout scope,
+facade-vs-native labeling, proxy `ssl_context` resolution), contributor
+guidance (MSRV extended-check model, unsafe-code exceptions, tag/CI
+semantics), architecture deep dives (redirect stripping, retryable
+statuses, body variants, module map), and user guides/cookbook/FFI
+examples were reconciled with the qualified implementation. No
+Rust/Python source, test, manifest, lockfile, script, workflow, or
+packaging file changed; `profile.toml` `qualification-sha` still equals
+`d24101be6ed7be64463813750da5b4043d9905ec`. Routine Tier 1
+(`./scripts/check.sh`) passed locally on the resulting tree, and routine
+remote CI covers the same frozen executable tree.
+
 ### Closure statement
 
 Corrective 08 is complete on the evidence above. The HTTPX 0.28.1

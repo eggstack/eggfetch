@@ -7,7 +7,7 @@ The minimum supported Rust version (MSRV) is declared in `workspace.package.rust
 - The MSRV may be raised in minor releases. A MSRV bump is announced at least one minor release in advance.
 - The MSRV is never raised in a patch release.
 - The MSRV is chosen to balance access to language features with distribution packager compatibility.
-- CI runs the full test suite against the declared MSRV to catch regressions.
+- The MSRV is checked in extended validation (`./scripts/check.sh extended`) via a `cargo check` with the 1.80 toolchain; the check is skipped when that toolchain is not installed. Routine CI does not run an MSRV matrix.
 
 ## Python Supported Versions
 

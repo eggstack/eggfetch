@@ -3,9 +3,8 @@
 **Current decision — Stage C qualified**
 
 The documented Python 3.10+ asyncio-supported HTTPX 0.28.1 surface is
-qualified at exact executable SHA
-`64a1e2c3f3cea7ddc6eeabcd85a67a4d7a17cb26`. See
-`compat/httpx/0.28.1/profile.toml` and
+qualified at the exact executable SHA recorded in
+`compat/httpx/0.28.1/profile.toml`. See that profile and
 `plans/httpx-parity-correction-status.md` for the current evidence. The
 historical candidate decision below is retained as audit history.
 
