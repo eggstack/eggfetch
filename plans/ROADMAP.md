@@ -8,6 +8,15 @@ eggfetch is a Rust-native HTTP client platform with Python bindings and a CLI la
 
 The remaining roadmap is therefore not primarily about proving feasibility. It is about tightening semantics, completing the expected HTTP-client feature set, expanding transport capabilities, and establishing production-grade release, security, testing, and documentation practices.
 
+## Current closure work (2026-09-03)
+
+Two ordered closure passes are active after the recent post-qualification hardening work:
+
+1. `httpx-parity-corrective-08-post-hardening-requalification-and-closure.md` — audit the executable changes since the 2026-08-24 HTTPX 0.28.1 qualification, freeze one final executable/test SHA, rerun the complete exact-SHA qualification evidence, and renew the bounded Stage C claim only if every gate passes.
+2. `documentation-broad-truth-refresh-after-requalification.md` — after the renewed qualification is recorded, perform a repository-wide documentation truth pass as a documentation/ledger-only descendant so migration, compatibility, architecture, contributor, verification, release, and guide material all describe the current implementation consistently.
+
+Execution order is strict: **Corrective 08 first, documentation refresh second**. Any executable/test/build/validation/packaging change discovered during the documentation pass reopens Corrective 08 and requires a new frozen SHA.
+
 ## Architectural invariants
 
 The following remain non-negotiable:
