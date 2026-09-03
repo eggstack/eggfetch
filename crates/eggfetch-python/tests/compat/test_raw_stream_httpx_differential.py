@@ -398,6 +398,17 @@ def _native_server():
         yield f"http://{host}:{port}"
 
 
+def _stable_multi_items(headers):
+    """Header items with the volatile `Date` value removed.
+
+    The test server stamps `Date` per request, so two sequential
+    requests (reference vs candidate) can straddle a second boundary
+    and differ by one second. Date *presence* is asserted separately;
+    everything else must match exactly.
+    """
+    return [(k, v) for k, v in headers.multi_items() if k.lower() != "date"]
+
+
 def test_actual_native_sync_raw_stream_reaches_unadapted_path():
     with _native_server() as base:
         with httpx.Client() as reference, Client() as candidate:
@@ -408,7 +419,10 @@ def test_actual_native_sync_raw_stream_reaches_unadapted_path():
                 actual_chunks = list(actual.iter_raw())
                 assert b"".join(actual_chunks) == b"".join(expected_chunks)
                 assert actual.num_bytes_downloaded == expected.num_bytes_downloaded
-                assert actual.headers.multi_items() == expected.headers.multi_items()
+                assert "date" in expected.headers and "date" in actual.headers
+                assert _stable_multi_items(actual.headers) == _stable_multi_items(
+                    expected.headers
+                )
 
 
 @pytest.mark.asyncio
@@ -422,7 +436,10 @@ async def test_actual_native_async_raw_stream_reaches_unadapted_path():
                 actual_chunks = [chunk async for chunk in actual.aiter_raw()]
                 assert b"".join(actual_chunks) == b"".join(expected_chunks)
                 assert actual.num_bytes_downloaded == expected.num_bytes_downloaded
-                assert actual.headers.multi_items() == expected.headers.multi_items()
+                assert "date" in expected.headers and "date" in actual.headers
+                assert _stable_multi_items(actual.headers) == _stable_multi_items(
+                    expected.headers
+                )
 
 
 def test_actual_native_sync_compressed_raw_and_decoded_match_httpx():
