@@ -284,13 +284,28 @@ installed; repository policy).
 
 ### Post-qualification descendant audit
 
-(TODO after the qualification-record commit: compare `d24101b` to the
-record commit and confirm documentation/ledger-only changes.)
+Compared `d24101be6ed7be64463813750da5b4043d9905ec` (frozen executable
+SHA) to the qualification-record commit: every changed file is
+documentation/ledger-only (`.skills/*.md`, `AGENTS.md`,
+`compat/httpx/0.28.1/README.md`, `compat/httpx/0.28.1/profile.toml`,
+`docs/architecture/*`, `docs/reference/compatibility.md`,
+`docs/residual-differences.md`, `plans/httpx-parity-correction-status.md`).
+No Rust/Python source, test, manifest, lockfile, script, workflow, or
+packaging file changed after the freeze. `profile.toml`
+`qualification-sha` equals the exact frozen SHA.
 
 ### Remote CI
 
-(TODO: existing routine CI runs `./scripts/check.sh`; record workflow
-run, head SHA, and conclusion after pushing.)
+Existing routine CI runs `./scripts/check.sh` (Tier 1) on every push; no
+special qualification workflow was created.
+
+- Workflow: `CI`, run `33788208265`, job `ci`
+- Head SHA: `155ff3a9160f2ba4c34631aad52a5fdaf7cba137` (the
+  documentation/ledger record commit — a docs-only descendant of the
+  frozen executable SHA, so the run covers the frozen executable tree)
+- Conclusion: success
+- Relationship to `FROZEN_EXECUTABLE_SHA`: executable-identical
+  descendant (proven by the descendant audit above).
 
 ### Closure statement
 
