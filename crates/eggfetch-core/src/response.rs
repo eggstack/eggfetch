@@ -101,6 +101,13 @@ impl HistoryEntry {
 }
 
 /// An HTTP response.
+///
+/// # Trailers
+///
+/// HTTP trailers (HTTP/1.1 chunked trailers, HTTP/2 trailing HEADERS) are
+/// not surfaced: the body stream ends normally when a trailers frame
+/// arrives (see `wrap_incoming`). There is currently no accessor for
+/// trailer headers.
 pub struct Response {
     status: StatusCode,
     version: Version,

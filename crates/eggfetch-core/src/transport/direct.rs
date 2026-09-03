@@ -262,8 +262,10 @@ async fn await_upgrade(on_upgrade: hyper::upgrade::OnUpgrade) -> Option<Upgraded
 /// HEADERS frames) are **not supported**. This adapter only yields data
 /// frames. When a trailers frame arrives, the stream ends normally
 /// (returns `Poll::Ready(None)`) without surfacing the trailer headers.
+/// A `tracing::debug!` event is emitted (with the `tracing` feature) so a
+/// trailers-dropped truncation is distinguishable from clean EOF in logs.
 /// This is a known limitation; trailers may be supported in a future
-/// milestone.
+/// milestone. See also [`crate::Response`] trailers documentation.
 pub(crate) fn wrap_incoming(incoming: hyper::body::Incoming) -> BoxBytesStream {
     use futures_core::Stream;
     use http_body::Body;
@@ -283,6 +285,9 @@ pub(crate) fn wrap_incoming(incoming: hyper::body::Incoming) -> BoxBytesStream {
                     if let Ok(data) = frame.into_data() {
                         Poll::Ready(Some(Ok(data)))
                     } else {
+                        // Trailers frame — end stream without surfacing headers.
+                        #[cfg(feature = "tracing")]
+                        tracing::debug!("eggfetch: dropping HTTP trailers frame (unsupported)");
                         Poll::Ready(None)
                     }
                 }
@@ -347,6 +352,9 @@ fn classify_h2_hyper_error(err: &hyper::Error) -> Option<Error> {
                 return None;
             }
             if h2_err.is_go_away() {
+                // h2 0.4 does not expose the GOAWAY last_stream_id through
+                // its public API (Kind::GoAway holds debug bytes/reason only),
+                // so report 0 as a placeholder with full detail in debug_data.
                 return Some(Error::Http2GoAway {
                     last_stream_id: 0,
                     debug_data: h2_err.to_string(),
@@ -374,6 +382,8 @@ fn classify_h2_message(msg: &str) -> Option<Error> {
     let lower = msg.to_ascii_lowercase();
 
     if lower.contains("goaway") || lower.contains("go away") {
+        // Same placeholder as above: the message fallback carries no
+        // last_stream_id, so report 0 with the raw message preserved.
         return Some(Error::Http2GoAway {
             last_stream_id: 0,
             debug_data: msg.to_string(),

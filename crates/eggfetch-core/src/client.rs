@@ -167,7 +167,7 @@ fn evict_one<K: std::clone::Clone + Eq + std::hash::Hash, V>(map: &mut HashMap<K
 ///
 /// The standard hyper-rustls connector applies this policy while building its
 /// connector. Custom connectors must set the same ALPN list themselves.
-fn configure_tls_alpn(
+pub(crate) fn configure_tls_alpn(
     mut config: rustls::ClientConfig,
     policy: crate::http_version::HttpVersionPolicyEnabler,
 ) -> rustls::ClientConfig {

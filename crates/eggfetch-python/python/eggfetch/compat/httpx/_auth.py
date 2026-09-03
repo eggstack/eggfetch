@@ -361,9 +361,16 @@ class NetRCAuth(Auth):
         hosts: dict[str, dict[str, str]] = {}
         current_host: str | None = None
         current_entry: dict[str, str] = {}
+        in_macdef = False
 
-        for line in content.splitlines():
-            line = line.strip()
+        for raw_line in content.splitlines():
+            stripped = raw_line.strip()
+            if in_macdef:
+                # Macro body runs until a blank line per netrc spec.
+                if not stripped:
+                    in_macdef = False
+                continue
+            line = stripped
             if not line or line.startswith("#"):
                 continue
 
@@ -399,13 +406,9 @@ class NetRCAuth(Auth):
                         current_entry["account"] = tokens[i]
                 elif token == "macdef":
                     # macdef is followed by a macro name, then lines until
-                    # a blank line.  We skip the entire macro body.
-                    i += 1  # skip macro name
-                    # Skip tokens until we see a blank line (end of macro)
-                    while i < len(tokens):
-                        # In tokenized form we can't detect blank lines;
-                        # just skip the rest of the line
-                        break
+                    # a blank line. Skip the entire macro body.
+                    in_macdef = True
+                    break
                 i += 1
 
         # Save last entry

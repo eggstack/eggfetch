@@ -328,6 +328,12 @@ pub unsafe extern "C" fn eggfetch_response_stream_header(
 /// call from another thread finds the empty receiver slot and returns
 /// null rather than interleaving with the parked reader.
 ///
+/// A `blocking_send` failure (runtime creation failure, task panic/drop)
+/// is terminal: the receiver was moved into the parked future and cannot
+/// be restored, and the producer's sender is disconnected once the
+/// receiver is dropped. Later `next` calls return null with the recorded
+/// error available via [`eggfetch_response_stream_error`].
+///
 /// Caller must free the returned chunk with [`eggfetch_stream_chunk_free`].
 ///
 /// # Safety
@@ -389,6 +395,10 @@ pub unsafe extern "C" fn eggfetch_response_stream_next(
                 }) {
                     Ok(outcome) => outcome,
                     Err(error) => {
+                        // Terminal: the receiver was moved into the future and
+                        // is dropped with it; the producer sender disconnects.
+                        // Record the cause so the host can distinguish this
+                        // from clean EOF via `eggfetch_response_stream_error`.
                         if let Ok(mut last) = state.last_error.lock() {
                             *last = Some(error.to_string());
                         }

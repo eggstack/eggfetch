@@ -119,14 +119,23 @@ pub(crate) async fn send_https_connect_request(
 
     // Perform TLS handshake with the destination through the tunnel.
     let rustls_config = if let Some(tc) = ctx.origin_tls_config {
-        tc.build_rustls_config()
-            .map_err(|e| Error::Tls(format!("failed to build TLS config for tunnel: {e}")))?
+        let rc = tc
+            .build_rustls_config()
+            .map_err(|e| Error::Tls(format!("failed to build TLS config for tunnel: {e}")))?;
+        crate::client::configure_tls_alpn(
+            rc,
+            crate::http_version::HttpVersionPolicyEnabler::from_policy(ctx.http_version_policy),
+        )
     } else {
         let mut root_store = rustls::RootCertStore::empty();
         root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
-        rustls::ClientConfig::builder()
+        let fallback = rustls::ClientConfig::builder()
             .with_root_certificates(root_store)
-            .with_no_client_auth()
+            .with_no_client_auth();
+        crate::client::configure_tls_alpn(
+            fallback,
+            crate::http_version::HttpVersionPolicyEnabler::from_policy(ctx.http_version_policy),
+        )
     };
     let tls_connector = tokio_rustls::TlsConnector::from(std::sync::Arc::new(rustls_config));
 
@@ -361,7 +370,9 @@ impl<S: tokio::io::AsyncRead + Unpin> futures_core::Stream for TlsProxyResponseS
             }
             std::task::Poll::Ready(Err(e)) => {
                 if e.kind() == std::io::ErrorKind::UnexpectedEof {
-                    return std::task::Poll::Ready(None);
+                    return std::task::Poll::Ready(Some(Err(Error::Body(format!(
+                        "proxy closed connection unexpectedly: {e}"
+                    )))));
                 }
                 std::task::Poll::Ready(Some(Err(Error::Body(format!(
                     "proxy stream read error: {e}"

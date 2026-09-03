@@ -518,7 +518,10 @@ fn format_headers(headers: &http::HeaderMap, verbose: bool, redact_secrets: bool
 fn format_headers_machine(headers: &http::HeaderMap) -> Vec<Value> {
     headers
         .iter()
-        .map(|(name, value)| json!([name.as_str(), value.to_str().unwrap_or("<binary>")]))
+        .map(|(name, value)| {
+            let raw = value.to_str().unwrap_or("<binary>");
+            json!([name.as_str(), format_header_value(name.as_str(), raw, true)])
+        })
         .collect()
 }
 
@@ -1088,7 +1091,7 @@ async fn run(cli: Cli) -> Result<()> {
                     version_string(response.version()),
                     status.as_u16(),
                     status.canonical_reason().unwrap_or(""),
-                    format_headers(response.headers(), false, false)
+                    format_headers(response.headers(), false, true)
                 );
                 if let Some(ref path) = cli.output {
                     let mut f = create_output_file(path, cli.no_clobber).await?;

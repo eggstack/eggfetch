@@ -4,7 +4,6 @@
 //! HTTP/3 uses QUIC instead of TCP, so it has its own connection lifecycle,
 //! TLS configuration, and stream multiplexing model.
 
-use std::net::ToSocketAddrs;
 use std::sync::Arc;
 
 use bytes::Buf;
@@ -77,9 +76,9 @@ impl H3Connector {
         let port = url.port_or_known_default().unwrap_or(443);
         let cache_key = format!("{host}:{port}");
 
-        // Resolve the address
-        let addr = format!("{host}:{port}")
-            .to_socket_addrs()
+        // Resolve the address without blocking the tokio worker.
+        let addr = tokio::net::lookup_host(format!("{host}:{port}"))
+            .await
             .map_err(|e| Error::Connect(format!("DNS resolve: {e}")))?
             .next()
             .ok_or_else(|| Error::Connect("no addresses resolved".into()))?;

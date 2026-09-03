@@ -247,9 +247,17 @@ pub(crate) async fn connect_to_proxy(
         } else {
             let mut root_store = rustls::RootCertStore::empty();
             root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
-            rustls::ClientConfig::builder()
+            let fallback = rustls::ClientConfig::builder()
                 .with_root_certificates(root_store)
-                .with_no_client_auth()
+                .with_no_client_auth();
+            // The proxy leg is always HTTP/1.1 (CONNECT/forwarding); never
+            // apply the origin H2-only policy here. Advertise http/1.1 only.
+            crate::client::configure_tls_alpn(
+                fallback,
+                crate::http_version::HttpVersionPolicyEnabler::from_policy(
+                    crate::http_version::HttpVersionPolicy::Http1Only,
+                ),
+            )
         };
         let connector = tokio_rustls::TlsConnector::from(std::sync::Arc::new(rustls_config));
         let domain = proxy_server_name(proxy_host)?;

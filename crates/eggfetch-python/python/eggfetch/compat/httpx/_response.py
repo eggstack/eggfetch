@@ -497,7 +497,17 @@ class Response:
         if self._native_stream is not None:
             self._content = self._native_stream.read()
         elif self._stream is not None:
-            self._content = b"".join(chunk if isinstance(chunk, bytes) else str(chunk).encode() for chunk in self._stream)
+            parts = []
+            for chunk in self._stream:
+                if isinstance(chunk, bytes):
+                    parts.append(chunk)
+                elif isinstance(chunk, (bytearray, memoryview)):
+                    parts.append(bytes(chunk))
+                else:
+                    raise TypeError(
+                        f"Response stream yielded non-bytes chunk of type {type(chunk).__name__!r}"
+                    )
+            self._content = b"".join(parts)
         else:
             self._content = self._content or b""
         self._num_bytes_downloaded = len(self._content)
@@ -515,7 +525,14 @@ class Response:
         elif self._stream is not None:
             chunks = []
             async for chunk in self._stream:
-                chunks.append(chunk if isinstance(chunk, bytes) else str(chunk).encode())
+                if isinstance(chunk, bytes):
+                    chunks.append(chunk)
+                elif isinstance(chunk, (bytearray, memoryview)):
+                    chunks.append(bytes(chunk))
+                else:
+                    raise TypeError(
+                        f"Response stream yielded non-bytes chunk of type {type(chunk).__name__!r}"
+                    )
             self._content = b"".join(chunks)
         else:
             self._content = self._content or b""

@@ -182,9 +182,13 @@ pub enum Error {
     RetryNotConfigured,
 
     /// The HTTP/2 connection received a GOAWAY frame from the server.
+    ///
+    /// `last_stream_id` is currently always `0`: `h2` 0.4 does not expose
+    /// the GOAWAY last-stream-id through its public error API, so the raw
+    /// error text is preserved in `debug_data` instead.
     #[error("HTTP/2 GOAWAY: last_stream_id={last_stream_id}, debug={debug_data}")]
     Http2GoAway {
-        /// The last stream ID the server will process.
+        /// The last stream ID the server will process (currently always `0`, see above).
         last_stream_id: u32,
         /// Debug data from the GOAWAY frame.
         debug_data: String,

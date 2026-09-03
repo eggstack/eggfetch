@@ -233,8 +233,12 @@ pub(crate) async fn send_with_retry(client: &Client, request: Request) -> Result
         }
 
         // Check total budget before attempting.
+        // Snapshot elapsed once so the total-deadline remainder below cannot
+        // go to zero between two samples and waste a connection on an
+        // attempt that fails immediately on the total deadline.
+        let elapsed = start_time.elapsed();
         if let Some(max_elapsed) = policy.max_elapsed() {
-            if start_time.elapsed() >= max_elapsed {
+            if elapsed >= max_elapsed {
                 return Err(Error::RetryBudgetExhausted {
                     attempts: attempt - 1,
                 });
@@ -247,19 +251,31 @@ pub(crate) async fn send_with_retry(client: &Client, request: Request) -> Result
         // would restart with the full original `total` and the aggregate
         // elapsed time could reach `max_attempts * total`.
         if let Some(total) = orig_timeout.as_ref().and_then(|t| t.total) {
-            if start_time.elapsed() >= total {
+            if elapsed >= total {
                 return Err(Error::Timeout {
                     phase: TimeoutPhase::Total,
-                    elapsed: start_time.elapsed(),
+                    elapsed,
                 });
             }
         }
         let attempt_timeout = orig_timeout.map(|mut t| {
             if let Some(total) = t.total {
-                t.total = Some(total.saturating_sub(start_time.elapsed()));
+                t.total = Some(total.saturating_sub(elapsed));
             }
             t
         });
+        // Skip an attempt with no remaining total budget instead of spending
+        // a pool slot and TCP connect only to fail on the deadline.
+        if attempt_timeout
+            .as_ref()
+            .and_then(|t| t.total)
+            .is_some_and(|remaining| remaining.is_zero())
+        {
+            return Err(Error::Timeout {
+                phase: TimeoutPhase::Total,
+                elapsed,
+            });
+        }
 
         // Reconstruct the request from saved parts.
         let attempt_request = rebuild_request(
