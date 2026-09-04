@@ -366,6 +366,20 @@ impl TlsConfig {
         roots
     }
 
+    /// Root store for proxy-leg / CONNECT-tunnel fallbacks: native system
+    /// roots when available, otherwise packaged `WebPKI` roots.
+    ///
+    /// Shares the `NativeWithWebPkiFallback` policy so corporate/private PKI
+    /// roots installed in the OS store work through `https://` proxy
+    /// endpoints and HTTPS-via-CONNECT tunnels, not just on the direct path.
+    #[cfg(feature = "proxy")]
+    pub(crate) fn fallback_root_store() -> rustls::RootCertStore {
+        match Self::try_native_roots() {
+            Ok(store) if !store.is_empty() => store,
+            _ => Self::webpki_roots(),
+        }
+    }
+
     fn supported_versions() -> impl Iterator<Item = TlsVersion> {
         [TlsVersion::Tls12, TlsVersion::Tls13].into_iter()
     }

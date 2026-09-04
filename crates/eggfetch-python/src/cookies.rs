@@ -193,7 +193,9 @@ impl PyCookies {
                 "cookie mapping key must match cookie.name",
             ));
         }
-        self.jar.set(py_cookie.inner.clone());
+        self.jar
+            .set(py_cookie.inner.clone())
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
         Ok(())
     }
 
@@ -261,7 +263,17 @@ impl PyCookies {
         };
         temp_jar.update_from_response(&url, &[set_cookie]);
         if let Some(cookie) = temp_jar.all_cookies().into_iter().next() {
-            self.jar.set(cookie);
+            // A `;`/`,` in the value would have been parsed as an attribute
+            // separator, truncating the value: reject instead of storing the
+            // truncated form.
+            if cookie.name() != name || cookie.value() != value {
+                return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                    "invalid cookie name, value, domain, or path",
+                ));
+            }
+            self.jar
+                .set(cookie)
+                .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
         } else {
             return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
                 "invalid cookie name, value, domain, or path",

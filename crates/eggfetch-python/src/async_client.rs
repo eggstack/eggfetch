@@ -126,7 +126,9 @@ impl PyAsyncClient {
                 for (key, value) in dict.iter() {
                     let name: String = key.extract()?;
                     let val: String = value.extract()?;
-                    jar.set_default_cookie(name, val);
+                    jar.set_default_cookie(name, val).map_err(|e| {
+                        PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string())
+                    })?;
                 }
             }
         }

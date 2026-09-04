@@ -8,6 +8,15 @@ use pyo3::prelude::*;
 ///
 /// Accepts either a float (seconds) for all phases, or keyword arguments
 /// for per-phase control. Matches HTTPX's Timeout API shape.
+///
+/// Native-vs-facade split (intentional): the compat facade
+/// (`eggfetch.compat.httpx.Timeout`) rejects an empty `Timeout()` unless
+/// a scalar or all four phases are supplied, preserving HTTPX's
+/// omitted-vs-explicit-`None` distinction. This native type accepts an
+/// empty `Timeout()` as "no timeout" (`has_any() == False`) because it
+/// cannot distinguish omitted from explicit-`None` (`Option<f64>`), and
+/// an all-`None` native timeout is the only way to express "disabled" via
+/// `_convert_timeout`. Behaviour is identical (no timeout either way).
 #[pyclass(name = "Timeout")]
 #[derive(Debug, Clone)]
 pub struct PyTimeout {
@@ -74,7 +83,8 @@ impl PyTimeout {
                 },
             })
         } else {
-            // Per-phase mode
+            // Per-phase mode (partial phases allowed for request-level
+            // overrides; an explicit total alone is a valid outer deadline).
             Ok(Self {
                 inner: eggfetch_core::Timeout {
                     pool: pool.map(Duration::from_secs_f64),

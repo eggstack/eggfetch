@@ -333,6 +333,7 @@ pin_project! {
         inner: BoxBytesStream,
         max: usize,
         decoded_bytes: usize,
+        limit_exceeded: bool,
     }
 }
 
@@ -344,10 +345,19 @@ impl Stream for LimitedResponseStream {
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Option<Self::Item>> {
         let mut this = self.project();
+        // Once the limit trips, fuse without polling the inner transport
+        // again (releases the connection earlier and avoids unbounded
+        // inner buffering under hostile streams). Returning `None`
+        // (rather than repeating the error) keeps combinators like
+        // `collect` terminating: callers observe the first error, then EOF.
+        if *this.limit_exceeded {
+            return std::task::Poll::Ready(None);
+        }
         match this.inner.as_mut().poll_next(cx) {
             std::task::Poll::Ready(Some(Ok(chunk))) => {
                 *this.decoded_bytes = this.decoded_bytes.saturating_add(chunk.len());
                 if *this.decoded_bytes > *this.max {
+                    *this.limit_exceeded = true;
                     std::task::Poll::Ready(Some(Err(Error::DecodedBodyTooLarge)))
                 } else {
                     std::task::Poll::Ready(Some(Ok(chunk)))
@@ -566,6 +576,7 @@ impl ResponseBody {
                     inner: stream,
                     max,
                     decoded_bytes: 0,
+                    limit_exceeded: false,
                 }),
                 lease,
             }),
@@ -1054,6 +1065,41 @@ mod tests {
             polled.load(Ordering::SeqCst),
             1,
             "stream should not be eagerly polled"
+        );
+    }
+
+    #[tokio::test]
+    async fn limited_stream_fuses_after_limit_trips() {
+        use futures_util::StreamExt;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let polls = Arc::new(AtomicUsize::new(0));
+        let polls_inner = polls.clone();
+        let tracked = futures_util::stream::iter(vec![
+            Ok(Bytes::from("ab")),
+            Ok(Bytes::from("cd")),
+            Ok(Bytes::from("ef")),
+        ])
+        .inspect(move |_| {
+            polls_inner.fetch_add(1, Ordering::SeqCst);
+        });
+        let inner: super::BoxBytesStream = Box::pin(tracked);
+        let mut limited = super::LimitedResponseStream {
+            inner,
+            max: 3,
+            decoded_bytes: 0,
+            limit_exceeded: false,
+        };
+        // "ab" ok (2 bytes), "cd" trips the limit (4 > 3).
+        assert!(limited.next().await.unwrap().is_ok());
+        assert!(limited.next().await.unwrap().is_err());
+        let polls_after_error = polls.load(Ordering::SeqCst);
+        // Further polls fuse (EOF) without polling inner again.
+        assert!(limited.next().await.is_none());
+        assert_eq!(
+            polls.load(Ordering::SeqCst),
+            polls_after_error,
+            "inner stream must not be re-polled after the limit trips"
         );
     }
 

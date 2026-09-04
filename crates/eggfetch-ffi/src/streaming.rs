@@ -426,18 +426,20 @@ pub unsafe extern "C" fn eggfetch_response_stream_next(
 
         match chunk {
             Some(Ok(data)) => {
-                if *state.subscribe().borrow_and_update() {
-                    // A chunk raced with cancellation: end the stream
-                    // here and surface why via `last_error` so hosts
-                    // can distinguish this from a natural end-of-body.
-                    if let Ok(mut last) = state.last_error.lock() {
-                        *last = Some("stream cancelled".to_owned());
-                    }
-                    return ptr::null_mut();
-                }
+                // A chunk that raced with cancellation is still delivered
+                // first; cancellation is reported on the *next* call via the
+                // pre-existing watch check. Dropping `data` here would lose
+                // one body chunk and overload the error slot.
                 let len = data.len();
                 let buf = if len > 0 {
                     let Ok(layout) = std::alloc::Layout::array::<u8>(len) else {
+                        // No allocation happened: restore the receiver so a
+                        // retry can continue the stream.
+                        if let Some(rx) = rx {
+                            if let Ok(mut guard) = state.rx.lock() {
+                                *guard = Some(rx);
+                            }
+                        }
                         if let Ok(mut last) = state.last_error.lock() {
                             *last = Some("out of memory: chunk layout unusable".to_owned());
                         }
@@ -445,6 +447,14 @@ pub unsafe extern "C" fn eggfetch_response_stream_next(
                     };
                     let buf = std::alloc::alloc(layout);
                     if buf.is_null() {
+                        // Allocation failed: restore the receiver so a retry
+                        // can continue with the *next* chunk (this chunk's
+                        // bytes are dropped with `data`).
+                        if let Some(rx) = rx {
+                            if let Ok(mut guard) = state.rx.lock() {
+                                *guard = Some(rx);
+                            }
+                        }
                         if let Ok(mut last) = state.last_error.lock() {
                             *last = Some("out of memory allocating chunk buffer".to_owned());
                         }
@@ -455,6 +465,12 @@ pub unsafe extern "C" fn eggfetch_response_stream_next(
                 } else {
                     ptr::null_mut()
                 };
+                // Successful delivery clears any stale error so hosts that
+                // check the slot after every call do not see a previous
+                // failure (e.g. a retried OOM) alongside a valid chunk.
+                if let Ok(mut last) = state.last_error.lock() {
+                    last.take();
+                }
                 // The stream continues: hand the receiver back for the
                 // next call.
                 if let Some(rx) = rx {

@@ -242,10 +242,14 @@ impl CookieJar {
     }
 
     /// Create a cookie jar pre-loaded with a single cookie.
+    ///
+    /// Invalid names/values are dropped (the jar stays empty) so this
+    /// infallible constructor keeps its signature; use [`Self::set`] when
+    /// the caller must observe validation failures.
     #[must_use]
     pub fn with_initial_cookie(cookie: Cookie) -> Self {
         let jar = Self::new();
-        jar.set(cookie);
+        let _ = jar.set(cookie);
         jar
     }
 
@@ -400,10 +404,30 @@ impl CookieJar {
     /// stored, so they are never transiently visible or counted before
     /// the next lazy `expire_stale()`.
     ///
+    /// Values are validated per RFC 6265 `cookie-octet` so a programmatic
+    /// `;`/`,`/CTL cannot split the serialized `Cookie` header into extra
+    /// pairs.
+    ///
     /// Lock poisoning is recovered from internally: the jar protects a
     /// plain map with no cross-entry invariants, so a panicked writer
     /// cannot leave it inconsistent.
-    pub fn set(&self, cookie: Cookie) {
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::error::Error::InvalidHeaderValue`] if the name or
+    /// value fails RFC 6265 validation.
+    pub fn set(&self, cookie: Cookie) -> Result<(), crate::error::Error> {
+        if !is_valid_cookie_name(&cookie.name) {
+            return Err(crate::error::Error::InvalidHeaderValue(format!(
+                "invalid cookie name: '{}'",
+                cookie.name
+            )));
+        }
+        if !is_valid_cookie_value(&cookie.value) {
+            return Err(crate::error::Error::InvalidHeaderValue(
+                "invalid cookie value: must match RFC 6265 cookie-octet (no ';', ',', whitespace, CTLs, or non-ASCII)".into(),
+            ));
+        }
         if cookie.persistent {
             if let Some(expires) = cookie.expires {
                 if SystemTime::now() >= expires {
@@ -415,7 +439,7 @@ impl CookieJar {
                         .unwrap_or_else(std::sync::PoisonError::into_inner)
                         .cookies
                         .remove(&key);
-                    return;
+                    return Ok(());
                 }
             }
         }
@@ -425,6 +449,7 @@ impl CookieJar {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .cookies
             .insert(key, cookie);
+        Ok(())
     }
 
     /// Set a "default" cookie that matches every URL.
@@ -434,10 +459,31 @@ impl CookieJar {
     /// This is used for pre-populated cookies from a dict (e.g.
     /// `Client(cookies={"name": "value"})`).
     ///
+    /// Values are validated per RFC 6265 `cookie-octet`.
+    ///
     /// Lock poisoning is recovered from internally: the jar protects a
     /// plain map with no cross-entry invariants, so a panicked writer
     /// cannot leave it inconsistent.
-    pub fn set_default_cookie(&self, name: String, value: String) {
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::error::Error::InvalidHeaderValue`] if the name or
+    /// value fails RFC 6265 validation.
+    pub fn set_default_cookie(
+        &self,
+        name: String,
+        value: String,
+    ) -> Result<(), crate::error::Error> {
+        if !is_valid_cookie_name(&name) {
+            return Err(crate::error::Error::InvalidHeaderValue(format!(
+                "invalid cookie name: '{name}'"
+            )));
+        }
+        if !is_valid_cookie_value(&value) {
+            return Err(crate::error::Error::InvalidHeaderValue(
+                "invalid cookie value: must match RFC 6265 cookie-octet (no ';', ',', whitespace, CTLs, or non-ASCII)".into(),
+            ));
+        }
         let cookie = Cookie {
             name,
             value,
@@ -457,6 +503,7 @@ impl CookieJar {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .cookies
             .insert(key, cookie);
+        Ok(())
     }
 
     /// Delete a cookie by name, domain, and path.
@@ -622,13 +669,30 @@ fn is_ip_address(s: &str) -> bool {
 ///
 /// Cookie names must not be empty and must consist of valid token characters.
 /// We reject names containing control characters, spaces, tabs, or separators.
-fn is_valid_cookie_name(name: &str) -> bool {
+pub(crate) fn is_valid_cookie_name(name: &str) -> bool {
     if name.is_empty() {
         return false;
     }
     !name
         .bytes()
         .any(|b| b <= 0x20 || b == 0x7f || b == b'"' || b == b',' || b == b';' || b == b'\\')
+}
+
+/// Validate a cookie value per RFC 6265 §4.2.1 `cookie-octet`.
+///
+/// Allowed: `%x21 / %x23-2B / %x2D-3A / %x3C-5B / %x5D-7E` (empty included).
+/// This rejects `;`, `,`, whitespace, CTLs, DEL, non-ASCII, `"` and `\`,
+/// which would otherwise split the serialized `Cookie` header into extra
+/// pairs (`value = "abc; evil=1"` serializes as two pairs). `=` is allowed
+/// (it stays inside the value after the first `=` split).
+pub(crate) fn is_valid_cookie_value(value: &str) -> bool {
+    value.bytes().all(|b| {
+        b == 0x21
+            || (0x23..=0x2B).contains(&b)
+            || (0x2D..=0x3A).contains(&b)
+            || (0x3C..=0x5B).contains(&b)
+            || (0x5D..=0x7E).contains(&b)
+    })
 }
 
 /// Compute the default cookie path from the response URL path per RFC 6265.
@@ -1050,8 +1114,8 @@ mod tests {
             persistent: false,
             creation_index: 2,
         };
-        jar.set(c1);
-        jar.set(c2);
+        jar.set(c1).expect("valid test cookie");
+        jar.set(c2).expect("valid test cookie");
 
         let header = jar.cookies_for_url(&url).unwrap();
         // Longer path is serialized first, while the shorter-path cookie is
@@ -1076,7 +1140,8 @@ mod tests {
             expires: None,
             persistent: false,
             creation_index: 1,
-        });
+        })
+        .expect("valid test cookie");
         jar.set(Cookie {
             name: "b".to_owned(),
             value: "2".to_owned(),
@@ -1089,7 +1154,8 @@ mod tests {
             expires: None,
             persistent: false,
             creation_index: 2,
-        });
+        })
+        .expect("valid test cookie");
 
         let header = jar.cookies_for_url(&url).unwrap();
         // Sorted by name since paths are equal length.
@@ -1129,7 +1195,8 @@ mod tests {
             expires: None,
             persistent: false,
             creation_index: 1,
-        });
+        })
+        .expect("valid test cookie");
 
         let c = jar.get("key", Some("example.com"), Some("/"));
         assert!(c.is_some());
@@ -1158,7 +1225,8 @@ mod tests {
             expires: None,
             persistent: false,
             creation_index: 1,
-        });
+        })
+        .expect("valid test cookie");
         assert_eq!(jar.len(), 1);
         jar.delete("key", "example.com", "/");
         assert_eq!(jar.len(), 0);
@@ -1175,7 +1243,7 @@ mod tests {
         let mut live = cookies[0].clone();
         live.domain = "example.com".to_owned();
         live.host_only = false;
-        jar.set(live);
+        jar.set(live).expect("valid test cookie");
         assert_eq!(jar.len(), 1);
 
         // Setting an expired replacement must not store it, and should
@@ -1193,7 +1261,8 @@ mod tests {
             persistent: true,
             creation_index: 2,
         };
-        jar.set(expired);
+        jar.set(expired)
+            .expect("expired replacement is still well-formed");
         assert_eq!(jar.len(), 0, "expired cookie must not be stored");
         assert!(jar.get("key", Some("example.com"), Some("/")).is_none());
     }
@@ -1213,7 +1282,8 @@ mod tests {
             expires: None,
             persistent: false,
             creation_index: 1,
-        });
+        })
+        .expect("valid test cookie");
         jar.set(Cookie {
             name: "b".to_owned(),
             value: "2".to_owned(),
@@ -1226,7 +1296,8 @@ mod tests {
             expires: None,
             persistent: false,
             creation_index: 2,
-        });
+        })
+        .expect("valid test cookie");
         assert_eq!(jar.len(), 2);
         jar.clear();
         assert!(jar.is_empty());
@@ -1247,7 +1318,8 @@ mod tests {
             expires: None,
             persistent: false,
             creation_index: 1,
-        });
+        })
+        .expect("valid test cookie");
         let jar2 = jar1.clone();
         assert_eq!(jar2.len(), 1);
         jar2.clear();
@@ -1269,7 +1341,8 @@ mod tests {
             expires: None,
             persistent: false,
             creation_index: 1,
-        });
+        })
+        .expect("valid test cookie");
 
         // Exact host matches.
         assert!(jar
@@ -1296,7 +1369,8 @@ mod tests {
             expires: None,
             persistent: false,
             creation_index: 1,
-        });
+        })
+        .expect("valid test cookie");
 
         assert!(jar
             .cookies_for_url(&make_url("http://example.com/"))
@@ -1375,7 +1449,8 @@ mod tests {
             expires: None,
             persistent: false,
             creation_index: 1,
-        });
+        })
+        .expect("valid test cookie");
         jar.set(Cookie {
             name: "y".to_owned(),
             value: "2".to_owned(),
@@ -1388,7 +1463,8 @@ mod tests {
             expires: None,
             persistent: false,
             creation_index: 2,
-        });
+        })
+        .expect("valid test cookie");
         let all = jar.all_cookies();
         assert_eq!(all.len(), 2);
     }
@@ -1425,7 +1501,8 @@ mod tests {
             expires: None,
             persistent: false,
             creation_index: 1,
-        });
+        })
+        .expect("valid test cookie");
 
         // Should match case-insensitively.
         assert!(jar
@@ -1458,7 +1535,8 @@ mod tests {
             expires: None,
             persistent: false,
             creation_index: 1,
-        });
+        })
+        .expect("valid test cookie");
 
         // Different domain.
         assert!(jar
@@ -1522,7 +1600,8 @@ mod tests {
             expires: None,
             persistent: false,
             creation_index: 2,
-        });
+        })
+        .expect("valid test cookie");
         jar.set(Cookie {
             name: "key".to_owned(),
             value: "first".to_owned(),
@@ -1535,7 +1614,8 @@ mod tests {
             expires: None,
             persistent: false,
             creation_index: 1,
-        });
+        })
+        .expect("valid test cookie");
 
         // Both have same path length; earlier creation_index wins.
         let header = jar.cookies_for_url(&url).unwrap();
@@ -1568,7 +1648,8 @@ mod tests {
             expires: None,
             persistent: false,
             creation_index: 1,
-        });
+        })
+        .expect("valid test cookie");
         assert!(!jar.is_empty());
         assert_eq!(jar.len(), 1);
     }
@@ -1657,11 +1738,36 @@ mod tests {
     #[test]
     fn cookie_jar_debug_redacts_values() {
         let jar = CookieJar::new();
-        jar.set_default_cookie("session".to_owned(), "super-secret-token".to_owned());
+        jar.set_default_cookie("session".to_owned(), "super-secret-token".to_owned())
+            .expect("valid test cookie");
         let debug = format!("{jar:?}");
         assert!(
             !debug.contains("super-secret-token"),
             "CookieJar Debug must not leak values: {debug}"
         );
+    }
+
+    #[test]
+    fn programmatic_cookie_value_with_separator_is_rejected() {
+        let jar = CookieJar::new();
+        let err = jar
+            .set_default_cookie("k".to_owned(), "a; b=1".to_owned())
+            .expect_err("separator in value must be rejected");
+        assert_eq!(err.kind(), "invalid_header_value");
+        assert_eq!(jar.len(), 0);
+    }
+
+    #[test]
+    fn cookie_value_validation_rejects_control_and_non_ascii() {
+        assert!(is_valid_cookie_value("abc123"));
+        assert!(is_valid_cookie_value(""));
+        assert!(is_valid_cookie_value("a=b"));
+        assert!(!is_valid_cookie_value("a; b=1"));
+        assert!(!is_valid_cookie_value("a,b"));
+        assert!(!is_valid_cookie_value("a b"));
+        assert!(!is_valid_cookie_value("a\nb"));
+        assert!(!is_valid_cookie_value("a\rb"));
+        assert!(!is_valid_cookie_value("caf\u{e9}"));
+        assert!(!is_valid_cookie_value("\"quoted\""));
     }
 }

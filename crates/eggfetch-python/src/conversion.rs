@@ -24,7 +24,8 @@ pub(crate) fn python_cookies_to_header(
     }
     let jar = eggfetch_core::cookie::CookieJar::new();
     for (name, value) in iter_kv_pairs(cookies, "cookies")? {
-        jar.set_default_cookie(name, value);
+        jar.set_default_cookie(name, value)
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
     }
     Ok(jar.cookies_for_url(target_url))
 }

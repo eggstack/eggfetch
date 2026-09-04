@@ -427,7 +427,7 @@ impl PyNetworkStream {
         })?;
         let inner = guard.take().ok_or_else(|| {
             pyo3::exceptions::PyValueError::new_err(
-                "cannot start TLS on an already-closed or metadata-only network stream",
+                "cannot start TLS on an already-closed, metadata-only, or handshake-consumed network stream (a prior start_tls consumed the stream, including failed handshakes)",
             )
         })?;
 
@@ -812,7 +812,7 @@ impl PyAsyncNetworkStream {
             let mut guard = inner.lock().await;
             let stream = guard.take().ok_or_else(|| {
                 pyo3::exceptions::PyValueError::new_err(
-                    "cannot start TLS on an already-closed or metadata-only network stream",
+                    "cannot start TLS on an already-closed, metadata-only, or handshake-consumed network stream (a prior start_tls consumed the stream, including failed handshakes)",
                 )
             })?;
             let handshake = stream.start_tls(&connector, &server_name_owned);

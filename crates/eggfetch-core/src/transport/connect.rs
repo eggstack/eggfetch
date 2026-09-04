@@ -127,8 +127,7 @@ pub(crate) async fn send_https_connect_request(
             crate::http_version::HttpVersionPolicyEnabler::from_policy(ctx.http_version_policy),
         )
     } else {
-        let mut root_store = rustls::RootCertStore::empty();
-        root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+        let root_store = crate::tls::TlsConfig::fallback_root_store();
         let fallback = rustls::ClientConfig::builder()
             .with_root_certificates(root_store)
             .with_no_client_auth();

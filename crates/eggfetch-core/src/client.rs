@@ -303,8 +303,7 @@ impl ClientInner {
                 .build_rustls_config()
                 .map_err(|e| Error::Tls(format!("failed to build SOCKS TLS config: {e}")))?
         } else {
-            let mut roots = rustls::RootCertStore::empty();
-            roots.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+            let roots = crate::tls::TlsConfig::fallback_root_store();
             rustls::ClientConfig::builder()
                 .with_root_certificates(roots)
                 .with_no_client_auth()
@@ -1185,7 +1184,8 @@ mod tests {
         #[cfg(feature = "cookies")]
         config
             .cookie_jar
-            .set_default_cookie("session".to_owned(), "jar-secret-token".to_owned());
+            .set_default_cookie("session".to_owned(), "jar-secret-token".to_owned())
+            .expect("valid test cookie");
         let debug = format!("{config:?}");
         assert!(
             !debug.contains("header-secret-token"),

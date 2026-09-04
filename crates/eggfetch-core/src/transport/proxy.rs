@@ -241,24 +241,7 @@ pub(crate) async fn connect_to_proxy(
     };
 
     let stream = if proxy_config.scheme() == "https" {
-        let rustls_config = if let Some(tc) = proxy_tls_config {
-            tc.build_rustls_config()
-                .map_err(|e| Error::Tls(format!("failed to build proxy TLS config: {e}")))?
-        } else {
-            let mut root_store = rustls::RootCertStore::empty();
-            root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
-            let fallback = rustls::ClientConfig::builder()
-                .with_root_certificates(root_store)
-                .with_no_client_auth();
-            // The proxy leg is always HTTP/1.1 (CONNECT/forwarding); never
-            // apply the origin H2-only policy here. Advertise http/1.1 only.
-            crate::client::configure_tls_alpn(
-                fallback,
-                crate::http_version::HttpVersionPolicyEnabler::from_policy(
-                    crate::http_version::HttpVersionPolicy::Http1Only,
-                ),
-            )
-        };
+        let rustls_config = build_proxy_tls_config(proxy_tls_config)?;
         let connector = tokio_rustls::TlsConnector::from(std::sync::Arc::new(rustls_config));
         let domain = proxy_server_name(proxy_host)?;
         let handshake = connector.connect(domain, stream);
@@ -284,6 +267,31 @@ pub(crate) async fn connect_to_proxy(
     };
 
     Ok(tokio::io::BufReader::new(stream))
+}
+
+/// Build the rustls config for an `https://` proxy endpoint.
+///
+/// The proxy leg is always HTTP/1.1 (CONNECT/forwarding); never apply the
+/// origin H2 policy here. Both the explicit `proxy_tls_config` branch and
+/// the native-roots fallback advertise `http/1.1` only.
+pub(crate) fn build_proxy_tls_config(
+    proxy_tls_config: Option<&crate::tls::TlsConfig>,
+) -> Result<rustls::ClientConfig> {
+    let http1_only = crate::http_version::HttpVersionPolicyEnabler::from_policy(
+        crate::http_version::HttpVersionPolicy::Http1Only,
+    );
+    if let Some(tc) = proxy_tls_config {
+        let rc = tc
+            .build_rustls_config()
+            .map_err(|e| Error::Tls(format!("failed to build proxy TLS config: {e}")))?;
+        Ok(crate::client::configure_tls_alpn(rc, http1_only))
+    } else {
+        let root_store = crate::tls::TlsConfig::fallback_root_store();
+        let fallback = rustls::ClientConfig::builder()
+            .with_root_certificates(root_store)
+            .with_no_client_auth();
+        Ok(crate::client::configure_tls_alpn(fallback, http1_only))
+    }
 }
 
 /// Build the TLS server name for a proxy endpoint.
@@ -321,6 +329,20 @@ async fn send_http_proxy_request(
         ));
     }
 
+    // Validate the wire target before opening any connection: forward
+    // proxies require absolute-form (`http://host/path`); an origin-form
+    // override like `/path` would emit an invalid request line on this leg.
+    if let Some(ref target) = transport_hints.target {
+        crate::pipeline::validate_target(target)?;
+        let uri = std::str::from_utf8(target)
+            .map_err(|_| Error::InvalidUrl("target extension is not valid UTF-8".into()))?;
+        if !(uri.starts_with("http://") || uri.starts_with("https://")) {
+            return Err(Error::RequestBuild(
+                "target extension must be absolute-form (http:// or https://) for forward-proxy requests".into(),
+            ));
+        }
+    }
+
     let mut stream = connect_to_proxy(
         proxy_config,
         ctx.proxy_connect_timeout,
@@ -331,9 +353,8 @@ async fn send_http_proxy_request(
     .await?;
 
     // Write the proxy request with absolute-form URI.
-    // Apply target override if present.
+    // Apply target override if present (already validated above).
     let absolute_uri = if let Some(ref target) = transport_hints.target {
-        crate::pipeline::validate_target(target)?;
         std::str::from_utf8(target)
             .map_err(|_| Error::InvalidUrl("target extension is not valid UTF-8".into()))?
     } else {
@@ -925,8 +946,8 @@ pub(crate) fn response_content_length(headers: &[(String, Vec<u8>)]) -> Option<u
 #[cfg(test)]
 mod tests {
     use super::{
-        effective_timeout, proxy_server_name, read_proxy_response, response_content_length,
-        write_proxy_request, ProxyResponseStream,
+        build_proxy_tls_config, effective_timeout, proxy_server_name, read_proxy_response,
+        response_content_length, write_proxy_request, ProxyResponseStream,
     };
     use crate::error::Error;
     use crate::timeout::TimeoutPhase;
@@ -1235,5 +1256,25 @@ mod tests {
             "raw obs-text value must reach the wire, got: {:?}",
             String::from_utf8_lossy(&wire)
         );
+    }
+
+    #[test]
+    fn proxy_tls_config_clamps_alpn_to_http1_only() {
+        // A custom proxy TLS config defaults to advertising h2+http/1.1;
+        // the proxy leg must clamp it to http/1.1 only.
+        let custom = crate::tls::TlsConfig::builder().build();
+        let with_custom =
+            build_proxy_tls_config(Some(&custom)).expect("custom proxy TLS config builds");
+        assert_eq!(with_custom.alpn_protocols, vec![b"http/1.1".to_vec()]);
+    }
+
+    #[test]
+    fn proxy_tls_fallback_advertises_http1_only_with_roots() {
+        let fallback = build_proxy_tls_config(None).expect("fallback proxy TLS config builds");
+        assert_eq!(fallback.alpn_protocols, vec![b"http/1.1".to_vec()]);
+        // Native-roots-with-WebPKI-fallback must yield a non-empty store so
+        // OS-installed corporate roots work through the proxy leg.
+        let store = crate::tls::TlsConfig::fallback_root_store();
+        assert!(!store.is_empty());
     }
 }

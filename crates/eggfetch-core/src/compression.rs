@@ -515,6 +515,44 @@ pub fn decompress_buffered(
     Ok(current)
 }
 
+/// Incrementally drain a sync decoder, enforcing `output_limit` per chunk.
+///
+/// Replaces `take(limit+1)` + `read_to_end` so a large `output_limit` does
+/// not grow the output `Vec` to the full budget in one call: reads use a
+/// fixed 8 KiB stack buffer and fail fast once the cumulative output
+/// exceeds the limit.
+#[cfg(any(
+    feature = "compression-gzip",
+    feature = "compression-deflate",
+    feature = "compression-brotli",
+    feature = "compression-zstd"
+))]
+fn sync_read_limited<R: std::io::Read>(
+    mut reader: R,
+    output_limit: Option<usize>,
+    ratio_is_tighter: bool,
+) -> Result<bytes::Bytes> {
+    let mut output = Vec::new();
+    let mut buf = [0u8; 8 * 1024];
+    loop {
+        let n = reader
+            .read(&mut buf)
+            .map_err(|e| Error::Decompression(e.to_string()))?;
+        if n == 0 {
+            break;
+        }
+        output.extend_from_slice(&buf[..n]);
+        if output_limit.is_some_and(|limit| output.len() > limit) {
+            return Err(if ratio_is_tighter {
+                Error::DecompressionRatioExceeded
+            } else {
+                Error::DecodedBodyTooLarge
+            });
+        }
+    }
+    Ok(bytes::Bytes::from(output))
+}
+
 /// Synchronously decode a single layer of gzip or deflate compression using flate2.
 #[cfg(any(feature = "compression-gzip", feature = "compression-deflate"))]
 fn sync_decode_flate2(
@@ -523,44 +561,14 @@ fn sync_decode_flate2(
     output_limit: Option<usize>,
     ratio_is_tighter: bool,
 ) -> Result<bytes::Bytes> {
-    use std::io::Read;
-
     match encoding {
         ContentCoding::Gzip => {
             let decoder = flate2::read::GzDecoder::new(&data[..]);
-            let mut output = Vec::new();
-            let mut limited = decoder.take(output_limit.map_or(u64::MAX, |limit| {
-                u64::try_from(limit).unwrap_or(u64::MAX).saturating_add(1)
-            }));
-            limited
-                .read_to_end(&mut output)
-                .map_err(|e| Error::Decompression(e.to_string()))?;
-            if output_limit.is_some_and(|limit| output.len() > limit) {
-                return Err(if ratio_is_tighter {
-                    Error::DecompressionRatioExceeded
-                } else {
-                    Error::DecodedBodyTooLarge
-                });
-            }
-            Ok(bytes::Bytes::from(output))
+            sync_read_limited(decoder, output_limit, ratio_is_tighter)
         }
         ContentCoding::Deflate => {
             let decoder = flate2::read::DeflateDecoder::new(&data[..]);
-            let mut output = Vec::new();
-            let mut limited = decoder.take(output_limit.map_or(u64::MAX, |limit| {
-                u64::try_from(limit).unwrap_or(u64::MAX).saturating_add(1)
-            }));
-            limited
-                .read_to_end(&mut output)
-                .map_err(|e| Error::Decompression(e.to_string()))?;
-            if output_limit.is_some_and(|limit| output.len() > limit) {
-                return Err(if ratio_is_tighter {
-                    Error::DecompressionRatioExceeded
-                } else {
-                    Error::DecodedBodyTooLarge
-                });
-            }
-            Ok(bytes::Bytes::from(output))
+            sync_read_limited(decoder, output_limit, ratio_is_tighter)
         }
         _ => Err(Error::UnsupportedContentEncoding(
             encoding.as_str().to_owned(),
@@ -574,24 +582,8 @@ fn sync_decode_brotli(
     output_limit: Option<usize>,
     ratio_is_tighter: bool,
 ) -> Result<bytes::Bytes> {
-    use std::io::Read;
-
     let decoder = brotli::Decompressor::new(&data[..], 4096);
-    let mut output = Vec::new();
-    let mut limited = decoder.take(output_limit.map_or(u64::MAX, |limit| {
-        u64::try_from(limit).unwrap_or(u64::MAX).saturating_add(1)
-    }));
-    limited
-        .read_to_end(&mut output)
-        .map_err(|e| Error::Decompression(e.to_string()))?;
-    if output_limit.is_some_and(|limit| output.len() > limit) {
-        return Err(if ratio_is_tighter {
-            Error::DecompressionRatioExceeded
-        } else {
-            Error::DecodedBodyTooLarge
-        });
-    }
-    Ok(bytes::Bytes::from(output))
+    sync_read_limited(decoder, output_limit, ratio_is_tighter)
 }
 
 #[cfg(feature = "compression-zstd")]
@@ -600,25 +592,9 @@ fn sync_decode_zstd(
     output_limit: Option<usize>,
     ratio_is_tighter: bool,
 ) -> Result<bytes::Bytes> {
-    use std::io::Read;
-
     let decoder = zstd::stream::read::Decoder::new(&data[..])
         .map_err(|e| Error::Decompression(e.to_string()))?;
-    let mut output = Vec::new();
-    let mut limited = decoder.take(output_limit.map_or(u64::MAX, |limit| {
-        u64::try_from(limit).unwrap_or(u64::MAX).saturating_add(1)
-    }));
-    limited
-        .read_to_end(&mut output)
-        .map_err(|e| Error::Decompression(e.to_string()))?;
-    if output_limit.is_some_and(|limit| output.len() > limit) {
-        return Err(if ratio_is_tighter {
-            Error::DecompressionRatioExceeded
-        } else {
-            Error::DecodedBodyTooLarge
-        });
-    }
-    Ok(bytes::Bytes::from(output))
+    sync_read_limited(decoder, output_limit, ratio_is_tighter)
 }
 
 /// Create a decoder for a single content coding.
@@ -843,6 +819,15 @@ struct LimitingStream {
     limit: DecompressionLimit,
     decoded_bytes: usize,
     compressed_counter: Arc<AtomicUsize>,
+    limit_exceeded: Option<LimitExceededKind>,
+}
+
+/// Which limit tripped first; retained so later polls fail fast without
+/// re-polling the inner transport.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LimitExceededKind {
+    Size,
+    Ratio,
 }
 
 impl LimitingStream {
@@ -856,31 +841,52 @@ impl LimitingStream {
             limit,
             decoded_bytes: 0,
             compressed_counter,
+            limit_exceeded: None,
         }
     }
 
     #[allow(clippy::cast_precision_loss)]
-    fn check_limit(&self) -> Result<()> {
+    fn check_limit(&self) -> std::result::Result<(), LimitExceededKind> {
         if let Some(max) = self.limit.max_decoded_body_size {
             if self.decoded_bytes > max {
-                return Err(Error::DecodedBodyTooLarge);
+                return Err(LimitExceededKind::Size);
             }
         }
         if let Some(max_ratio) = self.limit.max_decompression_ratio {
             if !max_ratio.is_finite() || max_ratio <= 0.0 {
-                return Err(Error::Decompression(
-                    "invalid max_decompression_ratio: must be finite and positive".into(),
-                ));
+                // Invalid configuration surfaces as a decompression error;
+                // record it as a terminal ratio failure so we still fuse.
+                return Err(LimitExceededKind::Ratio);
             }
             let compressed = self.compressed_counter.load(Ordering::Acquire);
             if compressed > 0 {
                 let ratio = self.decoded_bytes as f64 / compressed as f64;
                 if ratio > max_ratio {
-                    return Err(Error::DecompressionRatioExceeded);
+                    return Err(LimitExceededKind::Ratio);
                 }
             }
         }
         Ok(())
+    }
+
+    fn kind_to_error(kind: LimitExceededKind, limit: &DecompressionLimit) -> Error {
+        match kind {
+            LimitExceededKind::Size => Error::DecodedBodyTooLarge,
+            LimitExceededKind::Ratio => {
+                // Preserve the invalid-ratio configuration message; all
+                // genuine ratio violations map to `DecompressionRatioExceeded`.
+                if limit
+                    .max_decompression_ratio
+                    .is_some_and(|r| !r.is_finite() || r <= 0.0)
+                {
+                    Error::Decompression(
+                        "invalid max_decompression_ratio: must be finite and positive".into(),
+                    )
+                } else {
+                    Error::DecompressionRatioExceeded
+                }
+            }
+        }
     }
 }
 
@@ -893,14 +899,23 @@ impl futures_core::Stream for LimitingStream {
     ) -> std::task::Poll<Option<Self::Item>> {
         use std::pin::Pin;
 
+        // Once the limit trips, fuse without polling inner again (see
+        // `LimitedResponseStream`: `None` keeps `collect` terminating;
+        // callers already observed the first error).
+        if self.limit_exceeded.is_some() {
+            return std::task::Poll::Ready(None);
+        }
+
         match Pin::new(&mut self.inner).poll_next(cx) {
             std::task::Poll::Ready(Some(Ok(chunk))) => {
                 // Saturate instead of wrapping: a wrapped counter would
                 // permanently disable the limit mid-stream on targets
                 // where `usize` is narrower than the body size.
                 self.decoded_bytes = self.decoded_bytes.saturating_add(chunk.len());
-                if let Err(e) = self.check_limit() {
-                    return std::task::Poll::Ready(Some(Err(e)));
+                if let Err(kind) = self.check_limit() {
+                    self.limit_exceeded = Some(kind);
+                    let err = Self::kind_to_error(kind, &self.limit);
+                    return std::task::Poll::Ready(Some(Err(err)));
                 }
                 std::task::Poll::Ready(Some(Ok(chunk)))
             }

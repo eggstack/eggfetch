@@ -729,7 +729,8 @@ async fn run(cli: Cli) -> Result<()> {
         let jar = CookieJar::new();
         for c in &cli.cookie {
             let (name, value) = parse_query(c)?;
-            jar.set_default_cookie(name.to_owned(), value.to_owned());
+            jar.set_default_cookie(name.to_owned(), value.to_owned())
+                .map_err(|e| anyhow::anyhow!("invalid --cookie '{c}': {e}"))?;
         }
         client_builder = client_builder.cookie_jar(jar);
     }
@@ -745,7 +746,11 @@ async fn run(cli: Cli) -> Result<()> {
                 continue;
             }
             if let Some((name, value)) = line.split_once('=') {
-                jar.set_default_cookie(name.trim().to_owned(), value.trim().to_owned());
+                if let Err(e) =
+                    jar.set_default_cookie(name.trim().to_owned(), value.trim().to_owned())
+                {
+                    eprintln!("Warning: skipping invalid cookie jar line: {line} ({e})");
+                }
             } else if !line.is_empty() {
                 eprintln!("Warning: skipping unrecognized cookie jar line: {line}");
             }

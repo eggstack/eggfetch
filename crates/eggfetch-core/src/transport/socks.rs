@@ -111,6 +111,47 @@ pub(crate) async fn socks5_handshake(
     remaining_total: Option<std::time::Duration>,
 ) -> Result<tokio::net::TcpStream> {
     let deadline = remaining_total.map(|duration| std::time::Instant::now() + duration);
+
+    // Local-DNS path with multiple resolved addresses: try each destination
+    // address with a fresh proxy connection; the first successful CONNECT
+    // wins. A failed CONNECT may leave the proxy connection unusable, so
+    // retries use a new connection rather than reusing the failed stream.
+    if !remote_dns && dest_host.parse::<std::net::IpAddr>().is_err() {
+        if let Ok(addrs) = resolve_dest_ips(dest_host, deadline).await {
+            if addrs.len() > 1 {
+                let mut last_err: Option<Error> = None;
+                for ip in addrs {
+                    match handshake_with_ip(proxy_config, ip, dest_port, deadline).await {
+                        Ok(stream) => return Ok(stream),
+                        Err(e) => last_err = Some(e),
+                    }
+                }
+                return Err(last_err.unwrap_or_else(|| {
+                    Error::Connect(format!(
+                        "DNS resolution failed for SOCKS destination {dest_host}"
+                    ))
+                }));
+            }
+            // Zero or one address: fall through to the single-attempt path
+            // (which re-resolves; cheap and keeps the code path unified).
+        }
+    }
+
+    let mut stream = establish_socks_proxy_connection(proxy_config, deadline).await?;
+
+    // Phase 4: CONNECT command.
+    send_connect(&mut stream, dest_host, dest_port, remote_dns, deadline).await?;
+
+    Ok(stream)
+}
+
+/// Establish a SOCKS5 proxy connection through method negotiation and auth.
+///
+/// Returns a stream ready for the CONNECT command (phases 1-3).
+async fn establish_socks_proxy_connection(
+    proxy_config: &ProxyConfig,
+    deadline: Option<std::time::Instant>,
+) -> Result<tokio::net::TcpStream> {
     let proxy_host = proxy_config.host().unwrap_or("127.0.0.1");
     let proxy_port = proxy_config.port()?;
 
@@ -155,9 +196,19 @@ pub(crate) async fn socks5_handshake(
         authenticate(&mut stream, auth, deadline).await?;
     }
 
-    // Phase 4: CONNECT command.
-    send_connect(&mut stream, dest_host, dest_port, remote_dns, deadline).await?;
+    Ok(stream)
+}
 
+/// Full handshake against one pre-resolved destination IP (fresh proxy
+/// connection + CONNECT with that IP).
+async fn handshake_with_ip(
+    proxy_config: &ProxyConfig,
+    dest_ip: std::net::IpAddr,
+    dest_port: u16,
+    deadline: Option<std::time::Instant>,
+) -> Result<tokio::net::TcpStream> {
+    let mut stream = establish_socks_proxy_connection(proxy_config, deadline).await?;
+    send_connect_ip(&mut stream, dest_ip, dest_port, deadline).await?;
     Ok(stream)
 }
 
@@ -481,21 +532,50 @@ async fn send_connect(
     parse_connect_reply(stream, deadline).await
 }
 
-/// Resolve a destination host to an IP address.
+/// Send a CONNECT command for a pre-resolved destination IP.
+async fn send_connect_ip(
+    stream: &mut tokio::net::TcpStream,
+    dest_ip: std::net::IpAddr,
+    dest_port: u16,
+    deadline: Option<std::time::Instant>,
+) -> Result<()> {
+    let mut request = Vec::with_capacity(64);
+    request.push(SOCKS5_VERSION);
+    request.push(SOCKS5_CMD_CONNECT);
+    request.push(0x00); // reserved
+    match dest_ip {
+        std::net::IpAddr::V4(ip) => {
+            request.push(SOCKS5_ATYP_IPV4);
+            request.extend_from_slice(&ip.octets());
+        }
+        std::net::IpAddr::V6(ip) => {
+            request.push(SOCKS5_ATYP_IPV6);
+            request.extend_from_slice(&ip.octets());
+        }
+    }
+    request.extend_from_slice(&dest_port.to_be_bytes());
+
+    write_all_timeout(stream, &request, deadline, "SOCKS5 CONNECT").await?;
+
+    // Parse the reply.
+    parse_connect_reply(stream, deadline).await
+}
+
+/// Resolve a destination host to all IP addresses.
 ///
-/// Uses Tokio's DNS resolver. Returns both IPv4 and IPv6.
-async fn resolve_dest_ip(
+/// Uses Tokio's DNS resolver. Returns both IPv4 and IPv6 in resolver order.
+async fn resolve_dest_ips(
     host: &str,
     deadline: Option<std::time::Instant>,
-) -> Result<std::net::IpAddr> {
+) -> Result<Vec<std::net::IpAddr>> {
     use tokio::net::lookup_host;
 
     // Try parsing as an IP literal first.
     if let Ok(ip) = host.parse::<std::net::Ipv4Addr>() {
-        return Ok(std::net::IpAddr::V4(ip));
+        return Ok(vec![std::net::IpAddr::V4(ip)]);
     }
     if let Ok(ip) = host.parse::<std::net::Ipv6Addr>() {
-        return Ok(std::net::IpAddr::V6(ip));
+        return Ok(vec![std::net::IpAddr::V6(ip)]);
     }
 
     // DNS resolution.
@@ -512,17 +592,33 @@ async fn resolve_dest_ip(
         }
         None => lookup.await,
     };
-    let addr = result.ok().and_then(|mut addrs| addrs.next());
+    let addrs: Vec<std::net::IpAddr> = result
+        .map(|addrs| addrs.map(|a| a.ip()).collect())
+        .unwrap_or_default();
 
-    match addr {
-        Some(addr) => Ok(addr.ip()),
-        None => {
-            // Never redirect an unresolved destination to loopback.
-            Err(Error::Connect(format!(
-                "DNS resolution failed for SOCKS destination {host}"
-            )))
-        }
+    if addrs.is_empty() {
+        // Never redirect an unresolved destination to loopback.
+        return Err(Error::Connect(format!(
+            "DNS resolution failed for SOCKS destination {host}"
+        )));
     }
+    Ok(addrs)
+}
+
+/// Resolve a destination host to an IP address.
+///
+/// Uses Tokio's DNS resolver. Returns the first resolved address; callers
+/// that need multi-homed fallback should use [`resolve_dest_ips`].
+async fn resolve_dest_ip(
+    host: &str,
+    deadline: Option<std::time::Instant>,
+) -> Result<std::net::IpAddr> {
+    let addrs = resolve_dest_ips(host, deadline).await?;
+    addrs.into_iter().next().ok_or_else(|| {
+        Error::Connect(format!(
+            "DNS resolution failed for SOCKS destination {host}"
+        ))
+    })
 }
 
 /// Parse the SOCKS5 CONNECT reply from the proxy.
