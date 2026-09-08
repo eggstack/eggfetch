@@ -13,108 +13,153 @@ use crate::response::Response;
 use crate::trace::{OnEventAction, TraceEvent, TraceObserver, TracePhase};
 use crate::transport::{HyperRequestBody, TimeoutHyperClient};
 
+/// Emit the `send_request_headers/Started` trace event.
+///
+/// Shared by the standard Hyper, specialized-direct, SNI-direct, and UDS
+/// paths so trace start/abort semantics cannot diverge.
+///
+/// # Errors
+///
+/// Returns [`Error::TraceCallbackAborted`] when the observer aborts dispatch.
+pub(crate) fn emit_send_start(
+    trace: Option<&dyn TraceObserver>,
+    method: &str,
+    target: &str,
+) -> Result<()> {
+    if let Some(observer) = trace {
+        if observer.on_event(&TraceEvent::SendRequestHeaders {
+            phase: TracePhase::Started,
+            method: method.to_owned(),
+            target: target.to_owned(),
+        }) == OnEventAction::Abort
+        {
+            return Err(Error::TraceCallbackAborted);
+        }
+    }
+    Ok(())
+}
+
+/// Emit the `receive_response_headers/Complete` trace event.
+///
+/// Shared by all Hyper response converters.
+pub(crate) fn emit_receive_complete(trace: Option<&dyn TraceObserver>, status: u16) {
+    if let Some(observer) = trace {
+        observer.on_event(&TraceEvent::ReceiveResponseHeaders {
+            phase: TracePhase::Complete,
+            status,
+        });
+    }
+}
+
+/// Emit the `send_request_headers/Failed` trace event.
+///
+/// Shared by all Hyper dispatch error paths.
+pub(crate) fn emit_send_failed(trace: Option<&dyn TraceObserver>) {
+    if let Some(observer) = trace {
+        let _ = observer.on_event(&TraceEvent::SendRequestHeaders {
+            phase: TracePhase::Failed,
+            method: String::new(),
+            target: String::new(),
+        });
+    }
+}
+
+/// Convert a Hyper response into the core streaming `Response`.
+///
+/// Captures the upgrade future before consuming the body (for 101
+/// responses `into_body()` would block forever because Hyper transfers the
+/// connection IO to the upgrade handler), builds either an empty buffered
+/// body (upgrading) or a streaming body, emits the receive-complete trace
+/// event, awaits the upgrade future, and attaches the resulting
+/// [`UpgradedStream`]. This is the single response-lifecycle implementation
+/// shared by the standard and specialized-direct paths.
+async fn finish_hyper_response(
+    mut hyper_response: http::Response<hyper::body::Incoming>,
+    url: url::Url,
+    trace: Option<&dyn TraceObserver>,
+) -> Response {
+    let status = hyper_response.status().as_u16();
+    let resp_version = hyper_response.version();
+    let resp_headers = hyper_response.headers().clone();
+
+    emit_receive_complete(trace, status);
+
+    // Always try to capture the upgrade future before consuming the body.
+    // For 101 responses, `into_body()` would block forever because hyper
+    // transfers the connection IO to the upgrade handler — we must not
+    // consume the Incoming body.
+    let on_upgrade = hyper::upgrade::on(&mut hyper_response);
+    let upgrading = is_upgrade_status(status);
+
+    let mut response = if upgrading {
+        // For upgrade responses, do NOT consume the body via into_body().
+        // The Incoming body would block forever. Use an empty buffered body.
+        let body = ResponseBody::buffered(Bytes::new());
+        Response::new(
+            http::StatusCode::from_u16(status).unwrap_or(http::StatusCode::OK),
+            resp_version,
+            resp_headers,
+            url,
+            body,
+        )
+    } else {
+        let stream: BoxBytesStream = wrap_incoming(hyper_response.into_body());
+        let body = ResponseBody::streaming(stream);
+        Response::new(
+            http::StatusCode::from_u16(status).unwrap_or(http::StatusCode::OK),
+            resp_version,
+            resp_headers,
+            url,
+            body,
+        )
+    };
+
+    // For upgrade-eligible responses, await the upgrade future and attach
+    // the resulting UpgradedStream to the response.
+    if upgrading {
+        let upgraded = await_upgrade(on_upgrade).await;
+        if let Some(stream) = upgraded {
+            response.set_network_stream(NetworkStream::Upgraded(stream));
+        }
+    }
+
+    response
+}
+
 /// Issue a hyper request and return a streaming `Response` bound to the
 /// caller's URL.
 ///
 /// When a trace observer is provided, emits `send_request_headers` and
 /// `receive_response_headers` lifecycle events.
 ///
-/// For 101 Switching Protocols and successful CONNECT responses,
-/// captures the upgrade future and attaches an [`UpgradedStream`] to
-/// the response. For ordinary responses, attaches read-only connection
-/// metadata when available.
+/// For 101 Switching Protocols responses, captures the upgrade future and
+/// attaches an [`UpgradedStream`] to the response. For ordinary responses,
+/// attaches read-only connection metadata when available.
 pub(crate) async fn send_request(
     hyper_client: &TimeoutHyperClient,
     request: http::Request<HyperRequestBody>,
     url: url::Url,
     trace: Option<&dyn TraceObserver>,
 ) -> Result<Response> {
-    if let Some(observer) = trace {
-        let method = request.method().as_str().to_owned();
-        let target = request.uri().to_string();
-        if observer.on_event(&TraceEvent::SendRequestHeaders {
-            phase: TracePhase::Started,
-            method,
-            target,
-        }) == OnEventAction::Abort
-        {
-            return Err(Error::TraceCallbackAborted);
-        }
-    }
+    emit_send_start(trace, request.method().as_str(), &request.uri().to_string())?;
 
     let result = hyper_client.request(request).await.map_err(map_send_error);
 
     match result {
-        Ok(mut hyper_response) => {
-            let status = hyper_response.status().as_u16();
-            let resp_version = hyper_response.version();
-            let resp_headers = hyper_response.headers().clone();
-
-            if let Some(observer) = trace {
-                observer.on_event(&TraceEvent::ReceiveResponseHeaders {
-                    phase: TracePhase::Complete,
-                    status,
-                });
-            }
-
-            // Always try to capture the upgrade future before consuming
-            // the body. For 101 responses, `into_body()` would block
-            // forever because hyper transfers the connection IO to the
-            // upgrade handler — we must not consume the Incoming body.
-            let on_upgrade = hyper::upgrade::on(&mut hyper_response);
-            let upgrading = is_upgrade_status(status);
-
-            let mut response = if upgrading {
-                // For upgrade responses, do NOT consume the body via
-                // into_body(). The Incoming body would block forever.
-                // Use an empty buffered body instead.
-                let body = ResponseBody::buffered(Bytes::new());
-                Response::new(
-                    http::StatusCode::from_u16(status).unwrap_or(http::StatusCode::OK),
-                    resp_version,
-                    resp_headers,
-                    url,
-                    body,
-                )
-            } else {
-                let stream: BoxBytesStream = wrap_incoming(hyper_response.into_body());
-                let body = ResponseBody::streaming(stream);
-                Response::new(
-                    http::StatusCode::from_u16(status).unwrap_or(http::StatusCode::OK),
-                    resp_version,
-                    resp_headers,
-                    url,
-                    body,
-                )
-            };
-
-            // For upgrade-eligible responses, await the upgrade future
-            // and attach the resulting UpgradedStream to the response.
-            if upgrading {
-                let upgraded = await_upgrade(on_upgrade).await;
-                if let Some(stream) = upgraded {
-                    response.set_network_stream(NetworkStream::Upgraded(stream));
-                }
-            }
-
-            Ok(response)
-        }
+        Ok(hyper_response) => Ok(finish_hyper_response(hyper_response, url, trace).await),
         Err(e) => {
-            if let Some(observer) = trace {
-                let _ = observer.on_event(&TraceEvent::SendRequestHeaders {
-                    phase: TracePhase::Failed,
-                    method: String::new(),
-                    target: String::new(),
-                });
-            }
+            emit_send_failed(trace);
             Err(e)
         }
     }
 }
 
 /// Issue a request through the direct connector and return a streaming
-/// `Response`. Used for requests with advanced socket options or local
-/// address binding.
+/// `Response`. Used for requests with advanced socket options, local
+/// address binding, and the SNI-override path.
+///
+/// Shares the single [`finish_hyper_response`] lifecycle with the standard
+/// Hyper path; only the concrete Hyper client type differs.
 ///
 /// When a trace observer is provided, emits `send_request_headers` and
 /// `receive_response_headers` lifecycle events.
@@ -124,75 +169,14 @@ pub(crate) async fn send_direct_request(
     url: url::Url,
     trace: Option<&dyn TraceObserver>,
 ) -> Result<Response> {
-    if let Some(observer) = trace {
-        let method = request.method().as_str().to_owned();
-        let target = request.uri().to_string();
-        if observer.on_event(&TraceEvent::SendRequestHeaders {
-            phase: TracePhase::Started,
-            method,
-            target,
-        }) == OnEventAction::Abort
-        {
-            return Err(Error::TraceCallbackAborted);
-        }
-    }
+    emit_send_start(trace, request.method().as_str(), &request.uri().to_string())?;
 
     let result = hyper_client.request(request).await.map_err(map_send_error);
 
     match result {
-        Ok(mut hyper_response) => {
-            let status = hyper_response.status().as_u16();
-            let resp_version = hyper_response.version();
-            let resp_headers = hyper_response.headers().clone();
-
-            if let Some(observer) = trace {
-                observer.on_event(&TraceEvent::ReceiveResponseHeaders {
-                    phase: TracePhase::Complete,
-                    status,
-                });
-            }
-
-            let on_upgrade = hyper::upgrade::on(&mut hyper_response);
-            let upgrading = is_upgrade_status(status);
-
-            let mut response = if upgrading {
-                let body = ResponseBody::buffered(Bytes::new());
-                Response::new(
-                    http::StatusCode::from_u16(status).unwrap_or(http::StatusCode::OK),
-                    resp_version,
-                    resp_headers,
-                    url,
-                    body,
-                )
-            } else {
-                let stream: BoxBytesStream = wrap_incoming(hyper_response.into_body());
-                let body = ResponseBody::streaming(stream);
-                Response::new(
-                    http::StatusCode::from_u16(status).unwrap_or(http::StatusCode::OK),
-                    resp_version,
-                    resp_headers,
-                    url,
-                    body,
-                )
-            };
-
-            if upgrading {
-                let upgraded = await_upgrade(on_upgrade).await;
-                if let Some(stream) = upgraded {
-                    response.set_network_stream(NetworkStream::Upgraded(stream));
-                }
-            }
-
-            Ok(response)
-        }
+        Ok(hyper_response) => Ok(finish_hyper_response(hyper_response, url, trace).await),
         Err(e) => {
-            if let Some(observer) = trace {
-                let _ = observer.on_event(&TraceEvent::SendRequestHeaders {
-                    phase: TracePhase::Failed,
-                    method: String::new(),
-                    target: String::new(),
-                });
-            }
+            emit_send_failed(trace);
             Err(e)
         }
     }

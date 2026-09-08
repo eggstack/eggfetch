@@ -150,6 +150,18 @@ impl Service<Uri> for UdsConnector {
 }
 
 /// Convert a Hyper response from the UDS client into the core response type.
+///
+/// Reuses the shared trace lifecycle helpers and [`wrap_incoming`] body
+/// adapter from the direct path so generic trace/header/body conversion
+/// cannot diverge. Error mapping is unified through `map_send_error` so
+/// write-timeout and HTTP/2 classifications propagate identically.
+///
+/// Intentional difference: UDS does **not** implement 101 Switching
+/// Protocols upgrade handling. The Unix-socket connector cannot safely
+/// expose Hyper's opaque upgrade IO for user-writable streams in this
+/// milestone, so upgrade-eligible statuses are returned as ordinary
+/// streaming responses. This difference is explicit and covered by direct
+/// tests; do not hide it behind the generic upgrade helper.
 #[cfg(unix)]
 pub(crate) async fn send_request(
     client: &crate::transport::TimeoutUdsClient,
@@ -157,25 +169,16 @@ pub(crate) async fn send_request(
     url: url::Url,
     trace: Option<&dyn crate::trace::TraceObserver>,
 ) -> Result<Response> {
-    use crate::trace::{TraceEvent, TracePhase};
-
-    if let Some(observer) = trace {
-        let method = request.method().as_str().to_owned();
-        let target = request.uri().to_string();
-        if observer.on_event(&TraceEvent::SendRequestHeaders {
-            phase: TracePhase::Started,
-            method,
-            target,
-        }) == crate::trace::OnEventAction::Abort
-        {
-            return Err(Error::TraceCallbackAborted);
-        }
-    }
+    crate::transport::direct::emit_send_start(
+        trace,
+        request.method().as_str(),
+        &request.uri().to_string(),
+    )?;
 
     let result = client
         .request(request)
         .await
-        .map_err(|e| Error::HyperClient(Arc::new(e)));
+        .map_err(crate::transport::direct::map_send_error);
 
     match result {
         Ok(response) => {
@@ -183,12 +186,7 @@ pub(crate) async fn send_request(
             let version = response.version();
             let headers = response.headers().clone();
 
-            if let Some(observer) = trace {
-                observer.on_event(&TraceEvent::ReceiveResponseHeaders {
-                    phase: TracePhase::Complete,
-                    status,
-                });
-            }
+            crate::transport::direct::emit_receive_complete(trace, status);
 
             let body: BoxBytesStream =
                 crate::transport::direct::wrap_incoming(response.into_body());
@@ -201,13 +199,7 @@ pub(crate) async fn send_request(
             ))
         }
         Err(e) => {
-            if let Some(observer) = trace {
-                observer.on_event(&TraceEvent::SendRequestHeaders {
-                    phase: TracePhase::Failed,
-                    method: String::new(),
-                    target: String::new(),
-                });
-            }
+            crate::transport::direct::emit_send_failed(trace);
             Err(e)
         }
     }

@@ -101,8 +101,8 @@ All HTTP behavior lives here. 26 source modules including `stream` and `transpor
 | `timeout` | Yes | `Timeout`, `TimeoutBuilder`, `TimeoutPhase` — 7 distinct phases (Pool, Connect, ProxyConnect, ProxyTls, Write, Read, Total). Request-level overrides merge with client-level per-field. |
 | `tls` | Yes | `TlsConfig`, `TlsConfigBuilder`, `TlsVersion`, `TrustStore`, `ClientIdentity` — custom CA bundles, mTLS client certs, verification toggle, TLS version bounds. |
 | `trace` | Yes | `TraceObserver`, `TraceEvent` — synchronous callback observer for dispatch events (request/response/redirect/retry). Coroutine callbacks are rejected at adapter boundaries; core only ever sees sync observers. |
-| `pipeline` | No | `send_with_retry()`, `send_with_redirects()`, `send_single_request()` — full request lifecycle orchestration. Retry loop → redirect loop → header merge → cookie injection → auth → pool acquire → timeout → transport → decompression. |
-| `transport` | No | 9 submodules: `direct`, `direct_connector`, `proxy`, `socks`, `uds`, `http3`, `connect`, `connect_timeout`, `mod`. Type aliases for hyper clients with timeout wrappers. |
+| `pipeline` | No | `send_with_retry()`, `send_with_redirects()`, `send_single_request()` — full request lifecycle orchestration. Retry loop (typed `RequestParts::retry_request`) → redirect loop (shared first-hop builder + single redirect transformation) → preparation (`PreparedRequest`) → declarative transport dispatch (`TransportRoute::select_route`) → common post-transport policy (decompression, decoded-size limit, read-timeout + pool lease). |
+| `transport` | No | 9 submodules: `direct`, `direct_connector`, `proxy`, `socks`, `uds`, `http3`, `connect`, `connect_timeout`, `mod`. Type aliases for hyper clients with timeout wrappers. `direct` owns the shared Hyper response lifecycle (`finish_hyper_response` + trace helpers + `wrap_incoming` + `map_send_error`); `uds` reuses the trace/body/error helpers but intentionally omits 101 upgrade handling. |
 | `stream` | No | Per-chunk read/write timeout wrappers. |
 | `h2_headers` | No | HTTP/2 forbidden header stripping. |
 | `response_decode` | No | Content-Encoding parsing and decompression dispatch. |
@@ -241,29 +241,41 @@ Each component has a dedicated document for detailed review:
 
 ```
 Client::send()
-  → retry loop (send_with_retry)
-    → redirect loop (send_with_redirects)
+  → retry loop (send_with_retry via RequestParts::retry_request, total deadline shrinks)
+    → redirect loop (send_with_redirects via shared HopBuildParams builder)
       → header merge (client defaults + request overrides)
-      → cookie selection (from jar)
-      → auth resolution (request > disabled > client > none)
-      → pool acquisition (with timeout)
-      → write timeout wrapping (stream bodies)
-      → Content-Length application
-      → HTTP/2 forbidden header stripping
-      → transport dispatch (UDS / direct / direct-with-socket-options / proxy / HTTP3)
-      → decompression wrapping
+      → hop build (cookies, auth, hints; first hop preserves hints, later hops clear)
+      → redirect transformation (single advance_redirect_hop step)
+      → preparation (prepare_single_request → PreparedRequest)
+        → accept-encoding / Content-Length / user-agent / H2 stripping / size check
+        → proxy resolution + origin keying + pool acquisition
+        → write-timeout wrapping + remaining-total/deadline computation
+      → transport dispatch (select_route → UDS / Direct / Proxy / SNI / H3 / Standard)
+      → common post-transport policy (decompression, decoded-size limit)
       → read timeout + pool lease attachment
 ```
 
 ### Transport Dispatch Order
 
-The pipeline tries transports in this order within `send_single_request()`:
+`send_single_request()` separates preparation from execution. After
+`prepare_single_request()` builds a `PreparedRequest`, `select_route()`
+selects one declarative route (precedence unchanged, directly unit-tested):
 
-1. **Unix Domain Socket** — if the URL scheme is `http+unix` or `https+unix`
-2. **Direct TCP** — default path, with optional socket options and local address binding
-3. **HTTP Proxy** — HTTP forwarding or HTTPS CONNECT tunneling (if proxy configured)
-4. **SOCKS5 Proxy** — SOCKS5 connector with per-route persistent pools (if proxy configured)
-5. **HTTP/3 (QUIC)** — if `http3` feature enabled and URL scheme is `https`
+1. **Unix Domain Socket** — when `ClientBuilder::uds_path()` is configured
+2. **Specialized direct** — when a direct connector (socket options / local
+   address) is configured and no proxy applies
+3. **Proxy / SOCKS** — effective proxy or SOCKS path (SOCKS uses a
+   per-route persistent Hyper pool)
+4. **SNI override direct** — cached SNI-specific client when
+   `TransportHints::sni_hostname` is set
+5. **HTTP/3 (QUIC)** — when `http_version_policy.use_http3()` and the
+   `http3` feature is enabled
+6. **Standard Hyper direct** — default TCP path
+
+H3 never bypasses proxy rules because proxy routes are selected first.
+All routes share one post-transport policy; UDS and specialized-direct
+responses now flow through the same decompression and lease handling as
+the standard path.
 
 ### Pool Permit Lifecycle
 

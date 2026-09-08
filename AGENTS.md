@@ -90,9 +90,24 @@ engine while releasing the GIL. If you write HTTP logic outside eggfetch-core, s
 semantics: `target: Option<Bytes>` overrides the wire request target (e.g. `OPTIONS *`,
 absolute-form) while preserving routing, Host, cookies, auth, and proxy selection;
 `sni_hostname: Option<String>` overrides TLS SNI while preserving the TCP destination.
-Hints survive retry reconstruction and are cleared on redirect hops (destination changed).
+Hints survive retry reconstruction (typed `RequestParts::retry_request`) and are cleared
+on redirect hops (destination changed). The redirects-disabled fast path and the
+redirect-enabled first hop share one `HopBuildParams` builder, so the two cannot diverge.
 The Python compat facade passes `target`/`sni_hostname` from the request extensions dict
 through the native `stream()` method.
+
+## Core Pipeline Internals (for maintainers)
+
+- `RequestParts` is the complete logical-request state; all retry/redirect reconstruction
+  goes through typed helpers (`retry_request`, `into_request`, `advance_redirect_hop`)
+  with exhaustive construction — a new field fails to compile rather than being dropped.
+- `prepare_single_request()` normalizes a hop into an internal `PreparedRequest`
+  (headers/body/version/URI/proxy/pool/deadlines); `select_route()` then picks one
+  declarative `TransportRoute` (UDS → direct → proxy/SOCKS → SNI → H3 → standard).
+  One common post-transport policy applies to every route.
+- `transport/direct.rs` owns the shared Hyper response lifecycle
+  (`finish_hyper_response` + trace helpers + `wrap_incoming` + `map_send_error`);
+  `transport/uds.rs` reuses those helpers but intentionally omits 101 upgrade handling.
 
 ## HTTPX Compatibility Layer
 

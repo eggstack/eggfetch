@@ -58,7 +58,11 @@ Body sources are mutually exclusive: `body()`, `bytes()`, `stream()`, `json()`, 
 - `sni_hostname: Option<String>` — overrides TLS SNI while preserving TCP destination.
 - `trace: Option<Arc<dyn TraceObserver>>` — installs a callback observer for [`TraceEvent`](../../crates/eggfetch-core/src/trace.rs) emissions during dispatch.
 
-Transport hints survive through retry reconstruction but are cleared on redirect hops.  The redirect-disabled fast path in `pipeline::send_with_redirects` also reattaches the original `TransportHints` to the reconstructed request so that `target`, `sni_hostname`, and `trace` are not silently dropped when callers disable internal redirect handling.
+Transport hints survive retry reconstruction via the typed
+`RequestParts::retry_request()` transformation but are cleared on redirect
+hops (destination changed). The redirects-disabled fast path and the
+redirect-enabled first hop share one `HopBuildParams` builder, so `target`,
+`sni_hostname`, and `trace` cannot diverge between the two entry paths.
 
 ### Proxy Override
 
@@ -99,19 +103,31 @@ send_with_retry()           ← retry loop
     send_single_request()   ← one HTTP round-trip
 ```
 
-### send_single_request steps:
+### send_single_request phases:
 
-1. Header merge (client defaults + request overrides)
-2. Cookie selection from jar
-3. Auth resolution (`resolve_request_auth`)
-4. Timeout merging (per-field)
-5. Pool acquisition (with pool timeout)
-6. Write timeout wrapping (for stream bodies)
-7. Content-Length application
-8. HTTP/2 forbidden header stripping (`h2_headers`)
-9. Transport dispatch (direct / direct-with-socket-options / UDS / proxy / HTTP3)
-10. Decompression wrapping
-11. Read timeout + pool lease attachment
+Preparation (`prepare_single_request()` → `PreparedRequest`) centralizes
+request policy so transports own only connection/protocol work:
+
+1. Header merge (client defaults + request overrides) and timeout merging
+   (per-field) happen in `send_with_redirects()`; the hop itself is built
+   by the shared `HopBuildParams` builder (cookies, auth, hints).
+2. Preparation normalizes accept-encoding, Content-Length, user-agent, and
+   H2-forbidden headers, validates request size, resolves the wire URI
+   (`target` override), wraps stream bodies with the write timeout,
+   resolves the effective proxy/origin, acquires the pool guard, and
+   computes the remaining-total/deadline. One-shot bodies are moved, never
+   cloned.
+3. Dispatch selects one `TransportRoute` via `select_route()` (UDS →
+   specialized-direct → proxy/SOCKS → SNI-direct → H3 → standard Hyper).
+   Hyper request scaffolding is built once via `build_hyper_request()`.
+4. One common post-transport policy applies to every route: decompression
+   wrapping, decoded-size limiting, then read-timeout + pool-lease
+   attachment.
+
+The standard and specialized-direct Hyper paths share a single
+response-lifecycle implementation (`finish_hyper_response()` plus shared
+trace helpers); UDS reuses the trace/body/error helpers but intentionally
+omits 101 upgrade handling (documented in code and directly tested).
 
 ## Network Stream and Upgrade Support
 

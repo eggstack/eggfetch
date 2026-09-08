@@ -80,6 +80,11 @@ pub enum ProxyOverride {
 }
 
 /// Parts returned by [`Request::into_parts`].
+///
+/// This is the complete logical-request state carried across retry and
+/// redirect policy transformations. All reconstruction goes through the
+/// typed helpers below so a newly added field fails to compile (via
+/// exhaustive construction) rather than being silently dropped.
 pub(crate) struct RequestParts {
     pub(crate) method: http::Method,
     pub(crate) url: url::Url,
@@ -94,6 +99,102 @@ pub(crate) struct RequestParts {
     pub(crate) proxy_override: ProxyOverride,
     pub(crate) retry: Option<RetryPolicy>,
     pub(crate) transport_hints: TransportHints,
+}
+
+impl RequestParts {
+    /// Reassemble the parts into a [`Request`] without body replay.
+    ///
+    /// Exhaustively constructs the request so adding a field to
+    /// [`RequestParts`] without updating this path is a compile error.
+    /// Used by regression tests as the canonical round-trip anchor; the
+    /// live retry path uses [`Self::retry_request`] with a shrunk deadline.
+    #[allow(
+        dead_code,
+        reason = "exhaustiveness anchor for RequestParts: guarantees new fields fail to compile even though live code uses retry_request"
+    )]
+    pub(crate) fn into_request(self) -> Request {
+        let RequestParts {
+            method,
+            url,
+            headers,
+            body,
+            version,
+            timeout,
+            redirect,
+            auth,
+            auth_disabled,
+            decompress,
+            proxy_override,
+            retry,
+            transport_hints,
+        } = self;
+        let mut request = Request::new(method, url);
+        *request.headers_mut() = headers;
+        request.set_body(body);
+        request.set_version(version);
+        request.set_timeout(timeout);
+        request.set_redirect(redirect);
+        request.set_auth(auth);
+        request.set_auth_disabled(auth_disabled);
+        request.set_decompress(decompress);
+        #[cfg(feature = "proxy")]
+        request.set_proxy_override(proxy_override);
+        #[cfg(not(feature = "proxy"))]
+        let _ = proxy_override;
+        request.set_retry(retry);
+        request.set_transport_hints(transport_hints);
+        request
+    }
+
+    /// Build the retry attempt for the same logical request.
+    ///
+    /// Preserves every request-local override that remains valid for
+    /// another attempt (including transport hints, proxy/decompression
+    /// overrides, auth-disable state, redirect and retry policy) while
+    /// applying the shrunk `attempt_timeout` for the remaining total
+    /// deadline. Non-replayable stream bodies return the existing
+    /// [`crate::error::Error::BodyNotReplayableForRetry`] classification.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::error::Error::BodyNotReplayableForRetry`] when the
+    /// saved body is a one-shot stream.
+    pub(crate) fn retry_request(
+        &self,
+        attempt_timeout: Option<Timeout>,
+    ) -> crate::error::Result<Request> {
+        let replayed = self.body.try_clone_for_retry()?;
+        let mut request = Request::new(self.method.clone(), self.url.clone());
+        *request.headers_mut() = self.headers.clone();
+        request.set_body(replayed);
+        request.set_version(self.version);
+        request.set_timeout(attempt_timeout);
+        request.set_redirect(self.redirect.clone());
+        request.set_auth(self.auth.clone());
+        request.set_auth_disabled(self.auth_disabled);
+        request.set_decompress(self.decompress);
+        #[cfg(feature = "proxy")]
+        request.set_proxy_override(self.proxy_override.clone());
+        request.set_retry(self.retry.clone());
+        request.set_transport_hints(self.transport_hints.clone());
+        Ok(request)
+    }
+
+    /// Apply a shrunk total deadline to a timeout value.
+    ///
+    /// Returns the timeout with `total` replaced by `total - elapsed`
+    /// (saturating). Used by both retry and redirect loops so the original
+    /// total deadline shrinks rather than restarting on each attempt/hop.
+    pub(crate) fn shrink_total_deadline(
+        timeout: &Timeout,
+        elapsed: std::time::Duration,
+    ) -> Timeout {
+        let mut out = *timeout;
+        if let Some(total) = out.total {
+            out.total = Some(total.saturating_sub(elapsed));
+        }
+        out
+    }
 }
 
 /// An outgoing HTTP request.

@@ -111,44 +111,6 @@ async fn drain_response_body(response: &mut Response) {
     let _ = tokio::time::timeout(DRAIN_MAX_TIME, drain).await;
 }
 
-/// Reconstruct a request from saved parts for retry.
-#[allow(clippy::too_many_arguments)]
-fn rebuild_request(
-    method: &http::Method,
-    url: &url::Url,
-    headers: &Headers,
-    body: &RequestBody,
-    version: http::Version,
-    timeout: Option<&Timeout>,
-    redirect: Option<&redirect::RedirectPolicy>,
-    auth: Option<&crate::auth::AuthScheme>,
-    auth_disabled: bool,
-    decompress: Option<bool>,
-    #[cfg(feature = "proxy")] proxy_override: &ProxyOverride,
-    #[cfg(not(feature = "proxy"))] _proxy_override: (),
-    transport_hints: &crate::request::TransportHints,
-) -> Result<Request> {
-    let mut req = Request::new(method.clone(), url.clone());
-    *req.headers_mut() = headers.clone();
-    match body {
-        RequestBody::Empty => req.set_body(RequestBody::Empty),
-        RequestBody::Bytes(b) => req.set_body(RequestBody::Bytes(b.clone())),
-        RequestBody::Stream { .. } => {
-            return Err(Error::BodyNotReplayableForRetry);
-        }
-    }
-    req.set_version(version);
-    req.set_timeout(timeout.copied());
-    req.set_redirect(redirect.cloned());
-    req.set_auth(auth.cloned());
-    req.set_auth_disabled(auth_disabled);
-    req.set_decompress(decompress);
-    #[cfg(feature = "proxy")]
-    req.set_proxy_override(proxy_override.clone());
-    req.set_transport_hints(transport_hints.clone());
-    Ok(req)
-}
-
 /// Check if there is budget remaining for another retry attempt.
 fn has_budget(policy: &RetryPolicy, attempt: usize, start_time: std::time::Instant) -> bool {
     if attempt >= policy.max_attempts() {
@@ -173,7 +135,6 @@ fn has_budget(policy: &RetryPolicy, attempt: usize, start_time: std::time::Insta
 /// under the original total deadline. Stream bodies are never retried.
 #[allow(clippy::too_many_lines)]
 pub(crate) async fn send_with_retry(client: &Client, request: Request) -> Result<Response> {
-    let method = request.method().clone();
     let body_replayable = request.body().is_replayable();
 
     // Resolve the effective retry policy. Request-level takes precedence.
@@ -193,27 +154,13 @@ pub(crate) async fn send_with_retry(client: &Client, request: Request) -> Result
         return Box::pin(send_with_redirects(client, request)).await;
     }
 
-    // Save original request parts for replay.
-    let crate::request::RequestParts {
-        method: orig_method,
-        url: orig_url,
-        headers: orig_headers,
-        body: orig_body,
-        version: orig_version,
-        timeout: orig_timeout,
-        redirect: orig_redirect,
-        auth: orig_auth,
-        auth_disabled: orig_auth_disabled,
-        decompress: orig_decompress,
-        proxy_override: orig_proxy,
-        retry: _orig_retry,
-        transport_hints: orig_transport_hints,
-    } = request.into_parts();
-
-    // Without the `proxy` feature the override has no transport effect.
-    #[cfg(not(feature = "proxy"))]
-    let _ = &orig_proxy;
-
+    // Save the complete logical-request state for replay. The typed
+    // `retry_request` transformation below reconstructs each attempt from
+    // this saved state, so every field (including future additions) is
+    // preserved or explicitly transformed rather than copied through a
+    // long parameter list.
+    let saved = request.into_parts();
+    let saved_timeout = saved.timeout;
     let start_time = std::time::Instant::now();
     let mut attempt = 0usize;
 
@@ -250,7 +197,7 @@ pub(crate) async fn send_with_retry(client: &Client, request: Request) -> Result
         // redirect loop shrinks per-hop deadlines. Without this, an attempt
         // would restart with the full original `total` and the aggregate
         // elapsed time could reach `max_attempts * total`.
-        if let Some(total) = orig_timeout.as_ref().and_then(|t| t.total) {
+        if let Some(total) = saved_timeout.as_ref().and_then(|t| t.total) {
             if elapsed >= total {
                 return Err(Error::Timeout {
                     phase: TimeoutPhase::Total,
@@ -258,12 +205,8 @@ pub(crate) async fn send_with_retry(client: &Client, request: Request) -> Result
                 });
             }
         }
-        let attempt_timeout = orig_timeout.map(|mut t| {
-            if let Some(total) = t.total {
-                t.total = Some(total.saturating_sub(elapsed));
-            }
-            t
-        });
+        let attempt_timeout =
+            saved_timeout.map(|t| crate::request::RequestParts::shrink_total_deadline(&t, elapsed));
         // Skip an attempt with no remaining total budget instead of spending
         // a pool slot and TCP connect only to fail on the deadline.
         if attempt_timeout
@@ -277,24 +220,8 @@ pub(crate) async fn send_with_retry(client: &Client, request: Request) -> Result
             });
         }
 
-        // Reconstruct the request from saved parts.
-        let attempt_request = rebuild_request(
-            &orig_method,
-            &orig_url,
-            &orig_headers,
-            &orig_body,
-            orig_version,
-            attempt_timeout.as_ref(),
-            orig_redirect.as_ref(),
-            orig_auth.as_ref(),
-            orig_auth_disabled,
-            orig_decompress,
-            #[cfg(feature = "proxy")]
-            &orig_proxy,
-            #[cfg(not(feature = "proxy"))]
-            (),
-            &orig_transport_hints,
-        )?;
+        // Reconstruct the attempt through the single typed transformation.
+        let attempt_request = saved.retry_request(attempt_timeout)?;
 
         let result = Box::pin(send_with_redirects(client, attempt_request)).await;
 
@@ -305,7 +232,8 @@ pub(crate) async fn send_with_retry(client: &Client, request: Request) -> Result
                 }
                 let status = response.status().as_u16();
 
-                if let Some(cause) = should_retry(&policy, &method, &orig_body, None, Some(status))
+                if let Some(cause) =
+                    should_retry(&policy, &saved.method, &saved.body, None, Some(status))
                 {
                     if !has_budget(&policy, attempt, start_time) {
                         return Ok(response);
@@ -332,7 +260,9 @@ pub(crate) async fn send_with_retry(client: &Client, request: Request) -> Result
                 return Ok(response);
             }
             Err(err) => {
-                if let Some(cause) = should_retry(&policy, &method, &orig_body, Some(&err), None) {
+                if let Some(cause) =
+                    should_retry(&policy, &saved.method, &saved.body, Some(&err), None)
+                {
                     if !has_budget(&policy, attempt, start_time) {
                         return Err(err);
                     }
@@ -377,6 +307,314 @@ fn compute_retry_delay(
     Some(base)
 }
 
+/// Parameters for building one redirect-loop hop request.
+///
+/// This is the single policy path shared by the redirects-disabled fast
+/// path and every iteration of the redirect-enabled loop. Cookie injection,
+/// auth resolution, transport-hint handling, and credential scoping live
+/// here so the two entry paths cannot diverge.
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "hop policy is three orthogonal booleans (first-hop, credentials, cookies); an enum would obscure call sites"
+)]
+struct HopBuildParams {
+    method: http::Method,
+    url: url::Url,
+    headers: Headers,
+    body: RequestBody,
+    version: http::Version,
+    timeout: Timeout,
+    decompress: Option<bool>,
+    #[cfg(feature = "proxy")]
+    proxy_override: ProxyOverride,
+    transport_hints: crate::request::TransportHints,
+    auth: Option<crate::auth::AuthScheme>,
+    auth_disabled: bool,
+    /// True only for the first hop of the logical request.
+    is_first_hop: bool,
+    /// False after a cross-origin redirect; gates client-auth reapplication.
+    credentials_allowed: bool,
+    /// False after a cross-origin redirect; gates cookie injection.
+    cookie_allowed: bool,
+}
+
+/// Build one hop request through the shared first-hop policy path.
+///
+/// - Transport hints (`target`, `sni_hostname`, `trace`) attach only on the
+///   first hop; redirect hops clear them because the destination changed.
+/// - Per-request decompression and proxy overrides persist across all hops.
+/// - Auth follows the cross-origin stripping policy; cookies are injected
+///   from the jar unless an explicit `cookie` header exists or the hop no
+///   longer allows cookies.
+/// - The effective auth is resolved and applied here so both the fast path
+///   and the redirect loop observe identical header state on the wire.
+///
+/// # Errors
+///
+/// Returns an error if cookie insertion or auth application fails.
+fn build_hop_request(client: &Client, params: HopBuildParams) -> Result<Request> {
+    let HopBuildParams {
+        method,
+        url,
+        headers,
+        body,
+        version,
+        timeout,
+        decompress,
+        #[cfg(feature = "proxy")]
+        proxy_override,
+        transport_hints,
+        auth,
+        auth_disabled,
+        is_first_hop,
+        credentials_allowed,
+        cookie_allowed,
+    } = params;
+
+    let mut hop = Request::new(method, url);
+    *hop.headers_mut() = headers;
+    hop.set_body(body);
+    hop.set_version(version);
+    hop.set_timeout(Some(timeout));
+    hop.set_decompress(decompress);
+    #[cfg(feature = "proxy")]
+    hop.set_proxy_override(proxy_override);
+    // Transport hints apply only on the first hop; redirects clear them
+    // because the destination changed.
+    if is_first_hop {
+        hop.set_transport_hints(transport_hints);
+    }
+
+    hop.set_auth(if credentials_allowed { auth } else { None });
+    hop.set_auth_disabled(auth_disabled);
+
+    #[cfg(feature = "cookies")]
+    {
+        if !cookie_allowed {
+            hop.headers_mut().remove("cookie");
+        } else if !hop.headers().contains("cookie") {
+            if let Some(cookie_header) = client.config().cookie_jar.cookies_for_url(hop.url()) {
+                hop.headers_mut().insert("cookie", &cookie_header)?;
+            }
+        }
+    }
+    #[cfg(not(feature = "cookies"))]
+    let _ = (client, cookie_allowed);
+
+    {
+        let effective_auth = crate::auth::resolve_request_auth(
+            hop.auth(),
+            hop.is_auth_disabled(),
+            if credentials_allowed {
+                client.config().auth.as_ref()
+            } else {
+                None
+            },
+            hop.headers(),
+        )?;
+        if let Some(auth) = effective_auth {
+            auth.apply(hop.headers_mut())?;
+        }
+    }
+
+    Ok(hop)
+}
+
+/// Result of advancing one redirect hop: the next hop's method, URL,
+/// headers, body, and version.
+#[derive(Debug)]
+struct RedirectHop {
+    method: http::Method,
+    url: url::Url,
+    headers: Headers,
+    body: RequestBody,
+    version: http::Version,
+}
+
+/// Compute the next redirect hop's request state in one transformation step.
+///
+/// Evaluates the method/body policy, enforces one-shot body replayability
+/// before any unsafe replay, delegates header stripping to the redirect
+/// engine, and returns only the fields that legitimately change across a
+/// hop (method/URL/headers/body/version). Destination-specific transport
+/// hints, auth, proxy/decompression overrides, and timeouts are managed by
+/// the redirect loop itself, not carried through the redirect builder.
+///
+/// # Errors
+///
+/// Returns [`Error::BodyNotReplayableForRedirect`] when a method-preserving
+/// redirect requires replaying a one-shot stream body, or propagates URL
+/// and header errors from the redirect engine.
+fn advance_redirect_hop(
+    cur_method: &http::Method,
+    cur_url: &url::Url,
+    cur_headers: &Headers,
+    cur_version: http::Version,
+    replay_body: &mut Option<Bytes>,
+    status: http::StatusCode,
+    location: &str,
+) -> Result<RedirectHop> {
+    let new_method = redirect::redirect_method(status, cur_method);
+    let drop_body = redirect::drops_body_on_redirect(status, cur_method);
+    if drop_body {
+        // The body is dropped on this hop. Clear any stale replay payload
+        // so a later method-preserving hop does not resurrect bytes from an
+        // earlier method-rewritten hop.
+        *replay_body = Some(Bytes::new());
+    } else if replay_body.is_none() {
+        return Err(Error::BodyNotReplayableForRedirect);
+    }
+
+    let mut temp_request = Request::new(cur_method.clone(), cur_url.clone());
+    *temp_request.headers_mut() = cur_headers.clone();
+    let temp_body = if drop_body {
+        RequestBody::Empty
+    } else {
+        RequestBody::Bytes(
+            replay_body
+                .as_ref()
+                .ok_or(Error::BodyNotReplayableForRedirect)?
+                .clone(),
+        )
+    };
+    temp_request.set_body(temp_body);
+    temp_request.set_version(cur_version);
+
+    let redirect_req = redirect::build_redirect_request_with_policy(
+        &temp_request,
+        location,
+        new_method.clone(),
+        drop_body,
+    )?;
+
+    // Destructure exhaustively so a new `RequestParts` field fails to
+    // compile here rather than being silently dropped across hops.
+    let crate::request::RequestParts {
+        method: _,
+        url: new_url,
+        headers: new_headers,
+        body: new_body,
+        version: new_version,
+        timeout: _,
+        redirect: _,
+        auth: _,
+        auth_disabled: _,
+        decompress: _,
+        proxy_override: _,
+        retry: _,
+        transport_hints: _,
+    } = redirect_req.into_parts();
+
+    Ok(RedirectHop {
+        method: new_method,
+        url: new_url,
+        headers: new_headers,
+        body: new_body,
+        version: new_version,
+    })
+}
+
+/// Transport-ready state after request policy and body/header normalization.
+///
+/// Built once in `send_single_request`'s preparation phase. Transport
+/// dispatch then selects an execution path without reimplementing
+/// content-length, version, or header policy. The body is owned so one-shot
+/// streams are moved, never cloned, to satisfy the abstraction.
+struct PreparedRequest {
+    method: http::Method,
+    url: url::Url,
+    uri: http::Uri,
+    headers: Headers,
+    body: RequestBody,
+    version: http::Version,
+    transport_hints: crate::request::TransportHints,
+    #[cfg(feature = "proxy")]
+    effective_proxy: Option<ProxyConfig>,
+    decompression_enabled: bool,
+    timeout: Timeout,
+    remaining_total: Option<Duration>,
+    deadline: Option<std::time::Instant>,
+}
+
+/// Declarative transport route selected after preparation.
+///
+/// Precedence (unchanged): configured UDS, specialized direct connector
+/// when applicable (no proxy), effective proxy/SOCKS path, SNI override
+/// direct path, H3 where selected, standard Hyper direct path. H3 never
+/// bypasses proxy rules because proxy routes are selected first.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TransportRoute {
+    /// Configured Unix-domain-socket client.
+    Uds,
+    /// Specialized direct connector (socket options / local address).
+    Direct,
+    /// Effective proxy or SOCKS path.
+    Proxy,
+    /// Cached SNI-override direct client.
+    SniDirect,
+    /// HTTP/3 over QUIC.
+    H3,
+    /// Standard Hyper direct path.
+    Standard,
+}
+
+/// Select the transport route from prepared state.
+///
+/// Pure function over availability flags so precedence is directly tested
+/// without constructing clients.
+#[allow(
+    clippy::fn_params_excessive_bools,
+    reason = "route selection is a pure precedence predicate over five availability flags; bundling into a struct adds indirection for tests"
+)]
+fn select_route(
+    has_uds: bool,
+    has_direct_no_proxy: bool,
+    has_proxy: bool,
+    has_sni: bool,
+    use_h3: bool,
+) -> TransportRoute {
+    if has_uds {
+        TransportRoute::Uds
+    } else if has_direct_no_proxy {
+        TransportRoute::Direct
+    } else if has_proxy {
+        TransportRoute::Proxy
+    } else if has_sni {
+        TransportRoute::SniDirect
+    } else if use_h3 {
+        TransportRoute::H3
+    } else {
+        TransportRoute::Standard
+    }
+}
+
+/// Build a Hyper request from prepared parts.
+///
+/// Shared by the UDS, specialized-direct, SNI-direct, and standard Hyper
+/// paths so `http::Request` scaffolding is not rebuilt in each branch.
+///
+/// # Errors
+///
+/// Returns [`Error::RequestBuild`] if the Hyper request cannot be built.
+fn build_hyper_request(
+    method: &http::Method,
+    uri: http::Uri,
+    version: http::Version,
+    headers: &Headers,
+    body: RequestBody,
+) -> Result<http::Request<crate::transport::HyperRequestBody>> {
+    let mut builder = http::Request::builder()
+        .method(method)
+        .uri(uri)
+        .version(version);
+    for (name, value) in headers.iter() {
+        builder = builder.header(name, value);
+    }
+    builder
+        .body(body.into_http_body())
+        .map_err(|e| Error::RequestBuild(e.to_string()))
+}
+
 /// Send a request through the client, following redirects if enabled.
 ///
 /// This is the top-level entry point for the request pipeline. It
@@ -400,6 +638,10 @@ pub(crate) async fn send_with_redirects(client: &Client, request: Request) -> Re
         transport_hints: request_transport_hints,
     } = request.into_parts();
 
+    // Without the `proxy` feature the override has no transport effect.
+    #[cfg(not(feature = "proxy"))]
+    let _ = &request_proxy;
+
     let mut merged_headers = client.config().default_headers.clone().into_inner();
     for name in request_headers.keys() {
         merged_headers.remove(name);
@@ -416,54 +658,30 @@ pub(crate) async fn send_with_redirects(client: &Client, request: Request) -> Re
         .as_ref()
         .unwrap_or(&client.config().redirect);
 
-    // Fast path: redirects disabled — send directly without buffering.
+    // Fast path: redirects disabled — send through the same first-hop
+    // builder as the redirect-enabled path so the two cannot diverge except
+    // for redirect-loop behavior itself.
     if !effective_redirect.follow {
-        let mut request = Request::new(method, url);
-
-        #[cfg(feature = "cookies")]
-        let has_cookie_header = headers.contains("cookie");
-
-        *request.headers_mut() = headers;
-        request.set_body(body);
-        request.set_version(version);
-        request.set_timeout(Some(timeout));
-        // Propagate transport hints (target, SNI, trace observer) into the
-        // reconstructed request.  Without this, the fast path silently
-        // drops any trace callback the caller installed via `extensions=`.
-        request.set_transport_hints(request_transport_hints.clone());
-        // Preserve per-request decompression and proxy overrides; without
-        // these the reconstructed request reverts to client defaults.
-        request.set_decompress(request_decompress);
-        #[cfg(feature = "proxy")]
-        {
-            request.set_proxy_override(request_proxy);
-        }
-        #[cfg(not(feature = "proxy"))]
-        let _ = request_proxy;
-
-        {
-            request.set_auth(req_auth);
-            request.set_auth_disabled(req_auth_disabled);
-        }
-
-        #[cfg(feature = "cookies")]
-        if !has_cookie_header {
-            if let Some(cookie_header) = client.config().cookie_jar.cookies_for_url(request.url()) {
-                request.headers_mut().insert("cookie", &cookie_header)?;
-            }
-        }
-
-        {
-            let effective_auth = crate::auth::resolve_request_auth(
-                request.auth(),
-                request.is_auth_disabled(),
-                client.config().auth.as_ref(),
-                request.headers(),
-            )?;
-            if let Some(auth) = effective_auth {
-                auth.apply(request.headers_mut())?;
-            }
-        }
+        let request = build_hop_request(
+            client,
+            HopBuildParams {
+                method,
+                url,
+                headers,
+                body,
+                version,
+                timeout,
+                decompress: request_decompress,
+                #[cfg(feature = "proxy")]
+                proxy_override: request_proxy,
+                transport_hints: request_transport_hints,
+                auth: req_auth,
+                auth_disabled: req_auth_disabled,
+                is_first_hop: true,
+                credentials_allowed: true,
+                cookie_allowed: true,
+            },
+        )?;
 
         let response = client.send_single_request(request, &timeout).await?;
 
@@ -523,27 +741,7 @@ pub(crate) async fn send_with_redirects(client: &Client, request: Request) -> Re
             timeout
         };
 
-        let mut hop_request = Request::new(cur_method.clone(), cur_url.clone());
-        *hop_request.headers_mut() = cur_headers.clone();
-        hop_request.set_body(cur_body);
-        hop_request.set_version(cur_version);
-        hop_request.set_timeout(Some(hop_timeout));
-        // Per-request decompression and proxy overrides persist across all
-        // hops of the same logical request.
-        hop_request.set_decompress(request_decompress);
-        #[cfg(feature = "proxy")]
-        {
-            hop_request.set_proxy_override(request_proxy.clone());
-        }
-        #[cfg(not(feature = "proxy"))]
-        let _ = &request_proxy;
-
-        // Transport hints (target, sni_hostname) apply only on the first
-        // hop; redirects clear them because the destination changes.
-        if prev_url.is_none() {
-            hop_request.set_transport_hints(request_transport_hints.clone());
-        }
-
+        let is_first_hop = prev_url.is_none();
         let is_cross_origin_redirect = prev_url
             .as_ref()
             .is_some_and(|prev| prev.origin() != cur_url.origin());
@@ -555,43 +753,29 @@ pub(crate) async fn send_with_redirects(client: &Client, request: Request) -> Re
             }
         }
 
-        hop_request.set_auth(if credentials_allowed {
-            req_auth.clone()
-        } else {
-            None
-        });
-        hop_request.set_auth_disabled(req_auth_disabled);
-
-        #[cfg(feature = "cookies")]
-        {
-            if !cookie_header_allowed {
-                hop_request.headers_mut().remove("cookie");
-            } else if !hop_request.headers().contains("cookie") {
-                if let Some(cookie_header) = client
-                    .config()
-                    .cookie_jar
-                    .cookies_for_url(hop_request.url())
-                {
-                    hop_request.headers_mut().insert("cookie", &cookie_header)?;
-                }
-            }
-        }
-
-        {
-            let effective_auth = crate::auth::resolve_request_auth(
-                hop_request.auth(),
-                hop_request.is_auth_disabled(),
-                if credentials_allowed {
-                    client.config().auth.as_ref()
-                } else {
-                    None
-                },
-                hop_request.headers(),
-            )?;
-            if let Some(auth) = effective_auth {
-                auth.apply(hop_request.headers_mut())?;
-            }
-        }
+        let hop_request = build_hop_request(
+            client,
+            HopBuildParams {
+                method: cur_method.clone(),
+                url: cur_url.clone(),
+                headers: cur_headers.clone(),
+                body: cur_body,
+                version: cur_version,
+                timeout: hop_timeout,
+                decompress: request_decompress,
+                #[cfg(feature = "proxy")]
+                proxy_override: request_proxy.clone(),
+                transport_hints: request_transport_hints.clone(),
+                auth: req_auth.clone(),
+                auth_disabled: req_auth_disabled,
+                is_first_hop,
+                credentials_allowed,
+                #[cfg(feature = "cookies")]
+                cookie_allowed: cookie_header_allowed,
+                #[cfg(not(feature = "cookies"))]
+                cookie_allowed: true,
+            },
+        )?;
 
         let mut response = client
             .send_single_request(hop_request, &hop_timeout)
@@ -654,66 +838,27 @@ pub(crate) async fn send_with_redirects(client: &Client, request: Request) -> Re
         }
 
         let redirect_status = response.status();
-        // Evaluate the hop's method/body policy once and share it with
-        // the redirect request builder below.
-        let new_method = redirect::redirect_method(redirect_status, &cur_method);
-        let drop_body = redirect::drops_body_on_redirect(redirect_status, &cur_method);
-        if drop_body {
-            // The body is dropped on this hop. Clear any stale replay
-            // payload so a later method-preserving hop does not resurrect
-            // bytes from an earlier method-rewritten hop.
-            replay_body = Some(Bytes::new());
-        } else if replay_body.is_none() {
-            return Err(Error::BodyNotReplayableForRedirect);
-        }
-
-        let mut temp_request = Request::new(cur_method.clone(), cur_url.clone());
-        *temp_request.headers_mut() = cur_headers.clone();
-        let temp_body = if drop_body {
-            RequestBody::Empty
-        } else {
-            RequestBody::Bytes(
-                replay_body
-                    .as_ref()
-                    .ok_or(Error::BodyNotReplayableForRedirect)?
-                    .clone(),
-            )
-        };
-        temp_request.set_body(temp_body);
-        temp_request.set_version(cur_version);
-
-        let redirect_req = redirect::build_redirect_request_with_policy(
-            &temp_request,
+        // Single redirect transformation step: method/body policy, replay
+        // check, and header stripping live in `advance_redirect_hop`.
+        let hop = advance_redirect_hop(
+            &cur_method,
+            &cur_url,
+            &cur_headers,
+            cur_version,
+            &mut replay_body,
+            redirect_status,
             &location,
-            new_method.clone(),
-            drop_body,
         )?;
 
         history.push(HistoryEntry::from_response(&response));
 
-        let crate::request::RequestParts {
-            method: _,
-            url: new_url,
-            headers: new_headers,
-            body: new_body,
-            version: new_version,
-            timeout: _,
-            redirect: _,
-            auth: _,
-            auth_disabled: _,
-            decompress: _,
-            proxy_override: _,
-            retry: _,
-            transport_hints: _,
-        } = redirect_req.into_parts();
+        prev_url = Some(cur_url);
 
-        prev_url = Some(cur_url.clone());
-
-        cur_method = new_method;
-        cur_url = new_url;
-        cur_headers = new_headers;
-        cur_body = new_body;
-        cur_version = new_version;
+        cur_method = hop.method;
+        cur_url = hop.url;
+        cur_headers = hop.headers;
+        cur_body = hop.body;
+        cur_version = hop.version;
     }
 }
 
@@ -844,17 +989,30 @@ pub(crate) fn resolve_proxy(
     }
 }
 
-/// Send a single HTTP request and return the streaming response.
+/// Preparation phase for [`send_single_request`]: normalize headers, body,
+/// version, and proxy/pool/timeout state into a transport-ready form.
 ///
-/// This handles pool acquisition, timeout application, and body
-/// processing for one request/response cycle. It does NOT handle
-/// redirects—that is the responsibility of [`send_with_redirects`].
-#[allow(clippy::too_many_lines)]
-pub(crate) async fn send_single_request(
+/// Centralizes content-length, user-agent, accept-encoding, H2 header, and
+/// request-size policy so transport modules own only connection/protocol
+/// work. The pool guard is acquired here and returned alongside the prepared
+/// request; the caller attaches it to the response body after transport
+/// completes.
+///
+/// # Errors
+///
+/// Returns an error for TLS misconfiguration, proxy origin resolution,
+/// pool timeouts, content-length mismatches, or oversized requests.
+#[allow(
+    clippy::too_many_lines,
+    reason = "preparation centralizes header/body/version/proxy/pool policy in one place so transports do not reimplement it"
+)]
+async fn prepare_single_request(
     inner: &ClientInner,
     request: Request,
     timeout: &Timeout,
-) -> Result<Response> {
+) -> Result<(PreparedRequest, PoolGuard)> {
+    // Destructure exhaustively so new `RequestParts` fields fail to compile
+    // here rather than being silently dropped before transport.
     let crate::request::RequestParts {
         method,
         url,
@@ -892,8 +1050,6 @@ pub(crate) async fn send_single_request(
     {
         let _ = proxy_override;
     }
-    #[cfg(not(feature = "proxy"))]
-    let effective_proxy: Option<()> = None;
 
     #[cfg(feature = "proxy")]
     let origin = match effective_proxy {
@@ -972,199 +1128,241 @@ pub(crate) async fn send_single_request(
     let remaining_total = timeout
         .total
         .map(|total| total.saturating_sub(started.elapsed()));
+    let deadline = timeout.total.map(|total| started + total);
 
-    // Route through UDS handler if configured.
-    #[cfg(unix)]
-    if let Some(ref uds_client) = inner.uds_client {
-        let uri = resolve_request_uri(&url, &transport_hints)?;
-        let mut http_request = http::Request::builder()
-            .method(&method)
-            .uri(uri)
-            .version(version);
-        for (name, value) in headers.iter() {
-            http_request = http_request.header(name, value);
-        }
-        let request = http_request
-            .body(body.into_http_body())
-            .map_err(|e| Error::RequestBuild(e.to_string()))?;
-        let response = send_with_total_timeout(
-            crate::transport::uds::send_request(
-                uds_client,
-                request,
-                url.clone(),
-                transport_hints.trace.as_deref(),
-            ),
-            remaining_total,
-        )
-        .await?;
-        let mut response = response;
-        apply_read_timeout_and_lease(&mut response, guard, timeout.read);
-        return Ok(response);
-    }
+    let prepared = PreparedRequest {
+        method,
+        url,
+        uri: request_uri,
+        headers,
+        body,
+        version,
+        transport_hints,
+        #[cfg(feature = "proxy")]
+        effective_proxy,
+        decompression_enabled,
+        timeout: *timeout,
+        remaining_total,
+        deadline,
+    };
+    Ok((prepared, guard))
+}
 
-    // Route through direct connector if configured and no proxy.
+/// Send a single HTTP request and return the streaming response.
+///
+/// This handles pool acquisition, timeout application, and body
+/// processing for one request/response cycle. It does NOT handle
+/// redirects—that is the responsibility of [`send_with_redirects`].
+///
+/// The implementation separates a preparation phase
+/// ([`prepare_single_request`]) from declarative transport selection
+/// ([`select_route`]); one common post-transport policy (decompression,
+/// decoded-size limiting, read-timeout and pool-lease attachment) applies
+/// to every route.
+#[allow(clippy::too_many_lines)]
+pub(crate) async fn send_single_request(
+    inner: &ClientInner,
+    request: Request,
+    timeout: &Timeout,
+) -> Result<Response> {
+    let (prepared, guard) = prepare_single_request(inner, request, timeout).await?;
+    let PreparedRequest {
+        method,
+        url,
+        uri,
+        headers,
+        body,
+        version,
+        transport_hints,
+        #[cfg(feature = "proxy")]
+        effective_proxy,
+        decompression_enabled,
+        timeout: hop_timeout,
+        remaining_total,
+        deadline,
+    } = prepared;
+
+    // `deadline` feeds the proxy multi-phase context; without the `proxy`
+    // feature no route consumes it.
     #[cfg(not(feature = "proxy"))]
-    let effective_proxy_is_none = true;
+    let _ = &deadline;
+
+    #[cfg(unix)]
+    let has_uds = inner.uds_client.is_some();
+    #[cfg(not(unix))]
+    let has_uds = false;
     #[cfg(feature = "proxy")]
-    let effective_proxy_is_none = effective_proxy.is_none();
-    if effective_proxy_is_none {
-        if let Some(ref direct_client) = inner.direct_client {
-            let uri = resolve_request_uri(&url, &transport_hints)?;
-            let mut http_request = http::Request::builder()
-                .method(method)
-                .uri(uri)
-                .version(version);
-            for (name, value) in headers.iter() {
-                http_request = http_request.header(name, value);
+    let has_proxy = effective_proxy.is_some();
+    #[cfg(not(feature = "proxy"))]
+    let has_proxy = false;
+    #[cfg(feature = "proxy")]
+    let has_direct_no_proxy = !has_proxy && inner.direct_client.is_some() && !has_uds;
+    #[cfg(not(feature = "proxy"))]
+    let has_direct_no_proxy = !has_uds && inner.direct_client.is_some();
+    let has_sni = transport_hints.sni_hostname.is_some();
+    #[cfg(feature = "http3")]
+    let use_h3 = inner.config.http_version_policy.use_http3();
+    #[cfg(not(feature = "http3"))]
+    let use_h3 = false;
+    let route = select_route(has_uds, has_direct_no_proxy, has_proxy, has_sni, use_h3);
+
+    // Declarative transport dispatch. Precedence is encoded in
+    // `select_route` and covered by direct unit tests; H3 never bypasses
+    // proxy rules because proxy routes are selected first.
+    let response = match route {
+        TransportRoute::Uds => {
+            #[cfg(unix)]
+            {
+                let uds_client = inner
+                    .uds_client
+                    .as_ref()
+                    .ok_or_else(|| Error::Unsupported("UDS client not available".into()))?;
+                let hyper_request = build_hyper_request(&method, uri, version, &headers, body)?;
+                let send_future = crate::transport::uds::send_request(
+                    uds_client,
+                    hyper_request,
+                    url.clone(),
+                    transport_hints.trace.as_deref(),
+                );
+                send_with_total_timeout(send_future, remaining_total).await?
             }
-            let hyper_request = http_request
-                .body(body.into_http_body())
-                .map_err(|e| Error::RequestBuild(e.to_string()))?;
+            #[cfg(not(unix))]
+            {
+                let _ = (method, uri, headers, body, version);
+                return Err(Error::Unsupported(
+                    "Unix domain sockets are not supported on this platform".into(),
+                ));
+            }
+        }
+        TransportRoute::Direct => {
+            let direct_client = inner
+                .direct_client
+                .as_ref()
+                .ok_or_else(|| Error::Unsupported("direct client not available".into()))?;
+            let hyper_request = build_hyper_request(&method, uri, version, &headers, body)?;
             let send_future = crate::transport::direct::send_direct_request(
                 direct_client,
                 hyper_request,
                 url.clone(),
                 transport_hints.trace.as_deref(),
             );
-            let response = send_with_total_timeout(send_future, remaining_total).await?;
-            let mut response = response;
-            apply_read_timeout_and_lease(&mut response, guard, timeout.read);
-            return Ok(response);
+            send_with_total_timeout(send_future, remaining_total).await?
         }
-    }
-
-    #[cfg(feature = "proxy")]
-    let socks_client = {
-        let socks_proxy = effective_proxy.as_ref().filter(|proxy| proxy.is_socks());
-        match socks_proxy {
-            Some(proxy) => Some(inner.socks_client(proxy).await?),
-            None => None,
-        }
-    };
-
-    let response = match effective_proxy {
-        #[cfg(feature = "proxy")]
-        Some(ref proxy_config) => {
-            if !proxy_config.is_socks()
-                && headers.contains("proxy-authorization")
-                && proxy_config.auth().is_some()
+        TransportRoute::Proxy => {
+            #[cfg(feature = "proxy")]
             {
-                return Err(Error::ConflictingAuth(
-                    "conflict: both request Proxy-Authorization header and proxy auth are configured; remove one".into(),
-                ));
+                let proxy_config = effective_proxy.as_ref().ok_or_else(|| {
+                    Error::Unsupported("proxy configuration not available".into())
+                })?;
+                if !proxy_config.is_socks()
+                    && headers.contains("proxy-authorization")
+                    && proxy_config.auth().is_some()
+                {
+                    return Err(Error::ConflictingAuth(
+                        "conflict: both request Proxy-Authorization header and proxy auth are configured; remove one".into(),
+                    ));
+                }
+                let socks_client = {
+                    let socks_proxy = effective_proxy.as_ref().filter(|proxy| proxy.is_socks());
+                    match socks_proxy {
+                        Some(proxy) => Some(inner.socks_client(proxy).await?),
+                        None => None,
+                    }
+                };
+                Box::pin(send_proxy_request(
+                    &url,
+                    &method,
+                    &headers,
+                    body,
+                    version,
+                    proxy_config,
+                    &transport_hints,
+                    &crate::transport::proxy::ProxyRequestContext {
+                        remaining_total,
+                        deadline,
+                        connect_timeout: hop_timeout.connect,
+                        proxy_connect_timeout: hop_timeout.connect,
+                        proxy_tls_timeout: hop_timeout.connect,
+                        write_timeout: hop_timeout.write,
+                        read_timeout: hop_timeout.read,
+                        http_version_policy: inner.config.http_version_policy,
+                        origin_tls_config: inner.config.tls_config.as_ref(),
+                        // Proxy TLS config is independent from origin TLS
+                        // config. When the proxy endpoint has no explicit
+                        // TLS configuration we use the proxy endpoint's own
+                        // default trust roots rather than reusing the origin
+                        // CA / client identity / verification policy. This
+                        // prevents a custom origin CA, origin mTLS identity,
+                        // or origin verify=False from leaking into the proxy
+                        // handshake.
+                        proxy_tls_config: proxy_config.proxy_tls_config(),
+                        socks_client,
+                    },
+                ))
+                .await?
             }
-            Box::pin(send_proxy_request(
-                &url,
-                &method,
-                &headers,
-                body,
-                version,
-                proxy_config,
-                &transport_hints,
-                &crate::transport::proxy::ProxyRequestContext {
-                    remaining_total,
-                    deadline: timeout.total.map(|total| started + total),
-                    connect_timeout: timeout.connect,
-                    proxy_connect_timeout: timeout.connect,
-                    proxy_tls_timeout: timeout.connect,
-                    write_timeout: timeout.write,
-                    read_timeout: timeout.read,
-                    http_version_policy: inner.config.http_version_policy,
-                    origin_tls_config: inner.config.tls_config.as_ref(),
-                    // Proxy TLS config is independent from origin TLS
-                    // config.  When the proxy endpoint has no explicit
-                    // TLS configuration we use the proxy endpoint's
-                    // own default trust roots rather than reusing the
-                    // origin CA / client identity / verification policy.
-                    // This prevents a custom origin CA, origin mTLS
-                    // identity, or origin verify=False from leaking
-                    // into the proxy handshake.
-                    proxy_tls_config: proxy_config.proxy_tls_config(),
-                    socks_client,
-                },
-            ))
-            .await?
+            #[cfg(not(feature = "proxy"))]
+            {
+                let _ = (method, uri, headers, body, version);
+                return Err(Error::Unsupported("proxy support is not enabled".into()));
+            }
         }
-        _ => {
-            // When sni_hostname is set, route through a cached SNI-specific
-            // client that separates DNS/TCP (to original host) from TLS
-            // (with SNI override). The CONNECT tunnel handles its own SNI
-            // in the proxy path above.
-            if let Some(ref sni_hostname) = transport_hints.sni_hostname {
-                let sni_client = inner.sni_client(sni_hostname).await?;
-                let uri = resolve_request_uri(&url, &transport_hints)?;
-                let mut http_request = http::Request::builder()
-                    .method(method)
+        TransportRoute::SniDirect => {
+            // SNI override separates DNS/TCP (to the original host) from TLS
+            // (with the override hostname). The CONNECT tunnel handles its
+            // own SNI in the proxy path above.
+            let sni_hostname = transport_hints.sni_hostname.clone().ok_or_else(|| {
+                Error::RequestBuild("SNI route selected without sni_hostname".into())
+            })?;
+            let sni_client = inner.sni_client(&sni_hostname).await?;
+            let hyper_request = build_hyper_request(&method, uri, version, &headers, body)?;
+            let send_future = crate::transport::direct::send_direct_request(
+                &sni_client,
+                hyper_request,
+                url.clone(),
+                transport_hints.trace.as_deref(),
+            );
+            send_with_total_timeout(send_future, remaining_total).await?
+        }
+        TransportRoute::H3 => {
+            #[cfg(feature = "http3")]
+            {
+                let h3_connector = inner.h3_connector.as_ref().ok_or_else(|| {
+                    Error::Unsupported(
+                        "HTTP/3 connector not available; ensure http3 feature is enabled".into(),
+                    )
+                })?;
+                let mut builder = http::Request::builder()
+                    .method(&method)
                     .uri(uri)
                     .version(version);
                 for (name, value) in headers.iter() {
-                    http_request = http_request.header(name, value);
+                    builder = builder.header(name, value);
                 }
-                let hyper_request = http_request
-                    .body(body.into_http_body())
+                let h3_request = builder
+                    .body(body)
                     .map_err(|e| Error::RequestBuild(e.to_string()))?;
-                let send_future = crate::transport::direct::send_direct_request(
-                    &sni_client,
-                    hyper_request,
-                    url.clone(),
-                    transport_hints.trace.as_deref(),
-                );
+                let send_future = h3_connector.send_request(h3_request, url.clone());
                 send_with_total_timeout(send_future, remaining_total).await?
-            } else {
-                // Route through HTTP/3 when policy is Http3Only or Auto { allow_http3: true }
-                #[cfg(feature = "http3")]
-                {
-                    if inner.config.http_version_policy.use_http3() {
-                        if let Some(ref h3_connector) = inner.h3_connector {
-                            let uri = resolve_request_uri(&url, &transport_hints)?;
-                            let mut h3_request = http::Request::builder()
-                                .method(method)
-                                .uri(uri)
-                                .version(version);
-                            for (name, value) in headers.iter() {
-                                h3_request = h3_request.header(name, value);
-                            }
-                            let h3_request = h3_request
-                                .body(body)
-                                .map_err(|e| Error::RequestBuild(e.to_string()))?;
-
-                            let send_future = h3_connector.send_request(h3_request, url.clone());
-                            send_with_total_timeout(send_future, remaining_total).await?
-                        } else {
-                            return Err(Error::Unsupported(
-                                "HTTP/3 connector not available; ensure http3 feature is enabled"
-                                    .into(),
-                            ));
-                        }
-                    } else {
-                        send_hyper_request(
-                            inner,
-                            &method,
-                            url,
-                            &headers,
-                            body,
-                            version,
-                            remaining_total,
-                            &transport_hints,
-                        )
-                        .await?
-                    }
-                }
-                #[cfg(not(feature = "http3"))]
-                {
-                    send_hyper_request(
-                        inner,
-                        &method,
-                        url,
-                        &headers,
-                        body,
-                        version,
-                        remaining_total,
-                        &transport_hints,
-                    )
-                    .await?
-                }
-            } // end sni_hostname else
+            }
+            #[cfg(not(feature = "http3"))]
+            {
+                let _ = (method, uri, headers, body, version);
+                return Err(Error::Unsupported("HTTP/3 support is not enabled".into()));
+            }
+        }
+        TransportRoute::Standard => {
+            send_hyper_request(
+                inner,
+                &method,
+                url.clone(),
+                &headers,
+                body,
+                version,
+                remaining_total,
+                &transport_hints,
+            )
+            .await?
         }
     };
 
@@ -1196,15 +1394,17 @@ pub(crate) async fn send_single_request(
         response.body = response.body.limit_decoded_size(max)?;
     }
 
-    apply_read_timeout_and_lease(&mut response, guard, timeout.read);
+    apply_read_timeout_and_lease(&mut response, guard, hop_timeout.read);
 
     Ok(response)
 }
 
 /// Send a request through the hyper/HTTP-1.1/2 transport.
 ///
-/// Extracted as a helper to avoid code duplication between the http3-gated
-/// and non-http3 code paths.
+/// Shared standard-path helper; UDS, specialized-direct, and SNI-direct
+/// paths build their Hyper requests through [`build_hyper_request`] and call
+/// their respective `transport::direct`/`transport::uds` converters, so this
+/// helper exists only to keep the standard Hyper dispatch explicit.
 #[allow(clippy::too_many_arguments)] // Keeps the direct-send helper explicit; timeout wrapping is the only added phase input.
 async fn send_hyper_request(
     inner: &ClientInner,
@@ -1222,19 +1422,7 @@ async fn send_hyper_request(
         .ok_or_else(|| Error::Unsupported("HTTP client not available for this protocol".into()))?;
 
     let uri = resolve_request_uri(&url, transport_hints)?;
-
-    let mut http_request = http::Request::builder()
-        .method(method)
-        .uri(uri)
-        .version(version);
-
-    for (name, value) in headers.iter() {
-        http_request = http_request.header(name, value);
-    }
-
-    let hyper_request = http_request
-        .body(body.into_http_body())
-        .map_err(|e| Error::RequestBuild(e.to_string()))?;
+    let hyper_request = build_hyper_request(method, uri, version, headers, body)?;
 
     let send_future = crate::transport::direct::send_request(
         hyper_client,
@@ -1297,5 +1485,539 @@ fn resolve_request_uri(
         url.as_str()
             .parse()
             .map_err(|e| Error::InvalidUrl(format!("failed to convert url to URI: {e}")))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::request::{RequestParts, TransportHints};
+    use bytes::Bytes;
+    use std::sync::Arc;
+    use std::time::Duration;
+
+    fn test_url() -> url::Url {
+        url::Url::parse("https://example.com/path").expect("valid test URL")
+    }
+
+    fn full_request() -> Request {
+        use crate::auth::{AuthScheme, BasicAuth};
+        use crate::redirect::RedirectPolicy;
+        use crate::retry::RetryPolicy;
+
+        let mut req = Request::new(http::Method::POST, test_url());
+        req.headers_mut().insert("x-custom", "keep").unwrap();
+        req.headers_mut()
+            .insert("content-type", "text/plain")
+            .unwrap();
+        req.set_body(RequestBody::Bytes(Bytes::from("payload")));
+        req.set_version(http::Version::HTTP_11);
+        req.set_timeout(Some(
+            Timeout::builder()
+                .pool(Duration::from_secs(1))
+                .connect(Duration::from_secs(2))
+                .write(Duration::from_secs(3))
+                .read(Duration::from_secs(4))
+                .total(Duration::from_secs(30))
+                .build(),
+        ));
+        req.set_redirect(Some(RedirectPolicy::new(true, 7)));
+        req.set_auth(Some(AuthScheme::Basic(
+            BasicAuth::new("user", "pass").expect("valid auth"),
+        )));
+        req.set_auth_disabled(false);
+        req.set_decompress(Some(false));
+        #[cfg(feature = "proxy")]
+        req.set_proxy_override(crate::request::ProxyOverride::Direct);
+        req.set_retry(Some(RetryPolicy::default()));
+        req.set_transport_hints(TransportHints {
+            target: Some(Bytes::from("/override-target")),
+            sni_hostname: Some("sni.example".to_owned()),
+            trace: Some(Arc::new(crate::trace::NoopTraceObserver)),
+        });
+        req
+    }
+
+    #[test]
+    fn into_request_round_trip_preserves_every_field() {
+        // Exhaustive round-trip: if a field is added to `RequestParts` but
+        // omitted from `into_request`, this test (and compilation) fails.
+        let req = full_request();
+        let expected_method = req.method().clone();
+        let expected_url = req.url().clone();
+        let expected_headers = req.headers().clone();
+        let expected_version = req.version();
+        let expected_timeout = req.timeout().copied();
+        let expected_redirect = req.redirect().cloned();
+        let expected_auth = req.auth().cloned();
+        let expected_auth_disabled = req.is_auth_disabled();
+        let expected_decompress = req.decompress();
+        let expected_retry = req.retry().cloned();
+        let expected_target = req.transport_hints().target.clone();
+        let expected_sni = req.transport_hints().sni_hostname.clone();
+        let expected_has_trace = req.transport_hints().trace.is_some();
+
+        let parts = req.into_parts();
+        // Touch every field so wildcard destructuring cannot silently pass.
+        let RequestParts {
+            method: _,
+            url: _,
+            headers: _,
+            body: _,
+            version: _,
+            timeout: _,
+            redirect: _,
+            auth: _,
+            auth_disabled: _,
+            decompress: _,
+            proxy_override: _,
+            retry: _,
+            transport_hints: _,
+        } = &parts;
+        let rebuilt = parts.into_request();
+
+        assert_eq!(rebuilt.method(), &expected_method);
+        assert_eq!(rebuilt.url(), &expected_url);
+        assert_eq!(
+            rebuilt.headers().get("x-custom").unwrap().to_str().unwrap(),
+            "keep"
+        );
+        let _ = expected_headers;
+        assert_eq!(rebuilt.version(), expected_version);
+        match (rebuilt.timeout(), expected_timeout.as_ref()) {
+            (None, None) => {}
+            (Some(a), Some(b)) => {
+                assert_eq!(a.pool, b.pool);
+                assert_eq!(a.connect, b.connect);
+                assert_eq!(a.write, b.write);
+                assert_eq!(a.read, b.read);
+                assert_eq!(a.total, b.total);
+            }
+            (a, b) => panic!("timeout mismatch: {a:?} vs {b:?}"),
+        }
+        assert_eq!(
+            rebuilt.redirect().map(|r| (r.follow, r.max_redirects)),
+            expected_redirect.map(|r| (r.follow, r.max_redirects))
+        );
+        assert_eq!(
+            rebuilt.auth().map(|a| format!("{a:?}")),
+            expected_auth.map(|a| format!("{a:?}"))
+        );
+        assert_eq!(rebuilt.is_auth_disabled(), expected_auth_disabled);
+        assert_eq!(rebuilt.decompress(), expected_decompress);
+        #[cfg(feature = "proxy")]
+        assert!(matches!(
+            rebuilt.proxy_override(),
+            crate::request::ProxyOverride::Direct
+        ));
+        assert_eq!(rebuilt.retry().is_some(), expected_retry.is_some());
+        assert_eq!(rebuilt.transport_hints().target, expected_target);
+        assert_eq!(rebuilt.transport_hints().sni_hostname, expected_sni);
+        assert_eq!(
+            rebuilt.transport_hints().trace.is_some(),
+            expected_has_trace
+        );
+        match rebuilt.body() {
+            RequestBody::Bytes(b) => assert_eq!(b, "payload"),
+            other => panic!("expected bytes body, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn retry_request_preserves_every_override_and_shrinks_total() {
+        let req = full_request();
+        let parts = req.into_parts();
+        let attempt_timeout = Some(
+            Timeout::builder()
+                .pool(Duration::from_secs(1))
+                .total(Duration::from_secs(25))
+                .build(),
+        );
+        let attempt = parts.retry_request(attempt_timeout).expect("replayable");
+
+        // All request-local configuration survives the retry transformation.
+        assert_eq!(attempt.method(), &http::Method::POST);
+        assert_eq!(attempt.url().as_str(), "https://example.com/path");
+        assert_eq!(
+            attempt.headers().get("x-custom").unwrap().to_str().unwrap(),
+            "keep"
+        );
+        assert_eq!(attempt.version(), http::Version::HTTP_11);
+        assert_eq!(
+            attempt.timeout().and_then(|t| t.total),
+            Some(Duration::from_secs(25)),
+            "total deadline is replaced by the shrunk attempt budget"
+        );
+        assert!(attempt.redirect().is_some());
+        assert!(attempt.auth().is_some());
+        assert!(!attempt.is_auth_disabled());
+        assert_eq!(attempt.decompress(), Some(false));
+        #[cfg(feature = "proxy")]
+        assert!(matches!(
+            attempt.proxy_override(),
+            crate::request::ProxyOverride::Direct
+        ));
+        assert!(attempt.retry().is_some());
+        assert_eq!(
+            attempt.transport_hints().target.as_deref(),
+            Some(b"/override-target".as_slice())
+        );
+        assert_eq!(
+            attempt.transport_hints().sni_hostname.as_deref(),
+            Some("sni.example")
+        );
+        assert!(attempt.transport_hints().trace.is_some());
+        match attempt.body() {
+            RequestBody::Bytes(b) => assert_eq!(b, "payload"),
+            other => panic!("expected replayed bytes, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn retry_request_rejects_one_shot_stream() {
+        let mut req = Request::new(http::Method::POST, test_url());
+        req.set_body(RequestBody::from_stream(
+            futures_util::stream::empty::<crate::error::Result<Bytes>>(),
+            None,
+        ));
+        let parts = req.into_parts();
+        let err = parts.retry_request(None).unwrap_err();
+        assert!(
+            matches!(err, Error::BodyNotReplayableForRetry),
+            "unexpected error: {err:?}"
+        );
+    }
+
+    #[test]
+    fn retry_preserves_auth_disabled_state() {
+        let mut req = Request::new(http::Method::GET, test_url());
+        req.set_auth_disabled(true);
+        let parts = req.into_parts();
+        let attempt = parts.retry_request(None).expect("empty body replays");
+        assert!(attempt.is_auth_disabled());
+        assert!(attempt.auth().is_none());
+    }
+
+    #[test]
+    fn shrink_total_deadline_subtracts_elapsed() {
+        let t = Timeout::builder()
+            .pool(Duration::from_secs(1))
+            .total(Duration::from_secs(10))
+            .build();
+        let shrunk = RequestParts::shrink_total_deadline(&t, Duration::from_secs(3));
+        assert_eq!(shrunk.total, Some(Duration::from_secs(7)));
+        assert_eq!(shrunk.pool, Some(Duration::from_secs(1)));
+
+        let saturated = RequestParts::shrink_total_deadline(&t, Duration::from_secs(20));
+        assert_eq!(saturated.total, Some(Duration::ZERO));
+    }
+
+    #[test]
+    fn select_route_precedence_matches_pipeline_order() {
+        // UDS wins over everything.
+        assert_eq!(
+            select_route(true, true, true, true, true),
+            TransportRoute::Uds
+        );
+        // Specialized direct wins when no proxy (even with SNI/H3 present).
+        assert_eq!(
+            select_route(false, true, false, true, true),
+            TransportRoute::Direct
+        );
+        // Proxy wins over SNI/H3; H3 never bypasses proxy rules.
+        assert_eq!(
+            select_route(false, false, true, true, true),
+            TransportRoute::Proxy
+        );
+        assert_eq!(
+            select_route(false, false, true, false, true),
+            TransportRoute::Proxy
+        );
+        // SNI wins over H3/standard when no proxy/direct.
+        assert_eq!(
+            select_route(false, false, false, true, true),
+            TransportRoute::SniDirect
+        );
+        // H3 only when selected and no earlier route applies.
+        assert_eq!(
+            select_route(false, false, false, false, true),
+            TransportRoute::H3
+        );
+        assert_eq!(
+            select_route(false, false, false, false, false),
+            TransportRoute::Standard
+        );
+        // `has_direct_no_proxy` already encodes "no proxy": callers compute
+        // it as `direct.is_some() && !has_proxy`, so a proxy-present call
+        // always passes `false` here and selects Proxy (H3 never bypasses
+        // proxy rules).
+    }
+
+    #[test]
+    fn hop_builder_first_hop_preserves_hints_and_applies_auth() {
+        let client = crate::client::Client::new();
+        let mut headers = Headers::new();
+        headers.insert("x-custom", "keep").unwrap();
+
+        let hop = build_hop_request(
+            &client,
+            HopBuildParams {
+                method: http::Method::GET,
+                url: test_url(),
+                headers,
+                body: RequestBody::Empty,
+                version: http::Version::HTTP_11,
+                timeout: Timeout::default(),
+                decompress: Some(true),
+                #[cfg(feature = "proxy")]
+                proxy_override: crate::request::ProxyOverride::Direct,
+                transport_hints: TransportHints {
+                    target: Some(Bytes::from("/t")),
+                    sni_hostname: Some("sni.example".to_owned()),
+                    trace: Some(Arc::new(crate::trace::NoopTraceObserver)),
+                },
+                auth: None,
+                auth_disabled: false,
+                is_first_hop: true,
+                credentials_allowed: true,
+                cookie_allowed: true,
+            },
+        )
+        .expect("first hop builds");
+
+        assert_eq!(
+            hop.transport_hints().target.as_deref(),
+            Some(b"/t".as_slice())
+        );
+        assert_eq!(
+            hop.transport_hints().sni_hostname.as_deref(),
+            Some("sni.example")
+        );
+        assert!(hop.transport_hints().trace.is_some());
+        assert_eq!(hop.decompress(), Some(true));
+        assert_eq!(
+            hop.headers().get("x-custom").unwrap().to_str().unwrap(),
+            "keep"
+        );
+    }
+
+    #[test]
+    fn hop_builder_redirect_hop_clears_hints_and_drops_credentials() {
+        use crate::auth::{AuthScheme, BasicAuth};
+
+        let client = crate::client::Client::builder()
+            .auth(AuthScheme::basic("client", "secret").expect("valid auth"))
+            .build();
+        let mut headers = Headers::new();
+        headers.insert("cookie", "session=abc").unwrap();
+        headers.insert("x-custom", "keep").unwrap();
+
+        let hop = build_hop_request(
+            &client,
+            HopBuildParams {
+                method: http::Method::GET,
+                url: test_url(),
+                headers,
+                body: RequestBody::Empty,
+                version: http::Version::HTTP_11,
+                timeout: Timeout::default(),
+                decompress: None,
+                #[cfg(feature = "proxy")]
+                proxy_override: crate::request::ProxyOverride::Inherit,
+                transport_hints: TransportHints {
+                    target: Some(Bytes::from("/t")),
+                    sni_hostname: Some("sni.example".to_owned()),
+                    trace: Some(Arc::new(crate::trace::NoopTraceObserver)),
+                },
+                auth: Some(AuthScheme::Basic(
+                    BasicAuth::new("req", "pw").expect("valid auth"),
+                )),
+                auth_disabled: false,
+                is_first_hop: false,
+                credentials_allowed: false,
+                cookie_allowed: false,
+            },
+        )
+        .expect("redirect hop builds");
+
+        // Destination-specific hints are cleared after the first hop.
+        assert!(hop.transport_hints().target.is_none());
+        assert!(hop.transport_hints().sni_hostname.is_none());
+        assert!(hop.transport_hints().trace.is_none());
+        // Cross-origin policy drops credentials and cookies.
+        assert!(hop.auth().is_none());
+        // Cookie stripping lives behind the `cookies` feature; without it
+        // the hop builder preserves explicit headers verbatim.
+        #[cfg(feature = "cookies")]
+        assert!(hop.headers().get("cookie").is_none());
+        #[cfg(not(feature = "cookies"))]
+        assert!(hop.headers().get("cookie").is_some());
+        // Non-sensitive headers survive.
+        assert_eq!(
+            hop.headers().get("x-custom").unwrap().to_str().unwrap(),
+            "keep"
+        );
+    }
+
+    #[test]
+    fn no_redirect_fast_path_matches_redirect_first_hop() {
+        // Both entry paths call the same `build_hop_request` with
+        // `is_first_hop: true`; construct both and assert identical wire
+        // state so a future divergence fails here.
+        let client = crate::client::Client::new();
+        let mk_headers = || {
+            let mut h = Headers::new();
+            h.insert("x-custom", "keep").unwrap();
+            h
+        };
+        let mk_hints = || TransportHints {
+            target: Some(Bytes::from("/t")),
+            sni_hostname: None,
+            trace: None,
+        };
+
+        let fast = build_hop_request(
+            &client,
+            HopBuildParams {
+                method: http::Method::GET,
+                url: test_url(),
+                headers: mk_headers(),
+                body: RequestBody::Empty,
+                version: http::Version::HTTP_11,
+                timeout: Timeout::default(),
+                decompress: Some(true),
+                #[cfg(feature = "proxy")]
+                proxy_override: crate::request::ProxyOverride::Direct,
+                transport_hints: mk_hints(),
+                auth: None,
+                auth_disabled: false,
+                is_first_hop: true,
+                credentials_allowed: true,
+                cookie_allowed: true,
+            },
+        )
+        .unwrap();
+        let first_loop = build_hop_request(
+            &client,
+            HopBuildParams {
+                method: http::Method::GET,
+                url: test_url(),
+                headers: mk_headers(),
+                body: RequestBody::Empty,
+                version: http::Version::HTTP_11,
+                timeout: Timeout::default(),
+                decompress: Some(true),
+                #[cfg(feature = "proxy")]
+                proxy_override: crate::request::ProxyOverride::Direct,
+                transport_hints: mk_hints(),
+                auth: None,
+                auth_disabled: false,
+                is_first_hop: true,
+                credentials_allowed: true,
+                cookie_allowed: true,
+            },
+        )
+        .unwrap();
+
+        assert_eq!(fast.method(), first_loop.method());
+        assert_eq!(fast.url(), first_loop.url());
+        assert_eq!(fast.version(), first_loop.version());
+        assert_eq!(fast.decompress(), first_loop.decompress());
+        assert_eq!(
+            fast.transport_hints().target,
+            first_loop.transport_hints().target
+        );
+        assert_eq!(
+            format!("{:?}", fast.headers()),
+            format!("{:?}", first_loop.headers())
+        );
+    }
+
+    #[test]
+    fn redirect_hop_post_drops_body_and_clears_replay() {
+        let mut replay = Some(Bytes::from("payload"));
+        let mut headers = Headers::new();
+        headers.insert("content-length", "7").unwrap();
+        headers.insert("content-type", "text/plain").unwrap();
+
+        let hop = advance_redirect_hop(
+            &http::Method::POST,
+            &test_url(),
+            &headers,
+            http::Version::HTTP_11,
+            &mut replay,
+            http::StatusCode::MOVED_PERMANENTLY,
+            "https://example.com/other",
+        )
+        .expect("301 POST redirects");
+
+        assert_eq!(hop.method, http::Method::GET);
+        assert!(hop.body.is_empty());
+        assert!(hop.headers.get("content-length").is_none());
+        assert!(hop.headers.get("content-type").is_none());
+        assert_eq!(replay, Some(Bytes::new()));
+    }
+
+    #[test]
+    fn redirect_hop_307_preserves_replayable_body() {
+        let mut replay = Some(Bytes::from("payload"));
+        let headers = Headers::new();
+
+        let hop = advance_redirect_hop(
+            &http::Method::POST,
+            &test_url(),
+            &headers,
+            http::Version::HTTP_11,
+            &mut replay,
+            http::StatusCode::TEMPORARY_REDIRECT,
+            "https://example.com/other",
+        )
+        .expect("307 POST preserves body");
+
+        assert_eq!(hop.method, http::Method::POST);
+        match hop.body {
+            RequestBody::Bytes(b) => assert_eq!(b, "payload"),
+            other => panic!("expected bytes, got {other:?}"),
+        }
+        assert_eq!(replay, Some(Bytes::from("payload")));
+    }
+
+    #[test]
+    fn redirect_hop_rejects_one_shot_stream_before_replay() {
+        let mut replay: Option<Bytes> = None;
+        let headers = Headers::new();
+        let err = advance_redirect_hop(
+            &http::Method::POST,
+            &test_url(),
+            &headers,
+            http::Version::HTTP_11,
+            &mut replay,
+            http::StatusCode::TEMPORARY_REDIRECT,
+            "https://example.com/other",
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, Error::BodyNotReplayableForRedirect),
+            "unexpected error: {err:?}"
+        );
+    }
+
+    #[test]
+    fn build_hyper_request_carries_method_uri_version_headers() {
+        let mut headers = Headers::new();
+        headers.insert("x-custom", "keep").unwrap();
+        let uri: http::Uri = "https://example.com/path".parse().unwrap();
+        let req = build_hyper_request(
+            &http::Method::GET,
+            uri.clone(),
+            http::Version::HTTP_11,
+            &headers,
+            RequestBody::Empty,
+        )
+        .expect("hyper request builds");
+        assert_eq!(req.method(), &http::Method::GET);
+        assert_eq!(req.uri(), &uri);
+        assert_eq!(req.version(), http::Version::HTTP_11);
+        assert_eq!(req.headers().get("x-custom").unwrap(), "keep");
     }
 }

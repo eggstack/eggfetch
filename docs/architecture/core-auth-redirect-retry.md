@@ -46,10 +46,11 @@ do not.
 
 ### Policy
 
-`RedirectPolicy` configures redirect behavior:
-- `None` — never follow redirects.
-- `Limited(max)` — follow up to `max` redirects (default: 10).
-- `Unlimited` — follow redirects without limit (not recommended).
+`RedirectPolicy { follow: bool, max_redirects: usize }` configures redirect
+behavior (default: `follow = false`, matching HTTPX; `max_redirects = 20`).
+`ClientBuilder::follow_redirects()` / `max_redirects()` /
+`redirect_policy()` set the client default; `RequestBuilder::redirect_policy()`
+overrides per request.
 
 ### Method Rewriting
 
@@ -61,16 +62,19 @@ do not.
 
 ### Header Handling
 
-On redirect:
+On redirect (single `advance_redirect_hop()` transformation + shared
+`HopBuildParams` hop builder):
 - **Same-origin**: `Authorization`/`Proxy-Authorization` are stripped from the cloned set, then configured client-level auth is re-applied; `Cookie`/`Host` survive.
 - **Cross-origin**: `Authorization`, `Cookie`, and `Proxy-Authorization` are stripped, plus `Host` is reset to the new destination; client-level auth is not reapplied.
 - `Host` header is updated to the new destination.
-- `Content-Length` and `Content-Type` are stripped if the method changes from POST.
+- `Content-Length`, `Content-Type`, and `Transfer-Encoding` are stripped when the body is dropped.
+- Destination-specific transport hints (`target`, `sni_hostname`, `trace`) attach only on the first hop and are cleared thereafter. Per-request decompression and proxy overrides persist across all hops. The redirects-disabled fast path uses the same first-hop builder, so it cannot diverge except for loop behavior.
 
 ### Body Replay
 
-- 301/302/303: body is dropped (method changes to GET).
-- 307/308: body is replayed if replayable (`Bytes` body). Stream bodies return `Error::BodyNotReplayableForRedirect`.
+- 301/302/303: body is dropped (method changes to GET); the stale replay payload is cleared so a later method-preserving hop cannot resurrect it.
+- 307/308: body is replayed if replayable (`Bytes` body). Stream bodies return `Error::BodyNotReplayableForRedirect` before any unsafe replay.
+- 303 drops the payload for all methods except HEAD (RFC 9110 §15.4.4).
 
 ### History
 
@@ -78,7 +82,7 @@ Redirect hops are recorded in `Response::history()` as `HistoryEntry` records co
 
 ### Total Timeout
 
-The total timeout applies across the entire redirect chain, not per-hop. A chain of 5 redirects sharing a 10-second total timeout must complete within 10 seconds.
+The total timeout applies across the entire redirect chain, not per-hop. Each hop receives only the remaining wall-clock budget (`RequestParts::shrink_total_deadline`). A chain of 5 redirects sharing a 10-second total timeout must complete within 10 seconds.
 
 ## Retry
 
@@ -104,9 +108,14 @@ The total timeout applies across the entire redirect chain, not per-hop. A chain
 
 ### Replay Check
 
-Before retrying, `ReplayCheck` verifies the request body can be replayed:
-- `Bytes` bodies are replayed by cloning.
-- `Stream` bodies are non-replayable → `Error::BodyNotReplayableForRetry`.
+Retries restart the complete logical request (including redirects) under
+the original total deadline via the typed `RequestParts::retry_request()`
+transformation, which preserves every request-local override (transport
+hints, proxy/decompression overrides, auth-disable state, redirect and
+retry policy) and applies the shrunk total budget. Before retrying,
+replayability is verified through one explicit operation:
+- `Bytes`/`Empty` bodies are replayed by cloning (`try_clone_for_retry`).
+- `Stream` bodies are non-replayable → `Error::BodyNotReplayableForRetry` (never panics, never silently drops fields).
 
 ### Backoff
 

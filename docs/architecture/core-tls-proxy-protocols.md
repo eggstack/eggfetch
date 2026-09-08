@@ -235,6 +235,27 @@ ALPN protocols are set on the rustls configuration based on the version policy. 
 
 The standard hyper-rustls path passes an empty ALPN list to `hyper_rustls::HttpsConnectorBuilder` so the builder can populate it from the `enable_http1`/`enable_http2` calls. Direct and UDS connectors perform their own TLS handshake; the ALPN they advertise is determined by the `TlsConfig` and is shared across the three paths.
 
+### Shared Hyper response lifecycle
+
+The standard Hyper, specialized-direct (socket options / local address),
+and SNI-override paths share one response-lifecycle implementation in
+`transport/direct.rs`: shared trace helpers (`emit_send_start` /
+`emit_receive_complete` / `emit_send_failed`), shared dispatch error
+mapping (`map_send_error`, including write-timeout unwrapping and H2
+classification), and a single `finish_hyper_response()` converter that
+captures the 101 upgrade future before consuming the body, builds the
+streaming response, and attaches the `UpgradedStream`. UDS reuses the
+trace/body/error helpers but intentionally omits 101 upgrade handling —
+the Unix-socket connector cannot safely expose Hyper's opaque upgrade IO
+for user-writable streams in this milestone. That difference is explicit
+in code and directly tested; do not paper over it with a generic helper.
+
+Transport selection itself is declarative: `prepare_single_request()`
+builds a `PreparedRequest`, `select_route()` picks one `TransportRoute`
+(UDS → specialized-direct → proxy/SOCKS → SNI-direct → H3 → standard),
+and one common post-transport policy (decompression, decoded-size limit,
+read-timeout + pool lease) applies to every route.
+
 ### `http2_only` enforcement
 
 For `HttpVersionPolicy::Http2Only`, the legacy hyper-util client is built with `http2_only(true)`. This is what enforces the protocol contract:

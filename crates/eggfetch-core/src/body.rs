@@ -192,6 +192,25 @@ impl RequestBody {
         }
     }
 
+    /// Attempt to clone this body for use in a retry attempt.
+    ///
+    /// This is the retry counterpart to [`Self::try_clone_for_redirect`]:
+    /// only replayable bodies (`Empty`/`Bytes`) succeed. One-shot streams
+    /// return the retry-specific error classification so callers preserve
+    /// the existing retry error taxonomy.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::BodyNotReplayableForRetry`] if the body is a
+    /// live stream that cannot be replayed for another attempt.
+    pub(crate) fn try_clone_for_retry(&self) -> Result<Self> {
+        match self {
+            Self::Empty => Ok(Self::Empty),
+            Self::Bytes(b) => Ok(Self::Bytes(b.clone())),
+            Self::Stream { .. } => Err(Error::BodyNotReplayableForRetry),
+        }
+    }
+
     /// Consume the body and return all bytes.
     ///
     /// For byte bodies, returns the bytes directly. For stream bodies,
