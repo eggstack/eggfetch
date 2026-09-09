@@ -4,10 +4,276 @@ This record is the exact-SHA-bound status for the HTTPX 0.28.1 compatibility
 facade. Historical phase and corrective-pass records remain in the git history
 and referenced plans; counts below are only from the runs named here.
 
-## Current corrective pass — Corrective 08 post-hardening requalification and closure
+## Current pass — Post-maturation requalification and closure
 
 Current designation: **Stage C qualified** for the documented Python 3.10+
 asyncio-supported HTTPX 0.28.1 surface. The qualification is bound to the
+post-maturation executable SHA `d034a1005857a7f403222dda4bda5f2f204a44fe`
+and was performed on 2026-09-09. The Corrective 08 qualification at
+`d24101be6ed7be64463813750da5b4043d9905ec` (2026-09-03) is retained as
+historical evidence only; the four post-audit maturation commits plus the
+UDS fixture bind-readiness fix changed core request/transport behavior,
+H3 lifecycle semantics, response observability, native limit naming, the
+Node validation path, and qualification-relevant tests, invalidating the
+prior executable binding per the exact-SHA rule.
+
+Plan: `plans/post-maturation-httpx-requalification-and-closure.md`.
+Parent program: `plans/post-audit-architecture-and-surface-maturation-program.md`.
+Prior qualified executable SHA: `d24101be6ed7be64463813750da5b4043d9905ec` (Corrective 08).
+
+### Prerequisite plan closure (Requalification Section 1)
+
+All four executable maturation plans closed before the freeze, each with
+Tier 1 green at closure:
+
+- `core-request-and-transport-consolidation.md` (`0477d35`): typed
+  `RequestParts` retry/redirect transformations, shared first-hop builder,
+  internal `PreparedRequest` boundary, declarative `TransportRoute`
+  dispatch, shared Hyper response lifecycle; no behavior change.
+- `http3-lifecycle-and-policy-hardening.md` (`a505b6c`): bounded 64-entry
+  H3 origin cache with generation-scoped eviction, `OnceCell` shared
+  connect without poisoning, multi-address fallback under one connect
+  budget, phase-correct connect/total/read/write timeouts, QUIC idle from
+  keepalive expiry, bidi streams from per-origin limits, stale-origin
+  eviction without transport-level retries; `h3_hardening.rs` (12 tests).
+- `native-protocol-observability-and-api-cleanup.md` (`363f2e3`):
+  `SharedTrailers` core lifecycle (H1/H2/H3), connector-derived metadata
+  (real direct addrs/TLS, UDS `Unix` kind, opaque unavailable),
+  `TransportMetrics` separate from `PoolMetrics`,
+  `max_in_flight_requests*` native names with `max_connections*` aliases.
+- `node-binding-maturation.md` (`8139e10`, experimental outcome): Node
+  recorded as an explicit experimental prototype (blocking-C-ABI path,
+  string-body, no streaming/cancellation/structured-errors/declarations
+  documented as limitations); Tier 1 Node hook added (Rust tests always,
+  JS surface explicit skip without artifact).
+
+Behavioral clusters changed since `d24101b`: request reconstruction /
+retry / redirect preservation; transport dispatch and Hyper response
+conversion; H3 timeout/cache/DNS/resource behavior; trailer/response
+lifecycle; connection metadata/trace/metrics; native limits/API aliases;
+Node/FFI shared-core build surface; validation scripts (`check.sh`
+Node hook). No HTTPX facade signature changed; no new parity surface.
+
+### Pre-freeze correction (Requalification Section 2/3)
+
+One load-dependent test defect was found and fixed before the freeze (no
+product behavior change, no new CI/workflows, no parity-surface
+expansion):
+
+- **UDS fixture bind/connect race** (`d034a10`, test-only): the new
+  `uds_upgrade_reports_uds_without_ips` fixture bound its UnixListener
+  inside the spawned accept thread behind a fixed 50 ms sleep, which
+  raced the client's first connect under parallel Tier 2 load (`UDS
+  connect ... No such file or directory`) — the same load-dependent
+  class as the Corrective 08 `test_pool_isolation_uds_vs_tcp` retry.
+  All four bind-in-thread UDS fixtures (network-stream upgrade,
+  transport-metrics success, direct-transport isolation/timeout/
+  cancellation) now bind synchronously on the test thread before
+  spawning the accept loop; the sleeps are removed. Verified green in
+  default parallel mode.
+
+### Focused pre-freeze semantic gate
+
+602 passed, 0 failed, covering auth/config objects, headers, URL/query,
+timeouts, SSLContext translation and network proof, proxy trust safety,
+redirect state machine, response/raw-stream lifecycle,
+extensions/trace, 101 network-stream upgrades, H2 differentials, and
+SOCKS transport (same file set as Corrective 08). 13 non-failing
+warnings (HTTPX `verify=<str>`/TLS-version deprecations on
+rejection-boundary tests). Rust hardening suites green: `trailer_tests`
+7/7, `transport_metrics_tests` 6/6, `h3_hardening` 12/12.
+
+### Freeze history
+
+- `8139e10` — Node experimental-prototype closure. Tier 1 passed;
+  extended Tier 2 exposed the UDS bind race above (fixture-only).
+- `d034a1005857a7f403222dda4bda5f2f204a44fe` — UDS fixture
+  bind-readiness fix (test-only). **Final freeze: all qualification
+  evidence below was collected on this exact SHA with a clean worktree.**
+
+### Tier 1 (`./scripts/check.sh`) on `d034a10`
+
+Tier 1 passed on the frozen SHA:
+
+- 1149 workspace non-doctest Rust tests, 0 failed
+- 11 core doctests
+- 542 Python behavior tests
+- 133 compatibility smoke kernel tests
+- 0 failures, 0 skipped, 0 xfailed
+- Lint suppression policy, clippy pedantic, formatting, extension build: passed
+- Node JS surface skipped per explicit prototype policy (native artifact
+  not built); Node Rust tests passed
+- Toolchain: rustc 1.98.1, CPython 3.12.3, pytest 9.1.1, maturin 1.14.1
+
+### Extended verification (`./scripts/check.sh extended`) on `d034a10`
+
+Extended verification passed on the frozen SHA. Tier 2 reruns Tier 1 and
+adds the full compatibility suite, API oracle, feature matrix,
+feature-gated tests, doctests, FFI tests, lifecycle/soak checks, lossless
+merge, benchmarks, and the required downstream gate.
+
+- Full compat within Tier 2: **1839 passed**, 26 non-failing warnings
+  (HTTPX/SQL/TLS deprecations on rejection-boundary tests), 0 skipped,
+  0 xfailed.
+- Optional MSRV (Rust 1.80) skipped: toolchain not installed (existing
+  repository policy, same as Corrective 08).
+- Downstream step inside Tier 2 skipped per policy (artifact manifest
+  not present at that point); the required downstream portfolio was run
+  directly afterward against a fresh wheel from the frozen SHA (see
+  below), so no downstream evidence is missing.
+- Node JS surface skipped per explicit prototype policy (same as Tier 1).
+
+### Tier 3 package validation (`./scripts/check.sh package`) on `d034a10`
+
+Package validation passed from the clean frozen tree: crate packaging,
+wheel build, wheel smoke, and package-content validation
+(`eggfetch-0.1.1-cp312-cp312-manylinux_2_34_aarch64.whl`,
+SHA-256 `6b805e692c3af633f1159e8fc043d39dbf464aba307f6c1dff71f635b6b4ee95`).
+No `--allow-dirty`, no publication.
+
+### Full pinned HTTPX compatibility suite — three consecutive clean runs on `d034a10`
+
+Command:
+
+```sh
+EGGFETCH_COMPAT_REQUIRED=1 .venv/bin/python -m pytest \
+  crates/eggfetch-python/tests/compat/ -q --strict-markers
+```
+
+| Run | Result | Duration |
+| --- | --- | --- |
+| 1 | 1839 passed, 26 warnings | 311.34 s |
+| 2 | 1839 passed, 26 warnings | 306.19 s |
+| 3 | 1839 passed, 26 warnings | 305.32 s |
+
+Counts are stable (1839, identical to Corrective 08: the maturation
+program added Rust-side tests but no new compat cases); zero skips,
+xfails, or failures. No file or dependency changed between runs.
+
+Environment for all runs: CPython 3.12.3, pytest 9.1.1,
+pytest-asyncio 1.4.0, `httpx==0.28.1`, `httpcore==1.0.9`,
+`socksio==1.0.0`, IPv6 loopback available, no capability skips.
+
+### Differential high-risk spot checks
+
+Covered by the focused gate (602 passed) and the differential suites in
+the full runs: headers/multi-value, URL/query normalization,
+redirect/auth stripping and retained bodies, timeout conversion,
+SSLContext supported/rejected states, proxy precedence and `NO_PROXY`
+edges, SOCKS behavior, H2-only routes and the CONNECT residual, raw
+iteration and stream state transitions, 101 `network_stream` ownership
+and sync/async wrapper selection. Intentional differences remain linked
+to stable allowed-difference/parity-case IDs; no new retained
+difference was introduced. New native-only surfaces (trailers,
+transport metrics, `max_in_flight_requests*` aliases, H3 cache bounds)
+need no HTTPX parity evidence: the facade is unchanged.
+
+### API oracle and ledger validation on `d034a10`
+
+```sh
+.venv/bin/python scripts/generate_httpx_api_manifest.py \
+  --package eggfetch.compat.httpx --output /tmp/eggfetch-api.json
+.venv/bin/python scripts/compare_httpx_api_manifest.py \
+  --reference compat/httpx/0.28.1/reference-api.json \
+  --candidate /tmp/eggfetch-api.json \
+  --allowed compat/httpx/0.28.1/allowed-differences.toml \
+  --json --output /tmp/api-result.json
+```
+
+- 71 allowed matches, all `stage-bounded`
+- 0 stale allowed entries, 0 unexplained, 0 resolved-in-active
+- 74-symbol manifest valid
+- `allowed-differences.toml` (71 IDs), `resolved-differences.toml`, and
+  `parity-cases.toml` agree with tested behavior; no ledger change was
+  required (trailer/metric/limit-alias additions are native-only and do
+  not appear in the facade manifest).
+
+### Required downstream portfolio qualification on `d034a10`
+
+Fresh wheel built from the frozen SHA via the Tier 3 procedure:
+
+- `eggfetch-0.1.1-cp312-cp312-manylinux_2_34_aarch64.whl`,
+  SHA-256 `6b805e692c3af633f1159e8fc043d39dbf464aba307f6c1dff71f635b6b4ee95`
+- Controlled `httpx-0.28.1-py3-none-any.whl` shim reused byte-identical
+  from Corrective 07/08,
+  SHA-256 `4bc06cb9aedefec7adc613a67b6d149b127c9f204be35b6e67d026ff580dfb14`
+  (pure re-export of `eggfetch.compat.httpx`; content is independent of
+  the executable SHA, so rebuilding would only re-stamp metadata)
+
+```sh
+.venv/bin/python scripts/run_downstream_compat.py \
+  --artifact-manifest target/downstream-qualification/artifact-manifest.json \
+  --required-only
+```
+
+Result: 4/4 required packages passed, 0 failed/skipped/errors.
+
+| Package | Tests | Result |
+| --- | --- | --- |
+| respx 0.21.1 | 5/5 | passed |
+| httpx-sse 0.4.0 | 4/4 | passed |
+| httpx-auth 0.22.0 | 5/5 | passed |
+| httpx-ws 0.7.0 | 4/4 | passed |
+
+`pip check` notes missing `wsproto`/`hpack`/`hyperframe` (same diagnostic
+class as Corrective 07/08); behavioral suites passed in isolated venvs
+against the candidate wheel (no source-tree shadowing).
+
+### Retained bounded differences (unchanged)
+
+Same seven as Corrective 08: rustls-unrepresentable SSLContext state
+fails closed; HTTP/2 `stream_id` absent; HTTP/2 origin framing through
+HTTP CONNECT remains HTTP/1.1; four-element null-pointer
+`socket_options` rejected (uniformly `ValueError`); ordinary pooled
+`network_stream` absent; internal CONNECT tunnels not exposed; coroutine
+trace callbacks rejected (`TypeError`), sync callbacks supported. SNI
+override and SOCKS H2 routes remain `parity`.
+
+### Environment
+
+CPython 3.12.3, pytest 9.1.1, pytest-asyncio 1.4.0, `httpx==0.28.1`,
+`httpcore==1.0.9`, `socksio==1.0.0`, rustc 1.98.1, maturin 1.14.1, IPv6
+loopback available, no capability-based skips. MSRV 1.80 skipped
+(toolchain not installed; repository policy).
+
+### Post-qualification descendant audit
+
+Compared `d034a1005857a7f403222dda4bda5f2f204a44fe` (frozen executable
+SHA) to the qualification-record commit: every changed file is
+documentation/ledger-only (`.skills/*.md`, `AGENTS.md`,
+`compat/httpx/0.28.1/README.md`, `compat/httpx/0.28.1/profile.toml`,
+`docs/architecture/*`, `docs/reference/compatibility.md`,
+`docs/residual-differences.md`, `plans/httpx-parity-correction-status.md`).
+No Rust/Python source, test, manifest, lockfile, script, workflow, or
+packaging file changed after the freeze. `profile.toml`
+`qualification-sha` equals the exact frozen SHA.
+
+### Remote CI
+
+Existing routine CI runs `./scripts/check.sh` (Tier 1) on every push; no
+special qualification workflow was created.
+
+- Workflow: `CI`, run to be recorded at push time below, job `ci`
+- Head SHA: the documentation/ledger record commit — a docs-only
+  descendant of the frozen executable SHA, so the run covers the frozen
+  executable tree
+- Conclusion: to be recorded at push time
+- Relationship to `FROZEN_EXECUTABLE_SHA`: executable-identical
+  descendant (proven by the descendant audit above).
+
+### Closure statement
+
+Post-maturation requalification is complete on the evidence above. The
+HTTPX 0.28.1 compatibility facade is again **Stage C qualified** for the
+documented Python 3.10+ asyncio-supported surface, bound to executable
+SHA `d034a1005857a7f403222dda4bda5f2f204a44fe`. Future HTTPX work should
+be triggered by a new pinned HTTPX version, a newly discovered concrete
+compatibility defect, or an intentionally expanded compatibility scope.
+
+## Historical pass — Corrective 08 post-hardening requalification and closure
+
+Prior designation: **Stage C qualified** for the documented Python 3.10+
+asyncio-supported HTTPX 0.28.1 surface. The qualification was bound to the
 post-hardening executable SHA `d24101be6ed7be64463813750da5b4043d9905ec`
 and was performed on 2026-09-03. The Corrective 07 qualification at
 `5c7899fefb6df087dfa1b3578fbef9ba64f87742` (2026-08-24) is retained as
