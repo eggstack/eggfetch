@@ -547,7 +547,10 @@ let client = Client::new();
 
 // After making some requests...
 let metrics = client.pool_metrics();
-// PoolMetrics exposes idle/active connection counts for inspection.
+// PoolMetrics exposes logical waits/cancellations only
+// (acquisition_waits, acquisition_cancellations); transport
+// events live in Client::transport_metrics(). Hyper socket-reuse
+// counts are intentionally absent.
 ```
 
 ## Full Example
