@@ -8,14 +8,60 @@ eggfetch is a Rust-native HTTP client platform with Python bindings and a CLI la
 
 The remaining roadmap is therefore not primarily about proving feasibility. It is about tightening semantics, completing the expected HTTP-client feature set, expanding transport capabilities, and establishing production-grade release, security, testing, and documentation practices.
 
-## Current closure work (2026-09-03)
+## Current product position (2026-09-09)
 
-Two ordered closure passes are active after the recent post-qualification hardening work:
+The post-audit architecture and surface maturation program
+(`post-audit-architecture-and-surface-maturation-program.md`) is
+complete: request/transport consolidation, HTTP/3 lifecycle hardening,
+native protocol observability and API cleanup, and the Node
+experimental-prototype decision all landed, and the HTTPX 0.28.1 facade
+is Stage C qualified on the post-maturation executable SHA recorded in
+`compat/httpx/0.28.1/profile.toml` (evidence:
+`httpx-parity-correction-status.md`, the live ledger).
 
-1. `httpx-parity-corrective-08-post-hardening-requalification-and-closure.md` — audit the executable changes since the 2026-08-24 HTTPX 0.28.1 qualification, freeze one final executable/test SHA, rerun the complete exact-SHA qualification evidence, and renew the bounded Stage C claim only if every gate passes.
-2. `documentation-broad-truth-refresh-after-requalification.md` — after the renewed qualification is recorded, perform a repository-wide documentation truth pass as a documentation/ledger-only descendant so migration, compatibility, architecture, contributor, verification, release, and guide material all describe the current implementation consistently.
+### Current supported surfaces
 
-Execution order is strict: **Corrective 08 first, documentation refresh second**. Any executable/test/build/validation/packaging change discovered during the documentation pass reopens Corrective 08 and requires a new frozen SHA.
+- Rust-native async engine (`eggfetch-core`): HTTP/1.1, HTTP/2,
+  connection pooling, phase-aware timeouts, redirect engine, cookies,
+  auth, HTTP/SOCKS proxying, TLS configuration, response decompression,
+  multipart encoding, retry policy, HTTP trailers, connector-derived
+  connection metadata, transport metrics, and logical in-flight request
+  limits.
+- Python sync and asyncio bindings, including the Stage C qualified
+  `eggfetch.compat.httpx` facade for the documented HTTPX 0.28.1
+  asyncio surface (Python 3.10+).
+- CLI (`eggfetch-cli`) and C ABI (`eggfetch-ffi`) thin adapters.
+
+### Experimental / limited surfaces
+
+- HTTP/3 over QUIC: functional behind the `http3` feature gate with a
+  bounded per-origin cache, multi-address fallback, phase-correct
+  timeouts, and keepalive-derived idle policy. Retained as experimental
+  pending broader validation.
+- Node.js N-API binding: explicitly an experimental prototype (narrow
+  string-body API, no response streaming, cancellation, structured
+  errors, or generated declarations). Supported-binding scope is
+  deferred. Contract: `docs/architecture/ffi-and-node.md`.
+
+### Active work
+
+None scheduled. The maturation program's six plans are closed. Future
+work is triggered by a new pinned HTTPX version, a newly discovered
+concrete compatibility defect, or an intentionally expanded scope —
+not by speculative parity expansion.
+
+### Future candidates
+
+The production tracks below (benchmarking, fuzzing, security hardening,
+release engineering) remain the candidate backlog. No new language
+bindings, transport families, or CI/evidence frameworks are planned.
+
+### Historical milestone index
+
+Milestones N–M and production tracks A–D below are the historical record
+of how the platform was built, not active requirements. Completed plans
+in this directory are non-normative; verification and release policy
+live in `docs/verification-policy.md` and `docs/releases/process.md`.
 
 ## Architectural invariants
 
@@ -240,6 +286,11 @@ Implemented capabilities:
 - Protocol version reporting (`HTTP/3`)
 - Backward compatible; no existing behavior changes unless explicitly opted in
 - Rust tests covering feature-gated compilation, version policy, and error taxonomy
+- Post-maturation hardening (2026-09-09): bounded 64-entry per-origin
+  QUIC cache with eviction/reconnect, multi-address fallback under one
+  connect budget, phase-correct connect/total/read/write timeouts,
+  keepalive-derived QUIC idle, stream limits from logical concurrency
+  policy; stress evidence in `crates/eggfetch-core/tests/h3_hardening.rs`
 
 # Phase 5: CLI and Ecosystem
 
@@ -407,9 +458,9 @@ Establish:
 - MSRV and supported-Python policy
 - signed provenance/artifacts where practical
 
-# Recommended execution order
+# Historical completion order
 
-The preferred order is:
+The milestones above completed in this order (record, not active plan):
 
 1. Milestone N: semantic tightening
 2. Milestone O: cookies
