@@ -279,19 +279,22 @@ Required areas:
 
 Examples should include JSON APIs, large downloads/uploads, SSE-like streaming, authentication, and common third-party APIs.
 
-## Milestone Z: Additional bindings and frameworks (complete)
+## Milestone Z: Additional bindings and frameworks (complete as prototype scope)
 
 Treat `eggfetch-core` as a reusable engine for future consumers.
 
 Implemented capabilities:
 
 - C ABI boundary (`eggfetch-ffi`)
-- Node.js N-API prototype
+- Node.js N-API prototype (explicitly experimental; supported-binding
+  scope deferred per `plans/node-binding-maturation.md`)
 - opaque handle pattern
 - blocking-send runtime bridge
 - FFI surface audit
 
-These began only after the core API and semantics are stable.
+These began only after the core API and semantics are stable. "Complete"
+here means the prototype/reference scope above — it is not a supported
+Node.js binding claim.
 
 # Phase 5.5: Pre-Release Validation
 
@@ -424,7 +427,7 @@ The preferred order is:
 13. Milestone L: correctness and differential testing (complete)
 14. Milestone M: documentation and public MVP preparation (complete)
 15. HTTP/3 and additional language bindings
-16. Milestone Z: additional bindings and frameworks (complete)
+16. Milestone Z: additional bindings and frameworks (complete as prototype scope; supported Node deferred)
 
 Cookies and authentication may be developed in parallel only after Milestone N is complete and shared request/redirect semantics are stable.
 

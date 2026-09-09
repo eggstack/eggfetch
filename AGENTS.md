@@ -1,7 +1,7 @@
 # Agent Guide
 
 eggfetch is a Rust-native async HTTP client engine (tokio + hyper) with thin adapters: a CLI,
-Python bindings (sync + asyncio), C FFI, and Node bindings. There is exactly one networking
+Python bindings (sync + asyncio), C FFI, and experimental Node.js prototype bindings. There is exactly one networking
 implementation, living entirely in `eggfetch-core`.
 
 ## Quick Commands
@@ -281,7 +281,7 @@ point and links every deep dive. Index:
 **Adapters & tooling**
 - `cli.md` — argument model, output modes, exit codes
 - `python-bindings.md` — sync/async adapters, compat facade internals, exception hierarchy
-- `ffi-and-node.md` — C ABI handles, runtime bridge, N-API prototype
+- `ffi-and-node.md` — C ABI handles, runtime bridge, N-API prototype (Node explicitly experimental; contract lives in that doc)
 - `testing-fuzzing.md`, `benchmarks.md` — test strategy, fuzz targets, Criterion suites
 
 **Cross-cutting**

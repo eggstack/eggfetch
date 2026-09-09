@@ -27,6 +27,7 @@ eggfetch is a Rust-native HTTP client engine with Python bindings and a CLI tool
 - **Network stream exposure** -- 101 Switching Protocols responses expose an owned upgraded stream through `extensions["network_stream"]`; direct-connector upgrades carry real local/remote addrs and TLS version/cipher/ALPN, UDS upgrades report `Unix` without IPs, standard opaque upgrades remain explicitly unavailable; `start_tls` uses the same safe TLS translation as the default client
 - **Python/FFI trailer policy** -- core retains trailers; Python native, HTTPX facade, FFI, and Node defer trailer exposure in this milestone (facade unchanged; HTTPX 0.28.1 has no `trailers` surface to compare against)
 - **CLI** -- full-featured HTTP client with streaming output, machine-readable formats, and shell completions
+- **Node.js (experimental prototype)** -- N-API binding with narrow guarantees (UTF-8 string bodies, buffered responses, unstructured errors, stub declarations); see [`docs/architecture/ffi-and-node.md`](docs/architecture/ffi-and-node.md)
 
 ## Installation
 

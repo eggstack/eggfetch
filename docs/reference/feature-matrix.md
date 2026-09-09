@@ -117,10 +117,14 @@ Node.js (eggfetch-node, experimental).
 | Secret redaction in verbose output | Yes |
 | TTY-aware output | Yes |
 
-### Node.js (eggfetch-node, experimental)
+### Node.js (eggfetch-node, experimental prototype)
 
-Node.js bindings via N-API (napi-rs). **Experimental** — API surfaces may
-change before 1.0.
+Node.js bindings via N-API (napi-rs). **Experimental prototype, not a
+supported binding** — API surfaces may change without notice. Narrow
+guarantees only: common-verb plus arbitrary-method requests, UTF-8
+string bodies, buffered responses (`status`, `url`, `headers`,
+`getAll`, `text`, `bytes`, `json`, `ok`). See
+`docs/architecture/ffi-and-node.md` for the full support contract.
 
 ## Limitations per platform
 
@@ -141,8 +145,12 @@ change before 1.0.
   set. The default CLI build enables `cookies`, `multipart`, and `proxy`
   but **not** `http2` or `http3`.
 
-### Node.js (experimental)
+### Node.js (experimental prototype)
 
-- Experimental; API surfaces may change before 1.0.
+- Experimental prototype, not a supported binding; API surfaces may change without notice.
+- String-only request bodies (no lossless `Buffer`/`Uint8Array` path).
+- Buffered responses only (no streaming; bodies must fit in memory).
+- No cancellation, request configuration (headers/timeout/redirects/TLS/proxy/auth/HTTP-version), structured errors, or generated TypeScript declarations (`index.d.ts` is a stub).
 - Requires Node.js 16+.
 - HTTP/3 support depends on the Rust feature flags at build time.
+- JS test surface (`test.js`) runs only when a built `./eggfetch.node` artifact is present; Tier 1 records an explicit skip otherwise.

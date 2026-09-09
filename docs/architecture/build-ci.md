@@ -47,6 +47,7 @@ See [verification-policy.md](../verification-policy.md) for the normative policy
 | Python build | `maturin develop -m crates/eggfetch-python/Cargo.toml` |
 | Python tests | `pytest crates/eggfetch-python/tests/ -q --ignore=.../compat` |
 | HTTPX compat smoke | `pytest .../test_imports.py .../test_client.py .../test_exceptions.py .../test_corrective_kernel.py` |
+| Node prototype | `cargo test -p eggfetch-node --all-features`, then `node test.js` only when `node` and a built `crates/eggfetch-node/eggfetch.node` artifact are present (explicit skip otherwise) |
 
 ### Extended Validation (Tier 2)
 

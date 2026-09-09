@@ -15,7 +15,11 @@ Use this skill when working on the eggfetch-ffi or eggfetch-node crates.
 - FFI uses opaque handle pattern. Consumers never see internal struct layouts.
 - FFI functions are `extern "C"` with `#[repr(C)]` types.
 - Null pointer inputs are treated as no-ops for all free functions.
-- Node.js wraps FFI via napi-rs, not core directly.
+- Node.js is an explicitly experimental prototype that wraps FFI via
+  napi-rs (blocking C ABI in `spawn_blocking`, string-only bodies,
+  buffered responses, unstructured errors, stub `index.d.ts`), not core
+  directly. Do not present it as a supported binding; the contract and
+  unsupported list live in `docs/architecture/ffi-and-node.md`.
 
 ## Handle Types
 

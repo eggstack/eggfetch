@@ -6,7 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 readme.workspace = true
-description = "Node.js bindings for eggfetch via N-API"
+description = "Experimental Node.js prototype bindings for eggfetch via N-API"
 
 [lib]
 crate-type = ["cdylib"]

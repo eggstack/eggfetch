@@ -105,7 +105,7 @@ Exposed configuration options:
 ## Acceptance Criteria Met
 
 1. **Core façade is language-neutral**: All FFI functions use C-compatible types (pointers, integers, C strings). No Rust-specific types leak.
-2. **One reference secondary binding prototyped**: Node.js N-API binding (`eggfetch-node`) is functional with 10 passing tests.
+2. **One reference secondary binding prototyped**: Node.js N-API binding (`eggfetch-node`) is functional with 10 passing tests. Its support status is settled as explicitly experimental (not a supported binding) in `plans/node-binding-maturation.md`; the contract lives in `docs/architecture/ffi-and-node.md`.
 3. **Semantics centralized in core**: FFI and Node.js are thin wrappers. All HTTP behavior lives in `eggfetch-core`.
 4. **Distribution and maintenance**: CI workflow defined. FFI crate builds as cdylib + staticlib + rlib.
 5. **Unsupported bindings**: Documented as exploratory in README.

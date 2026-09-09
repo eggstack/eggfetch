@@ -191,12 +191,14 @@ Thread safety: `ClientHandle` is `Send + Sync` (shared). `RequestHandle`, `Respo
 
 ### eggfetch-node (the Node.js prototype)
 
-3 source modules. Prototype stage, wraps `eggfetch-ffi`:
+3 source modules. Explicitly experimental prototype that wraps the
+blocking `eggfetch-ffi` surface inside `spawn_blocking` (string-only
+bodies, buffered responses, unstructured errors, stub declarations):
 
 | Module | Purpose |
 |--------|---------|
-| `client` | `EggfetchClient` — wraps FFI client |
-| `response` | Response wrapper |
+| `client` | `EggfetchClient` — wraps FFI client (raw-pointer handle) |
+| `response` | Buffered response wrapper |
 | `lib` | N-API module registration |
 
 **Deep dive:** [ffi-and-node.md](ffi-and-node.md)

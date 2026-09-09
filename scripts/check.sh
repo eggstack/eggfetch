@@ -128,6 +128,27 @@ tier1_compat_smoke() {
         -v
 }
 
+tier1_node_binding() {
+    info "Node binding (experimental prototype)"
+    # Rust-side surface is also covered by the workspace tests above; this
+    # explicit step keeps the prototype's compiled surface visible even if
+    # the workspace test selection ever changes.
+    cargo test -p eggfetch-node --all-features
+    # JS surface: optional. The prototype loader (index.js) requires a
+    # manually placed ./eggfetch.node artifact, so absence is an explicit
+    # skip, not a failure.
+    if ! command -v node &>/dev/null; then
+        record_skip "Node JS surface" "node is not installed"
+        return 0
+    fi
+    local node_dir="$REPO_ROOT/crates/eggfetch-node"
+    if [[ ! -f "$node_dir/eggfetch.node" ]]; then
+        record_skip "Node JS surface" "native artifact not built ($node_dir/eggfetch.node missing; run 'npm run build' in crates/eggfetch-node and place the artifact)"
+        return 0
+    fi
+    (cd "$node_dir" && node test.js)
+}
+
 run_tier1() {
     check_tools
     require_python_env
@@ -138,6 +159,7 @@ run_tier1() {
     tier1_python_build
     tier1_python_tests
     tier1_compat_smoke
+    tier1_node_binding
 }
 
 # ── Tier 2: Extended validation ──────────────────────────────────────────

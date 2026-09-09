@@ -80,24 +80,63 @@ eggfetch_client_free(client);
 
 ## Node.js (`eggfetch-node`)
 
+### Support status: experimental prototype
+
+Per `plans/node-binding-maturation.md`, the Node crate closes as a
+**deliberately experimental prototype**, not a supported binding. The
+supported-binding path (direct async dispatch into `eggfetch-core`,
+Rust-owned in-flight lifetimes, byte/stream bodies, incremental response
+streaming, cancellation, structured errors, generated TypeScript
+declarations) remains deferred work: each item is a new API surface with
+its own ownership, backpressure, redaction, and semver commitments, and
+landing them together immediately before the exact-SHA HTTPX
+requalification freeze would widen that freeze for no parity benefit.
+Direct dispatch is not blocked on feasibility — core `Client` is
+`Clone + Send + Sync` — it is deferred on scope.
+
 ### Architecture
 
 - Prototype using napi-rs to wrap `eggfetch-ffi`.
 - `unsafe_code = "allow"` — sole exception for N-API.
 - Modules: `client.rs`, `response.rs`, `lib.rs`.
+- Ordinary requests execute the **blocking C ABI**
+  (`eggfetch_client_send`) inside `spawn_blocking`; Node adds no HTTP
+  behavior of its own and all I/O still originates in `eggfetch-core`
+  via the FFI runtime bridge.
+- The client handle is a raw FFI pointer stored as `usize`. In-flight
+  safety currently relies on napi-derive's internal strong-reference
+  codegen for async class methods (see the lifetime-safety comment on
+  `EggfetchClient`), not on Rust ownership — this is acceptable for a
+  prototype and must be replaced by `Arc`-owned state before any
+  supported release.
 
-### API
+### Narrow prototype guarantees
 
-```javascript
-const { EggfetchClient } = require('eggfetch');
+- Async `Client` request methods for the common verbs plus arbitrary
+  methods via `request(method, url, body)`.
+- UTF-8 string request bodies (`Option<String>`); empty body when `None`.
+- Buffered responses only: status, URL, headers (duplicates preserved
+  internally, joined in the `headers` object, individually via `getAll`),
+  `text` / `bytes` / `json` accessors, `ok` flag.
+- Rust-side compilation and unit surface covered by Tier 1
+  (`cargo test -p eggfetch-node`); the JS surface (`test.js`) runs in
+  Tier 1 only when `node` and a built `./eggfetch.node` artifact are
+  present, and records an explicit skip otherwise.
 
-const client = new EggfetchClient();
-const response = await client.get('https://example.com');
-console.log(response.statusCode, response.text());
-```
+### Explicitly unsupported (do not rely on these)
 
-### Limitations
-
-- Prototype stage — API surface may change.
-- Wraps FFI rather than calling core directly.
-- No streaming support yet.
+- Binary request bodies: `Buffer` / `Uint8Array` inputs have no
+  lossless path; only UTF-8 strings are accepted.
+- Response streaming: no async-iterator / Node-stream API; bodies are
+  buffered eagerly (must fit in memory).
+- Cancellation: no abort/close propagation to in-flight requests.
+- Request configuration: no headers, timeout, redirect, TLS/CA, proxy,
+  auth, or HTTP-version surface beyond FFI defaults.
+- Structured errors: failures surface as a single
+  `"eggfetch error [kind]: message"` string; assert on categories only
+  through that string, and expect it to change.
+- TypeScript declarations: `index.d.ts` is a stub, not generated output.
+- Packaging: no npm publication pipeline; the `index.js` loader expects
+  a manually placed `./eggfetch.node` artifact.
+- Trailers: deferred like the other non-Python adapters (core retains
+  them; see the workspace trailer policy in `AGENTS.md`).

@@ -48,6 +48,11 @@ Runs on every push and pull request via CI. Also run locally before committing. 
 5. Python extension build
 6. Ordinary Python behavior tests
 7. Compact HTTPX compatibility smoke kernel
+8. Node binding prototype check: `cargo test -p eggfetch-node` always;
+   the JS surface (`node test.js`) runs only when `node` and a built
+   `eggfetch.node` artifact are present, otherwise an explicit skip is
+   recorded (the prototype has no npm publication pipeline, so CI
+   environments without a manually built artifact skip truthfully).
 
 ### Tier 2: Extended Validation
 
