@@ -572,10 +572,13 @@ async fn uds_upgrade_reports_uds_without_ips() {
     let _ = std::fs::remove_file(path);
     let shutdown = Arc::new(std::sync::atomic::AtomicBool::new(false));
     let sd = shutdown.clone();
-    let sp = path.to_owned();
+    // Bind synchronously on the test thread so the socket exists before the
+    // client connects. Binding inside the spawned thread raced the client's
+    // first connect under parallel-test load (fixed 50 ms sleep was not a
+    // readiness signal). No behavior change: same listener, same accept loop.
+    let listener = UnixListener::bind(path).unwrap();
+    listener.set_nonblocking(true).unwrap();
     let handle = std::thread::spawn(move || {
-        let listener = UnixListener::bind(&sp).unwrap();
-        listener.set_nonblocking(true).unwrap();
         while !sd.load(std::sync::atomic::Ordering::Relaxed) {
             match listener.accept() {
                 Ok((mut stream, _)) => {
@@ -608,7 +611,6 @@ async fn uds_upgrade_reports_uds_without_ips() {
             }
         }
     });
-    tokio::time::sleep(Duration::from_millis(50)).await;
     let client = eggfetch_core::Client::builder()
         .uds_path(path.to_owned())
         .build();

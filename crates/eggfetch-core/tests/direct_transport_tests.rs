@@ -138,11 +138,12 @@ async fn test_pool_isolation_uds_vs_tcp() {
 
     let shutdown = Arc::new(AtomicBool::new(false));
     let sd = shutdown.clone();
-    let sp = sock_path.to_owned();
 
+    // Bind on the test thread so the socket exists before the client
+    // connects (see network_stream_tests.rs UDS upgrade fixture).
+    let listener = UnixListener::bind(sock_path).unwrap();
+    listener.set_nonblocking(true).unwrap();
     let handle = std::thread::spawn(move || {
-        let listener = UnixListener::bind(&sp).unwrap();
-        listener.set_nonblocking(true).unwrap();
         while !sd.load(Ordering::Relaxed) {
             match listener.accept() {
                 Ok((mut stream, _)) => {
@@ -159,8 +160,6 @@ async fn test_pool_isolation_uds_vs_tcp() {
             }
         }
     });
-
-    std::thread::sleep(Duration::from_millis(50));
 
     let uds_client = Client::builder().uds_path(sock_path.to_owned()).build();
 
@@ -261,11 +260,12 @@ async fn test_uds_total_timeout() {
 
     let shutdown = Arc::new(AtomicBool::new(false));
     let sd = shutdown.clone();
-    let sp = sock_path.to_owned();
 
+    // Bind on the test thread so the socket exists before the client
+    // connects (see network_stream_tests.rs UDS upgrade fixture).
+    let listener = UnixListener::bind(sock_path).unwrap();
+    listener.set_nonblocking(true).unwrap();
     let handle = std::thread::spawn(move || {
-        let listener = UnixListener::bind(&sp).unwrap();
-        listener.set_nonblocking(true).unwrap();
         while !sd.load(Ordering::Relaxed) {
             match listener.accept() {
                 Ok((mut stream, _)) => {
@@ -284,8 +284,6 @@ async fn test_uds_total_timeout() {
             }
         }
     });
-
-    std::thread::sleep(Duration::from_millis(50));
 
     let client = Client::builder()
         .uds_path(sock_path.to_owned())
@@ -364,11 +362,12 @@ async fn test_uds_cancellation() {
 
     let shutdown = Arc::new(AtomicBool::new(false));
     let sd = shutdown.clone();
-    let sp = sock_path.to_owned();
 
+    // Bind on the test thread so the socket exists before the client
+    // connects (see network_stream_tests.rs UDS upgrade fixture).
+    let listener = UnixListener::bind(sock_path).unwrap();
+    listener.set_nonblocking(true).unwrap();
     let handle = std::thread::spawn(move || {
-        let listener = UnixListener::bind(&sp).unwrap();
-        listener.set_nonblocking(true).unwrap();
         while !sd.load(Ordering::Relaxed) {
             match listener.accept() {
                 Ok((mut stream, _)) => {
@@ -386,8 +385,6 @@ async fn test_uds_cancellation() {
             }
         }
     });
-
-    std::thread::sleep(Duration::from_millis(50));
 
     let client = Client::builder().uds_path(sock_path.to_owned()).build();
 

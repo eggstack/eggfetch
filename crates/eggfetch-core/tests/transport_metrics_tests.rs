@@ -112,10 +112,11 @@ async fn uds_success_counts_exactly() {
     let _ = std::fs::remove_file(path);
     let shutdown = Arc::new(AtomicBool::new(false));
     let sd = shutdown.clone();
-    let sp = path.to_owned();
+    // Bind on the test thread so the socket exists before the client
+    // connects (see network_stream_tests.rs UDS upgrade fixture).
+    let listener = UnixListener::bind(path).unwrap();
+    listener.set_nonblocking(true).unwrap();
     let handle = std::thread::spawn(move || {
-        let listener = UnixListener::bind(&sp).unwrap();
-        listener.set_nonblocking(true).unwrap();
         while !sd.load(Ordering::Relaxed) {
             match listener.accept() {
                 Ok((mut stream, _)) => {
@@ -131,7 +132,6 @@ async fn uds_success_counts_exactly() {
             }
         }
     });
-    tokio::time::sleep(Duration::from_millis(50)).await;
     let client = Client::builder().uds_path(path.to_owned()).build();
     let before = client.transport_metrics().snapshot();
     let mut resp = client
