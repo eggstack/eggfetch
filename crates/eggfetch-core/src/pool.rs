@@ -91,24 +91,71 @@ use crate::error::{Error, Result};
 ///
 /// All fields are optional. When a field is `None`, the corresponding
 /// limit is not applied.
+///
+/// # Logical vs physical limits
+///
+/// `max_in_flight_requests` / `max_in_flight_requests_per_origin` (and
+/// their compatibility aliases `max_connections` /
+/// `max_connections_per_host`) bound **logical in-flight requests**
+/// (pool permits, one per request). They do not bound physical TCP
+/// connections: under HTTP/2 one connection carries many multiplexed
+/// streams, under HTTP/3 one QUIC connection carries many streams, and
+/// Hyper owns socket reuse opaquely. Idle-connection caps
+/// (`max_idle_connections*`, `idle_timeout`) are physical idle-pool
+/// policy passed to Hyper and are distinct from semaphore concurrency.
 #[derive(Debug, Clone, Default)]
 pub struct PoolConfig {
     /// Maximum number of idle (unused) connections kept per host.
     ///
     /// Applied as a per-host cap (the transport has no global idle
     /// limit); see [`Self::max_connections`] for a global bound.
+    /// This is physical idle-pool policy, not logical concurrency.
     pub max_idle_connections: Option<usize>,
     /// Maximum number of idle connections per individual host.
-    pub max_idle_connections_per_host: Option<usize>,
-    /// Maximum total number of concurrent connections (active + idle).
-    pub max_connections: Option<usize>,
-    /// Maximum number of concurrent connections per individual origin.
     ///
-    /// Origins are keyed by `(scheme, host, port)`. Two URLs with
-    /// different schemes or ports are distinct origins.
+    /// Physical idle-pool policy.
+    pub max_idle_connections_per_host: Option<usize>,
+    /// Maximum total number of concurrent in-flight requests (logical).
+    ///
+    /// Compatibility alias for [`Self::max_in_flight_requests`] kept for
+    /// the pre-1.0 release line. Prefer `max_in_flight_requests` in new
+    /// code; when both are set, `max_in_flight_requests` wins.
+    pub max_connections: Option<usize>,
+    /// Maximum number of concurrent in-flight requests per origin (logical).
+    ///
+    /// Compatibility alias for
+    /// [`Self::max_in_flight_requests_per_origin`]. Origins are keyed by
+    /// `(scheme, host, port)`. Prefer the new name; when both are set,
+    /// `max_in_flight_requests_per_origin` wins.
     pub max_connections_per_host: Option<usize>,
+    /// Maximum total number of concurrent in-flight requests (logical).
+    ///
+    /// Preferred native name; one permit equals one logical request, not
+    /// one TCP connection. See the type-level docs for H1/H2/H3 examples.
+    pub max_in_flight_requests: Option<usize>,
+    /// Maximum number of concurrent in-flight requests per origin (logical).
+    ///
+    /// Preferred native name. Origins are keyed by `(scheme, host, port)`.
+    pub max_in_flight_requests_per_origin: Option<usize>,
     /// Duration after which an idle connection is closed.
+    ///
+    /// Physical idle lifetime, not a concurrency bound.
     pub idle_timeout: Option<std::time::Duration>,
+}
+
+impl PoolConfig {
+    /// Effective global logical-request limit (new name wins).
+    #[must_use]
+    pub(crate) fn effective_max_in_flight(&self) -> Option<usize> {
+        self.max_in_flight_requests.or(self.max_connections)
+    }
+
+    /// Effective per-origin logical-request limit (new name wins).
+    #[must_use]
+    pub(crate) fn effective_max_in_flight_per_origin(&self) -> Option<usize> {
+        self.max_in_flight_requests_per_origin
+            .or(self.max_connections_per_host)
+    }
 }
 
 /// Origin key used for per-host pool slot acquisition.
@@ -446,7 +493,9 @@ impl Pool {
     /// Create a new pool from the given configuration.
     #[must_use]
     pub fn new(config: PoolConfig) -> Self {
-        let global_semaphore = config.max_connections.map(|n| Arc::new(Semaphore::new(n)));
+        let global_semaphore = config
+            .effective_max_in_flight()
+            .map(|n| Arc::new(Semaphore::new(n)));
 
         Self {
             inner: Arc::new(PoolInner {
@@ -504,9 +553,11 @@ impl Pool {
         }
 
         // Acquire per-origin permit if configured and origin is known.
-        if let (Some(max_per_origin), Some(origin)) =
-            (self.inner.config.max_connections_per_host, origin)
-        {
+        // Uses the effective logical-request limit (new name wins).
+        if let (Some(max_per_origin), Some(origin)) = (
+            self.inner.config.effective_max_in_flight_per_origin(),
+            origin,
+        ) {
             // Existing origins avoid the table lock entirely. The waiter guard
             // keeps the entry alive across the semaphore acquisition so an
             // eviction sweep cannot remove it between lookup and permit grant.
@@ -602,7 +653,54 @@ mod tests {
         assert!(config.max_idle_connections_per_host.is_none());
         assert!(config.max_connections.is_none());
         assert!(config.max_connections_per_host.is_none());
+        assert!(config.max_in_flight_requests.is_none());
+        assert!(config.max_in_flight_requests_per_origin.is_none());
         assert!(config.idle_timeout.is_none());
+    }
+
+    #[test]
+    fn effective_limits_prefer_new_names() {
+        let config = PoolConfig {
+            max_connections: Some(10),
+            max_in_flight_requests: Some(7),
+            max_connections_per_host: Some(5),
+            max_in_flight_requests_per_origin: Some(3),
+            ..PoolConfig::default()
+        };
+        assert_eq!(config.effective_max_in_flight(), Some(7));
+        assert_eq!(config.effective_max_in_flight_per_origin(), Some(3));
+    }
+
+    #[test]
+    fn effective_limits_fall_back_to_aliases() {
+        let config = PoolConfig {
+            max_connections: Some(10),
+            max_connections_per_host: Some(5),
+            ..PoolConfig::default()
+        };
+        assert_eq!(config.effective_max_in_flight(), Some(10));
+        assert_eq!(config.effective_max_in_flight_per_origin(), Some(5));
+    }
+
+    #[tokio::test]
+    async fn new_names_enforce_logical_concurrency() {
+        // One in-flight permit blocks a second acquisition, proving the
+        // new names gate logical requests (not physical connections).
+        let pool = Pool::new(PoolConfig {
+            max_in_flight_requests_per_origin: Some(1),
+            ..PoolConfig::default()
+        });
+        let origin = OriginKey::from_parts("http", "example.com", 80);
+        let _guard = pool.acquire(Some(&origin)).await.unwrap();
+        assert!(
+            tokio::time::timeout(
+                std::time::Duration::from_millis(10),
+                pool.acquire(Some(&origin))
+            )
+            .await
+            .is_err(),
+            "second logical request must wait while first holds its permit"
+        );
     }
 
     #[test]

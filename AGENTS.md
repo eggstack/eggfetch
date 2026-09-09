@@ -106,20 +106,44 @@ through the native `stream()` method.
   declarative `TransportRoute` (UDS → direct → proxy/SOCKS → SNI → H3 → standard).
   One common post-transport policy applies to every route.
 - `transport/direct.rs` owns the shared Hyper response lifecycle
-  (`finish_hyper_response` + trace helpers + `wrap_incoming` + `map_send_error`);
-  `transport/uds.rs` reuses those helpers but intentionally omits 101 upgrade handling.
+  (`finish_hyper_response` + trace helpers + `wrap_incoming` with
+  `SharedTrailers` + `map_send_error` + `await_upgrade` with connector
+  metadata); `transport/uds.rs` reuses the same helpers including 101
+  upgrade handling (UDS reports `Unix`/`TlsUnix` without IPs).
 - `transport/http3.rs` owns the QUIC lifecycle: `Vacant -> Connecting -> Ready ->
   Failed/Closed -> Evicted -> Reconnectable` via per-origin `OnceCell` (caches
   success only; failures stay reconnectable). Bounded 64-entry origin cache
-  with generation-scoped eviction (in-flight streams survive); multi-address
-  fallback under one shared connect budget with fair per-address shares;
-  `Timeout.connect` bounds DNS + QUIC + h3 init, `total` stays the outer
-  pipeline deadline, read/write apply at the body boundaries; QUIC idle
-  derives from `PoolConfig::idle_timeout` (default 30 s, never `Timeout.pool`);
-  bidi streams derive from `max_connections_per_host` (default 100); no
-  transport-level retries, one-shot bodies never replayed. Only `H3Connect`
-  is retryable. Test hooks are `test-util`-gated (`cache_len`,
+  with generation-scoped eviction (in-flight streams survive, evictions
+  counted in `TransportMetrics`); multi-address fallback under one shared
+  connect budget with fair per-address shares; `Timeout.connect` bounds
+  DNS + QUIC + h3 init, `total` stays the outer pipeline deadline,
+  read/write apply at the body boundaries; QUIC idle derives from
+  `PoolConfig::idle_timeout` (default 30 s, never `Timeout.pool`); bidi
+  streams derive from the effective per-origin in-flight limit (default
+  100); no transport-level retries, one-shot bodies never replayed. Only
+  `H3Connect` is retryable. Test hooks are `test-util`-gated (`cache_len`,
   `contains_origin`); behavior tests live in `tests/h3_hardening.rs`.
+- Trailers: `SharedTrailers` is populated by `wrap_incoming` (H1/H2) and the
+  H3 body unfold (via `recv_trailers`) without buffering; `Response::trailers()`
+  is `None` until EOF, on no-trailers, or on pre-trailer body errors. H1
+  duplicate same-name trailers collapse upstream in hyper (`insert`); H2
+  duplicates are preserved. Python/FFI/Node defer trailer exposure; the
+  HTTPX facade is unchanged (0.28.1 has no `trailers`).
+- Metadata: direct-connector 101 upgrades downcast to `DirectStream` for real
+  local/remote addrs + TLS version/cipher/ALPN; UDS upgrades report UDS kind
+  without IPs; standard opaque upgrades stay explicitly unavailable
+  (`None`, default kind). No secrets, no fake zeros. H3 per-response metadata
+  stays `None`; `TransportKind::Quic` is reserved.
+- Metrics: `TransportMetrics` (connector/DNS/TLS attempts, UDS/proxy, H3
+  creations/evictions, 101 upgrades) is separate from `PoolMetrics`
+  (logical waits/cancellations). Hyper reuse counts absent, never estimated.
+  `Client::transport_metrics()` is the accessor; tests assert exact counts.
+- Limits: native `max_in_flight_requests*` preferred (logical permits, not
+  TCP counts); `max_connections*` are pre-1.0 aliases (new wins). Idle caps
+  are physical Hyper policy. Facade `Limits(max_connections=...)` unchanged.
+- Trace reconciled with metrics: request/response header events emitted
+  consistently; DNS/connect/TLS observed via metrics to avoid duplicate
+  taxonomy. Existing event names/phases compatible; observer stays sync.
 
 ## HTTPX Compatibility Layer
 
@@ -188,7 +212,9 @@ list restricted to `h2`; `http2_only(true)` on standard/direct/SNI/SOCKS/UDS pat
 **Residual differences** (do not paper over): `stream_id` metadata is unreachable through
 hyper's legacy client (`Incoming` wraps `h2::RecvStream` privately) — never synthesize one;
 HTTP/2 origin framing through an HTTP CONNECT proxy remains HTTP/1.1; HTTPX's four-element
-null-pointer `socket_options` form is rejected at the safe boundary. Classification rules:
+null-pointer `socket_options` form is rejected at the safe boundary. H1 duplicate
+same-name trailers collapse upstream in hyper (`HeaderMap::insert`); H2 duplicates are
+preserved — never synthesize collapsed values. Classification rules:
 `docs/residual-differences.md`. Coroutine trace callbacks are rejected with `TypeError` before
 dispatch (core `TraceObserver` is synchronous); sync callbacks work on `Client` and
 `AsyncClient`.

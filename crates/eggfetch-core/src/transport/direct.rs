@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use bytes::Bytes;
 
-use crate::body::{BoxBytesStream, ResponseBody};
+use crate::body::{BoxBytesStream, ResponseBody, SharedTrailers};
 use crate::error::{Error, Result};
 use crate::network_stream::{ConnectionMetadata, NetworkStream, UpgradedStream};
 use crate::response::Response;
@@ -103,15 +103,18 @@ async fn finish_hyper_response(
             body,
         )
     } else {
-        let stream: BoxBytesStream = wrap_incoming(hyper_response.into_body());
+        let trailers = SharedTrailers::new();
+        let stream: BoxBytesStream = wrap_incoming(hyper_response.into_body(), trailers.clone());
         let body = ResponseBody::streaming(stream);
-        Response::new(
+        let mut response = Response::new(
             http::StatusCode::from_u16(status).unwrap_or(http::StatusCode::OK),
             resp_version,
             resp_headers,
             url,
             body,
-        )
+        );
+        response.set_trailers(trailers);
+        response
     };
 
     // For upgrade-eligible responses, await the upgrade future and attach
@@ -187,7 +190,7 @@ pub(crate) async fn send_direct_request(
 ///
 /// Only `101 Switching Protocols` triggers upgrade handling here.
 /// Successful CONNECT (200) is handled in the proxy transport path.
-fn is_upgrade_status(status: u16) -> bool {
+pub(crate) fn is_upgrade_status(status: u16) -> bool {
     status == 101
 }
 
@@ -195,41 +198,18 @@ fn is_upgrade_status(status: u16) -> bool {
 /// [`UpgradedStream`].
 ///
 /// Hyper's `Upgraded` preserves leading data in its internal `Rewind`
-/// buffer. These bytes (sent by the server in the same write as the
-/// 101/CONNECT response headers) are yielded on the first reads from
-/// the `Upgraded` stream. We wrap it with `hyper_util::rt::TokioIo`
-/// which bridges Hyper's IO traits to Tokio's `AsyncRead + AsyncWrite`.
+/// buffer. When the concrete IO type is known (custom direct connector
+/// or UDS), the upgrade is downcast to recover real socket/TLS metadata
+/// captured at the connector where it is observable; leading bytes are
+/// carried as `leading_data`. For the standard opaque Hyper path the
+/// socket addresses remain explicitly unavailable (`None`) and the
+/// `Rewind` buffer is preserved inside the adapter.
 ///
-/// Socket address metadata is not available from Hyper's `Upgraded`
-/// directly. The metadata is set to defaults; real metadata can be
-/// captured at the connector level in a future enhancement.
-async fn await_upgrade(on_upgrade: hyper::upgrade::OnUpgrade) -> Option<UpgradedStream> {
+/// No secret-bearing metadata is captured and no fake zero/default
+/// addresses are reported as real observations.
+pub(crate) async fn await_upgrade(on_upgrade: hyper::upgrade::OnUpgrade) -> Option<UpgradedStream> {
     match on_upgrade.await {
-        Ok(upgraded) => {
-            // Hyper's Upgraded wraps a Rewind buffer that preserves
-            // leading data (bytes read past the response headers before
-            // the upgrade completed). These bytes are returned first
-            // when reading from the Upgraded stream.
-            //
-            // We cannot extract the leading data separately without
-            // downcasting to the concrete IO type (which we don't know).
-            // The leading data is preserved inside Hyper's internal
-            // rewind buffer and will be yielded on the first reads.
-            //
-            // End-to-end test: upgraded_stream_leading_data_through_hyper
-            // verifies that a server-sent leading payload is returned
-            // by the first `read()` on the upgraded stream.
-            let leading = Bytes::new();
-            // Use hyper-util's TokioIo adapter to bridge Hyper's IO
-            // traits to Tokio's AsyncRead + AsyncWrite.
-            let adapter = hyper_util::rt::TokioIo::new(upgraded);
-            // We don't have socket addresses from Hyper's Upgraded
-            // directly. The metadata will be set to defaults; real
-            // metadata can be captured at the connector level in a
-            // future enhancement.
-            let metadata = Arc::new(ConnectionMetadata::default());
-            Some(UpgradedStream::from_adapter(adapter, leading, metadata))
-        }
+        Ok(upgraded) => Some(upgrade_with_connector_metadata(upgraded)),
         Err(_e) => {
             // Upgrade future failed — response headers are still valid;
             // the upgrade just couldn't be captured.
@@ -238,19 +218,99 @@ async fn await_upgrade(on_upgrade: hyper::upgrade::OnUpgrade) -> Option<Upgraded
     }
 }
 
+/// Convert an [`hyper::upgrade::Upgraded`] into an [`UpgradedStream`],
+/// recovering connector-observable metadata where possible.
+///
+/// Attempt order: direct-connector `DirectStream` (real local/remote
+/// addrs + TLS version/cipher/ALPN), UDS `UdsStream` (UDS transport
+/// without inventing IPs), then opaque fallback (explicitly unavailable
+/// metadata, `Rewind` preserved). Leading data handling differs per
+/// branch: downcast branches carry `read_buf` explicitly; the opaque
+/// branch preserves Hyper's internal `Rewind` and yields it on first
+/// reads (see `upgraded_stream_leading_data_through_hyper`).
+pub(crate) fn upgrade_with_connector_metadata(
+    upgraded: hyper::upgrade::Upgraded,
+) -> UpgradedStream {
+    // Direct connector: real socket addresses + TLS info observable.
+    match upgraded
+        .downcast::<hyper_util::rt::TokioIo<crate::transport::direct_connector::DirectStream>>()
+    {
+        Ok(parts) => {
+            let direct = parts.io.into_inner();
+            let leading = parts.read_buf;
+            match direct {
+                crate::transport::direct_connector::DirectStream::Tcp(tcp) => {
+                    UpgradedStream::from_tcp(tcp, leading)
+                }
+                crate::transport::direct_connector::DirectStream::Tls(tls) => {
+                    let (_, conn) = tls.get_ref();
+                    let tls_info = crate::network_stream::tls_info_from_rustls(conn, None);
+                    UpgradedStream::from_tls(*tls, leading, tls_info)
+                }
+            }
+        }
+        Err(upgraded) => {
+            // UDS connector: report UDS transport without IP addresses.
+            #[cfg(unix)]
+            match upgraded.downcast::<hyper_util::rt::TokioIo<crate::transport::uds::UdsStream>>() {
+                Ok(parts) => {
+                    let uds = parts.io.into_inner();
+                    let leading = parts.read_buf;
+                    let (kind, tls_info) = match &uds {
+                        crate::transport::uds::UdsStream::Plain(_) => {
+                            (crate::network_stream::TransportKind::Unix, None)
+                        }
+                        crate::transport::uds::UdsStream::Tls(tls) => {
+                            let (_, conn) = tls.get_ref();
+                            (
+                                crate::network_stream::TransportKind::TlsUnix,
+                                Some(crate::network_stream::tls_info_from_rustls(conn, None)),
+                            )
+                        }
+                    };
+                    let metadata = Arc::new(ConnectionMetadata {
+                        local_addr: None,
+                        peer_addr: None,
+                        transport_kind: kind,
+                        tls_info,
+                    });
+                    UpgradedStream::from_adapter(uds, leading, metadata)
+                }
+                Err(upgraded) => opaque_upgraded(upgraded),
+            }
+            #[cfg(not(unix))]
+            {
+                opaque_upgraded(upgraded)
+            }
+        }
+    }
+}
+
+/// Opaque fallback: socket metadata explicitly unavailable.
+///
+/// Preserves Hyper's internal `Rewind` buffer (leading bytes yielded on
+/// first reads) by wrapping the full `Upgraded` value.
+fn opaque_upgraded(upgraded: hyper::upgrade::Upgraded) -> UpgradedStream {
+    let leading = Bytes::new();
+    let adapter = hyper_util::rt::TokioIo::new(upgraded);
+    let metadata = Arc::new(ConnectionMetadata::default());
+    UpgradedStream::from_adapter(adapter, leading, metadata)
+}
+
 /// Wrap a hyper `Incoming` body into a `BoxBytesStream`.
 ///
-/// # Trailers
-///
-/// HTTP trailers (both HTTP/1.1 chunked trailers and HTTP/2 trailing
-/// HEADERS frames) are **not supported**. This adapter only yields data
-/// frames. When a trailers frame arrives, the stream ends normally
-/// (returns `Poll::Ready(None)`) without surfacing the trailer headers.
-/// A `tracing::debug!` event is emitted (with the `tracing` feature) so a
-/// trailers-dropped truncation is distinguishable from clean EOF in logs.
-/// This is a known limitation; trailers may be supported in a future
-/// milestone. See also [`crate::Response`] trailers documentation.
-pub(crate) fn wrap_incoming(incoming: hyper::body::Incoming) -> BoxBytesStream {
+/// Data frames are yielded exactly as before. When a trailers frame
+/// arrives (HTTP/1.1 chunked trailers or HTTP/2 trailing HEADERS where
+/// Hyper exposes them), the headers are stored in `trailers` and the
+/// stream ends normally. Body errors before trailers remain body errors;
+/// no trailer state is fabricated. Partial consumption leaves `trailers`
+/// empty; callers must drive the stream to EOF before reading trailers.
+/// Cancellation and pool-lease lifetime are preserved: dropping the stream
+/// early simply never populates trailers.
+pub(crate) fn wrap_incoming(
+    incoming: hyper::body::Incoming,
+    trailers: SharedTrailers,
+) -> BoxBytesStream {
     use futures_core::Stream;
     use http_body::Body;
     use std::pin::Pin;
@@ -258,6 +318,7 @@ pub(crate) fn wrap_incoming(incoming: hyper::body::Incoming) -> BoxBytesStream {
 
     struct IncomingStream {
         inner: hyper::body::Incoming,
+        trailers: SharedTrailers,
     }
 
     impl Stream for IncomingStream {
@@ -266,12 +327,23 @@ pub(crate) fn wrap_incoming(incoming: hyper::body::Incoming) -> BoxBytesStream {
         fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
             match Pin::new(&mut self.inner).poll_frame(cx) {
                 Poll::Ready(Some(Ok(frame))) => {
-                    if let Ok(data) = frame.into_data() {
-                        Poll::Ready(Some(Ok(data)))
+                    if frame.is_data() {
+                        match frame.into_data() {
+                            Ok(data) => Poll::Ready(Some(Ok(data))),
+                            Err(_) => {
+                                Poll::Ready(Some(Err(Error::Body("invalid data frame".into()))))
+                            }
+                        }
+                    } else if frame.is_trailers() {
+                        if let Ok(headers) = frame.into_trailers() {
+                            self.trailers.store(headers);
+                            #[cfg(feature = "tracing")]
+                            tracing::debug!("eggfetch: captured HTTP trailers");
+                        }
+                        // Non-trailers non-data frames end cleanly without
+                        // fabrication.
+                        Poll::Ready(None)
                     } else {
-                        // Trailers frame — end stream without surfacing headers.
-                        #[cfg(feature = "tracing")]
-                        tracing::debug!("eggfetch: dropping HTTP trailers frame (unsupported)");
                         Poll::Ready(None)
                     }
                 }
@@ -282,7 +354,10 @@ pub(crate) fn wrap_incoming(incoming: hyper::body::Incoming) -> BoxBytesStream {
         }
     }
 
-    Box::pin(IncomingStream { inner: incoming })
+    Box::pin(IncomingStream {
+        inner: incoming,
+        trailers,
+    })
 }
 
 /// Map a hyper-util legacy client error to an eggfetch [`Error`].

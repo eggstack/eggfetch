@@ -89,14 +89,32 @@ impl hyper_util::client::legacy::connect::Connection for UdsStream {
 pub(crate) struct UdsConnector {
     path: Arc<str>,
     tls: Option<Arc<tokio_rustls::TlsConnector>>,
+    metrics: Option<Arc<crate::transport::metrics::TransportMetrics>>,
 }
 
 #[cfg(unix)]
 impl UdsConnector {
+    #[allow(
+        dead_code,
+        reason = "kept for tests without metrics; client paths use with_metrics"
+    )]
     pub(crate) fn new(path: String, tls: Option<tokio_rustls::TlsConnector>) -> Self {
         Self {
             path: Arc::from(path),
             tls: tls.map(Arc::new),
+            metrics: None,
+        }
+    }
+
+    pub(crate) fn with_metrics(
+        path: String,
+        tls: Option<tokio_rustls::TlsConnector>,
+        metrics: Arc<crate::transport::metrics::TransportMetrics>,
+    ) -> Self {
+        Self {
+            path: Arc::from(path),
+            tls: tls.map(Arc::new),
+            metrics: Some(metrics),
         }
     }
 }
@@ -115,12 +133,23 @@ impl Service<Uri> for UdsConnector {
     fn call(&mut self, dst: Uri) -> Self::Future {
         let path = Arc::clone(&self.path);
         let tls = self.tls.clone();
+        let metrics = self.metrics.clone();
         Box::pin(async move {
-            let stream = tokio::net::UnixStream::connect(&*path).await.map_err(
-                |e| -> Box<dyn std::error::Error + Send + Sync> {
-                    Error::Connect(format!("UDS connect to {path} failed: {e}")).into()
-                },
-            )?;
+            if let Some(ref m) = metrics {
+                m.record_uds_attempt();
+            }
+            let stream = match tokio::net::UnixStream::connect(&*path).await {
+                Ok(s) => s,
+                Err(e) => {
+                    if let Some(ref m) = metrics {
+                        m.record_uds_failure();
+                    }
+                    return Err(Box::new(Error::Connect(format!(
+                        "UDS connect to {path} failed: {e}"
+                    )))
+                        as Box<dyn std::error::Error + Send + Sync>);
+                }
+            };
             if dst.scheme_str() != Some("https") {
                 return Ok(hyper_util::rt::TokioIo::new(UdsStream::Plain(stream)));
             }
@@ -151,17 +180,15 @@ impl Service<Uri> for UdsConnector {
 
 /// Convert a Hyper response from the UDS client into the core response type.
 ///
-/// Reuses the shared trace lifecycle helpers and [`wrap_incoming`] body
-/// adapter from the direct path so generic trace/header/body conversion
-/// cannot diverge. Error mapping is unified through `map_send_error` so
-/// write-timeout and HTTP/2 classifications propagate identically.
+/// Reuses the shared trace lifecycle helpers, [`wrap_incoming`] body
+/// adapter, and connector-metadata upgrade helper from the direct path so
+/// generic trace/header/body conversion cannot diverge. Error mapping is
+/// unified through `map_send_error` so write-timeout and HTTP/2
+/// classifications propagate identically.
 ///
-/// Intentional difference: UDS does **not** implement 101 Switching
-/// Protocols upgrade handling. The Unix-socket connector cannot safely
-/// expose Hyper's opaque upgrade IO for user-writable streams in this
-/// milestone, so upgrade-eligible statuses are returned as ordinary
-/// streaming responses. This difference is explicit and covered by direct
-/// tests; do not hide it behind the generic upgrade helper.
+/// UDS 101 upgrades are downcast to the concrete `UdsStream` where the
+/// transport kind (`Unix`/`TlsUnix`) is observable without inventing IP
+/// addresses; local/peer remain explicitly `None`.
 #[cfg(unix)]
 pub(crate) async fn send_request(
     client: &crate::transport::TimeoutUdsClient,
@@ -181,22 +208,47 @@ pub(crate) async fn send_request(
         .map_err(crate::transport::direct::map_send_error);
 
     match result {
-        Ok(response) => {
+        Ok(mut response) => {
             let status = response.status().as_u16();
             let version = response.version();
             let headers = response.headers().clone();
 
             crate::transport::direct::emit_receive_complete(trace, status);
 
-            let body: BoxBytesStream =
-                crate::transport::direct::wrap_incoming(response.into_body());
-            Ok(Response::new(
-                http::StatusCode::from_u16(status).unwrap_or(http::StatusCode::OK),
-                version,
-                headers,
-                url,
-                ResponseBody::streaming(body),
-            ))
+            // Capture upgrade future before consuming the body (same
+            // lifecycle as the direct path).
+            let on_upgrade = hyper::upgrade::on(&mut response);
+            let upgrading = crate::transport::direct::is_upgrade_status(status);
+
+            if upgrading {
+                let body = ResponseBody::buffered(bytes::Bytes::new());
+                let mut core_response = Response::new(
+                    http::StatusCode::from_u16(status).unwrap_or(http::StatusCode::OK),
+                    version,
+                    headers,
+                    url,
+                    body,
+                );
+                core_response.set_trailers(crate::body::SharedTrailers::new());
+                if let Some(stream) = crate::transport::direct::await_upgrade(on_upgrade).await {
+                    core_response
+                        .set_network_stream(crate::network_stream::NetworkStream::Upgraded(stream));
+                }
+                Ok(core_response)
+            } else {
+                let trailers = crate::body::SharedTrailers::new();
+                let body: BoxBytesStream =
+                    crate::transport::direct::wrap_incoming(response.into_body(), trailers.clone());
+                let mut core_response = Response::new(
+                    http::StatusCode::from_u16(status).unwrap_or(http::StatusCode::OK),
+                    version,
+                    headers,
+                    url,
+                    ResponseBody::streaming(body),
+                );
+                core_response.set_trailers(trailers);
+                Ok(core_response)
+            }
         }
         Err(e) => {
             crate::transport::direct::emit_send_failed(trace);

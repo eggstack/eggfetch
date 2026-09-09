@@ -233,6 +233,68 @@ impl hyper_util::client::legacy::connect::Connection for DirectStream {
     }
 }
 
+#[allow(
+    dead_code,
+    reason = "connector metadata helpers are exercised by integration tests; upgrade path uses from_tcp/from_tls directly"
+)]
+impl DirectStream {
+    /// Local socket address, if observable (TCP/TLS over TCP).
+    pub(crate) fn local_addr(&self) -> Option<SocketAddr> {
+        match self {
+            Self::Tcp(s) => s.local_addr().ok(),
+            Self::Tls(s) => s.get_ref().0.local_addr().ok(),
+        }
+    }
+
+    /// Remote socket address, if observable.
+    pub(crate) fn peer_addr(&self) -> Option<SocketAddr> {
+        match self {
+            Self::Tcp(s) => s.peer_addr().ok(),
+            Self::Tls(s) => s.get_ref().0.peer_addr().ok(),
+        }
+    }
+
+    /// TLS session info when this is a TLS stream.
+    ///
+    /// `server_name` is the SNI hostname when known; `None` explicitly
+    /// marks unavailable. Returns `None` for plain TCP.
+    pub(crate) fn tls_info(
+        &self,
+        server_name: Option<String>,
+    ) -> Option<crate::network_stream::TlsInfo> {
+        match self {
+            Self::Tcp(_) => None,
+            Self::Tls(s) => Some(crate::network_stream::tls_info_from_rustls(
+                s.get_ref().1,
+                server_name,
+            )),
+        }
+    }
+
+    /// Connection metadata captured at the connector where socket
+    /// information is directly observable.
+    ///
+    /// Uses `Option`/unknown for unavailable fields; never fabricates
+    /// zero/default addresses and never includes secrets.
+    pub(crate) fn connection_metadata(
+        &self,
+        server_name: Option<String>,
+    ) -> crate::network_stream::ConnectionMetadata {
+        let tls_info = self.tls_info(server_name);
+        let kind = if tls_info.is_some() {
+            crate::network_stream::TransportKind::Tls
+        } else {
+            crate::network_stream::TransportKind::Tcp
+        };
+        crate::network_stream::ConnectionMetadata {
+            local_addr: self.local_addr(),
+            peer_addr: self.peer_addr(),
+            transport_kind: kind,
+            tls_info,
+        }
+    }
+}
+
 /// A tower service connector that establishes TCP connections with optional
 /// socket-level pre-configuration and per-request TLS SNI override.
 ///
@@ -256,10 +318,18 @@ pub(crate) struct DirectConnector {
     /// hostname for `ServerName` Indication and certificate verification,
     /// while TCP still connects to the URL host.
     sni_hostname: Option<String>,
+    /// Shared transport observability counters. `None` disables metering
+    /// (unit tests, one-off connectors); client-owned connectors always
+    /// carry the client's shared metrics.
+    metrics: Option<Arc<crate::transport::metrics::TransportMetrics>>,
 }
 
 impl DirectConnector {
     /// Create a new direct connector with the given configuration.
+    #[allow(
+        dead_code,
+        reason = "kept for unit tests and one-off connectors without metrics; client paths use with_metrics"
+    )]
     pub(crate) fn new(
         config: DirectConnectorConfig,
         tls: Option<tokio_rustls::TlsConnector>,
@@ -268,6 +338,21 @@ impl DirectConnector {
             config,
             tls: tls.map(Arc::new),
             sni_hostname: None,
+            metrics: None,
+        }
+    }
+
+    /// Create a new direct connector with shared transport metrics.
+    pub(crate) fn with_metrics(
+        config: DirectConnectorConfig,
+        tls: Option<tokio_rustls::TlsConnector>,
+        metrics: Arc<crate::transport::metrics::TransportMetrics>,
+    ) -> Self {
+        Self {
+            config,
+            tls: tls.map(Arc::new),
+            sni_hostname: None,
+            metrics: Some(metrics),
         }
     }
 
@@ -281,6 +366,7 @@ impl DirectConnector {
             config: self.config.clone(),
             tls: self.tls.clone(),
             sni_hostname: Some(sni_hostname),
+            metrics: self.metrics.clone(),
         }
     }
 }
@@ -299,8 +385,13 @@ impl Service<Uri> for DirectConnector {
         let config = self.config.clone();
         let tls = self.tls.clone();
         let sni_hostname = self.sni_hostname.clone();
+        let metrics = self.metrics.clone();
 
         Box::pin(async move {
+            if let Some(ref m) = metrics {
+                m.record_direct_attempt();
+                m.record_direct_dns_attempt();
+            }
             let host = dst
                 .host()
                 .ok_or_else(|| -> Box<dyn std::error::Error + Send + Sync> {
@@ -319,11 +410,19 @@ impl Service<Uri> for DirectConnector {
 
             let is_https = dst.scheme_str() == Some("https");
 
-            let addresses = tokio::net::lookup_host((host.as_str(), port))
-                .await
-                .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> {
-                    Error::Connect(format!("DNS resolution failed for {host}: {e}")).into()
-                })?;
+            let addresses = match tokio::net::lookup_host((host.as_str(), port)).await {
+                Ok(addrs) => addrs,
+                Err(e) => {
+                    if let Some(ref m) = metrics {
+                        m.record_direct_dns_failure();
+                        m.record_direct_failure();
+                    }
+                    return Err(Box::new(Error::Connect(format!(
+                        "DNS resolution failed for {host}: {e}"
+                    )))
+                        as Box<dyn std::error::Error + Send + Sync>);
+                }
+            };
             let mut last_error = None;
             let mut tokio_stream = None;
             for addr in addresses {
@@ -359,14 +458,19 @@ impl Service<Uri> for DirectConnector {
                     Err(error) => last_error = Some(format!("{addr}: {error}")),
                 }
             }
-            let tokio_stream =
-                tokio_stream.ok_or_else(|| -> Box<dyn std::error::Error + Send + Sync> {
-                    Error::Connect(format!(
-                        "TCP connect to {host}:{port} failed: {}",
-                        last_error.unwrap_or_else(|| "no compatible addresses".into())
-                    ))
-                    .into()
-                })?;
+            let Some(tokio_stream) = tokio_stream else {
+                if let Some(ref m) = metrics {
+                    m.record_direct_failure();
+                }
+                return Err(Box::new(Error::Connect(format!(
+                    "TCP connect to {host}:{port} failed: {}",
+                    last_error.unwrap_or_else(|| "no compatible addresses".into())
+                )))
+                    as Box<dyn std::error::Error + Send + Sync>);
+            };
+            if let Some(ref m) = metrics {
+                m.record_direct_success();
+            }
 
             // Set TCP_NODELAY after connect only if the caller did not
             // explicitly configure it via socket_options. An explicit
@@ -399,12 +503,19 @@ impl Service<Uri> for DirectConnector {
                     },
                 )?;
 
-                let stream = tls_connector
-                    .connect(server_name, tokio_stream)
-                    .await
-                    .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> {
-                        Error::Tls(format!("TLS handshake failed: {e}")).into()
-                    })?;
+                if let Some(ref m) = metrics {
+                    m.record_direct_tls_attempt();
+                }
+                let stream = match tls_connector.connect(server_name, tokio_stream).await {
+                    Ok(s) => s,
+                    Err(e) => {
+                        if let Some(ref m) = metrics {
+                            m.record_direct_tls_failure();
+                        }
+                        return Err(Box::new(Error::Tls(format!("TLS handshake failed: {e}")))
+                            as Box<dyn std::error::Error + Send + Sync>);
+                    }
+                };
 
                 DirectStream::Tls(Box::new(stream))
             } else {

@@ -35,6 +35,7 @@ pub(crate) async fn send_https_connect_request(
         ctx.proxy_tls_timeout,
         ctx.deadline,
         ctx.proxy_tls_config,
+        ctx.transport_metrics.as_ref(),
     )
     .await?;
 

@@ -41,6 +41,7 @@ pub(crate) type TimeoutSocksClient = hyper_util::client::legacy::Client<
 pub(crate) mod connect_timeout;
 pub(crate) mod direct;
 pub mod direct_connector;
+pub mod metrics;
 pub(crate) mod uds;
 
 #[cfg(feature = "proxy")]

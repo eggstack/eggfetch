@@ -53,7 +53,11 @@ Streaming responses carry an internal `Arc<PoolGuard>` (the `PoolGuardArc`). Thi
 
 Buffered and already-consumed responses do not carry a lease.
 
-This ensures per-origin concurrency limits remain meaningful while response bodies are in flight.
+This ensures per-origin logical-request limits remain meaningful while response bodies are in flight. Dropping early releases the permit without waiting for trailers.
+
+### Trailers (`SharedTrailers`, `Response::trailers()`)
+
+Hyper yields trailers as a final `Frame::trailers` (H1 chunked trailers, H2 trailing HEADERS); H3 trailing headers come from `recv_trailers()` after data EOF. `wrap_incoming` stores them in a shared `Arc<Mutex<Option<HeaderMap>>>` without buffering the body; the H3 unfold does the same. `Response::trailers()` clones them after EOF and is `None` until arrival, on no-trailers, or on pre-trailer body errors (errors stay body errors). H1 duplicate same-name trailers collapse upstream in hyper (`insert`); H2 duplicates are preserved via `get_all`. Read timeouts apply while waiting for trailers at the body boundary. Python/FFI/Node defer exposure; the HTTPX facade is unchanged.
 
 ## BoxBytesStream
 

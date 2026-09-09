@@ -66,6 +66,9 @@ pub(crate) struct ProxyRequestContext<'a> {
     /// for the proxy handshake.
     pub(crate) proxy_tls_config: Option<&'a crate::tls::TlsConfig>,
     pub(crate) socks_client: Option<crate::transport::TimeoutSocksClient>,
+    /// Shared transport observability counters. `None` disables metering.
+    pub(crate) transport_metrics:
+        Option<std::sync::Arc<crate::transport::metrics::TransportMetrics>>,
 }
 
 /// Client-to-proxy stream, optionally protected by TLS for an `https://`
@@ -185,13 +188,21 @@ pub(crate) async fn send_proxy_request(
 }
 
 /// Connect to the proxy, returning a buffered TCP stream.
+#[allow(
+    clippy::too_many_lines,
+    reason = "proxy connect sequences TCP/DNS/TLS phases with metrics; splitting would obscure the ordered handshake"
+)]
 pub(crate) async fn connect_to_proxy(
     proxy_config: &ProxyConfig,
     proxy_connect_timeout: Option<std::time::Duration>,
     proxy_tls_timeout: Option<std::time::Duration>,
     deadline: Option<std::time::Instant>,
     proxy_tls_config: Option<&crate::tls::TlsConfig>,
+    metrics: Option<&std::sync::Arc<crate::transport::metrics::TransportMetrics>>,
 ) -> Result<tokio::io::BufReader<ProxyIo>> {
+    if let Some(m) = metrics {
+        m.record_proxy_attempt();
+    }
     let proxy_host = proxy_config.host().unwrap_or("127.0.0.1");
     let proxy_port = proxy_config.port()?;
 
@@ -229,18 +240,37 @@ pub(crate) async fn connect_to_proxy(
     let stream = match connect_timeout {
         Some(dur) => match tokio::time::timeout(dur, connect_future).await {
             Ok(Ok(s)) => s,
-            Ok(Err(e)) => return Err(e),
+            Ok(Err(e)) => {
+                if let Some(m) = metrics {
+                    m.record_proxy_failure();
+                }
+                return Err(e);
+            }
             Err(_) => {
+                if let Some(m) = metrics {
+                    m.record_proxy_failure();
+                }
                 return Err(Error::Timeout {
                     phase: TimeoutPhase::ProxyConnect,
                     elapsed: dur,
                 });
             }
         },
-        None => connect_future.await?,
+        None => match connect_future.await {
+            Ok(s) => s,
+            Err(e) => {
+                if let Some(m) = metrics {
+                    m.record_proxy_failure();
+                }
+                return Err(e);
+            }
+        },
     };
 
     let stream = if proxy_config.scheme() == "https" {
+        if let Some(m) = metrics {
+            m.record_proxy_tls_attempt();
+        }
         let rustls_config = build_proxy_tls_config(proxy_tls_config)?;
         let connector = tokio_rustls::TlsConnector::from(std::sync::Arc::new(rustls_config));
         let domain = proxy_server_name(proxy_host)?;
@@ -249,17 +279,31 @@ pub(crate) async fn connect_to_proxy(
         let tls_stream = match tls_timeout {
             Some(dur) => match tokio::time::timeout(dur, handshake).await {
                 Ok(Ok(stream)) => stream,
-                Ok(Err(e)) => return Err(Error::Tls(format!("proxy TLS handshake failed: {e}"))),
+                Ok(Err(e)) => {
+                    if let Some(m) = metrics {
+                        m.record_proxy_tls_failure();
+                    }
+                    return Err(Error::Tls(format!("proxy TLS handshake failed: {e}")));
+                }
                 Err(_) => {
+                    if let Some(m) = metrics {
+                        m.record_proxy_tls_failure();
+                    }
                     return Err(Error::Timeout {
                         phase: TimeoutPhase::ProxyTls,
                         elapsed: dur,
-                    })
+                    });
                 }
             },
-            None => handshake
-                .await
-                .map_err(|e| Error::Tls(format!("proxy TLS handshake failed: {e}")))?,
+            None => match handshake.await {
+                Ok(s) => s,
+                Err(e) => {
+                    if let Some(m) = metrics {
+                        m.record_proxy_tls_failure();
+                    }
+                    return Err(Error::Tls(format!("proxy TLS handshake failed: {e}")));
+                }
+            },
         };
         ProxyIo::Tls(Box::new(tls_stream))
     } else {
@@ -349,6 +393,7 @@ async fn send_http_proxy_request(
         ctx.proxy_tls_timeout,
         ctx.deadline,
         ctx.proxy_tls_config,
+        ctx.transport_metrics.as_ref(),
     )
     .await?;
 
@@ -821,14 +866,17 @@ async fn send_socks_request(
     let status = response.status();
     let response_version = response.version();
     let response_headers = response.headers().clone();
-    let stream = super::direct::wrap_incoming(response.into_body());
-    Ok(Response::new(
+    let trailers = crate::body::SharedTrailers::new();
+    let stream = super::direct::wrap_incoming(response.into_body(), trailers.clone());
+    let mut core_response = Response::new(
         status,
         response_version,
         response_headers,
         dest_url.clone(),
         ResponseBody::streaming(stream),
-    ))
+    );
+    core_response.set_trailers(trailers);
+    Ok(core_response)
 }
 
 impl<S> ProxyResponseStream<S> {

@@ -1297,6 +1297,7 @@ pub(crate) async fn send_single_request(
                         // handshake.
                         proxy_tls_config: proxy_config.proxy_tls_config(),
                         socks_client,
+                        transport_metrics: Some(inner.transport_metrics.clone()),
                     },
                 ))
                 .await?
@@ -1378,6 +1379,16 @@ pub(crate) async fn send_single_request(
     };
 
     let mut response = response;
+
+    // Record successfully captured 101 upgrades as protocol connections.
+    // Ordinary pooled responses remain uncounted here; logical requests are
+    // counted by `PoolMetrics`.
+    if response
+        .network_stream()
+        .is_some_and(crate::network_stream::NetworkStream::is_upgraded)
+    {
+        inner.transport_metrics.record_upgraded();
+    }
 
     if decompression_enabled {
         let content_encoding = response

@@ -41,15 +41,33 @@ cargo check -p eggfetch-core --all-features
 
 - Lifecycle lives in `crates/eggfetch-core/src/transport/http3.rs`:
   per-origin `OnceCell` (success cached, failures reconnectable), bounded
-  64-entry cache, generation-scoped eviction, shared connect budget with
-  fair address shares, no transport-level retries.
+  64-entry cache, generation-scoped eviction (counted in
+  `TransportMetrics`), shared connect budget with fair address shares, no
+  transport-level retries.
 - `Timeout.connect` bounds H3 DNS + QUIC + h3 init; `total` is the outer
   pipeline deadline; read/write apply at the body boundaries. QUIC idle
   derives from `PoolConfig::idle_timeout` (never `Timeout.pool`); bidi
-  streams derive from `max_connections_per_host`. Only `H3Connect` is
-  retryable.
+  streams derive from the effective per-origin in-flight limit. Only
+  `H3Connect` is retryable.
 - Behavior tests: `cargo test -p eggfetch-core --all-features --test h3_hardening -- --test-threads=1`
   plus unit tests in `transport/http3.rs`. Keep the experimental label.
+
+## Observability & Limits (native-protocol-observability)
+
+- Trailers: `SharedTrailers` + `Response::trailers()` (no buffering; `None`
+  until EOF/no-trailers/pre-trailer error). H1 duplicates collapse upstream
+  (`insert`); H2 duplicates preserved. Tests: `trailer_tests.rs`.
+- Metadata: direct 101 downcasts to `DirectStream` (real addrs/TLS);
+  UDS reports `Unix` without IPs; opaque stays unavailable. No secrets,
+  no fake zeros. Tests: `network_stream_tests.rs`.
+- Metrics: `TransportMetrics` (connector/DNS/TLS, UDS/proxy, H3, upgrades)
+  separate from `PoolMetrics` (logical). No Hyper reuse estimates.
+  `Client::transport_metrics()`; exact-count tests in
+  `transport_metrics_tests.rs`.
+- Limits: `max_in_flight_requests*` preferred (logical); `max_connections*`
+  are pre-1.0 aliases (new wins). Facade `Limits` unchanged.
+- Trace: request/response headers emitted; DNS/connect/TLS via metrics
+  (no duplicate taxonomy). Observer stays sync.
 
 ## Architecture References
 

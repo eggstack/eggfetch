@@ -134,6 +134,8 @@ pub(crate) struct H3Connector {
     quinn_idle_timeout: Duration,
     /// Effective maximum concurrent bidirectional streams per QUIC connection.
     max_bidi_streams: u32,
+    /// Shared transport observability counters. `None` disables metering.
+    metrics: Option<Arc<crate::transport::metrics::TransportMetrics>>,
 }
 
 /// Derive the QUIC idle timeout from pool configuration.
@@ -152,12 +154,14 @@ fn derive_quinn_idle_timeout(pool_config: &PoolConfig) -> Duration {
 ///
 /// Keeps the physical transport limit separate from logical request
 /// concurrency while ensuring the transport does not contradict configured
-/// policy: when `max_connections_per_host` is set, the QUIC connection
-/// admits at least that many concurrent request streams. Without explicit
-/// configuration the conservative default applies. `max_connections`
-/// (global) spans origins and does not size a single connection's streams.
+/// policy: when the effective per-origin in-flight limit
+/// (`max_in_flight_requests_per_origin` or alias
+/// `max_connections_per_host`) is set, the QUIC connection admits at
+/// least that many concurrent request streams. Without explicit
+/// configuration the conservative default applies. The global limit spans
+/// origins and does not size a single connection's streams.
 fn derive_max_bidi_streams(pool_config: &PoolConfig) -> u32 {
-    match pool_config.max_connections_per_host {
+    match pool_config.effective_max_in_flight_per_origin() {
         Some(n) => u32::try_from(n).unwrap_or(u32::MAX).max(1),
         None => H3_DEFAULT_MAX_BIDI_STREAMS,
     }
@@ -174,9 +178,22 @@ impl H3Connector {
     /// Derives QUIC idle and stream policy from `pool_config` so the H3 path
     /// honors the same keepalive/concurrency configuration as the H1/H2
     /// paths. See the module-level policy mapping for the exact semantics.
+    #[allow(
+        dead_code,
+        reason = "kept for unit tests without metrics; client paths use with_metrics"
+    )]
     pub(crate) fn new(
         tls_config: Option<crate::tls::TlsConfig>,
         pool_config: &PoolConfig,
+    ) -> Result<Self> {
+        Self::with_metrics(tls_config, pool_config, None)
+    }
+
+    /// Create a new H3 connector with shared transport metrics.
+    pub(crate) fn with_metrics(
+        tls_config: Option<crate::tls::TlsConfig>,
+        pool_config: &PoolConfig,
+        metrics: Option<Arc<crate::transport::metrics::TransportMetrics>>,
     ) -> Result<Self> {
         let bind_addr = "0.0.0.0:0"
             .parse()
@@ -190,6 +207,7 @@ impl H3Connector {
             sender_cache: Arc::new(DashMap::new()),
             quinn_idle_timeout: derive_quinn_idle_timeout(pool_config),
             max_bidi_streams: derive_max_bidi_streams(pool_config),
+            metrics,
         })
     }
 
@@ -242,6 +260,9 @@ impl H3Connector {
         });
         if let Some(victim) = victim {
             self.sender_cache.remove(&victim);
+            if let Some(ref m) = self.metrics {
+                m.record_h3_eviction();
+            }
         }
     }
 
@@ -257,6 +278,9 @@ impl H3Connector {
             .is_some_and(|current| Arc::ptr_eq(&current, cell))
         {
             self.sender_cache.remove(key);
+            if let Some(ref m) = self.metrics {
+                m.record_h3_eviction();
+            }
         }
     }
 
@@ -446,7 +470,7 @@ impl H3Connector {
             let started = std::time::Instant::now();
             let deadline = connect_timeout.map(|d| started + d);
             let endpoint_self = self.clone();
-            let init_result = cell
+            let init_result: Result<&CachedH3Sender> = cell
                 .get_or_try_init(|| async {
                     let addrs =
                         Self::resolve_addrs(&host_owned, port, deadline, connect_timeout, started)
@@ -454,7 +478,12 @@ impl H3Connector {
                     let quinn_conn = endpoint_self
                         .connect_with_fallback(&addrs, &host_owned, deadline, started)
                         .await?;
-                    Self::establish_h3_sender(quinn_conn, deadline, started).await
+                    let sender: CachedH3Sender =
+                        Self::establish_h3_sender(quinn_conn, deadline, started).await?;
+                    if let Some(ref m) = endpoint_self.metrics {
+                        m.record_h3_created();
+                    }
+                    Ok(sender)
                 })
                 .await;
             match init_result {
@@ -574,7 +603,8 @@ impl H3Connector {
 
         // Build a streaming response body from the h3 data frames.
         // recv_data() returns `impl Buf`; we convert to Bytes for compatibility
-        // with our BoxBytesStream type.
+        // with our BoxBytesStream type. After data EOF, recv_trailers() is
+        // attempted once and stored without buffering the body.
         //
         // The body stream holds only the request stream. The h3 sender and
         // driver are kept alive by the sender cache (or, after eviction, by
@@ -584,33 +614,67 @@ impl H3Connector {
         let cache_for_body = self.sender_cache.clone();
         let key_for_body = cache_key.clone();
         let cell_for_body = cell.clone();
-        let body_stream = futures_util::stream::unfold(request_stream, move |mut stream| {
-            let cache_for_body = cache_for_body.clone();
-            let key_for_body = key_for_body.clone();
-            let cell_for_body = cell_for_body.clone();
-            async move {
-                match stream.recv_data().await {
-                    Ok(Some(mut data)) => {
-                        let bytes = data.copy_to_bytes(data.remaining());
-                        Some((Ok::<_, Error>(bytes), stream))
+        let trailers = crate::body::SharedTrailers::new();
+        let trailers_for_body = trailers.clone();
+        let body_stream = futures_util::stream::unfold(
+            (request_stream, false),
+            move |(mut stream, trailers_done)| {
+                let cache_for_body = cache_for_body.clone();
+                let key_for_body = key_for_body.clone();
+                let cell_for_body = cell_for_body.clone();
+                let trailers_for_body = trailers_for_body.clone();
+                async move {
+                    if trailers_done {
+                        return None;
                     }
-                    Ok(None) => None,
-                    Err(e) => {
-                        if cache_for_body
-                            .get(&key_for_body)
-                            .is_some_and(|current| Arc::ptr_eq(&current, &cell_for_body))
-                        {
-                            cache_for_body.remove(&key_for_body);
+                    match stream.recv_data().await {
+                        Ok(Some(mut data)) => {
+                            let bytes = data.copy_to_bytes(data.remaining());
+                            Some((Ok::<_, Error>(bytes), (stream, false)))
                         }
-                        Some((Err(Error::H3Protocol(format!("recv data: {e}"))), stream))
+                        Ok(None) => {
+                            // Data complete; attempt trailers once.
+                            match stream.recv_trailers().await {
+                                Ok(Some(headers)) => {
+                                    trailers_for_body.store(headers);
+                                }
+                                Ok(None) => {}
+                                Err(e) => {
+                                    if cache_for_body.get(&key_for_body).is_some_and(|current| {
+                                        Arc::ptr_eq(&current, &cell_for_body)
+                                    }) {
+                                        cache_for_body.remove(&key_for_body);
+                                    }
+                                    return Some((
+                                        Err(Error::H3Protocol(format!("recv trailers: {e}"))),
+                                        (stream, true),
+                                    ));
+                                }
+                            }
+                            None
+                        }
+                        Err(e) => {
+                            if cache_for_body
+                                .get(&key_for_body)
+                                .is_some_and(|current| Arc::ptr_eq(&current, &cell_for_body))
+                            {
+                                cache_for_body.remove(&key_for_body);
+                            }
+                            Some((
+                                Err(Error::H3Protocol(format!("recv data: {e}"))),
+                                (stream, true),
+                            ))
+                        }
                     }
                 }
-            }
-        });
+            },
+        );
 
         let body = ResponseBody::streaming(Box::pin(body_stream));
 
-        Ok(Response::new(status, resp_version, resp_headers, url, body))
+        let mut core_response = Response::new(status, resp_version, resp_headers, url, body);
+        core_response.set_trailers(trailers);
+        Ok(core_response)
     }
 }
 
@@ -755,6 +819,35 @@ mod tests {
         // The most recently inserted origin survives its own insertion.
         let current = format!("host-{}.example:443", H3_CACHE_MAX_ENTRIES + 9);
         assert!(connector.sender_cache.contains_key(&current));
+    }
+
+    #[tokio::test]
+    async fn evictions_increment_transport_metrics() {
+        let metrics = Arc::new(crate::transport::metrics::TransportMetrics::new());
+        let connector =
+            H3Connector::with_metrics(None, &PoolConfig::default(), Some(metrics.clone()))
+                .expect("connector builds");
+        for i in 0..(H3_CACHE_MAX_ENTRIES + 5) {
+            let key = format!("host-{i}.example:443");
+            connector.ensure_cache_bound(&key);
+            connector.sender_cache.entry(key).or_default();
+        }
+        let evictions = metrics
+            .h3_cache_evictions
+            .load(std::sync::atomic::Ordering::Relaxed);
+        assert!(
+            evictions >= 5,
+            "bounded evictions must be counted, got {evictions}"
+        );
+    }
+
+    #[test]
+    fn bidi_follows_new_in_flight_name() {
+        let pool = PoolConfig {
+            max_in_flight_requests_per_origin: Some(9),
+            ..PoolConfig::default()
+        };
+        assert_eq!(derive_max_bidi_streams(&pool), 9);
     }
 
     #[tokio::test]

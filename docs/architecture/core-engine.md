@@ -87,6 +87,7 @@ Key methods:
 - `text()` → buffered body as `String`
 - `bytes_stream()` → streaming `BoxBytesStream`
 - `text_lines()` → line-by-line text iterator
+- `trailers()` → `Option<HeaderMap>` after body EOF (H1 chunked, H2 trailing HEADERS, H3 trailing headers; `None` until arrival, on no-trailers, or on pre-trailer errors; H1 duplicates collapse upstream)
 - `history()` → `&[HistoryEntry]` (redirect chain)
 
 ### HistoryEntry
@@ -126,19 +127,21 @@ request policy so transports own only connection/protocol work:
 
 The standard and specialized-direct Hyper paths share a single
 response-lifecycle implementation (`finish_hyper_response()` plus shared
-trace helpers); UDS reuses the trace/body/error helpers but intentionally
-omits 101 upgrade handling (documented in code and directly tested).
+trace helpers, `wrap_incoming` with `SharedTrailers`, and
+`await_upgrade` with connector metadata); UDS reuses the same helpers
+including 101 upgrade handling (UDS kind without IPs).
 
 ## Network Stream and Upgrade Support
 
 `Response` carries an optional `network_stream` field of type `Option<NetworkStream>`:
 
-- For **101 Switching Protocols** responses on the direct transport path, Hyper's `OnUpgrade` is captured before consuming the response body. The upgrade future is awaited and the resulting IO is wrapped in an `UpgradedStream` (bridged via `hyper_util::rt::TokioIo`). The response body is set to an empty buffered body.
+- For **101 Switching Protocols** responses, Hyper's `OnUpgrade` is captured before consuming the body. The upgrade future is awaited and converted via connector-aware downcasting: direct-connector upgrades recover real local/remote addrs plus TLS version/cipher/ALPN, UDS upgrades report `Unix`/`TlsUnix` without IPs, and standard opaque upgrades remain explicitly unavailable (`None` addrs, default kind). The response body is set to an empty buffered body.
 - For **ordinary** responses, `network_stream` is `None` — the connection is managed by the pool and raw IO access would corrupt pool state.
 - For **internal HTTPS CONNECT tunnels**, `network_stream` is `None` — the tunnel is owned by the proxy implementation; the canonical access path is the body iterator.
-- `UpgradedStream` carries an `UpgradedStreamVariant` (`Tcp`/`Tls`/`Adapter`) classification so callers can detect whether `start_tls` is safe to invoke. Only inner `Tcp` variants support `start_tls`; `Adapter` (Hyper-opaque wrapping of 101 upgrades) and `Tls` (already-encrypted) are rejected before any IO is consumed.
+- For **H3**, per-response metadata stays `None`; `TransportKind::Quic` is reserved for future connector-derived endpoint info.
+- `UpgradedStream` carries an `UpgradedStreamVariant` (`Tcp`/`Tls`/`Adapter`) classification so callers can detect whether `start_tls` is safe to invoke. Only inner `Tcp` variants support `start_tls`; `Adapter` (Hyper-opaque wrapping of 101 upgrades, including UDS adapter wrapping) and `Tls` (already-encrypted) are rejected before any IO is consumed.
 - The `UpgradedStream` provides async `read()`, `write_all()`, `close()`, `flush()`, and `start_tls()` operations, plus `metadata()` for connection info.
-- Leading data (bytes sent by the server in the same TCP segment as the 101 headers) is preserved inside Hyper's internal rewind buffer and yielded on the first reads.
+- Leading data: downcast branches carry Hyper's `read_buf` explicitly as `leading_data`; the opaque branch preserves Hyper's internal rewind buffer and yields it on the first reads.
 
 **Ownership rules**: once an upgrade handoff succeeds, the connection is removed from the HTTP pool and must never be reused. Closing the response and closing the upgraded stream are independent operations.
 
@@ -148,7 +151,7 @@ The `trace` module defines a typed event vocabulary (derived from httpcore 1.0.9
 
 ### Events
 
-`TraceEvent` has ten variants, each carrying a `TracePhase` (`Started`/`Complete`/`Failed`) plus structured metadata:
+`TraceEvent` has ten variants, each carrying a `TracePhase` (`Started`/`Complete`/`Failed`) plus structured metadata. Request/response header events are emitted consistently; DNS/connect/TLS phases are observed via `TransportMetrics` to avoid duplicate taxonomy (see `trace.rs` reconciliation docs):
 
 | Event | Extra fields | httpcore dotted name |
 |-------|--------------|----------------------|

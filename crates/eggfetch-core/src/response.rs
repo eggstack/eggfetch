@@ -21,7 +21,7 @@ use futures_core::Stream;
 use http::{HeaderMap, StatusCode, Version};
 use url::Url;
 
-use crate::body::{BoxBytesStream, ResponseBody};
+use crate::body::{BoxBytesStream, ResponseBody, SharedTrailers};
 use crate::error::Result;
 use crate::network_stream::NetworkStream;
 
@@ -104,10 +104,21 @@ impl HistoryEntry {
 ///
 /// # Trailers
 ///
-/// HTTP trailers (HTTP/1.1 chunked trailers, HTTP/2 trailing HEADERS) are
-/// not surfaced: the body stream ends normally when a trailers frame
-/// arrives (see `wrap_incoming`). There is currently no accessor for
-/// trailer headers.
+/// HTTP trailers (HTTP/1.1 chunked trailers, HTTP/2 trailing HEADERS, and
+/// HTTP/3 trailing headers where the h3 crate exposes them) are captured
+/// without buffering the body. The body stream yields data frames exactly
+/// as before; when the trailing-headers frame arrives it is stored and the
+/// stream ends normally. Use [`Self::trailers`] after fully consuming the
+/// body (`bytes()`, `bytes_stream()` to EOF) to retrieve them.
+///
+/// Lifecycle: `trailers()` returns `None` until the body has advanced far
+/// enough for trailers to arrive, when the response carried no trailers,
+/// or when a body error occurred before trailers (errors remain body
+/// errors, never fabricated trailer state). Partial consumption or early
+/// drop never reports trailers and releases the pool permit without
+/// waiting for them. Read timeouts apply while waiting for trailers at
+/// the body boundary; the explicit native `total` deadline bounds
+/// transport setup and is not restarted per trailer wait.
 pub struct Response {
     status: StatusCode,
     version: Version,
@@ -129,6 +140,11 @@ pub struct Response {
     wire_reason_phrase: Option<String>,
     pub(crate) body: ResponseBody,
     history: Vec<HistoryEntry>,
+    /// Shared trailer store populated as the body stream advances.
+    ///
+    /// Cloned into the body stream at construction so `trailers()` stays
+    /// available after `bytes()` collection. `None` until trailers arrive.
+    trailers: SharedTrailers,
     /// Optional network stream handle for connection metadata and
     /// upgraded-connection IO. Set for responses where the underlying
     /// transport metadata is available:
@@ -157,6 +173,10 @@ impl std::fmt::Debug for Response {
             .field("wire_reason_phrase", &self.wire_reason_phrase)
             .field("body", &self.body)
             .field("history", &self.history)
+            .field(
+                "trailers",
+                &self.trailers.get().map(|h| redacted_headers(&h)),
+            )
             .field(
                 "network_stream",
                 &self.network_stream.as_ref().map(|_| "..."),
@@ -200,6 +220,7 @@ impl Response {
             wire_reason_phrase: None,
             body,
             history: Vec::new(),
+            trailers: SharedTrailers::new(),
             network_stream: None,
         }
     }
@@ -208,6 +229,29 @@ impl Response {
     /// a leased body after pool acquisition.
     pub(crate) fn set_body(&mut self, body: ResponseBody) {
         self.body = body;
+    }
+
+    /// Attach the shared trailer store linked to the body stream.
+    ///
+    /// Transports create one [`SharedTrailers`], hand a clone to the
+    /// streaming adapter, and install the same instance here so
+    /// [`Self::trailers`] observes trailers populated during streaming.
+    pub(crate) fn set_trailers(&mut self, trailers: SharedTrailers) {
+        self.trailers = trailers;
+    }
+
+    /// Returns received HTTP trailers, if any.
+    ///
+    /// Returns `None` until the body has been fully consumed and trailers
+    /// have arrived, when the response carried no trailers, or when a body
+    /// error occurred before trailers. Duplicate/multi-value trailing
+    /// headers are preserved in the returned [`HeaderMap`].
+    ///
+    /// This never buffers the body: drive the body to EOF via `bytes()` or
+    /// `bytes_stream()` first, then call this method.
+    #[must_use]
+    pub fn trailers(&self) -> Option<HeaderMap> {
+        self.trailers.get()
     }
 
     /// Consume the response and return its body.
@@ -764,5 +808,127 @@ mod tests {
         let mut lines = resp.text_lines().unwrap();
         assert_eq!(lines.next().await.unwrap().unwrap(), "hello");
         assert!(lines.next().await.is_none());
+    }
+
+    #[test]
+    fn trailers_absent_initially() {
+        let resp = Response::new(
+            StatusCode::OK,
+            Version::HTTP_11,
+            HeaderMap::new(),
+            Url::parse("http://example.com").unwrap(),
+            ResponseBody::buffered(Bytes::new()),
+        );
+        assert!(resp.trailers().is_none());
+    }
+
+    #[test]
+    fn trailers_preserve_duplicate_multi_value() {
+        use crate::body::SharedTrailers;
+        let shared = SharedTrailers::new();
+        let mut map = HeaderMap::new();
+        map.append("x-trailer", HeaderValue::from_static("a"));
+        map.append("x-trailer", HeaderValue::from_static("b"));
+        map.insert("x-single", HeaderValue::from_static("v"));
+        shared.store(map);
+        let mut resp = Response::new(
+            StatusCode::OK,
+            Version::HTTP_11,
+            HeaderMap::new(),
+            Url::parse("http://example.com").unwrap(),
+            ResponseBody::buffered(Bytes::new()),
+        );
+        resp.set_trailers(shared);
+        let trailers = resp.trailers().expect("trailers present");
+        let values: Vec<_> = trailers
+            .get_all("x-trailer")
+            .iter()
+            .map(|v| v.to_str().unwrap().to_owned())
+            .collect();
+        assert_eq!(values, vec!["a", "b"]);
+        assert_eq!(trailers.get("x-single").unwrap(), "v");
+    }
+
+    #[tokio::test]
+    async fn trailers_available_after_bytes_collection() {
+        use crate::body::SharedTrailers;
+        // Simulate a transport that populates trailers when the body is
+        // driven to EOF (same contract as `wrap_incoming`).
+        let shared = SharedTrailers::new();
+        let shared_for_stream = shared.clone();
+        let stream = Box::pin(futures_util::stream::unfold(0, move |step| {
+            let shared_for_stream = shared_for_stream.clone();
+            async move {
+                if step == 0 {
+                    Some((Ok(Bytes::from("hello")), 1))
+                } else if step == 1 {
+                    let mut map = HeaderMap::new();
+                    map.insert("x-done", HeaderValue::from_static("yes"));
+                    shared_for_stream.store(map);
+                    None
+                } else {
+                    None
+                }
+            }
+        }));
+        let mut resp = Response::new(
+            StatusCode::OK,
+            Version::HTTP_11,
+            HeaderMap::new(),
+            Url::parse("http://example.com").unwrap(),
+            ResponseBody::streaming(stream),
+        );
+        resp.set_trailers(shared);
+        assert!(
+            resp.trailers().is_none(),
+            "partial consumption reports None"
+        );
+        let bytes = resp.bytes().await.unwrap();
+        assert_eq!(bytes, "hello");
+        assert_eq!(
+            resp.trailers().unwrap().get("x-done").unwrap(),
+            "yes",
+            "trailers available after body completion"
+        );
+    }
+
+    #[tokio::test]
+    async fn partial_consumption_does_not_falsely_report_trailers() {
+        let stream = Box::pin(futures_util::stream::iter(vec![Ok(Bytes::from("a"))]));
+        let mut resp = Response::new(
+            StatusCode::OK,
+            Version::HTTP_11,
+            HeaderMap::new(),
+            Url::parse("http://example.com").unwrap(),
+            ResponseBody::streaming(stream),
+        );
+        // No trailers wired; even after partial read there must be none.
+        let mut s = resp.bytes_stream().unwrap();
+        assert_eq!(s.next().await.unwrap().unwrap(), "a");
+        assert!(resp.trailers().is_none());
+    }
+
+    #[tokio::test]
+    async fn body_error_before_trailers_leaves_no_trailers() {
+        use crate::body::SharedTrailers;
+        let shared = SharedTrailers::new();
+        let stream = Box::pin(futures_util::stream::iter(vec![
+            Ok(Bytes::from("a")),
+            Err(crate::error::Error::Body("boom".into())),
+        ]));
+        let mut resp = Response::new(
+            StatusCode::OK,
+            Version::HTTP_11,
+            HeaderMap::new(),
+            Url::parse("http://example.com").unwrap(),
+            ResponseBody::streaming(stream),
+        );
+        resp.set_trailers(shared);
+        let err = resp.bytes().await.unwrap_err();
+        assert!(matches!(err, crate::error::Error::Body(_)));
+        assert!(
+            resp.trailers().is_none(),
+            "body errors must not fabricate trailer state"
+        );
     }
 }

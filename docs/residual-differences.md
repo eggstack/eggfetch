@@ -106,12 +106,31 @@ residuals:
 - Ordinary HTTP/1.1 and HTTP/2 responses return their connections to the pool,
   so `extensions["network_stream"]` is `None`; shared connection metadata is
   read-only and no raw socket is exposed.
+- Direct-connector 101 upgrades expose real local/remote addrs and TLS
+  version/cipher/ALPN; UDS upgrades expose `Unix`/`TlsUnix` without IPs;
+  standard opaque upgrades remain explicitly unavailable. H3 per-response
+  metadata stays `None` (`TransportKind::Quic` reserved). No secrets or fake
+  zeros are reported.
 - Internal proxy CONNECT tunnels are never exposed as writable network
   streams. Their body iterator is the canonical access path.
 - Cloned synchronous network-stream wrappers share a single mutable stream;
   their read and write calls are serialized while each call drives the
   originating Tokio runtime. This preserves ownership safety but does not
   provide concurrent full-duplex operations from multiple sync handles.
+
+## HTTP trailers and transport observability (native-only)
+
+- Core `Response::trailers()` surfaces H1 chunked trailers, H2 trailing
+  HEADERS, and H3 trailing headers without buffering. H1 duplicate
+  same-name trailers collapse upstream in hyper (`HeaderMap::insert`);
+  H2 duplicates are preserved. Python/FFI/Node defer trailer exposure;
+  the HTTPX facade is unchanged (0.28.1 has no `trailers`).
+- `TransportMetrics` counts connector/DNS/TLS attempts, UDS/proxy outcomes,
+  H3 creations/evictions, and 101 upgrades where observable. Hyper
+  socket-reuse and per-connection H2 stream counts remain absent (never
+  estimated). `PoolMetrics` counts logical waits/cancellations.
+- Native `max_in_flight_requests*` (logical permits) preferred;
+  `max_connections*` are pre-1.0 aliases. Facade `Limits` naming unchanged.
 
 ## Historical closures and exclusions
 

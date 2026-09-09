@@ -133,7 +133,14 @@ The facade is Stage C qualified for Python 3.10+ asyncio. Key boundaries:
 - 101 `network_stream` wrappers are chosen by caller API mode (sync wrapper
   for sync `Client` buffered/streaming, async wrapper for async `AsyncClient`
   buffered/streaming). Ordinary pooled responses and internal CONNECT
-  tunnels expose no writable network stream.
+  tunnels expose no writable network stream. Direct upgrades carry real
+  addrs/TLS, UDS reports `Unix` without IPs, opaque stays unavailable.
+- Trailers are core-only in this milestone: `Response::trailers()` exists
+  in Rust; Python native, HTTPX facade, FFI, and Node defer exposure
+  (facade unchanged — HTTPX 0.28.1 has no `trailers`). Do not add facade
+  surface without pinned reference evidence.
+- `Limits(max_connections=...)` facade naming is unchanged (native
+  `max_in_flight_requests*` are Rust-only aliases).
 - Raw iteration marks streams consumed before first source read, counts source bytes before chunk adaptation, closes on normal exhaustion only.
 - `test_corrective_kernel.py` runs in Tier 1; full compat suite, API oracle, and downstream runner are Tier 2/manual gates. Executable changes require fresh exact-SHA qualification (see `compat/httpx/0.28.1/profile.toml`).
 

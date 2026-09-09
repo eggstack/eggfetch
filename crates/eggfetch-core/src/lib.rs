@@ -56,7 +56,7 @@ pub mod trace;
 pub mod transport;
 
 pub use auth::{AuthScheme, BasicAuth, BearerAuth};
-pub use body::{BoxBytesStream, RequestBody, ResponseBody};
+pub use body::{BoxBytesStream, RequestBody, ResponseBody, SharedTrailers};
 pub use client::{Client, ClientBuilder};
 pub use compression::{accept_encoding_value, ContentCoding};
 pub use error::{Error, Result};
@@ -87,3 +87,4 @@ pub use timeout::{Timeout, TimeoutBuilder, TimeoutPhase};
 pub use tls::{ClientIdentity, TlsConfig, TlsConfigBuilder, TlsVersion, TrustStore};
 /// Socket option for direct TCP connections.
 pub use transport::direct_connector::{SocketOption, SocketOptionKind};
+pub use transport::metrics::{TransportMetrics, TransportSnapshot};

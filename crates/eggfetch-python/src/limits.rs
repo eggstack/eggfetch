@@ -42,6 +42,11 @@ impl PyLimits {
             inner: eggfetch_core::Limits {
                 max_connections,
                 max_connections_per_host,
+                // Native in-flight names are not part of the HTTPX facade
+                // contract; the facade keeps `max_connections` naming
+                // unchanged per the pinned 0.28.1 profile.
+                max_in_flight_requests: None,
+                max_in_flight_requests_per_origin: None,
                 max_idle_connections: max_keepalive_connections,
                 max_idle_connections_per_host: max_keepalive_connections,
                 keepalive_expiry: keepalive_expiry_duration,

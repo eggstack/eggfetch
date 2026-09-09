@@ -4,6 +4,25 @@
 //! plus a callback trait that transports use to emit lifecycle events.
 //! The Python binding implements this trait and bridges to user-supplied
 //! trace callables without holding the GIL during network waits.
+//!
+//! # Reconciliation with metrics and metadata
+//!
+//! Trace covers request/response lifecycle (`send_request_headers`,
+//! `receive_response_headers`) consistently across direct, proxy, SOCKS,
+//! UDS, and H3 paths. Connector-level observations (DNS/connect/TLS
+//! attempts, H3 creations/evictions, proxy CONNECT outcomes, 101 upgrades)
+//! are counted in [`crate::TransportMetrics`] instead of duplicating the
+//! event taxonomy: metrics are cheap, always-on, and atomic, while trace
+//! callbacks are per-request, synchronous, and user-controlled.
+//!
+//! `ConnectTcp`, `ConnectUnixSocket`, `StartTls`, `Retry`, `Close`, and
+//! body/close events remain part of the httpcore-compatible vocabulary
+//! for facade compatibility, but only request/response header events are
+//! emitted today. Emitting DNS/connect/TLS trace events consistently
+//! across all five transport families would require plumbing observers
+//! into tower connectors; until that is done uniformly, those phases are
+//! observed via metrics to avoid contradictory duplicate lifecycle events.
+//! Existing event names and phases remain compatible.
 
 use std::collections::HashMap;
 use std::fmt;

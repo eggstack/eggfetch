@@ -65,13 +65,15 @@ requests configure only connect/read/write/pool; native callers may set
 
 ## Connection Pool
 
-The pool controls **logical request concurrency**, not physical TCP connections. hyper manages actual TCP connections internally.
+The pool controls **logical in-flight request concurrency** (`max_in_flight_requests*`, aliases `max_connections*` for pre-1.0; new names win), not physical TCP connections. Hyper manages actual TCP connections internally; idle caps (`max_idle_connections*`, `idle_timeout`) are physical idle-pool policy.
 
 ### Semaphore-Based Concurrency
 
 The pool uses tokio semaphores to limit concurrent in-flight requests:
-- **Global limit**: maximum concurrent requests across all origins.
-- **Per-origin limit**: maximum concurrent requests to a single origin.
+- **Global limit**: maximum concurrent logical requests across all origins.
+- **Per-origin limit**: maximum concurrent logical requests to a single origin.
+
+Under H1 one request typically owns its slot; under H2/H3 many permits multiplex over one connection/QUIC session. One permit never equals one TCP connection.
 
 ### Origin Keying
 
@@ -95,21 +97,24 @@ When a request acquires a pool slot, it receives a `PoolGuard` (wrapped in `Arc`
 - Dropped responses release their slot immediately.
 - Buffered responses release their slot after the body is collected.
 
-### Pool Metrics
+### Pool Metrics vs Transport Metrics
 
-`PoolMetrics` exposes:
+`PoolMetrics` (logical) exposes:
 - `acquisition_waits` — number of times a request waited for a slot.
 - `acquisition_cancellations` — number of times a pool acquisition was cancelled.
 
-Socket-level counters (connections opened/reused/closed) were removed because hyper owns socket lifecycle and eggfetch cannot observe individual socket events.
+`TransportMetrics` (`Client::transport_metrics()`, atomic, low-overhead) counts connector/protocol events where observable: direct/DNS/TLS attempts, UDS/proxy attempts, H3 creations/evictions, and 101 upgrades. Names state whether they count connector events or protocol connections; logical requests stay in `PoolMetrics`.
+
+Socket-level reuse counts (connections opened/reused/closed) and per-connection H2 stream counts remain absent because hyper owns socket lifecycle and eggfetch cannot observe reuse reliably — never estimated. See `transport/metrics.rs` and `tests/transport_metrics_tests.rs` for exact-count evidence.
 
 ### H3 Pool and Idle Mapping
 
 H3 requests acquire pool permits exactly like H1/H2 (one permit per
-request, held on the streaming body until consumed or dropped), so
-`max_connections` / `max_connections_per_host` gate H3 streams as logical
+request, held on the streaming body until consumed or dropped), so the
+effective per-origin in-flight limit gates H3 streams as logical
 concurrency. The H3 origin cache (`host:port`, 64 entries) is separate
-from the pool's per-origin semaphore table.
+from the pool's per-origin semaphore table; creations/evictions are
+counted in `TransportMetrics`.
 
 Idle lifetime for H3 derives from `PoolConfig::idle_timeout`
 (`Limits::keepalive_expiry`), defaulting to 30 s; `Timeout.pool` and

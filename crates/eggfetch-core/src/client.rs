@@ -171,6 +171,9 @@ pub(crate) struct ClientInner {
     >,
     pub(crate) config: ClientConfig,
     pub(crate) pool: Pool,
+    /// Transport observability counters shared by all connectors owned by
+    /// this client. Distinct from [`Pool`] logical-permit metrics.
+    pub(crate) transport_metrics: Arc<crate::transport::metrics::TransportMetrics>,
     #[cfg(feature = "http3")]
     pub(crate) h3_connector: Option<crate::transport::http3::H3Connector>,
 }
@@ -256,8 +259,11 @@ impl ClientInner {
                 socket_options: Vec::new(),
             },
         );
-        let base_connector =
-            crate::transport::direct_connector::DirectConnector::new(base_config, tls_connector);
+        let base_connector = crate::transport::direct_connector::DirectConnector::with_metrics(
+            base_config,
+            tls_connector,
+            self.transport_metrics.clone(),
+        );
         let sni_connector = base_connector.with_sni(sni_hostname.to_owned());
         let connector =
             crate::transport::connect_timeout::ConnectTimeout::new(sni_connector, connect_timeout);
@@ -426,9 +432,22 @@ impl Client {
     }
 
     /// Returns a reference to the connection pool metrics.
+    ///
+    /// These count logical request-permit waits/cancellations. For
+    /// connector/protocol observations see [`Self::transport_metrics`].
     #[must_use]
     pub fn pool_metrics(&self) -> &PoolMetrics {
         self.inner.pool.metrics()
+    }
+
+    /// Returns a reference to the transport observability counters.
+    ///
+    /// Counts connector events (DNS/connect/TLS attempts) and protocol
+    /// connections (H3 sessions, 101 upgrades) where observable. Hyper
+    /// socket-reuse counts are intentionally absent.
+    #[must_use]
+    pub fn transport_metrics(&self) -> &crate::transport::metrics::TransportMetrics {
+        &self.inner.transport_metrics
     }
 
     /// Returns a reference to the client's cookie jar.
@@ -589,17 +608,47 @@ impl ClientBuilder {
         self
     }
 
-    /// Set the maximum total number of concurrent connections.
+    /// Set the maximum total number of concurrent in-flight requests.
+    ///
+    /// Compatibility alias for [`Self::max_in_flight_requests`] kept for
+    /// the pre-1.0 line. One permit equals one logical request, not one
+    /// TCP connection (H2/H3 multiplex many requests over one
+    /// connection). Prefer `max_in_flight_requests` in new code.
     #[must_use]
     pub fn max_connections(mut self, max: usize) -> Self {
         self.pool_config.max_connections = Some(max);
         self
     }
 
-    /// Set the maximum number of concurrent connections per individual host.
+    /// Set the maximum number of concurrent in-flight requests per origin.
+    ///
+    /// Compatibility alias for [`Self::max_in_flight_requests_per_origin`].
     #[must_use]
     pub fn max_connections_per_host(mut self, max: usize) -> Self {
         self.pool_config.max_connections_per_host = Some(max);
+        self
+    }
+
+    /// Set the maximum total number of concurrent in-flight requests.
+    ///
+    /// Preferred native name. Bounds logical request concurrency (one
+    /// permit per request). Under H1 one request typically owns its
+    /// connection slot; under H2/H3 many permits multiplex over one
+    /// TCP/QUIC connection. When both this and `max_connections` are
+    /// set, this wins.
+    #[must_use]
+    pub fn max_in_flight_requests(mut self, max: usize) -> Self {
+        self.pool_config.max_in_flight_requests = Some(max);
+        self
+    }
+
+    /// Set the maximum number of concurrent in-flight requests per origin.
+    ///
+    /// Preferred native name. When both this and
+    /// `max_connections_per_host` are set, this wins.
+    #[must_use]
+    pub fn max_in_flight_requests_per_origin(mut self, max: usize) -> Self {
+        self.pool_config.max_in_flight_requests_per_origin = Some(max);
         self
     }
 
@@ -871,6 +920,7 @@ impl ClientBuilder {
     pub fn build(self) -> Client {
         use crate::http_version::HttpVersionPolicyEnabler;
         let enabler = HttpVersionPolicyEnabler::from_policy(self.http_version_policy);
+        let transport_metrics = Arc::new(crate::transport::metrics::TransportMetrics::new());
 
         let mut pool_config = self.pool_config;
         if let Some(limits) = self.limits {
@@ -880,6 +930,13 @@ impl ClientBuilder {
             }
             if limits_config.max_connections_per_host.is_some() {
                 pool_config.max_connections_per_host = limits_config.max_connections_per_host;
+            }
+            if limits_config.max_in_flight_requests.is_some() {
+                pool_config.max_in_flight_requests = limits_config.max_in_flight_requests;
+            }
+            if limits_config.max_in_flight_requests_per_origin.is_some() {
+                pool_config.max_in_flight_requests_per_origin =
+                    limits_config.max_in_flight_requests_per_origin;
             }
             if limits_config.max_idle_connections.is_some() {
                 pool_config.max_idle_connections = limits_config.max_idle_connections;
@@ -968,7 +1025,12 @@ impl ClientBuilder {
 
         #[cfg(feature = "http3")]
         let h3_connector = if enabler.use_http3() {
-            crate::transport::http3::H3Connector::new(self.tls_config.clone(), &pool_config).ok()
+            crate::transport::http3::H3Connector::with_metrics(
+                self.tls_config.clone(),
+                &pool_config,
+                Some(transport_metrics.clone()),
+            )
+            .ok()
         } else {
             None
         };
@@ -997,7 +1059,11 @@ impl ClientBuilder {
             };
 
             let direct_connector =
-                crate::transport::direct_connector::DirectConnector::new(dc_config, tls_connector);
+                crate::transport::direct_connector::DirectConnector::with_metrics(
+                    dc_config,
+                    tls_connector,
+                    transport_metrics.clone(),
+                );
             let direct_connector = crate::transport::connect_timeout::ConnectTimeout::new(
                 direct_connector,
                 connect_timeout,
@@ -1039,7 +1105,11 @@ impl ClientBuilder {
                     )))
                 })
             });
-            let connector = crate::transport::uds::UdsConnector::new(path, tls_connector);
+            let connector = crate::transport::uds::UdsConnector::with_metrics(
+                path,
+                tls_connector,
+                transport_metrics.clone(),
+            );
             let connector = crate::transport::connect_timeout::ConnectTimeout::new(
                 connector,
                 self.timeout.as_ref().and_then(|timeout| timeout.connect),
@@ -1100,6 +1170,7 @@ impl ClientBuilder {
                 socks_clients: Mutex::new(HashMap::new()),
                 config,
                 pool,
+                transport_metrics,
                 #[cfg(feature = "http3")]
                 h3_connector,
             }),

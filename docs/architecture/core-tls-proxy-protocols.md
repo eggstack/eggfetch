@@ -238,17 +238,15 @@ The standard hyper-rustls path passes an empty ALPN list to `hyper_rustls::Https
 ### Shared Hyper response lifecycle
 
 The standard Hyper, specialized-direct (socket options / local address),
-and SNI-override paths share one response-lifecycle implementation in
+SNI-override, and UDS paths share one response-lifecycle implementation in
 `transport/direct.rs`: shared trace helpers (`emit_send_start` /
 `emit_receive_complete` / `emit_send_failed`), shared dispatch error
 mapping (`map_send_error`, including write-timeout unwrapping and H2
-classification), and a single `finish_hyper_response()` converter that
+classification), a single `finish_hyper_response()` converter that
 captures the 101 upgrade future before consuming the body, builds the
-streaming response, and attaches the `UpgradedStream`. UDS reuses the
-trace/body/error helpers but intentionally omits 101 upgrade handling —
-the Unix-socket connector cannot safely expose Hyper's opaque upgrade IO
-for user-writable streams in this milestone. That difference is explicit
-in code and directly tested; do not paper over it with a generic helper.
+streaming response with `SharedTrailers`, and attaches the
+`UpgradedStream` via connector-aware downcasting (direct → real addrs/TLS,
+UDS → `Unix`/`TlsUnix` without IPs, opaque → explicitly unavailable).
 
 Transport selection itself is declarative: `prepare_single_request()`
 builds a `PreparedRequest`, `select_route()` picks one `TransportRoute`
@@ -392,8 +390,9 @@ one-connection-per-origin model.
 ### Stream Limits
 
 Logical concurrency (pool permits, one per request) is separate from the
-physical QUIC stream cap. `max_concurrent_bidi_streams` derives from
-`PoolConfig::max_connections_per_host` when set (so the transport never
+physical QUIC stream cap. `max_concurrent_bidi_streams` derives from the
+effective per-origin in-flight limit (`max_in_flight_requests_per_origin`
+or alias `max_connections_per_host`) when set (so the transport never
 contradicts configured concurrency), otherwise 100. Unidirectional streams
 stay at 100 (control traffic). Every H3 request still holds a pool permit,
 so the logical per-origin limit remains the upper bound on concurrent

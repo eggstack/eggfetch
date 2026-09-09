@@ -511,3 +511,183 @@ fn connection_metadata_default() {
     assert_eq!(meta.transport_kind, TransportKind::Tcp);
     assert!(meta.tls_info.is_none());
 }
+
+#[tokio::test]
+async fn direct_connector_upgrade_captures_real_addrs() {
+    let (port, _shutdown) = start_upgrade_server();
+    let url = format!("http://127.0.0.1:{port}/");
+    let client = eggfetch_core::Client::builder()
+        .local_address("127.0.0.1:0".parse().unwrap())
+        .build();
+    let mut response = client
+        .get(&url)
+        .unwrap()
+        .header("upgrade", "echo")
+        .header("connection", "Upgrade")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status().as_u16(), 101);
+    let ns = response
+        .network_stream()
+        .expect("direct upgrade has stream");
+    let meta = ns.metadata();
+    assert_eq!(meta.transport_kind, TransportKind::Tcp);
+    let local = meta.local_addr.expect("direct captures local addr");
+    let peer = meta.peer_addr.expect("direct captures peer addr");
+    assert_eq!(local.ip().to_string(), "127.0.0.1");
+    assert_eq!(peer.port(), port);
+    assert!(meta.tls_info.is_none());
+}
+
+#[tokio::test]
+async fn standard_upgrade_opaque_metadata_unavailable() {
+    let (port, _shutdown) = start_upgrade_server();
+    let url = format!("http://127.0.0.1:{port}/");
+    let client = eggfetch_core::Client::new();
+    let mut response = client
+        .get(&url)
+        .unwrap()
+        .header("upgrade", "echo")
+        .header("connection", "Upgrade")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status().as_u16(), 101);
+    let ns = response.network_stream().expect("upgrade stream");
+    let meta = ns.metadata();
+    // Standard opaque Hyper path: explicitly unavailable, no fake values.
+    assert!(meta.local_addr.is_none());
+    assert!(meta.peer_addr.is_none());
+    assert!(meta.tls_info.is_none());
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn uds_upgrade_reports_uds_without_ips() {
+    use std::io::{Read, Write};
+    use std::os::unix::net::UnixListener;
+
+    let path = "/tmp/eggfetch_metadata_uds.sock";
+    let _ = std::fs::remove_file(path);
+    let shutdown = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let sd = shutdown.clone();
+    let sp = path.to_owned();
+    let handle = std::thread::spawn(move || {
+        let listener = UnixListener::bind(&sp).unwrap();
+        listener.set_nonblocking(true).unwrap();
+        while !sd.load(std::sync::atomic::Ordering::Relaxed) {
+            match listener.accept() {
+                Ok((mut stream, _)) => {
+                    let mut buf = [0u8; 4096];
+                    let mut acc = Vec::new();
+                    stream.set_read_timeout(Some(Duration::from_secs(1))).ok();
+                    loop {
+                        let mut tmp = [0u8; 1];
+                        match Read::read(&mut stream, &mut tmp) {
+                            Ok(0) | Err(_) => break,
+                            Ok(_) => {
+                                acc.push(tmp[0]);
+                                if acc.len() >= 4 && &acc[acc.len() - 4..] == b"\r\n\r\n" {
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    let _ = stream.write_all(
+                        b"HTTP/1.1 101 Switching Protocols\r\nUpgrade: echo\r\nConnection: Upgrade\r\n\r\n",
+                    );
+                    let _ = stream.flush();
+                    std::thread::sleep(Duration::from_millis(200));
+                    let _ = buf;
+                }
+                Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+                Err(_) => break,
+            }
+        }
+    });
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    let client = eggfetch_core::Client::builder()
+        .uds_path(path.to_owned())
+        .build();
+    let mut response = client
+        .get("http://localhost/")
+        .unwrap()
+        .header("upgrade", "echo")
+        .header("connection", "Upgrade")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status().as_u16(), 101);
+    let ns = response.network_stream().expect("uds upgrade has stream");
+    let meta = ns.metadata();
+    assert_eq!(meta.transport_kind, TransportKind::Unix);
+    assert!(meta.local_addr.is_none(), "UDS must not invent IPs");
+    assert!(meta.peer_addr.is_none(), "UDS must not invent IPs");
+    assert!(meta.tls_info.is_none());
+    shutdown.store(true, std::sync::atomic::Ordering::SeqCst);
+    let _ = handle.join();
+    let _ = std::fs::remove_file(path);
+}
+
+#[tokio::test]
+async fn tls_upgrade_captures_version_cipher_alpn() {
+    // Controlled local TLS 101 server with self-signed cert.
+    let cert_key =
+        rcgen::generate_simple_self_signed(vec!["localhost".into()]).expect("rcgen cert");
+    let cert_der = rustls::pki_types::CertificateDer::from(cert_key.cert.der().to_vec());
+    let key_der = rustls::pki_types::PrivateKeyDer::Pkcs8(
+        rustls::pki_types::PrivatePkcs8KeyDer::from(cert_key.key_pair.serialize_der()),
+    );
+    let mut server_tls = rustls::ServerConfig::builder()
+        .with_no_client_auth()
+        .with_single_cert(vec![cert_der], key_der)
+        .expect("cert");
+    server_tls.alpn_protocols = vec![b"http/1.1".to_vec()];
+    let acceptor = tokio_rustls::TlsAcceptor::from(std::sync::Arc::new(server_tls));
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    tokio::spawn(async move {
+        if let Ok((tcp, _)) = listener.accept().await {
+            if let Ok(mut tls) = acceptor.accept(tcp).await {
+                use tokio::io::{AsyncReadExt, AsyncWriteExt};
+                let mut buf = vec![0u8; 4096];
+                let _ = tokio::time::timeout(Duration::from_secs(5), tls.read(&mut buf)).await;
+                let _ = tls
+                    .write_all(
+                        b"HTTP/1.1 101 Switching Protocols\r\nUpgrade: echo\r\nConnection: Upgrade\r\n\r\n",
+                    )
+                    .await;
+                let _ = tls.flush().await;
+                tokio::time::sleep(Duration::from_millis(300)).await;
+            }
+        }
+    });
+
+    let url = format!("https://127.0.0.1:{port}/");
+    let client = eggfetch_core::Client::builder()
+        .local_address("127.0.0.1:0".parse().unwrap())
+        .danger_accept_invalid_certs(true)
+        .build();
+    let mut response = client
+        .get(&url)
+        .unwrap()
+        .header("upgrade", "echo")
+        .header("connection", "Upgrade")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status().as_u16(), 101);
+    let ns = response.network_stream().expect("tls upgrade stream");
+    let meta = ns.metadata();
+    assert_eq!(meta.transport_kind, TransportKind::Tls);
+    assert!(meta.local_addr.is_some());
+    assert!(meta.peer_addr.is_some());
+    let tls = meta.tls_info.as_ref().expect("tls info captured");
+    assert!(tls.tls_version.is_some(), "tls version observed");
+    assert!(tls.cipher_suite.is_some(), "cipher observed");
+    // ALPN http/1.1 was configured on the test server.
+    assert_eq!(tls.alpn_protocol.as_deref(), Some("http/1.1"));
+}

@@ -24,12 +24,21 @@ use crate::error::{Error, Result};
 pub enum TransportKind {
     /// Plain TCP.
     Tcp,
-    /// Unix domain socket.
+    /// Unix domain socket (no IP addresses; local/peer remain `None`).
     Unix,
     /// TLS-wrapped TCP (rustls).
     Tls,
     /// TLS-wrapped Unix domain socket.
     TlsUnix,
+    /// QUIC (HTTP/3) via Quinn.
+    ///
+    /// Reserved for H3 endpoint information where Quinn exposes it
+    /// (remote address). Per-response H3 metadata is currently
+    /// explicitly unavailable (`Response::network_stream()` is `None`
+    /// for ordinary H3 responses); this variant documents the transport
+    /// kind for future connector-derived metadata without inventing
+    /// values today.
+    Quic,
 }
 
 /// Read-only TLS session metadata captured after handshake.
@@ -73,6 +82,26 @@ impl Default for ConnectionMetadata {
             transport_kind: TransportKind::Tcp,
             tls_info: None,
         }
+    }
+}
+
+/// Build [`TlsInfo`] from a rustls client connection.
+///
+/// Extracts ALPN, TLS version, and cipher suite where rustls exposes them
+/// safely. `server_name` is the SNI hostname when known (direct-connector
+/// TLS host); `None` explicitly marks unavailable rather than inventing a
+/// value. No secret-bearing material is included.
+pub(crate) fn tls_info_from_rustls(
+    conn: &rustls::ClientConnection,
+    server_name: Option<String>,
+) -> TlsInfo {
+    TlsInfo {
+        alpn_protocol: conn
+            .alpn_protocol()
+            .map(|p| String::from_utf8_lossy(p).into_owned()),
+        tls_version: conn.protocol_version().map(|v| format!("{v:?}")),
+        cipher_suite: conn.negotiated_cipher_suite().map(|c| format!("{c:?}")),
+        server_name,
     }
 }
 
@@ -380,20 +409,7 @@ impl UpgradedStream {
 
         // Extract TLS info from the negotiated parameters.
         let (inner_tcp, connection_info) = tls_stream.get_ref();
-        let alpn = connection_info
-            .alpn_protocol()
-            .map(|p| String::from_utf8_lossy(p).into_owned());
-        let version = connection_info.protocol_version().map(|v| format!("{v:?}"));
-        let cipher = connection_info
-            .negotiated_cipher_suite()
-            .map(|c| format!("{c:?}"));
-
-        let tls_info = TlsInfo {
-            alpn_protocol: alpn,
-            tls_version: version,
-            cipher_suite: cipher,
-            server_name: Some(server_name.to_owned()),
-        };
+        let tls_info = tls_info_from_rustls(connection_info, Some(server_name.to_owned()));
 
         let local_addr = inner_tcp.local_addr().ok();
         let peer_addr = inner_tcp.peer_addr().ok();

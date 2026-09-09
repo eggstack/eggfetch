@@ -318,6 +318,55 @@ impl From<&str> for RequestBody {
 /// last handle releases the permit back to the pool.
 pub(crate) type PoolGuardArc = Arc<crate::pool::PoolGuard>;
 
+/// Shared trailer store populated during body streaming.
+///
+/// Hyper yields trailers as a final `Frame::trailers` after data frames
+/// (HTTP/1.1 chunked trailers and HTTP/2 trailing HEADERS). The store is
+/// filled exactly once when that frame arrives; it stays `None` until the
+/// body has advanced far enough, when no trailers were sent, or when a body
+/// error occurred before trailers. It never buffers the body to obtain
+/// trailers and never fabricates trailer state on errors.
+///
+/// Cloning is cheap (`Arc`); the [`crate::Response`] holds one clone while
+/// the body stream holds another, so `Response::trailers()` remains
+/// available after `bytes()` collection. Dropping the body early leaves the
+/// store as `None` and releases the pool permit without waiting for
+/// trailers.
+#[derive(Debug, Clone, Default)]
+pub struct SharedTrailers {
+    inner: Arc<std::sync::Mutex<Option<http::HeaderMap>>>,
+}
+
+impl SharedTrailers {
+    /// Create an empty trailer store.
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            inner: Arc::new(std::sync::Mutex::new(None)),
+        }
+    }
+
+    /// Store trailers received from the wire (first write wins).
+    pub(crate) fn store(&self, trailers: http::HeaderMap) {
+        if let Ok(mut guard) = self.inner.lock() {
+            if guard.is_none() {
+                *guard = Some(trailers);
+            }
+        }
+    }
+
+    /// Returns cloned trailers if they have arrived, else `None`.
+    ///
+    /// `None` means either the body has not been fully consumed yet, the
+    /// response carried no trailers, or a body error occurred before
+    /// trailers. Callers must fully consume the body stream (or `bytes()`)
+    /// before expecting trailers.
+    #[must_use]
+    pub fn get(&self) -> Option<http::HeaderMap> {
+        self.inner.lock().ok().and_then(|guard| guard.clone())
+    }
+}
+
 pin_project! {
     /// A response stream that keeps the pool lease alive while it is in use.
     struct LeasedResponseStream {

@@ -11,8 +11,10 @@ eggfetch is a Rust-native HTTP client engine with Python bindings and a CLI tool
 
 - **HTTP/1.1, HTTP/2, HTTP/3** -- ALPN negotiation, multiplexed connections, experimental QUIC transport (bounded per-origin cache, shared connect budget with address fallback, phase-correct timeouts, keepalive-derived idle)
 - **Streaming** -- request and response bodies stream without eager buffering; `bytes_stream()` and `text_lines()` for incremental reads
+- **HTTP trailers** -- H1 chunked trailers, H2 trailing HEADERS, and H3 trailing headers captured without buffering (`Response::trailers()` after body EOF; H1 duplicate same-name trailers collapse upstream in hyper and are documented)
 - **Response decompression** -- gzip, brotli, zstd, deflate via feature-gated streaming decoders
-- **Connection pooling** -- semaphore-based concurrency with per-origin limits and pool metrics
+- **Connection pooling** -- semaphore-based logical in-flight request concurrency (`max_in_flight_requests*`, aliases `max_connections*` for pre-1.0) with per-origin limits, pool metrics, and separate transport observability counters
+- **Transport observability** -- connector/DNS/TLS attempt counters, H3 creation/eviction counts, and 101 upgrade counts where observable; Hyper socket-reuse counts intentionally absent
 - **Phase-aware timeouts** -- pool, connect, write, read, and total timeout phases with cancellation safety
 - **TLS** -- rustls with custom CA bundles, client certificates (mTLS), version policy, and verification toggle
 - **Proxy** -- HTTP forwarding, HTTPS CONNECT tunneling, proxy auth, per-request override, `NO_PROXY` bypass
@@ -22,7 +24,8 @@ eggfetch is a Rust-native HTTP client engine with Python bindings and a CLI tool
 - **Retries** -- policy-driven retries with exponential backoff and `Retry-After` support
 - **Python API** -- requests/HTTPX-compatible sync and async interfaces, GIL-releasing blocking I/O
 - **HTTPX compatibility facade** -- compatible asyncio surface targeting HTTPX 0.28.1 (`eggfetch.compat.httpx`)
-- **Network stream exposure** -- 101 Switching Protocols responses expose an owned upgraded stream through `extensions["network_stream"]`; `start_tls` uses the same safe TLS translation as the default client
+- **Network stream exposure** -- 101 Switching Protocols responses expose an owned upgraded stream through `extensions["network_stream"]`; direct-connector upgrades carry real local/remote addrs and TLS version/cipher/ALPN, UDS upgrades report `Unix` without IPs, standard opaque upgrades remain explicitly unavailable; `start_tls` uses the same safe TLS translation as the default client
+- **Python/FFI trailer policy** -- core retains trailers; Python native, HTTPX facade, FFI, and Node defer trailer exposure in this milestone (facade unchanged; HTTPX 0.28.1 has no `trailers` surface to compare against)
 - **CLI** -- full-featured HTTP client with streaming output, machine-readable formats, and shell completions
 
 ## Installation
