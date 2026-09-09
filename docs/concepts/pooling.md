@@ -41,11 +41,16 @@ If the server's `SETTINGS_MAX_CONCURRENT_STREAMS` limit is reached, hyper intern
 
 The h2 library enforces a default of 100 concurrent streams per connection, or whatever the server advertises via `SETTINGS_MAX_CONCURRENT_STREAMS`. This is transparent to eggfetch.
 
-## HTTP/3 and QUIC
+## HTTP/3 and QUIC (experimental)
 
 When HTTP/3 is selected, requests bypass the hyper transport and are sent over QUIC via Quinn. These requests still acquire pool permits for concurrency limiting, but the underlying QUIC connection lifecycle is managed independently by the H3 connector.
 
-Quinn enforces a maximum of 100 concurrent bidirectional streams per QUIC connection by default. This is independent of the pool's logical permit limit. The H3 connector maintains a per-origin cache of QUIC connections for reuse.
+Quinn admits up to the effective per-origin in-flight limit
+(`max_in_flight_requests_per_origin` or alias
+`max_connections_per_host`) as concurrent bidirectional streams when
+set, otherwise 100 by default. This physical stream cap never contradicts
+configured logical concurrency: every H3 request still holds a pool
+permit, so the logical per-origin limit remains the upper bound. The H3 connector maintains a per-origin cache of QUIC connections for reuse.
 
 ## Idle Timeout and Eviction
 
@@ -96,8 +101,8 @@ use eggfetch_core::pool::PoolConfig;
 let config = PoolConfig {
     max_idle_connections: Some(100),
     max_idle_connections_per_host: Some(10),
-    max_connections: Some(200),
-    max_connections_per_host: Some(20),
+    max_in_flight_requests: Some(200),
+    max_in_flight_requests_per_origin: Some(20),
     idle_timeout: Some(Duration::from_secs(90)),
 };
 ```
@@ -106,8 +111,8 @@ let config = PoolConfig {
 |-------|-------------|
 | `max_idle_connections` | Maximum idle connections to keep in the pool |
 | `max_idle_connections_per_host` | Maximum idle connections per origin |
-| `max_connections` | Maximum total concurrent requests |
-| `max_connections_per_host` | Maximum concurrent requests per origin |
+| `max_in_flight_requests` (`max_connections` is a pre-1.0 alias) | Maximum total concurrent in-flight requests (logical, not physical connections) |
+| `max_in_flight_requests_per_origin` (`max_connections_per_host` is a pre-1.0 alias) | Maximum concurrent in-flight requests per origin (logical) |
 | `idle_timeout` | Duration after which idle connections are closed |
 
 All fields are optional. When `None`, the corresponding limit is not applied. The default `PoolConfig` has all fields set to `None`, meaning unlimited concurrency.
@@ -127,8 +132,8 @@ For production use, it is recommended to configure explicit limits to prevent ov
 ```rust
 let client = Client::builder()
     .pool_config(PoolConfig {
-        max_connections: Some(100),
-        max_connections_per_host: Some(10),
+        max_in_flight_requests: Some(100),
+        max_in_flight_requests_per_origin: Some(10),
         ..Default::default()
     })
     .build();

@@ -279,7 +279,7 @@ eggfetch --http3 https://example.com
 `--http2`/`--http3` require a CLI build with the corresponding core feature
 compiled in. The default build enables `cookies`, `multipart`, and `proxy`
 but **not** `http2` or `http3`; requesting an uncompiled protocol fails
-instead of silently downgrading.
+instead of silently downgrading. `--http3` (QUIC) is experimental.
 
 ## Decompression
 

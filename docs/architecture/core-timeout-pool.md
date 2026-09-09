@@ -119,8 +119,9 @@ counted in `TransportMetrics`.
 Idle lifetime for H3 derives from `PoolConfig::idle_timeout`
 (`Limits::keepalive_expiry`), defaulting to 30 s; `Timeout.pool` and
 `Timeout.total` are acquisition/outer budgets and never close idle QUIC
-connections. Physical QUIC stream caps derive from
-`max_connections_per_host` (default 100 bidi) and are documented in
+connections. Physical QUIC stream caps derive from the effective
+per-origin in-flight limit (`max_in_flight_requests_per_origin` or alias
+`max_connections_per_host`, default 100 bidi) and are documented in
 [core-tls-proxy-protocols.md](core-tls-proxy-protocols.md).
 
 ### Environment-Variable Proxy Policy

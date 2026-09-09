@@ -294,6 +294,7 @@ r = client.get(url, retries=False)
 | HTTP/3 | Not available | Experimental (QUIC) | Experimental (QUIC) |
 | Decompression | Decoded `iter_bytes()` / raw `iter_raw()` both available | Automatic decoded iteration; raw encoded path selectable | Decoded/raw selectable per first-consumption boundary |
 | Backend | httpcore + anyio | Rust (tokio + hyper) | Rust (tokio + hyper) |
+| Concurrency limits | `Limits(max_connections=…, max_keepalive_connections=…)` bound pool connections | `Limits(max_connections=…)` bounds logical in-flight requests (one permit per request; H2/H3 multiplex over one connection). Native Rust prefers `max_in_flight_requests*` (`max_connections*` are pre-1.0 aliases) | Same as native Python (`max_connections` naming kept for HTTPX compatibility) |
 | Trio/AnyIO | Supported | Not supported (asyncio only) | Not supported (asyncio only) |
 | WSGI/ASGI transports | Supported | Not in native API | Supported (`WSGITransport`, `ASGITransport`) |
 | Mock/custom transports, mounts | Supported | Not in native API | Supported (`MockTransport`, mounts) |

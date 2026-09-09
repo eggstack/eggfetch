@@ -533,6 +533,15 @@ absent; see `docs/residual-differences.md`.
 
 ## Connection Pool Metrics
 
+Concurrency limits bound logical in-flight requests (one permit per
+request), not physical TCP connections: under H1 one request typically
+owns its connection slot, while under H2/H3 many permits multiplex over
+one TCP/QUIC connection. Prefer `max_in_flight_requests` /
+`max_in_flight_requests_per_origin` in new code; `max_connections` /
+`max_connections_per_host` are pre-1.0 aliases (the new name wins when
+both are set). `max_idle_connections*` size the physical idle pool and
+are separate from in-flight concurrency.
+
 ```rust
 let client = Client::new();
 

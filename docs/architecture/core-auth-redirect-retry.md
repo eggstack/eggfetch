@@ -57,7 +57,7 @@ overrides per request.
 | Status | Original Method | Rewritten Method |
 |--------|----------------|------------------|
 | 301, 302 | POST | GET |
-| 303 | Any | GET |
+| 303 | Any except HEAD | GET (HEAD preserved) |
 | 307, 308 | (unchanged) | (unchanged) |
 
 ### Header Handling

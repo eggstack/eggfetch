@@ -380,10 +380,16 @@ client = eggfetch.Client()  # no limits configured
 
 | Parameter | Description | HTTPX default |
 |-----------|-------------|---------------|
-| `max_connections` | Maximum concurrent connections | 100 |
+| `max_connections` | Maximum concurrent in-flight requests (logical concurrency, not physical TCP connections; H2/H3 multiplex many requests over one connection) | 100 |
 | `max_keepalive_connections` | Maximum idle keep-alive connections | 20 |
 | `keepalive_expiry` | Seconds before idle connections close | 5.0 |
-| `max_connections_per_host` | Maximum connections per host | None |
+| `max_connections_per_host` | Maximum in-flight requests per host (logical, not physical connections) | None |
+
+These bound logical in-flight request concurrency (one permit per
+request). The native Rust API prefers the `max_in_flight_requests*`
+names (`max_connections*` are pre-1.0 aliases where the new name wins);
+the Python facade keeps the `max_connections` naming for HTTPX
+compatibility.
 
 ## Environment Trust
 
@@ -414,7 +420,7 @@ response = client.get("https://example.com")
 client = eggfetch.Client(http1=False, http2=True)
 response = client.get("https://example.com")
 
-# HTTP/3 (QUIC)
+# HTTP/3 (QUIC, experimental)
 client = eggfetch.Client(http3=True)
 response = client.get("https://example.com")
 ```

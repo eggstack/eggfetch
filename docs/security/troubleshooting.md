@@ -140,11 +140,11 @@ The decompressed response exceeds `max_decoded_body_size`. Increase the limit or
 All connection pool slots are occupied. Increase the pool size:
 
 ```rust
-ClientBuilder::new().max_connections(100).max_connections_per_host(20)
+Client::builder().max_in_flight_requests(100).max_in_flight_requests_per_origin(20)
 ```
 
 ```python
-eggfetch.Client(max_connections=100, max_connections_per_host=20)
+eggfetch.Client(limits=eggfetch.Limits(max_connections=100, max_connections_per_host=20))
 ```
 
 If requests are hanging, a timeout or cancellation issue may be holding pool slots. Set `total-timeout` to prevent indefinite requests.

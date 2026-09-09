@@ -329,3 +329,4 @@ r = client.post("https://example.com/upload", files={"file": eggfetch.File("/pat
 | HTTP/3 | No | Experimental (opt-in) |
 | Retry | Via urllib3 adapter mounted on `Session` | Built-in `Retry` policy |
 | Compression | Decoded `iter_content`, raw via `stream + raw` | Automatic decoded iteration; raw encoded path selectable |
+| Concurrency limits | Pool sizing via urllib3 adapter (`pool_connections`/`pool_maxsize` bound physical connections) | `Limits(max_connections=…)` bounds logical in-flight requests (one permit per request; H2/H3 multiplex over one connection). Native Rust prefers `max_in_flight_requests*` (`max_connections*` are pre-1.0 aliases) |

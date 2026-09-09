@@ -169,4 +169,4 @@ Exception
 | Decompression bomb blocked | `decoded_body_too_large` | Increase `max_decoded_body_size` if legitimate |
 | Streaming body cannot retry | `body_not_replayable_for_retry` | Use a buffered body for retryable requests |
 | HTTP/2 stream refused | `http2_stream_reset` | Automatically retried if error is retryable |
-| Pool slot unavailable | `pool` | Increase `max_connections` or reduce concurrency |
+| Pool slot unavailable | `pool` | Increase `max_in_flight_requests` (or `max_connections` alias) or reduce concurrency |
