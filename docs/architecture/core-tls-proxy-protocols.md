@@ -314,24 +314,115 @@ HTTP/2 multiplexes streams on a single connection, but eggfetch's pool permits s
 
 ### Feature Gating
 
-Behind the `http3` Cargo feature. Experimental — API surfaces may change.
+Behind the `http3` Cargo feature. Experimental — the label is retained
+while the QUIC/h3 ecosystem matures (no 0-RTT, WebTransport, datagrams,
+or Alt-Svc auto-upgrade in this milestone).
 
 ### Transport
 
-Uses `quinn` for QUIC transport and `h3` for the HTTP/3 protocol layer. QUIC mandates TLS 1.3; 0-RTT is disabled in the initial implementation.
+Uses `quinn` for QUIC transport and `h3` for the HTTP/3 protocol layer. QUIC mandates TLS 1.3; 0-RTT is disabled.
 
 ### Version Policy
 
-`Http3Only` variant is available when the `http3` feature is enabled. `Auto` does not automatically negotiate HTTP/3 — callers must explicitly select `Http3Only`.
+`HttpVersionPolicy::Http3Only` routes over QUIC. `Auto { allow_http3: true }`
+also selects the H3 route; `Auto { allow_http3: false }` (default) never
+does. H3 never bypasses proxy rules: proxy routes are selected first in
+`select_route()`.
+
+### Lifecycle
+
+Per-origin (`host:port`) state machine:
+
+`Vacant -> Connecting -> Ready -> Failed/Closed -> Evicted -> Reconnectable`
+
+- One connection attempt per origin at a time. The per-origin
+  `tokio::sync::OnceCell` serializes DNS + QUIC + h3 init; concurrent
+  waiters share the same attempt.
+- Failures are not cached (`OnceCell` keeps only success), so a failed
+  origin stays reconnectable.
+- Terminal transport failures evict the stale entry (scoped to the failed
+  generation via `Arc::ptr_eq`, so a concurrent fresh connection is never
+  dropped). Eviction removes only cache ownership: in-flight streams hold
+  their own sender clones and the detached driver task keeps driving until
+  they complete.
+- Client drop releases cache ownership and the endpoint; driver tasks end
+  when their connections close. In-flight bodies remain valid until
+  consumed or dropped.
+
+### Origin Cache
+
+Bounded at 64 entries (`H3_CACHE_MAX_ENTRIES`), matching the spirit of the
+SNI (256) / SOCKS (64) caches without a new LRU dependency. Eviction is
+arbitrary-entry and never removes the origin being inserted. Boundedness is
+pinned by unit tests in `transport/http3.rs` via `test-util` cache hooks
+(`cache_len`, `contains_origin`); in-flight survival across unrelated
+eviction is covered by `tests/h3_hardening.rs`.
+
+### Address Fallback
+
+DNS resolves the complete address set (not just the first record). Each
+candidate is attempted in order under one shared connect deadline with a
+fair share per remaining address (`remaining / addrs_left`), so a stalling
+candidate cannot starve later ones. Cancellation drops the loop promptly.
+All-address failure preserves the `Connect` (DNS) / `H3Connect`
+(handshake) taxonomy without leaking sensitive detail.
+
+### Timeouts
+
+- `Timeout.connect` bounds DNS + QUIC handshake + h3 init as one budget
+  shared across fallback attempts (phase `Connect` on expiry).
+- `Timeout.total` stays the outer pipeline deadline and is never restarted
+  per address or reconnect (phase `Total` wins when tighter).
+- `Timeout.write` applies to streamed request-body progress via the
+  pre-transport wrapper; stalls surface as `Write`, never as H3 protocol
+  errors, and never evict the shared connection.
+- `Timeout.read` applies to response-body progress at the documented
+  post-transport boundary (phase `Read`).
+
+### Idle Lifetime
+
+QUIC idle derives from `PoolConfig::idle_timeout`
+(`Limits::keepalive_expiry`), defaulting to 30 s when unset for
+compatibility. `Timeout.pool` is an acquisition budget and never controls
+idle lifetime. Quinn idles on packet activity while Hyper idles on pool
+checkout, so the mapping is documented as policy-equivalent, not identical.
+Idle connection counts (`max_idle_connections`) do not apply to H3's
+one-connection-per-origin model.
+
+### Stream Limits
+
+Logical concurrency (pool permits, one per request) is separate from the
+physical QUIC stream cap. `max_concurrent_bidi_streams` derives from
+`PoolConfig::max_connections_per_host` when set (so the transport never
+contradicts configured concurrency), otherwise 100. Unidirectional streams
+stay at 100 (control traffic). Every H3 request still holds a pool permit,
+so the logical per-origin limit remains the upper bound on concurrent
+streams.
+
+### Failure and Retry
+
+The transport never retries internally and never replays one-shot bodies.
+Stale entries are evicted on transport failure and the original error is
+returned; replayable idempotent requests reconnect only through the
+existing retry machinery on a later attempt. Only `H3Connect` is
+retryable; `H3ConnectionClosed` / `H3Stream` / `H3Protocol` are not.
 
 ### Error Taxonomy
 
 | Error | Meaning |
 |-------|---------|
-| `H3Connect` | QUIC connection failed |
-| `H3ConnectionClosed` | Peer closed the connection |
-| `H3Stream` | Stream error |
-| `H3Protocol` | HTTP/3 protocol error |
+| `H3Connect` | QUIC connection failed (retryable for replayable requests) |
+| `H3ConnectionClosed` | Peer closed the connection (not retried) |
+| `H3Stream` | Stream error (not retried) |
+| `H3Protocol` | HTTP/3 protocol error (not retried) |
+
+### Stress Evidence
+
+`tests/h3_hardening.rs` (12 tests, loopback fixtures only): connect/total
+precedence, stalled-body read timeout, shared concurrent init, per-host
+pool gating, failure non-poisoning, distinct-origin stabilization,
+fail/reconnect cycles, partial-body drop reuse, client-drop release, and
+prompt cancellation with continued usability.
 
 ### Python API
 

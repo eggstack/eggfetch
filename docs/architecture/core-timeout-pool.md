@@ -36,8 +36,8 @@ Request-level overrides are per-field: only fields present in the request-level 
 | Pool | `tokio::time::timeout` around pool acquisition |
 | Total | `tokio::time::timeout` around the full send |
 | Read | Per-chunk wrapper stream (`ReadTimeoutStream`) — deadline resets on each body chunk; direct Hyper/UDS/H3 header acquisition remains owned by the transport future |
-| Write | Per-chunk wrapper stream (`WriteTimeoutStream`) — deadline resets on each chunk delivery |
-| Connect | Enforced by the direct connector and by proxy TCP/TLS/origin-TLS setup |
+| Write | Per-chunk wrapper stream (`WriteTimeoutStream`) — deadline resets on each chunk delivery; H3 propagates `Write` without masking or evicting |
+| Connect | Enforced by the direct connector, by proxy TCP/TLS/origin-TLS setup, and by the H3 connector (DNS + QUIC + h3 init as one budget shared across address fallback with fair per-address shares) |
 
 ### Error Model
 
@@ -102,6 +102,21 @@ When a request acquires a pool slot, it receives a `PoolGuard` (wrapped in `Arc`
 - `acquisition_cancellations` — number of times a pool acquisition was cancelled.
 
 Socket-level counters (connections opened/reused/closed) were removed because hyper owns socket lifecycle and eggfetch cannot observe individual socket events.
+
+### H3 Pool and Idle Mapping
+
+H3 requests acquire pool permits exactly like H1/H2 (one permit per
+request, held on the streaming body until consumed or dropped), so
+`max_connections` / `max_connections_per_host` gate H3 streams as logical
+concurrency. The H3 origin cache (`host:port`, 64 entries) is separate
+from the pool's per-origin semaphore table.
+
+Idle lifetime for H3 derives from `PoolConfig::idle_timeout`
+(`Limits::keepalive_expiry`), defaulting to 30 s; `Timeout.pool` and
+`Timeout.total` are acquisition/outer budgets and never close idle QUIC
+connections. Physical QUIC stream caps derive from
+`max_connections_per_host` (default 100 bidi) and are documented in
+[core-tls-proxy-protocols.md](core-tls-proxy-protocols.md).
 
 ### Environment-Variable Proxy Policy
 

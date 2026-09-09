@@ -9,7 +9,7 @@ eggfetch is a Rust-native HTTP client engine with Python bindings and a CLI tool
 
 ## Features
 
-- **HTTP/1.1, HTTP/2, HTTP/3** -- ALPN negotiation, multiplexed connections, experimental QUIC transport
+- **HTTP/1.1, HTTP/2, HTTP/3** -- ALPN negotiation, multiplexed connections, experimental QUIC transport (bounded per-origin cache, shared connect budget with address fallback, phase-correct timeouts, keepalive-derived idle)
 - **Streaming** -- request and response bodies stream without eager buffering; `bytes_stream()` and `text_lines()` for incremental reads
 - **Response decompression** -- gzip, brotli, zstd, deflate via feature-gated streaming decoders
 - **Connection pooling** -- semaphore-based concurrency with per-origin limits and pool metrics

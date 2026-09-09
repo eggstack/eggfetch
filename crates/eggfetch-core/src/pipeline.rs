@@ -1342,7 +1342,18 @@ pub(crate) async fn send_single_request(
                 let h3_request = builder
                     .body(body)
                     .map_err(|e| Error::RequestBuild(e.to_string()))?;
-                let send_future = h3_connector.send_request(h3_request, url.clone());
+                // `Timeout.connect` bounds H3 DNS + QUIC + h3 establishment
+                // inside the connector as one budget shared across address
+                // fallback attempts. `remaining_total` stays the outer
+                // deadline enforced here and is never restarted per address.
+                // Read/write phases are enforced by the body wrappers at the
+                // documented boundaries. Boxed so the QUIC handshake state
+                // does not bloat the shared `send_single_request` future.
+                let send_future = Box::pin(h3_connector.send_request(
+                    h3_request,
+                    url.clone(),
+                    hop_timeout.connect,
+                ));
                 send_with_total_timeout(send_future, remaining_total).await?
             }
             #[cfg(not(feature = "http3"))]

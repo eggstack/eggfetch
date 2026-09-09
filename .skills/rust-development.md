@@ -14,7 +14,7 @@ Use this skill when writing, modifying, or reviewing Rust code in the eggfetch w
 ./scripts/check.sh              # Tier 1: routine validation (CI runs this)
 cargo fmt --all
 cargo clippy --workspace --all-targets --all-features -- -D warnings
-cargo test --workspace --all-features
+cargo test --workspace --exclude eggfetch-python --all-features -- --test-threads=1
 ```
 
 ## Key Constraints
@@ -33,8 +33,23 @@ Before committing changes to eggfetch-core, verify compilation across feature co
 ```sh
 cargo check -p eggfetch-core --no-default-features
 cargo check -p eggfetch-core --no-default-features --features http1,tls-rustls
+cargo check -p eggfetch-core --no-default-features --features http1,tls-rustls,http3
 cargo check -p eggfetch-core --all-features
 ```
+
+## HTTP/3 Constraints
+
+- Lifecycle lives in `crates/eggfetch-core/src/transport/http3.rs`:
+  per-origin `OnceCell` (success cached, failures reconnectable), bounded
+  64-entry cache, generation-scoped eviction, shared connect budget with
+  fair address shares, no transport-level retries.
+- `Timeout.connect` bounds H3 DNS + QUIC + h3 init; `total` is the outer
+  pipeline deadline; read/write apply at the body boundaries. QUIC idle
+  derives from `PoolConfig::idle_timeout` (never `Timeout.pool`); bidi
+  streams derive from `max_connections_per_host`. Only `H3Connect` is
+  retryable.
+- Behavior tests: `cargo test -p eggfetch-core --all-features --test h3_hardening -- --test-threads=1`
+  plus unit tests in `transport/http3.rs`. Keep the experimental label.
 
 ## Architecture References
 

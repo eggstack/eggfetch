@@ -104,7 +104,14 @@ The total timeout applies across the entire redirect chain, not per-hop. Each ho
 | 500 Internal Server Error | No (not in the default retryable set) |
 | `REFUSED_STREAM` (HTTP/2) | Yes |
 | `CANCEL`, `GOAWAY` (HTTP/2) | No |
+| `H3Connect` (HTTP/3) | Yes (for replayable requests) |
+| `H3ConnectionClosed`, `H3Stream`, `H3Protocol` (HTTP/3) | No |
 | Body not replayable | No |
+
+H3 performs no transport-level retries and never replays one-shot bodies:
+stale QUIC origins are evicted and the original error returned, so a
+reconnect happens only through this retry machinery on a later attempt
+where the policy above allows it.
 
 ### Replay Check
 

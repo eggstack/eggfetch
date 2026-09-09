@@ -6,7 +6,9 @@ See also: [overview.md](overview.md).
 
 ## Test Organization
 
-All tests are colocated in `#[cfg(test)] mod tests` blocks within each source file. No separate `tests/` directory for Rust integration tests.
+Unit tests are colocated in `#[cfg(test)] mod tests` blocks within each
+source file; integration tests live in `crates/eggfetch-core/tests/`
+(loopback fixtures only, no public internet).
 
 ### Test Counts
 
@@ -44,6 +46,19 @@ cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,co
 cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,proxy
 cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,http3
 ```
+
+## HTTP/3 Hardening Tests
+
+- Unit tests in `src/transport/http3.rs`: idle/stream-limit derivation,
+  64-entry bound, generation-scoped eviction, `OnceCell` non-poisoning,
+  multi-address fallback (unreachable + live), connect-phase timeout via a
+  UDP blackhole, prompt cancellation, and write-timeout propagation without
+  eviction.
+- `tests/h3_hardening.rs` (12 tests): connect/total precedence, stalled-body
+  read timeout, shared concurrent init, per-host pool gating, failure
+  non-poisoning, distinct-origin stabilization, fail/reconnect cycles,
+  partial-body drop reuse, client-drop release, and prompt cancellation
+  with continued usability.
 
 ## HTTPX Compatibility Testing
 

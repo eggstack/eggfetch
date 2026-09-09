@@ -968,7 +968,7 @@ impl ClientBuilder {
 
         #[cfg(feature = "http3")]
         let h3_connector = if enabler.use_http3() {
-            crate::transport::http3::H3Connector::new(self.tls_config.clone()).ok()
+            crate::transport::http3::H3Connector::new(self.tls_config.clone(), &pool_config).ok()
         } else {
             None
         };

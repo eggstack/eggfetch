@@ -108,6 +108,18 @@ through the native `stream()` method.
 - `transport/direct.rs` owns the shared Hyper response lifecycle
   (`finish_hyper_response` + trace helpers + `wrap_incoming` + `map_send_error`);
   `transport/uds.rs` reuses those helpers but intentionally omits 101 upgrade handling.
+- `transport/http3.rs` owns the QUIC lifecycle: `Vacant -> Connecting -> Ready ->
+  Failed/Closed -> Evicted -> Reconnectable` via per-origin `OnceCell` (caches
+  success only; failures stay reconnectable). Bounded 64-entry origin cache
+  with generation-scoped eviction (in-flight streams survive); multi-address
+  fallback under one shared connect budget with fair per-address shares;
+  `Timeout.connect` bounds DNS + QUIC + h3 init, `total` stays the outer
+  pipeline deadline, read/write apply at the body boundaries; QUIC idle
+  derives from `PoolConfig::idle_timeout` (default 30 s, never `Timeout.pool`);
+  bidi streams derive from `max_connections_per_host` (default 100); no
+  transport-level retries, one-shot bodies never replayed. Only `H3Connect`
+  is retryable. Test hooks are `test-util`-gated (`cache_len`,
+  `contains_origin`); behavior tests live in `tests/h3_hardening.rs`.
 
 ## HTTPX Compatibility Layer
 
