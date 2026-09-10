@@ -177,7 +177,9 @@ pub(crate) struct ClientInner {
     #[cfg(feature = "http3")]
     pub(crate) h3_connector: Option<crate::transport::http3::H3Connector>,
     /// Bounded Alt-Svc discovery state (separate from QUIC sessions).
-    /// Owned here so all routes share one view; empty when `http3` is off.
+    /// Owned here so all routes share one view. Only present with `http3`;
+    /// without it there is no discovery and no state to keep.
+    #[cfg(feature = "http3")]
     pub(crate) alt_svc_state: Arc<crate::transport::alt_svc::AltSvcState>,
 }
 
@@ -1183,6 +1185,7 @@ impl ClientBuilder {
                 transport_metrics,
                 #[cfg(feature = "http3")]
                 h3_connector,
+                #[cfg(feature = "http3")]
                 alt_svc_state: Arc::new(crate::transport::alt_svc::AltSvcState::new()),
             }),
         }
