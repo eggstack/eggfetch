@@ -495,26 +495,39 @@ stale/cancellation/clear, SNI preservation, one-shot non-replay).
 
 `tests/h3_interop_qualification.rs` (loopback only unless
 `EGGFETCH_H3_INTEROP_URLS` is set): mandatory Quinn self-interop,
-UDP-blackhole connect-budget termination, bad-then-good non-poisoning,
-server-restart reconnect, prompt cancellation, 100-request reuse soak,
-fail/reconnect stabilization, cancellation storms, construction/drop loops,
-exact metrics with truthful `None` H3 per-response metadata, IPv6
+GET/HEAD, buffered POST upload, 1 MiB streaming download, 20-way
+multiplexed concurrency, H3 trailers after EOF, UDP-blackhole
+connect-budget termination, bad-then-good non-poisoning,
+server-restart reconnect, early-close / mid-response-drop termination
+with recovery, prompt cancellation, 100-request reuse soak,
+fail/reconnect stabilization, 70-origin boundedness beyond the
+64-entry cache, cancellation storms, construction/drop loops, exact
+metrics with truthful `None` H3 per-response metadata, IPv6
 capability detection, and a doc-pinned platform-scope check.
+External URLs get GET + HEAD when configured.
 
 ### Dependency and Upstream-Risk Review (2026-09-10)
 
-Pinned for this milestone:
+Pinned for this milestone (exact versions from `Cargo.lock` at review time):
 
-- `quinn 0.11` (`rustls` + `ring` + `runtime-tokio`)
+- `quinn 0.11.11` (`rustls` + `ring` + `runtime-tokio`)
+- `quinn-proto 0.11.16`, `quinn-udp 0.5.15` (transitive QUIC transport)
 - `h3 0.0.8` with `i-implement-a-third-party-backend-and-opt-into-breaking-changes`
   (exposes `ConnectionState::is_closing()` / `is_h3_no_error()`; re-audit on bump)
 - `h3-quinn 0.0.10` bridge
+- QUIC/TLS companions: `rustls 0.23.41`, `ring 0.17.14`,
+  `tokio-rustls 0.26.4`, `tokio 1.52.3`, `http 1.4.2`
+  (`hyper 1.10.1` remains the H1/H2 engine; H3 bypasses hyper)
 
 Hyper's HTTP/3 integration remains unfinished upstream and the h3
 ecosystem still carries active correctness/interoperability work around
 clean close, buffered data, stream reset/cancel, GOAWAY, QPACK/frame
 parsing, and connection-driver lifecycle. No unsupported fork of
-h3/Quinn is introduced to force graduation. Upgrades require a concrete
+h3/Quinn is introduced to force graduation. No dependency upgrade is
+taken in this milestone: there is no concrete
+correctness/security/interoperability benefit that outweighs the
+requalification cost, and any future upgrade must land before the
+program freeze. Upgrades require a concrete
 correctness/security/interoperability benefit and land before the
 program freeze.
 
@@ -522,26 +535,76 @@ program freeze.
 
 - Deterministic loopback Quinn/h3 fixtures are mandatory and green
   (`h3_hardening`, `h3_alt_svc_discovery`, `h3_interop_qualification`).
+  The interop corpus covers GET/HEAD, request bodies (buffered upload),
+  large streaming download, concurrent multiplexed requests, response
+  trailers, cancellation/reset, server-restart reconnect, early-close /
+  mid-response drop termination with client recovery, UDP-blackhole
+  budgets, bad-then-good non-poisoning, 100-request reuse soak,
+  fail/reconnect stabilization, cancellation storms,
+  construction/drop loops, many-distinct-origin boundedness, exact
+  metrics with truthful `None` H3 per-response metadata, and IPv6
+  capability detection. Alt-Svc alternative authority/port, suppression,
+  safe fallback, and draining are covered in
+  `h3_alt_svc_discovery.rs`.
 - External independent servers (ngtcp2/nghttp3, quiche, …) are supported
   through `EGGFETCH_H3_INTEROP_URLS` with capability detection and
   explicit skip reporting; absence is visible and is not graduation
-  evidence. No external-server pass is claimed in this milestone.
+  evidence. When configured, the harness runs GET (drained body) plus
+  HEAD against each origin without changing EggFetch source. No
+  external-server pass is claimed in this milestone.
 - Real-network public-origin spot checks are manual qualification
-  supplements, not Tier 1; none are claimed in this milestone.
+  supplements, not Tier 1; none are claimed in this milestone. The
+  manual procedure below is the qualification instrument when spot
+  checks are run.
 - Impairment coverage is local and deterministic: UDP blackhole,
-  bad-then-good DNS-shape, server restart, cancellation during connect,
-  cancellation storms. Packet-loss/reordering/jitter rigs and
-  mid-response path-break harnesses remain future work and are listed
+  bad-then-good DNS-shape, server restart, early-close / mid-response
+  drop, cancellation during connect, cancellation storms.
+  Packet-loss/reordering/jitter rigs remain future work and are listed
   as blockers below.
+
+### Manual Public-Origin Spot-Check Procedure (Tier 2/manual, not CI)
+
+Do not bake volatile public hostnames into Tier 1 tests. When a
+qualifier runs spot checks, follow this procedure and record the
+ledger fields below:
+
+1. Pick a small set of major public HTTPS origins known to advertise
+   H3 at qualification time (record the exact hostnames and date;
+   they are volatile and are not part of the repo).
+2. For each origin, over authenticated HTTPS with default trust:
+   confirm the first request discovers Alt-Svc, then confirm a later
+   eligible request selects H3 with the correct protocol version and
+   response content.
+3. With UDP blocked (e.g. firewall drop, not just unplugged), confirm
+   the request still terminates within the configured
+   timeout/cancellation contract and falls back to a usable H1/H2
+   path where the policy permits it.
+4. Confirm diagnostics expose no credentials (redaction policy holds).
+5. Vary DNS/IPv4/IPv6 where available and confirm no permanent
+   poisoned state (a later request to a healthy origin succeeds).
+6. Record per origin: date, origin, negotiated protocol, result, and
+   whether any failure was transient Internet failure versus a
+   deterministic EggFetch failure. Transient Internet failure is not
+   graduation evidence and never fails Tier 1.
+
+Ledger for this milestone: no public-origin spot-check pass is
+claimed; the fields above are empty by design until a qualifier runs
+the procedure on a frozen SHA.
 
 ### Resource and Platform Scope
 
 - Soak coverage is bounded and deterministic: 100 sequential reused-H3
-  requests, 10 fail/reconnect cycles, 20-iteration cancellation storms
-  and construction/drop loops. Long-duration RSS/descriptor soak with
-  allocator-threshold policy remains extended-tier future work.
+  requests, 10 fail/reconnect cycles, 20-iteration cancellation storms,
+  20-iteration construction/drop loops, 70-distinct-origin boundedness,
+  20-way multiplexed concurrency, and 1 MiB streaming download.
+  Long-duration RSS/descriptor soak with allocator-threshold policy
+  remains extended-tier future work (existing
+  `resource_monitor`/resource-stabilization conventions apply; no
+  fragile exact-RSS assertions in H3 tests).
 - Fuzz coverage for EggFetch-owned Alt-Svc parsing/state lives in
-  `fuzz/fuzz_targets/fuzz_alt_svc.rs` plus deterministic adversarial
+  `fuzz/fuzz_targets/fuzz_alt_svc.rs` (header parsing, cache
+  learn/expiry/clear bounds, trust gating, plus suppressor
+  observe/suppress/recover transitions) plus deterministic adversarial
   unit/integration tests; h3/QPACK internals are not re-fuzzed.
 - Platform scope reuses existing CI/package mechanisms (no new matrix):
   UDP socket binding, IPv6 availability (capability-detected, never
@@ -559,8 +622,8 @@ pass yet; concrete blockers:
 1. No two-independent-non-Quinn-server interoperability pass recorded
    on the frozen SHA.
 2. No public-origin Alt-Svc spot-check ledger recorded.
-3. Impairment harness covers blackhole/restart/cancellation locally;
-   loss/reordering/jitter and mid-response path-break evidence missing.
+3. Impairment harness covers blackhole/restart/early-close/cancellation
+   locally; packet-loss/reordering/jitter rigs remain future work.
 4. Upstream `h3 0.0.8` / Hyper-H3 hardening still open; graduation
    must be evidence-driven, not label-driven.
 

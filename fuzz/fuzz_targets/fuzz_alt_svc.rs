@@ -3,7 +3,9 @@
 use libfuzzer_sys::fuzz_target;
 use std::time::{Duration, Instant};
 
-use eggfetch_core::transport::alt_svc::{AltSvcCache, AltSvcLearnContext, AltSvcOrigin};
+use eggfetch_core::transport::alt_svc::{
+    AltSvcCache, AltSvcLearnContext, AltSvcOrigin, BrokenRouteSuppressor, H3FailureClass,
+};
 
 fuzz_target!(|data: &[u8]| {
     // Split input into origin + header value parts.
@@ -49,4 +51,23 @@ fuzz_target!(|data: &[u8]| {
         origin_matches_hop: false,
     };
     assert!(!ctx.trustworthy());
+
+    // Suppressor observe/suppress/recover transitions must never panic and
+    // must stay bounded, even for hostile inputs.
+    let suppressor = BrokenRouteSuppressor::new();
+    let generation = u64::from(extra.len() as u8) ^ u64::from(header.len() as u8);
+    let reason = match data.first().unwrap_or(&0) % 4 {
+        0 => H3FailureClass::Connectivity,
+        1 => H3FailureClass::Protocol,
+        2 => H3FailureClass::Closed,
+        _ => H3FailureClass::Other,
+    };
+    suppressor.record_failure(&origin, generation, now, reason);
+    let _ = suppressor.is_suppressed(&origin, generation, now);
+    let _ = suppressor.is_suppressed(&origin, generation.wrapping_add(1), now);
+    let _ =
+        suppressor.is_suppressed(&origin, generation, now + Duration::from_secs(10_000));
+    suppressor.note_new_advertisement(&origin, generation.wrapping_add(1));
+    suppressor.record_success(&origin);
+    let _ = suppressor.is_suppressed(&origin, generation, now);
 });

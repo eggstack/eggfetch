@@ -9,7 +9,7 @@ eggfetch is a Rust-native HTTP client engine with Python bindings and a CLI tool
 
 ## Features
 
-- **HTTP/1.1, HTTP/2, HTTP/3** -- ALPN negotiation, multiplexed connections, experimental QUIC transport (bounded per-origin cache, shared connect budget with address fallback, phase-correct timeouts, keepalive-derived idle, authenticated Alt-Svc discovery with suppression/safe fallback/draining)
+- **HTTP/1.1, HTTP/2, HTTP/3** -- ALPN negotiation, multiplexed connections, experimental QUIC transport (bounded per-origin cache, shared connect budget with address fallback, phase-correct timeouts, keepalive-derived idle, authenticated Alt-Svc discovery with suppression/safe fallback/draining; retained experimental — see [`docs/architecture/core-tls-proxy-protocols.md`](docs/architecture/core-tls-proxy-protocols.md) § "Production Graduation Decision")
 - **Streaming** -- request and response bodies stream without eager buffering; `bytes_stream()` and `text_lines()` for incremental reads
 - **HTTP trailers** -- H1 chunked trailers, H2 trailing HEADERS, and H3 trailing headers captured without buffering (`Response::trailers()` after body EOF; H1 duplicate same-name trailers collapse upstream in hyper and are documented)
 - **Response decompression** -- gzip, brotli, zstd, deflate via feature-gated streaming decoders

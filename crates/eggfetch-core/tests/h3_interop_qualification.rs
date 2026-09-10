@@ -46,6 +46,7 @@ use std::time::Duration;
 
 use bytes::Bytes;
 use eggfetch_core::{Client, HttpVersionPolicy, Timeout, TlsConfig};
+use futures_util::StreamExt;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
 use tokio::sync::watch;
 
@@ -104,6 +105,89 @@ impl QuicTestServer {
                             loop {
                                 let Ok(Some(resolver)) = server.accept().await else { break };
                                 let body = body.clone();
+                                let Ok((req, mut stream)) = resolver.resolve_request().await
+                                else {
+                                    continue;
+                                };
+                                while stream.recv_data().await.ok().flatten().is_some() {}
+                                let resp = http::Response::builder()
+                                    .status(200)
+                                    .header("content-type", "text/plain")
+                                    .body(())
+                                    .unwrap();
+                                if stream.send_response(resp).await.is_err() {
+                                    break;
+                                }
+                                // HEAD responses carry no body; any other
+                                // method gets the configured payload.
+                                if req.method() == http::Method::HEAD {
+                                    let _ = stream.finish().await;
+                                    continue;
+                                }
+                                let _ = stream.send_data(body).await;
+                                let _ = stream.finish().await;
+                            }
+                        });
+                    }
+                    _ = rx.changed() => break,
+                }
+            }
+        });
+        Self { addr, shutdown: tx }
+    }
+
+    /// Server that sends response trailers after the body.
+    #[allow(unknown_lints, clippy::unused_async, clippy::unused_async_trait_impl)]
+    async fn start_with_trailers(body: Vec<u8>, trailer_name: &str, trailer_value: &str) -> Self {
+        let cert_key =
+            rcgen::generate_simple_self_signed(vec!["localhost".into()]).expect("rcgen cert");
+        let cert_der = CertificateDer::from(cert_key.cert.der().to_vec());
+        let key_der =
+            PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(cert_key.key_pair.serialize_der()));
+        let mut server_tls = rustls::ServerConfig::builder_with_provider(Arc::new(
+            rustls::crypto::ring::default_provider(),
+        ))
+        .with_protocol_versions(&[&rustls::version::TLS13])
+        .expect("TLS13")
+        .with_no_client_auth()
+        .with_single_cert(vec![cert_der], key_der)
+        .expect("cert");
+        server_tls.alpn_protocols = vec![b"h3".to_vec()];
+        let quic_crypto =
+            quinn::crypto::rustls::QuicServerConfig::try_from(server_tls).expect("server crypto");
+        let mut server_config = quinn::ServerConfig::with_crypto(Arc::new(quic_crypto));
+        let mut transport = quinn::TransportConfig::default();
+        transport.max_concurrent_bidi_streams(100u32.into());
+        transport.max_concurrent_uni_streams(100u32.into());
+        server_config.transport_config(Arc::new(transport));
+        let endpoint = quinn::Endpoint::server(server_config, "127.0.0.1:0".parse().unwrap())
+            .expect("bind server");
+        let addr = endpoint.local_addr().expect("addr");
+        let body = Bytes::from(body);
+        let trailer_name = trailer_name.to_string();
+        let trailer_value = trailer_value.to_string();
+        let (tx, mut rx) = watch::channel(false);
+        tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    incoming = endpoint.accept() => {
+                        let Some(incoming) = incoming else { break };
+                        let body = body.clone();
+                        let trailer_name = trailer_name.clone();
+                        let trailer_value = trailer_value.clone();
+                        tokio::spawn(async move {
+                            let Ok(conn) = incoming.await else { return };
+                            let h3_conn = h3_quinn::Connection::new(conn);
+                            let Ok(mut server) =
+                                h3::server::Connection::<_, Bytes>::new(h3_conn).await
+                            else {
+                                return;
+                            };
+                            loop {
+                                let Ok(Some(resolver)) = server.accept().await else { break };
+                                let body = body.clone();
+                                let trailer_name = trailer_name.clone();
+                                let trailer_value = trailer_value.clone();
                                 let Ok((_req, mut stream)) = resolver.resolve_request().await
                                 else {
                                     continue;
@@ -117,8 +201,88 @@ impl QuicTestServer {
                                 if stream.send_response(resp).await.is_err() {
                                     break;
                                 }
-                                let _ = stream.send_data(body).await;
+                                if stream.send_data(body).await.is_err() {
+                                    break;
+                                }
+                                let mut trailers = http::HeaderMap::new();
+                                trailers.insert(
+                                    http::HeaderName::from_bytes(trailer_name.as_bytes())
+                                        .expect("trailer name"),
+                                    http::HeaderValue::from_str(&trailer_value)
+                                        .expect("trailer value"),
+                                );
+                                let _ = stream.send_trailers(trailers).await;
                                 let _ = stream.finish().await;
+                            }
+                        });
+                    }
+                    _ = rx.changed() => break,
+                }
+            }
+        });
+        Self { addr, shutdown: tx }
+    }
+
+    /// Server that sends headers plus a partial body then drops the stream
+    /// without `finish` (mid-response path-break / early close).
+    #[allow(unknown_lints, clippy::unused_async, clippy::unused_async_trait_impl)]
+    async fn start_early_close() -> Self {
+        let cert_key =
+            rcgen::generate_simple_self_signed(vec!["localhost".into()]).expect("rcgen cert");
+        let cert_der = CertificateDer::from(cert_key.cert.der().to_vec());
+        let key_der =
+            PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(cert_key.key_pair.serialize_der()));
+        let mut server_tls = rustls::ServerConfig::builder_with_provider(Arc::new(
+            rustls::crypto::ring::default_provider(),
+        ))
+        .with_protocol_versions(&[&rustls::version::TLS13])
+        .expect("TLS13")
+        .with_no_client_auth()
+        .with_single_cert(vec![cert_der], key_der)
+        .expect("cert");
+        server_tls.alpn_protocols = vec![b"h3".to_vec()];
+        let quic_crypto =
+            quinn::crypto::rustls::QuicServerConfig::try_from(server_tls).expect("server crypto");
+        let mut server_config = quinn::ServerConfig::with_crypto(Arc::new(quic_crypto));
+        let mut transport = quinn::TransportConfig::default();
+        transport.max_concurrent_bidi_streams(100u32.into());
+        transport.max_concurrent_uni_streams(100u32.into());
+        server_config.transport_config(Arc::new(transport));
+        let endpoint = quinn::Endpoint::server(server_config, "127.0.0.1:0".parse().unwrap())
+            .expect("bind server");
+        let addr = endpoint.local_addr().expect("addr");
+        let (tx, mut rx) = watch::channel(false);
+        tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    incoming = endpoint.accept() => {
+                        let Some(incoming) = incoming else { break };
+                        tokio::spawn(async move {
+                            let Ok(conn) = incoming.await else { return };
+                            let h3_conn = h3_quinn::Connection::new(conn);
+                            let Ok(mut server) =
+                                h3::server::Connection::<_, Bytes>::new(h3_conn).await
+                            else {
+                                return;
+                            };
+                            loop {
+                                let Ok(Some(resolver)) = server.accept().await else { break };
+                                let Ok((_req, mut stream)) = resolver.resolve_request().await
+                                else {
+                                    continue;
+                                };
+                                while stream.recv_data().await.ok().flatten().is_some() {}
+                                let resp = http::Response::builder()
+                                    .status(200)
+                                    .header("content-type", "text/plain")
+                                    .body(())
+                                    .unwrap();
+                                if stream.send_response(resp).await.is_err() {
+                                    break;
+                                }
+                                let _ = stream.send_data(Bytes::from_static(b"partial")).await;
+                                // Drop without finish: abrupt mid-response cut.
+                                break;
                             }
                         });
                     }
@@ -236,7 +400,117 @@ async fn external_h3_interop_servers_if_configured() {
         );
         // Drain body to prove streaming works against the external stack.
         let _ = resp.text().await.expect("external body");
+        // HEAD proves method framing beyond GET without changing source.
+        let head_resp = client
+            .head(url)
+            .unwrap()
+            .send()
+            .await
+            .unwrap_or_else(|e| panic!("external h3 head {url} failed: {e:?}"));
+        assert!(
+            (200..400).contains(&head_resp.status().as_u16()),
+            "unexpected HEAD status for {url}"
+        );
     }
+}
+
+// ---------------------------------------------------------------------------
+// §2 continued: request/response corpus (local, deterministic)
+// ---------------------------------------------------------------------------
+
+/// POST with a buffered body succeeds over H3 (upload path).
+#[tokio::test(flavor = "multi_thread")]
+async fn h3_post_with_buffered_body_succeeds() {
+    let server = QuicTestServer::start(b"post-ok".to_vec()).await;
+    let url = server.url();
+    let client = h3_client();
+    let payload = vec![0x55_u8; 256 * 1024];
+    let mut resp = client
+        .post(&url)
+        .unwrap()
+        .body(payload)
+        .send()
+        .await
+        .expect("h3 post");
+    assert_eq!(resp.status().as_u16(), 200);
+    assert_eq!(resp.text().await.expect("body"), "post-ok");
+}
+
+/// HEAD framing succeeds over H3.
+#[tokio::test(flavor = "multi_thread")]
+async fn h3_head_method_succeeds() {
+    let server = QuicTestServer::start(b"head-body".to_vec()).await;
+    let url = server.url();
+    let client = h3_client();
+    let resp = client.head(&url).unwrap().send().await.expect("h3 head");
+    assert_eq!(resp.status().as_u16(), 200);
+}
+
+/// Large streaming download (1 MiB) without eager buffering.
+#[tokio::test(flavor = "multi_thread")]
+async fn h3_large_streaming_download() {
+    let expected = vec![0xAB_u8; 1024 * 1024];
+    let server = QuicTestServer::start(expected.clone()).await;
+    let url = server.url();
+    let client = h3_client();
+    let mut resp = client.get(&url).unwrap().send().await.expect("h3 get");
+    assert_eq!(resp.status().as_u16(), 200);
+    let mut stream = resp.bytes_stream().expect("stream");
+    let mut total = 0usize;
+    while let Some(chunk) = stream.next().await {
+        total += chunk.expect("chunk").len();
+    }
+    assert_eq!(total, expected.len());
+}
+
+/// Concurrent multiplexed requests share one H3 connection.
+#[tokio::test(flavor = "multi_thread")]
+async fn h3_concurrent_multiplexed_requests() {
+    let server = QuicTestServer::start(b"mux".to_vec()).await;
+    let url = server.url();
+    let client = h3_client();
+    let mut handles = Vec::new();
+    for _ in 0..20u32 {
+        let client = client.clone();
+        let url = url.clone();
+        handles.push(tokio::spawn(async move {
+            let mut resp = client.get(&url).unwrap().send().await.expect("mux req");
+            assert_eq!(resp.status().as_u16(), 200);
+            assert_eq!(resp.text().await.expect("body"), "mux");
+        }));
+    }
+    for h in handles {
+        h.await.expect("join");
+    }
+    let m = client.transport_metrics().snapshot();
+    assert!(
+        m.h3_connections_created < 10,
+        "multiplexed burst should reuse connections: {}",
+        m.h3_connections_created
+    );
+}
+
+/// H3 response trailers surface after EOF and are None before.
+#[tokio::test(flavor = "multi_thread")]
+async fn h3_response_trailers_surface_after_eof() {
+    let server =
+        QuicTestServer::start_with_trailers(b"trailer-body".to_vec(), "x-h3-test", "trailer-ok")
+            .await;
+    let url = server.url();
+    let client = h3_client();
+    let mut resp = client.get(&url).unwrap().send().await.expect("h3 get");
+    assert_eq!(resp.status().as_u16(), 200);
+    assert!(
+        resp.trailers().is_none(),
+        "trailers must be None before EOF"
+    );
+    let body = resp.text().await.expect("body");
+    assert_eq!(body, "trailer-body");
+    let trailers = resp.trailers().expect("trailers after EOF");
+    assert_eq!(
+        trailers.get("x-h3-test").expect("trailer value"),
+        "trailer-ok"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -325,6 +599,36 @@ async fn cancellation_during_h3_connect_is_prompt() {
     assert_eq!(resp.status().as_u16(), 200);
 }
 
+/// Mid-response early close terminates promptly and does not poison the
+/// client (local deterministic path-break shape).
+#[tokio::test(flavor = "multi_thread")]
+async fn h3_early_close_terminates_and_client_recovers() {
+    let broken = QuicTestServer::start_early_close().await;
+    let broken_url = broken.url();
+    let client = h3_client_with_connect_timeout(Duration::from_secs(5));
+    let outcome = tokio::time::timeout(
+        Duration::from_secs(5),
+        client.get(&broken_url).unwrap().send(),
+    )
+    .await;
+    // The request must terminate (outer timeout is the backstop); a hang
+    // would fail here. Either an error or a short body is acceptable —
+    // what matters is bounded termination without poisoned state.
+    if let Ok(Ok(mut resp)) = outcome {
+        let _ = tokio::time::timeout(Duration::from_secs(5), resp.text()).await;
+    }
+    let good = QuicTestServer::start(b"recovered".to_vec()).await;
+    let good_url = good.url();
+    let mut resp = client
+        .get(&good_url)
+        .unwrap()
+        .send()
+        .await
+        .expect("usable after early close");
+    assert_eq!(resp.status().as_u16(), 200);
+    assert_eq!(resp.text().await.expect("body"), "recovered");
+}
+
 // ---------------------------------------------------------------------------
 // §5: Resource and soak evidence (bounded, deterministic)
 // ---------------------------------------------------------------------------
@@ -375,6 +679,36 @@ async fn repeated_fail_reconnect_cycles_do_not_grow_state() {
         .await
         .expect("good after cycles");
     assert_eq!(resp.status().as_u16(), 200);
+}
+
+/// Many sequential distinct origins beyond the 64-entry H3 cache bound
+/// stay bounded and leave the client usable (§5 resource evidence).
+#[tokio::test(flavor = "multi_thread")]
+async fn h3_many_distinct_origins_stay_bounded() {
+    let client = h3_client_with_connect_timeout(Duration::from_millis(50));
+    // 70 distinct dead origins exceeds H3_CACHE_MAX_ENTRIES (64).
+    for _ in 0..70u32 {
+        let hole = Blackhole::bind();
+        let url = hole.url();
+        let _ = tokio::time::timeout(Duration::from_millis(200), client.get(&url).unwrap().send())
+            .await;
+    }
+    let m = client.transport_metrics().snapshot();
+    assert!(
+        m.h3_connections_created < 64,
+        "distinct-origin failures must not accumulate: {}",
+        m.h3_connections_created
+    );
+    let good = QuicTestServer::start(b"bounded-ok".to_vec()).await;
+    let url = good.url();
+    let mut resp = client
+        .get(&url)
+        .unwrap()
+        .send()
+        .await
+        .expect("good after many origins");
+    assert_eq!(resp.status().as_u16(), 200);
+    assert_eq!(resp.text().await.expect("body"), "bounded-ok");
 }
 
 #[tokio::test(flavor = "multi_thread")]

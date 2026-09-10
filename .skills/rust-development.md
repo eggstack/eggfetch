@@ -57,8 +57,14 @@ cargo check -p eggfetch-core --all-features
   streams derive from the effective per-origin in-flight limit. Only
   `H3Connect` is retryable.
 - Behavior tests: `cargo test -p eggfetch-core --all-features --test h3_hardening -- --test-threads=1`
-  plus ` --test h3_alt_svc_discovery` and unit tests in `transport/http3.rs`
-  + `transport/alt_svc.rs`. Keep the experimental label.
+  plus ` --test h3_alt_svc_discovery`, ` --test h3_interop_qualification`
+  (loopback-only unless `EGGFETCH_H3_INTEROP_URLS` is set; absence is an
+  explicit skip) and unit tests in `transport/http3.rs`
+  + `transport/alt_svc.rs`. Fuzz: `fuzz/fuzz_targets/fuzz_alt_svc.rs`
+  (parser/cache + suppressor transitions). Keep the experimental label;
+  the graduation gate and named blockers live in
+  `docs/architecture/core-tls-proxy-protocols.md`
+  (§ "Production Graduation Decision").
 
 ## Observability & Limits (native-protocol-observability)
 

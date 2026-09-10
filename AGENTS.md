@@ -131,8 +131,13 @@ through the native `stream()` method.
   (feature `i-implement-...`, re-audit on bump), marks generations draining,
   preserves close codes, reconnects next request. Test hooks are
   `test-util`-gated (`cache_len`, `contains_origin`, `is_draining_key`,
-  `close_reason_key`); behavior tests live in `tests/h3_hardening.rs` and
-  `tests/h3_alt_svc_discovery.rs`.
+  `close_reason_key`); behavior tests live in `tests/h3_hardening.rs`,
+  `tests/h3_alt_svc_discovery.rs`, and `tests/h3_interop_qualification.rs`
+  (loopback-only unless `EGGFETCH_H3_INTEROP_URLS` is set; absence is an
+  explicit skip, not evidence). HTTP/3 remains experimental; the graduation
+  gate, exact pinned versions, manual spot-check procedure, and named
+  blockers live in `docs/architecture/core-tls-proxy-protocols.md`
+  (§ "Production Graduation Decision").
 - Trailers: `SharedTrailers` is populated by `wrap_incoming` (H1/H2) and the
   H3 body unfold (via `recv_trailers`) without buffering; `Response::trailers()`
   is `None` until EOF, on no-trailers, or on pre-trailer body errors. H1
