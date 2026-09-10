@@ -1,0 +1,46 @@
+# HTTPX 1.0 preview status (non-qualified reconnaissance)
+#
+# This file is explicitly NOT a compatibility profile. It carries no
+# `qualification-sha`, no `stage`, and no parity claim. It exists only so
+# tooling and readers can distinguish preview reference data from the
+# production evidence in `compat/httpx/0.28.1/` (Stage C) and
+# `compat/httpx2/2.12.0/` (Stage C).
+#
+# Do not add `profile.toml` fields here. Do not gate CI on this directory.
+
+[preview]
+status = "preview-only"
+reference-distribution = "httpx"
+reference-version = "1.0.dev6"
+reference-date = "2026-08-31"
+observed-date = "2026-09-10"
+reference-wheel = "httpx-1.0.dev6-py3-none-any.whl"
+reference-size-approx = "37 KiB"
+stable-production-contract = "httpx==0.28.1"
+qualification-claim = "none"
+stage = "none"
+
+[observation]
+# `pip index versions httpx` hides pre-releases by default (shows 0.28.1 as
+# latest). Pre-releases are visible with `--pre` and are published on PyPI:
+# 1.0.dev1 (2025-07-02), dev2 (2025-08-04), dev3 (2025-09-15),
+# dev4 (2026-08-19), dev5 (2026-08-21), dev6 (2026-08-31).
+# The preview manifest was generated from the pinned dev6 wheel in an
+# isolated venv (never installed into the qualification venv).
+method = "pip index versions --pre httpx + isolated pip download httpx==1.0.dev6"
+manifest-tool = "scripts/generate_httpx_api_manifest.py --package httpx"
+manifest-symbols = 36
+delta-tool = "scripts/compare_httpx_api_manifest.py (empty allowed set; preview is not gated)"
+delta-differences-vs-0-28-1 = 192
+
+[migration-trigger]
+# Opens a NEW version-specific implementation program. Never renames this
+# preview plan into a Stage C plan.
+condition-1 = "upstream publishes an RC with an explicitly frozen public API, or a stable 1.0 release"
+condition-2 = "release notes indicate no further major compatibility reset before stable"
+condition-3 = "a fresh delta inventory shows the target is stable enough to justify implementation, pinned to the exact RC/stable release"
+
+[refresh-discipline]
+scope = "generated/reference/docs data only"
+automation = "none (no polling, no release watcher, no new CI job)"
+tooling-changes = "shared-script changes must land before the parent program freeze with full revalidation; none are made in preview refreshes"

@@ -1,0 +1,2697 @@
+{
+  "differences": [
+    {
+      "symbol": "ASGITransport",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "AsyncBaseTransport",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "AsyncByteStream",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "AsyncClient",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "AsyncHTTPTransport",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Auth",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "BaseTransport",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "BasicAuth",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "CloseError",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "ConnectError",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "ConnectTimeout",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "CookieConflict",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Cookies",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "DecodingError",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "DigestAuth",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "HTTPError",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "HTTPStatusError",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "HTTPTransport",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "InvalidURL",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Limits",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "LocalProtocolError",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "MockTransport",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "NetRCAuth",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "NetworkError",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "PoolTimeout",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Proxy",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "ProxyError",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "ReadError",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "ReadTimeout",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "RemoteProtocolError",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "RequestError",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "RequestNotRead",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "ResponseNotRead",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "StreamClosed",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "StreamConsumed",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "StreamError",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "SyncByteStream",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Timeout",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "TimeoutException",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "TooManyRedirects",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "TransportError",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "USE_CLIENT_DEFAULT",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "UnsupportedProtocol",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "WSGITransport",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "WriteError",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "WriteTimeout",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "__description__",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "codes",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "create_ssl_context",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "delete",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "get",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "head",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "main",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "options",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "patch",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "post",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "put",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "request",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "stream",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Binary",
+      "difference_type": "extra-symbol",
+      "member": "",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "Connection",
+      "difference_type": "extra-symbol",
+      "member": "",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "ConnectionPool",
+      "difference_type": "extra-symbol",
+      "member": "",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "Content",
+      "difference_type": "extra-symbol",
+      "member": "",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "DuplexStream",
+      "difference_type": "extra-symbol",
+      "member": "",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "File",
+      "difference_type": "extra-symbol",
+      "member": "",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "FileStream",
+      "difference_type": "extra-symbol",
+      "member": "",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "Files",
+      "difference_type": "extra-symbol",
+      "member": "",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "Form",
+      "difference_type": "extra-symbol",
+      "member": "",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "HTML",
+      "difference_type": "extra-symbol",
+      "member": "",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "HTTPParser",
+      "difference_type": "extra-symbol",
+      "member": "",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "JSON",
+      "difference_type": "extra-symbol",
+      "member": "",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "Method",
+      "difference_type": "extra-symbol",
+      "member": "",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "MultiPart",
+      "difference_type": "extra-symbol",
+      "member": "",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "NetworkBackend",
+      "difference_type": "extra-symbol",
+      "member": "",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "NetworkStream",
+      "difference_type": "extra-symbol",
+      "member": "",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "Server",
+      "difference_type": "extra-symbol",
+      "member": "",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "Stream",
+      "difference_type": "extra-symbol",
+      "member": "",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "Text",
+      "difference_type": "extra-symbol",
+      "member": "",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "Transport",
+      "difference_type": "extra-symbol",
+      "member": "",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "open_connection",
+      "difference_type": "extra-symbol",
+      "member": "",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "quote",
+      "difference_type": "extra-symbol",
+      "member": "",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "timeout",
+      "difference_type": "extra-symbol",
+      "member": "",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "unquote",
+      "difference_type": "extra-symbol",
+      "member": "",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "urldecode",
+      "difference_type": "extra-symbol",
+      "member": "",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "urlencode",
+      "difference_type": "extra-symbol",
+      "member": "",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "ByteStream",
+      "difference_type": "parameter-name",
+      "member": "ByteStream",
+      "reference": "['self', 'stream']",
+      "candidate": "['self', 'data']"
+    },
+    {
+      "symbol": "ByteStream",
+      "difference_type": "parameter-default",
+      "member": "stream",
+      "reference": "None",
+      "candidate": "b''"
+    },
+    {
+      "symbol": "ByteStream",
+      "difference_type": "base-class",
+      "member": "",
+      "reference": "['AsyncByteStream', 'SyncByteStream']",
+      "candidate": "['Stream']"
+    },
+    {
+      "symbol": "ByteStream",
+      "difference_type": "extra-property",
+      "member": "size",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "ByteStream",
+      "difference_type": "missing-method",
+      "member": "aclose",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "ByteStream",
+      "difference_type": "extra-method",
+      "member": "read",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "ByteStream",
+      "difference_type": "extra-method",
+      "member": "write",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "Client",
+      "difference_type": "parameter-name",
+      "member": "Client",
+      "reference": "['self', 'auth', 'params', 'headers', 'cookies', 'verify', 'cert', 'trust_env', 'http1', 'http2', 'proxy', 'mounts', 'timeout', 'follow_redirects', 'limits', 'max_redirects', 'event_hooks', 'base_url', 'transport', 'default_encoding']",
+      "candidate": "['self', 'url', 'headers', 'transport']"
+    },
+    {
+      "symbol": "Client",
+      "difference_type": "parameter-kind",
+      "member": "auth",
+      "reference": "KEYWORD_ONLY",
+      "candidate": "POSITIONAL_OR_KEYWORD"
+    },
+    {
+      "symbol": "Client",
+      "difference_type": "parameter-kind",
+      "member": "params",
+      "reference": "KEYWORD_ONLY",
+      "candidate": "POSITIONAL_OR_KEYWORD"
+    },
+    {
+      "symbol": "Client",
+      "difference_type": "parameter-kind",
+      "member": "headers",
+      "reference": "KEYWORD_ONLY",
+      "candidate": "POSITIONAL_OR_KEYWORD"
+    },
+    {
+      "symbol": "Client",
+      "difference_type": "base-class",
+      "member": "",
+      "reference": "['BaseClient']",
+      "candidate": "['object']"
+    },
+    {
+      "symbol": "Client",
+      "difference_type": "missing-property",
+      "member": "auth",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Client",
+      "difference_type": "missing-property",
+      "member": "base_url",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Client",
+      "difference_type": "missing-property",
+      "member": "cookies",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Client",
+      "difference_type": "missing-property",
+      "member": "event_hooks",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Client",
+      "difference_type": "missing-property",
+      "member": "headers",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Client",
+      "difference_type": "missing-property",
+      "member": "is_closed",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Client",
+      "difference_type": "missing-property",
+      "member": "params",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Client",
+      "difference_type": "missing-property",
+      "member": "timeout",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Client",
+      "difference_type": "missing-property",
+      "member": "trust_env",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Client",
+      "difference_type": "missing-method",
+      "member": "head",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Client",
+      "difference_type": "missing-method",
+      "member": "options",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Client",
+      "difference_type": "missing-method",
+      "member": "send",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Headers",
+      "difference_type": "parameter-name",
+      "member": "Headers",
+      "reference": "['self', 'headers', 'encoding']",
+      "candidate": "['self', 'headers']"
+    },
+    {
+      "symbol": "Headers",
+      "difference_type": "base-class",
+      "member": "",
+      "reference": "['Generic', 'MutableMapping']",
+      "candidate": "['Generic', 'Mapping']"
+    },
+    {
+      "symbol": "Headers",
+      "difference_type": "missing-property",
+      "member": "encoding",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Headers",
+      "difference_type": "missing-property",
+      "member": "raw",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Headers",
+      "difference_type": "missing-method",
+      "member": "clear",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Headers",
+      "difference_type": "missing-method",
+      "member": "copy",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Headers",
+      "difference_type": "missing-method",
+      "member": "get_list",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Headers",
+      "difference_type": "missing-method",
+      "member": "multi_items",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Headers",
+      "difference_type": "missing-method",
+      "member": "pop",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Headers",
+      "difference_type": "missing-method",
+      "member": "popitem",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Headers",
+      "difference_type": "missing-method",
+      "member": "setdefault",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Headers",
+      "difference_type": "missing-method",
+      "member": "update",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Headers",
+      "difference_type": "extra-method",
+      "member": "as_byte_pairs",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "Headers",
+      "difference_type": "extra-method",
+      "member": "copy_remove",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "Headers",
+      "difference_type": "extra-method",
+      "member": "copy_set",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "Headers",
+      "difference_type": "extra-method",
+      "member": "copy_update",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "ProtocolError",
+      "difference_type": "parameter-name",
+      "member": "ProtocolError",
+      "reference": "['self', 'message', 'request']",
+      "candidate": "['self', 'args', 'kwargs']"
+    },
+    {
+      "symbol": "ProtocolError",
+      "difference_type": "parameter-kind",
+      "member": "self",
+      "reference": "POSITIONAL_OR_KEYWORD",
+      "candidate": "POSITIONAL_ONLY"
+    },
+    {
+      "symbol": "ProtocolError",
+      "difference_type": "parameter-kind",
+      "member": "message",
+      "reference": "POSITIONAL_OR_KEYWORD",
+      "candidate": "VAR_POSITIONAL"
+    },
+    {
+      "symbol": "ProtocolError",
+      "difference_type": "parameter-kind",
+      "member": "request",
+      "reference": "KEYWORD_ONLY",
+      "candidate": "VAR_KEYWORD"
+    },
+    {
+      "symbol": "ProtocolError",
+      "difference_type": "base-class",
+      "member": "",
+      "reference": "['TransportError']",
+      "candidate": "['Exception']"
+    },
+    {
+      "symbol": "ProtocolError",
+      "difference_type": "missing-property",
+      "member": "request",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "QueryParams",
+      "difference_type": "parameter-name",
+      "member": "QueryParams",
+      "reference": "['self', 'args', 'kwargs']",
+      "candidate": "['self', 'params']"
+    },
+    {
+      "symbol": "QueryParams",
+      "difference_type": "parameter-kind",
+      "member": "args",
+      "reference": "VAR_POSITIONAL",
+      "candidate": "POSITIONAL_OR_KEYWORD"
+    },
+    {
+      "symbol": "QueryParams",
+      "difference_type": "missing-method",
+      "member": "add",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "QueryParams",
+      "difference_type": "missing-method",
+      "member": "merge",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "QueryParams",
+      "difference_type": "missing-method",
+      "member": "remove",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "QueryParams",
+      "difference_type": "missing-method",
+      "member": "set",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "QueryParams",
+      "difference_type": "missing-method",
+      "member": "update",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "QueryParams",
+      "difference_type": "extra-method",
+      "member": "copy_append",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "QueryParams",
+      "difference_type": "extra-method",
+      "member": "copy_remove",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "QueryParams",
+      "difference_type": "extra-method",
+      "member": "copy_set",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "QueryParams",
+      "difference_type": "extra-method",
+      "member": "copy_update",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "QueryParams",
+      "difference_type": "extra-method",
+      "member": "multi_dict",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "Request",
+      "difference_type": "parameter-name",
+      "member": "Request",
+      "reference": "['self', 'method', 'url', 'params', 'headers', 'cookies', 'content', 'data', 'files', 'json', 'stream', 'extensions']",
+      "candidate": "['self', 'method', 'url', 'headers', 'content']"
+    },
+    {
+      "symbol": "Request",
+      "difference_type": "parameter-kind",
+      "member": "params",
+      "reference": "KEYWORD_ONLY",
+      "candidate": "POSITIONAL_OR_KEYWORD"
+    },
+    {
+      "symbol": "Request",
+      "difference_type": "parameter-kind",
+      "member": "headers",
+      "reference": "KEYWORD_ONLY",
+      "candidate": "POSITIONAL_OR_KEYWORD"
+    },
+    {
+      "symbol": "Request",
+      "difference_type": "missing-property",
+      "member": "content",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Request",
+      "difference_type": "extra-property",
+      "member": "body",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "Request",
+      "difference_type": "missing-method",
+      "member": "aread",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Request",
+      "difference_type": "missing-method",
+      "member": "read",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "parameter-name",
+      "member": "Response",
+      "reference": "['self', 'status_code', 'headers', 'content', 'text', 'html', 'json', 'stream', 'request', 'extensions', 'history', 'default_encoding']",
+      "candidate": "['self', 'status_code', 'headers', 'content']"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-property",
+      "member": "charset_encoding",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-property",
+      "member": "content",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-property",
+      "member": "cookies",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-property",
+      "member": "elapsed",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-property",
+      "member": "encoding",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-property",
+      "member": "has_redirect_location",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-property",
+      "member": "http_version",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-property",
+      "member": "is_client_error",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-property",
+      "member": "is_error",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-property",
+      "member": "is_informational",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-property",
+      "member": "is_redirect",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-property",
+      "member": "is_server_error",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-property",
+      "member": "is_success",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-property",
+      "member": "links",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-property",
+      "member": "num_bytes_downloaded",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-property",
+      "member": "reason_phrase",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-property",
+      "member": "request",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-property",
+      "member": "text",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-property",
+      "member": "url",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "extra-property",
+      "member": "body",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-method",
+      "member": "aclose",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-method",
+      "member": "aiter_bytes",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-method",
+      "member": "aiter_lines",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-method",
+      "member": "aiter_raw",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-method",
+      "member": "aiter_text",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-method",
+      "member": "aread",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-method",
+      "member": "close",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-method",
+      "member": "iter_bytes",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-method",
+      "member": "iter_lines",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-method",
+      "member": "iter_raw",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-method",
+      "member": "iter_text",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-method",
+      "member": "json",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-method",
+      "member": "raise_for_status",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-method",
+      "member": "read",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "URL",
+      "difference_type": "missing-property",
+      "member": "raw",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "URL",
+      "difference_type": "missing-property",
+      "member": "raw_host",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "URL",
+      "difference_type": "missing-property",
+      "member": "raw_path",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "URL",
+      "difference_type": "missing-property",
+      "member": "raw_scheme",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "URL",
+      "difference_type": "extra-property",
+      "member": "target",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "URL",
+      "difference_type": "missing-method",
+      "member": "copy_add_param",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "URL",
+      "difference_type": "extra-method",
+      "member": "copy_append_param",
+      "reference": "absent",
+      "candidate": "present"
+    }
+  ],
+  "allowed_matches": [],
+  "stale_allowed": [],
+  "unexplained": [
+    {
+      "symbol": "ASGITransport",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "AsyncBaseTransport",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "AsyncByteStream",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "AsyncClient",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "AsyncHTTPTransport",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Auth",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "BaseTransport",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "BasicAuth",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "CloseError",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "ConnectError",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "ConnectTimeout",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "CookieConflict",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Cookies",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "DecodingError",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "DigestAuth",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "HTTPError",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "HTTPStatusError",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "HTTPTransport",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "InvalidURL",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Limits",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "LocalProtocolError",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "MockTransport",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "NetRCAuth",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "NetworkError",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "PoolTimeout",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Proxy",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "ProxyError",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "ReadError",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "ReadTimeout",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "RemoteProtocolError",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "RequestError",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "RequestNotRead",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "ResponseNotRead",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "StreamClosed",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "StreamConsumed",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "StreamError",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "SyncByteStream",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Timeout",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "TimeoutException",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "TooManyRedirects",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "TransportError",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "USE_CLIENT_DEFAULT",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "UnsupportedProtocol",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "WSGITransport",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "WriteError",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "WriteTimeout",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "__description__",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "codes",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "create_ssl_context",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "delete",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "get",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "head",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "main",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "options",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "patch",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "post",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "put",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "request",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "stream",
+      "difference_type": "missing-symbol",
+      "member": "",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Binary",
+      "difference_type": "extra-symbol",
+      "member": "",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "Connection",
+      "difference_type": "extra-symbol",
+      "member": "",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "ConnectionPool",
+      "difference_type": "extra-symbol",
+      "member": "",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "Content",
+      "difference_type": "extra-symbol",
+      "member": "",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "DuplexStream",
+      "difference_type": "extra-symbol",
+      "member": "",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "File",
+      "difference_type": "extra-symbol",
+      "member": "",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "FileStream",
+      "difference_type": "extra-symbol",
+      "member": "",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "Files",
+      "difference_type": "extra-symbol",
+      "member": "",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "Form",
+      "difference_type": "extra-symbol",
+      "member": "",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "HTML",
+      "difference_type": "extra-symbol",
+      "member": "",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "HTTPParser",
+      "difference_type": "extra-symbol",
+      "member": "",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "JSON",
+      "difference_type": "extra-symbol",
+      "member": "",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "Method",
+      "difference_type": "extra-symbol",
+      "member": "",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "MultiPart",
+      "difference_type": "extra-symbol",
+      "member": "",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "NetworkBackend",
+      "difference_type": "extra-symbol",
+      "member": "",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "NetworkStream",
+      "difference_type": "extra-symbol",
+      "member": "",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "Server",
+      "difference_type": "extra-symbol",
+      "member": "",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "Stream",
+      "difference_type": "extra-symbol",
+      "member": "",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "Text",
+      "difference_type": "extra-symbol",
+      "member": "",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "Transport",
+      "difference_type": "extra-symbol",
+      "member": "",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "open_connection",
+      "difference_type": "extra-symbol",
+      "member": "",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "quote",
+      "difference_type": "extra-symbol",
+      "member": "",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "timeout",
+      "difference_type": "extra-symbol",
+      "member": "",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "unquote",
+      "difference_type": "extra-symbol",
+      "member": "",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "urldecode",
+      "difference_type": "extra-symbol",
+      "member": "",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "urlencode",
+      "difference_type": "extra-symbol",
+      "member": "",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "ByteStream",
+      "difference_type": "parameter-name",
+      "member": "ByteStream",
+      "reference": "['self', 'stream']",
+      "candidate": "['self', 'data']"
+    },
+    {
+      "symbol": "ByteStream",
+      "difference_type": "parameter-default",
+      "member": "stream",
+      "reference": "None",
+      "candidate": "b''"
+    },
+    {
+      "symbol": "ByteStream",
+      "difference_type": "base-class",
+      "member": "",
+      "reference": "['AsyncByteStream', 'SyncByteStream']",
+      "candidate": "['Stream']"
+    },
+    {
+      "symbol": "ByteStream",
+      "difference_type": "extra-property",
+      "member": "size",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "ByteStream",
+      "difference_type": "missing-method",
+      "member": "aclose",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "ByteStream",
+      "difference_type": "extra-method",
+      "member": "read",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "ByteStream",
+      "difference_type": "extra-method",
+      "member": "write",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "Client",
+      "difference_type": "parameter-name",
+      "member": "Client",
+      "reference": "['self', 'auth', 'params', 'headers', 'cookies', 'verify', 'cert', 'trust_env', 'http1', 'http2', 'proxy', 'mounts', 'timeout', 'follow_redirects', 'limits', 'max_redirects', 'event_hooks', 'base_url', 'transport', 'default_encoding']",
+      "candidate": "['self', 'url', 'headers', 'transport']"
+    },
+    {
+      "symbol": "Client",
+      "difference_type": "parameter-kind",
+      "member": "auth",
+      "reference": "KEYWORD_ONLY",
+      "candidate": "POSITIONAL_OR_KEYWORD"
+    },
+    {
+      "symbol": "Client",
+      "difference_type": "parameter-kind",
+      "member": "params",
+      "reference": "KEYWORD_ONLY",
+      "candidate": "POSITIONAL_OR_KEYWORD"
+    },
+    {
+      "symbol": "Client",
+      "difference_type": "parameter-kind",
+      "member": "headers",
+      "reference": "KEYWORD_ONLY",
+      "candidate": "POSITIONAL_OR_KEYWORD"
+    },
+    {
+      "symbol": "Client",
+      "difference_type": "base-class",
+      "member": "",
+      "reference": "['BaseClient']",
+      "candidate": "['object']"
+    },
+    {
+      "symbol": "Client",
+      "difference_type": "missing-property",
+      "member": "auth",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Client",
+      "difference_type": "missing-property",
+      "member": "base_url",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Client",
+      "difference_type": "missing-property",
+      "member": "cookies",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Client",
+      "difference_type": "missing-property",
+      "member": "event_hooks",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Client",
+      "difference_type": "missing-property",
+      "member": "headers",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Client",
+      "difference_type": "missing-property",
+      "member": "is_closed",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Client",
+      "difference_type": "missing-property",
+      "member": "params",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Client",
+      "difference_type": "missing-property",
+      "member": "timeout",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Client",
+      "difference_type": "missing-property",
+      "member": "trust_env",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Client",
+      "difference_type": "missing-method",
+      "member": "head",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Client",
+      "difference_type": "missing-method",
+      "member": "options",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Client",
+      "difference_type": "missing-method",
+      "member": "send",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Headers",
+      "difference_type": "parameter-name",
+      "member": "Headers",
+      "reference": "['self', 'headers', 'encoding']",
+      "candidate": "['self', 'headers']"
+    },
+    {
+      "symbol": "Headers",
+      "difference_type": "base-class",
+      "member": "",
+      "reference": "['Generic', 'MutableMapping']",
+      "candidate": "['Generic', 'Mapping']"
+    },
+    {
+      "symbol": "Headers",
+      "difference_type": "missing-property",
+      "member": "encoding",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Headers",
+      "difference_type": "missing-property",
+      "member": "raw",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Headers",
+      "difference_type": "missing-method",
+      "member": "clear",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Headers",
+      "difference_type": "missing-method",
+      "member": "copy",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Headers",
+      "difference_type": "missing-method",
+      "member": "get_list",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Headers",
+      "difference_type": "missing-method",
+      "member": "multi_items",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Headers",
+      "difference_type": "missing-method",
+      "member": "pop",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Headers",
+      "difference_type": "missing-method",
+      "member": "popitem",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Headers",
+      "difference_type": "missing-method",
+      "member": "setdefault",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Headers",
+      "difference_type": "missing-method",
+      "member": "update",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Headers",
+      "difference_type": "extra-method",
+      "member": "as_byte_pairs",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "Headers",
+      "difference_type": "extra-method",
+      "member": "copy_remove",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "Headers",
+      "difference_type": "extra-method",
+      "member": "copy_set",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "Headers",
+      "difference_type": "extra-method",
+      "member": "copy_update",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "ProtocolError",
+      "difference_type": "parameter-name",
+      "member": "ProtocolError",
+      "reference": "['self', 'message', 'request']",
+      "candidate": "['self', 'args', 'kwargs']"
+    },
+    {
+      "symbol": "ProtocolError",
+      "difference_type": "parameter-kind",
+      "member": "self",
+      "reference": "POSITIONAL_OR_KEYWORD",
+      "candidate": "POSITIONAL_ONLY"
+    },
+    {
+      "symbol": "ProtocolError",
+      "difference_type": "parameter-kind",
+      "member": "message",
+      "reference": "POSITIONAL_OR_KEYWORD",
+      "candidate": "VAR_POSITIONAL"
+    },
+    {
+      "symbol": "ProtocolError",
+      "difference_type": "parameter-kind",
+      "member": "request",
+      "reference": "KEYWORD_ONLY",
+      "candidate": "VAR_KEYWORD"
+    },
+    {
+      "symbol": "ProtocolError",
+      "difference_type": "base-class",
+      "member": "",
+      "reference": "['TransportError']",
+      "candidate": "['Exception']"
+    },
+    {
+      "symbol": "ProtocolError",
+      "difference_type": "missing-property",
+      "member": "request",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "QueryParams",
+      "difference_type": "parameter-name",
+      "member": "QueryParams",
+      "reference": "['self', 'args', 'kwargs']",
+      "candidate": "['self', 'params']"
+    },
+    {
+      "symbol": "QueryParams",
+      "difference_type": "parameter-kind",
+      "member": "args",
+      "reference": "VAR_POSITIONAL",
+      "candidate": "POSITIONAL_OR_KEYWORD"
+    },
+    {
+      "symbol": "QueryParams",
+      "difference_type": "missing-method",
+      "member": "add",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "QueryParams",
+      "difference_type": "missing-method",
+      "member": "merge",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "QueryParams",
+      "difference_type": "missing-method",
+      "member": "remove",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "QueryParams",
+      "difference_type": "missing-method",
+      "member": "set",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "QueryParams",
+      "difference_type": "missing-method",
+      "member": "update",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "QueryParams",
+      "difference_type": "extra-method",
+      "member": "copy_append",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "QueryParams",
+      "difference_type": "extra-method",
+      "member": "copy_remove",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "QueryParams",
+      "difference_type": "extra-method",
+      "member": "copy_set",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "QueryParams",
+      "difference_type": "extra-method",
+      "member": "copy_update",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "QueryParams",
+      "difference_type": "extra-method",
+      "member": "multi_dict",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "Request",
+      "difference_type": "parameter-name",
+      "member": "Request",
+      "reference": "['self', 'method', 'url', 'params', 'headers', 'cookies', 'content', 'data', 'files', 'json', 'stream', 'extensions']",
+      "candidate": "['self', 'method', 'url', 'headers', 'content']"
+    },
+    {
+      "symbol": "Request",
+      "difference_type": "parameter-kind",
+      "member": "params",
+      "reference": "KEYWORD_ONLY",
+      "candidate": "POSITIONAL_OR_KEYWORD"
+    },
+    {
+      "symbol": "Request",
+      "difference_type": "parameter-kind",
+      "member": "headers",
+      "reference": "KEYWORD_ONLY",
+      "candidate": "POSITIONAL_OR_KEYWORD"
+    },
+    {
+      "symbol": "Request",
+      "difference_type": "missing-property",
+      "member": "content",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Request",
+      "difference_type": "extra-property",
+      "member": "body",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "Request",
+      "difference_type": "missing-method",
+      "member": "aread",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Request",
+      "difference_type": "missing-method",
+      "member": "read",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "parameter-name",
+      "member": "Response",
+      "reference": "['self', 'status_code', 'headers', 'content', 'text', 'html', 'json', 'stream', 'request', 'extensions', 'history', 'default_encoding']",
+      "candidate": "['self', 'status_code', 'headers', 'content']"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-property",
+      "member": "charset_encoding",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-property",
+      "member": "content",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-property",
+      "member": "cookies",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-property",
+      "member": "elapsed",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-property",
+      "member": "encoding",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-property",
+      "member": "has_redirect_location",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-property",
+      "member": "http_version",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-property",
+      "member": "is_client_error",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-property",
+      "member": "is_error",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-property",
+      "member": "is_informational",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-property",
+      "member": "is_redirect",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-property",
+      "member": "is_server_error",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-property",
+      "member": "is_success",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-property",
+      "member": "links",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-property",
+      "member": "num_bytes_downloaded",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-property",
+      "member": "reason_phrase",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-property",
+      "member": "request",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-property",
+      "member": "text",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-property",
+      "member": "url",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "extra-property",
+      "member": "body",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-method",
+      "member": "aclose",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-method",
+      "member": "aiter_bytes",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-method",
+      "member": "aiter_lines",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-method",
+      "member": "aiter_raw",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-method",
+      "member": "aiter_text",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-method",
+      "member": "aread",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-method",
+      "member": "close",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-method",
+      "member": "iter_bytes",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-method",
+      "member": "iter_lines",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-method",
+      "member": "iter_raw",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-method",
+      "member": "iter_text",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-method",
+      "member": "json",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-method",
+      "member": "raise_for_status",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "Response",
+      "difference_type": "missing-method",
+      "member": "read",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "URL",
+      "difference_type": "missing-property",
+      "member": "raw",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "URL",
+      "difference_type": "missing-property",
+      "member": "raw_host",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "URL",
+      "difference_type": "missing-property",
+      "member": "raw_path",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "URL",
+      "difference_type": "missing-property",
+      "member": "raw_scheme",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "URL",
+      "difference_type": "extra-property",
+      "member": "target",
+      "reference": "absent",
+      "candidate": "present"
+    },
+    {
+      "symbol": "URL",
+      "difference_type": "missing-method",
+      "member": "copy_add_param",
+      "reference": "present",
+      "candidate": "absent"
+    },
+    {
+      "symbol": "URL",
+      "difference_type": "extra-method",
+      "member": "copy_append_param",
+      "reference": "absent",
+      "candidate": "present"
+    }
+  ],
+  "resolved_in_active": []
+}

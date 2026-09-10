@@ -123,10 +123,12 @@ eggfetch targets HTTPX 0.28.1 compatibility in phases. The current status:
 - **Corrective 06 (Final semantic truthfulness)**: SSLContext translation made genuinely fail-closed; one native extension parser for all sync/async buffered/streaming paths; 101 `network_stream` wrapper chosen by caller API mode; H2-only policy propagated through SNI override and SOCKS routes.
 - **Corrective 07 (Final exact-SHA requalification)**: Closed the remaining-parity line. Qualification SHA `5c7899fefb6df087dfa1b3578fbef9ba64f87742`, qualified 2026-08-24 (superseded).
 - **Corrective 08 (Post-hardening requalification and closure)**: Renewed the claim after 38 hardening commits. Qualification SHA `d24101be6ed7be64463813750da5b4043d9905ec`, qualified 2026-09-03 (superseded). Pre-freeze corrections: secret-redaction hardening (`Cookie`/jar/`Request`/body `Debug`, proxy-URL error redaction), uniform `ValueError` for four-element `socket_options`, proxy EOF truncation-vs-complete boundary, package-scanner false-positive exclusions, raw-stream `Date` determinism. Full evidence in `plans/httpx-parity-correction-status.md`.
-- **Post-maturation requalification**: Renewed the claim after the four post-audit maturation commits (core request/transport consolidation, H3 lifecycle hardening, native protocol observability and API cleanup, Node experimental-prototype closure) plus the UDS fixture bind-readiness fix. Qualification SHA `d034a1005857a7f403222dda4bda5f2f204a44fe`, qualified 2026-09-09. Full evidence in `plans/httpx-parity-correction-status.md`.
+- **Post-maturation requalification**: Renewed the claim after the four post-audit maturation commits (core request/transport consolidation, H3 lifecycle hardening, native protocol observability and API cleanup, Node experimental-prototype closure) plus the UDS fixture bind-readiness fix. Qualification SHA `d034a1005857a7f403222dda4bda5f2f204a44fe`, qualified 2026-09-09 (superseded). Full evidence in `plans/httpx-parity-correction-status.md`.
+- **Next-scope requalification (current)**: Renewed HTTPX 0.28.1 and earned HTTPX2 2.12.0 Stage C on the frozen executable SHA `cc90f5ed561bbe10d4c26accc54ed3b916518f98`, qualified 2026-09-10. Executable scope: H3 Alt-Svc discovery/fallback/draining, H3 interop evidence (experimental retained), httpx2 sibling facade (+ SSE/optional WS), 1.0-preview tracking, oracle generalization. Full evidence in `plans/httpx-parity-correction-status.md`.
 
-**Current status: Stage C qualified.** Post-maturation requalification renewed the
-post-maturation claim. Proxy headers are forwarded on the proxy leg;
+**Current status: Stage C qualified.** Next-scope requalification renewed the
+0.28.1 claim and earned the independent httpx2 2.12.0 claim, both bound to
+the exact executable SHA in their profiles. Proxy headers are forwarded on the proxy leg;
 proxy ssl_context is translated to native TlsConfig; create_ssl_context
 returns a real ssl.SSLContext; SSLContext translation is fail-closed for
 unrepresentable state; H2-only mode is enforced on standard TLS, SNI

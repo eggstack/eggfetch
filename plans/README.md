@@ -28,7 +28,21 @@ preview-only. Child plans below are historical records:
 `httpx-parity-correction-status.md` remains the live exact-SHA status for
 both facades until a future program updates it. Profiles:
 `compat/httpx/0.28.1/profile.toml`, `compat/httpx2/2.12.0/profile.toml`.
-Preview: `compat/httpx/1.0-preview/` (unqualified by design).
+Preview: `compat/httpx/1.0-preview/` (unqualified by design; status in
+`preview-status.toml`, delta in `preview-delta-0.28.1-vs-1.0.dev6.json`,
+notes in `redesign-notes.md`).
+
+### HTTPX 1.0 migration trigger
+
+A future HTTPX 1.0 implementation/qualification program opens only when all
+three hold (recorded here and in `plans/ROADMAP.md`; never by renaming the
+preview plan into a Stage C plan):
+
+1. upstream publishes an RC with an explicitly frozen public API, or a
+   stable 1.0 release;
+2. release notes indicate no further major compatibility reset before stable;
+3. a fresh delta inventory shows the target is stable enough to justify
+   implementation, pinned to the exact RC/stable release.
 
 ## Recently completed program — post-audit maturation (2026-09-09)
 

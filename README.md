@@ -335,16 +335,18 @@ operators (`|`/`|=`), SSE (`EventSource`, `ServerSentEvent`, `SSEError` +
 truststore OS-trust default, RFC 9110 status renames with
 `HTTPXDeprecationWarning` aliases, and behavior hardening (decoder caps,
 multipart validation, WSGI framing). Python 3.10–3.13 distribution scope;
-Pyodide/jsfetch and CLI extras are not applicable. Stage is recorded in
-`compat/httpx2/2.12.0/profile.toml` (baseline-unqualified until the
-program freeze qualifies it independently).
+Pyodide/jsfetch and CLI extras are not applicable. Stage C qualified on the
+next-scope executable SHA recorded in `compat/httpx2/2.12.0/profile.toml`
+and `plans/httpx-parity-correction-status.md`.
 
 ### HTTPX 1.0 preview (no compatibility promise)
 
 `compat/httpx/1.0-preview/` tracks the original HTTPX 1.0 redesign as
-reconnaissance only. No dev release is a supported contract; see that
-directory for the observed version, delta notes, and the RC/stable trigger
-that would open a future implementation program.
+reconnaissance only (`httpx==1.0.dev6`, 2026-08-31; 36-symbol manifest, 192
+ungated deltas vs `0.28.1`, bucket impact notes). No dev release is a
+supported contract; see that directory (`preview-status.toml`,
+`redesign-notes.md`) for the observed version, delta notes, and the
+RC/stable trigger that would open a future implementation program.
 
 ### 101 Switching Protocols and `network_stream`
 

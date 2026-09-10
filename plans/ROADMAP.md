@@ -55,7 +55,10 @@ on the next-scope executable SHA recorded in their profiles (evidence:
 None scheduled. The next-scope program's eight plans are closed. Future
 work is triggered by a new pinned HTTPX version, a newly discovered
 concrete compatibility defect, or an intentionally expanded scope —
-not by speculative parity expansion.
+not by speculative parity expansion. An HTTPX 1.0 implementation program
+opens only on the RC/stable trigger recorded in `plans/README.md` (frozen
+public API + no further reset + fresh delta inventory, pinned to the exact
+RC/stable); dev releases never open implementation work.
 
 ### Future candidates
 

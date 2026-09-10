@@ -1,0 +1,3726 @@
+{
+  "schema_version": "1",
+  "package": "httpx",
+  "version": "1.0.dev6",
+  "symbols": [
+    {
+      "name": "Binary",
+      "kind": "class",
+      "signature": {
+        "parameters": [
+          {
+            "name": "self",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          },
+          {
+            "name": "content",
+            "kind": "POSITIONAL_OR_KEYWORD",
+            "annotation": "bytes | None"
+          }
+        ],
+        "return_annotation": "None"
+      },
+      "module_of_origin": "httpx._content",
+      "deprecated": false,
+      "bases": [
+        "Content"
+      ],
+      "mro": [
+        "Binary",
+        "Content"
+      ],
+      "methods": [
+        {
+          "name": "headers",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "<class 'httpx._headers.Headers'>"
+          }
+        },
+        {
+          "name": "open",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "<class 'httpx._streams.Stream'>"
+          }
+        },
+        {
+          "name": "parse",
+          "signature": {
+            "parameters": [
+              {
+                "name": "stream",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "<class 'httpx._streams.Stream'>"
+              }
+            ],
+            "return_annotation": "<class 'httpx._content.Content'>"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ByteStream",
+      "kind": "class",
+      "signature": {
+        "parameters": [
+          {
+            "name": "self",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          },
+          {
+            "name": "data",
+            "kind": "POSITIONAL_OR_KEYWORD",
+            "default": "b''",
+            "annotation": "<class 'bytes'>"
+          }
+        ],
+        "return_annotation": null
+      },
+      "module_of_origin": "httpx._streams",
+      "deprecated": false,
+      "bases": [
+        "Stream"
+      ],
+      "mro": [
+        "ByteStream",
+        "Stream"
+      ],
+      "methods": [
+        {
+          "name": "close",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "None"
+          }
+        },
+        {
+          "name": "read",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              },
+              {
+                "name": "size",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "default": "-1",
+                "annotation": "<class 'int'>"
+              }
+            ],
+            "return_annotation": "<class 'bytes'>"
+          }
+        },
+        {
+          "name": "write",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              },
+              {
+                "name": "data",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "<class 'bytes'>"
+              }
+            ],
+            "return_annotation": "None"
+          }
+        }
+      ],
+      "properties": [
+        {
+          "name": "size",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "int | None"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Client",
+      "kind": "class",
+      "signature": {
+        "parameters": [
+          {
+            "name": "self",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          },
+          {
+            "name": "url",
+            "kind": "POSITIONAL_OR_KEYWORD",
+            "default": "None",
+            "annotation": "httpx._urls.URL | str | None"
+          },
+          {
+            "name": "headers",
+            "kind": "POSITIONAL_OR_KEYWORD",
+            "default": "None",
+            "annotation": "typing.Union[httpx._headers.Headers, typing.Mapping[str, str], NoneType]"
+          },
+          {
+            "name": "transport",
+            "kind": "POSITIONAL_OR_KEYWORD",
+            "default": "None",
+            "annotation": "httpx._connection.Transport | None"
+          }
+        ],
+        "return_annotation": null
+      },
+      "module_of_origin": "httpx._client",
+      "deprecated": false,
+      "bases": [
+        "object"
+      ],
+      "mro": [
+        "Client"
+      ],
+      "methods": [
+        {
+          "name": "build_request",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              },
+              {
+                "name": "method",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "httpx._request.Method | str"
+              },
+              {
+                "name": "url",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "httpx._urls.URL | str"
+              },
+              {
+                "name": "headers",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "default": "None",
+                "annotation": "httpx._headers.Headers | dict[str, str] | None"
+              },
+              {
+                "name": "content",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "default": "None",
+                "annotation": "httpx._content.Content | bytes | None"
+              }
+            ],
+            "return_annotation": "<class 'httpx._request.Request'>"
+          }
+        },
+        {
+          "name": "close",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": null
+          }
+        },
+        {
+          "name": "delete",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              },
+              {
+                "name": "url",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "httpx._urls.URL | str"
+              },
+              {
+                "name": "headers",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "default": "None",
+                "annotation": "httpx._headers.Headers | dict[str, str] | None"
+              }
+            ],
+            "return_annotation": null
+          }
+        },
+        {
+          "name": "get",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              },
+              {
+                "name": "url",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "httpx._urls.URL | str"
+              },
+              {
+                "name": "headers",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "default": "None",
+                "annotation": "httpx._headers.Headers | dict[str, str] | None"
+              }
+            ],
+            "return_annotation": null
+          }
+        },
+        {
+          "name": "patch",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              },
+              {
+                "name": "url",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "httpx._urls.URL | str"
+              },
+              {
+                "name": "headers",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "default": "None",
+                "annotation": "httpx._headers.Headers | dict[str, str] | None"
+              },
+              {
+                "name": "content",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "default": "None",
+                "annotation": "httpx._content.Content | bytes | None"
+              }
+            ],
+            "return_annotation": null
+          }
+        },
+        {
+          "name": "post",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              },
+              {
+                "name": "url",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "httpx._urls.URL | str"
+              },
+              {
+                "name": "headers",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "default": "None",
+                "annotation": "httpx._headers.Headers | dict[str, str] | None"
+              },
+              {
+                "name": "content",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "default": "None",
+                "annotation": "httpx._content.Content | bytes | None"
+              }
+            ],
+            "return_annotation": null
+          }
+        },
+        {
+          "name": "put",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              },
+              {
+                "name": "url",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "httpx._urls.URL | str"
+              },
+              {
+                "name": "headers",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "default": "None",
+                "annotation": "httpx._headers.Headers | dict[str, str] | None"
+              },
+              {
+                "name": "content",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "default": "None",
+                "annotation": "httpx._content.Content | bytes | None"
+              }
+            ],
+            "return_annotation": null
+          }
+        },
+        {
+          "name": "request",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              },
+              {
+                "name": "method",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "httpx._request.Method | str"
+              },
+              {
+                "name": "url",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "httpx._urls.URL | str"
+              },
+              {
+                "name": "headers",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "default": "None",
+                "annotation": "httpx._headers.Headers | dict[str, str] | None"
+              },
+              {
+                "name": "content",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "default": "None",
+                "annotation": "httpx._content.Content | bytes | None"
+              }
+            ],
+            "return_annotation": "<class 'httpx._response.Response'>"
+          }
+        },
+        {
+          "name": "stream",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              },
+              {
+                "name": "method",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "httpx._request.Method | str"
+              },
+              {
+                "name": "url",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "httpx._urls.URL | str"
+              },
+              {
+                "name": "headers",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "default": "None",
+                "annotation": "httpx._headers.Headers | dict[str, str] | None"
+              },
+              {
+                "name": "content",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "default": "None",
+                "annotation": "httpx._content.Content | bytes | None"
+              }
+            ],
+            "return_annotation": "<class 'httpx._response.Response'>"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Connection",
+      "kind": "class",
+      "signature": {
+        "parameters": [
+          {
+            "name": "self",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          },
+          {
+            "name": "stream",
+            "kind": "POSITIONAL_OR_KEYWORD",
+            "annotation": "<class 'httpx._streams.Stream'>"
+          },
+          {
+            "name": "origin",
+            "kind": "POSITIONAL_OR_KEYWORD",
+            "annotation": "httpx._urls.URL | str"
+          }
+        ],
+        "return_annotation": null
+      },
+      "module_of_origin": "httpx._connection",
+      "deprecated": false,
+      "bases": [
+        "Transport"
+      ],
+      "mro": [
+        "Connection",
+        "Transport"
+      ],
+      "methods": [
+        {
+          "name": "close",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "None"
+          }
+        },
+        {
+          "name": "description",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "<class 'str'>"
+          }
+        },
+        {
+          "name": "is_closed",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "<class 'bool'>"
+          }
+        },
+        {
+          "name": "is_expired",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "<class 'bool'>"
+          }
+        },
+        {
+          "name": "is_idle",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "<class 'bool'>"
+          }
+        },
+        {
+          "name": "origin",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "<class 'httpx._urls.URL'>"
+          }
+        },
+        {
+          "name": "request",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              },
+              {
+                "name": "method",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "httpx._request.Method | str"
+              },
+              {
+                "name": "url",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "httpx._urls.URL | str"
+              },
+              {
+                "name": "headers",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "default": "None",
+                "annotation": "httpx._headers.Headers | dict[str, str] | None"
+              },
+              {
+                "name": "content",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "default": "None",
+                "annotation": "httpx._content.Content | bytes | None"
+              }
+            ],
+            "return_annotation": "<class 'httpx._response.Response'>"
+          }
+        },
+        {
+          "name": "send",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              },
+              {
+                "name": "request",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "<class 'httpx._request.Request'>"
+              }
+            ],
+            "return_annotation": "<class 'httpx._response.Response'>"
+          }
+        },
+        {
+          "name": "stream",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              },
+              {
+                "name": "method",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "httpx._request.Method | str"
+              },
+              {
+                "name": "url",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "httpx._urls.URL | str"
+              },
+              {
+                "name": "headers",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "default": "None",
+                "annotation": "httpx._headers.Headers | dict[str, str] | None"
+              },
+              {
+                "name": "content",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "default": "None",
+                "annotation": "httpx._content.Content | bytes | None"
+              }
+            ],
+            "return_annotation": "<class 'httpx._response.Response'>"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ConnectionPool",
+      "kind": "class",
+      "signature": {
+        "parameters": [
+          {
+            "name": "self",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          },
+          {
+            "name": "backend",
+            "kind": "POSITIONAL_OR_KEYWORD",
+            "default": "None",
+            "annotation": "httpx._network.NetworkBackend | None"
+          }
+        ],
+        "return_annotation": null
+      },
+      "module_of_origin": "httpx._pool",
+      "deprecated": false,
+      "bases": [
+        "Transport"
+      ],
+      "mro": [
+        "ConnectionPool",
+        "Transport"
+      ],
+      "methods": [
+        {
+          "name": "close",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": null
+          }
+        },
+        {
+          "name": "description",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "<class 'str'>"
+          }
+        },
+        {
+          "name": "request",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              },
+              {
+                "name": "method",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "httpx._request.Method | str"
+              },
+              {
+                "name": "url",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "httpx._urls.URL | str"
+              },
+              {
+                "name": "headers",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "default": "None",
+                "annotation": "httpx._headers.Headers | dict[str, str] | None"
+              },
+              {
+                "name": "content",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "default": "None",
+                "annotation": "httpx._content.Content | bytes | None"
+              }
+            ],
+            "return_annotation": "<class 'httpx._response.Response'>"
+          }
+        },
+        {
+          "name": "send",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              },
+              {
+                "name": "request",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "<class 'httpx._request.Request'>"
+              }
+            ],
+            "return_annotation": "<class 'httpx._response.Response'>"
+          }
+        },
+        {
+          "name": "stream",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              },
+              {
+                "name": "method",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "httpx._request.Method | str"
+              },
+              {
+                "name": "url",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "httpx._urls.URL | str"
+              },
+              {
+                "name": "headers",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "default": "None",
+                "annotation": "httpx._headers.Headers | dict[str, str] | None"
+              },
+              {
+                "name": "content",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "default": "None",
+                "annotation": "httpx._content.Content | bytes | None"
+              }
+            ],
+            "return_annotation": "<class 'httpx._response.Response'>"
+          }
+        }
+      ],
+      "properties": [
+        {
+          "name": "connections",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "list['Connection']"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Content",
+      "kind": "class",
+      "signature": {
+        "parameters": [
+          {
+            "name": "self",
+            "kind": "POSITIONAL_ONLY"
+          },
+          {
+            "name": "args",
+            "kind": "VAR_POSITIONAL"
+          },
+          {
+            "name": "kwargs",
+            "kind": "VAR_KEYWORD"
+          }
+        ],
+        "return_annotation": null
+      },
+      "module_of_origin": "httpx._content",
+      "deprecated": false,
+      "bases": [
+        "object"
+      ],
+      "mro": [
+        "Content"
+      ],
+      "methods": [
+        {
+          "name": "headers",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "<class 'httpx._headers.Headers'>"
+          }
+        },
+        {
+          "name": "open",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "<class 'httpx._streams.Stream'>"
+          }
+        },
+        {
+          "name": "parse",
+          "signature": {
+            "parameters": [
+              {
+                "name": "stream",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "<class 'httpx._streams.Stream'>"
+              }
+            ],
+            "return_annotation": "'Content'"
+          }
+        }
+      ]
+    },
+    {
+      "name": "DuplexStream",
+      "kind": "class",
+      "signature": {
+        "parameters": [
+          {
+            "name": "self",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          },
+          {
+            "name": "data",
+            "kind": "POSITIONAL_OR_KEYWORD",
+            "default": "b''",
+            "annotation": "<class 'bytes'>"
+          }
+        ],
+        "return_annotation": null
+      },
+      "module_of_origin": "httpx._streams",
+      "deprecated": false,
+      "bases": [
+        "Stream"
+      ],
+      "mro": [
+        "DuplexStream",
+        "Stream"
+      ],
+      "methods": [
+        {
+          "name": "close",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "None"
+          }
+        },
+        {
+          "name": "input_bytes",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "<class 'bytes'>"
+          }
+        },
+        {
+          "name": "output_bytes",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "<class 'bytes'>"
+          }
+        },
+        {
+          "name": "read",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              },
+              {
+                "name": "size",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "default": "-1",
+                "annotation": "<class 'int'>"
+              }
+            ],
+            "return_annotation": "<class 'bytes'>"
+          }
+        },
+        {
+          "name": "write",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              },
+              {
+                "name": "buffer",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "<class 'bytes'>"
+              }
+            ],
+            "return_annotation": null
+          }
+        }
+      ],
+      "properties": [
+        {
+          "name": "size",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "int | None"
+          }
+        }
+      ]
+    },
+    {
+      "name": "File",
+      "kind": "class",
+      "signature": {
+        "parameters": [
+          {
+            "name": "self",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          },
+          {
+            "name": "path",
+            "kind": "POSITIONAL_OR_KEYWORD",
+            "annotation": "<class 'str'>"
+          }
+        ],
+        "return_annotation": null
+      },
+      "module_of_origin": "httpx._content",
+      "deprecated": false,
+      "bases": [
+        "Content"
+      ],
+      "mro": [
+        "Content",
+        "File"
+      ],
+      "methods": [
+        {
+          "name": "headers",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "<class 'httpx._headers.Headers'>"
+          }
+        },
+        {
+          "name": "name",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "<class 'str'>"
+          }
+        },
+        {
+          "name": "open",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "<class 'httpx._streams.Stream'>"
+          }
+        },
+        {
+          "name": "parse",
+          "signature": {
+            "parameters": [
+              {
+                "name": "stream",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "<class 'httpx._streams.Stream'>"
+              }
+            ],
+            "return_annotation": "'Content'"
+          }
+        }
+      ]
+    },
+    {
+      "name": "FileStream",
+      "kind": "class",
+      "signature": {
+        "parameters": [
+          {
+            "name": "self",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          },
+          {
+            "name": "path",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          }
+        ],
+        "return_annotation": null
+      },
+      "module_of_origin": "httpx._streams",
+      "deprecated": false,
+      "bases": [
+        "Stream"
+      ],
+      "mro": [
+        "FileStream",
+        "Stream"
+      ],
+      "methods": [
+        {
+          "name": "close",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "None"
+          }
+        },
+        {
+          "name": "open",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": null
+          }
+        },
+        {
+          "name": "read",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              },
+              {
+                "name": "size",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "default": "-1",
+                "annotation": "<class 'int'>"
+              }
+            ],
+            "return_annotation": "<class 'bytes'>"
+          }
+        },
+        {
+          "name": "write",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              },
+              {
+                "name": "data",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "<class 'bytes'>"
+              }
+            ],
+            "return_annotation": "None"
+          }
+        }
+      ],
+      "properties": [
+        {
+          "name": "size",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "int | None"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Files",
+      "kind": "class",
+      "signature": {
+        "parameters": [
+          {
+            "name": "self",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          },
+          {
+            "name": "files",
+            "kind": "POSITIONAL_OR_KEYWORD",
+            "default": "None",
+            "annotation": "typing.Union[typing.Mapping[str, typing.Union[httpx._content.File, typing.Sequence[httpx._content.File]]], typing.Sequence[tuple[str, httpx._content.File]], NoneType]"
+          },
+          {
+            "name": "boundary",
+            "kind": "POSITIONAL_OR_KEYWORD",
+            "default": "''",
+            "annotation": "<class 'str'>"
+          }
+        ],
+        "return_annotation": "None"
+      },
+      "module_of_origin": "httpx._content",
+      "deprecated": false,
+      "bases": [
+        "Content",
+        "Generic",
+        "Mapping"
+      ],
+      "mro": [
+        "Collection",
+        "Container",
+        "Content",
+        "Files",
+        "Generic",
+        "Iterable",
+        "Mapping",
+        "Sized"
+      ],
+      "methods": [
+        {
+          "name": "get",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              },
+              {
+                "name": "key",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "<class 'str'>"
+              },
+              {
+                "name": "default",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "default": "None",
+                "annotation": "typing.Any"
+              }
+            ],
+            "return_annotation": "typing.Any"
+          }
+        },
+        {
+          "name": "get_list",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              },
+              {
+                "name": "key",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "<class 'str'>"
+              }
+            ],
+            "return_annotation": "list[httpx._content.File]"
+          }
+        },
+        {
+          "name": "headers",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "<class 'httpx._headers.Headers'>"
+          }
+        },
+        {
+          "name": "items",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "typing.ItemsView[str, httpx._content.File]"
+          }
+        },
+        {
+          "name": "keys",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "typing.KeysView[str]"
+          }
+        },
+        {
+          "name": "multi_dict",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "dict[str, list[httpx._content.File]]"
+          }
+        },
+        {
+          "name": "multi_items",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "list[tuple[str, httpx._content.File]]"
+          }
+        },
+        {
+          "name": "open",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "<class 'httpx._streams.Stream'>"
+          }
+        },
+        {
+          "name": "parse",
+          "signature": {
+            "parameters": [
+              {
+                "name": "stream",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "<class 'httpx._streams.Stream'>"
+              }
+            ],
+            "return_annotation": "'Content'"
+          }
+        },
+        {
+          "name": "values",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "typing.ValuesView[httpx._content.File]"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Form",
+      "kind": "class",
+      "signature": {
+        "parameters": [
+          {
+            "name": "self",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          },
+          {
+            "name": "form",
+            "kind": "POSITIONAL_OR_KEYWORD",
+            "default": "None",
+            "annotation": "typing.Union[typing.Mapping[str, typing.Union[str, typing.Sequence[str]]], typing.Sequence[tuple[str, str]], str, NoneType]"
+          }
+        ],
+        "return_annotation": "None"
+      },
+      "module_of_origin": "httpx._content",
+      "deprecated": false,
+      "bases": [
+        "Content",
+        "Generic",
+        "Mapping"
+      ],
+      "mro": [
+        "Collection",
+        "Container",
+        "Content",
+        "Form",
+        "Generic",
+        "Iterable",
+        "Mapping",
+        "Sized"
+      ],
+      "methods": [
+        {
+          "name": "copy_append",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              },
+              {
+                "name": "key",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "<class 'str'>"
+              },
+              {
+                "name": "value",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "<class 'str'>"
+              }
+            ],
+            "return_annotation": "'Form'"
+          }
+        },
+        {
+          "name": "copy_remove",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              },
+              {
+                "name": "key",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "<class 'str'>"
+              }
+            ],
+            "return_annotation": "'Form'"
+          }
+        },
+        {
+          "name": "copy_set",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              },
+              {
+                "name": "key",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "<class 'str'>"
+              },
+              {
+                "name": "value",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "<class 'str'>"
+              }
+            ],
+            "return_annotation": "'Form'"
+          }
+        },
+        {
+          "name": "get",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              },
+              {
+                "name": "key",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "<class 'str'>"
+              },
+              {
+                "name": "default",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "default": "None",
+                "annotation": "typing.Any"
+              }
+            ],
+            "return_annotation": "typing.Any"
+          }
+        },
+        {
+          "name": "get_list",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              },
+              {
+                "name": "key",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "<class 'str'>"
+              }
+            ],
+            "return_annotation": "list[str]"
+          }
+        },
+        {
+          "name": "headers",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "<class 'httpx._headers.Headers'>"
+          }
+        },
+        {
+          "name": "items",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "typing.ItemsView[str, str]"
+          }
+        },
+        {
+          "name": "keys",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "typing.KeysView[str]"
+          }
+        },
+        {
+          "name": "multi_dict",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "dict[str, list[str]]"
+          }
+        },
+        {
+          "name": "multi_items",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "list[tuple[str, str]]"
+          }
+        },
+        {
+          "name": "open",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "<class 'httpx._streams.Stream'>"
+          }
+        },
+        {
+          "name": "parse",
+          "signature": {
+            "parameters": [
+              {
+                "name": "stream",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "<class 'httpx._streams.Stream'>"
+              }
+            ],
+            "return_annotation": "'Content'"
+          }
+        },
+        {
+          "name": "values",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "typing.ValuesView[str]"
+          }
+        }
+      ]
+    },
+    {
+      "name": "HTML",
+      "kind": "class",
+      "signature": {
+        "parameters": [
+          {
+            "name": "self",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          },
+          {
+            "name": "text",
+            "kind": "POSITIONAL_OR_KEYWORD",
+            "annotation": "<class 'str'>"
+          },
+          {
+            "name": "source",
+            "kind": "POSITIONAL_OR_KEYWORD",
+            "default": "None",
+            "annotation": "bytes | None"
+          }
+        ],
+        "return_annotation": "None"
+      },
+      "module_of_origin": "httpx._content",
+      "deprecated": false,
+      "bases": [
+        "Content"
+      ],
+      "mro": [
+        "Content",
+        "HTML"
+      ],
+      "methods": [
+        {
+          "name": "headers",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "<class 'httpx._headers.Headers'>"
+          }
+        },
+        {
+          "name": "open",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "<class 'httpx._streams.Stream'>"
+          }
+        },
+        {
+          "name": "parse",
+          "signature": {
+            "parameters": [
+              {
+                "name": "stream",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "<class 'httpx._streams.Stream'>"
+              }
+            ],
+            "return_annotation": "<class 'httpx._content.Content'>"
+          }
+        }
+      ]
+    },
+    {
+      "name": "HTTPParser",
+      "kind": "class",
+      "signature": {
+        "parameters": [
+          {
+            "name": "self",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          },
+          {
+            "name": "stream",
+            "kind": "POSITIONAL_OR_KEYWORD",
+            "annotation": "<class 'httpx._streams.Stream'>"
+          },
+          {
+            "name": "mode",
+            "kind": "POSITIONAL_OR_KEYWORD",
+            "annotation": "<class 'str'>"
+          }
+        ],
+        "return_annotation": "None"
+      },
+      "module_of_origin": "httpx._parsers",
+      "deprecated": false,
+      "bases": [
+        "object"
+      ],
+      "mro": [
+        "HTTPParser"
+      ],
+      "methods": [
+        {
+          "name": "close",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": null
+          }
+        },
+        {
+          "name": "complete",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": null
+          }
+        },
+        {
+          "name": "description",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "<class 'str'>"
+          }
+        },
+        {
+          "name": "is_closed",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "<class 'bool'>"
+          }
+        },
+        {
+          "name": "is_idle",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "<class 'bool'>"
+          }
+        },
+        {
+          "name": "keepalive_expired",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "<class 'bool'>"
+          }
+        },
+        {
+          "name": "recv_body",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "<class 'bytes'>"
+          }
+        },
+        {
+          "name": "recv_headers",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "list[tuple[bytes, bytes]]"
+          }
+        },
+        {
+          "name": "recv_method_line",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "tuple[bytes, bytes, bytes]"
+          }
+        },
+        {
+          "name": "recv_status_line",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "tuple[bytes, int, bytes]"
+          }
+        },
+        {
+          "name": "send_body",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              },
+              {
+                "name": "body",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "<class 'bytes'>"
+              }
+            ],
+            "return_annotation": "None"
+          }
+        },
+        {
+          "name": "send_headers",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              },
+              {
+                "name": "headers",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "list[tuple[bytes, bytes]]"
+              }
+            ],
+            "return_annotation": "None"
+          }
+        },
+        {
+          "name": "send_method_line",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              },
+              {
+                "name": "method",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "<class 'bytes'>"
+              },
+              {
+                "name": "target",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "<class 'bytes'>"
+              },
+              {
+                "name": "protocol",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "<class 'bytes'>"
+              }
+            ],
+            "return_annotation": "None"
+          }
+        },
+        {
+          "name": "send_status_line",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              },
+              {
+                "name": "protocol",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "<class 'bytes'>"
+              },
+              {
+                "name": "status_code",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "<class 'int'>"
+              },
+              {
+                "name": "reason",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "<class 'bytes'>"
+              }
+            ],
+            "return_annotation": "None"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Headers",
+      "kind": "class",
+      "signature": {
+        "parameters": [
+          {
+            "name": "self",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          },
+          {
+            "name": "headers",
+            "kind": "POSITIONAL_OR_KEYWORD",
+            "default": "None",
+            "annotation": "'typing.Mapping[str, str] | typing.Sequence[tuple[str, str]] | None'"
+          }
+        ],
+        "return_annotation": "'None'"
+      },
+      "module_of_origin": "httpx._headers",
+      "deprecated": false,
+      "bases": [
+        "Generic",
+        "Mapping"
+      ],
+      "mro": [
+        "Collection",
+        "Container",
+        "Generic",
+        "Headers",
+        "Iterable",
+        "Mapping",
+        "Sized"
+      ],
+      "methods": [
+        {
+          "name": "as_byte_pairs",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "'list[tuple[bytes, bytes]]'"
+          }
+        },
+        {
+          "name": "copy_remove",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              },
+              {
+                "name": "key",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "'str'"
+              }
+            ],
+            "return_annotation": "'Headers'"
+          }
+        },
+        {
+          "name": "copy_set",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              },
+              {
+                "name": "key",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "'str'"
+              },
+              {
+                "name": "value",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "'str'"
+              }
+            ],
+            "return_annotation": "'Headers'"
+          }
+        },
+        {
+          "name": "copy_update",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              },
+              {
+                "name": "update",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "'Headers | typing.Mapping[str, str] | None'"
+              }
+            ],
+            "return_annotation": "'Headers'"
+          }
+        },
+        {
+          "name": "get",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              },
+              {
+                "name": "key",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "'str'"
+              },
+              {
+                "name": "default",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "default": "None",
+                "annotation": "'typing.Any'"
+              }
+            ],
+            "return_annotation": "'typing.Any'"
+          }
+        },
+        {
+          "name": "items",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "'typing.ItemsView[str, str]'"
+          }
+        },
+        {
+          "name": "keys",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "'typing.KeysView[str]'"
+          }
+        },
+        {
+          "name": "values",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "'typing.ValuesView[str]'"
+          }
+        }
+      ]
+    },
+    {
+      "name": "JSON",
+      "kind": "class",
+      "signature": {
+        "parameters": [
+          {
+            "name": "self",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          },
+          {
+            "name": "data",
+            "kind": "POSITIONAL_OR_KEYWORD",
+            "annotation": "typing.Any"
+          },
+          {
+            "name": "source",
+            "kind": "POSITIONAL_OR_KEYWORD",
+            "default": "None",
+            "annotation": "bytes | None"
+          }
+        ],
+        "return_annotation": "None"
+      },
+      "module_of_origin": "httpx._content",
+      "deprecated": false,
+      "bases": [
+        "Content"
+      ],
+      "mro": [
+        "Content",
+        "JSON"
+      ],
+      "methods": [
+        {
+          "name": "headers",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "<class 'httpx._headers.Headers'>"
+          }
+        },
+        {
+          "name": "keys",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "typing.KeysView[str]"
+          }
+        },
+        {
+          "name": "open",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "<class 'httpx._streams.Stream'>"
+          }
+        },
+        {
+          "name": "parse",
+          "signature": {
+            "parameters": [
+              {
+                "name": "stream",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "<class 'httpx._streams.Stream'>"
+              }
+            ],
+            "return_annotation": "'Content'"
+          }
+        }
+      ],
+      "properties": [
+        {
+          "name": "value",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "typing.Any"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Method",
+      "kind": "class",
+      "signature": {
+        "parameters": [
+          {
+            "name": "self",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          },
+          {
+            "name": "method",
+            "kind": "POSITIONAL_OR_KEYWORD",
+            "annotation": "<class 'str'>"
+          },
+          {
+            "name": "standard",
+            "kind": "POSITIONAL_OR_KEYWORD",
+            "default": "True"
+          }
+        ],
+        "return_annotation": null
+      },
+      "module_of_origin": "httpx._request",
+      "deprecated": false,
+      "bases": [
+        "object"
+      ],
+      "mro": [
+        "Method"
+      ],
+      "methods": [
+        {
+          "name": "has_body",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "<class 'bool'>"
+          }
+        }
+      ]
+    },
+    {
+      "name": "MultiPart",
+      "kind": "class",
+      "signature": {
+        "parameters": [
+          {
+            "name": "self",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          },
+          {
+            "name": "form",
+            "kind": "POSITIONAL_OR_KEYWORD",
+            "default": "None",
+            "annotation": "typing.Union[httpx._content.Form, typing.Mapping[str, typing.Union[str, typing.Sequence[str]]], typing.Sequence[tuple[str, str]], str, NoneType]"
+          },
+          {
+            "name": "files",
+            "kind": "POSITIONAL_OR_KEYWORD",
+            "default": "None",
+            "annotation": "typing.Union[httpx._content.Files, typing.Mapping[str, typing.Union[httpx._content.File, typing.Sequence[httpx._content.File]]], typing.Sequence[tuple[str, httpx._content.File]], NoneType]"
+          },
+          {
+            "name": "boundary",
+            "kind": "POSITIONAL_OR_KEYWORD",
+            "default": "None",
+            "annotation": "str | None"
+          }
+        ],
+        "return_annotation": null
+      },
+      "module_of_origin": "httpx._content",
+      "deprecated": false,
+      "bases": [
+        "Content"
+      ],
+      "mro": [
+        "Content",
+        "MultiPart"
+      ],
+      "methods": [
+        {
+          "name": "headers",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "<class 'httpx._headers.Headers'>"
+          }
+        },
+        {
+          "name": "open",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "<class 'httpx._streams.Stream'>"
+          }
+        },
+        {
+          "name": "parse",
+          "signature": {
+            "parameters": [
+              {
+                "name": "stream",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "<class 'httpx._streams.Stream'>"
+              }
+            ],
+            "return_annotation": "'Content'"
+          }
+        }
+      ],
+      "properties": [
+        {
+          "name": "files",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "<class 'httpx._content.Files'>"
+          }
+        },
+        {
+          "name": "form",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "<class 'httpx._content.Form'>"
+          }
+        }
+      ]
+    },
+    {
+      "name": "NetworkBackend",
+      "kind": "class",
+      "signature": {
+        "parameters": [
+          {
+            "name": "self",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          },
+          {
+            "name": "ssl_ctx",
+            "kind": "POSITIONAL_OR_KEYWORD",
+            "default": "None",
+            "annotation": "ssl.SSLContext | None"
+          }
+        ],
+        "return_annotation": null
+      },
+      "module_of_origin": "httpx._network",
+      "deprecated": false,
+      "bases": [
+        "object"
+      ],
+      "mro": [
+        "NetworkBackend"
+      ],
+      "methods": [
+        {
+          "name": "connect",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              },
+              {
+                "name": "host",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "<class 'str'>"
+              },
+              {
+                "name": "port",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "<class 'int'>"
+              }
+            ],
+            "return_annotation": "<class 'httpx._network.NetworkStream'>"
+          }
+        },
+        {
+          "name": "connect_tls",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              },
+              {
+                "name": "host",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "<class 'str'>"
+              },
+              {
+                "name": "port",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "<class 'int'>"
+              },
+              {
+                "name": "hostname",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "default": "''",
+                "annotation": "<class 'str'>"
+              }
+            ],
+            "return_annotation": "<class 'httpx._network.NetworkStream'>"
+          }
+        },
+        {
+          "name": "create_default_context",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "<class 'ssl.SSLContext'>"
+          }
+        },
+        {
+          "name": "listen",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              },
+              {
+                "name": "host",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "<class 'str'>"
+              },
+              {
+                "name": "port",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "<class 'int'>"
+              }
+            ],
+            "return_annotation": "<class 'httpx._network.NetworkListener'>"
+          }
+        },
+        {
+          "name": "serve",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              },
+              {
+                "name": "host",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "<class 'str'>"
+              },
+              {
+                "name": "port",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "<class 'int'>"
+              },
+              {
+                "name": "handler",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "typing.Callable[[httpx._network.NetworkStream], NoneType]"
+              }
+            ],
+            "return_annotation": "<class 'httpx._network.NetworkServer'>"
+          }
+        }
+      ]
+    },
+    {
+      "name": "NetworkStream",
+      "kind": "class",
+      "signature": {
+        "parameters": [
+          {
+            "name": "self",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          },
+          {
+            "name": "sock",
+            "kind": "POSITIONAL_OR_KEYWORD",
+            "annotation": "<class 'socket.socket'>"
+          },
+          {
+            "name": "address",
+            "kind": "POSITIONAL_OR_KEYWORD",
+            "annotation": "tuple[str, int]"
+          }
+        ],
+        "return_annotation": "None"
+      },
+      "module_of_origin": "httpx._network",
+      "deprecated": false,
+      "bases": [
+        "Stream"
+      ],
+      "mro": [
+        "NetworkStream",
+        "Stream"
+      ],
+      "methods": [
+        {
+          "name": "close",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "None"
+          }
+        },
+        {
+          "name": "read",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              },
+              {
+                "name": "size",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "default": "-1",
+                "annotation": "<class 'int'>"
+              }
+            ],
+            "return_annotation": "<class 'bytes'>"
+          }
+        },
+        {
+          "name": "write",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              },
+              {
+                "name": "buffer",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "<class 'bytes'>"
+              }
+            ],
+            "return_annotation": "None"
+          }
+        }
+      ],
+      "properties": [
+        {
+          "name": "host",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "<class 'str'>"
+          }
+        },
+        {
+          "name": "port",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "<class 'int'>"
+          }
+        },
+        {
+          "name": "size",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "int | None"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ProtocolError",
+      "kind": "exception",
+      "signature": {
+        "parameters": [
+          {
+            "name": "self",
+            "kind": "POSITIONAL_ONLY"
+          },
+          {
+            "name": "args",
+            "kind": "VAR_POSITIONAL"
+          },
+          {
+            "name": "kwargs",
+            "kind": "VAR_KEYWORD"
+          }
+        ],
+        "return_annotation": null
+      },
+      "module_of_origin": "httpx._parsers",
+      "deprecated": false,
+      "bases": [
+        "Exception"
+      ],
+      "mro": [
+        "BaseException",
+        "Exception",
+        "ProtocolError"
+      ],
+      "methods": [
+        {
+          "name": "add_note",
+          "signature": null
+        },
+        {
+          "name": "with_traceback",
+          "signature": null
+        }
+      ]
+    },
+    {
+      "name": "QueryParams",
+      "kind": "class",
+      "signature": {
+        "parameters": [
+          {
+            "name": "self",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          },
+          {
+            "name": "params",
+            "kind": "POSITIONAL_OR_KEYWORD",
+            "default": "None",
+            "annotation": "'QueryParams | dict[str, str | list[str]] | list[tuple[str, str]] | str | None'"
+          }
+        ],
+        "return_annotation": "'None'"
+      },
+      "module_of_origin": "httpx._urls",
+      "deprecated": false,
+      "bases": [
+        "Generic",
+        "Mapping"
+      ],
+      "mro": [
+        "Collection",
+        "Container",
+        "Generic",
+        "Iterable",
+        "Mapping",
+        "QueryParams",
+        "Sized"
+      ],
+      "methods": [
+        {
+          "name": "copy_append",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              },
+              {
+                "name": "key",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "'str'"
+              },
+              {
+                "name": "value",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "'str'"
+              }
+            ],
+            "return_annotation": "'QueryParams'"
+          }
+        },
+        {
+          "name": "copy_remove",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              },
+              {
+                "name": "key",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "'str'"
+              }
+            ],
+            "return_annotation": "'QueryParams'"
+          }
+        },
+        {
+          "name": "copy_set",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              },
+              {
+                "name": "key",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "'str'"
+              },
+              {
+                "name": "value",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "'str'"
+              }
+            ],
+            "return_annotation": "'QueryParams'"
+          }
+        },
+        {
+          "name": "copy_update",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              },
+              {
+                "name": "params",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "default": "None",
+                "annotation": "'QueryParams | dict[str, str | list[str]] | list[tuple[str, str]] | None'"
+              }
+            ],
+            "return_annotation": "'QueryParams'"
+          }
+        },
+        {
+          "name": "get",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              },
+              {
+                "name": "key",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "'str'"
+              },
+              {
+                "name": "default",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "default": "None",
+                "annotation": "'typing.Any'"
+              }
+            ],
+            "return_annotation": "'typing.Any'"
+          }
+        },
+        {
+          "name": "get_list",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              },
+              {
+                "name": "key",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "'str'"
+              }
+            ],
+            "return_annotation": "'list[str]'"
+          }
+        },
+        {
+          "name": "items",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "'typing.ItemsView[str, str]'"
+          }
+        },
+        {
+          "name": "keys",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "'typing.KeysView[str]'"
+          }
+        },
+        {
+          "name": "multi_dict",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "'dict[str, list[str]]'"
+          }
+        },
+        {
+          "name": "multi_items",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "'list[tuple[str, str]]'"
+          }
+        },
+        {
+          "name": "values",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "'typing.ValuesView[str]'"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Request",
+      "kind": "class",
+      "signature": {
+        "parameters": [
+          {
+            "name": "self",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          },
+          {
+            "name": "method",
+            "kind": "POSITIONAL_OR_KEYWORD",
+            "annotation": "httpx._request.Method | str"
+          },
+          {
+            "name": "url",
+            "kind": "POSITIONAL_OR_KEYWORD",
+            "annotation": "httpx._urls.URL | str"
+          },
+          {
+            "name": "headers",
+            "kind": "POSITIONAL_OR_KEYWORD",
+            "default": "None",
+            "annotation": "httpx._headers.Headers | dict[str, str] | None"
+          },
+          {
+            "name": "content",
+            "kind": "POSITIONAL_OR_KEYWORD",
+            "default": "None",
+            "annotation": "httpx._content.Content | bytes | None"
+          }
+        ],
+        "return_annotation": null
+      },
+      "module_of_origin": "httpx._request",
+      "deprecated": false,
+      "bases": [
+        "object"
+      ],
+      "mro": [
+        "Request"
+      ],
+      "properties": [
+        {
+          "name": "body",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "<class 'bytes'>"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Response",
+      "kind": "class",
+      "signature": {
+        "parameters": [
+          {
+            "name": "self",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          },
+          {
+            "name": "status_code",
+            "kind": "POSITIONAL_OR_KEYWORD",
+            "annotation": "httpx._response.StatusCode | int"
+          },
+          {
+            "name": "headers",
+            "kind": "KEYWORD_ONLY",
+            "default": "None",
+            "annotation": "httpx._headers.Headers | dict[str, str] | None"
+          },
+          {
+            "name": "content",
+            "kind": "KEYWORD_ONLY",
+            "default": "None",
+            "annotation": "httpx._content.Content | bytes | None"
+          }
+        ],
+        "return_annotation": null
+      },
+      "module_of_origin": "httpx._response",
+      "deprecated": false,
+      "bases": [
+        "object"
+      ],
+      "mro": [
+        "Response"
+      ],
+      "properties": [
+        {
+          "name": "body",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "<class 'bytes'>"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Server",
+      "kind": "class",
+      "signature": {
+        "parameters": [
+          {
+            "name": "self",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          },
+          {
+            "name": "app",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          },
+          {
+            "name": "host",
+            "kind": "POSITIONAL_OR_KEYWORD",
+            "default": "'127.0.0.1'"
+          },
+          {
+            "name": "port",
+            "kind": "POSITIONAL_OR_KEYWORD",
+            "default": "8080"
+          }
+        ],
+        "return_annotation": null
+      },
+      "module_of_origin": "httpx._server",
+      "deprecated": false,
+      "bases": [
+        "object"
+      ],
+      "mro": [
+        "Server"
+      ],
+      "methods": [
+        {
+          "name": "handle_stream",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              },
+              {
+                "name": "stream",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": null
+          }
+        },
+        {
+          "name": "serve",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": null
+          }
+        }
+      ]
+    },
+    {
+      "name": "Stream",
+      "kind": "class",
+      "signature": {
+        "parameters": [
+          {
+            "name": "self",
+            "kind": "POSITIONAL_ONLY"
+          },
+          {
+            "name": "args",
+            "kind": "VAR_POSITIONAL"
+          },
+          {
+            "name": "kwargs",
+            "kind": "VAR_KEYWORD"
+          }
+        ],
+        "return_annotation": null
+      },
+      "module_of_origin": "httpx._streams",
+      "deprecated": false,
+      "bases": [
+        "object"
+      ],
+      "mro": [
+        "Stream"
+      ],
+      "methods": [
+        {
+          "name": "close",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "None"
+          }
+        },
+        {
+          "name": "read",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              },
+              {
+                "name": "size",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "default": "-1",
+                "annotation": "<class 'int'>"
+              }
+            ],
+            "return_annotation": "<class 'bytes'>"
+          }
+        },
+        {
+          "name": "write",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              },
+              {
+                "name": "data",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "<class 'bytes'>"
+              }
+            ],
+            "return_annotation": "None"
+          }
+        }
+      ],
+      "properties": [
+        {
+          "name": "size",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "int | None"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Text",
+      "kind": "class",
+      "signature": {
+        "parameters": [
+          {
+            "name": "self",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          },
+          {
+            "name": "text",
+            "kind": "POSITIONAL_OR_KEYWORD",
+            "annotation": "<class 'str'>"
+          },
+          {
+            "name": "source",
+            "kind": "POSITIONAL_OR_KEYWORD",
+            "default": "None",
+            "annotation": "bytes | None"
+          }
+        ],
+        "return_annotation": "None"
+      },
+      "module_of_origin": "httpx._content",
+      "deprecated": false,
+      "bases": [
+        "Content"
+      ],
+      "mro": [
+        "Content",
+        "Text"
+      ],
+      "methods": [
+        {
+          "name": "headers",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "<class 'httpx._headers.Headers'>"
+          }
+        },
+        {
+          "name": "open",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "<class 'httpx._streams.Stream'>"
+          }
+        },
+        {
+          "name": "parse",
+          "signature": {
+            "parameters": [
+              {
+                "name": "stream",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "<class 'httpx._streams.Stream'>"
+              }
+            ],
+            "return_annotation": "<class 'httpx._content.Content'>"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Transport",
+      "kind": "class",
+      "signature": {
+        "parameters": [
+          {
+            "name": "self",
+            "kind": "POSITIONAL_ONLY"
+          },
+          {
+            "name": "args",
+            "kind": "VAR_POSITIONAL"
+          },
+          {
+            "name": "kwargs",
+            "kind": "VAR_KEYWORD"
+          }
+        ],
+        "return_annotation": null
+      },
+      "module_of_origin": "httpx._connection",
+      "deprecated": false,
+      "bases": [
+        "object"
+      ],
+      "mro": [
+        "Transport"
+      ],
+      "methods": [
+        {
+          "name": "close",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": null
+          }
+        },
+        {
+          "name": "request",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              },
+              {
+                "name": "method",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "httpx._request.Method | str"
+              },
+              {
+                "name": "url",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "httpx._urls.URL | str"
+              },
+              {
+                "name": "headers",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "default": "None",
+                "annotation": "httpx._headers.Headers | dict[str, str] | None"
+              },
+              {
+                "name": "content",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "default": "None",
+                "annotation": "httpx._content.Content | bytes | None"
+              }
+            ],
+            "return_annotation": "<class 'httpx._response.Response'>"
+          }
+        },
+        {
+          "name": "send",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              },
+              {
+                "name": "request",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "<class 'httpx._request.Request'>"
+              }
+            ],
+            "return_annotation": "<class 'httpx._response.Response'>"
+          }
+        },
+        {
+          "name": "stream",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              },
+              {
+                "name": "method",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "httpx._request.Method | str"
+              },
+              {
+                "name": "url",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "httpx._urls.URL | str"
+              },
+              {
+                "name": "headers",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "default": "None",
+                "annotation": "httpx._headers.Headers | dict[str, str] | None"
+              },
+              {
+                "name": "content",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "default": "None",
+                "annotation": "httpx._content.Content | bytes | None"
+              }
+            ],
+            "return_annotation": "<class 'httpx._response.Response'>"
+          }
+        }
+      ]
+    },
+    {
+      "name": "URL",
+      "kind": "class",
+      "signature": {
+        "parameters": [
+          {
+            "name": "self",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          },
+          {
+            "name": "url",
+            "kind": "POSITIONAL_OR_KEYWORD",
+            "default": "''",
+            "annotation": "'URL | str'"
+          },
+          {
+            "name": "kwargs",
+            "kind": "VAR_KEYWORD",
+            "annotation": "'typing.Any'"
+          }
+        ],
+        "return_annotation": "'None'"
+      },
+      "module_of_origin": "httpx._urls",
+      "deprecated": false,
+      "bases": [
+        "object"
+      ],
+      "mro": [
+        "URL"
+      ],
+      "methods": [
+        {
+          "name": "copy_append_param",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              },
+              {
+                "name": "key",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "'str'"
+              },
+              {
+                "name": "value",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "default": "None",
+                "annotation": "'typing.Any'"
+              }
+            ],
+            "return_annotation": "'URL'"
+          }
+        },
+        {
+          "name": "copy_merge_params",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              },
+              {
+                "name": "params",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "'QueryParams | dict[str, str | list[str]] | list[tuple[str, str]] | None'"
+              }
+            ],
+            "return_annotation": "'URL'"
+          }
+        },
+        {
+          "name": "copy_remove_param",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              },
+              {
+                "name": "key",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "'str'"
+              }
+            ],
+            "return_annotation": "'URL'"
+          }
+        },
+        {
+          "name": "copy_set_param",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              },
+              {
+                "name": "key",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "'str'"
+              },
+              {
+                "name": "value",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "default": "None",
+                "annotation": "'typing.Any'"
+              }
+            ],
+            "return_annotation": "'URL'"
+          }
+        },
+        {
+          "name": "copy_with",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              },
+              {
+                "name": "kwargs",
+                "kind": "VAR_KEYWORD",
+                "annotation": "'typing.Any'"
+              }
+            ],
+            "return_annotation": "'URL'"
+          }
+        },
+        {
+          "name": "join",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              },
+              {
+                "name": "url",
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": "'URL | str'"
+              }
+            ],
+            "return_annotation": "'URL'"
+          }
+        }
+      ],
+      "properties": [
+        {
+          "name": "fragment",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "'str'"
+          }
+        },
+        {
+          "name": "host",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "'str'"
+          }
+        },
+        {
+          "name": "is_absolute_url",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "'bool'"
+          }
+        },
+        {
+          "name": "is_relative_url",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "'bool'"
+          }
+        },
+        {
+          "name": "netloc",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "'str'"
+          }
+        },
+        {
+          "name": "params",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "'QueryParams'"
+          }
+        },
+        {
+          "name": "password",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "'str'"
+          }
+        },
+        {
+          "name": "path",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "'str'"
+          }
+        },
+        {
+          "name": "port",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "'int | None'"
+          }
+        },
+        {
+          "name": "query",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "'bytes'"
+          }
+        },
+        {
+          "name": "scheme",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "'str'"
+          }
+        },
+        {
+          "name": "target",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "'str'"
+          }
+        },
+        {
+          "name": "userinfo",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "'bytes'"
+          }
+        },
+        {
+          "name": "username",
+          "signature": {
+            "parameters": [
+              {
+                "name": "self",
+                "kind": "POSITIONAL_OR_KEYWORD"
+              }
+            ],
+            "return_annotation": "'str'"
+          }
+        }
+      ]
+    },
+    {
+      "name": "__title__",
+      "kind": "constant",
+      "signature": null,
+      "module_of_origin": "httpx",
+      "deprecated": false
+    },
+    {
+      "name": "__version__",
+      "kind": "constant",
+      "signature": null,
+      "module_of_origin": "httpx",
+      "deprecated": false
+    },
+    {
+      "name": "open_connection",
+      "kind": "function",
+      "signature": {
+        "parameters": [
+          {
+            "name": "url",
+            "kind": "POSITIONAL_OR_KEYWORD",
+            "annotation": "httpx._urls.URL | str"
+          },
+          {
+            "name": "hostname",
+            "kind": "POSITIONAL_OR_KEYWORD",
+            "default": "''",
+            "annotation": "<class 'str'>"
+          },
+          {
+            "name": "backend",
+            "kind": "POSITIONAL_OR_KEYWORD",
+            "default": "None",
+            "annotation": "httpx._network.NetworkBackend | None"
+          }
+        ],
+        "return_annotation": "<class 'httpx._connection.Connection'>"
+      },
+      "module_of_origin": "httpx._connection",
+      "deprecated": false
+    },
+    {
+      "name": "quote",
+      "kind": "function",
+      "signature": {
+        "parameters": [
+          {
+            "name": "string",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          },
+          {
+            "name": "safe",
+            "kind": "POSITIONAL_OR_KEYWORD",
+            "default": "'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~'"
+          }
+        ],
+        "return_annotation": null
+      },
+      "module_of_origin": "httpx._urlencode",
+      "deprecated": false
+    },
+    {
+      "name": "timeout",
+      "kind": "function",
+      "signature": {
+        "parameters": [
+          {
+            "name": "duration",
+            "kind": "POSITIONAL_OR_KEYWORD",
+            "annotation": "<class 'float'>"
+          }
+        ],
+        "return_annotation": "typing.Iterator[NoneType]"
+      },
+      "module_of_origin": "httpx._network",
+      "deprecated": false
+    },
+    {
+      "name": "unquote",
+      "kind": "function",
+      "signature": {
+        "parameters": [
+          {
+            "name": "string",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          }
+        ],
+        "return_annotation": null
+      },
+      "module_of_origin": "httpx._urlencode",
+      "deprecated": false
+    },
+    {
+      "name": "urldecode",
+      "kind": "function",
+      "signature": {
+        "parameters": [
+          {
+            "name": "string",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          }
+        ],
+        "return_annotation": null
+      },
+      "module_of_origin": "httpx._urlencode",
+      "deprecated": false
+    },
+    {
+      "name": "urlencode",
+      "kind": "function",
+      "signature": {
+        "parameters": [
+          {
+            "name": "multidict",
+            "kind": "POSITIONAL_OR_KEYWORD"
+          },
+          {
+            "name": "safe",
+            "kind": "POSITIONAL_OR_KEYWORD",
+            "default": "'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~'"
+          }
+        ],
+        "return_annotation": null
+      },
+      "module_of_origin": "httpx._urlencode",
+      "deprecated": false
+    }
+  ]
+}
