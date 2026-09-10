@@ -5,21 +5,22 @@ version = "1"
 created = "2026-07-21"
 rebaselined = "2026-08-07"
 rebaseline-sha = "f9eb1a455907d43210886b7b047d18bde8716652"
-# Post-maturation requalification renews the HTTPX 0.28.1 Stage C claim on
-# the post-maturation executable SHA `d034a10...` after the focused
-# semantic gate, Tier 1, extended, package validation, three consecutive
-# pinned compatibility runs, the API oracle, and the required downstream
-# portfolio all passed on the same SHA. Corrective 08's `d24101b...`
-# evidence is retained as historical only; its executable tree is
-# superseded by the four maturation commits (core request/transport
-# consolidation, H3 lifecycle hardening, native protocol observability and
-# API cleanup, Node experimental-prototype closure) plus the UDS fixture
-# bind-readiness fix.
+# Next-scope requalification renews the HTTPX 0.28.1 Stage C claim on
+# the next-scope executable SHA `cc90f5ed561bbe10d4c26accc54ed3b916518f98`
+# after the focused gates, Tier 1, extended, package validation, three
+# consecutive pinned compatibility runs, the API oracle, and the required
+# downstream portfolio all passed on the same SHA. The post-maturation
+# `d034a10...` evidence is retained as historical only; the H3
+# Alt-Svc/discovery/fallback/draining work, H3 interop evidence (experimental
+# retained), HTTPX2 sibling facade (independent profile, no 0.28.1 leakage),
+# 1.0-preview tracking, oracle generalization (httpx2 sentinel), and
+# extended-tier dual-profile gates changed executable/test/validation
+# behavior, invalidating the prior binding per the exact-SHA rule.
 stage = "stage-c-qualified"
 status = "stage-c-qualified"
-qualification-sha = "d034a1005857a7f403222dda4bda5f2f204a44fe"
-qualification-date = "2026-09-09"
-historical-qualification-sha = "d24101be6ed7be64463813750da5b4043d9905ec, 5c7899fefb6df087dfa1b3578fbef9ba64f87742, 9ffa6cd85848fd16a424b65f73254351911777c4, c44d4f25ffebc1a792335163ae4bc106076b3963"
+qualification-sha = "cc90f5ed561bbe10d4c26accc54ed3b916518f98"
+qualification-date = "2026-09-10"
+historical-qualification-sha = "d034a1005857a7f403222dda4bda5f2f204a44fe, d24101be6ed7be64463813750da5b4043d9905ec, 5c7899fefb6df087dfa1b3578fbef9ba64f87742, 9ffa6cd85848fd16a424b65f73254351911777c4, c44d4f25ffebc1a792335163ae4bc106076b3963"
 reference = "httpx==0.28.1"
 
 [reference]

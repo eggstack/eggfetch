@@ -4,7 +4,154 @@ This record is the exact-SHA-bound status for the HTTPX 0.28.1 compatibility
 facade. Historical phase and corrective-pass records remain in the git history
 and referenced plans; counts below are only from the runs named here.
 
-## Current pass — Post-maturation requalification and closure
+## Current pass — Next-scope requalification and closure (2026-09-10)
+
+Current designation: **Stage C qualified** for the documented Python 3.10+
+asyncio-supported HTTPX 0.28.1 surface, bound to the next-scope frozen
+executable SHA `cc90f5ed561bbe10d4c26accc54ed3b916518f98`. The sibling
+HTTPX2 2.12.0 facade is independently **Stage C qualified** on the same
+SHA (profile in `compat/httpx2/2.12.0/profile.toml`). HTTP/3 remains
+**experimental** with blockers recorded in
+`docs/architecture/core-tls-proxy-protocols.md` (§ "Production Graduation
+Decision"). HTTPX 1.0 pre-releases remain preview-only with no parity
+claim (`compat/httpx/1.0-preview/`).
+
+Plan: `plans/post-next-scope-compatibility-requalification-and-closure.md`.
+Parent program: `plans/http3-and-next-httpx-compatibility-program.md`.
+Prior qualified executable SHA: `d034a1005857a7f403222dda4bda5f2f204a44fe`
+(post-maturation; retained below as historical).
+
+### Prerequisite closure
+
+All six executable plans closed before the freeze, each with focused
+gates green:
+
+- `http3-alt-svc-discovery-fallback-and-draining.md` (prior commit
+  `815f4be` + `efaec42`): bounded authenticated Alt-Svc cache/suppressor,
+  Auto discovery, pre-commit replayable-only fallback, GOAWAY draining,
+  exact transport metrics; H3 stays experimental.
+- `http3-interoperability-and-production-graduation.md` (this program):
+  `tests/h3_interop_qualification.rs` (13 tests, loopback-only unless
+  `EGGFETCH_H3_INTEROP_URLS` is set), `fuzz_alt_svc` target, dependency
+  review (quinn 0.11 / h3 0.0.8 / h3-quinn 0.0.10), platform scope, and an
+  objective retained-experimental decision with named blockers (no
+  independent-server pass, no public spot-check ledger, partial impairment
+  harness, open upstream hardening).
+- `httpx2-2.12-profile-and-delta-baseline.md` (this program):
+  `compat/httpx2/2.12.0/` profile/requirements/reference manifest/oracle
+  baseline/parity cases/inventory; shared comparator generalized only with
+  the httpx2 UnsetType sentinel; extended tier exercises both profiles.
+- `httpx2-2.12-core-facade-parity.md` (this program):
+  `eggfetch.compat.httpx2` sibling facade (FunctionAuth, Origin/URL.origin,
+  QUERY, Headers operators, truststore default, status aliases +
+  HTTPXDeprecationWarning, behavior hardening corpus); 0.28.1 facade
+  untouched (smoke green).
+- `httpx2-2.12-sse-and-websocket-parity.md` (this program): SSE framing
+  over streamed responses; WebSocket wsproto framing over the existing 101
+  `network_stream` (handshake via normal pipeline; no second stack).
+- `httpx-1.0-preview-tracking.md` (this program):
+  `compat/httpx/1.0-preview/` reconnaissance (no PyPI 1.0 pre-release
+  available; RC/stable trigger recorded).
+
+Pre-freeze correction: `HttpVersionPolicyEnabler::use_http3` ungated so
+non-`http3` lib tests compile (1-line cfg fix; no behavior change).
+
+### Freeze
+
+Frozen executable SHA: `cc90f5ed561bbe10d4c26accc54ed3b916518f98` (program
+commit "feat: HTTP/3 interop evidence, httpx2 2.12 facade, 1.0 preview
+tracking"). Clean worktree; all source/tests/scripts/manifests committed.
+No evidence collected on a dirty tree.
+
+### Tier 1 (`./scripts/check.sh`) on `cc90f5e`
+
+Routine validation green: fmt, lint-suppression policy, pedantic clippy
+(`-D warnings`), Rust workspace tests (`--all-features`,
+`--test-threads=1`, excluding eggfetch-python), maturin build, Python
+behavior tests (542 passed), 0.28.1 compat smoke (133 passed).
+
+### Extended verification (extended tier) on `cc90f5e`
+
+Full compat suite, dual-profile oracle, feature matrix (`cargo check`
+variants), feature tests (incl. proxy/compression variants), docs
+(`cargo doc`, doc tests, examples/links checks), FFI tests, lifecycle
+suites, soak, merge-lossless, resource monitor, benchmarks (within noise),
+and the required downstream portfolio — green (MSRV records a scripted
+skip: 1.80 toolchain not installed; downstream `overall_pass: true`,
+4/4 required).
+
+### Tier 3 package validation on `cc90f5e`
+
+`cargo publish --dry-run -p eggfetch-core`, `cargo package --list` for
+dependent crates, release wheel build, wheel smoke, and package-content
+validation — green.
+
+### Full pinned compatibility suites — three consecutive clean runs on `cc90f5e`
+
+`EGGFETCH_COMPAT_REQUIRED=1 pytest crates/eggfetch-python/tests/compat/
+-q --strict-markers` (covers both 0.28.1 and httpx2 suites), no file or
+dependency changes between runs:
+
+- Run 1/3: 1870 passed.
+- Run 2/3: 1870 passed.
+- Run 3/3: 1870 passed.
+
+(One SOCKS reference-variant flake appeared in a pre-freeze full run and
+passed on immediate retry; it did not recur in the three frozen runs.)
+
+### API oracles on `cc90f5e`
+
+- 0.28.1: reference vs `eggfetch.compat.httpx`, zero unexplained (allowed
+  matches only).
+- httpx2 2.12.0: reference vs `eggfetch.compat.httpx2`, zero unexplained,
+  zero stale (64 inherited re-observed rows + 15 httpx2-specific rows +
+  2 not-applicable policy rows).
+
+### Required downstream portfolio on `cc90f5e`
+
+`run_downstream_compat.py --required-only`: `overall_pass: true`
+(4/4 required).
+
+### H3 graduation outcome on `cc90f5e`
+
+Experimental retained with blockers (see "Production Graduation Decision"
+in `docs/architecture/core-tls-proxy-protocols.md`). Failed graduation
+does not block compatibility qualification; no H3 change broke either
+profile (0.28.1 smoke + full suites green).
+
+### HTTPX2 independent stage on `cc90f5e`
+
+Stage C earned for the declared 2.12.0 surface (API oracle clean,
+behavior/security corpus green incl. 31 httpx2 differential tests, SSE
+lifecycle, optional WS with wsproto, downstream green, no 0.28.1
+leakage). Recorded in `compat/httpx2/2.12.0/profile.toml` on the same
+SHA. HTTPX 1.0 preview remains unqualified by design.
+
+### Post-qualification descendant audit
+
+Compared `cc90f5ed561bbe10d4c26accc54ed3b916518f98` (frozen executable
+SHA) to the qualification-record commit: every changed file is
+documentation/profile/ledger-only (`compat/httpx/0.28.1/profile.toml`,
+`compat/httpx2/2.12.0/profile.toml`, `plans/README.md`,
+`plans/ROADMAP.md`, `plans/httpx-parity-correction-status.md`). No
+Rust/Python source, test, manifest, lockfile, script, workflow, or
+packaging file changed after the freeze. Both `profile.toml`
+`qualification-sha` values equal the exact frozen SHA.
+
+### Remote CI
+
+To be recorded after push: existing routine CI (`./scripts/check.sh`,
+Tier 1) on the pushed HEAD; no special qualification workflow.
+
+### Closure statement
+
+Next-scope requalification is complete on the evidence above. HTTPX 0.28.1
+is again **Stage C qualified** and HTTPX2 2.12.0 is **Stage C qualified**,
+both bound to executable SHA
+`cc90f5ed561bbe10d4c26accc54ed3b916518f98`, with HTTP/3 retained as
+experimental and HTTPX 1.0 as preview-only.
+
+## Historical pass — Post-maturation requalification and closure
 
 Current designation: **Stage C qualified** for the documented Python 3.10+
 asyncio-supported HTTPX 0.28.1 surface. The qualification is bound to the

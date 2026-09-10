@@ -3,11 +3,19 @@ schema-version = "1"
 generator = "eggfetch-compat-profile"
 version = "1"
 created = "2026-09-10"
-# Baseline only: NOT qualified. No Stage C claim exists for HTTPX2 yet.
-# Qualification requires the parent program freeze + independent gates in
-# plans/post-next-scope-compatibility-requalification-and-closure.md.
-stage = "baseline-unqualified"
-status = "baseline-unqualified"
+# Next-scope qualification: Stage C earned on the frozen executable SHA
+# `cc90f5ed561bbe10d4c26accc54ed3b916518f98` (2026-09-10) after the focused
+# gates, Tier 1, extended, package validation, three consecutive full
+# compatibility runs (covering both profiles), the shared API oracle with
+# zero unexplained deltas, behavior/security corpus, SSE lifecycle, and
+# optional WS surface (wsproto) all passed on the same SHA, with the
+# required downstream portfolio green and no 0.28.1 leakage. Independent
+# of the HTTPX 0.28.1 Stage C claim on the same SHA; neither profile
+# mutates the other.
+stage = "stage-c-qualified"
+status = "stage-c-qualified"
+qualification-sha = "cc90f5ed561bbe10d4c26accc54ed3b916518f98"
+qualification-date = "2026-09-10"
 reference = "httpx2==2.12.0"
 
 [reference]

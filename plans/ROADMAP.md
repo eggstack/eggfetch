@@ -8,15 +8,15 @@ eggfetch is a Rust-native HTTP client platform with Python bindings and a CLI la
 
 The remaining roadmap is therefore not primarily about proving feasibility. It is about tightening semantics, completing the expected HTTP-client feature set, expanding transport capabilities, and establishing production-grade release, security, testing, and documentation practices.
 
-## Current product position (2026-09-09)
+## Current product position (2026-09-10)
 
-The post-audit architecture and surface maturation program
-(`post-audit-architecture-and-surface-maturation-program.md`) is
-complete: request/transport consolidation, HTTP/3 lifecycle hardening,
-native protocol observability and API cleanup, and the Node
-experimental-prototype decision all landed, and the HTTPX 0.28.1 facade
-is Stage C qualified on the post-maturation executable SHA recorded in
-`compat/httpx/0.28.1/profile.toml` (evidence:
+The HTTP/3 graduation and next HTTPX compatibility program
+(`http3-and-next-httpx-compatibility-program.md`) is complete: Alt-Svc
+discovery/fallback/draining, H3 interop evidence with a retained-
+experimental decision, the independent HTTPX2 2.12.0 sibling facade
+(+ SSE/optional WS), and HTTPX 1.0 preview tracking all landed. HTTPX
+0.28.1 is Stage C qualified and HTTPX2 2.12.0 is Stage C qualified, both
+on the next-scope executable SHA recorded in their profiles (evidence:
 `httpx-parity-correction-status.md`, the live ledger).
 
 ### Current supported surfaces
@@ -29,15 +29,22 @@ is Stage C qualified on the post-maturation executable SHA recorded in
   limits.
 - Python sync and asyncio bindings, including the Stage C qualified
   `eggfetch.compat.httpx` facade for the documented HTTPX 0.28.1
-  asyncio surface (Python 3.10+).
+  asyncio surface (Python 3.10+) and the independently Stage C qualified
+  `eggfetch.compat.httpx2` facade for httpx2 2.12.0 (FunctionAuth,
+  Origin, QUERY, header operators, SSE, optional WS).
 - CLI (`eggfetch-cli`) and C ABI (`eggfetch-ffi`) thin adapters.
 
 ### Experimental / limited surfaces
 
 - HTTP/3 over QUIC: functional behind the `http3` feature gate with a
   bounded per-origin cache, multi-address fallback, phase-correct
-  timeouts, and keepalive-derived idle policy. Retained as experimental
-  pending broader validation.
+  timeouts, keepalive-derived idle policy, authenticated Alt-Svc
+  discovery with suppression/safe fallback, and GOAWAY draining. Retained
+  as experimental with named blockers (see "Production Graduation
+  Decision" in `docs/architecture/core-tls-proxy-protocols.md`).
+- HTTPX 1.0 pre-releases: preview-only reconnaissance
+  (`compat/httpx/1.0-preview/`); no parity claim until an RC/stable
+  trigger opens a future program.
 - Node.js N-API binding: explicitly an experimental prototype (narrow
   string-body API, no response streaming, cancellation, structured
   errors, or generated declarations). Supported-binding scope is
@@ -45,7 +52,7 @@ is Stage C qualified on the post-maturation executable SHA recorded in
 
 ### Active work
 
-None scheduled. The maturation program's six plans are closed. Future
+None scheduled. The next-scope program's eight plans are closed. Future
 work is triggered by a new pinned HTTPX version, a newly discovered
 concrete compatibility defect, or an intentionally expanded scope —
 not by speculative parity expansion.
