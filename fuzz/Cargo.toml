@@ -85,5 +85,11 @@ path = "fuzz_targets/fuzz_proxy_response.rs"
 test = false
 doc = false
 
+[[bin]]
+name = "fuzz_alt_svc"
+path = "fuzz_targets/fuzz_alt_svc.rs"
+test = false
+doc = false
+
 [profile.release]
 debug = true

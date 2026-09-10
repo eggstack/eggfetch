@@ -156,11 +156,24 @@ EggfetchError
 
 Body kwargs (`content`, `data`, `json`) are mutually exclusive. `files` may combine with `data` but conflicts with `content` and `json`.
 
-## HTTPX Compatibility Facade
+## HTTPX Compatibility Facades
 
-The `eggfetch.compat.httpx` module provides an HTTPX 0.28.1-compatible facade over the native eggfetch bindings. This enables existing HTTPX code to run against the eggfetch Rust engine with minimal changes.
+Two versioned, independent facades share the single Rust engine:
 
-The facade is Stage C qualified for the documented Python 3.10+ asyncio-supported surface. The current qualification SHA, scope, and evidence live in `compat/httpx/0.28.1/profile.toml` and `plans/httpx-parity-correction-status.md`; phase/corrective plan documents below are historical records of how that state was reached, not the current claim.
+- `eggfetch.compat.httpx` — HTTPX 0.28.1 (Stage C; profile in
+  `compat/httpx/0.28.1/`, ledger in `plans/httpx-parity-correction-status.md`).
+- `eggfetch.compat.httpx2` — httpx2 2.12.0 sibling (stage in
+  `compat/httpx2/2.12.0/profile.toml`). Adds `FunctionAuth`, `Origin` +
+  `URL.origin`, `QUERY`, `Headers` merge operators, SSE (`EventSource` over
+  streamed responses), and optional WebSocket (wsproto framing over the
+  core 101 `network_stream`; handshake via the normal pipeline). Shared
+  helpers are reused where semantics are identical; profile-specific
+  behavior stays behind explicit boundaries. Importing one facade never
+  mutates the other.
+- `compat/httpx/1.0-preview/` — original HTTPX 1.0 reconnaissance only;
+  no implementation promise until an RC/stable trigger.
+
+The 0.28.1 facade is Stage C qualified for the documented Python 3.10+ asyncio-supported surface. The current qualification SHA, scope, and evidence live in `compat/httpx/0.28.1/profile.toml` and `plans/httpx-parity-correction-status.md`; phase/corrective plan documents below are historical records of how that state was reached, not the current claim.
 
 ### Architecture Overview
 

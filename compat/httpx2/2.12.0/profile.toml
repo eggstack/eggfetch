@@ -1,0 +1,51 @@
+[compatibility-profile]
+schema-version = "1"
+generator = "eggfetch-compat-profile"
+version = "1"
+created = "2026-09-10"
+# Baseline only: NOT qualified. No Stage C claim exists for HTTPX2 yet.
+# Qualification requires the parent program freeze + independent gates in
+# plans/post-next-scope-compatibility-requalification-and-closure.md.
+stage = "baseline-unqualified"
+status = "baseline-unqualified"
+reference = "httpx2==2.12.0"
+
+[reference]
+distribution = "httpx2"
+version = "2.12.0"
+python-versions = ["3.10", "3.11", "3.12", "3.13", "3.14", "3.15"]
+sync-backend = "httpcore2"
+async-backend = "httpcore2"
+httpcore-version = "2.12.0"
+
+[eggfetch]
+distribution = "eggfetch"
+# API compatibility is separate from distribution support: eggfetch wheels
+# cover Python 3.10–3.13 (see AGENTS.md Release). HTTPX2 3.14/3.15-only
+# syntax is not advertised as supported until packaging expands.
+python-versions = ["3.10", "3.11", "3.12", "3.13"]
+sync-backend = "rust-tokio"
+async-backend = "rust-tokio"
+
+[modules]
+# Public modules included in the compatibility contract
+public = ["httpx2"]
+# Private modules excluded (prefixed with _)
+private-excluded = ["_transports", "_content", "_models", "_decoders", "_exceptions", "_multipart", "_urlparse", "_config"]
+
+[feature-extras]
+# HTTPX2 optional extras and their eggfetch equivalents (Stage C target)
+http2 = { httpx2 = "httpx2[http2]", eggfetch = "http2=True" }
+brotli = { httpx2 = "httpx2[brotli]", eggfetch = "compression-brotli feature" }
+zstd = { httpx2 = "httpx2[zstd]", eggfetch = "compression-zstd feature" }
+socks = { httpx2 = "httpx2[socks]", eggfetch = "native Rust SOCKS5 (socks5/socks5h)" }
+ws = { httpx2 = "httpx2[ws]", eggfetch = "optional WebSocket over 101 network_stream (wsproto framing)" }
+cli = { httpx2 = "httpx2[cli]", eggfetch = "not-applicable (CLI cosmetic/dependency extra)" }
+
+[compatibility-categories]
+required-now = "Must match for current stage"
+required-later = "Accepted gap assigned to later roadmap phase"
+intentional-difference = "Reviewed and explicitly allowed"
+not-public = "Excluded from contract"
+not-applicable = "Reference feature cannot apply to current product stage"
+resolved = "Previously required gap, now implemented and verified"

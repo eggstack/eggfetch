@@ -102,8 +102,8 @@ impl HttpVersionPolicyEnabler {
     }
 
     /// Returns `true` if HTTP/3 should be used (QUIC transport).
-    #[cfg(feature = "http3")]
     #[must_use]
+    #[allow(dead_code)]
     pub(crate) fn use_http3(self) -> bool {
         match self.0 {
             HttpVersionPolicy::Http3Only => true,

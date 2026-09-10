@@ -34,6 +34,7 @@ _VALID_DIFFERENCE_TYPES = (
 
 _KNOWN_SENTINELS = {
     "<httpx._config.UnsetType object>": "UnsetType",
+    "<httpx2._config.UnsetType object>": "UnsetType",
 }
 
 

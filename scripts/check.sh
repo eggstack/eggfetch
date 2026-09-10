@@ -171,6 +171,15 @@ tier2_full_compat() {
 Extended HTTPX compatibility dependencies are not installed.
 Install them in the active environment:
   python -m pip install -r compat/httpx/0.28.1/requirements.txt
+  python -m pip install -r compat/httpx2/2.12.0/requirements.txt
+SETUP_GUIDE
+        exit 1
+    fi
+    if ! "$PYTHON_BIN" -c "import httpx2; assert httpx2.__version__ == '2.12.0'" 2>/dev/null; then
+        cat >&2 <<'SETUP_GUIDE'
+Extended HTTPX2 compatibility dependencies are not installed.
+Install them in the active environment:
+  python -m pip install -r compat/httpx2/2.12.0/requirements.txt
 SETUP_GUIDE
         exit 1
     fi
@@ -193,6 +202,8 @@ tier2_api_manifest() {
     require_file "$SCRIPT_DIR/compare_httpx_api_manifest.py"
     require_file "$REPO_ROOT/compat/httpx/0.28.1/reference-api.json"
     require_file "$REPO_ROOT/compat/httpx/0.28.1/allowed-differences.toml"
+    require_file "$REPO_ROOT/compat/httpx2/2.12.0/reference-api.json"
+    require_file "$REPO_ROOT/compat/httpx2/2.12.0/allowed-differences.toml"
     local tmp_dir
     tmp_dir="$(mktemp -d)"
     (
@@ -203,6 +214,11 @@ tier2_api_manifest() {
             --reference compat/httpx/0.28.1/reference-api.json \
             --candidate "$tmp_dir/eggfetch-manifest.json" \
             --allowed compat/httpx/0.28.1/allowed-differences.toml
+        "$PYTHON_BIN" scripts/generate_httpx_api_manifest.py --package eggfetch.compat.httpx2 --output "$tmp_dir/eggfetch-httpx2-manifest.json"
+        "$PYTHON_BIN" scripts/compare_httpx_api_manifest.py \
+            --reference compat/httpx2/2.12.0/reference-api.json \
+            --candidate "$tmp_dir/eggfetch-httpx2-manifest.json" \
+            --allowed compat/httpx2/2.12.0/allowed-differences.toml
     )
 }
 

@@ -1,0 +1,4 @@
+# Resolved differences ledger — HTTPX2 2.12.0
+# Historical records of previously-allowed differences that have been
+# resolved (implemented and verified). Empty at baseline; entries are
+# appended only after implementation + differential evidence.

@@ -72,11 +72,20 @@ EggfetchError
 
 ## HTTPX Compatibility Layer
 
-The `eggfetch.compat.httpx` module provides an HTTPX 0.28.1 compatibility facade over the eggfetch Rust engine (Stage C qualified for the documented asyncio surface at the exact SHA in `compat/httpx/0.28.1/profile.toml`). Import path:
+The `eggfetch.compat.httpx` module provides an HTTPX 0.28.1 compatibility facade over the eggfetch Rust engine (Stage C qualified for the documented asyncio surface at the exact SHA in `compat/httpx/0.28.1/profile.toml`). The sibling `eggfetch.compat.httpx2` module targets httpx2 2.12.0 (stage in `compat/httpx2/2.12.0/profile.toml`); the two facades coexist and importing one never mutates the other. Import paths:
 
 ```python
 from eggfetch.compat.httpx import Client, AsyncClient, Request, Response
+from eggfetch.compat.httpx2 import Client as H2Client  # sibling 2.12.0 surface
 ```
+
+**httpx2 delta surface** (in `eggfetch.compat.httpx2` only; never backported
+silently into 0.28.1): `FunctionAuth`, `Origin` + `URL.origin`, `QUERY`
+(`query` top-level + client helpers), `Headers` `|`/`|=` operators, SSE
+(`EventSource` framing over streamed responses), optional WebSocket
+(wsproto framing over the core 101 `network_stream`; handshake via the
+normal pipeline), `alias_httpx()` explicit opt-in, truststore default,
+RFC 9110 status renames with `HTTPXDeprecationWarning`.
 
 **Implemented surface** (historical phase detail lives in `docs/architecture/python-bindings.md`):
 

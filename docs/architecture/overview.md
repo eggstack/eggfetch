@@ -40,7 +40,8 @@ eggfetch/
 │   ├── eggfetch-ffi/       C ABI bindings — opaque handle pattern
 │   ├── eggfetch-node/      Node.js N-API prototype (wraps FFI)
 │   └── eggfetch-bench/     Criterion benchmarks (not published)
-├── compat/                 HTTPX compatibility profiles (httpx/0.28.1) + downstream
+├── compat/                 Versioned compatibility profiles (httpx/0.28.1,
+│                            httpx2/2.12.0, httpx/1.0-preview) + downstream
 │                            fixtures, shim, and controlled-replacement suites
 ├── docs/
 │   └── architecture/       This directory — internal architecture docs
@@ -165,7 +166,10 @@ Single source file (`main.rs`, ~1700 lines). Thin binary over `eggfetch-core`:
 | `errors.rs` | Exception hierarchy: `EggfetchError` → `RequestError` (nesting `InvalidUrl`, `TimeoutException`, `NetworkError`, `ProtocolError`, `BodyError`, `ProxyError`, retry/H2/H3 errors) plus direct subclasses `HTTPStatusError`, `UnsupportedKwarg`, stream-state errors. See [python-bindings.md](python-bindings.md). |
 | `limits.rs` | `PyLimits` — pool concurrency limits. |
 
-Plus the HTTPX compatibility facade in `eggfetch/compat/httpx/`.
+Plus the versioned compatibility facades in `eggfetch/compat/httpx/`
+(0.28.1) and `eggfetch/compat/httpx2/` (2.12.0). SSE is Python framing over
+streamed responses; WebSocket framing owns the core 101 `network_stream`.
+HTTPX 1.0 remains preview-only (`compat/httpx/1.0-preview/`).
 
 **Deep dive:** [python-bindings.md](python-bindings.md)
 
@@ -272,10 +276,12 @@ selects one declarative route (precedence unchanged, directly unit-tested):
    per-route persistent Hyper pool)
 4. **SNI override direct** — cached SNI-specific client when
    `TransportHints::sni_hostname` is set
-5. **HTTP/3 (QUIC)** — `Http3Only` always; `Auto { allow_http3: true }` only
+5. **HTTP/3 (QUIC, experimental)** — `Http3Only` always; `Auto { allow_http3: true }` only
    when a fresh Alt-Svc alternative is cached and not suppressed (otherwise
    standard); `Auto { allow_http3: false }` never. Requires the `http3`
-   feature.
+   feature. Graduation is **retained experimental** this milestone; blockers
+   and evidence live in [core-tls-proxy-protocols.md](core-tls-proxy-protocols.md)
+   (§ "Production Graduation Decision") and `tests/h3_interop_qualification.rs`.
 6. **Standard Hyper direct** — default TCP path (also safe `Auto` fallback
    for pre-commit replayable H3 failures, same deadlines/TLS).
 

@@ -20,6 +20,16 @@ Use this skill when performing security reviews or addressing security findings 
 - Multipart boundaries validated (no CR/LF injection). Filenames basename-only (no path traversal).
 - Proxy auth not forwarded to destination.
 - Cookie jar integrity maintained across redirects.
+- Alt-Svc learns only from authenticated HTTPS (verified TLS, no proxy,
+  hop-local origin); alternatives never change cookies/auth/Host policy;
+  QUIC SNI stays the origin; oversized/malformed values fail closed.
+- H3 fallback replays only pre-commit replayable bodies; one-shot bodies
+  never duplicate; `Http3Only` never falls back.
+- WebSocket handshake via the normal pipeline (proxy/SOCKS/TLS identical
+  to requests); only 101 owns a writable stream; proxy headers never reach
+  the origin; credentials redacted; max-message bounds fragments in total.
+- SSE bounds event buffering via `max_event_size`; close/cancel releases
+  the body/pool lease; no whole-response buffering.
 
 ## Severity Classification
 

@@ -1,8 +1,13 @@
 # Feature compatibility matrix
 
 This page tracks compatibility with requests and HTTPX across features. HTTPX
-claims refer specifically to the pinned 0.28.1 asyncio-supported facade, not
-all HTTPX transports or concurrency backends.
+claims refer specifically to the pinned 0.28.1 asyncio-supported facade
+(`eggfetch.compat.httpx`), not all HTTPX transports or concurrency backends.
+HTTPX2 claims refer specifically to the sibling 2.12.0 facade
+(`eggfetch.compat.httpx2`, stage in `compat/httpx2/2.12.0/profile.toml`);
+the two contracts are independent and never collapsed into one "HTTPX parity"
+claim. HTTPX 1.0 pre-releases are preview-only (`compat/httpx/1.0-preview/`)
+with no parity claim.
  eggfetch Node.js bindings are experimental and not included in this matrix.
 
 ## Supported and tested
@@ -68,6 +73,12 @@ all HTTPX transports or concurrency backends.
 | Event hooks (request/response sequencing) | No | Yes | Facade Yes (native: N/A) | N/A | N/A |
 | DigestAuth (MD5/SHA-256) | No | Yes | Facade Yes (native: Basic/Bearer only) | N/A | N/A |
 | NetRCAuth | No | Yes | Facade Yes (native: N/A) | N/A | N/A |
+| FunctionAuth (httpx2 only) | No | No (0.28.1) / Yes (httpx2 2.12.0) | httpx2 facade Yes | N/A | N/A |
+| Origin / URL.origin (httpx2 only) | No | No (0.28.1) / Yes (httpx2 2.12.0) | httpx2 facade Yes | N/A | N/A |
+| QUERY method (httpx2 only) | No | No (0.28.1) / Yes (httpx2 2.12.0) | httpx2 facade Yes | N/A | N/A |
+| Headers merge operators (httpx2 only) | No | No (0.28.1) / Yes (httpx2 2.12.0) | httpx2 facade Yes | N/A | N/A |
+| SSE EventSource (httpx2 only) | No | No (0.28.1) / Yes (httpx2 2.12.0) | httpx2 facade Yes (framing over streamed responses) | N/A | N/A |
+| WebSocket optional surface (httpx2 only) | No | No (0.28.1) / Yes (httpx2[ws]) | httpx2 facade Yes (wsproto over 101 network_stream) | N/A | N/A |
 | Auth flow generator pattern | No | Yes | Facade Yes (native: N/A) | N/A | N/A |
 | Async API | No | Yes | Yes | N/A | Yes (native) |
 

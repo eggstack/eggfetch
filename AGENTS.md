@@ -159,7 +159,10 @@ through the native `stream()` method.
 
 ## HTTPX Compatibility Layer
 
-`eggfetch.compat.httpx` targets HTTPX 0.28.1 (asyncio only; Stage C qualified):
+`eggfetch.compat.httpx` targets HTTPX 0.28.1 (asyncio only; Stage C qualified).
+`eggfetch.compat.httpx2` targets httpx2 2.12.0 (sibling profile; stage in
+`compat/httpx2/2.12.0/profile.toml`). The two facades coexist; importing one
+never mutates the other. `compat/httpx/1.0-preview/` is reconnaissance only.
 
 ```python
 from eggfetch.compat.httpx import Client, AsyncClient, Request, Response, URL, Headers, Cookies

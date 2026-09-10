@@ -131,10 +131,11 @@ string bodies, buffered responses (`status`, `url`, `headers`,
 ### Python
 
 - No Trio/AnyIO support (asyncio only).
-- No WSGI/ASGI in-process transports in the native API (the HTTPX compatibility facade provides `WSGITransport`/`ASGITransport`).
+- No WSGI/ASGI in-process transports in the native API (the HTTPX compatibility facades provide `WSGITransport`/`ASGITransport`).
 - Native proxy bypass comes from `NO_PROXY` in the environment (`trust_env=True`, the default); proxy credentials travel in the proxy URL. There is no `no_proxy=`/`proxy_auth=` kwarg on the native `Client`.
 - Encrypted private keys for mTLS produce a clear error at construction.
-- HTTP/3 is experimental; API surfaces may change.
+- HTTP/3 is experimental (retained this milestone; see "Production Graduation Decision" in `docs/architecture/core-tls-proxy-protocols.md`); API surfaces may change.
+- Compatibility facades: `eggfetch.compat.httpx` (HTTPX 0.28.1, Stage C) and `eggfetch.compat.httpx2` (httpx2 2.12.0, stage in `compat/httpx2/2.12.0/profile.toml`) coexist; HTTPX 1.0 is preview-only with no parity claim.
 
 ### CLI
 

@@ -242,7 +242,12 @@ See [`docs/cli/guide.md`](docs/cli/guide.md) for the full CLI reference.
 
 ## HTTPX Compatibility
 
-eggfetch provides an HTTPX 0.28.1-compatible asyncio facade via `eggfetch.compat.httpx`. The compatibility profile is pinned in `compat/httpx/0.28.1/` with machine-readable API manifests, allowed-difference tracking, and a parity case registry.
+eggfetch provides two versioned, independent compatibility facades over the
+single Rust engine. They coexist and never mutate each other.
+
+### HTTPX 0.28.1 (`eggfetch.compat.httpx`)
+
+The compatibility profile is pinned in `compat/httpx/0.28.1/` with machine-readable API manifests, allowed-difference tracking, and a parity case registry.
 
 The facade is Stage C qualified for the documented Python ≥3.10
 asyncio-supported surface of HTTPX 0.28.1. Current evidence is bound to the
@@ -304,6 +309,42 @@ URLs establish TLS to the proxy before forward or CONNECT proxying. The safe
   on every path (success or failure) at the declared boundary.
 
 Remaining differences are documented in `compat/httpx/0.28.1/allowed-differences.toml`; the compatibility claim is limited to the pinned HTTPX 0.28.1 profile and the supported asyncio surface.
+
+### HTTPX2 2.12.0 (`eggfetch.compat.httpx2`)
+
+A sibling facade for Pydantic's maintained `httpx2==2.12.0` line, pinned in
+`compat/httpx2/2.12.0/` with its own reference manifest, allowed-difference
+ledger, and parity cases. It reuses the same Rust engine and shared
+compatibility helpers where semantics are identical; HTTPX2-specific
+semantics (see below) live behind explicit profile boundaries and never
+leak into `eggfetch.compat.httpx`.
+
+```python
+from eggfetch.compat.httpx2 import Client, AsyncClient
+
+client = Client()  # httpx2 2.12.0 surface: FunctionAuth, Origin, QUERY, SSE, optional WS
+```
+
+New surface vs 0.28.1: `FunctionAuth`, `Origin` + `URL.origin`, `QUERY`
+(`query` top-level + `Client.query`/`AsyncClient.query`), `Headers` merge
+operators (`|`/`|=`), SSE (`EventSource`, `ServerSentEvent`, `SSEError` +
+`Client.sse`), optional WebSocket (`websocket` top-level +
+`Client.websocket`, `httpx2.websockets.*` over the existing 101
+`network_stream` with wsproto framing — no second socket/TLS stack),
+`alias_httpx()` (explicit opt-in only; ordinary imports never alias),
+truststore OS-trust default, RFC 9110 status renames with
+`HTTPXDeprecationWarning` aliases, and behavior hardening (decoder caps,
+multipart validation, WSGI framing). Python 3.10–3.13 distribution scope;
+Pyodide/jsfetch and CLI extras are not applicable. Stage is recorded in
+`compat/httpx2/2.12.0/profile.toml` (baseline-unqualified until the
+program freeze qualifies it independently).
+
+### HTTPX 1.0 preview (no compatibility promise)
+
+`compat/httpx/1.0-preview/` tracks the original HTTPX 1.0 redesign as
+reconnaissance only. No dev release is a supported contract; see that
+directory for the observed version, delta notes, and the RC/stable trigger
+that would open a future implementation program.
 
 ### 101 Switching Protocols and `network_stream`
 

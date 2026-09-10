@@ -481,17 +481,95 @@ is retryable; `H3ConnectionClosed` / `H3Stream` / `H3Protocol` are not.
 
 ### Stress Evidence
 
-`tests/h3_hardening.rs` (12 tests, loopback fixtures only): connect/total
+`tests/h3_hardening.rs` (loopback fixtures only): connect/total
 precedence, stalled-body read timeout, shared concurrent init, per-host
 pool gating, failure non-poisoning, distinct-origin stabilization,
 fail/reconnect cycles, partial-body drop reuse, client-drop release, and
 prompt cancellation with continued usability.
 
-`tests/h3_alt_svc_discovery.rs` (16 tests, loopback only): explicit strictness,
+`tests/h3_alt_svc_discovery.rs` (loopback only): explicit strictness,
 Auto discovery (learn-then-H3), suppression with fast skip and new-generation
 recovery, safe fallback with monotonic deadlines, draining reconnect,
 exact observability, and adversarial cases (plaintext/injection/oversized/
 stale/cancellation/clear, SNI preservation, one-shot non-replay).
+
+`tests/h3_interop_qualification.rs` (loopback only unless
+`EGGFETCH_H3_INTEROP_URLS` is set): mandatory Quinn self-interop,
+UDP-blackhole connect-budget termination, bad-then-good non-poisoning,
+server-restart reconnect, prompt cancellation, 100-request reuse soak,
+fail/reconnect stabilization, cancellation storms, construction/drop loops,
+exact metrics with truthful `None` H3 per-response metadata, IPv6
+capability detection, and a doc-pinned platform-scope check.
+
+### Dependency and Upstream-Risk Review (2026-09-10)
+
+Pinned for this milestone:
+
+- `quinn 0.11` (`rustls` + `ring` + `runtime-tokio`)
+- `h3 0.0.8` with `i-implement-a-third-party-backend-and-opt-into-breaking-changes`
+  (exposes `ConnectionState::is_closing()` / `is_h3_no_error()`; re-audit on bump)
+- `h3-quinn 0.0.10` bridge
+
+Hyper's HTTP/3 integration remains unfinished upstream and the h3
+ecosystem still carries active correctness/interoperability work around
+clean close, buffered data, stream reset/cancel, GOAWAY, QPACK/frame
+parsing, and connection-driver lifecycle. No unsupported fork of
+h3/Quinn is introduced to force graduation. Upgrades require a concrete
+correctness/security/interoperability benefit and land before the
+program freeze.
+
+### Interoperability Evidence (this milestone)
+
+- Deterministic loopback Quinn/h3 fixtures are mandatory and green
+  (`h3_hardening`, `h3_alt_svc_discovery`, `h3_interop_qualification`).
+- External independent servers (ngtcp2/nghttp3, quiche, …) are supported
+  through `EGGFETCH_H3_INTEROP_URLS` with capability detection and
+  explicit skip reporting; absence is visible and is not graduation
+  evidence. No external-server pass is claimed in this milestone.
+- Real-network public-origin spot checks are manual qualification
+  supplements, not Tier 1; none are claimed in this milestone.
+- Impairment coverage is local and deterministic: UDP blackhole,
+  bad-then-good DNS-shape, server restart, cancellation during connect,
+  cancellation storms. Packet-loss/reordering/jitter rigs and
+  mid-response path-break harnesses remain future work and are listed
+  as blockers below.
+
+### Resource and Platform Scope
+
+- Soak coverage is bounded and deterministic: 100 sequential reused-H3
+  requests, 10 fail/reconnect cycles, 20-iteration cancellation storms
+  and construction/drop loops. Long-duration RSS/descriptor soak with
+  allocator-threshold policy remains extended-tier future work.
+- Fuzz coverage for EggFetch-owned Alt-Svc parsing/state lives in
+  `fuzz/fuzz_targets/fuzz_alt_svc.rs` plus deterministic adversarial
+  unit/integration tests; h3/QPACK internals are not re-fuzzed.
+- Platform scope reuses existing CI/package mechanisms (no new matrix):
+  UDP socket binding, IPv6 availability (capability-detected, never
+  assumed), certificate stores, timer precision, and address metadata
+  follow the same policy as the rest of the engine. Lack of a
+  platform-specific H3 test is not described as support evidence.
+
+### Production Graduation Decision (this milestone): experimental retained
+
+HTTP/3 remains **experimental** for ordinary request/response operation.
+The objective gate in
+`plans/http3-interoperability-and-production-graduation.md` does not
+pass yet; concrete blockers:
+
+1. No two-independent-non-Quinn-server interoperability pass recorded
+   on the frozen SHA.
+2. No public-origin Alt-Svc spot-check ledger recorded.
+3. Impairment harness covers blackhole/restart/cancellation locally;
+   loss/reordering/jitter and mid-response path-break evidence missing.
+4. Upstream `h3 0.0.8` / Hyper-H3 hardening still open; graduation
+   must be evidence-driven, not label-driven.
+
+Removing the experimental label requires the full gate (deterministic
+suites + Alt-Svc/fallback/draining + two independent interop passes +
+spot checks + impairment/resource + no known corrupting upstream issue
++ documented platform scope + green Tier 1/extended). Advanced QUIC
+features (0-RTT, WebTransport, datagrams, MASQUE, migration) stay
+separately experimental/unimplemented regardless.
 
 ### Python API
 

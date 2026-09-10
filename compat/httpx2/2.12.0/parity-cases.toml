@@ -1,0 +1,172 @@
+# Parity case registry — HTTPX2 2.12.0 baseline
+# Each case has a stable ID, description, sync/async applicability,
+# test references, and required result (parity or intentional-difference).
+# Baseline cases intentionally fail/xfail until core/SSE/WS plans close;
+# this inventory is engineering tracking, not qualification evidence.
+
+# ── API objects/signatures ──────────────────────────────────────────
+
+[[case]]
+id = "H2X-API-001"
+description = "FunctionAuth public export, construction, sync/async integration"
+sync = true
+async = true
+tests = ["test_httpx2_api_parity.py"]
+result = "parity"
+phase = "core"
+
+[[case]]
+id = "H2X-API-002"
+description = "Origin + URL.origin: normalization, default ports, IDNA, IPv6, equality/hash/repr"
+sync = true
+async = true
+tests = ["test_httpx2_api_parity.py"]
+result = "parity"
+phase = "core"
+
+[[case]]
+id = "H2X-API-003"
+description = "QUERY method: top-level + Client/AsyncClient helpers, body/params, redirects, mock"
+sync = true
+async = true
+tests = ["test_httpx2_api_parity.py"]
+result = "parity"
+phase = "core"
+
+[[case]]
+id = "H2X-API-004"
+description = "Headers merge operators: |, |=, case-insensitive replace, duplicates, invalid operands, redaction"
+sync = true
+async = true
+tests = ["test_httpx2_api_parity.py"]
+result = "parity"
+phase = "core"
+
+[[case]]
+id = "H2X-API-005"
+description = "API oracle: zero unexplained non-streaming deltas in declared surface"
+sync = true
+async = true
+tests = ["test_httpx2_api_parity.py"]
+result = "parity"
+phase = "core"
+
+# ── Auth/URL/origin ─────────────────────────────────────────────────
+
+[[case]]
+id = "H2X-AUTH-001"
+description = "FunctionAuth redirect/retry call timing, no credential leak"
+sync = true
+async = true
+tests = ["test_httpx2_behavior.py"]
+result = "parity"
+phase = "core"
+
+# ── TLS/proxy/no_proxy ──────────────────────────────────────────────
+
+[[case]]
+id = "H2X-TLS-001"
+description = "TLS trust-default split: default/explicit verify/SSLContext/cert conflicts, no 0.28.1 regression"
+sync = true
+async = true
+tests = ["test_httpx2_behavior.py"]
+result = "parity"
+phase = "core"
+
+[[case]]
+id = "H2X-PROXY-001"
+description = "NO_PROXY/profiled deltas: bracketed/unbracketed IPv6, CIDR, host:port, boundaries, precedence"
+sync = true
+async = true
+tests = ["test_httpx2_behavior.py"]
+result = "parity"
+phase = "core"
+
+# ── Compression/multipart/WSGI ──────────────────────────────────────
+
+[[case]]
+id = "H2X-COMP-001"
+description = "Decompression hardening: chained decoder cap, bounded streaming memory, close-on-failure, zstd splits"
+sync = true
+async = true
+tests = ["test_httpx2_behavior.py"]
+result = "parity"
+phase = "core"
+
+[[case]]
+id = "H2X-MP-001"
+description = "Multipart header validation: CR/LF injection fails before bytes emitted"
+sync = true
+async = true
+tests = ["test_httpx2_behavior.py"]
+result = "parity"
+phase = "core"
+
+[[case]]
+id = "H2X-WSGI-001"
+description = "WSGI Transfer-Encoding preservation + buffered body length; no 0.28.1 regression"
+sync = true
+async = true
+tests = ["test_httpx2_behavior.py"]
+result = "parity"
+phase = "core"
+
+# ── Status/warnings/metadata ────────────────────────────────────────
+
+[[case]]
+id = "H2X-META-001"
+description = "Status aliases, HTTPXDeprecationWarning, version/User-Agent metadata"
+sync = true
+async = true
+tests = ["test_httpx2_api_parity.py"]
+result = "parity"
+phase = "core"
+
+# ── SSE ─────────────────────────────────────────────────────────────
+
+[[case]]
+id = "H2X-SSE-001"
+description = "SSE parser: UTF-8 fields, CR/LF/CRLF boundaries, multiline data, BOM/empty, incremental, sync/async"
+sync = true
+async = true
+tests = ["test_httpx2_sse.py"]
+result = "parity"
+phase = "sse"
+
+[[case]]
+id = "H2X-SSE-002"
+description = "SSE lifecycle: max_event_size bound, close/cancel releases body/pool lease"
+sync = true
+async = true
+tests = ["test_httpx2_sse.py"]
+result = "parity"
+phase = "sse"
+
+# ── WebSocket (optional ws surface) ─────────────────────────────────
+
+[[case]]
+id = "H2X-WS-001"
+description = "WebSocket handshake over existing pipeline: headers/key/subprotocol/cookies/auth/redirect/proxy/TLS, 101 network_stream only"
+sync = true
+async = true
+tests = ["test_httpx2_websocket.py"]
+result = "parity"
+phase = "ws"
+
+[[case]]
+id = "H2X-WS-002"
+description = "WebSocket framing: masking, text/binary, fragmentation, ping/pong, close codes, max-message, backpressure"
+sync = true
+async = true
+tests = ["test_httpx2_websocket.py"]
+result = "parity"
+phase = "ws"
+
+[[case]]
+id = "H2X-WS-003"
+description = "WebSocket proxy/SOCKS/TLS/security: wss via SOCKS origin TLS, trust isolation, header non-forwarding, redaction, oversized rejection"
+sync = true
+async = true
+tests = ["test_httpx2_websocket.py"]
+result = "parity"
+phase = "ws"

@@ -59,6 +59,15 @@ cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,ht
   non-poisoning, distinct-origin stabilization, fail/reconnect cycles,
   partial-body drop reuse, client-drop release, and prompt cancellation
   with continued usability.
+- `tests/h3_alt_svc_discovery.rs`: Alt-Svc discovery/suppression/fallback/draining.
+- `tests/h3_interop_qualification.rs` (13 tests, loopback-only unless
+  `EGGFETCH_H3_INTEROP_URLS` is set): mandatory Quinn self-interop,
+  UDP-blackhole budget, bad-then-good non-poisoning, server-restart
+  reconnect, prompt cancellation, 100-request reuse soak, fail/reconnect
+  stabilization, cancellation storms, construction/drop loops, exact
+  metrics with truthful `None` H3 metadata, IPv6 capability detection,
+  and a doc-pinned platform-scope check. External servers are optional
+  with explicit skip reporting; absence is not graduation evidence.
 
 ## HTTPX Compatibility Testing
 
@@ -157,6 +166,7 @@ Fuzz targets live in `fuzz/fuzz_targets/` and use cargo-fuzz with libFuzzer. Nig
 | `fuzz_retry` | Retry policy, backoff, Retry-After parsing |
 | `fuzz_tls` | TLS configuration and SNI handling |
 | `fuzz_url` | URL parsing and normalization |
+| `fuzz_alt_svc` | Alt-Svc header parsing, cache learn/expiry/clear bounds, trust gating |
 
 ### Running Fuzz Targets
 
