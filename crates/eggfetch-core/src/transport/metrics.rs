@@ -14,6 +14,10 @@
 //! - **Protocol connections**: `h3_connections_created`,
 //!   `upgraded_connections_created`. One per established QUIC/H3 session
 //!   or captured 101 upgrade.
+//! - **Alt-Svc discovery** (`http3`): `altsvc_learned/expired/cleared/rejected`,
+//!   `h3_route_attempted/suppressed`, `h3_fallback_selected`,
+//!   `h3_drain_observed/closed/reconnected`. One per routing decision or
+//!   cache transition; no secrets, no URLs, only counts.
 //! - **Logical requests** are counted by `PoolMetrics`, not here.
 //!
 //! Hyper's internal socket-reuse counts and per-connection H2 stream
@@ -64,6 +68,26 @@ pub struct TransportMetrics {
     pub h3_cache_evictions: AtomicUsize,
     /// Successfully captured 101 upgrades (protocol connections).
     pub upgraded_connections_created: AtomicUsize,
+    /// Alt-Svc advertisements learned (fresh H3 alternatives cached).
+    pub altsvc_learned: AtomicUsize,
+    /// Alt-Svc entries expired on read (lazy expiry).
+    pub altsvc_expired: AtomicUsize,
+    /// Alt-Svc entries cleared via `clear` or replaced by empty advertisement.
+    pub altsvc_cleared: AtomicUsize,
+    /// Alt-Svc header values rejected (malformed, oversized, untrusted context).
+    pub altsvc_rejected: AtomicUsize,
+    /// H3 route selections attempted (explicit or discovered).
+    pub h3_route_attempted: AtomicUsize,
+    /// H3 route selections skipped due to broken-route suppression.
+    pub h3_route_suppressed: AtomicUsize,
+    /// Safe H3-to-H2/H1 fallbacks selected (replayable, pre-commit only).
+    pub h3_fallback_selected: AtomicUsize,
+    /// H3 graceful drains observed (GOAWAY / `RemoteClosing`).
+    pub h3_drain_observed: AtomicUsize,
+    /// H3 connections closed (driver `poll_close` terminal).
+    pub h3_closed: AtomicUsize,
+    /// H3 reconnect generations created after drain/eviction.
+    pub h3_reconnected: AtomicUsize,
 }
 
 impl TransportMetrics {
@@ -157,6 +181,56 @@ impl TransportMetrics {
         Self::inc(&self.upgraded_connections_created);
     }
 
+    /// Record a learned Alt-Svc alternative.
+    pub fn record_altsvc_learned(&self) {
+        Self::inc(&self.altsvc_learned);
+    }
+
+    /// Record an Alt-Svc lazy expiry.
+    pub fn record_altsvc_expired(&self) {
+        Self::inc(&self.altsvc_expired);
+    }
+
+    /// Record an Alt-Svc clear.
+    pub fn record_altsvc_cleared(&self) {
+        Self::inc(&self.altsvc_cleared);
+    }
+
+    /// Record a rejected Alt-Svc value.
+    pub fn record_altsvc_rejected(&self) {
+        Self::inc(&self.altsvc_rejected);
+    }
+
+    /// Record an H3 route attempt.
+    pub fn record_h3_attempted(&self) {
+        Self::inc(&self.h3_route_attempted);
+    }
+
+    /// Record an H3 suppression skip.
+    pub fn record_h3_suppressed(&self) {
+        Self::inc(&self.h3_route_suppressed);
+    }
+
+    /// Record a safe H3-to-H2/H1 fallback.
+    pub fn record_h3_fallback(&self) {
+        Self::inc(&self.h3_fallback_selected);
+    }
+
+    /// Record an observed H3 graceful drain.
+    pub fn record_h3_drain(&self) {
+        Self::inc(&self.h3_drain_observed);
+    }
+
+    /// Record an H3 connection close.
+    pub fn record_h3_closed(&self) {
+        Self::inc(&self.h3_closed);
+    }
+
+    /// Record an H3 reconnect generation.
+    pub fn record_h3_reconnected(&self) {
+        Self::inc(&self.h3_reconnected);
+    }
+
     /// Snapshot all counters for assertions.
     #[must_use]
     #[allow(
@@ -181,6 +255,16 @@ impl TransportMetrics {
             h3_connections_created: self.h3_connections_created.load(Ordering::Relaxed),
             h3_cache_evictions: self.h3_cache_evictions.load(Ordering::Relaxed),
             upgraded_connections_created: self.upgraded_connections_created.load(Ordering::Relaxed),
+            altsvc_learned: self.altsvc_learned.load(Ordering::Relaxed),
+            altsvc_expired: self.altsvc_expired.load(Ordering::Relaxed),
+            altsvc_cleared: self.altsvc_cleared.load(Ordering::Relaxed),
+            altsvc_rejected: self.altsvc_rejected.load(Ordering::Relaxed),
+            h3_route_attempted: self.h3_route_attempted.load(Ordering::Relaxed),
+            h3_route_suppressed: self.h3_route_suppressed.load(Ordering::Relaxed),
+            h3_fallback_selected: self.h3_fallback_selected.load(Ordering::Relaxed),
+            h3_drain_observed: self.h3_drain_observed.load(Ordering::Relaxed),
+            h3_closed: self.h3_closed.load(Ordering::Relaxed),
+            h3_reconnected: self.h3_reconnected.load(Ordering::Relaxed),
         }
     }
 }
@@ -220,6 +304,26 @@ pub struct TransportSnapshot {
     pub h3_cache_evictions: usize,
     /// Upgraded created.
     pub upgraded_connections_created: usize,
+    /// Alt-Svc learned.
+    pub altsvc_learned: usize,
+    /// Alt-Svc expired.
+    pub altsvc_expired: usize,
+    /// Alt-Svc cleared.
+    pub altsvc_cleared: usize,
+    /// Alt-Svc rejected.
+    pub altsvc_rejected: usize,
+    /// H3 route attempted.
+    pub h3_route_attempted: usize,
+    /// H3 route suppressed.
+    pub h3_route_suppressed: usize,
+    /// H3 fallback selected.
+    pub h3_fallback_selected: usize,
+    /// H3 drain observed.
+    pub h3_drain_observed: usize,
+    /// H3 closed.
+    pub h3_closed: usize,
+    /// H3 reconnected.
+    pub h3_reconnected: usize,
 }
 
 #[cfg(test)]
@@ -232,6 +336,8 @@ mod tests {
         let s = m.snapshot();
         assert_eq!(s.direct_connector_attempts, 0);
         assert_eq!(s.upgraded_connections_created, 0);
+        assert_eq!(s.altsvc_learned, 0);
+        assert_eq!(s.h3_route_attempted, 0);
     }
 
     #[test]
@@ -241,9 +347,15 @@ mod tests {
         m.record_direct_attempt();
         m.record_direct_success();
         m.record_upgraded();
+        m.record_altsvc_learned();
+        m.record_h3_attempted();
+        m.record_h3_fallback();
         let s = m.snapshot();
         assert_eq!(s.direct_connector_attempts, 2);
         assert_eq!(s.direct_connector_successes, 1);
         assert_eq!(s.upgraded_connections_created, 1);
+        assert_eq!(s.altsvc_learned, 1);
+        assert_eq!(s.h3_route_attempted, 1);
+        assert_eq!(s.h3_fallback_selected, 1);
     }
 }

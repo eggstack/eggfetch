@@ -57,8 +57,30 @@
 //! returned. Replayable idempotent requests reconnect only through the
 //! existing retry machinery on a subsequent attempt; one-shot bodies are
 //! never duplicated by the transport.
+//!
+//! # Alt-Svc discovery (separate cache)
+//!
+//! Alt-Svc state lives in [`super::alt_svc::AltSvcCache`], owned by the
+//! client and logically separate from the QUIC `sender_cache` here. An
+//! origin may advertise an alternative with no QUIC session, and evicting a
+//! failed QUIC session never erases the advertised route. Alternative
+//! authorities affect only UDP routing; SNI, `Host`, cookies, auth, and
+//! certificate validation always use the logical origin.
+//!
+//! # Draining (GOAWAY)
+//!
+//! GOAWAY is observed through the pinned `h3` 0.0.8 API only:
+//! `SendRequest::send_request` fails with `StreamError::RemoteClosing` once
+//! the shared `closing` flag is set by `process_goaway`, and the driver
+//! `poll_close` terminal carries the HTTP/3 application close code
+//! (`ApplicationClose { error_code }`, e.g. `H3_NO_ERROR`). Draining marks
+//! the cached generation so no new streams are assigned to it; in-flight
+//! streams keep their sender clones and the detached driver until they
+//! complete. Reconnect creates a new generation. No upstream bug is worked
+//! around by normalizing close errors into success.
 
 use std::net::SocketAddr;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -106,9 +128,98 @@ type H3Sender = h3::client::SendRequest<h3_quinn::OpenStreams, bytes::Bytes>;
 /// (eviction) detaches the driver task (`JoinHandle` drop does not abort);
 /// the task keeps driving until in-flight streams complete and the
 /// connection closes.
+///
+/// `draining` is set when GOAWAY is observed (`RemoteClosing` on new
+/// streams) or when the driver `poll_close` resolves. New requests must not
+/// be assigned to a draining generation. `close_reason` preserves the
+/// upstream HTTP/3 application close code for diagnostics (never
+/// synthesized).
 struct CachedH3Sender {
     sender: H3Sender,
     _driver: tokio::task::JoinHandle<()>,
+    draining: Arc<AtomicBool>,
+    #[allow(
+        dead_code,
+        reason = "preserved upstream close code for diagnostics via test hook"
+    )]
+    close_reason: Arc<std::sync::Mutex<Option<String>>>,
+    /// Alt-Svc generation this session was built for (`None` = explicit
+    /// `Http3Only` direct route, no discovery).
+    alt_generation: Option<u64>,
+}
+
+/// Explicit H3 dispatch failure.
+///
+/// Carries whether any request body bytes may have been committed so the
+/// pipeline can decide safe fallback without inferring from error strings.
+/// `body_committed=false` means no application data was sent (connect,
+/// handshake, or pre-send drain); only then may `Auto` fall back for
+/// replayable bodies.
+#[derive(Debug, Clone)]
+pub(crate) struct H3DispatchError {
+    /// Underlying transport error.
+    pub(crate) error: crate::error::Error,
+    /// `true` once request body bytes may have been delivered.
+    pub(crate) body_committed: bool,
+    /// `true` when the peer indicated graceful drain (GOAWAY).
+    pub(crate) draining: bool,
+    /// Failure class for suppression (variant-derived, never strings).
+    pub(crate) failure_class: super::alt_svc::H3FailureClass,
+}
+
+impl H3DispatchError {
+    fn new(error: crate::error::Error, body_committed: bool, draining: bool) -> Self {
+        let failure_class = super::alt_svc::H3FailureClass::from_error(&error);
+        Self {
+            error,
+            body_committed,
+            draining,
+            failure_class,
+        }
+    }
+
+    /// Total-deadline expiry for an H3 attempt (pre-commit, request-scoped).
+    ///
+    /// Classified `Other` so it never triggers broken-route suppression;
+    /// the outer deadline is monotonic and never restarted by fallback.
+    pub(crate) fn for_total_timeout(elapsed: Duration) -> Self {
+        Self::new(
+            crate::error::Error::Timeout {
+                phase: crate::timeout::TimeoutPhase::Total,
+                elapsed,
+            },
+            false,
+            false,
+        )
+    }
+
+    /// Returns `true` when `Auto` may safely fall back to H2/H1 within the
+    /// same logical attempt: pre-commit failure only. The caller must also
+    /// check body replayability and `Http3Only` strictness.
+    pub(crate) fn safe_for_fallback(&self) -> bool {
+        // Draining before commit is safe to reconnect, but fallback to H1/H2
+        // is also safe (no bytes committed). Draining is handled as
+        // reconnect-first by the connector; pipeline fallback uses the same
+        // gate. Post-commit failures (including post-commit drains) are never
+        // safe to silently replay.
+        !self.body_committed
+    }
+}
+
+/// Alternative endpoint for one H3 attempt.
+///
+/// `alt_host/alt_port` is the UDP destination; `sni_host` is always the
+/// logical origin host for TLS authentication (never the alternative).
+#[derive(Debug, Clone)]
+pub(crate) struct H3AltTarget {
+    /// UDP destination host (resolved via DNS).
+    pub(crate) alt_host: String,
+    /// UDP destination port.
+    pub(crate) alt_port: u16,
+    /// Logical origin host for SNI and certificate validation.
+    pub(crate) sni_host: String,
+    /// Alt-Svc generation (for suppression scoping).
+    pub(crate) generation: Option<u64>,
 }
 
 /// Per-origin cache cell. The [`tokio::sync::OnceCell`] guarantees only
@@ -399,6 +510,8 @@ impl H3Connector {
         quinn_conn: quinn::Connection,
         deadline: Option<std::time::Instant>,
         started: std::time::Instant,
+        alt_generation: Option<u64>,
+        metrics: Option<Arc<crate::transport::metrics::TransportMetrics>>,
     ) -> Result<CachedH3Sender> {
         let init = async {
             let h3_conn = h3_quinn::Connection::new(quinn_conn);
@@ -417,13 +530,60 @@ impl H3Connector {
             }
             None => init.await?,
         };
+        let draining: Arc<AtomicBool> = Arc::new(AtomicBool::new(false));
+        let close_reason: Arc<std::sync::Mutex<Option<String>>> =
+            Arc::new(std::sync::Mutex::new(None));
+        let draining_for_driver = draining.clone();
+        let reason_for_driver = close_reason.clone();
+        let metrics_for_driver = metrics.clone();
         let driver_handle = tokio::spawn(async move {
             use futures_util::future;
-            let _ = future::poll_fn(|cx| driver.poll_close(cx)).await;
+            let close_err = future::poll_fn(|cx| driver.poll_close(cx)).await;
+            draining_for_driver.store(true, Ordering::Relaxed);
+            // Preserve the upstream HTTP/3 application close code for
+            // diagnostics (e.g. `H3_NO_ERROR` vs errors). Display already
+            // renders `Code` names, so no values are synthesized.
+            if let Ok(mut guard) = reason_for_driver.lock() {
+                *guard = Some(format!("{close_err}"));
+            }
+            if let Some(m) = metrics_for_driver {
+                m.record_h3_closed();
+                // Graceful application close (`H3_NO_ERROR`) is a drain,
+                // not a failure. Uses the public `is_h3_no_error()` API
+                // (pinned h3 0.0.8); no variant matching, no strings.
+                if close_err.is_h3_no_error() {
+                    m.record_h3_drain();
+                }
+            }
         });
         Ok(CachedH3Sender {
             sender,
             _driver: driver_handle,
+            draining,
+            close_reason,
+            alt_generation,
+        })
+    }
+
+    /// Returns `true` when the cached cell is draining (GOAWAY observed or
+    /// driver closed). Test hook for drain assertions.
+    #[cfg(any(test, feature = "test-util"))]
+    #[allow(dead_code, reason = "test hook for drain assertions")]
+    pub(crate) fn is_draining_key(&self, origin_key: &str) -> bool {
+        self.sender_cache.get(origin_key).is_some_and(|r| {
+            r.get()
+                .is_some_and(|cached| cached.draining.load(Ordering::Relaxed))
+        })
+    }
+
+    /// Last driver close reason for `origin_key`, if any (preserved upstream
+    /// close code, never synthesized).
+    #[cfg(any(test, feature = "test-util"))]
+    #[allow(dead_code, reason = "test hook for close-code assertions")]
+    pub(crate) fn close_reason_key(&self, origin_key: &str) -> Option<String> {
+        self.sender_cache.get(origin_key).and_then(|r| {
+            let cached = r.get()?;
+            cached.close_reason.lock().ok()?.clone()
         })
     }
 
@@ -436,30 +596,105 @@ impl H3Connector {
     /// the documented boundaries, so phase identity is preserved instead of
     /// collapsing into generic H3 protocol errors.
     ///
-    /// The transport performs no hidden retries. Connection-level failures
-    /// evict the stale origin entry and return the original error; a later
-    /// retry-policy attempt reconnects through the normal machinery.
-    /// One-shot bodies are never replayed here.
+    /// `alt` carries an Alt-Svc-discovered UDP destination; SNI and
+    /// certificate validation always use the logical origin host. `None`
+    /// means explicit direct (`Http3Only`) routing.
+    ///
+    /// The transport performs no hidden retries except one draining
+    /// reconnect (GOAWAY before commit): a draining generation is evicted
+    /// and a single fresh generation is attempted within the same connect
+    /// budget. All other connection-level failures evict the stale origin
+    /// entry and return the original error; a later retry-policy attempt
+    /// reconnects through the normal machinery. One-shot bodies are never
+    /// replayed here. Failures report `body_committed` explicitly so the
+    /// pipeline can gate safe fallback without string inference.
     #[allow(clippy::too_many_lines)]
+    #[allow(
+        dead_code,
+        reason = "kept for unit tests; pipeline uses send_request_with_alt"
+    )]
     pub(crate) async fn send_request(
         &self,
         request: http::Request<RequestBody>,
         url: url::Url,
         connect_timeout: Option<Duration>,
     ) -> Result<Response> {
+        self.send_request_inner(request, url, None, connect_timeout)
+            .await
+            .map_err(|e| e.error)
+    }
+
+    /// Detailed H3 dispatch with explicit commit/drain signalling for the
+    /// pipeline fallback and suppression policy.
+    pub(crate) async fn send_request_with_alt(
+        &self,
+        request: http::Request<RequestBody>,
+        url: url::Url,
+        alt: Option<H3AltTarget>,
+        connect_timeout: Option<Duration>,
+    ) -> std::result::Result<Response, H3DispatchError> {
+        self.send_request_inner(request, url, alt, connect_timeout)
+            .await
+    }
+
+    #[allow(
+        clippy::too_many_lines,
+        reason = "H3 dispatch centralizes connect/fallback/drain policy so transports do not reimplement it"
+    )]
+    async fn send_request_inner(
+        &self,
+        request: http::Request<RequestBody>,
+        url: url::Url,
+        alt: Option<H3AltTarget>,
+        connect_timeout: Option<Duration>,
+    ) -> std::result::Result<Response, H3DispatchError> {
+        let map_err = |e: Error, committed: bool, draining: bool| {
+            H3DispatchError::new(e, committed, draining)
+        };
         let host = url
             .host_str()
-            .ok_or_else(|| Error::InvalidUrl("missing host".into()))?;
+            .ok_or_else(|| map_err(Error::InvalidUrl("missing host".into()), false, false))?;
         let port = url.port_or_known_default().unwrap_or(443);
         let cache_key = Self::cache_key(host, port);
         let host_owned = host.to_owned();
+        // Alt-Svc routing: UDP destination may differ from the logical
+        // origin. SNI and certificate validation always use the origin host.
+        let (resolve_host, resolve_port, sni_host, alt_generation) = match &alt {
+            Some(a) => (
+                a.alt_host.clone(),
+                a.alt_port,
+                a.sni_host.clone(),
+                a.generation,
+            ),
+            None => (host_owned.clone(), port, host_owned.clone(), None),
+        };
 
         self.ensure_cache_bound(&cache_key);
-        let cell = self
+        let mut cell = self
             .sender_cache
             .entry(cache_key.clone())
             .or_default()
             .clone();
+
+        // Generation change (new advertisement) evicts the old QUIC session
+        // so the new alternative is used immediately without waiting on
+        // stale failure state. Draining generations are also evicted before
+        // assigning new streams; in-flight streams survive via their clones.
+        let mut was_reconnect = false;
+        if let Some(cached) = cell.get() {
+            let stale_generation = cached.alt_generation != alt_generation;
+            let draining = cached.draining.load(Ordering::Relaxed);
+            if stale_generation || draining {
+                self.evict_if_current(&cache_key, &cell);
+                let fresh: CachedH3SenderCell = Arc::new(tokio::sync::OnceCell::new());
+                self.ensure_cache_bound(&cache_key);
+                self.sender_cache.insert(cache_key.clone(), fresh.clone());
+                cell = fresh;
+                // A fresh generation after eviction counts as a reconnect
+                // once it establishes successfully below.
+                was_reconnect = true;
+            }
+        }
 
         // Fast path: an established connection needs no DNS or handshake.
         // The slow path below shares DNS + QUIC + h3 init across concurrent
@@ -470,18 +705,34 @@ impl H3Connector {
             let started = std::time::Instant::now();
             let deadline = connect_timeout.map(|d| started + d);
             let endpoint_self = self.clone();
-            let init_result: Result<&CachedH3Sender> = cell
+            let resolve_host_clone = resolve_host.clone();
+            let sni_host_clone = sni_host.clone();
+            let init_result: std::result::Result<&CachedH3Sender, Error> = cell
                 .get_or_try_init(|| async {
-                    let addrs =
-                        Self::resolve_addrs(&host_owned, port, deadline, connect_timeout, started)
-                            .await?;
+                    let addrs = Self::resolve_addrs(
+                        &resolve_host_clone,
+                        resolve_port,
+                        deadline,
+                        connect_timeout,
+                        started,
+                    )
+                    .await?;
                     let quinn_conn = endpoint_self
-                        .connect_with_fallback(&addrs, &host_owned, deadline, started)
+                        .connect_with_fallback(&addrs, &sni_host_clone, deadline, started)
                         .await?;
-                    let sender: CachedH3Sender =
-                        Self::establish_h3_sender(quinn_conn, deadline, started).await?;
+                    let sender: CachedH3Sender = Self::establish_h3_sender(
+                        quinn_conn,
+                        deadline,
+                        started,
+                        alt_generation,
+                        endpoint_self.metrics.clone(),
+                    )
+                    .await?;
                     if let Some(ref m) = endpoint_self.metrics {
                         m.record_h3_created();
+                        if was_reconnect {
+                            m.record_h3_reconnected();
+                        }
                     }
                     Ok(sender)
                 })
@@ -492,7 +743,7 @@ impl H3Connector {
                     // `OnceCell` caches only success, so the origin is already
                     // reconnectable. Propagate the connect-phase taxonomy
                     // (`Timeout{Connect}`, `Connect`, `H3Connect`) unchanged.
-                    return Err(e.clone());
+                    return Err(map_err(e.clone(), false, false));
                 }
             }
         };
@@ -513,23 +764,52 @@ impl H3Connector {
 
         let h3_request = h3_request
             .body(())
-            .map_err(|e| Error::RequestBuild(e.to_string()))?;
+            .map_err(|e| map_err(Error::RequestBuild(e.to_string()), false, false))?;
 
-        // Send the request headers. Any h3 transport failure evicts the
-        // stale origin so the next attempt reconnects. This is deliberately
-        // conservative: the h3 crate does not expose a stable public
-        // stream-vs-connection classification, and eviction removes only
-        // cache ownership (in-flight streams keep their clones and the
-        // detached driver), so over-eviction costs one handshake, never
-        // correctness. No hidden retry happens here; the caller (retry
-        // policy) decides whether to attempt again.
+        // Send the request headers. Pre-commit failures (including GOAWAY
+        // drain signalled via shared closing state) evict the stale
+        // generation so the next attempt reconnects. Draining is observed
+        // through the public `h3::ConnectionState::is_closing()` API on the
+        // pinned h3 0.0.8 sender (set by `process_goaway`); no variant
+        // matching, no error strings.
+        // No hidden retry happens here; the caller (retry/fallback policy)
+        // decides whether to attempt again. In-flight streams keep their
+        // clones and the detached driver.
         let mut request_stream = {
             let mut sender = sender;
             match sender.send_request(h3_request).await {
                 Ok(stream) => stream,
                 Err(e) => {
+                    // GOAWAY sets shared `closing`; a send failure while
+                    // closing is a graceful drain, not an arbitrary failure.
+                    let draining = {
+                        use h3::ConnectionState;
+                        sender.is_closing()
+                    };
+                    // Mark the cached generation draining so no new streams
+                    // are assigned to it; in-flight streams survive via
+                    // their clones and the detached driver.
+                    if draining {
+                        if let Some(cached) = cell.get() {
+                            cached.draining.store(true, Ordering::Relaxed);
+                        }
+                        if let Some(ref m) = self.metrics {
+                            m.record_h3_drain();
+                        }
+                    }
                     self.evict_if_current(&cache_key, &cell);
-                    return Err(Error::H3Protocol(format!("send request: {e}")));
+                    if draining {
+                        return Err(map_err(
+                            Error::H3ConnectionClosed("peer draining (GOAWAY)".into()),
+                            false,
+                            true,
+                        ));
+                    }
+                    return Err(map_err(
+                        Error::H3Protocol(format!("send request: {e}")),
+                        false,
+                        false,
+                    ));
                 }
             }
         };
@@ -537,6 +817,8 @@ impl H3Connector {
         // Send request body. The pipeline wraps streamed bodies with the
         // write-phase timeout before dispatch, so a stalled producer surfaces
         // as `Timeout{Write}` here and must not evict the connection.
+        // Body-phase failures are post-commit (bytes may have been
+        // delivered) and never safe for silent fallback.
         let send_body_result = async {
             match body {
                 RequestBody::Empty => Ok(()),
@@ -566,7 +848,8 @@ impl H3Connector {
             // Write-phase timeouts (`Timeout{Write}`) and body producer
             // errors are request scoped and must not evict the shared
             // connection. H3 transport failures evict so the next attempt
-            // reconnects.
+            // reconnects. All body-phase outcomes are post-commit for
+            // fallback gating.
             if matches!(
                 e,
                 Error::H3Protocol(_)
@@ -575,22 +858,31 @@ impl H3Connector {
                     | Error::H3Connect(_)
             ) {
                 self.evict_if_current(&cache_key, &cell);
+                return Err(map_err(e, true, false));
             }
-            return Err(e);
+            return Err(map_err(e, true, false));
         }
 
-        // Signal end of request body
+        // Signal end of request body (post-commit).
         if let Err(err) = request_stream.finish().await {
             self.evict_if_current(&cache_key, &cell);
-            return Err(Error::H3Protocol(format!("finish stream: {err}")));
+            return Err(map_err(
+                Error::H3Protocol(format!("finish stream: {err}")),
+                true,
+                false,
+            ));
         }
 
-        // Receive response headers
+        // Receive response headers (post-commit: request was delivered).
         let response = match request_stream.recv_response().await {
             Ok(response) => response,
             Err(e) => {
                 self.evict_if_current(&cache_key, &cell);
-                return Err(Error::H3Protocol(format!("recv response: {e}")));
+                return Err(map_err(
+                    Error::H3Protocol(format!("recv response: {e}")),
+                    true,
+                    false,
+                ));
             }
         };
 

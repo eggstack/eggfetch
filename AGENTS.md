@@ -120,9 +120,19 @@ through the native `stream()` method.
   read/write apply at the body boundaries; QUIC idle derives from
   `PoolConfig::idle_timeout` (default 30 s, never `Timeout.pool`); bidi
   streams derive from the effective per-origin in-flight limit (default
-  100); no transport-level retries, one-shot bodies never replayed. Only
-  `H3Connect` is retryable. Test hooks are `test-util`-gated (`cache_len`,
-  `contains_origin`); behavior tests live in `tests/h3_hardening.rs`.
+  100); no transport-level retries (draining only evicts for the *next*
+  request), one-shot bodies never replayed. Only `H3Connect` is retryable.
+  Alt-Svc state lives separately in `transport/alt_svc.rs` (bounded 64-entry
+  `AltSvcCache` + `BrokenRouteSuppressor`, `h3`-only, `ma`/`clear`, SNI stays
+  origin); `Auto { allow_http3: true }` discovers (no fresh entry = H1/H2),
+  `Http3Only` is strict direct with no fallback/suppression; safe `Auto`
+  fallback is pre-commit + replayable only via explicit `H3DispatchError`;
+  GOAWAY draining uses pinned h3 0.0.8 `is_closing()`/`is_h3_no_error()`
+  (feature `i-implement-...`, re-audit on bump), marks generations draining,
+  preserves close codes, reconnects next request. Test hooks are
+  `test-util`-gated (`cache_len`, `contains_origin`, `is_draining_key`,
+  `close_reason_key`); behavior tests live in `tests/h3_hardening.rs` and
+  `tests/h3_alt_svc_discovery.rs`.
 - Trailers: `SharedTrailers` is populated by `wrap_incoming` (H1/H2) and the
   H3 body unfold (via `recv_trailers`) without buffering; `Response::trailers()`
   is `None` until EOF, on no-trailers, or on pre-trailer body errors. H1
@@ -135,7 +145,9 @@ through the native `stream()` method.
   (`None`, default kind). No secrets, no fake zeros. H3 per-response metadata
   stays `None`; `TransportKind::Quic` is reserved.
 - Metrics: `TransportMetrics` (connector/DNS/TLS attempts, UDS/proxy, H3
-  creations/evictions, 101 upgrades) is separate from `PoolMetrics`
+  creations/evictions, Alt-Svc learned/expired/cleared/rejected, H3
+  attempted/suppressed/fallback/drain/close/reconnect, 101 upgrades) is
+  separate from `PoolMetrics`
   (logical waits/cancellations). Hyper reuse counts absent, never estimated.
   `Client::transport_metrics()` is the accessor; tests assert exact counts.
 - Limits: native `max_in_flight_requests*` preferred (logical permits, not

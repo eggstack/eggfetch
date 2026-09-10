@@ -120,10 +120,12 @@ request policy so transports own only connection/protocol work:
    cloned.
 3. Dispatch selects one `TransportRoute` via `select_route()` (UDS →
    specialized-direct → proxy/SOCKS → SNI-direct → H3 → standard Hyper).
-   Hyper request scaffolding is built once via `build_hyper_request()`.
-4. One common post-transport policy applies to every route: decompression
-   wrapping, decoded-size limiting, then read-timeout + pool-lease
-   attachment.
+   H3 is `Http3Only` direct or `Auto`-discovered (fresh Alt-Svc + not
+   suppressed); safe `Auto` fallback to standard is pre-commit replayable
+   only. Hyper request scaffolding is built once via `build_hyper_request()`.
+4. One common post-transport policy applies to every route: Alt-Svc learning
+   (learnable routes only), decompression wrapping, decoded-size limiting,
+   then read-timeout + pool-lease attachment.
 
 The standard and specialized-direct Hyper paths share a single
 response-lifecycle implementation (`finish_hyper_response()` plus shared

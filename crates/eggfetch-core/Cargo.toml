@@ -64,7 +64,12 @@ httpdate = "1"
 webpki-roots = "0.26"
 pem-rfc7468 = { version = "0.1", features = ["alloc"] }
 quinn = { version = "0.11", default-features = false, features = ["rustls", "ring", "runtime-tokio"], optional = true }
-h3 = { version = "0.0.8", optional = true }
+# Pinned h3 0.0.8: the `i-implement-...` feature only removes
+# `#[non_exhaustive]` from error variants and exposes `ConnectionState`
+# (`is_closing`) for GOAWAY/drain observation. No runtime behavior change;
+# version-gated draining logic in `transport/http3.rs` depends on it and must
+# be re-audited if the pinned h3 version changes.
+h3 = { version = "0.0.8", optional = true, features = ["i-implement-a-third-party-backend-and-opt-into-breaking-changes"] }
 h3-quinn = { version = "0.0.10", optional = true }
 
 [dev-dependencies]

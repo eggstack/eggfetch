@@ -94,7 +94,7 @@ All HTTP behavior lives here. 26 source modules including `stream` and `transpor
 | `multipart` | Yes | `Multipart`, `Boundary`, `Part`, `PartBody`, `MultipartEncoder` — streaming multipart/form-data with known-length optimization. (cfg `multipart`) |
 | `network_stream` | Yes | `NetworkStream`, `UpgradedStream`, `UpgradedStreamVariant` (`Tcp`/`Tls`/`Adapter`), `ConnectionMetadata`, `TlsInfo` (+`Quic` kind reserved), `ExtraInfo` — writable IO for 101 only; direct upgrades carry real addrs/TLS, UDS reports `Unix` without IPs, opaque stays unavailable. |
 | `pool` | Yes | `Pool`, `PoolConfig` (effective in-flight limits, new names win), `PoolGuard`, `OriginKey`, `PoolMetrics` (logical waits/cancellations) — semaphore-based concurrency limiter. Origin keyed by `(scheme, host, port)` + optional proxy route. |
-| `transport/metrics` | Yes | `TransportMetrics`, `TransportSnapshot` — connector/DNS/TLS, UDS/proxy, H3 creation/eviction, 101 upgrades. Separate from `PoolMetrics`; Hyper reuse absent. |
+| `transport/metrics` | Yes | `TransportMetrics`, `TransportSnapshot` — connector/DNS/TLS, UDS/proxy, H3 creation/eviction, Alt-Svc learned/expired/cleared/rejected, H3 attempted/suppressed/fallback/drain/close/reconnect, 101 upgrades. Separate from `PoolMetrics`; Hyper reuse absent. |
 | `proxy` | Yes | `Proxy`, `ProxyConfig`, `ProxyAuth`, `NoProxy`, `NoProxyRule`, `ProxyDecision` — HTTP forwarding, HTTPS CONNECT tunneling, SOCKS5. Per-request override model. NO_PROXY with 12 rule types. (cfg `proxy`) |
 | `redact` | Yes | `redact_headers()`, `redact_url()`, `SENSITIVE_HEADERS` — centralized secret redaction for all `Debug`/`Display`/error output. |
 | `redirect` | Yes | `RedirectPolicy`, `redirect_method()`, `build_redirect_request()` — redirect following: method rewrites (303→GET), cross-origin header stripping, body replayability checks. |
@@ -102,8 +102,8 @@ All HTTP behavior lives here. 26 source modules including `stream` and `transpor
 | `timeout` | Yes | `Timeout`, `TimeoutBuilder`, `TimeoutPhase` — 7 distinct phases (Pool, Connect, ProxyConnect, ProxyTls, Write, Read, Total). Request-level overrides merge with client-level per-field. |
 | `tls` | Yes | `TlsConfig`, `TlsConfigBuilder`, `TlsVersion`, `TrustStore`, `ClientIdentity` — custom CA bundles, mTLS client certs, verification toggle, TLS version bounds. |
 | `trace` | Yes | `TraceObserver`, `TraceEvent` — synchronous lifecycle callbacks (request/response headers emitted; DNS/connect/TLS observed via metrics to avoid duplicate taxonomy). Coroutine callbacks rejected at adapters. |
-| `pipeline` | No | `send_with_retry()`, `send_with_redirects()`, `send_single_request()` — full request lifecycle orchestration. Retry loop (typed `RequestParts::retry_request`) → redirect loop (shared first-hop builder + single redirect transformation) → preparation (`PreparedRequest`) → declarative transport dispatch (`TransportRoute::select_route`) → common post-transport policy (decompression, decoded-size limit, read-timeout + pool lease, 101 upgrade counting). |
-| `transport` | No | 10 submodules: `direct`, `direct_connector`, `metrics`, `proxy`, `socks`, `uds`, `http3`, `connect`, `connect_timeout`, `mod`. Type aliases for hyper clients with timeout wrappers. `direct` owns the shared Hyper response lifecycle (`finish_hyper_response` + trace helpers + `wrap_incoming` with trailers + `map_send_error` + `await_upgrade` with connector metadata); `uds` reuses the same helpers including 101 upgrade handling (UDS kind without IPs). |
+| `pipeline` | No | `send_with_retry()`, `send_with_redirects()`, `send_single_request()` — full request lifecycle orchestration. Retry loop (typed `RequestParts::retry_request`) → redirect loop (shared first-hop builder + single redirect transformation) → preparation (`PreparedRequest`) → declarative transport dispatch (`TransportRoute::select_route`) → common post-transport policy (Alt-Svc learning, decompression, decoded-size limit, read-timeout + pool lease, 101 upgrade counting). |
+| `transport` | No | 11 submodules: `direct`, `direct_connector`, `metrics`, `alt_svc`, `proxy`, `socks`, `uds`, `http3`, `connect`, `connect_timeout`, `mod`. Type aliases for hyper clients with timeout wrappers. `direct` owns the shared Hyper response lifecycle (`finish_hyper_response` + trace helpers + `wrap_incoming` with trailers + `map_send_error` + `await_upgrade` with connector metadata); `uds` reuses the same helpers including 101 upgrade handling (UDS kind without IPs). `alt_svc` owns discovery/suppression; `http3` owns QUIC/draining via explicit `H3DispatchError`. |
 | `stream` | No | Per-chunk read/write timeout wrappers. |
 | `h2_headers` | No | HTTP/2 forbidden header stripping. |
 | `response_decode` | No | Content-Encoding parsing and decompression dispatch. |
@@ -117,7 +117,8 @@ All HTTP behavior lives here. 26 source modules including `stream` and `transpor
 | `proxy` | HTTP proxy forwarding and HTTPS CONNECT tunneling |
 | `socks` | SOCKS5 proxy connector with persistent per-route hyper pools |
 | `uds` | Unix domain socket connections |
-| `http3` | HTTP/3 over QUIC via Quinn |
+| `http3` | HTTP/3 over QUIC via Quinn (explicit `H3DispatchError`, draining) |
+| `alt_svc` | Authenticated Alt-Svc cache + broken-route suppressor (discovery) |
 | `connect` | TLS connect logic for proxy tunnels |
 | `connect_timeout` | Connect-phase timeout wrapper for any connector |
 
@@ -254,7 +255,7 @@ Client::send()
         → proxy resolution + origin keying + pool acquisition
         → write-timeout wrapping + remaining-total/deadline computation
       → transport dispatch (select_route → UDS / Direct / Proxy / SNI / H3 / Standard)
-      → common post-transport policy (decompression, decoded-size limit)
+      → common post-transport policy (Alt-Svc learning, decompression, decoded-size limit)
       → read timeout + pool lease attachment
 ```
 
@@ -271,14 +272,17 @@ selects one declarative route (precedence unchanged, directly unit-tested):
    per-route persistent Hyper pool)
 4. **SNI override direct** — cached SNI-specific client when
    `TransportHints::sni_hostname` is set
-5. **HTTP/3 (QUIC)** — when `http_version_policy.use_http3()` and the
-   `http3` feature is enabled
-6. **Standard Hyper direct** — default TCP path
+5. **HTTP/3 (QUIC)** — `Http3Only` always; `Auto { allow_http3: true }` only
+   when a fresh Alt-Svc alternative is cached and not suppressed (otherwise
+   standard); `Auto { allow_http3: false }` never. Requires the `http3`
+   feature.
+6. **Standard Hyper direct** — default TCP path (also safe `Auto` fallback
+   for pre-commit replayable H3 failures, same deadlines/TLS).
 
 H3 never bypasses proxy rules because proxy routes are selected first.
 All routes share one post-transport policy; UDS and specialized-direct
-responses now flow through the same decompression and lease handling as
-the standard path.
+responses now flow through the same Alt-Svc learning (learnable routes
+only), decompression, and lease handling as the standard path.
 
 ### Pool Permit Lifecycle
 

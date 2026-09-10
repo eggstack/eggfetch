@@ -9,12 +9,12 @@ eggfetch is a Rust-native HTTP client engine with Python bindings and a CLI tool
 
 ## Features
 
-- **HTTP/1.1, HTTP/2, HTTP/3** -- ALPN negotiation, multiplexed connections, experimental QUIC transport (bounded per-origin cache, shared connect budget with address fallback, phase-correct timeouts, keepalive-derived idle)
+- **HTTP/1.1, HTTP/2, HTTP/3** -- ALPN negotiation, multiplexed connections, experimental QUIC transport (bounded per-origin cache, shared connect budget with address fallback, phase-correct timeouts, keepalive-derived idle, authenticated Alt-Svc discovery with suppression/safe fallback/draining)
 - **Streaming** -- request and response bodies stream without eager buffering; `bytes_stream()` and `text_lines()` for incremental reads
 - **HTTP trailers** -- H1 chunked trailers, H2 trailing HEADERS, and H3 trailing headers captured without buffering (`Response::trailers()` after body EOF; H1 duplicate same-name trailers collapse upstream in hyper and are documented)
 - **Response decompression** -- gzip, brotli, zstd, deflate via feature-gated streaming decoders
 - **Connection pooling** -- semaphore-based logical in-flight request concurrency (`max_in_flight_requests*`, aliases `max_connections*` for pre-1.0) with per-origin limits, pool metrics, and separate transport observability counters
-- **Transport observability** -- connector/DNS/TLS attempt counters, H3 creation/eviction counts, and 101 upgrade counts where observable; Hyper socket-reuse counts intentionally absent
+- **Transport observability** -- connector/DNS/TLS attempt counters, H3 creation/eviction counts, Alt-Svc learned/expired/cleared/rejected, H3 attempted/suppressed/fallback/drain/close/reconnect, and 101 upgrade counts where observable; Hyper socket-reuse counts intentionally absent
 - **Phase-aware timeouts** -- pool, connect, write, read, and total timeout phases with cancellation safety
 - **TLS** -- rustls with custom CA bundles, client certificates (mTLS), version policy, and verification toggle
 - **Proxy** -- HTTP forwarding, HTTPS CONNECT tunneling, proxy auth, per-request override, `NO_PROXY` bypass

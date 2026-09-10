@@ -38,6 +38,7 @@ pub(crate) type TimeoutSocksClient = hyper_util::client::legacy::Client<
     HyperRequestBody,
 >;
 
+pub mod alt_svc;
 pub(crate) mod connect_timeout;
 pub(crate) mod direct;
 pub mod direct_connector;

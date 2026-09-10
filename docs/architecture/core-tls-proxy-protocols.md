@@ -314,7 +314,9 @@ HTTP/2 multiplexes streams on a single connection, but eggfetch's pool permits s
 
 Behind the `http3` Cargo feature. Experimental — the label is retained
 while the QUIC/h3 ecosystem matures (no 0-RTT, WebTransport, datagrams,
-or Alt-Svc auto-upgrade in this milestone).
+connection migration, MASQUE, or Happy Eyeballs in this milestone).
+Authenticated Alt-Svc discovery, broken-route suppression, safe fallback,
+and draining are implemented; see below.
 
 ### Transport
 
@@ -322,10 +324,70 @@ Uses `quinn` for QUIC transport and `h3` for the HTTP/3 protocol layer. QUIC man
 
 ### Version Policy
 
-`HttpVersionPolicy::Http3Only` routes over QUIC. `Auto { allow_http3: true }`
-also selects the H3 route; `Auto { allow_http3: false }` (default) never
-does. H3 never bypasses proxy rules: proxy routes are selected first in
-`select_route()`.
+`HttpVersionPolicy::Http3Only` routes over QUIC directly (strict, no
+fallback, no discovery). `Auto { allow_http3: true }` uses authenticated
+Alt-Svc discovery: H2/H1 unless a fresh `h3` alternative is cached and not
+suppressed; no fresh entry means never invent an H3 endpoint.
+`Auto { allow_http3: false }` (default) never attempts H3. H3 never bypasses
+proxy rules: proxy/UDS/SNI routes are selected first in `select_route()`.
+
+### Alt-Svc Discovery (`transport/alt_svc.rs`)
+
+Separate from the QUIC `sender_cache`: an origin may advertise an
+alternative with no session, and evicting a failed session never erases the
+advertised route.
+
+- Origin key is normalized `(scheme, host, port)`; only `https` origins
+  learn, and only `h3` protocol IDs are recorded (`h2`, drafts ignored).
+- Retains alternative authority/port, `ma` expiry (default 24 h), and
+  `clear`; `ma=0` never caches. Cache bounded at 64 entries, arbitrary-entry
+  eviction, lazy expiry, no background tasks. No credentials/cookies/userinfo
+  stored; alternative affects only UDP routing — `Host`, cookies, auth, and
+  security policy always use the logical origin.
+- Parsing is isolated and bounded (8 KiB header cap, 16 alternatives max,
+  512 B authority cap). Malformed quoting, unknown protocols, bad ports,
+  `ma` overflow, userinfo injection, and oversized values fail closed.
+- Trust: learning requires authenticated HTTPS (verified TLS per policy,
+  not `danger_accept_invalid_certs`), no proxy route, and hop-local origin.
+  Plaintext `http`, proxy metadata, and cross-origin confusion are rejected
+  before parsing (counted as `altsvc_rejected`). QUIC TLS validates the
+  original origin (SNI = origin host), never the alternative hostname.
+
+### Broken-Route Suppression
+
+Per-origin suppression with exponential backoff (5 s base × 2ⁿ, 300 s cap,
+deterministic `Instant` injection for tests), bounded at 64 entries.
+Successful H3 use clears it; a changed alternative authority/port creates a
+new generation that re-enables without waiting, while same-endpoint
+re-advertisement preserves suppression. Only route failures
+(`Connectivity`/`Protocol`/`Closed` from `Error` variants, never strings)
+suppress; request-scoped `Other` (write/read/total timeouts) and graceful
+drains never suppress. This is routing suppression, not retry policy.
+
+### Safe H3-to-H2/H1 Fallback
+
+`Auto` only, pre-commit only, replayable bodies only (`Empty`/`Bytes`;
+one-shot streams never duplicate). `Http3Only` returns the H3 failure
+strictly. Retry policy remains the only later-attempt mechanism after
+ambiguous delivery. `total`/`connect`/`write`/`read` deadlines are monotonic
+(reused, never restarted); fallback cannot bypass proxy or alter TLS
+verification. Implemented via explicit `H3DispatchError { error,
+body_committed, draining, failure_class }` rather than string inference.
+
+### Draining (GOAWAY)
+
+Observed through the pinned h3 0.0.8 API (requires the
+`i-implement-a-third-party-backend-and-opt-into-breaking-changes` feature,
+which only removes `#[non_exhaustive]` and exposes `ConnectionState`; no
+runtime change, re-audit on version bump): `is_closing()` signals GOAWAY
+(`RemoteClosing` on new streams) and driver `poll_close` carries the
+application close code (`is_h3_no_error()` for graceful). Draining marks the
+cached generation so no new streams are assigned; in-flight streams keep
+their clones and the detached driver until complete. The drained generation
+is evicted (generation-scoped via `Arc::ptr_eq`) and the next request
+reconnects (counted as `h3_reconnected`). Close codes are preserved in
+diagnostics via `close_reason`; close errors are never normalized into
+success.
 
 ### Lifecycle
 
@@ -400,11 +462,13 @@ streams.
 
 ### Failure and Retry
 
-The transport never retries internally and never replays one-shot bodies.
-Stale entries are evicted on transport failure and the original error is
-returned; replayable idempotent requests reconnect only through the
-existing retry machinery on a later attempt. Only `H3Connect` is
-retryable; `H3ConnectionClosed` / `H3Stream` / `H3Protocol` are not.
+The transport never retries internally (except draining eviction, which
+creates a fresh generation for the *next* request, never resending the
+current body) and never replays one-shot bodies. Stale entries are evicted
+on transport failure and the original error is returned; replayable
+idempotent requests reconnect only through the existing retry machinery on
+a later attempt, or via safe `Auto` fallback pre-commit. Only `H3Connect`
+is retryable; `H3ConnectionClosed` / `H3Stream` / `H3Protocol` are not.
 
 ### Error Taxonomy
 
@@ -422,6 +486,12 @@ precedence, stalled-body read timeout, shared concurrent init, per-host
 pool gating, failure non-poisoning, distinct-origin stabilization,
 fail/reconnect cycles, partial-body drop reuse, client-drop release, and
 prompt cancellation with continued usability.
+
+`tests/h3_alt_svc_discovery.rs` (16 tests, loopback only): explicit strictness,
+Auto discovery (learn-then-H3), suppression with fast skip and new-generation
+recovery, safe fallback with monotonic deadlines, draining reconnect,
+exact observability, and adversarial cases (plaintext/injection/oversized/
+stale/cancellation/clear, SNI preservation, one-shot non-replay).
 
 ### Python API
 

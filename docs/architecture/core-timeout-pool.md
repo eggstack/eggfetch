@@ -103,9 +103,9 @@ When a request acquires a pool slot, it receives a `PoolGuard` (wrapped in `Arc`
 - `acquisition_waits` — number of times a request waited for a slot.
 - `acquisition_cancellations` — number of times a pool acquisition was cancelled.
 
-`TransportMetrics` (`Client::transport_metrics()`, atomic, low-overhead) counts connector/protocol events where observable: direct/DNS/TLS attempts, UDS/proxy attempts, H3 creations/evictions, and 101 upgrades. Names state whether they count connector events or protocol connections; logical requests stay in `PoolMetrics`.
+`TransportMetrics` (`Client::transport_metrics()`, atomic, low-overhead) counts connector/protocol events where observable: direct/DNS/TLS attempts, UDS/proxy attempts, H3 creations/evictions, Alt-Svc learned/expired/cleared/rejected, H3 attempted/suppressed/fallback/drain/close/reconnect, and 101 upgrades. Names state whether they count connector events or protocol connections; logical requests stay in `PoolMetrics`.
 
-Socket-level reuse counts (connections opened/reused/closed) and per-connection H2 stream counts remain absent because hyper owns socket lifecycle and eggfetch cannot observe reuse reliably — never estimated. See `transport/metrics.rs` and `tests/transport_metrics_tests.rs` for exact-count evidence.
+Socket-level reuse counts (connections opened/reused/closed) and per-connection H2 stream counts remain absent because hyper owns socket lifecycle and eggfetch cannot observe reuse reliably — never estimated. See `transport/metrics.rs` and `tests/transport_metrics_tests.rs` + `tests/h3_alt_svc_discovery.rs` for exact-count evidence.
 
 ### H3 Pool and Idle Mapping
 

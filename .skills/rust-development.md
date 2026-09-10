@@ -43,14 +43,22 @@ cargo check -p eggfetch-core --all-features
   per-origin `OnceCell` (success cached, failures reconnectable), bounded
   64-entry cache, generation-scoped eviction (counted in
   `TransportMetrics`), shared connect budget with fair address shares, no
-  transport-level retries.
+  transport-level retries (draining only evicts for the *next* request).
+- Discovery lives in `transport/alt_svc.rs` (separate `AltSvcCache` +
+  `BrokenRouteSuppressor`, `h3`-only, `ma`/`clear`, SNI stays origin):
+  `Auto { allow_http3: true }` discovers (no fresh entry = H1/H2),
+  `Http3Only` is strict direct with no fallback/suppression; safe `Auto`
+  fallback is pre-commit + replayable only via explicit `H3DispatchError`;
+  GOAWAY draining uses pinned h3 0.0.8 `is_closing()`/`is_h3_no_error()`
+  (feature `i-implement-...`, re-audit on bump).
 - `Timeout.connect` bounds H3 DNS + QUIC + h3 init; `total` is the outer
   pipeline deadline; read/write apply at the body boundaries. QUIC idle
   derives from `PoolConfig::idle_timeout` (never `Timeout.pool`); bidi
   streams derive from the effective per-origin in-flight limit. Only
   `H3Connect` is retryable.
 - Behavior tests: `cargo test -p eggfetch-core --all-features --test h3_hardening -- --test-threads=1`
-  plus unit tests in `transport/http3.rs`. Keep the experimental label.
+  plus ` --test h3_alt_svc_discovery` and unit tests in `transport/http3.rs`
+  + `transport/alt_svc.rs`. Keep the experimental label.
 
 ## Observability & Limits (native-protocol-observability)
 
@@ -60,10 +68,12 @@ cargo check -p eggfetch-core --all-features
 - Metadata: direct 101 downcasts to `DirectStream` (real addrs/TLS);
   UDS reports `Unix` without IPs; opaque stays unavailable. No secrets,
   no fake zeros. Tests: `network_stream_tests.rs`.
-- Metrics: `TransportMetrics` (connector/DNS/TLS, UDS/proxy, H3, upgrades)
+- Metrics: `TransportMetrics` (connector/DNS/TLS, UDS/proxy, H3 +
+  Alt-Svc learned/expired/cleared/rejected, H3 attempted/suppressed/fallback/
+  drain/close/reconnect, upgrades)
   separate from `PoolMetrics` (logical). No Hyper reuse estimates.
   `Client::transport_metrics()`; exact-count tests in
-  `transport_metrics_tests.rs`.
+  `transport_metrics_tests.rs` + `h3_alt_svc_discovery.rs`.
 - Limits: `max_in_flight_requests*` preferred (logical); `max_connections*`
   are pre-1.0 aliases (new wins). Facade `Limits` unchanged.
 - Trace: request/response headers emitted; DNS/connect/TLS via metrics

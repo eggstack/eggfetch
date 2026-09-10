@@ -176,6 +176,9 @@ pub(crate) struct ClientInner {
     pub(crate) transport_metrics: Arc<crate::transport::metrics::TransportMetrics>,
     #[cfg(feature = "http3")]
     pub(crate) h3_connector: Option<crate::transport::http3::H3Connector>,
+    /// Bounded Alt-Svc discovery state (separate from QUIC sessions).
+    /// Owned here so all routes share one view; empty when `http3` is off.
+    pub(crate) alt_svc_state: Arc<crate::transport::alt_svc::AltSvcState>,
 }
 
 /// Upper bound on cached SNI-keyed hyper clients.
@@ -965,8 +968,15 @@ impl ClientBuilder {
                 .map(|error| format!("failed to build TLS config: {error}"))
         });
 
-        // When HTTP/3 is selected, we skip building the hyper client
-        let hyper_client = if enabler.use_http3() || tls_config_error.is_some() {
+        // `Http3Only` is strict direct-QUIC and needs no Hyper client.
+        // `Auto { allow_http3: true }` needs both: H1/H2 for discovery and
+        // safe fallback plus QUIC for discovered routes. All other policies
+        // need Hyper only.
+        let hyper_client = if matches!(
+            self.http_version_policy,
+            crate::HttpVersionPolicy::Http3Only
+        ) || tls_config_error.is_some()
+        {
             None
         } else {
             let https = match tls_config_result {
@@ -1173,6 +1183,7 @@ impl ClientBuilder {
                 transport_metrics,
                 #[cfg(feature = "http3")]
                 h3_connector,
+                alt_svc_state: Arc::new(crate::transport::alt_svc::AltSvcState::new()),
             }),
         }
     }
