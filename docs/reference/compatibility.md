@@ -112,19 +112,24 @@ the GIL.
 
 eggfetch targets HTTPX 0.28.1 compatibility in phases. The current status:
 
-- **Phase 0**: Compatibility profile defined, manifest generators created, differential tests mandatory
-- **Phase 1**: Timeout, pool, and lifecycle behavior alignment; contract rebaseline (150 active differences classified: 89 must-close, 61 intentional)
-- **Phase 2**: Object contracts — Headers MutableMapping, QueryParams Mapping, exception hierarchy, NetRCAuth(file=...), URL.raw, codes IntEnum, Timeout/Limits/Proxy/default-encoding semantics (34 must-close resolved)
-- **Phase 3**: Signature alignment — top-level helper args, Client/AsyncClient constructors, transport signatures, base-class relationships, stream types (55 must-close resolved)
-- **Phase 4**: Direct transport — local_address, socket_options, UDS end-to-end, pool isolation, timeout/cancellation/resource release
-- **Phase 5**: SOCKS5 proxy — HTTP/HTTPS through SOCKS5, auth, DNS/address-type behavior, NO_PROXY bypass, credential redaction
-- **Phase 6 / Differential Closure**: Final qualification — API oracle clean (71 active differences, all intentional/deferred), full pinned compat suite passing, downstream behavioral fixtures validated (4/4)
-- **Corrective 05 (Exact-SHA closure)**: Requalification completed after Correctives 01-04. Qualification SHA `c44d4f25ffebc1a792335163ae4bc106076b3963` (superseded).
-- **Corrective 06 (Final semantic truthfulness)**: SSLContext translation made genuinely fail-closed; one native extension parser for all sync/async buffered/streaming paths; 101 `network_stream` wrapper chosen by caller API mode; H2-only policy propagated through SNI override and SOCKS routes.
-- **Corrective 07 (Final exact-SHA requalification)**: Closed the remaining-parity line. Qualification SHA `5c7899fefb6df087dfa1b3578fbef9ba64f87742`, qualified 2026-08-24 (superseded).
-- **Corrective 08 (Post-hardening requalification and closure)**: Renewed the claim after 38 hardening commits. Qualification SHA `d24101be6ed7be64463813750da5b4043d9905ec`, qualified 2026-09-03 (superseded). Pre-freeze corrections: secret-redaction hardening (`Cookie`/jar/`Request`/body `Debug`, proxy-URL error redaction), uniform `ValueError` for four-element `socket_options`, proxy EOF truncation-vs-complete boundary, package-scanner false-positive exclusions, raw-stream `Date` determinism. Full evidence in `plans/httpx-parity-correction-status.md`.
-- **Post-maturation requalification**: Renewed the claim after the four post-audit maturation commits (core request/transport consolidation, H3 lifecycle hardening, native protocol observability and API cleanup, Node experimental-prototype closure) plus the UDS fixture bind-readiness fix. Qualification SHA `d034a1005857a7f403222dda4bda5f2f204a44fe`, qualified 2026-09-09 (superseded). Full evidence in `plans/httpx-parity-correction-status.md`.
+- **Phase 0–6 / Differential Closure**: Profile, timeout/pool/lifecycle,
+  object contracts, signatures, direct transport, SOCKS5, and final oracle
+  clean — all must-close resolved. Full history in
+  `plans/httpx-parity-correction-status.md`.
+- **Correctives 01–08 + post-maturation** (superseded SHAs `c44d4f25`,
+  `5c7899f`, `d24101b`, `d034a10`): fail-closed SSLContext translation,
+  single extension parser, caller-mode `network_stream`, H2-only
+  propagation, redaction hardening, request/transport consolidation, H3
+  lifecycle hardening, observability cleanup. Historical evidence only.
 - **Next-scope requalification (current)**: Renewed HTTPX 0.28.1 and earned HTTPX2 2.12.0 Stage C on the frozen executable SHA `cc90f5ed561bbe10d4c26accc54ed3b916518f98`, qualified 2026-09-10. Executable scope: H3 Alt-Svc discovery/fallback/draining, H3 interop evidence (experimental retained), httpx2 sibling facade (+ SSE/optional WS), 1.0-preview tracking, oracle generalization. Full evidence in `plans/httpx-parity-correction-status.md`.
+
+**httpx2 core facade** (`eggfetch.compat.httpx2`, `H2X-API/META/AUTH/TLS/
+PROXY/COMP/MP/WSGI`): `FunctionAuth`, `Origin`/`URL.origin`, `QUERY`,
+`Headers` `|`/`|=`, truststore OS-trust default, IPv6 CIDR `NO_PROXY` fix
+(0.28.1 oddities preserved), chained-decoder cap native 4 vs reference 5
+(intentionally stricter), bounded decode with close-on-failure, multipart
+`try_header` validation, WSGI framing, status aliases with reference
+`DeprecationWarning` (`URL.raw` alone uses `HTTPXDeprecationWarning`).
 
 **Current status: Stage C qualified.** Next-scope requalification renewed the
 0.28.1 claim and earned the independent httpx2 2.12.0 claim, both bound to

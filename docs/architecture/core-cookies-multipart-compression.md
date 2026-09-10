@@ -81,6 +81,19 @@ The encoder preserves backpressure: a slow part body stream naturally backpressu
 
 A multipart body is replayable only when all parts are `PartBody::Bytes`. Stream parts make it non-replayable.
 
+### httpx2 Validation Parity
+
+`Part::try_header()` validates part header names/values through
+`http::HeaderName`/`HeaderValue` before serialization, matching httpx2
+2.12.0's pre-serialization validation (`_HEADER_NAME_RE` /
+`_FORBIDDEN_HEADER_VALUE_CHARS_RE`): CR/LF injection, invalid names, and
+binary/unicode violations fail before bytes are emitted with a coherent
+core error (`InvalidHeaderName`/`InvalidHeaderValue`). The infallible
+`Part::header()` silently ignores invalid values; prefer `try_header()`
+when errors must surface. WSGI Transfer-Encoding preservation and buffered
+body-length exposure are facade-level (`httpx`/`httpx2` `WSGITransport`);
+no 0.28.1 regression.
+
 ### Python API
 
 ```python
@@ -121,6 +134,14 @@ Feature-gated behind `compression-gzip`, `compression-brotli`, `compression-zstd
 | `max_decoded_body_size` | Configurable | `DecodedBodyTooLarge` |
 | `max_decompression_ratio` | Configurable | `DecompressionRatioExceeded` |
 | Nesting depth | 4 | Prevents zip-bomb chains |
+
+Chained `Content-Encoding` depth is capped at 4 nested decoders;
+httpx2 2.12.0 allows 5 (`MultiDecoder.max_decode_links`). EggFetch is
+intentionally stricter and does not weaken the limit to match — the
+difference is classified, not a parity gap. Streaming decode is bounded
+(transient memory limited, multi-frame zstd split across chunks supported)
+and decoder failure closes/releases the body/pool lease, matching the
+httpx2 close-on-failure contract.
 
 ### Decompression Modes
 

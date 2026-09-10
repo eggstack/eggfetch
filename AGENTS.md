@@ -169,6 +169,20 @@ through the native `stream()` method.
 `compat/httpx2/2.12.0/profile.toml`). The two facades coexist; importing one
 never mutates the other. `compat/httpx/1.0-preview/` is reconnaissance only.
 
+Core facade parity (`plans/httpx2-2.12-core-facade-parity.md`, done):
+`FunctionAuth` (`_auth.py`), `Origin` + `URL.origin` (`_urls.py`), `QUERY`
+(`_api.py` + `_client.py`), `Headers` `|`/`|=` (`_headers.py`), truststore
+OS-trust default (`__init__.create_ssl_context`), IPv6 CIDR `NO_PROXY` fix
+(versioned parser; 0.28.1 oddities preserved), decoder cap (native 4 vs
+reference 5, intentionally stricter), multipart header validation
+(core `try_header` before bytes), WSGI framing preservation, status
+aliases with reference `DeprecationWarning` (`URL.raw` alone uses
+`HTTPXDeprecationWarning`). Shared helpers are reused where semantics are
+identical (`_asgi/_cookies/_mock/_request/_response/_stream/_transports/
+_wsgi` re-exported from `httpx`); profile-specific behavior stays behind
+explicit boundaries. SSE/WS belong to the next plan
+(`httpx2-2.12-sse-and-websocket-parity.md`).
+
 ```python
 from eggfetch.compat.httpx import Client, AsyncClient, Request, Response, URL, Headers, Cookies
 ```

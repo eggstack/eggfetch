@@ -18,6 +18,13 @@ Use this skill when performing security reviews or addressing security findings 
 - URL credentials (`user:pass@host`) are rejected.
 - Decompression bombs limited by `max_decoded_body_size` and `max_decompression_ratio`.
 - Multipart boundaries validated (no CR/LF injection). Filenames basename-only (no path traversal).
+- httpx2 core hardening (`H2X-COMP/MP/PROXY/TLS-001`, `H2X-WS-003` for WS):
+  multipart part headers validated before bytes (`try_header`), chained
+  decoders capped (native 4 vs reference 5, intentionally stricter),
+  decode failure closes/releases body/pool lease, proxy trust isolated
+  (origin verify/CA/mTLS/SNI/version never influence proxy TLS), `NO_PROXY`
+  CIDR malformed input never broadens bypass, `FunctionAuth` redirect/retry
+  timing leaks no credentials, `Headers` merge preserves redaction.
 - Proxy auth not forwarded to destination.
 - Cookie jar integrity maintained across redirects.
 - Alt-Svc learns only from authenticated HTTPS (verified TLS, no proxy,

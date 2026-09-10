@@ -163,13 +163,15 @@ Two versioned, independent facades share the single Rust engine:
 - `eggfetch.compat.httpx` — HTTPX 0.28.1 (Stage C; profile in
   `compat/httpx/0.28.1/`, ledger in `plans/httpx-parity-correction-status.md`).
 - `eggfetch.compat.httpx2` — httpx2 2.12.0 sibling (stage in
-  `compat/httpx2/2.12.0/profile.toml`). Adds `FunctionAuth`, `Origin` +
-  `URL.origin`, `QUERY`, `Headers` merge operators, SSE (`EventSource` over
-  streamed responses), and optional WebSocket (wsproto framing over the
-  core 101 `network_stream`; handshake via the normal pipeline). Shared
-  helpers are reused where semantics are identical; profile-specific
-  behavior stays behind explicit boundaries. Importing one facade never
-  mutates the other.
+  `compat/httpx2/2.12.0/profile.toml`). Core facade adds `FunctionAuth`,
+  `Origin` + `URL.origin`, `QUERY`, `Headers` merge operators, truststore
+  OS-trust default, IPv6 CIDR `NO_PROXY` fix, decoder/multipart/WSGI
+  hardening, and status aliases; SSE (`EventSource` over streamed
+  responses) and optional WebSocket (wsproto framing over the core 101
+  `network_stream`; handshake via the normal pipeline) belong to the
+  follow-on streaming plan. Shared helpers are reused where semantics are
+  identical; profile-specific behavior stays behind explicit boundaries.
+  Importing one facade never mutates the other.
 - `compat/httpx/1.0-preview/` — original HTTPX 1.0 reconnaissance only;
   no implementation promise until an RC/stable trigger.
 
@@ -208,6 +210,33 @@ The facade owns all HTTPX-shaped API surfaces (URL, Headers, QueryParams, except
 | `eggfetch/compat/httpx/_response.py` | `Response` — metadata, status helpers, raise_for_status |
 | `eggfetch/compat/httpx/_client.py` | `Client` and `AsyncClient` — constructors, merge, build_request, send |
 | `eggfetch/compat/httpx/_ssl_context.py` | SSLContext snapshot, classification, construction fingerprint |
+
+### httpx2 Facade Module Structure (core parity)
+
+`eggfetch/compat/httpx2/` subclasses/re-exports the 0.28.1 facade — no
+~97 KB client fork. Shared semantics are re-exported unchanged
+(`_asgi/_cookies/_mock/_request/_response/_stream/_transports/_wsgi` from
+`httpx`); profile-specific modules subclass or wrap:
+
+| Module | Purpose |
+|--------|---------|
+| `httpx2/__init__.py` | Public 2.12.0 surface + truststore `create_ssl_context` |
+| `httpx2/_auth.py` | Re-exports shared auth + `FunctionAuth` callable adapter |
+| `httpx2/_urls.py` | `URL.origin` + frozen `Origin` (scheme/IDNA/ports/IPv6) |
+| `httpx2/_client.py` | Subclasses base clients + `query()`/`sse()`/`websocket()` |
+| `httpx2/_api.py` | Top-level helpers incl. `query` + `websocket` |
+| `httpx2/_headers.py` | Subclassed `Headers` with `\|`/`\|=` merge operators |
+| `httpx2/_config.py` | `Timeout` (message names httpx2) + SSE/WS defaults |
+| `httpx2/_exceptions.py` | Re-exported hierarchy + `HTTPXDeprecationWarning` |
+| `httpx2/_status_codes.py` | RFC 9110 canonical `codes` + `DeprecationWarning` aliases |
+| `httpx2/_alias.py` | Explicit opt-in `alias_httpx()` only |
+
+Behavior hardening owned by core/facade boundaries: IPv6 CIDR `NO_PROXY`
+(versioned parser), chained-decoder cap (native 4 vs reference 5,
+intentionally stricter), multipart `try_header` validation, WSGI framing.
+Parity cases `H2X-API/META/AUTH/TLS/PROXY/COMP/MP/WSGI` in
+`compat/httpx2/2.12.0/parity-cases.toml`; differential tests
+`test_httpx2_api_parity.py` + `test_httpx2_behavior.py`.
 
 ### SSLContext Translation
 

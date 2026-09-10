@@ -85,7 +85,20 @@ silently into 0.28.1): `FunctionAuth`, `Origin` + `URL.origin`, `QUERY`
 (`EventSource` framing over streamed responses), optional WebSocket
 (wsproto framing over the core 101 `network_stream`; handshake via the
 normal pipeline), `alias_httpx()` explicit opt-in, truststore default,
-RFC 9110 status renames with `HTTPXDeprecationWarning`.
+RFC 9110 status renames with reference `DeprecationWarning`
+(`URL.raw` alone uses `HTTPXDeprecationWarning`).
+
+**httpx2 core facade parity** (`plans/httpx2-2.12-core-facade-parity.md`):
+shared helpers reused where semantics identical (`_asgi/_cookies/_mock/
+_request/_response/_stream/_transports/_wsgi` re-exported); profile-specific
+`_auth/_urls/_client/_api/_headers/_config/_exceptions/_status_codes/
+_sse/websockets` stay behind explicit boundaries. Behavior deltas:
+IPv6 CIDR `NO_PROXY` fix (0.28.1 oddities preserved), decoder cap native 4
+vs reference 5 (intentionally stricter), multipart `try_header` validation
+before bytes, WSGI framing preservation. Parity cases `H2X-API-001..005,
+H2X-AUTH-001, H2X-TLS-001, H2X-PROXY-001, H2X-COMP-001, H2X-MP-001,
+H2X-WSGI-001, H2X-META-001` in `compat/httpx2/2.12.0/parity-cases.toml`;
+tests `test_httpx2_api_parity.py` + `test_httpx2_behavior.py`.
 
 **Implemented surface** (historical phase detail lives in `docs/architecture/python-bindings.md`):
 

@@ -28,6 +28,16 @@ Resolution order:
 
 A custom CA bundle **replaces** all default roots. If both system and private CAs are needed, concatenate them into a single PEM file.
 
+httpx2 2.12.0 changed its default verification to OS truststore behavior
+(`truststore.SSLContext`); native Rust already follows the same
+system-roots-then-WebPKI order, so no native default was weakened. The
+0.28.1 facade keeps its qualified `certifi`-default translation; the
+httpx2 facade exposes a separate `create_ssl_context(verify=True)` that
+prefers `truststore` and falls back to certifi only when unavailable.
+Explicit `verify`/`SSLContext`/`cert` conflicts and unrepresentable
+`SSLContext` state continue to fail closed; proxy-endpoint TLS stays
+isolated from origin trust.
+
 ### Client Identity (mTLS)
 
 `ClientIdentity` holds a certificate chain and private key for mutual TLS. Supports PEM-encoded chains. Unencrypted PEM private keys are supported; encrypted keys produce an error at construction time.
@@ -111,6 +121,13 @@ explicit normalized target port, so an entry such as `example.test:80` does
 not bypass an HTTP URL whose default port is omitted. These compatibility rules
 are separate from native `NoProxy::parse()`, which retains true CIDR and native
 default-port semantics.
+
+httpx2 2.12.0 fixed IPv6 CIDR `NO_PROXY` (`all://[addr]/subnet` mount form;
+0.28.1 emits the malformed `all://[addr/prefix]` form that never matches).
+The 0.28.1 facade preserves its qualified oddities unchanged; the httpx2
+facade uses a versioned parser policy with the fixed form behind an explicit
+profile boundary. Malformed CIDR never broadens bypass — it fails closed
+before dispatch.
 
 HTTP proxy endpoints may use `http://` or `https://`. An HTTPS endpoint first
 verifies the proxy hostname over TLS, then uses the existing absolute-form

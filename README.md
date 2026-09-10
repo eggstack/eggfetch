@@ -325,19 +325,32 @@ from eggfetch.compat.httpx2 import Client, AsyncClient
 client = Client()  # httpx2 2.12.0 surface: FunctionAuth, Origin, QUERY, SSE, optional WS
 ```
 
-New surface vs 0.28.1: `FunctionAuth`, `Origin` + `URL.origin`, `QUERY`
-(`query` top-level + `Client.query`/`AsyncClient.query`), `Headers` merge
-operators (`|`/`|=`), SSE (`EventSource`, `ServerSentEvent`, `SSEError` +
-`Client.sse`), optional WebSocket (`websocket` top-level +
+New surface vs 0.28.1 — core facade (this plan): `FunctionAuth`
+(callable auth adapter over the shared auth-flow state machine),
+`Origin` + `URL.origin` (normalized, immutable/hashable; scheme/IDNA/
+default-port/IPv4/IPv6), `QUERY` (`query` top-level +
+`Client.query`/`AsyncClient.query` as an ordinary method token),
+`Headers` merge operators (`|`/`|=` with case-insensitive replacement,
+duplicate handling, and redaction preserved), `alias_httpx()` (explicit
+opt-in only; ordinary imports never alias), truststore OS-trust default
+(`create_ssl_context(verify=True)` uses system roots via `truststore`,
+falling back to certifi only when unavailable; `verify=<str>`/`cert=...`
+deprecation warnings match the reference `DeprecationWarning` category,
+while `URL.raw` uses `HTTPXDeprecationWarning` as in upstream), RFC 9110
+status renames with reference-matching `DeprecationWarning` aliases, and
+behavior hardening: IPv6 CIDR `NO_PROXY` fix (versioned parser; 0.28.1
+oddities preserved), chained-decoder cap (native 4 vs reference 5 —
+intentionally stricter, classified, never weakened), bounded streaming
+decode with close-on-failure, multipart part-header validation before
+bytes are emitted, and WSGI Transfer-Encoding/buffered-length preservation.
+Streaming protocols (next plan): SSE (`EventSource`, `ServerSentEvent`,
+`SSEError` + `Client.sse`) and optional WebSocket (`websocket` top-level +
 `Client.websocket`, `httpx2.websockets.*` over the existing 101
-`network_stream` with wsproto framing — no second socket/TLS stack),
-`alias_httpx()` (explicit opt-in only; ordinary imports never alias),
-truststore OS-trust default, RFC 9110 status renames with
-`HTTPXDeprecationWarning` aliases, and behavior hardening (decoder caps,
-multipart validation, WSGI framing). Python 3.10–3.13 distribution scope;
-Pyodide/jsfetch and CLI extras are not applicable. Stage C qualified on the
-next-scope executable SHA recorded in `compat/httpx2/2.12.0/profile.toml`
-and `plans/httpx-parity-correction-status.md`.
+`network_stream` with wsproto framing — no second socket/TLS stack).
+Python 3.10–3.13 distribution scope; Pyodide/jsfetch and CLI extras are
+not applicable. Stage C qualified on the next-scope executable SHA
+recorded in `compat/httpx2/2.12.0/profile.toml` and
+`plans/httpx-parity-correction-status.md`.
 
 ### HTTPX 1.0 preview (no compatibility promise)
 
