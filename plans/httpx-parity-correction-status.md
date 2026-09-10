@@ -140,8 +140,16 @@ packaging file changed after the freeze. Both `profile.toml`
 
 ### Remote CI
 
-To be recorded after push: existing routine CI (`./scripts/check.sh`,
-Tier 1) on the pushed HEAD; no special qualification workflow.
+Existing routine CI runs `./scripts/check.sh` (Tier 1) on every push; no
+special qualification workflow was created.
+
+- Workflow: `CI`, run `34527602692`
+- Head SHA: `673d62ef7a0a9c5884bb76c89ffac749306ec159` (the
+  documentation/ledger record commit — a docs-only descendant of the
+  frozen executable SHA, so the run covers the frozen executable tree)
+- Conclusion: success (10m5s, 2026-09-10)
+- Relationship to `FROZEN_EXECUTABLE_SHA`: executable-identical
+  descendant (proven by the descendant audit above).
 
 ### Closure statement
 
