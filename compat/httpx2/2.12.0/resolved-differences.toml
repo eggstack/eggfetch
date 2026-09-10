@@ -1,4 +1,5 @@
-# Resolved differences ledger — HTTPX2 2.12.0
+# Resolved differences ledger — HTTPX2 2.12.0 (Stage C qualified)
 # Historical records of previously-allowed differences that have been
-# resolved (implemented and verified). Empty at baseline; entries are
-# appended only after implementation + differential evidence.
+# resolved (implemented and verified). No entries: intentional differences
+# remain in `allowed-differences.toml`; entries are appended only after
+# implementation + differential evidence.

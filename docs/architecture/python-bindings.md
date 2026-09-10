@@ -162,14 +162,14 @@ Two versioned, independent facades share the single Rust engine:
 
 - `eggfetch.compat.httpx` — HTTPX 0.28.1 (Stage C; profile in
   `compat/httpx/0.28.1/`, ledger in `plans/httpx-parity-correction-status.md`).
-- `eggfetch.compat.httpx2` — httpx2 2.12.0 sibling (stage in
-  `compat/httpx2/2.12.0/profile.toml`). Core facade adds `FunctionAuth`,
+- `eggfetch.compat.httpx2` — httpx2 2.12.0 sibling (Stage C qualified;
+  profile in `compat/httpx2/2.12.0/profile.toml`). Core facade adds `FunctionAuth`,
   `Origin` + `URL.origin`, `QUERY`, `Headers` merge operators, truststore
   OS-trust default, IPv6 CIDR `NO_PROXY` fix, decoder/multipart/WSGI
   hardening, and status aliases; SSE (`EventSource` over streamed
   responses) and optional WebSocket (wsproto framing over the core 101
-  `network_stream`; handshake via the normal pipeline) belong to the
-  follow-on streaming plan. Shared helpers are reused where semantics are
+  `network_stream`; handshake via the normal pipeline) are implemented in
+  the same facade. Shared helpers are reused where semantics are
   identical; profile-specific behavior stays behind explicit boundaries.
   Importing one facade never mutates the other.
 - `compat/httpx/1.0-preview/` — original HTTPX 1.0 reconnaissance only;
@@ -211,7 +211,7 @@ The facade owns all HTTPX-shaped API surfaces (URL, Headers, QueryParams, except
 | `eggfetch/compat/httpx/_client.py` | `Client` and `AsyncClient` — constructors, merge, build_request, send |
 | `eggfetch/compat/httpx/_ssl_context.py` | SSLContext snapshot, classification, construction fingerprint |
 
-### httpx2 Facade Module Structure (core parity)
+### httpx2 Facade Module Structure
 
 `eggfetch/compat/httpx2/` subclasses/re-exports the 0.28.1 facade — no
 ~97 KB client fork. Shared semantics are re-exported unchanged
@@ -230,13 +230,17 @@ The facade owns all HTTPX-shaped API surfaces (URL, Headers, QueryParams, except
 | `httpx2/_exceptions.py` | Re-exported hierarchy + `HTTPXDeprecationWarning` |
 | `httpx2/_status_codes.py` | RFC 9110 canonical `codes` + `DeprecationWarning` aliases |
 | `httpx2/_alias.py` | Explicit opt-in `alias_httpx()` only |
+| `httpx2/_sse.py` | `EventSource`/`ServerSentEvent` framing over streamed responses |
+| `httpx2/websockets/` | Optional WebSocket (wsproto framing over 101 `network_stream`) |
 
 Behavior hardening owned by core/facade boundaries: IPv6 CIDR `NO_PROXY`
 (versioned parser), chained-decoder cap (native 4 vs reference 5,
 intentionally stricter), multipart `try_header` validation, WSGI framing.
-Parity cases `H2X-API/META/AUTH/TLS/PROXY/COMP/MP/WSGI` in
+Parity cases `H2X-API/META/AUTH/TLS/PROXY/COMP/MP/WSGI` (core) plus
+`H2X-SSE-001/002`, `H2X-WS-001..003` (streaming) in
 `compat/httpx2/2.12.0/parity-cases.toml`; differential tests
-`test_httpx2_api_parity.py` + `test_httpx2_behavior.py`.
+`test_httpx2_api_parity.py` + `test_httpx2_behavior.py` (core),
+`test_httpx2_sse.py` + `test_httpx2_websocket.py` (streaming).
 
 ### SSLContext Translation
 

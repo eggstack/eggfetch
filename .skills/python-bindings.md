@@ -72,7 +72,7 @@ EggfetchError
 
 ## HTTPX Compatibility Layer
 
-The `eggfetch.compat.httpx` module provides an HTTPX 0.28.1 compatibility facade over the eggfetch Rust engine (Stage C qualified for the documented asyncio surface at the exact SHA in `compat/httpx/0.28.1/profile.toml`). The sibling `eggfetch.compat.httpx2` module targets httpx2 2.12.0 (stage in `compat/httpx2/2.12.0/profile.toml`); the two facades coexist and importing one never mutates the other. Import paths:
+The `eggfetch.compat.httpx` module provides an HTTPX 0.28.1 compatibility facade over the eggfetch Rust engine (Stage C qualified for the documented asyncio surface at the exact SHA in `compat/httpx/0.28.1/profile.toml`). The sibling `eggfetch.compat.httpx2` module targets httpx2 2.12.0 (Stage C qualified at the exact SHA in `compat/httpx2/2.12.0/profile.toml`); the two facades coexist and importing one never mutates the other. Import paths:
 
 ```python
 from eggfetch.compat.httpx import Client, AsyncClient, Request, Response
@@ -88,17 +88,22 @@ normal pipeline), `alias_httpx()` explicit opt-in, truststore default,
 RFC 9110 status renames with reference `DeprecationWarning`
 (`URL.raw` alone uses `HTTPXDeprecationWarning`).
 
-**httpx2 core facade parity** (`plans/httpx2-2.12-core-facade-parity.md`):
+**httpx2 core facade parity** (`plans/httpx2-2.12-core-facade-parity.md`, done):
 shared helpers reused where semantics identical (`_asgi/_cookies/_mock/
 _request/_response/_stream/_transports/_wsgi` re-exported); profile-specific
-`_auth/_urls/_client/_api/_headers/_config/_exceptions/_status_codes/
+_auth/_urls/_client/_api/_headers/_config/_exceptions/_status_codes/
 _sse/websockets` stay behind explicit boundaries. Behavior deltas:
 IPv6 CIDR `NO_PROXY` fix (0.28.1 oddities preserved), decoder cap native 4
 vs reference 5 (intentionally stricter), multipart `try_header` validation
-before bytes, WSGI framing preservation. Parity cases `H2X-API-001..005,
+before bytes, WSGI framing preservation. Streaming parity
+(`plans/httpx2-2.12-sse-and-websocket-parity.md`, done): SSE framing over
+streamed responses, optional WebSocket wsproto framing over the existing 101
+`network_stream`. Parity cases `H2X-API-001..005,
 H2X-AUTH-001, H2X-TLS-001, H2X-PROXY-001, H2X-COMP-001, H2X-MP-001,
-H2X-WSGI-001, H2X-META-001` in `compat/httpx2/2.12.0/parity-cases.toml`;
-tests `test_httpx2_api_parity.py` + `test_httpx2_behavior.py`.
+H2X-WSGI-001, H2X-META-001` (core) plus `H2X-SSE-001/002`, `H2X-WS-001..003`
+(streaming) in `compat/httpx2/2.12.0/parity-cases.toml`;
+tests `test_httpx2_api_parity.py` + `test_httpx2_behavior.py` (core),
+`test_httpx2_sse.py` + `test_httpx2_websocket.py` (streaming).
 
 **Implemented surface** (historical phase detail lives in `docs/architecture/python-bindings.md`):
 

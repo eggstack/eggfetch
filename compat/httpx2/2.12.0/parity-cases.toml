@@ -1,8 +1,7 @@
-# Parity case registry — HTTPX2 2.12.0 baseline
+# Parity case registry — HTTPX2 2.12.0 (Stage C qualified)
 # Each case has a stable ID, description, sync/async applicability,
 # test references, and required result (parity or intentional-difference).
-# Baseline cases intentionally fail/xfail until core/SSE/WS plans close;
-# this inventory is engineering tracking, not qualification evidence.
+# All cases pass on the qualified executable SHA recorded in `profile.toml`.
 
 # ── API objects/signatures ──────────────────────────────────────────
 

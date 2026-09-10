@@ -325,7 +325,7 @@ from eggfetch.compat.httpx2 import Client, AsyncClient
 client = Client()  # httpx2 2.12.0 surface: FunctionAuth, Origin, QUERY, SSE, optional WS
 ```
 
-New surface vs 0.28.1 — core facade (this plan): `FunctionAuth`
+New surface vs 0.28.1 — core facade (done): `FunctionAuth`
 (callable auth adapter over the shared auth-flow state machine),
 `Origin` + `URL.origin` (normalized, immutable/hashable; scheme/IDNA/
 default-port/IPv4/IPv6), `QUERY` (`query` top-level +
@@ -343,7 +343,7 @@ oddities preserved), chained-decoder cap (native 4 vs reference 5 —
 intentionally stricter, classified, never weakened), bounded streaming
 decode with close-on-failure, multipart part-header validation before
 bytes are emitted, and WSGI Transfer-Encoding/buffered-length preservation.
-Streaming protocols (next plan): SSE (`EventSource`, `ServerSentEvent`,
+Streaming protocols (done): SSE (`EventSource`, `ServerSentEvent`,
 `SSEError` + `Client.sse`) and optional WebSocket (`websocket` top-level +
 `Client.websocket`, `httpx2.websockets.*` over the existing 101
 `network_stream` with wsproto framing — no second socket/TLS stack).

@@ -19,8 +19,8 @@ and `plans/httpx-parity-correction-status.md`). Implementation lives in
 - `reference-api.json` — golden manifest of httpx2 2.12.0 public API (generated;
   do not hand-edit; regenerate with `scripts/generate_httpx_api_manifest.py --package httpx2`)
 - `allowed-differences.toml` — reviewed intentional differences (exact typed tuples)
-- `resolved-differences.toml` — audit trail of resolved gaps (empty at baseline)
-- `parity-cases.toml` — differential/behavioral case registry (baseline IDs)
+- `resolved-differences.toml` — audit trail of resolved gaps (none; intentional differences stay in `allowed-differences.toml`)
+- `parity-cases.toml` — differential/behavioral case registry (qualified IDs)
 - `upstream-test-inventory.md` — upstream test mapping (behavior-only changes)
 
 ## Usage

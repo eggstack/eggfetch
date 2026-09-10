@@ -165,8 +165,8 @@ through the native `stream()` method.
 ## HTTPX Compatibility Layer
 
 `eggfetch.compat.httpx` targets HTTPX 0.28.1 (asyncio only; Stage C qualified).
-`eggfetch.compat.httpx2` targets httpx2 2.12.0 (sibling profile; stage in
-`compat/httpx2/2.12.0/profile.toml`). The two facades coexist; importing one
+`eggfetch.compat.httpx2` targets httpx2 2.12.0 (sibling facade; Stage C qualified,
+profile in `compat/httpx2/2.12.0/profile.toml`). The two facades coexist; importing one
 never mutates the other. `compat/httpx/1.0-preview/` is reconnaissance only.
 
 Core facade parity (`plans/httpx2-2.12-core-facade-parity.md`, done):
@@ -180,8 +180,9 @@ aliases with reference `DeprecationWarning` (`URL.raw` alone uses
 `HTTPXDeprecationWarning`). Shared helpers are reused where semantics are
 identical (`_asgi/_cookies/_mock/_request/_response/_stream/_transports/
 _wsgi` re-exported from `httpx`); profile-specific behavior stays behind
-explicit boundaries. SSE/WS belong to the next plan
-(`httpx2-2.12-sse-and-websocket-parity.md`).
+explicit boundaries. SSE (`EventSource` over streamed responses) and
+optional WebSocket (wsproto framing over the core 101 `network_stream`) done
+(`httpx2-2.12-sse-and-websocket-parity.md`, done).
 
 ```python
 from eggfetch.compat.httpx import Client, AsyncClient, Request, Response, URL, Headers, Cookies
