@@ -6,8 +6,8 @@ This directory is the independent, versioned compatibility profile for
 the independently pinned HTTPX 0.28.1 contract and must not be rewritten
 to HTTPX2 semantics.
 
-Status: **Stage C qualified** on the next-scope frozen executable SHA
-`cc90f5ed561bbe10d4c26accc54ed3b916518f98` (2026-09-10; see `profile.toml`
+Status: **Stage C qualified** on the frozen executable SHA
+`65beb675a5380d3ff4291da6833b91ebf12c769a` (2026-09-11; see `profile.toml`
 and `plans/httpx-parity-correction-status.md`). Implementation lives in
 `eggfetch.compat.httpx2` (see
 `crates/eggfetch-python/python/eggfetch/compat/httpx2/`).

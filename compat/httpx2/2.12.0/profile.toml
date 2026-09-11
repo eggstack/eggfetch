@@ -3,19 +3,22 @@ schema-version = "1"
 generator = "eggfetch-compat-profile"
 version = "1"
 created = "2026-09-10"
-# Next-scope qualification: Stage C earned on the frozen executable SHA
-# `cc90f5ed561bbe10d4c26accc54ed3b916518f98` (2026-09-10) after the focused
+# Post-next-scope requalification: Stage C re-earned on the frozen executable
+# SHA `65beb675a5380d3ff4291da6833b91ebf12c769a` (2026-09-11) after the focused
 # gates, Tier 1, extended, package validation, three consecutive full
 # compatibility runs (covering both profiles), the shared API oracle with
 # zero unexplained deltas, behavior/security corpus, SSE lifecycle, and
 # optional WS surface (wsproto) all passed on the same SHA, with the
-# required downstream portfolio green and no 0.28.1 leakage. Independent
+# required downstream portfolio green and no 0.28.1 leakage. The prior
+# `cc90f5e...` (2026-09-10) evidence is historical only: H3 interop corpus
+# expansion, fuzz_alt_svc suppressor coverage, and parity truth passes
+# invalidated it per the exact-SHA rule. Independent
 # of the HTTPX 0.28.1 Stage C claim on the same SHA; neither profile
 # mutates the other.
 stage = "stage-c-qualified"
 status = "stage-c-qualified"
-qualification-sha = "cc90f5ed561bbe10d4c26accc54ed3b916518f98"
-qualification-date = "2026-09-10"
+qualification-sha = "65beb675a5380d3ff4291da6833b91ebf12c769a"
+qualification-date = "2026-09-11"
 reference = "httpx2==2.12.0"
 
 [reference]

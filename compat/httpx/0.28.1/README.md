@@ -2,7 +2,7 @@
 
 This directory contains the machine-readable compatibility profile for
 HTTPX 0.28.1. It is Stage C qualified against the exact executable SHA
-`cc90f5ed561bbe10d4c26accc54ed3b916518f98` recorded in `profile.toml`;
+`65beb675a5380d3ff4291da6833b91ebf12c769a` recorded in `profile.toml`;
 current evidence is recorded in `plans/httpx-parity-correction-status.md`.
 Executable changes require fresh qualification.
 

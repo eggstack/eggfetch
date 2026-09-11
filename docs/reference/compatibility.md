@@ -121,7 +121,7 @@ eggfetch targets HTTPX 0.28.1 compatibility in phases. The current status:
   single extension parser, caller-mode `network_stream`, H2-only
   propagation, redaction hardening, request/transport consolidation, H3
   lifecycle hardening, observability cleanup. Historical evidence only.
-- **Next-scope requalification (current)**: Renewed HTTPX 0.28.1 and earned HTTPX2 2.12.0 Stage C on the frozen executable SHA `cc90f5ed561bbe10d4c26accc54ed3b916518f98`, qualified 2026-09-10. Executable scope: H3 Alt-Svc discovery/fallback/draining, H3 interop evidence (experimental retained), httpx2 sibling facade (+ SSE/optional WS), 1.0-preview tracking, oracle generalization. Full evidence in `plans/httpx-parity-correction-status.md`.
+- **Next-scope requalification (current)**: Renewed HTTPX 0.28.1 and earned HTTPX2 2.12.0 Stage C on the frozen executable SHA `65beb675a5380d3ff4291da6833b91ebf12c769a`, qualified 2026-09-11. Executable scope: H3 Alt-Svc discovery/fallback/draining, H3 interop evidence (20-test corpus, experimental retained), httpx2 sibling facade (+ SSE/optional WS), 1.0-preview tracking, oracle generalization. Full evidence in `plans/httpx-parity-correction-status.md`.
 
 **httpx2 core facade** (`eggfetch.compat.httpx2`, `H2X-API/META/AUTH/TLS/
 PROXY/COMP/MP/WSGI`): `FunctionAuth`, `Origin`/`URL.origin`, `QUERY`,

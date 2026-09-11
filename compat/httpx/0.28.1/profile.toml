@@ -5,11 +5,15 @@ version = "1"
 created = "2026-07-21"
 rebaselined = "2026-08-07"
 rebaseline-sha = "f9eb1a455907d43210886b7b047d18bde8716652"
-# Next-scope requalification renews the HTTPX 0.28.1 Stage C claim on
-# the next-scope executable SHA `cc90f5ed561bbe10d4c26accc54ed3b916518f98`
-# after the focused gates, Tier 1, extended, package validation, three
-# consecutive pinned compatibility runs, the API oracle, and the required
-# downstream portfolio all passed on the same SHA. The post-maturation
+# Post-next-scope requalification renews the HTTPX 0.28.1 Stage C claim on
+# the frozen executable SHA `65beb675a5380d3ff4291da6833b91ebf12c769a`
+# (2026-09-11) after the focused gates, Tier 1, extended, package validation,
+# three consecutive pinned compatibility runs, the API oracle, and the required
+# downstream portfolio all passed on the same SHA. The `cc90f5e...` evidence
+# is retained as historical only: the H3 interop corpus expansion (13 to 20
+# tests), fuzz_alt_svc suppressor coverage, and httpx2 parity truth passes
+# changed test/validation behavior, invalidating the prior binding per the
+# exact-SHA rule. The post-maturation
 # `d034a10...` evidence is retained as historical only; the H3
 # Alt-Svc/discovery/fallback/draining work, H3 interop evidence (experimental
 # retained), HTTPX2 sibling facade (independent profile, no 0.28.1 leakage),
@@ -18,9 +22,9 @@ rebaseline-sha = "f9eb1a455907d43210886b7b047d18bde8716652"
 # behavior, invalidating the prior binding per the exact-SHA rule.
 stage = "stage-c-qualified"
 status = "stage-c-qualified"
-qualification-sha = "cc90f5ed561bbe10d4c26accc54ed3b916518f98"
-qualification-date = "2026-09-10"
-historical-qualification-sha = "d034a1005857a7f403222dda4bda5f2f204a44fe, d24101be6ed7be64463813750da5b4043d9905ec, 5c7899fefb6df087dfa1b3578fbef9ba64f87742, 9ffa6cd85848fd16a424b65f73254351911777c4, c44d4f25ffebc1a792335163ae4bc106076b3963"
+qualification-sha = "65beb675a5380d3ff4291da6833b91ebf12c769a"
+qualification-date = "2026-09-11"
+historical-qualification-sha = "cc90f5ed561bbe10d4c26accc54ed3b916518f98, d034a1005857a7f403222dda4bda5f2f204a44fe, d24101be6ed7be64463813750da5b4043d9905ec, 5c7899fefb6df087dfa1b3578fbef9ba64f87742, 9ffa6cd85848fd16a424b65f73254351911777c4, c44d4f25ffebc1a792335163ae4bc106076b3963"
 reference = "httpx==0.28.1"
 
 [reference]

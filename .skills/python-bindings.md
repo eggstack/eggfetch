@@ -121,7 +121,7 @@ tests `test_httpx2_api_parity.py` + `test_httpx2_behavior.py` (core),
 
 - Corrective passes 01–08, the post-audit maturation program, and the
   next-scope program are complete; Stage C is qualified on
-  `cc90f5ed561bbe10d4c26accc54ed3b916518f98` (also recorded in
+  `65beb675a5380d3ff4291da6833b91ebf12c769a` (also recorded in
   `compat/httpx/0.28.1/profile.toml` and
   `plans/httpx-parity-correction-status.md`). Executable changes require a new exact-SHA qualification.
 - Closure evidence: typed difference records gated by `allowed-differences.toml`, lossless merge semantics (`crates/eggfetch-python/tests/compat/test_merge_lossless.py`), separate sync/async auth drivers, behavioral downstream fixtures (`compat/downstream/behavioral_fixtures/`), and native lifecycle proof fixtures (`test_native_timeout_classification.py`, `test_soak.py`, proxy and TLS tests).

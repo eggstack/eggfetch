@@ -4,7 +4,7 @@ The HTTPX compatibility profile is Stage C qualified for its documented
 Python 3.10+ asyncio surface. These are the retained, tested bounded
 differences; the active ledger and parity registry are authoritative.
 The current qualification is bound to executable SHA
-`cc90f5ed561bbe10d4c26accc54ed3b916518f98`, recorded in
+`65beb675a5380d3ff4291da6833b91ebf12c769a`, recorded in
 `compat/httpx/0.28.1/profile.toml`.
 
 ## SSLContext representability

@@ -8,7 +8,7 @@ eggfetch is a Rust-native HTTP client platform with Python bindings and a CLI la
 
 The remaining roadmap is therefore not primarily about proving feasibility. It is about tightening semantics, completing the expected HTTP-client feature set, expanding transport capabilities, and establishing production-grade release, security, testing, and documentation practices.
 
-## Current product position (2026-09-10)
+## Current product position (2026-09-11)
 
 The HTTP/3 graduation and next HTTPX compatibility program
 (`http3-and-next-httpx-compatibility-program.md`) is complete: Alt-Svc

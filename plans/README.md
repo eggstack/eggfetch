@@ -2,11 +2,11 @@
 
 This directory contains active implementation plans, live qualification/status records, and historical implementation records. Completed plans are non-normative unless another current document explicitly says otherwise. Verification and release policy remain governed by `docs/verification-policy.md` and `docs/releases/process.md`.
 
-## Completed program — HTTP/3 graduation and next HTTPX compatibility (2026-09-10)
+## Completed program — HTTP/3 graduation and next HTTPX compatibility (2026-09-11)
 
 Handoff program: `http3-and-next-httpx-compatibility-program.md`
-(completed 2026-09-10 on frozen executable SHA
-`cc90f5ed561bbe10d4c26accc54ed3b916518f98`).
+(completed 2026-09-11 on frozen executable SHA
+`65beb675a5380d3ff4291da6833b91ebf12c769a`).
 
 HTTPX 0.28.1 renewed Stage C and HTTPX2 2.12.0 earned Stage C on that
 SHA (evidence: `httpx-parity-correction-status.md`, the live ledger).
