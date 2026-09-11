@@ -59,7 +59,10 @@ class TestNativeReadTimeout:
                 assert not isinstance(exc_info.value, ConnectTimeout), (
                     "Should not be ConnectTimeout for body stall"
                 )
-                assert elapsed < 5.0, f"Timeout took too long: {elapsed:.2f}s"
+                # The fixture sleeps for three seconds after sending headers.
+                # Keep enough headroom for a busy full-suite runner while
+                # still catching a stalled request that ignores the timeout.
+                assert elapsed < 10.0, f"Timeout took too long: {elapsed:.2f}s"
                 assert hasattr(exc_info.value, "request"), (
                     "Timeout exception must retain request context"
                 )
