@@ -2,6 +2,26 @@
 
 This directory contains active implementation plans, live qualification/status records, and historical implementation records. Completed plans are non-normative unless another current document explicitly says otherwise. Verification and release policy remain governed by `docs/verification-policy.md` and `docs/releases/process.md`.
 
+## Active program — HTTP/3 production qualification (2026-09-11)
+
+Handoff program: `http3-production-qualification-program.md`
+
+Objective: close the blockers left by the prior HTTP/3 graduation attempt and make a new evidence-based decision on whether ordinary H3 operation can move from **experimental** to **supported**. This is a qualification/hardening program, not a feature-expansion program.
+
+Execution order:
+
+1. `http3-independent-interop-and-impairment-qualification.md` — build/reuse one implementation-neutral H3 corpus; qualify against at least two independent non-Quinn servers; record public-origin evidence; run realistic loss/latency/reordering/UDP-block/MTU/address-family impairment; prove replay-safe fallback and independent drain/reconnect behavior.
+2. `http3-upstream-risk-resource-and-observability-hardening.md` — audit the exact Quinn/h3/h3-quinn/rustls stack and current ordinary-client correctness issues; upgrade/work around only where justified; add targeted regressions; run lifecycle/resource soak; characterize cache pressure; improve real QUIC diagnostics without fabricated response metadata.
+3. `http3-production-graduation-and-compatibility-requalification.md` — audit child-plan closure, freeze one exact executable SHA, run full repository/compatibility qualification, make the literal H3 graduation decision, renew HTTPX 0.28.1 and HTTPX2 2.12.0 Stage C on the new executable tree, and perform the documentation/descendant truth pass.
+
+Plans 1 and 2 may overlap where implementation paths do not conflict, but both must close before plan 3 freezes the tree.
+
+Current H3 status remains **experimental** until the final gate passes. Graduation requires, among other evidence, the required corpus passing against at least two maintained non-Quinn H3 implementations, independent GOAWAY/drain evidence, current public-origin checks, realistic impairment results, bounded resource/soak behavior, and closure of upstream defects that can corrupt ordinary successful H3 operation. Missing evidence remains a blocker; it is never converted into a pass.
+
+The current HTTPX 0.28.1 and HTTPX2 2.12.0 Stage C profiles remain bound to executable SHA `65beb675a5380d3ff4291da6833b91ebf12c769a` until qualification-sensitive work from this program lands. Once source/tests/manifests/lockfile/scripts/package/qualification tooling changes, the new tree must be requalified per the final plan; do not update profile SHAs mid-program.
+
+Explicitly out of scope for this program: 0-RTT, WebTransport, H3 datagrams, MASQUE/CONNECT-UDP, connection migration, and automatic H3-by-default policy changes.
+
 ## Completed program — HTTP/3 graduation and next HTTPX compatibility (2026-09-11)
 
 Handoff program: `http3-and-next-httpx-compatibility-program.md`
