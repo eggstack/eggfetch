@@ -13,20 +13,20 @@ The following features are declared in `crates/eggfetch-core/Cargo.toml`:
 ```toml
 [features]
 default = ["http1", "tls-rustls"]
-http1 = []
-http2 = []
-http3 = []
+http1 = ["hyper/http1", "hyper-util/http1", "hyper-rustls/http1"]
+http2 = ["dep:h2", "hyper/http2", "hyper-util/http2", "hyper-rustls/http2"]
+http3 = ["dep:quinn", "dep:h3", "dep:h3-quinn"]
 tls-rustls = []
 json = []
-compression-gzip = []
-compression-brotli = []
-compression-zstd = []
-compression-deflate = []
-cookies = []
+compression-gzip = ["dep:async-compression", "async-compression/gzip", "dep:tokio-util", "tokio/io-util", "dep:flate2"]
+compression-brotli = ["dep:async-compression", "async-compression/brotli", "dep:tokio-util", "tokio/io-util", "dep:brotli"]
+compression-zstd = ["dep:async-compression", "async-compression/zstd", "dep:tokio-util", "tokio/io-util", "dep:zstd"]
+compression-deflate = ["dep:async-compression", "async-compression/deflate", "dep:tokio-util", "tokio/io-util", "dep:flate2"]
+cookies = ["dep:cookie"]
 multipart = []
-proxy = []
-tracing = []
-test-util = []
+proxy = ["tokio/io-util"]
+tracing = ["dep:tracing"]
+test-util = ["tokio/test-util"]
 ```
 
 ## Default Features
@@ -74,7 +74,7 @@ remain buildable.
 
 ### json
 
-**Status:** feature flag exists, not wired into eggfetch-core.
+**Status:** reserved flag; currently only consumed by `eggfetch-bench` for dependency resolution, not wired into `eggfetch-core` behavior.
 The Python crate delivers JSON body support via Python's `json.dumps()`, not through a Rust-side feature gate. The feature flag is reserved for future Rust-native JSON serialization (e.g., serde integration in `eggfetch-core`).
 
 ### compression-gzip
@@ -131,7 +131,7 @@ dependencies.
 
 ### tracing
 
-**Status:** planned, not implemented.
+**Status:** implemented (optional `tracing` dependency gate).
 Enables structured logging via the tracing ecosystem. This is opt-in to avoid pulling in logging dependencies for users who do not need them.
 
 ### test-util
@@ -148,8 +148,9 @@ Enables `tokio/test-util` for deterministic time testing. This feature is for in
 
 ## Validation matrix
 
-The repository validates the following core combinations in CI and before a
-release:
+The repository validates the following core combinations via Tier 2
+(`./scripts/check.sh extended`: `tier2_feature_matrix` + `tier2_feature_tests`)
+before a release:
 
 ```text
 cargo check -p eggfetch-core --no-default-features

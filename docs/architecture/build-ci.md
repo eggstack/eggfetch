@@ -13,11 +13,15 @@ Pins to the stable Rust channel.
 ### rustfmt.toml
 
 - `max_width = 100`
-- Standard rustfmt defaults
+- `use_small_heuristics = "default"`
+- Edition 2021
 
 ### .clippy.toml
 
-Pedantic clippy enabled workspace-wide.
+Pedantic clippy is enabled via workspace lints in `Cargo.toml`
+(`[workspace.lints.clippy]`); `.clippy.toml` itself sets
+`avoid-breaking-exported-api = false` and
+`missing-docs-in-crate-items = true`.
 
 ### deny.toml
 
@@ -43,15 +47,15 @@ See [verification-policy.md](../verification-policy.md) for the normative policy
 | Rust formatting | `cargo fmt --all -- --check` |
 | Lint suppression | `bash scripts/check_lint_suppressions.sh` |
 | Rust clippy | `cargo clippy --workspace --all-targets --all-features -- -D warnings` |
-| Rust tests | `cargo test --workspace --exclude eggfetch-python --all-features` |
-| Python build | `maturin develop -m crates/eggfetch-python/Cargo.toml` |
-| Python tests | `pytest crates/eggfetch-python/tests/ -q --ignore=.../compat` |
-| HTTPX compat smoke | `pytest .../test_imports.py .../test_client.py .../test_exceptions.py .../test_corrective_kernel.py` |
+| Rust tests | `cargo test --workspace --exclude eggfetch-python --all-features -- --test-threads=1` (single-threaded: RSS tests) |
+| Python build | `PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1 maturin develop -m crates/eggfetch-python/Cargo.toml` (active venv required) |
+| Python tests | `python -m pytest crates/eggfetch-python/tests/ -q --ignore=.../compat` |
+| HTTPX compat smoke | `python -m pytest .../test_imports.py .../test_client.py .../test_exceptions.py .../test_corrective_kernel.py -v` (Tier 2 runs the full suite with `EGGFETCH_COMPAT_REQUIRED=1 ... --strict-markers`) |
 | Node prototype | `cargo test -p eggfetch-node --all-features`, then `node test.js` only when `node` and a built `crates/eggfetch-node/eggfetch.node` artifact are present (explicit skip otherwise) |
 
 ### Extended Validation (Tier 2)
 
-Run `./scripts/check.sh extended` for: full HTTPX compatibility, API manifest comparison, feature matrix, feature-gated tests, MSRV, docs, FFI, resource monitoring, lifecycle, soak, downstream, merge, and benchmarks. All executed checks are fail-closed. The only permitted skip is MSRV when the Rust 1.80 toolchain is not installed.
+Run `./scripts/check.sh extended` for: full HTTPX compatibility, API manifest comparison, feature matrix, feature-gated tests, MSRV, docs, FFI, resource monitoring, lifecycle, soak, downstream, merge, and benchmarks. Tier 2 runs all of Tier 1 first, then the additional checks. All executed checks are fail-closed. The only permitted skip is MSRV when the Rust 1.80 toolchain is not installed.
 
 ### HTTP/3 Qualification (manual, not CI)
 
@@ -90,8 +94,8 @@ Run manually via `workflow_dispatch` from `.github/workflows/pypi.yml`. The pipe
 
 - Pedantic clippy workspace-wide.
 - `unsafe_code = "forbid"` (except FFI/Node).
-- `missing_docs = "warn"`, `missing-docs-in-crate-items = true`.
-- Never use `#![allow(warnings)]`, `#![allow(clippy::all)]`, or `#![allow(clippy::pedantic)]`.
+- `missing_docs = "warn"` (workspace lints in `Cargo.toml`), `missing-docs-in-crate-items = true` (`.clippy.toml`).
+- Never use `#![allow(warnings)]`, `#![allow(clippy::all)]`, `#![allow(clippy::pedantic)]`, `#![allow(clippy::nursery)]`, or `#![allow(clippy::restriction)]`.
 - CI rejects blanket suppressions via `scripts/check_lint_suppressions.sh`.
 - Use specific lint names. Justify suppressions with a comment.
 

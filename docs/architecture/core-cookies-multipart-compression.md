@@ -11,7 +11,7 @@ Feature-gated behind `cookies`.
 ### RFC 6265 Implementation
 
 - **Parsing**: `Set-Cookie` response headers are parsed into `Cookie` structs.
-- **Storage**: `CookieJar` is a thread-safe store (uses `DashMap` internally).
+- **Storage**: `CookieJar` is a thread-safe store (`Arc<RwLock<JarInner>>` over a plain `HashMap`).
 - **Matching**: domain/path matching per RFC 6265 §5.1.4.
 - **Secure flag**: cookies with `secure=true` are only sent over HTTPS.
 - **Expiry**: `Max-Age=0` or past `Expires` removes the cookie. Negative `Max-Age` is treated as zero.

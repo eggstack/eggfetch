@@ -19,19 +19,21 @@ counts) is recorded in `plans/httpx-parity-correction-status.md`.
 ## Running Tests
 
 ```sh
-# Full Rust test suite
-cargo test --workspace --all-features
+# Full Rust test suite (single-threaded: resource-stabilization tests measure
+# process RSS and go flaky under concurrency)
+cargo test --workspace --exclude eggfetch-python --all-features -- --test-threads=1
 
 # Core only, all features
-cargo test -p eggfetch-core --all-features
+cargo test -p eggfetch-core --all-features -- --test-threads=1
 
-# Python tests (must build wheel first)
-cd crates/eggfetch-python && maturin develop
-python -m pytest -p pytest_asyncio
+# Python tests (rebuild the extension first; requires an active venv with
+# Python 3.10+, maturin, pytest, pytest-asyncio)
+PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1 maturin develop -m crates/eggfetch-python/Cargo.toml
+python -m pytest crates/eggfetch-python/tests/ -q --ignore=crates/eggfetch-python/tests/compat
 
 # HTTPX compatibility tests (requires httpx==0.28.1)
 pip install -r compat/httpx/0.28.1/requirements.txt
-EGGFETCH_COMPAT_REQUIRED=1 pytest crates/eggfetch-python/tests/compat/ -v --strict-markers
+EGGFETCH_COMPAT_REQUIRED=1 python -m pytest crates/eggfetch-python/tests/compat/ -v --strict-markers
 ```
 
 ## Feature-Gated Test Subsets
@@ -101,7 +103,7 @@ The compatibility test suite lives in `crates/eggfetch-python/tests/compat/` and
 | `fixtures.py` | Reusable test server and `BehaviorCase` dataclass |
 | `conftest.py` | Skip auditor; fails CI on unexplained skips |
 
-Run with `EGGFETCH_COMPAT_REQUIRED=1` for fail-closed behavior. The CI `compat-httpx` job enforces this.
+Run with `EGGFETCH_COMPAT_REQUIRED=1` for fail-closed behavior. Tier 2 (`tier2_full_compat`) enforces this.
 
 Compatibility profiles and allowed differences live in `compat/httpx/0.28.1/`. The corrective kernel also covers buffered/one-shot redirect replay, disabled and structured timeout conversion, request-local cookies, single query serialization, incremental response decoding, raw stream lifecycle (consumed state, byte accounting, chunk-size adaptation, exactly-once close), and fail-closed lint tooling.
 
@@ -159,7 +161,7 @@ Proptest property tests are colocated in `eggfetch-core` modules. They verify ro
 | Retry | Backoff calculation, Retry-After parsing |
 | PEM | Parse → serialize for CA bundles and client certs |
 | Timeout | State machine transitions |
-| Multipart | Boundary generation, encoder output |
+| Multipart | Boundary generation, encoder output (unit tests; no proptest usage in `multipart.rs`) |
 
 Property tests run on stable Rust:
 
@@ -212,14 +214,15 @@ cd fuzz && cargo +nightly fuzz build
 
 ## Python Tests
 
-CI matrix: Python 3.10–3.13 on Ubuntu, macOS, Windows (12 combinations).
+Routine CI tests use Python 3.12 on ubuntu-latest (single job, no matrix);
+wheel builds (`pypi.yml`) cover Python 3.10–3.13 across Linux/macOS/Windows.
 
 ```sh
-# Build and install
-cd crates/eggfetch-python && maturin develop
+# Build and install (from the repo root, inside the venv)
+PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1 maturin develop -m crates/eggfetch-python/Cargo.toml
 
 # Run tests
-python -m pytest -p pytest_asyncio
+python -m pytest crates/eggfetch-python/tests/ -q --ignore=crates/eggfetch-python/tests/compat
 ```
 
 CI must install `pytest-asyncio` explicitly.

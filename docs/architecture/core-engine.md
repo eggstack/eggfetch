@@ -6,6 +6,8 @@ See also: [overview.md](overview.md) for the high-level map.
 
 ## Module Map
 
+Focused subset for the engine lifecycle (client → request → pipeline → response). The full per-domain module reference lives in [overview.md](overview.md) with details in the sibling deep-dives.
+
 | Module | Public? | Purpose |
 |--------|---------|---------|
 | `client` | Yes | `Client`, `ClientBuilder` — entry point |
@@ -73,7 +75,7 @@ redirect-enabled first hop share one `HopBuildParams` builder, so `target`,
 
 ## Response
 
-`Response` wraps status, version, headers, URL, body, and redirect history.
+`Response` wraps status, version, headers, URL, body, redirect history, wire metadata (original content-encoding/length, reason phrase), trailers, and the optional 101 `network_stream`.
 
 Key methods:
 - `status()` → `StatusCode`
@@ -153,7 +155,7 @@ The `trace` module defines a typed event vocabulary (derived from httpcore 1.0.9
 
 ### Events
 
-`TraceEvent` has ten variants, each carrying a `TracePhase` (`Started`/`Complete`/`Failed`) plus structured metadata. Request/response header events are emitted consistently; DNS/connect/TLS phases are observed via `TransportMetrics` to avoid duplicate taxonomy (see `trace.rs` reconciliation docs):
+`TraceEvent` has ten variants, each carrying a `TracePhase` (`Started`/`Complete`/`Failed`) plus structured metadata where applicable (`Close`, `SendRequestBody`, `ReceiveResponseBody`, and `ResponseClosed` carry no extra fields). Request/response header events are emitted consistently; DNS/connect/TLS phases are observed via `TransportMetrics` to avoid duplicate taxonomy (see `trace.rs` reconciliation docs):
 
 | Event | Extra fields | httpcore dotted name |
 |-------|--------------|----------------------|

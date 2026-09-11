@@ -10,9 +10,9 @@ This document defines the process for handling security vulnerabilities in eggfe
 - Do not discuss vulnerability details in public issues, PRs, or discussions.
 - If the report arrives via a public issue, immediately close it and redirect the reporter to private communication.
 
-### 2. Acknowledge Within 48 Hours
+### 2. Acknowledge (Severity-Differentiated SLA)
 
-- Send a private acknowledgment to the reporter within 48 hours of receipt.
+- Send a private acknowledgment to the reporter within the SLA in `SECURITY.md` (Critical: 24 hours; High: 48 hours; Medium: 1 week; Low: 2 weeks).
 - Include a tracking identifier (e.g., `EF-YYYY-NNN`).
 - Confirm the preferred communication channel for follow-up.
 - Do not disclose details to anyone outside the core team during this phase.

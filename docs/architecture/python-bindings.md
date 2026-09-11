@@ -216,6 +216,7 @@ The facade owns all HTTPX-shaped API surfaces (URL, Headers, QueryParams, except
 | `eggfetch/compat/httpx/_response.py` | `Response` — metadata, status helpers, raise_for_status |
 | `eggfetch/compat/httpx/_client.py` | `Client` and `AsyncClient` — constructors, merge, build_request, send |
 | `eggfetch/compat/httpx/_ssl_context.py` | SSLContext snapshot, classification, construction fingerprint |
+| `eggfetch/compat/httpx/_diagnostics.py` | `diagnostics_summary` — redacted client diagnostics |
 
 ### httpx2 Facade Module Structure
 
@@ -232,7 +233,7 @@ The facade owns all HTTPX-shaped API surfaces (URL, Headers, QueryParams, except
 | `httpx2/_client.py` | Subclasses base clients + `query()`/`sse()`/`websocket()` |
 | `httpx2/_api.py` | Top-level helpers incl. `query` + `websocket` |
 | `httpx2/_headers.py` | Subclassed `Headers` with `\|`/`\|=` merge operators |
-| `httpx2/_config.py` | `Timeout` (message names httpx2) + SSE/WS defaults |
+| `httpx2/_config.py` | `Timeout` (message names httpx2) + SSE/WS defaults; re-exports `Limits` from the 0.28.1 facade |
 | `httpx2/_exceptions.py` | Re-exported hierarchy + `HTTPXDeprecationWarning` |
 | `httpx2/_status_codes.py` | RFC 9110 canonical `codes` + `DeprecationWarning` aliases |
 | `httpx2/_alias.py` | Explicit opt-in `alias_httpx()` only |

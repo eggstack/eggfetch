@@ -118,3 +118,4 @@ external reports. Each finding has a severity, status, and resolution.
 | Date | Auditor | Scope | Result |
 |------|---------|-------|--------|
 | 2026-07-16 | AI Agent | Security hardening plan implementation | 4 findings fixed, 1 deferred |
+| 2026-08-18 | AI Agent | TLS/proxy trust isolation + header redaction review | 3 findings fixed (F-006 High, F-007 High, F-008 Medium) |

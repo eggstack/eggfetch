@@ -82,7 +82,7 @@ Per-origin pool limits are keyed by a composite `OriginKey`:
 | Scenario | Key |
 |----------|-----|
 | Direct request | `(scheme, host, port)` |
-| Proxied request | `(proxy_origin, destination_origin, tunnel_mode)` |
+| Proxied request | `(proxy_origin, destination_origin, tunnel_mode)` — conceptual summary; the struct also carries `proxy_scheme`, so plain vs TLS-to-proxy routes get independent slots |
 
 Port uses the scheme's default when not explicit. Examples:
 - `http://example.com:80` and `http://example.com` share a limit.

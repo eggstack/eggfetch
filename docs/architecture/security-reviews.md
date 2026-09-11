@@ -28,7 +28,7 @@ This document records security review findings for each major subsystem of eggfe
 
 - **Key and cert storage**: `ClientIdentity` holds the certificate chain and private key in memory only.
 - **No key logging**: Private key material is never included in debug output, error messages, or repr diagnostics. Only the key-label identifier is referenced.
-- **Encrypted key rejection**: Encrypted PEM private keys produce an error at construction time. Only unencrypted PEM keys are supported.
+- **Encrypted key rejection**: Encrypted PEM private keys are rejected: `parse_private_key` only accepts `PRIVATE KEY` / `RSA PRIVATE KEY` / `EC PRIVATE KEY` blocks, so password-protected keys fail at construction time with `Error::PrivateKey`. Only unencrypted PEM keys are supported.
 - **Rustls negotiation**: The actual mTLS handshake is handled by rustls, which has a well-audited implementation.
 
 ### SNI and ALPN
@@ -159,7 +159,7 @@ No critical or high-severity findings. Proxy credentials are correctly isolated 
 
 ### Nested Compression
 
-- **Single layer only**: eggfetch decompresses a single layer of content encoding (e.g., gzip, deflate, brotli, zstd). Nested compression (e.g., gzip inside gzip) is not supported. This is consistent with HTTP semantics where `Content-Encoding` is a single layer.
+- **Bounded nesting**: eggfetch allows up to 4 chained content encodings (`MAX_NESTING_DEPTH = 4`); deeper chains are rejected. Each layer is bounded by the per-layer decompression-ratio limit, so nested zip-bombs stay contained.
 
 ### Findings
 
@@ -173,7 +173,7 @@ No critical or high-severity findings. Multipart boundary validation is thorough
 
 ### Method Safety
 
-- **Idempotent by default**: Only GET, HEAD, OPTIONS, PUT, and DELETE are retried by default. POST and PATCH are not retried unless the caller explicitly opts in.
+- **Idempotent by default**: Only GET, HEAD, and OPTIONS are retried by default. POST, PUT, PATCH, and DELETE are not retried unless the caller explicitly opts in.
 - **Explicit opt-in**: Callers can configure retry for any method, but the default policy is conservative.
 
 ### Body Replayability
@@ -185,7 +185,7 @@ No critical or high-severity findings. Multipart boundary validation is thorough
 ### Retry Budget
 
 - **Max retries**: Configurable via `RetryPolicy::max_retries()`. Default is a reasonable limit.
-- **Backoff**: Exponential backoff with jitter is applied between retries. The backoff computation uses `Retry-After` headers when present.
+- **Backoff**: Exponential backoff with jitter is applied between retries. The backoff computation uses `Retry-After` headers when present and enabled via `respect_retry_after(true)` (off by default).
 - **Budget enforcement**: The retry budget is enforced per-request. Once the budget is exhausted, no further retries are attempted.
 
 ### Deadline Handling

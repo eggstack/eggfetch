@@ -129,11 +129,11 @@ replayability is verified through one explicit operation:
 Exponential backoff with jitter:
 - Base delay × 2^attempt, capped at a maximum.
 - Jitter randomizes the delay to avoid thundering herd.
-- `Retry-After` header (both integer seconds and HTTP-date) is respected.
+- `Retry-After` header (both integer seconds and HTTP-date) is respected when enabled via `respect_retry_after(true)` (off by default).
 
 ### Context
 
 `RetryContext` provides:
-- `attempt` — current attempt number (0-based).
+- `attempt` — current attempt number (1-indexed).
 - `cause` — `RetryCause` enum (network error, status code, etc.).
 - `last_response` — the response that triggered the retry (if any).

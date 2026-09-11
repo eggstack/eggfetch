@@ -92,7 +92,7 @@ Proxy-only headers are applied as follows:
 
 ### Proxy Authentication
 
-`ProxyAuth` supports Basic and Bearer authentication for proxy connections.
+`ProxyAuth` supports Basic authentication for proxy connections.
 
 ### NO_PROXY
 

@@ -105,7 +105,7 @@ This checklist must be completed before any release of eggfetch. Each item has a
 - [ ] No secrets or keys committed to repository (check `git log --all --diff-filter=A` for sensitive files)
 - [ ] `.gitignore` covers private keys, certificates, and credential files
 - [ ] No hardcoded test credentials in source code (use environment variables or test fixtures)
-- [ ] SBOM generated (if tooling available): `cargo deny list --format json > sbom.json`
+- [ ] SBOM generated for information only, if tooling available (`cargo deny list --format json > sbom.json`) — not a publication gate (see `docs/releases/process.md` § "What This Process Does NOT Require")
 
 ## Release Process
 
@@ -120,7 +120,7 @@ This checklist must be completed before any release of eggfetch. Each item has a
 
 ## Release Artifacts
 
-- [ ] crates.io packages published in dependency order
+- [ ] crates.io packages published manually in dependency order (core → cli → ffi → python → node); pre-release `package`-tier validation fully covers only `eggfetch-core` (`cargo publish --dry-run`), dependents get package-structure validation until their deps are on the index
 - [ ] Python wheels built and published (if applicable)
 - [ ] Version tag created and pushed
 - [ ] GitHub Release created with release notes from CHANGELOG (optional)

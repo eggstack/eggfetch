@@ -18,10 +18,10 @@ See also: [overview.md](overview.md).
 | Handle | Thread Safety | Lifetime |
 |--------|--------------|----------|
 | `ClientBuilderHandle` | Single-thread, single-use | Consumed by `build()` or freed |
-| `ClientHandle` | `Send + Sync` (shared via `Arc`) | Process-long, freed explicitly |
+| `ClientHandle` | `Send + Sync` (wraps `Client`, which is itself thread-safe) | Process-long, freed explicitly |
 | `RequestHandle` | Single-thread, single-use | Consumed by `send()` or freed |
 | `ResponseHandle` | Single-thread, single-use | Freed after body is read |
-| `StreamingResponseHandle` | Single-thread, single-use | Freed after final chunk is read |
+| `StreamingResponseHandle` | Thread-safe shared state (`Arc<StreamState>`; cancel from one thread while `next` blocks on another) | Freed after stream is consumed or cancelled |
 | `ErrorHandle` | Single-thread, single-use | Freed after inspection |
 
 All handles are opaque pointers (`*mut eggfetch_ffi_client`, etc.).
@@ -60,23 +60,25 @@ This ensures the FFI works correctly from both sync C code and async-aware host 
 
 ```c
 // Create client
-eggfetch_ffi_client *client = eggfetch_client_new();
+ClientHandle *client = eggfetch_client_new();
 
-// Build request
-eggfetch_ffi_request *req = eggfetch_request_new(client, "GET", "https://example.com");
+// Build request (or use the verb helpers: eggfetch_client_get/post/...)
+RequestHandle *req = eggfetch_client_request(client, "GET", "https://example.com");
 
-// Send (blocking)
-eggfetch_ffi_response *resp = eggfetch_request_send(req);
+// Send (blocking, consumes req); on failure *err_out holds an ErrorHandle
+ResponseHandle *resp = eggfetch_client_send(client, req, &err);
 
-// Read body
-eggfetch_ffi_body_chunk chunk = eggfetch_response_read_body(resp);
+// Read body (out-params; buffer allocated with std::alloc)
+uint8_t *data; size_t len;
+eggfetch_response_body(resp, &data, &len);
 
 // Cleanup
-eggfetch_body_free(chunk.data);
+eggfetch_body_free(data, len);
 eggfetch_response_free(resp);
-eggfetch_request_free(req);
 eggfetch_client_free(client);
 ```
+
+Streaming uses `eggfetch_client_send_streaming` + `eggfetch_response_stream_next` (chunks are `StreamChunk`, freed with `eggfetch_stream_chunk_free`); errors are inspected via `eggfetch_error_kind`/`eggfetch_error_message` and freed with `eggfetch_error_free`.
 
 ## Node.js (`eggfetch-node`)
 

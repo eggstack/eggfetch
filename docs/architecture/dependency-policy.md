@@ -26,12 +26,14 @@ eggfetch-core has the following direct dependencies:
 - **url** -- URI parsing and query string serialization.
 - **thiserror** -- ergonomic error definitions.
 - **cookie** -- RFC 6265 cookie parsing and representation (optional, behind `cookies` feature).
+- **percent-encoding** -- percent-encoding for URL query strings and cookie values.
+- **tower-service** -- `Service` trait for transport connector abstraction (UDS, SOCKS, connect-timeout wrappers).
 - **base64** -- Basic authentication credential encoding.
-- **flate2** -- buffered gzip/deflate decompression for non-streaming response reads.
+- **flate2** -- buffered gzip/deflate decompression for non-streaming response reads (optional, behind `compression-gzip`/`compression-deflate`).
 - **getrandom** -- cryptographically secure random bytes for multipart boundary generation.
 - **httparse** -- low-level HTTP response parsing for proxy response status line and header extraction.
 - **httpdate** -- HTTP-date parsing for Retry-After header support.
-- **pem-rfc7468** -- PEM parsing for custom CA bundles and client certificates (optional, behind `tls-rustls` feature).
+- **pem-rfc7468** -- PEM parsing for custom CA bundles and client certificates.
 - **webpki-roots** -- packaged Mozilla/WebPKI root certificates as a fallback when native roots are unavailable.
 - **rustls-native-certs** -- platform-native certificate store loading for
   `TrustStore::NativeOnly` on platforms without a portable PEM bundle,
@@ -47,8 +49,8 @@ Features that are not core to HTTP/1.1 client behavior are optional and feature-
 - **encoding_rs** -- charset decoding for non-UTF-8 responses (eggfetch-python crate only).
 - **clap** -- CLI argument parsing (eggfetch-cli crate only).
 - **serde**, **serde_json** -- reserved for future Rust-native JSON serialization; not currently dependencies.
-- **async-compression**, **flate2** -- streaming and buffered decompression for gzip, brotli, deflate, and zstd (optional, behind compression features).
-- **tracing** -- reserved for structured logging; not currently a dependency.
+- **async-compression**, **tokio-util**, **brotli**, **zstd** -- streaming and buffered decompression for gzip, brotli, deflate, and zstd (optional, behind the respective compression features).
+- **tracing** -- structured logging (optional, behind `tracing`).
 
 These dependencies stay optional. They do not enter `default` features without discussion.
 
@@ -123,7 +125,9 @@ When a proxy is involved, the key extends to:
 
 - **`(proxy_origin, destination_origin, tunnel_mode)`**, where
   `tunnel_mode` is `true` for HTTPS CONNECT tunneling and `false` for
-  HTTP forward proxying. This means:
+  HTTP forward proxying. (Conceptual summary: the struct also carries
+  `proxy_scheme`, so plain vs TLS-to-proxy routes get independent slots.)
+  This means:
   - Direct and proxied requests to the same destination have independent
     concurrency slots.
   - Different proxies sharing the same destination get independent slots.

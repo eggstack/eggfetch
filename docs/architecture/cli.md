@@ -97,11 +97,11 @@ The CLI streams the response body via `Response::bytes_stream()` and writes chun
 |------|---------|
 | 0 | Success (HTTP errors included unless `--check-status`) |
 | 2 | CLI usage/configuration error |
-| 3 | DNS/connect/TLS/proxy transport error |
+| 3 | DNS/connect/TLS/pool/proxy transport error |
 | 4 | Timeout (any phase) |
 | 5 | Protocol/decompression/body limit error |
 | 6 | HTTP status failure (with `--check-status`) |
-| 7 | Output/file I/O error |
+| 7 | Hyper/network/file I/O error |
 | 130 | Interrupted (Ctrl-C) |
 
 ## File Output

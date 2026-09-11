@@ -12,7 +12,7 @@ See also: [overview.md](overview.md), [core-engine.md](core-engine.md).
 |---------|-------------|
 | `Empty` | No body (GET, HEAD, etc.) |
 | `Bytes(Bytes)` | Fixed buffer — fully known length |
-| `Stream { stream, length }` | Chunked upload — `length` is `Option<u64>` |
+| `Stream { stream, length }` | Chunked upload — `length` is `Option<usize>` |
 
 When `length` is `Some(n)`, the body is sent with `Content-Length`. When `None`, hyper selects a safe transfer mode (e.g., chunked transfer encoding for HTTP/1.1).
 
@@ -30,7 +30,7 @@ Stream bodies are wrapped in a hyper `StreamBody` and piped to the transport inc
 
 | Variant | Description |
 |---------|-------------|
-| `Buffered(Bytes)` | Collected body — fully in memory |
+| `Buffered { bytes }` | Collected body — fully in memory |
 | `Streaming(LeasedResponseStream)` | Live chunk stream with pool permit |
 | `EncodedStreaming` | Encoded source for streaming compressed responses; first body-consuming operation selects decoded vs raw mode one-shot |
 | `Consumed` | Body already consumed — second access returns error |
