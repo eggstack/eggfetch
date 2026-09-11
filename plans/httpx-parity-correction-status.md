@@ -30,12 +30,13 @@ independent non-Quinn server passes, independent GOAWAY/drain evidence,
 public-origin checks, realistic impairment execution, and unresolved upstream
 correctness risk. HTTP/3 status is separate from the HTTPX parity claims.
 
-Remote routine CI run `34578376515` passed on documentation descendant
-`c053fe0f7b504e7cbac29147afe7782bead030e1`. The push was a fast-forward from
-the frozen executable commit, so this run covers the same executable tree;
-the descendant audit below confirms only documentation, profile, and ledger
-files changed after `639bf18`. Documentation/profile/ledger descendants must
-not change executable files.
+Remote routine CI runs `34578376515` and `34579165931` passed on
+documentation/profile/ledger descendants `c053fe0f7b504e7cbac29147afe7782bead030e1`
+and `a5237f8c6316a3202591e73eb26b435f9dfe5303`, respectively. The pushes were
+fast-forwards from the frozen executable commit, so both runs cover the same
+executable tree; the descendant audit below confirms only documentation,
+profile, and ledger files changed after `639bf18`. Documentation/profile/ledger
+descendants must not change executable files.
 
 ## Historical state — qualification pending after HTTP/3 program changes (pre-freeze)
 

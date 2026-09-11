@@ -154,12 +154,11 @@ Record:
 
 Any executable change after freeze invalidates qualification and requires a new freeze.
 
-Execution record: the frozen executable commit `639bf18` and the
-documentation/profile/ledger descendant `c053fe0` were pushed in one
-fast-forward. Existing CI run `34578376515` passed on `c053fe0`; the
-descendant diff contains no executable files, so it is valid routine-CI
-evidence for the frozen executable tree. A final record-only descendant is
-being created after this run and will receive its own routine CI verification.
+Execution record: frozen executable commit `639bf18` and its
+documentation/profile/ledger descendants were pushed in fast-forwards.
+Existing CI runs `34578376515` (`c053fe0`) and `34579165931` (`a5237f8`)
+passed; the descendant diffs contain no executable files, so they are valid
+routine-CI evidence for the frozen executable tree.
 
 ## 9. Documentation truth pass
 
