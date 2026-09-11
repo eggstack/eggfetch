@@ -77,7 +77,7 @@ This `overview.md` is the entry point. For a focused review of any component, fo
 
 ### eggfetch-core (the engine)
 
-All HTTP behavior lives here. 26 source modules including `stream` and `transport` submodules. This is the single authority for networking — no other crate performs I/O.
+All HTTP behavior lives here. 26 top-level source modules plus the `transport` (11 submodules) and `stream` (3 submodules) trees. This is the single authority for networking — no other crate performs I/O.
 
 | Module | Public? | Purpose |
 |--------|---------|---------|

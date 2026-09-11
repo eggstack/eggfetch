@@ -139,9 +139,9 @@ close/cancel releases the body/pool lease); optional WebSocket
 101 `network_stream`, handshake via the normal pipeline, max-message
 enforced across fragments, proxy trust isolated).
 
-**Current status: Stage C qualified.** Next-scope requalification renewed the
-0.28.1 claim and earned the independent httpx2 2.12.0 claim, both bound to
-the exact executable SHA in their profiles. Proxy headers are forwarded on the proxy leg;
+**Current status: Stage C qualified for each facade independently.** Next-scope requalification renewed the
+0.28.1 claim (`eggfetch.compat.httpx`) and earned the independent httpx2 2.12.0 claim (`eggfetch.compat.httpx2`), each bound to
+its profile's exact executable SHA. Proxy headers are forwarded on the proxy leg;
 proxy ssl_context is translated to native TlsConfig; create_ssl_context
 returns a real ssl.SSLContext; SSLContext translation is fail-closed for
 unrepresentable state; H2-only mode is enforced on standard TLS, SNI

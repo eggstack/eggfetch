@@ -57,6 +57,43 @@ This redaction is applied at the type level, so secrets never appear in logs, er
 
 On cross-origin redirects, eggfetch strips the `Authorization`, `Cookie`, and `Proxy-Authorization` headers from the redirected request. This prevents credential leakage to third-party origins. The redirect engine determines origin by comparing the scheme, host, and port of the original and redirect URLs.
 
+### Alt-Svc / HTTP/3 origin handling (experimental)
+
+Alt-Svc advertisements never change security policy: learning requires
+authenticated HTTPS (verified TLS per policy, never
+`danger_accept_invalid_certs`), no proxy route, and a hop-local origin.
+Only `https` origins learn and only `h3` protocol IDs are recorded;
+plaintext, proxy, and cross-origin inputs are rejected before parsing.
+The alternative affects only UDP routing — `Host`, cookies, auth, and
+TLS verification always use the logical origin, and QUIC SNI stays the
+origin host (never the alternative). Oversized/malformed values fail
+closed with bounded parsing. H3 fallback replays only pre-commit
+replayable bodies; one-shot bodies never duplicate and `Http3Only`
+never falls back. Details live in
+`docs/architecture/core-tls-proxy-protocols.md`.
+
+### SSE / WebSocket bounds (httpx2 facade)
+
+`EventSource` bounds event buffering via `max_event_size` and releases
+the body/pool lease on close or cancel without whole-response
+buffering. WebSocket handshakes run through the normal client pipeline
+(proxy/SOCKS/TLS identical to requests); only a 101 response owns a
+writable `network_stream`, proxy headers never reach the origin, proxy
+endpoint TLS stays isolated from origin trust, and max-message is
+enforced across fragments in total with bounded buffers. Credentials
+stay redacted in SSE/WS diagnostics.
+
+### httpx2 hardening deltas
+
+The httpx2 facade keeps 0.28.1 semantics unchanged and adds explicit
+hardening behind profile boundaries: multipart part headers validated
+before bytes are emitted, chained decoders capped (native 4 vs
+reference 5, intentionally stricter) with close-on-failure releasing
+the body/pool lease, IPv6 CIDR `NO_PROXY` fixed without broadening
+malformed bypass, and `Headers` merge preserving redaction. See
+`docs/architecture/python-bindings.md` and
+`docs/architecture/core-cookies-multipart-compression.md`.
+
 ## Decompression Bomb Protection
 
 Compressed responses can expand to enormous sizes, allowing denial-of-service attacks through decompression bombs. eggfetch enforces two limits during streaming decompression:

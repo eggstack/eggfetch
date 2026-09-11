@@ -145,6 +145,42 @@ A malicious caller or compromised input source can craft multipart boundaries co
 - Validating custom boundaries via `Boundary::try_new()` -- rejects CR, LF, and whitespace.
 - Ensuring boundaries cannot appear in body content through length-aware framing.
 
+### Alt-Svc Route Injection (HTTP/3, experimental)
+
+A malicious server (or on-path HTTPS injector, if TLS is already
+compromised) can advertise `Alt-Svc` to steer later requests toward an
+attacker UDP endpoint. eggfetch mitigates this by treating Alt-Svc as
+routing-only, never policy:
+
+- Learning requires authenticated HTTPS (verified TLS per policy, never
+  `danger_accept_invalid_certs`), no proxy route, and a hop-local
+  origin; plaintext, proxy, and cross-origin inputs are rejected before
+  parsing (counted as rejected).
+- Only `https` origins learn and only `h3` IDs are recorded, with
+  bounded parsing (header/alternative/authority caps, `ma`/`clear`
+  handling); malformed, oversized, userinfo-injecting, or overflowing
+  values fail closed.
+- The alternative never changes `Host`, cookies, auth, or verification;
+  QUIC SNI stays the logical origin. Fallback replays only pre-commit
+  replayable bodies; one-shot bodies never duplicate.
+- Full policy lives in `core-tls-proxy-protocols.md` (§ Alt-Svc
+  Discovery, Suppression, Safe Fallback).
+
+### SSE / WebSocket Abuse (httpx2 facade)
+
+A malicious server can send unbounded SSE events or WebSocket frames to
+exhaust memory, or lure a client into exposing a pooled socket. The
+facade mitigates this at the application framing layer (core owns all
+network I/O; no second socket/TLS stack):
+
+- SSE bounds event buffering via `max_event_size`; close/cancel
+  releases the body and pool lease without whole-response buffering.
+- WebSocket handshakes run through the normal pipeline
+  (proxy/SOCKS/TLS identical to requests); only a 101 response owns a
+  writable `network_stream` (pooled responses and CONNECT tunnels
+  expose `None`); proxy headers never reach the origin; proxy TLS stays
+  isolated; max-message is enforced across fragments in total.
+
 ## Non-Goals
 
 The following attack classes are out of scope:
@@ -210,6 +246,21 @@ The Rust core does not read proxy environment variables. The HTTPX
 compatibility facade may translate them only when `trust_env=True`, with
 scheme-aware selection and `NO_PROXY` bypass. Native callers configure proxy
 state explicitly.
+
+### 13. Alt-Svc Never Changes Security Policy
+
+Alternative advertisements affect only UDP routing. `Host`, cookies,
+auth, verification, and QUIC SNI always use the logical origin;
+learning requires authenticated HTTPS with no proxy route. Malformed
+or cross-origin advertisements fail closed before parsing.
+
+### 14. SSE/WS Framing Is Bounded and Pipeline-Owned
+
+SSE events are bounded by `max_event_size` with lease release on
+close/cancel. WebSocket framing owns only the core 101
+`network_stream` returned by the normal pipeline, enforces max-message
+across fragments, isolates proxy trust, keeps proxy headers off the
+origin, and redacts credentials in diagnostics.
 
 ## Attack Tree Summary
 

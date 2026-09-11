@@ -425,10 +425,30 @@ client = eggfetch.Client(http3=True)
 response = client.get("https://example.com")
 ```
 
+HTTP/3 remains experimental; the graduation gate and named blockers
+live in `docs/architecture/core-tls-proxy-protocols.md`
+(§ "Production Graduation Decision"). The native `http3=True` switch
+selects discovery mode (`Auto { allow_http3: true }`): H1/H2 unless a
+fresh authenticated Alt-Svc `h3` entry is cached for the origin.
+Strict H3-only, proxy precedence (H3 never bypasses proxy rules),
+pre-commit replayable-only fallback, per-origin suppression/backoff,
+GOAWAY draining, and QUIC idle/stream-limit mapping all follow the
+core policy documented there. Transport events are observable via
+`Client::transport_metrics()` on the Rust side; per-response H3
+metadata stays `None`.
+
 The `stream_id` metadata field exposed by HTTPX is intentionally
 absent for H2 responses. See `docs/residual-differences.md` for the
 classification of HTTPX gaps and the differential tests that pin
 each behavior.
+
+Versioned compatibility facades are separate contracts:
+`eggfetch.compat.httpx` targets HTTPX 0.28.1 (Stage C) and
+`eggfetch.compat.httpx2` targets httpx2 2.12.0 (Stage C); HTTPX 1.0
+pre-releases are preview-only with no parity claim. Current SHAs and
+evidence live in `compat/httpx/0.28.1/profile.toml`,
+`compat/httpx2/2.12.0/profile.toml`, and
+`plans/httpx-parity-correction-status.md`.
 
 ## Error Handling
 

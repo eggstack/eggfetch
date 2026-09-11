@@ -108,6 +108,52 @@ The server and client cannot agree on a TLS version. Check that the server suppo
 - A GOAWAY frame means the server is closing the connection. The request may be retried.
 - `REFUSED_STREAM` resets are automatically retried by the retry subsystem.
 
+## HTTP/3 (experimental) Diagnostics
+
+HTTP/3 remains experimental; behavior follows
+`docs/architecture/core-tls-proxy-protocols.md`
+(§ "Production Graduation Decision"), which is authoritative.
+
+- **No H3 attempt despite `http3=True`**: discovery mode (`Auto`)
+  only selects H3 when a fresh authenticated Alt-Svc `h3` entry is
+  cached for the origin and not suppressed. No fresh entry means
+  H1/H2 by design; check `TransportMetrics` (`h3_attempted` vs
+  `h3_suppressed`) via `Client::transport_metrics()`.
+- **`H3Connect` / QUIC handshake failure**: only `H3Connect` is
+  retryable (replayable requests, via retry policy). `H3ConnectionClosed`,
+  `H3Stream`, and `H3Protocol` are not retried at the transport layer.
+  With UDP blocked, discovery-mode requests terminate within the
+  configured `connect`/`total` budget and fall back to H1/H2 only
+  pre-commit for replayable bodies; `Http3Only` never falls back.
+- **Repeated fast fallback skip**: per-origin broken-route suppression
+  with exponential backoff is working as intended. A changed
+  alternative authority/port creates a new generation that re-enables
+  without waiting; same-endpoint re-advertisement preserves
+  suppression. Timeouts and graceful GOAWAY drains never suppress.
+- **GOAWAY / draining**: the drained generation is evicted for the
+  *next* request while in-flight streams complete; the next request
+  reconnects (counted as `h3_reconnected`). Close codes are preserved
+  in diagnostics.
+- **Proxy/UDS/SNI routes win over H3**: H3 never bypasses proxy rules;
+  requests matching those routes never attempt QUIC.
+
+## SSE / WebSocket (httpx2 facade) Diagnostics
+
+- **SSE stalls or `max_event_size` errors**: `EventSource` is
+  Python-layer framing over a streamed response with a bounded event
+  buffer. An oversized event fails rather than buffering unboundedly;
+  closing or cancelling releases the body and pool lease.
+- **WebSocket `ImportError` for `wsproto`**: the WS surface is optional
+  by design; base installs stay lean. Install the WS extra
+  (`pip install httpx2[ws]`, i.e. wsproto) to use
+  `Client.websocket` / `httpx2.websockets.*`.
+- **WebSocket handshake/proxy failures**: handshakes run through the
+  normal client pipeline (proxy/SOCKS/TLS identical to requests) and
+  the writable stream comes only from a 101 `network_stream`.
+  Ordinary pooled responses and internal CONNECT tunnels expose `None`;
+  proxy headers never reach the origin and proxy TLS stays isolated
+  from origin trust. Message size is bounded across fragments in total.
+
 ## Decompression Errors
 
 ### Unsupported content encoding

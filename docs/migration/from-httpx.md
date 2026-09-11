@@ -284,6 +284,29 @@ r = client.get(url, retries=retry)
 r = client.get(url, retries=False)
 ```
 
+## Versioned compatibility facades (do not conflate)
+
+This guide above compares the native `eggfetch` Python API with HTTPX
+0.28.1 concepts. The pinned compatibility contracts are separate
+facades over the same Rust engine and must not be collapsed into one
+"HTTPX parity" claim:
+
+- `eggfetch.compat.httpx` targets HTTPX 0.28.1 (Stage C for the
+  documented Python 3.10+ asyncio surface; profile in
+  `compat/httpx/0.28.1/`, evidence in
+  `plans/httpx-parity-correction-status.md`).
+- `eggfetch.compat.httpx2` targets httpx2 2.12.0 as a sibling facade
+  (Stage C; profile in `compat/httpx2/2.12.0/`): `FunctionAuth`,
+  `Origin` + `URL.origin`, `QUERY`, `Headers` `|`/`|=`, truststore
+  OS-trust default, status aliases, plus SSE (`EventSource` over
+  streamed responses) and optional WebSocket (wsproto framing over the
+  core 101 `network_stream`). Importing one facade never mutates the
+  other.
+- `compat/httpx/1.0-preview/` tracks the original HTTPX 1.0 redesign
+  (`httpx==1.0.dev6`) as reconnaissance only, with no parity or
+  qualification claim. A future implementation program opens only on
+  the RC/stable trigger recorded in `plans/README.md`.
+
 ## Key differences summary
 
 | Feature | HTTPX 0.28.1 | eggfetch native Python | eggfetch `compat.httpx` facade |

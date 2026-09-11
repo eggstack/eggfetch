@@ -531,6 +531,51 @@ H2-only requests that reach an H1-only server fail with a
 The `stream_id` metadata field exposed by HTTPX is intentionally
 absent; see `docs/residual-differences.md`.
 
+### HTTP/3 (experimental, `http3` feature)
+
+HTTP/3 over QUIC remains experimental; the graduation gate, pinned
+versions, and named blockers live in
+`docs/architecture/core-tls-proxy-protocols.md`
+(§ "Production Graduation Decision"). The rules below summarize that
+document; it is authoritative on conflicts.
+
+```rust
+use eggfetch_core::{Client, HttpVersionPolicy};
+
+// Strict H3-only: direct QUIC, no discovery, no fallback, no suppression.
+let client = Client::builder()
+    .http_version_policy(HttpVersionPolicy::Http3Only)
+    .build();
+
+// Discovery mode: H1/H2 unless a fresh authenticated `h3` Alt-Svc entry
+// is cached for the origin and not suppressed.
+let client = Client::builder()
+    .http_version_policy(HttpVersionPolicy::Auto { allow_http3: true })
+    .build();
+```
+
+- `Http3Only` is strict direct: any H3 failure is returned, never
+  retried at the transport layer and never fallen back to H1/H2.
+- `Auto { allow_http3: true }` discovers via the bounded authenticated
+  Alt-Svc cache (`h3`-only, `ma`/`clear`, 64 entries); no fresh entry
+  means H1/H2. Safe fallback to H1/H2 happens only pre-commit for
+  replayable bodies (`Empty`/`Bytes`; one-shot streams never
+  duplicate) via an explicit dispatch error; `total`/`connect`/
+  `write`/`read` deadlines are reused, never restarted.
+- Broken routes are suppressed per origin with exponential backoff;
+  only route failures suppress, never timeouts or graceful drains.
+- H3 never bypasses proxy rules: UDS, specialized-direct,
+  proxy/SOCKS, and SNI routes are selected first.
+- GOAWAY draining evicts only the drained generation for the *next*
+  request; in-flight streams complete. Only `H3Connect` is retryable.
+- QUIC idle derives from `PoolConfig::idle_timeout` (default 30 s),
+  never `Timeout.pool`; bidi stream caps derive from the effective
+  per-origin in-flight limit (default 100). Creations, evictions,
+  Alt-Svc, attempted/suppressed/fallback/drain/close/reconnect events
+  are counted in `TransportMetrics` (`Client::transport_metrics()`).
+- Advanced QUIC features (0-RTT, WebTransport, datagrams, MASQUE,
+  connection migration) are not implemented in this milestone.
+
 ## Connection Pool Metrics
 
 Concurrency limits bound logical in-flight requests (one permit per
