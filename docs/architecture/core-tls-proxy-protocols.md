@@ -510,8 +510,8 @@ recovery, safe fallback with monotonic deadlines, draining reconnect,
 exact observability, and adversarial cases (plaintext/injection/oversized/
 stale/cancellation/clear, SNI preservation, one-shot non-replay).
 
-`tests/h3_interop_qualification.rs` (loopback only unless
-`EGGFETCH_H3_INTEROP_URLS` is set): mandatory Quinn self-interop,
+`tests/h3_interop_qualification.rs` (20 deterministic loopback controls;
+external cases are selected by the qualification runner): mandatory Quinn self-interop,
 GET/HEAD, buffered POST upload, 1 MiB streaming download, 20-way
 multiplexed concurrency, H3 trailers after EOF, UDP-blackhole
 connect-budget termination, bad-then-good non-poisoning,
@@ -520,8 +520,19 @@ with recovery, prompt cancellation, 100-request reuse soak,
 fail/reconnect stabilization, 70-origin boundedness beyond the
 64-entry cache, cancellation storms, construction/drop loops, exact
 metrics with truthful `None` H3 per-response metadata, IPv6
-capability detection, and a doc-pinned platform-scope check.
-External URLs get GET + HEAD when configured.
+capability detection, and a doc-pinned platform-scope check. The external
+adapter path can select GET/HEAD, buffered and streaming upload, large
+streaming download, trailers, multiplexing and reuse; server-controlled
+lifecycle cases remain unsupported unless an adapter can induce them.
+
+The implementation-neutral case contract is
+`qualification/http3/corpus.json`. Adapter manifests must capture an exact
+source revision or immutable image digest and are run by
+`scripts/h3_qualification.py`. Results retain pass/fail/unsupported status
+per implementation and per case in JSON; missing external servers never pass
+the gate. The qualification-only impairment contract is
+`qualification/http3/impairment-matrix.json`, coordinated by
+`scripts/h3_impairment.py` with a platform-specific namespace/netem runner.
 
 ### Dependency and Upstream-Risk Review (2026-09-10)
 
@@ -563,21 +574,22 @@ program freeze.
   capability detection. Alt-Svc alternative authority/port, suppression,
   safe fallback, and draining are covered in
   `h3_alt_svc_discovery.rs`.
-- External independent servers (ngtcp2/nghttp3, quiche, …) are supported
-  through `EGGFETCH_H3_INTEROP_URLS` with capability detection and
-  explicit skip reporting; absence is visible and is not graduation
-  evidence. When configured, the harness runs GET (drained body) plus
-  HEAD against each origin without changing EggFetch source. No
-  external-server pass is claimed in this milestone.
+- External independent servers (ngtcp2/nghttp3, quiche, quic-go, …) are
+  supported through the pinned adapter manifest and capability-selected
+  cases. Generic endpoint cases run through the same EggFetch client path;
+  server-controlled cancellation/reset/GOAWAY/restart cases remain
+  unsupported until the adapter supplies those controls. No external-server
+  pass is claimed in this milestone.
 - Real-network public-origin spot checks are manual qualification
   supplements, not Tier 1; none are claimed in this milestone. The
   manual procedure below is the qualification instrument when spot
   checks are run.
-- Impairment coverage is local and deterministic: UDP blackhole,
-  bad-then-good DNS-shape, server restart, early-close / mid-response
-  drop, cancellation during connect, cancellation storms.
-  Packet-loss/reordering/jitter rigs remain future work and are listed
-  as blockers below.
+- Deterministic local impairment coverage includes UDP blackhole,
+  bad-then-good origin behavior, server restart, early-close / mid-response
+  drop, cancellation during connect, and cancellation storms. The complete
+  required loss/reordering/jitter/duplication/MTU/address-family matrix is
+  represented in `qualification/http3/impairment-matrix.json`; execution
+  remains qualification-only and unsupported scenarios stay explicit.
 
 ### Manual Public-Origin Spot-Check Procedure (Tier 2/manual, not CI)
 
@@ -637,7 +649,8 @@ The objective gate in
 pass yet; concrete blockers:
 
 1. No two-independent-non-Quinn-server interoperability pass recorded
-   on the frozen SHA.
+   on the frozen SHA; the current evidence ledger is
+   `plans/http3-independent-interop-and-impairment-qualification-evidence.json`.
 2. No public-origin Alt-Svc spot-check ledger recorded.
 3. Impairment harness covers blackhole/restart/early-close/cancellation
    locally; packet-loss/reordering/jitter rigs remain future work.

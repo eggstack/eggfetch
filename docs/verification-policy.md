@@ -24,12 +24,19 @@ This document is the normative statement of CI, verification, and release policy
 | Required runner jobs per push/PR | 1 |
 | Routine CI matrices | 0 |
 | Routine CI artifact exchange | 0 |
-| Evidence schemas | 0 |
+| Automatic evidence schemas | 0 |
 | Workflow meta-validation | 0 |
 | Warm-cache target | < 10 minutes |
 | Cold-cache target | < 20 minutes |
 
 Any addition exceeding this budget requires a concrete regression history and explicit maintainer approval.
+
+Qualification-only evidence is separate from automatic CI: the HTTP/3
+program keeps versioned corpus, impairment, and result records under
+`qualification/http3/` and `plans/`, but routine CI neither downloads
+external servers nor consumes those records as a pass/fail gate. Missing or
+unsupported manual evidence remains visible and cannot be converted into a
+pass.
 
 ## Validation Tiers
 

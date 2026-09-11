@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "name": "eggfetch-http3-ordinary-client-corpus",
+  "description": "Implementation-neutral HTTP/3 client semantics used by local and independent-server qualification.",
+  "cases": [
+    {"id": "get", "required": true, "server_control": false, "assertion": "successful GET body is complete"},
+    {"id": "head", "required": true, "server_control": false, "assertion": "HEAD succeeds without a response body"},
+    {"id": "buffered_post", "required": true, "server_control": false, "assertion": "buffered POST body is accepted and response is complete"},
+    {"id": "streaming_upload", "required": true, "server_control": false, "assertion": "streaming request body is sent once and completely"},
+    {"id": "large_streaming_download", "required": true, "server_control": false, "assertion": "at least 1 MiB is consumed incrementally"},
+    {"id": "response_trailers", "required": true, "server_control": false, "assertion": "trailers are available only after body EOF"},
+    {"id": "multiplexed_requests", "required": true, "server_control": false, "assertion": "concurrent requests complete over reusable H3 state"},
+    {"id": "cancellation_before_headers", "required": true, "server_control": true, "assertion": "cancellation before response headers is prompt"},
+    {"id": "cancellation_during_upload", "required": true, "server_control": true, "assertion": "upload cancellation releases the stream and resources"},
+    {"id": "cancellation_during_download", "required": true, "server_control": true, "assertion": "download cancellation releases the stream and resources"},
+    {"id": "stream_reset", "required": true, "server_control": true, "assertion": "abrupt response termination is reported or bounded"},
+    {"id": "graceful_connection_close", "required": true, "server_control": true, "assertion": "graceful close preserves completed stream results"},
+    {"id": "goaway_reconnect", "required": true, "server_control": true, "assertion": "GOAWAY drains the generation and next work reconnects"},
+    {"id": "connection_reuse", "required": true, "server_control": false, "assertion": "repeated requests remain usable and bounded"},
+    {"id": "ipv4", "required": true, "server_control": false, "assertion": "IPv4 route succeeds when advertised"},
+    {"id": "ipv6", "required": true, "server_control": false, "assertion": "IPv6 route succeeds when advertised"},
+    {"id": "alternative_port", "required": true, "server_control": true, "assertion": "authenticated Alt-Svc alternative port is usable"},
+    {"id": "server_restart", "required": true, "server_control": true, "assertion": "a restarted server is reachable after stale state"}
+  ]
+}

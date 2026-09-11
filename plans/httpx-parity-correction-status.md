@@ -4,9 +4,18 @@ This record is the exact-SHA-bound status for the HTTPX 0.28.1 compatibility
 facade. Historical phase and corrective-pass records remain in the git history
 and referenced plans; counts below are only from the runs named here.
 
-## Current pass — Post-next-scope requalification and closure (2026-09-11)
+## Current state — qualification pending after HTTP/3 program changes (2026-09-11)
 
-Current designation: **Stage C qualified** for the documented Python 3.10+
+Current designation: **Stage C candidate — qualification pending**. The
+active HTTP/3 qualification program changed tests, validation tooling, and
+qualification inputs, so the previous exact-SHA binding must not be reused.
+The final HTTP/3 freeze plan must requalify both profiles on one clean
+executable SHA before restoring Stage C claims. The old `65beb...` record is
+retained below as historical evidence only.
+
+## Historical pass — Post-next-scope requalification and closure (2026-09-11)
+
+Historical designation: **Stage C qualified** for the documented Python 3.10+
 asyncio-supported HTTPX 0.28.1 surface, bound to the frozen
 executable SHA `65beb675a5380d3ff4291da6833b91ebf12c769a`. The sibling
 HTTPX2 2.12.0 facade is independently **Stage C qualified** on the same

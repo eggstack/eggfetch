@@ -29,6 +29,17 @@ eggfetch is a Rust-native HTTP client engine with Python bindings and a CLI tool
 - **CLI** -- full-featured HTTP client with streaming output, machine-readable formats, and shell completions
 - **Node.js (experimental prototype)** -- N-API binding with narrow guarantees (UTF-8 string bodies, buffered responses, unstructured errors, stub declarations); see [`docs/architecture/ffi-and-node.md`](docs/architecture/ffi-and-node.md)
 
+HTTP/3 remains experimental. The deterministic loopback controls run in the
+normal Rust test suite; independent-server, impairment, and public-origin
+qualification are opt-in and never routine CI dependencies. The machine-
+readable corpus and runners are in [`qualification/http3/`](qualification/http3/)
+and [`scripts/h3_qualification.py`](scripts/h3_qualification.py). See the
+[HTTP/3 production qualification plan](plans/http3-independent-interop-and-impairment-qualification.md)
+for the graduation gate and current evidence status. A local control-only
+run is `python3 scripts/h3_qualification.py --local-only --output
+/tmp/eggfetch-h3-local.json`; independent runs require pinned adapter
+manifests and are intentionally not part of CI.
+
 ## Installation
 
 **Python:**
@@ -249,11 +260,12 @@ single Rust engine. They coexist and never mutate each other.
 
 The compatibility profile is pinned in `compat/httpx/0.28.1/` with machine-readable API manifests, allowed-difference tracking, and a parity case registry.
 
-The facade is Stage C qualified for the documented Python ≥3.10
-asyncio-supported surface of HTTPX 0.28.1. Current evidence is bound to the
-exact executable SHA recorded in `compat/httpx/0.28.1/profile.toml` and
-`plans/httpx-parity-correction-status.md`; executable changes require fresh
-qualification.
+The facade was Stage C qualified for the documented Python ≥3.10
+asyncio-supported surface of HTTPX 0.28.1. That exact-SHA evidence is now
+historical while the active HTTP/3 qualification program changes executable
+tests and tooling; fresh qualification is required before restoring the
+Stage C claim. See `compat/httpx/0.28.1/profile.toml` and
+`plans/httpx-parity-correction-status.md`.
 
 Key differences from HTTPX:
 - Trio/AnyIO not supported (asyncio only, tokio-based)
@@ -350,9 +362,9 @@ Streaming protocols (done): SSE (`EventSource`, `ServerSentEvent`,
 Base installs never require WebSocket-only dependencies; the WS surface
 raises a clear `ImportError` (`pip install httpx2[ws]`, i.e. wsproto) when
 requested without support. Python 3.10–3.13 distribution scope; Pyodide/jsfetch and CLI extras are
-not applicable. Stage C qualified on the next-scope executable SHA
-recorded in `compat/httpx2/2.12.0/profile.toml` and
-`plans/httpx-parity-correction-status.md`.
+not applicable. The prior Stage C result is historical while the active
+HTTP/3 program is qualification-pending; the profile and live status ledger
+record the required fresh exact-SHA requalification.
 
 ### HTTPX 1.0 preview (no compatibility promise)
 

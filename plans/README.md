@@ -18,9 +18,19 @@ Plans 1 and 2 may overlap where implementation paths do not conflict, but both m
 
 Current H3 status remains **experimental** until the final gate passes. Graduation requires, among other evidence, the required corpus passing against at least two maintained non-Quinn H3 implementations, independent GOAWAY/drain evidence, current public-origin checks, realistic impairment results, bounded resource/soak behavior, and closure of upstream defects that can corrupt ordinary successful H3 operation. Missing evidence remains a blocker; it is never converted into a pass.
 
-The current HTTPX 0.28.1 and HTTPX2 2.12.0 Stage C profiles remain bound to executable SHA `65beb675a5380d3ff4291da6833b91ebf12c769a` until qualification-sensitive work from this program lands. Once source/tests/manifests/lockfile/scripts/package/qualification tooling changes, the new tree must be requalified per the final plan; do not update profile SHAs mid-program.
+The prior HTTPX 0.28.1 and HTTPX2 2.12.0 Stage C profiles were bound to
+executable SHA `65beb675a5380d3ff4291da6833b91ebf12c769a`; that binding is
+now historical because this program changed tests and qualification tooling.
+The profiles are Stage C candidates with empty current SHAs until the final
+plan freezes and requalifies the new executable tree.
 
 Explicitly out of scope for this program: 0-RTT, WebTransport, H3 datagrams, MASQUE/CONNECT-UDP, connection migration, and automatic H3-by-default policy changes.
+
+The current machine-readable evidence ledger is
+`http3-independent-interop-and-impairment-qualification-evidence.json`.
+The corpus and impairment contracts are under `../qualification/http3/`;
+they are qualification inputs, not routine CI gates. The ledger retains the
+experimental label until external evidence satisfies the parent gate.
 
 ## Completed program — HTTP/3 graduation and next HTTPX compatibility (2026-09-11)
 
@@ -28,9 +38,11 @@ Handoff program: `http3-and-next-httpx-compatibility-program.md`
 (completed 2026-09-11 on frozen executable SHA
 `65beb675a5380d3ff4291da6833b91ebf12c769a`).
 
-HTTPX 0.28.1 renewed Stage C and HTTPX2 2.12.0 earned Stage C on that
-SHA (evidence: `httpx-parity-correction-status.md`, the live ledger).
-HTTP/3 retained experimental with blockers; HTTPX 1.0 remains
+HTTPX 0.28.1 and HTTPX2 2.12.0 had renewed Stage C results on that SHA
+(evidence: `httpx-parity-correction-status.md`), but those results are now
+historical because the active qualification program changed executable tests
+and validation tooling. The profiles are pending fresh exact-SHA
+requalification. HTTP/3 retained experimental with blockers; HTTPX 1.0 remains
 preview-only. Child plans below are historical records:
 
 1. `http3-alt-svc-discovery-fallback-and-draining.md` — done.

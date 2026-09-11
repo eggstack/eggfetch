@@ -1,12 +1,13 @@
 # Compatibility Stage Decision
 
-**Current decision — Stage C qualified**
+**Current decision — Stage C candidate; fresh qualification pending**
 
 The documented Python 3.10+ asyncio-supported HTTPX 0.28.1 surface is
-qualified at the exact executable SHA recorded in
-`compat/httpx/0.28.1/profile.toml`. See that profile and
-`plans/httpx-parity-correction-status.md` for the current evidence. The
-historical candidate decision below is retained as audit history.
+not currently qualified on this executable tree. The prior exact-SHA result is
+historical because the active HTTP/3 qualification program changed executable
+tests and validation tooling. See `compat/httpx/0.28.1/profile.toml` and
+`plans/httpx-parity-correction-status.md` for the live status; the historical
+candidate decision below is retained as audit history.
 
 **Historical corrective closure — Verification, Substitution, and Lifecycle Pass**
 

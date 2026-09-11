@@ -53,4 +53,7 @@ docs/
 - Reference architecture docs from AGENTS.md using relative paths.
 - Ensure all internal links resolve.
 - All examples should be runnable or clearly marked as illustrative.
+- HTTP/3 qualification claims must point to the versioned corpus and evidence
+  ledger under `qualification/http3/` and `plans/`; unsupported or unexecuted
+  external cases must remain explicit.
 - Security-sensitive information belongs in `docs/security/` or `docs/architecture/`.

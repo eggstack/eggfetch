@@ -1,10 +1,10 @@
 # HTTPX 0.28.1 Compatibility Profile
 
 This directory contains the machine-readable compatibility profile for
-HTTPX 0.28.1. It is Stage C qualified against the exact executable SHA
-`65beb675a5380d3ff4291da6833b91ebf12c769a` recorded in `profile.toml`;
-current evidence is recorded in `plans/httpx-parity-correction-status.md`.
-Executable changes require fresh qualification.
+HTTPX 0.28.1. The prior Stage C result at executable SHA
+`65beb675a5380d3ff4291da6833b91ebf12c769a` is historical; the active HTTP/3
+qualification program changed executable tests and validation tooling. Fresh
+exact-SHA qualification is required before restoring the claim.
 
 ## Files
 

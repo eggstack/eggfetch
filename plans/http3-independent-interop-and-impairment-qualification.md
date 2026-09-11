@@ -7,6 +7,21 @@ Parent: `plans/http3-production-qualification-program.md`
 
 Replace the remaining self-interop-heavy HTTP/3 evidence with reproducible independent-stack and adverse-network qualification. The existing `tests/h3_interop_qualification.rs` Quinn/h3 fixtures remain mandatory controls; this plan adds evidence that EggFetch behaves correctly when the peer and network are not its own stack.
 
+## Implementation status
+
+The qualification contract is versioned in `qualification/http3/`:
+`corpus.json` defines the implementation-neutral cases and
+`impairment-matrix.json` defines the adverse-network scenarios. The opt-in
+dependency-free coordinators are `scripts/h3_qualification.py` and
+`scripts/h3_impairment.py`; they emit explicit pass/fail/unsupported JSON
+and never run from Tier 1. The current evidence records are
+`plans/http3-independent-interop-and-impairment-qualification-evidence.json`
+and `plans/http3-public-origin-spot-check-ledger.json`.
+
+At the current tree the 20 deterministic Quinn/h3 controls pass. Independent
+server, public-origin, and full impairment evidence remain open blockers; the
+HTTP/3 experimental label is therefore retained.
+
 ## 1. Define the qualification corpus once
 
 Create one implementation-neutral client corpus that can target local Quinn/h3 fixtures and externally supplied independent H3 servers without duplicating assertions per server.

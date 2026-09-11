@@ -36,7 +36,11 @@ Plans 1 and 2 may be developed in parallel where they do not touch the same exec
 
 ## Qualification-sensitive boundary
 
-The currently qualified HTTPX 0.28.1 and HTTPX2 2.12.0 executable binding is `65beb675a5380d3ff4291da6833b91ebf12c769a`. Any Rust/Python source, tests, manifests, lockfile, validation scripts, package configuration, dependency changes, or qualification tooling introduced by this program invalidates that executable binding for the new tree.
+The prior HTTPX 0.28.1 and HTTPX2 2.12.0 executable binding was
+`65beb675a5380d3ff4291da6833b91ebf12c769a`. Any Rust/Python source, tests,
+manifests, lockfile, validation scripts, package configuration, dependency
+changes, or qualification tooling introduced by this program invalidates that
+binding for the new tree. The profiles now record qualification pending.
 
 Therefore:
 

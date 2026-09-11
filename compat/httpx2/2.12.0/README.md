@@ -1,4 +1,4 @@
-# HTTPX2 2.12.0 Compatibility Profile (Stage C qualified)
+# HTTPX2 2.12.0 Compatibility Profile (Stage C candidate)
 
 This directory is the independent, versioned compatibility profile for
 `httpx2==2.12.0` (Pydantic's maintained HTTPX fork). It is a sibling of
@@ -6,9 +6,10 @@ This directory is the independent, versioned compatibility profile for
 the independently pinned HTTPX 0.28.1 contract and must not be rewritten
 to HTTPX2 semantics.
 
-Status: **Stage C qualified** on the frozen executable SHA
-`65beb675a5380d3ff4291da6833b91ebf12c769a` (2026-09-11; see `profile.toml`
-and `plans/httpx-parity-correction-status.md`). Implementation lives in
+Status: **qualification pending**. The prior Stage C result on executable SHA
+`65beb675a5380d3ff4291da6833b91ebf12c769a` is historical because the active
+HTTP/3 qualification program changed executable tests and validation tooling;
+see `profile.toml` and `plans/httpx-parity-correction-status.md`. Implementation lives in
 `eggfetch.compat.httpx2` (see
 `crates/eggfetch-python/python/eggfetch/compat/httpx2/`).
 

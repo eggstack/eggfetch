@@ -133,11 +133,14 @@ through the native `stream()` method.
   `test-util`-gated (`cache_len`, `contains_origin`, `is_draining_key`,
   `close_reason_key`); behavior tests live in `tests/h3_hardening.rs`,
   `tests/h3_alt_svc_discovery.rs`, and `tests/h3_interop_qualification.rs`
-  (loopback-only unless `EGGFETCH_H3_INTEROP_URLS` is set; absence is an
-  explicit skip, not evidence). HTTP/3 remains experimental; the graduation
-  gate, exact pinned versions, manual spot-check procedure, and named
-  blockers live in `docs/architecture/core-tls-proxy-protocols.md`
-  (§ "Production Graduation Decision").
+  (loopback controls; external endpoints are supplied only by the opt-in
+  qualification runner and absence is an explicit unsupported result, not
+  evidence). HTTP/3 remains experimental; the implementation-neutral corpus,
+  immutable adapter contract, machine-readable runner, and impairment matrix
+  live in `qualification/http3/` and `scripts/`. The graduation gate, exact
+  pinned versions, manual spot-check procedure, and named blockers live in
+  `docs/architecture/core-tls-proxy-protocols.md` (§ "Production Graduation
+  Decision").
 - Trailers: `SharedTrailers` is populated by `wrap_incoming` (H1/H2) and the
   H3 body unfold (via `recv_trailers`) without buffering; `Response::trailers()`
   is `None` until EOF, on no-trailers, or on pre-trailer body errors. H1
@@ -164,9 +167,10 @@ through the native `stream()` method.
 
 ## HTTPX Compatibility Layer
 
-`eggfetch.compat.httpx` targets HTTPX 0.28.1 (asyncio only; Stage C qualified).
-`eggfetch.compat.httpx2` targets httpx2 2.12.0 (sibling facade; Stage C qualified,
-profile in `compat/httpx2/2.12.0/profile.toml`). The two facades coexist; importing one
+`eggfetch.compat.httpx` targets HTTPX 0.28.1 (asyncio only; prior Stage C evidence is
+historical pending fresh exact-SHA requalification). `eggfetch.compat.httpx2` targets
+httpx2 2.12.0 (sibling facade; prior Stage C evidence is historical pending fresh
+exact-SHA requalification, profile in `compat/httpx2/2.12.0/profile.toml`). The two facades coexist; importing one
 never mutates the other. `compat/httpx/1.0-preview/` is reconnaissance only.
 
 Core facade parity (`plans/httpx2-2.12-core-facade-parity.md`, done):

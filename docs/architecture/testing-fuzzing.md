@@ -60,8 +60,8 @@ cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,ht
   partial-body drop reuse, client-drop release, and prompt cancellation
   with continued usability.
 - `tests/h3_alt_svc_discovery.rs`: Alt-Svc discovery/suppression/fallback/draining.
-- `tests/h3_interop_qualification.rs` (20 tests, loopback-only unless
-  `EGGFETCH_H3_INTEROP_URLS` is set): mandatory Quinn self-interop,
+- `tests/h3_interop_qualification.rs` (20 deterministic loopback controls;
+  external cases are opt-in through `scripts/h3_qualification.py`): mandatory Quinn self-interop,
   GET/HEAD, buffered POST upload, 1 MiB streaming download, 20-way
   multiplexed concurrency, H3 trailers after EOF, UDP-blackhole budget,
   bad-then-good non-poisoning, server-restart reconnect, early-close /
@@ -69,10 +69,18 @@ cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,ht
   100-request reuse soak, fail/reconnect stabilization, 70-origin
   boundedness beyond the 64-entry cache, cancellation storms,
   construction/drop loops, exact metrics with truthful `None` H3
-  metadata, IPv6 capability detection, and a doc-pinned
-  platform-scope check. External servers are optional with explicit
-  GET + HEAD coverage and skip reporting; absence is not graduation
-  evidence.
+  metadata, IPv6 capability detection, and a doc-pinned platform-scope
+  check. The external adapter path can select GET/HEAD, buffered and
+  streaming upload, large streaming download, trailers, multiplexing and
+  reuse; server-controlled lifecycle cases remain unsupported unless the
+  adapter can induce them. Adapter identity and every unsupported case are
+  retained in machine-readable results. Absence is not graduation evidence.
+
+The implementation-neutral corpus is `qualification/http3/corpus.json`.
+`scripts/h3_qualification.py` validates pinned adapter identity and runs the
+local controls plus selected independent-server cases. The impairment matrix
+is `qualification/http3/impairment-matrix.json`; its coordinator accepts a
+Linux namespace/netem or equivalent runner but is never part of Tier 1.
 
 ## HTTPX Compatibility Testing
 

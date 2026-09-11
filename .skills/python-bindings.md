@@ -72,7 +72,7 @@ EggfetchError
 
 ## HTTPX Compatibility Layer
 
-The `eggfetch.compat.httpx` module provides an HTTPX 0.28.1 compatibility facade over the eggfetch Rust engine (Stage C qualified for the documented asyncio surface at the exact SHA in `compat/httpx/0.28.1/profile.toml`). The sibling `eggfetch.compat.httpx2` module targets httpx2 2.12.0 (Stage C qualified at the exact SHA in `compat/httpx2/2.12.0/profile.toml`); the two facades coexist and importing one never mutates the other. Import paths:
+The `eggfetch.compat.httpx` module provides an HTTPX 0.28.1 compatibility facade over the eggfetch Rust engine (Stage C candidate; prior evidence is historical pending fresh exact-SHA requalification). The sibling `eggfetch.compat.httpx2` module targets httpx2 2.12.0 (also pending fresh exact-SHA requalification); the two facades coexist and importing one never mutates the other. Import paths:
 
 ```python
 from eggfetch.compat.httpx import Client, AsyncClient, Request, Response
@@ -126,7 +126,9 @@ tests `test_httpx2_api_parity.py` + `test_httpx2_behavior.py` (core),
   `plans/httpx-parity-correction-status.md`). Executable changes require a new exact-SHA qualification.
 - Closure evidence: typed difference records gated by `allowed-differences.toml`, lossless merge semantics (`crates/eggfetch-python/tests/compat/test_merge_lossless.py`), separate sync/async auth drivers, behavioral downstream fixtures (`compat/downstream/behavioral_fixtures/`), and native lifecycle proof fixtures (`test_native_timeout_classification.py`, `test_soak.py`, proxy and TLS tests).
 
-The facade is Stage C qualified for Python 3.10+ asyncio. Key boundaries:
+The facade is a Stage C candidate for Python 3.10+ asyncio until the active
+HTTP/3 program’s executable changes receive fresh exact-SHA requalification.
+Key boundaries:
 
 - Timeout conversion forwards only HTTPX's `connect`, `read`, `write`, `pool`; native `total` is EggFetch-only. The compat `Timeout` constructor uses a private `UNSET` sentinel so omitted phase values inherit the scalar while explicit `None` disables only that phase; `Timeout()` follows HTTPX validation and requires a scalar or all four phases.
 - `Proxy(headers=...)` is forwarded on the proxy leg (resolved in Phase 05).

@@ -160,9 +160,11 @@ Body kwargs (`content`, `data`, `json`) are mutually exclusive. `files` may comb
 
 Two versioned, independent facades share the single Rust engine:
 
-- `eggfetch.compat.httpx` — HTTPX 0.28.1 (Stage C; profile in
+- `eggfetch.compat.httpx` — HTTPX 0.28.1 (Stage C candidate; prior qualification
+  is historical pending fresh exact-SHA requalification; profile in
   `compat/httpx/0.28.1/`, ledger in `plans/httpx-parity-correction-status.md`).
-- `eggfetch.compat.httpx2` — httpx2 2.12.0 sibling (Stage C qualified;
+- `eggfetch.compat.httpx2` — httpx2 2.12.0 sibling (Stage C candidate; prior
+  qualification is historical pending fresh exact-SHA requalification;
   profile in `compat/httpx2/2.12.0/profile.toml`). Core facade adds `FunctionAuth`,
   `Origin` + `URL.origin`, `QUERY`, `Headers` merge operators, truststore
   OS-trust default, IPv6 CIDR `NO_PROXY` fix, decoder/multipart/WSGI
@@ -175,7 +177,11 @@ Two versioned, independent facades share the single Rust engine:
 - `compat/httpx/1.0-preview/` — original HTTPX 1.0 reconnaissance only;
   no implementation promise until an RC/stable trigger.
 
-The 0.28.1 facade is Stage C qualified for the documented Python 3.10+ asyncio-supported surface. The current qualification SHA, scope, and evidence live in `compat/httpx/0.28.1/profile.toml` and `plans/httpx-parity-correction-status.md`; phase/corrective plan documents below are historical records of how that state was reached, not the current claim.
+The 0.28.1 facade is a Stage C candidate for the documented Python 3.10+
+asyncio-supported surface. The prior qualification SHA is historical because
+the active HTTP/3 program changed executable tests and validation tooling;
+fresh exact-SHA evidence must be recorded in `compat/httpx/0.28.1/profile.toml`
+and `plans/httpx-parity-correction-status.md` before restoring the claim.
 
 ### Architecture Overview
 

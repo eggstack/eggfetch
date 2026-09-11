@@ -26,14 +26,16 @@
 
 //! HTTP/3 interoperability and production-graduation evidence.
 //!
-//! Parent program: `plans/http3-and-next-httpx-compatibility-program.md`
-//! Plan: `plans/http3-interoperability-and-production-graduation.md`
+//! Parent program: `plans/http3-production-qualification-program.md`
+//! Plan: `plans/http3-independent-interop-and-impairment-qualification.md`
 //!
 //! This suite is deterministic and local-only for Tier 1. External
 //! interoperability servers (ngtcp2/nghttp3, quiche, …) are exercised only
-//! when explicitly provided via `EGGFETCH_H3_INTEROP_URLS` (comma-separated
-//! `https://host:port/` origins with a trusted or `danger`-accepted cert).
-//! Absence is reported as an explicit skip and is NOT graduation evidence.
+//! when explicitly provided by the qualification runner through
+//! `EGGFETCH_H3_INTEROP_ENDPOINT` and capability-selected cases. The older
+//! comma-separated `EGGFETCH_H3_INTEROP_URLS` variable remains supported for
+//! manual compatibility. Absence is an explicit skip and is NOT graduation
+//! evidence.
 //!
 //! Graduation decision (this milestone): HTTP/3 remains **experimental**.
 //! Blockers are recorded in `docs/architecture/core-tls-proxy-protocols.md`
@@ -45,7 +47,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use bytes::Bytes;
-use eggfetch_core::{Client, HttpVersionPolicy, Timeout, TlsConfig};
+use eggfetch_core::{Client, HttpVersionPolicy, RequestBody, Timeout, TlsConfig};
 use futures_util::StreamExt;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
 use tokio::sync::watch;
@@ -349,6 +351,26 @@ fn h3_client_with_connect_timeout(d: Duration) -> Client {
         .build()
 }
 
+fn external_h3_client() -> Client {
+    let mut builder = Client::builder().http_version_policy(HttpVersionPolicy::Http3Only);
+    if std::env::var_os("EGGFETCH_H3_INTEROP_DANGER_ACCEPT_INVALID_CERTS").is_some() {
+        builder = builder.tls_config(
+            TlsConfig::builder()
+                .danger_accept_invalid_certs(true)
+                .build(),
+        );
+    }
+    builder.build()
+}
+
+fn external_case_enabled(case: &str) -> bool {
+    let cases = std::env::var("EGGFETCH_H3_INTEROP_CASES").unwrap_or_else(|_| "get,head".into());
+    cases
+        .split(',')
+        .map(str::trim)
+        .any(|candidate| candidate == case)
+}
+
 // ---------------------------------------------------------------------------
 // §2: Deterministic local interop harness + optional external servers
 // ---------------------------------------------------------------------------
@@ -369,8 +391,10 @@ async fn local_quinn_self_interop_get_and_body() {
 /// absence is an explicit skip, not graduation evidence.
 #[tokio::test(flavor = "multi_thread")]
 async fn external_h3_interop_servers_if_configured() {
-    let urls = std::env::var("EGGFETCH_H3_INTEROP_URLS").unwrap_or_default();
-    let urls: Vec<String> = urls
+    let configured = std::env::var("EGGFETCH_H3_INTEROP_ENDPOINT")
+        .or_else(|_| std::env::var("EGGFETCH_H3_INTEROP_URLS"))
+        .unwrap_or_default();
+    let urls: Vec<String> = configured
         .split(',')
         .map(str::trim)
         .filter(|s| !s.is_empty())
@@ -385,32 +409,147 @@ async fn external_h3_interop_servers_if_configured() {
         return;
     }
     for url in &urls {
-        let client = Client::builder()
-            .http_version_policy(HttpVersionPolicy::Http3Only)
-            .build();
-        let mut resp = client
-            .get(url)
-            .unwrap()
-            .send()
-            .await
-            .unwrap_or_else(|e| panic!("external h3 get {url} failed: {e:?}"));
-        assert!(
-            (200..400).contains(&resp.status().as_u16()),
-            "unexpected status for {url}"
-        );
-        // Drain body to prove streaming works against the external stack.
-        let _ = resp.text().await.expect("external body");
-        // HEAD proves method framing beyond GET without changing source.
-        let head_resp = client
-            .head(url)
-            .unwrap()
-            .send()
-            .await
-            .unwrap_or_else(|e| panic!("external h3 head {url} failed: {e:?}"));
-        assert!(
-            (200..400).contains(&head_resp.status().as_u16()),
-            "unexpected HEAD status for {url}"
-        );
+        let client = external_h3_client();
+        if external_case_enabled("get") {
+            let mut resp = client
+                .get(url)
+                .unwrap()
+                .send()
+                .await
+                .unwrap_or_else(|e| panic!("external h3 get {url} failed: {e:?}"));
+            assert!(
+                (200..400).contains(&resp.status().as_u16()),
+                "unexpected status for {url}"
+            );
+            let _ = resp.text().await.expect("external body");
+            eprintln!("H3_CORPUS_CASE get=pass endpoint={url}");
+        }
+        if external_case_enabled("head") {
+            let head_resp = client
+                .head(url)
+                .unwrap()
+                .send()
+                .await
+                .unwrap_or_else(|e| panic!("external h3 head {url} failed: {e:?}"));
+            assert!(
+                (200..400).contains(&head_resp.status().as_u16()),
+                "unexpected HEAD status for {url}"
+            );
+            eprintln!("H3_CORPUS_CASE head=pass endpoint={url}");
+        }
+        if external_case_enabled("buffered_post") {
+            let mut resp = client
+                .post(url)
+                .unwrap()
+                .body(vec![0x5a; 32 * 1024])
+                .send()
+                .await
+                .unwrap_or_else(|e| panic!("external h3 buffered POST {url} failed: {e:?}"));
+            assert!(
+                (200..400).contains(&resp.status().as_u16()),
+                "unexpected POST status for {url}"
+            );
+            let _ = resp.text().await.expect("external POST body");
+            eprintln!("H3_CORPUS_CASE buffered_post=pass endpoint={url}");
+        }
+        if external_case_enabled("streaming_upload") {
+            let chunks = (0..32)
+                .map(|_| Ok(Bytes::from(vec![0x33; 1024])))
+                .collect::<Vec<_>>();
+            let body =
+                RequestBody::from_stream(futures_util::stream::iter(chunks), Some(32 * 1024));
+            let mut resp = client
+                .post(url)
+                .unwrap()
+                .body(body)
+                .send()
+                .await
+                .unwrap_or_else(|e| panic!("external h3 streaming POST {url} failed: {e:?}"));
+            assert!(
+                (200..400).contains(&resp.status().as_u16()),
+                "unexpected streaming POST status for {url}"
+            );
+            let _ = resp.text().await.expect("external streaming POST body");
+            eprintln!("H3_CORPUS_CASE streaming_upload=pass endpoint={url}");
+        }
+        if external_case_enabled("large_streaming_download") {
+            let minimum = std::env::var("EGGFETCH_H3_INTEROP_MIN_DOWNLOAD_BYTES")
+                .ok()
+                .and_then(|value| value.parse::<usize>().ok())
+                .unwrap_or(1024 * 1024);
+            let mut resp = client
+                .get(url)
+                .unwrap()
+                .send()
+                .await
+                .unwrap_or_else(|e| panic!("external h3 streaming GET {url} failed: {e:?}"));
+            let mut stream = resp.bytes_stream().expect("external stream");
+            let mut total = 0usize;
+            while let Some(chunk) = stream.next().await {
+                total += chunk.expect("external stream chunk").len();
+            }
+            assert!(
+                total >= minimum,
+                "external body was {total} bytes, minimum is {minimum}"
+            );
+            eprintln!("H3_CORPUS_CASE large_streaming_download=pass endpoint={url}");
+        }
+        if external_case_enabled("response_trailers") {
+            let mut response = client
+                .get(url)
+                .unwrap()
+                .send()
+                .await
+                .unwrap_or_else(|e| panic!("external H3 trailers GET {url} failed: {e:?}"));
+            let _ = response.text().await.expect("external trailers body");
+            assert!(
+                response.trailers().is_some(),
+                "external response did not provide trailers"
+            );
+            eprintln!("H3_CORPUS_CASE response_trailers=pass endpoint={url}");
+        }
+        if external_case_enabled("multiplexed_requests") {
+            let mut handles = Vec::new();
+            for _ in 0..20u32 {
+                let client = client.clone();
+                let url = url.clone();
+                handles.push(tokio::spawn(async move {
+                    let mut response = client
+                        .get(&url)
+                        .unwrap()
+                        .send()
+                        .await
+                        .expect("external multiplexed request");
+                    let status = response.status();
+                    let _ = response.text().await.expect("external multiplexed body");
+                    status
+                }));
+            }
+            for handle in handles {
+                let status = handle.await.expect("external multiplexed task");
+                assert!(
+                    (200..400).contains(&status.as_u16()),
+                    "unexpected multiplexed status"
+                );
+            }
+            eprintln!("H3_CORPUS_CASE multiplexed_requests=pass endpoint={url}");
+        }
+        if external_case_enabled("connection_reuse") {
+            for _ in 0..20u32 {
+                let mut response = client
+                    .get(url)
+                    .unwrap()
+                    .send()
+                    .await
+                    .expect("external reuse request");
+                assert!(
+                    (200..400).contains(&response.status().as_u16()),
+                    "unexpected reuse status"
+                );
+                let _ = response.text().await.expect("external reuse body");
+            }
+            eprintln!("H3_CORPUS_CASE connection_reuse=pass endpoint={url}");
+        }
     }
 }
 

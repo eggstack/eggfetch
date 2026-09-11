@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "program": "http3-independent-interop-and-impairment-qualification",
+  "status": "not_run",
+  "qualification_sha": null,
+  "entries": [],
+  "entry_schema": {
+    "date_time_utc": "ISO-8601 UTC timestamp",
+    "hostname": "hostname only; no credentials, paths, or query strings",
+    "operator_or_cdn": "unrelated operator/CDN classification",
+    "h1_h2_discovery_status": "status code and authenticated Alt-Svc category/value",
+    "h3_used": "boolean plus observed route/protocol",
+    "body_integrity": "endpoint-appropriate integrity check",
+    "remote_address_family": "ipv4, ipv6, or unavailable",
+    "udp_unavailable_fallback": "pass, fail, or unsupported",
+    "transient_failure": "boolean",
+    "notes": "diagnostic notes without secrets"
+  },
+  "notes": "Populate on a frozen executable SHA. Public origins are never routine CI dependencies and a failed volatile check does not change deterministic test results."
+}

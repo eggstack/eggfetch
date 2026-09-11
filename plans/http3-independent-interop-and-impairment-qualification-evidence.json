@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "program": "http3-independent-interop-and-impairment-qualification",
+  "status": "blocked_pending_external_evidence",
+  "qualification_sha": null,
+  "generated_at": "2026-09-11T00:00:00Z",
+  "categories": {
+    "deterministic_local": {
+      "status": "pass",
+      "command": "cargo test -p eggfetch-core --all-features --test h3_interop_qualification -- --test-threads=1",
+      "cases_passed": 20,
+      "notes": "Quinn/h3 loopback controls pass; this is not independent-server graduation evidence."
+    },
+    "independent_servers": {
+      "status": "not_run",
+      "required_implementations": 2,
+      "passed_implementations": 0,
+      "notes": "Run scripts/h3_qualification.py with a manifest containing pinned, authenticated adapters."
+    },
+    "impairment": {
+      "status": "partial",
+      "deterministic_cases": ["udp_blackhole", "server_restart", "path_loss_after_headers", "cancellation_before_headers"],
+      "matrix_cases_not_run": ["udp_rejected", "packet_loss_low", "packet_loss_high", "latency_jitter", "packet_reordering", "packet_duplication", "reduced_mtu_pmtu_blackhole", "path_loss_during_upload", "first_address_unreachable", "ipv6_failure_ipv4_success", "ipv4_failure_ipv6_success"],
+      "notes": "The existing loopback tests prove bounded control behavior; namespace/netem execution remains manual and is never a Tier-1 dependency."
+    },
+    "public_origins": {
+      "status": "not_run",
+      "successful_origins": 0,
+      "notes": "No volatile public origin is embedded in routine tests. Record current checks in a frozen-SHA ledger before graduation."
+    },
+    "independent_drain_reset": {
+      "status": "not_run",
+      "notes": "Requires an adapter with controllable GOAWAY/reset behavior."
+    }
+  },
+  "graduation": {
+    "experimental_label_retained": true,
+    "blockers": [
+      "two independent non-Quinn implementations have not passed the corpus",
+      "independent GOAWAY/drain evidence is absent",
+      "three current public-origin checks are absent",
+      "loss/reordering/jitter/MTU/address-family impairment evidence is absent"
+    ]
+  }
+}

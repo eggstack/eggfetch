@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "name": "eggfetch-http3-impairment-matrix",
+  "description": "Qualification-only adverse-network scenarios. A runner must report pass, fail, or unsupported for every scenario.",
+  "scenarios": [
+    {"id": "udp_blackhole", "required": true, "invariants": ["bounded_connect_or_total_deadline", "Http3Only_does_not_fallback", "resources_released"]},
+    {"id": "udp_rejected", "required": true, "invariants": ["bounded_connect_or_total_deadline", "safe_auto_fallback_only_pre_commit", "resources_released"]},
+    {"id": "packet_loss_low", "required": true, "invariants": ["bounded_deadline", "no_body_duplication", "resources_released"]},
+    {"id": "packet_loss_high", "required": true, "invariants": ["bounded_deadline", "cancellation_prompt", "resources_released"]},
+    {"id": "latency_jitter", "required": true, "invariants": ["bounded_total_deadline", "no_permanent_cache_poisoning"]},
+    {"id": "packet_reordering", "required": true, "invariants": ["body_integrity", "no_body_duplication"]},
+    {"id": "packet_duplication", "required": true, "invariants": ["body_integrity", "no_body_duplication"]},
+    {"id": "reduced_mtu_pmtu_blackhole", "required": true, "invariants": ["bounded_deadline", "safe_auto_fallback_only_pre_commit"]},
+    {"id": "path_loss_after_headers", "required": true, "invariants": ["download_cancellation_or_error_bounded", "resources_released"]},
+    {"id": "path_loss_during_upload", "required": true, "invariants": ["upload_cancellation_or_error_bounded", "non_replayable_body_not_duplicated"]},
+    {"id": "server_restart", "required": true, "invariants": ["fresh_h3_recovery", "cache_not_permanently_poisoned"]},
+    {"id": "first_address_unreachable", "required": true, "invariants": ["later_address_reachable", "shared_connect_budget"]},
+    {"id": "ipv6_failure_ipv4_success", "required": true, "invariants": ["address_fallback", "body_integrity"]},
+    {"id": "ipv4_failure_ipv6_success", "required": true, "invariants": ["address_fallback", "body_integrity"]}
+  ]
+}

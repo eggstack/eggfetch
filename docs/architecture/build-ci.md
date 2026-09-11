@@ -53,6 +53,19 @@ See [verification-policy.md](../verification-policy.md) for the normative policy
 
 Run `./scripts/check.sh extended` for: full HTTPX compatibility, API manifest comparison, feature matrix, feature-gated tests, MSRV, docs, FFI, resource monitoring, lifecycle, soak, downstream, merge, and benchmarks. All executed checks are fail-closed. The only permitted skip is MSRV when the Rust 1.80 toolchain is not installed.
 
+### HTTP/3 Qualification (manual, not CI)
+
+The HTTP/3 corpus and impairment matrix are qualification-only inputs under
+`qualification/http3/`. `scripts/h3_qualification.py` requires immutable
+independent-server identity and emits per-case pass/fail/unsupported JSON;
+`scripts/h3_impairment.py` coordinates a supplied namespace/netem runner.
+Neither script runs from Tier 1 or adds a public-server dependency to CI.
+The current evidence and blockers are recorded in
+`plans/http3-independent-interop-and-impairment-qualification-evidence.json`.
+For a local control-only run use `python3 scripts/h3_qualification.py
+--local-only --output /tmp/eggfetch-h3-local.json`; an external run requires
+the pinned manifest contract in `qualification/http3/servers.example.json`.
+
 ### Package Validation (Tier 3)
 
 Run `./scripts/check.sh package` for: core publish dry-run (`cargo publish --dry-run -p eggfetch-core`), dependent-crate package-structure validation (`cargo package --list` plus structured internal dependency version verification via cargo metadata for eggfetch-cli, eggfetch-ffi, eggfetch-python, eggfetch-node), wheel build, exactly-one-wheel resolution, wheel smoke, and package content validation. Uses fresh temporary artifacts; stale repository wheels are never used. The worktree must be clean.

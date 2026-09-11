@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "description": "Copy this file to a private qualification manifest and replace every example value.",
+  "servers": [
+    {
+      "implementation": "ngtcp2-nghttp3",
+      "version": "record-released-version-or-source-date",
+      "identity": {"source_revision": "record-full-commit-or-image-digest"},
+      "endpoint": "https://h3.example.invalid/",
+      "capabilities": ["get", "head", "buffered_post", "streaming_upload", "large_streaming_download", "multiplexed_requests", "connection_reuse"],
+      "notes": "Use an authenticated certificate and a fixture endpoint implementing the declared cases. Do not use credentials or query strings in endpoint URLs."
+    },
+    {
+      "implementation": "quiche",
+      "version": "record-released-version-or-source-date",
+      "identity": {"image_digest": "sha256:record-full-image-digest"},
+      "endpoint": "https://h3.example.invalid/",
+      "capabilities": ["get", "head", "buffered_post", "streaming_upload", "large_streaming_download", "multiplexed_requests", "connection_reuse"],
+      "notes": "A second non-Quinn implementation is required for graduation; this example is not evidence until executed."
+    },
+    {
+      "implementation": "quic-go",
+      "version": "record-released-version-or-source-date",
+      "identity": {"source_revision": "record-full-commit-or-image-digest"},
+      "endpoint": "https://h3.example.invalid/",
+      "capabilities": ["get", "head"],
+      "notes": "Additional adapter diversity is encouraged; unsupported server-controlled cases remain explicit."
+    }
+  ]
+}

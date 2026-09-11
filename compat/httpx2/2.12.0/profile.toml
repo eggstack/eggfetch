@@ -3,22 +3,21 @@ schema-version = "1"
 generator = "eggfetch-compat-profile"
 version = "1"
 created = "2026-09-10"
-# Post-next-scope requalification: Stage C re-earned on the frozen executable
-# SHA `65beb675a5380d3ff4291da6833b91ebf12c769a` (2026-09-11) after the focused
-# gates, Tier 1, extended, package validation, three consecutive full
-# compatibility runs (covering both profiles), the shared API oracle with
-# zero unexplained deltas, behavior/security corpus, SSE lifecycle, and
-# optional WS surface (wsproto) all passed on the same SHA, with the
-# required downstream portfolio green and no 0.28.1 leakage. The prior
-# `cc90f5e...` (2026-09-10) evidence is historical only: H3 interop corpus
-# expansion, fuzz_alt_svc suppressor coverage, and parity truth passes
+# The prior Post-next-scope Stage C claim at `65beb675a5380d3ff4291da6833b91ebf12c769a`
+# is historical only. The HTTP/3 qualification corpus/runner and external
+# evidence tooling changed test/validation behavior, so exact-SHA policy
+# requires a fresh freeze and HTTPX requalification after the active H3 program
+# closes. Do not fill the current qualification SHA before those gates pass.
+# The prior `cc90f5e...` (2026-09-10) evidence is historical only: H3 interop
+# corpus expansion, fuzz_alt_svc suppressor coverage, and parity truth passes
 # invalidated it per the exact-SHA rule. Independent
 # of the HTTPX 0.28.1 Stage C claim on the same SHA; neither profile
 # mutates the other.
-stage = "stage-c-qualified"
-status = "stage-c-qualified"
-qualification-sha = "65beb675a5380d3ff4291da6833b91ebf12c769a"
-qualification-date = "2026-09-11"
+stage = "stage-c-candidate"
+status = "qualification-pending-http3-program"
+qualification-sha = ""
+qualification-date = ""
+historical-current-qualification-sha = "65beb675a5380d3ff4291da6833b91ebf12c769a"
 reference = "httpx2==2.12.0"
 
 [reference]
