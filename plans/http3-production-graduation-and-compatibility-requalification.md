@@ -154,6 +154,13 @@ Record:
 
 Any executable change after freeze invalidates qualification and requires a new freeze.
 
+Execution record: the frozen executable commit `639bf18` and the
+documentation/profile/ledger descendant `c053fe0` were pushed in one
+fast-forward. Existing CI run `34578376515` passed on `c053fe0`; the
+descendant diff contains no executable files, so it is valid routine-CI
+evidence for the frozen executable tree. A final record-only descendant is
+being created after this run and will receive its own routine CI verification.
+
 ## 9. Documentation truth pass
 
 After the executable qualification is fixed, update only documentation/profile/ledger files as needed:
@@ -191,11 +198,11 @@ does not constitute HTTP/3 graduation.
 
 ## Exit criteria
 
-- [ ] prerequisite child plans are fully audited;
-- [ ] one clean exact executable SHA is frozen;
-- [ ] independent interop, impairment, upstream-risk, resource and diagnostic evidence is recorded;
-- [ ] objective H3 graduation decision is made without waiver-by-wording;
-- [ ] HTTPX 0.28.1 and HTTPX2 2.12.0 Stage C are renewed on the frozen executable SHA if qualification-sensitive changes occurred;
-- [ ] remote CI and post-freeze descendant audit are recorded;
-- [ ] documentation and plan index reflect the final truth;
-- [ ] no active blocker is hidden behind a completed-plan label.
+- [x] prerequisite child plans are fully audited;
+- [x] one clean exact executable SHA is frozen;
+- [x] independent interop, impairment, upstream-risk, resource and diagnostic evidence is recorded;
+- [x] objective H3 graduation decision is made without waiver-by-wording;
+- [x] HTTPX 0.28.1 and HTTPX2 2.12.0 Stage C are renewed on the frozen executable SHA if qualification-sensitive changes occurred;
+- [x] remote CI and post-freeze descendant audit are recorded;
+- [x] documentation and plan index reflect the final truth;
+- [x] no active blocker is hidden behind a completed-plan label.

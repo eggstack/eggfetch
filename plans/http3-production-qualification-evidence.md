@@ -4,6 +4,12 @@ Date: 2026-09-11
 Frozen executable SHA: `639bf186a71c054e11278d1b160ffe7a6f172c02`
 Decision: **experimental retained**
 
+Routine remote CI: GitHub Actions run `34578376515` passed on
+`c053fe0f7b504e7cbac29147afe7782bead030e1`, a documentation/profile/ledger-only
+descendant of the frozen executable SHA. No direct workflow event was emitted
+for the intermediate freeze commit because both commits were pushed in one
+fast-forward; the descendant audit proves executable identity.
+
 This is the final-plan evidence record for the frozen executable tree. It
 separates evidence that was executed from evidence that was unavailable. A
 passing local Quinn fixture or an unavailable external implementation does
