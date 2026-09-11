@@ -29,7 +29,7 @@ Use this skill when working on the eggfetch-ffi or eggfetch-node crates.
 | `ClientHandle` | `Send + Sync` (shared via `Arc`) | Process-long, freed explicitly |
 | `RequestHandle` | Single-thread, single-use | Consumed by `send()` or freed |
 | `ResponseHandle` | Single-thread, single-use | Freed after body is read |
-| `StreamingResponseHandle` | Single-thread, single-use | Freed after final chunk is read |
+| `StreamingResponseHandle` | Thread-safe shared state (`Arc<StreamState>`; cancel from one thread while `next` blocks on another) | Freed after stream is consumed or cancelled |
 | `ErrorHandle` | Single-thread, single-use | Freed after inspection |
 
 ## Runtime Bridge

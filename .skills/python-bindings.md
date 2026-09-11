@@ -11,10 +11,14 @@ Use this skill when working on the eggfetch-python crate (PyO3/maturin bindings)
 ## Building and Testing
 
 ```sh
-cd crates/eggfetch-python
-maturin develop
-python -m pytest -p pytest_asyncio
+PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1 maturin develop -m crates/eggfetch-python/Cargo.toml
+python -m pytest crates/eggfetch-python/tests/ -q --ignore=crates/eggfetch-python/tests/compat
 ```
+
+Requires an active venv with Python 3.10+, maturin, pytest, pytest-asyncio
+(`check.sh` refuses to run without it). Rebuild after every Rust change in
+`crates/eggfetch-python` — a stale `.so` causes confusing failures.
+Tier 2 compat runs `EGGFETCH_COMPAT_REQUIRED=1 pytest .../compat/ -v --strict-markers`.
 
 CI must install `pytest-asyncio` explicitly. The `PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1` env var is required.
 

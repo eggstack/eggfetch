@@ -49,10 +49,10 @@ The goal is to make the gap between current state and final implementation obvio
 
 ## Testing
 
-Tests live next to the code they cover, using `#[cfg(test)] mod tests` blocks within the same file. Run the full suite with:
+Tests live next to the code they cover, using `#[cfg(test)] mod tests` blocks within the same file. Integration tests live in `crates/eggfetch-core/tests/` (loopback fixtures only, no public internet). Run the full suite single-threaded (resource-stabilization tests measure process RSS and go flaky under concurrency):
 
 ```sh
-cargo test --workspace --all-features
+cargo test --workspace --exclude eggfetch-python --all-features -- --test-threads=1
 ```
 
 Prefer small, focused tests that exercise one behavior. Test counts change
@@ -62,38 +62,24 @@ counts for the qualified SHA) is recorded in
 
 ### Python tests
 
-Python tests require the wheel to be built first:
+Python tests require an active venv (Python 3.10+, maturin, pytest, pytest-asyncio) and a fresh extension build — stale `.so` files cause confusing failures:
 
 ```sh
-cd crates/eggfetch-python
-maturin develop
-python -m pytest -p pytest_asyncio
+PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1 maturin develop -m crates/eggfetch-python/Cargo.toml
+python -m pytest crates/eggfetch-python/tests/ -q --ignore=crates/eggfetch-python/tests/compat
 ```
 
-Run differential tests against pinned versions of `requests` and `HTTPX`:
+Run differential tests against the pinned HTTPX references (Tier 2):
 
 ```sh
-python -m pytest tests/test_differential.py -p pytest_asyncio
+EGGFETCH_COMPAT_REQUIRED=1 python -m pytest crates/eggfetch-python/tests/compat/ -v --strict-markers
 ```
 
 ### Validation pass
 
-The full validation pass (used before release) runs feature-gated compilation and test subsets:
+The full validation pass is `./scripts/check.sh` (Tier 1) plus `./scripts/check.sh extended` (Tier 2) before release. Tier 2 runs the feature-gated subsets from `scripts/check.sh` (`tier2_feature_matrix` + `tier2_feature_tests`); see `docs/architecture/feature-flags.md` for the exact matrix. Manual extras (not Tier 2 gates):
 
 ```sh
-cargo check -p eggfetch-core --no-default-features
-cargo check -p eggfetch-core --no-default-features --features http1,tls-rustls
-cargo check -p eggfetch-core --all-features
-cargo test -p eggfetch-core --all-features
-cd crates/eggfetch-python
-maturin develop
-python -m pytest -p pytest_asyncio
-maturin build
-cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,compression-gzip
-cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,compression-brotli
-cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,compression-zstd
-cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,compression-deflate
-cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,proxy
 cargo check -p eggfetch-core --no-default-features --features http1,tls-rustls,http3
 cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,http3
 ```
@@ -114,37 +100,22 @@ See `docs/architecture/dependency-policy.md` for the full dependency policy.
 
 Do not add a feature flag just to silence a clippy lint or to opt into behavior that should be unconditional. Feature flags exist to let users pay only for what they use. Do not enable optional behavior in `default` without discussion.
 
-Current `eggfetch-core` feature declarations:
+Current `eggfetch-core` feature declarations (see `crates/eggfetch-core/Cargo.toml` for the exact dependency mapping):
 
 ```toml
 default = ["http1", "tls-rustls"]
-http1 = []
-http2 = []
-http3 = []
-tls-rustls = []
-json = []
-compression-gzip = []
-compression-brotli = []
-compression-zstd = []
-compression-deflate = []
-cookies = []
-proxy = []
-multipart = []
-tracing = []
-test-util = []
+# http1/http2/http3, tls-rustls, json (reserved), compression-gzip/brotli/zstd/deflate,
+# cookies, proxy, multipart, tracing (optional), test-util (internal)
 ```
 
-All feature flags are declared. `cookies`, `proxy`, and `multipart` are
-opt-in in core and enabled by the Python binding and CLI. `http3` is
-experimental. `tracing` and `json` are reserved stubs with no gated code
-yet. `test-util` enables `tokio/test-util` for deterministic time testing.
+`cookies`, `proxy`, and `multipart` are opt-in in core. CLI enables cookies/multipart/proxy; Python enables http2/http3/cookies/multipart/proxy plus all compressions. `http3` is experimental. `json` is reserved (Python delivers JSON via `json.dumps()`); `tracing` is an optional structured-logging gate; `test-util` enables `tokio/test-util` for deterministic time testing.
 See `docs/architecture/feature-flags.md` for details.
 
 ## Compatibility Expectations
 
 The Rust API stays idiomatic. Do not shape the Rust API to mirror Python conventions. The Rust `Client` should feel like a natural async Rust HTTP client, not a port of `httpx`.
 
-The Python sync API must block on the async Rust engine and release the GIL during blocking operations. The Python async API targets asyncio first. Trio/AnyIO support is a later goal, not an MVP requirement.
+The Python sync API must block on the async Rust engine and release the GIL during blocking operations. The Python async API targets asyncio only. Trio/AnyIO remain out of scope (see `docs/reference/compatibility.md`).
 
 ## No Duplicate Networking
 

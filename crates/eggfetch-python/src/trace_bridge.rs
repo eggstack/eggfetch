@@ -116,9 +116,10 @@ impl PyTraceObserver {
     /// request future uses to surface callback errors.
     ///
     /// Async callables (detected via `inspect.iscoroutinefunction`)
-    /// cannot be driven from a sync request future, so we record a
-    /// `NotAwaited` error eagerly.  The `AsyncClient` accepts them but
-    /// must drive the coroutine itself.
+    /// cannot be driven from the synchronous core `TraceObserver`, so we
+    /// record a `NotAwaited` error eagerly. Both sync `Client` and
+    /// `AsyncClient` reject coroutine callbacks with `TypeError` before
+    /// dispatch.
     pub(crate) fn new(py: Python<'_>, callback: Bound<'_, PyAny>) -> (Self, CallbackErrorSlot) {
         let is_async = py
             .import("inspect")
@@ -226,7 +227,8 @@ fn build_info_dict<'py>(py: Python<'py>, event: &TraceEvent) -> PyResult<Bound<'
 ///
 /// Callback errors map to `RuntimeError` with the captured message;
 /// the not-awaited error is reported as `TypeError` because the bug is
-/// in how the callable was supplied.
+/// in how the callable was supplied (coroutine callbacks are rejected on
+/// both sync and async APIs).
 pub(crate) fn bridge_error_to_pyerr(err: TraceBridgeError) -> PyErr {
     match err {
         TraceBridgeError::Callback(pyerr) => pyerr,

@@ -38,7 +38,10 @@ EGGFETCH_COMPAT_REQUIRED=1 python -m pytest crates/eggfetch-python/tests/compat/
 
 ## Feature-Gated Test Subsets
 
-Pre-release validation runs feature-gated subsets to ensure each feature compiles and tests independently:
+Tier 2 (`tier2_feature_tests` in `scripts/check.sh`) runs each of these
+independently to ensure every feature compiles and tests in isolation.
+This list must match the script — the `http3` and `multipart` combos below
+are manual checks, not Tier 2 gates:
 
 ```sh
 cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,compression-gzip
@@ -46,6 +49,11 @@ cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,co
 cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,compression-zstd
 cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,compression-deflate
 cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,proxy
+```
+
+Manual only:
+
+```sh
 cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,http3
 ```
 

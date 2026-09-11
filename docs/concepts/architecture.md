@@ -27,7 +27,7 @@ A command-line binary that wraps eggfetch-core. It handles argument parsing, ter
 
 ### eggfetch-ffi
 
-C ABI bindings exposing eggfetch-core over a stable C interface. Uses opaque handle patterns and `extern "C"` functions. This crate uses `unsafe_code = "allow"` — the sole exception to the workspace `forbid` policy.
+C ABI bindings exposing eggfetch-core over a stable C interface. Uses opaque handle patterns and `extern "C"` functions. This crate uses `unsafe_code = "allow"` — one of two workspace exceptions (the other is `eggfetch-node`) for checked FFI/N-API boundaries.
 
 ### eggfetch-node
 
@@ -82,8 +82,8 @@ eggfetch-core uses feature flags to keep the default build small. The Python cra
 | `compression-brotli` | Brotli decompression |
 | `compression-zstd` | Zstandard decompression |
 | `compression-deflate` | deflate decompression |
-| `json` | Reserved for future Rust-native JSON |
-| `tracing` | Structured logging (planned) |
+| `json` | Reserved for future Rust-native JSON (Python uses `json.dumps()`) |
+| `tracing` | Optional structured logging gate |
 | `test-util` | Deterministic time testing (internal) |
 
 See [feature-flags.md](../architecture/feature-flags.md) for the full validation matrix and compilation rules.

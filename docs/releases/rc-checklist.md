@@ -8,6 +8,7 @@ Optional maintainer checklist for release preparation. This is not a required ga
 - [ ] CHANGELOG.md updated with release section
 - [ ] Worktree is clean
 - [ ] `./scripts/check.sh` passes
+- [ ] `./scripts/check.sh extended` passes (before release)
 - [ ] `./scripts/check.sh package` passes
 - [ ] Package contents reviewed
 

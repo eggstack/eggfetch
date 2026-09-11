@@ -12,6 +12,14 @@ Use this skill when writing, modifying, or reviewing Rust code in the eggfetch w
 
 ```sh
 ./scripts/check.sh              # Tier 1: routine validation (CI runs this)
+```
+
+`check.sh` already runs `cargo fmt --check`, lint-suppression policy,
+`cargo clippy --workspace --all-targets --all-features -- -D warnings`,
+workspace tests single-threaded, the Python build/tests, the compat smoke
+kernel, and the Node prototype check. Focused equivalents (same flags):
+
+```sh
 cargo fmt --all
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo test --workspace --exclude eggfetch-python --all-features -- --test-threads=1
@@ -28,14 +36,20 @@ cargo test --workspace --exclude eggfetch-python --all-features -- --test-thread
 
 ## Feature Matrix Validation
 
-Before committing changes to eggfetch-core, verify compilation across feature combinations:
+Tier 2 (`tier2_feature_matrix` + `tier2_feature_tests` in `scripts/check.sh`)
+is the authority. Before release it runs:
 
 ```sh
 cargo check -p eggfetch-core --no-default-features
 cargo check -p eggfetch-core --no-default-features --features http1,tls-rustls
-cargo check -p eggfetch-core --no-default-features --features http1,tls-rustls,http3
 cargo check -p eggfetch-core --all-features
+# plus tier2_feature_tests: gzip/brotli/zstd/deflate/proxy subsets
 ```
+
+See `docs/architecture/feature-flags.md` for the exact matrix. The
+`http3` and `multipart,proxy` combos there are manual checks, not Tier 2
+gates — do not add new CI combinations without explicit maintainer
+approval (see `docs/verification-policy.md`).
 
 ## HTTP/3 Constraints
 

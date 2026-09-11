@@ -150,18 +150,23 @@ Enables `tokio/test-util` for deterministic time testing. This feature is for in
 
 The repository validates the following core combinations via Tier 2
 (`./scripts/check.sh extended`: `tier2_feature_matrix` + `tier2_feature_tests`)
-before a release:
+before a release. This list must match `scripts/check.sh` exactly — do not
+add combinations here without updating the script (and vice versa):
 
 ```text
 cargo check -p eggfetch-core --no-default-features
 cargo check -p eggfetch-core --no-default-features --features http1,tls-rustls
 cargo check -p eggfetch-core --all-features
-cargo test -p eggfetch-core --all-features
 cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,compression-gzip
 cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,compression-brotli
 cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,compression-zstd
 cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,compression-deflate
 cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,proxy
+```
+
+Manual (not Tier 2 gates) compile checks for other combinations:
+
+```text
 cargo check -p eggfetch-core --no-default-features --features http1,tls-rustls,multipart,proxy
 cargo check -p eggfetch-core --no-default-features --features http1,tls-rustls,http3
 cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,http3

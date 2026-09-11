@@ -35,11 +35,13 @@ PyPI uses Trusted Publishing (OIDC). No API token is needed.
 ## Pre-release Validation
 
 ```sh
-./scripts/check.sh
-./scripts/check.sh package
+./scripts/check.sh          # Tier 1: required before every commit
+./scripts/check.sh extended # Tier 2: before release (full compat, API oracle, feature matrix, MSRV, docs, FFI, soak)
+./scripts/check.sh package  # Tier 3: before publish
 ```
 
-Both require a clean worktree.
+Tier 2 runs Tier 1 first; Tier 3 runs Tier 1 first. All require a clean
+worktree. See `docs/releases/process.md` and `docs/verification-policy.md`.
 
 ## Publication
 

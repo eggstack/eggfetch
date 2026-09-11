@@ -1,7 +1,7 @@
 # Agent Guide
 
 eggfetch is a Rust-native async HTTP client (tokio + hyper). All networking lives in `eggfetch-core`; CLI, Python, FFI, and Node are thin adapters.
-Skills in `.skills/` carry task workflows (rust, python-bindings, cli, ffi, security-review, release-process, fuzz-testing, documentation). Architecture entry point: `docs/architecture/overview.md`.
+Skills in `.skills/` carry task workflows (rust, python-bindings, cli, ffi, security-review, release-process, fuzz-testing, documentation). Architecture entry point: `docs/architecture/overview.md` — its [Deep-Dive Index](docs/architecture/overview.md#deep-dive-index) is the map for every component below.
 
 ## Commands
 
@@ -30,8 +30,8 @@ cargo fmt --all -- --check
 - `unsafe_code = "forbid"` workspace-wide; only `eggfetch-ffi` and `eggfetch-node` override to `"allow"`. Never add new `unsafe` without explicit discussion.
 - Pedantic clippy (`-D warnings`); `missing_docs = "warn"`. `scripts/check_lint_suppressions.sh` (Tier 1) rejects `allow(warnings)`, `clippy::all`, `clippy::pedantic` (except inside FFI/Node), `clippy::nursery`, `clippy::restriction`. Use specific lint names with a justifying comment.
 - Core default features: `http1 + tls-rustls` only. Everything else opt-in (`http2`, `http3`, `json`, `compression-{gzip,brotli,zstd,deflate}`, `cookies`, `proxy`, `multipart`, `tracing`, `test-util`). CLI enables cookies/multipart/proxy; Python enables http2/http3/cookies/multipart/proxy + all compressions. `test-util` = `tokio/test-util` for deterministic time tests.
-- Core request reconstruction goes through typed helpers (`RequestParts::retry_request`, `into_request`, `advance_redirect_hop`) with exhaustive construction — a new field must fail to compile, never be silently dropped. `prepare_single_request()` + `select_route()` (UDS → direct → proxy/SOCKS → SNI → H3 → standard) share one post-transport policy for all routes.
-- `Request` `TransportHints` (`target`, `sni_hostname`) override wire behavior without changing logical URL/routing; they survive retry, are cleared on redirect, and arrive from the compat facade via the request extensions dict through native `stream()`.
+- Core request reconstruction goes through typed helpers (`RequestParts::retry_request`, `into_request`, `advance_redirect_hop`) with exhaustive construction — a new field must fail to compile, never be silently dropped. `prepare_single_request()` + `select_route()` (UDS → direct → proxy/SOCKS → SNI → H3 → standard) share one post-transport policy for all routes. See `docs/architecture/core-engine.md`.
+- `Request` `TransportHints` (`target`, `sni_hostname`, `trace`) override wire behavior without changing logical URL/routing; they survive retry, are cleared on redirect, and arrive from the compat facade via the request extensions dict through the shared native parser (`extract_native_extensions`) serving sync/async buffered/streaming.
 - HTTP/3 stays experimental (pinned h3 0.0.8, re-audit on bump). Graduation gate/blockers: `docs/architecture/core-tls-proxy-protocols.md` § "Production Graduation Decision"; workflow details live in the rust skill. Never make H3 qualification a Tier 1/CI gate.
 
 ## HTTPX compat (easy to break)
@@ -49,6 +49,18 @@ Facades `eggfetch.compat.httpx` (0.28.1) and `eggfetch.compat.httpx2` (2.12.0) c
 ## Upgrades
 
 Only 101 responses own a writable stream (`response.extensions["network_stream"]`); pooled responses are `None`, CONNECT tunnels are never surfaced (use body iterator). `start_tls` allows only inner-`Tcp` variants (reject `Adapter`/`Tls` before I/O). Sync `Client.stream()` yields `PyNetworkStream`, async yields `PyAsyncNetworkStream`; clones share one stream (Arc/Mutex). Honor leading rewind-buffer bytes on first reads.
+
+## Architecture index
+
+Start at `docs/architecture/overview.md` (§ Deep-Dive Index). Section → doc:
+
+- Engine/pipeline/errors → `core-engine.md`; bodies/streams/permits → `core-body-streaming.md`
+- Timeouts/pool/metrics → `core-timeout-pool.md`; auth/redirect/retry → `core-auth-redirect-retry.md`
+- TLS/proxy/SOCKS/UDS/H2/H3 → `core-tls-proxy-protocols.md`; cookies/multipart/compression → `core-cookies-multipart-compression.md`
+- Python/compat/SSE/WS/upgrades → `python-bindings.md`; CLI → `cli.md`; FFI/Node → `ffi-and-node.md`
+- Tests/fuzz/compat suites → `testing-fuzzing.md`; build/CI/lint/MSRV → `build-ci.md`
+- Flags → `feature-flags.md`; deps → `dependency-policy.md`; threat/reviews/findings/runbook/checklist → `threat-model.md`, `security-reviews.md`, `security-findings.md`, `incident-runbook.md`, `release-security-checklist.md`
+- Normative tiers/budget → `docs/verification-policy.md`; intentional deltas → `docs/residual-differences.md`; compat matrix → `docs/reference/compatibility.md`
 
 ## Working style
 

@@ -45,7 +45,7 @@ eggfetch-core = { version = "0.1", features = ["http1", "tls-rustls"] }
 | `compression-brotli` | Brotli response decompression |
 | `compression-zstd` | Zstd response decompression |
 | `compression-deflate` | Deflate response decompression |
-| `json` | JSON body serialization (Rust side) |
+| `json` | Reserved for future Rust-native JSON (Python uses `json.dumps()`) |
 
 Default features: `http1` and `tls-rustls`. The Python crate enables
 cookies, multipart, proxy, all compression codecs, http2, and http3 by
