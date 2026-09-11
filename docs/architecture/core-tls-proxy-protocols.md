@@ -594,6 +594,24 @@ Any future upgrade must land before a new freeze and requalification.
   represented in `qualification/http3/impairment-matrix.json`; execution
   remains qualification-only and unsupported scenarios stay explicit.
 
+### H3 Diagnostics
+
+When the `http3` feature is enabled, `Client::transport_metrics()` also
+provides `TransportMetrics::h3_diagnostics()`. Each entry is a bounded,
+point-in-time copy of Quinn state for one connection: stable connection ID,
+selected remote UDP address, optional local IP, smoothed RTT, packet/byte
+totals, path loss counters, explicit-versus-Alt-Svc route kind, Alt-Svc
+generation, and a sanitized close category/code after shutdown. The store is
+limited to 64 entries and retains snapshots only; it never retains a Quinn
+connection handle, origin hostname, request/response headers, cookies, body
+bytes, or peer-provided close-reason text.
+
+The pinned Quinn/h3 APIs do not expose a reliable count of active HTTP/3
+streams on a reused multiplexed connection, so `open_streams` is explicitly
+`None`. Hyper socket reuse and per-response QUIC metadata remain unavailable
+and are not estimated. These snapshots are diagnostic evidence, not a
+stability or graduation signal by themselves.
+
 ### Manual Public-Origin Spot-Check Procedure (Tier 2/manual, not CI)
 
 Do not bake volatile public hostnames into Tier 1 tests. When a

@@ -86,8 +86,12 @@ cargo check -p eggfetch-core --all-features
   Alt-Svc learned/expired/cleared/rejected, H3 attempted/suppressed/fallback/
   drain/close/reconnect, upgrades)
   separate from `PoolMetrics` (logical). No Hyper reuse estimates.
-  `Client::transport_metrics()`; exact-count tests in
-  `transport_metrics_tests.rs` + `h3_alt_svc_discovery.rs`.
+  `Client::transport_metrics()`; HTTP/3 builds additionally expose bounded
+  copied Quinn snapshots via `h3_diagnostics()` (remote address, RTT, path
+  counters, route/generation, sanitized close code; no live handles or peer
+  reason text). Stream counts remain unavailable (`None`) rather than guessed.
+  Exact-count and bound tests live in `transport/metrics.rs` and
+  `h3_alt_svc_discovery.rs`.
 - Limits: `max_in_flight_requests*` preferred (logical); `max_connections*`
   are pre-1.0 aliases (new wins). Facade `Limits` unchanged.
 - Trace: request/response headers emitted; DNS/connect/TLS via metrics

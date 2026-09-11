@@ -87,4 +87,6 @@ pub use timeout::{Timeout, TimeoutBuilder, TimeoutPhase};
 pub use tls::{ClientIdentity, TlsConfig, TlsConfigBuilder, TlsVersion, TrustStore};
 /// Socket option for direct TCP connections.
 pub use transport::direct_connector::{SocketOption, SocketOptionKind};
+#[cfg(feature = "http3")]
+pub use transport::metrics::{H3CloseKind, H3CloseSummary, H3ConnectionDiagnostic, H3RouteKind};
 pub use transport::metrics::{TransportMetrics, TransportSnapshot};

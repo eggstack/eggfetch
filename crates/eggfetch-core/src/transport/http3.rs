@@ -92,6 +92,7 @@ use crate::error::{Error, Result};
 use crate::pool::PoolConfig;
 use crate::response::Response;
 use crate::timeout::TimeoutPhase;
+use crate::transport::metrics::{H3CloseKind, H3CloseSummary, H3ConnectionDiagnostic, H3RouteKind};
 
 /// Upper bound on cached H3 origin entries.
 ///
@@ -281,6 +282,68 @@ fn derive_max_bidi_streams(pool_config: &PoolConfig) -> u32 {
 /// Remaining budget under an optional connect deadline.
 fn remaining_connect_budget(deadline: Option<std::time::Instant>) -> Option<Duration> {
     deadline.map(|d| d.saturating_duration_since(std::time::Instant::now()))
+}
+
+/// Convert an upstream QUIC close into a bounded, reason-free diagnostic.
+fn h3_close_summary(error: &quinn::ConnectionError, graceful: bool) -> H3CloseSummary {
+    let (kind, code) = match error {
+        quinn::ConnectionError::VersionMismatch => (H3CloseKind::VersionMismatch, None),
+        quinn::ConnectionError::TransportError(error) => {
+            (H3CloseKind::TransportError, Some(error.code.into()))
+        }
+        quinn::ConnectionError::ConnectionClosed(close) => {
+            (H3CloseKind::ConnectionClosed, Some(close.error_code.into()))
+        }
+        quinn::ConnectionError::ApplicationClosed(close) => (
+            H3CloseKind::ApplicationClosed,
+            Some(close.error_code.into()),
+        ),
+        quinn::ConnectionError::Reset => (H3CloseKind::Reset, None),
+        quinn::ConnectionError::TimedOut => (H3CloseKind::TimedOut, None),
+        quinn::ConnectionError::LocallyClosed => (H3CloseKind::LocallyClosed, None),
+        quinn::ConnectionError::CidsExhausted => (H3CloseKind::CidsExhausted, None),
+    };
+    H3CloseSummary {
+        kind,
+        code,
+        graceful,
+    }
+}
+
+/// Snapshot Quinn state without retaining the connection handle in metrics.
+fn h3_connection_diagnostic(
+    connection: &quinn::Connection,
+    route: H3RouteKind,
+    alt_svc_generation: Option<u64>,
+    close: Option<&quinn::ConnectionError>,
+    graceful: bool,
+) -> H3ConnectionDiagnostic {
+    let stats = connection.stats();
+    H3ConnectionDiagnostic {
+        stable_id: connection.stable_id(),
+        remote_address: connection.remote_address(),
+        local_ip: connection.local_ip(),
+        route,
+        alt_svc_generation,
+        rtt: connection.rtt(),
+        sent_packets: stats.path.sent_packets,
+        received_packets: stats.udp_rx.datagrams,
+        lost_packets: stats.path.lost_packets,
+        sent_bytes: stats.udp_tx.bytes,
+        received_bytes: stats.udp_rx.bytes,
+        lost_bytes: stats.path.lost_bytes,
+        close: close.map(|error| h3_close_summary(error, graceful)),
+        open_streams: None,
+    }
+}
+
+/// A reason-free close label retained only for the existing test hook.
+fn h3_close_label(error: &quinn::ConnectionError, graceful: bool) -> String {
+    let summary = h3_close_summary(error, graceful);
+    match summary.code {
+        Some(code) => format!("{:?}:{code}", summary.kind),
+        None => format!("{:?}", summary.kind),
+    }
 }
 
 impl H3Connector {
@@ -511,8 +574,10 @@ impl H3Connector {
         deadline: Option<std::time::Instant>,
         started: std::time::Instant,
         alt_generation: Option<u64>,
+        route: H3RouteKind,
         metrics: Option<Arc<crate::transport::metrics::TransportMetrics>>,
     ) -> Result<CachedH3Sender> {
+        let diagnostic_conn = quinn_conn.clone();
         let init = async {
             let h3_conn = h3_quinn::Connection::new(quinn_conn);
             h3::client::new(h3_conn)
@@ -536,22 +601,41 @@ impl H3Connector {
         let draining_for_driver = draining.clone();
         let reason_for_driver = close_reason.clone();
         let metrics_for_driver = metrics.clone();
+        if let Some(ref m) = metrics {
+            m.record_h3_diagnostic(h3_connection_diagnostic(
+                &diagnostic_conn,
+                route,
+                alt_generation,
+                None,
+                false,
+            ));
+        }
         let driver_handle = tokio::spawn(async move {
             use futures_util::future;
             let close_err = future::poll_fn(|cx| driver.poll_close(cx)).await;
             draining_for_driver.store(true, Ordering::Relaxed);
-            // Preserve the upstream HTTP/3 application close code for
-            // diagnostics (e.g. `H3_NO_ERROR` vs errors). Display already
-            // renders `Code` names, so no values are synthesized.
+            let graceful = close_err.is_h3_no_error();
+            let quinn_close = diagnostic_conn.close_reason();
             if let Ok(mut guard) = reason_for_driver.lock() {
-                *guard = Some(format!("{close_err}"));
+                *guard = quinn_close
+                    .as_ref()
+                    .map(|error| h3_close_label(error, graceful));
             }
             if let Some(m) = metrics_for_driver {
+                if let Some(error) = quinn_close.as_ref() {
+                    m.record_h3_diagnostic(h3_connection_diagnostic(
+                        &diagnostic_conn,
+                        route,
+                        alt_generation,
+                        Some(error),
+                        graceful,
+                    ));
+                }
                 m.record_h3_closed();
                 // Graceful application close (`H3_NO_ERROR`) is a drain,
                 // not a failure. Uses the public `is_h3_no_error()` API
                 // (pinned h3 0.0.8); no variant matching, no strings.
-                if close_err.is_h3_no_error() {
+                if graceful {
                     m.record_h3_drain();
                 }
             }
@@ -725,6 +809,11 @@ impl H3Connector {
                         deadline,
                         started,
                         alt_generation,
+                        if alt.is_some() {
+                            H3RouteKind::AltSvc
+                        } else {
+                            H3RouteKind::Explicit
+                        },
                         endpoint_self.metrics.clone(),
                     )
                     .await?;

@@ -129,7 +129,12 @@ through the native `stream()` method.
   fallback is pre-commit + replayable only via explicit `H3DispatchError`;
   GOAWAY draining uses pinned h3 0.0.8 `is_closing()`/`is_h3_no_error()`
   (feature `i-implement-...`, re-audit on bump), marks generations draining,
-  preserves close codes, reconnects next request. Test hooks are
+  preserves close codes, reconnects next request. HTTP/3 builds expose
+  bounded copied Quinn snapshots through `TransportMetrics::h3_diagnostics()`
+  (remote address, RTT, path counters, route/generation, and sanitized close
+  code; no origin names, reason text, credentials, bodies, or live handles).
+  Stream counts remain `None` because pinned Quinn/h3 do not expose a reliable
+  reused-connection count. Test hooks are
   `test-util`-gated (`cache_len`, `contains_origin`, `is_draining_key`,
   `close_reason_key`); behavior tests live in `tests/h3_hardening.rs`,
   `tests/h3_alt_svc_discovery.rs`, and `tests/h3_interop_qualification.rs`
@@ -159,8 +164,10 @@ through the native `stream()` method.
   creations/evictions, Alt-Svc learned/expired/cleared/rejected, H3
   attempted/suppressed/fallback/drain/close/reconnect, 101 upgrades) is
   separate from `PoolMetrics`
-  (logical waits/cancellations). Hyper reuse counts absent, never estimated.
-  `Client::transport_metrics()` is the accessor; tests assert exact counts.
+  (logical waits/cancellations). HTTP/3 builds additionally expose bounded
+  copied Quinn snapshots through `h3_diagnostics()`; Hyper reuse counts are
+  absent, never estimated. `Client::transport_metrics()` is the accessor;
+  tests assert exact counts and diagnostic bounds.
 - Limits: native `max_in_flight_requests*` preferred (logical permits, not
   TCP counts); `max_connections*` are pre-1.0 aliases (new wins). Idle caps
   are physical Hyper policy. Facade `Limits(max_connections=...)` unchanged.

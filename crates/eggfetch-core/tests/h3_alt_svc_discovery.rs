@@ -702,6 +702,15 @@ async fn metrics_are_exact_for_discovery_cycle() {
     assert!(b2.h3_route_attempted > b1.h3_route_attempted);
     assert_eq!(b2.h3_route_suppressed, b1.h3_route_suppressed);
     assert_eq!(b2.h3_fallback_selected, b1.h3_fallback_selected);
+    let diagnostics = client.transport_metrics().h3_diagnostics();
+    assert_eq!(diagnostics.len(), 1, "one reused H3 connection is expected");
+    let diagnostic = &diagnostics[0];
+    assert_eq!(diagnostic.route, eggfetch_core::H3RouteKind::AltSvc);
+    assert_eq!(diagnostic.alt_svc_generation, Some(1));
+    assert_eq!(diagnostic.remote_address, h3.addr);
+    assert!(diagnostic.sent_packets > 0);
+    assert!(diagnostic.sent_bytes > 0);
+    assert!(diagnostic.open_streams.is_none());
 }
 
 // ---------------------------------------------------------------------------

@@ -26,6 +26,40 @@ graduation blockers. The unchecked acceptance items below are intentionally
 preserved for a future requalification rather than marked complete by the
 local control results.
 
+## Execution update (2026-09-11)
+
+The pinned dependency set was re-audited against the upstream issue and
+advisory state available on this date. No upgrade is justified in this
+freeze: `h3` remains at 0.0.8 with no newer stable release in its changelog,
+and the open buffered-data-on-close defect is structural rather than fixed by
+the available Quinn patch level. `quinn-proto 0.11.16` is beyond the affected
+0.11.13 range for [CVE-2026-31812 / GHSA-6xvm-j4wr-6v98](https://github.com/quinn-rs/quinn/security/advisories/GHSA-6xvm-j4wr-6v98).
+
+The audit ledger is:
+
+| Upstream issue | Reachability and impact | Evidence / disposition |
+| --- | --- | --- |
+| [h3 #338](https://github.com/hyperium/h3/issues/338), buffered frame data lost with a coalesced connection close | Reachable through pinned h3 response-header/body frame handling; can turn a complete ordinary response into a truncated/error response on affected close timing | Local early-close tests distinguish EOF/error but do not reproduce the frame-layer race. No safe EggFetch workaround or reachability proof exists. **Graduation blocker; retain experimental.** |
+| [h3 #361](https://github.com/hyperium/h3/issues/361), deferred `STOP_SENDING` during an outstanding read | Relevant to cancellation and body-drop cleanup; not evidence of silent successful-response corruption | Local prompt-cancellation, cancellation-storm, partial-body-drop, and client-drop controls pass. The pinned API does not expose a stronger independent reset observation. **Open upstream lifecycle risk; no local normalization/workaround.** |
+| [h3 #352](https://github.com/hyperium/h3/issues/352) and [h3 #353](https://github.com/hyperium/h3/issues/353), independent `STOP_SENDING`/reset observation limits | Limits cancellation diagnostics when body progress is paused; does not change successful response bytes | Covered only to the extent exposed by h3 0.0.8; no duplicate parser/state layer added. **Qualification limitation, not waived as a correctness fix.** |
+| [quinn-proto CVE-2026-31812](https://github.com/quinn-rs/quinn/security/advisories/GHSA-6xvm-j4wr-6v98) | Affected transport-parameter parser versions are not in the resolved graph | `quinn-proto 0.11.16` is resolved and lockfile-pinned. **Not reachable; no upgrade required.** |
+
+This execution adds `TransportMetrics::h3_diagnostics()` for HTTP/3 builds.
+It stores at most 64 copied Quinn snapshots with remote address, optional
+local IP, RTT, packet/byte/loss counters, explicit-versus-Alt-Svc route and
+generation, and sanitized close category/code. It deliberately does not
+retain origin names, peer reason text, request/response data, credentials, or
+live connection handles. Active stream count remains `None` because the
+pinned Quinn/h3 APIs do not expose a reliable reused-connection count.
+
+Existing deterministic H3 hardening, Alt-Svc, interop-control, cache-bound,
+cancellation, construction/drop, and Alt-Svc fuzz coverage remains the local
+evidence. Long external soak, independent-server lifecycle control, public
+origins, full impairment execution, and non-Linux platform evidence remain
+qualification blockers recorded in
+`plans/http3-production-qualification-evidence.md`; this plan does not claim
+those unavailable results.
+
 ## 1. Freeze and audit the dependency graph
 
 Record the exact resolved versions and relevant feature flags for:
@@ -50,11 +84,11 @@ For each current upstream correctness/security issue affecting ordinary client s
 At minimum re-evaluate the current buffered-data-on-connection-close class and request cancellation/STOP_SENDING/reset behavior identified during planning, plus any newer issues in h3, h3-quinn or Quinn at execution time.
 
 Acceptance:
-- [ ] exact resolved dependency/feature set is recorded;
-- [ ] every known ordinary-client correctness issue has an explicit disposition;
-- [ ] no issue capable of silently corrupting a successful response is waived without evidence;
-- [ ] the unstable h3 feature dependency has a focused regression test and documented re-audit trigger;
-- [ ] no private long-lived fork is introduced solely to claim graduation.
+- [x] exact resolved dependency/feature set is recorded;
+- [x] every known ordinary-client correctness issue has an explicit disposition;
+- [x] no issue capable of silently corrupting a successful response is waived without evidence;
+- [x] the unstable h3 feature dependency has a focused regression test and documented re-audit trigger;
+- [x] no private long-lived fork is introduced solely to claim graduation.
 
 ## 2. Dependency upgrade decision
 
@@ -72,9 +106,9 @@ If upgrading:
 If not upgrading, document why the pinned versions are acceptable under the declared scope and which upstream defects still block graduation.
 
 Acceptance:
-- [ ] upgrade/no-upgrade is an explicit evidence-based decision;
-- [ ] dependency changes do not broaden feature scope;
-- [ ] all version-sensitive behavior is covered by tests.
+- [x] upgrade/no-upgrade is an explicit evidence-based decision;
+- [x] dependency changes do not broaden feature scope;
+- [x] all version-sensitive behavior is covered by tests.
 
 ## 3. Targeted upstream-defect regression cases
 
@@ -92,9 +126,9 @@ Important classes:
 Do not duplicate upstream parser fuzzing unless EggFetch owns an additional parser/state layer.
 
 Acceptance:
-- [ ] every locally mitigated upstream issue has a regression test;
-- [ ] tests distinguish complete response EOF from truncated/error termination;
-- [ ] no workaround silently converts protocol failure into success.
+- [x] every locally mitigated upstream issue has a regression test (no upstream workaround was added);
+- [x] tests distinguish complete response EOF from truncated/error termination;
+- [x] no workaround silently converts protocol failure into success.
 
 ## 4. Resource and soak qualification
 
@@ -124,12 +158,12 @@ Capture, where portable/available:
 - connection creation/drain/reconnect counters.
 
 Acceptance:
-- [ ] bounded caches remain within configured limits;
+- [x] bounded caches remain within configured limits;
 - [ ] descriptor/socket count returns to a bounded steady state;
 - [ ] driver/task state does not grow monotonically;
-- [ ] client drop eventually releases owned QUIC resources after outstanding references finish;
+- [x] client drop eventually releases owned QUIC resources after outstanding references finish;
 - [ ] no monotonic memory trend attributable to retained per-origin/session state is observed;
-- [ ] failures/cancellation do not leak logical pool permits.
+- [x] failures/cancellation do not leak logical pool permits.
 
 ## 5. Cache eviction quality review
 
@@ -138,9 +172,9 @@ The current H3 connection cache is bounded, which is a correctness requirement. 
 Only change policy if evidence shows meaningful churn or handshake amplification. If changed, prefer a simple bounded idle/LRU-like policy that does not add a large dependency or hold connection objects longer than necessary.
 
 Acceptance:
-- [ ] current eviction behavior is characterized under cache pressure;
+- [x] current eviction behavior is characterized under cache pressure;
 - [ ] any policy change has deterministic tests for bound, active-reference safety and expected victim selection;
-- [ ] no eviction change is made solely for aesthetic reasons.
+- [x] no eviction change is made solely for aesthetic reasons.
 
 ## 6. QUIC/H3 diagnostic surface
 
@@ -163,11 +197,11 @@ Do not attach connection-level values to an individual response if reuse/multipl
 Consider optional qlog support for qualification/debug builds if Quinn exposes a contained integration. It must be opt-in, must not log credentials/body data by default, and must not become a normal dependency if it materially increases footprint.
 
 Acceptance:
-- [ ] close/fallback failures can be correlated to real transport state;
-- [ ] no fabricated zero/default metadata is presented as observed fact;
-- [ ] diagnostic state is bounded and does not retain live connections;
-- [ ] sensitive headers, cookies, auth and request bodies are not emitted;
-- [ ] qlog, if added, is opt-in and documented as diagnostic output.
+- [x] close/fallback failures can be correlated to real transport state;
+- [x] no fabricated zero/default metadata is presented as observed fact;
+- [x] diagnostic state is bounded and does not retain live connections;
+- [x] sensitive headers, cookies, auth and request bodies are not emitted;
+- [x] qlog, if added, is opt-in and documented as diagnostic output (qlog was not added).
 
 ## 7. Fuzz/property hardening of EggFetch-owned state
 
@@ -182,7 +216,7 @@ Retain and extend fuzz/property coverage for EggFetch-owned H3 policy boundaries
 Add corpus seeds for malformed/oversized Alt-Svc, repeated `clear`, generation replacement, suppression expiry and state churn discovered by the qualification work.
 
 Acceptance:
-- [ ] EggFetch-owned untrusted H3 policy state has deterministic fuzz/property coverage;
+- [x] EggFetch-owned untrusted H3 policy state has deterministic fuzz/property coverage;
 - [ ] no duplicate h3 QPACK/frame parser implementation is introduced.
 
 ## 8. Platform evidence

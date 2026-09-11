@@ -30,6 +30,96 @@
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+#[cfg(feature = "http3")]
+use std::net::{IpAddr, SocketAddr};
+#[cfg(feature = "http3")]
+use std::sync::Mutex;
+#[cfg(feature = "http3")]
+use std::time::Duration;
+
+/// The H3 route that established a diagnostic snapshot.
+#[cfg(feature = "http3")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum H3RouteKind {
+    /// An explicit `Http3Only` direct route.
+    Explicit,
+    /// An authenticated Alt-Svc-discovered route.
+    AltSvc,
+}
+
+/// Sanitized classification of a QUIC connection close.
+#[cfg(feature = "http3")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum H3CloseKind {
+    /// The peer did not support a negotiated QUIC version.
+    VersionMismatch,
+    /// QUIC transport error; `code` contains the protocol code.
+    TransportError,
+    /// The peer aborted the QUIC connection; `code` contains the transport code.
+    ConnectionClosed,
+    /// An HTTP/3 application close; `code` contains the application code.
+    ApplicationClosed,
+    /// The peer reset the connection without a close code.
+    Reset,
+    /// The negotiated idle timeout elapsed.
+    TimedOut,
+    /// The local application closed the connection.
+    LocallyClosed,
+    /// The connection exhausted its connection-ID space.
+    CidsExhausted,
+}
+
+/// A bounded, connection-level H3 diagnostic snapshot.
+///
+/// These values are copied from Quinn and intentionally contain no origin
+/// hostname, request headers, cookies, bodies, or peer-provided close reason.
+/// `open_streams` is `None` because the pinned Quinn API does not expose a
+/// reliable H3 stream count for a reused multiplexed connection.
+#[cfg(feature = "http3")]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct H3ConnectionDiagnostic {
+    /// Quinn's stable identifier for this connection.
+    pub stable_id: usize,
+    /// Last selected remote UDP address observed by Quinn.
+    pub remote_address: SocketAddr,
+    /// Local address information when the platform exposes it.
+    pub local_ip: Option<IpAddr>,
+    /// Whether the route was explicit or Alt-Svc discovered.
+    pub route: H3RouteKind,
+    /// Alt-Svc generation, or `None` for an explicit route.
+    pub alt_svc_generation: Option<u64>,
+    /// Quinn's current smoothed RTT at snapshot time.
+    pub rtt: Duration,
+    /// QUIC packets sent on the current path.
+    pub sent_packets: u64,
+    /// QUIC packets received on the current path.
+    pub received_packets: u64,
+    /// QUIC packets declared lost on the current path.
+    pub lost_packets: u64,
+    /// QUIC bytes sent in UDP datagrams.
+    pub sent_bytes: u64,
+    /// QUIC bytes received in UDP datagrams.
+    pub received_bytes: u64,
+    /// QUIC bytes declared lost on the current path.
+    pub lost_bytes: u64,
+    /// H3/QUIC close classification, available after the connection closes.
+    pub close: Option<H3CloseSummary>,
+    /// H3 stream count is not exposed by the pinned Quinn/h3 APIs.
+    pub open_streams: Option<usize>,
+}
+
+/// Sanitized close information associated with an H3 diagnostic snapshot.
+#[cfg(feature = "http3")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct H3CloseSummary {
+    /// Close category.
+    pub kind: H3CloseKind,
+    /// QUIC or HTTP/3 close code when the upstream API provides one.
+    pub code: Option<u64>,
+    /// Whether h3 classified the close as `H3_NO_ERROR`.
+    pub graceful: bool,
+}
+
 /// Observable transport counters.
 ///
 /// Shared via `Arc` across connectors owned by one [`crate::Client`].
@@ -88,6 +178,9 @@ pub struct TransportMetrics {
     pub h3_closed: AtomicUsize,
     /// H3 reconnect generations created after drain/eviction.
     pub h3_reconnected: AtomicUsize,
+    /// Bounded H3 connection snapshots, when HTTP/3 is enabled.
+    #[cfg(feature = "http3")]
+    h3_diagnostics: Mutex<Vec<H3ConnectionDiagnostic>>,
 }
 
 impl TransportMetrics {
@@ -231,6 +324,36 @@ impl TransportMetrics {
         Self::inc(&self.h3_reconnected);
     }
 
+    /// Store the latest snapshot for an H3 connection.
+    #[cfg(feature = "http3")]
+    pub(crate) fn record_h3_diagnostic(&self, diagnostic: H3ConnectionDiagnostic) {
+        let Ok(mut diagnostics) = self.h3_diagnostics.lock() else {
+            return;
+        };
+        if let Some(existing) = diagnostics
+            .iter_mut()
+            .find(|existing| existing.stable_id == diagnostic.stable_id)
+        {
+            *existing = diagnostic;
+            return;
+        }
+        if diagnostics.len() >= 64 {
+            diagnostics.remove(0);
+        }
+        diagnostics.push(diagnostic);
+    }
+
+    /// Return bounded H3 connection snapshots without retaining live Quinn
+    /// connection handles.
+    #[cfg(feature = "http3")]
+    #[must_use]
+    pub fn h3_diagnostics(&self) -> Vec<H3ConnectionDiagnostic> {
+        self.h3_diagnostics
+            .lock()
+            .map(|diagnostics| diagnostics.clone())
+            .unwrap_or_default()
+    }
+
     /// Snapshot all counters for assertions.
     #[must_use]
     #[allow(
@@ -357,5 +480,61 @@ mod tests {
         assert_eq!(s.altsvc_learned, 1);
         assert_eq!(s.h3_route_attempted, 1);
         assert_eq!(s.h3_fallback_selected, 1);
+    }
+
+    #[cfg(feature = "http3")]
+    #[test]
+    fn h3_diagnostics_replace_by_connection_and_stay_bounded() {
+        let m = TransportMetrics::new();
+        let address = "127.0.0.1:443".parse().expect("address");
+        for stable_id in 0..65 {
+            m.record_h3_diagnostic(H3ConnectionDiagnostic {
+                stable_id,
+                remote_address: address,
+                local_ip: None,
+                route: H3RouteKind::Explicit,
+                alt_svc_generation: None,
+                rtt: Duration::from_millis(1),
+                sent_packets: 1,
+                received_packets: 1,
+                lost_packets: 0,
+                sent_bytes: 1,
+                received_bytes: 1,
+                lost_bytes: 0,
+                close: None,
+                open_streams: None,
+            });
+        }
+        let diagnostics = m.h3_diagnostics();
+        assert_eq!(diagnostics.len(), 64);
+        assert_eq!(diagnostics[0].stable_id, 1);
+
+        m.record_h3_diagnostic(H3ConnectionDiagnostic {
+            stable_id: 64,
+            remote_address: address,
+            local_ip: None,
+            route: H3RouteKind::AltSvc,
+            alt_svc_generation: Some(7),
+            rtt: Duration::from_millis(2),
+            sent_packets: 2,
+            received_packets: 2,
+            lost_packets: 1,
+            sent_bytes: 2,
+            received_bytes: 2,
+            lost_bytes: 1,
+            close: Some(H3CloseSummary {
+                kind: H3CloseKind::ApplicationClosed,
+                code: Some(0x100),
+                graceful: true,
+            }),
+            open_streams: None,
+        });
+        let updated = m.h3_diagnostics();
+        assert_eq!(updated.len(), 64);
+        assert_eq!(
+            updated.last().expect("last diagnostic").alt_svc_generation,
+            Some(7)
+        );
+        assert_eq!(updated.last().expect("last diagnostic").lost_packets, 1);
     }
 }
