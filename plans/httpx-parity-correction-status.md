@@ -33,12 +33,13 @@ independent non-Quinn server passes, independent GOAWAY/drain evidence,
 public-origin checks, realistic impairment execution, and unresolved upstream
 correctness risk. HTTP/3 status is separate from the HTTPX parity claims.
 
-Remote routine CI evidence is recorded below after the corrective-closure
-documentation descendants are pushed. The push is a fast-forward from the
-frozen executable commit, so CI covers the same executable tree; the final
-descendant audit confirms only documentation, profile, and ledger files change
-after `78a77ea`. Documentation/profile/ledger descendants must not change
-executable files.
+Remote routine CI run `34620344393` passed on documentation/profile/ledger
+descendant `3fd26bbc81b236fce2693fec406fa2a61865dad3`:
+https://github.com/eggstack/eggfetch/actions/runs/34620344393. The push was a
+fast-forward from the frozen executable commit, so the run covers the same
+executable tree; the final descendant audit confirms only documentation,
+profile, and ledger files change after `78a77ea`. Documentation/profile/ledger
+descendants must not change executable files.
 
 ## Historical state — qualification pending after HTTP/3 program changes (pre-freeze)
 

@@ -63,9 +63,9 @@ Before treating any current-tree result as qualification evidence:
 
 Acceptance:
 
-- [ ] no live document implies `639bf18...` is the executable SHA of current `main`;
-- [ ] historical evidence remains auditable;
-- [ ] H3 experimental status is not conflated with HTTPX Stage C status.
+- [x] no live document implies `639bf18...` is the executable SHA of current `main`;
+- [x] historical evidence remains auditable;
+- [x] H3 experimental status is not conflated with HTTPX Stage C status.
 
 ## 2. Audit the post-freeze diagnostics delta
 
@@ -114,9 +114,9 @@ Verify:
 
 Acceptance:
 
-- [ ] delta audit produces no unresolved correctness/security/ownership issue;
-- [ ] any correction lands before the new freeze;
-- [ ] no unrelated cleanup is bundled into the corrective pass.
+- [x] delta audit produces no unresolved correctness/security/ownership issue;
+- [x] any correction lands before the new freeze;
+- [x] no unrelated cleanup is bundled into the corrective pass.
 
 ## 3. Focused diagnostics regression gate
 
@@ -139,9 +139,9 @@ If the diagnostic ring/buffer uses replacement semantics, test wraparound explic
 
 Acceptance:
 
-- [ ] focused diagnostics tests pass repeatedly;
-- [ ] existing H3 deterministic suites remain green;
-- [ ] no test relies on public Internet or an optional independent server for this corrective closure.
+- [x] focused diagnostics tests pass repeatedly;
+- [x] existing H3 deterministic suites remain green;
+- [x] no test relies on public Internet or an optional independent server for this corrective closure.
 
 ## 4. Freeze one new executable SHA
 
@@ -157,9 +157,9 @@ The freeze must include the final diagnostics implementation and all focused tes
 
 Acceptance:
 
-- [ ] exactly one clean new executable SHA is named;
-- [ ] no qualification evidence is collected from a dirty or mixed tree;
-- [ ] all later record commits are executable-identical descendants.
+- [x] exactly one clean new executable SHA is named;
+- [x] no qualification evidence is collected from a dirty or mixed tree;
+- [x] all later record commits are executable-identical descendants.
 
 ## 5. Focused pre-qualification gate on the frozen SHA
 
@@ -180,9 +180,9 @@ The independent/public H3 evidence gates remain intentionally outside this corre
 
 Acceptance:
 
-- [ ] all focused gates are green on the exact freeze SHA;
-- [ ] API oracles show zero new unexplained/stale differences;
-- [ ] H3 experimental blockers remain recorded, not waived.
+- [x] all focused gates are green on the exact freeze SHA;
+- [x] API oracles show zero new unexplained/stale differences;
+- [x] H3 experimental blockers remain recorded, not waived.
 
 ## 6. Full repository verification on the frozen SHA
 
@@ -212,11 +212,11 @@ Run existing package validation, including crate dry-run/package content and Pyt
 
 Acceptance:
 
-- [ ] Tier 1 green;
-- [ ] extended green;
-- [ ] package validation green;
-- [ ] required downstream portfolio green;
-- [ ] no new waiver was introduced to force closure.
+- [x] Tier 1 green;
+- [x] extended green;
+- [x] package validation green;
+- [x] required downstream portfolio green;
+- [x] no new waiver was introduced to force closure.
 
 ## 7. Requalify HTTPX 0.28.1 on the new freeze
 
@@ -233,10 +233,10 @@ On the frozen SHA:
 
 Acceptance:
 
-- [ ] three consecutive full runs pass without source/dependency changes between runs;
-- [ ] API oracle clean;
-- [ ] downstream required set green;
-- [ ] profile may be rebound to the new SHA only after all gates pass.
+- [x] three consecutive full runs pass without source/dependency changes between runs;
+- [x] API oracle clean;
+- [x] downstream required set green;
+- [x] profile may be rebound to the new SHA only after all gates pass.
 
 ## 8. Requalify HTTPX2 2.12.0 independently
 
@@ -250,10 +250,10 @@ On the same frozen SHA:
 
 Acceptance:
 
-- [ ] HTTPX2 evidence independently supports Stage C on the same frozen SHA;
-- [ ] zero unexplained/stale oracle differences;
-- [ ] no cross-profile leakage;
-- [ ] profile update occurs only after evidence is complete.
+- [x] HTTPX2 evidence independently supports Stage C on the same frozen SHA;
+- [x] zero unexplained/stale oracle differences;
+- [x] no cross-profile leakage;
+- [x] profile update occurs only after evidence is complete.
 
 ## 9. Remote CI evidence
 
@@ -268,9 +268,9 @@ Do not create a special qualification workflow merely for this corrective pass.
 
 Acceptance:
 
-- [ ] at least one successful existing-CI result is recorded;
-- [ ] its relationship to `FROZEN_EXECUTABLE_SHA` is explicit;
-- [ ] no failed current-tree CI is omitted from the closure record.
+- [x] at least one successful existing-CI result is recorded;
+- [x] its relationship to `FROZEN_EXECUTABLE_SHA` is explicit;
+- [x] no failed current-tree CI is omitted from the closure record.
 
 ## 10. Record/profile truth repair
 
@@ -294,9 +294,9 @@ Required record semantics:
 
 Acceptance:
 
-- [ ] profiles and live ledger agree on exact SHA/date/stage;
-- [ ] plan index accurately distinguishes qualification closure from H3 graduation;
-- [ ] no current document says the diagnostics commit is a docs-only descendant of `639bf18...`.
+- [x] profiles and live ledger agree on exact SHA/date/stage;
+- [x] plan index accurately distinguishes qualification closure from H3 graduation;
+- [x] no current document says the diagnostics commit is a docs-only descendant of `639bf18...`.
 
 ## 11. Post-record descendant audit
 
@@ -321,9 +321,9 @@ Disallowed without another requalification:
 
 Acceptance:
 
-- [ ] descendant audit lists every changed file and classifies it;
-- [ ] no qualification-sensitive file changed after freeze;
-- [ ] final `main` is executable-identical to the qualified SHA.
+- [x] descendant audit lists every changed file and classifies it;
+- [x] no qualification-sensitive file changed after freeze;
+- [x] final `main` is executable-identical to the qualified SHA.
 
 ## H3 graduation status during this closure
 
@@ -343,20 +343,20 @@ The new diagnostics surface improves the ability to collect that evidence later,
 
 The corrective closure is complete only when all of the following are true on one exact frozen executable SHA:
 
-- [ ] diagnostics delta audit clean;
-- [ ] focused diagnostics/H3 gates green;
-- [ ] Tier 1 green;
-- [ ] extended green;
-- [ ] package validation green;
-- [ ] three consecutive full pinned compatibility runs green;
-- [ ] HTTPX 0.28.1 oracle clean;
-- [ ] HTTPX2 2.12.0 oracle clean;
-- [ ] required downstream portfolio green;
-- [ ] existing remote CI success recorded;
-- [ ] both profiles rebound to the freeze SHA;
-- [ ] live ledger/index repaired;
-- [ ] final descendant audit proves no post-freeze executable change;
-- [ ] H3 remains experimental with unresolved external evidence named explicitly.
+- [x] diagnostics delta audit clean;
+- [x] focused diagnostics/H3 gates green;
+- [x] Tier 1 green;
+- [x] extended green;
+- [x] package validation green;
+- [x] three consecutive full pinned compatibility runs green;
+- [x] HTTPX 0.28.1 oracle clean;
+- [x] HTTPX2 2.12.0 oracle clean;
+- [x] required downstream portfolio green;
+- [x] existing remote CI success recorded;
+- [x] both profiles rebound to the freeze SHA;
+- [x] live ledger/index repaired;
+- [x] final descendant audit proves no post-freeze executable change;
+- [x] H3 remains experimental with unresolved external evidence named explicitly.
 
 ## Exit criteria
 
@@ -388,5 +388,14 @@ non-failing warnings and no skips, xfails, or failures. The profiles and live
 ledger now bind both Stage C claims to the freeze SHA. HTTP/3 remains
 experimental with the external blockers named above.
 
-The remaining remote-CI result and final descendant classification are added
-to this record after the documentation/profile/ledger commit is pushed.
+Remote routine CI run `34620344393` passed on documentation/profile/ledger
+descendant `3fd26bbc81b236fce2693fec406fa2a61865dad3`:
+https://github.com/eggstack/eggfetch/actions/runs/34620344393. The final
+post-freeze descendant audit is limited to the 17 files changed by the
+documentation/profile/ledger commit: the three repository guidance files in
+`.skills/`, `AGENTS.md`, `README.md`, the two compatibility-profile READMEs,
+the two profile TOMLs, the two affected architecture documents, the two
+reference documents, and the four plan/status documents. No Rust/Python/JS
+source, test, script, manifest, lockfile, workflow, packaging, or
+qualification-input file changed after `78a77ea`; `main` remains
+executable-identical to that freeze.
