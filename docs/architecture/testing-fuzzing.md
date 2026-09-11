@@ -76,7 +76,7 @@ cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,ht
 
 ## HTTPX Compatibility Testing
 
-The compatibility test suite lives in `crates/eggfetch-python/tests/compat/` and verifies eggfetch behavior against `httpx==0.28.1`.
+The compatibility test suite lives in `crates/eggfetch-python/tests/compat/` and verifies eggfetch behavior against `httpx==0.28.1` and the sibling `httpx2==2.12.0` facade (`eggfetch.compat.httpx2`). Core httpx2 differentials live in `test_httpx2_api_parity.py` + `test_httpx2_behavior.py`; streaming protocols live in `test_httpx2_sse.py` (H2X-SSE-001/002) + `test_httpx2_websocket.py` (H2X-WS-001..003, in-memory fake streams + MockTransport, no network).
 
 | File | Purpose |
 |------|---------|
@@ -172,6 +172,14 @@ Fuzz targets live in `fuzz/fuzz_targets/` and use cargo-fuzz with libFuzzer. Nig
 | `fuzz_tls` | TLS configuration and SNI handling |
 | `fuzz_url` | URL parsing and normalization |
 | `fuzz_alt_svc` | Alt-Svc header parsing, cache learn/expiry/clear bounds, trust gating, suppressor observe/suppress/recover transitions |
+
+No Rust fuzz target exists for SSE or WebSocket framing by design
+(plan `httpx2-2.12-sse-and-websocket-parity.md` §9): SSE is Python-layer
+application framing over streamed responses (differential/chunk-split
+corpus in `test_httpx2_sse.py`, not a Rust parser), and WebSocket framing
+is owned by the maintained `wsproto` dependency (EggFetch tests focus on
+adapter/lifecycle state: handshake via the normal pipeline, 101-only
+stream ownership, max-message across fragments, close/cancel).
 
 ### Running Fuzz Targets
 

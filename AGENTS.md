@@ -257,6 +257,11 @@ dispatch (core `TraceObserver` is synchronous); sync callbacks work on `Client` 
 **Proxy headers**: `Proxy(headers=...)` rides the proxy leg only — never forwarded through a
 CONNECT tunnel or to the origin.
 
+**SSE/WebSocket** (`httpx2-2.12-sse-and-websocket-parity.md`, done):
+- SSE is Python-layer framing over streamed responses only — never add a second Rust network reader; enforce `max_event_size` bounds and release the body/pool lease on close/cancel.
+- WebSocket handshakes go through the normal client pipeline and acquire the writable stream only from the 101 `network_stream` extension; never open raw TCP/TLS sockets from Python and never expose pooled/CONNECT-tunnel sockets as writable.
+- WebSocket framing uses wsproto (no vendored client); enforce max-message across fragments in total with bounded buffers, keep proxy trust isolated and proxy headers off the origin, and keep base installs free of WS-only deps (clear `ImportError` when absent).
+
 ## Network Stream and Upgrades
 
 - Only 101 Switching Protocols responses own a writable `UpgradedStream`, exposed to Python via

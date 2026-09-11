@@ -32,6 +32,7 @@ Nightly Rust is required for cargo-fuzz.
 | `fuzz_retry` | Retry policy, backoff, Retry-After parsing |
 | `fuzz_tls` | TLS configuration and SNI handling |
 | `fuzz_url` | URL parsing and normalization |
+| `fuzz_alt_svc` | Alt-Svc parsing, cache bounds, trust gating, suppressor transitions |
 
 ## Property Testing
 

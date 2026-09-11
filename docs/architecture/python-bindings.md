@@ -241,6 +241,10 @@ Parity cases `H2X-API/META/AUTH/TLS/PROXY/COMP/MP/WSGI` (core) plus
 `compat/httpx2/2.12.0/parity-cases.toml`; differential tests
 `test_httpx2_api_parity.py` + `test_httpx2_behavior.py` (core),
 `test_httpx2_sse.py` + `test_httpx2_websocket.py` (streaming).
+Packaging: SSE needs no extra dependency; WS needs `wsproto` (+ `anyio`
+for async sessions) only when used — `Client.websocket`/`connect_ws`
+raise a clear `ImportError` otherwise, so base installs stay lean
+(see `docs/architecture/dependency-policy.md`).
 
 ### SSLContext Translation
 

@@ -52,6 +52,28 @@ Features that are not core to HTTP/1.1 client behavior are optional and feature-
 
 These dependencies stay optional. They do not enter `default` features without discussion.
 
+## Python Compatibility Optional Dependencies (httpx2 SSE/WS)
+
+The `httpx2` 2.12.0 streaming surface reuses the single Rust engine and
+adds only narrow Python framing dependencies (plan
+`httpx2-2.12-sse-and-websocket-parity.md` §§5/8; pinned in
+`compat/httpx2/2.12.0/requirements.txt`):
+
+- **wsproto** — WebSocket framing/state over the existing 101
+  `network_stream`. Selected because it materially reduces framing
+  correctness risk (masking, fragmentation/reassembly, ping/pong, close
+  codes) without vendoring a second HTTP client or socket/TLS stack.
+  Required only when the WS API is used; base client/SSE never import it
+  at module load (`Client.websocket`/`connect_ws` raise a clear
+  `ImportError` pointing at `httpx2[ws]` when absent).
+- **anyio** — async WS session task-group/queue primitives for
+  `AsyncWebSocketSession` (cancellation-safe background receive/keepalive).
+- **truststore** — OS-trust default for httpx2 `create_ssl_context`
+  (`verify=True`), falling back to certifi only when unavailable.
+
+SSE itself has no extra dependency: `EventSource`/`ServerSentEvent` are
+pure-Python framing over normal streamed responses.
+
 ## Selection Criteria
 
 When evaluating a new dependency:

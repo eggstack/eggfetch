@@ -131,6 +131,14 @@ PROXY/COMP/MP/WSGI`): `FunctionAuth`, `Origin`/`URL.origin`, `QUERY`,
 `try_header` validation, WSGI framing, status aliases with reference
 `DeprecationWarning` (`URL.raw` alone uses `HTTPXDeprecationWarning`).
 
+**httpx2 streaming protocols** (`H2X-SSE-001/002`, `H2X-WS-001..003`,
+qualified on the same SHA): SSE `EventSource`/`ServerSentEvent` framing
+over streamed responses (incremental, bounded by `max_event_size`,
+close/cancel releases the body/pool lease); optional WebSocket
+(`websocket` + `httpx2.websockets.*`, wsproto framing over the existing
+101 `network_stream`, handshake via the normal pipeline, max-message
+enforced across fragments, proxy trust isolated).
+
 **Current status: Stage C qualified.** Next-scope requalification renewed the
 0.28.1 claim and earned the independent httpx2 2.12.0 claim, both bound to
 the exact executable SHA in their profiles. Proxy headers are forwarded on the proxy leg;

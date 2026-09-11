@@ -347,7 +347,9 @@ Streaming protocols (done): SSE (`EventSource`, `ServerSentEvent`,
 `SSEError` + `Client.sse`) and optional WebSocket (`websocket` top-level +
 `Client.websocket`, `httpx2.websockets.*` over the existing 101
 `network_stream` with wsproto framing — no second socket/TLS stack).
-Python 3.10–3.13 distribution scope; Pyodide/jsfetch and CLI extras are
+Base installs never require WebSocket-only dependencies; the WS surface
+raises a clear `ImportError` (`pip install httpx2[ws]`, i.e. wsproto) when
+requested without support. Python 3.10–3.13 distribution scope; Pyodide/jsfetch and CLI extras are
 not applicable. Stage C qualified on the next-scope executable SHA
 recorded in `compat/httpx2/2.12.0/profile.toml` and
 `plans/httpx-parity-correction-status.md`.
