@@ -365,3 +365,28 @@ This corrective pass is closed when the repository can truthfully state all thre
 1. current `main` is executable-identical to one newly qualified frozen SHA;
 2. HTTPX 0.28.1 and HTTPX2 2.12.0 are Stage C qualified on that exact SHA with fresh evidence;
 3. HTTP/3 diagnostics are part of that qualified executable tree while HTTP/3 itself remains experimental pending the independent production-graduation evidence.
+
+## Closure record (2026-09-11)
+
+The clean executable freeze is `78a77ea153aae239ce7b722aeb9909a87df3bbb5`,
+whose parent is the prior qualification tree. The diagnostics audit found and
+corrected the native `received_packets`/UDP-datagram counter conflation; no
+other executable defect was identified. Focused evidence is green:
+
+- `h3_hardening`: 12/12;
+- `h3_alt_svc_discovery`: 17/17, including explicit-route diagnostics;
+- `h3_interop_qualification`: 20/20;
+- native close classification unit coverage: 1/1, with typed close codes and
+  peer reason text excluded from debug output.
+
+On that unchanged executable tree, Tier 1, extended, and package validation
+all passed. The extended tier's downstream portfolio passed 4/4, and its API
+oracles were clean with 71 allowed HTTPX 0.28.1 differences and 79 allowed
+HTTPX2 2.12.0 differences. The extended-tier compatibility run plus two
+additional consecutive pinned runs each passed 1,870 tests with 26
+non-failing warnings and no skips, xfails, or failures. The profiles and live
+ledger now bind both Stage C claims to the freeze SHA. HTTP/3 remains
+experimental with the external blockers named above.
+
+The remaining remote-CI result and final descendant classification are added
+to this record after the documentation/profile/ledger commit is pushed.

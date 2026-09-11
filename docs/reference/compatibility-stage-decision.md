@@ -4,7 +4,7 @@
 
 The documented Python 3.10+ asyncio-supported HTTPX 0.28.1 surface and the
 documented httpx2 2.12.0 sibling surface are qualified on executable SHA
-`639bf186a71c054e11278d1b160ffe7a6f172c02`. Each completed three consecutive
+`78a77ea153aae239ce7b722aeb9909a87df3bbb5`. Each completed three consecutive
 full compatibility runs, clean API oracle comparison, downstream checks, and
 the repository validation tiers. HTTP/3 remains separately experimental; its
 graduation blockers do not alter either compatibility claim. See

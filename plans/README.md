@@ -2,31 +2,40 @@
 
 This directory contains active implementation plans, live qualification/status records, and historical implementation records. Completed plans are non-normative unless another current document explicitly says otherwise. Verification and release policy remain governed by `docs/verification-policy.md` and `docs/releases/process.md`.
 
-## Active corrective closure — H3 post-freeze diagnostics requalification (2026-09-11)
+## Completed corrective closure — H3 post-freeze diagnostics requalification (2026-09-11)
 
 Handoff plan: `http3-post-freeze-diagnostics-requalification-corrective-closure.md`
 
 Trigger: executable/native HTTP/3 diagnostics landed in
 `6a0cfd87551b7c634593e7b39cd2fd35d128f727` after the prior qualification
-freeze `639bf186a71c054e11278d1b160ffe7a6f172c02`. Under the repository's
-exact-SHA policy, the prior HTTPX 0.28.1 and HTTPX2 2.12.0 Stage C bindings
-are historical for current `main` until a new frozen executable SHA is fully
-requalified.
+freeze `639bf186a71c054e11278d1b160ffe7a6f172c02`. The prior binding is now
+historical. The corrected executable tree was frozen at
+`78a77ea153aae239ce7b722aeb9909a87df3bbb5`.
 
-This is a narrow corrective closure, not another H3 feature or graduation
-program. Required sequence:
+This was a narrow corrective closure, not another H3 feature or graduation
+program. It completed with the following sequence:
 
-1. audit the diagnostics delta for boundedness, truthfulness, privacy,
+1. audited the diagnostics delta for boundedness, truthfulness, privacy,
    lifecycle safety, and feature gating;
-2. close only defects directly found in that delta and run focused H3/
+2. closed the directly-found counter-semantics defect and ran focused H3/
    diagnostics regression gates;
-3. freeze one clean executable SHA;
-4. run Tier 1, extended, package validation, three consecutive full pinned
+3. froze one clean executable SHA;
+4. ran Tier 1, extended, package validation, three consecutive full pinned
    compatibility runs, both API oracles, required downstreams, and existing
    remote CI;
-5. rebind both compatibility profiles and the live ledger to that exact SHA;
-6. perform a final descendant audit proving all post-freeze changes are
-   documentation/profile/ledger-only.
+5. rebound both compatibility profiles and the live ledger to that exact SHA;
+6. performed a final descendant audit proving all post-freeze changes are
+  documentation/profile/ledger-only.
+
+The audit corrected the native diagnostics field to report received UDP
+datagrams rather than a path-packet counter, documented the bounded copied
+snapshot contract, and added explicit-route and sanitized-close regression
+coverage. HTTP/3 remains **experimental**; diagnostics do not satisfy the
+missing independent non-Quinn interoperability, independent GOAWAY/drain,
+public-origin, realistic impairment, or upstream-risk evidence required for
+production graduation. The exact evidence is in
+`plans/http3-post-freeze-diagnostics-requalification-corrective-closure.md`
+and the live HTTPX ledger.
 
 HTTP/3 remains **experimental** throughout this corrective pass. The new
 transport diagnostics improve observability but do not satisfy the missing

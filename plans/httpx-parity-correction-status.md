@@ -4,20 +4,23 @@ This record is the exact-SHA-bound status for the HTTPX 0.28.1 compatibility
 facade. Historical phase and corrective-pass records remain in the git history
 and referenced plans; counts below are only from the runs named here.
 
-## Current state — Stage C renewed on frozen executable SHA (2026-09-11)
+## Current state — Stage C renewed on corrected frozen executable SHA (2026-09-11)
 
 Current designation: **Stage C qualified** for both the documented HTTPX
 0.28.1 and httpx2 2.12.0 asyncio surfaces, bound to executable SHA
-`639bf186a71c054e11278d1b160ffe7a6f172c02`. The active H3 program's only
-executable correction was the lifecycle-test wall-clock margin; it was
-committed before this freeze. The profiles in
+`78a77ea153aae239ce7b722aeb9909a87df3bbb5`. The prior `639bf186...`
+binding is historical because the post-freeze diagnostics audit corrected a
+native counter's semantics. The profiles in
 `compat/httpx/0.28.1/profile.toml` and `compat/httpx2/2.12.0/profile.toml`
 record this SHA and the 2026-09-11 qualification date.
 
 Qualification evidence on the unchanged frozen tree:
 
-- focused H3 suites: `h3_hardening` 12/12, `h3_alt_svc_discovery` 16/16,
+- focused H3 suites: `h3_hardening` 12/12, `h3_alt_svc_discovery` 17/17,
   `h3_interop_qualification` 20/20; all are deterministic loopback controls;
+- diagnostics coverage includes the explicit-route native snapshot and typed,
+  redacted close classification regression; the corrected field reports
+  received UDP datagrams, distinct from path packet counters;
 - Tier 1, extended, and package validation: green;
 - full compatibility: three consecutive runs, each 1,870 passed, 26
   non-failing warnings, zero skips/xfails/failures;
@@ -30,13 +33,12 @@ independent non-Quinn server passes, independent GOAWAY/drain evidence,
 public-origin checks, realistic impairment execution, and unresolved upstream
 correctness risk. HTTP/3 status is separate from the HTTPX parity claims.
 
-Remote routine CI runs `34578376515` and `34579165931` passed on
-documentation/profile/ledger descendants `c053fe0f7b504e7cbac29147afe7782bead030e1`
-and `a5237f8c6316a3202591e73eb26b435f9dfe5303`, respectively. The pushes were
-fast-forwards from the frozen executable commit, so both runs cover the same
-executable tree; the descendant audit below confirms only documentation,
-profile, and ledger files changed after `639bf18`. Documentation/profile/ledger
-descendants must not change executable files.
+Remote routine CI evidence is recorded below after the corrective-closure
+documentation descendants are pushed. The push is a fast-forward from the
+frozen executable commit, so CI covers the same executable tree; the final
+descendant audit confirms only documentation, profile, and ledger files change
+after `78a77ea`. Documentation/profile/ledger descendants must not change
+executable files.
 
 ## Historical state — qualification pending after HTTP/3 program changes (pre-freeze)
 

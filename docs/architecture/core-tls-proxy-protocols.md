@@ -671,7 +671,7 @@ pass yet; concrete blockers:
 
 1. No two-independent-non-Quinn-server interoperability pass recorded
    on frozen executable SHA
-   `639bf186a71c054e11278d1b160ffe7a6f172c02`; the current evidence ledger is
+   `78a77ea153aae239ce7b722aeb9909a87df3bbb5`; the current evidence ledger is
    `plans/http3-independent-interop-and-impairment-qualification-evidence.json`;
    the narrative record is `plans/http3-production-qualification-evidence.md`.
 2. No public-origin Alt-Svc spot-check ledger recorded.

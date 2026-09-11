@@ -16,8 +16,9 @@ discovery/fallback/draining, H3 interop evidence with a retained-
 experimental decision, the independent HTTPX2 2.12.0 sibling facade
 (+ SSE/optional WS), and HTTPX 1.0 preview tracking all landed. HTTPX
 0.28.1 and HTTPX2 2.12.0 were requalified on frozen executable SHA
-`639bf186a71c054e11278d1b160ffe7a6f172c02` after the active HTTP/3 program
-changed executable tests and validation tooling. HTTP/3 remains experimental
+`78a77ea153aae239ce7b722aeb9909a87df3bbb5` after the post-freeze diagnostics
+audit corrected a native counter's semantics; the prior `639bf186...` binding
+is historical. HTTP/3 remains experimental
 because independent interop, impairment, public-origin, and upstream closure
 evidence is still incomplete (evidence/status:
 `httpx-parity-correction-status.md` and

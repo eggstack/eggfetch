@@ -142,7 +142,9 @@ through the native `stream()` method.
   qualification runner and absence is an explicit unsupported result, not
   evidence). The completed 2026-09-11 qualification retained HTTP/3 as
   experimental on frozen executable SHA
-  `639bf186a71c054e11278d1b160ffe7a6f172c02`; the implementation-neutral corpus,
+  `78a77ea153aae239ce7b722aeb9909a87df3bbb5`; the prior `639bf186...` binding
+  is historical after the diagnostics audit corrected a native counter's
+  semantics. The implementation-neutral corpus,
   immutable adapter contract, machine-readable runner, and impairment matrix
   live in `qualification/http3/` and `scripts/`. The graduation gate, exact
   pinned versions, manual spot-check procedure, and named blockers live in
@@ -167,7 +169,8 @@ through the native `stream()` method.
   (logical waits/cancellations). HTTP/3 builds additionally expose bounded
   copied Quinn snapshots through `h3_diagnostics()`; Hyper reuse counts are
   absent, never estimated. `Client::transport_metrics()` is the accessor;
-  tests assert exact counts and diagnostic bounds.
+  tests assert exact counts and diagnostic bounds. Path packet/loss counters
+  remain distinct from connection-level received UDP datagram/byte totals.
 - Limits: native `max_in_flight_requests*` preferred (logical permits, not
   TCP counts); `max_connections*` are pre-1.0 aliases (new wins). Idle caps
   are physical Hyper policy. Facade `Limits(max_connections=...)` unchanged.
@@ -178,9 +181,9 @@ through the native `stream()` method.
 ## HTTPX Compatibility Layer
 
 `eggfetch.compat.httpx` targets HTTPX 0.28.1 (asyncio only; Stage C qualified on
-the frozen executable SHA `639bf186a71c054e11278d1b160ffe7a6f172c02`).
+the frozen executable SHA `78a77ea153aae239ce7b722aeb9909a87df3bbb5`).
 `eggfetch.compat.httpx2` targets httpx2 2.12.0 (sibling facade; independently
-Stage C qualified on the same SHA, profile in `compat/httpx2/2.12.0/profile.toml`). The two facades coexist; importing one
+Stage C qualified on the same SHA, profile in `compat/httpx2/2.12.0/profile.toml`; the prior `639bf186...` binding is historical after the diagnostics audit). The two facades coexist; importing one
 never mutates the other. `compat/httpx/1.0-preview/` is reconnaissance only.
 
 Core facade parity (`plans/httpx2-2.12-core-facade-parity.md`, done):

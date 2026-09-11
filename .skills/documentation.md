@@ -43,7 +43,7 @@ docs/
 ## Plans Directory (`plans/`)
 
 - Completed plans are **historical records, not active requirements** (verification-policy principle 9). Do not treat their step lists as current CI or release gates.
-- The one live ledger is `plans/httpx-parity-correction-status.md`: it records the exact executable SHA that the HTTPX 0.28.1 and httpx2 2.12.0 Stage C qualifications are bound to (`639bf186a71c054e11278d1b160ffe7a6f172c02` at the current freeze). Any change to executable code (Rust sources, tests, build/validation scripts, packaging config) invalidates that binding and requires a fresh exact-SHA requalification from a new freeze, following the current closure plan and status procedure.
+- The one live ledger is `plans/httpx-parity-correction-status.md`: it records the exact executable SHA that the HTTPX 0.28.1 and httpx2 2.12.0 Stage C qualifications are bound to (`78a77ea153aae239ce7b722aeb9909a87df3bbb5` at the current freeze). The prior `639bf186...` binding is historical after the post-freeze HTTP/3 diagnostics audit corrected native counter semantics. Any change to executable code (Rust sources, tests, build/validation scripts, packaging config) invalidates the current binding and requires a fresh exact-SHA requalification from a new freeze, following the current closure plan and status procedure.
 - Docs-only commits do not invalidate the SHA binding.
 - When finishing new work that changes a compatibility claim, update the status ledger and both `compat/httpx/0.28.1/profile.toml` and `compat/httpx2/2.12.0/profile.toml` together; never hand-edit generated manifests.
 
@@ -57,6 +57,6 @@ docs/
   ledger under `qualification/http3/` and `plans/`; unsupported or unexecuted
   external cases must remain explicit.
 - The 2026-09-11 qualification retained HTTP/3 as experimental on frozen
-  executable SHA `639bf186a71c054e11278d1b160ffe7a6f172c02`; do not describe
+  executable SHA `78a77ea153aae239ce7b722aeb9909a87df3bbb5`; do not describe
   documented controls as independent-server or production evidence.
 - Security-sensitive information belongs in `docs/security/` or `docs/architecture/`.

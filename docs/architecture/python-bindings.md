@@ -161,10 +161,11 @@ Body kwargs (`content`, `data`, `json`) are mutually exclusive. `files` may comb
 Two versioned, independent facades share the single Rust engine:
 
 - `eggfetch.compat.httpx` — HTTPX 0.28.1 (Stage C qualified on frozen
-  executable SHA `639bf186a71c054e11278d1b160ffe7a6f172c02`; profile in
+  executable SHA `78a77ea153aae239ce7b722aeb9909a87df3bbb5`; profile in
   `compat/httpx/0.28.1/`, ledger in `plans/httpx-parity-correction-status.md`).
 - `eggfetch.compat.httpx2` — httpx2 2.12.0 sibling (independently Stage C
-  qualified on the same frozen SHA;
+  qualified on the same frozen SHA; the prior `639bf186...` binding is
+  historical after the post-freeze HTTP/3 diagnostics audit;
   profile in `compat/httpx2/2.12.0/profile.toml`). Core facade adds `FunctionAuth`,
   `Origin` + `URL.origin`, `QUERY`, `Headers` merge operators, truststore
   OS-trust default, IPv6 CIDR `NO_PROXY` fix, decoder/multipart/WSGI

@@ -64,7 +64,7 @@ cargo check -p eggfetch-core --all-features
   + `transport/alt_svc.rs`. Fuzz: `fuzz/fuzz_targets/fuzz_alt_svc.rs`
   (parser/cache + suppressor transitions). The completed 2026-09-11
   qualification retained HTTP/3 as experimental on frozen executable SHA
-  `639bf186a71c054e11278d1b160ffe7a6f172c02`;
+  `78a77ea153aae239ce7b722aeb9909a87df3bbb5`;
   the graduation gate and named blockers live in
   `docs/architecture/core-tls-proxy-protocols.md`
   (§ "Production Graduation Decision"). The implementation-neutral corpus

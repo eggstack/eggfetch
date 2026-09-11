@@ -263,8 +263,10 @@ The compatibility profile is pinned in `compat/httpx/0.28.1/` with machine-reada
 
 The facade is Stage C qualified for the documented Python ≥3.10
 asyncio-supported surface of HTTPX 0.28.1 on frozen executable SHA
-`639bf186a71c054e11278d1b160ffe7a6f172c02`. The sibling HTTPX2 2.12.0
-facade is independently Stage C qualified on the same executable tree.
+`78a77ea153aae239ce7b722aeb9909a87df3bbb5`. The sibling HTTPX2 2.12.0
+facade is independently Stage C qualified on the same executable tree. The
+prior `639bf186...` binding is historical after the post-freeze HTTP/3
+diagnostics audit corrected a native counter's semantics.
 These compatibility claims are separate from HTTP/3's retained experimental
 status. See `compat/httpx/0.28.1/profile.toml` and
 `plans/httpx-parity-correction-status.md`.

@@ -123,7 +123,9 @@ eggfetch targets HTTPX 0.28.1 compatibility in phases. The current status:
   lifecycle hardening, observability cleanup. Historical evidence only.
 - **Current requalification**: HTTPX 0.28.1 and HTTPX2 2.12.0 are Stage C
   qualified on frozen executable SHA
-  `639bf186a71c054e11278d1b160ffe7a6f172c02` (2026-09-11). The prior
+  `78a77ea153aae239ce7b722aeb9909a87df3bbb5` (2026-09-11). The prior
+  `639bf186...` binding is historical after the post-freeze HTTP/3
+  diagnostics audit corrected native counter semantics. The earlier
   `65beb67` binding remains historical. Full status is in
   `plans/httpx-parity-correction-status.md`.
 

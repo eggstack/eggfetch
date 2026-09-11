@@ -7,7 +7,10 @@ rebaselined = "2026-08-07"
 rebaseline-sha = "f9eb1a455907d43210886b7b047d18bde8716652"
 # The prior Post-next-scope Stage C claim at `65beb675a5380d3ff4291da6833b91ebf12c769a`
 # is historical only. The active H3 program changed executable test behavior;
-# this profile was renewed on the clean frozen executable tree below. H3's
+# this profile was renewed on the clean frozen executable tree below. The
+# immediately preceding `639bf186...` binding is historical only because the
+# post-freeze HTTP/3 diagnostics audit corrected a native counter's semantics.
+# H3's
 # separate graduation status remains experimental and is not part of this
 # HTTPX API-parity claim.
 # The `cc90f5e...` evidence is retained as historical only: the H3 interop
@@ -22,9 +25,9 @@ rebaseline-sha = "f9eb1a455907d43210886b7b047d18bde8716652"
 # behavior, invalidating the prior binding per the exact-SHA rule.
 stage = "stage-c-qualified"
 status = "qualified"
-qualification-sha = "639bf186a71c054e11278d1b160ffe7a6f172c02"
+qualification-sha = "78a77ea153aae239ce7b722aeb9909a87df3bbb5"
 qualification-date = "2026-09-11"
-historical-current-qualification-sha = "65beb675a5380d3ff4291da6833b91ebf12c769a"
+historical-current-qualification-sha = "639bf186a71c054e11278d1b160ffe7a6f172c02"
 historical-qualification-sha = "cc90f5ed561bbe10d4c26accc54ed3b916518f98, d034a1005857a7f403222dda4bda5f2f204a44fe, d24101be6ed7be64463813750da5b4043d9905ec, 5c7899fefb6df087dfa1b3578fbef9ba64f87742, 9ffa6cd85848fd16a424b65f73254351911777c4, c44d4f25ffebc1a792335163ae4bc106076b3963"
 reference = "httpx==0.28.1"
 
