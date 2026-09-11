@@ -62,13 +62,17 @@ cargo check -p eggfetch-core --all-features
   qualification runner and absence is an explicit unsupported result) and
   unit tests in `transport/http3.rs`
   + `transport/alt_svc.rs`. Fuzz: `fuzz/fuzz_targets/fuzz_alt_svc.rs`
-  (parser/cache + suppressor transitions). Keep the HTTP/3 experimental label;
+  (parser/cache + suppressor transitions). The completed 2026-09-11
+  qualification retained HTTP/3 as experimental on frozen executable SHA
+  `639bf186a71c054e11278d1b160ffe7a6f172c02`;
   the graduation gate and named blockers live in
   `docs/architecture/core-tls-proxy-protocols.md`
   (§ "Production Graduation Decision"). The implementation-neutral corpus
   and opt-in machine-readable runner are in `qualification/http3/` and
   `scripts/h3_qualification.py`; `scripts/h3_impairment.py` coordinates
-  platform-specific netem runners. Neither is part of Tier 1.
+  platform-specific netem runners. The evidence record is
+  `plans/http3-production-qualification-evidence.md`; neither runner is part
+  of Tier 1.
 
 ## Observability & Limits (native-protocol-observability)
 

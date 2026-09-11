@@ -22,6 +22,14 @@ At the current tree the 20 deterministic Quinn/h3 controls pass. Independent
 server, public-origin, and full impairment evidence remain open blockers; the
 HTTP/3 experimental label is therefore retained.
 
+## Closure status
+
+This child plan is **not fully satisfied**: the deterministic corpus and
+fail-closed coordinators are complete, but no independent server adapters,
+public-origin checks, independent drain/reset server, or namespace/netem
+runner were available during the qualification window. Those unchecked
+acceptance items remain named blockers for any future promotion attempt.
+
 ## Closure audit (2026-09-11)
 
 The deterministic Quinn/h3 control corpus passed on frozen executable SHA

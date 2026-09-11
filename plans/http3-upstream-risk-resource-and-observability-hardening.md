@@ -17,6 +17,15 @@ long external soak and broader platform evidence were not available. See
 `http3-production-qualification-evidence.md` for the evidence and explicit
 dispositions.
 
+## Closure status
+
+This child plan is **not fully satisfied**: deterministic resource and
+diagnostic controls are green, but the open upstream correctness issue,
+long-duration external soak, and broader platform evidence remain unresolved
+graduation blockers. The unchecked acceptance items below are intentionally
+preserved for a future requalification rather than marked complete by the
+local control results.
+
 ## 1. Freeze and audit the dependency graph
 
 Record the exact resolved versions and relevant feature flags for:

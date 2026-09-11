@@ -6,6 +6,10 @@ Depends on:
 - `plans/http3-independent-interop-and-impairment-qualification.md`
 - `plans/http3-upstream-risk-resource-and-observability-hardening.md`
 
+Execution status: completed on `639bf186a71c054e11278d1b160ffe7a6f172c02`.
+The literal graduation gate was not met; this plan closed with HTTP/3
+retained as experimental and the missing evidence recorded as blockers.
+
 ## Objective
 
 Perform the final audit, exact-SHA freeze, objective HTTP/3 graduation decision, and compatibility requalification after all qualification-sensitive H3 work has landed. This plan must not hide missing H3 evidence behind successful HTTPX tests, nor invalidate existing HTTPX Stage C claims without renewing them on the final executable tree.
@@ -159,6 +163,9 @@ documentation/profile/ledger descendants were pushed in fast-forwards.
 Existing CI runs `34578376515` (`c053fe0`) and `34579165931` (`a5237f8`)
 passed; the descendant diffs contain no executable files, so they are valid
 routine-CI evidence for the frozen executable tree.
+
+The `[x]` evidence item below means the blocked or unsupported evidence was
+recorded in the ledger; it does not mean the graduation gate passed.
 
 ## 9. Documentation truth pass
 

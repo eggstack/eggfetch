@@ -22,6 +22,9 @@ because independent interop, impairment, public-origin, and upstream closure
 evidence is still incomplete (evidence/status:
 `httpx-parity-correction-status.md` and
 `http3-independent-interop-and-impairment-qualification-evidence.json`).
+The follow-on HTTP/3 production qualification program is complete as a
+retained-experimental outcome; its missing evidence is recorded in
+`http3-production-qualification-evidence.md` rather than treated as a pass.
 
 ### Current supported surfaces
 

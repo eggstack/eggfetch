@@ -3,6 +3,9 @@
 Planning baseline: `be7bf441661a923637b92ba8e449342868c56aa5` (`main`, 2026-09-11)
 Prior evidence: `plans/http3-interoperability-and-production-graduation.md`
 Current status: HTTP/3 **experimental**.
+Execution status: completed on the frozen executable tree with the
+experimental label retained; missing external evidence is recorded as
+blockers, not waived.
 
 ## Objective
 
@@ -30,7 +33,7 @@ Execute in this order:
 2. `http3-upstream-risk-resource-and-observability-hardening.md`
 3. `http3-production-graduation-and-compatibility-requalification.md`
 
-Plans 1 and 2 may be developed in parallel where they do not touch the same executable paths, but both must close before the final graduation/freeze plan.
+Plans 1 and 2 may be developed in parallel where they do not touch the same executable paths, but both must be audited before the final graduation/freeze plan. Unresolved acceptance items remain blockers rather than being waived by the freeze.
 
 ## Invariants
 
@@ -46,11 +49,13 @@ Plans 1 and 2 may be developed in parallel where they do not touch the same exec
 
 ## Qualification-sensitive boundary
 
-The prior HTTPX 0.28.1 and HTTPX2 2.12.0 executable binding was
+At program start, the prior HTTPX 0.28.1 and HTTPX2 2.12.0 executable binding was
 `65beb675a5380d3ff4291da6833b91ebf12c769a`. Any Rust/Python source, tests,
 manifests, lockfile, validation scripts, package configuration, dependency
 changes, or qualification tooling introduced by this program invalidates that
-binding for the new tree. The profiles now record qualification pending.
+binding for the new tree. The profiles were subsequently renewed on the final
+frozen executable SHA `639bf186a71c054e11278d1b160ffe7a6f172c02`; that renewal
+is separate from the HTTP/3 graduation decision.
 
 Therefore:
 
@@ -124,9 +129,9 @@ Graduation does not imply 0-RTT, WebTransport, datagrams, MASQUE, migration, or 
 
 ## Exit criteria
 
-- [ ] both implementation/qualification child plans close with their acceptance criteria satisfied or blockers explicitly recorded;
-- [ ] one exact executable SHA is frozen after all qualification-sensitive changes;
-- [ ] a reproducible evidence ledger identifies independent server versions/images, impairment scenarios, upstream dependency review, resource results and public spot checks;
-- [ ] HTTPX 0.28.1 and HTTPX2 2.12.0 are requalified on the frozen executable SHA if invalidated by this program;
-- [ ] HTTP/3 is either promoted under the narrow stable scope above or retained experimental with named unresolved blockers;
-- [ ] documentation and plan index match the actual decision.
+- [x] both implementation/qualification child plans were audited, with unsatisfied acceptance items and blockers explicitly recorded;
+- [x] one exact executable SHA was frozen after all qualification-sensitive changes;
+- [x] a reproducible evidence ledger identifies executed controls, unavailable independent servers, impairment scenarios, upstream dependency review, resource results and empty public-spot-check records;
+- [x] HTTPX 0.28.1 and HTTPX2 2.12.0 were requalified on the frozen executable SHA after this program's qualification-sensitive changes;
+- [x] HTTP/3 was retained as experimental with named unresolved blockers;
+- [x] documentation and plan index match the actual decision.

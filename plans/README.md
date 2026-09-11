@@ -2,11 +2,17 @@
 
 This directory contains active implementation plans, live qualification/status records, and historical implementation records. Completed plans are non-normative unless another current document explicitly says otherwise. Verification and release policy remain governed by `docs/verification-policy.md` and `docs/releases/process.md`.
 
-## Active program — HTTP/3 production qualification (2026-09-11)
+## Completed qualification program — HTTP/3 production qualification (2026-09-11)
 
 Handoff program: `http3-production-qualification-program.md`
 
-Objective: close the blockers left by the prior HTTP/3 graduation attempt and make a new evidence-based decision on whether ordinary H3 operation can move from **experimental** to **supported**. This is a qualification/hardening program, not a feature-expansion program.
+Objective: close the blockers left by the prior HTTP/3 graduation attempt and make a new evidence-based decision on whether ordinary H3 operation can move from **experimental** to **supported**. This was a qualification/hardening program, not a feature-expansion program.
+
+Execution is complete with a truthful retained-**experimental** outcome. The
+child plans remain evidence records, but their unchecked external acceptance
+items are not silently treated as satisfied. A future promotion attempt must
+supply the missing evidence and perform a new executable freeze and
+compatibility requalification.
 
 Execution order:
 

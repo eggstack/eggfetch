@@ -56,4 +56,7 @@ docs/
 - HTTP/3 qualification claims must point to the versioned corpus and evidence
   ledger under `qualification/http3/` and `plans/`; unsupported or unexecuted
   external cases must remain explicit.
+- The 2026-09-11 qualification retained HTTP/3 as experimental on frozen
+  executable SHA `639bf186a71c054e11278d1b160ffe7a6f172c02`; do not describe
+  documented controls as independent-server or production evidence.
 - Security-sensitive information belongs in `docs/security/` or `docs/architecture/`.

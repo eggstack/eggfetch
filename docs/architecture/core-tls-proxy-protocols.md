@@ -648,13 +648,14 @@ the procedure on a frozen SHA.
 
 HTTP/3 remains **experimental** for ordinary request/response operation.
 The objective gate in
-`plans/http3-interoperability-and-production-graduation.md` does not
+`plans/http3-production-qualification-program.md` does not
 pass yet; concrete blockers:
 
 1. No two-independent-non-Quinn-server interoperability pass recorded
    on frozen executable SHA
    `639bf186a71c054e11278d1b160ffe7a6f172c02`; the current evidence ledger is
-   `plans/http3-independent-interop-and-impairment-qualification-evidence.json`.
+   `plans/http3-independent-interop-and-impairment-qualification-evidence.json`;
+   the narrative record is `plans/http3-production-qualification-evidence.md`.
 2. No public-origin Alt-Svc spot-check ledger recorded.
 3. Impairment harness covers blackhole/restart/early-close/cancellation
    locally; packet-loss/reordering/jitter/duplication/MTU/address-family

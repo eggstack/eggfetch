@@ -34,8 +34,9 @@ normal Rust test suite; independent-server, impairment, and public-origin
 qualification are opt-in and never routine CI dependencies. The machine-
 readable corpus and runners are in [`qualification/http3/`](qualification/http3/)
 and [`scripts/h3_qualification.py`](scripts/h3_qualification.py). See the
-[HTTP/3 production qualification plan](plans/http3-independent-interop-and-impairment-qualification.md)
-for the graduation gate and current evidence status. A local control-only
+[HTTP/3 production qualification program](plans/http3-production-qualification-program.md)
+and [evidence record](plans/http3-production-qualification-evidence.md) for
+the graduation gate and current evidence status. A local control-only
 run is `python3 scripts/h3_qualification.py --local-only --output
 /tmp/eggfetch-h3-local.json`; independent runs require pinned adapter
 manifests and are intentionally not part of CI.

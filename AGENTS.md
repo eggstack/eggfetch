@@ -135,12 +135,15 @@ through the native `stream()` method.
   `tests/h3_alt_svc_discovery.rs`, and `tests/h3_interop_qualification.rs`
   (loopback controls; external endpoints are supplied only by the opt-in
   qualification runner and absence is an explicit unsupported result, not
-  evidence). HTTP/3 remains experimental; the implementation-neutral corpus,
+  evidence). The completed 2026-09-11 qualification retained HTTP/3 as
+  experimental on frozen executable SHA
+  `639bf186a71c054e11278d1b160ffe7a6f172c02`; the implementation-neutral corpus,
   immutable adapter contract, machine-readable runner, and impairment matrix
   live in `qualification/http3/` and `scripts/`. The graduation gate, exact
   pinned versions, manual spot-check procedure, and named blockers live in
   `docs/architecture/core-tls-proxy-protocols.md` (§ "Production Graduation
-  Decision").
+  Decision") and the evidence record in
+  `plans/http3-production-qualification-evidence.md`.
 - Trailers: `SharedTrailers` is populated by `wrap_incoming` (H1/H2) and the
   H3 body unfold (via `recv_trailers`) without buffering; `Response::trailers()`
   is `None` until EOF, on no-trailers, or on pre-trailer body errors. H1
