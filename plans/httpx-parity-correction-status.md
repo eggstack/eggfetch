@@ -196,9 +196,13 @@ special qualification workflow was created.
 - Conclusion: success (9m40s, 2026-09-11)
 - Relationship to `FROZEN_EXECUTABLE_SHA`: identical (the freeze commit).
 
-The qualification-record commit is a docs/profile/ledger-only descendant;
-its routine CI run will be recorded here in a follow-up docs-only commit
-after push (same pattern as the `cc90f5e` cycle).
+- Record-descendant CI: `CI`, run `34559737614`
+- Head SHA: `e48d27b0e6befaafe3a27a00dde40df3654311df` (the
+  documentation/profile/ledger record commit — a docs-only descendant of
+  the frozen executable SHA, so the run covers the frozen executable tree)
+- Conclusion: success (8m10s, 2026-09-11)
+- Relationship to `FROZEN_EXECUTABLE_SHA`: executable-identical
+  descendant (proven by the descendant audit above).
 
 ### Closure statement
 
