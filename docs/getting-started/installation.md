@@ -65,13 +65,6 @@ cargo build --release -p eggfetch-cli
 
 The binary is placed in `target/release/eggfetch`.
 
-### Pre-built binaries
-
-Pre-built CLI binaries for Linux, macOS, and Windows are available on the
-[GitHub Releases](https://github.com/eggstack/eggfetch/releases) page.
-Download the archive for your platform and place the `eggfetch` binary
-somewhere on your `PATH`.
-
 ## Platform support
 
 | Platform | Status |

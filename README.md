@@ -1,11 +1,13 @@
 # eggfetch
 
-eggfetch is a Rust-native HTTP client engine with Python bindings and a CLI tool. The core is async-first: a Rust engine built on tokio and hyper provides connection pooling, phase-aware timeouts, TLS configuration, streaming, and response decompression. The Python bindings expose both sync and async APIs; the sync API blocks on the async engine while releasing the GIL, and the async API integrates with asyncio. There is exactly one networking implementation, living entirely in Rust.
-
 [![CI](https://github.com/eggstack/eggfetch/actions/workflows/ci.yml/badge.svg)](https://github.com/eggstack/eggfetch/actions/workflows/ci.yml)
 [![Crates.io](https://img.shields.io/crates/v/eggfetch-core)](https://crates.io/crates/eggfetch-core)
+[![Crates.io Downloads](https://img.shields.io/crates/d/eggfetch-core)](https://crates.io/crates/eggfetch-core)
 [![PyPI version](https://img.shields.io/pypi/v/eggfetch)](https://pypi.org/project/eggfetch/)
+[![PyPI Downloads](https://static.pepy.tech/personalized-badge/eggfetch?period=total&units=INTERNATIONAL_SYSTEM&left_color=BLACK&right_color=GREEN&left_text=downloads)](https://pepy.tech/projects/eggfetch)
 [![License](https://img.shields.io/crates/l/eggfetch-core)](LICENSE-MIT)
+
+eggfetch is a Rust-native HTTP client engine with Python bindings and a CLI tool. The core is async-first: a Rust engine built on tokio and hyper provides connection pooling, phase-aware timeouts, TLS configuration, streaming, and response decompression. The Python bindings expose both sync and async APIs; the sync API blocks on the async engine while releasing the GIL, and the async API integrates with asyncio. There is exactly one networking implementation, living entirely in Rust.
 
 ## Features
 
@@ -29,17 +31,7 @@ eggfetch is a Rust-native HTTP client engine with Python bindings and a CLI tool
 - **CLI** -- full-featured HTTP client with streaming output, machine-readable formats, and shell completions
 - **Node.js (experimental prototype)** -- N-API binding with narrow guarantees (UTF-8 string bodies, buffered responses, unstructured errors, stub declarations); see [`docs/architecture/ffi-and-node.md`](docs/architecture/ffi-and-node.md)
 
-HTTP/3 remains experimental. The deterministic loopback controls run in the
-normal Rust test suite; independent-server, impairment, and public-origin
-qualification are opt-in and never routine CI dependencies. The machine-
-readable corpus and runners are in [`qualification/http3/`](qualification/http3/)
-and [`scripts/h3_qualification.py`](scripts/h3_qualification.py). See the
-[HTTP/3 production qualification program](plans/http3-production-qualification-program.md)
-and [evidence record](plans/http3-production-qualification-evidence.md) for
-the graduation gate and current evidence status. A local control-only
-run is `python3 scripts/h3_qualification.py --local-only --output
-/tmp/eggfetch-h3-local.json`; independent runs require pinned adapter
-manifests and are intentionally not part of CI.
+HTTP/3 remains experimental. See [`docs/architecture/core-tls-proxy-protocols.md`](docs/architecture/core-tls-proxy-protocols.md) § "Production Graduation Decision" for the graduation gate and current status.
 
 ## Installation
 
@@ -61,8 +53,6 @@ eggfetch-core = { version = "0.1", features = ["http1", "tls-rustls"] }
 ```bash
 cargo install eggfetch-cli
 ```
-
-Pre-built binaries for Linux, macOS, and Windows are available on the [GitHub Releases](https://github.com/eggstack/eggfetch/releases) page.
 
 ## Usage -- Python
 
@@ -259,17 +249,8 @@ single Rust engine. They coexist and never mutate each other.
 
 ### HTTPX 0.28.1 (`eggfetch.compat.httpx`)
 
-The compatibility profile is pinned in `compat/httpx/0.28.1/` with machine-readable API manifests, allowed-difference tracking, and a parity case registry.
-
-The facade is Stage C qualified for the documented Python ≥3.10
-asyncio-supported surface of HTTPX 0.28.1 on frozen executable SHA
-`78a77ea153aae239ce7b722aeb9909a87df3bbb5`. The sibling HTTPX2 2.12.0
-facade is independently Stage C qualified on the same executable tree. The
-prior `639bf186...` binding is historical after the post-freeze HTTP/3
-diagnostics audit corrected a native counter's semantics.
-These compatibility claims are separate from HTTP/3's retained experimental
-status. See `compat/httpx/0.28.1/profile.toml` and
-`plans/httpx-parity-correction-status.md`.
+An asyncio-compatible facade targeting HTTPX 0.28.1. See
+`compat/httpx/0.28.1/profile.toml` for the pinned compatibility profile.
 
 Key differences from HTTPX:
 - Trio/AnyIO not supported (asyncio only, tokio-based)
@@ -283,56 +264,30 @@ Key differences from HTTPX:
   values; `Timeout()` without a scalar or all four phases raises as in HTTPX
 - Core proxy configuration is explicit; the HTTPX compatibility facade honors
   scheme-specific `HTTP_PROXY`/`HTTPS_PROXY` with `ALL_PROXY` fallback,
-  lowercase forms, `NO_PROXY`, and `trust_env=False`.
+  lowercase forms, `NO_PROXY`, and `trust_env=False`
 - Redirects with buffered retained bodies replay correctly; arbitrary one-shot body iterators are rejected before the next hop
-- Request-local cookies and explicit Cookie headers are preserved within the facade jar model; native cookie kwargs are not used
+- Request-local cookies and explicit Cookie headers are preserved within the facade jar model
 - Response streaming is asyncio-compatible and supports incremental text decoding and chunk-size control
-- Compatibility raw iteration defaults to `chunk_size=None`, marks live streams consumed before the first source read, counts consumed source bytes before chunk adaptation, and closes automatically only on normal exhaustion; close a partially consumed response explicitly.
-- Native compressed-response raw parity is implemented through a core-owned one-shot pre-decompression boundary: a streaming response selects either exact encoded raw bytes or the existing decoded path on first body consumption. Core's existing decoded-header policy still removes `Content-Encoding` and `Content-Length` when automatic decompression is enabled; the compatibility facade restores only the original wire values for those two headers from a narrow read-only snapshot.
-
-The corrective transport pass routes UDS through Hyper's normal HTTP/TLS
-machinery, accepts HTTPX host-only `local_address` values with an ephemeral
-source port, and maintains a persistent SOCKS Hyper pool per route. SOCKS
-authentication, address types, origin TLS, cancellation, and reuse are pinned
-to HTTPX 0.28.1. Environment proxy discovery follows Python's HTTPX-compatible
-precedence and `NO_PROXY` URL-pattern rules: ordinary bare domains match the
-bare host and subdomains at label boundaries, leading-dot domains match
-subdomains only, localhost/IP literals remain exact, and explicit host ports
-match only normalized explicit target ports. Scheme-qualified entries retain
-their scheme and URL-pattern host/port constraints; CIDR-looking entries do
-not gain native subnet matching. Bare unbracketed IPv6 literals use HTTPX's
-accepted environment form; bracketed IPv6 and IPv6 prefix-looking forms are
-rejected before dispatch, matching HTTPX 0.28.1 rather than native Rust's
-richer parser. The matrix includes scheme-qualified and bare-IPv6 entries.
-HTTP and HTTPS proxy endpoints are distinct: HTTPS proxy
-URLs establish TLS to the proxy before forward or CONNECT proxying. The safe
- three-element `socket_options` form is supported; HTTPX's valid four-element
-  `(level, option, None, optlen)` form remains a narrow safe-Rust limitation.
-  Ordinary three-element values may be `int`, `bytes`, or `bytearray`.
 - `Proxy(headers=...)` is forwarded on the proxy leg only and is never sent
   through a CONNECT tunnel or to the origin; sensitive values are redacted in
-  diagnostic representations.
+  diagnostic representations
 - HTTP/2-only works for direct TLS, cleartext prior knowledge, the SNI override
   route, the SOCKS HTTPS route, and the specialized direct/UDS paths. HTTP
   CONNECT proxy origin framing remains HTTP/1.1, and HTTP/2 `stream_id` remains
-  metadata-only and unavailable.
+  metadata-only and unavailable
 - Sync trace callbacks work on both `Client` and `AsyncClient`; coroutine
   trace callbacks are rejected with `TypeError` before dispatch because
-  the core `TraceObserver` is synchronous and cannot await a Python
-  coroutine without unbounded reentrancy risk.
-- One native extension parser serves sync/async buffered/streaming paths
-  for `target`, `sni_hostname`, and `trace`. Callback errors are surfaced
-  on every path (success or failure) at the declared boundary.
+  the core `TraceObserver` is synchronous
 
 Remaining differences are documented in `compat/httpx/0.28.1/allowed-differences.toml`; the compatibility claim is limited to the pinned HTTPX 0.28.1 profile and the supported asyncio surface.
 
 ### HTTPX2 2.12.0 (`eggfetch.compat.httpx2`)
 
-A sibling facade for Pydantic's maintained `httpx2==2.12.0` line, pinned in
-`compat/httpx2/2.12.0/` with its own reference manifest, allowed-difference
-ledger, and parity cases. It reuses the same Rust engine and shared
+A sibling facade for the maintained `httpx2==2.12.0` line, pinned in
+`compat/httpx2/2.12.0/` with its own reference manifest and
+allowed-difference ledger. It reuses the same Rust engine and shared
 compatibility helpers where semantics are identical; HTTPX2-specific
-semantics (see below) live behind explicit profile boundaries and never
+semantics live behind explicit profile boundaries and never
 leak into `eggfetch.compat.httpx`.
 
 ```python
@@ -341,43 +296,20 @@ from eggfetch.compat.httpx2 import Client, AsyncClient
 client = Client()  # httpx2 2.12.0 surface: FunctionAuth, Origin, QUERY, SSE, optional WS
 ```
 
-New surface vs 0.28.1 — core facade (done): `FunctionAuth`
-(callable auth adapter over the shared auth-flow state machine),
-`Origin` + `URL.origin` (normalized, immutable/hashable; scheme/IDNA/
-default-port/IPv4/IPv6), `QUERY` (`query` top-level +
-`Client.query`/`AsyncClient.query` as an ordinary method token),
-`Headers` merge operators (`|`/`|=` with case-insensitive replacement,
-duplicate handling, and redaction preserved), `alias_httpx()` (explicit
-opt-in only; ordinary imports never alias), truststore OS-trust default
-(`create_ssl_context(verify=True)` uses system roots via `truststore`,
-falling back to certifi only when unavailable; `verify=<str>`/`cert=...`
-deprecation warnings match the reference `DeprecationWarning` category,
-while `URL.raw` uses `HTTPXDeprecationWarning` as in upstream), RFC 9110
-status renames with reference-matching `DeprecationWarning` aliases, and
-behavior hardening: IPv6 CIDR `NO_PROXY` fix (versioned parser; 0.28.1
-oddities preserved), chained-decoder cap (native 4 vs reference 5 —
-intentionally stricter, classified, never weakened), bounded streaming
-decode with close-on-failure, multipart part-header validation before
-bytes are emitted, and WSGI Transfer-Encoding/buffered-length preservation.
-Streaming protocols (done): SSE (`EventSource`, `ServerSentEvent`,
-`SSEError` + `Client.sse`) and optional WebSocket (`websocket` top-level +
-`Client.websocket`, `httpx2.websockets.*` over the existing 101
-`network_stream` with wsproto framing — no second socket/TLS stack).
-Base installs never require WebSocket-only dependencies; the WS surface
-raises a clear `ImportError` (`pip install httpx2[ws]`, i.e. wsproto) when
-requested without support. Python 3.10–3.13 distribution scope; Pyodide/jsfetch and CLI extras are
-not applicable. Stage C was renewed after the active HTTP/3 program's
-executable changes; the profile and live status ledger record the exact
-frozen SHA and evidence.
+New surface vs 0.28.1: `FunctionAuth`, `Origin` + `URL.origin`,
+`QUERY` (`query` top-level + `Client.query`/`AsyncClient.query`),
+`Headers` merge operators (`|`/`|=`), `alias_httpx()` (explicit
+opt-in only), truststore OS-trust default, RFC 9110 status renames,
+plus SSE (`EventSource` over streamed responses) and optional WebSocket
+(wsproto framing over the existing 101 `network_stream` — no second
+socket/TLS stack, `pip install httpx2[ws]` for WS support).
+Python 3.10–3.13 distribution scope.
 
 ### HTTPX 1.0 preview (no compatibility promise)
 
-`compat/httpx/1.0-preview/` tracks the original HTTPX 1.0 redesign as
-reconnaissance only (`httpx==1.0.dev6`, 2026-08-31; 36-symbol manifest, 192
-ungated deltas vs `0.28.1`, bucket impact notes). No dev release is a
-supported contract; see that directory (`preview-status.toml`,
-`redesign-notes.md`) for the observed version, delta notes, and the
-RC/stable trigger that would open a future implementation program.
+`compat/httpx/1.0-preview/` tracks the HTTPX 1.0 redesign as
+reconnaissance only. No dev release is a supported contract; see that
+directory for the observed version, delta notes, and entry criteria.
 
 ### 101 Switching Protocols and `network_stream`
 
@@ -428,7 +360,7 @@ eggfetch follows a security-hardening program covering dependencies, TLS, redire
 
 ## License
 
-eggfetch is dual-licensed under [MIT](LICENSE-MIT) and [Apache License, Version 2.0](LICENSE-APACHE). You may use this project under either license.
+eggfetch is licensed under the [MIT License](LICENSE-MIT).
 
 ## MSRV
 
