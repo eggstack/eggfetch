@@ -1,12 +1,16 @@
 [package]
 name = "eggfetch-core"
-version = "0.1.1"
+version = "0.1.2"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+homepage.workspace = true
 readme.workspace = true
-description = "Async-first HTTP client engine for eggfetch"
+description = "Async-first Rust HTTP client engine (tokio + hyper) with connection pooling, phase-aware timeouts, TLS, proxies, and compression"
+documentation = "https://docs.rs/eggfetch-core"
+keywords = ["http", "https", "client", "async", "tls"]
+categories = ["network-programming", "web-programming", "asynchronous"]
 
 [lints]
 workspace = true

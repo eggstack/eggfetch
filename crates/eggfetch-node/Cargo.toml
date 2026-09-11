@@ -1,12 +1,16 @@
 [package]
 name = "eggfetch-node"
-version = "0.1.1"
+version = "0.1.2"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+homepage.workspace = true
 readme.workspace = true
-description = "Experimental Node.js prototype bindings for eggfetch via N-API"
+description = "Experimental Node.js (N-API) bindings for the eggfetch HTTP engine"
+documentation = "https://docs.rs/eggfetch-node"
+keywords = ["nodejs", "napi", "bindings", "http", "client"]
+categories = ["api-bindings", "network-programming"]
 
 [lib]
 crate-type = ["cdylib"]
@@ -15,7 +19,7 @@ crate-type = ["cdylib"]
 napi-build = "2"
 
 [dependencies]
-eggfetch-ffi = { version = "0.1.1", path = "../eggfetch-ffi", default-features = false }
+eggfetch-ffi = { version = "0.1.2", path = "../eggfetch-ffi", default-features = false }
 napi = { version = "2", features = ["async", "napi8", "serde-json"] }
 napi-derive = "2"
 serde = { version = "1", features = ["derive"] }

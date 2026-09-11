@@ -1,12 +1,16 @@
 [package]
 name = "eggfetch-ffi"
-version = "0.1.1"
+version = "0.1.2"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+homepage.workspace = true
 readme.workspace = true
-description = "C ABI bindings for eggfetch-core"
+description = "Stable C ABI bindings for the eggfetch-core HTTP engine"
+documentation = "https://docs.rs/eggfetch-ffi"
+keywords = ["ffi", "c-abi", "http", "bindings", "client"]
+categories = ["api-bindings", "network-programming"]
 
 [lints.rust]
 unsafe_code = "allow"
@@ -35,7 +39,7 @@ compression-deflate = ["eggfetch-core/compression-deflate"]
 multipart = ["eggfetch-core/multipart"]
 
 [dependencies]
-eggfetch-core = { version = "0.1.1", path = "../eggfetch-core" }
+eggfetch-core = { version = "0.1.2", path = "../eggfetch-core" }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "net", "sync"] }
 bytes = "1"
 http = "1"

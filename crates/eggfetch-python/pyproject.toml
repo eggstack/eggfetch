@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "eggfetch"
-version = "0.1.1"
+version = "0.1.2"
 description = "Python bindings for eggfetch"
 readme = "../../README.md"
 requires-python = ">=3.10"
@@ -12,6 +12,7 @@ license = {text = "MIT"}
 authors = [
     {name = "eggfetch contributors"},
 ]
+keywords = ["http", "client", "httpx", "async", "rust"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Programming Language :: Python :: 3",
@@ -22,6 +23,10 @@ classifiers = [
     "Programming Language :: Rust",
     "License :: OSI Approved :: MIT License",
 ]
+
+[project.urls]
+Homepage = "https://github.com/eggstack/eggfetch"
+Repository = "https://github.com/eggstack/eggfetch"
 
 [project.optional-dependencies]
 test = [
