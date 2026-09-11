@@ -76,10 +76,12 @@ cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,ht
   adapter can induce them. Adapter identity and every unsupported case are
   retained in machine-readable results. Absence is not graduation evidence.
 - H3 diagnostics are tested for a bounded 64-entry copied-snapshot store in
-  `transport/metrics.rs` and for real Alt-Svc route generation, remote
-  address, and Quinn packet/byte counters in `tests/h3_alt_svc_discovery.rs`.
-  The unavailable multiplexed stream count is asserted as `None`; no
-  connection handle or peer close-reason text is retained.
+  `transport/metrics.rs` and for real explicit/Alt-Svc route generation,
+  remote address, Quinn path packet/loss counters, UDP datagram/byte
+  counters, close classification, and redaction in
+  `tests/h3_alt_svc_discovery.rs`. The unavailable multiplexed stream count
+  is asserted as `None`; no connection handle or peer close-reason text is
+  retained.
 
 The implementation-neutral corpus is `qualification/http3/corpus.json`.
 `scripts/h3_qualification.py` validates pinned adapter identity and runs the

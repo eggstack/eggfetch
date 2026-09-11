@@ -327,7 +327,7 @@ fn h3_connection_diagnostic(
         alt_svc_generation,
         rtt: connection.rtt(),
         sent_packets: stats.path.sent_packets,
-        received_packets: stats.udp_rx.datagrams,
+        received_datagrams: stats.udp_rx.datagrams,
         lost_packets: stats.path.lost_packets,
         sent_bytes: stats.udp_tx.bytes,
         received_bytes: stats.udp_rx.bytes,
@@ -1154,6 +1154,24 @@ mod tests {
     #[test]
     fn cache_bound_is_sixty_four() {
         assert_eq!(H3_CACHE_MAX_ENTRIES, 64);
+    }
+
+    #[test]
+    fn close_classification_is_sanitized_and_preserves_codes() {
+        let graceful = quinn::ConnectionError::ApplicationClosed(quinn::ApplicationClose {
+            error_code: quinn::VarInt::from_u32(0x100),
+            reason: bytes::Bytes::from_static(b"peer reason must not escape"),
+        });
+        let summary = h3_close_summary(&graceful, true);
+        assert_eq!(summary.kind, H3CloseKind::ApplicationClosed);
+        assert_eq!(summary.code, Some(0x100));
+        assert!(summary.graceful);
+        assert!(!format!("{summary:?}").contains("peer reason"));
+
+        let non_graceful = h3_close_summary(&quinn::ConnectionError::Reset, false);
+        assert_eq!(non_graceful.kind, H3CloseKind::Reset);
+        assert_eq!(non_graceful.code, None);
+        assert!(!non_graceful.graceful);
     }
     #[test]
     fn quic_config_uses_derived_policy() {

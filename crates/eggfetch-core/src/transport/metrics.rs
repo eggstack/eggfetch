@@ -24,9 +24,11 @@
 //! counts are intentionally absent: the legacy pool owns socket lifecycle
 //! and eggfetch cannot observe reuse reliably. No estimate is reported.
 //!
-//! All counters are `AtomicUsize` with `Relaxed` ordering (low overhead,
-//! concurrency-safe). Tests assert exact counts in deterministic local
-//! scenarios (loopback listeners, blackholed UDP for H3).
+//! The counters are `AtomicUsize` with `Relaxed` ordering (low overhead,
+//! concurrency-safe). H3 diagnostic snapshots use a private bounded mutex
+//! because they are copied value records rather than counters. Tests assert
+//! exact counts in deterministic local scenarios (loopback listeners,
+//! blackholed UDP for H3).
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -92,8 +94,8 @@ pub struct H3ConnectionDiagnostic {
     pub rtt: Duration,
     /// QUIC packets sent on the current path.
     pub sent_packets: u64,
-    /// QUIC packets received on the current path.
-    pub received_packets: u64,
+    /// UDP datagrams received on this connection.
+    pub received_datagrams: u64,
     /// QUIC packets declared lost on the current path.
     pub lost_packets: u64,
     /// QUIC bytes sent in UDP datagrams.
@@ -123,7 +125,8 @@ pub struct H3CloseSummary {
 /// Observable transport counters.
 ///
 /// Shared via `Arc` across connectors owned by one [`crate::Client`].
-/// Cloning the `Arc` is cheap; all methods are lock-free.
+/// Cloning the `Arc` is cheap; counter methods are lock-free and diagnostic
+/// snapshots use a private bounded mutex.
 #[derive(Debug, Default)]
 pub struct TransportMetrics {
     /// Direct-connector `call` attempts (connector events).
@@ -496,7 +499,7 @@ mod tests {
                 alt_svc_generation: None,
                 rtt: Duration::from_millis(1),
                 sent_packets: 1,
-                received_packets: 1,
+                received_datagrams: 1,
                 lost_packets: 0,
                 sent_bytes: 1,
                 received_bytes: 1,
@@ -517,7 +520,7 @@ mod tests {
             alt_svc_generation: Some(7),
             rtt: Duration::from_millis(2),
             sent_packets: 2,
-            received_packets: 2,
+            received_datagrams: 2,
             lost_packets: 1,
             sent_bytes: 2,
             received_bytes: 2,

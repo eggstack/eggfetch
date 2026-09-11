@@ -360,6 +360,31 @@ async fn http3only_is_strict_no_fallback() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn explicit_http3_records_native_diagnostic_snapshot() {
+    let ca = CertAuthority::new();
+    let (cert, key) = ca.generate_server_cert(&["localhost", "127.0.0.1"]);
+    let server = VerifiedH3Server::start(cert, key, b"explicit-diagnostic".to_vec()).await;
+    let client = h3only_danger_client();
+    let url = format!("https://127.0.0.1:{}/", server.addr.port());
+
+    let mut response = client.get(&url).unwrap().send().await.expect("H3");
+    assert_eq!(response.text().await.expect("body"), "explicit-diagnostic");
+
+    let diagnostics = client.transport_metrics().h3_diagnostics();
+    assert_eq!(diagnostics.len(), 1);
+    let diagnostic = &diagnostics[0];
+    assert_eq!(diagnostic.route, eggfetch_core::H3RouteKind::Explicit);
+    assert_eq!(diagnostic.alt_svc_generation, None);
+    assert_eq!(diagnostic.remote_address, server.addr);
+    assert!(diagnostic.sent_packets > 0);
+    assert!(diagnostic.received_datagrams > 0);
+    assert!(diagnostic.open_streams.is_none());
+    let debug = format!("{diagnostic:?}");
+    assert!(!debug.contains("peer reason"));
+    assert!(!debug.contains("authorization"));
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn auto_without_altsvc_never_attempts_h3() {
     let ca = CertAuthority::new();
     let https = HttpsAltSvcServer::start(&ca, &["localhost"], None, b"h1-only".to_vec()).await;
