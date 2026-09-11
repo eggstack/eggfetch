@@ -260,11 +260,12 @@ single Rust engine. They coexist and never mutate each other.
 
 The compatibility profile is pinned in `compat/httpx/0.28.1/` with machine-readable API manifests, allowed-difference tracking, and a parity case registry.
 
-The facade was Stage C qualified for the documented Python ≥3.10
-asyncio-supported surface of HTTPX 0.28.1. That exact-SHA evidence is now
-historical while the active HTTP/3 qualification program changes executable
-tests and tooling; fresh qualification is required before restoring the
-Stage C claim. See `compat/httpx/0.28.1/profile.toml` and
+The facade is Stage C qualified for the documented Python ≥3.10
+asyncio-supported surface of HTTPX 0.28.1 on frozen executable SHA
+`639bf186a71c054e11278d1b160ffe7a6f172c02`. The sibling HTTPX2 2.12.0
+facade is independently Stage C qualified on the same executable tree.
+These compatibility claims are separate from HTTP/3's retained experimental
+status. See `compat/httpx/0.28.1/profile.toml` and
 `plans/httpx-parity-correction-status.md`.
 
 Key differences from HTTPX:
@@ -362,9 +363,9 @@ Streaming protocols (done): SSE (`EventSource`, `ServerSentEvent`,
 Base installs never require WebSocket-only dependencies; the WS surface
 raises a clear `ImportError` (`pip install httpx2[ws]`, i.e. wsproto) when
 requested without support. Python 3.10–3.13 distribution scope; Pyodide/jsfetch and CLI extras are
-not applicable. The prior Stage C result is historical while the active
-HTTP/3 program is qualification-pending; the profile and live status ledger
-record the required fresh exact-SHA requalification.
+not applicable. Stage C was renewed after the active HTTP/3 program's
+executable changes; the profile and live status ledger record the exact
+frozen SHA and evidence.
 
 ### HTTPX 1.0 preview (no compatibility promise)
 

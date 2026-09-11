@@ -62,7 +62,7 @@ cargo check -p eggfetch-core --all-features
   qualification runner and absence is an explicit unsupported result) and
   unit tests in `transport/http3.rs`
   + `transport/alt_svc.rs`. Fuzz: `fuzz/fuzz_targets/fuzz_alt_svc.rs`
-  (parser/cache + suppressor transitions). Keep the experimental label;
+  (parser/cache + suppressor transitions). Keep the HTTP/3 experimental label;
   the graduation gate and named blockers live in
   `docs/architecture/core-tls-proxy-protocols.md`
   (§ "Production Graduation Decision"). The implementation-neutral corpus

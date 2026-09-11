@@ -22,6 +22,15 @@ At the current tree the 20 deterministic Quinn/h3 controls pass. Independent
 server, public-origin, and full impairment evidence remain open blockers; the
 HTTP/3 experimental label is therefore retained.
 
+## Closure audit (2026-09-11)
+
+The deterministic Quinn/h3 control corpus passed on frozen executable SHA
+`639bf186a71c054e11278d1b160ffe7a6f172c02`. No independent server adapters,
+public-origin checks, independent drain/reset server, or namespace/netem
+runner were available, so those acceptance items remain explicit blockers;
+they are not waived by the local pass. See
+`http3-production-qualification-evidence.md` and the JSON evidence ledger.
+
 ## 1. Define the qualification corpus once
 
 Create one implementation-neutral client corpus that can target local Quinn/h3 fixtures and externally supplied independent H3 servers without duplicating assertions per server.

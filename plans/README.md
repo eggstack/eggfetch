@@ -16,13 +16,18 @@ Execution order:
 
 Plans 1 and 2 may overlap where implementation paths do not conflict, but both must close before plan 3 freezes the tree.
 
-Current H3 status remains **experimental** until the final gate passes. Graduation requires, among other evidence, the required corpus passing against at least two maintained non-Quinn H3 implementations, independent GOAWAY/drain evidence, current public-origin checks, realistic impairment results, bounded resource/soak behavior, and closure of upstream defects that can corrupt ordinary successful H3 operation. Missing evidence remains a blocker; it is never converted into a pass.
+Final decision: HTTP/3 remains **experimental**. Deterministic controls and
+repository gates are green, but independent non-Quinn interop, independent
+GOAWAY/drain, public-origin, realistic impairment, and upstream-risk closure
+evidence remain blockers. Missing evidence remains a blocker; it is never
+converted into a pass.
 
 The prior HTTPX 0.28.1 and HTTPX2 2.12.0 Stage C profiles were bound to
 executable SHA `65beb675a5380d3ff4291da6833b91ebf12c769a`; that binding is
 now historical because this program changed tests and qualification tooling.
-The profiles are Stage C candidates with empty current SHAs until the final
-plan freezes and requalifies the new executable tree.
+The profiles were renewed on frozen executable SHA
+`639bf186a71c054e11278d1b160ffe7a6f172c02` after three consecutive full
+compatibility passes and clean API oracles.
 
 Explicitly out of scope for this program: 0-RTT, WebTransport, H3 datagrams, MASQUE/CONNECT-UDP, connection migration, and automatic H3-by-default policy changes.
 
@@ -41,9 +46,10 @@ Handoff program: `http3-and-next-httpx-compatibility-program.md`
 HTTPX 0.28.1 and HTTPX2 2.12.0 had renewed Stage C results on that SHA
 (evidence: `httpx-parity-correction-status.md`), but those results are now
 historical because the active qualification program changed executable tests
-and validation tooling. The profiles are pending fresh exact-SHA
-requalification. HTTP/3 retained experimental with blockers; HTTPX 1.0 remains
-preview-only. Child plans below are historical records:
+and validation tooling. They were superseded by the current qualification on
+`639bf186a71c054e11278d1b160ffe7a6f172c02`. HTTP/3 retained experimental with
+blockers; HTTPX 1.0 remains preview-only. Child plans below are historical
+records:
 
 1. `http3-alt-svc-discovery-fallback-and-draining.md` — done.
 2. `http3-interoperability-and-production-graduation.md` — done

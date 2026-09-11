@@ -534,7 +534,7 @@ the gate. The qualification-only impairment contract is
 `qualification/http3/impairment-matrix.json`, coordinated by
 `scripts/h3_impairment.py` with a platform-specific namespace/netem runner.
 
-### Dependency and Upstream-Risk Review (2026-09-10)
+### Dependency and Upstream-Risk Review (2026-09-11 frozen-tree audit)
 
 Pinned for this milestone (exact versions from `Cargo.lock` at review time):
 
@@ -550,14 +550,17 @@ Pinned for this milestone (exact versions from `Cargo.lock` at review time):
 Hyper's HTTP/3 integration remains unfinished upstream and the h3
 ecosystem still carries active correctness/interoperability work around
 clean close, buffered data, stream reset/cancel, GOAWAY, QPACK/frame
-parsing, and connection-driver lifecycle. No unsupported fork of
-h3/Quinn is introduced to force graduation. No dependency upgrade is
-taken in this milestone: there is no concrete
-correctness/security/interoperability benefit that outweighs the
-requalification cost, and any future upgrade must land before the
-program freeze. Upgrades require a concrete
-correctness/security/interoperability benefit and land before the
-program freeze.
+parsing, and connection-driver lifecycle. In particular, [h3 issue #338](https://github.com/hyperium/h3/issues/338)
+reports that buffered frame data can be discarded when a QUIC connection
+error arrives in the same receive batch; the affected h3 0.0.8 frame-layer
+behavior can turn an otherwise clean close into a truncated/error response.
+EggFetch has no proven workaround for that ordinary-response path, so this
+is a graduation blocker. Related open reset/STOP_SENDING work remains
+tracked in the H3 upstream-risk ledger. No unsupported fork of h3/Quinn is
+introduced to force graduation, and no dependency upgrade is taken in this
+milestone: the required independent and impairment evidence is also absent,
+so changing versions now would invalidate the completed frozen-tree gates.
+Any future upgrade must land before a new freeze and requalification.
 
 ### Interoperability Evidence (this milestone)
 
@@ -641,7 +644,7 @@ the procedure on a frozen SHA.
   follow the same policy as the rest of the engine. Lack of a
   platform-specific H3 test is not described as support evidence.
 
-### Production Graduation Decision (this milestone): experimental retained
+### Production Graduation Decision (2026-09-11): experimental retained
 
 HTTP/3 remains **experimental** for ordinary request/response operation.
 The objective gate in
@@ -649,13 +652,17 @@ The objective gate in
 pass yet; concrete blockers:
 
 1. No two-independent-non-Quinn-server interoperability pass recorded
-   on the frozen SHA; the current evidence ledger is
+   on frozen executable SHA
+   `639bf186a71c054e11278d1b160ffe7a6f172c02`; the current evidence ledger is
    `plans/http3-independent-interop-and-impairment-qualification-evidence.json`.
 2. No public-origin Alt-Svc spot-check ledger recorded.
 3. Impairment harness covers blackhole/restart/early-close/cancellation
-   locally; packet-loss/reordering/jitter rigs remain future work.
-4. Upstream `h3 0.0.8` / Hyper-H3 hardening still open; graduation
-   must be evidence-driven, not label-driven.
+   locally; packet-loss/reordering/jitter/duplication/MTU/address-family
+   matrix execution remains unavailable without a namespace/netem runner.
+4. Upstream h3 issue #338 (buffered data lost on connection close) remains
+   open and has no EggFetch workaround or reachability proof; related
+   cancellation/reset issues remain under review. Graduation must be
+   evidence-driven, not label-driven.
 
 Removing the experimental label requires the full gate (deterministic
 suites + Alt-Svc/fallback/draining + two independent interop passes +

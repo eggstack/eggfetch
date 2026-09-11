@@ -6,10 +6,10 @@ created = "2026-07-21"
 rebaselined = "2026-08-07"
 rebaseline-sha = "f9eb1a455907d43210886b7b047d18bde8716652"
 # The prior Post-next-scope Stage C claim at `65beb675a5380d3ff4291da6833b91ebf12c769a`
-# is historical only. The HTTP/3 qualification corpus/runner and external
-# evidence tooling changed test/validation behavior, so exact-SHA policy
-# requires a fresh freeze and HTTPX requalification after the active H3 program
-# closes. Do not fill the current qualification SHA before those gates pass.
+# is historical only. The active H3 program changed executable test behavior;
+# this profile was renewed on the clean frozen executable tree below. H3's
+# separate graduation status remains experimental and is not part of this
+# HTTPX API-parity claim.
 # The `cc90f5e...` evidence is retained as historical only: the H3 interop
 # corpus expansion (13 to 20 tests), fuzz_alt_svc suppressor coverage, and
 # httpx2 parity truth passes changed test/validation behavior, invalidating the prior binding per the
@@ -20,10 +20,10 @@ rebaseline-sha = "f9eb1a455907d43210886b7b047d18bde8716652"
 # 1.0-preview tracking, oracle generalization (httpx2 sentinel), and
 # extended-tier dual-profile gates changed executable/test/validation
 # behavior, invalidating the prior binding per the exact-SHA rule.
-stage = "stage-c-candidate"
-status = "qualification-pending-http3-program"
-qualification-sha = ""
-qualification-date = ""
+stage = "stage-c-qualified"
+status = "qualified"
+qualification-sha = "639bf186a71c054e11278d1b160ffe7a6f172c02"
+qualification-date = "2026-09-11"
 historical-current-qualification-sha = "65beb675a5380d3ff4291da6833b91ebf12c769a"
 historical-qualification-sha = "cc90f5ed561bbe10d4c26accc54ed3b916518f98, d034a1005857a7f403222dda4bda5f2f204a44fe, d24101be6ed7be64463813750da5b4043d9905ec, 5c7899fefb6df087dfa1b3578fbef9ba64f87742, 9ffa6cd85848fd16a424b65f73254351911777c4, c44d4f25ffebc1a792335163ae4bc106076b3963"
 reference = "httpx==0.28.1"

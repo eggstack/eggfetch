@@ -2,8 +2,8 @@
   "schema_version": 1,
   "program": "http3-independent-interop-and-impairment-qualification",
   "status": "blocked_pending_external_evidence",
-  "qualification_sha": null,
-  "generated_at": "2026-09-11T00:00:00Z",
+  "qualification_sha": "639bf186a71c054e11278d1b160ffe7a6f172c02",
+  "generated_at": "2026-09-11T08:06:02Z",
   "categories": {
     "deterministic_local": {
       "status": "pass",
@@ -12,21 +12,21 @@
       "notes": "Quinn/h3 loopback controls pass; this is not independent-server graduation evidence."
     },
     "independent_servers": {
-      "status": "not_run",
+      "status": "blocked",
       "required_implementations": 2,
       "passed_implementations": 0,
-      "notes": "Run scripts/h3_qualification.py with a manifest containing pinned, authenticated adapters."
+      "notes": "scripts/h3_qualification.py --local-only completed the deterministic control pass, but no pinned authenticated independent-server adapters were available; 0/2 is recorded, not a pass."
     },
     "impairment": {
       "status": "partial",
       "deterministic_cases": ["udp_blackhole", "server_restart", "path_loss_after_headers", "cancellation_before_headers"],
       "matrix_cases_not_run": ["udp_rejected", "packet_loss_low", "packet_loss_high", "latency_jitter", "packet_reordering", "packet_duplication", "reduced_mtu_pmtu_blackhole", "path_loss_during_upload", "first_address_unreachable", "ipv6_failure_ipv4_success", "ipv4_failure_ipv6_success"],
-      "notes": "The existing loopback tests prove bounded control behavior; namespace/netem execution remains manual and is never a Tier-1 dependency."
+      "notes": "The existing loopback tests prove bounded control behavior. scripts/h3_impairment.py was run without a namespace/netem runner; all 14 matrix scenarios were unsupported, so no impairment graduation evidence is claimed."
     },
     "public_origins": {
       "status": "not_run",
       "successful_origins": 0,
-      "notes": "No volatile public origin is embedded in routine tests. Record current checks in a frozen-SHA ledger before graduation."
+      "notes": "No volatile public origin is embedded in routine tests. The frozen-SHA public-origin ledger remains empty."
     },
     "independent_drain_reset": {
       "status": "not_run",
@@ -39,7 +39,8 @@
       "two independent non-Quinn implementations have not passed the corpus",
       "independent GOAWAY/drain evidence is absent",
       "three current public-origin checks are absent",
-      "loss/reordering/jitter/MTU/address-family impairment evidence is absent"
+      "loss/reordering/jitter/duplication/MTU/address-family impairment evidence is absent",
+      "h3 0.0.8 buffered-data-on-connection-close correctness issue remains open"
     ]
   }
 }

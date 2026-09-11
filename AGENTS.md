@@ -167,10 +167,10 @@ through the native `stream()` method.
 
 ## HTTPX Compatibility Layer
 
-`eggfetch.compat.httpx` targets HTTPX 0.28.1 (asyncio only; prior Stage C evidence is
-historical pending fresh exact-SHA requalification). `eggfetch.compat.httpx2` targets
-httpx2 2.12.0 (sibling facade; prior Stage C evidence is historical pending fresh
-exact-SHA requalification, profile in `compat/httpx2/2.12.0/profile.toml`). The two facades coexist; importing one
+`eggfetch.compat.httpx` targets HTTPX 0.28.1 (asyncio only; Stage C qualified on
+the frozen executable SHA `639bf186a71c054e11278d1b160ffe7a6f172c02`).
+`eggfetch.compat.httpx2` targets httpx2 2.12.0 (sibling facade; independently
+Stage C qualified on the same SHA, profile in `compat/httpx2/2.12.0/profile.toml`). The two facades coexist; importing one
 never mutates the other. `compat/httpx/1.0-preview/` is reconnaissance only.
 
 Core facade parity (`plans/httpx2-2.12-core-facade-parity.md`, done):
@@ -198,10 +198,10 @@ EGGFETCH_COMPAT_REQUIRED=1 python -m pytest crates/eggfetch-python/tests/compat/
 ```
 
 The compatibility profile lives in `compat/httpx/0.28.1/` (`profile.toml`, API manifests,
-`allowed-differences.toml`, `parity-cases.toml`). The qualification is bound to an exact
+`allowed-differences.toml`, `parity-cases.toml`). The qualification is bound to the exact
 executable SHA recorded there; **any executable change invalidates it** and requires a fresh
-exact-SHA requalification from a new freeze, following the current closure plan and status
-procedure (see `plans/httpx-parity-correction-status.md`). Extended-tier
+exact-SHA requalification from a new freeze, following the closure plan and status procedure
+(see `plans/httpx-parity-correction-status.md`). Extended-tier
 gates regenerate and compare the API manifest via `scripts/generate_httpx_api_manifest.py` +
 `scripts/compare_httpx_api_manifest.py`; do not hand-edit generated manifests.
 

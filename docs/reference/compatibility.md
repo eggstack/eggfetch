@@ -121,7 +121,11 @@ eggfetch targets HTTPX 0.28.1 compatibility in phases. The current status:
   single extension parser, caller-mode `network_stream`, H2-only
   propagation, redaction hardening, request/transport consolidation, H3
   lifecycle hardening, observability cleanup. Historical evidence only.
-- **Next-scope requalification (historical)**: HTTPX 0.28.1 and HTTPX2 2.12.0 were Stage C qualified on frozen executable SHA `65beb675a5380d3ff4291da6833b91ebf12c769a`, qualified 2026-09-11. The active HTTP/3 qualification corpus/runner changed executable test and validation behavior, so both claims are pending fresh exact-SHA requalification. Full status is in `plans/httpx-parity-correction-status.md`.
+- **Current requalification**: HTTPX 0.28.1 and HTTPX2 2.12.0 are Stage C
+  qualified on frozen executable SHA
+  `639bf186a71c054e11278d1b160ffe7a6f172c02` (2026-09-11). The prior
+  `65beb67` binding remains historical. Full status is in
+  `plans/httpx-parity-correction-status.md`.
 
 **httpx2 core facade** (`eggfetch.compat.httpx2`, `H2X-API/META/AUTH/TLS/
 PROXY/COMP/MP/WSGI`): `FunctionAuth`, `Origin`/`URL.origin`, `QUERY`,
@@ -139,9 +143,9 @@ close/cancel releases the body/pool lease); optional WebSocket
 101 `network_stream`, handshake via the normal pipeline, max-message
 enforced across fragments, proxy trust isolated).
 
-**Current status: Stage C candidate — qualification pending for each facade.** The prior
-0.28.1 and httpx2 2.12.0 claims are historical; each profile is awaiting a
-new exact executable SHA after the active HTTP/3 qualification work. Proxy
+**Current status: Stage C qualified for each documented facade.** Both
+profiles are bound to the same frozen executable SHA after the active HTTP/3
+qualification work. Proxy
 headers are forwarded on the proxy leg;
 proxy ssl_context is translated to native TlsConfig; create_ssl_context
 returns a real ssl.SSLContext; SSLContext translation is fail-closed for

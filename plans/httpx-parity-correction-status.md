@@ -4,7 +4,37 @@ This record is the exact-SHA-bound status for the HTTPX 0.28.1 compatibility
 facade. Historical phase and corrective-pass records remain in the git history
 and referenced plans; counts below are only from the runs named here.
 
-## Current state — qualification pending after HTTP/3 program changes (2026-09-11)
+## Current state — Stage C renewed on frozen executable SHA (2026-09-11)
+
+Current designation: **Stage C qualified** for both the documented HTTPX
+0.28.1 and httpx2 2.12.0 asyncio surfaces, bound to executable SHA
+`639bf186a71c054e11278d1b160ffe7a6f172c02`. The active H3 program's only
+executable correction was the lifecycle-test wall-clock margin; it was
+committed before this freeze. The profiles in
+`compat/httpx/0.28.1/profile.toml` and `compat/httpx2/2.12.0/profile.toml`
+record this SHA and the 2026-09-11 qualification date.
+
+Qualification evidence on the unchanged frozen tree:
+
+- focused H3 suites: `h3_hardening` 12/12, `h3_alt_svc_discovery` 16/16,
+  `h3_interop_qualification` 20/20; all are deterministic loopback controls;
+- Tier 1, extended, and package validation: green;
+- full compatibility: three consecutive runs, each 1,870 passed, 26
+  non-failing warnings, zero skips/xfails/failures;
+- API oracles: HTTPX 0.28.1 clean with 71 allowed differences and httpx2
+  2.12.0 clean with 79 allowed differences;
+- required downstream portfolio: 4/4 passed.
+
+HTTP/3 remains **experimental**. The H3 evidence ledger records the missing
+independent non-Quinn server passes, independent GOAWAY/drain evidence,
+public-origin checks, realistic impairment execution, and unresolved upstream
+correctness risk. HTTP/3 status is separate from the HTTPX parity claims.
+
+The frozen executable commit is not yet a remote-CI claim until its existing
+CI run is recorded below; documentation/profile/ledger descendants must not
+change executable files.
+
+## Historical state — qualification pending after HTTP/3 program changes (pre-freeze)
 
 Current designation: **Stage C candidate — qualification pending**. The
 active HTTP/3 qualification program changed tests, validation tooling, and

@@ -15,11 +15,13 @@ The HTTP/3 graduation and next HTTPX compatibility program
 discovery/fallback/draining, H3 interop evidence with a retained-
 experimental decision, the independent HTTPX2 2.12.0 sibling facade
 (+ SSE/optional WS), and HTTPX 1.0 preview tracking all landed. HTTPX
-0.28.1 and HTTPX2 2.12.0 had Stage C results on that SHA, but those results
-are now historical because the active HTTP/3 qualification program changed
-executable tests and validation tooling. Both profiles require fresh exact-SHA
-requalification before the claims are restored (evidence/status:
-`httpx-parity-correction-status.md`).
+0.28.1 and HTTPX2 2.12.0 were requalified on frozen executable SHA
+`639bf186a71c054e11278d1b160ffe7a6f172c02` after the active HTTP/3 program
+changed executable tests and validation tooling. HTTP/3 remains experimental
+because independent interop, impairment, public-origin, and upstream closure
+evidence is still incomplete (evidence/status:
+`httpx-parity-correction-status.md` and
+`http3-independent-interop-and-impairment-qualification-evidence.json`).
 
 ### Current supported surfaces
 
@@ -29,9 +31,9 @@ requalification before the claims are restored (evidence/status:
   multipart encoding, retry policy, HTTP trailers, connector-derived
   connection metadata, transport metrics, and logical in-flight request
   limits.
-- Python sync and asyncio bindings, including the Stage C candidate
+- Python sync and asyncio bindings, including the Stage C-qualified
   `eggfetch.compat.httpx` facade for the documented HTTPX 0.28.1
-  asyncio surface (Python 3.10+) and the independently qualified-in-history
+  asyncio surface (Python 3.10+) and the independently Stage C-qualified
   `eggfetch.compat.httpx2` facade for httpx2 2.12.0 (FunctionAuth,
   Origin, QUERY, header operators, SSE, optional WS).
 - CLI (`eggfetch-cli`) and C ABI (`eggfetch-ffi`) thin adapters.

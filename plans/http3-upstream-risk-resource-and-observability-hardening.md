@@ -7,6 +7,16 @@ Parent: `plans/http3-production-qualification-program.md`
 
 Close the non-interop blockers to a supportable HTTP/3 designation: upstream h3/Quinn correctness risk, long-running lifecycle/resource evidence, and sufficient QUIC diagnostics. Make only narrowly justified production changes discovered by qualification.
 
+## Closure audit (2026-09-11)
+
+The frozen tree records the resolved dependency graph, deterministic lifecycle
+and diagnostic coverage, cache-bound tests, and EggFetch-owned Alt-Svc fuzz
+target. No dependency upgrade or upstream workaround was justified before
+freeze. The open h3 buffered-data-on-close issue remains a promotion blocker;
+long external soak and broader platform evidence were not available. See
+`http3-production-qualification-evidence.md` for the evidence and explicit
+dispositions.
+
 ## 1. Freeze and audit the dependency graph
 
 Record the exact resolved versions and relevant feature flags for:

@@ -31,9 +31,10 @@ Required named evidence includes:
 Do not freeze while known product defects or qualification-script defects are still being corrected.
 
 Acceptance:
-- [ ] no child-plan checkbox is silently waived;
-- [ ] all executable corrections are committed before freeze;
-- [ ] working tree is clean.
+- [x] no child-plan checkbox is silently waived; the unresolved items are
+  recorded as blockers in `http3-production-qualification-evidence.md`;
+- [x] all executable corrections are committed before freeze;
+- [x] working tree was clean at the executable freeze.
 
 ## 2. Change-cluster audit
 
@@ -52,9 +53,17 @@ Group changes by risk:
 For every product behavior change identify focused regression evidence. Confirm that H1/H2, proxy/SOCKS, TLS, request replay, Python bindings and compatibility facades were not accidentally altered outside intended boundaries.
 
 Acceptance:
-- [ ] every executable cluster has focused evidence;
-- [ ] no hidden second transport path was introduced;
-- [ ] HTTPX facade behavior changes, if any, are intentional and separately qualified.
+- [x] every executable cluster in this final delta has focused evidence;
+- [x] no hidden second transport path was introduced;
+- [x] HTTPX facade behavior changes, if any, are intentional and separately qualified.
+
+Frozen-tree audit record: the executable delta from prior qualified SHA
+`65beb675a5380d3ff4291da6833b91ebf12c769a` to frozen SHA
+`639bf186a71c054e11278d1b160ffe7a6f172c02` is limited to the timeout
+qualification fixture's wall-clock assertion margin. The focused timeout
+file, H3 suites, full compatibility suites, and repository tiers were rerun;
+no Rust transport, dependency, manifest, or qualification-runner behavior
+changed in this final delta.
 
 ## 3. Pre-freeze focused gate
 
@@ -98,13 +107,13 @@ Run the full pinned compatibility suite three consecutive times on the unchanged
 Run both API oracles and the required downstream compatibility portfolio.
 
 Acceptance:
-- [ ] Tier 1 green;
-- [ ] extended green with all skips explained;
-- [ ] package validation green;
-- [ ] three consecutive full compatibility runs green without intervening changes;
-- [ ] HTTPX 0.28.1 oracle clean under its existing allowed-difference policy;
-- [ ] HTTPX2 2.12.0 oracle clean under its existing allowed-difference policy;
-- [ ] required downstream portfolio green.
+- [x] Tier 1 green;
+- [x] extended green with all skips explained;
+- [x] package validation green;
+- [x] three consecutive full compatibility runs green without intervening changes;
+- [x] HTTPX 0.28.1 oracle clean under its existing allowed-difference policy;
+- [x] HTTPX2 2.12.0 oracle clean under its existing allowed-difference policy;
+- [x] required downstream portfolio green.
 
 ## 6. HTTP/3 graduation decision
 
@@ -160,6 +169,17 @@ After the executable qualification is fixed, update only documentation/profile/l
 - compatibility profiles/status ledger.
 
 If H3 graduates, document the exact supported scope and advanced-feature exclusions. If not, keep experimental wording and list remaining blockers consistently.
+
+## Execution record (2026-09-11)
+
+The literal gate was evaluated on frozen executable SHA
+`639bf186a71c054e11278d1b160ffe7a6f172c02`. HTTP/3 remains experimental:
+the deterministic local suites and all repository/compatibility gates pass,
+but the required independent-server, independent-drain, public-origin,
+realistic impairment, and upstream-risk evidence does not. Full details are
+in `plans/http3-production-qualification-evidence.md` and the machine-readable
+interop ledger. Both compatibility profiles were renewed on this SHA; this
+does not constitute HTTP/3 graduation.
 
 ## Non-goals
 

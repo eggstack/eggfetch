@@ -160,11 +160,11 @@ Body kwargs (`content`, `data`, `json`) are mutually exclusive. `files` may comb
 
 Two versioned, independent facades share the single Rust engine:
 
-- `eggfetch.compat.httpx` — HTTPX 0.28.1 (Stage C candidate; prior qualification
-  is historical pending fresh exact-SHA requalification; profile in
+- `eggfetch.compat.httpx` — HTTPX 0.28.1 (Stage C qualified on frozen
+  executable SHA `639bf186a71c054e11278d1b160ffe7a6f172c02`; profile in
   `compat/httpx/0.28.1/`, ledger in `plans/httpx-parity-correction-status.md`).
-- `eggfetch.compat.httpx2` — httpx2 2.12.0 sibling (Stage C candidate; prior
-  qualification is historical pending fresh exact-SHA requalification;
+- `eggfetch.compat.httpx2` — httpx2 2.12.0 sibling (independently Stage C
+  qualified on the same frozen SHA;
   profile in `compat/httpx2/2.12.0/profile.toml`). Core facade adds `FunctionAuth`,
   `Origin` + `URL.origin`, `QUERY`, `Headers` merge operators, truststore
   OS-trust default, IPv6 CIDR `NO_PROXY` fix, decoder/multipart/WSGI
@@ -177,11 +177,10 @@ Two versioned, independent facades share the single Rust engine:
 - `compat/httpx/1.0-preview/` — original HTTPX 1.0 reconnaissance only;
   no implementation promise until an RC/stable trigger.
 
-The 0.28.1 facade is a Stage C candidate for the documented Python 3.10+
-asyncio-supported surface. The prior qualification SHA is historical because
-the active HTTP/3 program changed executable tests and validation tooling;
-fresh exact-SHA evidence must be recorded in `compat/httpx/0.28.1/profile.toml`
-and `plans/httpx-parity-correction-status.md` before restoring the claim.
+The 0.28.1 facade is Stage C qualified for the documented Python 3.10+
+asyncio-supported surface on the frozen SHA above. HTTP/3 remains separately
+experimental; its retained label and blockers do not weaken or extend either
+compatibility profile.
 
 ### Architecture Overview
 

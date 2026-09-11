@@ -12,6 +12,16 @@ This is primarily a qualification and hardening program, not a feature-expansion
 
 The prior program closed successfully with the experimental label retained because independent-server interop, public-origin evidence, realistic impairment coverage, and upstream-stack risk closure were incomplete. This program must close those blockers rather than repeating Quinn/h3 self-interop.
 
+## Final-plan outcome (2026-09-11)
+
+The final graduation/requalification plan evaluated the literal gate on frozen
+executable SHA `639bf186a71c054e11278d1b160ffe7a6f172c02`. Deterministic H3
+controls and repository/compatibility validation are green, and both HTTPX
+profiles were renewed on that SHA. HTTP/3 remains experimental because the
+independent-server, independent-drain, public-origin, full impairment, and
+upstream-risk evidence classes are not closed. The complete record is in
+`http3-production-qualification-evidence.md`.
+
 ## Program order
 
 Execute in this order:

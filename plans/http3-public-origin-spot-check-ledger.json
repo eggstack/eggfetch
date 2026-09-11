@@ -2,7 +2,7 @@
   "schema_version": 1,
   "program": "http3-independent-interop-and-impairment-qualification",
   "status": "not_run",
-  "qualification_sha": null,
+  "qualification_sha": "639bf186a71c054e11278d1b160ffe7a6f172c02",
   "entries": [],
   "entry_schema": {
     "date_time_utc": "ISO-8601 UTC timestamp",
@@ -16,5 +16,5 @@
     "transient_failure": "boolean",
     "notes": "diagnostic notes without secrets"
   },
-  "notes": "Populate on a frozen executable SHA. Public origins are never routine CI dependencies and a failed volatile check does not change deterministic test results."
+  "notes": "Frozen executable SHA recorded, but no public-origin checks were run. An empty ledger is an explicit graduation blocker, not evidence of support. Public origins are never routine CI dependencies and a failed volatile check does not change deterministic test results."
 }
