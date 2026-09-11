@@ -1105,6 +1105,12 @@ impl ClientBuilder {
             None
         };
 
+        // The UDS path is accepted on all platforms (see `uds_path`) but
+        // only consumed on Unix; without this the field is never read on
+        // non-Unix targets.
+        #[cfg(not(unix))]
+        let _ = &self.uds_path;
+
         #[cfg(unix)]
         let uds_client = self.uds_path.map(|path| {
             let tls_connector = self.tls_config.as_ref().and_then(|config| {

@@ -3,17 +3,25 @@
 //! The connector only establishes the Unix stream. Hyper owns HTTP framing,
 //! streaming, keep-alive, and response lifecycle exactly as it does for TCP.
 
+#[cfg(unix)]
 use std::future::Future;
+#[cfg(unix)]
 use std::pin::Pin;
+#[cfg(unix)]
 use std::sync::Arc;
+#[cfg(unix)]
 use std::task::{Context, Poll};
 
-use bytes::Bytes;
+#[cfg(unix)]
 use http::Uri;
+#[cfg(unix)]
 use tower_service::Service;
 
+#[cfg(unix)]
 use crate::body::{BoxBytesStream, ResponseBody};
+#[cfg(unix)]
 use crate::error::{Error, Result};
+#[cfg(unix)]
 use crate::response::Response;
 
 #[cfg(unix)]
@@ -257,12 +265,6 @@ pub(crate) async fn send_request(
     }
 }
 
-#[cfg(not(unix))]
-pub(crate) fn unsupported() -> Result<()> {
-    Err(Error::Unsupported(
-        "Unix domain sockets are not supported on this platform".into(),
-    ))
-}
-
-#[allow(dead_code)]
-fn _keep_bytes_import(_: Bytes) {}
+// Unix domain sockets are unsupported on this platform. The non-Unix
+// dispatch site in `pipeline.rs` returns `Error::Unsupported` directly,
+// so no fallback helper lives here.

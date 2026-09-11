@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-09-11
+
+### Fixed
+
+- Windows (`x86_64-pc-windows-msvc`) build with `RUSTFLAGS=-D warnings` (PyPI wheel matrix): `cfg(unix)`-gated the Unix-domain-socket-only imports in `transport/uds.rs`, removed the dead non-Unix `unsupported()` fallback (the non-Unix dispatch site in `pipeline.rs` already returns `Error::Unsupported` directly) and the obsolete `Bytes` import keep-alive, and acknowledged the intentionally cross-platform `ClientBuilder::uds_path` field in `build()` on non-Unix targets. No behavior change on any platform; `uds_path()` remains accepted everywhere and still errors at request time off Unix.
+
 ## [0.1.2] - 2026-09-11
 
 ### Added
