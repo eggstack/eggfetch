@@ -26,10 +26,10 @@ This program does **not** migrate CodeGG or add a CodeGG-specific facade. The mo
 Handoff plan: `http3-post-freeze-diagnostics-requalification-corrective-closure.md`
 
 Trigger: executable/native HTTP/3 diagnostics landed in
-`6a0cfd87551b7f39cd2fd35d128f727` after the prior qualification
+`6a0cfd87551b7c634593e7b39cd2fd35d128f727` after the prior qualification
 freeze `639bf186a71c054e11278d1b160ffe7a6f172c02`. The prior binding is now
 historical. The corrected executable tree was frozen at
-`78a77ea153aae239ce2693fec406fa2a61865dad3`.
+`78a77ea153aae239ce7b722aeb9909a87df3bbb5`.
 
 This was a narrow corrective closure, not another H3 feature or graduation
 program. It completed with the following sequence:
