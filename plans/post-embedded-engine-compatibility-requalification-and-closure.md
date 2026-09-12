@@ -9,8 +9,7 @@ Followed by: `plans/post-embedded-engine-documentation-and-plan-hygiene.md`
 ## Closure evidence — 2026-09-12
 
 Executable/test/fixture freeze: `6e65c5bfc2607b30af8062a9269fcd260ed96464`.
-Tier 1 and extended validation passed; package validation is being completed
-as part of this closure. Both API oracles passed with the existing allowed
+Tier 1, extended, and package validation passed. Both API oracles passed with the existing allowed
 differences. Three consecutive full pinned compatibility runs each passed
 1,870 tests with 26 warnings. The final footprint measurement is tied to the
 same SHA. HTTPX 0.28.1 and HTTPX2 2.12.0 were renewed independently on this
