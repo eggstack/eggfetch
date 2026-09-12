@@ -302,6 +302,16 @@ impl Response {
         self.wire_content_length.as_deref()
     }
 
+    /// Returns the declared wire `Content-Length` as an unsigned integer.
+    ///
+    /// This parses only the original header value. It never reports the
+    /// collected or decompressed body length and returns `None` when the
+    /// header is absent or invalid.
+    #[must_use]
+    pub fn content_length(&self) -> Option<u64> {
+        self.wire_content_length.as_deref()?.parse().ok()
+    }
+
     /// Returns the original wire reason phrase, if present.
     ///
     /// HTTP/1.x responses include a reason phrase after the status code.
@@ -381,6 +391,29 @@ impl Response {
     /// been consumed.
     pub async fn text(&mut self) -> Result<String> {
         self.body.text().await
+    }
+
+    /// Consume and deserialize the response body as JSON.
+    ///
+    /// This follows [`Self::bytes`] single-consumption and decoded-body-limit
+    /// semantics. Media type is not checked; calling this method is explicit
+    /// caller intent. The body is parsed directly from bytes without a lossy
+    /// UTF-8 conversion.
+    ///
+    /// # Errors
+    ///
+    /// Returns a body error when the response cannot be consumed, or
+    /// [`crate::Error::JsonDeserialize`] when the bytes are not valid JSON.
+    #[cfg(feature = "json")]
+    pub async fn json<T: serde::de::DeserializeOwned>(&mut self) -> Result<T> {
+        let bytes = self.bytes().await?;
+        serde_json::from_slice(&bytes).map_err(|error| {
+            crate::Error::JsonDeserialize(format!(
+                "invalid JSON at line {}, column {}",
+                error.line(),
+                error.column()
+            ))
+        })
     }
 
     /// Consume the response body and return a stream of byte chunks.
@@ -630,6 +663,47 @@ mod tests {
             response.headers().get("content-length"),
             Some(&HeaderValue::from_static("42"))
         );
+        assert_eq!(response.content_length(), Some(42));
+    }
+
+    #[test]
+    fn invalid_wire_content_length_is_not_inferred() {
+        let mut headers = HeaderMap::new();
+        headers.insert("content-length", HeaderValue::from_static("not-a-number"));
+        let response = Response::new(
+            StatusCode::OK,
+            Version::HTTP_11,
+            headers,
+            Url::parse("http://example.com").unwrap(),
+            ResponseBody::buffered(Bytes::from_static(b"1234")),
+        );
+        assert_eq!(response.content_length(), None);
+    }
+
+    #[cfg(feature = "json")]
+    #[tokio::test]
+    async fn response_json_deserializes_once_and_classifies_parse_errors() {
+        let mut response = Response::new(
+            StatusCode::OK,
+            Version::HTTP_11,
+            HeaderMap::new(),
+            Url::parse("http://example.com").unwrap(),
+            ResponseBody::buffered(Bytes::from_static(br#"{"key":"value"}"#)),
+        );
+        let value: serde_json::Value = response.json().await.unwrap();
+        assert_eq!(value["key"], "value");
+        assert!(matches!(response.bytes().await, Err(crate::Error::Body(_))));
+
+        let mut invalid = Response::new(
+            StatusCode::OK,
+            Version::HTTP_11,
+            HeaderMap::new(),
+            Url::parse("http://example.com").unwrap(),
+            ResponseBody::buffered(Bytes::from_static(b"{not-json")),
+        );
+        let error = invalid.json::<serde_json::Value>().await.unwrap_err();
+        assert_eq!(error.kind(), "json_deserialize");
+        assert!(!error.to_string().contains("not-json"));
     }
     use futures_util::StreamExt;
 

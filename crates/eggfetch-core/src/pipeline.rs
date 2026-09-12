@@ -332,6 +332,8 @@ struct HopBuildParams {
     auth_disabled: bool,
     /// True only for the first hop of the logical request.
     is_first_hop: bool,
+    /// Preserve the request-scoped resolved destination on a same-origin hop.
+    preserve_resolved_target: bool,
     /// False after a cross-origin redirect; gates client-auth reapplication.
     credentials_allowed: bool,
     /// False after a cross-origin redirect; gates cookie injection.
@@ -367,6 +369,7 @@ fn build_hop_request(client: &Client, params: HopBuildParams) -> Result<Request>
         auth,
         auth_disabled,
         is_first_hop,
+        preserve_resolved_target,
         credentials_allowed,
         cookie_allowed,
     } = params;
@@ -379,10 +382,17 @@ fn build_hop_request(client: &Client, params: HopBuildParams) -> Result<Request>
     hop.set_decompress(decompress);
     #[cfg(feature = "proxy")]
     hop.set_proxy_override(proxy_override);
-    // Transport hints apply only on the first hop; redirects clear them
-    // because the destination changed.
+    // Ordinary wire hints apply only on the first hop. A resolved destination
+    // is different: it remains valid for a same-origin redirect and is
+    // retained only when the redirect loop explicitly permits it.
     if is_first_hop {
         hop.set_transport_hints(transport_hints);
+    } else if preserve_resolved_target {
+        let resolved_hints = crate::request::TransportHints {
+            resolved_target: transport_hints.resolved_target,
+            ..Default::default()
+        };
+        hop.set_transport_hints(resolved_hints);
     }
 
     hop.set_auth(if credentials_allowed { auth } else { None });
@@ -799,6 +809,7 @@ pub(crate) async fn send_with_redirects(client: &Client, request: Request) -> Re
                 auth: req_auth,
                 auth_disabled: req_auth_disabled,
                 is_first_hop: true,
+                preserve_resolved_target: false,
                 credentials_allowed: true,
                 cookie_allowed: true,
             },
@@ -872,6 +883,9 @@ pub(crate) async fn send_with_redirects(client: &Client, request: Request) -> Re
             {
                 cookie_header_allowed = false;
             }
+            if request_transport_hints.resolved_target.is_some() {
+                return Err(Error::ResolvedTargetRedirect);
+            }
         }
 
         let hop_request = build_hop_request(
@@ -890,6 +904,7 @@ pub(crate) async fn send_with_redirects(client: &Client, request: Request) -> Re
                 auth: req_auth.clone(),
                 auth_disabled: req_auth_disabled,
                 is_first_hop,
+                preserve_resolved_target: !is_cross_origin_redirect,
                 credentials_allowed,
                 #[cfg(feature = "cookies")]
                 cookie_allowed: cookie_header_allowed,
@@ -1150,6 +1165,23 @@ async fn prepare_single_request(
         transport_hints,
     } = request.into_parts();
 
+    if let Some(target) = &transport_hints.resolved_target {
+        let expected_port = url.port_or_known_default().ok_or_else(|| {
+            Error::InvalidResolvedTarget(
+                "resolved destinations require an HTTP or HTTPS URL".into(),
+            )
+        })?;
+        if target
+            .addresses()
+            .iter()
+            .any(|address| address.port() != expected_port)
+        {
+            return Err(Error::InvalidResolvedTarget(format!(
+                "all resolved destinations must use the URL's effective port {expected_port}"
+            )));
+        }
+    }
+
     #[cfg(feature = "tls-rustls")]
     if url.scheme() == "https" {
         if let Some(error) = &inner.tls_config_error {
@@ -1171,6 +1203,22 @@ async fn prepare_single_request(
     #[cfg(not(feature = "proxy"))]
     {
         let _ = proxy_override;
+    }
+
+    if transport_hints.resolved_target.is_some() {
+        #[cfg(feature = "proxy")]
+        if effective_proxy.is_some() {
+            return Err(Error::Unsupported(
+                "caller-supplied resolved destinations require direct routing; disable the proxy explicitly".into(),
+            ));
+        }
+        #[cfg(all(unix, any(feature = "http1", feature = "http2")))]
+        if inner.uds_client.is_some() {
+            return Err(Error::Unsupported(
+                "caller-supplied resolved destinations are incompatible with Unix-domain routing"
+                    .into(),
+            ));
+        }
     }
 
     #[cfg(feature = "proxy")]
@@ -1310,7 +1358,7 @@ pub(crate) async fn send_single_request(
     #[cfg(not(feature = "proxy"))]
     let _ = &deadline;
 
-    #[cfg(unix)]
+    #[cfg(all(unix, any(feature = "http1", feature = "http2")))]
     let has_uds = inner.uds_client.is_some();
     #[cfg(not(unix))]
     let has_uds = false;
@@ -1319,9 +1367,12 @@ pub(crate) async fn send_single_request(
     #[cfg(not(feature = "proxy"))]
     let has_proxy = false;
     #[cfg(feature = "proxy")]
-    let has_direct_no_proxy = !has_proxy && inner.direct_client.is_some() && !has_uds;
+    let has_direct_no_proxy = !has_proxy
+        && (transport_hints.resolved_target.is_some() || inner.direct_client.is_some())
+        && !has_uds;
     #[cfg(not(feature = "proxy"))]
-    let has_direct_no_proxy = !has_uds && inner.direct_client.is_some();
+    let has_direct_no_proxy =
+        !has_uds && (transport_hints.resolved_target.is_some() || inner.direct_client.is_some());
     let has_sni = transport_hints.sni_hostname.is_some();
     // Discovery semantics for `Auto` (plan §4):
     // - `Http3Only` = explicit direct QUIC route, strict, no discovery, no
@@ -1356,6 +1407,12 @@ pub(crate) async fn send_single_request(
     let use_h3 = false;
     let route = select_route(has_uds, has_direct_no_proxy, has_proxy, has_sni, use_h3);
     #[cfg(feature = "http3")]
+    if transport_hints.resolved_target.is_some() && use_h3 {
+        return Err(Error::Unsupported(
+            "caller-supplied resolved destinations are incompatible with HTTP/3".into(),
+        ));
+    }
+    #[cfg(feature = "http3")]
     if use_h3 {
         inner.transport_metrics.record_h3_attempted();
     }
@@ -1365,7 +1422,7 @@ pub(crate) async fn send_single_request(
     // proxy rules because proxy routes are selected first.
     let response = match route {
         TransportRoute::Uds => {
-            #[cfg(unix)]
+            #[cfg(all(unix, any(feature = "http1", feature = "http2")))]
             {
                 let uds_client = inner
                     .uds_client
@@ -1389,10 +1446,17 @@ pub(crate) async fn send_single_request(
             }
         }
         TransportRoute::Direct => {
-            let direct_client = inner
-                .direct_client
-                .as_ref()
-                .ok_or_else(|| Error::Unsupported("direct client not available".into()))?;
+            let resolved_client;
+            let direct_client = if let Some(target) = transport_hints.resolved_target.as_ref() {
+                resolved_client =
+                    inner.resolved_client(target, transport_hints.sni_hostname.as_deref())?;
+                &resolved_client
+            } else {
+                inner
+                    .direct_client
+                    .as_ref()
+                    .ok_or_else(|| Error::Unsupported("direct client not available".into()))?
+            };
             let hyper_request = build_hyper_request(&method, uri, version, &headers, body)?;
             let send_future = crate::transport::direct::send_direct_request(
                 direct_client,
@@ -1863,6 +1927,7 @@ mod tests {
         req.set_transport_hints(TransportHints {
             target: Some(Bytes::from("/override-target")),
             sni_hostname: Some("sni.example".to_owned()),
+            resolved_target: None,
             trace: Some(Arc::new(crate::trace::NoopTraceObserver)),
         });
         req
@@ -2104,11 +2169,13 @@ mod tests {
                 transport_hints: TransportHints {
                     target: Some(Bytes::from("/t")),
                     sni_hostname: Some("sni.example".to_owned()),
+                    resolved_target: None,
                     trace: Some(Arc::new(crate::trace::NoopTraceObserver)),
                 },
                 auth: None,
                 auth_disabled: false,
                 is_first_hop: true,
+                preserve_resolved_target: false,
                 credentials_allowed: true,
                 cookie_allowed: true,
             },
@@ -2157,6 +2224,7 @@ mod tests {
                 transport_hints: TransportHints {
                     target: Some(Bytes::from("/t")),
                     sni_hostname: Some("sni.example".to_owned()),
+                    resolved_target: None,
                     trace: Some(Arc::new(crate::trace::NoopTraceObserver)),
                 },
                 auth: Some(AuthScheme::Basic(
@@ -2164,6 +2232,7 @@ mod tests {
                 )),
                 auth_disabled: false,
                 is_first_hop: false,
+                preserve_resolved_target: false,
                 credentials_allowed: false,
                 cookie_allowed: false,
             },
@@ -2203,6 +2272,7 @@ mod tests {
         let mk_hints = || TransportHints {
             target: Some(Bytes::from("/t")),
             sni_hostname: None,
+            resolved_target: None,
             trace: None,
         };
 
@@ -2222,6 +2292,7 @@ mod tests {
                 auth: None,
                 auth_disabled: false,
                 is_first_hop: true,
+                preserve_resolved_target: false,
                 credentials_allowed: true,
                 cookie_allowed: true,
             },
@@ -2243,6 +2314,7 @@ mod tests {
                 auth: None,
                 auth_disabled: false,
                 is_first_hop: true,
+                preserve_resolved_target: false,
                 credentials_allowed: true,
                 cookie_allowed: true,
             },

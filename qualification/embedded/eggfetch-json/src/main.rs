@@ -4,13 +4,6 @@
 //! JSON fixture: one reusable client, HTTPS GET, JSON request serialization,
 //! JSON response deserialization, and streaming response iteration.
 //!
-//! Note: `eggfetch-core/json` is currently a reserved flag with no native
-//! helper (see `docs/architecture/feature-flags.md`). This fixture therefore
-//! serializes via `serde_json` directly and sets `Content-Type` manually,
-//! mirroring what a downstream must do today. The reqwest fixture uses
-//! `RequestBuilder::json`. The difference is recorded in the footprint
-//! evidence rather than hidden.
-
 use eggfetch_core::Client;
 use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
@@ -33,21 +26,17 @@ async fn run(base: &str) -> Result<(), Box<dyn std::error::Error>> {
     }
     println!("get bytes: {total}");
 
-    // JSON request serialization (manual until native `json()` lands).
+    // Native JSON request serialization.
     let payload = Payload {
         key: "value".to_string(),
         count: 3,
     };
-    let body = serde_json::to_vec(&payload)?;
     let mut post = client
         .post(&format!("{base}/post"))?
-        .header("Content-Type", "application/json")
-        .body(body)
+        .json(&payload)?
         .send()
         .await?;
-    let bytes = post.bytes().await?;
-    // JSON response deserialization from raw bytes (no lossy conversion).
-    let echoed: serde_json::Value = serde_json::from_slice(&bytes)?;
+    let echoed: serde_json::Value = post.json().await?;
     println!("echoed: {echoed}");
 
     Ok(())

@@ -339,6 +339,8 @@ pub(crate) struct DirectConnector {
     /// hostname for `ServerName` Indication and certificate verification,
     /// while TCP still connects to the URL host.
     sni_hostname: Option<String>,
+    /// Request-scoped static destinations. When present, DNS is never used.
+    resolved_addresses: Option<Arc<[SocketAddr]>>,
     /// Shared transport observability counters. `None` disables metering
     /// (unit tests, one-off connectors); client-owned connectors always
     /// carry the client's shared metrics.
@@ -356,6 +358,7 @@ impl DirectConnector {
             config,
             tls: tls.map(Arc::new),
             sni_hostname: None,
+            resolved_addresses: None,
             metrics: None,
         }
     }
@@ -370,6 +373,7 @@ impl DirectConnector {
             config,
             tls: tls.map(Arc::new),
             sni_hostname: None,
+            resolved_addresses: None,
             metrics: Some(metrics),
         }
     }
@@ -384,6 +388,18 @@ impl DirectConnector {
             config: self.config.clone(),
             tls: self.tls.clone(),
             sni_hostname: Some(sni_hostname),
+            resolved_addresses: self.resolved_addresses.clone(),
+            metrics: self.metrics.clone(),
+        }
+    }
+
+    /// Create a connector clone pinned to the supplied destination snapshot.
+    pub(crate) fn with_resolved_target(&self, target: &crate::request::ResolvedTarget) -> Self {
+        Self {
+            config: self.config.clone(),
+            tls: self.tls.clone(),
+            sni_hostname: self.sni_hostname.clone(),
+            resolved_addresses: Some(target.addresses().to_vec().into()),
             metrics: self.metrics.clone(),
         }
     }
@@ -405,12 +421,15 @@ impl Service<Uri> for DirectConnector {
         let tls = self.tls.clone();
         #[cfg(feature = "tls-rustls")]
         let sni_hostname = self.sni_hostname.clone();
+        let resolved_addresses = self.resolved_addresses.clone();
         let metrics = self.metrics.clone();
 
         Box::pin(async move {
             if let Some(ref m) = metrics {
                 m.record_direct_attempt();
-                m.record_direct_dns_attempt();
+                if resolved_addresses.is_none() {
+                    m.record_direct_dns_attempt();
+                }
             }
             let host = dst
                 .host()
@@ -430,17 +449,21 @@ impl Service<Uri> for DirectConnector {
 
             let is_https = dst.scheme_str() == Some("https");
 
-            let addresses = match tokio::net::lookup_host((host.as_str(), port)).await {
-                Ok(addrs) => addrs,
-                Err(e) => {
-                    if let Some(ref m) = metrics {
-                        m.record_direct_dns_failure();
-                        m.record_direct_failure();
+            let addresses = if let Some(addresses) = resolved_addresses {
+                addresses.to_vec()
+            } else {
+                match tokio::net::lookup_host((host.as_str(), port)).await {
+                    Ok(addrs) => addrs.collect(),
+                    Err(e) => {
+                        if let Some(ref m) = metrics {
+                            m.record_direct_dns_failure();
+                            m.record_direct_failure();
+                        }
+                        return Err(Box::new(Error::Connect(format!(
+                            "DNS resolution failed for {host}: {e}"
+                        )))
+                            as Box<dyn std::error::Error + Send + Sync>);
                     }
-                    return Err(Box::new(Error::Connect(format!(
-                        "DNS resolution failed for {host}: {e}"
-                    )))
-                        as Box<dyn std::error::Error + Send + Sync>);
                 }
             };
             let mut last_error = None;

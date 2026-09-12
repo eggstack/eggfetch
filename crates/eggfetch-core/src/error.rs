@@ -31,6 +31,22 @@ pub enum Error {
     #[error("request build error: {0}")]
     RequestBuild(String),
 
+    /// A caller-supplied resolved destination is invalid for the request.
+    #[error("invalid resolved destination: {0}")]
+    InvalidResolvedTarget(String),
+
+    /// A pinned request attempted to follow a redirect that changes origin.
+    #[error("resolved destination cannot be reused across a cross-origin redirect")]
+    ResolvedTargetRedirect,
+
+    /// Request JSON serialization failed.
+    #[error("JSON serialization error: {0}")]
+    JsonSerialize(String),
+
+    /// Response JSON deserialization failed.
+    #[error("JSON deserialization error: {0}")]
+    JsonDeserialize(String),
+
     /// A connection could not be established.
     #[error("connect error: {0}")]
     Connect(String),
@@ -241,6 +257,10 @@ impl Error {
             Self::InvalidHeaderName(_) => "invalid_header_name",
             Self::InvalidHeaderValue(_) => "invalid_header_value",
             Self::RequestBuild(_) => "request_build",
+            Self::InvalidResolvedTarget(_) => "invalid_resolved_target",
+            Self::ResolvedTargetRedirect => "resolved_target_redirect",
+            Self::JsonSerialize(_) => "json_serialize",
+            Self::JsonDeserialize(_) => "json_deserialize",
             Self::Connect(_) => "connect",
             Self::Tls(_) => "tls",
             Self::Protocol(_) => "protocol",

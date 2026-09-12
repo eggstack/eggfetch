@@ -78,7 +78,7 @@ pub use redact::{
     is_sensitive_header, redact_headers, redact_url, redact_url_string, SENSITIVE_HEADERS,
 };
 pub use redirect::RedirectPolicy;
-pub use request::{ProxyOverride, Request, RequestBuilder, TransportHints};
+pub use request::{ProxyOverride, Request, RequestBuilder, ResolvedTarget, TransportHints};
 pub use response::{HistoryEntry, Response};
 pub use retry::{
     BackoffPolicy, MethodPolicy, ReplayCheck, RetryCause, RetryContext, RetryPolicy,

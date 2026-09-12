@@ -36,6 +36,133 @@ use std::time::Duration;
 use eggfetch_core::transport::direct_connector::{SocketOption, SocketOptionKind};
 use eggfetch_core::{Client, Error, Timeout, TimeoutPhase};
 use test_server::{TestServer, TestServerConfig};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::TcpListener;
+
+/// Static routing connects to the supplied address while retaining the
+/// logical hostname in the HTTP authority and without requiring DNS.
+#[tokio::test]
+async fn test_static_destination_preserves_logical_host_and_skips_dns() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = tokio::spawn(async move {
+        let (mut stream, _) = listener.accept().await.unwrap();
+        let mut request = Vec::new();
+        loop {
+            let mut byte = [0u8; 1];
+            if stream.read_exact(&mut byte).await.is_err() {
+                break;
+            }
+            request.push(byte[0]);
+            if request.ends_with(b"\r\n\r\n") {
+                break;
+            }
+        }
+        let request = String::from_utf8_lossy(&request).to_ascii_lowercase();
+        assert!(
+            request.contains("host: pinned.invalid:"),
+            "request was {request:?}"
+        );
+        stream
+            .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok")
+            .await
+            .unwrap();
+    });
+
+    let client = Client::builder().follow_redirects(true).build();
+    let url = format!("http://pinned.invalid:{}/", address.port());
+    let mut response = client
+        .get(&url)
+        .unwrap()
+        .resolved_addresses([address])
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.bytes().await.unwrap(), "ok");
+    assert_eq!(client.transport_metrics().snapshot().direct_dns_attempts, 0);
+    server.await.unwrap();
+}
+
+#[tokio::test]
+async fn test_static_destination_allows_no_dns_fallback() {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    drop(listener);
+    let client = Client::builder().follow_redirects(true).build();
+    let url = format!("http://never-resolved.invalid:{}/", address.port());
+    let error = client
+        .get(&url)
+        .unwrap()
+        .resolved_addresses([address])
+        .send()
+        .await
+        .unwrap_err();
+    assert_eq!(client.transport_metrics().snapshot().direct_dns_attempts, 0);
+    assert!(matches!(error, Error::Connect(_) | Error::HyperClient(_)));
+}
+
+#[tokio::test]
+async fn test_static_destination_survives_same_origin_redirect() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = tokio::spawn(async move {
+        for (status, location, body) in [("302 Found", Some("/next"), ""), ("200 OK", None, "done")]
+        {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            let mut request = [0u8; 1024];
+            let _ = stream.read(&mut request).await;
+            let location_header = location
+                .map(|value| format!("Location: {value}\r\n"))
+                .unwrap_or_default();
+            let response = format!(
+                "HTTP/1.1 {status}\r\n{location_header}Content-Length: {}\r\n\r\n{body}",
+                body.len()
+            );
+            stream.write_all(response.as_bytes()).await.unwrap();
+        }
+    });
+
+    let client = Client::builder().follow_redirects(true).build();
+    let url = format!("http://pinned.invalid:{}/start", address.port());
+    let mut response = client
+        .get(&url)
+        .unwrap()
+        .resolved_addresses([address])
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.bytes().await.unwrap(), "done");
+    server.await.unwrap();
+}
+
+#[tokio::test]
+async fn test_static_destination_rejects_cross_origin_redirect() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = tokio::spawn(async move {
+        let (mut stream, _) = listener.accept().await.unwrap();
+        let mut request = [0u8; 1024];
+        let _ = stream.read(&mut request).await;
+        stream
+            .write_all(
+                b"HTTP/1.1 302 Found\r\nLocation: http://other.invalid/\r\nContent-Length: 0\r\n\r\n",
+            )
+            .await
+            .unwrap();
+    });
+
+    let client = Client::builder().follow_redirects(true).build();
+    let url = format!("http://pinned.invalid:{}/start", address.port());
+    let error = client
+        .get(&url)
+        .unwrap()
+        .resolved_addresses([address])
+        .send()
+        .await
+        .unwrap_err();
+    assert!(matches!(error, Error::ResolvedTargetRedirect));
+    server.await.unwrap();
+}
 
 /// Helper to create a `TCP_NODELAY` socket option.
 fn tcp_nodelay_option() -> SocketOption {

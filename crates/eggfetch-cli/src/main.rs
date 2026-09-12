@@ -253,6 +253,7 @@ fn map_error_to_exit_code(err: &eggfetch_core::Error) -> u8 {
         | Error::InvalidHeaderName(_)
         | Error::InvalidHeaderValue(_)
         | Error::RequestBuild(_)
+        | Error::InvalidResolvedTarget(_)
         | Error::ConflictingAuth(_)
         | Error::InvalidProxyUrl(_)
         | Error::TlsConfig(_)
@@ -280,6 +281,9 @@ fn map_error_to_exit_code(err: &eggfetch_core::Error) -> u8 {
         | Error::BodyNotReplayableForRetry
         | Error::RetryBudgetExhausted { .. }
         | Error::RetryNotConfigured
+        | Error::ResolvedTargetRedirect
+        | Error::JsonSerialize(_)
+        | Error::JsonDeserialize(_)
         | Error::Http2GoAway { .. }
         | Error::Http2StreamReset { .. }
         | Error::Http2FlowControl(_)

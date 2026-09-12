@@ -209,11 +209,14 @@ pub fn map_err(err: eggfetch_core::Error) -> PyErr {
         | eggfetch_core::Error::InvalidHeaderName(msg)
         | eggfetch_core::Error::InvalidHeaderValue(msg)
         | eggfetch_core::Error::RequestBuild(msg)
+        | eggfetch_core::Error::InvalidResolvedTarget(msg)
         | eggfetch_core::Error::Unsupported(msg)
         | eggfetch_core::Error::Pool(msg)
         | eggfetch_core::Error::InvalidRedirectLocation(msg)
         | eggfetch_core::Error::InvalidAuthHeader(msg)
         | eggfetch_core::Error::ConflictingAuth(msg)
+        | eggfetch_core::Error::JsonSerialize(msg)
+        | eggfetch_core::Error::JsonDeserialize(msg)
         | eggfetch_core::Error::TlsConfig(msg)
         | eggfetch_core::Error::CaBundle(msg)
         | eggfetch_core::Error::ClientCert(msg)
@@ -230,6 +233,9 @@ pub fn map_err(err: eggfetch_core::Error) -> PyErr {
         eggfetch_core::Error::BodyNotReplayableForRedirect => {
             RequestError::new_err("request body is not replayable for redirect".to_string())
         }
+        eggfetch_core::Error::ResolvedTargetRedirect => RequestError::new_err(
+            "resolved destination cannot be reused across a cross-origin redirect",
+        ),
         eggfetch_core::Error::Decompression(msg) => DecompressionError::new_err(msg),
         eggfetch_core::Error::UnsupportedContentEncoding(msg) => {
             UnsupportedContentEncoding::new_err(msg)

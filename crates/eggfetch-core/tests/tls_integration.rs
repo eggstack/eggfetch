@@ -47,6 +47,31 @@ async fn default_verified_https_succeeds() {
 }
 
 #[tokio::test]
+async fn static_destination_preserves_https_hostname_identity() {
+    let ca = CertAuthority::new();
+    let server = TlsTestServer::start(&ca, &["localhost"]).await;
+    let server_url = url::Url::parse(&server.url()).unwrap();
+    let port = server_url.port().unwrap();
+    let logical_url = format!("https://localhost:{port}/");
+    let client = Client::builder()
+        .tls_config(
+            TlsConfig::builder()
+                .ca_certificate_pem(&ca.cert_pem())
+                .unwrap()
+                .build(),
+        )
+        .build();
+    let mut response = client
+        .get(&logical_url)
+        .unwrap()
+        .resolved_addresses([format!("127.0.0.1:{port}").parse().unwrap()])
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.text().await.unwrap(), "OK");
+}
+
+#[tokio::test]
 async fn untrusted_cert_fails() {
     let server_ca = CertAuthority::new();
     let server = TlsTestServer::start(&server_ca, &["localhost"]).await;

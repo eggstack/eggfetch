@@ -231,6 +231,69 @@ pub(crate) fn configure_tls_alpn(
 }
 
 impl ClientInner {
+    /// Build an isolated direct Hyper client for a request-scoped resolved
+    /// destination. Isolation prevents a connection established for ordinary
+    /// DNS routing, or for another address snapshot, from being reused.
+    #[cfg(any(feature = "http1", feature = "http2"))]
+    pub(crate) fn resolved_client(
+        &self,
+        target: &crate::request::ResolvedTarget,
+        sni_hostname: Option<&str>,
+    ) -> Result<crate::transport::TimeoutDirectClient> {
+        let connect_timeout = self.config.timeout.as_ref().and_then(|t| t.connect);
+        #[cfg(feature = "tls-rustls")]
+        let tls_connector = {
+            let tls_config = self.config.tls_config.clone().unwrap_or_default();
+            let rustls_config = tls_config
+                .build_rustls_config()
+                .map_err(|e| Error::Tls(format!("failed to build TLS config: {e}")))?;
+            let rustls_config = configure_tls_alpn(
+                rustls_config,
+                crate::http_version::HttpVersionPolicyEnabler::from_policy(
+                    self.config.http_version_policy,
+                ),
+            );
+            Some(tokio_rustls::TlsConnector::from(Arc::new(rustls_config)))
+        };
+        #[cfg(not(feature = "tls-rustls"))]
+        let tls_connector = None;
+
+        let base_config = self.direct_connector_config.clone().unwrap_or(
+            crate::transport::direct_connector::DirectConnectorConfig {
+                local_address: None,
+                socket_options: Vec::new(),
+            },
+        );
+        let mut connector = crate::transport::direct_connector::DirectConnector::with_metrics(
+            base_config,
+            tls_connector,
+            self.transport_metrics.clone(),
+        )
+        .with_resolved_target(target);
+        if let Some(sni_hostname) = sni_hostname {
+            connector = connector.with_sni(sni_hostname.to_owned());
+        }
+        let connector =
+            crate::transport::connect_timeout::ConnectTimeout::new(connector, connect_timeout);
+        let mut builder = hyper_util::client::legacy::Client::builder(TokioExecutor::new());
+        #[cfg(feature = "http2")]
+        if !crate::http_version::HttpVersionPolicyEnabler::from_policy(
+            self.config.http_version_policy,
+        )
+        .enable_http1()
+            && crate::http_version::HttpVersionPolicyEnabler::from_policy(
+                self.config.http_version_policy,
+            )
+            .enable_http2()
+        {
+            builder.http2_only(true);
+        }
+        if let Some(idle_timeout) = self.pool.idle_timeout() {
+            builder.pool_idle_timeout(idle_timeout);
+        }
+        Ok(builder.build(connector))
+    }
+
     /// Get or create a cached hyper client with TLS SNI hostname override.
     ///
     /// The returned client uses a [`DirectConnector`](crate::transport::direct_connector::DirectConnector)
@@ -935,7 +998,9 @@ impl ClientBuilder {
     #[must_use]
     #[allow(clippy::too_many_lines)]
     pub fn build(self) -> Client {
+        #[cfg(any(feature = "http1", feature = "http2"))]
         use crate::http_version::HttpVersionPolicyEnabler;
+        #[cfg(any(feature = "http1", feature = "http2"))]
         let enabler = HttpVersionPolicyEnabler::from_policy(self.http_version_policy);
         let transport_metrics = Arc::new(crate::transport::metrics::TransportMetrics::new());
 

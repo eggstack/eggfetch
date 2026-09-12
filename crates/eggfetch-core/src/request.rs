@@ -1,5 +1,6 @@
 //! Request types and builder.
 
+use std::net::SocketAddr;
 use std::sync::Arc;
 
 use bytes::Bytes;
@@ -18,6 +19,54 @@ use crate::trace::TraceObserver;
 use crate::auth::AuthScheme;
 #[cfg(feature = "proxy")]
 use crate::proxy::ProxyConfig;
+
+/// A validated set of remote socket addresses for one logical HTTP origin.
+///
+/// The addresses control only the physical TCP destination. The request URL,
+/// HTTP authority, TLS SNI, certificate verification, and origin policy still
+/// use the logical URL. An empty set cannot be constructed. Callers are
+/// responsible for validating that the addresses are appropriate for their
+/// application and redirect policy.
+#[derive(Clone, PartialEq, Eq)]
+pub struct ResolvedTarget {
+    addresses: Arc<[SocketAddr]>,
+}
+
+impl ResolvedTarget {
+    /// Construct a resolved destination from one or more socket addresses.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::Error::InvalidResolvedTarget`] for an empty set.
+    pub fn new<I>(addresses: I) -> crate::Result<Self>
+    where
+        I: IntoIterator<Item = SocketAddr>,
+    {
+        let addresses: Vec<_> = addresses.into_iter().collect();
+        if addresses.is_empty() {
+            return Err(crate::Error::InvalidResolvedTarget(
+                "resolved destination set must not be empty".into(),
+            ));
+        }
+        Ok(Self {
+            addresses: addresses.into(),
+        })
+    }
+
+    /// Return the caller-supplied destination addresses in their attempt order.
+    #[must_use]
+    pub fn addresses(&self) -> &[SocketAddr] {
+        &self.addresses
+    }
+}
+
+impl std::fmt::Debug for ResolvedTarget {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ResolvedTarget")
+            .field("address_count", &self.addresses.len())
+            .finish()
+    }
+}
 
 /// Typed transport-level hints carried on a request.
 ///
@@ -40,6 +89,13 @@ pub struct TransportHints {
     /// TCP connects to the URL host/IP; TLS uses this name for SNI and
     /// certificate verification.
     pub sni_hostname: Option<String>,
+    /// Caller-supplied physical destinations for the logical URL origin.
+    ///
+    /// When present, direct routing uses exactly these addresses and never
+    /// performs a DNS lookup. Same-origin redirects preserve this snapshot;
+    /// cross-origin redirects fail closed. Proxy, UDS, and HTTP/3 routes are
+    /// rejected while this hint is active.
+    pub resolved_target: Option<ResolvedTarget>,
     /// Optional trace observer for transport lifecycle events.
     ///
     /// When present, the transport layer emits typed events at each
@@ -54,6 +110,7 @@ impl std::fmt::Debug for TransportHints {
         f.debug_struct("TransportHints")
             .field("target", &self.target)
             .field("sni_hostname", &self.sni_hostname)
+            .field("resolved_target", &self.resolved_target)
             .field("trace", &self.trace.as_ref().map(|_| "..."))
             .finish()
     }
@@ -502,6 +559,27 @@ impl RequestBuilder {
         self.body(RequestBody::Bytes(data.into()))
     }
 
+    /// Serialize a value as JSON and use it as a replayable request body.
+    ///
+    /// Sets `Content-Type: application/json` unless the request already has
+    /// an explicit content type. The value is serialized before any network
+    /// operation; serialization failures are returned immediately.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::Error::JsonSerialize`] when the value cannot be
+    /// serialized, or a header error if the default content type is invalid.
+    #[cfg(feature = "json")]
+    pub fn json<T: serde::Serialize>(mut self, value: &T) -> Result<Self> {
+        let bytes = serde_json::to_vec(value)
+            .map_err(|_| crate::Error::JsonSerialize("failed to serialize JSON value".into()))?;
+        self.body = RequestBody::Bytes(Bytes::from(bytes));
+        if !self.headers.contains("content-type") {
+            self.headers.insert("content-type", "application/json")?;
+        }
+        Ok(self)
+    }
+
     /// Set the timeout for this specific request.
     ///
     /// When set, this overrides the client-level timeout on a per-field
@@ -603,6 +681,28 @@ impl RequestBuilder {
         self
     }
 
+    /// Pin this request to caller-supplied remote destinations.
+    ///
+    /// The logical URL remains unchanged for HTTP authority, TLS identity,
+    /// redirects, cookies, and authentication. The set must be non-empty and
+    /// each address must use the URL's effective HTTP/HTTPS port. Static
+    /// routing is direct-only; proxy and HTTP/3 combinations fail closed.
+    #[must_use]
+    pub fn resolved_addresses<I>(mut self, addresses: I) -> Self
+    where
+        I: IntoIterator<Item = SocketAddr>,
+    {
+        match ResolvedTarget::new(addresses) {
+            Ok(target) => self.transport_hints.resolved_target = Some(target),
+            Err(error) => {
+                if self.error.is_none() {
+                    self.error = Some(error);
+                }
+            }
+        }
+        self
+    }
+
     /// Build the request without sending it.
     ///
     /// # Errors
@@ -612,6 +712,22 @@ impl RequestBuilder {
     pub fn build(mut self) -> Result<Request> {
         if let Some(e) = self.error.take() {
             return Err(e);
+        }
+        if let Some(target) = &self.transport_hints.resolved_target {
+            let expected_port = self.url.port_or_known_default().ok_or_else(|| {
+                crate::Error::InvalidResolvedTarget(
+                    "resolved destinations require an HTTP or HTTPS URL".into(),
+                )
+            })?;
+            if target
+                .addresses()
+                .iter()
+                .any(|address| address.port() != expected_port)
+            {
+                return Err(crate::Error::InvalidResolvedTarget(format!(
+                    "all resolved destinations must use the URL's effective port {expected_port}"
+                )));
+            }
         }
         let request_target = self
             .transport_hints
@@ -652,9 +768,10 @@ impl RequestBuilder {
 mod tests {
     use proptest::prelude::*;
 
-    use super::Request;
+    use super::{Request, ResolvedTarget};
     use crate::auth::{AuthScheme, BasicAuth};
     use bytes::Bytes;
+    use std::net::SocketAddr;
 
     proptest::proptest! {
         #[test]
@@ -713,5 +830,74 @@ mod tests {
         // Non-secret structure is still visible for diagnostics.
         assert!(debug.contains("example.com"), "keeps the host: {debug}");
         assert!(debug.contains("POST"), "keeps the method: {debug}");
+    }
+
+    #[test]
+    fn resolved_target_rejects_empty_and_hides_addresses_in_debug() {
+        assert!(ResolvedTarget::new(Vec::<SocketAddr>::new()).is_err());
+        let target = ResolvedTarget::new(["127.0.0.1:443".parse().unwrap()]).unwrap();
+        let debug = format!("{target:?}");
+        assert!(debug.contains("address_count: 1"));
+        assert!(!debug.contains("127.0.0.1"));
+    }
+
+    #[test]
+    fn request_builder_validates_resolved_target_port() {
+        let client = crate::client::Client::new();
+        let request = client
+            .get("http://example.invalid/")
+            .unwrap()
+            .resolved_addresses(["127.0.0.1:80".parse().unwrap()])
+            .build()
+            .unwrap();
+        assert_eq!(
+            request
+                .transport_hints()
+                .resolved_target
+                .as_ref()
+                .unwrap()
+                .addresses()
+                .len(),
+            1
+        );
+
+        let error = client
+            .get("http://example.invalid/")
+            .unwrap()
+            .resolved_addresses(["127.0.0.1:443".parse().unwrap()])
+            .build()
+            .unwrap_err();
+        assert_eq!(error.kind(), "invalid_resolved_target");
+    }
+
+    #[cfg(feature = "json")]
+    #[test]
+    fn request_json_sets_default_content_type_and_replayable_body() {
+        let client = crate::client::Client::new();
+        let request = client
+            .post("http://example.invalid/")
+            .unwrap()
+            .json(&serde_json::json!({"key": "value"}))
+            .unwrap()
+            .build()
+            .unwrap();
+        assert_eq!(
+            request.headers().get("content-type").unwrap(),
+            "application/json"
+        );
+        assert!(request.body().is_replayable());
+
+        let request = client
+            .post("http://example.invalid/")
+            .unwrap()
+            .header("content-type", "application/vnd.api+json")
+            .json(&serde_json::json!([1, 2, 3]))
+            .unwrap()
+            .build()
+            .unwrap();
+        assert_eq!(
+            request.headers().get("content-type").unwrap(),
+            "application/vnd.api+json"
+        );
     }
 }

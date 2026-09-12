@@ -117,6 +117,8 @@ dependencies = [
  "pin-project-lite",
  "rustls",
  "rustls-native-certs",
+ "serde",
+ "serde_json",
  "thiserror",
  "tokio",
  "tokio-rustls",
