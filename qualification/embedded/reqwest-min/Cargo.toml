@@ -1,0 +1,25 @@
+[package]
+name = "reqwest-min"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Minimal embedded HTTPS streaming consumer for reqwest footprint comparison (Profile A, WebPKI primary)"
+license = "MIT"
+
+[workspace]
+
+[features]
+default = []
+native = ["reqwest/rustls-tls-native-roots"]
+
+[dependencies]
+reqwest = { version = "0.12", default-features = false, features = ["stream", "rustls-tls"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+futures-util = { version = "0.3", default-features = false, features = ["alloc"] }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = false
+debug = false
+panic = "unwind"

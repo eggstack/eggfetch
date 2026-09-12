@@ -34,6 +34,18 @@ For a full-featured client:
 eggfetch-core = { version = "0.1", features = ["http1", "http2", "tls-rustls", "cookies", "proxy", "multipart", "compression-gzip", "compression-brotli", "compression-zstd"] }
 ```
 
+For a minimal embedded HTTPS client (deterministic WebPKI roots):
+
+```toml
+eggfetch-core = { version = "0.1", default-features = false, features = ["http1", "tls-rustls"] }
+```
+
+`http1` alone is cleartext-only. `json` remains a reserved flag (use
+`serde_json` directly until native JSON lands). Measured downstream
+size/dependency evidence lives in
+`docs/architecture/embedded-footprint.md` — the current record is not a
+footprint win, so do not describe migration as slimming.
+
 ## Creating a Client
 
 The `Client` manages connection pooling and shared configuration. Create one and reuse it for multiple requests.

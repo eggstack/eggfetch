@@ -92,6 +92,12 @@ These are small, well-audited crates with minimal transitive trees. Together
 with the default feature set, they provide the dependencies required to build
 a working HTTPS client.
 
+Downstream size/dependency evidence for the minimal profiles lives in
+[embedded-footprint.md](embedded-footprint.md) (manual qualification in
+`qualification/embedded/`). Minimal trees verifiably exclude
+cookies/proxy/compression/multipart/H2/H3; `serde` stays absent unless
+JSON is selected (currently via the downstream fixture, not core).
+
 ## Optional Later Dependencies
 
 Features that are not core to HTTP/1.1 client behavior are optional and feature-gated:

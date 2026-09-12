@@ -1,0 +1,2 @@
+# Qualification fixtures build in place during manual runs; never commit artifacts.
+*/target/

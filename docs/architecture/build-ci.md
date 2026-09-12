@@ -70,6 +70,14 @@ For a local control-only run use `python3 scripts/h3_qualification.py
 --local-only --output /tmp/eggfetch-h3-local.json`; an external run requires
 the pinned manifest contract in `qualification/http3/servers.example.json`.
 
+### Embedded Footprint Qualification (manual, not CI)
+
+Tiny downstream fixtures under `qualification/embedded/` plus
+`scripts/qualify-embedded-footprint.sh` record dependency trees and
+stripped release sizes against an equivalently scoped reqwest
+configuration. No size gate, dashboard, or scheduled workflow. The
+current evidence is `embedded-footprint.md` (not a footprint win).
+
 ### Package Validation (Tier 3)
 
 Run `./scripts/check.sh package` for: core publish dry-run (`cargo publish --dry-run -p eggfetch-core`), dependent-crate package-structure validation (`cargo package --list` plus structured internal dependency version verification via cargo metadata for eggfetch-cli, eggfetch-ffi, eggfetch-python, eggfetch-node), wheel build, exactly-one-wheel resolution, wheel smoke, and package content validation. Uses fresh temporary artifacts; stale repository wheels are never used. The worktree must be clean.

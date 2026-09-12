@@ -59,4 +59,9 @@ docs/
 - The 2026-09-11 qualification retained HTTP/3 as experimental on frozen
   executable SHA `78a77ea153aae239ce7b722aeb9909a87df3bbb5`; do not describe
   documented controls as independent-server or production evidence.
+- Embedded footprint numbers live only in
+  `docs/architecture/embedded-footprint.md` (manual qualification in
+  `qualification/embedded/`); link there instead of copying byte counts
+  into README/guides. Never claim slimming: the current record is not a
+  footprint win.
 - Security-sensitive information belongs in `docs/security/` or `docs/architecture/`.

@@ -220,11 +220,20 @@ eggfetch-core = { version = "0.1", features = [
 ] }
 ```
 
-For an embedded cleartext client, select `http1` alone. `tls-rustls` enables
-Rustls with deterministic packaged WebPKI roots; add `tls-native-roots` when
+For an embedded cleartext client, select `http1` alone. For a deterministic
+embedded HTTPS client, use `default-features = false` with
+`http1,tls-rustls` (packaged WebPKI roots); add `tls-native-roots` when
 the system trust store should be preferred (it is part of the default
 profile). `http3` and `proxy` imply the TLS and HTTP/1 capabilities they
 require.
+
+Embedded size is measured, not claimed: see
+[`docs/architecture/embedded-footprint.md`](docs/architecture/embedded-footprint.md)
+for the latest manual downstream-size evidence (fixtures in
+`qualification/embedded/`, runner
+`scripts/qualify-embedded-footprint.sh`). The current record is not a
+footprint win over an equivalently scoped reqwest configuration; do not
+describe migration as slimming.
 
 See [`docs/rust/guide.md`](docs/rust/guide.md) for the full Rust API reference.
 

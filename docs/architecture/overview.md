@@ -72,7 +72,8 @@ eggfetch/
 ├── fuzz/                   cargo-fuzz (12 targets) + corpus + regressions
 ├── plans/                  Milestone plans and roadmap (historical record)
 ├── qualification/http3/    H3 machine-readable corpus + runners (opt-in)
-└── scripts/                check.sh tiers, manifest/compare, H3 runners,
+├── qualification/embedded/ Tiny downstream footprint fixtures (opt-in, non-product)
+└── scripts/                check.sh tiers, manifest/compare, H3 + embedded runners,
                             doc checkers, wheel/package validators
 ```
 
@@ -218,7 +219,7 @@ Thread safety: `ClientHandle` is `Send + Sync` (shared). `RequestHandle`, `Respo
 
 ### eggfetch-bench (benchmarks)
 
-Criterion-based harnesses (not published): shared `BenchServer` blocking test server in `src/lib.rs` plus three suites and one binary in `benchmarks/` — `microbench` (core-internal), `e2e` (full-client), `resources` (resource-oriented), and `resource_monitor` (RSS regression monitor binary). Core built with `http1`, `http2`, `tls-rustls`, `json`, `proxy` + cookies/multipart/all compressions.
+Criterion-based harnesses (not published): shared `BenchServer` blocking test server in `src/lib.rs` plus three suites and one binary in `benchmarks/` — `microbench` (core-internal), `e2e` (full-client), `resources` (resource-oriented), and `resource_monitor` (RSS regression monitor binary). Core built with `http1`, `http2`, `tls-rustls`, `tls-native-roots` (via default), `json`, `proxy` + cookies/multipart/all compressions.
 
 **Deep dive:** [benchmarks.md](benchmarks.md)
 
@@ -256,6 +257,14 @@ Single source of validation truth (CI repeats it on ubuntu-latest; see `docs/ver
 Machine-readable corpus (`corpus.json`), server manifests (`servers.example.json`), impairment matrix (`impairment-matrix.json`), and runners (`scripts/h3_qualification.py`, `scripts/h3_impairment.py`, `scripts/test_h3_qualification.py`). Deterministic loopback controls run in the normal Rust suite; independent-server, impairment, and public-origin qualification are opt-in and never routine CI gates. Local control-only run: `python3 scripts/h3_qualification.py --local-only --output /tmp/eggfetch-h3-local.json`.
 
 **Deep dive:** [core-tls-proxy-protocols.md](core-tls-proxy-protocols.md) (§ "Production Graduation Decision")
+
+### Embedded footprint qualification (`qualification/embedded/` + `scripts/qualify-embedded-footprint.sh`)
+
+Tiny downstream-style fixtures (`eggfetch-min/-json/-default`,
+`reqwest-min/-json/-default`) plus a manual runner that gathers `cargo
+tree` evidence and stripped release sizes. Opt-in, never a CI gate. The
+current evidence record is [embedded-footprint.md](embedded-footprint.md):
+not a footprint win — never claim slimming.
 
 ### Examples (`examples/`)
 
@@ -332,6 +341,7 @@ Each component has a dedicated document for detailed review:
 | **FFI & Node** | [ffi-and-node.md](ffi-and-node.md) | C ABI handles, runtime bridge, N-API prototype |
 | **Testing & Fuzzing** | [testing-fuzzing.md](testing-fuzzing.md) | Unit/integration tests, property tests, fuzz targets, compat suites |
 | **Benchmarks** | [benchmarks.md](benchmarks.md) | Criterion suites, BenchServer harness, RSS regression monitor |
+| **Embedded Footprint** | [embedded-footprint.md](embedded-footprint.md) | Downstream size/dependency evidence (manual, not CI) |
 | **Build & CI** | [build-ci.md](build-ci.md) | CI pipeline, lint policy, MSRV, release process |
 
 ## Cross-Cutting Concerns

@@ -1,0 +1,23 @@
+[package]
+name = "eggfetch-default"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Ordinary default-feature consumer for eggfetch footprint comparison (Profile C, informational)"
+license = "MIT"
+
+[workspace]
+
+[dependencies]
+eggfetch-core = { path = "../../../crates/eggfetch-core", features = ["json"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+futures-util = { version = "0.3", default-features = false, features = ["alloc"] }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = false
+debug = false
+panic = "unwind"

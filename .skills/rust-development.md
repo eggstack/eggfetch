@@ -41,7 +41,9 @@ is the authority. Before release it runs:
 
 ```sh
 cargo check -p eggfetch-core --no-default-features
+cargo check -p eggfetch-core --no-default-features --features http1
 cargo check -p eggfetch-core --no-default-features --features http1,tls-rustls
+cargo check -p eggfetch-core --no-default-features --features http1,tls-rustls,tls-native-roots
 cargo check -p eggfetch-core --all-features
 # plus tier2_feature_tests: gzip/brotli/zstd/deflate/proxy subsets
 ```
@@ -50,6 +52,11 @@ See `docs/architecture/feature-flags.md` for the exact matrix. The
 `http3` and `multipart,proxy` combos there are manual checks, not Tier 2
 gates — do not add new CI combinations without explicit maintainer
 approval (see `docs/verification-policy.md`).
+
+Embedded footprint qualification (`qualification/embedded/` +
+`scripts/qualify-embedded-footprint.sh` →
+`docs/architecture/embedded-footprint.md`) is manual/bounded, never a CI
+gate. The current record is not a footprint win; never claim slimming.
 
 ## HTTP/3 Constraints
 

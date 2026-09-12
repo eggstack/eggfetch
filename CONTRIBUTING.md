@@ -84,6 +84,16 @@ cargo check -p eggfetch-core --no-default-features --features http1,tls-rustls,h
 cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,http3
 ```
 
+Embedded footprint qualification is a separate manual step (never CI):
+
+```sh
+scripts/qualify-embedded-footprint.sh --output-dir /tmp/eggfetch-embedded-footprint
+```
+
+See `qualification/embedded/README.md` and
+`docs/architecture/embedded-footprint.md` (current record: not a
+footprint win).
+
 ## Dependencies
 
 Every new dependency must have an explicit reason stated in the PR or commit. The project follows these rules:

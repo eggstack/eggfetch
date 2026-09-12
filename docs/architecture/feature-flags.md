@@ -17,7 +17,7 @@ The following features are declared in `crates/eggfetch-core/Cargo.toml`:
 default = ["http1", "tls-rustls", "tls-native-roots"]
 http1 = ["hyper/http1", "hyper-util/http1", "hyper-rustls?/http1"]
 http2 = ["dep:h2", "hyper/http2", "hyper-util/http2", "hyper-rustls?/http2"]
-tls-rustls = ["dep:hyper-rustls", "dep:rustls", "dep:tokio-rustls", "dep:webpki-roots", "dep:pem-rfc7468"]
+tls-rustls = ["dep:hyper-rustls", "dep:pem-rfc7468", "dep:rustls", "dep:tokio-rustls", "dep:webpki-roots", "hyper-rustls/ring", "hyper-rustls/logging", "hyper-rustls/tls12"]
 tls-native-roots = ["tls-rustls", "dep:rustls-native-certs"]
 http3 = ["http1", "tls-rustls", "dep:quinn", "dep:h3", "dep:h3-quinn"]
 json = []
@@ -92,8 +92,13 @@ failure.
 
 ### json
 
-**Status:** reserved flag; currently only consumed by `eggfetch-bench` for dependency resolution, not wired into `eggfetch-core` behavior.
-The Python crate delivers JSON body support via Python's `json.dumps()`, not through a Rust-side feature gate. The feature flag is reserved for future Rust-native JSON serialization (e.g., serde integration in `eggfetch-core`).
+**Status:** reserved flag; currently owns no dependencies and enables no
+core behavior. `eggfetch-bench` and the `qualification/embedded/`
+fixtures select it as a no-op marker; downstream JSON today uses
+`serde_json` directly. The Python crate delivers JSON body support via
+Python's `json.dumps()`, not through a Rust-side feature gate. The flag
+is reserved for future Rust-native JSON serialization (e.g., serde
+integration in `eggfetch-core`).
 
 ### compression-gzip
 

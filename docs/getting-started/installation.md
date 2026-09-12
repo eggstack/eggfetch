@@ -52,6 +52,17 @@ Default features: `http1`, `tls-rustls`, and `tls-native-roots`. The Python crat
 cookies, multipart, proxy, all compression codecs, http2, and http3 by
 default.
 
+For a deterministic embedded HTTPS client without system trust loading:
+
+```toml
+eggfetch-core = { version = "0.1", default-features = false, features = ["http1", "tls-rustls"] }
+```
+
+For cleartext-only: `features = ["http1"]` alone. Measured downstream
+size/dependency evidence (not a footprint win) lives in
+`docs/architecture/embedded-footprint.md`; fixtures in
+`qualification/embedded/`.
+
 ## CLI
 
 ```bash
