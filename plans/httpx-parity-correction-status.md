@@ -36,8 +36,9 @@ correctness risk. HTTP/3 status is separate from the HTTPX parity claims.
 Remote routine CI for this freeze passed on documentation-only descendant
 `428922532d202d281b5d37f221e099c42ec3ad9f`, which contains the unchanged
 frozen executable SHA above. Run `34718676081` completed successfully on
-2026-09-12; the previous run `34620344393` is historical and is not reused
-as evidence for this SHA.
+2026-09-12. The final documentation-only head `a49252685b6c3016b04339d300ae9efd5377f0b6`
+was also verified by run `34719197754`; the previous run `34620344393` is
+historical and is not reused as evidence for this SHA.
 
 ## Historical state — qualification pending after HTTP/3 program changes (pre-freeze)
 
