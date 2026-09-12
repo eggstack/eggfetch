@@ -2,15 +2,34 @@
 
 This directory contains active implementation plans, live qualification/status records, and historical implementation records. Completed plans are non-normative unless another current document explicitly says otherwise. Verification and release policy remain governed by `docs/verification-policy.md` and `docs/releases/process.md`.
 
+## Active program — embedded Rust client footprint and routing (2026-09-12)
+
+Handoff program: `embedded-rust-client-footprint-and-routing-program.md`
+
+Objective: make `eggfetch-core` a cleaner embedded Rust HTTP engine with truthful feature/dependency ownership, first-class caller-supplied resolved-destination routing, native JSON ergonomics, and measured footprint evidence, without compromising default eggfetch capabilities, Python/CLI behavior, HTTPX compatibility, or existing transport/security goals.
+
+Execution order:
+
+1. `core-feature-dependency-and-tls-boundary-hardening.md` — make H1/TLS/root-store/multipart-adjacent feature ownership real; centralize trust-root construction through the existing TLS policy; retain current secure defaults while enabling a materially leaner explicit embedded profile.
+2. `static-resolution-and-pinned-destination-routing.md` — add typed pre-resolved destination routing through the existing direct connector; preserve logical Host/SNI/certificate identity; fail closed across retries, redirects, proxies, H3/Alt-Svc, and connection reuse.
+3. `native-rust-json-and-response-ergonomics.md` — implement the reserved native `json` feature with optional Serde dependencies and add only narrow native request/response conveniences that fit existing body/error semantics.
+4. `embedded-consumer-footprint-qualification.md` — measure dependency/feature shape and stripped release artifacts for equivalent minimal eggfetch and reqwest consumers; perform only bounded corrective tuning and record whether the result is beneficial, neutral/strategic, or not a footprint win.
+5. `post-embedded-engine-compatibility-requalification-and-closure.md` — freeze one final executable/test SHA after all executable work, run existing Tier 1/extended/package and HTTPX/HTTPX2 qualification procedures, and renew compatibility claims only on passing evidence.
+6. `post-embedded-engine-documentation-and-plan-hygiene.md` — documentation/registry-only descendant that reconciles feature/TLS/routing/JSON/footprint docs, corrects stale connection-reuse language, and closes the program without executable drift.
+
+Plans 1-4 are executable/test/qualification work and intentionally invalidate the current exact-SHA compatibility evidence once they land. Do not requalify after each child plan; plan 5 owns the single post-program freeze. Plan 6 must remain documentation/profile/ledger-only.
+
+This program does **not** migrate CodeGG or add a CodeGG-specific facade. The motivating downstream surfaced general-purpose engine gaps; implementation must remain independently justified for eggfetch Rust consumers.
+
 ## Completed corrective closure — H3 post-freeze diagnostics requalification (2026-09-11)
 
 Handoff plan: `http3-post-freeze-diagnostics-requalification-corrective-closure.md`
 
 Trigger: executable/native HTTP/3 diagnostics landed in
-`6a0cfd87551b7c634593e7b39cd2fd35d128f727` after the prior qualification
+`6a0cfd87551b7f39cd2fd35d128f727` after the prior qualification
 freeze `639bf186a71c054e11278d1b160ffe7a6f172c02`. The prior binding is now
 historical. The corrected executable tree was frozen at
-`78a77ea153aae239ce7b722aeb9909a87df3bbb5`.
+`78a77ea153aae239ce2693fec406fa2a61865dad3`.
 
 This was a narrow corrective closure, not another H3 feature or graduation
 program. It completed with the following sequence:
