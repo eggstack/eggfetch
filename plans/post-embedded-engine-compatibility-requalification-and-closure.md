@@ -2,7 +2,7 @@
 
 Planning baseline: `445149bd2af3c3ce5c0d34daacbde1bf8de57297` (`main`, 2026-09-11; eggfetch 0.1.3)
 Parent program: `plans/embedded-rust-client-footprint-and-routing-program.md`
-Prior qualified executable SHA: `78a77ea153aae239ce2693fec406fa2a61865dad3` for the currently documented HTTPX 0.28.1 / HTTPX2 2.12.0 qualification state, subject to the live ledger's descendant rules
+Prior qualified executable SHA: `78a77ea153aae239ce7b722aeb9909a87df3bbb5` for the currently documented HTTPX 0.28.1 / HTTPX2 2.12.0 qualification state, subject to the live ledger's descendant rules
 Depends on completion of all executable/test/validation child plans in the parent program
 Followed by: `plans/post-embedded-engine-documentation-and-plan-hygiene.md`
 
