@@ -2,24 +2,40 @@
 
 This directory contains active implementation plans, live qualification/status records, and historical implementation records. Completed plans are non-normative unless another current document explicitly says otherwise. Verification and release policy remain governed by `docs/verification-policy.md` and `docs/releases/process.md`.
 
-## Active program — embedded Rust client footprint and routing (2026-09-12)
+## Completed program — embedded Rust client footprint and routing (2026-09-12)
 
 Handoff program: `embedded-rust-client-footprint-and-routing-program.md`
 
 Objective: make `eggfetch-core` a cleaner embedded Rust HTTP engine with truthful feature/dependency ownership, first-class caller-supplied resolved-destination routing, native JSON ergonomics, and measured footprint evidence, without compromising default eggfetch capabilities, Python/CLI behavior, HTTPX compatibility, or existing transport/security goals.
 
-Execution order:
+Execution order and outcomes:
 
-1. `core-feature-dependency-and-tls-boundary-hardening.md` — make H1/TLS/root-store/multipart-adjacent feature ownership real; centralize trust-root construction through the existing TLS policy; retain current secure defaults while enabling a materially leaner explicit embedded profile.
-2. `static-resolution-and-pinned-destination-routing.md` — add typed pre-resolved destination routing through the existing direct connector; preserve logical Host/SNI/certificate identity; fail closed across retries, redirects, proxies, H3/Alt-Svc, and connection reuse.
-3. `native-rust-json-and-response-ergonomics.md` — implement the reserved native `json` feature with optional Serde dependencies and add only narrow native request/response conveniences that fit existing body/error semantics.
-4. `embedded-consumer-footprint-qualification.md` — measure dependency/feature shape and stripped release artifacts for equivalent minimal eggfetch and reqwest consumers; perform only bounded corrective tuning and record whether the result is beneficial, neutral/strategic, or not a footprint win.
-5. `post-embedded-engine-compatibility-requalification-and-closure.md` — freeze one final executable/test SHA after all executable work, run existing Tier 1/extended/package and HTTPX/HTTPX2 qualification procedures, and renew compatibility claims only on passing evidence.
-6. `post-embedded-engine-documentation-and-plan-hygiene.md` — documentation/registry-only descendant that reconciles feature/TLS/routing/JSON/footprint docs, corrects stale connection-reuse language, and closes the program without executable drift.
+1. `core-feature-dependency-and-tls-boundary-hardening.md` — done; feature
+   ownership and TLS trust construction are explicit while secure defaults
+   remain unchanged.
+2. `static-resolution-and-pinned-destination-routing.md` — done; typed
+   request-scoped static routing preserves logical identity and fails closed
+   for incompatible redirects/routes.
+3. `native-rust-json-and-response-ergonomics.md` — done; native request and
+   response JSON helpers are owned by the opt-in `json` feature.
+4. `embedded-consumer-footprint-qualification.md` — done; bounded evidence
+   classifies the result as **not a footprint win** against aligned reqwest
+   Rustls profiles.
+5. `post-embedded-engine-compatibility-requalification-and-closure.md` —
+   done on frozen executable/test/fixture SHA
+   `6e65c5bfc2607b30af8062a9269fcd260ed96464`; Tier 1, extended, package,
+   API oracles, and three consecutive full compatibility runs passed.
+6. `post-embedded-engine-documentation-and-plan-hygiene.md` — done as a
+   documentation/profile/plan-index-only descendant of that SHA.
 
-Plans 1-4 are executable/test/qualification work and intentionally invalidate the current exact-SHA compatibility evidence once they land. Do not requalify after each child plan; plan 5 owns the single post-program freeze. Plan 6 must remain documentation/profile/ledger-only.
+Plans 1–4 were executable/test/qualification work and invalidated the prior
+exact-SHA compatibility evidence. Plan 5 owned the single post-program freeze;
+Plan 6 remained documentation/profile/ledger-only. The final exact-SHA
+compatibility records are the two versioned profiles under `compat/`.
 
-This program does **not** migrate CodeGG or add a CodeGG-specific facade. The motivating downstream surfaced general-purpose engine gaps; implementation must remain independently justified for eggfetch Rust consumers.
+This program does **not** migrate CodeGG or add a CodeGG-specific facade. The
+engine is ready for downstream migration evaluation on ownership/control/API
+grounds, but any downstream migration remains outside eggfetch scope.
 
 ## Completed corrective closure — H3 post-freeze diagnostics requalification (2026-09-11)
 

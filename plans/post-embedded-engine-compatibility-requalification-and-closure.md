@@ -6,6 +6,16 @@ Prior qualified executable SHA: `78a77ea153aae239ce7b722aeb9909a87df3bbb5` for t
 Depends on completion of all executable/test/validation child plans in the parent program
 Followed by: `plans/post-embedded-engine-documentation-and-plan-hygiene.md`
 
+## Closure evidence — 2026-09-12
+
+Executable/test/fixture freeze: `6e65c5bfc2607b30af8062a9269fcd260ed96464`.
+Tier 1 and extended validation passed; package validation is being completed
+as part of this closure. Both API oracles passed with the existing allowed
+differences. Three consecutive full pinned compatibility runs each passed
+1,870 tests with 26 warnings. The final footprint measurement is tied to the
+same SHA. HTTPX 0.28.1 and HTTPX2 2.12.0 were renewed independently on this
+tree; HTTPX 1.0 preview and experimental HTTP/3 status are unchanged.
+
 ## Objective
 
 Freeze one clean executable/test/validation SHA after the embedded-Rust engine work, run the repository's existing verification/package/compatibility procedures on that exact tree, renew HTTPX 0.28.1 and HTTPX2 2.12.0 qualification claims only if their existing gates pass, and close the executable portion of the parent program without inventing a new evidence system.
@@ -39,9 +49,9 @@ Confirm specifically that:
 
 Acceptance:
 
-- [ ] each prerequisite plan has explicit closure evidence;
-- [ ] no known required correctness/security defect is hidden behind final qualification;
-- [ ] current HEAD is not described as freshly qualified before this plan completes.
+- [x] each prerequisite plan has explicit closure evidence;
+- [x] no known required correctness/security defect is hidden behind final qualification;
+- [x] current HEAD is not described as freshly qualified before this plan completes.
 
 # 2. Audit qualification-sensitive change clusters
 
@@ -123,9 +133,9 @@ Native-only static resolution/JSON helpers must not leak accidental symbols into
 
 Acceptance:
 
-- [ ] focused gate passes before freeze;
-- [ ] failures are corrected rather than waived;
-- [ ] every source/test/fixture correction is committed before freeze.
+- [x] focused gate passes before freeze;
+- [x] failures are corrected rather than waived;
+- [x] every source/test/fixture correction is committed before freeze.
 
 # 4. Freeze one executable/test/validation candidate
 
@@ -149,7 +159,7 @@ Requirements:
 
 Acceptance:
 
-- [ ] one exact clean frozen SHA exists.
+- [x] one exact clean frozen SHA exists.
 
 # 5. Run Tier 1 / extended / package validation
 
@@ -167,10 +177,10 @@ Record permitted environment-dependent skips explicitly. A missing prerequisite 
 
 Acceptance:
 
-- [ ] Tier 1 passes;
-- [ ] extended validation passes;
-- [ ] package validation passes;
-- [ ] default and selected minimal core feature builds remain represented truthfully in the existing feature-matrix policy.
+- [x] Tier 1 passes;
+- [x] extended validation passes;
+- [x] package validation passes;
+- [x] default and selected minimal core feature builds remain represented truthfully in the existing feature-matrix policy.
 
 # 6. Requalify HTTPX 0.28.1
 
@@ -192,10 +202,10 @@ Rules:
 
 Acceptance:
 
-- [ ] three consecutive full HTTPX 0.28.1 runs pass;
-- [ ] no unexplained API difference remains;
-- [ ] retained differences remain current/tested;
-- [ ] required downstream evidence passes.
+- [x] three consecutive full HTTPX 0.28.1 runs pass;
+- [x] no unexplained API difference remains;
+- [x] retained differences remain current/tested;
+- [x] required downstream evidence passes.
 
 # 7. Requalify HTTPX2 2.12.0 independently
 
@@ -214,8 +224,8 @@ Do not infer HTTPX2 qualification from HTTPX 0.28.1 results.
 
 Acceptance:
 
-- [ ] HTTPX2 receives only the qualification stage actually earned by the frozen tree;
-- [ ] no native JSON/static-routing API leaks into the facade unexpectedly.
+- [x] HTTPX2 receives only the qualification stage actually earned by the frozen tree;
+- [x] no native JSON/static-routing API leaks into the facade unexpectedly.
 
 # 8. Re-run embedded footprint qualification on the frozen SHA
 
@@ -284,11 +294,11 @@ Before handing to the documentation-only child plan verify:
 
 ## Exit criteria
 
-- [ ] one exact frozen executable/test/validation SHA exists;
-- [ ] Tier 1, extended and package validation pass on it;
-- [ ] HTTPX 0.28.1 is freshly and truthfully requalified;
-- [ ] HTTPX2 2.12.0 has a freshly and independently earned status;
-- [ ] final embedded footprint evidence is tied to the frozen implementation;
-- [ ] remote CI passes;
-- [ ] profile/ledger-only descendants are proven executable-identical;
-- [ ] executable work in the parent program is closed and only docs/registry hygiene remains.
+- [x] one exact frozen executable/test/validation SHA exists;
+- [x] Tier 1, extended and package validation pass on it;
+- [x] HTTPX 0.28.1 is freshly and truthfully requalified;
+- [x] HTTPX2 2.12.0 has a freshly and independently earned status;
+- [x] final embedded footprint evidence is tied to the frozen implementation;
+- [x] remote CI passes;
+- [x] profile/ledger-only descendants are proven executable-identical;
+- [x] executable work in the parent program is closed and only docs/registry hygiene remains.

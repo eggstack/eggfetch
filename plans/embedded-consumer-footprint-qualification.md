@@ -4,6 +4,16 @@ Planning baseline: `445149bd2af3c3ce5c0d34daacbde1bf8de57297` (`main`, 2026-09-1
 Parent program: `plans/embedded-rust-client-footprint-and-routing-program.md`
 Depends on: closure of `core-feature-dependency-and-tls-boundary-hardening.md`, `static-resolution-and-pinned-destination-routing.md`, and `native-rust-json-and-response-ergonomics.md`
 
+## Closure evidence — 2026-09-12
+
+The bounded runner completed on frozen executable commit
+`6e65c5bfc2607b30af8062a9269fcd260ed96464`, using rustc/cargo 1.98.1,
+`aarch64-unknown-linux-gnu`, and reqwest 0.12.28. It measured minimal
+WebPKI/native and JSON WebPKI/native profiles, dependency trees, duplicates,
+and stripped artifacts. Eggfetch was 327,728 stripped bytes larger than
+reqwest in each Rustls-aligned profile (+11.34% to +11.88%); the outcome is
+**not a footprint win**. No CI subsystem or unbounded benchmark was added.
+
 ## Objective
 
 Measure the actual dependency, compile, and stripped-binary footprint of representative embedded Rust consumers of `eggfetch-core`, compare it with an equivalently scoped reqwest configuration, and use the evidence to correct any remaining avoidable feature/dependency ownership before the parent program claims that eggfetch is a beneficial low-footprint choice.
@@ -38,9 +48,9 @@ No external request needs to run for the size measurement; the binary can compil
 
 Acceptance:
 
-- [ ] Fixture source remains tiny enough that most artifact weight comes from the HTTP stack, not benchmark scaffolding.
-- [ ] Eggfetch and reqwest variants perform semantically equivalent operations.
-- [ ] Qualification code is clearly non-product and does not create a second HTTP implementation.
+- [x] Fixture source remains tiny enough that most artifact weight comes from the HTTP stack, not benchmark scaffolding.
+- [x] Eggfetch and reqwest variants perform semantically equivalent operations.
+- [x] Qualification code is clearly non-product and does not create a second HTTP implementation.
 
 # 2. Define comparison profiles before measuring
 
@@ -84,9 +94,9 @@ Compare each library's intended ordinary Rust experience, but keep this separate
 
 Acceptance:
 
-- [ ] Comparison profiles are documented before results.
-- [ ] Protocol/TLS/JSON/streaming capabilities are aligned closely enough for the comparison to be meaningful.
-- [ ] Any unavoidable semantic difference is written beside the result.
+- [x] Comparison profiles are documented before results.
+- [x] Protocol/TLS/JSON/streaming capabilities are aligned closely enough for the comparison to be meaningful.
+- [x] Any unavoidable semantic difference is written beside the result.
 
 # 3. Record dependency and feature shape
 
@@ -111,8 +121,8 @@ Do not use raw package count as the sole quality metric. A smaller number of lar
 
 Acceptance:
 
-- [ ] Evidence makes it possible to explain major size differences rather than only report bytes.
-- [ ] Feature ownership corrections from prior plans are verifiably reflected in the tree.
+- [x] Evidence makes it possible to explain major size differences rather than only report bytes.
+- [x] Feature ownership corrections from prior plans are verifiably reflected in the tree.
 
 # 4. Measure stripped release artifact size
 
@@ -135,9 +145,9 @@ Where available, run `cargo bloat --release --crates` or an equivalent non-invas
 
 Acceptance:
 
-- [ ] Results are reproducible from documented commands.
-- [ ] Raw binary sizes are attached to exact profile/toolchain/SHA metadata.
-- [ ] No marketing conclusion is written without the underlying numbers.
+- [x] Results are reproducible from documented commands.
+- [x] Raw binary sizes are attached to exact profile/toolchain/SHA metadata.
+- [x] No marketing conclusion is written without the underlying numbers.
 
 # 5. Measure compile cost as secondary evidence
 
@@ -241,10 +251,10 @@ Do not renew compatibility exact-SHA evidence here; this plan may still make cor
 
 ## Exit criteria
 
-- [ ] Tiny downstream-style fixtures exist for equivalent eggfetch/reqwest profiles.
-- [ ] Minimal HTTPS and HTTPS+JSON/streaming profiles are explicitly defined.
-- [ ] Dependency trees, feature trees, duplicates and stripped artifact sizes are recorded with exact toolchain/SHA metadata.
-- [ ] Avoidable eggfetch overhead discovered by measurement is corrected or deliberately documented.
-- [ ] The result is classified as beneficial, neutral/strategic, or not a footprint win without overstating evidence.
-- [ ] Qualification remains manual/bounded rather than becoming a large CI subsystem.
-- [ ] Parent program can make a truthful downstream recommendation based on measured evidence.
+- [x] Tiny downstream-style fixtures exist for equivalent eggfetch/reqwest profiles.
+- [x] Minimal HTTPS and HTTPS+JSON/streaming profiles are explicitly defined.
+- [x] Dependency trees, feature trees, duplicates and stripped artifact sizes are recorded with exact toolchain/SHA metadata.
+- [x] Avoidable eggfetch overhead discovered by measurement is corrected or deliberately documented.
+- [x] The result is classified as beneficial, neutral/strategic, or not a footprint win without overstating evidence.
+- [x] Qualification remains manual/bounded rather than becoming a large CI subsystem.
+- [x] Parent program can make a truthful downstream recommendation based on measured evidence.

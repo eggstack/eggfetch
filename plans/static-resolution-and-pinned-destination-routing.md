@@ -4,6 +4,18 @@ Planning baseline: `445149bd2af3c3ce5c0d34daacbde1bf8de57297` (`main`, 2026-09-1
 Parent program: `plans/embedded-rust-client-footprint-and-routing-program.md`
 Depends on: `plans/core-feature-dependency-and-tls-boundary-hardening.md` reaching a stable direct/TLS connector shape
 
+## Closure evidence — 2026-09-12
+
+Implemented in the frozen executable commit
+`6e65c5bfc2607b30af8062a9269fcd260ed96464`. The request-scoped
+`ResolvedTarget`/`resolved_addresses()` API uses the existing direct connector
+candidate loop, never calls DNS in static mode, preserves logical Host/TLS
+identity, retains the snapshot for retries and same-origin redirects, and
+rejects cross-origin redirects, proxy/UDS/H3 combinations before I/O. Focused
+direct/TLS tests and the full Tier 1/extended/package gates passed. This v1
+contract is intentionally fail-closed for cross-origin redirects; no separate
+redirect destination map or SSRF policy engine was added.
+
 ## Objective
 
 Add a native, typed way for callers to supply one or more already-resolved remote `SocketAddr` values for a logical HTTP(S) origin and require eggfetch to connect exclusively to those addresses without performing a second DNS lookup, while preserving logical URL semantics, HTTP Host behavior, TLS SNI, certificate verification, redirects/retries, timeouts, pooling, metrics and existing transport security rules.
@@ -61,10 +73,10 @@ Expose the capability through an idiomatic native builder method rather than req
 
 Acceptance:
 
-- [ ] Public/native API clearly distinguishes normal system resolution from static caller-supplied routing.
-- [ ] Empty static destinations are rejected before I/O.
-- [ ] Debug output never leaks more destination detail than ordinary connection metadata policy allows; no secrets are involved.
-- [ ] Existing callers need no changes unless they opt into the new behavior.
+- [x] Public/native API clearly distinguishes normal system resolution from static caller-supplied routing.
+- [x] Empty static destinations are rejected before I/O.
+- [x] Debug output never leaks more destination detail than ordinary connection metadata policy allows; no secrets are involved.
+- [x] Existing callers need no changes unless they opt into the new behavior.
 
 # 2. Extend `DirectConnector` rather than adding a second transport stack
 
@@ -85,10 +97,10 @@ Do not implement static routing by rewriting the URL host to an IP address. That
 
 Acceptance:
 
-- [ ] No duplicate connector implementation is created.
-- [ ] Static and DNS-derived candidate sets share connect/fallback/socket-option logic.
-- [ ] Static mode performs no `lookup_host` call.
-- [ ] All supplied candidates obey the existing connect timeout budget rather than receiving a fresh full timeout each.
+- [x] No duplicate connector implementation is created.
+- [x] Static and DNS-derived candidate sets share connect/fallback/socket-option logic.
+- [x] Static mode performs no `lookup_host` call.
+- [x] All supplied candidates obey the existing connect timeout budget rather than receiving a fresh full timeout each.
 
 # 3. Preserve HTTP and TLS logical identity
 
@@ -116,9 +128,9 @@ Add H1 Host-header regressions and HTTPS tests using a deterministic local TLS s
 
 Acceptance:
 
-- [ ] HTTP Host remains the logical authority.
-- [ ] HTTPS SNI/certificate verification uses logical identity unless the caller explicitly requested an existing SNI override.
-- [ ] IP literals continue to work according to existing rustls IP-server-name semantics.
+- [x] HTTP Host remains the logical authority.
+- [x] HTTPS SNI/certificate verification uses logical identity unless the caller explicitly requested an existing SNI override.
+- [x] IP literals continue to work according to existing rustls IP-server-name semantics.
 
 # 4. Define retry semantics
 
@@ -136,8 +148,8 @@ Required behavior:
 
 Acceptance:
 
-- [ ] Retry reconstruction preserves the static destination set.
-- [ ] Regression test makes system resolution fail/change after first attempt and proves retry still uses the supplied set.
+- [x] Retry reconstruction preserves the static destination set.
+- [x] Regression test makes system resolution fail/change after first attempt and proves retry still uses the supplied set.
 
 # 5. Define redirect semantics conservatively
 
@@ -156,9 +168,9 @@ For security-sensitive use, provide a strict mode or semantics in which any redi
 
 Acceptance:
 
-- [ ] Same-origin redirect behavior is directly tested.
-- [ ] Cross-origin redirect cannot accidentally connect the new host to the old pinned address.
-- [ ] Strict pinned mode never returns to DNS through redirect handling.
+- [x] Same-origin redirect behavior is directly tested.
+- [x] Cross-origin redirect cannot accidentally connect the new host to the old pinned address.
+- [x] Strict pinned mode never returns to DNS through redirect handling.
 
 # 6. Define proxy interaction
 
@@ -175,9 +187,9 @@ If implementation can safely route an HTTPS CONNECT tunnel to a pinned destinati
 
 Acceptance:
 
-- [ ] Effective proxy + static origin routing has deterministic documented behavior.
-- [ ] No request silently bypasses a configured proxy unless the caller explicitly selected direct routing through existing API.
-- [ ] No proxy path silently discards the static destination constraint.
+- [x] Effective proxy + static origin routing has deterministic documented behavior.
+- [x] No request silently bypasses a configured proxy unless the caller explicitly selected direct routing through existing API.
+- [x] No proxy path silently discards the static destination constraint.
 
 # 7. Define HTTP/3 interaction
 
@@ -193,8 +205,8 @@ Given HTTP/3 remains experimental, rejecting unsupported static-routing combinat
 
 Acceptance:
 
-- [ ] H3 cannot bypass static routing.
-- [ ] Error/documentation clearly states unsupported combinations.
+- [x] H3 cannot bypass static routing.
+- [x] Error/documentation clearly states unsupported combinations.
 
 # 8. Pooling, connection reuse, and route identity
 
@@ -208,9 +220,9 @@ Do not key logical concurrency permits by raw address unless necessary; the pool
 
 Acceptance:
 
-- [ ] A static-routed request cannot accidentally ride a pooled connection established through ordinary DNS to another address.
-- [ ] Two different static address sets for the same logical origin do not share an incompatible physical connection cache.
-- [ ] Logical per-origin concurrency semantics remain unchanged unless documented.
+- [x] A static-routed request cannot accidentally ride a pooled connection established through ordinary DNS to another address.
+- [x] Two different static address sets for the same logical origin do not share an incompatible physical connection cache.
+- [x] Logical per-origin concurrency semantics remain unchanged unless documented.
 
 # 9. Security regression suite
 
@@ -274,11 +286,11 @@ Do not renew HTTPX/HTTPX2 exact-SHA qualification in this plan. The new request/
 
 ## Exit criteria
 
-- [ ] Native callers can supply validated remote address sets for a logical origin.
-- [ ] Static mode performs no second DNS lookup and never silently falls back to one.
-- [ ] Host/SNI/certificate/origin semantics remain logical-host based.
-- [ ] Retry/redirect behavior is explicit and tested.
-- [ ] Proxy/H3 incompatible routes fail closed.
-- [ ] Physical connection reuse cannot violate route constraints.
-- [ ] Existing ordinary-resolution behavior remains unchanged for requests not using the feature.
-- [ ] Documentation makes caller responsibilities and guarantees precise.
+- [x] Native callers can supply validated remote address sets for a logical origin.
+- [x] Static mode performs no second DNS lookup and never silently falls back to one.
+- [x] Host/SNI/certificate/origin semantics remain logical-host based.
+- [x] Retry/redirect behavior is explicit and tested.
+- [x] Proxy/H3 incompatible routes fail closed.
+- [x] Physical connection reuse cannot violate route constraints.
+- [x] Existing ordinary-resolution behavior remains unchanged for requests not using the feature.
+- [x] Documentation makes caller responsibilities and guarantees precise.

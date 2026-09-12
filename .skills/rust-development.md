@@ -30,6 +30,8 @@ cargo test --workspace --exclude eggfetch-python --all-features -- --test-thread
 - `unsafe_code = "forbid"` workspace-wide, except `eggfetch-ffi` and `eggfetch-node` (sole exceptions for their FFI/N-API boundaries). Never add `unsafe` elsewhere. If you think you need it, stop and ask.
 - All HTTP logic belongs in `eggfetch-core`. CLI, Python, FFI, and Node are adapters.
 - No parallel synchronous networking path. Python sync blocks on async Rust engine.
+- The opt-in `json` feature owns the direct `serde`/`serde_json` dependencies and provides replayable `RequestBuilder::json()` plus single-consume `Response::json()` helpers. Keep the default feature graph unchanged.
+- `RequestBuilder::resolved_addresses()` is a native direct-routing escape hatch: it uses exactly the supplied socket addresses, preserves logical Host/TLS identity, and fails closed for proxy, UDS, H3, or cross-origin redirect combinations. It is not an SSRF policy or a Python compatibility extension.
 - Public items need doc comments. For skeletal types, state which milestone fills in the real implementation.
 - Never use `#![allow(warnings)]`, `#![allow(clippy::all)]`, or `#![allow(clippy::pedantic)]`.
 - Use specific lint names. Justify suppressions with a comment.
@@ -56,7 +58,8 @@ approval (see `docs/verification-policy.md`).
 Embedded footprint qualification (`qualification/embedded/` +
 `scripts/qualify-embedded-footprint.sh` →
 `docs/architecture/embedded-footprint.md`) is manual/bounded, never a CI
-gate. The current record is not a footprint win; never claim slimming.
+gate. The current record is not a footprint win; never claim slimming. The
+native JSON helpers are opt-in and must remain absent from minimal profiles.
 
 ## HTTP/3 Constraints
 

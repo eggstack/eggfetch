@@ -5,6 +5,14 @@ Parent program: `plans/embedded-rust-client-footprint-and-routing-program.md`
 Depends on: successful closure of `plans/post-embedded-engine-compatibility-requalification-and-closure.md`
 Scope: documentation/profile/ledger/plan-index only after the frozen executable SHA
 
+## Closure evidence — 2026-09-12
+
+This descendant updates documentation, compatibility profile/ledger metadata,
+and plan indexes only. The frozen executable SHA is
+`6e65c5bfc2607b30af8062a9269fcd260ed96464`; the final descendant audit must
+show no source, test, manifest, lockfile, script, packaging, or qualification
+fixture drift after that commit.
+
 ## Objective
 
 Reconcile eggfetch documentation, plan navigation, architecture descriptions, examples, and qualification evidence with the final embedded-Rust engine implementation without modifying executable/test/build/validation/package behavior after compatibility requalification.
@@ -67,9 +75,9 @@ If `--no-default-features` still has intentionally limited utility, document exa
 
 Acceptance:
 
-- [ ] examples compile against the frozen feature contract;
-- [ ] native-root/WebPKI differences are explicit;
-- [ ] optional capabilities are not described as free/default when they are feature-gated.
+- [x] examples compile against the frozen feature contract;
+- [x] native-root/WebPKI differences are explicit;
+- [x] optional capabilities are not described as free/default when they are feature-gated.
 
 # 3. Reconcile TLS trust documentation
 
@@ -208,14 +216,14 @@ Record this audit in the program/index closure note.
 
 ## Exit criteria
 
-- [ ] All current architecture/docs describe the frozen implementation accurately.
-- [ ] Supported embedded feature profiles are documented with explicit capabilities.
-- [ ] TLS trust behavior has one consistent documented model.
-- [ ] Static destination routing guarantees/limitations are precise and security wording is bounded.
-- [ ] Native JSON semantics are documented.
-- [ ] Footprint evidence is dated/profile-specific and does not overclaim.
-- [ ] Connection reuse/pooling docs distinguish logical limits from physical transport reuse correctly.
-- [ ] `plans/README.md` and `plans/ROADMAP.md` record final program status.
-- [ ] Compatibility documents agree with live exact-SHA profiles/ledger.
-- [ ] Descendant audit proves no executable drift after final qualification.
-- [ ] Parent embedded-Rust engine program is ready to close.
+- [x] All current architecture/docs describe the frozen implementation accurately.
+- [x] Supported embedded feature profiles are documented with explicit capabilities.
+- [x] TLS trust behavior has one consistent documented model.
+- [x] Static destination routing guarantees/limitations are precise and security wording is bounded.
+- [x] Native JSON semantics are documented.
+- [x] Footprint evidence is dated/profile-specific and does not overclaim.
+- [x] Connection reuse/pooling docs distinguish logical limits from physical transport reuse correctly.
+- [x] `plans/README.md` and `plans/ROADMAP.md` record final program status.
+- [x] Compatibility documents agree with live exact-SHA profiles/ledger.
+- [x] Descendant audit proves no executable drift after final qualification.
+- [x] Parent embedded-Rust engine program is ready to close.

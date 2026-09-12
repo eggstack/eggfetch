@@ -82,7 +82,7 @@ eggfetch-core uses feature flags to keep the default build small. The Python cra
 | `compression-brotli` | Brotli decompression |
 | `compression-zstd` | Zstandard decompression |
 | `compression-deflate` | deflate decompression |
-| `json` | Reserved for future Rust-native JSON (Python uses `json.dumps()`) |
+| `json` | Native JSON request/response helpers via optional Serde dependencies |
 | `tracing` | Optional structured logging gate |
 | `test-util` | Deterministic time testing (internal) |
 

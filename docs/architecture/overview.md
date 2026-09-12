@@ -109,11 +109,11 @@ All HTTP behavior lives here (~29.7k lines across 27 source files plus `transpor
 | Module | Public? | Purpose |
 |--------|---------|---------|
 | `client` | Yes | `Client`, `ClientBuilder` — entry point for all requests. Holds hyper clients (standard, direct, UDS, SOCKS, H3), pool, config. Builder pattern with comprehensive configuration. |
-| `request` | Yes | `Request`, `RequestBuilder`, `ProxyOverride`, `TransportHints` — fluent request construction (`header()`, `query()`, `body()`, `timeout()`, `auth()`, `decompress()`, `proxy()`, `retry()`). `TransportHints` carries wire-level overrides (`target`, `sni_hostname`, `trace`) that do not affect logical URL semantics; hints survive retry reconstruction and are cleared on redirect hops. `send()` delegates to client. |
+| `request` | Yes | `Request`, `RequestBuilder`, `ProxyOverride`, `ResolvedTarget`, `TransportHints` — fluent request construction (`header()`, `query()`, `body()`, `json()`, `timeout()`, `auth()`, `decompress()`, `proxy()`, `retry()`, `resolved_addresses()`). `TransportHints` carries wire-level overrides (`target`, `sni_hostname`, `resolved_target`, `trace`) that do not affect logical URL semantics; hints survive retry reconstruction, while same-origin redirects retain only a resolved destination and cross-origin redirects fail closed. `send()` delegates to client. |
 | `response` | Yes | `Response`, `HistoryEntry` — status, version, headers, URL, body, redirect history, trailers (`trailers()` after EOF). Consumption: `bytes()`, `text()`, `bytes_stream()`, `raw_bytes_stream()`, `text_lines()`. |
 | `body` | Yes | `RequestBody`, `ResponseBody`, `BoxBytesStream`, `SharedTrailers` — single-consumption body model. Request: `Empty \| Bytes \| Stream`. Response: `Buffered \| Streaming \| EncodedStreaming \| Consumed`. Streaming bodies carry pool permits via `PoolGuardArc` (RAII); trailers populate without buffering via shared store. |
 | `headers` | Yes | `Headers` — case-insensitive header map wrapper around `http::HeaderMap`. |
-| `error` | Yes | `Error` enum (47 variants), `Result<T>` alias. Comprehensive taxonomy (`InvalidUrl` … `Http2*`, `H3*`, `TraceCallbackAborted`) with `kind()` returning static strings for programmatic matching. |
+| `error` | Yes | `Error` enum and `Result<T>` alias. Comprehensive taxonomy (`InvalidUrl` … `Http2*`, `H3*`, `ResolvedTargetRedirect`, JSON errors, `TraceCallbackAborted`) with `kind()` returning static strings for programmatic matching. |
 | `auth` | Yes | `AuthScheme`, `BasicAuth`, `BearerAuth` — CR/LF injection prevention, redacted `Debug`/`Display`. Precedence: request > disabled > client > none. |
 | `compression` | Yes | `ContentCoding`, `DecompressionLimit` — streaming decompression (gzip, brotli, zstd, deflate). Zip-bomb protection via max decoded size and ratio. |
 | `cookie` | Yes | `CookieJar`, `Cookie`, `SameSite` — RFC 6265 jar with domain/path matching, cross-origin stripping, thread-safe storage. (cfg `cookies`) |
@@ -122,7 +122,7 @@ All HTTP behavior lives here (~29.7k lines across 27 source files plus `transpor
 | `multipart` | Yes | `Multipart`, `Boundary`, `Part`, `PartBody`, `MultipartEncoder` — streaming multipart/form-data with known-length optimization. (cfg `multipart`) |
 | `network_stream` | Yes | `NetworkStream`, `UpgradedStream`, `UpgradedStreamVariant` (`Tcp`/`Tls`/`Adapter`), `ConnectionMetadata`, `TlsInfo`, `ExtraInfo` — writable IO for 101 only; direct upgrades carry real addrs/TLS, UDS reports `Unix` without IPs, opaque stays unavailable. |
 | `pool` | Yes | `Pool`, `PoolConfig`, `PoolGuard`, `OriginKey`, `PoolMetrics` — semaphore-based concurrency limiter keyed by `(scheme, host, port)` + optional proxy route. |
-| `transport/metrics` | Yes | `TransportMetrics`, `TransportSnapshot` — connector/DNS/TLS, UDS/proxy, H3 creation/eviction, Alt-Svc learned/expired/cleared/rejected, H3 attempted/suppressed/fallback/drain/close/reconnect, 101 upgrades. Separate from `PoolMetrics`; Hyper reuse absent by design. |
+| `transport/metrics` | Yes | `TransportMetrics`, `TransportSnapshot` — connector/DNS/TLS, UDS/proxy, H3 creation/eviction, Alt-Svc learned/expired/cleared/rejected, H3 attempted/suppressed/fallback/drain/close/reconnect, 101 upgrades. Separate from `PoolMetrics`; physical Hyper reuse is not represented as a logical permit metric. |
 | `proxy` | Yes | `Proxy`, `ProxyConfig`, `ProxyAuth`, `NoProxy`, `NoProxyRule`, `ProxyDecision` — HTTP forwarding, HTTPS CONNECT tunneling, SOCKS5. Per-request override model. (cfg `proxy`) |
 | `redact` | Yes | `redact_headers()`, `redact_url()`, `SENSITIVE_HEADERS` — centralized secret redaction for all `Debug`/`Display`/error output. |
 | `redirect` | Yes | `RedirectPolicy`, `redirect_method()`, `build_redirect_request()` — method rewrites (303→GET), cross-origin header stripping, body replayability checks. |
@@ -174,7 +174,7 @@ Single source file (`main.rs`, ~1.8k lines). Thin binary over `eggfetch-core` (e
 | `multipart.rs` | `File` wrapper for multipart uploads. |
 | `streaming.rs` | `StreamingResponse` — sync/async iterators for bytes, text, lines, raw bytes. |
 | `conversion.rs` | Python↔Rust type conversion (shared by sync/async). |
-| `extensions.rs` | Request-extension extraction (`target`, `sni_hostname`, `trace`) into core `TransportHints`. |
+| `extensions.rs` | Request-extension extraction (`target`, `sni_hostname`, `trace`) into core `TransportHints`; native resolved destinations remain Rust-only. |
 | `network_stream.rs` | `PyNetworkStream` (sync) / `PyAsyncNetworkStream` (async) behind `EitherNetworkStream`; `start_tls`, `get_extra_info`. Clones share one stream (Arc/Mutex); leading rewind bytes honored. |
 | `trace_bridge.rs` | `PyTraceObserver` — wraps sync Python callables as core `TraceObserver`; rejects coroutines eagerly with `TypeError`. |
 | `errors.rs` | Exception hierarchy: `EggfetchError` → `RequestError` (nesting `InvalidUrl`, `TimeoutException`, `NetworkError`, `ProtocolError`, `BodyError`, `ProxyError`, retry/H2/H3 errors) plus `HTTPStatusError`, `UnsupportedKwarg`, stream-state errors. |
@@ -365,13 +365,13 @@ Client::send()
   → retry loop (send_with_retry via RequestParts::retry_request, total deadline shrinks)
     → redirect loop (send_with_redirects via shared HopBuildParams builder)
       → header merge (client defaults + request overrides)
-      → hop build (cookies, auth, hints; first hop preserves hints, later hops clear)
+      → hop build (cookies, auth, hints; retries preserve pins, same-origin redirects retain only the pin)
       → redirect transformation (single advance_redirect_hop step)
       → preparation (prepare_single_request → PreparedRequest)
         → accept-encoding / Content-Length / user-agent / H2 stripping / size check
         → proxy resolution + origin keying + pool acquisition
         → write-timeout wrapping + remaining-total/deadline computation
-      → transport dispatch (select_route → UDS / Direct / Proxy / SNI / H3 / Standard)
+      → transport dispatch (select_route → UDS / Static Direct / Direct / Proxy / SNI / H3 / Standard)
       → common post-transport policy (Alt-Svc learning, decompression, decoded-size limit)
       → read timeout + pool lease attachment
 ```
@@ -383,22 +383,28 @@ Client::send()
 selects one declarative route (precedence unchanged, directly unit-tested):
 
 1. **Unix Domain Socket** — when `ClientBuilder::uds_path()` is configured
-2. **Specialized direct** — when a direct connector (socket options / local
+2. **Static direct** — when `RequestBuilder::resolved_addresses()` supplied
+   caller-owned destinations; addresses are used exactly and no DNS lookup is
+   performed. Logical URL, Host, TLS certificate identity, and SNI remain
+   authoritative. Proxy, UDS, and H3 combinations reject before I/O.
+3. **Specialized direct** — when a direct connector (socket options / local
    address) is configured and no proxy applies
-3. **Proxy / SOCKS** — effective proxy or SOCKS path (SOCKS uses a
+4. **Proxy / SOCKS** — effective proxy or SOCKS path (SOCKS uses a
    per-route persistent Hyper pool)
-4. **SNI override direct** — cached SNI-specific client when
+5. **SNI override direct** — cached SNI-specific client when
    `TransportHints::sni_hostname` is set
-5. **HTTP/3 (QUIC, experimental)** — `Http3Only` always; `Auto { allow_http3: true }` only
+6. **HTTP/3 (QUIC, experimental)** — `Http3Only` always; `Auto { allow_http3: true }` only
    when a fresh Alt-Svc alternative is cached and not suppressed (otherwise
    standard); `Auto { allow_http3: false }` never. Requires the `http3`
    feature. Graduation is **retained experimental** this milestone; blockers
    and evidence live in [core-tls-proxy-protocols.md](core-tls-proxy-protocols.md)
    (§ "Production Graduation Decision") and `tests/h3_interop_qualification.rs`.
-6. **Standard Hyper direct** — default TCP path (also safe `Auto` fallback
+7. **Standard Hyper direct** — default TCP path (also safe `Auto` fallback
    for pre-commit replayable H3 failures, same deadlines/TLS).
 
-H3 never bypasses proxy rules because proxy routes are selected first.
+H3 never bypasses proxy rules because proxy routes are selected first. Static
+destinations are deliberately not an SSRF policy: callers must validate their
+own address authority and access policy.
 All routes share one post-transport policy; UDS and specialized-direct
 responses now flow through the same Alt-Svc learning (learnable routes
 only), decompression, and lease handling as the standard path.

@@ -24,6 +24,8 @@ eggfetch is a Rust-native HTTP client engine with Python bindings and a CLI tool
 - **Authentication** -- Basic and Bearer auth with credential redaction in all output paths
 - **Multipart** -- streaming multipart/form-data with known-length optimization
 - **Retries** -- policy-driven retries with exponential backoff and `Retry-After` support
+- **Native Rust JSON (opt-in)** -- replayable `RequestBuilder::json()` request bodies and single-consumption `Response::json()` decoding via Serde
+- **Resolved destination routing (native Rust)** -- caller-supplied direct `SocketAddr` sets without a second DNS lookup, preserving logical Host/SNI identity
 - **Python API** -- requests/HTTPX-compatible sync and async interfaces, GIL-releasing blocking I/O
 - **HTTPX compatibility facade** -- compatible asyncio surface targeting HTTPX 0.28.1 (`eggfetch.compat.httpx`)
 - **Network stream exposure** -- 101 Switching Protocols responses expose an owned upgraded stream through `extensions["network_stream"]`; direct-connector upgrades carry real local/remote addrs and TLS version/cipher/ALPN, UDS upgrades report `Unix` without IPs, standard opaque upgrades remain explicitly unavailable; `start_tls` uses the same safe TLS translation as the default client
@@ -165,6 +167,39 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
+With the opt-in `json` feature, request and response JSON helpers use the
+normal replayable-body and single-consumption response semantics:
+
+```rust
+use eggfetch_core::Client;
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize)]
+struct Payload { key: String }
+
+let client = Client::new();
+let mut response = client.post("https://api.example/data")?
+    .json(&Payload { key: "value".into() })?
+    .send()
+    .await?;
+let payload: Payload = response.json().await?;
+```
+
+For deterministic direct routing, attach caller-validated destinations while
+keeping the logical URL (and therefore HTTP Host and HTTPS SNI) unchanged:
+
+```rust
+let mut response = client
+    .get("https://service.example/data")?
+    .resolved_addresses(["203.0.113.10:443".parse()?])
+    .send()
+    .await?;
+```
+
+Static destinations never fall back to DNS. Same-origin redirects retain the
+snapshot; cross-origin redirects and proxy/HTTP/3 routes fail closed. This is
+a routing primitive, not an address-safety or SSRF policy engine.
+
 ### Builder pattern
 
 ```rust
@@ -217,6 +252,7 @@ eggfetch-core = { version = "0.1", features = [
     "compression-zstd",
     "compression-deflate",
     "multipart",      # streaming multipart/form-data
+    "json",           # optional native Serde JSON helpers
 ] }
 ```
 

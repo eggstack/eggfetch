@@ -8,7 +8,18 @@ eggfetch is a Rust-native HTTP client platform with Python bindings and a CLI la
 
 The remaining roadmap is therefore not primarily about proving feasibility. It is about tightening semantics, completing the expected HTTP-client feature set, expanding transport capabilities, and establishing production-grade release, security, testing, and documentation practices.
 
-## Current product position (2026-09-11)
+## Current product position (2026-09-12)
+
+The embedded Rust client footprint and routing program is complete on frozen
+executable/test/fixture SHA
+`6e65c5bfc2607b30af8062a9269fcd260ed96464`. `eggfetch-core` now has truthful
+feature ownership, native `json` request/response helpers, and request-scoped
+resolved-destination routing that preserves logical identity and fails closed
+for incompatible routes. Bounded embedded evidence classifies the result as
+**not a footprint win** against aligned Rustls reqwest profiles; adoption is
+therefore an ownership/control/API decision, not a size-saving claim. The
+engine is ready for downstream migration evaluation, but no downstream
+migration is part of eggfetch.
 
 The HTTP/3 graduation and next HTTPX compatibility program
 (`http3-and-next-httpx-compatibility-program.md`) is complete: Alt-Svc
@@ -33,8 +44,8 @@ retained-experimental outcome; its missing evidence is recorded in
   connection pooling, phase-aware timeouts, redirect engine, cookies,
   auth, HTTP/SOCKS proxying, TLS configuration, response decompression,
   multipart encoding, retry policy, HTTP trailers, connector-derived
-  connection metadata, transport metrics, and logical in-flight request
-  limits.
+  connection metadata, transport metrics, logical in-flight request limits,
+  opt-in native JSON helpers, and request-scoped static destination routing.
 - Python sync and asyncio bindings, including the Stage C-qualified
   `eggfetch.compat.httpx` facade for the documented HTTPX 0.28.1
   asyncio surface (Python 3.10+) and the independently Stage C-qualified

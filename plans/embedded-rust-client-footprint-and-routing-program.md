@@ -86,19 +86,19 @@ Plan 5 is the only plan allowed to renew exact-SHA HTTPX/HTTPX2 compatibility st
 
 The program is complete only when all of the following are true:
 
-- [ ] The default eggfetch-core feature set preserves the documented 0.1.3 ordinary-client behavior unless an intentional, documented pre-1.0 API correction is required.
-- [ ] `tls-rustls` and related root-store features own real optional dependency behavior rather than being mostly declarative aliases.
-- [ ] A no-default-features embedded configuration can select only the protocol/TLS/JSON capabilities it actually needs without pulling unrelated proxy/cookie/compression/multipart/H2/H3 dependencies.
-- [ ] Multipart-only randomness/dependencies are not unconditional unless another core use independently justifies them.
-- [ ] TLS trust-root selection has one authoritative policy path for standard/direct/proxy/H3 contexts where the semantics are shared; intentional leg-specific behavior remains explicit.
-- [ ] A caller can provide one or more validated `SocketAddr` destinations for a logical origin and require that request to connect only to those addresses, without a second DNS lookup.
-- [ ] Pinned routing preserves logical HTTP Host and HTTPS SNI/certificate identity and fails closed when incompatible with route selection.
-- [ ] Retry and redirect transformations preserve or clear resolved-destination state according to explicit tests; cross-origin redirects never accidentally reuse the old destination snapshot.
-- [ ] The native `json` feature provides request and response helpers backed by optional Serde dependencies and does not enter the default dependency graph unless intentionally selected.
-- [ ] Footprint qualification records actual stripped artifact size and dependency/feature evidence for an embedded eggfetch profile and an equivalently scoped comparison client; documentation does not claim a win that measurements do not support.
-- [ ] Existing Tier 1 checks remain green during implementation and affected compatibility tests run with each compatibility-sensitive change.
-- [ ] One final SHA passes the repository's existing package/compatibility qualification before compatibility ledgers are renewed.
-- [ ] Documentation, feature flags, dependency policy, roadmap and plan index describe the final implementation accurately.
+- [x] The default eggfetch-core feature set preserves the documented 0.1.3 ordinary-client behavior unless an intentional, documented pre-1.0 API correction is required.
+- [x] `tls-rustls` and related root-store features own real optional dependency behavior rather than being mostly declarative aliases.
+- [x] A no-default-features embedded configuration can select only the protocol/TLS/JSON capabilities it actually needs without pulling unrelated proxy/cookie/compression/multipart/H2/H3 dependencies.
+- [x] Multipart-only randomness/dependencies are not unconditional unless another core use independently justifies them.
+- [x] TLS trust-root selection has one authoritative policy path for standard/direct/proxy/H3 contexts where the semantics are shared; intentional leg-specific behavior remains explicit.
+- [x] A caller can provide one or more validated `SocketAddr` destinations for a logical origin and require that request to connect only to those addresses, without a second DNS lookup.
+- [x] Pinned routing preserves logical HTTP Host and HTTPS SNI/certificate identity and fails closed when incompatible with route selection.
+- [x] Retry and redirect transformations preserve or clear resolved-destination state according to explicit tests; cross-origin redirects never accidentally reuse the old destination snapshot.
+- [x] The native `json` feature provides request and response helpers backed by optional Serde dependencies and does not enter the default dependency graph unless intentionally selected.
+- [x] Footprint qualification records actual stripped artifact size and dependency/feature evidence for an embedded eggfetch profile and an equivalently scoped comparison client; documentation does not claim a win that measurements do not support.
+- [x] Existing Tier 1 checks remain green during implementation and affected compatibility tests run with each compatibility-sensitive change.
+- [x] One final SHA passes the repository's existing package/compatibility qualification before compatibility ledgers are renewed.
+- [x] Documentation, feature flags, dependency policy, roadmap and plan index describe the final implementation accurately.
 
 ## Explicit non-goals
 
@@ -120,3 +120,21 @@ Do not expand this program into:
 Use existing verification conventions. `./scripts/check.sh` is mandatory after executable child-plan changes. Use focused tests for affected feature combinations and transport/TLS/security semantics throughout. `./scripts/check.sh extended` and package validation belong at meaningful closure points rather than after every small edit.
 
 The final exact-SHA compatibility qualification is intentionally deferred until all executable/test work is complete. Missing external prerequisites or unsupported environments must be recorded as such rather than converted into a pass.
+
+## Completed program closure — 2026-09-12
+
+Plans 1–4 completed the executable work: feature/TLS ownership was corrected,
+native resolved-destination routing was added with fail-closed route
+selection, native Rust JSON helpers were implemented behind the opt-in
+`json` feature, and bounded embedded fixtures/evidence were added. The
+measured outcome is **not a footprint win** against the equivalent Rustls
+reqwest profiles; the dated evidence is in
+`docs/architecture/embedded-footprint.md`.
+
+Plan 5 froze executable/test/fixture commit
+`6e65c5bfc2607b30af8062a9269fcd260ed96464`. Tier 1, extended, package,
+feature-matrix, API-oracle, embedded-footprint, and three consecutive full
+HTTPX compatibility runs passed on that tree. HTTPX 0.28.1 and HTTPX2 2.12.0
+profiles were renewed independently on the same SHA. Plan 6 is the
+documentation/profile/plan-registry descendant; its final audit must remain
+executable-identical to this SHA.

@@ -35,11 +35,8 @@ Each binary exercises the same workload for its profile:
 
 - construct one reusable client;
 - HTTPS GET;
-- JSON request serialization where the profile selects it
-  (eggfetch fixtures serialize via `serde_json` directly because
-  `eggfetch-core/json` is currently reserved; reqwest fixtures use
-  `.json()` — the difference is recorded, not hidden);
-- JSON response deserialization from raw bytes;
+- JSON request serialization and response deserialization through each
+  client's native helper API;
 - streaming response iteration via `bytes_stream()`.
 
 No fixture exercises cookies, proxies, compression, multipart, H2, or H3

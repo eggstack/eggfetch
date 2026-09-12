@@ -2,7 +2,8 @@
 
 This directory contains the machine-readable compatibility profile for
 HTTPX 0.28.1. The current Stage C claim is bound to frozen executable SHA
-`78a77ea153aae239ce7b722aeb9909a87df3bbb5`. The prior `639bf186...` binding
+`6e65c5bfc2607b30af8062a9269fcd260ed96464`. The prior `78a77ea...` and
+`639bf186...` bindings
 is historical after the post-freeze HTTP/3 diagnostics audit corrected a
 native counter's semantics; the earlier `65beb675...` result is historical as
 well.

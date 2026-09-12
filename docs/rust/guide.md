@@ -9,6 +9,8 @@ Add `eggfetch-core` to your `Cargo.toml`:
 ```toml
 [dependencies]
 eggfetch-core = { version = "0.1", features = ["http1", "tls-rustls", "tls-native-roots"] }
+# Add this when deriving request/response types for the `json` helpers.
+serde = { version = "1", features = ["derive"] }
 ```
 
 Enable optional features as needed:
@@ -23,6 +25,7 @@ Enable optional features as needed:
 | `cookies` | Cookie jar support |
 | `proxy` | HTTP/HTTPS proxy support |
 | `multipart` | Multipart form-data encoding |
+| `json` | Native JSON request/response helpers via optional Serde dependencies |
 | `compression-gzip` | Gzip decompression |
 | `compression-brotli` | Brotli decompression |
 | `compression-zstd` | Zstandard decompression |
@@ -40,9 +43,9 @@ For a minimal embedded HTTPS client (deterministic WebPKI roots):
 eggfetch-core = { version = "0.1", default-features = false, features = ["http1", "tls-rustls"] }
 ```
 
-`http1` alone is cleartext-only. `json` remains a reserved flag (use
-`serde_json` directly until native JSON lands). Measured downstream
-size/dependency evidence lives in
+`http1` alone is cleartext-only. The opt-in `json` feature adds native
+`RequestBuilder::json()` and `Response::json()` helpers; it does not change
+the default dependency graph. Measured downstream size/dependency evidence lives in
 `docs/architecture/embedded-footprint.md` — the current record is not a
 footprint win, so do not describe migration as slimming.
 
@@ -121,6 +124,38 @@ let resp = client.post("https://api.example.com/data")?
     .body(RequestBody::from(Bytes::from("hello")))
     .send().await?;
 ```
+
+With the `json` feature, request and response values can use Serde directly:
+
+```rust
+#[derive(serde::Serialize)]
+struct CreateUser<'a> { name: &'a str }
+
+#[derive(serde::Deserialize)]
+struct User { id: u64 }
+
+let response = client.post("https://api.example.com/users")?
+    .json(&CreateUser { name: "Ada" })?
+    .send().await?;
+let user: User = response.json().await?;
+```
+
+For native direct routing, `resolved_addresses()` pins the physical TCP
+destinations while the request URL still controls Host, HTTPS certificate
+identity, and SNI:
+
+```rust
+use std::net::SocketAddr;
+
+let address: SocketAddr = "203.0.113.10:443".parse()?;
+let response = client.get("https://service.example")?
+    .resolved_addresses([address])
+    .send().await?;
+```
+
+The supplied addresses are used exactly and DNS is not attempted. Same-origin
+redirects retain the pin; cross-origin redirects, proxies, UDS, and H3 fail
+closed. This is a routing primitive, not an SSRF policy.
 
 ### Timeout
 

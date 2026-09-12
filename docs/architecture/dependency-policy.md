@@ -95,8 +95,8 @@ a working HTTPS client.
 Downstream size/dependency evidence for the minimal profiles lives in
 [embedded-footprint.md](embedded-footprint.md) (manual qualification in
 `qualification/embedded/`). Minimal trees verifiably exclude
-cookies/proxy/compression/multipart/H2/H3; `serde` stays absent unless
-JSON is selected (currently via the downstream fixture, not core).
+cookies/proxy/compression/multipart/H2/H3 and JSON; serde/serde_json enter
+only when the native json feature is selected.
 
 ## Optional Later Dependencies
 
@@ -105,7 +105,8 @@ Features that are not core to HTTP/1.1 client behavior are optional and feature-
 - **pyo3**, **pyo3-async-runtimes** -- Python bindings (eggfetch-python crate only).
 - **encoding_rs** -- charset decoding for non-UTF-8 responses (eggfetch-python crate only).
 - **clap** -- CLI argument parsing (eggfetch-cli crate only).
-- **serde**, **serde_json** -- reserved for future Rust-native JSON serialization; not currently dependencies.
+- **serde**, **serde_json** -- native Rust JSON request/response helpers,
+  optional behind the json feature and absent from non-JSON core profiles.
 - **async-compression**, **tokio-util**, **brotli**, **zstd** -- streaming and buffered decompression for gzip, brotli, deflate, and zstd (optional, behind the respective compression features).
 - **tracing** -- structured logging (optional, behind `tracing`).
 
@@ -211,13 +212,14 @@ the body is consumed or dropped.
 
 ### Connection Reuse
 
-The current implementation does **not** reuse TCP connections or tunnels
-across requests. Each request:
+Standard direct requests use Hyper's physical connection pool and may reuse
+compatible TCP/TLS connections across requests. Each request:
 
 1. Acquires a pool permit.
-2. Opens a fresh TCP connection (and TLS handshake for HTTPS).
+2. Reuses a compatible pooled connection or opens a TCP connection (and TLS
+   handshake for HTTPS).
 3. Sends the request and reads the response.
-4. Releases the pool permit.
+4. Releases the logical pool permit.
 
 For proxy connections specifically:
 
@@ -229,11 +231,12 @@ For proxy connections specifically:
   the tunnel, sends the HTTP request, reads the response, and closes the
   connection.
 
-The pool permit key includes the proxy origin to prevent excessive
-parallel connections through the same proxy, but each permit corresponds
-to a fresh socket. Future work may introduce transport-level connection
-pooling for proxy connections, keyed by `(proxy origin, destination
-origin, tunnel mode, TLS config)`.
+The pool permit key includes the proxy origin to prevent excessive parallel
+connections through the same proxy, but the current HTTP forward and HTTPS
+CONNECT proxy paths open a fresh proxy socket per request. SOCKS routes use
+their own persistent Hyper pools. Static resolved-destination requests use
+an isolated direct client so ordinary DNS and incompatible static route
+connections cannot cross the caller's constraint.
 
 ## Decoded-Body Limits
 

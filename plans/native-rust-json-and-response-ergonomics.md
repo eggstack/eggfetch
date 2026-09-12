@@ -3,6 +3,16 @@
 Planning baseline: `445149bd2af3c3ce5c0d34daacbde1bf8de57297` (`main`, 2026-09-11; eggfetch 0.1.3)
 Parent program: `plans/embedded-rust-client-footprint-and-routing-program.md`
 
+## Closure evidence — 2026-09-12
+
+Implemented in frozen executable commit
+`6e65c5bfc2607b30af8062a9269fcd260ed96464`. The opt-in `json` feature owns
+`serde`/`serde_json`; `RequestBuilder::json()` sets a default JSON media type
+without overriding an explicit header, and `Response::json()` uses the
+existing buffered/decompression/limit/single-consumption path. Focused unit
+coverage, feature-off/on checks, fixture builds, and the full repository gates
+passed. JSON errors are classified without embedding payloads.
+
 ## Objective
 
 Finish the already-reserved native Rust `json` capability and add a small set of high-value native request/response conveniences that reduce downstream boilerplate without turning eggfetch into a reqwest compatibility facade or expanding the default dependency graph.
@@ -38,9 +48,9 @@ Requirements:
 
 Acceptance:
 
-- [ ] `cargo tree -e features` proves JSON dependencies are feature-owned.
-- [ ] `cargo check -p eggfetch-core --no-default-features --features http1,tls-rustls,json` succeeds after the feature/TLS plan.
-- [ ] Disabling `json` removes native Serde JSON helper code through normal `cfg(feature = "json")` boundaries.
+- [x] `cargo tree -e features` proves JSON dependencies are feature-owned.
+- [x] `cargo check -p eggfetch-core --no-default-features --features http1,tls-rustls,json` succeeds after the feature/TLS plan.
+- [x] Disabling `json` removes native Serde JSON helper code through normal `cfg(feature = "json")` boundaries.
 
 # 2. Add request JSON serialization
 
@@ -71,10 +81,10 @@ Prefer the conventional `application/json` value without charset unless existing
 
 Acceptance:
 
-- [ ] structs/maps/scalars/arrays serialize correctly;
-- [ ] explicit Content-Type is preserved;
-- [ ] serialization failure opens no connection;
-- [ ] resulting body remains replayable through existing retry/redirect rules.
+- [x] structs/maps/scalars/arrays serialize correctly;
+- [x] explicit Content-Type is preserved;
+- [x] serialization failure opens no connection;
+- [x] resulting body remains replayable through existing retry/redirect rules.
 
 # 3. Add response JSON deserialization
 
@@ -97,11 +107,11 @@ Required semantics:
 
 Acceptance:
 
-- [ ] valid JSON maps to `DeserializeOwned` targets;
-- [ ] invalid JSON returns a structured JSON error;
-- [ ] decoded-body limits still apply;
-- [ ] compressed JSON follows the same decode path as buffered bytes;
-- [ ] the response is consumed once and cannot be silently re-read.
+- [x] valid JSON maps to `DeserializeOwned` targets;
+- [x] invalid JSON returns a structured JSON error;
+- [x] decoded-body limits still apply;
+- [x] compressed JSON follows the same decode path as buffered bytes;
+- [x] the response is consumed once and cannot be silently re-read.
 
 # 4. Extend the error taxonomy narrowly
 
@@ -120,8 +130,8 @@ Do not create a broad serialization framework or generic codec trait.
 
 Acceptance:
 
-- [ ] JSON errors are distinguishable from transport/body I/O failures.
-- [ ] error formatting does not leak request/response JSON payloads.
+- [x] JSON errors are distinguishable from transport/body I/O failures.
+- [x] error formatting does not leak request/response JSON payloads.
 
 # 5. Add numeric content-length convenience if it stays allocation-free
 
@@ -145,8 +155,8 @@ If duplicate/conflicting Content-Length semantics require more nuanced handling,
 
 Acceptance:
 
-- [ ] numeric helper never reports decompressed/collected body size as wire Content-Length.
-- [ ] existing compatibility metadata remains untouched.
+- [x] numeric helper never reports decompressed/collected body size as wire Content-Length.
+- [x] existing compatibility metadata remains untouched.
 
 # 6. Evaluate request-scoped decoded-body limits
 
@@ -236,10 +246,10 @@ Run feature-off and feature-on compile checks. Run affected retry/redirect/body-
 
 ## Exit criteria
 
-- [ ] The reserved `json` feature has real native behavior and optional dependency ownership.
-- [ ] Native request JSON serialization is replay-safe and respects header precedence.
-- [ ] Native response JSON deserialization uses existing single-consumption/body-limit semantics.
-- [ ] JSON errors are structured and do not leak payloads.
-- [ ] Narrow additional ergonomics are implemented only where semantics remain clear and scope stays small.
-- [ ] Default/non-JSON consumers do not pay for Serde JSON through this feature.
-- [ ] Documentation accurately describes the native JSON contract.
+- [x] The reserved `json` feature has real native behavior and optional dependency ownership.
+- [x] Native request JSON serialization is replay-safe and respects header precedence.
+- [x] Native response JSON deserialization uses existing single-consumption/body-limit semantics.
+- [x] JSON errors are structured and do not leak payloads.
+- [x] Narrow additional ergonomics are implemented only where semantics remain clear and scope stays small.
+- [x] Default/non-JSON consumers do not pay for Serde JSON through this feature.
+- [x] Documentation accurately describes the native JSON contract.

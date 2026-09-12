@@ -20,7 +20,7 @@ http2 = ["dep:h2", "hyper/http2", "hyper-util/http2", "hyper-rustls?/http2"]
 tls-rustls = ["dep:hyper-rustls", "dep:pem-rfc7468", "dep:rustls", "dep:tokio-rustls", "dep:webpki-roots", "hyper-rustls/ring", "hyper-rustls/logging", "hyper-rustls/tls12"]
 tls-native-roots = ["tls-rustls", "dep:rustls-native-certs"]
 http3 = ["http1", "tls-rustls", "dep:quinn", "dep:h3", "dep:h3-quinn"]
-json = []
+json = ["dep:serde", "dep:serde_json"]
 compression-gzip = ["dep:async-compression", "async-compression/gzip", "dep:tokio-util", "tokio/io-util", "dep:flate2"]
 compression-brotli = ["dep:async-compression", "async-compression/brotli", "dep:tokio-util", "tokio/io-util", "dep:brotli"]
 compression-zstd = ["dep:async-compression", "async-compression/zstd", "dep:tokio-util", "tokio/io-util", "dep:zstd"]
@@ -92,13 +92,24 @@ failure.
 
 ### json
 
-**Status:** reserved flag; currently owns no dependencies and enables no
-core behavior. `eggfetch-bench` and the `qualification/embedded/`
-fixtures select it as a no-op marker; downstream JSON today uses
-`serde_json` directly. The Python crate delivers JSON body support via
-Python's `json.dumps()`, not through a Rust-side feature gate. The flag
-is reserved for future Rust-native JSON serialization (e.g., serde
-integration in `eggfetch-core`).
+**Status:** implemented (optional). Enables serde and serde_json and adds
+RequestBuilder::json() plus Response::json(). Request JSON is serialized
+into a replayable byte body and sets Content-Type: application/json only
+when the caller has not supplied a content type. Response JSON consumes the
+body once through the normal decoded-body/limit path and does not require a
+particular media type. JSON errors have distinct json_serialize and
+json_deserialize kinds. The feature remains opt-in and is not in default;
+Python continues to expose its own json.dumps() boundary.
+
+### Resolved destination routing
+
+This is a native API capability rather than a Cargo feature. A request can use
+RequestBuilder::resolved_addresses() to provide a non-empty set of validated
+SocketAddr values. Direct routing uses exactly that set without DNS and
+preserves logical URL/Host/TLS identity. Same-origin redirects retain the
+snapshot; cross-origin redirects, proxies, UDS, and HTTP/3 fail closed. The
+caller owns address validation and redirect policy; this primitive is not an
+SSRF policy engine.
 
 ### compression-gzip
 
@@ -183,6 +194,7 @@ cargo check -p eggfetch-core --no-default-features --features http1
 cargo check -p eggfetch-core --no-default-features --features http1,tls-rustls
 cargo check -p eggfetch-core --no-default-features --features http1,tls-rustls,tls-native-roots
 cargo check -p eggfetch-core --all-features
+cargo check -p eggfetch-core --no-default-features --features http1,tls-rustls,json
 cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,compression-gzip
 cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,compression-brotli
 cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,compression-zstd

@@ -114,11 +114,11 @@ Current `eggfetch-core` feature declarations (see `crates/eggfetch-core/Cargo.to
 
 ```toml
 default = ["http1", "tls-rustls", "tls-native-roots"]
-# http1/http2/http3, tls-rustls, json (reserved), compression-gzip/brotli/zstd/deflate,
+# http1/http2/http3, tls-rustls, json, compression-gzip/brotli/zstd/deflate,
 # tls-native-roots, cookies, proxy, multipart, tracing (optional), test-util (internal)
 ```
 
-`cookies`, `proxy`, and `multipart` are opt-in in core. CLI enables cookies/multipart/proxy; Python enables http2/http3/cookies/multipart/proxy plus all compressions. `http3` is experimental. `json` is reserved (Python delivers JSON via `json.dumps()`); `tracing` is an optional structured-logging gate; `test-util` enables `tokio/test-util` for deterministic time testing.
+`cookies`, `proxy`, and `multipart` are opt-in in core. CLI enables cookies/multipart/proxy; Python enables http2/http3/cookies/multipart/proxy plus all compressions. `http3` is experimental. `json` enables the optional native `RequestBuilder::json()` and `Response::json()` helpers; `tracing` is an optional structured-logging gate; `test-util` enables `tokio/test-util` for deterministic time testing.
 See `docs/architecture/feature-flags.md` for details.
 
 ## Compatibility Expectations

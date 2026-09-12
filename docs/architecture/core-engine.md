@@ -17,7 +17,7 @@ Focused subset for the engine lifecycle (client → request → pipeline → res
 | `headers` | Yes | `Headers` — case-insensitive header map wrapper |
 | `network_stream` | Yes | `NetworkStream`, `UpgradedStream`, `ConnectionMetadata` — upgrade IO + connection metadata |
 | `trace` | Yes | `TraceObserver`, `TraceEvent` — synchronous lifecycle event callbacks |
-| `error` | Yes | `Error` enum (47 variants), `Result<T>` alias |
+| `error` | Yes | `Error` enum, `Result<T>` alias |
 | `pipeline` | Crate-internal | Full request lifecycle orchestration |
 | `transport` | Crate-internal | Direct, direct-with-socket-options, UDS, proxy, HTTP/3 transport dispatch |
 | `stream` | Crate-internal | Per-chunk read/write timeout wrappers |
@@ -58,6 +58,10 @@ Body sources are mutually exclusive: `body()`, `bytes()`, `stream()`, `json()`, 
 
 - `target: Option<Bytes>` — overrides the wire request target (e.g. `OPTIONS *`, absolute-form) without changing the logical URL used for routing, cookies, auth, and proxy selection.
 - `sni_hostname: Option<String>` — overrides TLS SNI while preserving TCP destination.
+- `resolved_target: Option<ResolvedTarget>` — pins direct TCP to caller-supplied
+  addresses without a second DNS lookup while preserving logical URL/Host/SNI
+  identity. Same-origin redirects retain it; cross-origin redirects and
+  incompatible proxy/UDS/H3 routes fail closed.
 - `trace: Option<Arc<dyn TraceObserver>>` — installs a callback observer for [`TraceEvent`](../../crates/eggfetch-core/src/trace.rs) emissions during dispatch.
 
 Transport hints survive retry reconstruction via the typed
@@ -120,8 +124,9 @@ request policy so transports own only connection/protocol work:
    resolves the effective proxy/origin, acquires the pool guard, and
    computes the remaining-total/deadline. One-shot bodies are moved, never
    cloned.
-3. Dispatch selects one `TransportRoute` via `select_route()` (UDS →
-   specialized-direct → proxy/SOCKS → SNI-direct → H3 → standard Hyper).
+3. Dispatch selects one `TransportRoute` via `select_route()` (UDS → static
+   direct → specialized-direct → proxy/SOCKS → SNI-direct → H3 → standard
+   Hyper).
    H3 is `Http3Only` direct or `Auto`-discovered (fresh Alt-Svc + not
    suppressed); safe `Auto` fallback to standard is pre-commit replayable
    only. Hyper request scaffolding is built once via `build_hyper_request()`.
@@ -187,17 +192,19 @@ Python callables never enter `eggfetch-core`: `crates/eggfetch-python/src/trace_
 
 ## Error Taxonomy
 
-`Error` is a single `thiserror`-derived enum with 47 variants. Each variant has a `kind()` method returning a static string for programmatic matching.
+`Error` is a single `thiserror`-derived enum. Each variant has a `kind()`
+method returning a static string for programmatic matching.
 
 | Category | Variants |
 |----------|----------|
-| **Input validation** | `InvalidUrl`, `InvalidMethod`, `InvalidHeaderName`, `InvalidHeaderValue`, `RequestBuild` |
+| **Input validation** | `InvalidUrl`, `InvalidMethod`, `InvalidHeaderName`, `InvalidHeaderValue`, `RequestBuild`, `InvalidResolvedTarget` |
 | **Connection** | `Connect`, `Tls`, `Protocol`, `Hyper`, `HyperClient`, `Io` |
 | **Timeout** | `Timeout { phase, elapsed }` — phase is `Pool`, `Connect`, `ProxyConnect`, `ProxyTls`, `Write`, `Read`, or `Total` |
 | **Pool** | `Pool` |
-| **Redirect** | `InvalidRedirectLocation`, `TooManyRedirects { followed, max }`, `BodyNotReplayableForRedirect` |
+| **Redirect** | `InvalidRedirectLocation`, `TooManyRedirects { followed, max }`, `BodyNotReplayableForRedirect`, `ResolvedTargetRedirect` |
 | **Auth** | `InvalidAuthHeader`, `ConflictingAuth` |
 | **Body** | `Body`, `Decompression`, `UnsupportedContentEncoding`, `DecodedBodyTooLarge`, `DecompressionRatioExceeded`, `Unsupported` |
+| **JSON** | `JsonSerialize`, `JsonDeserialize` |
 | **Proxy** | `InvalidProxyUrl`, `ProxyConnect`, `ProxyAuthRequired`, `ProxyConnectRejected`, `MalformedProxyResponse` |
 | **TLS** | `TlsConfig`, `CaBundle`, `ClientCert`, `PrivateKey`, `CertificateVerification`, `HostnameVerification` |
 | **Retry** | `BodyNotReplayableForRetry`, `RetryBudgetExhausted { attempts }`, `RetryNotConfigured` |

@@ -342,6 +342,22 @@ The H2 classification function in `crates/eggfetch-core/src/transport/direct.rs`
 
 HTTP/2 multiplexes streams on a single connection, but eggfetch's pool permits still control logical request concurrency. hyper handles connection-level multiplexing; the server's `SETTINGS_MAX_CONCURRENT_STREAMS` is respected internally.
 
+### Caller-supplied resolved destinations
+
+`RequestBuilder::resolved_addresses()` is a native direct-routing primitive for
+callers that already resolved or selected the physical endpoints. The direct
+connector iterates exactly those `SocketAddr` values under the request's
+connect budget and does not invoke `lookup_host()`. The logical URL remains
+authoritative for the request target, `Host`, HTTPS certificate verification,
+and SNI; an optional `sni_hostname` override still changes only SNI.
+
+Resolved destinations use an isolated direct Hyper client so pooled ordinary
+connections cannot cross the static-routing constraint. Retries retain the
+pin. A same-origin redirect retains it, while a cross-origin redirect returns
+`Error::ResolvedTargetRedirect`. Static destinations reject proxy, UDS, and
+HTTP/3 routes before network I/O. This API is not an SSRF policy and does not
+authorize callers to connect to arbitrary addresses.
+
 ## HTTP/3
 
 ### Feature Gating

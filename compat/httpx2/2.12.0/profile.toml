@@ -18,8 +18,8 @@ created = "2026-09-10"
 # mutates the other.
 stage = "stage-c-qualified"
 status = "qualified"
-qualification-sha = "78a77ea153aae239ce7b722aeb9909a87df3bbb5"
-qualification-date = "2026-09-11"
+qualification-sha = "6e65c5bfc2607b30af8062a9269fcd260ed96464"
+qualification-date = "2026-09-12"
 historical-current-qualification-sha = "639bf186a71c054e11278d1b160ffe7a6f172c02"
 reference = "httpx2==2.12.0"
 

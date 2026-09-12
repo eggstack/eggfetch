@@ -8,13 +8,10 @@ Parent program: `plans/embedded-rust-client-footprint-and-routing-program.md`.
 Fixture profiles and runner: `qualification/embedded/README.md`,
 `scripts/qualify-embedded-footprint.sh` (manual, never a CI gate).
 
-Status note: the sibling tracks for static resolved-destination routing
-(`plans/static-resolution-and-pinned-destination-routing.md`) and native
-Rust JSON ergonomics (`plans/native-rust-json-and-response-ergonomics.md`)
-have not landed. The `json` flag below is therefore the reserved no-op
-described in `feature-flags.md`; JSON fixtures serialize via downstream
-`serde_json` directly. This measurement reflects the current tree, not the
-intended post-JSON surface.
+Status note: the native JSON helper track is now implemented. The recorded
+JSON fixture uses `eggfetch-core/json`; static resolved-destination routing is
+an independent native transport capability and is not part of the size
+workload.
 
 ## Measurement
 
@@ -24,7 +21,7 @@ scripts/qualify-embedded-footprint.sh --output-dir /tmp/eggfetch-embedded-footpr
 
 | Item | Value |
 |---|---|
-| eggfetch SHA | `cc4468598320f129aa36b99400238d36fddcb577` |
+| eggfetch SHA | `6e65c5bfc2607b30af8062a9269fcd260ed96464` |
 | reqwest | `0.12.28` (resolved via crates.io at run time) |
 | rustc | `1.98.1 (48a229cea 2026-09-01)` |
 | cargo | `1.98.1 (797e8a9bc 2026-08-05)` |
@@ -47,8 +44,10 @@ minimal profiles.
 | B JSON WebPKI (`+json` both) | 3,217,328 | 2,889,600 | +327,728 (+11.34%) |
 | B JSON native | 3,217,328 | 2,889,600 | +327,728 (+11.34%) |
 
-Raw (unstripped) deltas are +6.6–7.0% in the same direction
-(eggfetch-min 7,571,376 vs reqwest-min 7,076,776, etc.).
+Raw (unstripped) deltas are +6.6–7.0% in the same direction:
+`eggfetch-min` 7,574,048 vs `reqwest-min` 7,076,776,
+`eggfetch-min-native` 7,681,424 vs 7,189,528, `eggfetch-json` 7,797,184
+vs 7,305,064, and `eggfetch-json-native` 7,839,192 vs 7,352,520.
 Build wall-clock is directional only (81–100 s per clean release build
 on this host); compile time is not a pass/fail criterion.
 
@@ -72,9 +71,9 @@ Unique resolved packages (`cargo tree --prefix none | sort -u | wc -l`):
 |---|---|---|
 | A minimal WebPKI | 116 | 121 |
 | A minimal native | 118 | 124 |
-| B JSON WebPKI | 122 | 126 |
-| B JSON native | 124 | 129 |
-| C default | 124 | 141 |
+| B JSON WebPKI | 124 | 126 |
+| B JSON native | 126 | 129 |
+| C default | 126 | 141 |
 
 `cargo tree -d` shows only the expected low-risk duplicates (`syn`
 2.x/3.x via derive macros; `webpki-roots` 0.26 shim over 1.0 in the
@@ -106,11 +105,11 @@ Direct-dependency differences (minimal WebPKI):
   Prior feature-ownership corrections are verifiably reflected:
   disabling a capability removes its crates.
 - `serde`/`serde_json` are absent from `eggfetch-min` and present only
-  where JSON is selected (currently via the fixture, not core).
+  where the native `json` feature is selected.
 
 ## Corrective tuning (bounded)
 
-No executable correction was made. Inspection found no allowed fix that
+No additional executable correction was made during measurement. Inspection found no allowed fix that
 would not violate the plan's prohibitions:
 
 - No unconditional dependency owned by a disabled capability remains;
@@ -140,7 +139,6 @@ policy helpers (`pem-rfc7468`, `httpdate`, pool state). Raw package
 count alone would have predicted the wrong winner, as the plan warned.
 
 Adoption remains justifiable on ownership/control/API consolidation
-grounds where those matter, but size is not a benefit. Revisit only if a
-future functional change (for example native JSON landing, or a reviewed
-root-bundle update) plausibly moves the artifact, then re-run the manual
-runner and update this record.
+grounds where those matter, but size is not a benefit. Revisit after a
+future functional or dependency change plausibly moves the artifact, then
+re-run the manual runner and update this dated record.

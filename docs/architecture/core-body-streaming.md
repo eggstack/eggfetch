@@ -44,6 +44,11 @@ Body types are single-consume:
 
 This prevents accidental double-reads and enforces ownership transfer.
 
+With the opt-in `json` feature, `Response::json()` consumes the response through
+the same `bytes()` path and then deserializes with `serde_json`. Decompression,
+decoded-size limits, timeouts, pool-lease release, and single-consumption
+behavior therefore remain unchanged; parse errors do not expose the payload.
+
 ### LeasedResponseStream
 
 Streaming responses carry an internal `Arc<PoolGuard>` (the `PoolGuardArc`). This holds the pool permits acquired for the request. Permits are released when:

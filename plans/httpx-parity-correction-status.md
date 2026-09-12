@@ -4,15 +4,15 @@ This record is the exact-SHA-bound status for the HTTPX 0.28.1 compatibility
 facade. Historical phase and corrective-pass records remain in the git history
 and referenced plans; counts below are only from the runs named here.
 
-## Current state — Stage C renewed on corrected frozen executable SHA (2026-09-11)
+## Current state — Stage C renewed on embedded-program frozen executable SHA (2026-09-12)
 
 Current designation: **Stage C qualified** for both the documented HTTPX
 0.28.1 and httpx2 2.12.0 asyncio surfaces, bound to executable SHA
-`78a77ea153aae239ce7b722aeb9909a87df3bbb5`. The prior `639bf186...`
-binding is historical because the post-freeze diagnostics audit corrected a
-native counter's semantics. The profiles in
+`6e65c5bfc2607b30af8062a9269fcd260ed96464`. The prior
+`78a77ea...` and `639bf186...` bindings are historical because subsequent
+qualification-sensitive work followed them. The profiles in
 `compat/httpx/0.28.1/profile.toml` and `compat/httpx2/2.12.0/profile.toml`
-record this SHA and the 2026-09-11 qualification date.
+record this SHA and the 2026-09-12 qualification date.
 
 Qualification evidence on the unchanged frozen tree:
 
@@ -33,13 +33,9 @@ independent non-Quinn server passes, independent GOAWAY/drain evidence,
 public-origin checks, realistic impairment execution, and unresolved upstream
 correctness risk. HTTP/3 status is separate from the HTTPX parity claims.
 
-Remote routine CI run `34620344393` passed on documentation/profile/ledger
-descendant `3fd26bbc81b236fce2693fec406fa2a61865dad3`:
-https://github.com/eggstack/eggfetch/actions/runs/34620344393. The push was a
-fast-forward from the frozen executable commit, so the run covers the same
-executable tree; the final descendant audit confirms only documentation,
-profile, and ledger files change after `78a77ea`. Documentation/profile/ledger
-descendants must not change executable files.
+Remote routine CI for this freeze is pending the push of the frozen
+executable commit and its documentation-only descendant. The previous run
+`34620344393` is historical and is not reused as evidence for this SHA.
 
 ## Historical state — qualification pending after HTTP/3 program changes (pre-freeze)
 
