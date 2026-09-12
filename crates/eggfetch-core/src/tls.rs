@@ -8,8 +8,10 @@
 //!
 //! - Hostname verification is enabled.
 //! - Certificate-chain verification is enabled.
-//! - Native system roots are preferred; packaged `WebPKI` roots are used
-//!   as a construction fallback when native roots are unavailable.
+//! - When `tls-native-roots` is enabled, native system roots are preferred and
+//!   packaged `WebPKI` roots are used as a construction fallback when native
+//!   roots are unavailable. Without that feature, packaged `WebPKI` roots are
+//!   the default.
 //! - TLS 1.2 and 1.3 are supported.
 //! - SNI is enabled by default.
 //!
@@ -37,8 +39,9 @@ use crate::error::{Error, Result};
 /// Trust store source for certificate verification.
 #[derive(Debug, Clone, Default)]
 pub enum TrustStore {
-    /// Use native system roots with packaged `WebPKI` roots as a
-    /// construction fallback (default).
+    /// Use native system roots with packaged `WebPKI` roots as a construction
+    /// fallback when `tls-native-roots` is enabled. Without that feature, the
+    /// default builder uses packaged `WebPKI` roots directly.
     #[default]
     NativeWithWebPkiFallback,
     /// Use only native system roots. Fails at construction if the
@@ -309,21 +312,30 @@ impl TlsConfig {
         }
     }
 
+    #[cfg(not(feature = "tls-native-roots"))]
+    fn try_native_roots() -> Result<rustls::RootCertStore> {
+        Err(Error::TlsConfig(
+            "native root certificates are disabled; enable tls-native-roots".into(),
+        ))
+    }
+
+    #[cfg(feature = "tls-native-roots")]
     fn try_native_roots() -> Result<rustls::RootCertStore> {
         let mut roots = rustls::RootCertStore::empty();
 
-        #[cfg(any(target_os = "linux", target_os = "macos"))]
+        #[cfg(feature = "tls-native-roots")]
         {
-            #[cfg(target_os = "linux")]
+            #[cfg(all(target_os = "linux", feature = "tls-native-roots"))]
             let pem_paths: &[&str] = &[
                 "/etc/ssl/certs/ca-certificates.crt",
                 "/etc/pki/tls/certs/ca-bundle.crt",
                 "/etc/ssl/ca-bundle.pem",
             ];
 
-            #[cfg(target_os = "macos")]
+            #[cfg(all(target_os = "macos", feature = "tls-native-roots"))]
             let pem_paths: &[&str] = &["/etc/ssl/cert.pem", "/usr/local/etc/openssl/cert.pem"];
 
+            #[cfg(any(target_os = "linux", target_os = "macos"))]
             for path in pem_paths {
                 if let Ok(certs) = load_pem_certs_from_path(Path::new(path)) {
                     for cert in certs {
@@ -340,7 +352,10 @@ impl TlsConfig {
             }
         }
 
-        #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+        #[cfg(all(
+            feature = "tls-native-roots",
+            not(any(target_os = "linux", target_os = "macos"))
+        ))]
         {
             for cert in rustls_native_certs::load_native_certs().certs {
                 if let Err(e) = roots.add(cert) {
@@ -364,20 +379,6 @@ impl TlsConfig {
         let mut roots = rustls::RootCertStore::empty();
         roots.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
         roots
-    }
-
-    /// Root store for proxy-leg / CONNECT-tunnel fallbacks: native system
-    /// roots when available, otherwise packaged `WebPKI` roots.
-    ///
-    /// Shares the `NativeWithWebPkiFallback` policy so corporate/private PKI
-    /// roots installed in the OS store work through `https://` proxy
-    /// endpoints and HTTPS-via-CONNECT tunnels, not just on the direct path.
-    #[cfg(feature = "proxy")]
-    pub(crate) fn fallback_root_store() -> rustls::RootCertStore {
-        match Self::try_native_roots() {
-            Ok(store) if !store.is_empty() => store,
-            _ => Self::webpki_roots(),
-        }
     }
 
     fn supported_versions() -> impl Iterator<Item = TlsVersion> {
@@ -1162,6 +1163,24 @@ mod tests {
         let config = TlsConfig::builder().build();
         let result = config.build_rustls_config();
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn webpki_only_builds_without_native_roots() {
+        let config = TlsConfig::builder()
+            .trust_store(TrustStore::WebPkiOnly)
+            .build();
+        assert!(config.build_rustls_config().is_ok());
+    }
+
+    #[cfg(not(feature = "tls-native-roots"))]
+    #[test]
+    fn native_only_reports_disabled_feature() {
+        let config = TlsConfig::builder()
+            .trust_store(TrustStore::NativeOnly)
+            .build();
+        let error = config.build_rustls_config().unwrap_err();
+        assert!(error.to_string().contains("tls-native-roots"));
     }
 
     #[test]

@@ -544,7 +544,6 @@ dependencies = [
  "http",
  "http-body",
  "http-body-util",
- "httparse",
  "httpdate",
  "hyper",
  "hyper-rustls",
@@ -954,11 +953,9 @@ dependencies = [
  "hyper-util",
  "log",
  "rustls",
- "rustls-native-certs",
  "tokio",
  "tokio-rustls",
  "tower-service",
- "webpki-roots 1.0.8",
 ]
 
 [[package]]

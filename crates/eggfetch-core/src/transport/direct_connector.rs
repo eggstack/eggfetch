@@ -43,6 +43,7 @@ use tower_service::Service;
 use crate::error::Error;
 
 /// Build a rustls server name from a DNS name or IP literal.
+#[cfg(feature = "tls-rustls")]
 pub(crate) fn tls_server_name(
     host: &str,
 ) -> std::result::Result<tokio_rustls::rustls::pki_types::ServerName<'static>, String> {
@@ -172,6 +173,7 @@ pub(crate) enum DirectStream {
     /// A plain TCP stream (for HTTP).
     Tcp(tokio::net::TcpStream),
     /// A TLS-wrapped stream (for HTTPS), boxed to reduce enum size.
+    #[cfg(feature = "tls-rustls")]
     Tls(Box<tokio_rustls::client::TlsStream<tokio::net::TcpStream>>),
 }
 
@@ -183,6 +185,7 @@ impl AsyncRead for DirectStream {
     ) -> Poll<std::io::Result<()>> {
         match &mut *self {
             DirectStream::Tcp(s) => Pin::new(s).poll_read(cx, buf),
+            #[cfg(feature = "tls-rustls")]
             DirectStream::Tls(s) => Pin::new(s).poll_read(cx, buf),
         }
     }
@@ -196,6 +199,7 @@ impl AsyncWrite for DirectStream {
     ) -> Poll<std::io::Result<usize>> {
         match &mut *self {
             DirectStream::Tcp(s) => Pin::new(s).poll_write(cx, buf),
+            #[cfg(feature = "tls-rustls")]
             DirectStream::Tls(s) => Pin::new(s).poll_write(cx, buf),
         }
     }
@@ -203,6 +207,7 @@ impl AsyncWrite for DirectStream {
     fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
         match &mut *self {
             DirectStream::Tcp(s) => Pin::new(s).poll_flush(cx),
+            #[cfg(feature = "tls-rustls")]
             DirectStream::Tls(s) => Pin::new(s).poll_flush(cx),
         }
     }
@@ -210,6 +215,7 @@ impl AsyncWrite for DirectStream {
     fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
         match &mut *self {
             DirectStream::Tcp(s) => Pin::new(s).poll_shutdown(cx),
+            #[cfg(feature = "tls-rustls")]
             DirectStream::Tls(s) => Pin::new(s).poll_shutdown(cx),
         }
     }
@@ -221,7 +227,11 @@ impl hyper_util::client::legacy::connect::Connection for DirectStream {
         // knows whether the connection negotiated HTTP/2. Without this
         // signal, an HTTP/2-only legacy client could silently downgrade to
         // HTTP/1.1 even when ALPN selected `h2`.
+        #[cfg(feature = "tls-rustls")]
         let mut connected = hyper_util::client::legacy::connect::Connected::new();
+        #[cfg(not(feature = "tls-rustls"))]
+        let connected = hyper_util::client::legacy::connect::Connected::new();
+        #[cfg(feature = "tls-rustls")]
         if let Self::Tls(tls) = self {
             if let Some(alpn) = tls.get_ref().1.alpn_protocol() {
                 if alpn == b"h2" {
@@ -233,6 +243,12 @@ impl hyper_util::client::legacy::connect::Connection for DirectStream {
     }
 }
 
+#[cfg(feature = "tls-rustls")]
+type TlsConnector = tokio_rustls::TlsConnector;
+
+#[cfg(not(feature = "tls-rustls"))]
+type TlsConnector = ();
+
 #[allow(
     dead_code,
     reason = "connector metadata helpers are exercised by integration tests; upgrade path uses from_tcp/from_tls directly"
@@ -242,6 +258,7 @@ impl DirectStream {
     pub(crate) fn local_addr(&self) -> Option<SocketAddr> {
         match self {
             Self::Tcp(s) => s.local_addr().ok(),
+            #[cfg(feature = "tls-rustls")]
             Self::Tls(s) => s.get_ref().0.local_addr().ok(),
         }
     }
@@ -250,6 +267,7 @@ impl DirectStream {
     pub(crate) fn peer_addr(&self) -> Option<SocketAddr> {
         match self {
             Self::Tcp(s) => s.peer_addr().ok(),
+            #[cfg(feature = "tls-rustls")]
             Self::Tls(s) => s.get_ref().0.peer_addr().ok(),
         }
     }
@@ -262,8 +280,11 @@ impl DirectStream {
         &self,
         server_name: Option<String>,
     ) -> Option<crate::network_stream::TlsInfo> {
+        #[cfg(not(feature = "tls-rustls"))]
+        let _ = server_name;
         match self {
             Self::Tcp(_) => None,
+            #[cfg(feature = "tls-rustls")]
             Self::Tls(s) => Some(crate::network_stream::tls_info_from_rustls(
                 s.get_ref().1,
                 server_name,
@@ -313,7 +334,7 @@ impl DirectStream {
 #[derive(Clone)]
 pub(crate) struct DirectConnector {
     config: DirectConnectorConfig,
-    tls: Option<Arc<tokio_rustls::TlsConnector>>,
+    tls: Option<Arc<TlsConnector>>,
     /// Per-request TLS SNI hostname override. When set, TLS uses this
     /// hostname for `ServerName` Indication and certificate verification,
     /// while TCP still connects to the URL host.
@@ -330,10 +351,7 @@ impl DirectConnector {
         dead_code,
         reason = "kept for unit tests and one-off connectors without metrics; client paths use with_metrics"
     )]
-    pub(crate) fn new(
-        config: DirectConnectorConfig,
-        tls: Option<tokio_rustls::TlsConnector>,
-    ) -> Self {
+    pub(crate) fn new(config: DirectConnectorConfig, tls: Option<TlsConnector>) -> Self {
         Self {
             config,
             tls: tls.map(Arc::new),
@@ -345,7 +363,7 @@ impl DirectConnector {
     /// Create a new direct connector with shared transport metrics.
     pub(crate) fn with_metrics(
         config: DirectConnectorConfig,
-        tls: Option<tokio_rustls::TlsConnector>,
+        tls: Option<TlsConnector>,
         metrics: Arc<crate::transport::metrics::TransportMetrics>,
     ) -> Self {
         Self {
@@ -383,7 +401,9 @@ impl Service<Uri> for DirectConnector {
     #[allow(clippy::too_many_lines)]
     fn call(&mut self, dst: Uri) -> Self::Future {
         let config = self.config.clone();
+        #[cfg(feature = "tls-rustls")]
         let tls = self.tls.clone();
+        #[cfg(feature = "tls-rustls")]
         let sni_hostname = self.sni_hostname.clone();
         let metrics = self.metrics.clone();
 
@@ -487,6 +507,7 @@ impl Service<Uri> for DirectConnector {
                 )?;
             }
 
+            #[cfg(feature = "tls-rustls")]
             let direct_stream = if is_https {
                 let tls_connector =
                     tls.ok_or_else(|| -> Box<dyn std::error::Error + Send + Sync> {
@@ -518,6 +539,15 @@ impl Service<Uri> for DirectConnector {
                 };
 
                 DirectStream::Tls(Box::new(stream))
+            } else {
+                DirectStream::Tcp(tokio_stream)
+            };
+            #[cfg(not(feature = "tls-rustls"))]
+            let direct_stream = if is_https {
+                return Err(Box::new(Error::Tls(
+                    "HTTPS requested but the tls-rustls feature is disabled".into(),
+                ))
+                    as Box<dyn std::error::Error + Send + Sync>);
             } else {
                 DirectStream::Tcp(tokio_stream)
             };

@@ -91,6 +91,7 @@ impl Default for ConnectionMetadata {
 /// safely. `server_name` is the SNI hostname when known (direct-connector
 /// TLS host); `None` explicitly marks unavailable rather than inventing a
 /// value. No secret-bearing material is included.
+#[cfg(feature = "tls-rustls")]
 pub(crate) fn tls_info_from_rustls(
     conn: &rustls::ClientConnection,
     server_name: Option<String>,
@@ -146,6 +147,7 @@ enum UpgradedStreamInner {
     /// Plain TCP stream.
     Tcp(tokio::net::TcpStream),
     /// TLS stream already established before upgrade.
+    #[cfg(feature = "tls-rustls")]
     Tls(Box<tokio_rustls::client::TlsStream<tokio::net::TcpStream>>),
     /// Opaque adapter (e.g. Hyper's Upgraded wrapper).
     Adapter(Pin<Box<dyn TokioIoBox>>),
@@ -167,6 +169,7 @@ impl AsyncRead for UpgradedStreamInner {
     ) -> Poll<std::io::Result<()>> {
         match &mut *self {
             UpgradedStreamInner::Tcp(s) => Pin::new(s).poll_read(cx, buf),
+            #[cfg(feature = "tls-rustls")]
             UpgradedStreamInner::Tls(s) => Pin::new(s).poll_read(cx, buf),
             UpgradedStreamInner::Adapter(a) => a.as_mut().poll_read(cx, buf),
         }
@@ -181,6 +184,7 @@ impl AsyncWrite for UpgradedStreamInner {
     ) -> Poll<std::io::Result<usize>> {
         match &mut *self {
             UpgradedStreamInner::Tcp(s) => Pin::new(s).poll_write(cx, buf),
+            #[cfg(feature = "tls-rustls")]
             UpgradedStreamInner::Tls(s) => Pin::new(s).poll_write(cx, buf),
             UpgradedStreamInner::Adapter(a) => a.as_mut().poll_write(cx, buf),
         }
@@ -189,6 +193,7 @@ impl AsyncWrite for UpgradedStreamInner {
     fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
         match &mut *self {
             UpgradedStreamInner::Tcp(s) => Pin::new(s).poll_flush(cx),
+            #[cfg(feature = "tls-rustls")]
             UpgradedStreamInner::Tls(s) => Pin::new(s).poll_flush(cx),
             UpgradedStreamInner::Adapter(a) => a.as_mut().poll_flush(cx),
         }
@@ -197,6 +202,7 @@ impl AsyncWrite for UpgradedStreamInner {
     fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
         match &mut *self {
             UpgradedStreamInner::Tcp(s) => Pin::new(s).poll_shutdown(cx),
+            #[cfg(feature = "tls-rustls")]
             UpgradedStreamInner::Tls(s) => Pin::new(s).poll_shutdown(cx),
             UpgradedStreamInner::Adapter(a) => a.as_mut().poll_shutdown(cx),
         }
@@ -243,6 +249,7 @@ impl UpgradedStream {
     }
 
     /// Wrap a TLS stream into an upgraded stream.
+    #[cfg(feature = "tls-rustls")]
     pub fn from_tls(
         stream: tokio_rustls::client::TlsStream<tokio::net::TcpStream>,
         leading_data: Bytes,
@@ -281,6 +288,7 @@ impl UpgradedStream {
     pub fn variant(&self) -> UpgradedStreamVariant {
         match &self.inner {
             UpgradedStreamInner::Tcp(_) => UpgradedStreamVariant::Tcp,
+            #[cfg(feature = "tls-rustls")]
             UpgradedStreamInner::Tls(_) => UpgradedStreamVariant::Tls,
             UpgradedStreamInner::Adapter(_) => UpgradedStreamVariant::Adapter,
         }
@@ -374,6 +382,7 @@ impl UpgradedStream {
     ///
     /// Returns `Error::Tls` if the handshake fails or the stream type
     /// does not support TLS upgrade.
+    #[cfg(feature = "tls-rustls")]
     pub async fn start_tls(
         mut self,
         tls_connector: &tokio_rustls::TlsConnector,

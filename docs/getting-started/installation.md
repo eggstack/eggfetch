@@ -27,7 +27,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-eggfetch-core = { version = "0.1", features = ["http1", "tls-rustls"] }
+eggfetch-core = { version = "0.1", features = ["http1", "tls-rustls", "tls-native-roots"] }
 ```
 
 ### Feature flags
@@ -38,6 +38,7 @@ eggfetch-core = { version = "0.1", features = ["http1", "tls-rustls"] }
 | `http2` | HTTP/2 ALPN negotiation and multiplexing |
 | `http3` | HTTP/3 QUIC transport (experimental) |
 | `tls-rustls` | TLS via rustls (default) |
+| `tls-native-roots` | Prefer the operating system trust store; implies `tls-rustls` (default) |
 | `cookies` | Cookie jar and RFC 6265 handling |
 | `proxy` | HTTP proxy and HTTPS CONNECT tunneling |
 | `multipart` | Streaming multipart/form-data uploads |
@@ -47,7 +48,7 @@ eggfetch-core = { version = "0.1", features = ["http1", "tls-rustls"] }
 | `compression-deflate` | Deflate response decompression |
 | `json` | Reserved for future Rust-native JSON (Python uses `json.dumps()`) |
 
-Default features: `http1` and `tls-rustls`. The Python crate enables
+Default features: `http1`, `tls-rustls`, and `tls-native-roots`. The Python crate enables
 cookies, multipart, proxy, all compression codecs, http2, and http3 by
 default.
 

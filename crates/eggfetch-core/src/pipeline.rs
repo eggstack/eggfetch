@@ -1150,6 +1150,7 @@ async fn prepare_single_request(
         transport_hints,
     } = request.into_parts();
 
+    #[cfg(feature = "tls-rustls")]
     if url.scheme() == "https" {
         if let Some(error) = &inner.tls_config_error {
             return Err(Error::Tls(error.clone()));
@@ -1281,6 +1282,7 @@ async fn prepare_single_request(
 /// decoded-size limiting, read-timeout and pool-lease attachment) applies
 /// to every route.
 #[allow(clippy::too_many_lines)]
+#[cfg(any(feature = "http1", feature = "http2"))]
 pub(crate) async fn send_single_request(
     inner: &ClientInner,
     request: Request,
@@ -1714,6 +1716,18 @@ pub(crate) async fn send_single_request(
     Ok(response)
 }
 
+/// Report that no HTTP protocol feature was selected.
+#[cfg(not(any(feature = "http1", feature = "http2")))]
+pub(crate) async fn send_single_request(
+    _inner: &ClientInner,
+    _request: Request,
+    _timeout: &Timeout,
+) -> Result<Response> {
+    Err(Error::Unsupported(
+        "no HTTP protocol feature is enabled; enable http1 or http2".into(),
+    ))
+}
+
 /// Send a request through the hyper/HTTP-1.1/2 transport.
 ///
 /// Shared standard-path helper; UDS, specialized-direct, and SNI-direct
@@ -1721,6 +1735,7 @@ pub(crate) async fn send_single_request(
 /// their respective `transport::direct`/`transport::uds` converters, so this
 /// helper exists only to keep the standard Hyper dispatch explicit.
 #[allow(clippy::too_many_arguments)] // Keeps the direct-send helper explicit; timeout wrapping is the only added phase input.
+#[cfg(any(feature = "http1", feature = "http2"))]
 async fn send_hyper_request(
     inner: &ClientInner,
     method: &http::Method,

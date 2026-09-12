@@ -5,7 +5,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use http::Method;
+#[cfg(any(feature = "http1", feature = "http2"))]
 use hyper_util::rt::TokioExecutor;
+#[cfg(any(feature = "http1", feature = "http2"))]
 use tokio::sync::Mutex;
 
 use crate::error::{Error, Result};
@@ -46,7 +48,7 @@ pub(crate) struct ClientConfig {
     pub(crate) proxy: Option<Proxy>,
     #[cfg(feature = "proxy")]
     pub(crate) environment_proxies: Vec<Proxy>,
-    #[cfg(any(feature = "proxy", feature = "http3"))]
+    #[cfg(feature = "tls-rustls")]
     pub(crate) tls_config: Option<crate::tls::TlsConfig>,
     pub(crate) retry: Option<RetryPolicy>,
     #[allow(
@@ -75,7 +77,7 @@ impl std::fmt::Debug for ClientConfig {
         debug
             .field("proxy", &self.proxy)
             .field("environment_proxies", &self.environment_proxies);
-        #[cfg(any(feature = "proxy", feature = "http3"))]
+        #[cfg(feature = "tls-rustls")]
         debug.field("tls_config", &self.tls_config);
         debug
             .field("retry", &self.retry)
@@ -101,7 +103,7 @@ impl Default for ClientConfig {
             proxy: None,
             #[cfg(feature = "proxy")]
             environment_proxies: Vec::new(),
-            #[cfg(any(feature = "proxy", feature = "http3"))]
+            #[cfg(feature = "tls-rustls")]
             tls_config: None,
             retry: None,
             http_version_policy: HttpVersionPolicy::default(),
@@ -125,20 +127,24 @@ impl std::fmt::Debug for Client {
 }
 
 pub(crate) struct ClientInner {
+    #[cfg(any(feature = "http1", feature = "http2"))]
     pub(crate) hyper_client: Option<crate::transport::TimeoutHyperClient>,
     /// Error captured while building the configured TLS policy, if any.
     ///
     /// `ClientBuilder::build` is intentionally infallible, so HTTPS requests
     /// surface this error at dispatch time instead of falling back to a
     /// different trust policy.
+    #[cfg(feature = "tls-rustls")]
     pub(crate) tls_config_error: Option<String>,
     /// Direct connector for requests with advanced socket options or local
     /// address binding. Uses a custom connector instead of the standard
     /// hyper-rustls connector path.
+    #[cfg(any(feature = "http1", feature = "http2"))]
     pub(crate) direct_client: Option<crate::transport::TimeoutDirectClient>,
     /// Base direct-connector configuration (local address / socket options)
     /// used to construct SNI-override clients so they preserve source
     /// binding and socket tuning.
+    #[cfg(any(feature = "http1", feature = "http2"))]
     pub(crate) direct_connector_config:
         Option<crate::transport::direct_connector::DirectConnectorConfig>,
     /// Cached hyper clients keyed by TLS SNI hostname override.
@@ -158,9 +164,11 @@ pub(crate) struct ClientInner {
     /// this cache would need to include `HttpVersionPolicy` (and
     /// `tls_config` identity) in the key to avoid serving a client with
     /// stale ALPN (e.g. H2 vs H1) for the same hostname.
+    #[cfg(any(feature = "http1", feature = "http2"))]
     pub(crate) sni_clients: Mutex<HashMap<String, crate::transport::TimeoutDirectClient>>,
     /// Hyper client for Unix domain socket requests.
     #[cfg(unix)]
+    #[cfg(any(feature = "http1", feature = "http2"))]
     pub(crate) uds_client: Option<crate::transport::TimeoutUdsClient>,
     /// Persistent Hyper clients keyed by effective SOCKS route.
     ///
@@ -207,6 +215,7 @@ fn evict_one<K: std::clone::Clone + Eq + std::hash::Hash, V>(map: &mut HashMap<K
 ///
 /// The standard hyper-rustls connector applies this policy while building its
 /// connector. Custom connectors must set the same ALPN list themselves.
+#[cfg(feature = "tls-rustls")]
 pub(crate) fn configure_tls_alpn(
     mut config: rustls::ClientConfig,
     policy: crate::http_version::HttpVersionPolicyEnabler,
@@ -228,6 +237,7 @@ impl ClientInner {
     /// that separates DNS/TCP resolution (to the original URL host) from
     /// TLS negotiation (with the SNI hostname). Clients are cached by
     /// SNI hostname for connection reuse.
+    #[cfg(any(feature = "http1", feature = "http2"))]
     pub(crate) async fn sni_client(
         &self,
         sni_hostname: &str,
@@ -238,24 +248,22 @@ impl ClientInner {
         }
 
         let connect_timeout = self.config.timeout.as_ref().and_then(|t| t.connect);
-        #[cfg(any(feature = "http2", feature = "http3", feature = "proxy"))]
+        #[cfg(any(feature = "tls-rustls", feature = "http2"))]
         let policy = self.config.http_version_policy;
 
-        #[cfg(any(feature = "proxy", feature = "http3"))]
-        let tls_connector = match self.config.tls_config.as_ref() {
-            Some(tls_config) => {
-                let rc = tls_config
-                    .build_rustls_config()
-                    .map_err(|e| Error::Tls(format!("failed to build TLS config: {e}")))?;
-                let rc = configure_tls_alpn(
-                    rc,
-                    crate::http_version::HttpVersionPolicyEnabler::from_policy(policy),
-                );
-                Some(tokio_rustls::TlsConnector::from(Arc::new(rc)))
-            }
-            None => None,
+        #[cfg(feature = "tls-rustls")]
+        let tls_connector = {
+            let tls_config = self.config.tls_config.clone().unwrap_or_default();
+            let rc = tls_config
+                .build_rustls_config()
+                .map_err(|e| Error::Tls(format!("failed to build TLS config: {e}")))?;
+            let rc = configure_tls_alpn(
+                rc,
+                crate::http_version::HttpVersionPolicyEnabler::from_policy(policy),
+            );
+            Some(tokio_rustls::TlsConnector::from(Arc::new(rc)))
         };
-        #[cfg(not(any(feature = "proxy", feature = "http3")))]
+        #[cfg(not(feature = "tls-rustls"))]
         let tls_connector = None;
 
         let base_config = self.direct_connector_config.clone().unwrap_or(
@@ -314,10 +322,9 @@ impl ClientInner {
                 .build_rustls_config()
                 .map_err(|e| Error::Tls(format!("failed to build SOCKS TLS config: {e}")))?
         } else {
-            let roots = crate::tls::TlsConfig::fallback_root_store();
-            rustls::ClientConfig::builder()
-                .with_root_certificates(roots)
-                .with_no_client_auth()
+            crate::tls::TlsConfig::default()
+                .build_rustls_config()
+                .map_err(|e| Error::Tls(format!("failed to build default SOCKS TLS config: {e}")))?
         };
         let tls_config = configure_tls_alpn(
             tls_config,
@@ -527,6 +534,7 @@ pub struct ClientBuilder {
     proxy: Option<Proxy>,
     #[cfg(feature = "proxy")]
     environment_proxies: Vec<Proxy>,
+    #[cfg(feature = "tls-rustls")]
     tls_config: Option<crate::tls::TlsConfig>,
     retry: Option<RetryPolicy>,
     http_version_policy: HttpVersionPolicy,
@@ -557,6 +565,7 @@ impl ClientBuilder {
             proxy: None,
             #[cfg(feature = "proxy")]
             environment_proxies: Vec::new(),
+            #[cfg(feature = "tls-rustls")]
             tls_config: None,
             retry: None,
             http_version_policy: HttpVersionPolicy::default(),
@@ -779,8 +788,10 @@ impl ClientBuilder {
     /// Set a custom TLS configuration for this client.
     ///
     /// When set, the client uses the provided [`crate::tls::TlsConfig`] for all
-    /// TLS connections instead of the default native-root-with-webpki-fallback
-    /// strategy.
+    /// TLS connections instead of the default native-root-with-WebPKI-fallback
+    /// strategy (or the packaged-WebPKI default when `tls-native-roots` is not
+    /// enabled).
+    #[cfg(feature = "tls-rustls")]
     #[must_use]
     pub fn tls_config(mut self, config: crate::tls::TlsConfig) -> Self {
         self.tls_config = Some(config);
@@ -789,6 +800,7 @@ impl ClientBuilder {
 
     /// Enable or disable insecure TLS verification while retaining other
     /// TLS configuration already applied to this builder.
+    #[cfg(feature = "tls-rustls")]
     #[must_use]
     pub fn danger_accept_invalid_certs(mut self, accept: bool) -> Self {
         let config = self.tls_config.take().unwrap_or_default();
@@ -959,52 +971,30 @@ impl ClientBuilder {
         let cookie_jar = self.cookie_jar.unwrap_or_default();
 
         let automatic_decompression = self.automatic_decompression.unwrap_or(true);
+        #[cfg(feature = "tls-rustls")]
         let tls_config_result = self
             .tls_config
+            .clone()
+            .unwrap_or_default()
+            .build_rustls_config();
+        #[cfg(feature = "tls-rustls")]
+        let tls_config_error = tls_config_result
             .as_ref()
-            .map(crate::tls::TlsConfig::build_rustls_config);
-        let tls_config_error = tls_config_result.as_ref().and_then(|result| {
-            result
-                .as_ref()
-                .err()
-                .map(|error| format!("failed to build TLS config: {error}"))
-        });
-
+            .err()
+            .map(|error| format!("failed to build TLS config: {error}"));
         // `Http3Only` is strict direct-QUIC and needs no Hyper client.
         // `Auto { allow_http3: true }` needs both: H1/H2 for discovery and
         // safe fallback plus QUIC for discovered routes. All other policies
         // need Hyper only.
+        #[cfg(feature = "tls-rustls")]
         let hyper_client = if matches!(
             self.http_version_policy,
             crate::HttpVersionPolicy::Http3Only
         ) || tls_config_error.is_some()
         {
             None
-        } else {
-            let https = match tls_config_result {
-                Some(Ok(mut rc)) => {
-                    // hyper-rustls requires empty ALPN; it rebuilds based
-                    // on enable_http1/enable_http2 calls.
-                    rc.alpn_protocols.clear();
-                    let builder = hyper_rustls::HttpsConnectorBuilder::new()
-                        .with_tls_config(rc)
-                        .https_or_http();
-                    #[cfg(feature = "http2")]
-                    {
-                        match (enabler.enable_http1(), enabler.enable_http2()) {
-                            (true, true) => builder.enable_http1().enable_http2().build(),
-                            (true | false, false) => builder.enable_http1().build(),
-                            (false, true) => builder.enable_http2().build(),
-                        }
-                    }
-                    #[cfg(not(feature = "http2"))]
-                    {
-                        let _ = enabler;
-                        builder.enable_http1().build()
-                    }
-                }
-                Some(Err(_)) | None => build_fallback_connector(enabler),
-            };
+        } else if let Ok(rc) = tls_config_result {
+            let https = build_standard_connector(rc, enabler);
 
             // Wrap the connector with connect-phase timeout if configured.
             let connect_timeout = self.timeout.as_ref().and_then(|t| t.connect);
@@ -1033,8 +1023,34 @@ impl ClientBuilder {
                 builder.pool_max_idle_per_host(max_idle);
             }
             Some(builder.build(https))
+        } else {
+            None
         };
 
+        #[cfg(all(not(feature = "tls-rustls"), any(feature = "http1", feature = "http2")))]
+        let hyper_client = if matches!(
+            self.http_version_policy,
+            crate::HttpVersionPolicy::Http3Only
+        ) {
+            None
+        } else {
+            let connector = build_standard_connector(enabler);
+            let connector = crate::transport::connect_timeout::ConnectTimeout::new(
+                connector,
+                self.timeout.as_ref().and_then(|t| t.connect),
+            );
+            let mut builder = hyper_util::client::legacy::Client::builder(TokioExecutor::new());
+            if let Some(timeout) = pool_config.idle_timeout {
+                builder.pool_idle_timeout(timeout);
+            }
+            if let Some(max_idle) = pool_config
+                .max_idle_connections_per_host
+                .or(pool_config.max_idle_connections)
+            {
+                builder.pool_max_idle_per_host(max_idle);
+            }
+            Some(builder.build(connector))
+        };
         #[cfg(feature = "http3")]
         let h3_connector = if enabler.use_http3() {
             crate::transport::http3::H3Connector::with_metrics(
@@ -1050,25 +1066,32 @@ impl ClientBuilder {
         // Build the direct connector client for advanced socket options / local
         // address binding. This uses a custom connector path instead of the
         // standard hyper-rustls connector.
+        #[cfg(any(feature = "http1", feature = "http2"))]
         let stored_direct_config = self.direct_connector_config.clone();
+        #[cfg(any(feature = "http1", feature = "http2"))]
         let direct_client = if let Some(dc_config) = self.direct_connector_config {
             let connect_timeout = self.timeout.as_ref().and_then(|t| t.connect);
 
             // Build a TLS connector for HTTPS through the direct path.
-            let tls_connector = match self.tls_config.as_ref() {
-                Some(tls_config) => match tls_config.build_rustls_config() {
-                    Ok(rc) => Some(tokio_rustls::TlsConnector::from(Arc::new(
-                        configure_tls_alpn(
-                            rc,
-                            crate::http_version::HttpVersionPolicyEnabler::from_policy(
-                                self.http_version_policy,
-                            ),
+            #[cfg(feature = "tls-rustls")]
+            let tls_connector = match self
+                .tls_config
+                .clone()
+                .unwrap_or_default()
+                .build_rustls_config()
+            {
+                Ok(rc) => Some(tokio_rustls::TlsConnector::from(Arc::new(
+                    configure_tls_alpn(
+                        rc,
+                        crate::http_version::HttpVersionPolicyEnabler::from_policy(
+                            self.http_version_policy,
                         ),
-                    ))),
-                    Err(_) => None,
-                },
-                None => None,
+                    ),
+                ))),
+                Err(_) => None,
             };
+            #[cfg(not(feature = "tls-rustls"))]
+            let tls_connector = None;
 
             let direct_connector =
                 crate::transport::direct_connector::DirectConnector::with_metrics(
@@ -1111,18 +1134,25 @@ impl ClientBuilder {
         #[cfg(not(unix))]
         let _ = &self.uds_path;
 
-        #[cfg(unix)]
+        #[cfg(all(unix, any(feature = "http1", feature = "http2")))]
         let uds_client = self.uds_path.map(|path| {
-            let tls_connector = self.tls_config.as_ref().and_then(|config| {
-                config.build_rustls_config().ok().map(|rc| {
+            #[cfg(feature = "tls-rustls")]
+            let tls_connector = self
+                .tls_config
+                .clone()
+                .unwrap_or_default()
+                .build_rustls_config()
+                .ok()
+                .map(|rc| {
                     tokio_rustls::TlsConnector::from(Arc::new(configure_tls_alpn(
                         rc,
                         crate::http_version::HttpVersionPolicyEnabler::from_policy(
                             self.http_version_policy,
                         ),
                     )))
-                })
-            });
+                });
+            #[cfg(not(feature = "tls-rustls"))]
+            let tls_connector = None;
             let connector = crate::transport::uds::UdsConnector::with_metrics(
                 path,
                 tls_connector,
@@ -1151,7 +1181,6 @@ impl ClientBuilder {
             }
             builder.build(connector)
         });
-
         let config = ClientConfig {
             default_headers: self.default_headers,
             user_agent: self.user_agent,
@@ -1167,7 +1196,7 @@ impl ClientBuilder {
             proxy: self.proxy,
             #[cfg(feature = "proxy")]
             environment_proxies: self.environment_proxies,
-            #[cfg(any(feature = "proxy", feature = "http3"))]
+            #[cfg(feature = "tls-rustls")]
             tls_config: self.tls_config,
             retry: self.retry,
             http_version_policy: self.http_version_policy,
@@ -1177,12 +1206,17 @@ impl ClientBuilder {
 
         Client {
             inner: Arc::new(ClientInner {
+                #[cfg(any(feature = "http1", feature = "http2"))]
                 hyper_client,
+                #[cfg(feature = "tls-rustls")]
                 tls_config_error,
+                #[cfg(any(feature = "http1", feature = "http2"))]
                 direct_client,
+                #[cfg(any(feature = "http1", feature = "http2"))]
                 direct_connector_config: stored_direct_config,
+                #[cfg(any(feature = "http1", feature = "http2"))]
                 sni_clients: Mutex::new(HashMap::new()),
-                #[cfg(unix)]
+                #[cfg(all(unix, any(feature = "http1", feature = "http2")))]
                 uds_client,
                 #[cfg(feature = "proxy")]
                 socks_clients: Mutex::new(HashMap::new()),
@@ -1198,31 +1232,38 @@ impl ClientBuilder {
     }
 }
 
-/// Build a connector with fallback root stores.
-///
-/// Uses native roots when available, otherwise falls back to the packaged
-/// Mozilla root set. Protocol versions are determined by the enabler.
-fn build_fallback_connector(enabler: crate::http_version::HttpVersionPolicyEnabler) -> Connector {
-    let builder = match hyper_rustls::HttpsConnectorBuilder::new().with_native_roots() {
-        Ok(b) => b,
-        Err(_) => hyper_rustls::HttpsConnectorBuilder::new().with_webpki_roots(),
-    };
+/// Build the standard cleartext connector.
+#[cfg(not(feature = "tls-rustls"))]
+fn build_standard_connector(enabler: crate::http_version::HttpVersionPolicyEnabler) -> Connector {
+    let _ = enabler;
+    let mut connector = hyper_util::client::legacy::connect::HttpConnector::new();
+    connector.enforce_http(true);
+    connector
+}
+
+/// Build the standard TLS connector from the authoritative [`TlsConfig`].
+#[cfg(feature = "tls-rustls")]
+fn build_standard_connector(
+    mut config: rustls::ClientConfig,
+    enabler: crate::http_version::HttpVersionPolicyEnabler,
+) -> Connector {
+    // hyper-rustls fills ALPN from the selected protocol methods.
+    config.alpn_protocols.clear();
+    let builder = hyper_rustls::HttpsConnectorBuilder::new()
+        .with_tls_config(config)
+        .https_or_http();
     #[cfg(feature = "http2")]
     {
         match (enabler.enable_http1(), enabler.enable_http2()) {
-            (true, true) => builder
-                .https_or_http()
-                .enable_http1()
-                .enable_http2()
-                .build(),
-            (true | false, false) => builder.https_or_http().enable_http1().build(),
-            (false, true) => builder.https_or_http().enable_http2().build(),
+            (true, true) => builder.enable_http1().enable_http2().build(),
+            (true | false, false) => builder.enable_http1().build(),
+            (false, true) => builder.enable_http2().build(),
         }
     }
     #[cfg(not(feature = "http2"))]
     {
         let _ = enabler;
-        builder.https_or_http().enable_http1().build()
+        builder.enable_http1().build()
     }
 }
 
@@ -1363,17 +1404,18 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "tls-rustls")]
     fn tls_root_store_paths_construct() {
-        // Native roots are environment-dependent, but when available the
-        // production path must build the same verified connector shape.
-        if let Ok(builder) = hyper_rustls::HttpsConnectorBuilder::new().with_native_roots() {
-            let _ = builder.https_or_http().enable_http1().build();
-        }
+        // Native roots are environment-dependent; the production connector
+        // always receives the same policy-built config as direct connectors.
         let enabler =
             crate::http_version::HttpVersionPolicyEnabler::from_policy(HttpVersionPolicy::Auto {
                 allow_http3: false,
             });
-        let _ = build_fallback_connector(enabler);
+        let config = crate::tls::TlsConfig::default()
+            .build_rustls_config()
+            .expect("default TLS policy builds");
+        let _ = build_standard_connector(config, enabler);
     }
 
     #[test]
@@ -1422,7 +1464,12 @@ mod tests {
         ] {
             let enabler = crate::http_version::HttpVersionPolicyEnabler::from_policy(policy);
             if !enabler.use_http3() {
-                let _ = build_fallback_connector(enabler);
+                #[cfg(feature = "tls-rustls")]
+                let config = crate::tls::TlsConfig::default()
+                    .build_rustls_config()
+                    .expect("default TLS policy builds");
+                #[cfg(feature = "tls-rustls")]
+                let _ = build_standard_connector(config, enabler);
             }
         }
     }

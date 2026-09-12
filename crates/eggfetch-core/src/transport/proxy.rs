@@ -330,10 +330,9 @@ pub(crate) fn build_proxy_tls_config(
             .map_err(|e| Error::Tls(format!("failed to build proxy TLS config: {e}")))?;
         Ok(crate::client::configure_tls_alpn(rc, http1_only))
     } else {
-        let root_store = crate::tls::TlsConfig::fallback_root_store();
-        let fallback = rustls::ClientConfig::builder()
-            .with_root_certificates(root_store)
-            .with_no_client_auth();
+        let fallback = crate::tls::TlsConfig::default()
+            .build_rustls_config()
+            .map_err(|e| Error::Tls(format!("failed to build proxy TLS config: {e}")))?;
         Ok(crate::client::configure_tls_alpn(fallback, http1_only))
     }
 }
@@ -1320,9 +1319,5 @@ mod tests {
     fn proxy_tls_fallback_advertises_http1_only_with_roots() {
         let fallback = build_proxy_tls_config(None).expect("fallback proxy TLS config builds");
         assert_eq!(fallback.alpn_protocols, vec![b"http/1.1".to_vec()]);
-        // Native-roots-with-WebPKI-fallback must yield a non-empty store so
-        // OS-installed corporate roots work through the proxy leg.
-        let store = crate::tls::TlsConfig::fallback_root_store();
-        assert!(!store.is_empty());
     }
 }

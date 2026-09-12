@@ -119,24 +119,15 @@ pub(crate) async fn send_https_connect_request(
     let tunnel = ProxyTunnel::new(initial_buf, tcp_stream);
 
     // Perform TLS handshake with the destination through the tunnel.
-    let rustls_config = if let Some(tc) = ctx.origin_tls_config {
-        let rc = tc
-            .build_rustls_config()
-            .map_err(|e| Error::Tls(format!("failed to build TLS config for tunnel: {e}")))?;
-        crate::client::configure_tls_alpn(
-            rc,
-            crate::http_version::HttpVersionPolicyEnabler::from_policy(ctx.http_version_policy),
-        )
-    } else {
-        let root_store = crate::tls::TlsConfig::fallback_root_store();
-        let fallback = rustls::ClientConfig::builder()
-            .with_root_certificates(root_store)
-            .with_no_client_auth();
-        crate::client::configure_tls_alpn(
-            fallback,
-            crate::http_version::HttpVersionPolicyEnabler::from_policy(ctx.http_version_policy),
-        )
-    };
+    let default_tls_config = crate::tls::TlsConfig::default();
+    let tls_config = ctx.origin_tls_config.unwrap_or(&default_tls_config);
+    let rustls_config = tls_config
+        .build_rustls_config()
+        .map_err(|e| Error::Tls(format!("failed to build TLS config for tunnel: {e}")))?;
+    let rustls_config = crate::client::configure_tls_alpn(
+        rustls_config,
+        crate::http_version::HttpVersionPolicyEnabler::from_policy(ctx.http_version_policy),
+    );
     let tls_connector = tokio_rustls::TlsConnector::from(std::sync::Arc::new(rustls_config));
 
     // Use sni_hostname override for TLS SNI and certificate verification

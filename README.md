@@ -45,7 +45,7 @@ pip install eggfetch
 
 ```toml
 [dependencies]
-eggfetch-core = { version = "0.1", features = ["http1", "tls-rustls"] }
+eggfetch-core = { version = "0.1", features = ["http1", "tls-rustls", "tls-native-roots"] }
 ```
 
 **CLI:**
@@ -209,6 +209,7 @@ eggfetch-core = { version = "0.1", features = [
     "http1",          # HTTP/1.1 (default)
     "http2",          # HTTP/2 via ALPN
     "tls-rustls",     # TLS via rustls (default)
+    "tls-native-roots", # OS roots, with WebPKI construction fallback (default)
     "cookies",        # RFC 6265 cookie jar
     "proxy",          # HTTP proxy and CONNECT tunneling
     "compression-gzip",
@@ -218,6 +219,12 @@ eggfetch-core = { version = "0.1", features = [
     "multipart",      # streaming multipart/form-data
 ] }
 ```
+
+For an embedded cleartext client, select `http1` alone. `tls-rustls` enables
+Rustls with deterministic packaged WebPKI roots; add `tls-native-roots` when
+the system trust store should be preferred (it is part of the default
+profile). `http3` and `proxy` imply the TLS and HTTP/1 capabilities they
+require.
 
 See [`docs/rust/guide.md`](docs/rust/guide.md) for the full Rust API reference.
 

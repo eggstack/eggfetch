@@ -143,11 +143,14 @@ impl RetryPolicy {
     /// Returns `true` if the given error is eligible for retry.
     #[must_use]
     pub fn is_error_retryable(error: &Error) -> bool {
+        #[cfg(any(feature = "http1", feature = "http2"))]
+        if matches!(error, Error::HyperClient(_)) {
+            return true;
+        }
         match error {
             Error::Connect(_)
             | Error::Io(_)
             | Error::Hyper(_)
-            | Error::HyperClient(_)
             | Error::Timeout {
                 phase: crate::timeout::TimeoutPhase::Connect,
                 ..

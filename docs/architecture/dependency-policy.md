@@ -4,7 +4,9 @@ eggfetch follows a conservative dependency policy. Every dependency must have an
 
 ## Current Posture
 
-eggfetch-core has the following direct dependencies:
+eggfetch-core has the following direct dependencies. The `optional` marker
+means the dependency is absent from the core dependency graph unless its
+owning feature is selected.
 
 - **bytes** -- efficient byte buffer types for request and response bodies.
 - **dashmap** -- concurrent hash map for per-host pool semaphore storage.
@@ -13,16 +15,19 @@ eggfetch-core has the following direct dependencies:
 - **http** -- standard HTTP types (`Method`, `StatusCode`, `HeaderMap`, `Uri`).
 - **http-body** -- body trait abstraction.
 - **http-body-util** -- body combinators for http-body (`Full`, `Empty`).
-- **hyper** -- HTTP/1.1 and HTTP/2 protocol implementation.
+- **hyper** -- HTTP/1.1 and HTTP/2 protocol implementation; protocol features
+  are enabled by the matching `http1`/`http2` core features.
 - **h2** -- typed HTTP/2 error reasons for transport error classification (optional, behind `http2`).
-- **hyper-util** -- high-level client utilities built on hyper.
-- **hyper-rustls** -- TLS integration via rustls, with native roots preferred
-  and packaged Mozilla roots as a verified fallback when the host keychain is
-  unavailable.
+- **hyper-util** -- high-level client utilities built on hyper; H1/H2 protocol
+  support follows the matching core feature.
+- **hyper-rustls** -- optional TLS integration via Rustls (`tls-rustls`). The
+  standard connector receives a policy-built `TlsConfig`; it does not construct
+  a second native/WebPKI fallback.
 - **pin-project-lite** -- lightweight pin projections for stream wrappers (read/write timeout streams).
-- **rustls** -- memory-safe TLS implementation.
+- **rustls** -- optional memory-safe TLS implementation (`tls-rustls`).
 - **tokio** -- async runtime.
-- **tokio-rustls** -- async TLS streams for tokio + rustls.
+- **tokio-rustls** -- optional async TLS streams for tokio + Rustls
+  (`tls-rustls`).
 - **url** -- URI parsing and query string serialization.
 - **thiserror** -- ergonomic error definitions.
 - **cookie** -- RFC 6265 cookie parsing and representation (optional, behind `cookies` feature).
@@ -30,16 +35,62 @@ eggfetch-core has the following direct dependencies:
 - **tower-service** -- `Service` trait for transport connector abstraction (UDS, SOCKS, connect-timeout wrappers).
 - **base64** -- Basic authentication credential encoding.
 - **flate2** -- buffered gzip/deflate decompression for non-streaming response reads (optional, behind `compression-gzip`/`compression-deflate`).
-- **getrandom** -- cryptographically secure random bytes for multipart boundary generation.
-- **httparse** -- low-level HTTP response parsing for proxy response status line and header extraction.
+- **getrandom** -- cryptographically secure random bytes for multipart
+  boundary generation and retry jitter. It is intentionally unconditional;
+  multipart is not its only production owner.
 - **httpdate** -- HTTP-date parsing for Retry-After header support.
-- **pem-rfc7468** -- PEM parsing for custom CA bundles and client certificates.
-- **webpki-roots** -- packaged Mozilla/WebPKI root certificates as a fallback when native roots are unavailable.
-- **rustls-native-certs** -- platform-native certificate store loading for
-  `TrustStore::NativeOnly` on platforms without a portable PEM bundle,
-  including Windows.
+- **pem-rfc7468** -- optional PEM parsing for custom CA bundles and client
+  certificates (`tls-rustls`).
+- **webpki-roots** -- optional packaged Mozilla/WebPKI root certificates
+  (`tls-rustls`).
+- **rustls-native-certs** -- optional platform-native certificate store loading
+  (`tls-native-roots`, which implies `tls-rustls`). Linux/macOS portable PEM
+  paths and other platform loaders are selected inside the same authoritative
+  `TlsConfig` root builder.
 
-These are small, well-audited crates with minimal transitive trees. They are the minimum required to build a working HTTPS client.
+## Core dependency ownership inventory
+
+This source-backed inventory records why each direct dependency exists and
+which profile owns it. “Cleartext” means ordinary HTTP operation without
+Rustls; a dependency can still be shared by other optional routes.
+
+| Dependency | Core use sites | Cleartext H1 | Rustls TLS | Optional-only owner | Gating decision |
+| --- | --- | ---: | ---: | --- | --- |
+| `bytes` | bodies, headers, request/response types | yes | shared | no | foundational |
+| `dashmap` | pool and Alt-Svc state | yes | shared | no | foundational |
+| `futures-core`, `futures-util` | streams, bodies, pipeline, retry | yes | shared | no | foundational |
+| `http`, `http-body`, `http-body-util` | HTTP types and Hyper body adaptation | yes | shared | no | foundational |
+| `hyper` | client protocol engine | H1 via `http1`; H2 via `http2` | shared when TLS | no | protocol features own H1/H2 flags |
+| `hyper-util` | legacy client and Tokio integration | H1 via `http1`; H2 via `http2` | shared when TLS | no | protocol features own H1/H2 flags |
+| `hyper-rustls` | standard HTTPS connector | no | yes | `tls-rustls` | optional; root policy is supplied by `TlsConfig` |
+| `h2` | typed H2 error classification | no | H2 only | `http2` | optional |
+| `rustls`, `tokio-rustls` | TLS config and async handshakes | no | yes | `tls-rustls` | optional |
+| `webpki-roots` | deterministic bundled roots | no | yes | `tls-rustls` | optional but always available with Rustls |
+| `rustls-native-certs` | system trust-store loader | no | yes | `tls-native-roots` | optional; default enables it |
+| `pem-rfc7468` | custom CA and mTLS PEM parsing | no | yes | `tls-rustls` | optional with TLS API |
+| `quinn`, `h3`, `h3-quinn` | QUIC/HTTP3 transport | no | H3 TLS | `http3` | optional; `http3` implies H1 + Rustls |
+| `async-compression`, `tokio-util` | streaming decompression | no | no | compression features | optional per compression feature |
+| `flate2` | buffered gzip/deflate decoding | no | no | gzip/deflate | optional |
+| `brotli`, `zstd` | buffered codec support | no | no | brotli/zstd | optional |
+| `cookie` | cookie jar | no | no | `cookies` | optional |
+| `tracing` | opt-in diagnostics | no | no | `tracing` | optional |
+| `getrandom` | retry jitter and multipart boundaries | yes | shared | no (multipart is only one owner) | intentionally unconditional |
+| `httpdate` | Retry-After parsing | yes | shared | no | foundational to retry policy |
+| `base64` | Basic auth and proxy auth | yes | shared | no | foundational |
+| `tower-service` | custom connector `Service` implementations | yes | shared | no | foundational |
+| `pin-project-lite` | timeout/body stream projections | yes | shared | no | foundational |
+| `percent-encoding` | proxy and URL value encoding | yes | shared | no | foundational |
+| `url` | URL parsing, routing, and pool keys | yes | shared | no | foundational |
+| `thiserror` | public error taxonomy | yes | shared | no | foundational |
+
+The matrix intentionally does not gate tiny ubiquitous dependencies merely to
+reduce crate count. In particular, `getrandom` cannot be made multipart-only
+without changing retry jitter behavior. No dependency upgrade was needed, so
+the workspace MSRV remains Rust 1.80.
+
+These are small, well-audited crates with minimal transitive trees. Together
+with the default feature set, they provide the dependencies required to build
+a working HTTPS client.
 
 ## Optional Later Dependencies
 
@@ -197,9 +248,11 @@ pool lease is released.
 
 ## TLS root policy
 
-`hyper-rustls` is configured with both native and packaged WebPKI root
-support. Native roots are attempted first. The packaged Mozilla roots are a
-construction fallback only when the native store is unavailable; they are not
-tried after a certificate-chain or hostname verification failure. Enterprise
-or private CAs therefore require a future explicit trust-store configuration
-surface and are not silently trusted by the fallback.
+When `tls-native-roots` is enabled, `hyper-rustls` is configured with native
+and packaged WebPKI root support. Native roots are attempted first. The
+packaged Mozilla roots are a construction fallback only when the native store
+is unavailable; they are not tried after a certificate-chain or hostname
+verification failure. With only `tls-rustls`, the packaged roots are selected
+directly for deterministic operation without platform-store loading.
+Enterprise or private CAs therefore require an explicit custom trust-store
+configuration and are not silently trusted by the fallback.

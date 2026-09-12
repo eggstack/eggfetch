@@ -200,7 +200,7 @@ Python package surface (`python/eggfetch/__init__.py` + `compat/`): native `Clie
 | `streaming` | Streaming body support |
 | `lib` | C API entry points, string/memory management |
 
-Thread safety: `ClientHandle` is `Send + Sync` (shared). `RequestHandle`, `ResponseHandle`, `StreamingResponseHandle`, `ErrorHandle` are single-thread, single-use. Default features: `http1`, `tls-rustls`, `cookies`, `proxy`, `compression-gzip`; `http2`/`http3`/`multipart`/more codecs opt-in.
+Thread safety: `ClientHandle` is `Send + Sync` (shared). `RequestHandle`, `ResponseHandle`, `StreamingResponseHandle`, `ErrorHandle` are single-thread, single-use. Core defaults are `http1`, `tls-rustls`, and `tls-native-roots`; adapter crates add `cookies`, `proxy`, `compression-gzip`, and their other required capabilities. `http2`/`http3`/`multipart`/more codecs remain opt-in at the core layer.
 
 **Deep dive:** [ffi-and-node.md](ffi-and-node.md)
 

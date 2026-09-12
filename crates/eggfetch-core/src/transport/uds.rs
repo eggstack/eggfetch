@@ -27,8 +27,15 @@ use crate::response::Response;
 #[cfg(unix)]
 pub(crate) enum UdsStream {
     Plain(tokio::net::UnixStream),
+    #[cfg(feature = "tls-rustls")]
     Tls(Box<tokio_rustls::client::TlsStream<tokio::net::UnixStream>>),
 }
+
+#[cfg(feature = "tls-rustls")]
+type TlsConnector = tokio_rustls::TlsConnector;
+
+#[cfg(not(feature = "tls-rustls"))]
+type TlsConnector = ();
 
 #[cfg(unix)]
 impl tokio::io::AsyncRead for UdsStream {
@@ -39,6 +46,7 @@ impl tokio::io::AsyncRead for UdsStream {
     ) -> Poll<std::io::Result<()>> {
         match &mut *self {
             Self::Plain(stream) => Pin::new(stream).poll_read(cx, buf),
+            #[cfg(feature = "tls-rustls")]
             Self::Tls(stream) => Pin::new(stream).poll_read(cx, buf),
         }
     }
@@ -53,6 +61,7 @@ impl tokio::io::AsyncWrite for UdsStream {
     ) -> Poll<std::io::Result<usize>> {
         match &mut *self {
             Self::Plain(stream) => Pin::new(stream).poll_write(cx, bytes),
+            #[cfg(feature = "tls-rustls")]
             Self::Tls(stream) => Pin::new(stream).poll_write(cx, bytes),
         }
     }
@@ -60,6 +69,7 @@ impl tokio::io::AsyncWrite for UdsStream {
     fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
         match &mut *self {
             Self::Plain(stream) => Pin::new(stream).poll_flush(cx),
+            #[cfg(feature = "tls-rustls")]
             Self::Tls(stream) => Pin::new(stream).poll_flush(cx),
         }
     }
@@ -67,6 +77,7 @@ impl tokio::io::AsyncWrite for UdsStream {
     fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
         match &mut *self {
             Self::Plain(stream) => Pin::new(stream).poll_shutdown(cx),
+            #[cfg(feature = "tls-rustls")]
             Self::Tls(stream) => Pin::new(stream).poll_shutdown(cx),
         }
     }
@@ -79,7 +90,11 @@ impl hyper_util::client::legacy::connect::Connection for UdsStream {
         // knows whether the connection negotiated HTTP/2. Without this
         // signal, an HTTP/2-only legacy client could silently downgrade to
         // HTTP/1.1 even when ALPN selected `h2`.
+        #[cfg(feature = "tls-rustls")]
         let mut connected = hyper_util::client::legacy::connect::Connected::new();
+        #[cfg(not(feature = "tls-rustls"))]
+        let connected = hyper_util::client::legacy::connect::Connected::new();
+        #[cfg(feature = "tls-rustls")]
         if let Self::Tls(tls) = self {
             if let Some(alpn) = tls.get_ref().1.alpn_protocol() {
                 if alpn == b"h2" {
@@ -96,7 +111,7 @@ impl hyper_util::client::legacy::connect::Connection for UdsStream {
 #[derive(Clone)]
 pub(crate) struct UdsConnector {
     path: Arc<str>,
-    tls: Option<Arc<tokio_rustls::TlsConnector>>,
+    tls: Option<Arc<TlsConnector>>,
     metrics: Option<Arc<crate::transport::metrics::TransportMetrics>>,
 }
 
@@ -106,7 +121,7 @@ impl UdsConnector {
         dead_code,
         reason = "kept for tests without metrics; client paths use with_metrics"
     )]
-    pub(crate) fn new(path: String, tls: Option<tokio_rustls::TlsConnector>) -> Self {
+    pub(crate) fn new(path: String, tls: Option<TlsConnector>) -> Self {
         Self {
             path: Arc::from(path),
             tls: tls.map(Arc::new),
@@ -116,7 +131,7 @@ impl UdsConnector {
 
     pub(crate) fn with_metrics(
         path: String,
-        tls: Option<tokio_rustls::TlsConnector>,
+        tls: Option<TlsConnector>,
         metrics: Arc<crate::transport::metrics::TransportMetrics>,
     ) -> Self {
         Self {
@@ -140,6 +155,7 @@ impl Service<Uri> for UdsConnector {
 
     fn call(&mut self, dst: Uri) -> Self::Future {
         let path = Arc::clone(&self.path);
+        #[cfg(feature = "tls-rustls")]
         let tls = self.tls.clone();
         let metrics = self.metrics.clone();
         Box::pin(async move {
@@ -161,24 +177,33 @@ impl Service<Uri> for UdsConnector {
             if dst.scheme_str() != Some("https") {
                 return Ok(hyper_util::rt::TokioIo::new(UdsStream::Plain(stream)));
             }
+            #[cfg(feature = "tls-rustls")]
             let connector = tls.ok_or_else(|| -> Box<dyn std::error::Error + Send + Sync> {
                 Error::Tls("HTTPS over UDS requires a TLS connector".into()).into()
             })?;
+            #[cfg(not(feature = "tls-rustls"))]
+            return Err(Box::new(Error::Tls(
+                "HTTPS over UDS requires the tls-rustls feature".into(),
+            )) as Box<dyn std::error::Error + Send + Sync>);
+            #[cfg(feature = "tls-rustls")]
             let host = dst
                 .host()
                 .ok_or_else(|| -> Box<dyn std::error::Error + Send + Sync> {
                     Error::InvalidUrl("HTTPS over UDS requires an origin host".into()).into()
                 })?;
+            #[cfg(feature = "tls-rustls")]
             let name = crate::transport::direct_connector::tls_server_name(host).map_err(
                 |e| -> Box<dyn std::error::Error + Send + Sync> {
                     Error::Tls(format!("invalid UDS TLS server name '{host}': {e}")).into()
                 },
             )?;
+            #[cfg(feature = "tls-rustls")]
             let stream = connector.connect(name, stream).await.map_err(
                 |e| -> Box<dyn std::error::Error + Send + Sync> {
                     Error::Tls(format!("TLS handshake over UDS failed: {e}")).into()
                 },
             )?;
+            #[cfg(feature = "tls-rustls")]
             Ok(hyper_util::rt::TokioIo::new(UdsStream::Tls(Box::new(
                 stream,
             ))))

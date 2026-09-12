@@ -115,7 +115,9 @@ No critical or high-severity findings. Cross-origin credential stripping is comp
 
 ### Proxy Response Parsing
 
-- **Bounded parsing**: Proxy response status lines and headers are parsed with `httparse`, which enforces limits on line length and header count.
+- **Bounded parsing**: Proxy response status lines and headers use the core’s
+  bounded line/header parser, which enforces limits on line length and header
+  count without adding a direct parser dependency.
 - **Header size limits**: The proxy response parser rejects responses with headers exceeding reasonable size limits.
 - **Line limits**: Status lines are bounded to prevent resource exhaustion from oversized responses.
 

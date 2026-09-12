@@ -7,26 +7,34 @@
 use bytes::Bytes;
 
 /// TLS-capable connector used by the hyper client.
+#[cfg(feature = "tls-rustls")]
 pub(crate) type Connector =
     hyper_rustls::HttpsConnector<hyper_util::client::legacy::connect::HttpConnector>;
+
+/// Cleartext connector used when Rustls is not compiled in.
+#[cfg(not(feature = "tls-rustls"))]
+pub(crate) type Connector = hyper_util::client::legacy::connect::HttpConnector;
 
 /// HTTP request body type expected by the hyper client.
 pub(crate) type HyperRequestBody =
     http_body_util::combinators::UnsyncBoxBody<Bytes, Box<dyn std::error::Error + Send + Sync>>;
 
 /// Hyper legacy client type with a connect-phase timeout wrapper.
+#[cfg(any(feature = "http1", feature = "http2"))]
 pub(crate) type TimeoutHyperClient = hyper_util::client::legacy::Client<
     connect_timeout::ConnectTimeout<Connector>,
     HyperRequestBody,
 >;
 
 /// Hyper legacy client type using the direct connector with socket options.
+#[cfg(any(feature = "http1", feature = "http2"))]
 pub(crate) type TimeoutDirectClient = hyper_util::client::legacy::Client<
     connect_timeout::ConnectTimeout<direct_connector::DirectConnector>,
     HyperRequestBody,
 >;
 
 #[cfg(unix)]
+#[cfg(any(feature = "http1", feature = "http2"))]
 pub(crate) type TimeoutUdsClient = hyper_util::client::legacy::Client<
     connect_timeout::ConnectTimeout<uds::UdsConnector>,
     HyperRequestBody,
@@ -40,9 +48,11 @@ pub(crate) type TimeoutSocksClient = hyper_util::client::legacy::Client<
 
 pub mod alt_svc;
 pub(crate) mod connect_timeout;
+#[cfg(any(feature = "http1", feature = "http2"))]
 pub(crate) mod direct;
 pub mod direct_connector;
 pub mod metrics;
+#[cfg(all(unix, any(feature = "http1", feature = "http2")))]
 pub(crate) mod uds;
 
 #[cfg(feature = "proxy")]

@@ -52,6 +52,7 @@ pub enum Error {
     Hyper(#[from] std::sync::Arc<hyper::Error>),
 
     /// An error from the hyper-util legacy client.
+    #[cfg(any(feature = "http1", feature = "http2"))]
     #[error("hyper client error: {0}")]
     HyperClient(#[source] std::sync::Arc<hyper_util::client::legacy::Error>),
 
@@ -245,6 +246,7 @@ impl Error {
             Self::Protocol(_) => "protocol",
             Self::Body(_) => "body",
             Self::Hyper(_) => "hyper",
+            #[cfg(any(feature = "http1", feature = "http2"))]
             Self::HyperClient(_) => "hyper_client",
             Self::Io(_) => "io",
             Self::Unsupported(_) => "unsupported",

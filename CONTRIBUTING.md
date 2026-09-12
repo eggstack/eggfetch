@@ -103,9 +103,9 @@ Do not add a feature flag just to silence a clippy lint or to opt into behavior 
 Current `eggfetch-core` feature declarations (see `crates/eggfetch-core/Cargo.toml` for the exact dependency mapping):
 
 ```toml
-default = ["http1", "tls-rustls"]
+default = ["http1", "tls-rustls", "tls-native-roots"]
 # http1/http2/http3, tls-rustls, json (reserved), compression-gzip/brotli/zstd/deflate,
-# cookies, proxy, multipart, tracing (optional), test-util (internal)
+# tls-native-roots, cookies, proxy, multipart, tracing (optional), test-util (internal)
 ```
 
 `cookies`, `proxy`, and `multipart` are opt-in in core. CLI enables cookies/multipart/proxy; Python enables http2/http3/cookies/multipart/proxy plus all compressions. `http3` is experimental. `json` is reserved (Python delivers JSON via `json.dumps()`); `tracing` is an optional structured-logging gate; `test-util` enables `tokio/test-util` for deterministic time testing.

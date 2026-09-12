@@ -16,7 +16,7 @@ crates/eggfetch-bench/
     └── resource_monitor.rs       # [[bin]]  RSS regression monitor
 ```
 
-All three benchmark suites use Criterion (`harness = false`) and are enabled by default features: `cookies`, `multipart`, and all four compression codecs; core is built with `http1`, `http2`, `tls-rustls`, `json`, `proxy`.
+All three benchmark suites use Criterion (`harness = false`) and are enabled by the benchmark crate's feature set: `cookies`, `multipart`, and all four compression codecs; core is built with `http1`, `http2`, `tls-rustls`, `json`, `proxy`. This is a benchmark profile, not the core crate's default feature set.
 
 ## BenchServer
 

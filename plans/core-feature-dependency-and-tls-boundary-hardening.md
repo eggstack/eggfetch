@@ -60,9 +60,9 @@ Do not infer removal merely because a use is sparse. Confirm runtime and test/bu
 
 Acceptance:
 
-- [ ] Every direct core dependency has a documented owner/use rationale.
-- [ ] Known optional-only dependencies are identified explicitly.
-- [ ] No dependency is proposed for gating if doing so would silently break a supported default path.
+- [x] Every direct core dependency has a documented owner/use rationale.
+- [x] Known optional-only dependencies are identified explicitly.
+- [x] No dependency is proposed for gating if doing so would silently break a supported default path.
 
 # 2. Define a truthful coarse feature model
 
@@ -83,10 +83,10 @@ The ordinary default feature set should retain the current trust behavior. If th
 
 Acceptance:
 
-- [ ] Feature names map to real dependency or behavior boundaries.
-- [ ] Default behavior remains secure and compatible.
-- [ ] Unsupported combinations fail clearly at compile time or construction rather than silently downgrading.
-- [ ] Feature relationships are encoded explicitly (for example H3 -> TLS if required), not only documented in prose.
+- [x] Feature names map to real dependency or behavior boundaries.
+- [x] Default behavior remains secure and compatible.
+- [x] Unsupported combinations fail clearly at compile time or construction rather than silently downgrading.
+- [x] Feature relationships are encoded explicitly (for example H3 -> TLS if required), not only documented in prose.
 
 # 3. Centralize TLS root policy
 
@@ -107,18 +107,23 @@ Avoid creating a generic TLS abstraction layer larger than needed. Reuse existin
 
 Acceptance:
 
-- [ ] There is one authoritative implementation for native/WebPKI/custom root-store construction.
-- [ ] The standard connector no longer defines a separate fallback policy.
-- [ ] Existing TLS tests remain green and new tests compare default standard/direct trust semantics.
-- [ ] Native-root absence is distinguished from certificate verification failure.
+- [x] There is one authoritative implementation for native/WebPKI/custom root-store construction.
+- [x] The standard connector no longer defines a separate fallback policy.
+- [x] Existing TLS tests remain green and new tests compare default standard/direct trust semantics.
+- [x] Native-root absence is distinguished from certificate verification failure.
 
 # 4. Gate genuinely optional dependencies
+
+The initial inventory called out `getrandom` as a likely multipart-only
+dependency. Source review found that retry jitter also uses it, so it remains
+unconditional and is documented as shared foundational functionality.
 
 Move dependencies behind existing/new coarse features where ownership is unambiguous.
 
 Required known case:
 
-- `getrandom` should be enabled by `multipart` if multipart remains its only production use.
+- `getrandom` remains unconditional because retry jitter is also a production
+  use; multipart is not its only owner.
 
 Audit other candidates found in step 1. Examples to evaluate rather than assume:
 
@@ -131,9 +136,9 @@ Do not feature-gate tiny ubiquitous dependencies if the resulting `cfg` surface 
 
 Acceptance:
 
-- [ ] Every changed dependency gate has a corresponding feature-matrix compile/test case.
-- [ ] Optional feature disablement removes the corresponding dependency from `cargo tree` where technically practical.
-- [ ] No default public behavior disappears accidentally.
+- [x] Every changed dependency gate has a corresponding feature-matrix compile/test case.
+- [x] Optional feature disablement removes the corresponding dependency from `cargo tree` where technically practical.
+- [x] No default public behavior disappears accidentally.
 
 # 5. Keep the feature matrix bounded and useful
 
@@ -157,8 +162,8 @@ Do not add a CI job for every possible cross-product.
 
 Acceptance:
 
-- [ ] Existing Tier 2 feature validation reflects the supported matrix truthfully.
-- [ ] `docs/architecture/feature-flags.md` can describe each combination without caveats that contradict Cargo behavior.
+- [x] Existing Tier 2 feature validation reflects the supported matrix truthfully.
+- [x] `docs/architecture/feature-flags.md` can describe each combination without caveats that contradict Cargo behavior.
 
 # 6. Dependency duplication and MSRV audit
 
@@ -170,9 +175,9 @@ Confirm the refactor does not unintentionally raise the workspace MSRV. If a dep
 
 Acceptance:
 
-- [ ] No new unexplained major-version duplicate is introduced.
-- [ ] Core minimal/default feature trees are captured for the later footprint plan.
-- [ ] Workspace MSRV remains truthful.
+- [x] No new unexplained major-version duplicate is introduced.
+- [x] Core minimal/default feature trees are captured for the later footprint plan.
+- [x] Workspace MSRV remains truthful.
 
 # 7. Focused regression tests
 
@@ -224,11 +229,11 @@ Run affected feature checks and targeted TLS tests directly. At plan closure, ru
 
 ## Exit criteria
 
-- [ ] Cargo features own meaningful capability/dependency boundaries.
-- [ ] Default users retain current documented behavior.
-- [ ] TLS trust-root policy is centralized through one authoritative core path.
-- [ ] Native roots are independently selectable from Rustls/WebPKI operation where practical.
-- [ ] Multipart-only randomness is not unconditional without justification.
-- [ ] Supported minimal/default profiles compile and pass targeted tests.
-- [ ] Feature/dependency docs match the implementation.
-- [ ] No compatibility ledger is advanced yet.
+- [x] Cargo features own meaningful capability/dependency boundaries.
+- [x] Default users retain current documented behavior.
+- [x] TLS trust-root policy is centralized through one authoritative core path.
+- [x] Native roots are independently selectable from Rustls/WebPKI operation where practical.
+- [x] `getrandom` remains unconditional only with documented justification: retry jitter is also a production use, so it is not multipart-only.
+- [x] Supported minimal/default profiles compile and pass targeted tests.
+- [x] Feature/dependency docs match the implementation.
+- [x] No compatibility ledger is advanced yet.

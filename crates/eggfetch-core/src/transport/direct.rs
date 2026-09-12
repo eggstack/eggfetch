@@ -242,6 +242,7 @@ pub(crate) fn upgrade_with_connector_metadata(
                 crate::transport::direct_connector::DirectStream::Tcp(tcp) => {
                     UpgradedStream::from_tcp(tcp, leading)
                 }
+                #[cfg(feature = "tls-rustls")]
                 crate::transport::direct_connector::DirectStream::Tls(tls) => {
                     let (_, conn) = tls.get_ref();
                     let tls_info = crate::network_stream::tls_info_from_rustls(conn, None);
@@ -260,6 +261,7 @@ pub(crate) fn upgrade_with_connector_metadata(
                         crate::transport::uds::UdsStream::Plain(_) => {
                             (crate::network_stream::TransportKind::Unix, None)
                         }
+                        #[cfg(feature = "tls-rustls")]
                         crate::transport::uds::UdsStream::Tls(tls) => {
                             let (_, conn) = tls.get_ref();
                             (

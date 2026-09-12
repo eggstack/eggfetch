@@ -1074,22 +1074,9 @@ fn build_quic_client_config(
     idle_timeout: Duration,
     max_bidi_streams: u32,
 ) -> Result<quinn::ClientConfig> {
-    let rc = if let Some(tc) = tls_config {
-        tc.build_quic_rustls_config()?
-    } else {
-        let mut root_store = rustls::RootCertStore::empty();
-        root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
-
-        let provider = crate::tls::process_crypto_provider()?;
-        let mut rc = rustls::ClientConfig::builder_with_provider(provider)
-            .with_protocol_versions(&[&rustls::version::TLS13])
-            .map_err(|e| Error::Tls(format!("TLS version config: {e}")))?
-            .with_root_certificates(root_store)
-            .with_no_client_auth();
-
-        rc.alpn_protocols = vec![b"h3".to_vec()];
-        rc
-    };
+    let default_tls_config = crate::tls::TlsConfig::default();
+    let tls_config = tls_config.unwrap_or(&default_tls_config);
+    let rc = tls_config.build_quic_rustls_config()?;
 
     let quic_crypto = quinn::crypto::rustls::QuicClientConfig::try_from(rc)
         .map_err(|e| Error::Tls(format!("QUIC TLS config conversion: {e}")))?;

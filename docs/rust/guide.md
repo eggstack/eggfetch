@@ -8,7 +8,7 @@ Add `eggfetch-core` to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-eggfetch-core = { version = "0.1", features = ["http1", "tls-rustls"] }
+eggfetch-core = { version = "0.1", features = ["http1", "tls-rustls", "tls-native-roots"] }
 ```
 
 Enable optional features as needed:
@@ -19,6 +19,7 @@ Enable optional features as needed:
 | `http2` | HTTP/2 support via ALPN |
 | `http3` | HTTP/3 over QUIC (experimental) |
 | `tls-rustls` | TLS via rustls (default) |
+| `tls-native-roots` | Prefer the operating system trust store; implies `tls-rustls` (default) |
 | `cookies` | Cookie jar support |
 | `proxy` | HTTP/HTTPS proxy support |
 | `multipart` | Multipart form-data encoding |

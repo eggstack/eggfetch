@@ -19,14 +19,32 @@ let tls = TlsConfig::builder()
     .build()?;
 ```
 
-### Trust Store Hierarchy
+### Trust Store Hierarchy and feature ownership
 
 Resolution order:
 1. Custom `TrustStore` (if provided via `TlsConfig`)
-2. Operating system native roots (if available)
-3. Packaged Mozilla/WebPKI roots (fallback for minimal containers)
+2. Operating system native roots (when `tls-native-roots` is enabled)
+3. Packaged Mozilla/WebPKI roots (construction fallback, or the deterministic
+   default when only `tls-rustls` is enabled)
 
 A custom CA bundle **replaces** all default roots. If both system and private CAs are needed, concatenate them into a single PEM file.
+
+`tls-rustls` owns the Rustls transport, PEM parsing, and packaged WebPKI roots.
+`tls-native-roots` implies it and owns native/system trust-store loading. The
+ordinary default is `http1 + tls-rustls + tls-native-roots`, preserving native
+roots first with WebPKI construction fallback. `http1` without Rustls is a
+cleartext-only profile; HTTPS fails closed with an unsupported TLS error.
+
+All origin TLS routes use the same `TlsConfig::build_rustls_config` root and
+verification builder: the standard Hyper connector, specialized direct/SNI
+and UDS connectors, proxy-origin CONNECT/SOCKS paths, and H3/QUIC. The
+standard connector only adapts that completed config for Hyper ALPN; it does
+not call `with_native_roots()` or `with_webpki_roots()` independently. A
+native-root construction error may select WebPKI under the fallback policy,
+but a chain or hostname verification error is a handshake failure and never
+rebuilds the config with another root store. Proxy-endpoint TLS remains
+logically separate and uses its explicit proxy policy or the same default
+builder primitive.
 
 httpx2 2.12.0 changed its default verification to OS truststore behavior
 (`truststore.SSLContext`); native Rust already follows the same
@@ -142,8 +160,7 @@ bundle, an origin mTLS client identity, an origin SNI override, and
 the origin TLS version policy are not propagated to the proxy
 endpoint.  Callers that need a specific trust anchor for the proxy
 must configure it explicitly via `Proxy(ssl_context=...)`; otherwise
-the proxy endpoint is verified using rustls' default trust anchors
-(system roots).
+the proxy endpoint is verified using the same default `TlsConfig` root policy.
 
 Proxy setup maps HTTPX's phase timeouts directly: proxy TCP/TLS and origin TLS
 use `connect`, CONNECT writes and tunneled request writes use `write`, and

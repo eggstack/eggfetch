@@ -225,7 +225,9 @@ tier2_api_manifest() {
 tier2_feature_matrix() {
     info "Feature matrix validation"
     cargo check -p eggfetch-core --no-default-features
+    cargo check -p eggfetch-core --no-default-features --features http1
     cargo check -p eggfetch-core --no-default-features --features http1,tls-rustls
+    cargo check -p eggfetch-core --no-default-features --features http1,tls-rustls,tls-native-roots
     cargo check -p eggfetch-core --all-features
 }
 

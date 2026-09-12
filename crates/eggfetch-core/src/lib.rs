@@ -51,6 +51,7 @@ pub(crate) mod response_decode;
 pub mod retry;
 pub(crate) mod stream;
 pub mod timeout;
+#[cfg(feature = "tls-rustls")]
 pub mod tls;
 pub mod trace;
 pub mod transport;
@@ -84,6 +85,7 @@ pub use retry::{
     RetryPolicyBuilder, StatusPolicy,
 };
 pub use timeout::{Timeout, TimeoutBuilder, TimeoutPhase};
+#[cfg(feature = "tls-rustls")]
 pub use tls::{ClientIdentity, TlsConfig, TlsConfigBuilder, TlsVersion, TrustStore};
 /// Socket option for direct TCP connections.
 pub use transport::direct_connector::{SocketOption, SocketOptionKind};
