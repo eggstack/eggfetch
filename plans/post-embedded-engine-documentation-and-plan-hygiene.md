@@ -15,7 +15,9 @@ fixture drift after that commit.
 
 The audit for this closure classifies every post-freeze change as Markdown or
 compatibility profile metadata. No executable drift is present in the current
-descendant; the final post-push CI check is the remaining remote confirmation.
+descendant; routine remote CI run `34718676081` passed for this frozen
+executable state. A final docs-only descendant will receive its own routine
+CI run after this record is committed.
 
 ## Objective
 
