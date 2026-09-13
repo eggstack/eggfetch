@@ -122,6 +122,9 @@ pub(crate) fn tls_info_from_rustls(
 pub struct UpgradedStream {
     inner: UpgradedStreamInner,
     metadata: Arc<ConnectionMetadata>,
+    /// Keeps connector-lifecycle resources alive after Hyper hands off a 101
+    /// stream. The concrete resource is intentionally private to transport.
+    connection_guard: Option<Box<dyn Send>>,
     /// Leading bytes already read from the connection before the
     /// upgrade completed (e.g. data sent by the server in the same
     /// write as the 101/CONNECT response headers).
@@ -226,6 +229,7 @@ impl UpgradedStream {
             inner: UpgradedStreamInner::Tcp(stream),
             metadata,
             leading_data,
+            connection_guard: None,
         }
     }
 
@@ -245,7 +249,13 @@ impl UpgradedStream {
             inner: UpgradedStreamInner::Adapter(pinned),
             metadata,
             leading_data,
+            connection_guard: None,
         }
+    }
+
+    /// Retain a connector-owned resource until this upgraded stream closes.
+    pub(crate) fn hold_connection_guard(&mut self, guard: Box<dyn Send>) {
+        self.connection_guard = Some(guard);
     }
 
     /// Wrap a TLS stream into an upgraded stream.
@@ -270,6 +280,7 @@ impl UpgradedStream {
             inner: UpgradedStreamInner::Tls(Box::new(stream)),
             metadata,
             leading_data,
+            connection_guard: None,
         }
     }
 
@@ -436,6 +447,7 @@ impl UpgradedStream {
             // Carry any leading data buffered before the TLS handshake so
             // pipelined bytes from the 101 upgrade are not dropped.
             leading_data: std::mem::take(&mut self.leading_data),
+            connection_guard: self.connection_guard.take(),
         })
     }
 }

@@ -111,6 +111,10 @@ impl hyper_util::client::legacy::connect::Connection for UdsStream {
 #[derive(Clone)]
 pub(crate) struct UdsConnector {
     path: Arc<str>,
+    #[cfg_attr(
+        not(feature = "tls-rustls"),
+        allow(dead_code, reason = "TLS is unavailable in this feature profile")
+    )]
     tls: Option<Arc<TlsConnector>>,
     metrics: Option<Arc<crate::transport::metrics::TransportMetrics>>,
 }

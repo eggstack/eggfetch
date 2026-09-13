@@ -87,8 +87,12 @@ pub use retry::{
 pub use timeout::{Timeout, TimeoutBuilder, TimeoutPhase};
 #[cfg(feature = "tls-rustls")]
 pub use tls::{ClientIdentity, TlsConfig, TlsConfigBuilder, TlsVersion, TrustStore};
+pub use transport::dialer::{DialError, DialErrorKind, DialFuture, DialStream, DialTarget, Dialer};
 /// Socket option for direct TCP connections.
 pub use transport::direct_connector::{SocketOption, SocketOptionKind};
+pub use transport::lifecycle::{
+    PhysicalConnectionPolicy, TransportIoDirection, TransportIoTimeout,
+};
 #[cfg(feature = "http3")]
 pub use transport::metrics::{H3CloseKind, H3CloseSummary, H3ConnectionDiagnostic, H3RouteKind};
 pub use transport::metrics::{TransportMetrics, TransportSnapshot};

@@ -567,6 +567,8 @@ struct PreparedRequest {
 enum TransportRoute {
     /// Configured Unix-domain-socket client.
     Uds,
+    /// Caller-supplied raw-stream dialer.
+    Custom,
     /// Specialized direct connector (socket options / local address).
     Direct,
     /// Effective proxy or SOCKS path.
@@ -585,10 +587,11 @@ enum TransportRoute {
 /// without constructing clients.
 #[allow(
     clippy::fn_params_excessive_bools,
-    reason = "route selection is a pure precedence predicate over five availability flags; bundling into a struct adds indirection for tests"
+    reason = "route selection is a pure precedence predicate over six availability flags; bundling into a struct adds indirection for tests"
 )]
 fn select_route(
     has_uds: bool,
+    has_custom: bool,
     has_direct_no_proxy: bool,
     has_proxy: bool,
     has_sni: bool,
@@ -596,6 +599,8 @@ fn select_route(
 ) -> TransportRoute {
     if has_uds {
         TransportRoute::Uds
+    } else if has_custom {
+        TransportRoute::Custom
     } else if has_direct_no_proxy {
         TransportRoute::Direct
     } else if has_proxy {
@@ -1184,6 +1189,14 @@ async fn prepare_single_request(
         max_decompression_ratio: request_max_decompression_ratio,
     } = request.into_parts();
 
+    #[cfg(any(feature = "http1", feature = "http2"))]
+    if inner.lifecycle.invalid {
+        return Err(Error::RequestBuild(
+            "physical connection policy requires max_live > 0 and admission_timeout only with max_live"
+                .into(),
+        ));
+    }
+
     if let Some(target) = &transport_hints.resolved_target {
         let expected_port = url.port_or_known_default().ok_or_else(|| {
             Error::InvalidResolvedTarget(
@@ -1240,6 +1253,34 @@ async fn prepare_single_request(
             return Err(Error::Unsupported(
                 "caller-supplied resolved destinations are incompatible with Unix-domain routing"
                     .into(),
+            ));
+        }
+    }
+
+    if inner.config.dialer.is_some() {
+        if transport_hints.resolved_target.is_some() {
+            return Err(Error::Unsupported(
+                "custom dialing is incompatible with caller-supplied resolved destinations".into(),
+            ));
+        }
+        #[cfg(any(feature = "http1", feature = "http2"))]
+        if inner.direct_connector_config.is_some() {
+            return Err(Error::Unsupported(
+                "custom dialing is incompatible with local-address or socket-option routing".into(),
+            ));
+        }
+        if inner.config.uds_configured {
+            return Err(Error::Unsupported(
+                "custom dialing is incompatible with Unix-domain routing".into(),
+            ));
+        }
+        #[cfg(feature = "http3")]
+        if matches!(
+            inner.config.http_version_policy,
+            crate::HttpVersionPolicy::Http3Only
+        ) {
+            return Err(Error::Unsupported(
+                "custom dialing is incompatible with HTTP/3".into(),
             ));
         }
     }
@@ -1401,6 +1442,13 @@ pub(crate) async fn send_single_request(
     let has_direct_no_proxy =
         !has_uds && (transport_hints.resolved_target.is_some() || inner.direct_client.is_some());
     let has_sni = transport_hints.sni_hostname.is_some();
+    let has_custom = inner.config.dialer.is_some();
+    #[cfg(feature = "proxy")]
+    if has_custom && has_proxy {
+        return Err(Error::Unsupported(
+            "custom dialing is incompatible with built-in proxy routing".into(),
+        ));
+    }
     // Discovery semantics for `Auto` (plan §4):
     // - `Http3Only` = explicit direct QUIC route, strict, no discovery, no
     //   fallback, no suppression.
@@ -1419,7 +1467,7 @@ pub(crate) async fn send_single_request(
                 // learns and never routes H3. Earlier routes (UDS/proxy/SNI)
                 // already win via `select_route`, so discovery here only
                 // decides H3-vs-standard.
-                if has_uds || has_proxy || has_sni {
+                if has_uds || has_proxy || has_sni || has_custom {
                     (false, None)
                 } else if let Some(target) = h3_discovered_target(inner, &url) {
                     (true, Some(target))
@@ -1432,7 +1480,14 @@ pub(crate) async fn send_single_request(
     };
     #[cfg(not(feature = "http3"))]
     let use_h3 = false;
-    let route = select_route(has_uds, has_direct_no_proxy, has_proxy, has_sni, use_h3);
+    let route = select_route(
+        has_uds,
+        has_custom,
+        has_direct_no_proxy,
+        has_proxy,
+        has_sni,
+        use_h3,
+    );
     #[cfg(feature = "http3")]
     if transport_hints.resolved_target.is_some() && use_h3 {
         return Err(Error::Unsupported(
@@ -1471,6 +1526,26 @@ pub(crate) async fn send_single_request(
                     "Unix domain sockets are not supported on this platform".into(),
                 ));
             }
+        }
+        TransportRoute::Custom => {
+            let custom_client = if let Some(sni_hostname) = transport_hints.sni_hostname.as_deref()
+            {
+                inner.sni_custom_client(sni_hostname).await?
+            } else {
+                inner
+                    .custom_client
+                    .as_ref()
+                    .ok_or_else(|| Error::Unsupported("custom dialer client not available".into()))?
+                    .clone()
+            };
+            let hyper_request = build_hyper_request(&method, uri, version, &headers, body)?;
+            let send_future = crate::transport::direct::send_request(
+                &custom_client,
+                hyper_request,
+                url.clone(),
+                transport_hints.trace.as_deref(),
+            );
+            send_with_total_timeout(send_future, remaining_total).await?
         }
         TransportRoute::Direct => {
             let resolved_client;
@@ -2154,35 +2229,35 @@ mod tests {
     fn select_route_precedence_matches_pipeline_order() {
         // UDS wins over everything.
         assert_eq!(
-            select_route(true, true, true, true, true),
+            select_route(true, false, true, true, true, true),
             TransportRoute::Uds
         );
         // Specialized direct wins when no proxy (even with SNI/H3 present).
         assert_eq!(
-            select_route(false, true, false, true, true),
+            select_route(false, false, true, false, true, true),
             TransportRoute::Direct
         );
         // Proxy wins over SNI/H3; H3 never bypasses proxy rules.
         assert_eq!(
-            select_route(false, false, true, true, true),
+            select_route(false, false, false, true, true, true),
             TransportRoute::Proxy
         );
         assert_eq!(
-            select_route(false, false, true, false, true),
+            select_route(false, false, false, true, false, true),
             TransportRoute::Proxy
         );
         // SNI wins over H3/standard when no proxy/direct.
         assert_eq!(
-            select_route(false, false, false, true, true),
+            select_route(false, false, false, false, true, true),
             TransportRoute::SniDirect
         );
         // H3 only when selected and no earlier route applies.
         assert_eq!(
-            select_route(false, false, false, false, true),
+            select_route(false, false, false, false, false, true),
             TransportRoute::H3
         );
         assert_eq!(
-            select_route(false, false, false, false, false),
+            select_route(false, false, false, false, false, false),
             TransportRoute::Standard
         );
         // `has_direct_no_proxy` already encodes "no proxy": callers compute

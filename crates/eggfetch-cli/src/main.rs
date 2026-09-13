@@ -264,7 +264,7 @@ fn map_error_to_exit_code(err: &eggfetch_core::Error) -> u8 {
         | Error::HostnameVerification(_) => EXIT_USAGE,
 
         // Timeout errors
-        Error::Timeout { .. } => EXIT_TIMEOUT,
+        Error::Timeout { .. } | Error::TransportIoTimeout { .. } => EXIT_TIMEOUT,
 
         // Protocol / decompression errors
         Error::Protocol(_)
@@ -296,6 +296,7 @@ fn map_error_to_exit_code(err: &eggfetch_core::Error) -> u8 {
 
         // Connect / TLS / proxy errors
         Error::Connect(_)
+        | Error::CustomTransport(_)
         | Error::Tls(_)
         | Error::Pool(_)
         | Error::ProxyConnect(_)

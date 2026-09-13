@@ -14,6 +14,7 @@ eggfetch is a Rust-native async HTTP client engine (tokio + hyper) with Python b
 - **HTTP/1.1, HTTP/2, HTTP/3** — ALPN negotiation; HTTP/3 over QUIC stays experimental ([graduation gate](docs/architecture/core-tls-proxy-protocols.md))
 - **Streaming** — request/response bodies without eager buffering (`bytes_stream()`, `text_lines()`); trailers via `Response::trailers()` ([guide](docs/rust/guide.md))
 - **Pooling, timeouts, observability** — per-origin in-flight limits, phase-aware timeouts (pool/connect/write/read/total), connector/DNS/TLS and H3 transport metrics ([pool/timeouts](docs/architecture/core-timeout-pool.md))
+- **Native embedded transport control** — optional caller-owned raw-stream dialing, explicit Hyper stale-connection retry control, physical-connection admission, and established-I/O inactivity guardrails ([Rust guide](docs/rust/guide.md))
 - **TLS** — rustls with custom CA bundles, mTLS client certs, version policy, verification toggle ([TLS](docs/concepts/tls.md))
 - **Proxy** — HTTP forwarding, HTTPS CONNECT, proxy auth, per-request override, `NO_PROXY`; SOCKS5 and UDS routes ([proxy](docs/concepts/proxy.md))
 - **Cookies, auth, multipart** — RFC 6265 jar, Basic/Bearer with redaction, streaming multipart uploads ([cookies](docs/concepts/cookies.md))
@@ -116,6 +117,12 @@ from eggfetch.compat.httpx2 import Client as H2Client  # httpx2 2.12.0 surface
 See [`docs/python/guide.md`](docs/python/guide.md) for the full Python API reference.
 
 ## Usage -- Rust
+
+Native Rust consumers can keep their own route while eggfetch owns HTTP and
+destination TLS. A `Dialer` receives only the logical host and effective port;
+it does not replace URL/Host/SNI identity. The custom route is intentionally
+incompatible with built-in proxy, UDS, resolved-address, local-binding,
+socket-option, and HTTP/3 routing.
 
 ```rust
 use eggfetch_core::Client;

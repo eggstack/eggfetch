@@ -8,6 +8,11 @@ Parent program: `plans/embedded-rust-client-footprint-and-routing-program.md`.
 Fixture profiles and runner: `qualification/embedded/README.md`,
 `scripts/qualify-embedded-footprint.sh` (manual, never a CI gate).
 
+The extensible embedded transport program also includes the external-style
+compile/runtime fixture at `qualification/embedded-custom-dialer/`. It is a
+public-API qualification artifact, not a replacement for this footprint
+measurement and does not change the classification below.
+
 Status note: the native JSON helper track is now implemented. The recorded
 JSON fixture uses `eggfetch-core/json`; static resolved-destination routing is
 an independent native transport capability and is not part of the size

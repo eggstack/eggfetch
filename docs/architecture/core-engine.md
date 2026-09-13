@@ -19,7 +19,7 @@ Focused subset for the engine lifecycle (client → request → pipeline → res
 | `trace` | Yes | `TraceObserver`, `TraceEvent` — synchronous lifecycle event callbacks |
 | `error` | Yes | `Error` enum, `Result<T>` alias |
 | `pipeline` | Crate-internal | Full request lifecycle orchestration |
-| `transport` | Yes | Direct, direct-with-socket-options, UDS, proxy, HTTP/3 transport dispatch |
+| `transport` | Yes | Direct, caller-owned raw-stream dialer, direct-with-socket-options, UDS, proxy, HTTP/3 transport dispatch |
 | `stream` | Crate-internal | Per-chunk read/write timeout wrappers |
 
 ## Client
@@ -33,7 +33,7 @@ let client = ClientBuilder::new()
     .build()?;
 ```
 
-Builder-configurable options: headers, timeout, pool, redirects, auth, cookies, proxy, TLS, retry, decompression, HTTP version policy, max body size, max decompression ratio.
+Builder-configurable options: headers, timeout, pool, redirects, auth, cookies, proxy, TLS, retry, Hyper canceled-request retry, native dialer, physical connection admission, established-I/O inactivity, decompression, HTTP version policy, max body size, max decompression ratio.
 
 `Client` is `Clone` (cheap — internals are `Arc`-wrapped).
 
@@ -153,9 +153,11 @@ request policy so transports own only connection/protocol work:
    resolves the effective proxy/origin, acquires the pool guard, and
    computes the remaining-total/deadline. One-shot bodies are moved, never
    cloned.
-3. Dispatch selects one `TransportRoute` via `select_route()` (UDS → static
-   direct → specialized-direct → proxy/SOCKS → SNI-direct → H3 → standard
-   Hyper).
+3. Dispatch selects one `TransportRoute` via `select_route()` (UDS → custom
+   dialer → static/specialized direct → proxy/SOCKS → SNI-direct → H3 →
+   standard Hyper). A configured custom dialer is never silently bypassed;
+   unsupported combinations with proxy, UDS, resolved targets, local socket
+   controls, or H3 fail during preparation before network I/O.
    H3 is `Http3Only` direct or `Auto`-discovered (fresh Alt-Svc + not
    suppressed); safe `Auto` fallback to standard is pre-commit replayable
    only. Hyper request scaffolding is built once via `build_hyper_request()`.
@@ -168,6 +170,19 @@ response-lifecycle implementation (`finish_hyper_response()` plus shared
 trace helpers, `wrap_incoming` with `SharedTrailers`, and
 `await_upgrade` with connector metadata); UDS reuses the same helpers
 including 101 upgrade handling (UDS kind without IPs).
+
+### Caller-owned raw streams
+
+`ClientBuilder::dialer()` accepts the small public `Dialer` contract rather
+than Hyper's `Service`/`Connection` traits. Eggfetch adapts the returned Tokio
+stream into Hyper, then performs destination TLS itself for HTTPS, preserving
+the logical URL host for `Host`, SNI, and certificate verification. Dialer
+errors retain the caller source through `Error::custom_transport_error()` and
+never trigger fallback to the ordinary direct connector.
+
+`retry_canceled_requests(false)` disables only Hyper's implicit retry when a
+reused idle connection is unusable before the request begins. It is separate
+from the opt-in eggfetch `RetryPolicy`, whose behavior is unchanged.
 
 ## Network Stream and Upgrade Support
 

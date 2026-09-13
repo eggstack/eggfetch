@@ -29,6 +29,12 @@ class _ThreadedHTTPServerV6(_ThreadedHTTPServer):
 
     address_family = socket.AF_INET6
 
+    def server_bind(self):
+        # Keep localhost route tests deterministic on hosts where localhost
+        # resolves to IPv4 first while the fixture is bound to ::1.
+        self.socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
+        super().server_bind()
+
 
 class DelayedResponseHandler(http.server.BaseHTTPRequestHandler):
     """HTTP handler that can delay response headers or body chunks."""
@@ -174,17 +180,33 @@ def local_http_server(
 def local_ipv6_http_server(
     handler_class=DelayedResponseHandler,
 ) -> Generator[tuple[str, int], None, None]:
-    """Start a deterministic HTTP server on IPv6 loopback."""
+    """Start deterministic HTTP servers on IPv6 and, when needed, IPv4 loopback."""
     httpd = _ThreadedHTTPServerV6(("::1", 0), handler_class)
     port = httpd.server_address[1]
-    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
-    thread.start()
+    ipv4_httpd = None
+    try:
+        # Some Linux images have IPv6-only sockets and resolve localhost to
+        # 127.0.0.1 first. Bind the same port on IPv4 so route tests exercise
+        # proxy selection rather than an address-family accident.
+        ipv4_httpd = _ThreadedHTTPServer(("127.0.0.1", port), handler_class)
+    except OSError:
+        # A dual-stack IPv6 socket already accepts the IPv4 side.
+        pass
+    threads = [threading.Thread(target=httpd.serve_forever, daemon=True)]
+    if ipv4_httpd is not None:
+        threads.append(threading.Thread(target=ipv4_httpd.serve_forever, daemon=True))
+    for thread in threads:
+        thread.start()
     try:
         yield "::1", port
     finally:
         httpd.shutdown()
         httpd.server_close()
-        thread.join(timeout=2)
+        if ipv4_httpd is not None:
+            ipv4_httpd.shutdown()
+            ipv4_httpd.server_close()
+        for thread in threads:
+            thread.join(timeout=2)
 
 
 @contextmanager

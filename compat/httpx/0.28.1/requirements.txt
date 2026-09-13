@@ -11,3 +11,6 @@ httpx-sse>=0.4.0
 respx>=0.21.0
 starlette>=0.27.0
 pytest-httpx>=0.30.0
+# Native compatibility fixtures exercise HTTP/2 and HTTPX's SOCKS reference.
+h2>=4.0,<5
+socksio>=1.0,<2

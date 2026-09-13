@@ -225,6 +225,7 @@ pub fn map_err(err: eggfetch_core::Error) -> PyErr {
         | eggfetch_core::Error::Tls(msg)
         | eggfetch_core::Error::CertificateVerification(msg)
         | eggfetch_core::Error::HostnameVerification(msg) => NetworkError::new_err(msg),
+        eggfetch_core::Error::CustomTransport(error) => NetworkError::new_err(error.to_string()),
         eggfetch_core::Error::Protocol(msg) => ProtocolError::new_err(msg),
         eggfetch_core::Error::Body(msg) => BodyError::new_err(msg),
         eggfetch_core::Error::Hyper(arc) => NetworkError::new_err(arc.to_string()),
@@ -264,6 +265,13 @@ pub fn map_err(err: eggfetch_core::Error) -> PyErr {
                 TimeoutPhase::Read => ReadTimeout::new_err(msg),
                 TimeoutPhase::Write => WriteTimeout::new_err(msg),
                 TimeoutPhase::Total => TimeoutException::new_err(msg),
+            }
+        }
+        eggfetch_core::Error::TransportIoTimeout { direction, elapsed } => {
+            let msg = format!("transport {direction:?} timeout after {elapsed:?}");
+            match direction {
+                eggfetch_core::TransportIoDirection::Read => ReadTimeout::new_err(msg),
+                eggfetch_core::TransportIoDirection::Write => WriteTimeout::new_err(msg),
             }
         }
         eggfetch_core::Error::DecodedBodyTooLarge => {

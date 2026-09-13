@@ -11,7 +11,7 @@ use crate::error::{Error, Result};
 use crate::network_stream::{ConnectionMetadata, NetworkStream, UpgradedStream};
 use crate::response::Response;
 use crate::trace::{OnEventAction, TraceEvent, TraceObserver, TracePhase};
-use crate::transport::{HyperRequestBody, TimeoutHyperClient};
+use crate::transport::HyperRequestBody;
 
 /// Emit the `send_request_headers/Started` trace event.
 ///
@@ -138,12 +138,15 @@ async fn finish_hyper_response(
 /// For 101 Switching Protocols responses, captures the upgrade future and
 /// attaches an [`UpgradedStream`] to the response. For ordinary responses,
 /// attaches read-only connection metadata when available.
-pub(crate) async fn send_request(
-    hyper_client: &TimeoutHyperClient,
+pub(crate) async fn send_request<C>(
+    hyper_client: &hyper_util::client::legacy::Client<C, HyperRequestBody>,
     request: http::Request<HyperRequestBody>,
     url: url::Url,
     trace: Option<&dyn TraceObserver>,
-) -> Result<Response> {
+) -> Result<Response>
+where
+    C: hyper_util::client::legacy::connect::Connect + Clone + Send + Sync + 'static,
+{
     emit_send_start(trace, request.method().as_str(), &request.uri().to_string())?;
 
     let result = hyper_client.request(request).await.map_err(map_send_error);
@@ -166,12 +169,15 @@ pub(crate) async fn send_request(
 ///
 /// When a trace observer is provided, emits `send_request_headers` and
 /// `receive_response_headers` lifecycle events.
-pub(crate) async fn send_direct_request(
-    hyper_client: &crate::transport::TimeoutDirectClient,
+pub(crate) async fn send_direct_request<C>(
+    hyper_client: &hyper_util::client::legacy::Client<C, HyperRequestBody>,
     request: http::Request<HyperRequestBody>,
     url: url::Url,
     trace: Option<&dyn TraceObserver>,
-) -> Result<Response> {
+) -> Result<Response>
+where
+    C: hyper_util::client::legacy::connect::Connect + Clone + Send + Sync + 'static,
+{
     emit_send_start(trace, request.method().as_str(), &request.uri().to_string())?;
 
     let result = hyper_client.request(request).await.map_err(map_send_error);
@@ -228,9 +234,39 @@ pub(crate) async fn await_upgrade(on_upgrade: hyper::upgrade::OnUpgrade) -> Opti
 /// branch: downcast branches carry `read_buf` explicitly; the opaque
 /// branch preserves Hyper's internal `Rewind` and yields it on first
 /// reads (see `upgraded_stream_leading_data_through_hyper`).
+#[allow(
+    clippy::too_many_lines,
+    reason = "Upgrade classification must cover direct, lifecycle-wrapped direct, UDS, and opaque Hyper branches in one exhaustive downcast path"
+)]
 pub(crate) fn upgrade_with_connector_metadata(
     upgraded: hyper::upgrade::Upgraded,
 ) -> UpgradedStream {
+    let upgraded = match upgraded.downcast::<crate::transport::lifecycle::LifecycleConnection<
+        hyper_util::rt::TokioIo<crate::transport::direct_connector::DirectStream>,
+    >>() {
+        Ok(parts) => {
+            let (inner, permit) = parts.io.into_inner_and_permit();
+            let direct = inner.into_inner();
+            let leading = parts.read_buf;
+            let mut stream = match direct {
+                crate::transport::direct_connector::DirectStream::Tcp(tcp) => {
+                    UpgradedStream::from_tcp(tcp, leading)
+                }
+                #[cfg(feature = "tls-rustls")]
+                crate::transport::direct_connector::DirectStream::Tls(tls) => {
+                    let (_, conn) = tls.get_ref();
+                    let tls_info = crate::network_stream::tls_info_from_rustls(conn, None);
+                    UpgradedStream::from_tls(*tls, leading, tls_info)
+                }
+            };
+            if let Some(permit) = permit {
+                stream.hold_connection_guard(Box::new(permit));
+            }
+            return stream;
+        }
+        Err(upgraded) => upgraded,
+    };
+
     // Direct connector: real socket addresses + TLS info observable.
     match upgraded
         .downcast::<hyper_util::rt::TokioIo<crate::transport::direct_connector::DirectStream>>()
@@ -252,6 +288,42 @@ pub(crate) fn upgrade_with_connector_metadata(
         }
         Err(upgraded) => {
             // UDS connector: report UDS transport without IP addresses.
+            #[cfg(unix)]
+            let upgraded = match upgraded
+                .downcast::<crate::transport::lifecycle::LifecycleConnection<
+                    hyper_util::rt::TokioIo<crate::transport::uds::UdsStream>,
+                >>() {
+                Ok(parts) => {
+                    let (inner, permit) = parts.io.into_inner_and_permit();
+                    let uds = inner.into_inner();
+                    let leading = parts.read_buf;
+                    let (kind, tls_info) = match &uds {
+                        crate::transport::uds::UdsStream::Plain(_) => {
+                            (crate::network_stream::TransportKind::Unix, None)
+                        }
+                        #[cfg(feature = "tls-rustls")]
+                        crate::transport::uds::UdsStream::Tls(tls) => {
+                            let (_, conn) = tls.get_ref();
+                            (
+                                crate::network_stream::TransportKind::TlsUnix,
+                                Some(crate::network_stream::tls_info_from_rustls(conn, None)),
+                            )
+                        }
+                    };
+                    let metadata = Arc::new(ConnectionMetadata {
+                        local_addr: None,
+                        peer_addr: None,
+                        transport_kind: kind,
+                        tls_info,
+                    });
+                    let mut stream = UpgradedStream::from_adapter(uds, leading, metadata);
+                    if let Some(permit) = permit {
+                        stream.hold_connection_guard(Box::new(permit));
+                    }
+                    return stream;
+                }
+                Err(upgraded) => upgraded,
+            };
             #[cfg(unix)]
             match upgraded.downcast::<hyper_util::rt::TokioIo<crate::transport::uds::UdsStream>>() {
                 Ok(parts) => {
@@ -379,6 +451,17 @@ pub(crate) fn wrap_incoming(
 pub(crate) fn map_send_error(err: hyper_util::client::legacy::Error) -> Error {
     let mut current: Option<&dyn std::error::Error> = Some(&err);
     while let Some(e) = current {
+        if let Some(core_error) = e.downcast_ref::<Error>() {
+            return core_error.clone();
+        }
+        if let Some(io_error) = e.downcast_ref::<std::io::Error>() {
+            if let Some(inner) = io_error
+                .get_ref()
+                .and_then(|source| source.downcast_ref::<Error>())
+            {
+                return inner.clone();
+            }
+        }
         if let Some(hyper_err) = e.downcast_ref::<hyper::Error>() {
             // Try to extract h2-specific error information.
             #[cfg(feature = "http2")]

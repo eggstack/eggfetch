@@ -19,38 +19,57 @@ pub(crate) type Connector = hyper_util::client::legacy::connect::HttpConnector;
 pub(crate) type HyperRequestBody =
     http_body_util::combinators::UnsyncBoxBody<Bytes, Box<dyn std::error::Error + Send + Sync>>;
 
+#[cfg(any(feature = "http1", feature = "http2"))]
+pub(crate) type CustomConnector = custom_connector::CustomConnector;
+
+#[cfg(any(feature = "http1", feature = "http2"))]
+pub(crate) type TimeoutCustomClient = hyper_util::client::legacy::Client<
+    lifecycle::LifecycleConnector<connect_timeout::ConnectTimeout<CustomConnector>>,
+    HyperRequestBody,
+>;
+
 /// Hyper legacy client type with a connect-phase timeout wrapper.
 #[cfg(any(feature = "http1", feature = "http2"))]
 pub(crate) type TimeoutHyperClient = hyper_util::client::legacy::Client<
-    connect_timeout::ConnectTimeout<Connector>,
+    lifecycle::LifecycleConnector<connect_timeout::ConnectTimeout<Connector>>,
     HyperRequestBody,
 >;
 
 /// Hyper legacy client type using the direct connector with socket options.
 #[cfg(any(feature = "http1", feature = "http2"))]
 pub(crate) type TimeoutDirectClient = hyper_util::client::legacy::Client<
-    connect_timeout::ConnectTimeout<direct_connector::DirectConnector>,
+    lifecycle::LifecycleConnector<
+        connect_timeout::ConnectTimeout<direct_connector::DirectConnector>,
+    >,
     HyperRequestBody,
 >;
 
 #[cfg(unix)]
 #[cfg(any(feature = "http1", feature = "http2"))]
 pub(crate) type TimeoutUdsClient = hyper_util::client::legacy::Client<
-    connect_timeout::ConnectTimeout<uds::UdsConnector>,
+    lifecycle::LifecycleConnector<connect_timeout::ConnectTimeout<uds::UdsConnector>>,
     HyperRequestBody,
 >;
 
 #[cfg(feature = "proxy")]
 pub(crate) type TimeoutSocksClient = hyper_util::client::legacy::Client<
-    connect_timeout::ConnectTimeout<socks::SocksConnector>,
+    lifecycle::LifecycleConnector<connect_timeout::ConnectTimeout<socks::SocksConnector>>,
     HyperRequestBody,
 >;
 
 pub mod alt_svc;
 pub(crate) mod connect_timeout;
+pub(crate) mod custom_connector {
+    #[cfg(feature = "tls-rustls")]
+    pub(crate) type CustomConnector = hyper_rustls::HttpsConnector<super::dialer::DialerConnector>;
+    #[cfg(not(feature = "tls-rustls"))]
+    pub(crate) type CustomConnector = super::dialer::DialerConnector;
+}
+pub mod dialer;
 #[cfg(any(feature = "http1", feature = "http2"))]
 pub(crate) mod direct;
 pub mod direct_connector;
+pub mod lifecycle;
 pub mod metrics;
 #[cfg(all(unix, any(feature = "http1", feature = "http2")))]
 pub(crate) mod uds;

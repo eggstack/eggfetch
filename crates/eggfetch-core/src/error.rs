@@ -51,6 +51,10 @@ pub enum Error {
     #[error("connect error: {0}")]
     Connect(String),
 
+    /// A caller-supplied native dialer failed.
+    #[error("custom transport error: {0}")]
+    CustomTransport(#[source] std::sync::Arc<crate::transport::dialer::DialError>),
+
     /// A TLS handshake or configuration error occurred.
     #[error("TLS error: {0}")]
     Tls(String),
@@ -123,6 +127,16 @@ pub enum Error {
         /// Which phase of the request timed out.
         phase: TimeoutPhase,
         /// The duration that was exceeded.
+        elapsed: std::time::Duration,
+    },
+
+    /// An established transport made no read or write progress before its
+    /// dedicated inactivity deadline.
+    #[error("transport {direction:?} inactivity timeout after {elapsed:?}")]
+    TransportIoTimeout {
+        /// Which established I/O direction stalled.
+        direction: crate::transport::lifecycle::TransportIoDirection,
+        /// Duration for which no progress was observed.
         elapsed: std::time::Duration,
     },
 
@@ -262,6 +276,7 @@ impl Error {
             Self::JsonSerialize(_) => "json_serialize",
             Self::JsonDeserialize(_) => "json_deserialize",
             Self::Connect(_) => "connect",
+            Self::CustomTransport(_) => "custom_transport",
             Self::Tls(_) => "tls",
             Self::Protocol(_) => "protocol",
             Self::Body(_) => "body",
@@ -286,6 +301,12 @@ impl Error {
                 crate::timeout::TimeoutPhase::Write => "timeout_write",
                 crate::timeout::TimeoutPhase::Read => "timeout_read",
                 crate::timeout::TimeoutPhase::Total => "timeout_total",
+            },
+            Self::TransportIoTimeout { direction, .. } => match direction {
+                crate::transport::lifecycle::TransportIoDirection::Read => "transport_read_timeout",
+                crate::transport::lifecycle::TransportIoDirection::Write => {
+                    "transport_write_timeout"
+                }
             },
             Self::InvalidProxyUrl(_) => "invalid_proxy_url",
             Self::ProxyConnect(_) => "proxy_connect",
@@ -313,6 +334,27 @@ impl Error {
             Self::H3Protocol(_) => "h3_protocol",
             Self::TraceCallbackAborted => "trace_callback_aborted",
         }
+    }
+
+    /// Returns the nested caller error when this is a custom-dialer failure.
+    #[must_use]
+    pub fn custom_transport_error(&self) -> Option<&crate::transport::dialer::DialError> {
+        match self {
+            Self::CustomTransport(error) => Some(error.as_ref()),
+            _ => None,
+        }
+    }
+
+    /// Returns whether this is a physical-connection admission timeout.
+    #[must_use]
+    pub fn is_physical_connection_admission_timeout(&self) -> bool {
+        matches!(self, Self::Pool(message) if message == crate::transport::lifecycle::PHYSICAL_ADMISSION_TIMEOUT)
+    }
+
+    /// Returns whether this is an established-transport inactivity timeout.
+    #[must_use]
+    pub fn is_transport_io_timeout(&self) -> bool {
+        matches!(self, Self::TransportIoTimeout { .. })
     }
 }
 

@@ -186,6 +186,20 @@ For HTTPS through a proxy, the transport establishes a CONNECT tunnel:
 3. Upgrade the connection to TLS.
 4. Send the actual HTTP request over the TLS tunnel.
 
+### Caller-owned raw-stream dialing
+
+The native `Dialer` extension is below destination HTTP/TLS and outside the
+built-in proxy model. The dialer receives the logical URL host and effective
+port and returns a Tokio-compatible raw stream. For HTTPS, eggfetch then runs
+its configured rustls client over that stream, so logical `Host`, SNI, and
+certificate verification remain authoritative. The dialer does not implement
+or expose Hyper connector traits.
+
+A custom dialer cannot be combined with built-in HTTP/SOCKS proxying, UDS,
+resolved-address routing, local-address/socket-option routing, or HTTP/3.
+These combinations fail before I/O. A dial failure is preserved as a custom
+transport error and never falls back to ordinary direct DNS/TCP.
+
 The tunneled body stream knows the declared `Content-Length` (when the
 response carries an explicit non-chunked length) and uses it only to tell
 a truncated body apart from a complete one: EOF short of the declared

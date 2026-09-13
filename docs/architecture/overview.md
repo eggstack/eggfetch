@@ -73,6 +73,7 @@ eggfetch/
 ├── plans/                  Milestone plans and roadmap (historical record)
 ├── qualification/http3/    H3 machine-readable corpus + runners (opt-in)
 ├── qualification/embedded/ Tiny downstream footprint fixtures (opt-in, non-product)
+├── qualification/embedded-custom-dialer/ External-style native transport fixture
 └── scripts/                check.sh tiers, manifest/compare, H3 + embedded runners,
                             doc checkers, wheel/package validators
 ```
@@ -131,7 +132,7 @@ All HTTP behavior lives here (~29.7k lines across 27 source files plus `transpor
 | `tls` | Yes | `TlsConfig`, `TlsConfigBuilder`, `TlsVersion`, `TrustStore`, `ClientIdentity` — custom CA bundles, mTLS certs, verification toggle, version bounds. |
 | `trace` | Yes | `TraceObserver`, `TraceEvent` — synchronous lifecycle callbacks; coroutine callbacks rejected at adapters. |
 | `pipeline` | No | `send_with_retry()`, `send_with_redirects()`, `send_single_request()` — lifecycle orchestration: retry loop (typed `RequestParts::retry_request`) → redirect loop → preparation (`PreparedRequest`) → declarative dispatch (`TransportRoute::select_route`) → common post-transport policy. |
-| `transport` | Mixed | 11 files: `mod` (hyper client type aliases), `direct`, `direct_connector` (socket options + local bind), `proxy`, `socks` (per-route persistent pools), `uds`, `http3` (QUIC/draining, explicit `H3DispatchError`), `alt_svc` (authenticated cache + suppressor), `connect`, `connect_timeout`, `metrics`. `direct` owns the shared Hyper response lifecycle (`finish_hyper_response`, `wrap_incoming`, `await_upgrade`). |
+| `transport` | Mixed | `mod` (Hyper client aliases), `dialer` (public caller-owned raw-stream seam plus private Hyper adapter), `lifecycle` (physical admission and established-I/O guards), `direct`, `direct_connector` (socket options + local bind), `proxy`, `socks` (per-route persistent pools), `uds`, `http3` (QUIC/draining, explicit `H3DispatchError`), `alt_svc` (authenticated cache + suppressor), `connect`, `connect_timeout`, `metrics`. `direct` owns the shared Hyper response lifecycle (`finish_hyper_response`, `wrap_incoming`, `await_upgrade`). |
 | `stream` | No | Per-chunk read/write timeout wrappers (`read_timeout`, `write_timeout`). |
 | `h2_headers` | No | HTTP/2 forbidden-header stripping. |
 | `response_decode` | No | Content-Encoding parsing and decompression dispatch. |
@@ -286,7 +287,7 @@ HTTP/1.1 (default), HTTP/2 via ALPN (plus h2c prior knowledge and `Http2Only` en
 
 ### Pooling, timeouts, observability
 
-Semaphore-based logical in-flight concurrency (`max_in_flight_requests*`, `max_connections*` aliases) with per-origin limits and `PoolMetrics` (waits/cancellations), separate from `TransportMetrics` (connector/DNS/TLS attempts, H3 create/evict, Alt-Svc learned/expired/cleared/rejected, H3 attempted/suppressed/fallback/drain/close/reconnect, 101 counts; Quinn RTT/path/route snapshots on H3 builds). Phase-aware timeouts: pool, connect, proxy-connect, proxy-TLS, write, read, total — with cancellation safety and per-request merges. Never synthesize native `total` from HTTPX facade timeouts.
+Semaphore-based logical in-flight concurrency (`max_in_flight_requests*`, `max_connections*` aliases) with per-origin limits and `PoolMetrics` (waits/cancellations), separate from `TransportMetrics` (connector/DNS/TLS attempts, H3 create/evict, Alt-Svc learned/expired/cleared/rejected, H3 attempted/suppressed/fallback/drain/close/reconnect, 101 counts; Quinn RTT/path/route snapshots on H3 builds). Native callers may additionally cap live physical Hyper connections and wrap established custom/direct transports with read/write inactivity guards. Phase-aware timeouts: pool, connect, proxy-connect, proxy-TLS, write, read, total — with cancellation safety and per-request merges. Never synthesize native `total` from HTTPX facade timeouts.
 
 **Deep dive:** [core-timeout-pool.md](core-timeout-pool.md)
 

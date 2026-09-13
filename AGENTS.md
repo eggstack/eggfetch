@@ -46,6 +46,7 @@ Facades `eggfetch.compat.httpx` (0.28.1) and `eggfetch.compat.httpx2` (2.12.0) c
 - `ssl.SSLContext` → rustls: never heuristic-match CA stores by count/names; helper contexts carry a construction fingerprint (mutation drops it and reclassifies from live snapshot); passthrough contexts carry no `cert_path`/inherited trust; subclasses and unrepresentable state fail closed with `TypeError`. Proxy TLS comes only from `Proxy(ssl_context=...)`, never origin `verify`/CA/mTLS/SNI.
 - Redact `authorization`, `proxy-authorization`, `cookie`, `set-cookie` in all Debug/Display/`__repr__`/errors via `eggfetch_core::redact`; raw values stay available to engine code.
 - `Http2Only` enforced at three layers (ALPN `h2`-only, `http2_only(true)` on direct/SNI/SOCKS/UDS/standard, `Connected::negotiated_h2()`); h2c uses prior knowledge. Never fork a second engine for HTTPX.
+- Native embedded transport controls are additive and Rust-only: `ClientBuilder::dialer()` supplies a raw Tokio stream for the logical host/port while eggfetch owns HTTP and destination TLS; `retry_canceled_requests(false)` controls Hyper's implicit stale-idle retry separately from `RetryPolicy`; `PhysicalConnectionPolicy` limits live physical Hyper connections and `TransportIoTimeout` limits established I/O inactivity. Custom dialing fails closed with proxy, UDS, resolved-target, local/socket routing, and H3, and never falls back to direct I/O.
 - Do not paper over residuals (see `docs/residual-differences.md`): no synthesized `stream_id`, CONNECT-proxy origin framing stays H1.1, 4-element null-pointer `socket_options` rejected, H1 duplicate trailers collapse upstream while H2 duplicates preserved, sync trace callbacks ok but coroutines rejected with `TypeError`. `Proxy(headers=...)` rides the proxy leg only.
 - SSE is Python framing over streamed responses; WebSocket uses wsproto over the core 101 `network_stream`. Never open raw sockets from Python or add a second Rust reader.
 
@@ -58,6 +59,7 @@ Only 101 responses own a writable stream (`response.extensions["network_stream"]
 Start at `docs/architecture/overview.md` (§ Deep-Dive Index). Section → doc:
 
 - Engine/pipeline/errors → `core-engine.md`; bodies/streams/permits → `core-body-streaming.md`
+- Native dialer/physical connection admission/established I/O → `core-engine.md`, `core-timeout-pool.md`, `core-tls-proxy-protocols.md`, and `docs/rust/guide.md`
 - Timeouts/pool/metrics → `core-timeout-pool.md`; auth/redirect/retry → `core-auth-redirect-retry.md`
 - TLS/proxy/SOCKS/UDS/H2/H3 → `core-tls-proxy-protocols.md`; cookies/multipart/compression → `core-cookies-multipart-compression.md`
 - Python/compat/SSE/WS/upgrades → `python-bindings.md`; CLI → `cli.md`; FFI/Node → `ffi-and-node.md`

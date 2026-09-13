@@ -22,6 +22,10 @@ use crate::request::{Request, RequestBuilder};
 use crate::response::Response;
 use crate::retry::RetryPolicy;
 use crate::timeout::Timeout;
+use crate::transport::dialer::Dialer;
+#[cfg(any(feature = "http1", feature = "http2"))]
+use crate::transport::lifecycle::LifecycleConfig;
+use crate::transport::lifecycle::{PhysicalConnectionPolicy, TransportIoTimeout};
 use crate::transport::Connector;
 
 #[cfg(feature = "cookies")]
@@ -51,6 +55,9 @@ pub(crate) struct ClientConfig {
     #[cfg(feature = "tls-rustls")]
     pub(crate) tls_config: Option<crate::tls::TlsConfig>,
     pub(crate) retry: Option<RetryPolicy>,
+    pub(crate) retry_canceled_requests: bool,
+    pub(crate) dialer: Option<Arc<dyn Dialer>>,
+    pub(crate) uds_configured: bool,
     #[allow(
         dead_code,
         reason = "stored for inspection and future request-level use"
@@ -81,6 +88,9 @@ impl std::fmt::Debug for ClientConfig {
         debug.field("tls_config", &self.tls_config);
         debug
             .field("retry", &self.retry)
+            .field("retry_canceled_requests", &self.retry_canceled_requests)
+            .field("dialer", &self.dialer.as_ref().map(|_| "configured"))
+            .field("uds_configured", &self.uds_configured)
             .field("http_version_policy", &self.http_version_policy)
             .finish_non_exhaustive()
     }
@@ -106,6 +116,9 @@ impl Default for ClientConfig {
             #[cfg(feature = "tls-rustls")]
             tls_config: None,
             retry: None,
+            retry_canceled_requests: true,
+            dialer: None,
+            uds_configured: false,
             http_version_policy: HttpVersionPolicy::default(),
         }
     }
@@ -129,6 +142,9 @@ impl std::fmt::Debug for Client {
 pub(crate) struct ClientInner {
     #[cfg(any(feature = "http1", feature = "http2"))]
     pub(crate) hyper_client: Option<crate::transport::TimeoutHyperClient>,
+    /// Hyper client backed by the caller-supplied native dialer.
+    #[cfg(any(feature = "http1", feature = "http2"))]
+    pub(crate) custom_client: Option<crate::transport::TimeoutCustomClient>,
     /// Error captured while building the configured TLS policy, if any.
     ///
     /// `ClientBuilder::build` is intentionally infallible, so HTTPS requests
@@ -166,6 +182,9 @@ pub(crate) struct ClientInner {
     /// stale ALPN (e.g. H2 vs H1) for the same hostname.
     #[cfg(any(feature = "http1", feature = "http2"))]
     pub(crate) sni_clients: Mutex<HashMap<String, crate::transport::TimeoutDirectClient>>,
+    /// Cached custom-dialer clients for per-request SNI overrides.
+    #[cfg(any(feature = "http1", feature = "http2"))]
+    pub(crate) sni_custom_clients: Mutex<HashMap<String, crate::transport::TimeoutCustomClient>>,
     /// Hyper client for Unix domain socket requests.
     #[cfg(unix)]
     #[cfg(any(feature = "http1", feature = "http2"))]
@@ -182,6 +201,9 @@ pub(crate) struct ClientInner {
     /// Transport observability counters shared by all connectors owned by
     /// this client. Distinct from [`Pool`] logical-permit metrics.
     pub(crate) transport_metrics: Arc<crate::transport::metrics::TransportMetrics>,
+    /// Shared admission permits and established-I/O timeout policy.
+    #[cfg(any(feature = "http1", feature = "http2"))]
+    pub(crate) lifecycle: Arc<LifecycleConfig>,
     #[cfg(feature = "http3")]
     pub(crate) h3_connector: Option<crate::transport::http3::H3Connector>,
     /// Bounded Alt-Svc discovery state (separate from QUIC sessions).
@@ -230,6 +252,22 @@ pub(crate) fn configure_tls_alpn(
     config
 }
 
+#[cfg(any(feature = "http1", feature = "http2"))]
+fn configure_hyper_builder_policy(
+    builder: &mut hyper_util::client::legacy::Builder,
+    config: &ClientConfig,
+    idle_timeout: Option<Duration>,
+    max_idle_per_host: Option<usize>,
+) {
+    builder.retry_canceled_requests(config.retry_canceled_requests);
+    if let Some(idle_timeout) = idle_timeout {
+        builder.pool_idle_timeout(idle_timeout);
+    }
+    if let Some(max_idle_per_host) = max_idle_per_host {
+        builder.pool_max_idle_per_host(max_idle_per_host);
+    }
+}
+
 impl ClientInner {
     /// Build an isolated direct Hyper client for a request-scoped resolved
     /// destination. Isolation prevents a connection established for ordinary
@@ -275,6 +313,8 @@ impl ClientInner {
         }
         let connector =
             crate::transport::connect_timeout::ConnectTimeout::new(connector, connect_timeout);
+        let connector =
+            crate::transport::lifecycle::LifecycleConnector::new(connector, self.lifecycle.clone());
         let mut builder = hyper_util::client::legacy::Client::builder(TokioExecutor::new());
         #[cfg(feature = "http2")]
         if !crate::http_version::HttpVersionPolicyEnabler::from_policy(
@@ -288,9 +328,7 @@ impl ClientInner {
         {
             builder.http2_only(true);
         }
-        if let Some(idle_timeout) = self.pool.idle_timeout() {
-            builder.pool_idle_timeout(idle_timeout);
-        }
+        configure_hyper_builder_policy(&mut builder, &self.config, self.pool.idle_timeout(), None);
         Ok(builder.build(connector))
     }
 
@@ -343,6 +381,8 @@ impl ClientInner {
         let sni_connector = base_connector.with_sni(sni_hostname.to_owned());
         let connector =
             crate::transport::connect_timeout::ConnectTimeout::new(sni_connector, connect_timeout);
+        let connector =
+            crate::transport::lifecycle::LifecycleConnector::new(connector, self.lifecycle.clone());
 
         let mut builder =
             hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new());
@@ -354,9 +394,67 @@ impl ClientInner {
         // (`Limits::keepalive_expiry`), matching the standard, direct,
         // and UDS paths. `Timeout.pool`/`total` are acquisition budgets
         // and must not close idle connections early.
-        if let Some(idle_timeout) = self.pool.idle_timeout() {
-            builder.pool_idle_timeout(idle_timeout);
+        configure_hyper_builder_policy(&mut builder, &self.config, self.pool.idle_timeout(), None);
+        let client = builder.build(connector);
+        if clients.len() >= SNI_CLIENT_CACHE_MAX_ENTRIES {
+            evict_one(&mut clients);
         }
+        clients.insert(sni_hostname.to_owned(), client.clone());
+        Ok(client)
+    }
+
+    /// Get or create a custom-dialer Hyper client with a fixed SNI override.
+    #[cfg(any(feature = "http1", feature = "http2"))]
+    pub(crate) async fn sni_custom_client(
+        &self,
+        sni_hostname: &str,
+    ) -> Result<crate::transport::TimeoutCustomClient> {
+        let mut clients = self.sni_custom_clients.lock().await;
+        if let Some(client) = clients.get(sni_hostname) {
+            return Ok(client.clone());
+        }
+        let dialer = self
+            .config
+            .dialer
+            .clone()
+            .ok_or_else(|| Error::Unsupported("custom dialer is not configured".into()))?;
+        #[cfg(feature = "tls-rustls")]
+        let tls_config = self
+            .config
+            .tls_config
+            .clone()
+            .unwrap_or_default()
+            .build_rustls_config()
+            .map_err(|error| Error::Tls(format!("failed to build TLS config: {error}")))?;
+        #[cfg(not(feature = "tls-rustls"))]
+        let tls_config = ();
+        let connector = build_custom_connector(
+            tls_config,
+            dialer,
+            crate::http_version::HttpVersionPolicyEnabler::from_policy(
+                self.config.http_version_policy,
+            ),
+            Some(sni_hostname),
+        )?;
+        let connector = crate::transport::connect_timeout::ConnectTimeout::new(
+            connector,
+            self.config
+                .timeout
+                .as_ref()
+                .and_then(|timeout| timeout.connect),
+        );
+        let connector =
+            crate::transport::lifecycle::LifecycleConnector::new(connector, self.lifecycle.clone());
+        let mut builder =
+            hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new());
+        #[cfg(feature = "http2")]
+        if matches!(
+            self.config.http_version_policy,
+            crate::HttpVersionPolicy::Http2Only
+        ) {
+            builder.http2_only(true);
+        }
+        configure_hyper_builder_policy(&mut builder, &self.config, self.pool.idle_timeout(), None);
         let client = builder.build(connector);
         if clients.len() >= SNI_CLIENT_CACHE_MAX_ENTRIES {
             evict_one(&mut clients);
@@ -405,12 +503,15 @@ impl ClientInner {
                 .as_ref()
                 .and_then(|timeout| timeout.connect),
         );
+        let connector =
+            crate::transport::lifecycle::LifecycleConnector::new(connector, self.lifecycle.clone());
         let mut builder =
             hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new());
         #[cfg(feature = "http2")]
         if matches!(policy, crate::HttpVersionPolicy::Http2Only) {
             builder.http2_only(true);
         }
+        configure_hyper_builder_policy(&mut builder, &self.config, None, None);
         let client = builder.build(connector);
         if clients.len() >= SOCKS_CLIENT_CACHE_MAX_ENTRIES {
             evict_one(&mut clients);
@@ -600,6 +701,10 @@ pub struct ClientBuilder {
     #[cfg(feature = "tls-rustls")]
     tls_config: Option<crate::tls::TlsConfig>,
     retry: Option<RetryPolicy>,
+    retry_canceled_requests: bool,
+    dialer: Option<Arc<dyn Dialer>>,
+    physical_connection_policy: PhysicalConnectionPolicy,
+    transport_io_timeout: TransportIoTimeout,
     http_version_policy: HttpVersionPolicy,
     /// Advanced direct-connector config for socket options / local address.
     direct_connector_config: Option<crate::transport::direct_connector::DirectConnectorConfig>,
@@ -631,6 +736,10 @@ impl ClientBuilder {
             #[cfg(feature = "tls-rustls")]
             tls_config: None,
             retry: None,
+            retry_canceled_requests: true,
+            dialer: None,
+            physical_connection_policy: PhysicalConnectionPolicy::default(),
+            transport_io_timeout: TransportIoTimeout::default(),
             http_version_policy: HttpVersionPolicy::default(),
             direct_connector_config: None,
             uds_path: None,
@@ -923,6 +1032,55 @@ impl ClientBuilder {
         self
     }
 
+    /// Allow or disallow Hyper's implicit retry when a reused idle
+    /// connection is found unusable before a request starts writing.
+    ///
+    /// This is separate from eggfetch's explicit [`RetryPolicy`]. The
+    /// default is `true`, preserving Hyper's existing behavior.
+    #[must_use]
+    pub fn retry_canceled_requests(mut self, enabled: bool) -> Self {
+        self.retry_canceled_requests = enabled;
+        self
+    }
+
+    /// Install a client-scoped caller-owned raw-stream dialer.
+    ///
+    /// Eggfetch continues to own HTTP framing, destination TLS, SNI,
+    /// certificate verification, redirects, retries, and response bodies.
+    /// The dialer is incompatible with built-in proxy, UDS, resolved-target,
+    /// local-address, and socket-option routing; those combinations fail
+    /// closed before network I/O.
+    #[must_use]
+    pub fn dialer<D>(mut self, dialer: D) -> Self
+    where
+        D: Dialer,
+    {
+        self.dialer = Some(Arc::new(dialer));
+        self
+    }
+
+    /// Install a shared caller-scoped live physical-connection policy.
+    ///
+    /// This controls established Hyper connections, including idle pooled
+    /// connections. It does not change the logical request limits in
+    /// [`PoolConfig`](crate::PoolConfig). A `max_live` value of zero fails
+    /// requests closed because no useful client can be created from it.
+    #[must_use]
+    pub fn physical_connection_policy(mut self, policy: PhysicalConnectionPolicy) -> Self {
+        self.physical_connection_policy = policy;
+        self
+    }
+
+    /// Install established-transport read/write inactivity guardrails.
+    ///
+    /// These timers are distinct from [`Timeout`](crate::Timeout)'s request
+    /// body and response-stream semantics and are disabled by default.
+    #[must_use]
+    pub fn transport_io_timeout(mut self, timeout: TransportIoTimeout) -> Self {
+        self.transport_io_timeout = timeout;
+        self
+    }
+
     /// Set the HTTP version policy for this client.
     ///
     /// Controls which HTTP protocol versions the client may negotiate.
@@ -1031,6 +1189,11 @@ impl ClientBuilder {
                 pool_config.idle_timeout = limits_config.idle_timeout;
             }
         }
+        #[cfg(any(feature = "http1", feature = "http2"))]
+        let lifecycle = Arc::new(LifecycleConfig::from_policy(
+            self.physical_connection_policy,
+            self.transport_io_timeout,
+        ));
 
         #[cfg(feature = "cookies")]
         let cookie_jar = self.cookie_jar.unwrap_or_default();
@@ -1065,6 +1228,8 @@ impl ClientBuilder {
             let connect_timeout = self.timeout.as_ref().and_then(|t| t.connect);
             let https =
                 crate::transport::connect_timeout::ConnectTimeout::new(https, connect_timeout);
+            let https =
+                crate::transport::lifecycle::LifecycleConnector::new(https, lifecycle.clone());
 
             let mut builder = hyper_util::client::legacy::Client::builder(TokioExecutor::new());
             // When HTTP/1 is disabled and HTTP/2 is enabled, mark the legacy
@@ -1078,15 +1243,18 @@ impl ClientBuilder {
             if !enabler.enable_http1() && enabler.enable_http2() {
                 builder.http2_only(true);
             }
-            if let Some(timeout) = pool_config.idle_timeout {
-                builder.pool_idle_timeout(timeout);
-            }
-            if let Some(max_idle) = pool_config
-                .max_idle_connections_per_host
-                .or(pool_config.max_idle_connections)
-            {
-                builder.pool_max_idle_per_host(max_idle);
-            }
+            let builder_config = ClientConfig {
+                retry_canceled_requests: self.retry_canceled_requests,
+                ..ClientConfig::default()
+            };
+            configure_hyper_builder_policy(
+                &mut builder,
+                &builder_config,
+                pool_config.idle_timeout,
+                pool_config
+                    .max_idle_connections_per_host
+                    .or(pool_config.max_idle_connections),
+            );
             Some(builder.build(https))
         } else {
             None
@@ -1104,16 +1272,21 @@ impl ClientBuilder {
                 connector,
                 self.timeout.as_ref().and_then(|t| t.connect),
             );
+            let connector =
+                crate::transport::lifecycle::LifecycleConnector::new(connector, lifecycle.clone());
             let mut builder = hyper_util::client::legacy::Client::builder(TokioExecutor::new());
-            if let Some(timeout) = pool_config.idle_timeout {
-                builder.pool_idle_timeout(timeout);
-            }
-            if let Some(max_idle) = pool_config
-                .max_idle_connections_per_host
-                .or(pool_config.max_idle_connections)
-            {
-                builder.pool_max_idle_per_host(max_idle);
-            }
+            let builder_config = ClientConfig {
+                retry_canceled_requests: self.retry_canceled_requests,
+                ..ClientConfig::default()
+            };
+            configure_hyper_builder_policy(
+                &mut builder,
+                &builder_config,
+                pool_config.idle_timeout,
+                pool_config
+                    .max_idle_connections_per_host
+                    .or(pool_config.max_idle_connections),
+            );
             Some(builder.build(connector))
         };
         #[cfg(feature = "http3")]
@@ -1168,6 +1341,10 @@ impl ClientBuilder {
                 direct_connector,
                 connect_timeout,
             );
+            let direct_connector = crate::transport::lifecycle::LifecycleConnector::new(
+                direct_connector,
+                lifecycle.clone(),
+            );
 
             let mut builder = hyper_util::client::legacy::Client::builder(TokioExecutor::new());
             // Match the standard hyper-rustls path: when H2-only, force
@@ -1179,15 +1356,18 @@ impl ClientBuilder {
             if !enabler.enable_http1() && enabler.enable_http2() {
                 builder.http2_only(true);
             }
-            if let Some(timeout) = pool_config.idle_timeout {
-                builder.pool_idle_timeout(timeout);
-            }
-            if let Some(max_idle) = pool_config
-                .max_idle_connections_per_host
-                .or(pool_config.max_idle_connections)
-            {
-                builder.pool_max_idle_per_host(max_idle);
-            }
+            let builder_config = ClientConfig {
+                retry_canceled_requests: self.retry_canceled_requests,
+                ..ClientConfig::default()
+            };
+            configure_hyper_builder_policy(
+                &mut builder,
+                &builder_config,
+                pool_config.idle_timeout,
+                pool_config
+                    .max_idle_connections_per_host
+                    .or(pool_config.max_idle_connections),
+            );
             Some(builder.build(direct_connector))
         } else {
             None
@@ -1200,7 +1380,7 @@ impl ClientBuilder {
         let _ = &self.uds_path;
 
         #[cfg(all(unix, any(feature = "http1", feature = "http2")))]
-        let uds_client = self.uds_path.map(|path| {
+        let uds_client = self.uds_path.clone().map(|path| {
             #[cfg(feature = "tls-rustls")]
             let tls_connector = self
                 .tls_config
@@ -1227,6 +1407,8 @@ impl ClientBuilder {
                 connector,
                 self.timeout.as_ref().and_then(|timeout| timeout.connect),
             );
+            let connector =
+                crate::transport::lifecycle::LifecycleConnector::new(connector, lifecycle.clone());
             let mut builder = hyper_util::client::legacy::Client::builder(TokioExecutor::new());
             // Mirror the standard and direct paths: when H2-only, force
             // http2_only on the legacy client. The UDS connector signals ALPN
@@ -1235,17 +1417,66 @@ impl ClientBuilder {
             if !enabler.enable_http1() && enabler.enable_http2() {
                 builder.http2_only(true);
             }
-            if let Some(timeout) = pool_config.idle_timeout {
-                builder.pool_idle_timeout(timeout);
-            }
-            if let Some(max_idle) = pool_config
-                .max_idle_connections_per_host
-                .or(pool_config.max_idle_connections)
-            {
-                builder.pool_max_idle_per_host(max_idle);
-            }
+            let builder_config = ClientConfig {
+                retry_canceled_requests: self.retry_canceled_requests,
+                ..ClientConfig::default()
+            };
+            configure_hyper_builder_policy(
+                &mut builder,
+                &builder_config,
+                pool_config.idle_timeout,
+                pool_config
+                    .max_idle_connections_per_host
+                    .or(pool_config.max_idle_connections),
+            );
             builder.build(connector)
         });
+
+        #[cfg(any(feature = "http1", feature = "http2"))]
+        let custom_client = if let Some(dialer) = self.dialer.clone() {
+            #[cfg(feature = "tls-rustls")]
+            let custom_config = self
+                .tls_config
+                .clone()
+                .unwrap_or_default()
+                .build_rustls_config()
+                .ok();
+            #[cfg(not(feature = "tls-rustls"))]
+            let custom_config = Some(());
+
+            custom_config.and_then(|custom_config| {
+                let connector =
+                    build_custom_connector(custom_config, dialer, enabler, None).ok()?;
+                let connector = crate::transport::connect_timeout::ConnectTimeout::new(
+                    connector,
+                    self.timeout.as_ref().and_then(|timeout| timeout.connect),
+                );
+                let connector = crate::transport::lifecycle::LifecycleConnector::new(
+                    connector,
+                    lifecycle.clone(),
+                );
+                let mut builder = hyper_util::client::legacy::Client::builder(TokioExecutor::new());
+                #[cfg(feature = "http2")]
+                if !enabler.enable_http1() && enabler.enable_http2() {
+                    builder.http2_only(true);
+                }
+                let builder_config = ClientConfig {
+                    retry_canceled_requests: self.retry_canceled_requests,
+                    ..ClientConfig::default()
+                };
+                configure_hyper_builder_policy(
+                    &mut builder,
+                    &builder_config,
+                    pool_config.idle_timeout,
+                    pool_config
+                        .max_idle_connections_per_host
+                        .or(pool_config.max_idle_connections),
+                );
+                Some(builder.build(connector))
+            })
+        } else {
+            None
+        };
         let config = ClientConfig {
             default_headers: self.default_headers,
             user_agent: self.user_agent,
@@ -1264,6 +1495,9 @@ impl ClientBuilder {
             #[cfg(feature = "tls-rustls")]
             tls_config: self.tls_config,
             retry: self.retry,
+            retry_canceled_requests: self.retry_canceled_requests,
+            dialer: self.dialer,
+            uds_configured: self.uds_path.is_some(),
             http_version_policy: self.http_version_policy,
         };
 
@@ -1273,6 +1507,8 @@ impl ClientBuilder {
             inner: Arc::new(ClientInner {
                 #[cfg(any(feature = "http1", feature = "http2"))]
                 hyper_client,
+                #[cfg(any(feature = "http1", feature = "http2"))]
+                custom_client,
                 #[cfg(feature = "tls-rustls")]
                 tls_config_error,
                 #[cfg(any(feature = "http1", feature = "http2"))]
@@ -1281,6 +1517,8 @@ impl ClientBuilder {
                 direct_connector_config: stored_direct_config,
                 #[cfg(any(feature = "http1", feature = "http2"))]
                 sni_clients: Mutex::new(HashMap::new()),
+                #[cfg(any(feature = "http1", feature = "http2"))]
+                sni_custom_clients: Mutex::new(HashMap::new()),
                 #[cfg(all(unix, any(feature = "http1", feature = "http2")))]
                 uds_client,
                 #[cfg(feature = "proxy")]
@@ -1288,6 +1526,8 @@ impl ClientBuilder {
                 config,
                 pool,
                 transport_metrics,
+                #[cfg(any(feature = "http1", feature = "http2"))]
+                lifecycle,
                 #[cfg(feature = "http3")]
                 h3_connector,
                 #[cfg(feature = "http3")]
@@ -1330,6 +1570,40 @@ fn build_standard_connector(
         let _ = enabler;
         builder.enable_http1().build()
     }
+}
+
+#[cfg(all(feature = "tls-rustls", any(feature = "http1", feature = "http2")))]
+fn build_custom_connector(
+    config: rustls::ClientConfig,
+    dialer: Arc<dyn Dialer>,
+    enabler: crate::http_version::HttpVersionPolicyEnabler,
+    sni_hostname: Option<&str>,
+) -> Result<crate::transport::CustomConnector> {
+    let config = configure_tls_alpn(config, enabler);
+    let resolver: Arc<dyn hyper_rustls::ResolveServerName + Send + Sync> =
+        if let Some(sni_hostname) = sni_hostname {
+            let server_name = rustls::pki_types::ServerName::try_from(sni_hostname.to_owned())
+                .map_err(|error| Error::Tls(format!("invalid SNI hostname: {error}")))?;
+            Arc::new(hyper_rustls::FixedServerNameResolver::new(server_name))
+        } else {
+            Arc::new(hyper_rustls::DefaultServerNameResolver::default())
+        };
+    Ok(hyper_rustls::HttpsConnector::new(
+        crate::transport::dialer::DialerConnector::new(dialer),
+        Arc::new(config),
+        false,
+        resolver,
+    ))
+}
+
+#[cfg(all(not(feature = "tls-rustls"), any(feature = "http1", feature = "http2")))]
+fn build_custom_connector(
+    _config: (),
+    dialer: Arc<dyn Dialer>,
+    _enabler: crate::http_version::HttpVersionPolicyEnabler,
+    _sni_hostname: Option<&str>,
+) -> Result<crate::transport::CustomConnector> {
+    Ok(crate::transport::dialer::DialerConnector::new(dialer))
 }
 
 impl Default for ClientBuilder {
@@ -1588,6 +1862,40 @@ mod tests {
         let builder = client.get("https://example.com").unwrap();
         let req = builder.build().unwrap();
         assert_eq!(*req.method(), Method::GET);
+    }
+
+    #[test]
+    fn hyper_canceled_request_retry_defaults_on_and_is_independently_configurable() {
+        assert!(Client::new().inner.config.retry_canceled_requests);
+        let strict = Client::builder().retry_canceled_requests(false).build();
+        assert!(!strict.inner.config.retry_canceled_requests);
+        assert!(strict.inner.config.retry.is_none());
+    }
+
+    #[test]
+    fn physical_policy_and_transport_io_timeout_are_separate_from_logical_pooling() {
+        let client = Client::builder()
+            .physical_connection_policy(PhysicalConnectionPolicy {
+                max_live: Some(2),
+                admission_timeout: Some(Duration::from_secs(1)),
+            })
+            .transport_io_timeout(TransportIoTimeout {
+                read: Some(Duration::from_secs(2)),
+                write: Some(Duration::from_secs(3)),
+            })
+            .build();
+        assert_eq!(
+            client.inner.lifecycle.admission_timeout,
+            Some(Duration::from_secs(1))
+        );
+        assert_eq!(
+            client.inner.lifecycle.io_timeout.read,
+            Some(Duration::from_secs(2))
+        );
+        assert_eq!(
+            client.inner.lifecycle.io_timeout.write,
+            Some(Duration::from_secs(3))
+        );
     }
 
     #[test]

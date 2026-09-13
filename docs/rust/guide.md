@@ -53,6 +53,54 @@ footprint win, so do not describe migration as slimming.
 The profile recipes and their excluded capabilities are listed in
 [`docs/architecture/feature-flags.md`](../architecture/feature-flags.md).
 
+## Caller-owned transport and embedded guardrails
+
+Native consumers that already own routing can supply a raw Tokio stream while
+keeping HTTP and destination TLS in eggfetch:
+
+```rust
+use eggfetch_core::{Client, DialFuture, DialTarget, Dialer, DialError, DialStream};
+
+struct MyDialer;
+
+impl Dialer for MyDialer {
+    fn dial(&self, target: DialTarget) -> DialFuture<'_> {
+        Box::pin(async move {
+            let stream = tokio::net::TcpStream::connect((target.host(), target.port()))
+                .await
+                .map_err(|error| DialError::with_source(
+                    eggfetch_core::DialErrorKind::Connection,
+                    "caller route failed",
+                    error,
+                ))?;
+            Ok(Box::new(stream) as DialStream)
+        })
+    }
+}
+
+let client = Client::builder()
+    .dialer(MyDialer)
+    .retry_canceled_requests(false)
+    .physical_connection_policy(eggfetch_core::PhysicalConnectionPolicy {
+        max_live: Some(8),
+        admission_timeout: Some(std::time::Duration::from_secs(2)),
+    })
+    .transport_io_timeout(eggfetch_core::TransportIoTimeout {
+        read: Some(std::time::Duration::from_secs(30)),
+        write: Some(std::time::Duration::from_secs(30)),
+    })
+    .build();
+```
+
+The dialer receives only logical host/port data. Eggfetch owns `Host`, HTTPS
+SNI/certificate verification, HTTP framing, pooling, redirects, retries, and
+response streaming. Custom dialing is incompatible with built-in proxy, UDS,
+resolved-target, local socket, socket-option, and HTTP/3 routes; conflicts
+fail before network I/O. `retry_canceled_requests` controls only Hyper's
+implicit stale-idle-connection retry and is independent of `RetryPolicy`.
+`PhysicalConnectionPolicy` caps live Hyper connections, including idle pooled
+connections, while `TransportIoTimeout` guards inactivity after establishment.
+
 ## Creating a Client
 
 The `Client` manages connection pooling and shared configuration. Create one and reuse it for multiple requests.

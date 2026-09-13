@@ -14,6 +14,7 @@ eggfetch implements phase-aware timeouts that map to specific segments of the re
 |-------|----------------|
 | `Pool` | Waiting for a connection slot from the concurrency pool |
 | `Connect` | TCP connection establishment + TLS handshake (including DNS); for proxy routes, also proxy TCP/TLS setup and origin TLS after CONNECT |
+| Physical admission | Optional wait for a live-connection permit; distinct from logical pool acquisition |
 | `ProxyConnect` | Internal classification for proxy TCP setup |
 | `ProxyTls` | Internal classification for TLS to an HTTPS proxy endpoint |
 | `Write` | Sending request headers and body |
@@ -38,6 +39,20 @@ Request-level overrides are per-field: only fields present in the request-level 
 | Read | Per-chunk wrapper stream (`ReadTimeoutStream`) — deadline resets on each body chunk; direct Hyper/UDS/H3 header acquisition remains owned by the transport future |
 | Write | Per-chunk wrapper stream (`WriteTimeoutStream`) — deadline resets on each chunk delivery; H3 propagates `Write` without masking or evicting |
 | Connect | Enforced by the direct connector, by proxy TCP/TLS/origin-TLS setup, and by the H3 connector (DNS + QUIC + h3 init as one budget shared across address fallback with fair per-address shares) |
+
+Native embedded consumers may additionally set `PhysicalConnectionPolicy` and
+`TransportIoTimeout`. The physical policy is applied by the common Hyper
+connector wrapper: a permit is acquired only for a newly established
+connection and is retained while that connection is active or idle in Hyper's
+pool. HTTP/2 multiplexing therefore consumes one physical permit while
+logical request permits remain independent. An admission timeout is reported
+by `Error::is_physical_connection_admission_timeout()`.
+
+`TransportIoTimeout` wraps established Hyper I/O. Read and write inactivity
+deadlines reset only on actual progress; they cover buffered Hyper writes and
+connection reads without changing the meaning of request-body `Timeout.write`
+or response-stream `Timeout.read`. DNS, TCP, custom dialing, and destination
+TLS remain under the connect phase.
 
 ### Error Model
 
@@ -66,6 +81,10 @@ requests configure only connect/read/write/pool; native callers may set
 ## Connection Pool
 
 The pool controls **logical in-flight request concurrency** (`max_in_flight_requests*`, aliases `max_connections*` for pre-1.0; new names win), not physical TCP connections. Hyper manages actual TCP connections internally; idle caps (`max_idle_connections*`, `idle_timeout`) are physical idle-pool policy.
+
+This distinction is intentional: use `PoolConfig` for logical work and
+`PhysicalConnectionPolicy` for an independent live-connection cap. Existing
+`PoolConfig.max_connections` semantics are unchanged.
 
 ### Semaphore-Based Concurrency
 
