@@ -141,7 +141,7 @@ All HTTP behavior lives here (~29.7k lines across 27 source files plus `transpor
 
 ### eggfetch-cli (the CLI)
 
-Single source file (`main.rs`, ~1.8k lines). Thin binary over `eggfetch-core` (enables `cookies`, `multipart`, `proxy`):
+Single source file (`main.rs`, ~1.8k lines). Thin binary over `eggfetch-core` (enables `cookies`, `multipart`, `proxy`; no compression decoders, no `http2`/`http3` — it never sends `Accept-Encoding`):
 
 - **Argument parsing**: clap-based (`#[derive(Parser)]`), maps flags to `ClientBuilder`/`RequestBuilder` calls
 - **Body modes**: `--body`, `--body-file`, `--json`, `--form`, `--file @path`

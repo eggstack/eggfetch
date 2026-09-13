@@ -185,7 +185,7 @@ Key boundaries:
 **Testing the compat layer:**
 
 ```sh
-cd crates/eggfetch-python && maturin develop
+PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1 maturin develop -m crates/eggfetch-python/Cargo.toml
 EGGFETCH_COMPAT_REQUIRED=1 pytest crates/eggfetch-python/tests/compat/ -v --strict-markers
 ```
 

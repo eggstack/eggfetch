@@ -20,6 +20,8 @@ Use this skill when preparing or executing a release of eggfetch.
 
 crates.io index propagation requires verification between publishes. Do not encode fixed sleeps.
 
+`eggfetch-bench` and `eggfetch-fuzz` are never published (dev-only harnesses).
+
 ### PyPI (GitHub Actions, manual dispatch)
 
 After crates.io publication and tag creation, dispatch `.github/workflows/pypi.yml`:

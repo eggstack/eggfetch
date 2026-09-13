@@ -40,12 +40,14 @@ Use this skill when performing security reviews or addressing security findings 
 
 ## Severity Classification
 
-| Severity | Criteria | Response Time |
-|----------|----------|---------------|
-| Critical | RCE, credential exfiltration, TLS bypass | Fix within 7 days |
-| High | Credential leakage, SSRF, decompression bomb | Fix within 14 days |
-| Medium | Info disclosure, redirect issues, bypass | Fix within 30 days |
-| Low | Theoretical issues, minor leakage, DoS | Fix within 60 days |
+Source of truth: `SECURITY.md` § "Vulnerability Response SLA".
+
+| Severity | Criteria | Initial Response | Fix Target |
+|----------|----------|-----------------|------------|
+| Critical | RCE, credential exfiltration, TLS bypass | 24 hours | 7 days |
+| High | Credential leakage, SSRF, decompression bomb | 48 hours | 14 days |
+| Medium | Info disclosure, redirect issues, bypass | 1 week | 30 days |
+| Low | Theoretical issues, minor leakage, DoS | 2 weeks | 90 days |
 
 ## Incident Contact
 

@@ -12,9 +12,10 @@ Use this skill when working on the eggfetch-cli crate.
 
 - CLI is a thin adapter over eggfetch-core. No HTTP logic here.
 - All I/O goes through eggfetch-core's public API.
-- Exit codes: 0 success, 2 usage, 3 connect/TLS, 4 timeout, 5 protocol, 6 status (with `--check-status`), 7 I/O, 130 interrupted.
+- Exit codes: 0 success, 2 usage, 3 DNS/connect/TLS/pool/proxy transport error, 4 timeout, 5 protocol, 6 status (with `--check-status` on any non-2xx), 7 I/O, 130 interrupted.
 - Auth/proxy/cookie headers are redacted in verbose output.
-- Body modes are mutually exclusive except `--form` + `--file`.
+- Body sources `--body`/`--body-file`/`--json` are mutually exclusive with `--form`/`--file`; `--form` + `--file` may combine into one multipart body (see the bail message near `main.rs:887`).
+- The default CLI build enables `cookies`, `multipart`, and `proxy` but compiles **no** compression decoders and no `http2`/`http3`: it never sends `Accept-Encoding`, and an encoded response body fails with exit 5 unless `--no-compress` passes it through raw. Requesting an uncompiled protocol fails instead of silently downgrading. Do not document CLI decompression as supported.
 
 ## Environment Variables
 

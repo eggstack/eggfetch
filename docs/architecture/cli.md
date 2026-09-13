@@ -72,6 +72,17 @@ Body sources are mutually exclusive (except `--form` + `--file`):
 
 `--form` + `--file` combines text fields and files into a multipart body.
 
+### Protocol and compression support
+
+`--http2`/`--http3` require a CLI build with the corresponding core feature
+compiled in; the default build enables `cookies`, `multipart`, and `proxy`
+but **not** `http2` or `http3`. Likewise the default build compiles **no**
+compression decoders: the CLI never sends `Accept-Encoding`, so compliant
+servers reply identity-encoded. If a server sends an encoded body anyway,
+decoding fails with exit 5 unless `--no-compress` passes the bytes through
+raw. Requesting an uncompiled capability fails instead of silently
+downgrading.
+
 ## Output Modes
 
 | Mode | Flag | Behavior |

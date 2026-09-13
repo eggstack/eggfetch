@@ -12,13 +12,14 @@ Node.js (eggfetch-node, experimental).
 | `http2` | No | Yes | No |
 | `http3` | No | Yes | No |
 | `tls-rustls` | Yes | Yes | Yes |
+| `tls-native-roots` | Yes | Yes | Yes |
 | `cookies` | No | Yes | Yes |
 | `proxy` | No | Yes | Yes |
 | `multipart` | No | Yes | Yes |
-| `compression-gzip` | No | Yes | Yes |
-| `compression-brotli` | No | Yes | Yes |
-| `compression-zstd` | No | Yes | Yes |
-| `compression-deflate` | No | Yes | Yes |
+| `compression-gzip` | No | Yes | No (CLI never sends `Accept-Encoding`; encoded bodies fail unless `--no-compress`) |
+| `compression-brotli` | No | Yes | No (same as above) |
+| `compression-zstd` | No | Yes | No (same as above) |
+| `compression-deflate` | No | Yes | No (same as above) |
 | `json` | No | N/A | N/A |
 | `tracing` | No | N/A | N/A |
 | `test-util` | No | N/A | N/A |

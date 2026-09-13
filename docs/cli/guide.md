@@ -283,8 +283,13 @@ instead of silently downgrading. `--http3` (QUIC) is experimental.
 
 ## Decompression
 
+The default CLI build compiles **no** compression decoders and never sends
+`Accept-Encoding`, so compliant servers reply identity-encoded. If a server
+sends an encoded body anyway, decoding fails (exit 5) unless
+`--no-compress` passes the bytes through raw:
+
 ```sh
-# Disable automatic decompression
+# Pass the body through without decoding (also skips Accept-Encoding)
 eggfetch --no-compress https://example.com
 
 # Limit decoded body size

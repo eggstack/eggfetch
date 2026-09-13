@@ -87,10 +87,13 @@ native JSON helpers are opt-in and must remain absent from minimal profiles.
   qualification runner and absence is an explicit unsupported result) and
   unit tests in `transport/http3.rs`
   + `transport/alt_svc.rs`. Fuzz: `fuzz/fuzz_targets/fuzz_alt_svc.rs`
-  (parser/cache + suppressor transitions). The completed 2026-09-11
-  qualification retained HTTP/3 as experimental on frozen executable SHA
-  `78a77ea153aae239ce7b722aeb9909a87df3bbb5`;
-  the graduation gate and named blockers live in
+  (parser/cache + suppressor transitions). The deterministic H3 suites
+  (hardening 12/12, Alt-Svc discovery 17/17, interop controls 20/20)
+  re-passed on the current executable freeze
+  `22a6f5c0dc0207c1356b6143c0eda3d4075063b0` (2026-09-12, see the live
+  ledger `plans/httpx-parity-correction-status.md`); earlier freeze SHAs
+  in plan history are not the current binding.
+  The graduation gate and named blockers live in
   `docs/architecture/core-tls-proxy-protocols.md`
   (§ "Production Graduation Decision"). The implementation-neutral corpus
   and opt-in machine-readable runner are in `qualification/http3/` and
@@ -133,6 +136,7 @@ native JSON helpers are opt-in and must remain absent from minimal profiles.
 - Cookies, multipart & compression: `docs/architecture/core-cookies-multipart-compression.md`
 - Feature flags: `docs/architecture/feature-flags.md`
 - Dependency policy: `docs/architecture/dependency-policy.md`
+- Benchmarks (Criterion suites, RSS monitor — not published): `docs/architecture/benchmarks.md`
 
 ## HTTPX Compatibility
 

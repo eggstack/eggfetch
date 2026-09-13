@@ -695,7 +695,7 @@ the procedure on a frozen SHA.
   follow the same policy as the rest of the engine. Lack of a
   platform-specific H3 test is not described as support evidence.
 
-### Production Graduation Decision (2026-09-11): experimental retained
+### Production Graduation Decision (2026-09-11, re-affirmed 2026-09-12): experimental retained
 
 HTTP/3 remains **experimental** for ordinary request/response operation.
 The objective gate in
@@ -703,8 +703,10 @@ The objective gate in
 pass yet; concrete blockers:
 
 1. No two-independent-non-Quinn-server interoperability pass recorded
-   on frozen executable SHA
-   `78a77ea153aae239ce7b722aeb9909a87df3bbb5`; the current evidence ledger is
+   on the current executable freeze
+   `22a6f5c0dc0207c1356b6143c0eda3d4075063b0` (2026-09-12; the
+   deterministic H3 suites re-passed on this tree — hardening 12/12,
+   Alt-Svc discovery 17/17, interop controls 20/20); the current evidence ledger is
    `plans/http3-independent-interop-and-impairment-qualification-evidence.json`;
    the narrative record is `plans/http3-production-qualification-evidence.md`.
 2. No public-origin Alt-Svc spot-check ledger recorded.

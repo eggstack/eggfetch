@@ -59,9 +59,14 @@ docs/
 - HTTP/3 qualification claims must point to the versioned corpus and evidence
   ledger under `qualification/http3/` and `plans/`; unsupported or unexecuted
   external cases must remain explicit.
-- The 2026-09-11 qualification retained HTTP/3 as experimental on frozen
-  executable SHA `78a77ea153aae239ce7b722aeb9909a87df3bbb5`; do not describe
-  documented controls as independent-server or production evidence.
+- HTTP/3 remains experimental with named graduation blockers in
+  `docs/architecture/core-tls-proxy-protocols.md`
+  (§ "Production Graduation Decision"). The deterministic H3 suites
+  re-passed on the current executable freeze
+  `22a6f5c0dc0207c1356b6143c0eda3d4075063b0` (2026-09-12, live ledger
+  `plans/httpx-parity-correction-status.md`); earlier freeze SHAs in plan
+  history are not the current binding. Do not describe documented controls
+  as independent-server or production evidence.
 - Embedded footprint numbers live only in
   `docs/architecture/embedded-footprint.md` (manual qualification in
   `qualification/embedded/`); link there instead of copying byte counts
