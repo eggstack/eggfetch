@@ -170,9 +170,14 @@ let response = client.get("https://service.example")?
     .send().await?;
 ```
 
-The supplied addresses are used exactly and DNS is not attempted. Same-origin
-redirects retain the pin; cross-origin redirects, proxies, UDS, and H3 fail
-closed. This is a routing primitive, not an SSRF policy.
+The supplied addresses are used exactly and DNS is never attempted, including
+on retries. Each address must use the URL's effective HTTP/HTTPS port. A
+same-origin redirect retains the destination snapshot; a cross-origin
+redirect, configured proxy, Unix-domain-socket route, or HTTP/3 route fails
+closed before network I/O. Static requests use an isolated direct connection
+client, so ordinary pooled connections cannot bypass the pin. This is distinct
+from local source-address binding and from an SNI override, and is a routing
+primitive rather than an SSRF policy.
 
 ### Timeout
 

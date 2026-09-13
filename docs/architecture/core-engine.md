@@ -65,10 +65,12 @@ Body sources are mutually exclusive: `body()`, `bytes()`, `stream()`, `json()`, 
 - `trace: Option<Arc<dyn TraceObserver>>` — installs a callback observer for [`TraceEvent`](../../crates/eggfetch-core/src/trace.rs) emissions during dispatch.
 
 Transport hints survive retry reconstruction via the typed
-`RequestParts::retry_request()` transformation but are cleared on redirect
-hops (destination changed). The redirects-disabled fast path and the
-redirect-enabled first hop share one `HopBuildParams` builder, so `target`,
-`sni_hostname`, and `trace` cannot diverge between the two entry paths.
+`RequestParts::retry_request()` transformation. Ordinary destination-specific
+hints (`target`, `sni_hostname`, and `trace`) are cleared on redirect hops;
+the native `resolved_target` snapshot is retained only for same-origin hops
+and causes a cross-origin redirect to fail closed. The redirects-disabled fast
+path and the redirect-enabled first hop share one `HopBuildParams` builder, so
+the first-hop behavior cannot diverge between the two entry paths.
 
 ### Static resolved-destination routing
 
@@ -183,7 +185,7 @@ including 101 upgrade handling (UDS kind without IPs).
 
 ## Trace Observer
 
-The `trace` module defines a typed event vocabulary (derived from httpcore 1.0.9's `Trace` context manager) and the callback trait transports use to emit lifecycle events. Observers are installed per request via `TransportHints::trace` — they survive retry reconstruction and are cleared on redirect hops like all transport hints.
+The `trace` module defines a typed event vocabulary (derived from httpcore 1.0.9's `Trace` context manager) and the callback trait transports use to emit lifecycle events. Observers are installed per request via `TransportHints::trace` — they survive retry reconstruction and are cleared on redirect hops because they are destination-specific. A `resolved_target` is the only transport hint with a same-origin redirect exception.
 
 ### Events
 

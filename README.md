@@ -203,9 +203,13 @@ let mut response = client
     .await?;
 ```
 
-Static destinations never fall back to DNS. Same-origin redirects retain the
-snapshot; cross-origin redirects and proxy/HTTP/3 routes fail closed. This is
-a routing primitive, not an address-safety or SSRF policy engine.
+Static destinations never fall back to DNS, including on retries. Each address
+must use the URL's effective HTTP/HTTPS port. Same-origin redirects retain the
+snapshot; cross-origin redirects and proxy/HTTP/3 routes fail closed before
+network I/O. Static requests use an isolated direct connection client, so
+ordinary pooled connections cannot bypass the pin. This is distinct from local
+source-address binding and from an SNI override, and is a routing primitive,
+not an address-safety or SSRF policy engine.
 
 ### Builder pattern
 
