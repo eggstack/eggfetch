@@ -190,7 +190,7 @@ Python package surface (`python/eggfetch/__init__.py` + `compat/`): native `Clie
 
 | Module | Purpose |
 |--------|---------|
-| `handle` | Opaque handle type definitions (`*mut eggfetch_ffi_client`, etc.) |
+| `handle` | Opaque handle type definitions (`*mut ClientHandle`, `*mut RequestHandle`, etc.) |
 | `client` | Client creation and configuration |
 | `request` | Request building |
 | `response` | Response reading |

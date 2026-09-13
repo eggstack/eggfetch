@@ -15,29 +15,39 @@ The CLI creates an `eggfetch_core::Client` via `ClientBuilder`, configures it fr
 ## Argument Model
 
 ```
-eggfetch [METHOD] URL [OPTIONS]
+eggfetch URL [OPTIONS]
 ```
 
-METHOD defaults to GET (or POST when a body is provided).
+The URL is the only positional argument. The method is set with `-X`/`--method` and defaults to GET (or POST when a body is provided).
 
 ### Mapping to Core API
 
 | CLI Flag | Core API |
 |----------|----------|
+| `-X`/`--method M` | Request method (default GET, POST with body) |
 | `-H name:value` | `RequestBuilder::header()` |
 | `-q key=value` | `RequestBuilder::query()` |
 | `--auth user:pass` | `ClientBuilder::auth()` |
 | `--bearer TOKEN` | `ClientBuilder::auth()` |
 | `--proxy URL` | `ClientBuilder::proxy()` |
-| `--verify`/`--no-verify` | `ClientBuilder::tls_config()` |
+| `--no-proxy` | Proxy bypass |
+| `--cookie`/`--cookie-jar` | Cookie handling |
+| `--no-verify` | `ClientBuilder::tls_config()` (verification off) |
 | `--cacert PATH` | `ClientBuilder::tls_config()` |
 | `--cert`/`--key` | `ClientBuilder::tls_config()` |
 | `--follow`/`--no-follow` | `ClientBuilder::redirect_policy()` |
 | `--max-redirects N` | `ClientBuilder::redirect_policy()` |
-| `--timeout SECS` | `ClientBuilder::timeout()` |
+| `--timeout SECS` | `RequestBuilder::timeout()` (per-request) |
+| `--connect-timeout`/`--read-timeout`/`--total-timeout SECS` | Per-phase `RequestBuilder::timeout()` overrides |
 | `--retry N` | `ClientBuilder::retry()` |
+| `--retry-delay SECS` | Retry backoff delay |
+| `--max-body-size N` | Per-request decoded-body limit |
+| `--max-decompression-ratio N` | Per-request decompression ratio limit |
+| `--no-body` | Send no body |
 | `--http1`/`--http2`/`--http3` | `ClientBuilder::http_version_policy()` |
 | `--no-compress` | `ClientBuilder::automatic_decompression(false)` |
+| `--check-status` | Exit 6 on HTTP error status |
+| `--base64` | Include `body_base64` in JSON output |
 
 ### Environment Variables
 
@@ -83,9 +93,12 @@ Body sources are mutually exclusive (except `--form` + `--file`):
   "elapsed_ms": 123,
   "history": [...],
   "body_length": 456,
+  "errors": [...],
   "body_base64": "..."
 }
 ```
+
+`errors` is always present; `body_base64` appears only with `--base64`.
 
 ## Streaming
 

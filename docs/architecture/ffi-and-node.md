@@ -24,7 +24,7 @@ See also: [overview.md](overview.md).
 | `StreamingResponseHandle` | Thread-safe shared state (`Arc<StreamState>`; cancel from one thread while `next` blocks on another) | Freed after stream is consumed or cancelled |
 | `ErrorHandle` | Single-thread, single-use | Freed after inspection |
 
-All handles are opaque pointers (`*mut eggfetch_ffi_client`, etc.).
+All handles are opaque pointers (`*mut ClientHandle`, `*mut RequestHandle`, etc.).
 
 ### Module Map
 
@@ -44,9 +44,8 @@ All handles are opaque pointers (`*mut eggfetch_ffi_client`, etc.).
 
 `eggfetch-ffi` manages a global tokio runtime (`OnceLock<Runtime>`, multi-thread flavor, never shut down). The `blocking_send` helper picks a strategy from the ambient context:
 
-- **Outside any runtime**: calls `ffi_runtime().block_on()` directly.
 - **Inside a multi-thread runtime** (e.g. napi-rs): `tokio::task::block_in_place` on the ambient handle.
-- **Inside a current-thread runtime**: spawns the future on the global FFI runtime and blocks the caller on a channel (avoids `block_in_place` panics).
+- **Otherwise — outside any runtime or inside a current-thread runtime**: spawns the future on the global FFI runtime and blocks the caller on a channel (avoids `block_in_place` panics on current-thread runtimes).
 
 This ensures the FFI works correctly from both sync C code and async-aware host runtimes.
 

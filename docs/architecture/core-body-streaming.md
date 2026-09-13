@@ -36,7 +36,7 @@ Stream bodies are wrapped in a hyper `StreamBody` and piped to the transport inc
 | Variant | Description |
 |---------|-------------|
 | `Buffered { bytes }` | Collected body — fully in memory |
-| `Streaming(LeasedResponseStream)` | Live chunk stream with pool permit |
+| `Streaming { stream, lease }` | Live chunk stream (`BoxBytesStream`) with optional pool permit (`Option<PoolGuardArc>`) |
 | `EncodedStreaming` | Encoded source for streaming compressed responses; first body-consuming operation selects decoded vs raw mode one-shot |
 | `Consumed` | Body already consumed — second access returns error |
 
@@ -59,7 +59,6 @@ behavior therefore remain unchanged; parse errors do not expose the payload.
 Streaming responses carry an internal `Arc<PoolGuard>` (the `PoolGuardArc`). This holds the pool permits acquired for the request. Permits are released when:
 - The response body is fully consumed.
 - The response body is dropped.
-- The response body is explicitly closed.
 
 Buffered and already-consumed responses do not carry a lease.
 
@@ -112,7 +111,7 @@ Python-side request bodies support iterables, file-like objects, and custom `Byt
 
 - `max_decoded_body_size` — maximum decoded body size, including identity
   and other unencoded responses.
-- `max_decompression_ratio` — maximum ratio of compressed to decoded size.
+- `max_decompression_ratio` — maximum ratio of decoded to compressed size.
 
 Exceeding either limit yields `Error::DecodedBodyTooLarge` or `Error::DecompressionRatioExceeded`.
 The client values can be overridden per request with

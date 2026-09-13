@@ -72,7 +72,7 @@ On redirect (single `advance_redirect_hop()` transformation + shared
 
 ### Body Replay
 
-- 301/302/303: body is dropped (method changes to GET); the stale replay payload is cleared so a later method-preserving hop cannot resurrect it.
+- 301/302: body is dropped only for POST→GET rewrites (method changes to GET); other methods preserve method and body. The stale replay payload is cleared so a later method-preserving hop cannot resurrect it.
 - 307/308: body is replayed if replayable (`Bytes` body). Stream bodies return `Error::BodyNotReplayableForRedirect` before any unsafe replay.
 - 303 drops the payload for all methods except HEAD (RFC 9110 §15.4.4).
 
@@ -98,7 +98,8 @@ The total timeout applies across the entire redirect chain, not per-hop. Each ho
 
 | Condition | Retryable? |
 |-----------|-----------|
-| Network errors (connect, TLS, I/O) | Yes (for replayable requests) |
+| Network errors (connect, I/O, hyper) | Yes (for replayable requests) |
+| TLS handshake failures (`Error::Tls`) | No — never retried |
 | 429 Too Many Requests | Yes (with Retry-After) |
 | 408, 502, 503, 504 | Yes (for replayable requests) |
 | 500 Internal Server Error | No (not in the default retryable set) |
@@ -127,7 +128,7 @@ replayability is verified through one explicit operation:
 ### Backoff
 
 Exponential backoff with jitter:
-- Base delay × 2^attempt, capped at a maximum.
+- `initial_delay × factor^(attempt − 2)`, capped at `max_delay` (factor configurable via `backoff_factor()`, default `2.0`; no delay before attempt 1).
 - Jitter randomizes the delay to avoid thundering herd.
 - `Retry-After` header (both integer seconds and HTTP-date) is respected when enabled via `respect_retry_after(true)` (off by default).
 
@@ -135,5 +136,7 @@ Exponential backoff with jitter:
 
 `RetryContext` provides:
 - `attempt` — current attempt number (1-indexed).
+- `method` — the HTTP method.
+- `body_replayable` — whether the request body can be replayed.
 - `cause` — `RetryCause` enum (network error, status code, etc.).
-- `last_response` — the response that triggered the retry (if any).
+- `remaining_total` — remaining total budget (`Option<Duration>`).

@@ -82,7 +82,7 @@ Per-origin pool limits are keyed by a composite `OriginKey`:
 | Scenario | Key |
 |----------|-----|
 | Direct request | `(scheme, host, port)` |
-| Proxied request | `(proxy_origin, destination_origin, tunnel_mode)` — conceptual summary; the struct also carries `proxy_scheme`, so plain vs TLS-to-proxy routes get independent slots |
+| Proxied request | `(scheme, host, port, proxy_host, proxy_port, proxy_scheme, is_tunnel)` — the destination origin plus proxy endpoint and tunnel mode, so plain vs TLS-to-proxy and tunnel vs forwarding routes get independent slots |
 
 Port uses the scheme's default when not explicit. Examples:
 - `http://example.com:80` and `http://example.com` share a limit.
@@ -117,7 +117,8 @@ from the pool's per-origin semaphore table; creations/evictions are
 counted in `TransportMetrics`.
 
 Idle lifetime for H3 derives from `PoolConfig::idle_timeout`
-(`Limits::keepalive_expiry`), defaulting to 30 s; `Timeout.pool` and
+(`Limits::keepalive_expiry`): 5 s under `Limits::compat()`, unset (idle
+connections never proactively closed) under `Limits::native()`; `Timeout.pool` and
 `Timeout.total` are acquisition/outer budgets and never close idle QUIC
 connections. Physical QUIC stream caps derive from the effective
 per-origin in-flight limit (`max_in_flight_requests_per_origin` or alias

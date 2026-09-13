@@ -19,7 +19,7 @@ Focused subset for the engine lifecycle (client → request → pipeline → res
 | `trace` | Yes | `TraceObserver`, `TraceEvent` — synchronous lifecycle event callbacks |
 | `error` | Yes | `Error` enum, `Result<T>` alias |
 | `pipeline` | Crate-internal | Full request lifecycle orchestration |
-| `transport` | Crate-internal | Direct, direct-with-socket-options, UDS, proxy, HTTP/3 transport dispatch |
+| `transport` | Yes | Direct, direct-with-socket-options, UDS, proxy, HTTP/3 transport dispatch |
 | `stream` | Crate-internal | Per-chunk read/write timeout wrappers |
 
 ## Client

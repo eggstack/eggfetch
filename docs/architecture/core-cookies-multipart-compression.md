@@ -120,8 +120,8 @@ Feature-gated behind `compression-gzip`, `compression-brotli`, `compression-zstd
 |--------|---------|----------------|
 | gzip | `compression-gzip` | `async-compression` (streaming), `flate2` (buffered) |
 | deflate | `compression-deflate` | `async-compression` (streaming), `flate2` (buffered) |
-| brotli | `compression-brotli` | `async-compression` |
-| zstd | `compression-zstd` | `async-compression` |
+| brotli | `compression-brotli` | `async-compression` (streaming), `brotli` crate (buffered) |
+| zstd | `compression-zstd` | `async-compression` (streaming), `zstd` crate (buffered) |
 
 ### Accept-Encoding Negotiation
 
@@ -146,7 +146,7 @@ httpx2 close-on-failure contract.
 ### Decompression Modes
 
 - **Streaming**: `decompress_stream()` wraps the response body stream with an async decoder.
-- **Buffered**: `decompress_buffered()` decodes a collected `Bytes` buffer synchronously via `flate2`.
+- **Buffered**: `decompress_buffered()` decodes a collected `Bytes` buffer synchronously via `flate2` (gzip/deflate), the `brotli` crate (brotli), or the `zstd` crate (zstd).
 
 Automatic decompression removes `Content-Encoding` and `Content-Length` from
 the visible core response headers. The response retains only the original

@@ -12,9 +12,9 @@ Builder-pattern configuration for TLS behavior:
 
 ```rust
 let tls = TlsConfig::builder()
-    .trust_store(TrustStore::from_pem_file("ca-bundle.pem")?)
-    .client_identity(ClientIdentity::new("cert.pem", "key.pem")?)
-    .min_version(TlsVersion::Tls12)
+    .ca_certificate_path("ca-bundle.pem")?
+    .client_cert_path("cert.pem", "key.pem")?
+    .min_tls_version(TlsVersion::Tls12)
     .danger_accept_invalid_certs(false)
     .build()?;
 ```
@@ -297,7 +297,7 @@ For `HttpVersionPolicy::Http2Only`, the legacy hyper-util client is built with `
 
 Both the standard hyper-rustls client and the direct / UDS clients are configured with `http2_only(true)` when H2-only is selected. The `Http1Only` and `Auto` policies do not set `http2_only`.
 
-Corrective 06 extends this to the SNI override and SOCKS routes: `ClientInner::sni_client()` and `ClientInner::socks_client()` now read `self.config.http_version_policy` and call `builder.http2_only(true)` when `Http2Only` is active. The SNI client further restricts the connector's TLS ALPN list to `h2` (via `DirectConnector::with_alpn_h2_only()`) so no silent H1 fallback is possible. The SOCKS client restricts the rustls ALPN list to `h2` for HTTPS transports. `SocksStream::connected()` now inspects ALPN on the inner TLS stream and calls `negotiated_h2()` when `h2` is negotiated, mirroring the direct-stream behavior. The SNI client cache key remains the hostname string alone; `HttpVersionPolicy` is currently client-level immutable, so a single cache key per hostname is still sound.
+Corrective 06 extends this to the SNI override and SOCKS routes: `ClientInner::sni_client()` and `ClientInner::socks_client()` now read `self.config.http_version_policy` and call `builder.http2_only(true)` when `Http2Only` is active. The SNI client further restricts the connector's TLS ALPN list to `h2` (via `configure_tls_alpn()` in `ClientInner::sni_client()`) so no silent H1 fallback is possible. The SOCKS client restricts the rustls ALPN list to `h2` for HTTPS transports. `SocksStream::connected()` now inspects ALPN on the inner TLS stream and calls `negotiated_h2()` when `h2` is negotiated, mirroring the direct-stream behavior. The SNI client cache key remains the hostname string alone; `HttpVersionPolicy` is currently client-level immutable, so a single cache key per hostname is still sound.
 
 ### Direct connector ALPN signaling
 
