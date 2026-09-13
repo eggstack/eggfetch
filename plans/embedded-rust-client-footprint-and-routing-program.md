@@ -132,7 +132,7 @@ reqwest profiles; the dated evidence is in
 `docs/architecture/embedded-footprint.md`.
 
 Plan 5 froze executable/test/fixture commit
-`6e65c5bfc2607b30af8062a9269fcd260ed96464`. Tier 1, extended, package,
+`22a6f5c0dc0207c1356b6143c0eda3d4075063b0`. Tier 1, extended, package,
 feature-matrix, API-oracle, embedded-footprint, and three consecutive full
 HTTPX compatibility runs passed on that tree. HTTPX 0.28.1 and HTTPX2 2.12.0
 profiles were renewed independently on the same SHA. Plan 6 is the

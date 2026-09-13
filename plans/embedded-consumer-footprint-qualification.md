@@ -7,7 +7,7 @@ Depends on: closure of `core-feature-dependency-and-tls-boundary-hardening.md`, 
 ## Closure evidence — 2026-09-12
 
 The bounded runner completed on frozen executable commit
-`6e65c5bfc2607b30af8062a9269fcd260ed96464`, using rustc/cargo 1.98.1,
+`22a6f5c0dc0207c1356b6143c0eda3d4075063b0`, using rustc/cargo 1.98.1,
 `aarch64-unknown-linux-gnu`, and reqwest 0.12.28. It measured minimal
 WebPKI/native and JSON WebPKI/native profiles, dependency trees, duplicates,
 and stripped artifacts. Eggfetch was 327,728 stripped bytes larger than

@@ -23,10 +23,11 @@ Execution order and outcomes:
    Rustls profiles.
 5. `post-embedded-engine-compatibility-requalification-and-closure.md` —
    done on frozen executable/test/fixture SHA
-   `6e65c5bfc2607b30af8062a9269fcd260ed96464`; Tier 1, extended, package,
+   `22a6f5c0dc0207c1356b6143c0eda3d4075063b0`; Tier 1, extended, package,
    API oracles, and three consecutive full compatibility runs passed.
-6. `post-embedded-engine-documentation-and-plan-hygiene.md` — done as a
-   documentation/profile/plan-index-only descendant of that SHA.
+6. `post-embedded-engine-documentation-and-plan-hygiene.md` — done as the
+   documentation/profile/plan-index-only descendant of that SHA; final remote
+   CI is the handoff verification for this record.
 
 Plans 1–4 were executable/test/qualification work and invalidated the prior
 exact-SHA compatibility evidence. Plan 5 owned the single post-program freeze;

@@ -12,7 +12,7 @@ The remaining roadmap is therefore not primarily about proving feasibility. It i
 
 The embedded Rust client footprint and routing program is complete on frozen
 executable/test/fixture SHA
-`6e65c5bfc2607b30af8062a9269fcd260ed96464`. `eggfetch-core` now has truthful
+`22a6f5c0dc0207c1356b6143c0eda3d4075063b0`. `eggfetch-core` now has truthful
 feature ownership, native `json` request/response helpers, and request-scoped
 resolved-destination routing that preserves logical identity and fails closed
 for incompatible routes. Bounded embedded evidence classifies the result as

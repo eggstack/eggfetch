@@ -9,15 +9,15 @@ Scope: documentation/profile/ledger/plan-index only after the frozen executable 
 
 This descendant updates documentation, compatibility profile/ledger metadata,
 and plan indexes only. The frozen executable SHA is
-`6e65c5bfc2607b30af8062a9269fcd260ed96464`; the final descendant audit must
+`22a6f5c0dc0207c1356b6143c0eda3d4075063b0`; the final descendant audit must
 show no source, test, manifest, lockfile, script, packaging, or qualification
 fixture drift after that commit.
 
 The audit for this closure classifies every post-freeze change as Markdown or
 compatibility profile metadata. No executable drift is present in the current
-descendant; routine remote CI run `34718676081` passed for this frozen
-executable state, and final docs-only head `a49252685b6c3016b04339d300ae9efd5377f0b6`
-passed run `34719197754` as well.
+descendant. Local Tier 1, extended, compatibility, oracle, footprint, and
+downstream gates are green; package validation is rerun on the clean commit,
+and routine remote CI is the remaining handoff check.
 
 ## Objective
 

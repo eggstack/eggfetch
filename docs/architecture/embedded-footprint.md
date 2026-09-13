@@ -21,7 +21,7 @@ scripts/qualify-embedded-footprint.sh --output-dir /tmp/eggfetch-embedded-footpr
 
 | Item | Value |
 |---|---|
-| eggfetch SHA | `6e65c5bfc2607b30af8062a9269fcd260ed96464` |
+| eggfetch SHA | `22a6f5c0dc0207c1356b6143c0eda3d4075063b0` |
 | reqwest | `0.12.28` (resolved via crates.io at run time) |
 | rustc | `1.98.1 (48a229cea 2026-09-01)` |
 | cargo | `1.98.1 (797e8a9bc 2026-08-05)` |

@@ -6,8 +6,9 @@ Depends on: `plans/core-feature-dependency-and-tls-boundary-hardening.md` reachi
 
 ## Closure evidence — 2026-09-12
 
-Implemented in the frozen executable commit
-`6e65c5bfc2607b30af8062a9269fcd260ed96464`. The request-scoped
+Implemented before the final qualification freeze; the final executable
+evidence is bound to `22a6f5c0dc0207c1356b6143c0eda3d4075063b0`. The
+request-scoped
 `ResolvedTarget`/`resolved_addresses()` API uses the existing direct connector
 candidate loop, never calls DNS in static mode, preserves logical Host/TLS
 identity, retains the snapshot for retries and same-origin redirects, and

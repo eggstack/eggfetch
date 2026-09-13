@@ -306,6 +306,11 @@ See [`docs/cli/guide.md`](docs/cli/guide.md) for the full CLI reference.
 eggfetch provides two versioned, independent compatibility facades over the
 single Rust engine. They coexist and never mutate each other.
 
+Both documented facades are Stage C qualified on frozen executable SHA
+`22a6f5c0dc0207c1356b6143c0eda3d4075063b0`; HTTPX 1.0 preview remains
+reconnaissance-only. See the versioned profiles for the exact supported
+surfaces and retained differences.
+
 ### HTTPX 0.28.1 (`eggfetch.compat.httpx`)
 
 An asyncio-compatible facade targeting HTTPX 0.28.1. See

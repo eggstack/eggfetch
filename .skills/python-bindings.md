@@ -76,7 +76,7 @@ EggfetchError
 
 ## HTTPX Compatibility Layer
 
-The `eggfetch.compat.httpx` module provides an HTTPX 0.28.1 compatibility facade over the eggfetch Rust engine (Stage C qualified on frozen executable SHA `78a77ea153aae239ce7b722aeb9909a87df3bbb5`). The sibling `eggfetch.compat.httpx2` module targets httpx2 2.12.0 and is independently Stage C qualified on the same SHA; the prior `639bf186...` binding is historical after the post-freeze HTTP/3 diagnostics audit. The two facades coexist and importing one never mutates the other. Import paths:
+The `eggfetch.compat.httpx` module provides an HTTPX 0.28.1 compatibility facade over the eggfetch Rust engine (Stage C qualified on frozen executable SHA `22a6f5c0dc0207c1356b6143c0eda3d4075063b0`). The sibling `eggfetch.compat.httpx2` module targets httpx2 2.12.0 and is independently Stage C qualified on the same SHA; earlier bindings are historical after subsequent qualification-sensitive changes. The two facades coexist and importing one never mutates the other. Import paths:
 
 ```python
 from eggfetch.compat.httpx import Client, AsyncClient, Request, Response
@@ -123,10 +123,10 @@ tests `test_httpx2_api_parity.py` + `test_httpx2_behavior.py` (core),
 
 **Differential closure / corrective passes (current state):**
 
-- Corrective passes 01–08, the post-audit maturation program, the next-scope
-  program, and the active H3 requalification are complete; Stage C is
-  qualified on `78a77ea153aae239ce7b722aeb9909a87df3bbb5` (also recorded in
-  both compatibility profiles and `plans/httpx-parity-correction-status.md`).
+- Corrective passes 01–08, the post-audit maturation program, the next-scope,
+  H3 requalification, and embedded-engine requalification are complete; Stage
+  C is qualified on `22a6f5c0dc0207c1356b6143c0eda3d4075063b0` (also recorded
+  in both compatibility profiles and `plans/httpx-parity-correction-status.md`).
   Executable changes require a new exact-SHA qualification.
 - Closure evidence: typed difference records gated by `allowed-differences.toml`, lossless merge semantics (`crates/eggfetch-python/tests/compat/test_merge_lossless.py`), separate sync/async auth drivers, behavioral downstream fixtures (`compat/downstream/behavioral_fixtures/`), and native lifecycle proof fixtures (`test_native_timeout_classification.py`, `test_soak.py`, proxy and TLS tests).
 

@@ -8,37 +8,39 @@ and referenced plans; counts below are only from the runs named here.
 
 Current designation: **Stage C qualified** for both the documented HTTPX
 0.28.1 and httpx2 2.12.0 asyncio surfaces, bound to executable SHA
-`6e65c5bfc2607b30af8062a9269fcd260ed96464`. The prior
-`78a77ea...` and `639bf186...` bindings are historical because subsequent
-qualification-sensitive work followed them. The profiles in
+`22a6f5c0dc0207c1356b6143c0eda3d4075063b0`. The prior
+`6e65c5b...` binding, as well as earlier bindings, is historical because
+subsequent qualification-sensitive work followed it. The profiles in
 `compat/httpx/0.28.1/profile.toml` and `compat/httpx2/2.12.0/profile.toml`
 record this SHA and the 2026-09-12 qualification date.
 
 Qualification evidence on the unchanged frozen tree:
 
-- focused H3 suites: `h3_hardening` 12/12, `h3_alt_svc_discovery` 17/17,
-  `h3_interop_qualification` 20/20; all are deterministic loopback controls;
-- diagnostics coverage includes the explicit-route native snapshot and typed,
-  redacted close classification regression; the corrected field reports
-  received UDP datagrams, distinct from path packet counters;
-- Tier 1, extended, and package validation: green;
+- focused suites: direct/static transport 17/17, H3 Alt-Svc 17/17, H3
+  hardening 12/12, native JSON 8/8, proxy 36/36, retry 6/6, and TLS 13/13;
+- Tier 1: green. One transient feature-profile timeout assertion was rerun
+  three times successfully; no source change was made for it;
 - full compatibility: three consecutive runs, each 1,870 passed, 26
   non-failing warnings, zero skips/xfails/failures;
 - API oracles: HTTPX 0.28.1 clean with 71 allowed differences and httpx2
   2.12.0 clean with 79 allowed differences;
-- required downstream portfolio: 4/4 passed.
+- bounded embedded footprint: 327,728 stripped bytes larger than aligned
+  reqwest in each Rustls profile; outcome **not a footprint win**.
+
+Extended validation passed with the existing skips for the unavailable Rust
+1.80 toolchain and unbuilt Node JS artifact. Package validation passed on the
+clean documentation commit `cade32b` (including crate packaging, wheel smoke,
+and package-content checks); required downstream qualification passed 4/4
+against the rebuilt 0.1.3 wheel.
 
 HTTP/3 remains **experimental**. The H3 evidence ledger records the missing
 independent non-Quinn server passes, independent GOAWAY/drain evidence,
 public-origin checks, realistic impairment execution, and unresolved upstream
 correctness risk. HTTP/3 status is separate from the HTTPX parity claims.
 
-Remote routine CI for this freeze passed on documentation-only descendant
-`428922532d202d281b5d37f221e099c42ec3ad9f`, which contains the unchanged
-frozen executable SHA above. Run `34718676081` completed successfully on
-2026-09-12. The final documentation-only head `a49252685b6c3016b04339d300ae9efd5377f0b6`
-was also verified by run `34719197754`; the previous run `34620344393` is
-historical and is not reused as evidence for this SHA.
+Remote routine CI for the final documentation-only descendant will be
+recorded after the requested push; it must contain this unchanged executable
+SHA and pass the repository's existing CI workflow.
 
 ## Historical state — qualification pending after HTTP/3 program changes (pre-freeze)
 

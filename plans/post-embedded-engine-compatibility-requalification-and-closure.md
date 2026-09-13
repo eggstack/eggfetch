@@ -8,12 +8,19 @@ Followed by: `plans/post-embedded-engine-documentation-and-plan-hygiene.md`
 
 ## Closure evidence — 2026-09-12
 
-Executable/test/fixture freeze: `6e65c5bfc2607b30af8062a9269fcd260ed96464`.
-Tier 1, extended, and package validation passed. Both API oracles passed with the existing allowed
-differences. Three consecutive full pinned compatibility runs each passed
-1,870 tests with 26 warnings. The final footprint measurement is tied to the
-same SHA. HTTPX 0.28.1 and HTTPX2 2.12.0 were renewed independently on this
-tree; HTTPX 1.0 preview and experimental HTTP/3 status are unchanged.
+Executable/test/fixture freeze: `22a6f5c0dc0207c1356b6143c0eda3d4075063b0`.
+The native JSON implementation and its regression tests landed after the
+previous `6e65c5b...` record, so that record was not reused. On this unchanged
+tree, the focused transport/JSON corpus passed (17 direct/static, 17 Alt-Svc,
+12 H3 hardening, 8 native JSON, 36 proxy, 6 retry, and 13 TLS tests), Tier 1
+passed, and three consecutive full pinned compatibility runs each passed
+1,870 tests with 26 warnings. Both API oracles passed with the existing
+allowed differences (71 for HTTPX 0.28.1; 79 for HTTPX2 2.12.0). The final
+bounded footprint measurement is tied to this SHA. Extended and package
+validation passed with only the documented unavailable MSRV and Node artifact
+skips. The required downstream portfolio passed 4/4 against the rebuilt
+current wheel.
+HTTPX 1.0 preview and experimental HTTP/3 status are unchanged.
 
 ## Objective
 
