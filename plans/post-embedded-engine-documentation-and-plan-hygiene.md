@@ -5,7 +5,7 @@ Parent program: `plans/embedded-rust-client-footprint-and-routing-program.md`
 Depends on: successful closure of `plans/post-embedded-engine-compatibility-requalification-and-closure.md`
 Scope: documentation/profile/ledger/plan-index only after the frozen executable SHA
 
-## Closure evidence — 2026-09-12
+## Final descendant closure — 2026-09-13
 
 This descendant updates documentation, compatibility profile/ledger metadata,
 and plan indexes only. The frozen executable SHA is
@@ -14,10 +14,14 @@ show no source, test, manifest, lockfile, script, packaging, or qualification
 fixture drift after that commit.
 
 The audit for this closure classifies every post-freeze change as Markdown or
-compatibility profile metadata. No executable drift is present in the current
-descendant. Local Tier 1, extended, package, compatibility, oracle, footprint,
-and downstream gates are green. Routine remote CI run `34737618274` passed for
-documentation-only descendant `d9f26c4d17555d5fb8ff0c71281486f7aab0abd4`.
+compatibility profile metadata. No executable, test, manifest, lockfile,
+script, packaging, or qualification-fixture drift is present in the current
+descendant. The final documentation commit before this metadata update is
+`a7df01df31fd624e3b6fff1db48a0120fd8b9779`; local Tier 1 and package checks
+passed on that clean tree, and the full compatibility suite passed with 1,870
+tests. Routine remote CI run `34741393283` passed for that documentation-only
+descendant. The additional closure metadata in this commit is also
+documentation-only.
 
 ## Objective
 

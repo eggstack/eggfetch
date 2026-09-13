@@ -26,8 +26,9 @@ Execution order and outcomes:
    `22a6f5c0dc0207c1356b6143c0eda3d4075063b0`; Tier 1, extended, package,
    API oracles, and three consecutive full compatibility runs passed.
 6. `post-embedded-engine-documentation-and-plan-hygiene.md` — done as the
-   documentation/profile/plan-index-only descendant of that SHA; final remote
-   CI is the handoff verification for this record.
+   documentation/profile/plan-index-only descendant of that SHA. The final
+   documentation commit `a7df01df31fd624e3b6fff1db48a0120fd8b9779` passed
+   routine remote CI in run `34741393283`.
 
 Plans 1–4 were executable/test/qualification work and invalidated the prior
 exact-SHA compatibility evidence. Plan 5 owned the single post-program freeze;
