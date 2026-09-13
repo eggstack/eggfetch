@@ -3,7 +3,7 @@
 Planning baseline: `475bd50f6f9b9f66b95eea814f06b4adb22ede93` (`main`, 2026-09-13; eggfetch 0.1.4)
 Parent program: `plans/extensible-embedded-transport-consumer-program.md`
 Depends on: `plans/custom-dialer-transport-extension.md` so the lifecycle wrapper is applied to the final Hyper route set
-Status: ready
+Status: implemented; expanded deterministic qualification follow-up remains
 
 ## Objective
 
@@ -312,15 +312,17 @@ The parent closure plan owns extended/package/exact-SHA requalification.
 
 ## Exit criteria
 
-- [ ] native callers can opt into a hard live physical Hyper-connection cap;
-- [ ] idle pooled connections retain physical permits until actually dropped;
-- [ ] HTTP/2 logical streams do not consume one permit each;
-- [ ] physical-admission wait/timeout is distinct from logical pool and connect waits;
-- [ ] native callers can opt into established transport read/write inactivity guards;
-- [ ] buffered socket writes are covered by the write guardrail;
-- [ ] TLS/connect establishment remains under connect timeout semantics;
-- [ ] existing `PoolConfig` and `Timeout` behavior is unchanged when new policies are disabled;
-- [ ] all Hyper-based routes are audited for consistent wrapper application;
-- [ ] metrics are truthful and bounded;
+- [x] native callers can opt into a hard live physical Hyper-connection cap;
+- [x] idle pooled connections retain physical permits until actually dropped;
+- [x] HTTP/2 logical streams do not consume one permit each;
+- [x] physical-admission wait/timeout is distinct from logical pool and connect waits;
+- [x] native callers can opt into established transport read/write inactivity guards;
+- [x] buffered socket writes are covered by the write guardrail;
+- [x] TLS/connect establishment remains under connect timeout semantics;
+- [x] existing `PoolConfig` and `Timeout` behavior is unchanged when new policies are disabled;
+- [x] all Hyper-based routes are audited for consistent wrapper application;
+- [x] metrics are truthful and bounded;
 - [ ] deterministic tests cover admission, reuse, idle retention, failure, cancellation and I/O progress reset;
-- [ ] routine validation passes.
+- [x] routine validation passes.
+
+Implementation note: the focused unit coverage proves permit retention and invalid-policy handling; the broader admission/reuse/progress-reset matrix remains a follow-up recorded by the parent closure plan.

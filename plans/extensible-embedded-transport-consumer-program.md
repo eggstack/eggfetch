@@ -1,7 +1,7 @@
 # Extensible Embedded Transport Consumer Program
 
 Planning baseline: `475bd50f6f9b9f66b95eea814f06b4adb22ede93` (`main`, 2026-09-13; eggfetch 0.1.4)
-Status: ready for implementation
+Status: implementation landed; closure follow-ups remain
 
 ## Objective
 
@@ -193,16 +193,30 @@ Use existing feature-matrix/MSRV/downstream/compatibility machinery rather than 
 
 The program is complete when:
 
-- [ ] a native caller can supply a raw-stream dialer without depending on Hyper internals;
-- [ ] HTTPS over that dialer preserves eggfetch-owned SNI/certificate validation;
-- [ ] custom-dialer failure never falls back to direct I/O;
-- [ ] callers can disable Hyper's implicit canceled-request retry while the default remains unchanged;
-- [ ] all Hyper client construction paths honor that setting;
-- [ ] callers can independently bound live physical connections without changing logical pool semantics;
-- [ ] callers can independently bound actual transport read/write inactivity without changing existing body timeout semantics;
+- [x] a native caller can supply a raw-stream dialer without depending on Hyper internals;
+- [x] HTTPS over that dialer preserves eggfetch-owned SNI/certificate validation;
+- [x] custom-dialer failure never falls back to direct I/O;
+- [x] callers can disable Hyper's implicit canceled-request retry while the default remains unchanged;
+- [x] all Hyper client construction paths honor that setting;
+- [x] callers can independently bound live physical connections without changing logical pool semantics;
+- [x] callers can independently bound actual transport read/write inactivity without changing existing body timeout semantics;
 - [ ] focused regressions cover route conflicts, stale pooled connections, connection admission, idle-pool permit retention and stalled transport I/O;
-- [ ] a tiny external-style fixture proves the public API requires no crate-private types;
+- [x] a tiny external-style fixture proves the public API requires no crate-private types;
 - [ ] minimal/default dependency and binary effects are measured rather than inferred;
 - [ ] Tier 1, extended and package validation pass;
-- [ ] exact-SHA compatibility evidence is renewed after executable work freezes;
-- [ ] plan index and architecture/native Rust documentation accurately describe the final surface.
+- [x] exact-SHA compatibility evidence is renewed after executable work freezes;
+- [x] plan index and architecture/native Rust documentation accurately describe the final surface.
+
+## Closure evidence (2026-09-13)
+
+Implementation commit: `af03f006f377979550ee6cb96a30b28193c8708d`.
+
+- `git pull --rebase` completed before implementation.
+- Tier 1 passed locally with the repository's documented single-job/resource-stabilized settings.
+- The corrected feature matrix passed the no-default, HTTP/1, and HTTP/1 + Rustls core profiles.
+- The pinned HTTPX 0.28.1 compatibility profile passed `1870` tests on the clean implementation commit; the isolated reference SOCKS/TLS retry after one transient full-suite failure also passed.
+- Tier 3 package validation passed on the clean commit, including crate dry-runs, package listings, release wheel build, smoke tests, and content validation.
+- `qualification/embedded-custom-dialer/` compiled and ran using only public `eggfetch-core` exports.
+- Minimal dependency inspection showed no new runtime dependency and no proxy/H2/H3/compression/cookie/multipart capability pulled into the HTTP/1 profiles by these controls.
+
+Retained follow-ups: add a deterministic stale-idle test that distinguishes default/strict/explicit retry, broaden the lifecycle integration matrix beyond the focused permit tests, and rerun the bounded stripped-binary measurement for a consumer that uses the new controls. The existing footprint conclusion remains authoritative: eggfetch is not presently a footprint win.

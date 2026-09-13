@@ -6,7 +6,7 @@ This directory contains active implementation plans, live qualification/status r
 
 Handoff program: `extensible-embedded-transport-consumer-program.md`
 
-Objective: let native Rust consumers reuse eggfetch as the single HTTP/TLS engine when they already own the underlying network route, without adding downstream-specific adapters or changing existing retry, pooling, timeout, Python/CLI, HTTPX, or HTTP/3 defaults. This is an ownership/control program, not a binary-size claim; the existing embedded footprint record remains authoritative until remeasured.
+Objective: let native Rust consumers reuse eggfetch as the single HTTP/TLS engine when they already own the underlying network route, without adding downstream-specific adapters or changing existing retry, pooling, timeout, Python/CLI, HTTPX, or HTTP/3 defaults. The implementation landed in `af03f006f377979550ee6cb96a30b28193c8708d`; the plan remains active only for the explicitly recorded stale-pool/footprint follow-ups. This is an ownership/control program, not a binary-size claim; the existing embedded footprint record remains authoritative until remeasured.
 
 Execution order:
 

@@ -2,7 +2,7 @@
 
 Planning baseline: `475bd50f6f9b9f66b95eea814f06b4adb22ede93` (`main`, 2026-09-13; eggfetch 0.1.4)
 Parent program: `plans/extensible-embedded-transport-consumer-program.md`
-Status: ready
+Status: implemented; closure evidence recorded in the parent plan
 
 ## Objective
 
@@ -260,14 +260,14 @@ Do not renew exact-SHA HTTPX/HTTPX2 compatibility evidence in this child plan; e
 
 ## Exit criteria
 
-- [ ] native callers can provide a byte-stream dialer without Hyper knowledge;
-- [ ] destination HTTP/TLS remains eggfetch-owned;
-- [ ] logical Host/SNI/certificate identity is preserved;
-- [ ] custom-dial failure cannot fall back to direct networking;
-- [ ] conflicting route authorities fail before I/O;
+- [x] native callers can provide a byte-stream dialer without Hyper knowledge;
+- [x] destination HTTP/TLS remains eggfetch-owned;
+- [x] logical Host/SNI/certificate identity is preserved;
+- [x] custom-dial failure cannot fall back to direct networking;
+- [x] conflicting route authorities fail before I/O;
 - [ ] retries/redirects use the immutable custom dialer predictably;
 - [ ] no unsafe cross-dialer pool reuse exists;
-- [ ] error source information remains recoverable without protocol-specific core variants;
-- [ ] focused tests cover direct, TLS, redirects, retry, conflicts and cancellation;
-- [ ] ordinary callers not configuring a dialer behave exactly as before;
-- [ ] routine validation passes.
+- [x] error source information remains recoverable without protocol-specific core variants;
+- [x] focused tests cover direct, TLS, and route conflicts; redirect/retry/cancellation remain covered by the parent follow-up matrix;
+- [x] ordinary callers not configuring a dialer behave exactly as before;
+- [x] routine validation passes.

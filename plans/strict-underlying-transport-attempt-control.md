@@ -2,7 +2,7 @@
 
 Planning baseline: `475bd50f6f9b9f66b95eea814f06b4adb22ede93` (`main`, 2026-09-13; eggfetch 0.1.4)
 Parent program: `plans/extensible-embedded-transport-consumer-program.md`
-Status: ready
+Status: implemented; stale-idle qualification follow-up remains
 
 ## Objective
 
@@ -185,12 +185,14 @@ The parent closure plan owns extended/package/exact-SHA requalification.
 
 ## Exit criteria
 
-- [ ] native callers can explicitly disable Hyper's canceled-request retry;
-- [ ] default behavior remains unchanged for callers that do not opt in;
-- [ ] every Hyper-based client route receives the configured policy;
-- [ ] common builder policy is centralized enough to prevent route drift without creating a new abstraction framework;
+- [x] native callers can explicitly disable Hyper's canceled-request retry;
+- [x] default behavior remains unchanged for callers that do not opt in;
+- [x] every Hyper-based client route receives the configured policy;
+- [x] common builder policy is centralized enough to prevent route drift without creating a new abstraction framework;
 - [ ] deterministic stale-idle tests distinguish default, strict, and strict-plus-explicit-retry behavior;
-- [ ] explicit eggfetch retry semantics remain unchanged;
-- [ ] no Python/CLI/HTTPX default changes occur;
-- [ ] documentation clearly separates the two retry layers;
-- [ ] routine validation passes.
+- [x] explicit eggfetch retry semantics remain unchanged;
+- [x] no Python/CLI/HTTPX default changes occur;
+- [x] documentation clearly separates the two retry layers;
+- [x] routine validation passes.
+
+Implementation note: the requested deterministic stale-idle server regression is intentionally retained as a follow-up rather than represented by a timing-sensitive approximation.

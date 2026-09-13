@@ -3,7 +3,7 @@
 Planning baseline: `475bd50f6f9b9f66b95eea814f06b4adb22ede93` (`main`, 2026-09-13; eggfetch 0.1.4)
 Parent program: `plans/extensible-embedded-transport-consumer-program.md`
 Depends on: executable completion of the custom-dialer, strict-attempt-control, and physical-connection/I/O-guardrail plans
-Status: ready after Plans 1–3
+Status: partial closure recorded; bounded follow-ups remain
 
 ## Objective
 
@@ -243,12 +243,12 @@ At closure, append a concise evidence section containing:
 ## Exit criteria
 
 - [ ] all three executable child plans satisfy their exit criteria;
-- [ ] external-style public consumer fixture compiles and runs without private APIs;
-- [ ] minimal feature profiles remain clean and expected dependencies are absent;
+- [x] external-style public consumer fixture compiles and runs without private APIs;
+- [x] minimal feature profiles remain clean and expected dependencies are absent;
 - [ ] footprint impact is measured and recorded truthfully;
 - [ ] focused transport regressions pass;
 - [ ] Tier 1, extended and package validation pass under existing policy;
-- [ ] exact-SHA HTTPX/HTTPX2 compatibility evidence is renewed on the final executable tree;
-- [ ] documentation reflects the actual public API and limitations;
+- [x] exact-SHA HTTPX/HTTPX2 compatibility evidence is renewed on the final executable tree;
+- [x] documentation reflects the actual public API and limitations;
 - [ ] post-freeze descendants are audited as non-executable or the freeze is rerun;
 - [ ] plan index/roadmap mark the program complete only after evidence exists.
