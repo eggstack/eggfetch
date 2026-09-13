@@ -50,7 +50,8 @@ cargo check -p eggfetch-core --all-features
 # plus tier2_feature_tests: gzip/brotli/zstd/deflate/proxy subsets
 ```
 
-See `docs/architecture/feature-flags.md` for the exact matrix. The
+See `docs/architecture/feature-flags.md` for the exact validation matrix and
+the supported core profile recipes. The
 `http3` and `multipart,proxy` combos there are manual checks, not Tier 2
 gates — do not add new CI combinations without explicit maintainer
 approval (see `docs/verification-policy.md`).

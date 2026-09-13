@@ -8,9 +8,7 @@ Add `eggfetch-core` to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-eggfetch-core = { version = "0.1", features = ["http1", "tls-rustls", "tls-native-roots"] }
-# Add this when deriving request/response types for the `json` helpers.
-serde = { version = "1", features = ["derive"] }
+eggfetch-core = { version = "0.1" } # H1 + Rustls + native roots/WebPKI fallback
 ```
 
 Enable optional features as needed:
@@ -31,10 +29,13 @@ Enable optional features as needed:
 | `compression-zstd` | Zstandard decompression |
 | `compression-deflate` | Deflate decompression |
 
-For a full-featured client:
+For a typical H1/H2 client with cookies, proxying, multipart, all response
+compression codecs, and native JSON helpers:
 
 ```toml
-eggfetch-core = { version = "0.1", features = ["http1", "http2", "tls-rustls", "cookies", "proxy", "multipart", "compression-gzip", "compression-brotli", "compression-zstd"] }
+eggfetch-core = { version = "0.1", features = ["http1", "http2", "tls-rustls", "tls-native-roots", "cookies", "proxy", "multipart", "compression-gzip", "compression-brotli", "compression-zstd", "compression-deflate", "json"] }
+# Add this when deriving request/response types for the `json` helpers.
+serde = { version = "1", features = ["derive"] }
 ```
 
 For a minimal embedded HTTPS client (deterministic WebPKI roots):
@@ -48,6 +49,9 @@ eggfetch-core = { version = "0.1", default-features = false, features = ["http1"
 the default dependency graph. Measured downstream size/dependency evidence lives in
 `docs/architecture/embedded-footprint.md` — the current record is not a
 footprint win, so do not describe migration as slimming.
+
+The profile recipes and their excluded capabilities are listed in
+[`docs/architecture/feature-flags.md`](../architecture/feature-flags.md).
 
 ## Creating a Client
 
@@ -150,6 +154,12 @@ and persist across retries and redirects.
 For native direct routing, `resolved_addresses()` pins the physical TCP
 destinations while the request URL still controls Host, HTTPS certificate
 identity, and SNI:
+
+```text
+logical URL: https://service.example/data
+Host/SNI:    service.example
+physical:    203.0.113.10:443 (caller-supplied)
+```
 
 ```rust
 use std::net::SocketAddr;

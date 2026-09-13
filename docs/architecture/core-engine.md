@@ -70,6 +70,25 @@ hops (destination changed). The redirects-disabled fast path and the
 redirect-enabled first hop share one `HopBuildParams` builder, so `target`,
 `sni_hostname`, and `trace` cannot diverge between the two entry paths.
 
+### Static resolved-destination routing
+
+`RequestBuilder::resolved_addresses()` separates logical identity from the
+physical endpoint:
+
+```text
+logical URL / Host / HTTPS SNI  ── request identity ──┐
+                                                       ├─ direct TCP only
+caller-supplied SocketAddr set ── physical route ──────┘
+```
+
+The caller supplies and validates the address set; the engine uses those
+addresses exactly and never performs DNS fallback. Retries and same-origin
+redirects preserve the snapshot. Cross-origin redirects and proxy, UDS, or
+HTTP/3 routing fail closed before dispatch. Each static request uses an
+isolated direct Hyper client, so ordinary pooled connections cannot satisfy a
+request pinned to a different address set. This is a transport primitive, not
+an SSRF or address-authorization policy.
+
 ### Proxy Override
 
 `RequestBuilder::proxy()` accepts `ProxyOverride`:

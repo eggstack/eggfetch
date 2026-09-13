@@ -46,6 +46,9 @@ docs/
 - The one live ledger is `plans/httpx-parity-correction-status.md`: it records the exact executable SHA that the HTTPX 0.28.1 and httpx2 2.12.0 Stage C qualifications are bound to (`22a6f5c0dc0207c1356b6143c0eda3d4075063b0` at the current freeze). Earlier bindings are historical after subsequent qualification-sensitive changes. Any change to executable code (Rust sources, tests, build/validation scripts, packaging config) invalidates the current binding and requires a fresh exact-SHA requalification from a new freeze, following the current closure plan and status procedure.
 - Docs-only commits do not invalidate the SHA binding.
 - When finishing new work that changes a compatibility claim, update the status ledger and both `compat/httpx/0.28.1/profile.toml` and `compat/httpx2/2.12.0/profile.toml` together; never hand-edit generated manifests.
+- The canonical embedded/core feature recipes are the profile matrix in
+  `docs/architecture/feature-flags.md`; README and `docs/rust/guide.md` should
+  link to it rather than inventing ambiguous “minimal” or “lite” labels.
 
 ## Key Constraints
 

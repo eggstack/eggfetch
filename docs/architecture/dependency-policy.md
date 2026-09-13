@@ -97,6 +97,8 @@ Downstream size/dependency evidence for the minimal profiles lives in
 `qualification/embedded/`). Minimal trees verifiably exclude
 cookies/proxy/compression/multipart/H2/H3 and JSON; serde/serde_json enter
 only when the native json feature is selected.
+The exact supported core recipes and their excluded capabilities are listed in
+[feature-flags.md](feature-flags.md#supported-core-profiles).
 
 ## Optional Later Dependencies
 

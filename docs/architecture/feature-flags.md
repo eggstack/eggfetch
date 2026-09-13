@@ -45,6 +45,27 @@ for a cleartext-only build. `tls-rustls` without `tls-native-roots` uses the
 packaged WebPKI roots deterministically; `tls-native-roots` adds system-store
 loading and is included in the default profile.
 
+## Supported Core Profiles
+
+These recipes make the intended capability boundary explicit. Unless noted,
+the profiles exclude `http2`, `http3`, `json`, all compression features,
+`cookies`, `multipart`, `proxy`, `tracing`, and `test-util`.
+
+| Profile | Cargo recipe | Includes |
+| --- | --- | --- |
+| Ordinary default | `eggfetch-core = { version = "0.1" }` | H1, Rustls, native roots preferred with WebPKI construction fallback |
+| H1 cleartext | `default-features = false, features = ["http1"]` | HTTP/1.1 only; HTTPS is unavailable |
+| H1 deterministic HTTPS | `default-features = false, features = ["http1", "tls-rustls"]` | H1, Rustls, packaged WebPKI roots; no system-store loading |
+| H1 native-root HTTPS | `default-features = false, features = ["http1", "tls-rustls", "tls-native-roots"]` | H1, Rustls, native roots with WebPKI construction fallback; explicit form of the default trust profile |
+| H1 + native Rust JSON | `default-features = false, features = ["http1", "tls-rustls", "json"]` | Deterministic H1 HTTPS plus Serde request/response helpers; JSON is not in the default graph |
+
+Add `http2` to an H1/TLS profile for HTTP/2 ALPN and multiplexing. The
+`http3` feature implies `http1` and `tls-rustls` but not `tls-native-roots`;
+HTTP/3 remains experimental. The `proxy` feature likewise implies H1 and
+Rustls because HTTPS proxy endpoints and tunnels need them. Add
+`tls-native-roots` explicitly when those profiles should prefer the platform
+trust store.
+
 ## Feature Reference
 
 ### http1

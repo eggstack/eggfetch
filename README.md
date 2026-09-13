@@ -263,6 +263,13 @@ eggfetch-core = { version = "0.1", features = [
 ] }
 ```
 
+The core profile recipes are explicit about what they include: the ordinary
+default is H1 + Rustls with native roots preferred and WebPKI construction
+fallback; `default-features = false, features = ["http1"]` is cleartext H1
+only; and `default-features = false` with `http1,tls-rustls` is deterministic
+WebPKI HTTPS. Add `tls-native-roots` for platform trust loading or `json` for
+the native Rust Serde helpers. See the [feature profile matrix](docs/architecture/feature-flags.md#supported-core-profiles).
+
 For an embedded cleartext client, select `http1` alone. For a deterministic
 embedded HTTPS client, use `default-features = false` with
 `http1,tls-rustls` (packaged WebPKI roots); add `tls-native-roots` when
