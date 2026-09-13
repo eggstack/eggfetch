@@ -30,7 +30,7 @@ Execution order and outcomes:
    remain unchanged.
 2. `static-resolution-and-pinned-destination-routing.md` — done; typed
    request-scoped static routing preserves logical identity and fails closed
-   for incompatible routes.
+   for incompatible redirects/routes.
 3. `native-rust-json-and-response-ergonomics.md` — done; native request and
    response JSON helpers are owned by the opt-in `json` feature.
 4. `embedded-consumer-footprint-qualification.md` — done; bounded evidence
