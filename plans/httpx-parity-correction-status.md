@@ -38,9 +38,9 @@ independent non-Quinn server passes, independent GOAWAY/drain evidence,
 public-origin checks, realistic impairment execution, and unresolved upstream
 correctness risk. HTTP/3 status is separate from the HTTPX parity claims.
 
-Remote routine CI for the final documentation-only descendant will be
-recorded after the requested push; it must contain this unchanged executable
-SHA and pass the repository's existing CI workflow.
+Remote routine CI for documentation-only descendant `d9f26c4d17555d5fb8ff0c71281486f7aab0abd4`
+passed in run `34737618274` on 2026-09-13. It contains the unchanged frozen
+executable SHA above and passed the repository's existing CI workflow.
 
 ## Historical state — qualification pending after HTTP/3 program changes (pre-freeze)
 

@@ -15,9 +15,9 @@ fixture drift after that commit.
 
 The audit for this closure classifies every post-freeze change as Markdown or
 compatibility profile metadata. No executable drift is present in the current
-descendant. Local Tier 1, extended, compatibility, oracle, footprint, and
-downstream gates are green; package validation is rerun on the clean commit,
-and routine remote CI is the remaining handoff check.
+descendant. Local Tier 1, extended, package, compatibility, oracle, footprint,
+and downstream gates are green. Routine remote CI run `34737618274` passed for
+documentation-only descendant `d9f26c4d17555d5fb8ff0c71281486f7aab0abd4`.
 
 ## Objective
 
