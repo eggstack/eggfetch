@@ -233,9 +233,9 @@ import eggfetch
 
 async def main():
     async with eggfetch.AsyncClient() as client:
-        async with client.stream("GET", "https://httpbin.org/stream-bytes/100000") as r:
-            async for chunk in r.aiter_bytes(chunk_size=8192):
-                print(f"Got {len(chunk)} bytes")
+        r = await client.stream("GET", "https://httpbin.org/stream-bytes/100000")
+        async for chunk in r.aiter_bytes(chunk_size=8192):
+            print(f"Got {len(chunk)} bytes")
 
 asyncio.run(main())
 ```

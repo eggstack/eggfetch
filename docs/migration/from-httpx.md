@@ -119,11 +119,11 @@ async with httpx.AsyncClient() as client:
         async for chunk in r.aiter_bytes():
             process(chunk)
 
-# eggfetch
+# eggfetch (native AsyncClient.stream is a coroutine, so await it)
 async with eggfetch.AsyncClient() as client:
-    async with client.stream("GET", url) as r:
-        async for chunk in r.aiter_bytes():
-            process(chunk)
+    r = await client.stream("GET", url)
+    async for chunk in r.aiter_bytes():
+        process(chunk)
 ```
 
 ## Authentication

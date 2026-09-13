@@ -7,33 +7,23 @@
 [![PyPI Downloads](https://static.pepy.tech/personalized-badge/eggfetch?period=total&units=INTERNATIONAL_SYSTEM&left_color=BLACK&right_color=GREEN&left_text=downloads)](https://pepy.tech/projects/eggfetch)
 [![License](https://img.shields.io/crates/l/eggfetch-core)](LICENSE-MIT)
 
-eggfetch is a Rust-native HTTP client engine with Python bindings and a CLI tool. The core is async-first: a Rust engine built on tokio and hyper provides connection pooling, phase-aware timeouts, TLS configuration, streaming, and response decompression. The Python bindings expose both sync and async APIs; the sync API blocks on the async engine while releasing the GIL, and the async API integrates with asyncio. There is exactly one networking implementation, living entirely in Rust.
+eggfetch is a Rust-native async HTTP client engine (tokio + hyper) with Python bindings and a CLI. There is exactly one networking implementation, living entirely in `eggfetch-core`; the Python sync API blocks on the async engine while releasing the GIL, and the async API integrates with asyncio.
 
 ## Features
 
-- **HTTP/1.1, HTTP/2, HTTP/3** -- ALPN negotiation, multiplexed connections, experimental QUIC transport (bounded per-origin cache, shared connect budget with address fallback, phase-correct timeouts, keepalive-derived idle, authenticated Alt-Svc discovery with suppression/safe fallback/draining; retained experimental — see [`docs/architecture/core-tls-proxy-protocols.md`](docs/architecture/core-tls-proxy-protocols.md) § "Production Graduation Decision")
-- **Streaming** -- request and response bodies stream without eager buffering; `bytes_stream()` and `text_lines()` for incremental reads
-- **HTTP trailers** -- H1 chunked trailers, H2 trailing HEADERS, and H3 trailing headers captured without buffering (`Response::trailers()` after body EOF; H1 duplicate same-name trailers collapse upstream in hyper and are documented)
-- **Response decompression** -- gzip, brotli, zstd, deflate via feature-gated streaming decoders
-- **Connection pooling** -- semaphore-based logical in-flight request concurrency (`max_in_flight_requests*`, aliases `max_connections*` for pre-1.0) with per-origin limits, pool metrics, and separate transport observability counters
-- **Transport observability** -- connector/DNS/TLS attempt counters, H3 creation/eviction counts, Alt-Svc learned/expired/cleared/rejected, H3 attempted/suppressed/fallback/drain/close/reconnect, and 101 upgrade counts where observable; HTTP/3 builds also expose bounded Quinn snapshots (remote address, RTT, path counters, route generation, and sanitized close codes); Hyper socket-reuse counts intentionally absent
-- **Phase-aware timeouts** -- pool, connect, write, read, and total timeout phases with cancellation safety
-- **TLS** -- rustls with custom CA bundles, client certificates (mTLS), version policy, and verification toggle
-- **Proxy** -- HTTP forwarding, HTTPS CONNECT tunneling, proxy auth, per-request override, `NO_PROXY` bypass
-- **Cookies** -- RFC 6265 cookie jar with domain/path matching, cross-origin stripping
-- **Authentication** -- Basic and Bearer auth with credential redaction in all output paths
-- **Multipart** -- streaming multipart/form-data with known-length optimization
-- **Retries** -- policy-driven retries with exponential backoff and `Retry-After` support
-- **Native Rust JSON (opt-in)** -- replayable `RequestBuilder::json()` request bodies and single-consumption `Response::json()` decoding via Serde; parsing is explicit and does not require a JSON media type
-- **Resolved destination routing (native Rust)** -- caller-supplied direct `SocketAddr` sets without a second DNS lookup, preserving logical Host/SNI identity
-- **Python API** -- requests/HTTPX-compatible sync and async interfaces, GIL-releasing blocking I/O
-- **HTTPX compatibility facade** -- compatible asyncio surface targeting HTTPX 0.28.1 (`eggfetch.compat.httpx`)
-- **Network stream exposure** -- 101 Switching Protocols responses expose an owned upgraded stream through `extensions["network_stream"]`; direct-connector upgrades carry real local/remote addrs and TLS version/cipher/ALPN, UDS upgrades report `Unix` without IPs, standard opaque upgrades remain explicitly unavailable; `start_tls` uses the same safe TLS translation as the default client
-- **Python/FFI trailer policy** -- core retains trailers; Python native, HTTPX facade, FFI, and Node defer trailer exposure in this milestone (facade unchanged; HTTPX 0.28.1 has no `trailers` surface to compare against)
-- **CLI** -- full-featured HTTP client with streaming output, machine-readable formats, and shell completions
-- **Node.js (experimental prototype)** -- N-API binding with narrow guarantees (UTF-8 string bodies, buffered responses, unstructured errors, stub declarations); see [`docs/architecture/ffi-and-node.md`](docs/architecture/ffi-and-node.md)
-
-HTTP/3 remains experimental. See [`docs/architecture/core-tls-proxy-protocols.md`](docs/architecture/core-tls-proxy-protocols.md) § "Production Graduation Decision" for the graduation gate and current status.
+- **HTTP/1.1, HTTP/2, HTTP/3** — ALPN negotiation; HTTP/3 over QUIC stays experimental ([graduation gate](docs/architecture/core-tls-proxy-protocols.md))
+- **Streaming** — request/response bodies without eager buffering (`bytes_stream()`, `text_lines()`); trailers via `Response::trailers()` ([guide](docs/rust/guide.md))
+- **Pooling, timeouts, observability** — per-origin in-flight limits, phase-aware timeouts (pool/connect/write/read/total), connector/DNS/TLS and H3 transport metrics ([pool/timeouts](docs/architecture/core-timeout-pool.md))
+- **TLS** — rustls with custom CA bundles, mTLS client certs, version policy, verification toggle ([TLS](docs/concepts/tls.md))
+- **Proxy** — HTTP forwarding, HTTPS CONNECT, proxy auth, per-request override, `NO_PROXY`; SOCKS5 and UDS routes ([proxy](docs/concepts/proxy.md))
+- **Cookies, auth, multipart** — RFC 6265 jar, Basic/Bearer with redaction, streaming multipart uploads ([cookies](docs/concepts/cookies.md))
+- **Retries and redirects** — policy-driven backoff with `Retry-After`, replayable-body redirect handling ([retry](docs/concepts/retry.md))
+- **Compression** — feature-gated streaming gzip/brotli/zstd/deflate with zip-bomb limits ([compression](docs/concepts/compression.md))
+- **Native Rust JSON (opt-in)** — replayable `RequestBuilder::json()`, single-consumption `Response::json()` via the `json` feature ([guide](docs/rust/guide.md))
+- **Python API** — requests/HTTPX-compatible sync and async interfaces ([guide](docs/python/guide.md)), plus versioned `eggfetch.compat.httpx` (0.28.1) and `eggfetch.compat.httpx2` (2.12.0) facades ([compatibility](#httpx-compatibility))
+- **Upgrades** — 101 responses expose an owned `network_stream` (WebSocket/SSE building blocks); CONNECT tunnels stay body-iterator only
+- **CLI** — streaming output, machine-readable formats, shell completions ([guide](docs/cli/guide.md))
+- **C ABI and Node.js prototype** — opaque-handle FFI plus an experimental N-API wrapper ([ffi-and-node](docs/architecture/ffi-and-node.md))
 
 ## Installation
 
@@ -50,6 +40,8 @@ pip install eggfetch
 eggfetch-core = { version = "0.1", features = ["http1", "tls-rustls", "tls-native-roots"] }
 ```
 
+See the [feature profile matrix](docs/architecture/feature-flags.md#supported-core-profiles) for minimal, deterministic, and embedded recipes.
+
 **CLI:**
 
 ```bash
@@ -57,8 +49,6 @@ cargo install eggfetch-cli
 ```
 
 ## Usage -- Python
-
-### Quick requests
 
 ```python
 import eggfetch
@@ -68,27 +58,20 @@ print(r.status_code)
 print(r.text)
 ```
 
-### Using a client
-
 ```python
 import eggfetch
 
 with eggfetch.Client(headers={"User-Agent": "my-app/1.0"}) as client:
-    # Buffered response
     r = client.get("https://httpbin.org/get")
     print(r.json())
 
-    # POST with JSON body
     r = client.post("https://httpbin.org/post", json={"key": "value"})
     print(r.status_code)
 
-    # Streaming response
     with client.stream("GET", "https://httpbin.org/stream-bytes/10000") as r:
         for chunk in r.iter_bytes():
             print(f"chunk: {len(chunk)} bytes")
 ```
-
-### Async client
 
 ```python
 import asyncio
@@ -99,7 +82,6 @@ async def main():
         r = await client.get("https://httpbin.org/get")
         print(r.status_code)
 
-        # Concurrent requests
         responses = await asyncio.gather(
             client.get("https://httpbin.org/get"),
             client.get("https://httpbin.org/ip"),
@@ -109,8 +91,6 @@ async def main():
 
 asyncio.run(main())
 ```
-
-### Configuration
 
 ```python
 import eggfetch
@@ -126,170 +106,45 @@ client = eggfetch.Client(
 )
 ```
 
-### HTTPX-compatible facade
+Versioned HTTPX-compatible facades over the same engine:
 
 ```python
-from eggfetch.compat.httpx import Client, AsyncClient
-
-# HTTPX 0.28.1 asyncio-compatible facade
-client = Client()
-response = client.get("https://example.com")
+from eggfetch.compat.httpx import Client  # HTTPX 0.28.1 surface
+from eggfetch.compat.httpx2 import Client as H2Client  # httpx2 2.12.0 surface
 ```
 
 See [`docs/python/guide.md`](docs/python/guide.md) for the full Python API reference.
 
 ## Usage -- Rust
 
-### Basic requests
-
 ```rust
 use eggfetch_core::Client;
+use futures_util::StreamExt;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let client = Client::new();
+    let client = Client::builder()
+        .timeout(eggfetch_core::Timeout::from_secs(30))
+        .follow_redirects(true)
+        .user_agent("my-app/1.0")
+        .build();
 
-    // GET request
-    let resp = client.get("https://httpbin.org/get").send().await?;
+    let mut resp = client.get("https://httpbin.org/get").send().await?;
     println!("Status: {}", resp.status());
     println!("Body: {}", resp.text().await?);
 
-    // POST with JSON
-    let resp = client
-        .post("https://httpbin.org/post")
-        .header("Content-Type", "application/json")
-        .body(r#"{"key": "value"}"#)
-        .send()
-        .await?;
-    println!("Status: {}", resp.status());
+    // Streaming body
+    let mut resp = client.get("https://httpbin.org/stream/3").send().await?;
+    let mut stream = resp.bytes_stream()?;
+    while let Some(chunk) = stream.next().await {
+        println!("chunk: {} bytes", chunk?.len());
+    }
 
     Ok(())
 }
 ```
 
-With the opt-in `json` feature, request and response JSON helpers use the
-normal replayable-body and single-consumption response semantics:
-
-```rust
-use eggfetch_core::Client;
-use serde::{Deserialize, Serialize};
-
-#[derive(Serialize, Deserialize)]
-struct Payload { key: String }
-
-let client = Client::new();
-let mut response = client.post("https://api.example/data")?
-    .json(&Payload { key: "value".into() })?
-    .send()
-    .await?;
-let payload: Payload = response.json().await?;
-```
-
-`Response::json()` consumes the body once and uses the normal decompression and
-decoded-body limits. It does not validate `Content-Type`. Request body setters
-follow last-call-wins semantics; if a later `body()`/`bytes()` call replaces a
-JSON body, update the content type explicitly when needed. Per-request
-`max_decoded_body_size()` and `max_decompression_ratio()` overrides take
-precedence over client settings and survive retries and redirects.
-
-For deterministic direct routing, attach caller-validated destinations while
-keeping the logical URL (and therefore HTTP Host and HTTPS SNI) unchanged:
-
-```rust
-let mut response = client
-    .get("https://service.example/data")?
-    .resolved_addresses(["203.0.113.10:443".parse()?])
-    .send()
-    .await?;
-```
-
-Static destinations never fall back to DNS, including on retries. Each address
-must use the URL's effective HTTP/HTTPS port. Same-origin redirects retain the
-snapshot; cross-origin redirects and proxy/HTTP/3 routes fail closed before
-network I/O. Static requests use an isolated direct connection client, so
-ordinary pooled connections cannot bypass the pin. This is distinct from local
-source-address binding and from an SNI override, and is a routing primitive,
-not an address-safety or SSRF policy engine.
-
-### Builder pattern
-
-```rust
-use eggfetch_core::{Client, Timeout};
-
-let client = Client::builder()
-    .timeout(Timeout::from_secs(30))
-    .follow_redirects(true)
-    .max_redirects(5)
-    .user_agent("my-app/1.0")
-    .automatic_decompression(true)
-    .build();
-
-let resp = client
-    .get("https://httpbin.org/get")?
-    .header("accept", "application/json")
-    .query("page", "1")
-    .send()
-    .await?;
-```
-
-### Streaming
-
-```rust
-use eggfetch_core::Client;
-use futures_util::StreamExt;
-
-let mut resp = client.get("https://httpbin.org/stream/3").send().await?;
-let mut stream = resp.bytes_stream()?;
-
-while let Some(chunk) = stream.next().await {
-    let chunk = chunk?;
-    println!("chunk: {} bytes", chunk.len());
-}
-```
-
-### Feature flags
-
-```toml
-[dependencies]
-eggfetch-core = { version = "0.1", features = [
-    "http1",          # HTTP/1.1 (default)
-    "http2",          # HTTP/2 via ALPN
-    "tls-rustls",     # TLS via rustls (default)
-    "tls-native-roots", # OS roots, with WebPKI construction fallback (default)
-    "cookies",        # RFC 6265 cookie jar
-    "proxy",          # HTTP proxy and CONNECT tunneling
-    "compression-gzip",
-    "compression-brotli",
-    "compression-zstd",
-    "compression-deflate",
-    "multipart",      # streaming multipart/form-data
-    "json",           # optional native Serde JSON helpers
-] }
-```
-
-The core profile recipes are explicit about what they include: the ordinary
-default is H1 + Rustls with native roots preferred and WebPKI construction
-fallback; `default-features = false, features = ["http1"]` is cleartext H1
-only; and `default-features = false` with `http1,tls-rustls` is deterministic
-WebPKI HTTPS. Add `tls-native-roots` for platform trust loading or `json` for
-the native Rust Serde helpers. See the [feature profile matrix](docs/architecture/feature-flags.md#supported-core-profiles).
-
-For an embedded cleartext client, select `http1` alone. For a deterministic
-embedded HTTPS client, use `default-features = false` with
-`http1,tls-rustls` (packaged WebPKI roots); add `tls-native-roots` when
-the system trust store should be preferred (it is part of the default
-profile). `http3` and `proxy` imply the TLS and HTTP/1 capabilities they
-require.
-
-Embedded size is measured, not claimed: see
-[`docs/architecture/embedded-footprint.md`](docs/architecture/embedded-footprint.md)
-for the latest manual downstream-size evidence (fixtures in
-`qualification/embedded/`, runner
-`scripts/qualify-embedded-footprint.sh`). The current record is not a
-footprint win over an equivalently scoped reqwest configuration; do not
-describe migration as slimming.
-
-See [`docs/rust/guide.md`](docs/rust/guide.md) for the full Rust API reference.
+The opt-in `json` feature adds `RequestBuilder::json()` / `Response::json()` Serde helpers, and `resolved_addresses()` pins caller-validated destinations without a second DNS lookup. See [`docs/rust/guide.md`](docs/rust/guide.md) for the full Rust API reference.
 
 ## Usage -- CLI
 
@@ -312,101 +167,21 @@ eggfetch --json-output https://httpbin.org/get
 
 See [`docs/cli/guide.md`](docs/cli/guide.md) for the full CLI reference.
 
+## Examples
+
+Runnable starting points (each takes an optional base URL argument, default `https://httpbin.org`):
+
+- [`crates/eggfetch-core/examples/quickstart.rs`](crates/eggfetch-core/examples/quickstart.rs) — core client: configured GET/POST, timeout override, auth, streaming (`cargo run -p eggfetch-core --example quickstart`)
+- [`examples/python_sync.py`](examples/python_sync.py) — sync client, JSON POST, streaming download
+- [`examples/python_async.py`](examples/python_async.py) — async client with concurrent requests
+
+More patterns are in [`docs/cookbook/`](docs/cookbook/).
+
 ## HTTPX Compatibility
 
-eggfetch provides two versioned, independent compatibility facades over the
-single Rust engine. They coexist and never mutate each other.
+Two versioned, independent facades over the single Rust engine — `eggfetch.compat.httpx` (0.28.1) and `eggfetch.compat.httpx2` (2.12.0, adds `FunctionAuth`, `Origin`/`URL.origin`, `QUERY`, SSE, optional WebSocket). Both are Stage C qualified on frozen executable SHA `22a6f5c0dc0207c1356b6143c0eda3d4075063b0`; HTTPX 1.0 preview under `compat/httpx/1.0-preview/` is reconnaissance only.
 
-Both documented facades are Stage C qualified on frozen executable SHA
-`22a6f5c0dc0207c1356b6143c0eda3d4075063b0`; HTTPX 1.0 preview remains
-reconnaissance-only. See the versioned profiles for the exact supported
-surfaces and retained differences.
-
-### HTTPX 0.28.1 (`eggfetch.compat.httpx`)
-
-An asyncio-compatible facade targeting HTTPX 0.28.1. See
-`compat/httpx/0.28.1/profile.toml` for the pinned compatibility profile.
-
-Key differences from HTTPX:
-- Trio/AnyIO not supported (asyncio only, tokio-based)
-- Python 3.8/3.9 not supported (requires 3.10+)
-- `ssl_context` and proxy `ssl_context` are translated through the safe rustls
-  boundary when representable; contexts with unrepresentable cipher, ALPN,
-  TLS-version, or client-certificate provenance fail closed with `TypeError`
-- HTTPX timeout values map to `connect`, `read`, `write`, and `pool` only;
-  the facade does not synthesize EggFetch's native `total` deadline
-- HTTPX `Timeout` preserves omitted versus explicitly disabled (`None`) phase
-  values; `Timeout()` without a scalar or all four phases raises as in HTTPX
-- Core proxy configuration is explicit; the HTTPX compatibility facade honors
-  scheme-specific `HTTP_PROXY`/`HTTPS_PROXY` with `ALL_PROXY` fallback,
-  lowercase forms, `NO_PROXY`, and `trust_env=False`
-- Redirects with buffered retained bodies replay correctly; arbitrary one-shot body iterators are rejected before the next hop
-- Request-local cookies and explicit Cookie headers are preserved within the facade jar model
-- Response streaming is asyncio-compatible and supports incremental text decoding and chunk-size control
-- `Proxy(headers=...)` is forwarded on the proxy leg only and is never sent
-  through a CONNECT tunnel or to the origin; sensitive values are redacted in
-  diagnostic representations
-- HTTP/2-only works for direct TLS, cleartext prior knowledge, the SNI override
-  route, the SOCKS HTTPS route, and the specialized direct/UDS paths. HTTP
-  CONNECT proxy origin framing remains HTTP/1.1, and HTTP/2 `stream_id` remains
-  metadata-only and unavailable
-- Sync trace callbacks work on both `Client` and `AsyncClient`; coroutine
-  trace callbacks are rejected with `TypeError` before dispatch because
-  the core `TraceObserver` is synchronous
-
-Remaining differences are documented in `compat/httpx/0.28.1/allowed-differences.toml`; the compatibility claim is limited to the pinned HTTPX 0.28.1 profile and the supported asyncio surface.
-
-### HTTPX2 2.12.0 (`eggfetch.compat.httpx2`)
-
-A sibling facade for the maintained `httpx2==2.12.0` line, pinned in
-`compat/httpx2/2.12.0/` with its own reference manifest and
-allowed-difference ledger. It reuses the same Rust engine and shared
-compatibility helpers where semantics are identical; HTTPX2-specific
-semantics live behind explicit profile boundaries and never
-leak into `eggfetch.compat.httpx`.
-
-```python
-from eggfetch.compat.httpx2 import Client, AsyncClient
-
-client = Client()  # httpx2 2.12.0 surface: FunctionAuth, Origin, QUERY, SSE, optional WS
-```
-
-New surface vs 0.28.1: `FunctionAuth`, `Origin` + `URL.origin`,
-`QUERY` (`query` top-level + `Client.query`/`AsyncClient.query`),
-`Headers` merge operators (`|`/`|=`), `alias_httpx()` (explicit
-opt-in only), truststore OS-trust default, RFC 9110 status renames,
-plus SSE (`EventSource` over streamed responses) and optional WebSocket
-(wsproto framing over the existing 101 `network_stream` — no second
-socket/TLS stack, `pip install httpx2[ws]` for WS support).
-Python 3.10–3.13 distribution scope.
-
-### HTTPX 1.0 preview (no compatibility promise)
-
-`compat/httpx/1.0-preview/` tracks the HTTPX 1.0 redesign as
-reconnaissance only. No dev release is a supported contract; see that
-directory for the observed version, delta notes, and entry criteria.
-
-### 101 Switching Protocols and `network_stream`
-
-When a request upgrades (e.g. WebSocket via `Connection: Upgrade`), the
-response carries a live owned `NetworkStream` exposed through
-`response.extensions["network_stream"]`. The wrapper type follows the
-caller's API mode: sync `Client.stream()` and `Client.request()` 101
-responses expose the sync `NetworkStream`; async `AsyncClient.stream()`
-and `AsyncClient.request()` 101 responses expose the async wrapper.
-For ordinary pooled HTTP/1.1 and HTTP/2 connections, `network_stream` is
-`None`; the connection is returned to the pool and not user-writable.
-Internal HTTPS proxy CONNECT tunnels are also classified as `None` — the
-canonical access path is the body iterator, not the upgraded stream.
-
-The `NetworkStream` object supports `read`, `write`, `close`, `is_upgraded`,
-`get_extra_info`, and `start_tls(ssl_context=..., server_hostname=...,
-timeout=...)`. `start_tls` uses the same safe TLS policy as the default
-client; it is rejected for Hyper-opaque adapter streams and for streams that
-are already TLS-wrapped. Leading bytes written immediately after the 101
-headers are returned by the first reads from the upgraded stream.
-
-See [`docs/reference/compatibility.md`](docs/reference/compatibility.md) for the full feature matrix.
+See [`docs/reference/compatibility.md`](docs/reference/compatibility.md) for the full feature matrix and retained differences.
 
 ## Documentation
 
@@ -426,12 +201,10 @@ See [`docs/reference/compatibility.md`](docs/reference/compatibility.md) for the
 
 ## Security
 
-eggfetch follows a security-hardening program covering dependencies, TLS, redirects, auth, cookies, proxies, decompression, multipart, retries, and protocol handling.
-
 - **Dependency auditing:** `cargo-deny` configured in `deny.toml`
-- **Secret redaction:** All `Debug`/`Display`/error output redacts credentials, cookies, bearer tokens, and proxy passwords
-- **Threat model:** See [docs/architecture/threat-model.md](docs/architecture/threat-model.md)
-- **Vulnerability reporting:** See [SECURITY.md](SECURITY.md)
+- **Secret redaction:** all `Debug`/`Display`/error output redacts credentials, cookies, bearer tokens, and proxy passwords
+- **Threat model:** see [docs/architecture/threat-model.md](docs/architecture/threat-model.md)
+- **Vulnerability reporting:** see [SECURITY.md](SECURITY.md)
 
 ## License
 

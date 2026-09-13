@@ -57,9 +57,9 @@ The server accepted the connection but is slow to send the response body. Increa
 
 ```python
 async with eggfetch.AsyncClient() as client:
-    async with client.stream("GET", "https://example.com/large") as resp:
-        async for chunk in resp.aiter_bytes():
-            ...
+    resp = await client.stream("GET", "https://example.com/large")
+    async for chunk in resp.aiter_bytes():
+        ...
 ```
 
 ## Too Many Redirects

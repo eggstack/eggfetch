@@ -86,13 +86,13 @@ with client.stream("GET", url) as resp:
     # or: resp.iter_text(), resp.iter_lines(), resp.read(), resp.text
 ```
 
-Async variant:
+Async variant (`stream()` is a coroutine — await it first):
 
 ```python
-async with client.stream("GET", url) as resp:
-    async for chunk in resp.aiter_bytes():
-        process(chunk)
-    # or: resp.aiter_text(), resp.aiter_lines(), resp.aread(), resp.text
+resp = await client.stream("GET", url)
+async for chunk in resp.aiter_bytes():
+    process(chunk)
+# or: resp.aiter_text(), resp.aiter_lines(), resp.aread(), resp.text
 ```
 
 ### StreamingResponse Lifecycle

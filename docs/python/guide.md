@@ -124,23 +124,23 @@ Use `client.stream()` for streaming responses without buffering the full body.
 
 ```python
 async with eggfetch.AsyncClient() as client:
-    async with client.stream("GET", "https://example.com/large") as response:
-        # Iterate over byte chunks
-        async for chunk in response.aiter_bytes():
-            process(chunk)
+    response = await client.stream("GET", "https://example.com/large")
+    # Iterate over byte chunks
+    async for chunk in response.aiter_bytes():
+        process(chunk)
 
-        # Or iterate over lines
-        async for line in response.aiter_text():
-            print(line)
+    # Or iterate over lines
+    async for line in response.aiter_text():
+        print(line)
 ```
 
 Streaming responses also support a buffered fallback:
 
 ```python
 async with eggfetch.AsyncClient() as client:
-    async with client.stream("GET", "https://example.com/data") as response:
-        # Buffer the entire body into text (sync call; releases the GIL)
-        text = response.text()
+    response = await client.stream("GET", "https://example.com/data")
+    # Buffer the entire body into text (sync call; releases the GIL)
+    text = response.text()
 ```
 
 The sync client supports streaming too:
@@ -524,9 +524,9 @@ Streaming responses also support context managers:
 
 ```python
 async with eggfetch.AsyncClient() as client:
-    async with client.stream("GET", "https://example.com") as response:
-        async for chunk in response.aiter_bytes():
-            process(chunk)
+    response = await client.stream("GET", "https://example.com")
+    async for chunk in response.aiter_bytes():
+        process(chunk)
 ```
 
 ## Full Example
