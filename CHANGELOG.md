@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-09-13
+
+### Added
+
+- Native Rust JSON behind the opt-in `json` feature: replayable `RequestBuilder::json()` and single-consumption `Response::json()`. Per-request decoded-body limits override client limits across retries and redirects. Minimal consumers pay nothing for serde.
+- Static resolved routing: pinned-destination `TransportHints` (`resolved_target`) for pre-resolved addresses. Static destinations reject proxy, UDS, and H3 combinations before any I/O.
+- Runnable examples: `crates/eggfetch-core/examples/quickstart.rs` (GET/POST/timeout/auth/streaming), `examples/python_sync.py`, and `examples/python_async.py`.
+
+### Changed
+
+- Core feature and TLS boundary hardening: all origin TLS routes build through `TlsConfig`/`TrustStore`, and feature-flag implications (`http3`, `proxy`) are explicit about the H1/Rustls capabilities they require.
+- README condensed to a quickstart plus grouped feature bullets linking into `docs/`; JSON, resolved-routing, embedded, and httpx-delta details live in their guides.
+
+### Fixed
+
+- Documentation corrected to `response = await client.stream(...)` for the native async API (five guides previously showed the HTTPX-style `async with` form, which only the compat facade supports).
+
 ## [0.1.3] - 2026-09-11
 
 ### Fixed
@@ -57,5 +74,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Multipart boundary validation
 - Proxy authentication boundary enforcement
 
-[Unreleased]: https://github.com/eggstack/eggfetch/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/eggstack/eggfetch/compare/v0.1.4...HEAD
+[0.1.4]: https://github.com/eggstack/eggfetch/releases/tag/v0.1.4
+[0.1.3]: https://github.com/eggstack/eggfetch/releases/tag/v0.1.3
+[0.1.2]: https://github.com/eggstack/eggfetch/releases/tag/v0.1.2
+[0.1.1]: https://github.com/eggstack/eggfetch/releases/tag/v0.1.1
 [0.1.0]: https://github.com/eggstack/eggfetch/releases/tag/v0.1.0
