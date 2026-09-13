@@ -2,6 +2,21 @@
 
 This directory contains active implementation plans, live qualification/status records, and historical implementation records. Completed plans are non-normative unless another current document explicitly says otherwise. Verification and release policy remain governed by `docs/verification-policy.md` and `docs/releases/process.md`.
 
+## Active program — extensible embedded transport consumers (2026-09-13)
+
+Handoff program: `extensible-embedded-transport-consumer-program.md`
+
+Objective: let native Rust consumers reuse eggfetch as the single HTTP/TLS engine when they already own the underlying network route, without adding downstream-specific adapters or changing existing retry, pooling, timeout, Python/CLI, HTTPX, or HTTP/3 defaults. This is an ownership/control program, not a binary-size claim; the existing embedded footprint record remains authoritative until remeasured.
+
+Execution order:
+
+1. `custom-dialer-transport-extension.md` — add a general caller-supplied raw-stream dialer below eggfetch-owned HTTP/TLS, with fail-closed route-combination semantics and no protocol-specific coupling.
+2. `strict-underlying-transport-attempt-control.md` — expose Hyper's canceled-request retry policy separately from eggfetch `RetryPolicy` and apply it consistently to every Hyper client route.
+3. `physical-connection-admission-and-io-inactivity-guardrails.md` — add opt-in physical live-connection admission and established-transport read/write inactivity controls without changing logical `PoolConfig` or existing `Timeout` meanings.
+4. `post-extensible-transport-qualification-and-closure.md` — qualify a synthetic external-style consumer, dependency/footprint impact, repository gates and exact-SHA compatibility, then perform documentation/plan closure.
+
+The public API must remain transport-generic. No Eggpool, Eggress, provider/account, SSH, pproxy, Trojan, Shadowsocks or other downstream protocol model becomes part of eggfetch. Downstream migration remains outside this repository.
+
 ## Completed program — embedded Rust client footprint and routing (2026-09-12)
 
 Handoff program: `embedded-rust-client-footprint-and-routing-program.md`
@@ -15,7 +30,7 @@ Execution order and outcomes:
    remain unchanged.
 2. `static-resolution-and-pinned-destination-routing.md` — done; typed
    request-scoped static routing preserves logical identity and fails closed
-   for incompatible redirects/routes.
+   for incompatible routes.
 3. `native-rust-json-and-response-ergonomics.md` — done; native request and
    response JSON helpers are owned by the opt-in `json` feature.
 4. `embedded-consumer-footprint-qualification.md` — done; bounded evidence
