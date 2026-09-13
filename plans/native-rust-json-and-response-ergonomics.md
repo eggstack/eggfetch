@@ -5,13 +5,15 @@ Parent program: `plans/embedded-rust-client-footprint-and-routing-program.md`
 
 ## Closure evidence — 2026-09-12
 
-Implemented in frozen executable commit
-`6e65c5bfc2607b30af8062a9269fcd260ed96464`. The opt-in `json` feature owns
-`serde`/`serde_json`; `RequestBuilder::json()` sets a default JSON media type
-without overriding an explicit header, and `Response::json()` uses the
-existing buffered/decompression/limit/single-consumption path. Focused unit
-coverage, feature-off/on checks, fixture builds, and the full repository gates
-passed. JSON errors are classified without embedding payloads.
+The initial implementation landed in executable commit
+`6e65c5bfc2607b30af8062a9269fcd260ed96464`; this follow-up closes the remaining
+request-scoped limit and coverage gaps. The opt-in `json` feature owns the
+`serde`/`serde_json` dependencies; `RequestBuilder::json()` sets a default JSON
+media type without overriding an explicit header, and `Response::json()` uses
+the existing buffered/decompression/limit/single-consumption path. Request
+limits now override client limits and survive retries and redirects. The final
+verification commit and remote CI result are recorded after the local and
+remote gates complete. JSON errors are classified without embedding payloads.
 
 ## Objective
 
@@ -21,7 +23,9 @@ The implementation must remain idiomatic to eggfetch's own body/response model a
 
 ## Current problem
 
-`eggfetch-core` declares a `json` feature, but the feature is currently empty. The architecture documentation explicitly reserves it for future Rust-native Serde integration while Python JSON support is implemented independently at the Python boundary.
+The original baseline declared an empty `json` feature and reserved it for
+future Rust-native Serde integration. That capability is now implemented while
+Python JSON support remains independent at the Python boundary.
 
 As a result, native Rust consumers must manually:
 
@@ -182,7 +186,19 @@ Requirements:
 - enforce both streaming and buffered response paths through the existing limit wrapper;
 - avoid duplicating limit logic in `Response` methods.
 
+Acceptance:
+
+- [x] request overrides take precedence over client settings;
+- [x] request overrides survive retries and redirects;
+- [x] buffered and streaming response paths use the existing shared limit
+  wrappers.
+
 If this requires invasive pipeline changes disproportionate to the benefit, record a deliberate deferral rather than expanding scope. Native JSON is the required part of this plan; request-scoped body limits are desirable but not a blocker to parent-program closure.
+
+The pipeline change is small and consistent with the existing typed request
+reconstruction: request overrides are stored as optional fields, resolved once
+in prepared-request state, and passed to the existing buffered/streaming
+decompression and decoded-size limit path.
 
 # 7. Builder/API consistency audit
 

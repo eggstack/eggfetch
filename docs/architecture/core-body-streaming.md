@@ -16,6 +16,11 @@ See also: [overview.md](overview.md), [core-engine.md](core-engine.md).
 
 When `length` is `Some(n)`, the body is sent with `Content-Length`. When `None`, hyper selects a safe transfer mode (e.g., chunked transfer encoding for HTTP/1.1).
 
+With the opt-in `json` feature, `RequestBuilder::json()` serializes once into
+the replayable `Bytes` variant. It sets `Content-Type: application/json` only
+when no content type was supplied. Body setters follow last-call-wins
+semantics; replacing JSON later does not remove its already-set content type.
+
 ### Replayability
 
 `RequestBody::try_clone_for_redirect()` is used during redirect following. `Bytes` bodies are replayed by cloning. `Stream` bodies are non-replayable — 307/308 redirects with stream bodies return `Error::BodyNotReplayableForRedirect`.
@@ -110,3 +115,8 @@ Python-side request bodies support iterables, file-like objects, and custom `Byt
 - `max_decompression_ratio` — maximum ratio of compressed to decoded size.
 
 Exceeding either limit yields `Error::DecodedBodyTooLarge` or `Error::DecompressionRatioExceeded`.
+The client values can be overridden per request with
+`RequestBuilder::max_decoded_body_size()` and
+`RequestBuilder::max_decompression_ratio()`. Request overrides take
+precedence and are retained across retries and redirects. `Response::json()`
+uses these same limits through the ordinary decoded body path.

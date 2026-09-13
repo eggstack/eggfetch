@@ -325,6 +325,8 @@ struct HopBuildParams {
     version: http::Version,
     timeout: Timeout,
     decompress: Option<bool>,
+    max_decoded_body_size: Option<usize>,
+    max_decompression_ratio: Option<f64>,
     #[cfg(feature = "proxy")]
     proxy_override: ProxyOverride,
     transport_hints: crate::request::TransportHints,
@@ -344,7 +346,8 @@ struct HopBuildParams {
 ///
 /// - Transport hints (`target`, `sni_hostname`, `trace`) attach only on the
 ///   first hop; redirect hops clear them because the destination changed.
-/// - Per-request decompression and proxy overrides persist across all hops.
+/// - Per-request decompression, decoded-body limits, and proxy overrides
+///   persist across all hops.
 /// - Auth follows the cross-origin stripping policy; cookies are injected
 ///   from the jar unless an explicit `cookie` header exists or the hop no
 ///   longer allows cookies.
@@ -363,6 +366,8 @@ fn build_hop_request(client: &Client, params: HopBuildParams) -> Result<Request>
         version,
         timeout,
         decompress,
+        max_decoded_body_size,
+        max_decompression_ratio,
         #[cfg(feature = "proxy")]
         proxy_override,
         transport_hints,
@@ -380,6 +385,8 @@ fn build_hop_request(client: &Client, params: HopBuildParams) -> Result<Request>
     hop.set_version(version);
     hop.set_timeout(Some(timeout));
     hop.set_decompress(decompress);
+    hop.set_max_decoded_body_size(max_decoded_body_size);
+    hop.set_max_decompression_ratio(max_decompression_ratio);
     #[cfg(feature = "proxy")]
     hop.set_proxy_override(proxy_override);
     // Ordinary wire hints apply only on the first hop. A resolved destination
@@ -510,6 +517,8 @@ fn advance_redirect_hop(
         auth: _,
         auth_disabled: _,
         decompress: _,
+        max_decoded_body_size: _,
+        max_decompression_ratio: _,
         proxy_override: _,
         retry: _,
         transport_hints: _,
@@ -541,6 +550,8 @@ struct PreparedRequest {
     #[cfg(feature = "proxy")]
     effective_proxy: Option<ProxyConfig>,
     decompression_enabled: bool,
+    max_decoded_body_size: Option<usize>,
+    max_decompression_ratio: Option<f64>,
     timeout: Timeout,
     remaining_total: Option<Duration>,
     deadline: Option<std::time::Instant>,
@@ -764,6 +775,8 @@ pub(crate) async fn send_with_redirects(client: &Client, request: Request) -> Re
         auth: req_auth,
         auth_disabled: req_auth_disabled,
         decompress: request_decompress,
+        max_decoded_body_size: request_max_decoded_body_size,
+        max_decompression_ratio: request_max_decompression_ratio,
         proxy_override: request_proxy,
         retry: _request_retry,
         transport_hints: request_transport_hints,
@@ -803,6 +816,8 @@ pub(crate) async fn send_with_redirects(client: &Client, request: Request) -> Re
                 version,
                 timeout,
                 decompress: request_decompress,
+                max_decoded_body_size: request_max_decoded_body_size,
+                max_decompression_ratio: request_max_decompression_ratio,
                 #[cfg(feature = "proxy")]
                 proxy_override: request_proxy,
                 transport_hints: request_transport_hints,
@@ -898,6 +913,8 @@ pub(crate) async fn send_with_redirects(client: &Client, request: Request) -> Re
                 version: cur_version,
                 timeout: hop_timeout,
                 decompress: request_decompress,
+                max_decoded_body_size: request_max_decoded_body_size,
+                max_decompression_ratio: request_max_decompression_ratio,
                 #[cfg(feature = "proxy")]
                 proxy_override: request_proxy.clone(),
                 transport_hints: request_transport_hints.clone(),
@@ -1163,6 +1180,8 @@ async fn prepare_single_request(
         proxy_override,
         retry: _,
         transport_hints,
+        max_decoded_body_size: request_max_decoded_body_size,
+        max_decompression_ratio: request_max_decompression_ratio,
     } = request.into_parts();
 
     if let Some(target) = &transport_hints.resolved_target {
@@ -1190,6 +1209,10 @@ async fn prepare_single_request(
     }
 
     let decompression_enabled = request_decompress.unwrap_or(inner.config.automatic_decompression);
+    let max_decoded_body_size =
+        request_max_decoded_body_size.or(inner.config.max_decoded_body_size);
+    let max_decompression_ratio =
+        request_max_decompression_ratio.or(inner.config.max_decompression_ratio);
 
     let mut headers = headers;
     if decompression_enabled && !headers.contains("accept-encoding") {
@@ -1311,6 +1334,8 @@ async fn prepare_single_request(
         #[cfg(feature = "proxy")]
         effective_proxy,
         decompression_enabled,
+        max_decoded_body_size,
+        max_decompression_ratio,
         timeout: *timeout,
         remaining_total,
         deadline,
@@ -1348,6 +1373,8 @@ pub(crate) async fn send_single_request(
         #[cfg(feature = "proxy")]
         effective_proxy,
         decompression_enabled,
+        max_decoded_body_size,
+        max_decompression_ratio,
         timeout: hop_timeout,
         remaining_total,
         deadline,
@@ -1757,8 +1784,8 @@ pub(crate) async fn send_single_request(
             .map(str::to_owned);
 
         let limit = crate::compression::DecompressionLimit {
-            max_decoded_body_size: inner.config.max_decoded_body_size,
-            max_decompression_ratio: inner.config.max_decompression_ratio,
+            max_decoded_body_size,
+            max_decompression_ratio,
         };
 
         response = crate::response_decode::apply_decompression(
@@ -1768,7 +1795,7 @@ pub(crate) async fn send_single_request(
         )?;
     }
 
-    if let Some(max) = inner.config.max_decoded_body_size {
+    if let Some(max) = max_decoded_body_size {
         // EncodedStreaming merges this value into its existing decompression
         // limit; unencoded streaming bodies get the limiting wrapper here.
         // This does not add a second decoded-size stream layer.
@@ -1921,6 +1948,8 @@ mod tests {
         )));
         req.set_auth_disabled(false);
         req.set_decompress(Some(false));
+        req.set_max_decoded_body_size(Some(1024));
+        req.set_max_decompression_ratio(Some(12.5));
         #[cfg(feature = "proxy")]
         req.set_proxy_override(crate::request::ProxyOverride::Direct);
         req.set_retry(Some(RetryPolicy::default()));
@@ -1947,6 +1976,8 @@ mod tests {
         let expected_auth = req.auth().cloned();
         let expected_auth_disabled = req.is_auth_disabled();
         let expected_decompress = req.decompress();
+        let expected_max_decoded_body_size = req.max_decoded_body_size();
+        let expected_max_decompression_ratio = req.max_decompression_ratio();
         let expected_retry = req.retry().cloned();
         let expected_target = req.transport_hints().target.clone();
         let expected_sni = req.transport_hints().sni_hostname.clone();
@@ -1965,6 +1996,8 @@ mod tests {
             auth: _,
             auth_disabled: _,
             decompress: _,
+            max_decoded_body_size: _,
+            max_decompression_ratio: _,
             proxy_override: _,
             retry: _,
             transport_hints: _,
@@ -2000,6 +2033,14 @@ mod tests {
         );
         assert_eq!(rebuilt.is_auth_disabled(), expected_auth_disabled);
         assert_eq!(rebuilt.decompress(), expected_decompress);
+        assert_eq!(
+            rebuilt.max_decoded_body_size(),
+            expected_max_decoded_body_size
+        );
+        assert_eq!(
+            rebuilt.max_decompression_ratio(),
+            expected_max_decompression_ratio
+        );
         #[cfg(feature = "proxy")]
         assert!(matches!(
             rebuilt.proxy_override(),
@@ -2047,6 +2088,8 @@ mod tests {
         assert!(attempt.auth().is_some());
         assert!(!attempt.is_auth_disabled());
         assert_eq!(attempt.decompress(), Some(false));
+        assert_eq!(attempt.max_decoded_body_size(), Some(1024));
+        assert_eq!(attempt.max_decompression_ratio(), Some(12.5));
         #[cfg(feature = "proxy")]
         assert!(matches!(
             attempt.proxy_override(),
@@ -2164,6 +2207,8 @@ mod tests {
                 version: http::Version::HTTP_11,
                 timeout: Timeout::default(),
                 decompress: Some(true),
+                max_decoded_body_size: None,
+                max_decompression_ratio: None,
                 #[cfg(feature = "proxy")]
                 proxy_override: crate::request::ProxyOverride::Direct,
                 transport_hints: TransportHints {
@@ -2219,6 +2264,8 @@ mod tests {
                 version: http::Version::HTTP_11,
                 timeout: Timeout::default(),
                 decompress: None,
+                max_decoded_body_size: None,
+                max_decompression_ratio: None,
                 #[cfg(feature = "proxy")]
                 proxy_override: crate::request::ProxyOverride::Inherit,
                 transport_hints: TransportHints {
@@ -2286,6 +2333,8 @@ mod tests {
                 version: http::Version::HTTP_11,
                 timeout: Timeout::default(),
                 decompress: Some(true),
+                max_decoded_body_size: None,
+                max_decompression_ratio: None,
                 #[cfg(feature = "proxy")]
                 proxy_override: crate::request::ProxyOverride::Direct,
                 transport_hints: mk_hints(),
@@ -2308,6 +2357,8 @@ mod tests {
                 version: http::Version::HTTP_11,
                 timeout: Timeout::default(),
                 decompress: Some(true),
+                max_decoded_body_size: None,
+                max_decompression_ratio: None,
                 #[cfg(feature = "proxy")]
                 proxy_override: crate::request::ProxyOverride::Direct,
                 transport_hints: mk_hints(),

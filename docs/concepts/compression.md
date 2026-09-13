@@ -66,6 +66,10 @@ let client = Client::builder()
     .build();
 ```
 
+For a single request, `max_decoded_body_size()` and
+`max_decompression_ratio()` override the matching client setting. Request
+overrides take precedence and are retained across retries and redirects.
+
 | Limit | Description |
 |-------|-------------|
 | `max_decoded_body_size` | Hard limit on total decoded bytes, including unencoded responses |

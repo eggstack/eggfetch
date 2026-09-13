@@ -98,8 +98,8 @@ malformed bypass, and `Headers` merge preserving redaction. See
 
 Compressed responses can expand to enormous sizes, allowing denial-of-service attacks through decompression bombs. eggfetch enforces two limits during streaming decompression:
 
-- **max_decoded_body_size**: Maximum uncompressed bytes the client will accept. Configurable via `ClientBuilder::max_decoded_body_size()` or CLI `--max-body-size`.
-- **max_decompression_ratio**: Ratio of compressed to uncompressed output. Configurable via `ClientBuilder::max_decompression_ratio()` or CLI `--max-decompression-ratio`.
+- **max_decoded_body_size**: Maximum uncompressed bytes the client will accept. Configurable via `ClientBuilder::max_decoded_body_size()`, per-request `RequestBuilder::max_decoded_body_size()`, or CLI `--max-body-size`.
+- **max_decompression_ratio**: Ratio of compressed to uncompressed output. Configurable via `ClientBuilder::max_decompression_ratio()`, per-request `RequestBuilder::max_decompression_ratio()`, or CLI `--max-decompression-ratio`.
 
 When either limit is exceeded, the response stream is terminated with `Error::DecodedBodyTooLarge` or `Error::DecompressionRatioExceeded`. Both limits are enforced during streaming, so memory usage stays bounded even for large responses.
 

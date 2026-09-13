@@ -140,6 +140,13 @@ let response = client.post("https://api.example.com/users")?
 let user: User = response.json().await?;
 ```
 
+Native `Response::json()` parsing is explicit: it does not require or validate
+`Content-Type`, consumes the response body once, and uses the normal decoded
+body/decompression limits. `RequestBuilder::json()` replaces an earlier body;
+a later body setter replaces its bytes but leaves an already-set content type.
+Per-request decoded-body limit overrides take precedence over client settings
+and persist across retries and redirects.
+
 For native direct routing, `resolved_addresses()` pins the physical TCP
 destinations while the request URL still controls Host, HTTPS certificate
 identity, and SNI:

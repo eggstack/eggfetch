@@ -24,7 +24,7 @@ eggfetch is a Rust-native HTTP client engine with Python bindings and a CLI tool
 - **Authentication** -- Basic and Bearer auth with credential redaction in all output paths
 - **Multipart** -- streaming multipart/form-data with known-length optimization
 - **Retries** -- policy-driven retries with exponential backoff and `Retry-After` support
-- **Native Rust JSON (opt-in)** -- replayable `RequestBuilder::json()` request bodies and single-consumption `Response::json()` decoding via Serde
+- **Native Rust JSON (opt-in)** -- replayable `RequestBuilder::json()` request bodies and single-consumption `Response::json()` decoding via Serde; parsing is explicit and does not require a JSON media type
 - **Resolved destination routing (native Rust)** -- caller-supplied direct `SocketAddr` sets without a second DNS lookup, preserving logical Host/SNI identity
 - **Python API** -- requests/HTTPX-compatible sync and async interfaces, GIL-releasing blocking I/O
 - **HTTPX compatibility facade** -- compatible asyncio surface targeting HTTPX 0.28.1 (`eggfetch.compat.httpx`)
@@ -184,6 +184,13 @@ let mut response = client.post("https://api.example/data")?
     .await?;
 let payload: Payload = response.json().await?;
 ```
+
+`Response::json()` consumes the body once and uses the normal decompression and
+decoded-body limits. It does not validate `Content-Type`. Request body setters
+follow last-call-wins semantics; if a later `body()`/`bytes()` call replaces a
+JSON body, update the content type explicitly when needed. Per-request
+`max_decoded_body_size()` and `max_decompression_ratio()` overrides take
+precedence over client settings and survive retries and redirects.
 
 For deterministic direct routing, attach caller-validated destinations while
 keeping the logical URL (and therefore HTTP Host and HTTPS SNI) unchanged:

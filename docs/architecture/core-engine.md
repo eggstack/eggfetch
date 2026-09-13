@@ -88,13 +88,21 @@ Key methods:
 - `url()` → `&Url`
 - `wire_content_encoding()` → `Option<&str>` — original wire Content-Encoding (before decompression)
 - `wire_content_length()` → `Option<&str>` — original wire Content-Length
+- `content_length()` → `Option<u64>` — parsed declared wire Content-Length; never decoded body size
 - `wire_reason_phrase()` → `Option<&str>` — original wire HTTP/1.x reason phrase
 - `bytes()` → buffered body as `Bytes`
 - `text()` → buffered body as `String`
+- `json()` → optional `DeserializeOwned` decoding through the same single-consume `bytes()` path
 - `bytes_stream()` → streaming `BoxBytesStream`
 - `text_lines()` → line-by-line text iterator
 - `trailers()` → `Option<HeaderMap>` after body EOF (H1 chunked, H2 trailing HEADERS, H3 trailing headers; `None` until arrival, on no-trailers, or on pre-trailer errors; H1 duplicates collapse upstream)
 - `history()` → `&[HistoryEntry]` (redirect chain)
+
+`RequestBuilder::max_decoded_body_size()` and
+`RequestBuilder::max_decompression_ratio()` override the corresponding
+client limits for one logical request. Request values win over client values
+and survive retries and redirects; both buffered and streaming response paths
+use the same prepared limits.
 
 ### HistoryEntry
 

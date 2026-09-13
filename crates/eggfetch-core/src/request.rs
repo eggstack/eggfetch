@@ -153,6 +153,8 @@ pub(crate) struct RequestParts {
     pub(crate) auth: Option<AuthScheme>,
     pub(crate) auth_disabled: bool,
     pub(crate) decompress: Option<bool>,
+    pub(crate) max_decoded_body_size: Option<usize>,
+    pub(crate) max_decompression_ratio: Option<f64>,
     pub(crate) proxy_override: ProxyOverride,
     pub(crate) retry: Option<RetryPolicy>,
     pub(crate) transport_hints: TransportHints,
@@ -181,6 +183,8 @@ impl RequestParts {
             auth,
             auth_disabled,
             decompress,
+            max_decoded_body_size,
+            max_decompression_ratio,
             proxy_override,
             retry,
             transport_hints,
@@ -194,6 +198,8 @@ impl RequestParts {
         request.set_auth(auth);
         request.set_auth_disabled(auth_disabled);
         request.set_decompress(decompress);
+        request.set_max_decoded_body_size(max_decoded_body_size);
+        request.set_max_decompression_ratio(max_decompression_ratio);
         #[cfg(feature = "proxy")]
         request.set_proxy_override(proxy_override);
         #[cfg(not(feature = "proxy"))]
@@ -230,6 +236,8 @@ impl RequestParts {
         request.set_auth(self.auth.clone());
         request.set_auth_disabled(self.auth_disabled);
         request.set_decompress(self.decompress);
+        request.set_max_decoded_body_size(self.max_decoded_body_size);
+        request.set_max_decompression_ratio(self.max_decompression_ratio);
         #[cfg(feature = "proxy")]
         request.set_proxy_override(self.proxy_override.clone());
         request.set_retry(self.retry.clone());
@@ -273,6 +281,8 @@ pub struct Request {
     auth: Option<AuthScheme>,
     auth_disabled: bool,
     decompress: Option<bool>,
+    max_decoded_body_size: Option<usize>,
+    max_decompression_ratio: Option<f64>,
     /// Proxy override: `None` = inherit, `Some(None)` = direct, `Some(Some(c))` = explicit.
     proxy_override: ProxyOverride,
     /// Per-request retry policy override.
@@ -294,6 +304,8 @@ impl std::fmt::Debug for Request {
             .field("auth", &self.auth)
             .field("auth_disabled", &self.auth_disabled)
             .field("decompress", &self.decompress)
+            .field("max_decoded_body_size", &self.max_decoded_body_size)
+            .field("max_decompression_ratio", &self.max_decompression_ratio)
             .field("proxy_override", &self.proxy_override)
             .field("retry", &self.retry)
             .field("transport_hints", &self.transport_hints)
@@ -315,6 +327,8 @@ impl Request {
             auth: None,
             auth_disabled: false,
             decompress: None,
+            max_decoded_body_size: None,
+            max_decompression_ratio: None,
             proxy_override: ProxyOverride::Inherit,
             retry: None,
             transport_hints: TransportHints::default(),
@@ -425,6 +439,32 @@ impl Request {
         self.decompress = decompress;
     }
 
+    /// Returns the per-request decoded response body size limit, if set.
+    ///
+    /// `None` means the client-level setting is used.
+    #[must_use]
+    pub fn max_decoded_body_size(&self) -> Option<usize> {
+        self.max_decoded_body_size
+    }
+
+    /// Set the per-request decoded response body size limit.
+    pub fn set_max_decoded_body_size(&mut self, max: Option<usize>) {
+        self.max_decoded_body_size = max;
+    }
+
+    /// Returns the per-request decompression ratio limit, if set.
+    ///
+    /// `None` means the client-level setting is used.
+    #[must_use]
+    pub fn max_decompression_ratio(&self) -> Option<f64> {
+        self.max_decompression_ratio
+    }
+
+    /// Set the per-request decompression ratio limit.
+    pub fn set_max_decompression_ratio(&mut self, ratio: Option<f64>) {
+        self.max_decompression_ratio = ratio;
+    }
+
     /// Returns the proxy override for this request.
     #[cfg(feature = "proxy")]
     #[must_use]
@@ -475,6 +515,8 @@ impl Request {
             auth: self.auth,
             auth_disabled: self.auth_disabled,
             decompress: self.decompress,
+            max_decoded_body_size: self.max_decoded_body_size,
+            max_decompression_ratio: self.max_decompression_ratio,
             proxy_override: self.proxy_override,
             retry: self.retry,
             transport_hints: self.transport_hints,
@@ -494,6 +536,8 @@ pub struct RequestBuilder {
     auth: Option<AuthScheme>,
     auth_disabled: bool,
     decompress: Option<bool>,
+    max_decoded_body_size: Option<usize>,
+    max_decompression_ratio: Option<f64>,
     proxy_override: ProxyOverride,
     retry: Option<RetryPolicy>,
     transport_hints: TransportHints,
@@ -514,6 +558,8 @@ impl RequestBuilder {
             auth: None,
             auth_disabled: false,
             decompress: None,
+            max_decoded_body_size: None,
+            max_decompression_ratio: None,
             proxy_override: ProxyOverride::Inherit,
             retry: None,
             transport_hints: TransportHints::default(),
@@ -563,7 +609,10 @@ impl RequestBuilder {
     ///
     /// Sets `Content-Type: application/json` unless the request already has
     /// an explicit content type. The value is serialized before any network
-    /// operation; serialization failures are returned immediately.
+    /// operation; serialization failures are returned immediately. Like the
+    /// other body setters, this replaces a body set earlier in the chain. A
+    /// later `body()` or `bytes()` call replaces the JSON bytes; it does not
+    /// remove a content type that was already set.
     ///
     /// # Errors
     ///
@@ -650,6 +699,35 @@ impl RequestBuilder {
     #[must_use]
     pub fn decompress(mut self, decompress: bool) -> Self {
         self.decompress = Some(decompress);
+        self
+    }
+
+    /// Override the client decoded response body size limit for this request.
+    ///
+    /// The request setting takes precedence over the client setting and is
+    /// carried across retries and redirects. A value of zero rejects any
+    /// non-empty decoded response body.
+    #[must_use]
+    pub fn max_decoded_body_size(mut self, max: usize) -> Self {
+        self.max_decoded_body_size = Some(max);
+        self
+    }
+
+    /// Override the client decompression ratio limit for this request.
+    ///
+    /// The request setting takes precedence over the client setting and is
+    /// carried across retries and redirects.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `ratio` is not finite or not positive.
+    #[must_use]
+    pub fn max_decompression_ratio(mut self, ratio: f64) -> Self {
+        assert!(
+            ratio.is_finite() && ratio > 0.0,
+            "max_decompression_ratio must be finite and positive, got {ratio}"
+        );
+        self.max_decompression_ratio = Some(ratio);
         self
     }
 
@@ -744,6 +822,8 @@ impl RequestBuilder {
         req.auth = self.auth;
         req.auth_disabled = self.auth_disabled;
         req.decompress = self.decompress;
+        req.max_decoded_body_size = self.max_decoded_body_size;
+        req.max_decompression_ratio = self.max_decompression_ratio;
         req.proxy_override = self.proxy_override;
         req.retry = self.retry;
         req.transport_hints = self.transport_hints;

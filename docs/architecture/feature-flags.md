@@ -99,7 +99,9 @@ when the caller has not supplied a content type. Response JSON consumes the
 body once through the normal decoded-body/limit path and does not require a
 particular media type. JSON errors have distinct json_serialize and
 json_deserialize kinds. The feature remains opt-in and is not in default;
-Python continues to expose its own json.dumps() boundary.
+Python continues to expose its own json.dumps() boundary. The native
+`Response::json()` path does not cache or re-read the body, and request-level
+decoded-body limits are available independently of this feature.
 
 ### Resolved destination routing
 
