@@ -7,13 +7,15 @@ Parent program: `plans/embedded-rust-client-footprint-and-routing-program.md`
 
 The initial implementation landed in executable commit
 `6e65c5bfc2607b30af8062a9269fcd260ed96464`; this follow-up closes the remaining
-request-scoped limit and coverage gaps. The opt-in `json` feature owns the
+request-scoped limit and coverage gaps. The implementation is finalized in
+commit `30ae8a89dfb92c125c81cda1e20f304858f0c091`. The opt-in `json` feature owns the
 `serde`/`serde_json` dependencies; `RequestBuilder::json()` sets a default JSON
 media type without overriding an explicit header, and `Response::json()` uses
 the existing buffered/decompression/limit/single-consumption path. Request
 limits now override client limits and survive retries and redirects. The final
-verification commit and remote CI result are recorded after the local and
-remote gates complete. JSON errors are classified without embedding payloads.
+local Tier 1 checks passed, and remote main CI run
+`34727671743 <https://github.com/eggstack/eggfetch/actions/runs/34727671743>`
+passed for that commit. JSON errors are classified without embedding payloads.
 
 ## Objective
 
