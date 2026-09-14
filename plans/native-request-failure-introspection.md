@@ -343,6 +343,7 @@ Validation on the frozen executable tree:
 - `./scripts/check.sh extended`: passed; full compatibility 1,870/1,870, with the existing optional skips for the unbuilt Node artifact, Rust 1.80/Cargo resolution, and absent downstream artifact manifest.
 - `./scripts/check.sh package`: passed, including crate dry-run, wheel smoke, and package-content validation.
 - Three exact-SHA full compatibility runs: 1,870/1,870 each, in 245.62s, 247.55s, and 250.15s; 26 known non-failing warnings per run.
+- Remote `CI` run `34903075007` passed on closure head `032f56d933a1d27c595c4730aa9f906083ab3d36` in 8m48s; its only annotation was the existing GitHub Actions Node.js 20 deprecation notice.
 - Dependency trees (`cargo tree -p eggfetch-core`, feature tree, and duplicate tree) show no new dependency. MSRV was exercised through the extended gate; its documented local toolchain limitation remains an optional skip.
 - The active HTTPX 0.28.1 and HTTPX2 2.12.0 profile bindings are renewed to this SHA on 2026-09-14. The subsequent closure commit is documentation/profile/plan-only.
 - `max_decoded_body_size` work was documentation clarification only; existing identity-body coverage (`response_body_unencoded_size_limit_is_enforced`) and `DecodedBodyTooLarge` behavior remain authoritative, with no second limiter.

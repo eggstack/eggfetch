@@ -28,7 +28,13 @@ Qualification evidence on the final executable tree:
 The closing plan is `plans/native-request-failure-introspection.md`. Its
 follow-up documentation/profile/plan-index commit is intentionally a
 docs-only descendant of this executable freeze. Remote CI status is recorded
-below after the descendant is pushed.
+below for the pushed descendant:
+
+- Workflow: `CI`, run `34903075007`
+- Head SHA: `032f56d933a1d27c595c4730aa9f906083ab3d36`
+- Conclusion: success (8m48s, 2026-09-14)
+- The workflow’s only annotation is the repository’s existing GitHub Actions
+  Node.js 20 deprecation notice; no validation step failed.
 
 ## Historical state — Stage C renewed after TLS provider qualification hardening (2026-09-14)
 
