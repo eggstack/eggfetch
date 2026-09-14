@@ -20,9 +20,12 @@ created = "2026-09-10"
 # invalidated the previous binding; this profile was renewed after the
 # corrected final freeze below. A later qualification-only TLS provider/mTLS
 # fixture hardening pass invalidated that binding and was requalified below.
+# Native request-failure introspection then changed core request/error plumbing;
+# this profile was renewed after three consecutive full compatibility passes on
+# the final executable tree below.
 stage = "stage-c-qualified"
 status = "qualified"
-qualification-sha = "1ea63ba1a4ea81ab548c2a7c9af5563d975793cd"
+qualification-sha = "e10c4efdff6af9a73a89d015584df15fa6e2900c"
 qualification-date = "2026-09-14"
 historical-current-qualification-sha = "639bf186a71c054e11278d1b160ffe7a6f172c02"
 reference = "httpx2==2.12.0"

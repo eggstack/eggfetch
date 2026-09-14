@@ -4,7 +4,33 @@ This record is the exact-SHA-bound status for the HTTPX 0.28.1 compatibility
 facade. Historical phase and corrective-pass records remain in the git history
 and referenced plans; counts below are only from the runs named here.
 
-## Recorded state — Stage C renewed after TLS provider qualification hardening (2026-09-14)
+## Recorded state — Stage C renewed after native request-failure introspection (2026-09-14)
+
+Recorded designation: **Stage C qualified** for both the documented HTTPX
+0.28.1 and httpx2 2.12.0 asyncio surfaces, bound to executable SHA
+`e10c4efdff6af9a73a89d015584df15fa6e2900c`. The preceding
+`1ea63ba1a4ea81ab548c2a7c9af5563d975793cd` binding is historical because the
+native request/error plumbing changed after that freeze. Both profiles record
+this SHA and the 2026-09-14 qualification date.
+
+Qualification evidence on the final executable tree:
+
+- focused native request-failure and direct-connector tests passed, along with
+  the custom-dialer provenance regression;
+- Tier 1, extended, and package validation passed, with only the documented
+  optional local skips for the unbuilt Node artifact, Rust 1.80/Cargo
+  resolution, and absent downstream artifact manifest;
+- three consecutive full compatibility runs each passed 1,870 tests with 26
+  non-failing warnings, taking 245.62s, 247.55s, and 250.15s;
+- no new dependency was added; body-size changes were documentation/test
+  clarification only.
+
+The closing plan is `plans/native-request-failure-introspection.md`. Its
+follow-up documentation/profile/plan-index commit is intentionally a
+docs-only descendant of this executable freeze. Remote CI status is recorded
+below after the descendant is pushed.
+
+## Historical state — Stage C renewed after TLS provider qualification hardening (2026-09-14)
 
 Recorded designation: **Stage C qualified** for both the documented HTTPX
 0.28.1 and httpx2 2.12.0 asyncio surfaces, bound to executable SHA

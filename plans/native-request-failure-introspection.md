@@ -1,7 +1,7 @@
 # Native Request Failure Introspection
 
 Planning baseline: `c5a79cbf3f94741dc25e694329b1ab552976d6a2` (`main`, 2026-09-14; eggfetch 0.1.4)
-Status: implementation handoff
+Status: complete
 Motivating downstream review: Gregg system-monitor client integration. Gregg is requirements evidence only; no Gregg type, endpoint, status model, feature flag, or adapter belongs in eggfetch.
 
 ## Objective
@@ -114,11 +114,11 @@ Use names consistent with the final API review, but do not replace or change `se
 
 Acceptance:
 
-- [ ] Existing `Client::send` and `RequestBuilder::send` signatures are unchanged.
-- [ ] Existing `Error` variants, field shapes, exhaustiveness, `kind()` values and ordinary display behavior are unchanged.
-- [ ] The detailed API can always recover the original `Error` losslessly with `into_error()`.
-- [ ] The new classification enum is generic and evolvable from its first release.
-- [ ] No application/downstream terminology appears in the public API.
+- [x] Existing `Client::send` and `RequestBuilder::send` signatures are unchanged.
+- [x] Existing `Error` variants, field shapes, exhaustiveness, `kind()` values and ordinary display behavior are unchanged.
+- [x] The detailed API can always recover the original `Error` losslessly with `into_error()`.
+- [x] The new classification enum is generic and evolvable from its first release.
+- [x] No application/downstream terminology appears in the public API.
 
 ## 2. Keep diagnostics private to opted-in requests
 
@@ -141,10 +141,10 @@ However, classification is about the **terminal request failure**, not every tra
 
 Acceptance:
 
-- [ ] Ordinary requests pay no diagnostics allocation/storage cost.
-- [ ] Detailed requests carry at most bounded O(1) failure metadata.
-- [ ] Retry/redirect/fallback cannot report stale earlier-attempt classification as the terminal failure.
-- [ ] Existing tracing and transport metrics remain separate; no second lifecycle/event subsystem is created.
+- [x] Ordinary requests pay no diagnostics allocation/storage cost.
+- [x] Detailed requests carry at most bounded O(1) failure metadata.
+- [x] Retry/redirect/fallback cannot report stale earlier-attempt classification as the terminal failure.
+- [x] Existing tracing and transport metrics remain separate; no second lifecycle/event subsystem is created.
 
 ## 3. Capture structured provenance before legacy error collapse
 
@@ -192,11 +192,11 @@ Document route coverage. This API is an evidence-backed classifier, not a promis
 
 Acceptance:
 
-- [ ] No classifier searches `Display`, `Debug`, localized OS text, Hyper text, or prefix/suffix strings.
-- [ ] DNS/refusal is derived from typed/private provenance before public error collapse.
-- [ ] Existing public `Error` returned by ordinary `send()` remains compatible.
-- [ ] Direct-connector address fallback has deterministic, tested classification rules.
-- [ ] Routes without sufficient evidence degrade to generic/unknown rather than guessing.
+- [x] No classifier searches `Display`, `Debug`, localized OS text, Hyper text, or prefix/suffix strings.
+- [x] DNS/refusal is derived from typed/private provenance before public error collapse.
+- [x] Existing public `Error` returned by ordinary `send()` remains compatible.
+- [x] Direct-connector address fallback has deterministic, tested classification rules.
+- [x] Routes without sufficient evidence degrade to generic/unknown rather than guessing.
 
 ## 4. Centralize cross-platform resolver/refusal detection
 
@@ -210,9 +210,9 @@ Where a platform does not expose enough structured information to prove DNS fail
 
 Acceptance:
 
-- [ ] Linux, macOS and Windows logic is explicit where platform raw codes are needed.
-- [ ] No test depends on internet reachability or a public resolver.
-- [ ] Unknown resolver/connect states fail closed to generic classification.
+- [x] Linux, macOS and Windows logic is explicit where platform raw codes are needed.
+- [x] No test depends on internet reachability or a public resolver.
+- [x] Unknown resolver/connect states fail closed to generic classification.
 
 ## 5. Preserve timeout semantics exactly
 
@@ -242,9 +242,9 @@ Where existing tests already prove the identity/unencoded path, reference them i
 
 Acceptance:
 
-- [ ] Public documentation no longer implies the limit applies only to compressed/decompressed bodies.
-- [ ] No duplicate body-limit implementation is added.
-- [ ] Existing `DecodedBodyTooLarge` semantics remain unchanged.
+- [x] Public documentation no longer implies the limit applies only to compressed/decompressed bodies.
+- [x] No duplicate body-limit implementation is added.
+- [x] Existing `DecodedBodyTooLarge` semantics remain unchanged.
 
 ## 7. Public API and regression tests
 
@@ -320,6 +320,33 @@ When implementation is complete, amend this plan with:
 
 Do not turn this plan into a permanent evidence subsystem. Once closed, it becomes a historical implementation record under the normal plan-index rules.
 
+## Closure record
+
+- Final executable SHA: `e10c4efdff6af9a73a89d015584df15fa6e2900c` (`feat(core): add native request failure introspection`).
+- Public API: `NetworkFailureKind`, `RequestFailure`, `Client::send_detailed`, and `RequestBuilder::send_detailed`; the wrapper exposes `error()`, `into_error()`, `network_failure_kind()`, `is_timeout()`, and `timeout_phase()`.
+- The existing `Error` enum, `Error::kind()`, ordinary send methods, and binding/facade paths are unchanged. Detailed requests alone allocate the private bounded context.
+
+Route coverage is evidence-backed and intentionally conservative:
+
+| Route | DNS | `ConnectionRefused` | generic `Connect` | Notes |
+|---|---|---|---|---|
+| Standard Hyper | unknown/`None` | yes, when a typed refusal is present in the source chain | yes, for Hyper connect failures | The standard resolver’s concrete error is opaque; no message inference is used. The legacy public error kind remains `hyper_client` for this route. |
+| Direct/resolved/SNI | yes, on direct resolver failure | yes, only when every attempted compatible address refused | yes, for mixed/other connect and setup failures | Private connector provenance is converted back to the existing public `Error::Connect(String)`. |
+| Custom `Dialer` | `None` | `None` | `None` | Existing `DialError` and `CustomTransport` source semantics are preserved; caller errors are not reinterpreted. |
+| Proxy/UDS/HTTP/3 | `None` | `None` | `None` | No current abstraction exposes sufficient typed evidence at the common boundary. |
+
+Validation on the frozen executable tree:
+
+- Focused native request-failure tests: 4/4; direct connector classifier tests: 9/9; custom-dialer provenance regression: passed.
+- `cargo check -p eggfetch-core --all-features --locked`, focused all-target clippy with `-D warnings`, `cargo fmt --all -- --check`, doc tests, and documentation example/link checks: passed.
+- `./scripts/check.sh`: passed (Rust, Python behavior 542/542, HTTPX smoke 133/133, and Rust Node tests; Node JS artifact surface skipped because the optional artifact is not built).
+- `./scripts/check.sh extended`: passed; full compatibility 1,870/1,870, with the existing optional skips for the unbuilt Node artifact, Rust 1.80/Cargo resolution, and absent downstream artifact manifest.
+- `./scripts/check.sh package`: passed, including crate dry-run, wheel smoke, and package-content validation.
+- Three exact-SHA full compatibility runs: 1,870/1,870 each, in 245.62s, 247.55s, and 250.15s; 26 known non-failing warnings per run.
+- Dependency trees (`cargo tree -p eggfetch-core`, feature tree, and duplicate tree) show no new dependency. MSRV was exercised through the extended gate; its documented local toolchain limitation remains an optional skip.
+- The active HTTPX 0.28.1 and HTTPX2 2.12.0 profile bindings are renewed to this SHA on 2026-09-14. The subsequent closure commit is documentation/profile/plan-only.
+- `max_decoded_body_size` work was documentation clarification only; existing identity-body coverage (`response_body_unencoded_size_limit_is_enforced`) and `DecodedBodyTooLarge` behavior remain authoritative, with no second limiter.
+
 ## Non-goals
 
 - no Gregg migration code;
@@ -337,13 +364,13 @@ Do not turn this plan into a permanent evidence subsystem. Once closed, it becom
 
 ## Exit criteria
 
-- [ ] Native Rust callers can opt into structured terminal request-failure metadata without parsing strings.
-- [ ] DNS and connection refusal are reported only when supported by structured evidence.
-- [ ] Existing public `Error` enum shape, `kind()` values, and ordinary send APIs remain compatible.
-- [ ] Existing non-detailed callers pay no diagnostics allocation/state cost.
-- [ ] Retry/redirect/fallback cannot leak stale failure classifications.
-- [ ] Direct-connector failure provenance is structured internally before conversion to the legacy public error.
-- [ ] Body-size documentation accurately describes the already-existing unencoded/decoded cap semantics.
-- [ ] No downstream-specific code or dependency is added.
-- [ ] Tier 1, extended, package, MSRV, and applicable existing compatibility checks pass or record only already-supported truthful optional skips.
-- [ ] The plan contains final closure evidence and `plans/README.md` points to the current status.
+- [x] Native Rust callers can opt into structured terminal request-failure metadata without parsing strings.
+- [x] DNS and connection refusal are reported only when supported by structured evidence.
+- [x] Existing public `Error` enum shape, `kind()` values, and ordinary send APIs remain compatible.
+- [x] Existing non-detailed callers pay no diagnostics allocation/state cost.
+- [x] Retry/redirect/fallback cannot leak stale failure classifications.
+- [x] Direct-connector failure provenance is structured internally before conversion to the legacy public error.
+- [x] Body-size documentation accurately describes the already-existing unencoded/decoded cap semantics.
+- [x] No downstream-specific code or dependency is added.
+- [x] Tier 1, extended, package, MSRV, and applicable existing compatibility checks pass or record only already-supported truthful optional skips.
+- [x] The plan contains final closure evidence and `plans/README.md` points to the current status.

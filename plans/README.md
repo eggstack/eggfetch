@@ -2,9 +2,16 @@
 
 This directory contains active implementation plans, live qualification/status records, and historical implementation records. Completed plans are non-normative unless another current document explicitly says otherwise. Verification and release policy remain governed by `docs/verification-policy.md` and `docs/releases/process.md`.
 
-## Active handoff — native request failure introspection (2026-09-14)
+## Completed — native request failure introspection (2026-09-14)
 
-Handoff plan: `native-request-failure-introspection.md`
+Plan: `native-request-failure-introspection.md`
+
+Status: complete. The executable implementation is committed at
+`e10c4efdff6af9a73a89d015584df15fa6e2900c`; the plan contains the API,
+route-coverage, compatibility, and validation closure record. Tier 1,
+extended, package validation, and three consecutive exact-SHA 1,870-test
+compatibility runs passed. The compatibility profiles were renewed on this
+SHA; the closing documentation/profile commit is a docs-only descendant.
 
 Objective: add an opt-in, transport-generic native Rust request-failure surface that can preserve structured DNS/refusal/connect provenance before the existing public `Error::Connect(String)` collapse, without changing the existing `Error` enum, `Error::kind()` tokens, ordinary `send()` APIs, Python/CLI/HTTPX behavior, or transport policy. The same plan clarifies that `max_decoded_body_size` already bounds unencoded/identity responses as well as decoded compressed bodies; it does not add another body-limit implementation.
 
