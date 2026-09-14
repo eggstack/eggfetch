@@ -159,6 +159,10 @@ Native callers that need strict attempt accounting can set
 Hyper's transparent retry after a reused idle connection is found unusable;
 it does not disable or alter eggfetch's explicit `RetryPolicy`. The default is
 `true`, and the setting does not apply to the independent HTTP/3 transport.
+Embedded orchestrators can additionally set `PhysicalConnectionPolicy` and
+`TransportIoTimeout` to bound live Hyper connections and established I/O
+inactivity independently from logical pool limits and request timeouts. See
+the [Rust guide](docs/rust/guide.md) for the integration boundary and limits.
 
 ## Usage -- CLI
 
@@ -193,7 +197,7 @@ More patterns are in [`docs/cookbook/`](docs/cookbook/).
 
 ## HTTPX Compatibility
 
-Two versioned, independent facades over the single Rust engine — `eggfetch.compat.httpx` (0.28.1) and `eggfetch.compat.httpx2` (2.12.0, adds `FunctionAuth`, `Origin`/`URL.origin`, `QUERY`, SSE, optional WebSocket). Both are Stage C qualified on frozen executable SHA `22a6f5c0dc0207c1356b6143c0eda3d4075063b0`; HTTPX 1.0 preview under `compat/httpx/1.0-preview/` is reconnaissance only.
+Two versioned, independent facades over the single Rust engine — `eggfetch.compat.httpx` (0.28.1) and `eggfetch.compat.httpx2` (2.12.0, adds `FunctionAuth`, `Origin`/`URL.origin`, `QUERY`, SSE, optional WebSocket). Both are Stage C qualified on frozen executable SHA `43c68bd1bcff45301fc8b6b163b6b6e06d98a786`; HTTPX 1.0 preview under `compat/httpx/1.0-preview/` is reconnaissance only.
 
 See [`docs/reference/compatibility.md`](docs/reference/compatibility.md) for the full feature matrix and retained differences.
 

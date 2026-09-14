@@ -8,18 +8,19 @@ eggfetch is a Rust-native HTTP client platform with Python bindings and a CLI la
 
 The remaining roadmap is therefore not primarily about proving feasibility. It is about tightening semantics, completing the expected HTTP-client feature set, expanding transport capabilities, and establishing production-grade release, security, testing, and documentation practices.
 
-## Current product position (2026-09-12)
+## Current product position (2026-09-14)
 
-The embedded Rust client footprint and routing program is complete on frozen
-executable/test/fixture SHA
-`22a6f5c0dc0207c1356b6143c0eda3d4075063b0`. `eggfetch-core` now has truthful
-feature ownership, native `json` request/response helpers, and request-scoped
-resolved-destination routing that preserves logical identity and fails closed
-for incompatible routes. Bounded embedded evidence classifies the result as
-**not a footprint win** against aligned Rustls reqwest profiles; adoption is
-therefore an ownership/control/API decision, not a size-saving claim. The
-engine is ready for downstream migration evaluation, but no downstream
-migration is part of eggfetch.
+The embedded Rust client and extensible transport programs are complete on
+executable/test/fixture freeze `43c68bd1bcff45301fc8b6b163b6b6e06d98a786`.
+`eggfetch-core` now has truthful feature ownership, native `json`
+request/response helpers, request-scoped resolved-destination routing, a
+caller-owned raw-stream `Dialer`, strict Hyper stale-idle retry control, and
+independent physical-connection/I/O-inactivity guardrails. These preserve
+logical identity and fail closed for incompatible routes. Bounded embedded
+evidence still classifies the result as **not a footprint win** against aligned
+Rustls reqwest profiles; adoption is therefore an ownership/control/API
+decision, not a size-saving claim. The engine is ready for downstream
+migration evaluation, but no downstream migration is part of eggfetch.
 
 The HTTP/3 graduation and next HTTPX compatibility program
 (`http3-and-next-httpx-compatibility-program.md`) is complete: Alt-Svc

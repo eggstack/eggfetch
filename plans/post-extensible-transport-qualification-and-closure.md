@@ -3,7 +3,7 @@
 Planning baseline: `475bd50f6f9b9f66b95eea814f06b4adb22ede93` (`main`, 2026-09-13; eggfetch 0.1.4)
 Parent program: `plans/extensible-embedded-transport-consumer-program.md`
 Depends on: executable completion of the custom-dialer, strict-attempt-control, and physical-connection/I/O-guardrail plans
-Status: partial closure recorded; bounded follow-ups remain
+Status: complete; final qualification and documentation closure recorded 2026-09-14
 
 ## Objective
 
@@ -242,13 +242,59 @@ At closure, append a concise evidence section containing:
 
 ## Exit criteria
 
-- [ ] all three executable child plans satisfy their exit criteria;
+- [x] all three executable child plans satisfy their exit criteria;
 - [x] external-style public consumer fixture compiles and runs without private APIs;
 - [x] minimal feature profiles remain clean and expected dependencies are absent;
-- [ ] footprint impact is measured and recorded truthfully;
-- [ ] focused transport regressions pass;
-- [ ] Tier 1, extended and package validation pass under existing policy;
+- [x] footprint impact is measured and recorded truthfully;
+- [x] focused transport regressions pass;
+- [x] Tier 1, extended and package validation pass under existing policy;
 - [x] exact-SHA HTTPX/HTTPX2 compatibility evidence is renewed on the final executable tree;
 - [x] documentation reflects the actual public API and limitations;
-- [ ] post-freeze descendants are audited as non-executable or the freeze is rerun;
-- [ ] plan index/roadmap mark the program complete only after evidence exists.
+- [x] post-freeze descendants are audited as non-executable or the freeze is rerun;
+- [x] plan index/roadmap mark the program complete only after evidence exists.
+
+## Closure evidence (2026-09-14)
+
+- **Executable freeze:** `43c68bd1bcff45301fc8b6b163b6b6e06d98a786`.
+  The only post-`6eb9f3f` executable correction was the RSS monitor's delta
+  headroom, widened from 50 MiB to 64 MiB while retaining the independent
+  100 MiB absolute peak cap. The final clean Tier 1/2/3 runs are bound to this
+  SHA.
+- **Focused behavior:** the custom dialer, route-conflict, TLS identity,
+  stale-idle retry, physical admission/reuse/idle-retention, transport-I/O
+  progress/timeout, cancellation, H2, and H3 incompatibility suites passed.
+  In the final all-features run, the relevant counts were retry 10, transport
+  metrics 8, direct transport 17, H2 22, H3 hardening 12, H3 Alt-Svc 17, and
+  H3 interop controls 20; the full core test run passed 691 unit tests.
+- **Canonical gates:** Tier 1 passed; Tier 2 passed with only the documented
+  Node artifact, local MSRV/Cargo, and downstream artifact skips; Tier 3
+  passed package dry-runs, wheel build/smoke, and content validation. The
+  local MSRV check is explicitly not an MSRV pass because installed Rust 1.80
+  Cargo cannot parse the current crates.io resolution.
+- **Compatibility and API oracles:** three consecutive full runs for both
+  versioned facades passed, each with 1,870 tests and 26 warnings. HTTPX 0.28.1
+  generated 71 allowed differences and httpx2 2.12.0 generated 79; both API
+  oracles were clean. The profiles now bind to the executable freeze above.
+- **External-style fixture:**
+  `qualification/embedded-custom-dialer/` compiled and ran using only public
+  `eggfetch-core` exports, with HTTP streaming, strict retry, physical
+  admission, and transport-I/O controls. The fixture remains intentionally
+  HTTP-only; TLS/SNI behavior is covered by core integration tests.
+- **Footprint:** on `x86_64-unknown-linux-gnu`, `rustc/cargo 1.98.1`, linker
+  `cc 13.3.0`, isolated release builds measured eggfetch/reqwest stripped
+  minimal WebPKI at 3,643,952/3,079,840 bytes, native roots at
+  3,678,296/3,116,968, JSON WebPKI at 3,769,600/3,223,256, and JSON native
+  at 3,804,008/3,256,288. The control fixture was 4,369,848 stripped bytes
+  (6,077,008 unstripped; 117 unique packages). Classification remains **not a
+  footprint win**; values are not cross-host regressions.
+- **Dependency conclusion:** the new controls add no runtime dependency;
+  minimal trees remain free of optional proxy/H2/H3/compression/cookie/
+  multipart crates. No unrelated dependency pins or upgrades were retained.
+- **Descendant audit:** documentation/profile/plan closure is a separate
+  descendant of the executable freeze and contains no Rust/Python/JS source,
+  tests, manifests, build scripts, or generated executable assets. The final
+  documentation descendant SHA is recorded after this closure commit.
+
+Retained limitations are unchanged: HTTP/3 remains experimental, the local
+MSRV environment is unsupported for a definitive Rust 1.80 graph check, and
+no downstream application migration is included.

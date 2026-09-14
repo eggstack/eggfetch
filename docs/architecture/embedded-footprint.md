@@ -18,7 +18,7 @@ JSON fixture uses `eggfetch-core/json`; static resolved-destination routing is
 an independent native transport capability and is not part of the size
 workload.
 
-## Measurement
+## Latest control-closure measurement (2026-09-14)
 
 ```sh
 scripts/qualify-embedded-footprint.sh --output-dir /tmp/eggfetch-embedded-footprint
@@ -26,21 +26,49 @@ scripts/qualify-embedded-footprint.sh --output-dir /tmp/eggfetch-embedded-footpr
 
 | Item | Value |
 |---|---|
-| eggfetch SHA | `22a6f5c0dc0207c1356b6143c0eda3d4075063b0` |
+| eggfetch SHA | `43c68bd1bcff45301fc8b6b163b6b6e06d98a786` |
 | reqwest | `0.12.28` (resolved via crates.io at run time) |
 | rustc | `1.98.1 (48a229cea 2026-09-01)` |
 | cargo | `1.98.1 (797e8a9bc 2026-08-05)` |
-| target | `aarch64-unknown-linux-gnu` |
+| target | `x86_64-unknown-linux-gnu` |
 | linker | `cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0` |
 | release profile | `lto="thin"`, `codegen-units=1`, `strip=false`, `debug=false`, `panic="unwind"`; `stripped` is an explicit `strip` copy |
 | build isolation | isolated `CARGO_TARGET_DIR` per profile (clean) |
+
+Ordinary profiles on this host remain larger than aligned reqwest profiles:
+
+| Profile | eggfetch stripped | reqwest stripped | Delta |
+|---|---:|---:|---:|
+| minimal WebPKI | 3,643,952 | 3,079,840 | +564,112 |
+| minimal native roots | 3,678,296 | 3,116,968 | +561,328 |
+| JSON WebPKI | 3,769,600 | 3,223,256 | +546,344 |
+| JSON native roots | 3,804,008 | 3,256,288 | +547,720 |
+
+The custom-control fixture is measured separately because reqwest has no
+equivalent first-party profile:
+
+| Profile | stripped | unstripped | unique packages |
+|---|---:|---:|---:|
+| `eggfetch-custom-dialer` | 4,369,848 | 6,077,008 | 117 |
+
+The runner also measured `eggfetch-default` at 3,759,976 stripped bytes and
+`reqwest-default` at 2,401,392; that pair is informational and not equivalent.
+These x86_64 values supersede neither the historical aarch64 record below nor
+the classification: eggfetch is still **not a footprint win** in the aligned
+profiles. Cross-host byte deltas are not exact regressions.
+
+Latest unique package counts were 116/118/124/126 for the four eggfetch
+minimal/native/JSON profiles and 121/124/126/129 for their reqwest peers;
+`eggfetch-default` was 126, `reqwest-default` 144, and the custom fixture 117.
+
+## Previous comparable measurement (2026-09-12, aarch64)
 
 Each binary remains tiny: one reusable client, HTTPS GET, JSON
 serialize/deserialize where the profile selects it, and streaming
 iteration. No cookies, proxy, compression, multipart, H2, or H3 in the
 minimal profiles.
 
-## Stripped sizes (primary)
+## Stripped sizes (historical primary record)
 
 | Profile | eggfetch stripped | reqwest stripped | Delta |
 |---|---|---|---|
@@ -132,9 +160,11 @@ would not violate the plan's prohibitions:
 
 ## Classification: not a footprint win
 
-Eggfetch is materially larger than the equivalently scoped reqwest
-configuration in every Rustls-aligned profile (+327,728 stripped bytes,
-+11–12%). Do not describe migration as slimming.
+The historical aarch64 record below showed eggfetch materially larger than the
+equivalently scoped reqwest configuration by +327,728 stripped bytes in every
+Rustls-aligned profile. The latest x86_64 record shows the same direction with
+host-specific deltas of +546,344 to +564,112 bytes. Do not describe migration
+as slimming.
 
 The difference is inherent to the current engine rather than an
 avoidable wiring error: both stacks share Hyper/Tokio/Rustls

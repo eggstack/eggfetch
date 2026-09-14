@@ -4,22 +4,22 @@ This record is the exact-SHA-bound status for the HTTPX 0.28.1 compatibility
 facade. Historical phase and corrective-pass records remain in the git history
 and referenced plans; counts below are only from the runs named here.
 
-## Recorded state — Stage C renewed on embedded-program frozen executable SHA (2026-09-12)
+## Recorded state — Stage C renewed on extensible-transport frozen executable SHA (2026-09-14)
 
 Recorded designation: **Stage C qualified** for both the documented HTTPX
 0.28.1 and httpx2 2.12.0 asyncio surfaces, bound to executable SHA
-`22a6f5c0dc0207c1356b6143c0eda3d4075063b0`. The prior
-`6e65c5b...` binding, as well as earlier bindings, is historical because
+`43c68bd1bcff45301fc8b6b163b6b6e06d98a786`. The prior
+`22a6f5c...` binding, as well as earlier bindings, is historical because
 subsequent qualification-sensitive work followed it. The profiles in
 `compat/httpx/0.28.1/profile.toml` and `compat/httpx2/2.12.0/profile.toml`
-record this SHA and the 2026-09-12 qualification date.
+record this SHA and the 2026-09-14 qualification date.
 
 Qualification evidence on the unchanged frozen tree:
 
 - focused suites: direct/static transport 17/17, H3 Alt-Svc 17/17, H3
-  hardening 12/12, native JSON 8/8, proxy 36/36, retry 6/6, and TLS 13/13;
-- Tier 1: green. One transient feature-profile timeout assertion was rerun
-  three times successfully; no source change was made for it;
+  hardening 12/12, native JSON 8/8, proxy 36/36, retry 10/10, transport
+  metrics 8/8, and TLS 13/13;
+- Tier 1: green on the final executable freeze;
 - full compatibility: three consecutive runs, each 1,870 passed, 26
   non-failing warnings, zero skips/xfails/failures;
 - API oracles: HTTPX 0.28.1 clean with 71 allowed differences and httpx2
@@ -27,32 +27,27 @@ Qualification evidence on the unchanged frozen tree:
 - bounded embedded footprint: 327,728 stripped bytes larger than aligned
   reqwest in each Rustls profile; outcome **not a footprint win**.
 
-Extended validation passed with the existing skips for the unavailable Rust
-1.80 toolchain and unbuilt Node JS artifact. Package validation passed on the
-clean documentation commit `cade32b` (including crate packaging, wheel smoke,
-and package-content checks); required downstream qualification passed 4/4
-against the rebuilt 0.1.3 wheel.
+Extended validation passed with the documented unsupported local Rust 1.80 /
+old Cargo environment, unbuilt Node JS artifact, and absent downstream
+artifact skips. Package validation passed on the final executable freeze
+(including crate packaging, wheel smoke, and package-content checks).
 
 HTTP/3 remains **experimental**. The H3 evidence ledger records the missing
 independent non-Quinn server passes, independent GOAWAY/drain evidence,
 public-origin checks, realistic impairment execution, and unresolved upstream
 correctness risk. HTTP/3 status is separate from the HTTPX parity claims.
 
-Remote routine CI for documentation-only descendant
-`a7df01df31fd624e3b6fff1db48a0120fd8b9779` passed in run `34741393283` on
-2026-09-13. It contains the unchanged frozen executable SHA above and passed
-the repository's existing CI workflow.
+Remote routine CI for the final documentation descendant is pending the push
+of this closure commit; the executable freeze and all local gates are recorded
+above.
 
 ### Current-tree qualification note (2026-09-14)
 
-The native custom-dialer correction and its deterministic Rust regressions are
-post-freeze executable changes. The recorded Stage C result above therefore
-remains valid only for the exact frozen SHA
-`22a6f5c0dc0207c1356b6143c0eda3d4075063b0`; it is not a current-tree claim.
-The compatibility profiles and generated API manifests are intentionally
-unchanged because this correction does not alter either Python facade. A
-future compatibility closure must requalify both profiles on a new clean
-executable freeze before restoring a current-tree Stage C designation.
+The native custom-dialer, lifecycle-control, deterministic regression, and
+RSS-monitor qualification work is closed on the exact executable SHA above.
+The compatibility profiles and generated API manifests remain independent of
+the native surface; both profiles were nevertheless requalified together on
+the final clean freeze as required by the repository's exact-SHA policy.
 
 ## Historical state — qualification pending after HTTP/3 program changes (pre-freeze)
 

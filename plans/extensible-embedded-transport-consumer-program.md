@@ -1,7 +1,7 @@
 # Extensible Embedded Transport Consumer Program
 
 Planning baseline: `475bd50f6f9b9f66b95eea814f06b4adb22ede93` (`main`, 2026-09-13; eggfetch 0.1.4)
-Status: implementation landed; closure follow-ups remain
+Status: complete; qualification and documentation closure recorded 2026-09-14
 
 ## Objective
 
@@ -200,10 +200,10 @@ The program is complete when:
 - [x] all Hyper client construction paths honor that setting;
 - [x] callers can independently bound live physical connections without changing logical pool semantics;
 - [x] callers can independently bound actual transport read/write inactivity without changing existing body timeout semantics;
-- [ ] focused regressions cover route conflicts, stale pooled connections, connection admission, idle-pool permit retention and stalled transport I/O;
+- [x] focused regressions cover route conflicts, stale pooled connections, connection admission, idle-pool permit retention and stalled transport I/O;
 - [x] a tiny external-style fixture proves the public API requires no crate-private types;
-- [ ] minimal/default dependency and binary effects are measured rather than inferred;
-- [ ] Tier 1, extended and package validation pass;
+- [x] minimal/default dependency and binary effects are measured rather than inferred;
+- [x] Tier 1, extended and package validation pass;
 - [x] exact-SHA compatibility evidence is renewed after executable work freezes;
 - [x] plan index and architecture/native Rust documentation accurately describe the final surface.
 
@@ -219,4 +219,31 @@ Implementation commit: `af03f006f377979550ee6cb96a30b28193c8708d`.
 - `qualification/embedded-custom-dialer/` compiled and ran using only public `eggfetch-core` exports.
 - Minimal dependency inspection showed no new runtime dependency and no proxy/H2/H3/compression/cookie/multipart capability pulled into the HTTP/1 profiles by these controls.
 
-Retained follow-ups: add a deterministic stale-idle test that distinguishes default/strict/explicit retry, broaden the lifecycle integration matrix beyond the focused permit tests, and rerun the bounded stripped-binary measurement for a consumer that uses the new controls. The existing footprint conclusion remains authoritative: eggfetch is not presently a footprint win.
+The previously retained stale-idle, lifecycle-matrix, and control-using
+footprint follow-ups are closed by the final evidence below. The existing
+footprint conclusion remains authoritative: eggfetch is not presently a
+footprint win.
+
+## Final closure evidence (2026-09-14)
+
+The executable/test/fixture freeze is `43c68bd1bcff45301fc8b6b163b6b6e06d98a786`.
+The final qualification record is in
+`plans/post-extensible-transport-qualification-and-closure.md`.
+
+- The deterministic stale-idle tests now cover default transparent retry,
+  strict failure, explicit retry, and unreplayable-body behavior; lifecycle
+  metrics tests cover successful reuse/idle permit retention and independent
+  physical admission across origins.
+- Minimal HTTP/1 + Rustls feature trees remain free of optional proxy, H2, H3,
+  compression, cookie, and multipart dependencies. No dependency was added
+  for the new native controls.
+- The final x86_64 footprint run remains **not a footprint win** against
+  aligned reqwest Rustls profiles. The control-using fixture is reported
+  separately because reqwest has no equivalent profile.
+- Tier 1, extended, and package validation passed. Extended validation records
+  only the documented unavailable Node artifact, unsupported local Rust 1.80 /
+  old Cargo MSRV environment, and absent downstream artifact skips.
+
+The program is complete as a general-purpose eggfetch engine capability. No
+downstream migration, protocol-specific routing model, or HTTP/3 graduation
+is part of this closure.

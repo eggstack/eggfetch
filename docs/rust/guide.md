@@ -116,6 +116,15 @@ controls. `max_live` must be greater than zero when set, and
 I/O-timeout counters. Admission waits are distinct from `Timeout.pool`, and
 transport I/O timeouts are distinct from request-body/response-body timeouts.
 
+### Integration boundary
+
+For an embedding application, keep routing and route/isolation policy outside
+eggfetch, construct a client for the policy domain as needed, and optionally
+provide a `Dialer` for the raw stream. Eggfetch then owns destination
+HTTP/TLS, pooling, request timeouts, response streaming, and the ordinary
+`RetryPolicy`; the native canceled-request setting, physical connection cap,
+and transport-I/O inactivity policy remain separately configurable.
+
 ## Creating a Client
 
 The `Client` manages connection pooling and shared configuration. Create one and reuse it for multiple requests.

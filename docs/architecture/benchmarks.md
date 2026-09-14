@@ -72,6 +72,12 @@ cargo build --release -p eggfetch-bench --bin resource_monitor
 
 This is why Tier 1 runs workspace tests with `--test-threads=1` (`--workspace --exclude eggfetch-python`): resource-stabilization tests measure process RSS, and concurrent test execution makes that measurement scheduling-dependent. See [build-ci.md](build-ci.md).
 
+The monitor uses a 64 MiB peak-minus-baseline delta cap and an independent
+100 MiB absolute peak cap. The delta headroom accounts for normal allocator and
+runtime growth across the sequential workloads; it is not a product memory
+budget. The report records both values so a real absolute-growth regression
+remains visible.
+
 ## Relation to Performance Budgets
 
 Separate from these Rust benchmarks, the HTTPX compatibility qualification enforces latency/throughput ceilings defined in `compat/httpx/0.28.1/performance-budgets.toml`. See [testing-fuzzing.md](testing-fuzzing.md).

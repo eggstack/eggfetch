@@ -2,18 +2,18 @@
 
 This directory contains active implementation plans, live qualification/status records, and historical implementation records. Completed plans are non-normative unless another current document explicitly says otherwise. Verification and release policy remain governed by `docs/verification-policy.md` and `docs/releases/process.md`.
 
-## Active program — extensible embedded transport consumers (2026-09-13)
+## Completed program — extensible embedded transport consumers (2026-09-14)
 
 Handoff program: `extensible-embedded-transport-consumer-program.md`
 
-Objective: let native Rust consumers reuse eggfetch as the single HTTP/TLS engine when they already own the underlying network route, without adding downstream-specific adapters or changing existing retry, pooling, timeout, Python/CLI, HTTPX, or HTTP/3 defaults. The implementation landed in `af03f006f377979550ee6cb96a30b28193c8708d`; the plan remains active only for the explicitly recorded stale-pool/footprint follow-ups. This is an ownership/control program, not a binary-size claim; the existing embedded footprint record remains authoritative until remeasured.
+Objective: let native Rust consumers reuse eggfetch as the single HTTP/TLS engine when they already own the underlying network route, without adding downstream-specific adapters or changing existing retry, pooling, timeout, Python/CLI, HTTPX, or HTTP/3 defaults. The implementation landed in `af03f006f377979550ee6cb96a30b28193c8708d`; qualification and documentation closure completed on executable freeze `43c68bd1bcff45301fc8b6b163b6b6e06d98a786`. This is an ownership/control program, not a binary-size claim; the latest embedded record remains **not a footprint win** against aligned reqwest profiles.
 
 Execution order:
 
 1. `custom-dialer-transport-extension.md` — add a general caller-supplied raw-stream dialer below eggfetch-owned HTTP/TLS, with fail-closed route-combination semantics and no protocol-specific coupling.
 2. `strict-underlying-transport-attempt-control.md` — expose Hyper's canceled-request retry policy separately from eggfetch `RetryPolicy` and apply it consistently to every Hyper client route.
 3. `physical-connection-admission-and-io-inactivity-guardrails.md` — add opt-in physical live-connection admission and established-transport read/write inactivity controls without changing logical `PoolConfig` or existing `Timeout` meanings.
-4. `post-extensible-transport-qualification-and-closure.md` — qualify a synthetic external-style consumer, dependency/footprint impact, repository gates and exact-SHA compatibility, then perform documentation/plan closure.
+4. `post-extensible-transport-qualification-and-closure.md` — completed the synthetic external-style consumer, dependency/footprint impact, repository gates and exact-SHA compatibility, then performed documentation/plan closure.
 
 The public API must remain transport-generic. No Eggpool, Eggress, provider/account, SSH, pproxy, Trojan, Shadowsocks or other downstream protocol model becomes part of eggfetch. Downstream migration remains outside this repository.
 

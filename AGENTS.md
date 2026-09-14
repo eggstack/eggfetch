@@ -39,7 +39,7 @@ cargo fmt --all -- --check
 
 ## HTTPX compat (easy to break)
 
-Facades `eggfetch.compat.httpx` (0.28.1) and `eggfetch.compat.httpx2` (2.12.0) coexist without cross-mutation; `compat/httpx/1.0-preview/` is reconnaissance only. Both are Stage C qualified on frozen SHA `22a6f5c0dc0207c1356b6143c0eda3d4075063b0` (`compat/*/profile.toml`); any executable change invalidates qualification. Never hand-edit generated API manifests — regenerate via `scripts/generate_httpx_api_manifest.py` + `scripts/compare_httpx_api_manifest.py`.
+Facades `eggfetch.compat.httpx` (0.28.1) and `eggfetch.compat.httpx2` (2.12.0) coexist without cross-mutation; `compat/httpx/1.0-preview/` is reconnaissance only. Both are Stage C qualified on frozen SHA `43c68bd1bcff45301fc8b6b163b6b6e06d98a786` (`compat/*/profile.toml`); any executable change invalidates qualification. Never hand-edit generated API manifests — regenerate via `scripts/generate_httpx_api_manifest.py` + `scripts/compare_httpx_api_manifest.py`.
 
 - Timeouts: map only `connect`/`read`/`write`/`pool`; never synthesize native `total`. Preserve omitted-vs-`None`; reject bare `Timeout()`. Proxy setup uses one monotonic deadline (min of explicit `total` + phase budgets).
 - `NO_PROXY`: compat env parser accepts bare unbracketed IPv6 but rejects bracketed/CIDR-looking forms; native `NoProxy::parse()` is richer. Do not unify.
