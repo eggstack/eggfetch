@@ -2,6 +2,7 @@
 # Embedded consumer footprint qualification (manual, not CI).
 #
 # Builds the fixed minimal/JSON/default profiles for eggfetch-core and reqwest,
+# plus the public custom-dialer control-using fixture,
 # gathers `cargo tree` evidence, measures release artifact sizes before and
 # after explicit `strip`, and writes a machine-readable result plus a
 # human-readable summary.
@@ -65,6 +66,7 @@ PROFILES=(
   "reqwest-json-native|reqwest-json|native|reqwest-json"
   "eggfetch-default|eggfetch-default||eggfetch-default"
   "reqwest-default|reqwest-default||reqwest-default"
+  "eggfetch-custom-dialer|../embedded-custom-dialer||eggfetch-custom-dialer-fixture"
 )
 
 EGGFETCH_SHA="$(git -C "$REPO_ROOT" rev-parse HEAD)"
@@ -97,10 +99,10 @@ for entry in "${PROFILES[@]}"; do
     extra_args+=(--features "$features")
   fi
   echo "==> trees: $label"
-  cargo tree --manifest-path "$manifest" "${extra_args[@]}" > "$OUTPUT_DIR/trees/$label.tree.txt" 2>/dev/null
-  cargo tree --manifest-path "$manifest" "${extra_args[@]}" -e features > "$OUTPUT_DIR/trees/$label.features.txt" 2>/dev/null || true
-  cargo tree --manifest-path "$manifest" "${extra_args[@]}" -d > "$OUTPUT_DIR/trees/$label.duplicates.txt" 2>/dev/null || true
-  cargo tree --manifest-path "$manifest" "${extra_args[@]}" --prefix none 2>/dev/null | sort -u > "$OUTPUT_DIR/trees/$label.packages.txt" || true
+  cargo tree --locked --manifest-path "$manifest" "${extra_args[@]}" > "$OUTPUT_DIR/trees/$label.tree.txt" 2>/dev/null
+  cargo tree --locked --manifest-path "$manifest" "${extra_args[@]}" -e features > "$OUTPUT_DIR/trees/$label.features.txt" 2>/dev/null || true
+  cargo tree --locked --manifest-path "$manifest" "${extra_args[@]}" -d > "$OUTPUT_DIR/trees/$label.duplicates.txt" 2>/dev/null || true
+  cargo tree --locked --manifest-path "$manifest" "${extra_args[@]}" --prefix none 2>/dev/null | sort -u > "$OUTPUT_DIR/trees/$label.packages.txt" || true
 done
 
 # Build release artifacts with isolated target dirs (clean per profile).
@@ -118,7 +120,7 @@ else
     target_dir="$OUTPUT_DIR/target-$label"
     rm -rf "$target_dir"
     mkdir -p "$target_dir"
-    build_args=(build --release --manifest-path "$manifest")
+    build_args=(build --locked --release --manifest-path "$manifest")
     if [[ -n "$features" ]]; then
       build_args+=(--features "$features")
     fi

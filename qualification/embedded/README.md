@@ -20,6 +20,13 @@ all eggfetch fixtures drive `eggfetch-core` only.
 | `eggfetch-default` | C ordinary default + JSON workload (informational) | default (`http1,tls-rustls,tls-native-roots`) + `json` |
 | `reqwest-default` | C ordinary default + JSON workload (informational) | default (`default-tls,charset,http2,system-proxy`) + `json,stream` |
 
+The separate `qualification/embedded-custom-dialer/` fixture is also built by
+the runner as the control-using profile. It uses the minimal HTTP/1 + Rustls
+feature set plus the public `Dialer`, strict canceled-request setting,
+physical connection cap, and transport I/O timeout APIs. Its result is
+reported separately because reqwest has no equivalent workload in this
+qualification set.
+
 `native` builds add the fixture `native` feature:
 
 - eggfetch: `eggfetch-core/tls-native-roots` (system store preferred,

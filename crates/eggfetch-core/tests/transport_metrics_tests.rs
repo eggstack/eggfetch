@@ -12,6 +12,8 @@
 //! socket-reuse counts remain absent (not estimated).
 
 use std::net::SocketAddr;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 
 use eggfetch_core::Client;
@@ -32,6 +34,130 @@ async fn start_http_server(body: &'static [u8]) -> (String, tokio::task::JoinHan
         }
     });
     (format!("http://{addr}/"), handle)
+}
+
+async fn read_request(stream: &mut tokio::net::TcpStream) -> std::io::Result<()> {
+    use tokio::io::AsyncReadExt;
+
+    let mut request = Vec::new();
+    let mut byte = [0_u8; 1];
+    loop {
+        stream.read_exact(&mut byte).await?;
+        request.push(byte[0]);
+        if request.ends_with(b"\r\n\r\n") {
+            return Ok(());
+        }
+    }
+}
+
+#[tokio::test]
+async fn physical_policy_reuses_connection_and_retains_idle_permit() {
+    use tokio::io::AsyncWriteExt;
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let accepted = Arc::new(AtomicUsize::new(0));
+    let accepted_by_server = accepted.clone();
+    let server = tokio::spawn(async move {
+        let (mut stream, _) = listener.accept().await.unwrap();
+        accepted_by_server.fetch_add(1, Ordering::SeqCst);
+        for _ in 0..2 {
+            read_request(&mut stream).await.unwrap();
+            stream
+                .write_all(
+                    b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: keep-alive\r\n\r\nok",
+                )
+                .await
+                .unwrap();
+            stream.flush().await.unwrap();
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    });
+
+    let client = Client::builder()
+        .physical_connection_policy(eggfetch_core::PhysicalConnectionPolicy {
+            max_live: Some(1),
+            admission_timeout: Some(Duration::from_millis(50)),
+        })
+        .build();
+    let url = format!("http://{address}/");
+
+    let mut first = client.get(&url).unwrap().send().await.unwrap();
+    assert_eq!(first.bytes().await.unwrap().as_ref(), b"ok");
+    let after_first = client.transport_metrics().snapshot();
+    assert_eq!(after_first.physical_connections_live, 1);
+    assert_eq!(after_first.physical_connections_high_water, 1);
+
+    let mut second = client.get(&url).unwrap().send().await.unwrap();
+    assert_eq!(second.bytes().await.unwrap().as_ref(), b"ok");
+    let after_second = client.transport_metrics().snapshot();
+    assert_eq!(accepted.load(Ordering::SeqCst), 1);
+    assert_eq!(after_second.physical_connections_live, 1);
+    assert_eq!(after_second.physical_connections_high_water, 1);
+    assert_eq!(after_second.physical_admission_waits, 0);
+
+    server.await.unwrap();
+}
+
+#[tokio::test]
+async fn physical_policy_blocks_a_second_origin_independently_of_logical_limits() {
+    use tokio::io::AsyncWriteExt;
+    use tokio::sync::oneshot;
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let accepted = Arc::new(AtomicUsize::new(0));
+    let accepted_by_server = accepted.clone();
+    let (release_tx, release_rx) = oneshot::channel();
+    let server = tokio::spawn(async move {
+        let (mut stream, _) = listener.accept().await.unwrap();
+        accepted_by_server.fetch_add(1, Ordering::SeqCst);
+        read_request(&mut stream).await.unwrap();
+        release_rx.await.unwrap();
+        stream
+            .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok")
+            .await
+            .unwrap();
+        stream.flush().await.unwrap();
+    });
+
+    let client = Client::builder()
+        .max_in_flight_requests(2)
+        .physical_connection_policy(eggfetch_core::PhysicalConnectionPolicy {
+            max_live: Some(1),
+            admission_timeout: Some(Duration::from_millis(30)),
+        })
+        .build();
+    let first_url = format!("http://127.0.0.1:{}/", address.port());
+    let second_url = format!("http://localhost:{}/", address.port());
+    let first_client = client.clone();
+    let first = tokio::spawn(async move { first_client.get(&first_url).unwrap().send().await });
+
+    tokio::time::timeout(Duration::from_secs(1), async {
+        while accepted.load(Ordering::SeqCst) != 1 {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("first origin should establish one physical connection");
+
+    let error = client
+        .get(&second_url)
+        .unwrap()
+        .send()
+        .await
+        .expect_err("second origin should be denied by physical admission");
+    assert!(error.is_physical_connection_admission_timeout());
+    assert_eq!(accepted.load(Ordering::SeqCst), 1);
+    let snapshot = client.transport_metrics().snapshot();
+    assert_eq!(snapshot.physical_admission_waits, 1);
+    assert_eq!(snapshot.physical_admission_timeouts, 1);
+    assert_eq!(snapshot.physical_connections_high_water, 1);
+
+    release_tx.send(()).unwrap();
+    let mut response = first.await.unwrap().unwrap();
+    assert_eq!(response.bytes().await.unwrap().as_ref(), b"ok");
+    server.await.unwrap();
 }
 
 #[tokio::test]
