@@ -174,6 +174,9 @@ The native `execute_http_body()` surface starts response read timeouts when
 the returned body is first polled, preserves DATA/trailer frames, and leaves
 redirects, retries, cookies, auth, decompression, and upgrades to the caller
 or high-level API as documented there.
+The public frame/provider/private-PKI boundary is also exercised by the
+standalone `qualification/native-http-body-tls/` fixture; that manual fixture
+is not part of the routine CI matrix.
 
 For native Rust HTTPS clients that need a private CA in addition to the
 selected native or WebPKI roots, use the additive TLS methods:

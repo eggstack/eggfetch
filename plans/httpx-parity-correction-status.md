@@ -8,7 +8,7 @@ and referenced plans; counts below are only from the runs named here.
 
 Recorded designation: **Stage C qualified** for both the documented HTTPX
 0.28.1 and httpx2 2.12.0 asyncio surfaces, bound to executable SHA
-`1fe808b8f88e5e9c8dee7456629c897d50b425fb`. The prior
+`1ea63ba1a4ea81ab548c2a7c9af5563d975793cd`. The prior
 `22a6f5c...` binding, as well as earlier bindings, is historical because
 subsequent qualification-sensitive work followed it. The profiles in
 `compat/httpx/0.28.1/profile.toml` and `compat/httpx2/2.12.0/profile.toml`
@@ -39,15 +39,15 @@ correctness risk. HTTP/3 status is separate from the HTTPX parity claims.
 
 Remote routine CI passed for the preceding corrected freeze in run
 `34875311872` on 2026-09-14. The final qualification tree has passed all local
-gates above and is pending its new remote CI run after push.
+gates above; its new remote CI run will be recorded after push.
 
 ### Current-tree qualification note (2026-09-14)
 
 The native custom-dialer, lifecycle-control, deterministic regression, RSS-
 monitor, native body, TLS extensibility, and first-poll timeout correction
 qualification work is closed on the exact executable SHA above. The follow-up
-changed only regression-test and external-fixture coverage; it did not change
-runtime/API behavior.
+changed only a regression-test assertion; it did not change runtime/API
+behavior or the external fixture.
 The compatibility profiles and generated API manifests remain independent of
 the native surface; both profiles were nevertheless requalified together on
 the final clean freeze as required by the repository's exact-SHA policy.

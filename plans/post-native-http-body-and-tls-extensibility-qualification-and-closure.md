@@ -3,12 +3,14 @@
 Planning baseline: `45c08e0e7587eb1e8f713d49e6f7902478c27a35` (`main`, 2026-09-14; eggfetch 0.1.4)
 Parent program: `plans/native-http-body-and-tls-extensibility-program.md`
 Status: complete; implementation closure freeze `fdfe060`; final
-qualification test/fixture freeze `1fe808b`
+qualification test/fixture freeze `1ea63ba1a4ea81ab548c2a7c9af5563d975793cd`
 
-The original closure freeze was followed by a qualification-only regression
-test and external-fixture hardening pass. That pass changed no runtime/API
-behavior, but it invalidated the prior exact-SHA compatibility binding; the
-live qualification records were rebound after the final local gates passed.
+The original closure freeze was followed by qualification-only regression-test
+hardening. That pass changed no runtime/API behavior, but it invalidated the
+prior exact-SHA compatibility binding; the live qualification records were
+rebound after the final local gates passed. The final correction stabilizes
+the explicit-provider locality assertion when Rust integration tests run in
+parallel and does not alter the runtime/provider implementation.
 
 ## Objective
 

@@ -78,6 +78,24 @@ stripped release sizes against an equivalently scoped reqwest
 configuration. No size gate, dashboard, or scheduled workflow. The
 current evidence is `embedded-footprint.md` (not a footprint win).
 
+### Native HTTP Body and TLS Qualification (manual, not CI)
+
+The public frame-preserving body boundary, caller-selected Rustls provider,
+provider-neutral mTLS key loading, and additive private-root trust composition
+are exercised by the external-style
+`qualification/native-http-body-tls/` crate. Run it with:
+
+```sh
+cargo run --manifest-path qualification/native-http-body-tls/Cargo.toml
+```
+
+The fixture intentionally stays outside the workspace and routine CI: it
+represents an independent native consumer profile and carries its alternate
+AWS-LC provider dependency itself. Its generated `target/` directory is build
+output and must not be committed. Current exact-SHA compatibility and plan
+closure evidence lives in `plans/httpx-parity-correction-status.md` and the
+native body/TLS closure plan.
+
 ### Package Validation (Tier 3)
 
 Run `./scripts/check.sh package` for: core publish dry-run (`cargo publish --dry-run -p eggfetch-core`), dependent-crate package-structure validation (`cargo package --list` plus structured internal dependency version verification via cargo metadata for eggfetch-cli, eggfetch-ffi, eggfetch-python, eggfetch-node), wheel build, exactly-one-wheel resolution, wheel smoke, and package content validation. Uses fresh temporary artifacts; stale repository wheels are never used.

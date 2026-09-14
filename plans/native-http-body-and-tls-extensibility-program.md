@@ -4,15 +4,17 @@ Planning baseline: `45c08e0e7587eb1e8f713d49e6f7902478c27a35` (`main`, 2026-09-1
 Program opened: 2026-09-14
 Motivating downstream: Synvoid integration evaluation, but every change in this program must remain generally useful to native Rust consumers and must not introduce a Synvoid-specific API.
 Status: complete; implementation closed on `fdfe060`; final qualification
-test/fixture follow-up closed on `1fe808b`
+test/fixture follow-up closed on
+`1ea63ba1a4ea81ab548c2a7c9af5563d975793cd`
 
 ## Closure record
 
 Implemented in `fdfe060` (`Add native HTTP body and TLS extensibility`), with
 the native frame-body tests and initial external AWS-LC/private-PKI fixture
 included in that implementation freeze. Qualification-only TLS provider/mTLS
-regression coverage was strengthened in `1fe808b`; the final exact-SHA closure
-gates passed on that clean tree:
+regression coverage was strengthened in
+`1ea63ba1a4ea81ab548c2a7c9af5563d975793cd`; the final exact-SHA closure gates
+passed on that clean tree:
 
 - Tier 1, extended validation, and package validation passed;
 - three sequential full compatibility runs each passed 1,870 tests with 26
@@ -25,8 +27,8 @@ gates passed on that clean tree:
 
 After the final qualification follow-up, changes are limited to this
 plan/qualification documentation and compatibility-profile metadata. The
-follow-up itself changed only tests and the external qualification fixture; no
-runtime/API behavior changed.
+follow-up itself changed only a test harness assertion; no runtime/API
+behavior or external fixture changed.
 
 ## Objective
 
