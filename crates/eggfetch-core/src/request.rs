@@ -116,6 +116,46 @@ impl std::fmt::Debug for TransportHints {
     }
 }
 
+/// Transport-only options for [`Client::execute_http_body`](crate::Client::execute_http_body).
+///
+/// The native body API intentionally does not apply redirects, retries,
+/// cookies, authentication, decompression, or decoded-body limits. Those
+/// policies can change or replay wire bytes and remain part of the
+/// high-level request API instead.
+#[derive(Default, Clone)]
+pub struct NativeRequestOptions {
+    /// Optional timeout override. It is merged with the client timeout using
+    /// the same phase-aware rules as ordinary requests.
+    pub timeout: Option<Timeout>,
+    /// Typed transport hints such as a resolved destination or SNI name.
+    pub transport_hints: TransportHints,
+}
+
+impl std::fmt::Debug for NativeRequestOptions {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("NativeRequestOptions")
+            .field("timeout", &self.timeout)
+            .field("transport_hints", &self.transport_hints)
+            .finish()
+    }
+}
+
+impl NativeRequestOptions {
+    /// Set a request-scoped timeout override.
+    #[must_use]
+    pub fn timeout(mut self, timeout: Timeout) -> Self {
+        self.timeout = Some(timeout);
+        self
+    }
+
+    /// Set typed transport hints for this request.
+    #[must_use]
+    pub fn transport_hints(mut self, transport_hints: TransportHints) -> Self {
+        self.transport_hints = transport_hints;
+        self
+    }
+}
+
 /// Proxy override for a specific request.
 ///
 /// Controls whether a request inherits the client-level proxy,

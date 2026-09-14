@@ -16,8 +16,15 @@ let tls = TlsConfig::builder()
     .client_cert_path("cert.pem", "key.pem")?
     .min_tls_version(TlsVersion::Tls12)
     .danger_accept_invalid_certs(false)
-    .build()?;
+    .build();
 ```
+
+`TlsConfigBuilder::crypto_provider(Arc<CryptoProvider>)` selects a Rustls
+provider for this configuration only. It is passed to certificate
+verification and client-key loading and never installed as the process-wide
+provider. With no explicit provider, eggfetch retains its existing
+process-default/ring fallback behavior. Provider-specific properties such as
+FIPS or post-quantum support depend on the caller's exact provider build.
 
 ### Trust Store Hierarchy and feature ownership
 
@@ -27,7 +34,13 @@ Resolution order:
 3. Packaged Mozilla/WebPKI roots (construction fallback, or the deterministic
    default when only `tls-rustls` is enabled)
 
-A custom CA bundle **replaces** all default roots. If both system and private CAs are needed, concatenate them into a single PEM file.
+A custom CA bundle **replaces** all default roots. To retain the selected
+native or WebPKI base and add private roots, use
+`additional_ca_certificate_path`, `additional_ca_certificate_pem`, or
+`additional_ca_certificate_der`. Existing `add_ca_certificate_path` remains
+replacement-custom-set behavior for compatibility; it was not repurposed.
+Base trust selection completes before additional roots are overlaid, so
+`NativeOnly` still fails when native roots are unavailable.
 
 `tls-rustls` owns the Rustls transport, PEM parsing, and packaged WebPKI roots.
 `tls-native-roots` implies it and owns native/system trust-store loading. The

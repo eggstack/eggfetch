@@ -57,7 +57,7 @@ pub mod trace;
 pub mod transport;
 
 pub use auth::{AuthScheme, BasicAuth, BearerAuth};
-pub use body::{BoxBytesStream, RequestBody, ResponseBody, SharedTrailers};
+pub use body::{BoxBytesStream, NativeResponseBody, RequestBody, ResponseBody, SharedTrailers};
 pub use client::{Client, ClientBuilder};
 pub use compression::{accept_encoding_value, ContentCoding};
 pub use error::{Error, Result};
@@ -78,7 +78,9 @@ pub use redact::{
     is_sensitive_header, redact_headers, redact_url, redact_url_string, SENSITIVE_HEADERS,
 };
 pub use redirect::RedirectPolicy;
-pub use request::{ProxyOverride, Request, RequestBuilder, ResolvedTarget, TransportHints};
+pub use request::{
+    NativeRequestOptions, ProxyOverride, Request, RequestBuilder, ResolvedTarget, TransportHints,
+};
 pub use response::{HistoryEntry, Response};
 pub use retry::{
     BackoffPolicy, MethodPolicy, ReplayCheck, RetryCause, RetryContext, RetryPolicy,

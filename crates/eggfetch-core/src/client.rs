@@ -18,7 +18,7 @@ use crate::pool::{Pool, PoolConfig, PoolMetrics};
 #[cfg(feature = "proxy")]
 use crate::proxy::Proxy;
 use crate::redirect::RedirectPolicy;
-use crate::request::{Request, RequestBuilder};
+use crate::request::{NativeRequestOptions, Request, RequestBuilder};
 use crate::response::Response;
 use crate::retry::RetryPolicy;
 use crate::timeout::Timeout;
@@ -671,6 +671,55 @@ impl Client {
         timeout: &Timeout,
     ) -> Result<Response> {
         crate::pipeline::send_single_request(&self.inner, request, timeout).await
+    }
+
+    /// Execute a native `http_body::Body` using eggfetch's HTTP/TLS
+    /// transport engine.
+    ///
+    /// This is the lower-level native embedding API. Request DATA and
+    /// trailer frames are passed through without flattening. The response is
+    /// an ordinary `http::Response` whose opaque [`crate::NativeResponseBody`]
+    /// preserves DATA and trailer frames and holds the logical pool lease
+    /// until the body reaches EOF, errors, or is dropped.
+    ///
+    /// Native execution does not implicitly apply redirects, logical
+    /// retries, cookies, authentication, response decompression, or decoded
+    /// body limits. The request body is one-shot. Built-in proxy, HTTP/3,
+    /// and protocol-upgrade routes are rejected because their current
+    /// adapters do not expose the frame-preserving contract.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for an invalid logical URI, unsupported route, pool
+    /// or transport failure, or a timeout.
+    pub async fn execute_http_body<B>(
+        &self,
+        request: http::Request<B>,
+        options: NativeRequestOptions,
+    ) -> Result<http::Response<crate::NativeResponseBody>>
+    where
+        B: http_body::Body<Data = bytes::Bytes> + Send + 'static,
+        B::Error: std::error::Error + Send + Sync + 'static,
+    {
+        crate::pipeline::send_native_http_body(&self.inner, request, options).await
+    }
+
+    /// Execute a native body request with default native transport options.
+    ///
+    /// # Errors
+    ///
+    /// Returns the same URI, pool, transport, and timeout errors as
+    /// [`Self::execute_http_body`].
+    pub async fn execute_http_body_default<B>(
+        &self,
+        request: http::Request<B>,
+    ) -> Result<http::Response<crate::NativeResponseBody>>
+    where
+        B: http_body::Body<Data = bytes::Bytes> + Send + 'static,
+        B::Error: std::error::Error + Send + Sync + 'static,
+    {
+        self.execute_http_body(request, NativeRequestOptions::default())
+            .await
     }
 }
 

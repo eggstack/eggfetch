@@ -160,6 +160,31 @@ where
     }
 }
 
+/// Issue a Hyper request and return its raw response body for the native
+/// frame-preserving API. This deliberately stops at the response-header
+/// boundary; body ownership is transferred to `NativeResponseBody` by the
+/// pipeline.
+pub(crate) async fn send_raw_request<C>(
+    hyper_client: &hyper_util::client::legacy::Client<C, HyperRequestBody>,
+    request: http::Request<HyperRequestBody>,
+    trace: Option<&dyn TraceObserver>,
+) -> Result<http::Response<hyper::body::Incoming>>
+where
+    C: hyper_util::client::legacy::connect::Connect + Clone + Send + Sync + 'static,
+{
+    emit_send_start(trace, request.method().as_str(), &request.uri().to_string())?;
+    match hyper_client.request(request).await {
+        Ok(response) => {
+            emit_receive_complete(trace, response.status().as_u16());
+            Ok(response)
+        }
+        Err(error) => {
+            emit_send_failed(trace);
+            Err(map_send_error(error))
+        }
+    }
+}
+
 /// Issue a request through the direct connector and return a streaming
 /// `Response`. Used for requests with advanced socket options, local
 /// address binding, and the SNI-override path.
@@ -399,31 +424,35 @@ pub(crate) fn wrap_incoming(
         type Item = Result<Bytes>;
 
         fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-            match Pin::new(&mut self.inner).poll_frame(cx) {
-                Poll::Ready(Some(Ok(frame))) => {
-                    if frame.is_data() {
-                        match frame.into_data() {
-                            Ok(data) => Poll::Ready(Some(Ok(data))),
-                            Err(_) => {
-                                Poll::Ready(Some(Err(Error::Body("invalid data frame".into()))))
+            loop {
+                match Pin::new(&mut self.inner).poll_frame(cx) {
+                    Poll::Ready(Some(Ok(frame))) => {
+                        if frame.is_data() {
+                            return match frame.into_data() {
+                                Ok(data) => Poll::Ready(Some(Ok(data))),
+                                Err(_) => {
+                                    Poll::Ready(Some(Err(Error::Body("invalid data frame".into()))))
+                                }
+                            };
+                        }
+                        if frame.is_trailers() {
+                            if let Ok(headers) = frame.into_trailers() {
+                                self.trailers.store(headers);
+                                #[cfg(feature = "tracing")]
+                                tracing::debug!("eggfetch: captured HTTP trailers");
                             }
+                            return Poll::Ready(None);
                         }
-                    } else if frame.is_trailers() {
-                        if let Ok(headers) = frame.into_trailers() {
-                            self.trailers.store(headers);
-                            #[cfg(feature = "tracing")]
-                            tracing::debug!("eggfetch: captured HTTP trailers");
-                        }
-                        // Non-trailers non-data frames end cleanly without
-                        // fabrication.
-                        Poll::Ready(None)
-                    } else {
-                        Poll::Ready(None)
+                        // The high-level adapter is byte-oriented. It cannot
+                        // expose an unknown frame, but it must keep polling
+                        // rather than treating one as EOF.
                     }
+                    Poll::Ready(Some(Err(e))) => {
+                        return Poll::Ready(Some(Err(Error::Body(e.to_string()))));
+                    }
+                    Poll::Ready(None) => return Poll::Ready(None),
+                    Poll::Pending => return Poll::Pending,
                 }
-                Poll::Ready(Some(Err(e))) => Poll::Ready(Some(Err(Error::Body(e.to_string())))),
-                Poll::Ready(None) => Poll::Ready(None),
-                Poll::Pending => Poll::Pending,
             }
         }
     }

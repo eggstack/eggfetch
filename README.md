@@ -12,10 +12,10 @@ eggfetch is a Rust-native async HTTP client engine (tokio + hyper) with Python b
 ## Features
 
 - **HTTP/1.1, HTTP/2, HTTP/3** — ALPN negotiation; HTTP/3 over QUIC stays experimental ([graduation gate](docs/architecture/core-tls-proxy-protocols.md))
-- **Streaming** — request/response bodies without eager buffering (`bytes_stream()`, `text_lines()`); trailers via `Response::trailers()` ([guide](docs/rust/guide.md))
+- **Streaming** — high-level byte bodies without eager buffering (`bytes_stream()`, `text_lines()`), plus an additive native `http_body::Body` frame boundary that preserves DATA/trailers ([guide](docs/rust/guide.md))
 - **Pooling, timeouts, observability** — separate logical pool and live Hyper-connection controls, phase-aware timeouts (pool/connect/write/read/total), established-I/O guardrails, and connector/lifecycle/DNS/TLS/H3 transport metrics ([pool/timeouts](docs/architecture/core-timeout-pool.md))
 - **Native embedded transport control** — optional caller-owned raw-stream dialing, explicit Hyper stale-connection retry control, physical-connection admission, and established-I/O inactivity guardrails ([Rust guide](docs/rust/guide.md))
-- **TLS** — rustls with custom CA bundles, mTLS client certs, version policy, verification toggle ([TLS](docs/concepts/tls.md))
+- **TLS** — rustls with explicit per-client crypto providers, replacement or additive CA roots, mTLS client certs, version policy, and verification toggle ([TLS](docs/concepts/tls.md))
 - **Proxy** — HTTP forwarding, HTTPS CONNECT, proxy auth, per-request override, `NO_PROXY`; SOCKS5 and UDS routes ([proxy](docs/concepts/proxy.md))
 - **Cookies, auth, multipart** — RFC 6265 jar, Basic/Bearer with redaction, streaming multipart uploads ([cookies](docs/concepts/cookies.md))
 - **Retries and redirects** — policy-driven backoff with `Retry-After`, replayable-body redirect handling ([retry](docs/concepts/retry.md))

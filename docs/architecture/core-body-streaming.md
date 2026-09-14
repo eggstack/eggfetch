@@ -29,6 +29,29 @@ semantics; replacing JSON later does not remove its already-set content type.
 
 Stream bodies are wrapped in a hyper `StreamBody` and piped to the transport incrementally. The producer stream is polled lazily: each chunk is sent as soon as it is produced, so a slow producer backpressures the transport.
 
+### Native frame-preserving interoperability
+
+Transport-oriented Rust embedders can use
+`Client::execute_http_body(http::Request<B>, NativeRequestOptions)` with any
+`B: http_body::Body<Data = bytes::Bytes>`. The request body is erased only at
+the existing Hyper boundary, so DATA and trailer frames remain frames and
+backpressure/cancellation are preserved. No body is collected to infer a
+length, and the body is one-shot.
+
+The result is an ordinary `http::Response<NativeResponseBody>`. Its opaque
+eggfetch-owned body implements `http_body::Body<Data = Bytes, Error = Error>`
+and forwards DATA/trailer frames while holding the logical pool lease until
+EOF, error, or drop. Hyper's `Incoming` is not part of the public contract.
+Read timeouts apply while waiting for the next frame; established transport
+I/O inactivity remains the lower-level lifecycle control.
+
+This native surface deliberately does not apply high-level redirects,
+logical retries, cookies, auth, decompression, or decoded-body limits. The
+current hand-rolled proxy, experimental H3, and upgrade paths reject native
+frame execution before body transfer because they do not yet expose the same
+frame contract. Existing `RequestBody`, `ResponseBody`, `bytes_stream()`, and
+`Response::trailers()` semantics are unchanged.
+
 ## Response Body
 
 `ResponseBody` has four variants:

@@ -139,8 +139,9 @@ pub struct Timeout {
     /// Includes DNS resolution when performed as part of connect.
     /// Enforced by wrapping the underlying connector with a deadline.
     pub connect: Option<Duration>,
-    /// Time allowed for the request body producer to yield each chunk.
-    /// Only applies to streamed request bodies.
+    /// Time allowed for the request body producer to yield each frame.
+    /// Applies to high-level streamed request bodies and the native
+    /// `http_body::Body` execution surface.
     pub write: Option<Duration>,
     /// Time allowed between response body chunks. Resets on every chunk.
     pub read: Option<Duration>,

@@ -36,8 +36,11 @@
 //! but not consumed continues to occupy its pool slot. Buffered and
 //! already-consumed responses do not carry a lease.
 
+use std::future::Future as _;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::task::{Context, Poll};
+use std::time::Duration;
 
 use bytes::{Bytes, BytesMut};
 use futures_core::Stream;
@@ -310,6 +313,108 @@ impl From<&str> for RequestBody {
     }
 }
 
+pin_project! {
+    /// Type-erased native request body with per-frame write deadlines.
+    ///
+    /// The deadline starts when Hyper first polls the body, so connection and
+    /// TLS setup do not consume the write budget. It is reset after every
+    /// successfully produced frame and covers stalled body producers; the
+    /// established transport I/O timeout remains a separate concern.
+    #[must_use = "request bodies do nothing unless polled"]
+    pub(crate) struct NativeRequestBody {
+        #[pin]
+        inner: Pin<Box<dyn http_body::Body<Data = Bytes, Error = Box<dyn std::error::Error + Send + Sync>> + Send>>,
+        write_timeout: Option<Duration>,
+        #[pin]
+        timer: tokio::time::Sleep,
+        started: bool,
+        done: bool,
+    }
+}
+
+impl NativeRequestBody {
+    pub(crate) fn new(
+        inner: Pin<
+            Box<
+                dyn http_body::Body<Data = Bytes, Error = Box<dyn std::error::Error + Send + Sync>>
+                    + Send,
+            >,
+        >,
+        write_timeout: Option<Duration>,
+    ) -> Self {
+        Self {
+            inner,
+            write_timeout,
+            timer: tokio::time::sleep(Duration::MAX),
+            started: false,
+            done: false,
+        }
+    }
+}
+
+impl http_body::Body for NativeRequestBody {
+    type Data = Bytes;
+    type Error = Box<dyn std::error::Error + Send + Sync>;
+
+    fn poll_frame(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Option<std::result::Result<Frame<Self::Data>, Self::Error>>> {
+        let mut this = self.project();
+        if *this.done {
+            return Poll::Ready(None);
+        }
+
+        if let Some(timeout) = *this.write_timeout {
+            if !*this.started {
+                *this.started = true;
+                this.timer
+                    .as_mut()
+                    .reset(tokio::time::Instant::now() + timeout);
+            }
+        }
+
+        match this.inner.as_mut().poll_frame(cx) {
+            Poll::Ready(Some(Ok(frame))) => {
+                if let Some(timeout) = *this.write_timeout {
+                    this.timer
+                        .as_mut()
+                        .reset(tokio::time::Instant::now() + timeout);
+                }
+                Poll::Ready(Some(Ok(frame)))
+            }
+            Poll::Ready(Some(Err(error))) => {
+                *this.done = true;
+                Poll::Ready(Some(Err(error)))
+            }
+            Poll::Ready(None) => {
+                *this.done = true;
+                Poll::Ready(None)
+            }
+            Poll::Pending => {
+                if let Some(timeout) = *this.write_timeout {
+                    if this.timer.as_mut().poll(cx).is_ready() {
+                        *this.done = true;
+                        return Poll::Ready(Some(Err(Box::new(Error::Timeout {
+                            phase: crate::timeout::TimeoutPhase::Write,
+                            elapsed: timeout,
+                        }))));
+                    }
+                }
+                Poll::Pending
+            }
+        }
+    }
+
+    fn is_end_stream(&self) -> bool {
+        self.done || self.inner.as_ref().is_end_stream()
+    }
+
+    fn size_hint(&self) -> http_body::SizeHint {
+        self.inner.as_ref().size_hint()
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Response body
 // ---------------------------------------------------------------------------
@@ -317,6 +422,150 @@ impl From<&str> for RequestBody {
 /// A handle to a pool permit. Cloning the handle is cheap; dropping the
 /// last handle releases the permit back to the pool.
 pub(crate) type PoolGuardArc = Arc<crate::pool::PoolGuard>;
+
+pin_project! {
+    /// A native frame-preserving response body.
+    ///
+    /// Unlike [`ResponseBody`], this type exposes the `http_body` frame
+    /// boundary directly. DATA and trailer frames are returned unchanged,
+    /// while the internal pool lease remains held until EOF, an error, or
+    /// drop. The type is opaque so Hyper's `Incoming` does not become part
+    /// of eggfetch's public API.
+    pub struct NativeResponseBody {
+        #[pin]
+        inner: Pin<Box<dyn http_body::Body<Data = Bytes, Error = Error> + Send>>,
+        lease: Option<PoolGuardArc>,
+        read_timeout: Option<Duration>,
+        #[pin]
+        timer: tokio::time::Sleep,
+        done: bool,
+    }
+}
+
+impl std::fmt::Debug for NativeResponseBody {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("NativeResponseBody")
+            .field("read_timeout", &self.read_timeout)
+            .field("done", &self.done)
+            .finish_non_exhaustive()
+    }
+}
+
+impl NativeResponseBody {
+    /// Construct a native body around an eggfetch-owned response body.
+    pub(crate) fn new<B>(body: B, lease: PoolGuardArc, read_timeout: Option<Duration>) -> Self
+    where
+        B: http_body::Body<Data = Bytes, Error = Error> + Send + 'static,
+    {
+        Self {
+            inner: Box::pin(body),
+            lease: Some(lease),
+            read_timeout,
+            timer: tokio::time::sleep(read_timeout.unwrap_or(Duration::MAX)),
+            done: false,
+        }
+    }
+}
+
+impl http_body::Body for NativeResponseBody {
+    type Data = Bytes;
+    type Error = Error;
+
+    fn poll_frame(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Option<Result<Frame<Self::Data>>>> {
+        let mut this = self.project();
+        if *this.done {
+            return Poll::Ready(None);
+        }
+
+        match this.inner.as_mut().poll_frame(cx) {
+            Poll::Ready(Some(Ok(frame))) => {
+                if let Some(timeout) = *this.read_timeout {
+                    this.timer
+                        .as_mut()
+                        .reset(tokio::time::Instant::now() + timeout);
+                }
+                Poll::Ready(Some(Ok(frame)))
+            }
+            Poll::Ready(Some(Err(error))) => {
+                *this.done = true;
+                this.lease.take();
+                Poll::Ready(Some(Err(error)))
+            }
+            Poll::Ready(None) => {
+                *this.done = true;
+                this.lease.take();
+                Poll::Ready(None)
+            }
+            Poll::Pending => {
+                if let Some(timeout) = *this.read_timeout {
+                    if this.timer.as_mut().poll(cx).is_ready() {
+                        *this.done = true;
+                        this.lease.take();
+                        return Poll::Ready(Some(Err(Error::Timeout {
+                            phase: crate::timeout::TimeoutPhase::Read,
+                            elapsed: timeout,
+                        })));
+                    }
+                }
+                Poll::Pending
+            }
+        }
+    }
+
+    fn is_end_stream(&self) -> bool {
+        self.done || self.inner.as_ref().is_end_stream()
+    }
+
+    fn size_hint(&self) -> http_body::SizeHint {
+        self.inner.as_ref().size_hint()
+    }
+}
+
+pin_project! {
+    struct IncomingErrorBody {
+        #[pin]
+        inner: hyper::body::Incoming,
+    }
+}
+
+impl http_body::Body for IncomingErrorBody {
+    type Data = Bytes;
+    type Error = Error;
+
+    fn poll_frame(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Option<Result<Frame<Self::Data>>>> {
+        self.project()
+            .inner
+            .poll_frame(cx)
+            .map_ok(|frame| frame)
+            .map_err(|error| Error::Hyper(Arc::new(error)))
+    }
+
+    fn is_end_stream(&self) -> bool {
+        self.inner.is_end_stream()
+    }
+
+    fn size_hint(&self) -> http_body::SizeHint {
+        self.inner.size_hint()
+    }
+}
+
+impl NativeResponseBody {
+    /// Wrap a Hyper response body while converting transport errors to the
+    /// stable eggfetch error type.
+    pub(crate) fn from_incoming(
+        incoming: hyper::body::Incoming,
+        lease: PoolGuardArc,
+        read_timeout: Option<Duration>,
+    ) -> Self {
+        Self::new(IncomingErrorBody { inner: incoming }, lease, read_timeout)
+    }
+}
 
 /// Shared trailer store populated during body streaming.
 ///

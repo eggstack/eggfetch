@@ -13,7 +13,7 @@ Focused subset for the engine lifecycle (client → request → pipeline → res
 | `client` | Yes | `Client`, `ClientBuilder` — entry point |
 | `request` | Yes | `Request`, `RequestBuilder` — fluent request construction |
 | `response` | Yes | `Response`, `HistoryEntry` — response + redirect history |
-| `body` | Yes | `RequestBody`, `ResponseBody`, `BoxBytesStream` |
+| `body` | Yes | `RequestBody`, `ResponseBody`, `NativeResponseBody`, `BoxBytesStream` |
 | `headers` | Yes | `Headers` — case-insensitive header map wrapper |
 | `network_stream` | Yes | `NetworkStream`, `UpgradedStream`, `ConnectionMetadata` — upgrade IO + connection metadata |
 | `trace` | Yes | `TraceObserver`, `TraceEvent` — synchronous lifecycle event callbacks |
@@ -36,6 +36,23 @@ let client = ClientBuilder::new()
 Builder-configurable options: headers, timeout, pool, redirects, auth, cookies, proxy, TLS, retry, Hyper canceled-request retry, native dialer, physical connection admission, established-I/O inactivity, decompression, HTTP version policy, max body size, max decompression ratio.
 
 `Client` is `Clone` (cheap — internals are `Arc`-wrapped).
+
+### Native frame execution
+
+`Client::execute_http_body()` is a sibling transport surface for callers that
+already own HTTP-level policy. It validates an absolute logical HTTP(S) URI,
+acquires the same logical pool permit, and dispatches through the existing
+standard/direct/resolved/SNI/custom-dialer/UDS Hyper clients. The request
+`http_body::Body` is erased to the same internal Hyper body type used by the
+high-level path; the raw Hyper response is then wrapped in
+`NativeResponseBody` at the response-header boundary.
+
+The high-level pipeline continues to own header defaults, content-length
+normalization, redirects, retries, cookies, auth, decompression and decoded
+limits. Native execution does not duplicate those transformations or create
+a second connector/TLS/pool stack. Built-in proxy, experimental H3, and 101
+upgrade routes are explicit v1 unsupported cases because their custom
+parsers/upgrade ownership cannot yet preserve the native frame contract.
 
 ## RequestBuilder
 

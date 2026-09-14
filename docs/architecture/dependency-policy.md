@@ -48,6 +48,13 @@ owning feature is selected.
   paths and other platform loaders are selected inside the same authoritative
   `TlsConfig` root builder.
 
+The native frame API adds no dependency: it exposes the existing direct
+`http-body` 1.x contract and erases bodies at the existing Hyper boundary.
+Likewise, `TlsConfigBuilder::crypto_provider` accepts a caller-owned Rustls
+`CryptoProvider`; eggfetch does not add AWS-LC, FIPS, or another provider to
+its ordinary feature graph merely to support injection. Alternate providers
+belong to the embedding application's dependency/qualification profile.
+
 ## Core dependency ownership inventory
 
 This source-backed inventory records why each direct dependency exists and

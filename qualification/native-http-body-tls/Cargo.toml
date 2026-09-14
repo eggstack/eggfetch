@@ -1,0 +1,19 @@
+[package]
+name = "eggfetch-native-http-body-tls-fixture"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[dependencies]
+bytes = "1"
+eggfetch-core = { path = "../../crates/eggfetch-core", default-features = false, features = ["http1", "tls-rustls"] }
+futures-util = "0.3"
+http = "1"
+http-body = "1"
+http-body-util = "0.1"
+rcgen = "0.13"
+rustls = { version = "0.23", default-features = false, features = ["aws-lc-rs", "std", "tls12"] }
+tokio = { version = "1", features = ["io-util", "macros", "net", "rt-multi-thread", "time"] }
+tokio-rustls = "0.26"

@@ -110,6 +110,8 @@ impl TlsVersion {
 pub struct TlsConfig {
     trust_store: TrustStore,
     custom_ca_roots: Vec<CertificateDer<'static>>,
+    additional_ca_roots: Vec<CertificateDer<'static>>,
+    crypto_provider: Option<Arc<rustls::crypto::CryptoProvider>>,
     client_identity: Option<ClientIdentity>,
     verify_hostname: bool,
     verify_certificate: bool,
@@ -124,6 +126,11 @@ impl std::fmt::Debug for TlsConfig {
         f.debug_struct("TlsConfig")
             .field("trust_store", &self.trust_store)
             .field("has_custom_ca", &!self.custom_ca_roots.is_empty())
+            .field("additional_ca_count", &self.additional_ca_roots.len())
+            .field(
+                "has_explicit_crypto_provider",
+                &self.crypto_provider.is_some(),
+            )
             .field("has_client_identity", &self.client_identity.is_some())
             .field("verify_hostname", &self.verify_hostname)
             .field("verify_certificate", &self.verify_certificate)
@@ -233,7 +240,7 @@ impl TlsConfig {
             ));
         }
 
-        let provider = process_crypto_provider()?;
+        let provider = self.resolve_crypto_provider()?;
         let supported_schemes = provider
             .signature_verification_algorithms
             .supported_schemes();
@@ -248,10 +255,13 @@ impl TlsConfig {
                 .with_protocol_versions(&protocol_versions)
                 .map_err(|e| Error::TlsConfig(format!("TLS version config: {e}")))?
                 .dangerous()
-                .with_custom_certificate_verifier(no_hostname_verifier(&root_store, provider)?)
+                .with_custom_certificate_verifier(no_hostname_verifier(
+                    &root_store,
+                    provider.clone(),
+                )?)
                 .with_no_client_auth()
         } else {
-            rustls::ClientConfig::builder_with_provider(provider)
+            rustls::ClientConfig::builder_with_provider(provider.clone())
                 .with_protocol_versions(&protocol_versions)
                 .map_err(|e| Error::TlsConfig(format!("TLS version config: {e}")))?
                 .dangerous()
@@ -276,7 +286,10 @@ impl TlsConfig {
         config.enable_sni = self.sni_enabled;
 
         if let Some(identity) = &self.client_identity {
-            config.client_auth_cert_resolver = Arc::new(SingleCertResolver::new(identity.clone()));
+            config.client_auth_cert_resolver = Arc::new(SingleCertResolver::new(
+                identity.clone(),
+                provider.as_ref(),
+            )?);
         }
 
         Ok(config)
@@ -290,7 +303,7 @@ impl TlsConfig {
     }
 
     fn build_root_store_uncached(&self) -> Result<rustls::RootCertStore> {
-        match &self.trust_store {
+        let mut roots = match &self.trust_store {
             TrustStore::NativeWithWebPkiFallback => match Self::try_native_roots() {
                 Ok(store) if !store.is_empty() => Ok(store),
                 _ => Ok(Self::webpki_roots()),
@@ -309,7 +322,14 @@ impl TlsConfig {
                 }
                 Ok(store)
             }
+        }?;
+
+        for cert in &self.additional_ca_roots {
+            roots
+                .add(cert.clone())
+                .map_err(|e| Error::CaBundle(format!("invalid additional CA certificate: {e}")))?;
         }
+        Ok(roots)
     }
 
     #[cfg(not(feature = "tls-native-roots"))]
@@ -403,6 +423,22 @@ impl TlsConfig {
         self.sni_enabled
     }
 
+    /// Returns whether this configuration carries an explicitly selected
+    /// Rustls crypto provider.
+    #[must_use]
+    pub fn has_explicit_crypto_provider(&self) -> bool {
+        self.crypto_provider.is_some()
+    }
+
+    /// Build the provider used by this configuration without changing the
+    /// process-wide Rustls provider.
+    fn resolve_crypto_provider(&self) -> Result<Arc<rustls::crypto::CryptoProvider>> {
+        if let Some(provider) = &self.crypto_provider {
+            return Ok(provider.clone());
+        }
+        process_crypto_provider()
+    }
+
     /// Build a `rustls::ClientConfig` for QUIC (TLS 1.3 only, ALPN `h3`).
     ///
     /// This differs from [`build_rustls_config`](Self::build_rustls_config)
@@ -416,7 +452,7 @@ impl TlsConfig {
     pub(crate) fn build_quic_rustls_config(&self) -> Result<rustls::ClientConfig> {
         let root_store = self.build_root_store()?;
 
-        let provider = process_crypto_provider()?;
+        let provider = self.resolve_crypto_provider()?;
         let supported_schemes = provider
             .signature_verification_algorithms
             .supported_schemes();
@@ -431,10 +467,13 @@ impl TlsConfig {
                 .with_protocol_versions(&[&rustls::version::TLS13])
                 .map_err(|e| Error::Tls(format!("TLS version config: {e}")))?
                 .dangerous()
-                .with_custom_certificate_verifier(no_hostname_verifier(&root_store, provider)?)
+                .with_custom_certificate_verifier(no_hostname_verifier(
+                    &root_store,
+                    provider.clone(),
+                )?)
                 .with_no_client_auth()
         } else {
-            rustls::ClientConfig::builder_with_provider(provider)
+            rustls::ClientConfig::builder_with_provider(provider.clone())
                 .with_protocol_versions(&[&rustls::version::TLS13])
                 .map_err(|e| Error::Tls(format!("TLS version config: {e}")))?
                 .dangerous()
@@ -446,7 +485,10 @@ impl TlsConfig {
         config.enable_sni = self.sni_enabled;
 
         if let Some(identity) = &self.client_identity {
-            config.client_auth_cert_resolver = Arc::new(SingleCertResolver::new(identity.clone()));
+            config.client_auth_cert_resolver = Arc::new(SingleCertResolver::new(
+                identity.clone(),
+                provider.as_ref(),
+            )?);
         }
 
         Ok(config)
@@ -457,6 +499,8 @@ impl TlsConfig {
 pub struct TlsConfigBuilder {
     trust_store: TrustStore,
     custom_ca_roots: Vec<CertificateDer<'static>>,
+    additional_ca_roots: Vec<CertificateDer<'static>>,
+    crypto_provider: Option<Arc<rustls::crypto::CryptoProvider>>,
     client_identity: Option<ClientIdentity>,
     verify_hostname: bool,
     verify_certificate: bool,
@@ -478,6 +522,8 @@ impl TlsConfigBuilder {
         Self {
             trust_store: TrustStore::NativeWithWebPkiFallback,
             custom_ca_roots: Vec::new(),
+            additional_ca_roots: Vec::new(),
+            crypto_provider: None,
             client_identity: None,
             verify_hostname: true,
             verify_certificate: true,
@@ -555,6 +601,33 @@ impl TlsConfigBuilder {
         Ok(self)
     }
 
+    /// Load additional CA certificates from a PEM file or certificate
+    /// directory. Additional roots augment the selected base trust store;
+    /// unlike [`Self::ca_certificate_path`], they do not replace it.
+    ///
+    /// Existing [`Self::add_ca_certificate_path`] behavior is intentionally
+    /// unchanged: that method continues to build a replacement custom set.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the path cannot be read or contains malformed
+    /// certificate data. Empty directories are ignored, matching the
+    /// existing path-based CA API.
+    pub fn additional_ca_certificate_path(mut self, path: impl AsRef<Path>) -> Result<Self> {
+        let certs = load_pem_certs_from_path(path.as_ref())?;
+        if certs.is_empty() {
+            if path.as_ref().is_dir() {
+                return Ok(self);
+            }
+            return Err(Error::CaBundle(format!(
+                "no certificates found in {}",
+                path.as_ref().display()
+            )));
+        }
+        append_unique_certs(&mut self.additional_ca_roots, certs);
+        Ok(self)
+    }
+
     /// Load CA certificates from PEM bytes, replacing any existing trust
     /// store configuration.
     ///
@@ -589,6 +662,52 @@ impl TlsConfigBuilder {
         self.custom_ca_roots = certs;
         self.trust_store = TrustStore::Custom(self.custom_ca_roots.clone());
         Ok(self)
+    }
+
+    /// Load additional CA certificates from PEM bytes. The certificates are
+    /// added to the selected base trust store rather than replacing it.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the PEM data is malformed or contains no
+    /// certificates.
+    pub fn additional_ca_certificate_pem(mut self, pem_bytes: &[u8]) -> Result<Self> {
+        let certs = parse_pem_certificates(pem_bytes)?;
+        if certs.is_empty() {
+            return Err(Error::CaBundle(
+                "no certificates found in additional PEM data".into(),
+            ));
+        }
+        append_unique_certs(&mut self.additional_ca_roots, certs);
+        Ok(self)
+    }
+
+    /// Load additional CA certificates from raw DER values. The certificates
+    /// are added to the selected base trust store rather than replacing it.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if no certificates are supplied.
+    pub fn additional_ca_certificate_der(mut self, der_certs: Vec<Vec<u8>>) -> Result<Self> {
+        if der_certs.is_empty() {
+            return Err(Error::CaBundle(
+                "no additional DER certificates provided".into(),
+            ));
+        }
+        append_unique_certs(
+            &mut self.additional_ca_roots,
+            der_certs.into_iter().map(CertificateDer::from),
+        );
+        Ok(self)
+    }
+
+    /// Use an explicitly supplied Rustls crypto provider for this
+    /// configuration. The provider is local to the resulting [`TlsConfig`]
+    /// and is never installed as the process-wide default.
+    #[must_use]
+    pub fn crypto_provider(mut self, provider: Arc<rustls::crypto::CryptoProvider>) -> Self {
+        self.crypto_provider = Some(provider);
+        self
     }
 
     /// Set the client identity for mTLS.
@@ -686,6 +805,8 @@ impl TlsConfigBuilder {
         TlsConfig {
             trust_store: self.trust_store,
             custom_ca_roots: self.custom_ca_roots,
+            additional_ca_roots: self.additional_ca_roots,
+            crypto_provider: self.crypto_provider,
             client_identity: self.client_identity,
             verify_hostname: self.verify_hostname,
             verify_certificate: self.verify_certificate,
@@ -840,32 +961,37 @@ impl rustls::client::danger::ServerCertVerifier for NoVerifier {
 
 /// A resolver that returns a single certificate and key for mTLS.
 struct SingleCertResolver {
-    cert_chain: Vec<CertificateDer<'static>>,
-    private_key_der: Vec<u8>,
+    certified_key: Arc<rustls::sign::CertifiedKey>,
     key_label: String,
 }
 
 impl std::fmt::Debug for SingleCertResolver {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("SingleCertResolver")
-            .field("cert_count", &self.cert_chain.len())
+            .field("cert_count", &self.certified_key.cert.len())
             .field("key_label", &self.key_label)
             .finish_non_exhaustive()
     }
 }
 
 impl SingleCertResolver {
-    fn new(identity: ClientIdentity) -> Self {
+    fn new(identity: ClientIdentity, provider: &rustls::crypto::CryptoProvider) -> Result<Self> {
         match identity {
             ClientIdentity::Pem {
                 cert_chain,
                 private_key_der,
                 key_label,
-            } => Self {
-                cert_chain,
-                private_key_der,
-                key_label,
-            },
+            } => {
+                let key_der = private_key_der_from_parts(&private_key_der, &key_label);
+                let certified_key = rustls::sign::CertifiedKey::from_der(
+                    cert_chain, key_der, provider,
+                )
+                .map_err(|e| Error::PrivateKey(format!("failed to load private key: {e}")))?;
+                Ok(Self {
+                    certified_key: Arc::new(certified_key),
+                    key_label,
+                })
+            }
         }
     }
 }
@@ -876,38 +1002,39 @@ impl rustls::client::ResolvesClientCert for SingleCertResolver {
         _root_hint_subjects: &[&[u8]],
         _sigschemes: &[rustls::SignatureScheme],
     ) -> Option<Arc<rustls::sign::CertifiedKey>> {
-        let key_der = match self.key_label.as_str() {
-            "RSA PRIVATE KEY" => PrivateKeyDer::Pkcs1(rustls::pki_types::PrivatePkcs1KeyDer::from(
-                self.private_key_der.clone(),
-            )),
-            "EC PRIVATE KEY" => PrivateKeyDer::Sec1(rustls::pki_types::PrivateSec1KeyDer::from(
-                self.private_key_der.clone(),
-            )),
-            _ => PrivateKeyDer::Pkcs8(rustls::pki_types::PrivatePkcs8KeyDer::from(
-                self.private_key_der.clone(),
-            )),
-        };
-        let signing_key = match rustls::crypto::ring::sign::any_supported_type(&key_der) {
-            Ok(k) => k,
-            Err(e) => {
-                #[cfg(feature = "tracing")]
-                tracing::warn!(
-                    "eggfetch: unsupported private key type ({key_label}): {e}",
-                    key_label = self.key_label
-                );
-                #[cfg(not(feature = "tracing"))]
-                let _ = (&self.key_label, &e);
-                return None;
-            }
-        };
-        Some(Arc::new(rustls::sign::CertifiedKey::new(
-            self.cert_chain.clone(),
-            signing_key,
-        )))
+        self.has_certs().then(|| self.certified_key.clone())
     }
 
     fn has_certs(&self) -> bool {
-        !self.cert_chain.is_empty()
+        !self.certified_key.cert.is_empty()
+    }
+}
+
+fn private_key_der_from_parts(bytes: &[u8], label: &str) -> PrivateKeyDer<'static> {
+    match label {
+        "RSA PRIVATE KEY" => PrivateKeyDer::Pkcs1(rustls::pki_types::PrivatePkcs1KeyDer::from(
+            bytes.to_owned(),
+        )),
+        "EC PRIVATE KEY" => {
+            PrivateKeyDer::Sec1(rustls::pki_types::PrivateSec1KeyDer::from(bytes.to_owned()))
+        }
+        _ => PrivateKeyDer::Pkcs8(rustls::pki_types::PrivatePkcs8KeyDer::from(
+            bytes.to_owned(),
+        )),
+    }
+}
+
+fn append_unique_certs(
+    destination: &mut Vec<CertificateDer<'static>>,
+    certificates: impl IntoIterator<Item = CertificateDer<'static>>,
+) {
+    for certificate in certificates {
+        if !destination
+            .iter()
+            .any(|existing| existing.as_ref() == certificate.as_ref())
+        {
+            destination.push(certificate);
+        }
     }
 }
 
@@ -1044,6 +1171,58 @@ mod tests {
         assert!(config.verify_hostname());
         assert!(config.verify_certificate());
         assert!(config.sni_enabled());
+    }
+
+    #[test]
+    fn explicit_provider_is_local_and_retained_by_tls_config() {
+        let provider = Arc::new(rustls::crypto::ring::default_provider());
+        let before = rustls::crypto::CryptoProvider::get_default().cloned();
+        let config = TlsConfig::builder()
+            .crypto_provider(provider.clone())
+            .trust_store(TrustStore::WebPkiOnly)
+            .build();
+        assert!(config.has_explicit_crypto_provider());
+        assert!(config.build_rustls_config().is_ok());
+        let provider_ptr =
+            |value: Option<&Arc<rustls::crypto::CryptoProvider>>| value.map(Arc::as_ptr);
+        assert_eq!(
+            provider_ptr(rustls::crypto::CryptoProvider::get_default()),
+            provider_ptr(before.as_ref()),
+            "explicit provider configuration must not mutate the global provider"
+        );
+    }
+
+    #[test]
+    fn additional_ca_roots_augment_without_changing_replacement_semantics() {
+        let mut params = rcgen::CertificateParams::default();
+        params.is_ca = rcgen::IsCa::Ca(rcgen::BasicConstraints::Unconstrained);
+        let key = rcgen::KeyPair::generate().unwrap();
+        let cert = params.self_signed(&key).unwrap();
+        let der = cert.der().to_vec();
+        let config = TlsConfig::builder()
+            .trust_store(TrustStore::WebPkiOnly)
+            .additional_ca_certificate_der(vec![der.clone(), der])
+            .unwrap()
+            .build();
+        let debug = format!("{config:?}");
+        assert!(debug.contains("additional_ca_count: 1"));
+        assert!(config.build_rustls_config().is_ok());
+
+        let replacement = TlsConfig::builder()
+            .ca_certificate_der(vec![cert.der().to_vec()])
+            .unwrap()
+            .build();
+        assert!(replacement.build_rustls_config().is_ok());
+    }
+
+    #[test]
+    fn malformed_additional_ca_fails_closed() {
+        let result = TlsConfig::builder().additional_ca_certificate_pem(b"not a certificate");
+        assert!(result.is_err());
+        assert_eq!(
+            result.err().expect("error checked above").kind(),
+            "ca_bundle"
+        );
     }
 
     #[test]

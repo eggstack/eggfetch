@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use bytes::Bytes;
 
-use crate::body::{RequestBody, ResponseBody};
+use crate::body::{NativeRequestBody, NativeResponseBody, RequestBody, ResponseBody};
 use crate::client::{Client, ClientInner};
 use crate::error::{Error, Result};
 use crate::headers::Headers;
@@ -16,7 +16,7 @@ use crate::proxy::{Proxy, ProxyConfig};
 use crate::redirect;
 #[cfg(feature = "proxy")]
 use crate::request::ProxyOverride;
-use crate::request::Request;
+use crate::request::{NativeRequestOptions, Request};
 use crate::response::{HistoryEntry, Response};
 use crate::retry::{should_retry, RetryCause, RetryPolicy};
 use crate::stream::{read_timeout_stream, write_timeout_stream};
@@ -48,12 +48,12 @@ async fn sleep_if_budget_allows(
 /// total deadline. Direct Hyper/UDS/H3 transports do not expose a clean
 /// response-header boundary here, so their read budget is applied by the
 /// response-body stream after transport setup has completed.
-async fn send_with_total_timeout<F>(
+async fn send_with_total_timeout<F, T>(
     send_future: F,
     remaining_total: Option<Duration>,
-) -> Result<Response>
+) -> Result<T>
 where
-    F: std::future::Future<Output = Result<Response>>,
+    F: std::future::Future<Output = Result<T>>,
 {
     match remaining_total {
         Some(duration) => {
@@ -751,6 +751,16 @@ fn build_hyper_request(
     headers: &Headers,
     body: RequestBody,
 ) -> Result<http::Request<crate::transport::HyperRequestBody>> {
+    build_http_request(method, uri, version, headers, body.into_http_body())
+}
+
+fn build_http_request<B>(
+    method: &http::Method,
+    uri: http::Uri,
+    version: http::Version,
+    headers: &Headers,
+    body: B,
+) -> Result<http::Request<B>> {
     let mut builder = http::Request::builder()
         .method(method)
         .uri(uri)
@@ -759,7 +769,7 @@ fn build_hyper_request(
         builder = builder.header(name, value);
     }
     builder
-        .body(body.into_http_body())
+        .body(body)
         .map_err(|e| Error::RequestBuild(e.to_string()))
 }
 
@@ -1881,6 +1891,268 @@ pub(crate) async fn send_single_request(
     apply_read_timeout_and_lease(&mut response, guard, hop_timeout.read);
 
     Ok(response)
+}
+
+/// Execute a caller-owned `http_body::Body` through eggfetch's transport
+/// engine without applying high-level request policy.
+#[cfg(any(feature = "http1", feature = "http2"))]
+#[allow(
+    clippy::too_many_lines,
+    reason = "native dispatch keeps route validation, pool admission, and the shared route matrix together"
+)]
+pub(crate) async fn send_native_http_body<B>(
+    inner: &ClientInner,
+    request: http::Request<B>,
+    options: NativeRequestOptions,
+) -> Result<http::Response<NativeResponseBody>>
+where
+    B: http_body::Body<Data = Bytes> + Send + 'static,
+    B::Error: std::error::Error + Send + Sync + 'static,
+{
+    use http_body_util::BodyExt;
+
+    let logical_url = url::Url::parse(&request.uri().to_string())
+        .map_err(|e| Error::InvalidUrl(format!("native request URI must be absolute: {e}")))?;
+    if !matches!(logical_url.scheme(), "http" | "https") || logical_url.host_str().is_none() {
+        return Err(Error::Unsupported(
+            "native request URI must use http or https and include an authority".into(),
+        ));
+    }
+    if !logical_url.username().is_empty() || logical_url.password().is_some() {
+        return Err(Error::InvalidUrl(
+            "URL userinfo is not supported; configure authentication explicitly".into(),
+        ));
+    }
+
+    let NativeRequestOptions {
+        timeout: request_timeout,
+        transport_hints,
+    } = options;
+    let timeout = match inner.config.timeout {
+        Some(client_timeout) => client_timeout.merge(request_timeout),
+        None => request_timeout.unwrap_or_default(),
+    };
+
+    if let Some(target) = &transport_hints.resolved_target {
+        let expected_port = logical_url.port_or_known_default().ok_or_else(|| {
+            Error::InvalidResolvedTarget(
+                "resolved destinations require an HTTP or HTTPS URL".into(),
+            )
+        })?;
+        if target
+            .addresses()
+            .iter()
+            .any(|address| address.port() != expected_port)
+        {
+            return Err(Error::InvalidResolvedTarget(format!(
+                "all resolved destinations must use the URL's effective port {expected_port}"
+            )));
+        }
+    }
+
+    #[cfg(feature = "proxy")]
+    if resolve_proxy(inner, &logical_url, &crate::request::ProxyOverride::Inherit).is_some() {
+        return Err(Error::Unsupported(
+            "native frame bodies are not supported through the built-in proxy routes".into(),
+        ));
+    }
+
+    if inner.config.dialer.is_some() {
+        if transport_hints.resolved_target.is_some() {
+            return Err(Error::Unsupported(
+                "custom dialing is incompatible with caller-supplied resolved destinations".into(),
+            ));
+        }
+        if inner.direct_connector_config.is_some() {
+            return Err(Error::Unsupported(
+                "custom dialing is incompatible with local-address or socket-option routing".into(),
+            ));
+        }
+        if inner.config.uds_configured {
+            return Err(Error::Unsupported(
+                "custom dialing is incompatible with Unix-domain routing".into(),
+            ));
+        }
+        #[cfg(feature = "http3")]
+        if matches!(
+            inner.config.http_version_policy,
+            crate::HttpVersionPolicy::Http3Only
+        ) {
+            return Err(Error::Unsupported(
+                "custom dialing is incompatible with HTTP/3".into(),
+            ));
+        }
+    }
+
+    #[cfg(feature = "http3")]
+    if matches!(
+        inner.config.http_version_policy,
+        crate::HttpVersionPolicy::Http3Only
+    ) {
+        return Err(Error::Unsupported(
+            "native frame bodies are not supported by the experimental HTTP/3 route".into(),
+        ));
+    }
+
+    #[cfg(feature = "tls-rustls")]
+    if logical_url.scheme() == "https" {
+        if let Some(error) = &inner.tls_config_error {
+            return Err(Error::Tls(error.clone()));
+        }
+    }
+
+    let uri = resolve_request_uri(&logical_url, &transport_hints)?;
+    let method = request.method().clone();
+    let version = request.version();
+    let headers = Headers::from(request.headers().clone());
+    let body = BodyExt::map_err(request.into_body(), |error| {
+        Box::new(error) as Box<dyn std::error::Error + Send + Sync>
+    })
+    .boxed_unsync();
+    let body = NativeRequestBody::new(Box::pin(body), timeout.write).boxed_unsync();
+
+    let origin = OriginKey::from_url(logical_url.scheme(), &logical_url);
+    let started = std::time::Instant::now();
+    let pool_deadline = match (timeout.pool, timeout.total) {
+        (Some(pool), Some(total)) if total < pool => Some((total, TimeoutPhase::Total)),
+        (Some(pool), _) => Some((pool, TimeoutPhase::Pool)),
+        (None, Some(total)) => Some((total, TimeoutPhase::Total)),
+        (None, None) => None,
+    };
+    let guard = match pool_deadline {
+        Some((duration, phase)) => {
+            match tokio::time::timeout(duration, inner.pool.acquire(origin.as_ref())).await {
+                Ok(guard) => guard?,
+                Err(_) => {
+                    return Err(Error::Timeout {
+                        phase,
+                        elapsed: started.elapsed(),
+                    })
+                }
+            }
+        }
+        None => inner.pool.acquire(origin.as_ref()).await?,
+    };
+
+    let remaining_total = timeout
+        .total
+        .map(|total| total.saturating_sub(started.elapsed()));
+    let trace = transport_hints.trace.as_deref();
+    #[cfg(unix)]
+    let has_uds = inner.uds_client.is_some();
+    #[cfg(not(unix))]
+    let has_uds = false;
+    let route = select_route(
+        has_uds,
+        inner.config.dialer.is_some(),
+        transport_hints.resolved_target.is_some() || inner.direct_client.is_some(),
+        false,
+        transport_hints.sni_hostname.is_some(),
+        false,
+    );
+
+    let raw_response = match route {
+        TransportRoute::Uds => {
+            let uds_client = inner
+                .uds_client
+                .as_ref()
+                .ok_or_else(|| Error::Unsupported("UDS client not available".into()))?;
+            let hyper_request = build_http_request(&method, uri, version, &headers, body)?;
+            send_with_total_timeout(
+                crate::transport::direct::send_raw_request(uds_client, hyper_request, trace),
+                remaining_total,
+            )
+            .await?
+        }
+        TransportRoute::Custom => {
+            let custom_client = if let Some(sni_hostname) = transport_hints.sni_hostname.as_deref()
+            {
+                inner.sni_custom_client(sni_hostname).await?
+            } else {
+                inner
+                    .custom_client
+                    .as_ref()
+                    .ok_or_else(|| Error::Unsupported("custom dialer client not available".into()))?
+                    .clone()
+            };
+            let hyper_request = build_http_request(&method, uri, version, &headers, body)?;
+            send_with_total_timeout(
+                crate::transport::direct::send_raw_request(&custom_client, hyper_request, trace),
+                remaining_total,
+            )
+            .await?
+        }
+        TransportRoute::Direct => {
+            let resolved_client;
+            let direct_client = if let Some(target) = transport_hints.resolved_target.as_ref() {
+                resolved_client =
+                    inner.resolved_client(target, transport_hints.sni_hostname.as_deref())?;
+                &resolved_client
+            } else {
+                inner
+                    .direct_client
+                    .as_ref()
+                    .ok_or_else(|| Error::Unsupported("direct client not available".into()))?
+            };
+            let hyper_request = build_http_request(&method, uri, version, &headers, body)?;
+            send_with_total_timeout(
+                crate::transport::direct::send_raw_request(direct_client, hyper_request, trace),
+                remaining_total,
+            )
+            .await?
+        }
+        TransportRoute::SniDirect => {
+            let sni_hostname = transport_hints.sni_hostname.as_deref().ok_or_else(|| {
+                Error::RequestBuild("SNI route selected without sni_hostname".into())
+            })?;
+            let sni_client = inner.sni_client(sni_hostname).await?;
+            let hyper_request = build_http_request(&method, uri, version, &headers, body)?;
+            send_with_total_timeout(
+                crate::transport::direct::send_raw_request(&sni_client, hyper_request, trace),
+                remaining_total,
+            )
+            .await?
+        }
+        TransportRoute::Standard => {
+            let hyper_client = inner.hyper_client.as_ref().ok_or_else(|| {
+                Error::Unsupported("HTTP client not available for this protocol".into())
+            })?;
+            let hyper_request = build_http_request(&method, uri, version, &headers, body)?;
+            send_with_total_timeout(
+                crate::transport::direct::send_raw_request(hyper_client, hyper_request, trace),
+                remaining_total,
+            )
+            .await?
+        }
+        TransportRoute::Proxy | TransportRoute::H3 => {
+            return Err(Error::Unsupported(
+                "native frame body route is not available".into(),
+            ));
+        }
+    };
+
+    if raw_response.status() == http::StatusCode::SWITCHING_PROTOCOLS {
+        return Err(Error::Unsupported(
+            "native frame bodies do not expose protocol upgrades; use the high-level upgrade API"
+                .into(),
+        ));
+    }
+
+    let (parts, incoming) = raw_response.into_parts();
+    let native_body = NativeResponseBody::from_incoming(incoming, Arc::new(guard), timeout.read);
+    Ok(http::Response::from_parts(parts, native_body))
+}
+
+/// Report that no HTTP protocol feature was selected for native bodies.
+#[cfg(not(any(feature = "http1", feature = "http2")))]
+pub(crate) async fn send_native_http_body<B>(
+    _inner: &ClientInner,
+    _request: http::Request<B>,
+    _options: NativeRequestOptions,
+) -> Result<http::Response<NativeResponseBody>> {
+    Err(Error::Unsupported(
+        "no HTTP protocol feature is enabled; enable http1 or http2".into(),
+    ))
 }
 
 /// Report that no HTTP protocol feature was selected.

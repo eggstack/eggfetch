@@ -201,6 +201,53 @@ let resp = client.post("https://api.example.com/data")?
     .send().await?;
 ```
 
+### Native HTTP body interoperability
+
+When an application already owns an `http_body::Body`, the native transport
+surface preserves its DATA and trailer frames:
+
+```rust
+use bytes::Bytes;
+use eggfetch_core::{Client, NativeRequestOptions};
+use http_body::Frame;
+use http_body_util::StreamBody;
+
+let body = StreamBody::new(futures_util::stream::iter([
+    Ok::<_, std::convert::Infallible>(Frame::data(Bytes::from_static(b"payload"))),
+]));
+let request = http::Request::post("https://api.example.com/upload")
+    .body(body)?;
+let response = Client::new()
+    .execute_http_body(request, NativeRequestOptions::default())
+    .await?;
+```
+
+Consume `response.into_body()` by polling `http_body::Body::poll_frame` (or
+an appropriate `http-body-util` adapter) to observe DATA and trailer frames.
+This one-shot API does not apply redirects, logical retries, cookies, auth,
+decompression, or decoded-body limits. It is intended for native gateways,
+service meshes, middleware, and custom-network clients; the existing
+`RequestBuilder` API remains the application-oriented choice.
+
+### TLS provider and additional roots
+
+Rustls provider choice is local to `TlsConfig`:
+
+```rust
+use std::sync::Arc;
+let tls = eggfetch_core::TlsConfig::builder()
+    .crypto_provider(Arc::new(rustls::crypto::ring::default_provider()))
+    .additional_ca_certificate_pem(include_bytes!("private-ca.pem"))?
+    .build();
+let client = Client::builder().tls_config(tls).build();
+```
+
+`ca_certificate_*` methods retain replacement semantics. The
+`additional_ca_certificate_*` methods augment the selected native/WebPKI or
+custom base. `add_ca_certificate_path` is intentionally unchanged. The
+provider is not installed globally and is used for both verification and
+mTLS private-key loading.
+
 With the `json` feature, request and response values can use Serde directly:
 
 ```rust
