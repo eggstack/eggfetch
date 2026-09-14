@@ -4,30 +4,30 @@ This record is the exact-SHA-bound status for the HTTPX 0.28.1 compatibility
 facade. Historical phase and corrective-pass records remain in the git history
 and referenced plans; counts below are only from the runs named here.
 
-## Recorded state — Stage C renewed on corrected native body frozen executable SHA (2026-09-14)
+## Recorded state — Stage C renewed after TLS provider qualification hardening (2026-09-14)
 
 Recorded designation: **Stage C qualified** for both the documented HTTPX
 0.28.1 and httpx2 2.12.0 asyncio surfaces, bound to executable SHA
-`8044bb4b83bb4fc6834dcc4314b0db397b7cd563`. The prior
+`1fe808b8f88e5e9c8dee7456629c897d50b425fb`. The prior
 `22a6f5c...` binding, as well as earlier bindings, is historical because
 subsequent qualification-sensitive work followed it. The profiles in
 `compat/httpx/0.28.1/profile.toml` and `compat/httpx2/2.12.0/profile.toml`
 record this SHA and the 2026-09-14 qualification date.
 
-Qualification evidence on the corrected frozen tree:
+Qualification evidence on the final qualification tree:
 
 - focused suites: direct/static transport 17/17, H3 Alt-Svc 17/17, H3
   hardening 12/12, native JSON 8/8, proxy 36/36, retry 10/10, transport
-  metrics 8/8, and TLS 13/13;
-- Tier 1: green on the final executable freeze;
-- full compatibility: 1,870 passed in the extended local run, with the
-  existing non-failing warning/skip policy;
+  metrics 8/8, and TLS 14/14;
+- Tier 1: green on the final qualification tree;
+- full compatibility: three consecutive runs each passed 1,870 tests with
+  26 non-failing warnings and no compatibility skips, xfails, or failures;
 - API oracles: HTTPX 0.28.1 clean with 71 allowed differences and httpx2
   2.12.0 clean with 79 allowed differences;
 - bounded embedded footprint: 327,728 stripped bytes larger than aligned
   reqwest in each Rustls profile; outcome **not a footprint win**.
 
-Extended validation passed with the documented unsupported local Rust 1.80 /
+Extended and package validation passed with the documented unsupported local Rust 1.80 /
 old Cargo environment, unbuilt Node JS artifact, and absent downstream
 artifact skips. Package validation passed on the final executable freeze
 (including crate packaging, wheel smoke, and package-content checks).
@@ -37,14 +37,17 @@ independent non-Quinn server passes, independent GOAWAY/drain evidence,
 public-origin checks, realistic impairment execution, and unresolved upstream
 correctness risk. HTTP/3 status is separate from the HTTPX parity claims.
 
-Remote routine CI passed for this corrected freeze in run `34875311872` on
-2026-09-14. The executable freeze and all local gates are recorded above.
+Remote routine CI passed for the preceding corrected freeze in run
+`34875311872` on 2026-09-14. The final qualification tree has passed all local
+gates above and is pending its new remote CI run after push.
 
 ### Current-tree qualification note (2026-09-14)
 
 The native custom-dialer, lifecycle-control, deterministic regression, RSS-
 monitor, native body, TLS extensibility, and first-poll timeout correction
-qualification work is closed on the exact executable SHA above.
+qualification work is closed on the exact executable SHA above. The follow-up
+changed only regression-test and external-fixture coverage; it did not change
+runtime/API behavior.
 The compatibility profiles and generated API manifests remain independent of
 the native surface; both profiles were nevertheless requalified together on
 the final clean freeze as required by the repository's exact-SHA policy.

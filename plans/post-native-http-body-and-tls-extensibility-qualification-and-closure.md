@@ -2,7 +2,13 @@
 
 Planning baseline: `45c08e0e7587eb1e8f713d49e6f7902478c27a35` (`main`, 2026-09-14; eggfetch 0.1.4)
 Parent program: `plans/native-http-body-and-tls-extensibility-program.md`
-Status: complete; closure freeze `fdfe060`
+Status: complete; implementation closure freeze `fdfe060`; final
+qualification test/fixture freeze `1fe808b`
+
+The original closure freeze was followed by a qualification-only regression
+test and external-fixture hardening pass. That pass changed no runtime/API
+behavior, but it invalidated the prior exact-SHA compatibility binding; the
+live qualification records were rebound after the final local gates passed.
 
 ## Objective
 
@@ -241,7 +247,8 @@ Do not add Synvoid migration instructions to eggfetch's core architecture docs. 
 - [x] Dependency/footprint documentation remains truthful.
 - [x] One exact executable/test/fixture SHA is frozen.
 - [x] HTTPX 0.28.1 and HTTPX2 2.12.0 compatibility evidence is rerun and rebound only if it passes on that SHA.
-- [x] Post-freeze changes are documentation/profile/ledger-only.
+- [x] After the final qualification test/fixture freeze, changes are
+  documentation/profile/ledger-only.
 - [x] `plans/README.md` and `plans/ROADMAP.md` record final status.
 
 ## Non-goals

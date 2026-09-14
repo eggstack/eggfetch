@@ -18,10 +18,11 @@ created = "2026-09-10"
 # mutates the other.
 # The native body/TLS extensibility and first-poll timeout correction
 # invalidated the previous binding; this profile was renewed after the
-# corrected final freeze below.
+# corrected final freeze below. A later qualification-only TLS provider/mTLS
+# fixture hardening pass invalidated that binding and was requalified below.
 stage = "stage-c-qualified"
 status = "qualified"
-qualification-sha = "8044bb4b83bb4fc6834dcc4314b0db397b7cd563"
+qualification-sha = "1fe808b8f88e5e9c8dee7456629c897d50b425fb"
 qualification-date = "2026-09-14"
 historical-current-qualification-sha = "639bf186a71c054e11278d1b160ffe7a6f172c02"
 reference = "httpx2==2.12.0"

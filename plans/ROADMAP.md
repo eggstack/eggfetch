@@ -11,8 +11,9 @@ The remaining roadmap is therefore not primarily about proving feasibility. It i
 ## Current product position (2026-09-14)
 
 The embedded Rust client, extensible transport, and native HTTP body/TLS
-extensibility programs are complete on executable/test/fixture freeze
-`fdfe060cd7035ddf936d6e0817cb2459f9d3fc0c`.
+extensibility programs are complete on implementation freeze
+`fdfe060cd7035ddf936d6e0817cb2459f9d3fc0c`; the final qualification
+test/fixture follow-up is `1fe808b8f88e5e9c8dee7456629c897d50b425fb`.
 `eggfetch-core` now has truthful feature ownership, native `json`
 request/response helpers, request-scoped resolved-destination routing, a
 caller-owned raw-stream `Dialer`, strict Hyper stale-idle retry control, and
@@ -76,8 +77,9 @@ retained-experimental outcome; its missing evidence is recorded in
 ### Recently completed work
 
 The native HTTP body and TLS extensibility program
-(`native-http-body-and-tls-extensibility-program.md`) is complete on the freeze
-above. It remains a bounded, transport-generic native-Rust engine expansion:
+(`native-http-body-and-tls-extensibility-program.md`) is complete on the
+implementation freeze above, with qualification-only test/fixture hardening
+recorded at `1fe808b8f88e5e9c8dee7456629c897d50b425fb`. It remains a bounded, transport-generic native-Rust engine expansion:
 arbitrary request frames and response trailers cross the new `http_body::Body`
 surface, Rustls provider selection is explicit and provider-neutral, and
 additional trust anchors augment rather than redefine existing replacement CA

@@ -3,13 +3,16 @@
 Planning baseline: `45c08e0e7587eb1e8f713d49e6f7902478c27a35` (`main`, 2026-09-14; eggfetch 0.1.4)
 Program opened: 2026-09-14
 Motivating downstream: Synvoid integration evaluation, but every change in this program must remain generally useful to native Rust consumers and must not introduce a Synvoid-specific API.
-Status: complete; closed on executable/test/fixture freeze `fdfe060`
+Status: complete; implementation closed on `fdfe060`; final qualification
+test/fixture follow-up closed on `1fe808b`
 
 ## Closure record
 
 Implemented in `fdfe060` (`Add native HTTP body and TLS extensibility`), with
-the native frame-body tests and external AWS-LC/private-PKI fixture included
-in that freeze. The exact-SHA closure gates passed on the clean tree:
+the native frame-body tests and initial external AWS-LC/private-PKI fixture
+included in that implementation freeze. Qualification-only TLS provider/mTLS
+regression coverage was strengthened in `1fe808b`; the final exact-SHA closure
+gates passed on that clean tree:
 
 - Tier 1, extended validation, and package validation passed;
 - three sequential full compatibility runs each passed 1,870 tests with 26
@@ -20,8 +23,10 @@ in that freeze. The exact-SHA closure gates passed on the clean tree:
   unavailable for the current dependency resolution, the Node native artifact
   is not built, and the optional downstream artifact manifest was absent.
 
-Post-freeze changes are limited to this plan/qualification documentation and
-compatibility-profile metadata.
+After the final qualification follow-up, changes are limited to this
+plan/qualification documentation and compatibility-profile metadata. The
+follow-up itself changed only tests and the external qualification fixture; no
+runtime/API behavior changed.
 
 ## Objective
 
