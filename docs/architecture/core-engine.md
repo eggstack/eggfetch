@@ -165,6 +165,31 @@ request policy so transports own only connection/protocol work:
    (learnable routes only), decompression wrapping, decoded-size limiting,
    then read-timeout + pool-lease attachment.
 
+### Connector lifecycle ordering
+
+Every Hyper client is assembled as:
+
+```text
+physical admission → ConnectTimeout → underlying route connector
+  (DNS/TCP/custom dial/TLS) → established I/O guard → Hyper pool
+```
+
+In the concrete type, `ConnectTimeout` is inside the lifecycle connector:
+the lifecycle wrapper acquires a permit first, then starts the connect-phase
+future, and retains the permit in the returned connection until Hyper drops
+it. An idle pooled connection still counts, HTTP/2 streams do not consume
+additional permits, and failed or cancelled connects release the permit.
+Admission wait has its own identifiable error query. The wrapper is shared by
+standard, direct/resolved, SNI, custom-dialer, UDS, and SOCKS Hyper routes;
+the hand-rolled HTTP proxy and independent H3/QUIC transports are not Hyper
+connector routes.
+
+When `TransportIoTimeout` is enabled, established reads and writes are
+guarded at this same boundary. The timers reset on actual byte progress,
+cover vectored writes and pending flush/shutdown, and surface as
+`Error::TransportIoTimeout` with a read/write direction. They do not change
+the request-body or response-body timeout fields.
+
 The standard and specialized-direct Hyper paths share a single
 response-lifecycle implementation (`finish_hyper_response()` plus shared
 trace helpers, `wrap_incoming` with `SharedTrailers`, and
@@ -255,8 +280,8 @@ method returning a static string for programmatic matching.
 |----------|----------|
 | **Input validation** | `InvalidUrl`, `InvalidMethod`, `InvalidHeaderName`, `InvalidHeaderValue`, `RequestBuild`, `InvalidResolvedTarget` |
 | **Connection** | `Connect`, `Tls`, `Protocol`, `Hyper`, `HyperClient`, `Io` |
-| **Timeout** | `Timeout { phase, elapsed }` — phase is `Pool`, `Connect`, `ProxyConnect`, `ProxyTls`, `Write`, `Read`, or `Total` |
-| **Pool** | `Pool` |
+| **Timeout** | `Timeout { phase, elapsed }` — phase is `Pool`, `Connect`, `ProxyConnect`, `ProxyTls`, `Write`, `Read`, or `Total`; established transport stalls use `TransportIoTimeout { direction, elapsed }` |
+| **Pool** | `Pool`; physical admission timeouts remain distinguishable with `Error::is_physical_connection_admission_timeout()` |
 | **Redirect** | `InvalidRedirectLocation`, `TooManyRedirects { followed, max }`, `BodyNotReplayableForRedirect`, `ResolvedTargetRedirect` |
 | **Auth** | `InvalidAuthHeader`, `ConflictingAuth` |
 | **Body** | `Body`, `Decompression`, `UnsupportedContentEncoding`, `DecodedBodyTooLarge`, `DecompressionRatioExceeded`, `Unsupported` |

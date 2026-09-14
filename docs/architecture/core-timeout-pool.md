@@ -12,9 +12,9 @@ eggfetch implements phase-aware timeouts that map to specific segments of the re
 
 | Phase | What It Covers |
 |-------|----------------|
-| `Pool` | Waiting for a connection slot from the concurrency pool |
+| `Pool` | Waiting for a logical request slot from the concurrency pool |
 | `Connect` | TCP connection establishment + TLS handshake (including DNS); for proxy routes, also proxy TCP/TLS setup and origin TLS after CONNECT |
-| Physical admission | Optional wait for a live-connection permit; distinct from logical pool acquisition |
+| Physical admission | Optional wait for a live Hyper-connection permit; distinct from logical pool acquisition |
 | `ProxyConnect` | Internal classification for proxy TCP setup |
 | `ProxyTls` | Internal classification for TLS to an HTTPS proxy endpoint |
 | `Write` | Sending request headers and body |
@@ -48,11 +48,35 @@ pool. HTTP/2 multiplexing therefore consumes one physical permit while
 logical request permits remain independent. An admission timeout is reported
 by `Error::is_physical_connection_admission_timeout()`.
 
+The four resource controls are intentionally separate:
+
+| Control | Resource covered |
+|---|---|
+| `PoolConfig::max_in_flight_requests*` (and legacy `max_connections*`) | Logical requests, one permit per in-flight request |
+| `PoolConfig::max_idle_connections*` / `idle_timeout` | Hyper's retained idle connections |
+| `PhysicalConnectionPolicy` | Live established Hyper connections, including idle pooled connections; one permit per HTTP/1 or HTTP/2 connection |
+| `TransportIoTimeout` | Read/write inactivity after establishment, including buffered Hyper I/O |
+
+`ClientBuilder::build()` remains infallible. `max_live = Some(0)` and an
+`admission_timeout` without `max_live` are invalid configurations; requests
+through the Hyper routes fail before connector I/O with a `Pool` error. The
+physical admission metrics expose waits, timeouts, current live admitted
+connections, and a high-water mark. The live gauge is meaningful when a
+physical cap is enabled.
+
 `TransportIoTimeout` wraps established Hyper I/O. Read and write inactivity
 deadlines reset only on actual progress; they cover buffered Hyper writes and
 connection reads without changing the meaning of request-body `Timeout.write`
 or response-stream `Timeout.read`. DNS, TCP, custom dialing, and destination
 TLS remain under the connect phase.
+
+The lifecycle wrapper is installed after `ConnectTimeout`, so admission wait
+does not consume the connect budget and DNS/TCP/custom dialing/destination
+TLS remain connect-phase work. It is shared by standard, direct,
+resolved-target, SNI, custom-dialer, UDS, and SOCKS Hyper clients. HTTP
+forward/CONNECT proxy requests use the separate hand-rolled proxy transport,
+and HTTP/3 uses QUIC; those paths retain their existing phase/idle controls
+and are outside this Hyper-specific policy.
 
 ### Error Model
 
@@ -122,7 +146,7 @@ When a request acquires a pool slot, it receives a `PoolGuard` (wrapped in `Arc`
 - `acquisition_waits` — number of times a request waited for a slot.
 - `acquisition_cancellations` — number of times a pool acquisition was cancelled.
 
-`TransportMetrics` (`Client::transport_metrics()`, atomic, low-overhead) counts connector/protocol events where observable: direct/DNS/TLS attempts, UDS/proxy attempts, H3 creations/evictions, Alt-Svc learned/expired/cleared/rejected, H3 attempted/suppressed/fallback/drain/close/reconnect, and 101 upgrades. Names state whether they count connector events or protocol connections; logical requests stay in `PoolMetrics`.
+`TransportMetrics` (`Client::transport_metrics()`, atomic, low-overhead) counts connector/protocol events where observable: direct/DNS/TLS attempts, UDS/proxy attempts, physical admission waits/timeouts/live/high-water values, established read/write inactivity timeouts, H3 creations/evictions, Alt-Svc learned/expired/cleared/rejected, H3 attempted/suppressed/fallback/drain/close/reconnect, and 101 upgrades. Names state whether they count connector events or protocol connections; logical requests stay in `PoolMetrics`.
 
 Socket-level reuse counts (connections opened/reused/closed) and per-connection H2 stream counts remain absent because hyper owns socket lifecycle and eggfetch cannot observe reuse reliably — never estimated. See `transport/metrics.rs` and `tests/transport_metrics_tests.rs` + `tests/h3_alt_svc_discovery.rs` for exact-count evidence.
 

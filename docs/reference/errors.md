@@ -30,6 +30,7 @@ The `eggfetch_core::Error` enum is the single error type for the library. Use `e
 | `Decompression` | `decompression` | Decompression stream error |
 | `UnsupportedContentEncoding` | `unsupported_content_encoding` | Content-Encoding not supported |
 | `Timeout { phase }` | `timeout_{phase}` | Timeout elapsed (see phases below) |
+| `TransportIoTimeout` | `transport_{read,write}_timeout` | Established Hyper transport made no read/write progress before its inactivity deadline |
 | `InvalidProxyUrl` | `invalid_proxy_url` | Proxy URL is malformed |
 | `ProxyConnect` | `proxy_connect` | Proxy connection failed |
 | `ProxyAuthRequired` | `proxy_auth_required` | Proxy requires authentication |
@@ -68,6 +69,12 @@ The `Timeout` variant includes a phase discriminant. The `kind()` string include
 | Write | `timeout_write` |
 | Read | `timeout_read` |
 | Total | `timeout_total` |
+
+Physical admission waits use the `Pool` variant but are distinguishable in
+Rust with `Error::is_physical_connection_admission_timeout()`. This is
+separate from a logical `Timeout { phase: Pool, .. }`. Established transport
+timeouts are `TransportIoTimeout { direction, elapsed }`; the direction is
+also available in `error.kind()`.
 
 ## Python Exception Hierarchy
 
@@ -123,6 +130,8 @@ Exception
 | `Timeout` (Read) | `ReadTimeout` |
 | `Timeout` (Write) | `WriteTimeout` |
 | `Timeout` (Total) | `TimeoutException` |
+| `TransportIoTimeout` (Read) | `ReadTimeout` |
+| `TransportIoTimeout` (Write) | `WriteTimeout` |
 | `Decompression` | `DecompressionError` |
 | `UnsupportedContentEncoding` | `UnsupportedContentEncoding` |
 | `InvalidProxyUrl` | `ProxyError` |

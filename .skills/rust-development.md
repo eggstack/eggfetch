@@ -121,6 +121,16 @@ native JSON helpers are opt-in and must remain absent from minimal profiles.
   reason text). Stream counts remain unavailable (`None`) rather than guessed.
   Exact-count and bound tests live in `transport/metrics.rs` and
   `h3_alt_svc_discovery.rs`.
+- Physical lifecycle: `PhysicalConnectionPolicy` is a native Hyper-route
+  cap, separate from logical pool permits; permits remain held by active or
+  idle Hyper connections and are shared by client clones. `TransportIoTimeout`
+  guards established Hyper reads/writes, resets only on byte progress, and
+  includes vectored writes plus pending flush/shutdown. The lifecycle wrapper
+  is used by standard, direct/resolved, SNI, custom-dialer, UDS, and SOCKS
+  Hyper clients; hand-rolled HTTP proxy and H3/QUIC paths are intentionally
+  outside this policy. Deterministic lifecycle tests are in
+  `transport/lifecycle.rs` and metrics snapshots include admission/live/high-
+  water and read/write inactivity counters.
 - **Underlying attempt control**: `ClientBuilder::retry_canceled_requests`
   defaults to `true` to preserve Hyper-util's transparent retry when a reused
   idle connection is unusable before transmission. Set it to `false` for

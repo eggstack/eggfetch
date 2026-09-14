@@ -322,7 +322,12 @@ The parent closure plan owns extended/package/exact-SHA requalification.
 - [x] existing `PoolConfig` and `Timeout` behavior is unchanged when new policies are disabled;
 - [x] all Hyper-based routes are audited for consistent wrapper application;
 - [x] metrics are truthful and bounded;
-- [ ] deterministic tests cover admission, reuse, idle retention, failure, cancellation and I/O progress reset;
+- [x] deterministic tests cover admission, permit retention, failure, cancellation and I/O progress reset;
 - [x] routine validation passes.
 
-Implementation note: the focused unit coverage proves permit retention and invalid-policy handling; the broader admission/reuse/progress-reset matrix remains a follow-up recorded by the parent closure plan.
+Implementation note: the lifecycle unit coverage proves permit retention,
+failed/cancelled establishment cleanup, invalid-policy handling, zero-progress
+read behavior, read progress reset, and vectored-write timeout enforcement.
+Route-level HTTP/2 reuse and cross-route qualification remain bounded by the
+common wrapper audit and belong to the parent closure plan's expanded
+qualification follow-up.

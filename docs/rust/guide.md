@@ -107,6 +107,14 @@ later logical attempt. The control applies to Hyper HTTP/1/2 routes only;
 HTTP/3 uses its separate QUIC lifecycle and retry rules.
 `PhysicalConnectionPolicy` caps live Hyper connections, including idle pooled
 connections, while `TransportIoTimeout` guards inactivity after establishment.
+They are native Hyper-route controls: the policy covers standard, direct,
+resolved-target, SNI, custom-dialer, UDS, and SOCKS clients, while the
+hand-rolled HTTP proxy and experimental HTTP/3/QUIC paths keep their existing
+controls. `max_live` must be greater than zero when set, and
+`admission_timeout` is meaningful only with a live cap. Use
+`client.transport_metrics().snapshot()` for admission/live/high-water and
+I/O-timeout counters. Admission waits are distinct from `Timeout.pool`, and
+transport I/O timeouts are distinct from request-body/response-body timeouts.
 
 ## Creating a Client
 

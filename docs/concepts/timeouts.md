@@ -14,6 +14,13 @@ eggfetch implements phase-aware timeouts that map to specific segments of the re
 | `Read` | Per-chunk time to wait for a response body chunk; proxy protocol reads also cover response headers |
 | `Total` | Wall-clock cap across the entire request lifecycle |
 
+Native Rust callers also have `TransportIoTimeout { read, write }`. This is
+not an additional `Timeout` phase: it guards inactivity on established Hyper
+transport I/O, including buffered request writes, and resets only on actual
+byte progress. It is distinct from request-body producer `Write` and
+response-body consumer `Read` timing. HTTP forward/CONNECT proxy and H3/QUIC
+transports retain their existing phase-specific controls.
+
 ## Default Behavior
 
 By default, all timeout phases are disabled (all `None`). A `Timeout` with no fields set allows requests to run indefinitely (subject to OS-level TCP timeouts).
@@ -93,6 +100,7 @@ let response = client
 - **Connect** is enforced by wrapping the underlying connector with a deadline that bounds DNS resolution, TCP connect, and TLS handshake
 - **Read** is enforced per body chunk by a wrapper stream that fires an error if no chunk arrives within the duration. The deadline resets on every chunk arrival. Direct Hyper/UDS/H3 header acquisition is owned by the transport future; proxy protocol header reads remain phase-aware
 - **Write** is enforced per chunk by a wrapper stream that fires an error if the body producer does not yield a chunk within the duration. The deadline resets on every chunk delivery. Only applies to streamed request bodies; buffered bodies complete synchronously
+- **Established transport I/O** is optionally enforced by `TransportIoTimeout` at the common Hyper connector boundary. Read/write timers cover socket progress after DNS/TCP/TLS establishment, reset on byte progress, and include vectored writes plus pending flush/shutdown. Failures are `Error::TransportIoTimeout` with a read/write direction.
 
 ## Timeout Errors
 

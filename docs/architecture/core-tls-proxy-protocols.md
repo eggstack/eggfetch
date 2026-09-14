@@ -200,6 +200,24 @@ resolved-address routing, local-address/socket-option routing, or HTTP/3.
 These combinations fail before I/O. A dial failure is preserved as a custom
 transport error and never falls back to ordinary direct DNS/TCP.
 
+### Hyper connection lifecycle controls
+
+Native callers can install `PhysicalConnectionPolicy` and
+`TransportIoTimeout` on `ClientBuilder`. The common lifecycle wrapper is
+composed around the completed standard/direct/custom/SNI/UDS/SOCKS Hyper
+connector set, after `ConnectTimeout`: it waits for physical admission, lets
+the underlying connector perform DNS/TCP/dial/TLS, then wraps the established
+stream before Hyper receives it. A permit remains attached through Hyper idle
+pooling and HTTP/2 multiplexing, and is released on stream drop, failed or
+cancelled establishment, or client teardown. `TransportIoTimeout` applies
+only after establishment and resets on real byte progress, including
+vectored writes and pending flush/shutdown.
+
+This is a Hyper transport control, not a universal socket cap. The
+hand-rolled HTTP forward/CONNECT proxy path and the independent QUIC/H3 path
+retain their existing proxy-phase and QUIC idle semantics and are outside
+this wrapper.
+
 The tunneled body stream knows the declared `Content-Length` (when the
 response carries an explicit non-chunked length) and uses it only to tell
 a truncated body apart from a complete one: EOF short of the declared

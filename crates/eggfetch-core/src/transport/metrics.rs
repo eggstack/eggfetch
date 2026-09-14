@@ -19,6 +19,10 @@
 //!   `h3_drain_observed/closed/reconnected`. One per routing decision or
 //!   cache transition; no secrets, no URLs, only counts.
 //! - **Logical requests** are counted by `PoolMetrics`, not here.
+//! - **Physical lifecycle**: admission waits/timeouts, current live
+//!   connections, and the live high-water mark are counted at the common
+//!   Hyper connector boundary. Established read/write inactivity timeouts
+//!   are counted when the lifecycle wrapper returns them.
 //!
 //! Hyper's internal socket-reuse counts and per-connection H2 stream
 //! counts are intentionally absent: the legacy pool owns socket lifecycle
@@ -129,6 +133,19 @@ pub struct H3CloseSummary {
 /// snapshots use a private bounded mutex.
 #[derive(Debug, Default)]
 pub struct TransportMetrics {
+    /// Physical connection admission waits after an immediate permit attempt
+    /// found the configured live-connection cap exhausted.
+    pub physical_admission_waits: AtomicUsize,
+    /// Physical connection admission waits that reached their deadline.
+    pub physical_admission_timeouts: AtomicUsize,
+    /// Number of currently live admitted Hyper connections.
+    pub physical_connections_live: AtomicUsize,
+    /// Highest observed number of simultaneously live admitted connections.
+    pub physical_connections_high_water: AtomicUsize,
+    /// Established transport read inactivity timeouts.
+    pub transport_read_inactivity_timeouts: AtomicUsize,
+    /// Established transport write inactivity timeouts.
+    pub transport_write_inactivity_timeouts: AtomicUsize,
     /// Direct-connector `call` attempts (connector events).
     pub direct_connector_attempts: AtomicUsize,
     /// Direct-connector TCP successes (at least one address connected).
@@ -195,6 +212,49 @@ impl TransportMetrics {
 
     fn inc(counter: &AtomicUsize) {
         counter.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub(crate) fn record_physical_admission_wait(&self) {
+        Self::inc(&self.physical_admission_waits);
+    }
+
+    pub(crate) fn record_physical_admission_timeout(&self) {
+        Self::inc(&self.physical_admission_timeouts);
+    }
+
+    pub(crate) fn record_physical_connection_admitted(&self) {
+        let live = self
+            .physical_connections_live
+            .fetch_add(1, Ordering::Relaxed)
+            .saturating_add(1);
+        let mut high_water = self.physical_connections_high_water.load(Ordering::Relaxed);
+        while live > high_water {
+            match self.physical_connections_high_water.compare_exchange_weak(
+                high_water,
+                live,
+                Ordering::Relaxed,
+                Ordering::Relaxed,
+            ) {
+                Ok(_) => break,
+                Err(observed) => high_water = observed,
+            }
+        }
+    }
+
+    pub(crate) fn record_physical_connection_released(&self) {
+        self.physical_connections_live
+            .fetch_sub(1, Ordering::Relaxed);
+    }
+
+    pub(crate) fn record_transport_io_timeout(&self, direction: crate::TransportIoDirection) {
+        match direction {
+            crate::TransportIoDirection::Read => {
+                Self::inc(&self.transport_read_inactivity_timeouts);
+            }
+            crate::TransportIoDirection::Write => {
+                Self::inc(&self.transport_write_inactivity_timeouts);
+            }
+        }
     }
 
     /// Record a direct-connector call start.
@@ -365,6 +425,18 @@ impl TransportMetrics {
     )]
     pub fn snapshot(&self) -> TransportSnapshot {
         TransportSnapshot {
+            physical_admission_waits: self.physical_admission_waits.load(Ordering::Relaxed),
+            physical_admission_timeouts: self.physical_admission_timeouts.load(Ordering::Relaxed),
+            physical_connections_live: self.physical_connections_live.load(Ordering::Relaxed),
+            physical_connections_high_water: self
+                .physical_connections_high_water
+                .load(Ordering::Relaxed),
+            transport_read_inactivity_timeouts: self
+                .transport_read_inactivity_timeouts
+                .load(Ordering::Relaxed),
+            transport_write_inactivity_timeouts: self
+                .transport_write_inactivity_timeouts
+                .load(Ordering::Relaxed),
             direct_connector_attempts: self.direct_connector_attempts.load(Ordering::Relaxed),
             direct_connector_successes: self.direct_connector_successes.load(Ordering::Relaxed),
             direct_connector_failures: self.direct_connector_failures.load(Ordering::Relaxed),
@@ -398,6 +470,18 @@ impl TransportMetrics {
 /// Point-in-time snapshot of [`TransportMetrics`] for tests.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TransportSnapshot {
+    /// Physical admission waits.
+    pub physical_admission_waits: usize,
+    /// Physical admission timeouts.
+    pub physical_admission_timeouts: usize,
+    /// Current live admitted Hyper connections.
+    pub physical_connections_live: usize,
+    /// High-water mark for live admitted Hyper connections.
+    pub physical_connections_high_water: usize,
+    /// Established transport read inactivity timeouts.
+    pub transport_read_inactivity_timeouts: usize,
+    /// Established transport write inactivity timeouts.
+    pub transport_write_inactivity_timeouts: usize,
     /// Direct-connector attempts.
     pub direct_connector_attempts: usize,
     /// Direct-connector successes.

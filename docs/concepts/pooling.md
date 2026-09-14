@@ -58,6 +58,13 @@ The `idle_timeout` configuration controls how long an idle connection remains in
 
 These settings control hyper's internal connection pool, not eggfetch's concurrency semaphores. eggfetch delegates connection lifecycle management to hyper.
 
+Native Rust callers can additionally set `PhysicalConnectionPolicy` to cap
+live established Hyper connections. That cap is independent of logical
+in-flight limits and includes idle pooled connections; HTTP/2 streams sharing
+one connection consume one physical permit. Use `TransportIoTimeout` for
+established read/write inactivity guardrails, not `Timeout.write` or
+`Timeout.read` request-body/response-body timing.
+
 ## Pool Metrics
 
 `PoolMetrics` exposes observable counters:
@@ -143,4 +150,6 @@ let client = Client::builder()
 
 The pool controls logical request concurrency, not physical TCP connections. Connection reuse is handled by hyper's internal connection pool. Under HTTP/1.1, hyper may keep a connection alive for reuse. Under HTTP/2, a single connection carries multiple multiplexed streams.
 
-eggfetch does not expose direct control over TCP connection lifecycle. The idle timeout and idle connection limits configure hyper's internal connection pool, which operates independently of eggfetch's concurrency semaphores.
+The idle timeout and idle connection limits configure hyper's internal pool,
+while `PhysicalConnectionPolicy` provides an opt-in live Hyper-connection cap.
+Both operate independently of eggfetch's logical concurrency semaphores.

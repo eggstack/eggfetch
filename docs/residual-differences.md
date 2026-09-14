@@ -125,7 +125,8 @@ residuals:
   H2 duplicates are preserved. Python/FFI/Node defer trailer exposure;
   the HTTPX facade is unchanged (0.28.1 has no `trailers`).
 - `TransportMetrics` counts connector/DNS/TLS attempts, UDS/proxy outcomes,
-  H3 creations/evictions, and 101 upgrades where observable. Hyper
+  physical admission waits/timeouts/live/high-water, established read/write
+  inactivity timeouts, H3 creations/evictions, and 101 upgrades where observable. Hyper
   socket-reuse and per-connection H2 stream counts remain absent (never
   estimated). `PoolMetrics` counts logical waits/cancellations.
 - Native `max_in_flight_requests*` (logical permits) preferred;

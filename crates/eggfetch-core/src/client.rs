@@ -1063,7 +1063,7 @@ impl ClientBuilder {
     ///
     /// This controls established Hyper connections, including idle pooled
     /// connections. It does not change the logical request limits in
-    /// [`PoolConfig`](crate::PoolConfig). A `max_live` value of zero fails
+    /// [`PoolConfig`]. A `max_live` value of zero fails
     /// requests closed because no useful client can be created from it.
     #[must_use]
     pub fn physical_connection_policy(mut self, policy: PhysicalConnectionPolicy) -> Self {
@@ -1073,7 +1073,7 @@ impl ClientBuilder {
 
     /// Install established-transport read/write inactivity guardrails.
     ///
-    /// These timers are distinct from [`Timeout`](crate::Timeout)'s request
+    /// These timers are distinct from [`Timeout`]'s request
     /// body and response-stream semantics and are disabled by default.
     #[must_use]
     pub fn transport_io_timeout(mut self, timeout: TransportIoTimeout) -> Self {
@@ -1193,6 +1193,7 @@ impl ClientBuilder {
         let lifecycle = Arc::new(LifecycleConfig::from_policy(
             self.physical_connection_policy,
             self.transport_io_timeout,
+            transport_metrics.clone(),
         ));
 
         #[cfg(feature = "cookies")]
