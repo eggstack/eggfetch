@@ -37,8 +37,8 @@ independent non-Quinn server passes, independent GOAWAY/drain evidence,
 public-origin checks, realistic impairment execution, and unresolved upstream
 correctness risk. HTTP/3 status is separate from the HTTPX parity claims.
 
-Remote routine CI for this corrected freeze is pending push. The executable
-freeze and all local gates are recorded above.
+Remote routine CI passed for this corrected freeze in run `34875311872` on
+2026-09-14. The executable freeze and all local gates are recorded above.
 
 ### Current-tree qualification note (2026-09-14)
 
