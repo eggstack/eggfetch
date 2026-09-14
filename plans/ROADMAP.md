@@ -72,13 +72,25 @@ retained-experimental outcome; its missing evidence is recorded in
 
 ### Active work
 
-None scheduled. The next-scope program's eight plans are closed. Future
-work is triggered by a new pinned HTTPX version, a newly discovered
-concrete compatibility defect, or an intentionally expanded scope —
-not by speculative parity expansion. An HTTPX 1.0 implementation program
-opens only on the RC/stable trigger recorded in `plans/README.md` (frozen
-public API + no further reset + fresh delta inventory, pinned to the exact
-RC/stable); dev releases never open implementation work.
+The native HTTP body and TLS extensibility program is planned for implementation:
+`native-http-body-and-tls-extensibility-program.md`. It is a bounded native-Rust
+engine expansion motivated by downstream integration analysis but deliberately
+kept transport-generic. The ordered work adds frame-preserving `http_body::Body`
+interop, explicit per-`TlsConfig` Rustls `CryptoProvider` selection with
+provider-neutral mTLS key loading, and explicit additional trust anchors while
+preserving existing high-level APIs, default ring behavior, replacement custom-
+CA semantics, Python/CLI behavior and HTTPX/HTTPX2 compatibility surfaces.
+
+Execution order is `native-http-body-interoperability.md`,
+`tls-crypto-provider-extensibility.md`, `tls-additional-trust-anchors.md`, then
+`post-native-http-body-and-tls-extensibility-qualification-and-closure.md` for
+integration audit, external-style qualification, exact-SHA freeze and
+compatibility requalification. Downstream migration remains outside eggfetch.
+
+Separately, an HTTPX 1.0 implementation program opens only on the RC/stable
+trigger recorded in `plans/README.md` (frozen public API + no further reset +
+fresh delta inventory, pinned to the exact RC/stable); dev releases never open
+implementation work.
 
 ### Future candidates
 
