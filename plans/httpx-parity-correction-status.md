@@ -38,8 +38,14 @@ public-origin checks, realistic impairment execution, and unresolved upstream
 correctness risk. HTTP/3 status is separate from the HTTPX parity claims.
 
 Remote routine CI passed for the preceding corrected freeze in run
-`34875311872` on 2026-09-14. The final qualification tree has passed all local
-gates above; its new remote CI run will be recorded after push.
+`34875311872` on 2026-09-14. The final qualification tree was then pushed
+through routine CI as the documentation-only descendant `9ca82999`:
+
+- Workflow: `CI`, run `34889540053`
+- Head SHA: `9ca8299992232678afa2148c9fb0687b3476518f`
+- Conclusion: success (8m46s, 2026-09-14)
+- Relationship to the frozen executable SHA: documentation/profile-only
+  descendant of `1ea63ba1a4ea81ab548c2a7c9af5563d975793cd`
 
 ### Current-tree qualification note (2026-09-14)
 

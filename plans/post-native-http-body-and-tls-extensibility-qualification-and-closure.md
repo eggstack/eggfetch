@@ -12,6 +12,11 @@ rebound after the final local gates passed. The final correction stabilizes
 the explicit-provider locality assertion when Rust integration tests run in
 parallel and does not alter the runtime/provider implementation.
 
+Routine remote CI passed for the documentation/profile-only closure descendant
+`9ca82999` in GitHub Actions run `34889540053` (2026-09-14, 8m46s). The run
+covered the unchanged qualification executable tree frozen at
+`1ea63ba1a4ea81ab548c2a7c9af5563d975793cd`.
+
 ## Objective
 
 Perform the single integration/qualification pass for the native HTTP-body and TLS-extensibility program, correct only defects found by that integration audit, freeze one exact executable/test/fixture SHA, renew compatibility evidence on that frozen tree, and then reconcile documentation/plan status without changing executable behavior after the freeze.
