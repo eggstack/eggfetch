@@ -559,10 +559,10 @@ struct PreparedRequest {
 
 /// Declarative transport route selected after preparation.
 ///
-/// Precedence (unchanged): configured UDS, specialized direct connector
-/// when applicable (no proxy), effective proxy/SOCKS path, SNI override
-/// direct path, H3 where selected, standard Hyper direct path. H3 never
-/// bypasses proxy rules because proxy routes are selected first.
+/// Precedence: configured UDS, caller-owned custom dialer, specialized direct
+/// connector when applicable (no proxy), effective proxy/SOCKS path, SNI
+/// override direct path, H3 where selected, standard Hyper direct path. H3
+/// never bypasses proxy rules because proxy routes are selected first.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum TransportRoute {
     /// Configured Unix-domain-socket client.
@@ -737,8 +737,9 @@ fn learn_altsvc_from_response(
 
 /// Build a Hyper request from prepared parts.
 ///
-/// Shared by the UDS, specialized-direct, SNI-direct, and standard Hyper
-/// paths so `http::Request` scaffolding is not rebuilt in each branch.
+/// Shared by the UDS, custom-dialer, specialized-direct, SNI-direct, and
+/// standard Hyper paths so `http::Request` scaffolding is not rebuilt in each
+/// branch.
 ///
 /// # Errors
 ///
@@ -1971,16 +1972,32 @@ fn resolve_request_uri(
     url: &url::Url,
     transport_hints: &crate::request::TransportHints,
 ) -> Result<http::Uri> {
+    let logical_uri: http::Uri = url
+        .as_str()
+        .parse()
+        .map_err(|e| Error::InvalidUrl(format!("failed to convert url to URI: {e}")))?;
     if let Some(ref target) = transport_hints.target {
         validate_target(target)?;
-        std::str::from_utf8(target)
-            .map_err(|_| Error::InvalidUrl("target extension is not valid UTF-8".into()))?
-            .parse()
+        let target = std::str::from_utf8(target)
+            .map_err(|_| Error::InvalidUrl("target extension is not valid UTF-8".into()))?;
+        // Hyper's legacy client requires an absolute URI to select a
+        // connector, then converts that URI to origin-form on the wire. Keep
+        // the logical scheme/authority for connector routing and TLS while
+        // replacing only the path-and-query portion with the caller's wire
+        // target. This also preserves the `*` request target.
+        let target_uri = target.parse::<http::Uri>().ok();
+        let path_and_query = target_uri
+            .as_ref()
+            .and_then(http::Uri::path_and_query)
+            .cloned()
+            .or_else(|| target.parse().ok())
+            .ok_or_else(|| Error::InvalidUrl("failed to convert target to URI".into()))?;
+        let mut parts = logical_uri.into_parts();
+        parts.path_and_query = Some(path_and_query);
+        http::Uri::from_parts(parts)
             .map_err(|e| Error::InvalidUrl(format!("failed to convert target to URI: {e}")))
     } else {
-        url.as_str()
-            .parse()
-            .map_err(|e| Error::InvalidUrl(format!("failed to convert url to URI: {e}")))
+        Ok(logical_uri)
     }
 }
 

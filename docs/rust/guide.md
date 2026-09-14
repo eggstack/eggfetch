@@ -96,7 +96,9 @@ The dialer receives only logical host/port data. Eggfetch owns `Host`, HTTPS
 SNI/certificate verification, HTTP framing, pooling, redirects, retries, and
 response streaming. Custom dialing is incompatible with built-in proxy, UDS,
 resolved-target, local socket, socket-option, and HTTP/3 routes; conflicts
-fail before network I/O. `retry_canceled_requests` controls only Hyper's
+fail before network I/O. A request `target` override changes only the wire
+path/query while the logical authority remains in place for dialing and TLS.
+`retry_canceled_requests` controls only Hyper's
 implicit stale-idle-connection retry and is independent of `RetryPolicy`.
 `PhysicalConnectionPolicy` caps live Hyper connections, including idle pooled
 connections, while `TransportIoTimeout` guards inactivity after establishment.
@@ -682,7 +684,7 @@ let client = Client::builder()
   `write`/`read` deadlines are reused, never restarted.
 - Broken routes are suppressed per origin with exponential backoff;
   only route failures suppress, never timeouts or graceful drains.
-- H3 never bypasses proxy rules: UDS, specialized-direct,
+- H3 never bypasses proxy rules: UDS, custom-dialer, specialized-direct,
   proxy/SOCKS, and SNI routes are selected first.
 - GOAWAY draining evicts only the drained generation for the *next*
   request; in-flight streams complete. Only `H3Connect` is retryable.

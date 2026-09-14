@@ -180,6 +180,12 @@ the logical URL host for `Host`, SNI, and certificate verification. Dialer
 errors retain the caller source through `Error::custom_transport_error()` and
 never trigger fallback to the ordinary direct connector.
 
+When a request has a wire `target` override, the Hyper request still carries
+the logical absolute scheme and authority needed for connector selection; only
+the path-and-query portion is replaced. This keeps custom dialing directed at
+the logical destination while allowing the caller to control the origin-form
+request target.
+
 `retry_canceled_requests(false)` disables only Hyper's implicit retry when a
 reused idle connection is unusable before the request begins. It is separate
 from the opt-in eggfetch `RetryPolicy`, whose behavior is unchanged.

@@ -165,6 +165,11 @@ impl RetryPolicy {
                 ..
             }
             | Error::H3Connect(_) => true,
+            Error::CustomTransport(error) => matches!(
+                error.kind(),
+                crate::transport::dialer::DialErrorKind::Connection
+                    | crate::transport::dialer::DialErrorKind::Timeout
+            ),
             Error::Http2StreamReset { reason } if reason.starts_with("REFUSED_STREAM") => true,
             _ => false,
         }
@@ -738,6 +743,29 @@ mod tests {
                 elapsed: Duration::from_secs(1),
             };
             assert!(RetryPolicy::is_error_retryable(&error));
+        }
+    }
+
+    #[test]
+    fn custom_dialer_connection_and_timeout_failures_are_retryable() {
+        for kind in [
+            crate::transport::dialer::DialErrorKind::Connection,
+            crate::transport::dialer::DialErrorKind::Timeout,
+        ] {
+            let error = Error::CustomTransport(std::sync::Arc::new(
+                crate::transport::dialer::DialError::new(kind, "route failed"),
+            ));
+            assert!(RetryPolicy::is_error_retryable(&error));
+        }
+        for kind in [
+            crate::transport::dialer::DialErrorKind::Authentication,
+            crate::transport::dialer::DialErrorKind::Rejected,
+            crate::transport::dialer::DialErrorKind::Other,
+        ] {
+            let error = Error::CustomTransport(std::sync::Arc::new(
+                crate::transport::dialer::DialError::new(kind, "route failed"),
+            ));
+            assert!(!RetryPolicy::is_error_retryable(&error));
         }
     }
 

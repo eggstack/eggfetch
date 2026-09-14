@@ -4,9 +4,9 @@ This record is the exact-SHA-bound status for the HTTPX 0.28.1 compatibility
 facade. Historical phase and corrective-pass records remain in the git history
 and referenced plans; counts below are only from the runs named here.
 
-## Current state — Stage C renewed on embedded-program frozen executable SHA (2026-09-12)
+## Recorded state — Stage C renewed on embedded-program frozen executable SHA (2026-09-12)
 
-Current designation: **Stage C qualified** for both the documented HTTPX
+Recorded designation: **Stage C qualified** for both the documented HTTPX
 0.28.1 and httpx2 2.12.0 asyncio surfaces, bound to executable SHA
 `22a6f5c0dc0207c1356b6143c0eda3d4075063b0`. The prior
 `6e65c5b...` binding, as well as earlier bindings, is historical because
@@ -42,6 +42,17 @@ Remote routine CI for documentation-only descendant
 `a7df01df31fd624e3b6fff1db48a0120fd8b9779` passed in run `34741393283` on
 2026-09-13. It contains the unchanged frozen executable SHA above and passed
 the repository's existing CI workflow.
+
+### Current-tree qualification note (2026-09-14)
+
+The native custom-dialer correction and its deterministic Rust regressions are
+post-freeze executable changes. The recorded Stage C result above therefore
+remains valid only for the exact frozen SHA
+`22a6f5c0dc0207c1356b6143c0eda3d4075063b0`; it is not a current-tree claim.
+The compatibility profiles and generated API manifests are intentionally
+unchanged because this correction does not alter either Python facade. A
+future compatibility closure must requalify both profiles on a new clean
+executable freeze before restoring a current-tree Stage C designation.
 
 ## Historical state — qualification pending after HTTP/3 program changes (pre-freeze)
 

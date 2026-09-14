@@ -298,7 +298,7 @@ UDS → `Unix`/`TlsUnix` without IPs, opaque → explicitly unavailable).
 
 Transport selection itself is declarative: `prepare_single_request()`
 builds a `PreparedRequest`, `select_route()` picks one `TransportRoute`
-(UDS → specialized-direct → proxy/SOCKS → SNI-direct → H3 → standard),
+(UDS → custom-dialer → specialized-direct → proxy/SOCKS → SNI-direct → H3 → standard),
 and one common post-transport policy (decompression, decoded-size limit,
 read-timeout + pool lease) applies to every route.
 
@@ -393,7 +393,7 @@ fallback, no discovery). `Auto { allow_http3: true }` uses authenticated
 Alt-Svc discovery: H2/H1 unless a fresh `h3` alternative is cached and not
 suppressed; no fresh entry means never invent an H3 endpoint.
 `Auto { allow_http3: false }` (default) never attempts H3. H3 never bypasses
-proxy rules: proxy/UDS/SNI routes are selected first in `select_route()`.
+proxy rules: proxy/UDS/custom-dialer/SNI routes are selected first in `select_route()`.
 
 ### Alt-Svc Discovery (`transport/alt_svc.rs`)
 

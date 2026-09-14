@@ -265,9 +265,9 @@ Do not renew exact-SHA HTTPX/HTTPX2 compatibility evidence in this child plan; e
 - [x] logical Host/SNI/certificate identity is preserved;
 - [x] custom-dial failure cannot fall back to direct networking;
 - [x] conflicting route authorities fail before I/O;
-- [ ] retries/redirects use the immutable custom dialer predictably;
-- [ ] no unsafe cross-dialer pool reuse exists;
+- [x] retries/redirects use the immutable custom dialer predictably;
+- [x] no unsafe cross-dialer pool reuse exists;
 - [x] error source information remains recoverable without protocol-specific core variants;
-- [x] focused tests cover direct, TLS, and route conflicts; redirect/retry/cancellation remain covered by the parent follow-up matrix;
+- [x] focused tests cover direct, TLS, wire-target preservation, route conflicts, redirect credential stripping, retry reuse, separate-client pool isolation, and cancellation cleanup;
 - [x] ordinary callers not configuring a dialer behave exactly as before;
 - [x] routine validation passes.

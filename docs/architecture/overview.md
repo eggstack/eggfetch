@@ -293,7 +293,7 @@ Semaphore-based logical in-flight concurrency (`max_in_flight_requests*`, `max_c
 
 ### TLS, proxy, SOCKS, UDS
 
-rustls with custom CA bundles, mTLS client certs, version policy, verification toggle; `ssl.SSLContext` translation is fail-closed (construction fingerprint; subclasses/unrepresentable state → `TypeError`; proxy TLS comes only from `Proxy(ssl_context=…)`). HTTP forwarding, HTTPS CONNECT tunneling, proxy auth, per-request override, `NO_PROXY` bypass (compat env parser vs richer native `NoProxy::parse()` — intentionally not unified). SOCKS5 via per-route persistent Hyper pools. UDS route for local sockets. Transport dispatch order `prepare_single_request()` + `select_route()`: UDS → direct → proxy/SOCKS → SNI → H3 → standard, sharing one post-transport policy.
+rustls with custom CA bundles, mTLS client certs, version policy, verification toggle; `ssl.SSLContext` translation is fail-closed (construction fingerprint; subclasses/unrepresentable state → `TypeError`; proxy TLS comes only from `Proxy(ssl_context=…)`). HTTP forwarding, HTTPS CONNECT tunneling, proxy auth, per-request override, `NO_PROXY` bypass (compat env parser vs richer native `NoProxy::parse()` — intentionally not unified). SOCKS5 via per-route persistent Hyper pools. UDS route for local sockets. Native callers may supply a client-scoped raw-stream `Dialer`; eggfetch retains logical HTTP/TLS identity and rejects incompatible proxy, UDS, resolved-target, socket, and H3 combinations. Transport dispatch order `prepare_single_request()` + `select_route()`: UDS → custom dialer → direct → proxy/SOCKS → SNI → H3 → standard, sharing one post-transport policy.
 
 **Deep dive:** [core-tls-proxy-protocols.md](core-tls-proxy-protocols.md)
 
@@ -372,7 +372,7 @@ Client::send()
         → accept-encoding / Content-Length / user-agent / H2 stripping / size check
         → proxy resolution + origin keying + pool acquisition
         → write-timeout wrapping + remaining-total/deadline computation
-      → transport dispatch (select_route → UDS / Static Direct / Direct / Proxy / SNI / H3 / Standard)
+      → transport dispatch (select_route → UDS / Custom Dialer / Static Direct / Direct / Proxy / SNI / H3 / Standard)
       → common post-transport policy (Alt-Svc learning, decompression, decoded-size limit)
       → read timeout + pool lease attachment
 ```
@@ -384,23 +384,26 @@ Client::send()
 selects one declarative route (precedence unchanged, directly unit-tested):
 
 1. **Unix Domain Socket** — when `ClientBuilder::uds_path()` is configured
-2. **Static direct** — when `RequestBuilder::resolved_addresses()` supplied
+2. **Custom dialer** — when `ClientBuilder::dialer()` is configured; the
+   caller-owned stream is used for the logical destination and incompatible
+   route controls reject before I/O
+3. **Static direct** — when `RequestBuilder::resolved_addresses()` supplied
    caller-owned destinations; addresses are used exactly and no DNS lookup is
    performed. Logical URL, Host, TLS certificate identity, and SNI remain
    authoritative. Proxy, UDS, and H3 combinations reject before I/O.
-3. **Specialized direct** — when a direct connector (socket options / local
+4. **Specialized direct** — when a direct connector (socket options / local
    address) is configured and no proxy applies
-4. **Proxy / SOCKS** — effective proxy or SOCKS path (SOCKS uses a
+5. **Proxy / SOCKS** — effective proxy or SOCKS path (SOCKS uses a
    per-route persistent Hyper pool)
-5. **SNI override direct** — cached SNI-specific client when
+6. **SNI override direct** — cached SNI-specific client when
    `TransportHints::sni_hostname` is set
-6. **HTTP/3 (QUIC, experimental)** — `Http3Only` always; `Auto { allow_http3: true }` only
+7. **HTTP/3 (QUIC, experimental)** — `Http3Only` always; `Auto { allow_http3: true }` only
    when a fresh Alt-Svc alternative is cached and not suppressed (otherwise
    standard); `Auto { allow_http3: false }` never. Requires the `http3`
    feature. Graduation is **retained experimental** this milestone; blockers
    and evidence live in [core-tls-proxy-protocols.md](core-tls-proxy-protocols.md)
    (§ "Production Graduation Decision") and `tests/h3_interop_qualification.rs`.
-7. **Standard Hyper direct** — default TCP path (also safe `Auto` fallback
+8. **Standard Hyper direct** — default TCP path (also safe `Auto` fallback
    for pre-commit replayable H3 failures, same deadlines/TLS).
 
 H3 never bypasses proxy rules because proxy routes are selected first. Static

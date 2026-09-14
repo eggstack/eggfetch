@@ -120,7 +120,8 @@ See [`docs/python/guide.md`](docs/python/guide.md) for the full Python API refer
 
 Native Rust consumers can keep their own route while eggfetch owns HTTP and
 destination TLS. A `Dialer` receives only the logical host and effective port;
-it does not replace URL/Host/SNI identity. The custom route is intentionally
+it does not replace URL/Host/SNI identity. A request target override changes
+only the wire path/query. The custom route is intentionally
 incompatible with built-in proxy, UDS, resolved-address, local-binding,
 socket-option, and HTTP/3 routing.
 

@@ -99,6 +99,8 @@ The total timeout applies across the entire redirect chain, not per-hop. Each ho
 | Condition | Retryable? |
 |-----------|-----------|
 | Network errors (connect, I/O, hyper) | Yes (for replayable requests) |
+| Custom dialer connection/timeout failures | Yes (for replayable requests) |
+| Custom dialer authentication/rejection/other failures | No |
 | TLS handshake failures (`Error::Tls`) | No — never retried |
 | 429 Too Many Requests | Yes (with Retry-After) |
 | 408, 502, 503, 504 | Yes (for replayable requests) |

@@ -132,7 +132,10 @@ impl fmt::Debug for DialError {
         f.debug_struct("DialError")
             .field("kind", &self.kind)
             .field("message", &self.message)
-            .field("source", &self.source)
+            // The source remains available through `Error::source`, but its
+            // Debug implementation belongs to the embedding application and
+            // may contain secrets or unbounded transport state.
+            .field("source", &self.source.as_ref().map(|_| "<redacted>"))
             .finish()
     }
 }
@@ -310,5 +313,35 @@ impl Service<Uri> for DialerConnector {
                         as Box<dyn StdError + Send + Sync>
                 })
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(Debug)]
+    struct SecretSource;
+
+    impl fmt::Display for SecretSource {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            f.write_str("secret-source")
+        }
+    }
+
+    impl StdError for SecretSource {}
+
+    #[test]
+    fn debug_does_not_delegate_to_caller_source() {
+        let error = DialError::with_source(
+            DialErrorKind::Connection,
+            "safe route description",
+            SecretSource,
+        );
+        let debug = format!("{error:?}");
+        assert!(debug.contains("safe route description"));
+        assert!(debug.contains("<redacted>"));
+        assert!(!debug.contains("SecretSource"));
+        assert!(StdError::source(&error).is_some());
     }
 }
