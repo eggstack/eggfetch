@@ -31,6 +31,14 @@ use tls_fixtures::{CertAuthority, MtlsTestServer, TlsTestServer};
 
 #[test]
 fn explicit_crypto_provider_is_local_and_survives_clone() {
+    // Other integration tests may need Rustls's process default and run in
+    // parallel with this test. Establish it before taking the snapshot so a
+    // concurrent first-use installation cannot make the locality assertion
+    // race. The configured provider below is a distinct Arc and must not
+    // replace this process-level sentinel.
+    if rustls::crypto::CryptoProvider::get_default().is_none() {
+        let _ = rustls::crypto::ring::default_provider().install_default();
+    }
     let before = rustls::crypto::CryptoProvider::get_default().map(Arc::as_ptr);
     let provider = Arc::new(rustls::crypto::ring::default_provider());
     let config = TlsConfig::builder()
