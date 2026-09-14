@@ -31,7 +31,8 @@ Certificate verification and hostname verification are enabled by default. The c
 
 ## Trust Stores
 
-eggfetch resolves trusted roots in this order:
+eggfetch resolves trusted roots in this order, then overlays any explicit
+additional roots:
 
 1. **Custom CA bundle** -- if provided via `TlsConfig`, replaces all default roots
 2. **Native system roots** -- the operating system's trust store
@@ -44,7 +45,12 @@ The `TrustStore` enum controls this behavior:
 - `WebPkiOnly` -- use only packaged roots
 - `Custom(certs)` -- use only the provided CA certificates
 
-A custom CA bundle **replaces** all default roots. If both system and private CAs are needed, concatenate them into a single PEM file.
+A custom CA bundle **replaces** all default roots. Native Rust callers that
+need both the selected base and private roots should use
+`additional_ca_certificate_path`, `additional_ca_certificate_pem`, or
+`additional_ca_certificate_der`; these methods do not alter hostname/SNI
+verification or discover certificates from the environment. The existing
+`add_ca_certificate_path` method remains replacement-style for compatibility.
 
 ## Custom CA Bundles
 
@@ -55,6 +61,18 @@ let config = TlsConfig::builder()
     .ca_certificate_path("/path/to/ca-bundle.pem")?
     .build();
 ```
+
+To add a private root while retaining the selected base trust policy:
+
+```rust
+let config = TlsConfig::builder()
+    .additional_ca_certificate_path("/path/to/private-ca.pem")?
+    .build();
+```
+
+Malformed additional certificate material is rejected before network I/O.
+The Python and HTTPX-compatible facades retain their existing replacement CA
+semantics; this additive API is native Rust functionality.
 
 ```python
 client = eggfetch.Client(verify="/path/to/ca-bundle.pem")

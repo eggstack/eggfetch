@@ -52,7 +52,11 @@ native or WebPKI base and add private roots, use
 `additional_ca_certificate_der`. Existing `add_ca_certificate_path` remains
 replacement-custom-set behavior for compatibility; it was not repurposed.
 Base trust selection completes before additional roots are overlaid, so
-`NativeOnly` still fails when native roots are unavailable.
+`NativeOnly` still fails when native roots are unavailable. Additional
+certificate sources are explicit only—there is no environment or filesystem
+discovery—and malformed PEM/DER material fails before a request is sent.
+Explicit additional certificates are deduplicated by exact DER bytes; a
+duplicate in the selected base is harmless and does not change trust meaning.
 
 `tls-rustls` owns the Rustls transport, PEM parsing, and packaged WebPKI roots.
 `tls-native-roots` implies it and owns native/system trust-store loading. The
@@ -70,6 +74,10 @@ but a chain or hostname verification error is a handshake failure and never
 rebuilds the config with another root store. Proxy-endpoint TLS remains
 logically separate and uses its explicit proxy policy or the same default
 builder primitive.
+
+An origin configuration's additional roots are never implicitly copied to an
+HTTPS proxy endpoint. A proxy gets its own explicitly supplied TLS
+configuration, or the default proxy trust policy when none is supplied.
 
 httpx2 2.12.0 changed its default verification to OS truststore behavior
 (`truststore.SSLContext`); native Rust already follows the same

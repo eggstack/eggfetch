@@ -202,8 +202,11 @@ r = eggfetch.get("https://example.com", verify="/path/to/ca-bundle.pem")
 r = eggfetch.get("https://example.com", cert=("/path/cert.pem", "/path/key.pem"))
 ```
 
-A custom CA bundle **replaces** the default system roots entirely. If you
-need both, concatenate them into a single PEM file.
+A custom CA bundle **replaces** the default system roots entirely. The
+Python requests-compatible API retains that behavior. Native Rust callers
+that need both the selected base and private roots can use
+`TlsConfigBuilder::additional_ca_certificate_path/pem/der`; the legacy
+`add_ca_certificate_path` remains replacement-style.
 
 ## Redirects
 

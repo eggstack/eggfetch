@@ -10,7 +10,8 @@ This document records security review findings for each major subsystem of eggfe
 
 - **Native roots first**: eggfetch attempts the operating system's native root store before falling back to the packaged Mozilla/WebPKI roots. This preserves the system administrator's trust policy.
 - **Packaged roots as construction-only fallback**: The Mozilla roots are loaded only when the native store is unavailable (e.g., minimal containers). They are not tried after a certificate-chain or hostname verification failure. This prevents silent trust escalation.
-- **Custom CA replaces all defaults**: When a custom `TrustStore` is provided, it replaces both native and packaged roots. This prevents a misconfigured system trust store from silently undermining the custom policy. If both system and private CAs are needed, the caller concatenates them into a single PEM file.
+- **Custom CA replaces all defaults**: When a custom `TrustStore` is provided, it replaces both native and packaged roots. This prevents a misconfigured system trust store from silently undermining the custom policy. Native Rust callers that need a private root in addition to the selected base use the explicit `additional_ca_certificate_*` methods; the compatibility facades retain replacement-style custom CA behavior.
+- **Additional roots are explicit overlays**: Base trust selection completes before additional roots are added. Additional sources are parsed and validated before dispatch, exact DER duplicates are ignored, and additional origin roots are never reused for an HTTPS proxy endpoint unless the proxy is explicitly given the same policy.
 
 ### Certificate Verification
 

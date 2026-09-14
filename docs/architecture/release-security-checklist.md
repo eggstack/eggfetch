@@ -38,6 +38,7 @@ This checklist must be completed before any release of eggfetch. Each item has a
 - [ ] TLS configuration review completed (trust store hierarchy, verification toggle, version policy)
 - [ ] `danger_accept_invalid_certs(true)` requires explicit opt-in (no default or config-file bypass)
 - [ ] Custom CA bundle correctly replaces all default roots (native + packaged)
+- [ ] Native additional CA roots augment only the selected origin trust store; malformed material fails closed and is not reused for HTTPS proxies implicitly
 - [ ] Client certificate private key material excluded from debug output, error messages, and repr
 - [ ] Encrypted PEM private keys rejected at construction time
 - [ ] TLS 1.2 minimum enforced (no SSLv3, TLS 1.0, TLS 1.1 support)

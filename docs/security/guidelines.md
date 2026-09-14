@@ -22,7 +22,13 @@ For corporate proxies or private certificate authorities, provide a custom CA bu
 
 - **Python**: `Client(verify="/path/to/ca-bundle.crt")`
 - **CLI**: `--ca-bundle /path/to/ca-bundle.crt`
-- **Rust**: `TlsConfig::builder().ca_bundle_pem(path)`
+- **Rust replacement**: `TlsConfig::builder().ca_certificate_path(path)?`
+- **Rust additional**: `TlsConfig::builder().additional_ca_certificate_path(path)?`
+
+The Rust `additional_ca_certificate_*` methods preserve the selected native
+or WebPKI roots and add explicit private anchors. They do not disable
+hostname verification, discover roots from the environment, or affect an
+HTTPS proxy's trust policy.
 
 ### TLS version pinning
 

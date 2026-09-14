@@ -96,7 +96,8 @@ unavailable. Verification failures never trigger the fallback. This feature
 also supports custom CA bundles via `TrustStore`,
 client certificates via `ClientIdentity`, TLS version policy via `TlsVersion`,
 verification toggle via `TlsConfigBuilder::danger_accept_invalid_certs(true)`,
-and SNI configuration. The Python crate exposes `verify=` and `cert=` kwargs
+SNI configuration, and additive native roots via
+`TlsConfigBuilder::additional_ca_certificate_path/pem/der`. The Python crate exposes `verify=` and `cert=` kwargs
 for TLS configuration. The Rustls transport and its configuration dependencies
 are enabled only by `tls-rustls`. Without that feature, HTTPS is rejected at
 the transport boundary; cleartext H1 remains available when `http1` is

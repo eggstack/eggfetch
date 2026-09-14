@@ -175,6 +175,22 @@ the returned body is first polled, preserves DATA/trailer frames, and leaves
 redirects, retries, cookies, auth, decompression, and upgrades to the caller
 or high-level API as documented there.
 
+For native Rust HTTPS clients that need a private CA in addition to the
+selected native or WebPKI roots, use the additive TLS methods:
+
+```rust
+let tls = eggfetch_core::TlsConfig::builder()
+    .additional_ca_certificate_path("/path/to/private-ca.pem")?
+    .build();
+let client = eggfetch_core::Client::builder().tls_config(tls).build();
+```
+
+`additional_ca_certificate_path`, `additional_ca_certificate_pem`, and
+`additional_ca_certificate_der` augment the selected base trust store.
+`ca_certificate_*` remains replacement-style, and the legacy
+`add_ca_certificate_path` was deliberately not repurposed: existing callers
+use it to build a replacement custom set.
+
 ## Usage -- CLI
 
 ```bash

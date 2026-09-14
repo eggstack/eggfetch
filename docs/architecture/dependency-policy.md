@@ -275,5 +275,7 @@ packaged Mozilla roots are a construction fallback only when the native store
 is unavailable; they are not tried after a certificate-chain or hostname
 verification failure. With only `tls-rustls`, the packaged roots are selected
 directly for deterministic operation without platform-store loading.
-Enterprise or private CAs therefore require an explicit custom trust-store
-configuration and are not silently trusted by the fallback.
+Enterprise or private CAs therefore require explicit configuration. Native
+Rust callers can augment the selected base with
+`additional_ca_certificate_path/pem/der`; compatibility facades retain their
+replacement-style CA behavior and are not changed by this native API.
