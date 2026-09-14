@@ -2,6 +2,21 @@
 
 This directory contains active implementation plans, live qualification/status records, and historical implementation records. Completed plans are non-normative unless another current document explicitly says otherwise. Verification and release policy remain governed by `docs/verification-policy.md` and `docs/releases/process.md`.
 
+## Active program — native HTTP body and TLS extensibility (2026-09-14)
+
+Handoff program: `native-http-body-and-tls-extensibility-program.md`
+
+Objective: extend `eggfetch-core` for transport-oriented native Rust consumers without changing existing high-level client semantics or adding downstream-specific adapters. The program adds a frame-preserving `http_body::Body` interoperability surface, explicit per-`TlsConfig` Rustls `CryptoProvider` selection with provider-neutral mTLS key loading, and explicit additional trust anchors layered on top of the existing base trust policy. Existing `RequestBody`, `ResponseBody`, `TrustStore`, Python/CLI, HTTPX/HTTPX2 and replacement custom-CA semantics are to remain compatible.
+
+Execution order:
+
+1. `native-http-body-interoperability.md` — add an additive native frame-preserving request/response body surface that reuses the existing transport/TLS/pool engine without exposing Hyper internals or changing public body enums.
+2. `tls-crypto-provider-extensibility.md` — allow caller-supplied Rustls `CryptoProvider` policy per `TlsConfig`, remove hard-coded ring key loading from mTLS, and retain current ring/default behavior for callers that do not opt in.
+3. `tls-additional-trust-anchors.md` — add a distinct native API for augmenting native/WebPKI/custom base trust with private roots while preserving all existing replacement-style CA APIs.
+4. `post-native-http-body-and-tls-extensibility-qualification-and-closure.md` — perform integration/API-boundedness audit, external-style qualification, dependency/feature checks, freeze one executable/test/fixture SHA, renew exact-SHA HTTPX/HTTPX2 evidence, and close documentation/plan status without post-freeze executable changes.
+
+The motivating Synvoid evaluation is requirements evidence only. No Synvoid type, feature flag, routing/WAF/site/backend policy, provider-brand product mode, or downstream migration code belongs in eggfetch. The public additions must remain useful to unrelated gateways, service meshes, private-PKI clients, custom-network clients and other native Rust embedders.
+
 ## Completed program — extensible embedded transport consumers (2026-09-14)
 
 Handoff program: `extensible-embedded-transport-consumer-program.md`
