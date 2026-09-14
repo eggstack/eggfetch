@@ -42,14 +42,18 @@ The result is an ordinary `http::Response<NativeResponseBody>`. Its opaque
 eggfetch-owned body implements `http_body::Body<Data = Bytes, Error = Error>`
 and forwards DATA/trailer frames while holding the logical pool lease until
 EOF, error, or drop. Hyper's `Incoming` is not part of the public contract.
-Read timeouts apply while waiting for the next frame; established transport
-I/O inactivity remains the lower-level lifecycle control.
+Read timeouts start when the caller first polls the body and reset after each
+frame, so delaying body consumption after receiving headers does not consume
+the read budget. Established transport I/O inactivity remains the lower-level
+lifecycle control.
 
 This native surface deliberately does not apply high-level redirects,
 logical retries, cookies, auth, decompression, or decoded-body limits. The
-current hand-rolled proxy, experimental H3, and upgrade paths reject native
-frame execution before body transfer because they do not yet expose the same
-frame contract. Existing `RequestBody`, `ResponseBody`, `bytes_stream()`, and
+current hand-rolled proxy and experimental H3 routes reject native frame
+execution before body transfer because they do not yet expose the same frame
+contract. A 101 upgrade is rejected after response headers identify the
+status; it cannot be rejected earlier without knowing the response status.
+Existing `RequestBody`, `ResponseBody`, `bytes_stream()`, and
 `Response::trailers()` semantics are unchanged.
 
 ## Response Body

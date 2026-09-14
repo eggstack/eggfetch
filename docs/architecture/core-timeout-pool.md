@@ -40,6 +40,12 @@ Request-level overrides are per-field: only fields present in the request-level 
 | Write | Per-chunk wrapper stream (`WriteTimeoutStream`) — deadline resets on each chunk delivery; H3 propagates `Write` without masking or evicting |
 | Connect | Enforced by the direct connector, by proxy TCP/TLS/origin-TLS setup, and by the H3 connector (DNS + QUIC + h3 init as one budget shared across address fallback with fair per-address shares) |
 
+The native `execute_http_body()` response wrapper uses the same read phase
+contract: its timer starts when the caller first polls the body and resets
+after each returned frame. A delay between response headers and the first body
+poll therefore does not consume `Timeout.read`; `TransportIoTimeout` remains
+the separate established-connection inactivity control.
+
 Native embedded consumers may additionally set `PhysicalConnectionPolicy` and
 `TransportIoTimeout`. The physical policy is applied by the common Hyper
 connector wrapper: a permit is acquired only for a newly established

@@ -163,6 +163,10 @@ Embedded orchestrators can additionally set `PhysicalConnectionPolicy` and
 `TransportIoTimeout` to bound live Hyper connections and established I/O
 inactivity independently from logical pool limits and request timeouts. See
 the [Rust guide](docs/rust/guide.md) for the integration boundary and limits.
+The native `execute_http_body()` surface starts response read timeouts when
+the returned body is first polled, preserves DATA/trailer frames, and leaves
+redirects, retries, cookies, auth, decompression, and upgrades to the caller
+or high-level API as documented there.
 
 ## Usage -- CLI
 

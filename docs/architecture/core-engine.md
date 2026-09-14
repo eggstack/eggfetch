@@ -50,9 +50,12 @@ high-level path; the raw Hyper response is then wrapped in
 The high-level pipeline continues to own header defaults, content-length
 normalization, redirects, retries, cookies, auth, decompression and decoded
 limits. Native execution does not duplicate those transformations or create
-a second connector/TLS/pool stack. Built-in proxy, experimental H3, and 101
-upgrade routes are explicit v1 unsupported cases because their custom
-parsers/upgrade ownership cannot yet preserve the native frame contract.
+a second connector/TLS/pool stack. Built-in proxy and experimental H3 routes
+are explicit v1 unsupported cases because their custom parsers cannot yet
+preserve the native frame contract. 101 upgrades are rejected after response
+headers identify the status; callers that may receive upgrades must use the
+high-level upgrade API because the native request can already have transferred
+its body by that point.
 
 ## RequestBuilder
 

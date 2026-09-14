@@ -438,6 +438,7 @@ pin_project! {
         read_timeout: Option<Duration>,
         #[pin]
         timer: tokio::time::Sleep,
+        started: bool,
         done: bool,
     }
 }
@@ -461,7 +462,8 @@ impl NativeResponseBody {
             inner: Box::pin(body),
             lease: Some(lease),
             read_timeout,
-            timer: tokio::time::sleep(read_timeout.unwrap_or(Duration::MAX)),
+            timer: tokio::time::sleep(Duration::MAX),
+            started: false,
             done: false,
         }
     }
@@ -478,6 +480,15 @@ impl http_body::Body for NativeResponseBody {
         let mut this = self.project();
         if *this.done {
             return Poll::Ready(None);
+        }
+
+        if let Some(timeout) = *this.read_timeout {
+            if !*this.started {
+                *this.started = true;
+                this.timer
+                    .as_mut()
+                    .reset(tokio::time::Instant::now() + timeout);
+            }
         }
 
         match this.inner.as_mut().poll_frame(cx) {

@@ -74,6 +74,7 @@ eggfetch/
 ├── qualification/http3/    H3 machine-readable corpus + runners (opt-in)
 ├── qualification/embedded/ Tiny downstream footprint fixtures (opt-in, non-product)
 ├── qualification/embedded-custom-dialer/ External-style native transport fixture
+├── qualification/native-http-body-tls/ External-style frame/TLS fixture
 └── scripts/                check.sh tiers, manifest/compare, H3 + embedded runners,
                             doc checkers, wheel/package validators
 ```
@@ -266,6 +267,14 @@ Tiny downstream-style fixtures (`eggfetch-min/-json/-default`,
 tree` evidence and stripped release sizes. Opt-in, never a CI gate. The
 current evidence record is [embedded-footprint.md](embedded-footprint.md):
 not a footprint win — never claim slimming.
+
+### Native HTTP body and TLS qualification (`qualification/native-http-body-tls/`)
+
+An opt-in independent-crate fixture exercises public `http_body` DATA/trailer
+frames, custom dialing, an explicitly selected Rustls provider, and additive
+private trust. It is a bounded qualification fixture rather than a routine CI
+matrix; run it with `cargo run --manifest-path
+qualification/native-http-body-tls/Cargo.toml`.
 
 ### Examples (`examples/`)
 

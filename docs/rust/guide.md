@@ -225,9 +225,11 @@ let response = Client::new()
 Consume `response.into_body()` by polling `http_body::Body::poll_frame` (or
 an appropriate `http-body-util` adapter) to observe DATA and trailer frames.
 This one-shot API does not apply redirects, logical retries, cookies, auth,
-decompression, or decoded-body limits. It is intended for native gateways,
-service meshes, middleware, and custom-network clients; the existing
-`RequestBuilder` API remains the application-oriented choice.
+decompression, or decoded-body limits. Read timeouts start on the first body
+poll and reset after each frame; delaying consumption after response headers
+does not consume that budget. It is intended for native gateways, service
+meshes, middleware, and custom-network clients; the existing `RequestBuilder`
+API remains the application-oriented choice.
 
 ### TLS provider and additional roots
 
