@@ -154,6 +154,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 The opt-in `json` feature adds `RequestBuilder::json()` / `Response::json()` Serde helpers, and `resolved_addresses()` pins caller-validated destinations without a second DNS lookup. See [`docs/rust/guide.md`](docs/rust/guide.md) for the full Rust API reference.
 
+Rustls crypto providers are selected per `TlsConfig`, not process-wide. Native
+applications that need a different provider can depend on the matching Rustls
+provider feature and pass its `Arc<CryptoProvider>` to
+`TlsConfigBuilder::crypto_provider`; the ordinary eggfetch profile remains
+ring-backed. Provider capabilities, including FIPS or post-quantum properties,
+depend on the caller's exact provider build.
+
 Native callers that need strict attempt accounting can set
 `Client::builder().retry_canceled_requests(false)`. This disables only
 Hyper's transparent retry after a reused idle connection is found unusable;

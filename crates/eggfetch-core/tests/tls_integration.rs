@@ -26,7 +26,36 @@
 mod tls_fixtures;
 
 use eggfetch_core::{Client, TlsConfig, TlsVersion};
+use std::sync::Arc;
 use tls_fixtures::{CertAuthority, MtlsTestServer, TlsTestServer};
+
+#[test]
+fn explicit_crypto_provider_is_local_and_survives_clone() {
+    let before = rustls::crypto::CryptoProvider::get_default().map(Arc::as_ptr);
+    let provider = Arc::new(rustls::crypto::ring::default_provider());
+    let config = TlsConfig::builder()
+        .crypto_provider(provider.clone())
+        .build();
+    let cloned = config.clone();
+
+    assert!(config.has_explicit_crypto_provider());
+    assert!(cloned.has_explicit_crypto_provider());
+    assert_eq!(
+        before,
+        rustls::crypto::CryptoProvider::get_default().map(Arc::as_ptr)
+    );
+
+    let rustls_config = config.build_rustls_config().unwrap();
+    assert!(Arc::ptr_eq(rustls_config.crypto_provider(), &provider));
+    assert_eq!(
+        before,
+        rustls::crypto::CryptoProvider::get_default().map(Arc::as_ptr)
+    );
+
+    let debug = format!("{config:?}");
+    assert!(debug.contains("has_explicit_crypto_provider: true"));
+    assert!(!debug.contains("CryptoProvider"));
+}
 
 #[tokio::test]
 async fn default_verified_https_succeeds() {

@@ -53,7 +53,10 @@ The native frame API adds no dependency: it exposes the existing direct
 Likewise, `TlsConfigBuilder::crypto_provider` accepts a caller-owned Rustls
 `CryptoProvider`; eggfetch does not add AWS-LC, FIPS, or another provider to
 its ordinary feature graph merely to support injection. Alternate providers
-belong to the embedding application's dependency/qualification profile.
+belong to the embedding application's dependency/qualification profile. The
+external-style `qualification/native-http-body-tls/` fixture carries AWS-LC
+only in that isolated qualification crate, where it also proves mTLS key
+loading; it is not a runtime dependency of `eggfetch-core`.
 
 ## Core dependency ownership inventory
 

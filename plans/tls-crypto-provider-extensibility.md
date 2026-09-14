@@ -2,7 +2,8 @@
 
 Planning baseline: `45c08e0e7587eb1e8f713d49e6f7902478c27a35` (`main`, 2026-09-14; eggfetch 0.1.4)
 Parent program: `plans/native-http-body-and-tls-extensibility-program.md`
-Status: complete; implemented and frozen in `fdfe060`
+Status: complete; implementation frozen in `fdfe060`; qualification fixture
+coverage was strengthened in the post-freeze follow-up on the current branch.
 
 ## Objective
 
@@ -201,6 +202,12 @@ The fixture should:
 9. attempt H3 only if the selected provider is supported by the current QUIC feature graph, otherwise prove the documented fail-before-I/O behavior.
 
 The fixture may carry dev/qualification-only provider dependencies. Do not add them to the ordinary default runtime graph solely to run the fixture.
+
+The maintained fixture currently uses AWS-LC to exercise the explicit-provider
+path, requires a client certificate from a TLS 1.3 server, and compares the
+process-default provider before and after the request. H2/H3 remain covered by
+the repository's protocol-specific route/configuration tests; the fixture is
+deliberately a bounded H1/custom-dialer qualification consumer.
 
 ## 8. Focused deterministic tests
 

@@ -4,7 +4,7 @@ use std::sync::Arc;
 use bytes::Bytes;
 use eggfetch_core::{
     Client, DialError, DialErrorKind, DialFuture, DialStream, DialTarget, Dialer,
-    NativeRequestOptions, TlsConfig, TrustStore,
+    ClientIdentity, NativeRequestOptions, TlsConfig, TrustStore,
 };
 use http_body::{Body, Frame};
 use http_body_util::StreamBody;
@@ -42,18 +42,44 @@ fn ca() -> (rcgen::Certificate, KeyPair) {
     (params.self_signed(&key).expect("CA certificate"), key)
 }
 
+fn leaf(
+    common_name: &str,
+    issuer: &rcgen::Certificate,
+    issuer_key: &KeyPair,
+) -> (rcgen::Certificate, KeyPair) {
+    let mut params = CertificateParams::new(vec![common_name.to_owned()]).expect("leaf params");
+    params.is_ca = IsCa::NoCa;
+    let key = KeyPair::generate().expect("leaf key");
+    (
+        params
+            .signed_by(&key, issuer, issuer_key)
+            .expect("leaf certificate"),
+        key,
+    )
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let (_base_ca, _base_key) = ca();
+    let process_provider_before = rustls::crypto::CryptoProvider::get_default()
+        .map(|provider| Arc::as_ptr(provider));
+    let (base_ca, _base_key) = ca();
     let (private_ca, private_key) = ca();
-    let mut server_params = CertificateParams::new(vec!["fixture.invalid".to_owned()])?;
-    server_params.is_ca = IsCa::NoCa;
-    let server_key = KeyPair::generate()?;
-    let server_cert = server_params.signed_by(&server_key, &private_ca, &private_key)?;
+    let (server_cert, server_key) = leaf("fixture.invalid", &private_ca, &private_key);
+    let (client_cert, client_key) = leaf("client.fixture.invalid", &private_ca, &private_key);
     let provider = Arc::new(rustls::crypto::aws_lc_rs::default_provider());
+
+    let mut client_roots = rustls::RootCertStore::empty();
+    client_roots.add(rustls::pki_types::CertificateDer::from(
+        private_ca.der().to_vec(),
+    ))?;
+    let client_verifier = rustls::server::WebPkiClientVerifier::builder_with_provider(
+        Arc::new(client_roots),
+        provider.clone(),
+    )
+    .build()?;
     let server_config = rustls::ServerConfig::builder_with_provider(provider.clone())
         .with_protocol_versions(&[&rustls::version::TLS13])?
-        .with_no_client_auth()
+        .with_client_cert_verifier(client_verifier)
         .with_single_cert(
             vec![rustls::pki_types::CertificateDer::from(
                 server_cert.der().to_vec(),
@@ -93,9 +119,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     let tls_config = TlsConfig::builder()
         .trust_store(TrustStore::Custom(vec![
-            rustls::pki_types::CertificateDer::from(_base_ca.der().to_vec()),
+            rustls::pki_types::CertificateDer::from(base_ca.der().to_vec()),
         ]))
         .additional_ca_certificate_der(vec![private_ca.der().to_vec()])?
+        .client_identity(ClientIdentity::Pem {
+            cert_chain: vec![rustls::pki_types::CertificateDer::from(
+                client_cert.der().to_vec(),
+            )],
+            private_key_der: client_key.serialize_der(),
+            key_label: "PRIVATE KEY".to_owned(),
+        })
         .crypto_provider(provider)
         .build();
     let client = Client::builder()
@@ -124,6 +157,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     }
     assert_eq!(data, b"firstsecond");
     assert_eq!(trailer.unwrap().get("x-fixture").unwrap(), "passed");
+    assert_eq!(
+        process_provider_before,
+        rustls::crypto::CryptoProvider::get_default().map(Arc::as_ptr),
+        "explicit provider use must not mutate the process-global default",
+    );
     server.await??;
     Ok(())
 }

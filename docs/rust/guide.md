@@ -248,7 +248,16 @@ let client = Client::builder().tls_config(tls).build();
 `additional_ca_certificate_*` methods augment the selected native/WebPKI or
 custom base. `add_ca_certificate_path` is intentionally unchanged. The
 provider is not installed globally and is used for both verification and
-mTLS private-key loading.
+
+To use another Rustls provider, add that provider as a direct dependency in
+the application and pass its `Arc<CryptoProvider>` in the same way. For
+example, an AWS-LC application selects the `aws-lc-rs` Rustls feature and
+uses `rustls::crypto::aws_lc_rs::default_provider()`. This does not make
+eggfetch FIPS-validated or post-quantum capable; those properties depend on
+the exact provider build and configuration. The isolated
+[`native-http-body-tls` qualification fixture](../../qualification/native-http-body-tls/)
+demonstrates the external-provider, mTLS, custom-dialer, and private-root
+path.
 
 With the `json` feature, request and response values can use Serde directly:
 

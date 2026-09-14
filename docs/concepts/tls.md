@@ -2,6 +2,29 @@
 
 eggfetch uses rustls for TLS, providing memory-safe HTTPS with configurable trust stores, client certificates, and verification policy.
 
+## Crypto Providers
+
+Rustls crypto selection is local to each `TlsConfig`. A native Rust application
+can construct any compatible `Arc<rustls::crypto::CryptoProvider>`—including a
+provider supplied by a separately selected Rustls feature—and pass it through
+`TlsConfigBuilder::crypto_provider`:
+
+```rust
+use std::sync::Arc;
+use eggfetch_core::TlsConfig;
+
+let tls = TlsConfig::builder()
+    .crypto_provider(Arc::new(rustls::crypto::ring::default_provider()))
+    .build();
+```
+
+The provider is retained when `TlsConfig` is cloned and governs both server
+certificate verification and mTLS private-key loading. Building or using the
+configuration never installs it as the process-wide Rustls default. If no
+provider is supplied, eggfetch preserves its existing process-default/ring
+fallback behavior. A provider's algorithm, FIPS, or post-quantum properties
+come from the exact provider build and are not claims made by eggfetch.
+
 ## Verification Defaults
 
 Certificate verification and hostname verification are enabled by default. The client validates the server's certificate chain against trusted roots and confirms the hostname matches the certificate.

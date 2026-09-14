@@ -25,6 +25,18 @@ verification and client-key loading and never installed as the process-wide
 provider. With no explicit provider, eggfetch retains its existing
 process-default/ring fallback behavior. Provider-specific properties such as
 FIPS or post-quantum support depend on the caller's exact provider build.
+The same completed configuration is used by direct, resolved-target,
+custom-dialer, UDS, tunneled-origin, and standard Hyper TLS routes. The H3
+adapter converts that completed Rustls client configuration into Quinn's
+QUIC adapter; an incompatible provider/Quinn feature combination fails during
+configuration rather than silently falling back to ring.
+
+The external-style
+[`native-http-body-tls`](../../qualification/native-http-body-tls/) fixture
+qualifies this boundary with an injected AWS-LC provider, mTLS client-key
+loading, custom dialing, private-root augmentation, and a process-default
+isolation check. AWS-LC remains a fixture/downstream choice, not an
+eggfetch feature or default.
 
 ### Trust Store Hierarchy and feature ownership
 
