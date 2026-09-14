@@ -55,7 +55,7 @@ See [verification-policy.md](../verification-policy.md) for the normative policy
 
 ### Extended Validation (Tier 2)
 
-Run `./scripts/check.sh extended` for: full HTTPX compatibility, API manifest comparison, feature matrix, feature-gated tests, MSRV, docs, FFI, resource monitoring, lifecycle, soak, downstream, merge, and benchmarks. Tier 2 runs all of Tier 1 first, then the additional checks. All executed checks are fail-closed. Permitted explicit skips are: MSRV when the Rust 1.80 toolchain is not installed, downstream when the artifact manifest is absent, and the Node JS surface when `node` or the built `eggfetch.node` artifact is missing (Tier 1 records the same Node skip).
+Run `./scripts/check.sh extended` for: full HTTPX compatibility, API manifest comparison, feature matrix, feature-gated tests, MSRV, docs, FFI, resource monitoring, lifecycle, soak, downstream, merge, and benchmarks. Tier 2 runs all of Tier 1 first, then the additional checks. All executed checks are fail-closed. Permitted explicit skips are: MSRV when the Rust 1.80 toolchain is not installed or its Cargo cannot parse the current crates.io resolution (the script records this as an unsupported local MSRV environment, not a pass), downstream when the artifact manifest is absent, and the Node JS surface when `node` or the built `eggfetch.node` artifact is missing (Tier 1 records the same Node skip).
 
 ### HTTP/3 Qualification (manual, not CI)
 
@@ -109,7 +109,11 @@ Run manually via `workflow_dispatch` from `.github/workflows/pypi.yml`. The pipe
 
 ## MSRV
 
-**Rust 1.80** — checked in extended validation via `cargo check` with the 1.80 toolchain.
+**Rust 1.80** — checked in extended validation via `cargo check` with the
+1.80 toolchain when its Cargo can parse the resolved graph. If the installed
+Cargo predates a dependency manifest feature such as edition 2024, the gate
+records an explicit unsupported-environment skip; it does not claim an MSRV
+pass.
 
 ## Release Process
 

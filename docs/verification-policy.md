@@ -67,7 +67,13 @@ Runs on every push and pull request via CI. Also run locally before committing. 
 ./scripts/check.sh extended
 ```
 
-Runs Tier 1 first, then additional checks. May include an explicit skip when an optional prerequisite (e.g., Rust 1.80 toolchain for MSRV) is unavailable. All executed checks are fail-closed. Includes full HTTPX compatibility, feature combinations, docs, MSRV, resource monitoring, FFI, soak tests, downstream compatibility, lossless merge tests, and benchmarks.
+Runs Tier 1 first, then additional checks. May include an explicit skip when
+an optional prerequisite (e.g., the Rust 1.80 toolchain, or a Cargo version
+able to parse its current resolved dependency graph, for MSRV) is unavailable.
+Such a skip is not an MSRV pass. All executed checks are fail-closed. Includes
+full HTTPX compatibility, feature combinations, docs, MSRV, resource
+monitoring, FFI, soak tests, downstream compatibility, lossless merge tests,
+and benchmarks.
 
 ### Tier 3: Package Validation
 

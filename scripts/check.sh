@@ -250,7 +250,20 @@ tier2_msrv() {
         record_skip "MSRV" "Rust 1.80 toolchain is not installed"
         return 0
     fi
-    rustup run 1.80 cargo check -p eggfetch-core --no-default-features --features http1,tls-rustls
+    local msrv_log
+    msrv_log="$(mktemp)"
+    if rustup run 1.80 cargo check -p eggfetch-core --no-default-features --features http1,tls-rustls >"$msrv_log" 2>&1; then
+        rm -f "$msrv_log"
+        return 0
+    fi
+    if grep -Eq 'feature `edition2024` is required|requires rustc' "$msrv_log"; then
+        record_skip "MSRV" "Rust 1.80 cannot parse the current crates.io resolution; use a newer Cargo or a resolver-compatible lock for a definitive MSRV run"
+        rm -f "$msrv_log"
+        return 0
+    fi
+    cat "$msrv_log" >&2
+    rm -f "$msrv_log"
+    fail "MSRV check failed for a reason other than an unavailable Rust 1.80 dependency graph"
 }
 
 tier2_docs() {

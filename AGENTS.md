@@ -20,7 +20,7 @@ cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo fmt --all -- --check
 ```
 
-- `check.sh` refuses to run outside an active venv with Python 3.10+, maturin, pytest, pytest-asyncio. Setup: `python3 -m venv .venv && source .venv/bin/activate && python -m pip install maturin pytest pytest-asyncio`.
+- `check.sh` refuses to run outside an active venv with Python 3.10+, maturin, pytest, pytest-asyncio. Setup: `python3 -m venv .venv && source .venv/bin/activate && python -m pip install maturin pytest pytest-asyncio`. Extended MSRV validation records an explicit unsupported-environment skip when Rust 1.80/Cargo cannot parse the current resolved dependency graph; that is not an MSRV pass.
 - After changing `crates/eggfetch-python` Rust code, rebuild before testing: `PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1 maturin develop -m crates/eggfetch-python/Cargo.toml` (CI exports the same var; plain `maturin develop` inside `check.sh` relies on it). Stale `.so` causes confusing failures.
 - Never parallelize Rust workspace tests (`--test-threads=1`): resource-stabilization tests measure process RSS; concurrency makes them flaky.
 
