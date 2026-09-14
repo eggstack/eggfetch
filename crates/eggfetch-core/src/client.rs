@@ -660,6 +660,30 @@ impl Client {
         Box::pin(crate::pipeline::send_with_retry(self, request)).await
     }
 
+    /// Send a request and return optional structured native failure detail.
+    ///
+    /// The ordinary [`Error`] remains unchanged and can be recovered with
+    /// [`RequestFailure::into_error`](crate::RequestFailure::into_error).
+    /// Network classifications are reported only when the selected route
+    /// exposes typed evidence; callers must not treat an absent subtype as a
+    /// positive diagnosis.
+    ///
+    /// # Errors
+    ///
+    /// Returns the original request error wrapped in [`crate::RequestFailure`].
+    pub async fn send_detailed(
+        &self,
+        mut request: Request,
+    ) -> std::result::Result<Response, crate::RequestFailure> {
+        let context = crate::error::RequestFailureContext::new();
+        context.clear();
+        request.set_failure_context(Some(context.clone()));
+        match Box::pin(crate::pipeline::send_with_retry(self, request)).await {
+            Ok(response) => Ok(response),
+            Err(error) => Err(crate::RequestFailure::from_context(error, &context)),
+        }
+    }
+
     /// Send a single HTTP request and return the streaming response.
     ///
     /// This handles pool acquisition, timeout application, and body
@@ -1045,8 +1069,14 @@ impl ClientBuilder {
     }
 
     /// Set the maximum decoded response body size in bytes.
-    /// When set, responses whose decompressed body exceeds this limit
-    /// produce an error instead of buffering the full content.
+    ///
+    /// The limit applies to bytes made available after decoding and also to
+    /// ordinary unencoded/identity response bodies, in both buffered and
+    /// streaming paths. Exceeding it produces [`Error::DecodedBodyTooLarge`]
+    /// without requiring a second caller-side accumulation loop. A wire
+    /// `Content-Length` may be used for an early metadata check, but this
+    /// body limit remains authoritative when the header is absent, incorrect,
+    /// or describes encoded bytes.
     #[must_use]
     pub fn max_decoded_body_size(mut self, max: usize) -> Self {
         self.max_decoded_body_size = Some(max);

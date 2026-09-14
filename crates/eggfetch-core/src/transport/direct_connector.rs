@@ -30,6 +30,7 @@
 //! that need platform-specific socket options beyond the recognized set
 //! should use a custom transport.
 
+use std::fmt;
 use std::future::Future;
 use std::net::SocketAddr;
 use std::pin::Pin;
@@ -72,6 +73,69 @@ pub enum SocketOptionKind {
     ReceiveBuffer,
     /// Set the send buffer size.
     SendBuffer,
+}
+
+/// Private structured error emitted before Hyper collapses connector errors
+/// into its legacy client error. The message remains the existing public
+/// `Error::Connect` text; the category is consumed only by detailed sends.
+pub(crate) struct DirectConnectError {
+    kind: crate::transport::ConnectFailureKind,
+    message: String,
+    source: Option<std::io::Error>,
+}
+
+impl DirectConnectError {
+    pub(crate) fn new(
+        kind: crate::transport::ConnectFailureKind,
+        message: String,
+        source: Option<std::io::Error>,
+    ) -> Self {
+        Self {
+            kind,
+            message,
+            source,
+        }
+    }
+
+    pub(crate) const fn kind(&self) -> crate::transport::ConnectFailureKind {
+        self.kind
+    }
+
+    pub(crate) fn message(&self) -> &str {
+        &self.message
+    }
+}
+
+fn classify_tcp_failures(attempted: usize, refused: usize) -> crate::transport::ConnectFailureKind {
+    if attempted > 0 && attempted == refused {
+        crate::transport::ConnectFailureKind::ConnectionRefused
+    } else {
+        crate::transport::ConnectFailureKind::Connect
+    }
+}
+
+impl fmt::Debug for DirectConnectError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("DirectConnectError")
+            .field("kind", &self.kind)
+            .field("message", &self.message)
+            .field("source", &self.source.as_ref().map(|_| "<redacted>"))
+            .finish()
+    }
+}
+
+impl fmt::Display for DirectConnectError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.message)
+    }
+}
+
+impl std::error::Error for DirectConnectError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        self.source
+            .as_ref()
+            .map(|source| source as &(dyn std::error::Error + 'static))
+    }
 }
 
 /// A socket option triple `(level, option, value)`.
@@ -459,14 +523,18 @@ impl Service<Uri> for DirectConnector {
                             m.record_direct_dns_failure();
                             m.record_direct_failure();
                         }
-                        return Err(Box::new(Error::Connect(format!(
-                            "DNS resolution failed for {host}: {e}"
-                        )))
+                        return Err(Box::new(DirectConnectError::new(
+                            crate::transport::ConnectFailureKind::Dns,
+                            format!("DNS resolution failed for {host}: {e}"),
+                            Some(e),
+                        ))
                             as Box<dyn std::error::Error + Send + Sync>);
                     }
                 }
             };
-            let mut last_error = None;
+            let mut attempted = 0usize;
+            let mut refused = 0;
+            let mut last_error: Option<(String, std::io::Error)> = None;
             let mut tokio_stream = None;
             for addr in addresses {
                 if let Some(local_addr) = config.local_address {
@@ -489,26 +557,39 @@ impl Service<Uri> for DirectConnector {
                 }
                 if let Some(local_addr) = config.local_address {
                     if let Err(error) = socket.bind(local_addr) {
-                        last_error = Some(error.to_string());
+                        attempted += 1;
+                        last_error = Some((error.to_string(), error));
                         continue;
                     }
                 }
+                attempted += 1;
                 match socket.connect(addr).await {
                     Ok(stream) => {
                         tokio_stream = Some(stream);
                         break;
                     }
-                    Err(error) => last_error = Some(format!("{addr}: {error}")),
+                    Err(error) => {
+                        if error.kind() == std::io::ErrorKind::ConnectionRefused {
+                            refused += 1;
+                        }
+                        last_error = Some((format!("{addr}: {error}"), error));
+                    }
                 }
             }
             let Some(tokio_stream) = tokio_stream else {
                 if let Some(ref m) = metrics {
                     m.record_direct_failure();
                 }
-                return Err(Box::new(Error::Connect(format!(
-                    "TCP connect to {host}:{port} failed: {}",
-                    last_error.unwrap_or_else(|| "no compatible addresses".into())
-                )))
+                let (last_message, source) = last_error.map_or_else(
+                    || ("no compatible addresses".into(), None),
+                    |(message, error)| (message, Some(error)),
+                );
+                let kind = classify_tcp_failures(attempted, refused);
+                return Err(Box::new(DirectConnectError::new(
+                    kind,
+                    format!("TCP connect to {host}:{port} failed: {last_message}"),
+                    source,
+                ))
                     as Box<dyn std::error::Error + Send + Sync>);
             };
             if let Some(ref m) = metrics {
@@ -665,5 +746,36 @@ mod tests {
         let err = apply_socket_option(&socket, &opt).unwrap_err();
         assert_eq!(err.kind(), "connect");
         assert!(err.to_string().contains("too short"));
+    }
+
+    #[test]
+    fn tcp_failure_classification_requires_all_attempts_to_be_refused() {
+        assert_eq!(
+            classify_tcp_failures(2, 2),
+            crate::transport::ConnectFailureKind::ConnectionRefused
+        );
+        assert_eq!(
+            classify_tcp_failures(2, 1),
+            crate::transport::ConnectFailureKind::Connect
+        );
+        assert_eq!(
+            classify_tcp_failures(0, 0),
+            crate::transport::ConnectFailureKind::Connect
+        );
+    }
+
+    #[test]
+    fn direct_dns_error_keeps_private_structured_category() {
+        let error = DirectConnectError::new(
+            crate::transport::ConnectFailureKind::Dns,
+            "DNS resolution failed".into(),
+            Some(std::io::Error::new(
+                std::io::ErrorKind::AddrNotAvailable,
+                "synthetic resolver failure",
+            )),
+        );
+        assert_eq!(error.kind(), crate::transport::ConnectFailureKind::Dns);
+        assert_eq!(error.to_string(), "DNS resolution failed");
+        assert!(std::error::Error::source(&error).is_some());
     }
 }

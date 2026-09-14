@@ -123,6 +123,29 @@ async fn dialer_failure_is_returned_without_direct_fallback() {
 }
 
 #[tokio::test]
+async fn detailed_dialer_failure_preserves_source_without_network_guess() {
+    let targets = Arc::new(Mutex::new(Vec::new()));
+    let client = eggfetch_core::Client::builder()
+        .dialer(RecordingDialer {
+            address: "127.0.0.1:1".parse().unwrap(),
+            targets,
+            fail: true,
+        })
+        .build();
+
+    let failure = client
+        .get("http://127.0.0.1:1/")
+        .unwrap()
+        .send_detailed()
+        .await
+        .unwrap_err();
+
+    assert!(matches!(failure.error(), Error::CustomTransport(_)));
+    assert!(failure.error().custom_transport_error().is_some());
+    assert_eq!(failure.network_failure_kind(), None);
+}
+
+#[tokio::test]
 async fn custom_dialer_uses_default_http_port() {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();

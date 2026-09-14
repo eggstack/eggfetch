@@ -2,8 +2,157 @@
 
 use crate::timeout::TimeoutPhase;
 
+use std::sync::atomic::{AtomicU8, Ordering};
+use std::sync::Arc;
+
 /// Result alias using [`Error`].
 pub type Result<T> = std::result::Result<T, Error>;
+
+/// Evidence-backed detail for a request that failed while establishing a
+/// network connection.
+///
+/// This is an additive, opt-in classification. It deliberately does not
+/// replace [`Error::kind`] and is only reported when the transport exposes
+/// typed evidence for the category.
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum NetworkFailureKind {
+    /// Name resolution failed before a destination address was attempted.
+    Dns,
+    /// Every attempted destination failed with connection refusal.
+    ConnectionRefused,
+    /// A connection-establishment failure that is not more specifically
+    /// classified.
+    Connect,
+}
+
+/// A request error with optional structured connection-failure detail.
+///
+/// The ordinary [`Error`] remains the compatibility surface. Use
+/// [`Client::send_detailed`](crate::Client::send_detailed) or
+/// [`RequestBuilder::send_detailed`](crate::RequestBuilder::send_detailed)
+/// when native Rust code needs the additional, evidence-backed network
+/// classification.
+pub struct RequestFailure {
+    error: Error,
+    network_failure: Option<NetworkFailureKind>,
+}
+
+impl RequestFailure {
+    /// Return the original public error by reference.
+    #[must_use]
+    pub fn error(&self) -> &Error {
+        &self.error
+    }
+
+    /// Consume the detailed wrapper and return the original public error.
+    #[must_use]
+    pub fn into_error(self) -> Error {
+        self.error
+    }
+
+    /// Return evidence-backed connection-failure detail, when available.
+    #[must_use]
+    pub fn network_failure_kind(&self) -> Option<NetworkFailureKind> {
+        self.network_failure
+    }
+
+    /// Return whether the error represents a timeout.
+    ///
+    /// This includes both ordinary request-phase [`Error::Timeout`] values
+    /// and established-transport inactivity [`Error::TransportIoTimeout`]
+    /// values. Caller-dialer timeout categories remain available through
+    /// [`Error::custom_transport_error`] and are not reclassified here.
+    #[must_use]
+    pub fn is_timeout(&self) -> bool {
+        matches!(
+            self.error,
+            Error::Timeout { .. } | Error::TransportIoTimeout { .. }
+        )
+    }
+
+    /// Return the request timeout phase, when the error carries one.
+    ///
+    /// Established-transport inactivity timeouts intentionally return
+    /// `None`; they are not ordinary request-phase timeouts.
+    #[must_use]
+    pub fn timeout_phase(&self) -> Option<TimeoutPhase> {
+        match self.error {
+            Error::Timeout { phase, .. } => Some(phase),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn from_error(error: Error) -> Self {
+        Self {
+            error,
+            network_failure: None,
+        }
+    }
+
+    pub(crate) fn from_context(error: Error, context: &RequestFailureContext) -> Self {
+        Self {
+            error,
+            network_failure: context.network_failure_kind(),
+        }
+    }
+}
+
+impl std::fmt::Debug for RequestFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RequestFailure")
+            .field("error", &self.error)
+            .field("network_failure", &self.network_failure)
+            .finish()
+    }
+}
+
+impl std::fmt::Display for RequestFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.error.fmt(f)
+    }
+}
+
+impl std::error::Error for RequestFailure {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        self.error.source()
+    }
+}
+
+/// Request-local storage for the one terminal network classification.
+///
+/// This is only allocated by detailed sends. An atomic is sufficient because
+/// the context stores one small value and later terminal attempts replace
+/// earlier transient classifications.
+pub(crate) struct RequestFailureContext {
+    network_failure: AtomicU8,
+}
+
+impl RequestFailureContext {
+    pub(crate) fn new() -> Arc<Self> {
+        Arc::new(Self {
+            network_failure: AtomicU8::new(0),
+        })
+    }
+
+    pub(crate) fn clear(&self) {
+        self.network_failure.store(0, Ordering::Relaxed);
+    }
+
+    pub(crate) fn record(&self, kind: NetworkFailureKind) {
+        self.network_failure
+            .store(kind as u8 + 1, Ordering::Relaxed);
+    }
+
+    fn network_failure_kind(&self) -> Option<NetworkFailureKind> {
+        match self.network_failure.load(Ordering::Relaxed) {
+            1 => Some(NetworkFailureKind::Dns),
+            2 => Some(NetworkFailureKind::ConnectionRefused),
+            3 => Some(NetworkFailureKind::Connect),
+            _ => None,
+        }
+    }
+}
 
 /// Error taxonomy for the eggfetch engine.
 ///
@@ -379,6 +528,43 @@ mod tests {
         let io_err = std::sync::Arc::new(std::io::Error::other("test"));
         let err: Error = io_err.into();
         assert_eq!(err.kind(), "io");
+    }
+
+    #[test]
+    fn request_failure_exposes_timeout_without_changing_error() {
+        let error = Error::Timeout {
+            phase: TimeoutPhase::Connect,
+            elapsed: std::time::Duration::from_millis(5),
+        };
+        let failure = RequestFailure::from_error(error);
+        assert!(failure.is_timeout());
+        assert_eq!(failure.timeout_phase(), Some(TimeoutPhase::Connect));
+        assert_eq!(failure.error().kind(), "timeout_connect");
+        assert_eq!(failure.into_error().kind(), "timeout_connect");
+    }
+
+    #[test]
+    fn request_failure_keeps_transport_timeout_distinct() {
+        let failure = RequestFailure::from_error(Error::TransportIoTimeout {
+            direction: crate::transport::lifecycle::TransportIoDirection::Read,
+            elapsed: std::time::Duration::from_secs(1),
+        });
+        assert!(failure.is_timeout());
+        assert_eq!(failure.timeout_phase(), None);
+    }
+
+    #[test]
+    fn request_failure_context_replaces_transient_classification() {
+        let context = RequestFailureContext::new();
+        context.record(NetworkFailureKind::Dns);
+        context.record(NetworkFailureKind::ConnectionRefused);
+        let failure = RequestFailure::from_context(Error::Connect("refused".into()), &context);
+        assert_eq!(
+            failure.network_failure_kind(),
+            Some(NetworkFailureKind::ConnectionRefused)
+        );
+        context.clear();
+        assert_eq!(context.network_failure_kind(), None);
     }
 
     #[test]

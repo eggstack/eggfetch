@@ -198,6 +198,7 @@ pub(crate) struct RequestParts {
     pub(crate) proxy_override: ProxyOverride,
     pub(crate) retry: Option<RetryPolicy>,
     pub(crate) transport_hints: TransportHints,
+    pub(crate) failure_context: Option<Arc<crate::error::RequestFailureContext>>,
 }
 
 impl RequestParts {
@@ -228,6 +229,7 @@ impl RequestParts {
             proxy_override,
             retry,
             transport_hints,
+            failure_context,
         } = self;
         let mut request = Request::new(method, url);
         *request.headers_mut() = headers;
@@ -246,6 +248,7 @@ impl RequestParts {
         let _ = proxy_override;
         request.set_retry(retry);
         request.set_transport_hints(transport_hints);
+        request.set_failure_context(failure_context);
         request
     }
 
@@ -282,6 +285,7 @@ impl RequestParts {
         request.set_proxy_override(self.proxy_override.clone());
         request.set_retry(self.retry.clone());
         request.set_transport_hints(self.transport_hints.clone());
+        request.set_failure_context(self.failure_context.clone());
         Ok(request)
     }
 
@@ -329,6 +333,9 @@ pub struct Request {
     retry: Option<RetryPolicy>,
     /// Typed transport-level hints (target override, SNI hostname, etc.).
     transport_hints: TransportHints,
+    /// Optional native detailed-failure context; ordinary requests leave it
+    /// absent so they do not allocate diagnostics state.
+    failure_context: Option<Arc<crate::error::RequestFailureContext>>,
 }
 
 impl std::fmt::Debug for Request {
@@ -349,6 +356,10 @@ impl std::fmt::Debug for Request {
             .field("proxy_override", &self.proxy_override)
             .field("retry", &self.retry)
             .field("transport_hints", &self.transport_hints)
+            .field(
+                "failure_context",
+                &self.failure_context.as_ref().map(|_| "configured"),
+            )
             .finish()
     }
 }
@@ -372,6 +383,7 @@ impl Request {
             proxy_override: ProxyOverride::Inherit,
             retry: None,
             transport_hints: TransportHints::default(),
+            failure_context: None,
         }
     }
 
@@ -540,6 +552,13 @@ impl Request {
         self.transport_hints = hints;
     }
 
+    pub(crate) fn set_failure_context(
+        &mut self,
+        context: Option<Arc<crate::error::RequestFailureContext>>,
+    ) {
+        self.failure_context = context;
+    }
+
     /// Decompose a request into its parts.
     ///
     /// Returns the request fields as named parts.
@@ -560,6 +579,7 @@ impl Request {
             proxy_override: self.proxy_override,
             retry: self.retry,
             transport_hints: self.transport_hints,
+            failure_context: self.failure_context,
         }
     }
 }
@@ -745,8 +765,11 @@ impl RequestBuilder {
     /// Override the client decoded response body size limit for this request.
     ///
     /// The request setting takes precedence over the client setting and is
-    /// carried across retries and redirects. A value of zero rejects any
-    /// non-empty decoded response body.
+    /// carried across retries and redirects. It applies to decoded compressed
+    /// data and ordinary unencoded/identity response bodies, whether the
+    /// response is buffered or streamed. A value of zero rejects any
+    /// non-empty decoded response body and yields
+    /// [`crate::Error::DecodedBodyTooLarge`].
     #[must_use]
     pub fn max_decoded_body_size(mut self, max: usize) -> Self {
         self.max_decoded_body_size = Some(max);
@@ -882,6 +905,30 @@ impl RequestBuilder {
         let request = self.build()?;
         Box::pin(client.send(request)).await
     }
+
+    /// Build and send the request with optional structured native failure
+    /// classification.
+    ///
+    /// The underlying [`crate::Error`] and all ordinary request behavior are
+    /// unchanged. Use [`RequestFailure::into_error`](crate::RequestFailure::into_error)
+    /// to recover the legacy error without loss.
+    ///
+    /// # Errors
+    ///
+    /// Returns the original error wrapped in [`crate::RequestFailure`] if the
+    /// request could not be built or sent.
+    pub async fn send_detailed(self) -> std::result::Result<Response, crate::RequestFailure> {
+        let Some(client) = self.client.clone() else {
+            return Err(crate::RequestFailure::from_error(
+                crate::Error::RequestBuild("no client associated with request builder".into()),
+            ));
+        };
+        let request = match self.build() {
+            Ok(request) => request,
+            Err(error) => return Err(crate::RequestFailure::from_error(error)),
+        };
+        client.send_detailed(request).await
+    }
 }
 
 #[cfg(test)]
@@ -959,6 +1006,15 @@ mod tests {
         let debug = format!("{target:?}");
         assert!(debug.contains("address_count: 1"));
         assert!(!debug.contains("127.0.0.1"));
+    }
+
+    #[test]
+    fn ordinary_request_has_no_failure_context() {
+        let request = Request::new(
+            http::Method::GET,
+            url::Url::parse("http://example.com/").expect("valid URL"),
+        );
+        assert!(request.failure_context.is_none());
     }
 
     #[test]

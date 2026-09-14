@@ -60,7 +60,7 @@ pub use auth::{AuthScheme, BasicAuth, BearerAuth};
 pub use body::{BoxBytesStream, NativeResponseBody, RequestBody, ResponseBody, SharedTrailers};
 pub use client::{Client, ClientBuilder};
 pub use compression::{accept_encoding_value, ContentCoding};
-pub use error::{Error, Result};
+pub use error::{Error, NetworkFailureKind, RequestFailure, Result};
 pub use headers::Headers;
 pub use http::Method;
 pub use http_version::HttpVersionPolicy;

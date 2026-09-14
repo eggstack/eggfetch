@@ -258,7 +258,7 @@ responses that expand to large sizes.
 
 - `max_decoded_body_size`: Hard limit on total decoded bytes. When
   exceeded during streaming or buffered reads, returns
-  `Error::DecodedBodyLimit`. Default: unlimited.
+  `Error::DecodedBodyTooLarge`. Default: unlimited.
 - `max_decompression_ratio`: Optional limit comparing decoded bytes to
   compressed bytes. Applied once enough input has been observed to make
   a meaningful comparison. Default: unlimited.

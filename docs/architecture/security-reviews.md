@@ -156,7 +156,7 @@ No critical or high-severity findings. Proxy credentials are correctly isolated 
 
 ### Decoded-Body Limits
 
-- **max_decoded_body_size**: Hard limit on total decoded bytes. Enforced during streaming, not just on buffered reads. When exceeded, the response stream is terminated with `Error::DecodedBodyLimit`.
+- **max_decoded_body_size**: Hard limit on total decoded bytes. Enforced during streaming, not just on buffered reads. When exceeded, the response stream is terminated with `Error::DecodedBodyTooLarge`.
 - **max_decompression_ratio**: Ratio limit comparing decoded to compressed bytes. Applied once enough input has been observed to make a meaningful comparison. Prevents zip-bomb attacks.
 - **Both limits enforced in streaming path**: Memory usage stays bounded even for large responses because limits are checked per-chunk.
 

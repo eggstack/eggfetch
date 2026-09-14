@@ -17,7 +17,7 @@ Focused subset for the engine lifecycle (client → request → pipeline → res
 | `headers` | Yes | `Headers` — case-insensitive header map wrapper |
 | `network_stream` | Yes | `NetworkStream`, `UpgradedStream`, `ConnectionMetadata` — upgrade IO + connection metadata |
 | `trace` | Yes | `TraceObserver`, `TraceEvent` — synchronous lifecycle event callbacks |
-| `error` | Yes | `Error` enum, `Result<T>` alias |
+| `error` | Yes | `Error` enum, `RequestFailure` opt-in detail wrapper, `Result<T>` alias |
 | `pipeline` | Crate-internal | Full request lifecycle orchestration |
 | `transport` | Yes | Direct, caller-owned raw-stream dialer, direct-with-socket-options, UDS, proxy, HTTP/3 transport dispatch |
 | `stream` | Crate-internal | Per-chunk read/write timeout wrappers |
@@ -36,6 +36,26 @@ let client = ClientBuilder::new()
 Builder-configurable options: headers, timeout, pool, redirects, auth, cookies, proxy, TLS, retry, Hyper canceled-request retry, native dialer, physical connection admission, established-I/O inactivity, decompression, HTTP version policy, max body size, max decompression ratio.
 
 `Client` is `Clone` (cheap — internals are `Arc`-wrapped).
+
+### Native request-failure detail
+
+`Client::send_detailed()` and `RequestBuilder::send_detailed()` are additive
+native Rust entry points. They preserve the existing `Error` value and
+`Error::kind()` result while attaching at most one terminal
+`NetworkFailureKind`. The request carries an optional crate-private atomic
+context through retry and redirect reconstruction; ordinary requests carry
+`None` and allocate no diagnostic state. Each retry clears the context, and
+H3-to-H1/H2 fallback does not retain a failed pre-commit route.
+
+The classifier runs before the transport boundary collapses direct connector
+errors into `Error::Connect(String)`. It uses typed I/O refusal evidence and a
+private direct-connector category; it never parses `Display`/`Debug` text.
+Standard Hyper resolver failures remain generic because hyper-util does not
+expose a public resolver-error type. Direct address fallback reports DNS only
+for resolution failure, refusal only when every attempted address was refused,
+and generic connect for mixed or otherwise unproven failures. Proxy, UDS,
+HTTP/3, and caller-owned dialer routes remain generic/unknown where their
+current boundaries do not expose sufficient evidence.
 
 ### Native frame execution
 

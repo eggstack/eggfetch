@@ -34,6 +34,7 @@ cargo test --workspace --exclude eggfetch-python --all-features -- --test-thread
 - `RequestBuilder::resolved_addresses()` is a native direct-routing escape hatch: it uses exactly the supplied socket addresses, preserves logical Host/TLS identity, and fails closed for proxy, UDS, H3, or cross-origin redirect combinations. It is not an SSRF policy or a Python compatibility extension.
 - `ClientBuilder::dialer()` is a native-only client-scoped raw-stream seam: eggfetch owns HTTP, destination TLS, logical Host/SNI identity, pooling, redirects, and retries. A request `target` override changes only the wire path/query. Custom dialing fails closed with proxy, UDS, resolved-target, local/socket routing, and H3; `DialError` source chains are preserved without delegating source `Debug` output into eggfetch diagnostics.
 - `Client::execute_http_body()` is the additive native frame-preserving seam: it accepts a caller-owned `http_body::Body<Data = Bytes>`, returns an `http::Response<NativeResponseBody>`, and shares the existing Hyper routes/pool/TLS. It intentionally omits high-level redirects/retries/cookies/auth/decompression and rejects the custom proxy/H3 routes before dispatch; a 101 upgrade is rejected after its status is received because upgrades cannot be identified before I/O. Native response read timeouts start on the first body poll and reset after each frame, matching the high-level streaming contract.
+- `Client::send_detailed()` and `RequestBuilder::send_detailed()` are additive native-only error entry points. Preserve the exact underlying `Error` and `Error::kind()` values; `RequestFailure` may add only evidence-backed `NetworkFailureKind` detail. Classify refusal from typed `io::ErrorKind`, direct DNS/refusal from private connector provenance, and unknown routes as generic/`None`. Never search display/debug text, change `Error`, or let transient retry/H3-fallback failures survive into the terminal result.
 - `TlsConfigBuilder::crypto_provider()` selects an `Arc<CryptoProvider>` locally without installing a process default; mTLS keys must load through that provider. `additional_ca_certificate_path/pem/der` augments the selected base trust store through the one authoritative TLS builder, while all existing `ca_certificate_*` and `add_ca_certificate_path` methods remain replacement-style. Keep origin and HTTPS-proxy trust configurations separate; see `docs/architecture/core-tls-proxy-protocols.md`.
 - The external-style `qualification/native-http-body-tls/` fixture qualifies a separately supplied AWS-LC provider, mTLS key loading, private-root augmentation, custom dialing, frame bodies, and process-default isolation. It is outside routine workspace CI.
 - Run that fixture manually after executable TLS/body changes; its `target/` directory is generated build output and must not be committed. Keep its alternate provider dependency isolated from the ordinary workspace graph.
@@ -145,6 +146,10 @@ native JSON helpers are opt-in and must remain absent from minimal profiles.
   are pre-1.0 aliases (new wins). Facade `Limits` unchanged.
 - Trace: request/response headers emitted; DNS/connect/TLS via metrics
   (no duplicate taxonomy). Observer stays sync.
+- Native request-failure detail is an opt-in wrapper around the unchanged
+  public `Error`; its network subtype is route-dependent evidence, not a
+  complete transport taxonomy. Keep this surface separate from tracing and
+  metrics, and never recommend matching error display strings.
 
 ## Architecture References
 

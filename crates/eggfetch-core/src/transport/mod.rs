@@ -6,6 +6,14 @@
 
 use bytes::Bytes;
 
+/// Private connection-establishment evidence shared by transport seams.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ConnectFailureKind {
+    Dns,
+    ConnectionRefused,
+    Connect,
+}
+
 /// TLS-capable connector used by the hyper client.
 #[cfg(feature = "tls-rustls")]
 pub(crate) type Connector =

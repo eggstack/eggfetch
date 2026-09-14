@@ -154,6 +154,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 The opt-in `json` feature adds `RequestBuilder::json()` / `Response::json()` Serde helpers, and `resolved_addresses()` pins caller-validated destinations without a second DNS lookup. See [`docs/rust/guide.md`](docs/rust/guide.md) for the full Rust API reference.
 
+Native embedders that need structured timeout/DNS/refusal detail can opt into
+`RequestBuilder::send_detailed()`; the [Rust guide](docs/rust/guide.md) shows
+the string-free handling pattern.
+
 Rustls crypto providers are selected per `TlsConfig`, not process-wide. Native
 applications that need a different provider can depend on the matching Rustls
 provider feature and pass its `Arc<CryptoProvider>` to

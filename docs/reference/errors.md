@@ -6,6 +6,35 @@ Complete reference for eggfetch error types across Rust, Python, and the CLI.
 
 The `eggfetch_core::Error` enum is the single error type for the library. Use `error.kind()` to get a machine-readable category string.
 
+### Opt-in native request-failure detail
+
+Native Rust callers that need more than the stable coarse `Error::kind()`
+classification can use `RequestBuilder::send_detailed()` or
+`Client::send_detailed()`. These return a `RequestFailure` wrapper whose
+`error()`/`into_error()` expose the unchanged original `Error`, plus:
+
+- `network_failure_kind()` — `Dns`, `ConnectionRefused`, or generic `Connect`
+  only when the selected route supplies typed evidence;
+- `is_timeout()` — true for ordinary request-phase timeouts and established
+  transport inactivity timeouts;
+- `timeout_phase()` — the existing `TimeoutPhase`, or `None` for transport-I/O
+  inactivity and other error families.
+
+This surface never searches error text. The standard Hyper connector can prove
+connection refusal from `io::ErrorKind`; its resolver error type is opaque to
+eggfetch, so unresolved standard-route failures remain generic. The direct
+connector reports DNS resolution failures before address attempts and applies
+the deterministic address-fallback rule: DNS only for resolution failure,
+`ConnectionRefused` only when every attempted address was refused, and generic
+`Connect` for mixed/other failures. Proxy, UDS, HTTP/3, and caller-owned
+`Dialer` routes return no subtype unless their current structured boundary can
+prove one. An absent subtype is therefore unknown, not a negative diagnosis.
+
+The context is allocated only for detailed sends, remains bounded to one
+terminal classification, and is cleared between retry attempts. A transient
+H3 fallback or failed retry cannot leak into a later success; existing Python,
+CLI, HTTPX, and ordinary Rust `send()` callers do not opt into this API.
+
 | Variant | `kind()` | Description |
 |---------|----------|-------------|
 | `InvalidUrl` | `invalid_url` | URL could not be parsed |

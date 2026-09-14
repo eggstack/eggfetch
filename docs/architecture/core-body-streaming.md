@@ -136,11 +136,16 @@ Python-side request bodies support iterables, file-like objects, and custom `Byt
 
 ## Resource Limits
 
-- `max_decoded_body_size` — maximum decoded body size, including identity
-  and other unencoded responses.
+- `max_decoded_body_size` — maximum bytes made available after decoding,
+  including ordinary unencoded/identity responses. The same cap applies to
+  buffered and streaming bodies. A wire `Content-Length` is useful for an
+  early metadata check, but the streaming limit remains authoritative when
+  the header is absent, incorrect, or describes encoded bytes.
 - `max_decompression_ratio` — maximum ratio of decoded to compressed size.
 
-Exceeding either limit yields `Error::DecodedBodyTooLarge` or `Error::DecompressionRatioExceeded`.
+Exceeding either limit yields `Error::DecodedBodyTooLarge` or
+`Error::DecompressionRatioExceeded`; callers do not need a second manual
+accumulation loop to enforce the decoded-size cap.
 The client values can be overridden per request with
 `RequestBuilder::max_decoded_body_size()` and
 `RequestBuilder::max_decompression_ratio()`. Request overrides take

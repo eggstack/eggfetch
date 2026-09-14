@@ -166,6 +166,9 @@ pub(crate) async fn send_with_retry(client: &Client, request: Request) -> Result
 
     loop {
         attempt += 1;
+        if let Some(context) = saved.failure_context.as_deref() {
+            context.clear();
+        }
 
         // Check max attempts budget first so the `attempts` field in the
         // error reports the same count regardless of which constraint
@@ -340,6 +343,7 @@ struct HopBuildParams {
     credentials_allowed: bool,
     /// False after a cross-origin redirect; gates cookie injection.
     cookie_allowed: bool,
+    failure_context: Option<Arc<crate::error::RequestFailureContext>>,
 }
 
 /// Build one hop request through the shared first-hop policy path.
@@ -377,6 +381,7 @@ fn build_hop_request(client: &Client, params: HopBuildParams) -> Result<Request>
         preserve_resolved_target,
         credentials_allowed,
         cookie_allowed,
+        failure_context,
     } = params;
 
     let mut hop = Request::new(method, url);
@@ -404,6 +409,7 @@ fn build_hop_request(client: &Client, params: HopBuildParams) -> Result<Request>
 
     hop.set_auth(if credentials_allowed { auth } else { None });
     hop.set_auth_disabled(auth_disabled);
+    hop.set_failure_context(failure_context);
 
     #[cfg(feature = "cookies")]
     {
@@ -522,6 +528,7 @@ fn advance_redirect_hop(
         proxy_override: _,
         retry: _,
         transport_hints: _,
+        failure_context: _,
     } = redirect_req.into_parts();
 
     Ok(RedirectHop {
@@ -555,6 +562,7 @@ struct PreparedRequest {
     timeout: Timeout,
     remaining_total: Option<Duration>,
     deadline: Option<std::time::Instant>,
+    failure_context: Option<Arc<crate::error::RequestFailureContext>>,
 }
 
 /// Declarative transport route selected after preparation.
@@ -796,6 +804,7 @@ pub(crate) async fn send_with_redirects(client: &Client, request: Request) -> Re
         proxy_override: request_proxy,
         retry: _request_retry,
         transport_hints: request_transport_hints,
+        failure_context,
     } = request.into_parts();
 
     // Without the `proxy` feature the override has no transport effect.
@@ -843,6 +852,7 @@ pub(crate) async fn send_with_redirects(client: &Client, request: Request) -> Re
                 preserve_resolved_target: false,
                 credentials_allowed: true,
                 cookie_allowed: true,
+                failure_context: failure_context.clone(),
             },
         )?;
 
@@ -943,6 +953,7 @@ pub(crate) async fn send_with_redirects(client: &Client, request: Request) -> Re
                 cookie_allowed: cookie_header_allowed,
                 #[cfg(not(feature = "cookies"))]
                 cookie_allowed: true,
+                failure_context: failure_context.clone(),
             },
         )?;
 
@@ -1196,6 +1207,7 @@ async fn prepare_single_request(
         proxy_override,
         retry: _,
         transport_hints,
+        failure_context,
         max_decoded_body_size: request_max_decoded_body_size,
         max_decompression_ratio: request_max_decompression_ratio,
     } = request.into_parts();
@@ -1391,6 +1403,7 @@ async fn prepare_single_request(
         timeout: *timeout,
         remaining_total,
         deadline,
+        failure_context,
     };
     Ok((prepared, guard))
 }
@@ -1430,6 +1443,7 @@ pub(crate) async fn send_single_request(
         timeout: hop_timeout,
         remaining_total,
         deadline,
+        failure_context,
     } = prepared;
 
     // `deadline` feeds the proxy multi-phase context; without the `proxy`
@@ -1555,6 +1569,7 @@ pub(crate) async fn send_single_request(
                 hyper_request,
                 url.clone(),
                 transport_hints.trace.as_deref(),
+                failure_context.as_deref(),
             );
             send_with_total_timeout(send_future, remaining_total).await?
         }
@@ -1576,6 +1591,7 @@ pub(crate) async fn send_single_request(
                 hyper_request,
                 url.clone(),
                 transport_hints.trace.as_deref(),
+                failure_context.as_deref(),
             );
             send_with_total_timeout(send_future, remaining_total).await?
         }
@@ -1653,6 +1669,7 @@ pub(crate) async fn send_single_request(
                 hyper_request,
                 url.clone(),
                 transport_hints.trace.as_deref(),
+                failure_context.as_deref(),
             );
             send_with_total_timeout(send_future, remaining_total).await?
         }
@@ -1789,6 +1806,9 @@ pub(crate) async fn send_single_request(
                             );
                         if can_fallback {
                             inner.transport_metrics.record_h3_fallback();
+                            if let Some(context) = failure_context.as_ref() {
+                                context.clear();
+                            }
                             let fb_body = fallback_body.expect("checked above");
                             send_hyper_request(
                                 inner,
@@ -1799,6 +1819,7 @@ pub(crate) async fn send_single_request(
                                 version,
                                 remaining_total,
                                 &transport_hints,
+                                failure_context.as_deref(),
                             )
                             .await?
                         } else {
@@ -1826,6 +1847,7 @@ pub(crate) async fn send_single_request(
                 version,
                 remaining_total,
                 &transport_hints,
+                failure_context.as_deref(),
             )
             .await?
         }
@@ -2184,6 +2206,7 @@ async fn send_hyper_request(
     version: http::Version,
     remaining_total: Option<Duration>,
     transport_hints: &crate::request::TransportHints,
+    failure_context: Option<&crate::error::RequestFailureContext>,
 ) -> Result<Response> {
     let hyper_client = inner
         .hyper_client
@@ -2198,6 +2221,7 @@ async fn send_hyper_request(
         hyper_request,
         url.clone(),
         transport_hints.trace.as_deref(),
+        failure_context,
     );
 
     send_with_total_timeout(send_future, remaining_total).await
@@ -2365,6 +2389,7 @@ mod tests {
             proxy_override: _,
             retry: _,
             transport_hints: _,
+            failure_context: _,
         } = &parts;
         let rebuilt = parts.into_request();
 
@@ -2587,6 +2612,7 @@ mod tests {
                 preserve_resolved_target: false,
                 credentials_allowed: true,
                 cookie_allowed: true,
+                failure_context: None,
             },
         )
         .expect("first hop builds");
@@ -2646,6 +2672,7 @@ mod tests {
                 preserve_resolved_target: false,
                 credentials_allowed: false,
                 cookie_allowed: false,
+                failure_context: None,
             },
         )
         .expect("redirect hop builds");
@@ -2708,6 +2735,7 @@ mod tests {
                 preserve_resolved_target: false,
                 credentials_allowed: true,
                 cookie_allowed: true,
+                failure_context: None,
             },
         )
         .unwrap();
@@ -2732,6 +2760,7 @@ mod tests {
                 preserve_resolved_target: false,
                 credentials_allowed: true,
                 cookie_allowed: true,
+                failure_context: None,
             },
         )
         .unwrap();

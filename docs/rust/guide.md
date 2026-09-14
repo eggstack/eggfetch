@@ -162,6 +162,34 @@ let resp = client.request(Method::from_bytes("PURGE")?, "https://example.com")?
     .send().await?;
 ```
 
+### Structured native request failures
+
+Use the opt-in detailed entry point when native Rust code needs to distinguish
+timeouts from evidence-backed connection failures without matching display
+strings:
+
+```rust
+use eggfetch_core::{Client, NetworkFailureKind};
+
+let failure = Client::new()
+    .get("https://service.example")?
+    .send_detailed()
+    .await
+    .expect_err("example endpoint should be unavailable");
+
+match failure.network_failure_kind() {
+    Some(NetworkFailureKind::Dns) => eprintln!("DNS resolution failed"),
+    Some(NetworkFailureKind::ConnectionRefused) => eprintln!("connection refused"),
+    Some(NetworkFailureKind::Connect) => eprintln!("connection establishment failed"),
+    None if failure.is_timeout() => eprintln!("timeout: {:?}", failure.timeout_phase()),
+    None => eprintln!("request failed: {}", failure.error()),
+}
+```
+
+`RequestFailure::into_error()` recovers the unchanged public `Error`. Network
+subtypes are evidence-backed and route-dependent; an absent subtype means the
+current transport boundary could not prove DNS or refusal.
+
 ## RequestBuilder API
 
 The builder is fluent and lets you configure headers, query params, body, timeouts, auth, proxy, and retry per-request.

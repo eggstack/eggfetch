@@ -143,13 +143,17 @@ pub(crate) async fn send_request<C>(
     request: http::Request<HyperRequestBody>,
     url: url::Url,
     trace: Option<&dyn TraceObserver>,
+    failure_context: Option<&crate::error::RequestFailureContext>,
 ) -> Result<Response>
 where
     C: hyper_util::client::legacy::connect::Connect + Clone + Send + Sync + 'static,
 {
     emit_send_start(trace, request.method().as_str(), &request.uri().to_string())?;
 
-    let result = hyper_client.request(request).await.map_err(map_send_error);
+    let result = hyper_client
+        .request(request)
+        .await
+        .map_err(|error| map_send_error_with_context(error, failure_context));
 
     match result {
         Ok(hyper_response) => Ok(finish_hyper_response(hyper_response, url, trace).await),
@@ -199,13 +203,17 @@ pub(crate) async fn send_direct_request<C>(
     request: http::Request<HyperRequestBody>,
     url: url::Url,
     trace: Option<&dyn TraceObserver>,
+    failure_context: Option<&crate::error::RequestFailureContext>,
 ) -> Result<Response>
 where
     C: hyper_util::client::legacy::connect::Connect + Clone + Send + Sync + 'static,
 {
     emit_send_start(trace, request.method().as_str(), &request.uri().to_string())?;
 
-    let result = hyper_client.request(request).await.map_err(map_send_error);
+    let result = hyper_client
+        .request(request)
+        .await
+        .map_err(|error| map_send_error_with_context(error, failure_context));
 
     match result {
         Ok(hyper_response) => Ok(finish_hyper_response(hyper_response, url, trace).await),
@@ -478,12 +486,42 @@ pub(crate) fn wrap_incoming(
 /// cannot be determined, the error falls through to the generic
 /// `Error::Hyper` path.
 pub(crate) fn map_send_error(err: hyper_util::client::legacy::Error) -> Error {
+    map_send_error_with_context(err, None)
+}
+
+/// Map a Hyper client error while optionally retaining typed connection
+/// provenance for an opted-in native request.
+pub(crate) fn map_send_error_with_context(
+    err: hyper_util::client::legacy::Error,
+    failure_context: Option<&crate::error::RequestFailureContext>,
+) -> Error {
+    let mut refused = false;
     let mut current: Option<&dyn std::error::Error> = Some(&err);
-    while let Some(e) = current {
+    for _ in 0..32 {
+        let Some(e) = current else { break };
+        if let Some(direct_error) =
+            e.downcast_ref::<crate::transport::direct_connector::DirectConnectError>()
+        {
+            if let Some(context) = failure_context {
+                context.record(match direct_error.kind() {
+                    crate::transport::ConnectFailureKind::Dns => {
+                        crate::error::NetworkFailureKind::Dns
+                    }
+                    crate::transport::ConnectFailureKind::ConnectionRefused => {
+                        crate::error::NetworkFailureKind::ConnectionRefused
+                    }
+                    crate::transport::ConnectFailureKind::Connect => {
+                        crate::error::NetworkFailureKind::Connect
+                    }
+                });
+            }
+            return Error::Connect(direct_error.message().to_owned());
+        }
         if let Some(core_error) = e.downcast_ref::<Error>() {
             return core_error.clone();
         }
         if let Some(io_error) = e.downcast_ref::<std::io::Error>() {
+            refused |= io_error.kind() == std::io::ErrorKind::ConnectionRefused;
             if let Some(inner) = io_error
                 .get_ref()
                 .and_then(|source| source.downcast_ref::<Error>())
@@ -506,6 +544,19 @@ pub(crate) fn map_send_error(err: hyper_util::client::legacy::Error) -> Error {
             }
         }
         current = e.source();
+    }
+
+    if let Some(context) = failure_context {
+        if err.is_connect() {
+            context.record(if refused {
+                crate::error::NetworkFailureKind::ConnectionRefused
+            } else {
+                // hyper-util does not expose a public resolver-error type;
+                // unresolved standard-connector failures therefore remain
+                // generic rather than being inferred from display text.
+                crate::error::NetworkFailureKind::Connect
+            });
+        }
     }
     Error::HyperClient(std::sync::Arc::new(err))
 }
