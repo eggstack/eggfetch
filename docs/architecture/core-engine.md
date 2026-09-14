@@ -187,8 +187,14 @@ the logical destination while allowing the caller to control the origin-form
 request target.
 
 `retry_canceled_requests(false)` disables only Hyper's implicit retry when a
-reused idle connection is unusable before the request begins. It is separate
-from the opt-in eggfetch `RetryPolicy`, whose behavior is unchanged.
+reused idle connection is unusable before the request begins. All Hyper
+legacy-client construction goes through the crate-internal common builder
+policy, which also applies shared idle-pool settings; route-specific
+`http2_only` configuration remains at each connector. The setting is shared
+by standard, direct, resolved-target, SNI, UDS, SOCKS, and custom-dialer
+clients, but not the independent HTTP/3 transport. It is separate from the
+opt-in eggfetch `RetryPolicy`, whose behavior is unchanged, and no socket-reuse
+metric is inferred from it.
 
 ## Network Stream and Upgrade Support
 

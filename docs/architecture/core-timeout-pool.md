@@ -126,6 +126,13 @@ When a request acquires a pool slot, it receives a `PoolGuard` (wrapped in `Arc`
 
 Socket-level reuse counts (connections opened/reused/closed) and per-connection H2 stream counts remain absent because hyper owns socket lifecycle and eggfetch cannot observe reuse reliably — never estimated. See `transport/metrics.rs` and `tests/transport_metrics_tests.rs` + `tests/h3_alt_svc_discovery.rs` for exact-count evidence.
 
+The same observability boundary applies to Hyper's canceled-request retry:
+`ClientBuilder::retry_canceled_requests(false)` can prevent the hidden retry,
+but `PoolMetrics` and `TransportMetrics` do not report Hyper's internal retry
+or socket-reuse count. Use the native flag plus server-side instrumentation
+when strict physical-attempt accounting is required. HTTP/3 is outside this
+Hyper-specific control.
+
 ### H3 Pool and Idle Mapping
 
 H3 requests acquire pool permits exactly like H1/H2 (one permit per

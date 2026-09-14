@@ -116,6 +116,30 @@ stale QUIC origins are evicted and the original error returned, so a
 reconnect happens only through this retry machinery on a later attempt
 where the policy above allows it.
 
+### Hyper canceled-request retry
+
+Hyper-util's legacy HTTP/1/2 client has a separate lower-level retry for a
+request assigned to a reused idle connection that is found unusable before
+transmission. `ClientBuilder::retry_canceled_requests(true)` leaves that
+behavior enabled (the default); setting it to `false` surfaces the existing
+Hyper/transport error to eggfetch without adding a strict-mode error variant.
+The control is applied through the common Hyper builder policy to standard,
+direct, resolved-target, SNI, UDS, SOCKS, and custom-dialer clients. It does
+not apply to HTTP/3/QUIC, which has its own lifecycle and retry rules.
+
+These controls remain independent:
+
+| Layer | Control | Effect |
+|-------|---------|--------|
+| Hyper transport | `retry_canceled_requests(false)` | Prevents a hidden retry of one request on a stale reused idle connection |
+| eggfetch pipeline | `RetryPolicy` | Starts another logical attempt when method, status/error, body replayability, backoff, and deadline rules allow it |
+
+Disabling the Hyper behavior does not change explicit retry eligibility or
+make streaming request bodies replayable. `PoolMetrics` and
+`TransportMetrics` also do not infer Hyper socket reuse or its internal retry
+count; local server instrumentation is required when exact physical attempts
+matter.
+
 ### Replay Check
 
 Retries restart the complete logical request (including redirects) under

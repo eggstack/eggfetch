@@ -2,7 +2,7 @@
 
 Planning baseline: `475bd50f6f9b9f66b95eea814f06b4adb22ede93` (`main`, 2026-09-13; eggfetch 0.1.4)
 Parent program: `plans/extensible-embedded-transport-consumer-program.md`
-Status: implemented; stale-idle qualification follow-up remains
+Status: complete
 
 ## Objective
 
@@ -195,4 +195,8 @@ The parent closure plan owns extended/package/exact-SHA requalification.
 - [x] documentation clearly separates the two retry layers;
 - [x] routine validation passes.
 
-Implementation note: the requested deterministic stale-idle server regression is intentionally retained as a follow-up rather than represented by a timing-sensitive approximation.
+The deterministic stale-idle server regression uses a local loopback fixture
+that controls when the first pooled keepalive connection is closed and counts
+accepted connections and received requests. It covers default transparent
+retry, strict failure, strict mode plus an explicit eggfetch retry, and a
+one-shot streaming request body.

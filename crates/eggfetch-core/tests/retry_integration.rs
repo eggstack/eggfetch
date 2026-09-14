@@ -25,6 +25,7 @@
 //!
 //! These tests use tokio's async TCP utilities.
 
+use std::error::Error as StdError;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -32,7 +33,7 @@ use std::time::Duration;
 use eggfetch_core::{Client, Error, RequestBody, RetryPolicy, Timeout, TimeoutPhase};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpListener;
-use tokio::sync::watch;
+use tokio::sync::{oneshot, watch};
 
 // ---------------------------------------------------------------------------
 // Helper: start a mock HTTP server
@@ -202,6 +203,171 @@ impl MockServer {
 }
 
 // ---------------------------------------------------------------------------
+// Deterministic stale-idle connection fixture
+// ---------------------------------------------------------------------------
+
+/// A loopback server that closes its first keepalive connection only after the
+/// client has completed the first request. This makes Hyper's reused-idle
+/// connection retry path observable without relying on timing or an external
+/// origin.
+struct StaleIdleServer {
+    port: u16,
+    request_count: Arc<AtomicUsize>,
+    connection_count: Arc<AtomicUsize>,
+    close_idle: Option<oneshot::Sender<()>>,
+    idle_closed: Option<oneshot::Receiver<()>>,
+    shutdown: Option<oneshot::Sender<()>>,
+    accept_handle: Option<tokio::task::JoinHandle<()>>,
+}
+
+impl StaleIdleServer {
+    async fn start() -> Self {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let request_count = Arc::new(AtomicUsize::new(0));
+        let connection_count = Arc::new(AtomicUsize::new(0));
+        let (close_idle_tx, close_idle_rx) = oneshot::channel();
+        let (idle_closed_tx, idle_closed_rx) = oneshot::channel();
+        let (shutdown_tx, mut shutdown_rx) = oneshot::channel();
+
+        let request_count_for_accept = request_count.clone();
+        let connection_count_for_accept = connection_count.clone();
+        let accept_handle = tokio::spawn(async move {
+            let mut first_close = Some(close_idle_rx);
+            let mut first_closed = Some(idle_closed_tx);
+
+            loop {
+                tokio::select! {
+                    result = listener.accept() => {
+                        let Ok((stream, _)) = result else {
+                            break;
+                        };
+                        connection_count_for_accept.fetch_add(1, Ordering::SeqCst);
+                        let request_count = request_count_for_accept.clone();
+                        let close_rx = first_close.take();
+                        let closed_tx = first_closed.take();
+                        tokio::spawn(async move {
+                            serve_stale_idle_connection(
+                                stream,
+                                request_count,
+                                close_rx,
+                                closed_tx,
+                            )
+                            .await;
+                        });
+                    }
+                    _ = &mut shutdown_rx => break,
+                }
+            }
+        });
+
+        Self {
+            port,
+            request_count,
+            connection_count,
+            close_idle: Some(close_idle_tx),
+            idle_closed: Some(idle_closed_rx),
+            shutdown: Some(shutdown_tx),
+            accept_handle: Some(accept_handle),
+        }
+    }
+
+    fn url(&self) -> String {
+        format!("http://127.0.0.1:{}/", self.port)
+    }
+
+    async fn close_idle_connection(&mut self) {
+        self.close_idle
+            .take()
+            .expect("stale connection close command already sent")
+            .send(())
+            .expect("stale connection handler exited before close command");
+        self.idle_closed
+            .take()
+            .expect("stale connection close acknowledgement already received")
+            .await
+            .expect("stale connection handler dropped close acknowledgement");
+    }
+
+    async fn shutdown(&mut self) {
+        let _ = self
+            .shutdown
+            .take()
+            .expect("server already shut down")
+            .send(());
+        self.accept_handle
+            .take()
+            .expect("server accept task already joined")
+            .await
+            .expect("stale connection accept task panicked");
+    }
+}
+
+async fn serve_stale_idle_connection(
+    stream: tokio::net::TcpStream,
+    request_count: Arc<AtomicUsize>,
+    close_rx: Option<oneshot::Receiver<()>>,
+    closed_tx: Option<oneshot::Sender<()>>,
+) {
+    let (read_half, mut write_half) = stream.into_split();
+    let mut reader = BufReader::new(read_half);
+    if read_http_request(&mut reader).await.is_none() {
+        return;
+    }
+
+    request_count.fetch_add(1, Ordering::SeqCst);
+    let keepalive = close_rx.is_some();
+    let connection = if keepalive { "keep-alive" } else { "close" };
+    let response =
+        format!("HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: {connection}\r\n\r\nok");
+    if write_half.write_all(response.as_bytes()).await.is_err() || write_half.flush().await.is_err()
+    {
+        return;
+    }
+
+    if let Some(close_rx) = close_rx {
+        let _ = close_rx.await;
+        let _ = write_half.shutdown().await;
+        let _ = closed_tx
+            .expect("first connection must carry close acknowledgement")
+            .send(());
+    } else {
+        let _ = write_half.shutdown().await;
+    }
+}
+
+async fn read_http_request(reader: &mut BufReader<tokio::net::tcp::OwnedReadHalf>) -> Option<()> {
+    let mut request_line = String::new();
+    if reader.read_line(&mut request_line).await.ok()? == 0 {
+        return None;
+    }
+
+    let mut content_length = 0usize;
+    loop {
+        let mut line = String::new();
+        if reader.read_line(&mut line).await.ok()? == 0 {
+            return None;
+        }
+        if line.trim().is_empty() {
+            break;
+        }
+        if let Some((name, value)) = line.split_once(':') {
+            if name.eq_ignore_ascii_case("content-length") {
+                content_length = value.trim().parse().ok()?;
+            }
+        }
+    }
+
+    if content_length > 0 {
+        let mut body = vec![0u8; content_length];
+        tokio::io::AsyncReadExt::read_exact(reader, &mut body)
+            .await
+            .ok()?;
+    }
+    Some(())
+}
+
+// ---------------------------------------------------------------------------
 // Retry + redirect integration
 // ---------------------------------------------------------------------------
 
@@ -345,6 +511,93 @@ async fn retry_stream_body_sends_once() {
     // Only 1 request — no retries for stream bodies
     assert_eq!(server.request_count.load(Ordering::SeqCst), 1);
     server.shutdown();
+}
+
+#[tokio::test]
+async fn stale_idle_default_retries_transparently() {
+    let mut server = StaleIdleServer::start().await;
+    let client = Client::new();
+    let url = server.url();
+
+    let mut first = client.get(&url).unwrap().send().await.unwrap();
+    assert_eq!(first.bytes().await.unwrap().as_ref(), b"ok");
+    server.close_idle_connection().await;
+
+    let mut second = client.get(&url).unwrap().send().await.unwrap();
+    assert_eq!(second.status(), 200);
+    assert_eq!(second.bytes().await.unwrap().as_ref(), b"ok");
+    assert_eq!(server.request_count.load(Ordering::SeqCst), 2);
+    assert_eq!(server.connection_count.load(Ordering::SeqCst), 2);
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn stale_idle_strict_mode_surfaces_transport_failure() {
+    let mut server = StaleIdleServer::start().await;
+    let client = Client::builder().retry_canceled_requests(false).build();
+    let url = server.url();
+
+    let mut first = client.get(&url).unwrap().send().await.unwrap();
+    assert_eq!(first.bytes().await.unwrap().as_ref(), b"ok");
+    server.close_idle_connection().await;
+
+    let result = client.get(&url).unwrap().send().await;
+    let error = result.expect_err("strict mode must not transparently retry");
+    assert_eq!(error.kind(), "hyper_client");
+    assert!(StdError::source(&error).is_some());
+    assert_eq!(server.request_count.load(Ordering::SeqCst), 1);
+    assert_eq!(server.connection_count.load(Ordering::SeqCst), 1);
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn stale_idle_strict_mode_allows_explicit_retry() {
+    let mut server = StaleIdleServer::start().await;
+    let policy = RetryPolicy::builder()
+        .max_attempts(2)
+        .backoff_factor(0.0)
+        .build();
+    let client = Client::builder()
+        .retry_canceled_requests(false)
+        .retry(policy)
+        .build();
+    let url = server.url();
+
+    let mut first = client.get(&url).unwrap().send().await.unwrap();
+    assert_eq!(first.bytes().await.unwrap().as_ref(), b"ok");
+    server.close_idle_connection().await;
+
+    let mut second = client.get(&url).unwrap().send().await.unwrap();
+    assert_eq!(second.status(), 200);
+    assert_eq!(second.bytes().await.unwrap().as_ref(), b"ok");
+    assert_eq!(server.request_count.load(Ordering::SeqCst), 2);
+    assert_eq!(server.connection_count.load(Ordering::SeqCst), 2);
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn stale_idle_strict_mode_does_not_retry_one_shot_body() {
+    let mut server = StaleIdleServer::start().await;
+    let client = Client::builder().retry_canceled_requests(false).build();
+    let url = server.url();
+    let mut first = client.get(&url).unwrap().send().await.unwrap();
+    assert_eq!(first.bytes().await.unwrap().as_ref(), b"ok");
+    server.close_idle_connection().await;
+
+    let body = RequestBody::from_stream(
+        futures_util::stream::once(async {
+            Ok::<bytes::Bytes, Error>(bytes::Bytes::from_static(b"body"))
+        }),
+        Some(4),
+    );
+    let result = client.post(&url).unwrap().body(body).send().await;
+    assert!(
+        result.is_err(),
+        "strict mode must surface the stale-idle failure"
+    );
+    assert_eq!(server.request_count.load(Ordering::SeqCst), 1);
+    assert_eq!(server.connection_count.load(Ordering::SeqCst), 1);
+    server.shutdown().await;
 }
 
 #[tokio::test]

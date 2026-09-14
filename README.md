@@ -154,6 +154,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 The opt-in `json` feature adds `RequestBuilder::json()` / `Response::json()` Serde helpers, and `resolved_addresses()` pins caller-validated destinations without a second DNS lookup. See [`docs/rust/guide.md`](docs/rust/guide.md) for the full Rust API reference.
 
+Native callers that need strict attempt accounting can set
+`Client::builder().retry_canceled_requests(false)`. This disables only
+Hyper's transparent retry after a reused idle connection is found unusable;
+it does not disable or alter eggfetch's explicit `RetryPolicy`. The default is
+`true`, and the setting does not apply to the independent HTTP/3 transport.
+
 ## Usage -- CLI
 
 ```bash

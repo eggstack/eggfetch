@@ -100,6 +100,11 @@ fail before network I/O. A request `target` override changes only the wire
 path/query while the logical authority remains in place for dialing and TLS.
 `retry_canceled_requests` controls only Hyper's
 implicit stale-idle-connection retry and is independent of `RetryPolicy`.
+It defaults to `true` for compatibility. Set it to `false` when one logical
+call must expose a stale pooled-connection failure instead of allowing Hyper
+to retry it internally; an eligible eggfetch `RetryPolicy` can still perform a
+later logical attempt. The control applies to Hyper HTTP/1/2 routes only;
+HTTP/3 uses its separate QUIC lifecycle and retry rules.
 `PhysicalConnectionPolicy` caps live Hyper connections, including idle pooled
 connections, while `TransportIoTimeout` guards inactivity after establishment.
 
@@ -579,6 +584,11 @@ let client = Client::builder()
 ```
 
 Only safe methods (GET, HEAD, OPTIONS) are retried by default. POST and PUT must be explicitly opted in with `.allow_post_retry()` or `.allow_put_retry()`. Streaming request bodies are not retried unless a replay factory is provided.
+
+This logical retry policy is separate from Hyper's lower-level canceled-request
+retry. `retry_canceled_requests(false)` disables only that lower-level retry;
+it does not change method eligibility, backoff, `Retry-After`, deadlines, or
+the requirement that a retry body be replayable.
 
 ## Cookie Jar
 

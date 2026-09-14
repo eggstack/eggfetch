@@ -121,6 +121,12 @@ native JSON helpers are opt-in and must remain absent from minimal profiles.
   reason text). Stream counts remain unavailable (`None`) rather than guessed.
   Exact-count and bound tests live in `transport/metrics.rs` and
   `h3_alt_svc_discovery.rs`.
+- **Underlying attempt control**: `ClientBuilder::retry_canceled_requests`
+  defaults to `true` to preserve Hyper-util's transparent retry when a reused
+  idle connection is unusable before transmission. Set it to `false` for
+  strict native attempt accounting; this is independent of eggfetch's
+  explicit `RetryPolicy`, applies to every Hyper HTTP/1/2 client route through
+  the common builder policy, and has no meaning for the independent H3 path.
 - Limits: `max_in_flight_requests*` preferred (logical); `max_connections*`
   are pre-1.0 aliases (new wins). Facade `Limits` unchanged.
 - Trace: request/response headers emitted; DNS/connect/TLS via metrics
