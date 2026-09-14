@@ -2,6 +2,14 @@
 
 This directory contains active implementation plans, live qualification/status records, and historical implementation records. Completed plans are non-normative unless another current document explicitly says otherwise. Verification and release policy remain governed by `docs/verification-policy.md` and `docs/releases/process.md`.
 
+## Active handoff — native request failure introspection (2026-09-14)
+
+Handoff plan: `native-request-failure-introspection.md`
+
+Objective: add an opt-in, transport-generic native Rust request-failure surface that can preserve structured DNS/refusal/connect provenance before the existing public `Error::Connect(String)` collapse, without changing the existing `Error` enum, `Error::kind()` tokens, ordinary `send()` APIs, Python/CLI/HTTPX behavior, or transport policy. The same plan clarifies that `max_decoded_body_size` already bounds unencoded/identity responses as well as decoded compressed bodies; it does not add another body-limit implementation.
+
+The motivating Gregg review is requirements evidence only. No Gregg, EggPool, monitoring, endpoint-status, provider, or other downstream-specific type or adapter belongs in eggfetch. This is a maintenance/ergonomics improvement for unrelated native embedders, not a binary-footprint claim.
+
 ## Completed program — native HTTP body and TLS extensibility (2026-09-14)
 
 Handoff program: `native-http-body-and-tls-extensibility-program.md`
