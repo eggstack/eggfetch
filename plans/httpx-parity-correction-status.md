@@ -37,9 +37,9 @@ independent non-Quinn server passes, independent GOAWAY/drain evidence,
 public-origin checks, realistic impairment execution, and unresolved upstream
 correctness risk. HTTP/3 status is separate from the HTTPX parity claims.
 
-Remote routine CI for the final documentation descendant is pending the push
-of this closure commit; the executable freeze and all local gates are recorded
-above.
+Remote routine CI passed for documentation-only descendant
+`89d0f62f471163fe6e226afe0f4263d36508a459` in run `34803089404` on
+2026-09-14. The executable freeze and all local gates are recorded above.
 
 ### Current-tree qualification note (2026-09-14)
 
