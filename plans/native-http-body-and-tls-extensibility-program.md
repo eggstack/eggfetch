@@ -3,7 +3,25 @@
 Planning baseline: `45c08e0e7587eb1e8f713d49e6f7902478c27a35` (`main`, 2026-09-14; eggfetch 0.1.4)
 Program opened: 2026-09-14
 Motivating downstream: Synvoid integration evaluation, but every change in this program must remain generally useful to native Rust consumers and must not introduce a Synvoid-specific API.
-Status: planned; ready for implementation handoff
+Status: complete; closed on executable/test/fixture freeze `fdfe060`
+
+## Closure record
+
+Implemented in `fdfe060` (`Add native HTTP body and TLS extensibility`), with
+the native frame-body tests and external AWS-LC/private-PKI fixture included
+in that freeze. The exact-SHA closure gates passed on the clean tree:
+
+- Tier 1, extended validation, and package validation passed;
+- three sequential full compatibility runs each passed 1,870 tests with 26
+  non-failing warnings and no skips/xfails/failures;
+- explicit-provider, additional-root, frame/trailer, cancellation, and
+  read/write-timeout focused tests passed;
+- known limitations remain unchanged: HTTP/3 is experimental, Rust 1.80 is
+  unavailable for the current dependency resolution, the Node native artifact
+  is not built, and the optional downstream artifact manifest was absent.
+
+Post-freeze changes are limited to this plan/qualification documentation and
+compatibility-profile metadata.
 
 ## Objective
 
@@ -113,28 +131,28 @@ Plans 2 and 3 may overlap after their shared `TlsConfig` field/layout direction 
 
 The program is complete only when all of the following are true:
 
-- [ ] Existing high-level Rust/Python/CLI/compatibility APIs remain behaviorally intact.
-- [ ] No downstream-specific type, feature flag, adapter crate or protocol policy enters eggfetch.
-- [ ] A native Rust caller can submit an arbitrary `http_body::Body<Data = Bytes>` through an eggfetch client without flattening the request to `Stream<Bytes>` first.
-- [ ] The native response path exposes an eggfetch-owned body implementing `http_body::Body<Data = Bytes>` and preserves trailer frames and backpressure.
-- [ ] Unknown/future HTTP body frames are not accidentally interpreted as EOF by the new native path; the high-level byte adapter is also audited for safe forward-compatible behavior.
-- [ ] Dropping/cancelling a native response releases eggfetch logical pool/connection admission state exactly as the existing streaming response path does.
-- [ ] Read/I/O timeout and body-error semantics remain deterministic at the frame boundary.
-- [ ] Native frame execution does not silently replay one-shot request bodies through eggfetch redirect/retry policy.
-- [ ] Existing `RequestBody` and `ResponseBody` public enum shapes remain unchanged.
-- [ ] A `TlsConfig` can carry an explicit `Arc<CryptoProvider>` without mutating the process-global Rustls provider.
-- [ ] When no explicit provider is supplied, current ring/default behavior remains unchanged for ordinary builds.
-- [ ] Client-certificate signing uses the selected provider's `key_provider`, not a hard-coded ring signing function.
-- [ ] Explicit provider selection is tested across all relevant TLS route constructors; unsupported combinations fail clearly rather than falling back to another provider.
-- [ ] Existing custom CA APIs remain replacement-style exactly as documented.
-- [ ] A separate additional-root API can compose native/WebPKI/custom base trust with one or more additional anchors.
-- [ ] `NativeOnly` still fails if native roots are unavailable; additional anchors do not silently redefine that policy.
-- [ ] `NativeWithWebPkiFallback` still performs its existing fallback before additional roots are overlaid.
-- [ ] Root/provider state is redacted/bounded in `Debug` output and private key/certificate contents are never logged.
-- [ ] No unnecessary runtime dependency is added to the ordinary default profile.
-- [ ] The external-style fixture proves the intended public API without depending on Synvoid or another downstream repository.
-- [ ] One final frozen executable/test/fixture SHA passes the repository's required validation and compatibility requalification before current exact-SHA claims are renewed.
-- [ ] Documentation and `plans/README.md` / `plans/ROADMAP.md` describe the final implementation accurately.
+- [x] Existing high-level Rust/Python/CLI/compatibility APIs remain behaviorally intact.
+- [x] No downstream-specific type, feature flag, adapter crate or protocol policy enters eggfetch.
+- [x] A native Rust caller can submit an arbitrary `http_body::Body<Data = Bytes>` through an eggfetch client without flattening the request to `Stream<Bytes>` first.
+- [x] The native response path exposes an eggfetch-owned body implementing `http_body::Body<Data = Bytes>` and preserves trailer frames and backpressure.
+- [x] Unknown/future HTTP body frames are not accidentally interpreted as EOF by the new native path; the high-level byte adapter is also audited for safe forward-compatible behavior.
+- [x] Dropping/cancelling a native response releases eggfetch logical pool/connection admission state exactly as the existing streaming response path does.
+- [x] Read/I/O timeout and body-error semantics remain deterministic at the frame boundary.
+- [x] Native frame execution does not silently replay one-shot request bodies through eggfetch redirect/retry policy.
+- [x] Existing `RequestBody` and `ResponseBody` public enum shapes remain unchanged.
+- [x] A `TlsConfig` can carry an explicit `Arc<CryptoProvider>` without mutating the process-global Rustls provider.
+- [x] When no explicit provider is supplied, current ring/default behavior remains unchanged for ordinary builds.
+- [x] Client-certificate signing uses the selected provider's `key_provider`, not a hard-coded ring signing function.
+- [x] Explicit provider selection is tested across all relevant TLS route constructors; unsupported combinations fail clearly rather than falling back to another provider.
+- [x] Existing custom CA APIs remain replacement-style exactly as documented.
+- [x] A separate additional-root API can compose native/WebPKI/custom base trust with one or more additional anchors.
+- [x] `NativeOnly` still fails if native roots are unavailable; additional anchors do not silently redefine that policy.
+- [x] `NativeWithWebPkiFallback` still performs its existing fallback before additional roots are overlaid.
+- [x] Root/provider state is redacted/bounded in `Debug` output and private key/certificate contents are never logged.
+- [x] No unnecessary runtime dependency is added to the ordinary default profile.
+- [x] The external-style fixture proves the intended public API without depending on Synvoid or another downstream repository.
+- [x] One final frozen executable/test/fixture SHA passes the repository's required validation and compatibility requalification before current exact-SHA claims are renewed.
+- [x] Documentation and `plans/README.md` / `plans/ROADMAP.md` describe the final implementation accurately.
 
 ## Explicit non-goals
 

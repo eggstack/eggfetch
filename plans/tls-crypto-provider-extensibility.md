@@ -2,7 +2,7 @@
 
 Planning baseline: `45c08e0e7587eb1e8f713d49e6f7902478c27a35` (`main`, 2026-09-14; eggfetch 0.1.4)
 Parent program: `plans/native-http-body-and-tls-extensibility-program.md`
-Status: planned; ready for implementation handoff
+Status: complete; implemented and frozen in `fdfe060`
 
 ## Objective
 
@@ -253,15 +253,15 @@ Do not renew exact-SHA HTTPX/HTTPX2 compatibility evidence in this child plan. T
 
 ## Acceptance criteria
 
-- [ ] `TlsConfig` can carry an explicit `Arc<CryptoProvider>` through an additive builder API.
-- [ ] Explicit provider selection does not install or overwrite the process-global provider.
-- [ ] Existing no-explicit-provider behavior remains compatible.
-- [ ] mTLS key loading uses the selected provider's key loader rather than ring directly.
-- [ ] Verification and signing use one coherent provider per TLS config.
-- [ ] Every TLS route is audited and either propagates the provider or fails explicitly before I/O.
-- [ ] No mandatory AWS-LC or downstream-specific dependency enters the ordinary profile.
-- [ ] An external alternate-provider fixture passes without Synvoid source dependencies.
-- [ ] Documentation avoids unsupported FIPS/PQ claims.
+- [x] `TlsConfig` can carry an explicit `Arc<CryptoProvider>` through an additive builder API.
+- [x] Explicit provider selection does not install or overwrite the process-global provider.
+- [x] Existing no-explicit-provider behavior remains compatible.
+- [x] mTLS key loading uses the selected provider's key loader rather than ring directly.
+- [x] Verification and signing use one coherent provider per TLS config.
+- [x] Every TLS route is audited and either propagates the provider or fails explicitly before I/O.
+- [x] No mandatory AWS-LC or downstream-specific dependency enters the ordinary profile.
+- [x] An external alternate-provider fixture passes without Synvoid source dependencies.
+- [x] Documentation avoids unsupported FIPS/PQ claims.
 
 ## Non-goals
 

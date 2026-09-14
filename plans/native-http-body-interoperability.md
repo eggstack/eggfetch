@@ -2,7 +2,7 @@
 
 Planning baseline: `45c08e0e7587eb1e8f713d49e6f7902478c27a35` (`main`, 2026-09-14; eggfetch 0.1.4)
 Parent program: `plans/native-http-body-and-tls-extensibility-program.md`
-Status: planned; ready for implementation handoff
+Status: complete; implemented and frozen in `fdfe060`
 
 ## Objective
 
@@ -326,17 +326,17 @@ Do not renew exact-SHA HTTPX/HTTPX2 compatibility evidence in this child plan. T
 
 ## Acceptance criteria
 
-- [ ] Existing high-level public body enum shapes and behavior are unchanged.
-- [ ] Arbitrary `http_body::Body<Data = Bytes>` requests can be dispatched without conversion to `Stream<Bytes>`.
-- [ ] Native responses expose an eggfetch-owned `Body<Data = Bytes>` with DATA/trailer fidelity.
-- [ ] The public API does not expose Hyper `Incoming`, connector or client types.
-- [ ] The implementation shares route/connector/pool/TLS lifecycle code with the existing client.
-- [ ] Native bodies are one-shot and are never logically retried/redirected by hidden eggfetch policy.
-- [ ] Hyper stale-idle retry remains separately controlled by the existing strict transport setting.
-- [ ] Pool leases, cancellation and timeouts are correct at the frame boundary.
-- [ ] High-level trailer/streaming behavior remains intact.
-- [ ] Unsupported native routes, if any, fail explicitly before I/O and are documented.
-- [ ] External-style qualification proves public API usability without downstream source dependencies.
+- [x] Existing high-level public body enum shapes and behavior are unchanged.
+- [x] Arbitrary `http_body::Body<Data = Bytes>` requests can be dispatched without conversion to `Stream<Bytes>`.
+- [x] Native responses expose an eggfetch-owned `Body<Data = Bytes>` with DATA/trailer fidelity.
+- [x] The public API does not expose Hyper `Incoming`, connector or client types.
+- [x] The implementation shares route/connector/pool/TLS lifecycle code with the existing client.
+- [x] Native bodies are one-shot and are never logically retried/redirected by hidden eggfetch policy.
+- [x] Hyper stale-idle retry remains separately controlled by the existing strict transport setting.
+- [x] Pool leases, cancellation and timeouts are correct at the frame boundary.
+- [x] High-level trailer/streaming behavior remains intact.
+- [x] Unsupported native routes, if any, fail explicitly before I/O and are documented.
+- [x] External-style qualification proves public API usability without downstream source dependencies.
 
 ## Non-goals
 

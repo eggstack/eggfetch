@@ -4,11 +4,11 @@ This record is the exact-SHA-bound status for the HTTPX 0.28.1 compatibility
 facade. Historical phase and corrective-pass records remain in the git history
 and referenced plans; counts below are only from the runs named here.
 
-## Recorded state — Stage C renewed on extensible-transport frozen executable SHA (2026-09-14)
+## Recorded state — Stage C renewed on native body/TLS frozen executable SHA (2026-09-14)
 
 Recorded designation: **Stage C qualified** for both the documented HTTPX
 0.28.1 and httpx2 2.12.0 asyncio surfaces, bound to executable SHA
-`43c68bd1bcff45301fc8b6b163b6b6e06d98a786`. The prior
+`fdfe060cd7035ddf936d6e0817cb2459f9d3fc0c`. The prior
 `22a6f5c...` binding, as well as earlier bindings, is historical because
 subsequent qualification-sensitive work followed it. The profiles in
 `compat/httpx/0.28.1/profile.toml` and `compat/httpx2/2.12.0/profile.toml`
@@ -37,14 +37,16 @@ independent non-Quinn server passes, independent GOAWAY/drain evidence,
 public-origin checks, realistic impairment execution, and unresolved upstream
 correctness risk. HTTP/3 status is separate from the HTTPX parity claims.
 
-Remote routine CI passed for documentation-only descendant
+Remote routine CI for this freeze will be recorded after push. The prior
+remote routine CI passed for documentation-only descendant
 `89d0f62f471163fe6e226afe0f4263d36508a459` in run `34803089404` on
 2026-09-14. The executable freeze and all local gates are recorded above.
 
 ### Current-tree qualification note (2026-09-14)
 
-The native custom-dialer, lifecycle-control, deterministic regression, and
-RSS-monitor qualification work is closed on the exact executable SHA above.
+The native custom-dialer, lifecycle-control, deterministic regression, RSS-
+monitor, native body, and TLS extensibility qualification work is closed on
+the exact executable SHA above.
 The compatibility profiles and generated API manifests remain independent of
 the native surface; both profiles were nevertheless requalified together on
 the final clean freeze as required by the repository's exact-SHA policy.

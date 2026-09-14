@@ -2,7 +2,7 @@
 
 Planning baseline: `45c08e0e7587eb1e8f713d49e6f7902478c27a35` (`main`, 2026-09-14; eggfetch 0.1.4)
 Parent program: `plans/native-http-body-and-tls-extensibility-program.md`
-Status: planned; execute only after the three executable child plans close
+Status: complete; closure freeze `fdfe060`
 
 ## Objective
 
@@ -229,20 +229,20 @@ Do not add Synvoid migration instructions to eggfetch's core architecture docs. 
 
 ## Final acceptance criteria
 
-- [ ] All child-plan acceptance criteria are closed or explicitly superseded by documented equivalent implementation.
-- [ ] Public API review finds no downstream-specific surface and no unnecessary source break.
-- [ ] Native HTTP-body external fixture passes with frame/trailer/backpressure fidelity.
-- [ ] Alternate explicit TLS provider fixture passes without mutating the process-global provider.
-- [ ] mTLS key loading follows the selected provider.
-- [ ] Additional trust anchors compose with all selected base trust policies without changing replacement CA semantics.
-- [ ] Existing default high-level clients remain behaviorally compatible.
-- [ ] Required Tier 1, extended and package checks pass on the candidate executable tree.
-- [ ] Representative feature matrices pass.
-- [ ] Dependency/footprint documentation remains truthful.
-- [ ] One exact executable/test/fixture SHA is frozen.
-- [ ] HTTPX 0.28.1 and HTTPX2 2.12.0 compatibility evidence is rerun and rebound only if it passes on that SHA.
-- [ ] Post-freeze changes are documentation/profile/ledger-only.
-- [ ] `plans/README.md` and `plans/ROADMAP.md` record final status.
+- [x] All child-plan acceptance criteria are closed or explicitly superseded by documented equivalent implementation.
+- [x] Public API review finds no downstream-specific surface and no unnecessary source break.
+- [x] Native HTTP-body external fixture passes with frame/trailer/backpressure fidelity.
+- [x] Alternate explicit TLS provider fixture passes without mutating the process-global provider.
+- [x] mTLS key loading follows the selected provider.
+- [x] Additional trust anchors compose with all selected base trust policies without changing replacement CA semantics.
+- [x] Existing default high-level clients remain behaviorally compatible.
+- [x] Required Tier 1, extended and package checks pass on the candidate executable tree.
+- [x] Representative feature matrices pass.
+- [x] Dependency/footprint documentation remains truthful.
+- [x] One exact executable/test/fixture SHA is frozen.
+- [x] HTTPX 0.28.1 and HTTPX2 2.12.0 compatibility evidence is rerun and rebound only if it passes on that SHA.
+- [x] Post-freeze changes are documentation/profile/ledger-only.
+- [x] `plans/README.md` and `plans/ROADMAP.md` record final status.
 
 ## Non-goals
 

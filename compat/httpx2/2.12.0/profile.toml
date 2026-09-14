@@ -16,11 +16,11 @@ created = "2026-09-10"
 # invalidated it per the exact-SHA rule. Independent
 # of the HTTPX 0.28.1 Stage C claim on the same SHA; neither profile
 # mutates the other.
-# The embedded transport qualification invalidated the previous binding; this
-# profile was renewed after the final native lifecycle freeze below.
+# The native body/TLS extensibility qualification invalidated the previous
+# binding; this profile was renewed after the final freeze below.
 stage = "stage-c-qualified"
 status = "qualified"
-qualification-sha = "43c68bd1bcff45301fc8b6b163b6b6e06d98a786"
+qualification-sha = "fdfe060cd7035ddf936d6e0817cb2459f9d3fc0c"
 qualification-date = "2026-09-14"
 historical-current-qualification-sha = "639bf186a71c054e11278d1b160ffe7a6f172c02"
 reference = "httpx2==2.12.0"

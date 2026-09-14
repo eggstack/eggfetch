@@ -10,8 +10,9 @@ The remaining roadmap is therefore not primarily about proving feasibility. It i
 
 ## Current product position (2026-09-14)
 
-The embedded Rust client and extensible transport programs are complete on
-executable/test/fixture freeze `43c68bd1bcff45301fc8b6b163b6b6e06d98a786`.
+The embedded Rust client, extensible transport, and native HTTP body/TLS
+extensibility programs are complete on executable/test/fixture freeze
+`fdfe060cd7035ddf936d6e0817cb2459f9d3fc0c`.
 `eggfetch-core` now has truthful feature ownership, native `json`
 request/response helpers, request-scoped resolved-destination routing, a
 caller-owned raw-stream `Dialer`, strict Hyper stale-idle retry control, and
@@ -46,7 +47,9 @@ retained-experimental outcome; its missing evidence is recorded in
   auth, HTTP/SOCKS proxying, TLS configuration, response decompression,
   multipart encoding, retry policy, HTTP trailers, connector-derived
   connection metadata, transport metrics, logical in-flight request limits,
-  opt-in native JSON helpers, and request-scoped static destination routing.
+  opt-in native JSON helpers, request-scoped static destination routing, a
+  frame-preserving `http_body::Body` API, explicit per-client Rustls providers,
+  and additive private trust anchors.
 - Python sync and asyncio bindings, including the Stage C-qualified
   `eggfetch.compat.httpx` facade for the documented HTTPX 0.28.1
   asyncio surface (Python 3.10+) and the independently Stage C-qualified
@@ -70,22 +73,19 @@ retained-experimental outcome; its missing evidence is recorded in
   errors, or generated declarations). Supported-binding scope is
   deferred. Contract: `docs/architecture/ffi-and-node.md`.
 
-### Active work
+### Recently completed work
 
-The native HTTP body and TLS extensibility program is planned for implementation:
-`native-http-body-and-tls-extensibility-program.md`. It is a bounded native-Rust
-engine expansion motivated by downstream integration analysis but deliberately
-kept transport-generic. The ordered work adds frame-preserving `http_body::Body`
-interop, explicit per-`TlsConfig` Rustls `CryptoProvider` selection with
-provider-neutral mTLS key loading, and explicit additional trust anchors while
-preserving existing high-level APIs, default ring behavior, replacement custom-
-CA semantics, Python/CLI behavior and HTTPX/HTTPX2 compatibility surfaces.
+The native HTTP body and TLS extensibility program
+(`native-http-body-and-tls-extensibility-program.md`) is complete on the freeze
+above. It remains a bounded, transport-generic native-Rust engine expansion:
+arbitrary request frames and response trailers cross the new `http_body::Body`
+surface, Rustls provider selection is explicit and provider-neutral, and
+additional trust anchors augment rather than redefine existing replacement CA
+semantics. The external fixture uses AWS-LC only as an injected provider test;
+it is not an eggfetch default or product mode.
 
-Execution order is `native-http-body-interoperability.md`,
-`tls-crypto-provider-extensibility.md`, `tls-additional-trust-anchors.md`, then
-`post-native-http-body-and-tls-extensibility-qualification-and-closure.md` for
-integration audit, external-style qualification, exact-SHA freeze and
-compatibility requalification. Downstream migration remains outside eggfetch.
+The child plans and closure record document the execution order, limitations,
+and exact-SHA evidence. Downstream migration remains outside eggfetch.
 
 Separately, an HTTPX 1.0 implementation program opens only on the RC/stable
 trigger recorded in `plans/README.md` (frozen public API + no further reset +

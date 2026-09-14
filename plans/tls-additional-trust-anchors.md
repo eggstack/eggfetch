@@ -2,7 +2,7 @@
 
 Planning baseline: `45c08e0e7587eb1e8f713d49e6f7902478c27a35` (`main`, 2026-09-14; eggfetch 0.1.4)
 Parent program: `plans/native-http-body-and-tls-extensibility-program.md`
-Status: planned; ready for implementation handoff
+Status: complete; implemented and frozen in `fdfe060`
 
 ## Objective
 
@@ -235,17 +235,17 @@ Do not renew exact-SHA HTTPX/HTTPX2 compatibility evidence in this child plan. T
 
 ## Acceptance criteria
 
-- [ ] Existing `TrustStore` enum shape is unchanged.
-- [ ] Existing replacement-style CA methods preserve their current semantics.
-- [ ] A distinct native API augments the selected base trust store with additional certificate roots.
-- [ ] Base policy selection completes before extras are overlaid.
-- [ ] `NativeOnly` remains truly native-required.
-- [ ] Invalid additional CA material fails closed.
-- [ ] Additional roots do not alter hostname/SNI semantics.
-- [ ] Provider selection and additional roots compose without provider-specific trust logic.
-- [ ] All TLS routes observe one authoritative composed root-store policy.
-- [ ] Origin and HTTPS-proxy trust remain isolated unless configured explicitly.
-- [ ] Compatibility-facade behavior is unchanged by default.
+- [x] Existing `TrustStore` enum shape is unchanged.
+- [x] Existing replacement-style CA methods preserve their current semantics.
+- [x] A distinct native API augments the selected base trust store with additional certificate roots.
+- [x] Base policy selection completes before extras are overlaid.
+- [x] `NativeOnly` remains truly native-required.
+- [x] Invalid additional CA material fails closed.
+- [x] Additional roots do not alter hostname/SNI semantics.
+- [x] Provider selection and additional roots compose without provider-specific trust logic.
+- [x] All TLS routes observe one authoritative composed root-store policy.
+- [x] Origin and HTTPS-proxy trust remain isolated unless configured explicitly.
+- [x] Compatibility-facade behavior is unchanged by default.
 
 ## Non-goals
 
