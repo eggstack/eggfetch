@@ -293,7 +293,9 @@ At closure, append a concise evidence section containing:
 - **Descendant audit:** documentation/profile/plan closure is a separate
   descendant of the executable freeze and contains no Rust/Python/JS source,
   tests, manifests, build scripts, or generated executable assets. The final
-  documentation descendant SHA is recorded after this closure commit.
+  documentation-only closure began at descendant
+  `e81d9e0453ee872a279b27ffacb5739e6349fad8`; this plan record is also part
+  of the audited documentation-only descendant.
 
 Retained limitations are unchanged: HTTP/3 remains experimental, the local
 MSRV environment is unsupported for a definitive Rust 1.80 graph check, and
