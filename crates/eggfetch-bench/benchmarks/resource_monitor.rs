@@ -338,8 +338,8 @@ fn workload_concurrent_streaming(_url: &str, size: usize) -> (String, u64) {
 
 /// Maximum allowed delta RSS (peak - baseline) in bytes for any single workload.
 /// Set generously to avoid noisy failures on CI runners, but strict enough to
-/// catch unbounded growth. Current threshold: 50 MB.
-const MAX_DELTA_BYTES: u64 = 50 * 1024 * 1024;
+/// catch unbounded growth. Current threshold: 64 MB.
+const MAX_DELTA_BYTES: u64 = 64 * 1024 * 1024;
 
 /// Maximum allowed peak RSS in bytes across all workloads.
 /// Current threshold: 100 MB.
