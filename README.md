@@ -264,7 +264,7 @@ More patterns are in [`docs/cookbook/`](docs/cookbook/).
 
 ## HTTPX Compatibility
 
-Two versioned, independent facades over the single Rust engine — `eggfetch.compat.httpx` (0.28.1) and `eggfetch.compat.httpx2` (2.12.0, adds `FunctionAuth`, `Origin`/`URL.origin`, `QUERY`, SSE, optional WebSocket). Both are Stage C qualified on frozen executable SHA `97e87e42c8f4d5659739e7b23ff9005a4ec1ae53`; HTTPX 1.0 preview under `compat/httpx/1.0-preview/` is reconnaissance only.
+Two versioned, independent facades over the single Rust engine — `eggfetch.compat.httpx` (0.28.1) and `eggfetch.compat.httpx2` (2.12.0, adds `FunctionAuth`, `Origin`/`URL.origin`, `QUERY`, SSE, optional WebSocket). Both are Stage C qualified on frozen executable SHA `2281345f3eaf636c62ec21d2c963d6f90ea764a8`; HTTPX 1.0 preview under `compat/httpx/1.0-preview/` is reconnaissance only.
 
 See [`docs/reference/compatibility.md`](docs/reference/compatibility.md) for the full feature matrix and retained differences.
 

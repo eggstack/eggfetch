@@ -4,6 +4,9 @@ Status: **implemented; local Tier 1/Tier 2 qualification complete**
 Parent: `python-interop-api-hygiene-program.md`  
 Date: 2026-09-15
 
+Final interop-closure qualification: `2281345f3eaf636c62ec21d2c963d6f90ea764a8`
+(2026-09-15); no executable changes followed the freeze.
+
 ## Scope
 
 Correct the Python binding's internal dependency direction, add a real asynchronous request-body bridge, and consolidate duplicated sync/async argument normalization without merging their runtime/lifecycle models.

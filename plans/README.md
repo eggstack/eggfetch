@@ -2,6 +2,15 @@
 
 This directory contains active implementation plans, live qualification/status records, and historical implementation records. Completed plans are non-normative unless another current document explicitly says otherwise. Verification and release policy remain governed by `docs/verification-policy.md` and `docs/releases/process.md`.
 
+## Completed — Python interop/API hygiene closure (2026-09-15)
+
+The native API, neutral SSL boundary, async-body bridge, PyO3/Python matrix,
+and PEP 561 typing surface are qualified on executable candidate
+`2281345f3eaf636c62ec21d2c963d6f90ea764a8`. HTTPX 0.28.1 and HTTPX2 2.12.0
+profiles were renewed after Tier 1, Tier 2, package validation, API oracles,
+and three consecutive 1,870-test compatibility passes. See
+`post-python-interop-api-qualification-and-closure.md`.
+
 ## Completed corrective closure — standard-route DNS provenance (2026-09-15)
 
 Plan: `standard-route-dns-provenance-correction.md`

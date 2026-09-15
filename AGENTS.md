@@ -51,7 +51,7 @@ response failures stop.
 
 ## HTTPX compat (easy to break)
 
-Facades `eggfetch.compat.httpx` (0.28.1) and `eggfetch.compat.httpx2` (2.12.0) coexist without cross-mutation; `compat/httpx/1.0-preview/` is reconnaissance only. Both are Stage C qualified on frozen SHA `97e87e42c8f4d5659739e7b23ff9005a4ec1ae53` (`compat/*/profile.toml`); any executable change invalidates qualification. Never hand-edit generated API manifests — regenerate via `scripts/generate_httpx_api_manifest.py` + `scripts/compare_httpx_api_manifest.py`.
+Facades `eggfetch.compat.httpx` (0.28.1) and `eggfetch.compat.httpx2` (2.12.0) coexist without cross-mutation; `compat/httpx/1.0-preview/` is reconnaissance only. Both are Stage C qualified on frozen SHA `2281345f3eaf636c62ec21d2c963d6f90ea764a8` (`compat/*/profile.toml`); any executable change invalidates qualification. Never hand-edit generated API manifests — regenerate via `scripts/generate_httpx_api_manifest.py` + `scripts/compare_httpx_api_manifest.py`.
 
 - Timeouts: map only `connect`/`read`/`write`/`pool`; never synthesize native `total`. Preserve omitted-vs-`None`; reject bare `Timeout()`. Proxy setup uses one monotonic deadline (min of explicit `total` + phase budgets).
 - `NO_PROXY`: compat env parser accepts bare unbracketed IPv6 but rejects bracketed/CIDR-looking forms; native `NoProxy::parse()` is richer. Do not unify.

@@ -1,6 +1,6 @@
 # Python PEP 561 Typing Surface
 
-Status: **implemented; final qualification pending**
+Status: **complete; qualified in final interop closure**
 Parent: `python-interop-api-hygiene-program.md`  
 Date: 2026-09-15
 
@@ -277,3 +277,13 @@ plus:
 ## Handoff
 
 Once typing/package checks are stable, freeze the full program through `post-python-interop-api-qualification-and-closure.md`.
+
+## Qualification Record
+
+The reviewed typing surface was frozen and qualified in candidate commit
+`2281345f3eaf636c62ec21d2c963d6f90ea764a8` (2026-09-15). The candidate passed
+the structural surface checker, native and compatibility consumer fixtures,
+the expected-negative async-body fixture, installed-wheel typing smoke, Tier
+1, Tier 2, and package validation. The package contains `py.typed`, reviewed
+native stubs, and typed public compatibility entry points; private underscore
+modules remain outside the typing promise.

@@ -4,6 +4,9 @@ Status: **complete**
 Parent: `python-interop-api-hygiene-program.md`  
 Date: 2026-09-15
 
+Final interop-closure qualification: `2281345f3eaf636c62ec21d2c963d6f90ea764a8`
+(2026-09-15); no executable changes followed the freeze.
+
 ## Scope
 
 Establish one authoritative native Python package contract and eliminate release metadata drift before deeper binding refactors begin.

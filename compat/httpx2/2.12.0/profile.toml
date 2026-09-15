@@ -35,10 +35,16 @@ created = "2026-09-10"
 # changed executable validation inputs; this profile was renewed after three
 # consecutive full compatibility passes on the final clean executable freeze
 # below. The immediately preceding `312cd440...` binding is historical only.
+# The Python interop/API hygiene program then changed public exports, package
+# typing, and compatibility entry-point metadata; this profile was renewed
+# after three consecutive full compatibility passes on the final executable
+# candidate below. The immediately preceding `97e87e42...` binding is
+# historical only.
 stage = "stage-c-qualified"
 status = "qualified"
-qualification-sha = "97e87e42c8f4d5659739e7b23ff9005a4ec1ae53"
+qualification-sha = "2281345f3eaf636c62ec21d2c963d6f90ea764a8"
 qualification-date = "2026-09-15"
+previous-qualification-sha = "97e87e42c8f4d5659739e7b23ff9005a4ec1ae53"
 historical-current-qualification-sha = "312cd4402ea2b4b27bf54cf7dc36924a1d449adc"
 reference = "httpx2==2.12.0"
 
@@ -53,9 +59,9 @@ httpcore-version = "2.12.0"
 [eggfetch]
 distribution = "eggfetch"
 # API compatibility is separate from distribution support: eggfetch wheels
-# cover Python 3.10–3.13 (see AGENTS.md Release). HTTPX2 3.14/3.15-only
-# syntax is not advertised as supported until packaging expands.
-python-versions = ["3.10", "3.11", "3.12", "3.13"]
+# cover Python 3.10–3.14 (see AGENTS.md Release). HTTPX2 3.15-only syntax is
+# not advertised as supported; Python 3.15 remains forward-only evidence.
+python-versions = ["3.10", "3.11", "3.12", "3.13", "3.14"]
 sync-backend = "rust-tokio"
 async-backend = "rust-tokio"
 

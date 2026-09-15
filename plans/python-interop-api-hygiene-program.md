@@ -1,6 +1,6 @@
 # Python Interop and API Hygiene Program
 
-Status: **implementation complete; final qualification pending**
+Status: **complete; final qualification closed**
 Date: 2026-09-15  
 Target repository: `eggstack/eggfetch`
 
@@ -20,7 +20,10 @@ The expected result is a Python package whose supported public API is explicit, 
 
 ## Baseline
 
-Current `main` is the documentation/profile descendant of qualified executable SHA `97e87e42c8f4d5659739e7b23ff9005a4ec1ae53`.
+The final executable candidate is `2281345f3eaf636c62ec21d2c963d6f90ea764a8`.
+The prior qualification SHA `97e87e42c8f4d5659739e7b23ff9005a4ec1ae53` is
+historical. The candidate was qualified on 2026-09-15; profile and ledger
+updates are a documentation-only descendant.
 
 The current native Python implementation has the following confirmed issues:
 
@@ -162,11 +165,11 @@ Documentation-only descendants are permitted after that freeze only after confir
 - [x] wheel validation proves stubs/marker are present.
 - [x] runtime/stub drift and representative consumer type checking are gated.
 - [x] PyO3 and `pyo3-async-runtimes` are upgraded coherently.
-- [x] Python 3.14 is included in package metadata and the release matrix; final published-package qualification remains pending.
+- [x] Python 3.14 is included in package metadata and the release matrix; the installed-wheel/package qualification is complete.
 - [x] current supported Python versions have local native behavior coverage on the available interpreters.
 - [x] obsolete `PYO3_USE_ABI3_FORWARD_COMPATIBILITY` usage is removed from ordinary release validation.
 - [x] dead direct `pyo3-build-config` dependency is removed.
 - [x] Rust 1.89 MSRV policy remains intact.
 - [x] Tier 1, Tier 2, package validation, typing gates, and release-matrix smoke tests pass.
-- [ ] HTTPX 0.28.1 and HTTPX2 2.12.0 API oracles and full pinned compatibility suites pass on the final exact SHA.
-- [ ] compatibility profiles and live ledger bind to the final qualified SHA.
+- [x] HTTPX 0.28.1 and HTTPX2 2.12.0 API oracles and full pinned compatibility suites pass on the final exact SHA.
+- [x] compatibility profiles and live ledger bind to the final qualified SHA.

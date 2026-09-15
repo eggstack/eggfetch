@@ -224,9 +224,9 @@ Body kwargs (`content`, `data`, `json`) are mutually exclusive. `files` may comb
 
 Two versioned, independent facades share the single Rust engine:
 
-- `eggfetch.compat.httpx` — HTTPX 0.28.1 (the prior Stage C qualification is
-  bound to historical executable SHA `97e87e42c8f4d5659739e7b23ff9005a4ec1ae53`;
-  the current interop/API hygiene changes are pending requalification).
+- `eggfetch.compat.httpx` — HTTPX 0.28.1, Stage C qualified on executable SHA
+  `2281345f3eaf636c62ec21d2c963d6f90ea764a8`; the prior
+  `97e87e42c8f4d5659739e7b23ff9005a4ec1ae53` binding is historical.
 - `eggfetch.compat.httpx2` — httpx2 2.12.0 sibling (independently Stage C
   qualified on the same frozen SHA; the prior `639bf186...` binding is
   historical after the post-freeze HTTP/3 diagnostics audit;
@@ -242,9 +242,8 @@ Two versioned, independent facades share the single Rust engine:
 - `compat/httpx/1.0-preview/` — original HTTPX 1.0 reconnaissance only;
   no implementation promise until an RC/stable trigger.
 
-The 0.28.1 facade was Stage C qualified for the documented Python 3.10+
-asyncio-supported surface on the historical SHA above. The current candidate
-requires fresh exact-SHA qualification. HTTP/3 remains separately
+The 0.28.1 facade is Stage C qualified for the documented Python 3.10+
+asyncio-supported surface on the current SHA above. HTTP/3 remains separately
 experimental; its retained label and blockers do not weaken or extend either
 compatibility profile.
 

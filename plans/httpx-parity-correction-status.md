@@ -4,15 +4,15 @@ This record is the exact-SHA-bound status for the HTTPX 0.28.1 compatibility
 facade. Historical phase and corrective-pass records remain in the git history
 and referenced plans; counts below are only from the runs named here.
 
-## Recorded state — Stage C renewed after Rust 1.89 MSRV migration (2026-09-15)
+## Recorded state — Stage C renewed after Python interop/API closure (2026-09-15)
 
 Recorded designation: **Stage C qualified** for both the documented HTTPX
 0.28.1 and httpx2 2.12.0 asyncio surfaces, bound to executable SHA
-`97e87e42c8f4d5659739e7b23ff9005a4ec1ae53`. The preceding
-`312cd4402ea2b4b27bf54cf7dc36924a1d449adc` binding is historical because the
-workspace MSRV, Cargo resolver, validation tooling, and stable-Clippy source
-compatibility inputs changed. Both compatibility profiles record this SHA and
-the 2026-09-15 qualification date.
+`2281345f3eaf636c62ec21d2c963d6f90ea764a8`. The preceding
+`97e87e42c8f4d5659739e7b23ff9005a4ec1ae53` binding is historical because the
+Python interop/API hygiene program changed the public package, typing surface,
+and compatibility entry-point metadata. Both compatibility profiles record
+this SHA and the 2026-09-15 qualification date.
 
 Qualification evidence on the frozen executable tree:
 
@@ -22,7 +22,7 @@ Qualification evidence on the frozen executable tree:
 - The HTTPX 0.28.1 and httpx2 2.12.0 API oracles passed. Three consecutive
   full pinned compatibility runs each collected 1,870 tests with no failures.
 - The committed `Cargo.lock`, direct dependency requirements, and feature
-  ownership are unchanged. A disposable Rust-1.89 fresh-resolution audit
+  ownership are unchanged in the interop/API candidate. A disposable Rust-1.89 fresh-resolution audit
   generated a compatible 282-package graph and passed the core and workspace
   MSRV checks; that evidence lockfile was not committed.
 - The only remaining local skips are documented unrelated optional Node JS

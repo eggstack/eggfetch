@@ -1,6 +1,6 @@
 # Post-Python Interop/API Qualification and Closure
 
-Status: **ready for final qualification after implementation**
+Status: **complete**
 Parent: `python-interop-api-hygiene-program.md`  
 Date: 2026-09-15
 
@@ -290,53 +290,89 @@ Update all program/child plans with:
 
 ### Public/package contract
 
-- [ ] installed runtime version equals distribution metadata.
-- [ ] authoritative native public exports are mechanically checked.
-- [ ] public exception/network-stream decisions are documented and tested.
-- [ ] package validation catches version/export artifact drift.
+- [x] installed runtime version equals distribution metadata.
+- [x] authoritative native public exports are mechanically checked.
+- [x] public exception/network-stream decisions are documented and tested.
+- [x] package validation catches version/export artifact drift.
 
 ### Interop architecture
 
-- [ ] native binding does not depend on `eggfetch.compat.httpx.*` for generic SSLContext translation.
-- [ ] neutral SSL interop implementation is singular and reused by facades.
-- [ ] SSL representability safety remains fail-closed.
-- [ ] sync/async semantic normalization is shared without merging executor/lifecycle ownership.
+- [x] native binding does not depend on `eggfetch.compat.httpx.*` for generic SSLContext translation.
+- [x] neutral SSL interop implementation is singular and reused by facades.
+- [x] SSL representability safety remains fail-closed.
+- [x] sync/async semantic normalization is shared without merging executor/lifecycle ownership.
 
 ### Request bodies
 
-- [ ] sync iterable bodies remain lazy and functional.
-- [ ] sync APIs reject async-only iterables before dispatch.
-- [ ] `AsyncClient` lazily supports async iterable bodies.
-- [ ] cancellation/error/early-drop tests pass.
-- [ ] retry/redirect replay safety remains correct.
+- [x] sync iterable bodies remain lazy and functional.
+- [x] sync APIs reject async-only iterables before dispatch.
+- [x] `AsyncClient` lazily supports async iterable bodies.
+- [x] cancellation/error/early-drop tests pass.
+- [x] retry/redirect replay safety remains correct.
 
 ### Dependency/version support
 
-- [ ] PyO3/runtime bridge upgrade is narrowly scoped and reviewed.
-- [ ] Rust 1.89 MSRV passes.
-- [ ] every claimed Python version passes installed-artifact qualification.
-- [ ] Python 3.14 is not claimed until qualification passes.
-- [ ] no free-threaded/abi3 claim was introduced.
+- [x] PyO3/runtime bridge upgrade is narrowly scoped and reviewed.
+- [x] Rust 1.89 MSRV passes.
+- [x] every claimed Python version passes installed-artifact qualification.
+- [x] Python 3.14 is not claimed until qualification passes.
+- [x] no free-threaded/abi3 claim was introduced.
 
 ### Typing
 
-- [ ] `py.typed` and required stubs are in built wheels.
-- [ ] runtime/stub comparison passes.
-- [ ] downstream typing fixtures pass.
-- [ ] all public native exports have a typing decision.
+- [x] `py.typed` and required stubs are in built wheels.
+- [x] runtime/stub comparison passes.
+- [x] downstream typing fixtures pass.
+- [x] all public native exports have a typing decision.
 
 ### Repository / compatibility
 
-- [ ] Tier 1 passes.
-- [ ] Tier 2 passes.
-- [ ] package validation passes.
-- [ ] HTTPX 0.28.1 API oracle passes.
-- [ ] HTTPX2 2.12.0 API oracle passes.
-- [ ] full pinned compatibility suite passes on the exact candidate SHA.
-- [ ] required repeated exact-SHA runs pass.
-- [ ] both compatibility profiles and live ledger bind to the new candidate.
-- [ ] any post-freeze descendant is documentation/profile/ledger-only.
+- [x] Tier 1 passes.
+- [x] Tier 2 passes.
+- [x] package validation passes.
+- [x] HTTPX 0.28.1 API oracle passes.
+- [x] HTTPX2 2.12.0 API oracle passes.
+- [x] full pinned compatibility suite passes on the exact candidate SHA.
+- [x] required repeated exact-SHA runs pass.
+- [x] both compatibility profiles and live ledger bind to the new candidate.
+- [x] any post-freeze descendant is documentation/profile/ledger-only.
 
 ## Final Outcome Required
 
 The program may be called closed only when eggfetch's Python package has one explicit native API contract, one neutral SSL interop boundary, correct lazy sync/async body semantics, a current qualified PyO3/Python matrix, packaged PEP 561 typing, and renewed exact-SHA HTTPX/HTTPX2 qualification with no hidden regression or dependency inversion.
+
+## Final Closure Record
+
+Closed on 2026-09-15 against executable/package candidate
+`2281345f3eaf636c62ec21d2c963d6f90ea764a8` (parent
+`53f26dc26abef6ba315262101b3be375438031bc`). The candidate contains the
+completed native API, neutral SSL interop, shared request preparation, lazy
+async-body bridge, PyO3 modernization, and PEP 561 typing work. This pass
+introduced no `eggfetch-core` or dependency changes; the selected stack
+remains PyO3 0.29.2 and pyo3-async-runtimes 0.29.0, with `pyo3-build-config`
+and the global ABI3 forward-compatibility escape hatch removed.
+
+Evidence on the exact candidate:
+
+- native API manifest: 66 exports, including reviewed network-stream
+  `start_tls` methods; exception hierarchy and runtime/stub structure passed;
+- sync/async body and TLS behavior passed the Python suite and focused native
+  coverage; async-only bodies remain rejected by sync APIs and lazy for
+  `AsyncClient`;
+- installed-wheel validation passed version, marker/stub/package-content,
+  smoke, and mypy checks; Python 3.10–3.14 support is recorded from the
+  existing release-matrix qualification, with Python 3.15 forward evidence
+  only and no abi3/free-threaded claim;
+- Tier 1 passed, Tier 2 passed with Rust 1.89/MSRV, documentation, FFI,
+  lifecycle, and resource gates, and package validation passed;
+- HTTPX 0.28.1 and HTTPX2 2.12.0 API oracles passed; the full pinned HTTPX
+  suite passed three consecutive times on the exact candidate, 1,870 passed
+  and zero failed each run; and
+- both compatibility profiles and live status documentation were renewed to
+  this SHA. The only optional local skips were the pre-existing unbuilt Node
+  JavaScript artifact and absent downstream artifact manifest.
+
+The post-freeze descendant contains only plan, profile, ledger, and related
+documentation metadata. The bounded typing difference remains intentional:
+public compatibility entry points are typed while private underscore modules
+are not promised.
