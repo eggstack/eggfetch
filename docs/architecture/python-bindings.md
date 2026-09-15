@@ -4,6 +4,26 @@ The Python crate (`eggfetch-python`) uses PyO3/maturin to expose `eggfetch-core`
 
 See also: [overview.md](overview.md).
 
+## Native package contract
+
+The supported native Python import surface is the pure-Python `eggfetch`
+package. Its explicit `eggfetch.__all__` list is the single public export
+contract and is checked against
+`crates/eggfetch-python/tests/native_api_manifest.json`. The `_native` PyO3
+extension is private implementation machinery: it intentionally has no
+`__all__`, so registering an implementation symbol cannot silently create a
+second supported API.
+
+The top-level surface exports the complete native exception hierarchy,
+including `DecompressionError`, `UnsupportedContentEncoding`, `H3Error`,
+`H3ConnectError`, and `H3ProtocolError`. `NetworkStream` and
+`AsyncNetworkStream` are public concrete wrappers for writable 101 upgrade
+streams; ordinary pooled responses and internal CONNECT tunnels do not expose
+one. Their methods and the important client/helper constructors are covered by
+the native API oracle. Release validation also checks that the native runtime
+version, coordinated Cargo/`pyproject.toml` version, and installed wheel
+metadata agree.
+
 ## Module Map
 
 | Module | Purpose |

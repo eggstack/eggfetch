@@ -49,6 +49,8 @@ See [verification-policy.md](../verification-policy.md) for the normative policy
 | Rust clippy | `cargo clippy --workspace --all-targets --all-features -- -D warnings` |
 | Rust tests | `cargo test --workspace --exclude eggfetch-python --all-features -- --test-threads=1` (single-threaded: RSS tests) |
 | Python build | `maturin develop -m crates/eggfetch-python/Cargo.toml` (active venv required; rebuild after every binding Rust change) |
+| Native Python API | `python scripts/check_native_python_api.py` (root exports, symbol kinds, exception MRO, important signatures, and version) |
+| Python typing fixture | `python scripts/check_python_typing.py` (reviewed public stubs with mypy) |
 | Python tests | `python -m pytest crates/eggfetch-python/tests/ -q --ignore=.../compat` |
 | HTTPX compat smoke | `python -m pytest .../test_imports.py .../test_client.py .../test_exceptions.py .../test_corrective_kernel.py -v` (Tier 2 runs the full suite with `EGGFETCH_COMPAT_REQUIRED=1 ... --strict-markers`) |
 | Node prototype | `cargo test -p eggfetch-node --all-features`, then `node test.js` only when `node` and a built `crates/eggfetch-node/eggfetch.node` artifact are present (explicit skip otherwise) |
@@ -114,7 +116,7 @@ committed.
 
 ### Package Validation (Tier 3)
 
-Run `./scripts/check.sh package` for: core publish dry-run (`cargo publish --dry-run -p eggfetch-core`), dependent-crate package-structure validation (`cargo package --list` plus structured internal dependency version verification via cargo metadata for eggfetch-cli, eggfetch-ffi, eggfetch-python, eggfetch-node), wheel build, exactly-one-wheel resolution, wheel smoke, and package content validation. Uses fresh temporary artifacts; stale repository wheels are never used.
+Run `./scripts/check.sh package` for: core publish dry-run (`cargo publish --dry-run -p eggfetch-core`), dependent-crate package-structure validation (`cargo package --list` plus structured internal dependency version verification via cargo metadata for eggfetch-cli, eggfetch-ffi, eggfetch-python, eggfetch-node), wheel build, exactly-one-wheel resolution, wheel smoke (including runtime version equality with installed distribution metadata and the PEP 561 files), and package content validation. Uses fresh temporary artifacts; stale repository wheels are never used.
 
 ### PyPI Wheel Pipeline
 

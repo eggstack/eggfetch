@@ -59,6 +59,11 @@ version bump (post-1.0).
 - Return type changes (e.g., `bytes` → `str`)
 - Removed or renamed public attributes
 - Changes to `__init__` constructor parameters
+- The supported native package surface is `eggfetch.__all__`; `_native` is an
+  implementation module and is not a separately versioned import contract.
+- A release is invalid if the native runtime version differs from the
+  coordinated Cargo/`pyproject.toml` version or the installed distribution
+  metadata. Wheel smoke validation checks the installed artifact directly.
 
 ### CLI
 

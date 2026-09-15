@@ -1,2 +1,4 @@
 from ._native import *
-from ._native import __all__, __version__
+
+__all__: list[str]
+__version__: str

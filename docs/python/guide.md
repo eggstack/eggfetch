@@ -16,6 +16,15 @@ the public `eggfetch` surface. `Client` accepts lazy synchronous iterable
 request bodies; `AsyncClient` also accepts lazy asynchronous iterables of
 `bytes` or `str` and consumes them with transport backpressure.
 
+`eggfetch` is the supported native import surface. Its explicit
+`eggfetch.__all__` list is the release contract and includes the documented
+exception hierarchy, including decompression and HTTP/3 errors, plus the
+concrete `NetworkStream` and `AsyncNetworkStream` classes returned for 101
+upgrade responses. `eggfetch._native` is a private implementation module; do
+not import it or rely on names registered there. The runtime package version is
+derived from the native release metadata and wheel validation compares it with
+`importlib.metadata.version("eggfetch")`.
+
 ## Top-Level Functions
 
 The quickest way to make requests. Each function creates a short-lived client internally.

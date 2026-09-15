@@ -120,6 +120,13 @@ The native package supports Python 3.10–3.14 and includes a `py.typed` marker
 with reviewed stubs for its public API. Native wheels are interpreter-specific
 and do not claim ABI3 compatibility. `AsyncClient` can consume an async
 generator as request content lazily, without buffering it before dispatch.
+The supported native import surface is `eggfetch`; its explicit
+`eggfetch.__all__` contract includes the documented exception hierarchy and
+the concrete `NetworkStream`/`AsyncNetworkStream` upgrade wrappers.
+`eggfetch._native` is a private implementation module and must not be imported
+by applications. The package and native extension use the coordinated release
+version, and wheel smoke validation checks it against installed distribution
+metadata.
 
 ## Usage -- Rust
 

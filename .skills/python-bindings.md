@@ -2,6 +2,13 @@
 
 Use this skill when working on the eggfetch-python crate (PyO3/maturin bindings).
 
+The supported native import surface is `eggfetch.__all__` in
+`python/eggfetch/__init__.py`. The `_native` extension is private and must not
+define a second `__all__` contract. Keep the public exception hierarchy,
+`NetworkStream`/`AsyncNetworkStream` upgrade wrappers, signatures, and runtime
+version synchronized with `tests/native_api_manifest.json`; run
+`scripts/check_native_python_api.py` after binding changes.
+
 ## Workflow
 
 1. Read `docs/architecture/python-bindings.md` for the module map and API surface.

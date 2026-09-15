@@ -1,6 +1,6 @@
 # Python Public API and Package Correctness
 
-Status: **implemented; final qualification pending**
+Status: **complete**
 Parent: `python-interop-api-hygiene-program.md`  
 Date: 2026-09-15
 
@@ -177,7 +177,7 @@ If top-level exports are intentionally expanded, add direct native tests before 
 - [x] native API oracle exists and covers root exports, important signatures, and exception hierarchy.
 - [x] native API oracle runs in repository validation at an appropriate tier.
 - [x] package and wheel smoke tests pass locally.
-- [ ] no HTTP behavior changes are introduced.
+- [x] no HTTP behavior changes are introduced.
 - [x] no `eggfetch-core` API change is required.
 
 ## Handoff

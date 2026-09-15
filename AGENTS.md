@@ -61,6 +61,7 @@ Facades `eggfetch.compat.httpx` (0.28.1) and `eggfetch.compat.httpx2` (2.12.0) c
 - Do not paper over residuals (see `docs/residual-differences.md`): no synthesized `stream_id`, CONNECT-proxy origin framing stays H1.1, 4-element null-pointer `socket_options` rejected, H1 duplicate trailers collapse upstream while H2 duplicates preserved, sync trace callbacks ok but coroutines rejected with `TypeError`. `Proxy(headers=...)` rides the proxy leg only.
 - Native request-failure detail is an opt-in wrapper around the unchanged public `Error`; its network subtype is route-dependent evidence, not a complete transport taxonomy. See `docs/reference/errors.md`.
 - SSE is Python framing over streamed responses; WebSocket uses wsproto over the core 101 `network_stream`. Never open raw sockets from Python or add a second Rust reader.
+- Native Python public API is authoritative in `crates/eggfetch-python/python/eggfetch/__init__.py` and its explicit `__all__`; `_native` is private and must not define a second export contract. Public exception types include decompression and H3 errors, and `NetworkStream`/`AsyncNetworkStream` are the concrete 101-upgrade wrappers. Keep `tests/native_api_manifest.json`, direct native API tests, and package/wheel version checks synchronized with that surface.
 
 ## Upgrades
 

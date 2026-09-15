@@ -608,81 +608,6 @@ fn register_exceptions(m: &Bound<'_, PyModule>) -> PyResult<()> {
     Ok(())
 }
 
-/// Register the __all__ list on the module.
-fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    let all_items = vec![
-        "AsyncClient",
-        "AsyncNetworkStream",
-        "AsyncStreamingBytesIterator",
-        "AsyncStreamingLinesIterator",
-        "AsyncStreamingRawBytesIterator",
-        "AsyncStreamingTextIterator",
-        "Client",
-        "NetworkStream",
-        "Cookie",
-        "Cookies",
-        "File",
-        "Headers",
-        "Limits",
-        "NoAuth",
-        "NOAUTH",
-        "Response",
-        "Retry",
-        "StreamingBytesIterator",
-        "StreamingLinesIterator",
-        "StreamingRawBytesIterator",
-        "StreamingResponse",
-        "StreamingTextIterator",
-        "Timeout",
-        "BasicAuth",
-        "BearerAuth",
-        "request",
-        "get",
-        "post",
-        "put",
-        "patch",
-        "delete",
-        "head",
-        "options",
-        "EggfetchError",
-        "RequestError",
-        "InvalidUrl",
-        "TimeoutException",
-        "PoolTimeout",
-        "ConnectTimeout",
-        "ReadTimeout",
-        "WriteTimeout",
-        "NetworkError",
-        "ProtocolError",
-        "BodyError",
-        "HTTPStatusError",
-        "UnsupportedKwarg",
-        "TooManyRedirects",
-        "StreamConsumed",
-        "StreamClosed",
-        "ResponseNotRead",
-        "DecompressionError",
-        "UnsupportedContentEncoding",
-        "ProxyError",
-        "ProxyConnectError",
-        "ProxyAuthError",
-        "BodyNotReplayableForRetry",
-        "RetryBudgetExhausted",
-        "RetryNotConfigured",
-        "Http2Error",
-        "Http2GoAway",
-        "Http2StreamReset",
-        "Http2FlowControlError",
-        "H3Error",
-        "H3ConnectError",
-        "H3ProtocolError",
-    ];
-    let py = m.py();
-    let py_list = pyo3::types::PyList::new(py, &all_items)?;
-    m.add("__all__", py_list)?;
-    Ok(())
-}
-
 /// eggfetch - Python bindings for eggfetch.
 #[pymodule]
 fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -728,7 +653,10 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(head, m)?)?;
     m.add_function(wrap_pyfunction!(options, m)?)?;
 
-    register_all(m)?;
+    // PyO3 automatically builds a module __all__ from every add/add_class
+    // call. The pure-Python eggfetch package owns the supported export
+    // contract, so do not expose a second contract from this private module.
+    m.delattr("__all__")?;
 
     Ok(())
 }

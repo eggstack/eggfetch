@@ -37,9 +37,9 @@ PyPI uses Trusted Publishing (OIDC). No API token is needed.
 ## Pre-release Validation
 
 ```sh
-./scripts/check.sh          # Tier 1: required before every commit
+./scripts/check.sh          # Tier 1: required before every commit, including native API checks
 ./scripts/check.sh extended # Tier 2: before release (full compat, API oracle, feature matrix, MSRV, docs, FFI, soak)
-./scripts/check.sh package  # Tier 3: before publish
+./scripts/check.sh package  # Tier 3: before publish, including installed wheel smoke
 ```
 
 Tier 2 runs Tier 1 first and requires the exact Rust 1.89.0 toolchain for its

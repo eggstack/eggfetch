@@ -10,6 +10,8 @@ Usage:
 """
 
 import argparse
+import importlib
+import importlib.metadata
 import json
 import re
 import subprocess
@@ -143,6 +145,31 @@ def main() -> int:
             f"eggfetch-python Cargo version {py_cargo_version!r} != "
             f"workspace Cargo version {cargo_version!r}"
         )
+
+    # If this interpreter already has eggfetch installed, include the runtime
+    # package boundary in the coherence check.  Release validation also runs
+    # before a wheel is built in CI, so an absent installation is allowed here;
+    # wheel_smoke.py is the required installed-artifact check.
+    try:
+        installed_version = importlib.metadata.version("eggfetch")
+    except importlib.metadata.PackageNotFoundError:
+        installed_version = None
+    if installed_version is not None:
+        if installed_version != cargo_version:
+            errors.append(
+                f"installed eggfetch distribution version {installed_version!r} != "
+                f"Cargo version {cargo_version!r}"
+            )
+        try:
+            runtime_version = importlib.import_module("eggfetch").__version__
+        except (ImportError, AttributeError) as exc:
+            errors.append(f"installed eggfetch runtime version unavailable: {exc}")
+        else:
+            if runtime_version != installed_version:
+                errors.append(
+                    f"eggfetch.__version__ {runtime_version!r} != installed "
+                    f"distribution version {installed_version!r}"
+                )
 
     # 6. Tag validation (if --tag provided).
     if args.tag:
