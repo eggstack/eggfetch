@@ -64,7 +64,7 @@ crates.io versions are immutable. If publication is partial, bump and republish.
 ## CI
 
 - Routine CI (`.github/workflows/ci.yml`): runs `./scripts/check.sh` on pushes and pull requests. One Ubuntu job, no matrix.
-- PyPI CI (`.github/workflows/pypi.yml`): manually dispatched, builds 12 wheels + 1 sdist (linux-x86_64, macos-arm64, windows-x86_64 × Python 3.10–3.13).
+- PyPI CI (`.github/workflows/pypi.yml`): manually dispatched, builds 15 wheels + 1 sdist (linux-x86_64, macos-arm64, windows-x86_64 × Python 3.10–3.14).
 
 ## Architecture References
 

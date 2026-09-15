@@ -1,6 +1,6 @@
 # Python Interop Boundary and Async Body Pass
 
-Status: **ready for implementation after `python-public-api-package-correctness.md`**  
+Status: **implemented; final qualification pending**
 Parent: `python-interop-api-hygiene-program.md`  
 Date: 2026-09-15
 
@@ -316,22 +316,22 @@ Exact-SHA compatibility profile rebinding remains deferred to final closure.
 
 ## Acceptance Criteria
 
-- [ ] native `tls.rs` no longer imports `eggfetch.compat.httpx.*` for generic SSLContext translation.
-- [ ] generic SSL snapshot/classification/registry logic has one implementation in a neutral eggfetch interop module.
-- [ ] compatibility facades reuse that implementation or a thin non-divergent shim.
-- [ ] current fail-closed SSL representability/mutation/provenance behavior is preserved.
-- [ ] native TLS input error messages match actual accepted types.
-- [ ] body classification distinguishes buffered, sync iterable, and async iterable content without consuming one-shot streams early.
-- [ ] sync APIs reject async-only iterables with deterministic `TypeError` before network dispatch.
-- [ ] `AsyncClient` lazily consumes async iterables under transport backpressure.
-- [ ] async producer exceptions propagate correctly.
-- [ ] request cancellation prevents further generator pulls and does not poison the client.
-- [ ] non-replayable body retry/redirect safety remains intact.
-- [ ] sync/async client construction shares one semantic preparation path.
-- [ ] sync/async request normalization shares one semantic preparation path.
-- [ ] runtime/lifecycle execution remains separately implemented for sync and async adapters.
-- [ ] no Python-specific type or runtime assumption is introduced into `eggfetch-core`.
-- [ ] Tier 1 and Tier 2 pass after implementation.
+- [x] native `tls.rs` no longer imports `eggfetch.compat.httpx.*` for generic SSLContext translation.
+- [x] generic SSL snapshot/classification/registry logic has one implementation in a neutral eggfetch interop module.
+- [x] compatibility facades reuse that implementation or a thin non-divergent shim.
+- [x] current fail-closed SSL representability/mutation/provenance behavior is preserved.
+- [x] native TLS input error messages match actual accepted types.
+- [x] body classification distinguishes buffered, sync iterable, and async iterable content without consuming one-shot streams early.
+- [x] sync APIs reject async-only iterables with deterministic `TypeError` before network dispatch.
+- [x] `AsyncClient` lazily consumes async iterables under transport backpressure.
+- [x] async producer exceptions propagate correctly.
+- [x] request cancellation prevents further generator pulls and does not poison the client.
+- [x] non-replayable body retry/redirect safety remains intact.
+- [x] sync/async client construction shares one semantic preparation path.
+- [x] sync/async request normalization shares one semantic preparation path.
+- [x] runtime/lifecycle execution remains separately implemented for sync and async adapters.
+- [x] no Python-specific type or runtime assumption is introduced into `eggfetch-core`.
+- [x] Tier 1 and Tier 2 pass after implementation.
 
 ## Handoff
 

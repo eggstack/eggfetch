@@ -4,7 +4,7 @@ use pyo3::prelude::*;
 use pyo3::types::{PyList, PyString, PyTuple};
 
 /// A case-insensitive HTTP headers container exposed to Python.
-#[pyclass(name = "Headers")]
+#[pyclass(name = "Headers", from_py_object)]
 #[derive(Debug, Clone)]
 pub struct PyHeaders {
     inner: http::HeaderMap,

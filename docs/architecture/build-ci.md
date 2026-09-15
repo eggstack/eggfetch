@@ -36,7 +36,7 @@ cargo-deny configuration for:
 Two GitHub Actions workflows:
 
 - **`ci.yml`** — routine push/PR validation. One Ubuntu job, no matrix, no artifact exchange. Calls `./scripts/check.sh`. This is the only automatic workflow.
-- **`pypi.yml`** — manual-dispatch PyPI release pipeline. Builds 12 wheels across 3 platforms (linux-x86_64, macos-arm64, windows-x86_64) and 4 Python versions, builds and validates an sdist, assembles the release set, and optionally publishes via Trusted Publishing (OIDC).
+- **`pypi.yml`** — manual-dispatch PyPI release pipeline. Builds 15 wheels across 3 platforms (linux-x86_64, macos-arm64, windows-x86_64) and Python 3.10–3.14, builds and validates an sdist, assembles the release set, and optionally publishes via Trusted Publishing (OIDC).
 
 See [verification-policy.md](../verification-policy.md) for the normative policy.
 
@@ -48,7 +48,7 @@ See [verification-policy.md](../verification-policy.md) for the normative policy
 | Lint suppression | `bash scripts/check_lint_suppressions.sh` |
 | Rust clippy | `cargo clippy --workspace --all-targets --all-features -- -D warnings` |
 | Rust tests | `cargo test --workspace --exclude eggfetch-python --all-features -- --test-threads=1` (single-threaded: RSS tests) |
-| Python build | `maturin develop -m crates/eggfetch-python/Cargo.toml` (active venv required; CI exports `PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1` — set it manually when rebuilding locally) |
+| Python build | `maturin develop -m crates/eggfetch-python/Cargo.toml` (active venv required; rebuild after every binding Rust change) |
 | Python tests | `python -m pytest crates/eggfetch-python/tests/ -q --ignore=.../compat` |
 | HTTPX compat smoke | `python -m pytest .../test_imports.py .../test_client.py .../test_exceptions.py .../test_corrective_kernel.py -v` (Tier 2 runs the full suite with `EGGFETCH_COMPAT_REQUIRED=1 ... --strict-markers`) |
 | Node prototype | `cargo test -p eggfetch-node --all-features`, then `node test.js` only when `node` and a built `crates/eggfetch-node/eggfetch.node` artifact are present (explicit skip otherwise) |
@@ -121,16 +121,17 @@ Run `./scripts/check.sh package` for: core publish dry-run (`cargo publish --dry
 Run manually via `workflow_dispatch` from `.github/workflows/pypi.yml`. The pipeline:
 
 1. **validate-release** — version coherence, internal dependency topology, routine + package validation
-2. **build-wheel** — 12 wheel jobs across 3 platforms × 4 Python versions
+2. **build-wheel** — 15 wheel jobs across 3 platforms × 5 Python versions
 3. **build-sdist** — source distribution with isolated build test
-4. **assemble** — downloads all artifacts, validates coverage matrix (12 wheels + 1 sdist), runs twine check
+4. **assemble** — downloads all artifacts, validates coverage matrix (15 wheels + 1 sdist), runs twine check
 5. **publish** — optional OIDC upload to PyPI (requires `publish=true` input plus `pypi` environment approval)
 
 ## Environment
 
 - `CARGO_TERM_COLOR=always`
 - `RUSTFLAGS=-D warnings` — warnings are errors
-- `PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1`
+- PyO3 builds ordinary interpreter-specific extension artifacts; ABI3 is not
+  enabled or claimed.
 
 ## Lint Policy
 

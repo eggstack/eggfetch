@@ -123,9 +123,10 @@ eggfetch targets HTTPX 0.28.1 compatibility in phases. The current status:
   single extension parser, caller-mode `network_stream`, H2-only
   propagation, redaction hardening, request/transport consolidation, H3
   lifecycle hardening, observability cleanup. Historical evidence only.
-- **Current requalification**: HTTPX 0.28.1 and HTTPX2 2.12.0 are Stage C
-  qualified on frozen executable SHA
-  `97e87e42c8f4d5659739e7b23ff9005a4ec1ae53` (2026-09-15). Earlier
+- **Prior qualification**: HTTPX 0.28.1 and HTTPX2 2.12.0 were Stage C
+  qualified on executable SHA
+  `97e87e42c8f4d5659739e7b23ff9005a4ec1ae53` (2026-09-15). The current
+  interop/API hygiene changes require fresh exact-SHA qualification. Earlier
   `639bf186...` binding is historical after the post-freeze HTTP/3
   diagnostics audit corrected native counter semantics. The earlier
   `65beb67` binding remains historical. Full status is in
@@ -147,8 +148,8 @@ close/cancel releases the body/pool lease); optional WebSocket
 101 `network_stream`, handshake via the normal pipeline, max-message
 enforced across fragments, proxy trust isolated).
 
-**Current status: Stage C qualified for each documented facade.** Both
-profiles are bound to the same frozen executable SHA after the active HTTP/3
+**Prior status: Stage C qualified for each documented facade.** Both
+profiles were bound to the same historical executable SHA after the active HTTP/3
 qualification work. Proxy
 headers are forwarded on the proxy leg;
 proxy ssl_context is translated to native TlsConfig; create_ssl_context

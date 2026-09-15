@@ -21,7 +21,7 @@ eggfetch is a Rust-native async HTTP client engine (tokio + hyper) with Python b
 - **Retries and redirects** — policy-driven backoff with `Retry-After`, replayable-body redirect handling ([retry](docs/concepts/retry.md))
 - **Compression** — feature-gated streaming gzip/brotli/zstd/deflate with zip-bomb limits ([compression](docs/concepts/compression.md))
 - **Native Rust JSON (opt-in)** — replayable `RequestBuilder::json()`, single-consumption `Response::json()` via the `json` feature ([guide](docs/rust/guide.md))
-- **Python API** — requests/HTTPX-compatible sync and async interfaces ([guide](docs/python/guide.md)), plus versioned `eggfetch.compat.httpx` (0.28.1) and `eggfetch.compat.httpx2` (2.12.0) facades ([compatibility](#httpx-compatibility))
+- **Python API** — requests/HTTPX-compatible sync and async interfaces ([guide](docs/python/guide.md)), lazy synchronous and asynchronous request bodies, PEP 561 typing, plus versioned `eggfetch.compat.httpx` (0.28.1) and `eggfetch.compat.httpx2` (2.12.0) facades ([compatibility](#httpx-compatibility))
 - **Upgrades** — 101 responses expose an owned `network_stream` (WebSocket/SSE building blocks); CONNECT tunnels stay body-iterator only
 - **CLI** — streaming output, machine-readable formats, shell completions ([guide](docs/cli/guide.md))
 - **C ABI and Node.js prototype** — opaque-handle FFI plus an experimental N-API wrapper ([ffi-and-node](docs/architecture/ffi-and-node.md))
@@ -115,6 +115,11 @@ from eggfetch.compat.httpx2 import Client as H2Client  # httpx2 2.12.0 surface
 ```
 
 See [`docs/python/guide.md`](docs/python/guide.md) for the full Python API reference.
+
+The native package supports Python 3.10–3.14 and includes a `py.typed` marker
+with reviewed stubs for its public API. Native wheels are interpreter-specific
+and do not claim ABI3 compatibility. `AsyncClient` can consume an async
+generator as request content lazily, without buffering it before dispatch.
 
 ## Usage -- Rust
 

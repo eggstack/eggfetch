@@ -184,7 +184,7 @@ Single source file (`main.rs`, ~1.8k lines). Thin binary over `eggfetch-core` (e
 | `errors.rs` | Exception hierarchy: `EggfetchError` → `RequestError` (nesting `InvalidUrl`, `TimeoutException`, `NetworkError`, `ProtocolError`, `BodyError`, `ProxyError`, retry/H2/H3 errors) plus `HTTPStatusError`, `UnsupportedKwarg`, stream-state errors. |
 | `limits.rs` | `PyLimits` — pool concurrency limits. |
 
-Python package surface (`python/eggfetch/__init__.py` + `compat/`): native `Client`/`AsyncClient`, `Response`, `Headers`, `Cookies`, `Timeout`, `Limits`, auth types, streaming iterators, top-level verbs, plus versioned facades `eggfetch.compat.httpx` (0.28.1, 19 modules: `_client`, `_response`, `_request`, `_urls`, `_headers`, `_cookies`, `_auth`, `_timeout`, `_proxy`, `_transports`, `_stream`, `_exceptions`, `_status_codes`, `_mock`, `_asgi`, `_wsgi`, `_ssl_context`, `_diagnostics`, `_limits`) and `eggfetch.compat.httpx2` (2.12.0: `_api`, `_config`, `_sse`, …). SSE is Python framing over streamed responses; WebSocket uses wsproto over the core 101 `network_stream` — never raw sockets from Python. See [Capabilities](#httpx-compatibility-facades).
+Python package surface (`python/eggfetch/__init__.py` + `compat/`): native `Client`/`AsyncClient`, `Response`, `Headers`, `Cookies`, `Timeout`, `Limits`, auth types, streaming iterators, network-stream wrappers, top-level verbs, and a PEP 561 typing surface, plus versioned facades `eggfetch.compat.httpx` (0.28.1) and `eggfetch.compat.httpx2` (2.12.0). Generic SSL interop is owned by neutral `eggfetch._ssl_context`; the historical HTTPX private path is a shim only. SSE is Python framing over streamed responses; WebSocket uses wsproto over the core 101 `network_stream` — never raw sockets from Python. See [Capabilities](#httpx-compatibility-facades).
 
 **Deep dive:** [python-bindings.md](python-bindings.md)
 
@@ -474,7 +474,7 @@ evidence bound to the qualified executable SHA is recorded in
 `plans/httpx-parity-correction-status.md`. MSRV is Rust 1.89
 (`workspace.package.rust-version`; `rust-toolchain.toml` pins stable for
 development, while Tier 2 validates exact Rust 1.89.0). CI enforces
-`RUSTFLAGS=-D warnings` with pedantic clippy. Python support is 3.10–3.13
+`RUSTFLAGS=-D warnings` with pedantic clippy. Python support is 3.10–3.14
 (asyncio only; Trio/AnyIO out of scope).
 
 The `test-util` feature enables `tokio/test-util` for deterministic time testing in timeout-related tests.

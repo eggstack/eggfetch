@@ -114,7 +114,7 @@ pub fn parse_proxy(proxy: Option<&Bound<'_, PyAny>>) -> PyResult<ProxyOverride> 
                     // Embed raw_auth into the URL so all_compat can extract it.
                     if let Ok(raw_auth) = val.getattr("raw_auth") {
                         if !raw_auth.is_none() {
-                            if let Ok(auth_tuple) = raw_auth.downcast::<pyo3::types::PyTuple>() {
+                            if let Ok(auth_tuple) = raw_auth.cast::<pyo3::types::PyTuple>() {
                                 if auth_tuple.len() == 2 {
                                     if let (Ok(username), Ok(password)) = (
                                         auth_tuple.get_item(0)?.extract::<String>(),

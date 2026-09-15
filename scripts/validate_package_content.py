@@ -177,6 +177,15 @@ def _check_wheel_init_py(namelist: list[str]) -> list[ValidationError]:
     return errors
 
 
+def _check_wheel_typing_surface(namelist: list[str]) -> list[ValidationError]:
+    """Require the reviewed PEP 561 marker and native stubs."""
+    errors: list[ValidationError] = []
+    for required in ("eggfetch/py.typed", "eggfetch/__init__.pyi", "eggfetch/_native.pyi"):
+        if required not in namelist:
+            errors.append(ValidationError("missing-typing", f"{required} not found in wheel"))
+    return errors
+
+
 def _check_wheel_version_match(namelist: list[str]) -> list[ValidationError]:
     """Check version consistency between WHEEL metadata and __init__.py."""
     errors: list[ValidationError] = []
@@ -288,6 +297,7 @@ def validate_wheel(path: Path) -> list[ValidationError]:
             errors.extend(_check_wheel_forbidden_files(namelist))
             errors.extend(_check_wheel_unexpected_modules(namelist))
             errors.extend(_check_wheel_init_py(namelist))
+            errors.extend(_check_wheel_typing_surface(namelist))
             errors.extend(_check_secrets(namelist, zf))
 
             version = _extract_wheel_version(namelist, zf)

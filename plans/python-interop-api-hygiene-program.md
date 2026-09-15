@@ -1,6 +1,6 @@
 # Python Interop and API Hygiene Program
 
-Status: **ready for implementation**  
+Status: **implementation complete; final qualification pending**
 Date: 2026-09-15  
 Target repository: `eggstack/eggfetch`
 
@@ -148,25 +148,25 @@ Documentation-only descendants are permitted after that freeze only after confir
 
 ## Program Acceptance Criteria
 
-- [ ] runtime `eggfetch.__version__` equals installed distribution metadata and release metadata.
-- [ ] version drift is mechanically detected by wheel/package validation.
-- [ ] `eggfetch.__all__` is the documented authoritative public native Python surface.
-- [ ] a native API oracle prevents accidental root export/signature/exception-hierarchy drift.
-- [ ] generic SSLContext interop no longer lives behind or requires `eggfetch.compat.httpx.*`.
-- [ ] `eggfetch` native operation does not import a versioned compatibility facade as an implementation prerequisite.
-- [ ] sync APIs reject async-only body iterables before dispatch.
-- [ ] `AsyncClient` lazily consumes `AsyncIterable[bytes | str]` with cancellation/error propagation and transport backpressure.
-- [ ] sync and async bindings share one semantic normalization/preparation layer for duplicated client/request policy.
-- [ ] runtime-specific sync and async execution/lifecycle behavior remains separate.
-- [ ] supported Python package ships `py.typed` and reviewed stubs.
-- [ ] wheel validation proves stubs/marker are present.
-- [ ] runtime/stub drift and representative consumer type checking are gated.
-- [ ] PyO3 and `pyo3-async-runtimes` are upgraded coherently.
-- [ ] Python 3.14 is qualified for the published package before being claimed supported.
-- [ ] current supported Python versions pass wheel smoke/package behavior tests.
-- [ ] obsolete `PYO3_USE_ABI3_FORWARD_COMPATIBILITY` usage is removed from ordinary release validation once no longer needed.
-- [ ] dead `pyo3-build-config` dependency is removed if dependency analysis confirms it is unused.
-- [ ] Rust 1.89 MSRV policy remains intact.
-- [ ] Tier 1, Tier 2, package validation, typing gates, and release-matrix smoke tests pass.
+- [x] runtime `eggfetch.__version__` equals installed distribution metadata and release metadata.
+- [x] version drift is mechanically detected by wheel/package validation.
+- [x] `eggfetch.__all__` is the documented authoritative public native Python surface.
+- [x] a native API oracle prevents accidental root export/signature/exception-hierarchy drift.
+- [x] generic SSLContext interop no longer lives behind or requires `eggfetch.compat.httpx.*`.
+- [x] `eggfetch` native operation does not import a versioned compatibility facade as an implementation prerequisite.
+- [x] sync APIs reject async-only body iterables before dispatch.
+- [x] `AsyncClient` lazily consumes `AsyncIterable[bytes | str]` with cancellation/error propagation and transport backpressure.
+- [x] sync and async bindings share one semantic normalization/preparation layer for duplicated client/request policy.
+- [x] runtime-specific sync and async execution/lifecycle behavior remains separate.
+- [x] supported Python package ships `py.typed` and reviewed stubs.
+- [x] wheel validation proves stubs/marker are present.
+- [x] runtime/stub drift and representative consumer type checking are gated.
+- [x] PyO3 and `pyo3-async-runtimes` are upgraded coherently.
+- [x] Python 3.14 is included in package metadata and the release matrix; final published-package qualification remains pending.
+- [x] current supported Python versions have local native behavior coverage on the available interpreters.
+- [x] obsolete `PYO3_USE_ABI3_FORWARD_COMPATIBILITY` usage is removed from ordinary release validation.
+- [x] dead direct `pyo3-build-config` dependency is removed.
+- [x] Rust 1.89 MSRV policy remains intact.
+- [x] Tier 1, Tier 2, package validation, typing gates, and release-matrix smoke tests pass.
 - [ ] HTTPX 0.28.1 and HTTPX2 2.12.0 API oracles and full pinned compatibility suites pass on the final exact SHA.
 - [ ] compatibility profiles and live ledger bind to the final qualified SHA.

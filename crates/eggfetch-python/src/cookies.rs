@@ -6,7 +6,7 @@ use pyo3::types::{PyFloat, PyList, PyString};
 /// A Python-accessible HTTP cookie.
 ///
 /// Wraps `eggfetch_core::cookie::Cookie` with read-only properties.
-#[pyclass(name = "Cookie")]
+#[pyclass(name = "Cookie", from_py_object)]
 #[derive(Debug, Clone)]
 pub struct PyCookie {
     inner: eggfetch_core::cookie::Cookie,
@@ -128,7 +128,7 @@ impl PyCookie {
 /// Keys are cookie names (strings). Values are [`Cookie`] objects.
 /// When multiple cookies share a name (different domains/paths),
 /// name-only lookup is treated as ambiguous and returns no value.
-#[pyclass(name = "Cookies")]
+#[pyclass(name = "Cookies", from_py_object)]
 #[derive(Debug, Clone)]
 pub struct PyCookies {
     jar: eggfetch_core::cookie::CookieJar,
@@ -158,7 +158,7 @@ impl PyCookies {
 
     /// Iterate over cookie names.
     fn __iter__<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
-        let names: Vec<PyObject> = self
+        let names: Vec<Py<PyAny>> = self
             .jar
             .all_cookies()
             .iter()
@@ -301,13 +301,13 @@ impl PyCookies {
     /// Return a list of (name, Cookie) tuples.
     fn items<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
         let py_tuple = py.import("builtins")?.getattr("tuple")?;
-        let items: Vec<PyObject> = self
+        let items: Vec<Py<PyAny>> = self
             .jar
             .all_cookies()
             .into_iter()
             .map(|c| {
-                let name: PyObject = PyString::new(py, c.name()).into();
-                let cookie: PyObject = Py::new(py, PyCookie::from_core(c))?.into_any();
+                let name: Py<PyAny> = PyString::new(py, c.name()).into();
+                let cookie: Py<PyAny> = Py::new(py, PyCookie::from_core(c))?.into_any();
                 let tup = py_tuple.call1((PyList::new(py, [name, cookie])?,))?;
                 Ok(tup.into())
             })

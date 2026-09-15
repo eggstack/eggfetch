@@ -12,7 +12,7 @@ use crate::errors::map_err;
 /// Args:
 ///     username: The username.
 ///     password: The password (default: "").
-#[pyclass(name = "BasicAuth")]
+#[pyclass(name = "BasicAuth", from_py_object)]
 #[derive(Clone)]
 pub struct PyBasicAuth {
     pub(crate) inner: eggfetch_core::BasicAuth,
@@ -43,7 +43,7 @@ impl PyBasicAuth {
 ///
 /// Args:
 ///     token: The bearer token.
-#[pyclass(name = "BearerAuth")]
+#[pyclass(name = "BearerAuth", from_py_object)]
 #[derive(Clone)]
 pub struct PyBearerAuth {
     pub(crate) inner: eggfetch_core::BearerAuth,
@@ -126,7 +126,7 @@ pub fn parse_auth(auth: Option<&Bound<'_, PyAny>>) -> PyResult<AuthOverride> {
                 )));
             }
             // Check for (username, password) tuple
-            if let Ok(tuple) = val.downcast::<PyTuple>() {
+            if let Ok(tuple) = val.cast::<PyTuple>() {
                 if tuple.len() == 2 {
                     let username: String = tuple.get_item(0)?.extract()?;
                     let password: String = tuple.get_item(1)?.extract()?;

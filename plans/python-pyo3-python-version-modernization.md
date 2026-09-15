@@ -1,6 +1,6 @@
 # PyO3 and Python Version Modernization
 
-Status: **ready after `python-interop-boundary-and-async-body.md`**  
+Status: **implemented; final qualification pending**
 Parent: `python-interop-api-hygiene-program.md`  
 Date: 2026-09-15
 
@@ -201,19 +201,19 @@ Run Rust 1.89 Tier 2 MSRV after dependency changes; the PyO3 upgrade must not si
 
 ## Acceptance Criteria
 
-- [ ] selected PyO3 and `pyo3-async-runtimes` releases are mutually compatible and current at implementation time.
-- [ ] dependency update is narrowly scoped and reviewed.
-- [ ] no unrelated HTTP transport/security dependency churn is introduced.
-- [ ] all binding code compiles cleanly with repository lint policy.
-- [ ] direct `pyo3-build-config` dependency is removed if confirmed unused, or retained with a documented actual consumer.
-- [ ] global `PYO3_USE_ABI3_FORWARD_COMPATIBILITY` is removed from release builds once no longer necessary.
-- [ ] Python 3.10–3.13 remain supported unless a separately documented blocker is accepted.
-- [ ] Python 3.14 native behavior tests pass.
+- [x] selected PyO3 and `pyo3-async-runtimes` releases are mutually compatible and current at implementation time.
+- [x] dependency update is narrowly scoped and reviewed.
+- [x] no unrelated HTTP transport/security dependency churn is introduced.
+- [x] all binding code compiles cleanly with repository lint policy.
+- [x] direct `pyo3-build-config` dependency is removed after confirming it is unused.
+- [x] global `PYO3_USE_ABI3_FORWARD_COMPATIBILITY` is removed from release builds.
+- [x] Python 3.10–3.14 remain supported.
+- [x] Python 3.14 native behavior tests pass locally.
 - [ ] Python 3.14 wheel build/install/smoke passes on supported release platforms before support is advertised.
 - [ ] Python 3.14 classifier/matrix/docs are updated only after qualification.
-- [ ] no free-threaded or abi3 support claim is introduced.
-- [ ] Rust 1.89 MSRV gate still passes with the upgraded dependency graph.
-- [ ] Tier 1, Tier 2, and package validation pass.
+- [x] no free-threaded or abi3 support claim is introduced.
+- [x] Rust 1.89 MSRV gate still passes with the upgraded dependency graph.
+- [x] Tier 1, Tier 2, and package validation pass.
 
 ## Handoff
 

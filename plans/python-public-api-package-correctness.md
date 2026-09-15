@@ -1,6 +1,6 @@
 # Python Public API and Package Correctness
 
-Status: **ready for implementation**  
+Status: **implemented; final qualification pending**
 Parent: `python-interop-api-hygiene-program.md`  
 Date: 2026-09-15
 
@@ -167,18 +167,18 @@ If top-level exports are intentionally expanded, add direct native tests before 
 
 ## Acceptance Criteria
 
-- [ ] `_native.__version__` is not hard-coded independently of package release metadata.
-- [ ] installed wheel runtime version equals `importlib.metadata.version("eggfetch")`.
-- [ ] wheel/package validation fails on version mismatch.
-- [ ] `eggfetch.__all__` is documented as the authoritative native public surface.
-- [ ] `_native.__all__` is removed, derived, or otherwise prevented from becoming an independent drifting contract.
-- [ ] documented decompression and H3 exceptions are intentionally exported or deliberately reclassified/private with matching documentation.
-- [ ] network-stream public/private status is explicit and tested.
-- [ ] native API oracle exists and covers root exports, important signatures, and exception hierarchy.
-- [ ] native API oracle runs in repository validation at an appropriate tier.
-- [ ] package and wheel smoke tests pass.
+- [x] `_native.__version__` is not hard-coded independently of package release metadata.
+- [x] installed wheel runtime version equals `importlib.metadata.version("eggfetch")`.
+- [x] wheel/package validation fails on version mismatch.
+- [x] `eggfetch.__all__` is documented as the authoritative native public surface.
+- [x] `_native.__all__` is removed, derived, or otherwise prevented from becoming an independent drifting contract.
+- [x] documented decompression and H3 exceptions are intentionally exported or deliberately reclassified/private with matching documentation.
+- [x] network-stream public/private status is explicit and tested.
+- [x] native API oracle exists and covers root exports, important signatures, and exception hierarchy.
+- [x] native API oracle runs in repository validation at an appropriate tier.
+- [x] package and wheel smoke tests pass locally.
 - [ ] no HTTP behavior changes are introduced.
-- [ ] no `eggfetch-core` API change is required.
+- [x] no `eggfetch-core` API change is required.
 
 ## Handoff
 

@@ -623,7 +623,7 @@ impl PyStreamingResponse {
     /// wrapper (sync `NetworkStream` or async `AsyncNetworkStream`) based
     /// on the caller's context. Returns `None` for non-101 responses.
     #[getter]
-    fn network_stream<'py>(&self, py: Python<'py>) -> PyResult<PyObject> {
+    fn network_stream<'py>(&self, py: Python<'py>) -> PyResult<Py<PyAny>> {
         match self.network_stream.as_ref() {
             Some(EitherNetworkStream::Sync(s)) => Ok(Py::new(py, s.clone())?.into_any()),
             Some(EitherNetworkStream::Async(s)) => Ok(Py::new(py, s.clone())?.into_any()),
@@ -698,25 +698,25 @@ impl PyStreamingResponse {
         PyAsyncRawBytesIterator::new(slf, py, chunk_size)
     }
 
-    fn read(slf: Py<Self>, py: Python<'_>) -> PyResult<PyObject> {
-        let state = Python::with_gil(|py| {
+    fn read(slf: Py<Self>, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        let state = Python::attach(|py| {
             let borrowed = slf.borrow(py);
             borrowed.ensure_streaming()?;
             Ok::<_, PyErr>(borrowed.body_state())
         })?;
-        let bytes = py.allow_threads(|| state.drain_all_bytes())?;
+        let bytes = py.detach(|| state.drain_all_bytes())?;
         Ok(PyBytes::new(py, &bytes).into())
     }
 
     fn text(slf: Py<Self>, py: Python<'_>) -> PyResult<String> {
-        let state = Python::with_gil(|py| Ok::<_, PyErr>(slf.borrow(py).body_state()))?;
-        py.allow_threads(|| state.drain_all_text())
+        let state = Python::attach(|py| Ok::<_, PyErr>(slf.borrow(py).body_state()))?;
+        py.detach(|| state.drain_all_text())
     }
 
     fn aread<'py>(slf: Py<Self>, py: Python<'py>) -> PyResult<Bound<'py, pyo3::PyAny>> {
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let (mut stream, mut cancellation) = {
-                Python::with_gil(|py| {
+                Python::attach(|py| {
                     let borrowed = slf.borrow(py);
                     Ok::<_, PyErr>((
                         borrowed.take_stream_or_err()?,
@@ -742,7 +742,7 @@ impl PyStreamingResponse {
                 }
             }
             let bytes = buf.freeze();
-            Python::with_gil(|py| {
+            Python::attach(|py| {
                 let borrowed = slf.borrow(py);
                 let _ = borrowed.body_state.compare_exchange(
                     STATE_CONSUMED,
@@ -765,7 +765,7 @@ impl PyStreamingResponse {
 
     fn aclose<'py>(slf: Py<Self>, py: Python<'py>) -> PyResult<Bound<'py, pyo3::PyAny>> {
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let result: PyResult<()> = Python::with_gil(|py| slf.borrow(py).drain_and_close());
+            let result: PyResult<()> = Python::attach(|py| slf.borrow(py).drain_and_close());
             result?;
             Ok(())
         })
@@ -811,7 +811,7 @@ impl PyStreamingResponse {
     ) -> PyResult<Bound<'py, pyo3::PyAny>> {
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             // HTTPX discards unread body on context exit — do NOT drain.
-            let result: PyResult<()> = Python::with_gil(|py| {
+            let result: PyResult<()> = Python::attach(|py| {
                 let borrowed = slf.borrow(py);
                 let _ = borrowed.stream_cancel.send(true);
                 let mut response_guard = borrowed.response.lock().map_err(|e| {
@@ -932,7 +932,7 @@ impl PyBytesChunkIterator {
         slf
     }
 
-    fn __next__(&self, py: Python<'_>) -> PyResult<Option<PyObject>> {
+    fn __next__(&self, py: Python<'_>) -> PyResult<Option<Py<PyAny>>> {
         {
             let mut pending = self
                 .pending
@@ -944,7 +944,7 @@ impl PyBytesChunkIterator {
                 return Ok(Some(PyBytes::new(py, &chunk).into()));
             }
         }
-        let result = py.allow_threads(|| {
+        let result = py.detach(|| {
             let rx = self
                 .rx
                 .lock()
@@ -1062,8 +1062,8 @@ impl PyTextChunkIterator {
         slf
     }
 
-    fn __next__(&self, py: Python<'_>) -> PyResult<Option<PyObject>> {
-        let result = py.allow_threads(|| {
+    fn __next__(&self, py: Python<'_>) -> PyResult<Option<Py<PyAny>>> {
+        let result = py.detach(|| {
             let rx = self
                 .rx
                 .lock()
@@ -1180,8 +1180,8 @@ impl PyLinesChunkIterator {
         slf
     }
 
-    fn __next__(&self, py: Python<'_>) -> PyResult<Option<PyObject>> {
-        let result = py.allow_threads(|| {
+    fn __next__(&self, py: Python<'_>) -> PyResult<Option<Py<PyAny>>> {
+        let result = py.detach(|| {
             let rx = self
                 .rx
                 .lock()
@@ -1612,7 +1612,7 @@ impl PyRawBytesChunkIterator {
         slf
     }
 
-    fn __next__(&self, py: Python<'_>) -> PyResult<Option<PyObject>> {
+    fn __next__(&self, py: Python<'_>) -> PyResult<Option<Py<PyAny>>> {
         {
             let mut pending = self
                 .pending
@@ -1628,7 +1628,7 @@ impl PyRawBytesChunkIterator {
                 return Ok(Some(PyBytes::new(py, &chunk).into()));
             }
         }
-        let result = py.allow_threads(|| {
+        let result = py.detach(|| {
             let rx = self
                 .rx
                 .lock()

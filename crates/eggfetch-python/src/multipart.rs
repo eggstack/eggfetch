@@ -26,7 +26,7 @@ use eggfetch_core::multipart::{Multipart, Part, PartBody};
 ///     path: Filesystem path to the file.
 ///     filename: Override filename (default: basename of path).
 ///     `content_type`: Override content type (default: application/octet-stream).
-#[pyclass(name = "File")]
+#[pyclass(name = "File", from_py_object)]
 #[derive(Debug, Clone)]
 pub struct PyFile {
     path: PathBuf,
@@ -129,7 +129,7 @@ fn add_form_fields(
     };
     for item in items.try_iter()? {
         let item = item?;
-        let tuple: Bound<'_, PyTuple> = item.downcast_into::<PyTuple>()?;
+        let tuple: Bound<'_, PyTuple> = item.cast_into::<PyTuple>()?;
         if tuple.len() != 2 {
             return Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
                 "expected a mapping or sequence of 2-tuples",
@@ -166,7 +166,7 @@ fn add_file_parts(
         let mut pairs = Vec::new();
         for item in items.try_iter()? {
             let item = item?;
-            let tuple: Bound<'_, PyTuple> = item.downcast_into::<PyTuple>()?;
+            let tuple: Bound<'_, PyTuple> = item.cast_into::<PyTuple>()?;
             let field_name: String = tuple.get_item(0)?.extract()?;
             let file_spec = tuple.get_item(1)?;
             pairs.push((field_name, file_spec));
@@ -176,7 +176,7 @@ fn add_file_parts(
         let mut pairs = Vec::new();
         for item in files.try_iter()? {
             let item = item?;
-            let tuple: Bound<'_, PyTuple> = item.downcast_into::<PyTuple>()?;
+            let tuple: Bound<'_, PyTuple> = item.cast_into::<PyTuple>()?;
             if tuple.len() != 2 {
                 return Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
                     "files sequence items must be 2-tuples of (field_name, file_spec)",
@@ -232,7 +232,7 @@ fn add_single_file_part(
         return Ok(());
     }
 
-    if let Ok(tuple) = file_spec.downcast::<PyTuple>() {
+    if let Ok(tuple) = file_spec.cast::<PyTuple>() {
         return add_tuple_file_part(multipart, py, field_name, tuple);
     }
 

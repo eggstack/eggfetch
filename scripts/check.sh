@@ -66,13 +66,13 @@ Python validation requires an active virtual environment.
 Create one and install test tooling:
   python3 -m venv .venv
   source .venv/bin/activate
-  python -m pip install maturin pytest pytest-asyncio
+  python -m pip install maturin pytest pytest-asyncio mypy
 SETUP_GUIDE
         exit 1
     fi
 
     # Verify required Python modules
-    for mod in pytest pytest_asyncio; do
+    for mod in pytest pytest_asyncio mypy; do
         if ! "$PYTHON_BIN" -c "import $mod" 2>/dev/null; then
             fail "Required Python module not found: $mod. Install into the active venv: python -m pip install $mod"
         fi
@@ -110,6 +110,16 @@ tier1_rust_tests() {
 tier1_python_build() {
     info "Building Python extension"
     maturin develop -m "$REPO_ROOT/crates/eggfetch-python/Cargo.toml"
+}
+
+tier1_native_api() {
+    info "Native Python API manifest"
+    "$PYTHON_BIN" "$SCRIPT_DIR/check_native_python_api.py"
+}
+
+tier1_python_typing() {
+    info "Python typing fixture"
+    "$PYTHON_BIN" "$SCRIPT_DIR/check_python_typing.py"
 }
 
 tier1_python_tests() {
@@ -157,6 +167,8 @@ run_tier1() {
     tier1_clippy
     tier1_rust_tests
     tier1_python_build
+    tier1_native_api
+    tier1_python_typing
     tier1_python_tests
     tier1_compat_smoke
     tier1_node_binding

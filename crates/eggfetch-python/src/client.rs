@@ -6,13 +6,9 @@ use std::sync::{Arc, Mutex};
 use pyo3::prelude::*;
 
 use crate::auth;
-use crate::conversion::{
-    build_request_body, parse_timeout, python_cookies_to_header, python_headers_to_rust,
-    python_params_to_url, validate_body_kwargs_with_files,
-};
+use crate::conversion::{parse_timeout, python_headers_to_rust};
 use crate::cookies::PyCookies;
 use crate::errors::{map_err, InvalidUrl};
-use crate::extensions::extract_native_extensions;
 use crate::limits::PyLimits;
 use crate::proxy::{self, ProxyOverride};
 use crate::response::PyResponse;
@@ -187,7 +183,7 @@ impl PyClient {
 
         let jar = eggfetch_core::cookie::CookieJar::new();
         if let Some(c) = cookies {
-            if let Ok(dict) = c.downcast::<pyo3::types::PyDict>() {
+            if let Ok(dict) = c.cast::<pyo3::types::PyDict>() {
                 for (key, value) in dict.iter() {
                     let name: String = key.extract()?;
                     let val: String = value.extract()?;
@@ -315,88 +311,47 @@ impl PyClient {
             ));
         }
 
-        let method_upper = method.to_uppercase();
-        let http_method = http::Method::try_from(method_upper.as_str()).map_err(|_| {
-            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
-                "invalid HTTP method: {method}"
-            ))
-        })?;
-
-        let mut target_url = url::Url::parse(url)
-            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
-
-        if let Some(p) = params {
-            python_params_to_url(py, &mut target_url, p)?;
-        }
-        let target_url = target_url;
-
-        validate_body_kwargs_with_files(content, data, json, files)?;
-
-        let mut rust_headers = if let Some(h) = headers {
-            python_headers_to_rust(py, h)?
-        } else {
-            eggfetch_core::Headers::new()
-        };
-
-        let (body_bytes, auto_content_type): (Option<Vec<u8>>, Option<String>) =
-            if let Some(f) = files {
-                let (body, ct) = crate::multipart::build_multipart_body(py, data, f)?;
-                match body {
-                    eggfetch_core::RequestBody::Bytes(b) => (Some(b.to_vec()), Some(ct)),
-                    _ => (None, Some(ct)),
-                }
-            } else {
-                let (bytes, ct) = build_request_body(py, content, data, json)?;
-                (bytes, ct.map(String::from))
-            };
-
-        // Check if content is a Python iterable (not bytes/str) — treat as stream body.
-        let stream_body = if let Some(c) = content {
-            if body_bytes.is_none() && files.is_none() && crate::conversion::is_python_iterable(c)?
-            {
-                Some(crate::conversion::python_iterable_to_request_body(py, c)?)
-            } else {
-                None
-            }
-        } else {
-            None
-        };
-
-        if let Some(ct) = &auto_content_type {
-            if !rust_headers.contains("content-type") {
-                rust_headers.insert("content-type", ct).map_err(map_err)?;
-            }
-        }
-
-        if let Some(cookie_header) = python_cookies_to_header(cookies, &target_url)? {
-            if !rust_headers.contains("cookie") {
-                rust_headers
-                    .insert("cookie", &cookie_header)
-                    .map_err(map_err)?;
-            }
-        }
-
-        let rust_timeout = parse_timeout(timeout)?;
-
-        let auth_override = auth::parse_auth(auth)?;
-
-        let proxy_override = proxy::parse_proxy(proxy)?;
-
-        let (proxy_headers, proxy_tls_config) = proxy::extract_proxy_extras(py, proxy)?;
-
-        let retry_override = retry::parse_retry_option(retries)?;
-
-        // Extract any native transport hints and trace bridge from the
-        // Python `extensions` dict.  This must happen while we still
-        // hold the GIL because the trace callback is a Python callable.
-        let extracted = extract_native_extensions(py, extensions)?;
+        let crate::request_preparation::PreparedRequest {
+            method: http_method,
+            url: target_url,
+            headers: rust_headers,
+            body: request_body,
+            timeout: rust_timeout,
+            auth: auth_override,
+            proxy: proxy_override,
+            proxy_headers,
+            proxy_tls_config,
+            retry: retry_override,
+            extensions: extracted,
+            follow_redirects: prepared_follow_redirects,
+            max_redirects: prepared_max_redirects,
+        } = crate::request_preparation::prepare_request(
+            py,
+            method,
+            url,
+            headers,
+            params,
+            content,
+            data,
+            json,
+            files,
+            timeout,
+            cookies,
+            auth,
+            follow_redirects,
+            max_redirects,
+            proxy,
+            retries,
+            extensions,
+            false,
+        )?;
         let transport_hints = extracted.hints;
 
         let client = self.clone_client()?;
         let trace_slot = extracted.trace_error_slot.clone();
         let (runtime_guard, runtime_handle) = self.runtime_for_dispatch()?;
         let effective_decompress = decompress.or(self.decompress);
-        let result = py.allow_threads(|| {
+        let result = py.detach(|| {
             runtime_handle.block_on(async {
                 let mut builder = client
                     .request(http_method, target_url.as_str())
@@ -404,10 +359,8 @@ impl PyClient {
 
                 builder = builder.headers(rust_headers);
 
-                if let Some(bytes) = body_bytes {
-                    builder = builder.bytes(bytes);
-                } else if let Some(stream) = stream_body {
-                    builder = builder.body(stream);
+                if let Some(body) = request_body {
+                    builder = builder.body(body);
                 }
 
                 if let Some(t) = rust_timeout {
@@ -448,12 +401,12 @@ impl PyClient {
                     }
                 }
 
-                if follow_redirects.is_some() || max_redirects.is_some() {
+                if prepared_follow_redirects.is_some() || prepared_max_redirects.is_some() {
                     let mut redirect = eggfetch_core::redirect::RedirectPolicy::default();
-                    if let Some(f) = follow_redirects {
+                    if let Some(f) = prepared_follow_redirects {
                         redirect.follow = f;
                     }
-                    if let Some(m) = max_redirects {
+                    if let Some(m) = prepared_max_redirects {
                         redirect.max_redirects = m;
                     }
                     builder = builder.redirect_policy(redirect);
@@ -860,88 +813,47 @@ impl PyClient {
             ));
         }
 
-        let method_upper = method.to_uppercase();
-        let http_method = http::Method::try_from(method_upper.as_str()).map_err(|_| {
-            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
-                "invalid HTTP method: {method}"
-            ))
-        })?;
-
-        let mut target_url = url::Url::parse(url)
-            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
-
-        if let Some(p) = params {
-            python_params_to_url(py, &mut target_url, p)?;
-        }
-        let target_url = target_url;
-
-        validate_body_kwargs_with_files(content, data, json, files)?;
-
-        let mut rust_headers = if let Some(h) = headers {
-            python_headers_to_rust(py, h)?
-        } else {
-            eggfetch_core::Headers::new()
-        };
-
-        let (body_bytes, auto_content_type): (Option<Vec<u8>>, Option<String>) =
-            if let Some(f) = files {
-                let (body, ct) = crate::multipart::build_multipart_body(py, data, f)?;
-                match body {
-                    eggfetch_core::RequestBody::Bytes(b) => (Some(b.to_vec()), Some(ct)),
-                    _ => (None, Some(ct)),
-                }
-            } else {
-                let (bytes, ct) = build_request_body(py, content, data, json)?;
-                (bytes, ct.map(String::from))
-            };
-
-        // Check if content is a Python iterable (not bytes/str) — treat as stream body.
-        let stream_body = if let Some(c) = content {
-            if body_bytes.is_none() && files.is_none() && crate::conversion::is_python_iterable(c)?
-            {
-                Some(crate::conversion::python_iterable_to_request_body(py, c)?)
-            } else {
-                None
-            }
-        } else {
-            None
-        };
-
-        if let Some(ct) = &auto_content_type {
-            if !rust_headers.contains("content-type") {
-                rust_headers.insert("content-type", ct).map_err(map_err)?;
-            }
-        }
-
-        if let Some(cookie_header) = python_cookies_to_header(cookies, &target_url)? {
-            if !rust_headers.contains("cookie") {
-                rust_headers
-                    .insert("cookie", &cookie_header)
-                    .map_err(map_err)?;
-            }
-        }
-
-        let rust_timeout = parse_timeout(timeout)?;
-
-        let auth_override = auth::parse_auth(auth)?;
-
-        let proxy_override = proxy::parse_proxy(proxy)?;
-
-        let (proxy_headers, proxy_tls_config) = proxy::extract_proxy_extras(py, proxy)?;
-
-        let retry_override = retry::parse_retry_option(retries)?;
-
-        // Extract transport hints and trace bridge from the Python
-        // `extensions` dict.  The same helper is used by `request()` so
-        // behavior stays consistent across buffered and streaming paths.
-        let extracted = extract_native_extensions(py, extensions)?;
+        let crate::request_preparation::PreparedRequest {
+            method: http_method,
+            url: target_url,
+            headers: rust_headers,
+            body: request_body,
+            timeout: rust_timeout,
+            auth: auth_override,
+            proxy: proxy_override,
+            proxy_headers,
+            proxy_tls_config,
+            retry: retry_override,
+            extensions: extracted,
+            follow_redirects: prepared_follow_redirects,
+            max_redirects: prepared_max_redirects,
+        } = crate::request_preparation::prepare_request(
+            py,
+            method,
+            url,
+            headers,
+            params,
+            content,
+            data,
+            json,
+            files,
+            timeout,
+            cookies,
+            auth,
+            follow_redirects,
+            max_redirects,
+            proxy,
+            retries,
+            extensions,
+            false,
+        )?;
         let transport_hints = extracted.hints;
         let trace_slot = extracted.trace_error_slot.clone();
 
         let client = self.clone_client()?;
         let (runtime_guard, runtime_handle) = self.runtime_for_dispatch()?;
         let effective_decompress = decompress.or(self.decompress);
-        let result = py.allow_threads(|| {
+        let result = py.detach(|| {
             runtime_handle.block_on(async {
                 let mut builder = client
                     .request(http_method, target_url.as_str())
@@ -949,10 +861,8 @@ impl PyClient {
 
                 builder = builder.headers(rust_headers);
 
-                if let Some(bytes) = body_bytes {
-                    builder = builder.bytes(bytes);
-                } else if let Some(stream) = stream_body {
-                    builder = builder.body(stream);
+                if let Some(body) = request_body {
+                    builder = builder.body(body);
                 }
 
                 if let Some(t) = rust_timeout {
@@ -993,12 +903,12 @@ impl PyClient {
                     }
                 }
 
-                if follow_redirects.is_some() || max_redirects.is_some() {
+                if prepared_follow_redirects.is_some() || prepared_max_redirects.is_some() {
                     let mut redirect = eggfetch_core::redirect::RedirectPolicy::default();
-                    if let Some(f) = follow_redirects {
+                    if let Some(f) = prepared_follow_redirects {
                         redirect.follow = f;
                     }
-                    if let Some(m) = max_redirects {
+                    if let Some(m) = prepared_max_redirects {
                         redirect.max_redirects = m;
                     }
                     builder = builder.redirect_policy(redirect);
@@ -1135,7 +1045,7 @@ impl PyClient {
     /// Clone the shared tokio runtime and its handle for dispatch.
     ///
     /// This must be the *only* runtime fetch on the request path: it
-    /// happens once, before `allow_threads`, so a concurrent `close()`
+    /// happens once, before `detach`, so a concurrent `close()`
     /// taking the runtime afterwards cannot race a second fetch. A
     /// closed client raises `ValueError` instead of panicking.
     fn runtime_for_dispatch(&self) -> PyResult<(RuntimeGuard, tokio::runtime::Handle)> {

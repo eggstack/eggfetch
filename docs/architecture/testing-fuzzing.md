@@ -28,7 +28,7 @@ cargo test -p eggfetch-core --all-features -- --test-threads=1
 
 # Python tests (rebuild the extension first; requires an active venv with
 # Python 3.10+, maturin, pytest, pytest-asyncio)
-PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1 maturin develop -m crates/eggfetch-python/Cargo.toml
+maturin develop -m crates/eggfetch-python/Cargo.toml
 python -m pytest crates/eggfetch-python/tests/ -q --ignore=crates/eggfetch-python/tests/compat
 
 # HTTPX compatibility tests (requires httpx==0.28.1)
@@ -223,11 +223,11 @@ cd fuzz && cargo +nightly fuzz build
 ## Python Tests
 
 Routine CI tests use Python 3.12 on ubuntu-latest (single job, no matrix);
-wheel builds (`pypi.yml`) cover Python 3.10–3.13 across Linux/macOS/Windows.
+wheel builds (`pypi.yml`) cover Python 3.10–3.14 across Linux/macOS/Windows.
 
 ```sh
 # Build and install (from the repo root, inside the venv)
-PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1 maturin develop -m crates/eggfetch-python/Cargo.toml
+maturin develop -m crates/eggfetch-python/Cargo.toml
 
 # Run tests
 python -m pytest crates/eggfetch-python/tests/ -q --ignore=crates/eggfetch-python/tests/compat

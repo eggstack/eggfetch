@@ -17,7 +17,7 @@ use pyo3::prelude::*;
 /// cannot distinguish omitted from explicit-`None` (`Option<f64>`), and
 /// an all-`None` native timeout is the only way to express "disabled" via
 /// `_convert_timeout`. Behaviour is identical (no timeout either way).
-#[pyclass(name = "Timeout")]
+#[pyclass(name = "Timeout", from_py_object)]
 #[derive(Debug, Clone)]
 pub struct PyTimeout {
     /// The inner timeout configuration.

@@ -2,6 +2,8 @@
 
 import http.server
 import json
+import ssl
+import sys
 import threading
 import time
 import urllib.parse
@@ -91,7 +93,15 @@ def server():
 class TestPackageImports:
     def test_import_version(self):
         assert isinstance(eggfetch.__version__, str)
-        assert eggfetch.__version__ == "0.1.0"
+        assert eggfetch.__version__ == "0.1.4"
+
+    def test_native_ssl_interop_does_not_import_compat_facade(self):
+        before = {name for name in sys.modules if name.startswith("eggfetch.compat")}
+        context = ssl.create_default_context()
+        with eggfetch.Client(verify=context) as client:
+            assert repr(client)
+        after = {name for name in sys.modules if name.startswith("eggfetch.compat")}
+        assert after == before
 
     def test_imports_classes(self):
         assert hasattr(eggfetch, "Client")

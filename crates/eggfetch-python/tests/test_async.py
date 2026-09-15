@@ -35,8 +35,19 @@ class _Handler(http.server.BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_POST(self):
-        length = int(self.headers.get("Content-Length", 0))
-        raw = self.rfile.read(length) if length else b""
+        if self.headers.get("Transfer-Encoding", "").lower() == "chunked":
+            chunks = []
+            while True:
+                size = int(self.rfile.readline().strip(), 16)
+                if size == 0:
+                    self.rfile.readline()
+                    break
+                chunks.append(self.rfile.read(size))
+                self.rfile.readline()
+            raw = b"".join(chunks)
+        else:
+            length = int(self.headers.get("Content-Length", 0))
+            raw = self.rfile.read(length) if length else b""
         body = json.dumps({
             "method": "POST",
             "path": self.path,
@@ -154,6 +165,33 @@ class TestAsyncClientPost:
                 assert data["method"] == "POST"
                 assert data["body"] == "hello world"
         asyncio.run(_test())
+
+    def test_async_iterable_body_is_lazy_and_reusable(self, server):
+        async def _test():
+            pulls = []
+
+            async def body():
+                pulls.append(1)
+                yield b"hello "
+                await asyncio.sleep(0)
+                pulls.append(2)
+                yield "world"
+
+            async with eggfetch.AsyncClient() as client:
+                response = await client.post(f"{server}/api", content=body())
+                assert json.loads(response.text)["body"] == "hello world"
+                assert pulls == [1, 2]
+                assert (await client.get(f"{server}/hello")).status_code == 200
+
+        asyncio.run(_test())
+
+    def test_sync_client_rejects_async_only_body(self, server):
+        async def body():
+            yield b"never sent"
+
+        with eggfetch.Client() as client:
+            with pytest.raises(TypeError, match="AsyncClient"):
+                client.post(f"{server}/api", content=body())
 
 
 # ---------------------------------------------------------------------------

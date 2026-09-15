@@ -11,7 +11,7 @@ Use this skill when working on the eggfetch-python crate (PyO3/maturin bindings)
 ## Building and Testing
 
 ```sh
-PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1 maturin develop -m crates/eggfetch-python/Cargo.toml
+maturin develop -m crates/eggfetch-python/Cargo.toml
 python -m pytest crates/eggfetch-python/tests/ -q --ignore=crates/eggfetch-python/tests/compat
 ```
 
@@ -20,7 +20,9 @@ Requires an active venv with Python 3.10+, maturin, pytest, pytest-asyncio
 `crates/eggfetch-python` — a stale `.so` causes confusing failures.
 Tier 2 compat runs `EGGFETCH_COMPAT_REQUIRED=1 pytest .../compat/ -v --strict-markers`.
 
-CI must install `pytest-asyncio` explicitly. The `PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1` env var is required.
+CI must install `pytest-asyncio` and `mypy` explicitly. The binding uses
+interpreter-specific PyO3 wheels; do not add an ABI3 forward-compatibility
+environment override.
 
 ## Key Constraints
 
@@ -33,6 +35,14 @@ CI must install `pytest-asyncio` explicitly. The `PYO3_USE_ABI3_FORWARD_COMPATIB
 - Async API targets asyncio via pyo3-async-runtimes.
 - Response surface must be requests/httpx-compatible.
 - Body kwargs (`content`, `data`, `json`) are mutually exclusive. `files` may combine with `data` but conflicts with `content` and `json`.
+- `Client` and top-level sync helpers accept lazy synchronous iterable bodies;
+  `AsyncClient` additionally accepts lazy async iterables of `bytes | str`.
+  Sync APIs reject async-only iterables before dispatch.
+- Shared argument normalization lives in `src/request_preparation.rs`; keep
+  runtime ownership and dispatch-specific lifecycle behavior in the sync and
+  async adapters.
+- Generic `ssl.SSLContext` interop lives in `eggfetch._ssl_context`. The
+  historical `eggfetch.compat.httpx._ssl_context` path is only a thin shim.
 - Secret redaction applies to all Debug/Display/output paths.
 
 ## Exception Hierarchy
@@ -185,7 +195,7 @@ Key boundaries:
 **Testing the compat layer:**
 
 ```sh
-PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1 maturin develop -m crates/eggfetch-python/Cargo.toml
+maturin develop -m crates/eggfetch-python/Cargo.toml
 EGGFETCH_COMPAT_REQUIRED=1 pytest crates/eggfetch-python/tests/compat/ -v --strict-markers
 ```
 

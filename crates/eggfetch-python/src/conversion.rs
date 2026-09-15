@@ -1,5 +1,6 @@
 //! Conversion utilities between Python and Rust types.
 
+use pyo3::exceptions::PyStopAsyncIteration;
 use pyo3::prelude::*;
 use pyo3::types::{PyByteArray, PyByteArrayMethods, PyIterator, PyMemoryView, PyTuple};
 
@@ -43,7 +44,7 @@ fn iter_kv_pairs(obj: &Bound<'_, PyAny>, field: &str) -> PyResult<Vec<(String, S
     let mut pairs = Vec::new();
     for item in items.try_iter()? {
         let item = item?;
-        let tuple: Bound<'_, PyTuple> = item.downcast_into::<PyTuple>()?;
+        let tuple: Bound<'_, PyTuple> = item.cast_into::<PyTuple>()?;
         if tuple.len() != 2 {
             return Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(format!(
                 "{field} must be a mapping or sequence of 2-tuples"
@@ -198,8 +199,8 @@ pub fn build_request_body<'py>(
     }
 }
 
-/// Check if a Python object is an iterable/generator (not bytes or str).
-pub fn is_python_iterable(obj: &Bound<'_, PyAny>) -> PyResult<bool> {
+/// Return whether a body provides synchronous iteration.
+pub fn is_sync_iterable(obj: &Bound<'_, PyAny>) -> PyResult<bool> {
     if obj.is_instance_of::<pyo3::types::PyBytes>()
         || obj.is_instance_of::<pyo3::types::PyString>()
         || obj.is_instance_of::<PyByteArray>()
@@ -207,7 +208,29 @@ pub fn is_python_iterable(obj: &Bound<'_, PyAny>) -> PyResult<bool> {
     {
         return Ok(false);
     }
-    Ok(obj.hasattr("__iter__")? || obj.hasattr("__aiter__")?)
+    obj.hasattr("__iter__")
+}
+
+/// Return whether a body provides asynchronous iteration.
+pub fn is_async_iterable(obj: &Bound<'_, PyAny>) -> PyResult<bool> {
+    if obj.is_instance_of::<pyo3::types::PyBytes>()
+        || obj.is_instance_of::<pyo3::types::PyString>()
+        || obj.is_instance_of::<PyByteArray>()
+        || obj.is_instance_of::<PyMemoryView>()
+    {
+        return Ok(false);
+    }
+    obj.hasattr("__aiter__")
+}
+
+/// Reject an async-only body before a synchronous request is dispatched.
+pub fn reject_async_only_body(obj: &Bound<'_, PyAny>) -> PyResult<()> {
+    if is_async_iterable(obj)? && !is_sync_iterable(obj)? {
+        return Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
+            "async iterable request bodies are supported only by AsyncClient",
+        ));
+    }
+    Ok(())
 }
 
 /// Create a `RequestBody` from a Python sync iterable.
@@ -221,10 +244,10 @@ struct PythonBodyIterator {
 
 impl Drop for PythonBodyIterator {
     fn drop(&mut self) {
-        // `Python::with_gil` can panic during interpreter shutdown. Swallow
+        // `Python::attach` can panic during interpreter shutdown. Swallow
         // the panic so `Drop` never unwinds, and ignore `close()` errors.
         let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            Python::with_gil(|py| {
+            Python::attach(|py| {
                 let iterator = self.iterator.bind(py);
                 if let Ok(close) = iterator.as_any().getattr("close") {
                     let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -241,10 +264,10 @@ fn extract_bytes_like(obj: &Bound<'_, PyAny>) -> PyResult<Option<Vec<u8>>> {
     if let Ok(bytes) = obj.extract::<Vec<u8>>() {
         return Ok(Some(bytes));
     }
-    if let Ok(bytearray) = obj.downcast::<PyByteArray>() {
+    if let Ok(bytearray) = obj.cast::<PyByteArray>() {
         return Ok(Some(bytearray.to_vec()));
     }
-    if let Ok(memoryview) = obj.downcast::<PyMemoryView>() {
+    if let Ok(memoryview) = obj.cast::<PyMemoryView>() {
         return Ok(Some(
             memoryview.call_method0("tobytes")?.extract::<Vec<u8>>()?,
         ));
@@ -265,7 +288,7 @@ pub fn python_iterable_to_request_body<'py>(
     let stream = stream::unfold(Some(state), |state| async move {
         let state = state?;
         let result = match tokio::task::spawn_blocking(move || {
-            let next_chunk = Python::with_gil(|py| {
+            let next_chunk = Python::attach(|py| {
                 let mut iterator = state.iterator.bind(py).clone();
                 match iterator.next() {
                     Some(item) => {
@@ -298,6 +321,66 @@ pub fn python_iterable_to_request_body<'py>(
             Ok(Some(chunk)) => Some((Ok(chunk), Some(state))),
             Ok(None) => None,
             Err(error) => Some((Err(eggfetch_core::Error::Body(error.to_string())), None)),
+        }
+    });
+    Ok(eggfetch_core::RequestBody::from_stream(
+        Box::pin(stream),
+        None,
+    ))
+}
+
+/// Create a lazy request body from a Python asynchronous iterable.
+///
+/// Each `__anext__()` call is scheduled on the event loop captured from the
+/// calling asyncio task and awaited only when the transport asks for another
+/// body frame. The iterator is therefore never eagerly buffered.
+pub fn python_async_iterable_to_request_body<'py>(
+    py: Python<'py>,
+    iterable: &Bound<'py, PyAny>,
+) -> PyResult<eggfetch_core::RequestBody> {
+    use futures_util::stream;
+
+    let iterator = iterable.call_method0("__aiter__")?.unbind();
+    let locals = pyo3_async_runtimes::tokio::get_current_locals(py)?;
+    let stream = stream::unfold(Some((iterator, locals)), |state| async move {
+        let (iterator, locals) = state?;
+        let next_future = Python::attach(|py| {
+            let awaitable = iterator.bind(py).call_method0("__anext__")?;
+            pyo3_async_runtimes::into_future_with_locals(&locals, awaitable)
+        });
+        let next_result = match next_future {
+            Ok(future) => future.await,
+            Err(error) => Err(error),
+        };
+
+        match next_result {
+            Ok(item) => {
+                let chunk = Python::attach(|py| {
+                    let item = item.bind(py);
+                    if let Some(bytes) = extract_bytes_like(item)? {
+                        Ok(Bytes::from(bytes))
+                    } else if let Ok(string) = item.extract::<String>() {
+                        Ok(Bytes::from(string.into_bytes()))
+                    } else {
+                        Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
+                            "async iterable must yield bytes or str items",
+                        ))
+                    }
+                });
+                match chunk {
+                    Ok(chunk) => Some((Ok(chunk), Some((iterator, locals)))),
+                    Err(error) => Some((Err(eggfetch_core::Error::Body(error.to_string())), None)),
+                }
+            }
+            Err(error) => {
+                let finished =
+                    Python::attach(|py| error.is_instance_of::<PyStopAsyncIteration>(py));
+                if finished {
+                    None
+                } else {
+                    Some((Err(eggfetch_core::Error::Body(error.to_string())), None))
+                }
+            }
         }
     });
     Ok(eggfetch_core::RequestBody::from_stream(
@@ -365,7 +448,7 @@ pub(crate) fn parse_socket_options(
     let mut options = Vec::new();
     for item in py_options.try_iter()? {
         let item = item?;
-        let tuple: Bound<'_, PyTuple> = item.downcast_into::<PyTuple>()?;
+        let tuple: Bound<'_, PyTuple> = item.cast_into::<PyTuple>()?;
         if tuple.len() == 4 {
             // Both four-element shapes are rejected uniformly with
             // `ValueError`, matching the HTTPX compatibility facade
@@ -393,7 +476,7 @@ pub(crate) fn parse_socket_options(
         let value_obj = tuple.get_item(2)?;
         let value = if let Ok(value) = value_obj.extract::<i32>() {
             value.to_ne_bytes().to_vec()
-        } else if let Ok(value) = value_obj.downcast::<pyo3::types::PyByteArray>() {
+        } else if let Ok(value) = value_obj.cast::<pyo3::types::PyByteArray>() {
             value.to_vec()
         } else {
             value_obj.extract::<Vec<u8>>()?

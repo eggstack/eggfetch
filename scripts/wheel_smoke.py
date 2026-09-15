@@ -187,12 +187,18 @@ def main() -> None:
             base = f"http://127.0.0.1:{server.server_address[1]}"
             smoke = f"""
 import eggfetch
+import importlib.metadata
 import sys
 
 # --- Test 1: Version metadata ---
 assert hasattr(eggfetch, "__version__"), "eggfetch has no __version__"
 v = eggfetch.__version__
 assert isinstance(v, str) and len(v) > 0, f"invalid version: {{v!r}}"
+assert v == importlib.metadata.version("eggfetch"), (v, importlib.metadata.version("eggfetch"))
+from importlib.resources import files
+assert files("eggfetch").joinpath("py.typed").is_file()
+assert files("eggfetch").joinpath("__init__.pyi").is_file()
+assert files("eggfetch").joinpath("_native.pyi").is_file()
 print(f"PASS: version = {{v}}")
 
 # --- Test 2: Buffered GET ---

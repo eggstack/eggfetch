@@ -15,7 +15,6 @@ permissions:
 env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: -D warnings
-  PYO3_USE_ABI3_FORWARD_COMPATIBILITY: "1"
 
 jobs:
   # ── Validation ──────────────────────────────────────────────────────────
@@ -56,7 +55,7 @@ jobs:
         run: |
           python -m venv .venv
           source .venv/bin/activate
-          python -m pip install maturin pytest pytest-asyncio
+          python -m pip install maturin pytest pytest-asyncio mypy
           ./scripts/check.sh
 
       - name: Run package validation
@@ -99,6 +98,12 @@ jobs:
             maturin-args: --target x86_64-unknown-linux-gnu
             manylinux: "2014"
             python: "3.13"
+          - os: linux
+            arch: x86_64
+            runner: ubuntu-latest
+            maturin-args: --target x86_64-unknown-linux-gnu
+            manylinux: "2014"
+            python: "3.14"
           # macOS arm64
           - os: macos
             arch: arm64
@@ -120,6 +125,11 @@ jobs:
             runner: macos-latest
             maturin-args: --target aarch64-apple-darwin
             python: "3.13"
+          - os: macos
+            arch: arm64
+            runner: macos-latest
+            maturin-args: --target aarch64-apple-darwin
+            python: "3.14"
           # Windows x86_64
           - os: windows
             arch: x86_64
@@ -141,6 +151,11 @@ jobs:
             runner: windows-latest
             maturin-args: --target x86_64-pc-windows-msvc
             python: "3.13"
+          - os: windows
+            arch: x86_64
+            runner: windows-latest
+            maturin-args: --target x86_64-pc-windows-msvc
+            python: "3.14"
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
@@ -346,8 +361,8 @@ jobs:
           echo "Sdists: $sdist_count"
           echo "Total: $total"
 
-          if [[ $wheel_count -ne 12 ]]; then
-            echo "FAIL: expected 12 wheels, found $wheel_count" >&2; exit 1
+          if [[ $wheel_count -ne 15 ]]; then
+            echo "FAIL: expected 15 wheels, found $wheel_count" >&2; exit 1
           fi
           if [[ $sdist_count -ne 1 ]]; then
             echo "FAIL: expected 1 sdist, found $sdist_count" >&2; exit 1
@@ -407,8 +422,8 @@ jobs:
           set -euo pipefail
           count=$(find dist/ -type f \( -name '*.whl' -o -name '*.tar.gz' \) | wc -l)
           echo "Distributions to publish: $count"
-          if [[ $count -ne 13 ]]; then
-            echo "FAIL: expected 13 distributions, found $count" >&2; exit 1
+          if [[ $count -ne 16 ]]; then
+            echo "FAIL: expected 16 distributions, found $count" >&2; exit 1
           fi
 
       - name: Publish to PyPI

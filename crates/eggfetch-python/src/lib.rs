@@ -14,6 +14,7 @@ mod limits;
 mod multipart;
 mod network_stream;
 mod proxy;
+mod request_preparation;
 mod response;
 mod retry;
 mod streaming;
@@ -80,84 +81,49 @@ fn request<'py>(
     retries: Option<&Bound<'py, PyAny>>,
     limits: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let method_upper = method.to_uppercase();
-    let http_method = http::Method::try_from(method_upper.as_str()).map_err(|_| {
-        PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("invalid HTTP method: {method}"))
-    })?;
-
-    let mut target_url = url::Url::parse(url)
-        .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
-
-    if let Some(p) = params {
-        conversion::python_params_to_url(py, &mut target_url, p)?;
-    }
-    let target_url = target_url;
-
-    conversion::validate_body_kwargs_with_files(content, data, json, files)?;
-
-    let mut rust_headers = if let Some(h) = headers {
-        conversion::python_headers_to_rust(py, h)?
-    } else {
-        eggfetch_core::Headers::new()
-    };
-
-    let (body_bytes, auto_content_type): (Option<Vec<u8>>, Option<String>) = if let Some(f) = files
-    {
-        let (body, ct) = multipart::build_multipart_body(py, data, f)?;
-        match body {
-            eggfetch_core::RequestBody::Bytes(b) => (Some(b.to_vec()), Some(ct)),
-            _ => (None, Some(ct)),
-        }
-    } else {
-        let (bytes, ct) = conversion::build_request_body(py, content, data, json)?;
-        (bytes, ct.map(String::from))
-    };
-
-    // Check if content is a Python iterable (not bytes/str) — treat as stream body.
-    let stream_body = if let Some(c) = content {
-        if body_bytes.is_none() && files.is_none() && conversion::is_python_iterable(c)? {
-            Some(conversion::python_iterable_to_request_body(py, c)?)
-        } else {
-            None
-        }
-    } else {
-        None
-    };
-
-    if let Some(ct) = &auto_content_type {
-        if !rust_headers.contains("content-type") {
-            rust_headers.insert("content-type", ct).map_err(map_err)?;
-        }
-    }
-
-    let rust_timeout = conversion::parse_timeout(timeout)?;
-
-    let redirect_policy = eggfetch_core::redirect::RedirectPolicy::new(
-        follow_redirects.unwrap_or(false),
-        max_redirects.unwrap_or(20),
-    );
-
-    if let Some(cookie_header) = conversion::python_cookies_to_header(cookies, &target_url)? {
-        if !rust_headers.contains("cookie") {
-            rust_headers
-                .insert("cookie", &cookie_header)
-                .map_err(map_err)?;
-        }
-    }
+    let request_preparation::PreparedRequest {
+        method: http_method,
+        url: target_url,
+        headers: rust_headers,
+        body: request_body,
+        timeout: rust_timeout,
+        auth: auth_override,
+        proxy: proxy_override,
+        retry: retry_override,
+        follow_redirects,
+        max_redirects,
+        ..
+    } = request_preparation::prepare_request(
+        py,
+        method,
+        url,
+        headers,
+        params,
+        content,
+        data,
+        json,
+        files,
+        timeout,
+        cookies,
+        auth,
+        follow_redirects,
+        max_redirects,
+        proxy,
+        retries,
+        None,
+        false,
+    )?;
 
     let runtime = tokio::runtime::Runtime::new()
         .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
 
-    let auth_override = auth::parse_auth(auth)?;
-
-    let proxy_override = proxy::parse_proxy(proxy)?;
-
-    let retry_override = retry::parse_retry_option(retries)?;
-
     let tls_config = tls::build_tls_config(verify, cert, None)?;
 
     let mut builder = eggfetch_core::Client::builder()
-        .redirect_policy(redirect_policy)
+        .redirect_policy(eggfetch_core::redirect::RedirectPolicy::new(
+            follow_redirects.unwrap_or(false),
+            max_redirects.unwrap_or(20),
+        ))
         .tls_config(tls_config);
 
     match auth_override {
@@ -167,7 +133,7 @@ fn request<'py>(
         }
     }
 
-    if let ProxyOverride::Override(ref url) = proxy_override {
+    if let proxy::ProxyOverride::Override(ref url) = proxy_override {
         let p = eggfetch_core::Proxy::all(url).map_err(map_err)?;
         builder = builder.proxy(p);
     }
@@ -179,7 +145,7 @@ fn request<'py>(
 
     let client = builder.build();
 
-    let result = py.allow_threads(|| {
+    let result = py.detach(|| {
         runtime.block_on(async {
             let mut builder = client
                 .request(http_method, target_url.as_str())
@@ -187,10 +153,8 @@ fn request<'py>(
 
             builder = builder.headers(rust_headers);
 
-            if let Some(bytes) = body_bytes {
-                builder = builder.bytes(bytes);
-            } else if let Some(stream) = stream_body {
-                builder = builder.body(stream);
+            if let Some(body) = request_body {
+                builder = builder.body(body);
             }
 
             if let Some(t) = rust_timeout {
@@ -654,6 +618,7 @@ fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
         "AsyncStreamingRawBytesIterator",
         "AsyncStreamingTextIterator",
         "Client",
+        "NetworkStream",
         "Cookie",
         "Cookies",
         "File",
@@ -721,7 +686,7 @@ fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
 /// eggfetch - Python bindings for eggfetch.
 #[pymodule]
 fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add("__version__", "0.1.0")?;
+    m.add("__version__", env!("CARGO_PKG_VERSION"))?;
 
     m.add_class::<PyAsyncClient>()?;
     m.add_class::<PyClient>()?;

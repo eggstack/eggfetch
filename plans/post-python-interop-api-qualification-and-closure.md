@@ -1,6 +1,6 @@
 # Post-Python Interop/API Qualification and Closure
 
-Status: **blocked on completion of the Python interop/API implementation plans**  
+Status: **ready for final qualification after implementation**
 Parent: `python-interop-api-hygiene-program.md`  
 Date: 2026-09-15
 

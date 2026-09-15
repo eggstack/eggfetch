@@ -16,12 +16,12 @@ fn apply_verify(
         }
     } else if let Ok(path) = v.extract::<String>() {
         builder = builder.ca_certificate_path(&path).map_err(map_err)?;
-    } else if let Ok(py_list) = v.downcast::<PyList>() {
+    } else if let Ok(py_list) = v.cast::<PyList>() {
         let mut der_certs: Vec<Vec<u8>> = Vec::with_capacity(py_list.len());
         for item in py_list.iter() {
             if let Ok(der_bytes) = item.extract::<Vec<u8>>() {
                 der_certs.push(der_bytes);
-            } else if let Ok(py_bytes) = item.downcast::<PyBytes>() {
+            } else if let Ok(py_bytes) = item.cast::<PyBytes>() {
                 der_certs.push(py_bytes.as_bytes().to_vec());
             } else {
                 return Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
@@ -37,7 +37,7 @@ fn apply_verify(
         let ssl_context_cls = v.py().import("ssl")?.getattr("SSLContext")?;
         if !v.is_instance(&ssl_context_cls)? {
             return Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
-                "verify must be bool, a CA bundle path or file-like object, \
+                "verify must be bool, a CA bundle path, \
                  a list of DER certificates, or an ssl.SSLContext",
             ));
         }
@@ -52,7 +52,7 @@ fn apply_ssl_context(
     mut builder: eggfetch_core::TlsConfigBuilder,
     v: &Bound<'_, PyAny>,
 ) -> PyResult<eggfetch_core::TlsConfigBuilder> {
-    let snapshot_mod = v.py().import("eggfetch.compat.httpx._ssl_context")?;
+    let snapshot_mod = v.py().import("eggfetch._ssl_context")?;
     let snapshot = snapshot_mod
         .getattr("snapshot_context")?
         .call((v.as_unbound(),), None)?;
@@ -93,7 +93,7 @@ fn apply_eggfetch_registry_metadata(
     let meta_any = registry.getattr("get")?.call((ctx.as_unbound(),), None)?;
 
     if !meta_any.is_none() {
-        let meta = meta_any.downcast::<pyo3::types::PyDict>()?;
+        let meta = meta_any.cast::<pyo3::types::PyDict>()?;
 
         if let Some(verify_val) = meta.get_item("verify")? {
             if let Ok(b) = verify_val.extract::<bool>() {
@@ -205,7 +205,7 @@ fn apply_cert(
 ) -> PyResult<eggfetch_core::TlsConfigBuilder> {
     if let Ok(path) = c.extract::<String>() {
         builder = builder.client_cert_path(&path, &path).map_err(map_err)?;
-    } else if let Ok(tuple) = c.downcast::<PyTuple>() {
+    } else if let Ok(tuple) = c.cast::<PyTuple>() {
         if tuple.len() != 2 {
             return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
                 "cert tuple must be (cert_path, key_path)",

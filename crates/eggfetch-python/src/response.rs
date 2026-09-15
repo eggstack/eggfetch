@@ -76,7 +76,7 @@ fn decode_with_encoding(content: &[u8], encoding: Option<&str>) -> String {
 ///
 /// All data is buffered at creation time so Python code can access it
 /// synchronously.
-#[pyclass(name = "Response")]
+#[pyclass(name = "Response", from_py_object)]
 #[derive(Debug, Clone)]
 pub struct PyResponse {
     /// HTTP status code.
@@ -420,7 +420,7 @@ impl PyResponse {
 
     /// Parse the response body as JSON.
     #[pyo3(signature = (**kwargs))]
-    fn json(&self, py: Python<'_>, kwargs: Option<&Bound<'_, PyDict>>) -> PyResult<PyObject> {
+    fn json(&self, py: Python<'_>, kwargs: Option<&Bound<'_, PyDict>>) -> PyResult<Py<PyAny>> {
         let json_module = py.import("json")?;
         let text_obj = PyString::new(py, &self.text);
         let loads = json_module.getattr("loads")?;
@@ -432,13 +432,13 @@ impl PyResponse {
 
     /// Iterate over response body in byte chunks.
     #[pyo3(signature = (chunk_size=8192))]
-    fn iter_bytes(&self, py: Python<'_>, chunk_size: usize) -> PyResult<PyObject> {
+    fn iter_bytes(&self, py: Python<'_>, chunk_size: usize) -> PyResult<Py<PyAny>> {
         if chunk_size == 0 {
             return Err(pyo3::exceptions::PyValueError::new_err(
                 "chunk_size must be greater than zero",
             ));
         }
-        let chunks: Vec<PyObject> = self
+        let chunks: Vec<Py<PyAny>> = self
             .content
             .chunks(chunk_size)
             .map(|c| Ok(PyBytes::new(py, c).into()))
@@ -452,7 +452,7 @@ impl PyResponse {
 
     /// Iterate over response body in text chunks.
     #[pyo3(signature = (chunk_size=8192))]
-    fn iter_text(&self, py: Python<'_>, chunk_size: usize) -> PyResult<PyObject> {
+    fn iter_text(&self, py: Python<'_>, chunk_size: usize) -> PyResult<Py<PyAny>> {
         if chunk_size == 0 {
             return Err(pyo3::exceptions::PyValueError::new_err(
                 "chunk_size must be greater than zero",
@@ -460,7 +460,7 @@ impl PyResponse {
         }
         // Slice by char count without materializing `Vec<char>`: iterate
         // char boundaries and cut every `chunk_size` chars, preserving UTF-8.
-        let mut chunks: Vec<PyObject> = Vec::new();
+        let mut chunks: Vec<Py<PyAny>> = Vec::new();
         let mut byte_start = 0;
         let mut count = 0;
         for (byte_idx, c) in self.text.char_indices() {
@@ -483,8 +483,8 @@ impl PyResponse {
     }
 
     /// Iterate over response body lines.
-    fn iter_lines(&self, py: Python<'_>) -> PyResult<PyObject> {
-        let lines: Vec<PyObject> = self
+    fn iter_lines(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        let lines: Vec<Py<PyAny>> = self
             .text
             .lines()
             .map(|l| Ok(PyString::new(py, l).into()))

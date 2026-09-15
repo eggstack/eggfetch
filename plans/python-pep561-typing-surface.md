@@ -1,6 +1,6 @@
 # Python PEP 561 Typing Surface
 
-Status: **ready after `python-pyo3-python-version-modernization.md`**  
+Status: **implemented; final qualification pending**
 Parent: `python-interop-api-hygiene-program.md`  
 Date: 2026-09-15
 
@@ -261,18 +261,18 @@ plus:
 
 ## Acceptance Criteria
 
-- [ ] `eggfetch/py.typed` is present in source and built wheels.
-- [ ] native public package has reviewed `.pyi` coverage.
-- [ ] every supported `eggfetch.__all__` symbol has a typing decision.
-- [ ] public exception hierarchy is represented correctly in stubs.
-- [ ] sync/async request-body types reflect actual post-interop behavior.
-- [ ] response/stream/context-manager return types are accurate.
-- [ ] compatibility-package public entry points remain usable by type checkers without requiring a full annotation campaign for private underscore modules.
-- [ ] runtime/stub structural drift is mechanically checked.
-- [ ] representative downstream typing fixtures pass.
-- [ ] package validation fails if marker/stubs are missing from the wheel.
-- [ ] no private implementation module is accidentally declared supported solely due to PEP 561 packaging.
-- [ ] Tier 1, Tier 2, and package validation pass.
+- [x] `eggfetch/py.typed` is present in source and built wheels.
+- [x] native public package has reviewed `.pyi` coverage.
+- [x] every supported `eggfetch.__all__` symbol has a typing decision.
+- [x] public exception hierarchy is represented correctly in stubs.
+- [x] sync/async request-body types reflect actual post-interop behavior.
+- [x] response/stream/context-manager return types are accurate.
+- [x] compatibility-package public entry points remain usable by type checkers without requiring a full annotation campaign for private underscore modules.
+- [x] runtime/stub structural drift is mechanically checked.
+- [x] representative downstream typing fixtures pass.
+- [x] package validation fails if marker/stubs are missing from the wheel.
+- [x] no private implementation module is accidentally declared supported solely due to PEP 561 packaging.
+- [x] Tier 1, Tier 2, and package validation pass.
 
 ## Handoff
 

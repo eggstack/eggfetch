@@ -1,7 +1,7 @@
 use pyo3::prelude::*;
 
 /// HTTPX-compatible resource limits for the connection pool.
-#[pyclass(name = "Limits")]
+#[pyclass(name = "Limits", from_py_object)]
 #[derive(Debug, Clone)]
 pub struct PyLimits {
     pub inner: eggfetch_core::Limits,

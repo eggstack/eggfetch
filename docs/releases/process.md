@@ -62,11 +62,11 @@ PyPI publication is performed via the manually dispatched `.github/workflows/pyp
 
 | Operating system | Architecture | Python versions |
 |---|---|---|
-| Linux manylinux2014 | x86_64 | 3.10, 3.11, 3.12, 3.13 |
-| macOS | arm64 | 3.10, 3.11, 3.12, 3.13 |
-| Windows | x86_64 | 3.10, 3.11, 3.12, 3.13 |
+| Linux manylinux2014 | x86_64 | 3.10, 3.11, 3.12, 3.13, 3.14 |
+| macOS | arm64 | 3.10, 3.11, 3.12, 3.13, 3.14 |
+| Windows | x86_64 | 3.10, 3.11, 3.12, 3.13, 3.14 |
 
-12 wheels + 1 source distribution = 13 distributions per release.
+15 wheels + 1 source distribution = 16 distributions per release.
 
 ### Dispatch Procedure
 

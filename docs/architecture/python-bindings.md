@@ -23,6 +23,7 @@ See also: [overview.md](overview.md).
 | `multipart.rs` | `File` wrapper for multipart uploads |
 | `streaming.rs` | `StreamingResponse` — sync/async iterators |
 | `conversion.rs` | Python↔Rust type conversion (shared by sync/async) |
+| `request_preparation.rs` | Shared method/URL/header/body/auth/proxy/retry normalization |
 | `limits.rs` | `PyLimits` — pool concurrency limits |
 | `extensions.rs` | Request extension extraction (`target`, `sni_hostname`, `trace`) |
 | `network_stream.rs` | `PyNetworkStream` / `PyAsyncNetworkStream` upgrade wrappers |
@@ -34,8 +35,9 @@ Each `PyClient` owns a tokio runtime and an `eggfetch_core::Client`.
 
 ### Request Flow
 
-1. Convert Python arguments to owned Rust types (headers, URL, body bytes, timeout).
-2. Release the GIL via `py.allow_threads`.
+1. Normalize Python arguments through `request_preparation.rs` (including lazy
+   sync-body handling and sync rejection of async-only bodies).
+2. Release the GIL via `py.detach`.
 3. Block on the async Rust engine via `runtime.block_on(future)`.
 4. Buffer the response body via `response.bytes().await`.
 5. Re-acquire the GIL and return a `PyResponse` with buffered data.
@@ -56,7 +58,11 @@ released.
 
 ## Async Adapter
 
-`AsyncClient` targets asyncio via `pyo3-async-runtimes`.
+`AsyncClient` targets asyncio via `pyo3-async-runtimes`. It accepts both lazy
+synchronous iterables and lazy `AsyncIterable[bytes | str]` request bodies;
+the latter are advanced only when the Rust body is polled, so transport
+backpressure is preserved and iterator errors/cancellation propagate through
+the request future.
 
 ### Request Flow
 
@@ -160,9 +166,9 @@ Body kwargs (`content`, `data`, `json`) are mutually exclusive. `files` may comb
 
 Two versioned, independent facades share the single Rust engine:
 
-- `eggfetch.compat.httpx` — HTTPX 0.28.1 (Stage C qualified on frozen
-  executable SHA `97e87e42c8f4d5659739e7b23ff9005a4ec1ae53`; profile in
-  `compat/httpx/0.28.1/`, ledger in `plans/httpx-parity-correction-status.md`).
+- `eggfetch.compat.httpx` — HTTPX 0.28.1 (the prior Stage C qualification is
+  bound to historical executable SHA `97e87e42c8f4d5659739e7b23ff9005a4ec1ae53`;
+  the current interop/API hygiene changes are pending requalification).
 - `eggfetch.compat.httpx2` — httpx2 2.12.0 sibling (independently Stage C
   qualified on the same frozen SHA; the prior `639bf186...` binding is
   historical after the post-freeze HTTP/3 diagnostics audit;
@@ -178,8 +184,9 @@ Two versioned, independent facades share the single Rust engine:
 - `compat/httpx/1.0-preview/` — original HTTPX 1.0 reconnaissance only;
   no implementation promise until an RC/stable trigger.
 
-The 0.28.1 facade is Stage C qualified for the documented Python 3.10+
-asyncio-supported surface on the frozen SHA above. HTTP/3 remains separately
+The 0.28.1 facade was Stage C qualified for the documented Python 3.10+
+asyncio-supported surface on the historical SHA above. The current candidate
+requires fresh exact-SHA qualification. HTTP/3 remains separately
 experimental; its retained label and blockers do not weaken or extend either
 compatibility profile.
 
@@ -215,7 +222,8 @@ The facade owns all HTTPX-shaped API surfaces (URL, Headers, QueryParams, except
 | `eggfetch/compat/httpx/_request.py` | `Request` — construction and auto-headers |
 | `eggfetch/compat/httpx/_response.py` | `Response` — metadata, status helpers, raise_for_status |
 | `eggfetch/compat/httpx/_client.py` | `Client` and `AsyncClient` — constructors, merge, build_request, send |
-| `eggfetch/compat/httpx/_ssl_context.py` | SSLContext snapshot, classification, construction fingerprint |
+| `eggfetch/_ssl_context.py` | Neutral SSLContext snapshot, classification, construction fingerprint |
+| `eggfetch/compat/httpx/_ssl_context.py` | Backward-compatible shim to the neutral SSL interop module |
 | `eggfetch/compat/httpx/_diagnostics.py` | `diagnostics_summary` — redacted client diagnostics |
 
 ### httpx2 Facade Module Structure

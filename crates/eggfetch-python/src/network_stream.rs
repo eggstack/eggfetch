@@ -81,7 +81,7 @@ pub(crate) type SharedStreamInner =
 /// This is the core of the HTTPX `network_stream` compatibility layer.
 /// The sync wrapper carries an explicit runtime handle so it can drive
 /// Tokio futures without relying on an ambient runtime.
-#[pyclass(name = "NetworkStream")]
+#[pyclass(name = "NetworkStream", from_py_object)]
 pub struct PyNetworkStream {
     /// Inner upgraded stream, wrapped in `Arc<Mutex<>>` so multiple
     /// clones share the same IO. ``None`` for metadata-only handles.
@@ -231,7 +231,7 @@ impl PyNetworkStream {
         // it waits for the lock or for IO to complete.
         let result: PyResult<
             Result<Result<bytes::Bytes, eggfetch_core::Error>, tokio::time::error::Elapsed>,
-        > = py.allow_threads(|| {
+        > = py.detach(|| {
             let mut guard = self.inner.lock().map_err(|e| {
                 pyo3::exceptions::PyRuntimeError::new_err(format!("lock poisoned: {e}"))
             })?;
@@ -276,7 +276,7 @@ impl PyNetworkStream {
         // GIL released so a contended mutex cannot stall other threads.
         let result: PyResult<
             Result<Result<(), eggfetch_core::Error>, tokio::time::error::Elapsed>,
-        > = py.allow_threads(|| {
+        > = py.detach(|| {
             let mut guard = self.inner.lock().map_err(|e| {
                 pyo3::exceptions::PyRuntimeError::new_err(format!("lock poisoned: {e}"))
             })?;
@@ -310,7 +310,7 @@ impl PyNetworkStream {
             return;
         };
         let handle = self.runtime_handle.clone();
-        let _ = py.allow_threads(|| handle.block_on(inner.close()));
+        let _ = py.detach(|| handle.block_on(inner.close()));
     }
 
     /// Get extra information about the connection.
@@ -434,7 +434,7 @@ impl PyNetworkStream {
         let server_name_owned = server_hostname.to_owned();
         let handle = self.runtime_handle.clone();
         let dur = validated_timeout(timeout)?;
-        let result = py.allow_threads(|| {
+        let result = py.detach(|| {
             let handshake = inner.start_tls(&connector, &server_name_owned);
             match dur {
                 Some(d) => handle.block_on(async { tokio::time::timeout(d, handshake).await }),
@@ -572,7 +572,7 @@ type AsyncStreamLock =
 /// [`pyo3_async_runtimes::tokio::future_into_py`]. The Tokio IO is
 /// dispatched on the shared runtime handle carried by the wrapper; the
 /// inner stream is locked for the duration of the awaited futures.
-#[pyclass(name = "AsyncNetworkStream")]
+#[pyclass(name = "AsyncNetworkStream", from_py_object)]
 #[derive(Clone)]
 pub struct PyAsyncNetworkStream {
     /// Inner upgraded stream, wrapped in `Arc<tokio::sync::Mutex<>>` so
@@ -829,7 +829,7 @@ impl PyAsyncNetworkStream {
             let upgraded = result.map_err(crate::errors::map_err)?;
             // Wrap the upgraded stream in a new AsyncNetworkStream and
             // return it as a Python object.
-            Python::with_gil(|py| {
+            Python::attach(|py| {
                 let new_stream = PyAsyncNetworkStream::from_upgraded(upgraded);
                 Bound::new(py, new_stream).map(|b| b.into_any().unbind())
             })

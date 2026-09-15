@@ -66,7 +66,7 @@ pub(crate) fn extract_native_extensions(
         });
     }
 
-    let dict = ext.downcast::<PyDict>().map_err(|_| {
+    let dict = ext.cast::<PyDict>().map_err(|_| {
         PyTypeError::new_err(
             "extensions must be a dict containing supported keys: target, sni_hostname, trace",
         )

@@ -22,7 +22,7 @@ use pyo3::prelude::*;
 ///     `allow_delete`: Whether DELETE requests may be retried (default False).
 ///     `allow_patch`: Whether PATCH requests may be retried (default False).
 ///     `max_elapsed`: Maximum total elapsed time across all attempts in seconds (default None, no limit).
-#[pyclass(name = "Retry", frozen)]
+#[pyclass(name = "Retry", frozen, from_py_object)]
 #[derive(Clone)]
 pub struct PyRetry {
     inner: eggfetch_core::RetryPolicy,

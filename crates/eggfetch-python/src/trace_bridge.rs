@@ -154,7 +154,7 @@ impl TraceObserver for PyTraceObserver {
         // Acquire the GIL only at the callback delivery point.  We do
         // not block on user code from outside the GIL.  All event-name
         // and info construction happens inside the GIL block.
-        let result = Python::with_gil(|py| {
+        let result = Python::attach(|py| {
             let (_prefix, name) = event_to_httpcore_name(event);
             let info_dict = match build_info_dict(py, event) {
                 Ok(d) => d,
