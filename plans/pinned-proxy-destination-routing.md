@@ -1,6 +1,6 @@
 # Pinned Proxied Destination Routing
 
-Status: Ready for handoff
+Status: Complete
 
 Date: 2026-09-14
 
@@ -317,14 +317,27 @@ Before child-plan completion, also run all existing direct resolved-target, cust
 
 ## Acceptance criteria
 
-- [ ] A native caller can explicitly pin the physical ultimate target of an HTTPS CONNECT request while preserving the logical origin URL/Host/TLS identity.
-- [ ] A native caller can explicitly pin the physical ultimate target of a SOCKS5 request without origin DNS fallback.
-- [ ] Existing direct `resolved_addresses()` remains direct-only and unchanged.
-- [ ] SOCKS5H ultimate-target pinning fails closed before I/O.
-- [ ] Plain HTTP forward-proxy ultimate-target pinning fails closed before I/O in v1.
-- [ ] Multiple supplied targets use a conservative typed fallback policy under one shared deadline.
-- [ ] Retry and same-origin redirects preserve the target snapshot; cross-origin redirects cannot reuse it.
-- [ ] Pool/tunnel reuse cannot violate physical route constraints.
-- [ ] Proxy and destination TLS identities remain logically correct when both proxy peer and ultimate target are pinned.
-- [ ] Existing unpinned proxy/SOCKS behavior and compatibility facades are unchanged.
-- [ ] No new production dependency and no Egress dependency is introduced.
+- [x] A native caller can explicitly pin the physical ultimate target of an HTTPS CONNECT request while preserving the logical origin URL/Host/TLS identity.
+- [x] A native caller can explicitly pin the physical ultimate target of a SOCKS5 request without origin DNS fallback.
+- [x] Existing direct `resolved_addresses()` remains direct-only and unchanged.
+- [x] SOCKS5H ultimate-target pinning fails closed before I/O.
+- [x] Plain HTTP forward-proxy ultimate-target pinning fails closed before I/O in v1.
+- [x] Multiple supplied targets use a conservative typed fallback policy under one shared deadline.
+- [x] Retry and same-origin redirects preserve the target snapshot; cross-origin redirects cannot reuse it.
+- [x] Pool/tunnel reuse cannot violate physical route constraints.
+- [x] Proxy and destination TLS identities remain logically correct when both proxy peer and ultimate target are pinned.
+- [x] Existing unpinned proxy/SOCKS behavior and compatibility facades are unchanged.
+- [x] No new production dependency and no Egress dependency is introduced.
+
+## Implementation record
+
+Implemented on executable freeze
+`e8260cd472c70edd87663191c6d984e0c7fabab8`. The separate
+`RequestBuilder::proxy_target_addresses()` API carries an immutable physical
+target snapshot through request reconstruction. HTTPS CONNECT uses the
+approved target authority while preserving logical origin Host/URL/TLS
+identity; local-resolution SOCKS5 sends approved IP targets without origin
+DNS. SOCKS5H and plaintext HTTP forward-proxy target pins reject before proxy
+I/O. Route-aware SOCKS keys prevent incompatible reuse, and request
+round-trip/retry plus local proxy/TLS/SOCKS fixtures cover the bounded
+behavior. No production dependency or Egress policy surface was added.

@@ -1,6 +1,6 @@
 # Pinned Proxy Peer Routing
 
-Status: Ready for handoff
+Status: Complete
 
 Date: 2026-09-14
 
@@ -259,14 +259,27 @@ Before marking the child plan complete, also run affected proxy, TLS, retry, red
 
 ## Acceptance criteria
 
-- [ ] A native caller can pin one or more physical proxy peers without changing the logical proxy URI.
-- [ ] Pinned mode performs no proxy-host DNS lookup and never falls back to one.
-- [ ] HTTP, HTTPS CONNECT, HTTPS-proxy TLS, SOCKS5, and SOCKS5H proxy-server connections use the supplied peer snapshot where applicable.
-- [ ] HTTPS proxy SNI/certificate verification remains logical-host based.
-- [ ] Candidate fallback shares the existing connect budget.
-- [ ] Retry preserves the exact snapshot.
-- [ ] Redirect/proxy-rule transitions cannot leak a stale peer constraint into a different route.
-- [ ] Pool/client reuse cannot violate the physical route constraint.
-- [ ] Existing unpinned proxy and direct `resolved_addresses()` behavior is unchanged.
-- [ ] No new production dependency is introduced.
-- [ ] No Egress dependency or EggSec-specific policy surface is introduced.
+- [x] A native caller can pin one or more physical proxy peers without changing the logical proxy URI.
+- [x] Pinned mode performs no proxy-host DNS lookup and never falls back to one.
+- [x] HTTP, HTTPS CONNECT, HTTPS-proxy TLS, SOCKS5, and SOCKS5H proxy-server connections use the supplied peer snapshot where applicable.
+- [x] HTTPS proxy SNI/certificate verification remains logical-host based.
+- [x] Candidate fallback shares the existing connect budget.
+- [x] Retry preserves the exact snapshot.
+- [x] Redirect/proxy-rule transitions cannot leak a stale peer constraint into a different route.
+- [x] Pool/client reuse cannot violate the physical route constraint.
+- [x] Existing unpinned proxy and direct `resolved_addresses()` behavior is unchanged.
+- [x] No new production dependency is introduced.
+- [x] No Egress dependency or EggSec-specific policy surface is introduced.
+
+## Implementation record
+
+Implemented on executable freeze
+`e8260cd472c70edd87663191c6d984e0c7fabab8`. The public `Proxy` builder now
+accepts an ordered, validated peer snapshot; pinned dialing skips proxy-host
+DNS and preserves logical proxy identity. HTTP, HTTPS CONNECT, HTTPS-proxy,
+SOCKS5, and SOCKS5H proxy-peer paths consume the snapshot, while route-aware
+SOCKS cache keys prevent incompatible reuse. Local proxy/TLS fixtures cover
+unresolvable logical proxy names, identity separation, pre-I/O validation, and
+topology-safe debug output. No production dependency or Egress policy surface
+was added. The broader program closure record documents the shared validation
+evidence and its explicit optional skips.

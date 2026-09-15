@@ -1,6 +1,6 @@
 # Post-Proxy Route Pinning Qualification and Closure
 
-Status: Ready for handoff
+Status: Complete
 
 Date: 2026-09-14
 
@@ -278,13 +278,35 @@ Mark the parent/child plans complete only after the final executable evidence is
 
 ## Final acceptance criteria
 
-- [ ] Both child plans' acceptance criteria are satisfied or any unsupported row is explicitly narrowed/fail-closed.
-- [ ] Wire fixtures prove proxy-peer and supported ultimate-target physical destinations.
-- [ ] DNS non-fallback is directly tested for pinned proxy peers and supported pinned targets.
-- [ ] Proxy and origin logical TLS/HTTP identities remain correct under physical pinning.
-- [ ] Retry/redirect/candidate timeout behavior is bounded and deterministic.
-- [ ] Connection reuse cannot cross incompatible physical-route constraints.
-- [ ] Existing unpinned proxy, direct static routing, dialer, Python/CLI/HTTPX, and HTTP/3 behavior remains compatible.
-- [ ] Tier 1, extended, package, affected focused suites, and current compatibility qualification are green or truthfully record optional skips.
-- [ ] No new production dependency appears; specifically no `eggress-*` dependency is present.
-- [ ] Documentation and plan status match the implementation actually shipped.
+- [x] Both child plans' acceptance criteria are satisfied or any unsupported row is explicitly narrowed/fail-closed.
+- [x] Wire fixtures prove proxy-peer and supported ultimate-target physical destinations.
+- [x] DNS non-fallback is directly tested for pinned proxy peers and supported pinned targets.
+- [x] Proxy and origin logical TLS/HTTP identities remain correct under physical pinning.
+- [x] Retry/redirect/candidate timeout behavior is bounded and deterministic.
+- [x] Connection reuse cannot cross incompatible physical-route constraints.
+- [x] Existing unpinned proxy, direct static routing, dialer, Python/CLI/HTTPX, and HTTP/3 behavior remains compatible.
+- [x] Tier 1, extended, package, affected focused suites, and current compatibility qualification are green or truthfully record optional skips.
+- [x] No new production dependency appears; specifically no `eggress-*` dependency is present.
+- [x] Documentation and plan status match the implementation actually shipped.
+
+## Closure record
+
+Executable freeze: `e8260cd472c70edd87663191c6d984e0c7fabab8`.
+Documentation-only closure is recorded in the descendant commit that updates
+these plan statuses and evidence.
+
+The API audit confirms separate proxy-peer and proxied-target state, no new
+`TransportHints` field, unchanged direct-only `resolved_addresses()` behavior,
+caller-owned address validation, and no Python/CLI/HTTPX exposure. Local wire
+fixtures prove pinned proxy peer/target behavior and logical TLS/HTTP identity;
+unsupported SOCKS5H and plaintext-forward combinations fail before proxy I/O.
+Retry/redirect reconstruction, timeout-budgeted candidate loops, and route-aware
+SOCKS cache keys preserve the snapshots without cross-route reuse. Dependency
+and feature review found zero production dependency delta and no `eggress-*`
+package. Egress remains an external policy/dialer composition layer.
+
+Validation on the freeze passed Tier 1, extended, and package gates, including
+documentation examples/links, FFI, resource/lifecycle/soak suites, and the
+existing compatibility suites. Extended validation explicitly skipped only the
+unbuilt Node artifact, the Rust-1.80/MSRV parser incompatibility, and the
+missing downstream artifact manifest.

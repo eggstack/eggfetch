@@ -1,6 +1,6 @@
 # Proxy Route Pinning and Egress Interoperability Program
 
-Status: Ready for handoff
+Status: Complete
 
 Date: 2026-09-14
 
@@ -213,3 +213,24 @@ The program closes only when all are true:
 8. `eggfetch-core` has no Egress dependency; the retained decision explains why Egress remains an external policy/dialer layer.
 9. Current repository verification and compatibility obligations are green on the final executable tree.
 10. Documentation clearly distinguishes proxy peer, ultimate target, logical proxy identity, logical origin identity, SOCKS5, and SOCKS5H semantics.
+
+## Closure record
+
+The executable/test/fixture freeze is
+`e8260cd472c70edd87663191c6d984e0c7fabab8`, based on the baseline
+`d681da848e36199846604b71f2162a1054d24aa6`. It adds the native
+`Proxy::resolved_addresses()` peer pin and
+`RequestBuilder::proxy_target_addresses()` proxied-target pin, with no new
+production dependency or feature. Direct `resolved_addresses()` remains
+direct-only; unsupported SOCKS5H and plaintext forward-proxy target pins fail
+closed before proxy I/O; proxy/origin logical TLS and HTTP identities remain
+separate from their physical destinations; route snapshots participate in
+retry, redirect, and SOCKS route-cache state.
+
+The local evidence bound to this freeze is Tier 1, extended, package, focused
+proxy/propagation tests, documentation examples/links, and the existing
+compatibility/lifecycle suites. Extended validation retained only the
+documented optional skips for the unbuilt Node artifact, the unavailable
+Rust-1.80/MSRV parser, and the absent downstream artifact manifest. The
+documentation-only closure update is intentionally a descendant of this
+freeze.
