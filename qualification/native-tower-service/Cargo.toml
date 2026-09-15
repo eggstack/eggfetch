@@ -12,4 +12,4 @@ eggfetch-core = { path = "../../crates/eggfetch-core", default-features = false,
 http = "1"
 http-body = "1"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
-tonic = { version = "0.12", default-features = false, features = ["codegen", "transport"] }
+tonic = { version = "=0.14.6", default-features = false, features = ["codegen"] }
