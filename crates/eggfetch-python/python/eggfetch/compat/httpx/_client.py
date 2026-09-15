@@ -294,7 +294,7 @@ def _convert_verify_cert(verify, cert, trust_env):
     import ssl
 
     if isinstance(verify, ssl.SSLContext):
-        from eggfetch.compat.httpx._ssl_context import context_to_eggfetch_kwargs
+        from eggfetch._ssl_context import context_to_eggfetch_kwargs
 
         kwargs = context_to_eggfetch_kwargs(verify)
         new_verify = kwargs.get("verify", verify)

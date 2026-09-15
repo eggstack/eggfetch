@@ -45,9 +45,15 @@ environment override.
 - `Client` and top-level sync helpers accept lazy synchronous iterable bodies;
   `AsyncClient` additionally accepts lazy async iterables of `bytes | str`.
   Sync APIs reject async-only iterables before dispatch.
-- Shared argument normalization lives in `src/request_preparation.rs`; keep
-  runtime ownership and dispatch-specific lifecycle behavior in the sync and
-  async adapters.
+- Shared client and request argument normalization lives in
+  `src/request_preparation.rs`; keep runtime ownership and dispatch-specific
+  lifecycle behavior in the sync and async adapters.
+- `prepare_client_config()` and `apply_client_config()` are the shared
+  constructor path; do not reintroduce sync/async copies of TLS, proxy,
+  limits, cookie, or transport-option setup.
+- Request body classification obtains a synchronous or asynchronous iterator
+  once and passes that owned iterator to the lazy adapter. Do not probe a
+  one-shot iterable again during dispatch or buffer an async iterable.
 - Generic `ssl.SSLContext` interop lives in `eggfetch._ssl_context`. The
   historical `eggfetch.compat.httpx._ssl_context` path is only a thin shim.
 - Secret redaction applies to all Debug/Display/output paths.

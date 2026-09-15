@@ -1,6 +1,6 @@
 # Python Interop Boundary and Async Body Pass
 
-Status: **implemented; final qualification pending**
+Status: **implemented; local Tier 1/Tier 2 qualification complete**
 Parent: `python-interop-api-hygiene-program.md`  
 Date: 2026-09-15
 
@@ -313,6 +313,12 @@ Run at minimum:
 plus focused native Python async-body, SSLContext translation, TLS network-proof, proxy/TLS, close/cancellation, and HTTPX/HTTPX2 compatibility tests touched by the migration.
 
 Exact-SHA compatibility profile rebinding remains deferred to final closure.
+
+Local validation completed on 2026-09-15:
+
+- Tier 1: passed (`557` native Python behavior tests, `133` compatibility smoke tests, plus the full Rust/FFI/Node-native suite).
+- Tier 2: passed, including the full compatibility suite, API/oracle checks, feature matrix, MSRV, documentation, FFI, resource regression, and benchmarks.
+- The documented optional Node JS artifact and downstream artifact checks were skipped because their generated qualification artifacts were not present.
 
 ## Acceptance Criteria
 

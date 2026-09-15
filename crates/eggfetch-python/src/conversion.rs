@@ -2,7 +2,7 @@
 
 use pyo3::exceptions::PyStopAsyncIteration;
 use pyo3::prelude::*;
-use pyo3::types::{PyByteArray, PyByteArrayMethods, PyIterator, PyMemoryView, PyTuple};
+use pyo3::types::{PyByteArray, PyByteArrayMethods, PyBytes, PyIterator, PyMemoryView, PyTuple};
 
 use bytes::Bytes;
 
@@ -155,82 +155,41 @@ pub fn validate_body_kwargs_with_files(
     validate_body_kwargs(content, data, json)
 }
 
-/// Build a request body from the provided Python kwargs.
+/// The one-shot classification result for a Python `content=` value.
 ///
-/// Returns `(body_bytes, content_type_override)` where `content_type_override`
-/// is `Some(ct)` when the body was auto-typed (form or JSON).
-///
-/// If `content` is a Python iterable/generator (not bytes or str), returns
-/// `None` for `body_bytes` — the caller must handle it as a stream body.
-pub fn build_request_body<'py>(
-    py: Python<'py>,
-    content: Option<&Bound<'py, PyAny>>,
-    data: Option<&Bound<'py, PyAny>>,
-    json: Option<&Bound<'py, PyAny>>,
-) -> PyResult<(Option<Vec<u8>>, Option<&'static str>)> {
-    if let Some(c) = content {
-        // Try to extract as bytes or string first.
-        if let Ok(s) = c.extract::<String>() {
-            return Ok((Some(s.into_bytes()), None));
-        }
-        if let Some(b) = extract_bytes_like(c)? {
-            return Ok((Some(b), None));
-        }
-        // If it's an iterable/generator, signal to caller to treat as stream.
-        if c.hasattr("__iter__")? || c.hasattr("__aiter__")? {
-            if c.hasattr("items")? && c.hasattr("__getitem__")? {
-                return Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
-                    "content must be bytes, str, or an iterable of bytes",
-                ));
-            }
-            return Ok((None, None));
-        }
-        Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
-            "content must be bytes, str, or an iterable of bytes",
-        ))
-    } else if let Some(d) = data {
-        let body_bytes = encode_form_body(py, d)?;
-        Ok((Some(body_bytes), Some("application/x-www-form-urlencoded")))
-    } else if let Some(j) = json {
-        let body_bytes = encode_json_body(py, j)?;
-        Ok((Some(body_bytes), Some("application/json")))
-    } else {
-        Ok((None, None))
-    }
+/// Classification obtains an iterator exactly once.  Keeping that iterator
+/// in the result avoids probing a one-shot object and then asking it for a
+/// second iterator during body construction.
+pub(crate) enum PythonBodyKind {
+    Buffered(Vec<u8>),
+    Sync(Py<PyIterator>),
+    Async(Py<PyAny>),
 }
 
-/// Return whether a body provides synchronous iteration.
-pub fn is_sync_iterable(obj: &Bound<'_, PyAny>) -> PyResult<bool> {
-    if obj.is_instance_of::<pyo3::types::PyBytes>()
-        || obj.is_instance_of::<pyo3::types::PyString>()
-        || obj.is_instance_of::<PyByteArray>()
-        || obj.is_instance_of::<PyMemoryView>()
-    {
-        return Ok(false);
+/// Classify a Python request body without consuming its first item.
+pub(crate) fn classify_python_body(content: &Bound<'_, PyAny>) -> PyResult<PythonBodyKind> {
+    if let Ok(string) = content.extract::<String>() {
+        return Ok(PythonBodyKind::Buffered(string.into_bytes()));
     }
-    obj.hasattr("__iter__")
-}
-
-/// Return whether a body provides asynchronous iteration.
-pub fn is_async_iterable(obj: &Bound<'_, PyAny>) -> PyResult<bool> {
-    if obj.is_instance_of::<pyo3::types::PyBytes>()
-        || obj.is_instance_of::<pyo3::types::PyString>()
-        || obj.is_instance_of::<PyByteArray>()
-        || obj.is_instance_of::<PyMemoryView>()
-    {
-        return Ok(false);
+    if let Some(bytes) = extract_bytes_like(content)? {
+        return Ok(PythonBodyKind::Buffered(bytes));
     }
-    obj.hasattr("__aiter__")
-}
-
-/// Reject an async-only body before a synchronous request is dispatched.
-pub fn reject_async_only_body(obj: &Bound<'_, PyAny>) -> PyResult<()> {
-    if is_async_iterable(obj)? && !is_sync_iterable(obj)? {
+    if content.hasattr("items")? && content.hasattr("__getitem__")? {
         return Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
-            "async iterable request bodies are supported only by AsyncClient",
+            "content must be bytes, str, or an iterable of bytes",
         ));
     }
-    Ok(())
+    if content.hasattr("__iter__")? {
+        return Ok(PythonBodyKind::Sync(content.try_iter()?.unbind()));
+    }
+    if content.hasattr("__aiter__")? {
+        return Ok(PythonBodyKind::Async(
+            content.call_method0("__aiter__")?.unbind(),
+        ));
+    }
+    Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
+        "content must be bytes, str, or an iterable of bytes",
+    ))
 }
 
 /// Create a `RequestBody` from a Python sync iterable.
@@ -261,8 +220,8 @@ impl Drop for PythonBodyIterator {
 
 /// Convert a Python buffer-like value to owned bytes.
 fn extract_bytes_like(obj: &Bound<'_, PyAny>) -> PyResult<Option<Vec<u8>>> {
-    if let Ok(bytes) = obj.extract::<Vec<u8>>() {
-        return Ok(Some(bytes));
+    if let Ok(bytes) = obj.cast::<PyBytes>() {
+        return Ok(Some(bytes.as_bytes().to_vec()));
     }
     if let Ok(bytearray) = obj.cast::<PyByteArray>() {
         return Ok(Some(bytearray.to_vec()));
@@ -276,15 +235,10 @@ fn extract_bytes_like(obj: &Bound<'_, PyAny>) -> PyResult<Option<Vec<u8>>> {
 }
 
 /// Create a `RequestBody` from a Python sync iterable.
-pub fn python_iterable_to_request_body<'py>(
-    _py: Python<'py>,
-    iterable: &Bound<'py, PyAny>,
-) -> PyResult<eggfetch_core::RequestBody> {
+pub fn python_iterable_to_request_body(iterator: Py<PyIterator>) -> eggfetch_core::RequestBody {
     use futures_util::stream;
 
-    let state = PythonBodyIterator {
-        iterator: iterable.try_iter()?.unbind(),
-    };
+    let state = PythonBodyIterator { iterator };
     let stream = stream::unfold(Some(state), |state| async move {
         let state = state?;
         let result = match tokio::task::spawn_blocking(move || {
@@ -323,10 +277,7 @@ pub fn python_iterable_to_request_body<'py>(
             Err(error) => Some((Err(eggfetch_core::Error::Body(error.to_string())), None)),
         }
     });
-    Ok(eggfetch_core::RequestBody::from_stream(
-        Box::pin(stream),
-        None,
-    ))
+    eggfetch_core::RequestBody::from_stream(Box::pin(stream), None)
 }
 
 /// Create a lazy request body from a Python asynchronous iterable.
@@ -334,13 +285,12 @@ pub fn python_iterable_to_request_body<'py>(
 /// Each `__anext__()` call is scheduled on the event loop captured from the
 /// calling asyncio task and awaited only when the transport asks for another
 /// body frame. The iterator is therefore never eagerly buffered.
-pub fn python_async_iterable_to_request_body<'py>(
-    py: Python<'py>,
-    iterable: &Bound<'py, PyAny>,
+pub fn python_async_iterable_to_request_body(
+    py: Python<'_>,
+    iterator: Py<PyAny>,
 ) -> PyResult<eggfetch_core::RequestBody> {
     use futures_util::stream;
 
-    let iterator = iterable.call_method0("__aiter__")?.unbind();
     let locals = pyo3_async_runtimes::tokio::get_current_locals(py)?;
     let stream = stream::unfold(Some((iterator, locals)), |state| async move {
         let (iterator, locals) = state?;

@@ -55,7 +55,8 @@ eggfetch/
 ├── crates/
 │   ├── eggfetch-core/      Async HTTP engine — all networking lives here
 │   ├── eggfetch-cli/       CLI binary — argument parsing, output formatting
-│   ├── eggfetch-python/    Python bindings via PyO3/maturin (+ compat facades)
+│   ├── eggfetch-python/    Python bindings via PyO3/maturin (+ compat facades;
+│   │                       neutral `_ssl_context` interop and shared prep)
 │   ├── eggfetch-ffi/       C ABI bindings — opaque handle pattern
 │   ├── eggfetch-node/      Node.js N-API prototype (wraps FFI)
 │   └── eggfetch-bench/     Criterion benchmarks (not published)

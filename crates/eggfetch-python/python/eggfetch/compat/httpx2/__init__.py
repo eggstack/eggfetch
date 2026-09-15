@@ -98,7 +98,7 @@ def create_ssl_context(verify=True, cert=None, trust_env=True):
     import os
     import ssl as _ssl
 
-    from eggfetch.compat.httpx._ssl_context import _eggfetch_ssl_registry
+    from eggfetch._ssl_context import _eggfetch_ssl_registry
 
     if verify is True:
         if trust_env and os.environ.get("SSL_CERT_FILE"):

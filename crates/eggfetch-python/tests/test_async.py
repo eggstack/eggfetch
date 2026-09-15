@@ -38,7 +38,10 @@ class _Handler(http.server.BaseHTTPRequestHandler):
         if self.headers.get("Transfer-Encoding", "").lower() == "chunked":
             chunks = []
             while True:
-                size = int(self.rfile.readline().strip(), 16)
+                line = self.rfile.readline().strip()
+                if not line:
+                    return
+                size = int(line, 16)
                 if size == 0:
                     self.rfile.readline()
                     break
@@ -192,6 +195,100 @@ class TestAsyncClientPost:
         with eggfetch.Client() as client:
             with pytest.raises(TypeError, match="AsyncClient"):
                 client.post(f"{server}/api", content=body())
+
+    def test_top_level_sync_helper_rejects_async_only_body(self, server):
+        async def body():
+            yield b"never sent"
+
+        with pytest.raises(TypeError, match="AsyncClient"):
+            eggfetch.post(f"{server}/api", content=body())
+
+    def test_async_body_is_not_pulled_during_request_preparation(self, server):
+        async def _test():
+            pulls = []
+
+            async def body():
+                pulls.append("started")
+                yield b"lazy"
+
+            async with eggfetch.AsyncClient() as client:
+                pending = client.post(f"{server}/api", content=body())
+                assert pulls == []
+                response = await pending
+                assert json.loads(response.text)["body"] == "lazy"
+
+        asyncio.run(_test())
+
+    def test_async_body_producer_error_is_body_error(self, server):
+        async def _test():
+            async def body():
+                yield b"first"
+                raise RuntimeError("producer boom")
+
+            async with eggfetch.AsyncClient() as client:
+                with pytest.raises(eggfetch.BodyError, match="producer boom"):
+                    await client.post(f"{server}/api", content=body())
+
+        asyncio.run(_test())
+
+    def test_async_body_invalid_chunk_is_body_error(self, server):
+        async def _test():
+            async def body():
+                yield [1, 2, 3]
+
+            async with eggfetch.AsyncClient() as client:
+                with pytest.raises(eggfetch.BodyError, match="bytes or str"):
+                    await client.post(f"{server}/api", content=body())
+
+        asyncio.run(_test())
+
+    def test_async_body_empty_generator(self, server):
+        async def _test():
+            async def body():
+                if False:
+                    yield b""
+
+            async with eggfetch.AsyncClient() as client:
+                response = await client.post(f"{server}/api", content=body())
+                assert json.loads(response.text)["body"] == ""
+
+        asyncio.run(_test())
+
+    def test_async_client_accepts_sync_generator(self, server):
+        async def _test():
+            def body():
+                yield b"sync "
+                yield "body"
+
+            async with eggfetch.AsyncClient() as client:
+                response = await client.post(f"{server}/api", content=body())
+                assert json.loads(response.text)["body"] == "sync body"
+
+        asyncio.run(_test())
+
+    def test_async_body_cancellation_stops_producer_and_client_remains_usable(self, server):
+        async def _test():
+            started = asyncio.Event()
+            release = asyncio.Event()
+            pulls = 0
+
+            async def body():
+                nonlocal pulls
+                pulls += 1
+                started.set()
+                await release.wait()
+                yield b"should not be sent"
+
+            async with eggfetch.AsyncClient() as client:
+                pending = asyncio.ensure_future(client.post(f"{server}/api", content=body()))
+                await asyncio.wait_for(started.wait(), timeout=1)
+                pending.cancel()
+                with pytest.raises(asyncio.CancelledError):
+                    await pending
+                assert pulls == 1
+                assert (await client.get(f"{server}/hello")).status_code == 200
+
+        asyncio.run(_test())
 
 
 # ---------------------------------------------------------------------------

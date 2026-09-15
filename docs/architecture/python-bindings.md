@@ -41,9 +41,9 @@ metadata agree.
 | `timeout.rs` | Timeout configuration |
 | `tls.rs` | TLS configuration (`verify`, `cert` kwargs) |
 | `multipart.rs` | `File` wrapper for multipart uploads |
-| `streaming.rs` | `StreamingResponse` — sync/async iterators |
+| `streaming.rs` | `StreamingResponse` — sync/async response iterators |
 | `conversion.rs` | Python↔Rust type conversion (shared by sync/async) |
-| `request_preparation.rs` | Shared method/URL/header/body/auth/proxy/retry normalization |
+| `request_preparation.rs` | Shared client configuration and method/URL/header/body/auth/proxy/retry normalization |
 | `limits.rs` | `PyLimits` — pool concurrency limits |
 | `extensions.rs` | Request extension extraction (`target`, `sni_hostname`, `trace`) |
 | `network_stream.rs` | `PyNetworkStream` / `PyAsyncNetworkStream` upgrade wrappers |
@@ -87,6 +87,26 @@ the request future.
 ### Request Flow
 
 Each request method uses `future_into_py` to convert the Rust future into a Python awaitable. The async block buffers the response body before returning.
+
+### Shared preparation boundary
+
+`request_preparation.rs` is the single GIL-held normalization boundary for
+both adapters. `prepare_client_config()` owns constructor policy conversion
+(TLS, protocol flags, limits, defaults, timeout, redirects, cookies, auth,
+proxies and `NO_PROXY`, retries, and transport options); the adapter then
+chooses its runtime ownership and calls `apply_client_config()`. The sync
+adapter creates and owns a Tokio runtime, while `AsyncClient` uses the
+`pyo3-async-runtimes` asyncio bridge. Runtime ownership is not hidden in the
+shared type.
+
+`prepare_request()` performs the corresponding request-local normalization
+once for sync and async dispatch. It classifies `content=` as buffered,
+synchronous iterable, or asynchronous iterable and stores the iterator it
+obtained, avoiding a second probe of one-shot objects. Async-only bodies are
+rejected before dispatch by sync APIs and are supported lazily by
+`AsyncClient`; each `__anext__()` is awaited only when core polls the request
+body. Producer exceptions become `BodyError`, `StopAsyncIteration` is EOF,
+and cancelling the request drops the in-flight producer future.
 
 ### Design Decisions
 

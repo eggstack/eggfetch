@@ -128,6 +128,13 @@ by applications. The package and native extension use the coordinated release
 version, and wheel smoke validation checks it against installed distribution
 metadata.
 
+`Client` and top-level synchronous helpers accept lazy synchronous
+`content=` iterables and reject async-only iterables before dispatch.
+`AsyncClient` accepts lazy `AsyncIterable[bytes | str]` bodies; each chunk is
+awaited through the same asyncio context only when the Rust transport asks for
+it. Producer failures surface as `BodyError`, and request cancellation stops
+further pulls.
+
 ## Usage -- Rust
 
 Native Rust consumers can keep their own route while eggfetch owns HTTP and

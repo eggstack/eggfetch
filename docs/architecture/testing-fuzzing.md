@@ -36,6 +36,23 @@ pip install -r compat/httpx/0.28.1/requirements.txt
 EGGFETCH_COMPAT_REQUIRED=1 python -m pytest crates/eggfetch-python/tests/compat/ -v --strict-markers
 ```
 
+## Native Python interop coverage
+
+After changing `crates/eggfetch-python/src/`, rebuild the extension and run
+the native suite. `tests/test_async.py` covers the request-body bridge's
+multiple bytes/string chunks, empty bodies, deferred first pull, producer
+failure, invalid chunk types, sync-client rejection of async-only iterables,
+top-level helper rejection, cancellation, and post-cancellation client reuse.
+`tests/test_sync.py` includes the neutral `ssl.SSLContext` isolation check;
+the test asserts that constructing a native client does not import either
+versioned compatibility facade.
+
+The bridge is intentionally tested at the binding boundary: async iterators
+are obtained once while the GIL is held, `__anext__()` is awaited through
+`pyo3-async-runtimes`, and no second Tokio runtime or eager Python buffer is
+introduced. Compatibility facade body/replay semantics remain covered by the
+full HTTPX and HTTPX2 suites in Tier 2.
+
 ## Feature-Gated Test Subsets
 
 Tier 2 (`tier2_feature_tests` in `scripts/check.sh`) runs each of these

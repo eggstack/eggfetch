@@ -78,6 +78,10 @@ client.close()
 
 The sync client releases the GIL during network I/O so other Python threads can run while a request is in progress.
 
+Synchronous clients and top-level synchronous helpers accept lazy synchronous
+iterables for `content=`. They reject an async-only iterable immediately with
+`TypeError`, before opening a network request.
+
 ## AsyncClient Class (asyncio)
 
 An async client for use with `asyncio`. Returns coroutines instead of blocking.
@@ -102,6 +106,23 @@ async def main():
 
 asyncio.run(main())
 ```
+
+`AsyncClient` additionally accepts a lazy `AsyncIterable[bytes | str]` body.
+The iterator is advanced on transport demand, so request preparation does not
+buffer the complete body:
+
+```python
+async def chunks():
+    yield b"part 1"
+    yield "part 2"
+
+async with eggfetch.AsyncClient() as client:
+    response = await client.post("https://example.com/upload", content=chunks())
+```
+
+Async producer exceptions and invalid chunk types are reported as `BodyError`.
+Cancelling the request cancels a pending `__anext__()` operation and leaves
+the client usable for later requests.
 
 ## Response Objects (Buffered)
 

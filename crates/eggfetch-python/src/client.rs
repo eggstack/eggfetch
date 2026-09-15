@@ -6,13 +6,10 @@ use std::sync::{Arc, Mutex};
 use pyo3::prelude::*;
 
 use crate::auth;
-use crate::conversion::{parse_timeout, python_headers_to_rust};
 use crate::cookies::PyCookies;
-use crate::errors::{map_err, InvalidUrl};
-use crate::limits::PyLimits;
+use crate::errors::map_err;
 use crate::proxy::{self, ProxyOverride};
 use crate::response::PyResponse;
-use crate::retry;
 use crate::streaming::PyStreamingResponse;
 use crate::trace_bridge::take_callback_error;
 
@@ -99,10 +96,6 @@ impl PyClient {
     ///     `follow_redirects`: Whether to follow redirects (default False).
     ///     `max_redirects`: Maximum redirects to follow (default 20).
     #[allow(clippy::too_many_arguments)]
-    #[allow(
-        clippy::too_many_lines,
-        reason = "constructor keeps shared binding configuration at one adapter boundary"
-    )]
     #[new]
     #[pyo3(signature = (*, headers=None, timeout=None, follow_redirects=None, max_redirects=None, cookies=None, auth=None, decompress=None, proxy=None, verify=None, cert=None, retries=None, http1=None, http2=None, http3=None, limits=None, trust_env=None, local_address=None, socket_options=None, uds=None))]
     fn new(
@@ -127,146 +120,34 @@ impl PyClient {
         socket_options: Option<&Bound<'_, PyAny>>,
         uds: Option<&str>,
     ) -> PyResult<Self> {
+        let prepared = crate::request_preparation::prepare_client_config(
+            py,
+            headers,
+            timeout,
+            follow_redirects,
+            max_redirects,
+            cookies,
+            auth,
+            decompress,
+            proxy,
+            verify,
+            cert,
+            retries,
+            http1,
+            http2,
+            http3,
+            limits,
+            trust_env,
+            local_address,
+            socket_options,
+            uds,
+        )?;
         let runtime = Arc::new(RuntimeState::new(tokio::runtime::Runtime::new().map_err(
             |e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()),
         )?));
-
-        let verify_disabled = verify
-            .and_then(|v| v.extract::<bool>().ok())
-            .is_some_and(|b| !b);
-        let tls_config = crate::tls::build_tls_config(verify, cert, trust_env)?;
-        let mut builder = eggfetch_core::Client::builder().tls_config(tls_config);
-
-        // Resolve the HTTP version policy from (http1, http2, http3) flags.
-        // When only http1 is explicitly set (http1=True, http2=False/None),
-        // use Http1Only. When only http2 is set (http1=False/None, http2=True),
-        // use Http2Only for prior-knowledge mode. When both are true,
-        // use Auto. http3=True always maps to Http3Only.
-        let http1_enabled = http1.unwrap_or(true);
-        let http2_enabled = http2.unwrap_or(false);
-        if let Some(true) = http3 {
-            builder = builder.http_version_policy(eggfetch_core::HttpVersionPolicy::Http3Only);
-        } else if !http1_enabled && http2_enabled {
-            builder = builder.http_version_policy(eggfetch_core::HttpVersionPolicy::Http2Only);
-        } else if http1_enabled && http2_enabled {
-            builder = builder
-                .http_version_policy(eggfetch_core::HttpVersionPolicy::Auto { allow_http3: false });
-        } else if http1_enabled && !http2_enabled {
-            builder = builder.http_version_policy(eggfetch_core::HttpVersionPolicy::Http1Only);
-        } else {
-            return Err(pyo3::exceptions::PyValueError::new_err(
-                "At least one of http1 or http2 must be True",
-            ));
-        }
-
-        if let Some(l) = limits {
-            let py_limits: PyLimits = l.extract()?;
-            builder = builder.limits(py_limits.inner);
-        }
-
-        if let Some(hdrs) = headers {
-            let rust_headers = python_headers_to_rust(py, hdrs)?;
-            builder = builder.default_headers(rust_headers);
-        }
-
-        if let Some(t) = timeout {
-            if let Some(rust_timeout) = parse_timeout(Some(t))? {
-                builder = builder.timeout(rust_timeout);
-            }
-        }
-
-        let redirect = eggfetch_core::redirect::RedirectPolicy::new(
-            follow_redirects.unwrap_or(false),
-            max_redirects.unwrap_or(20),
-        );
-        builder = builder.redirect_policy(redirect);
-
-        let jar = eggfetch_core::cookie::CookieJar::new();
-        if let Some(c) = cookies {
-            if let Ok(dict) = c.cast::<pyo3::types::PyDict>() {
-                for (key, value) in dict.iter() {
-                    let name: String = key.extract()?;
-                    let val: String = value.extract()?;
-                    jar.set_default_cookie(name, val).map_err(|e| {
-                        PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string())
-                    })?;
-                }
-            }
-        }
-        builder = builder.cookie_jar(jar);
-
-        let auth_override = auth::parse_auth(auth)?;
-        match auth_override {
-            auth::AuthOverride::Inherit | auth::AuthOverride::Disable => {}
-            auth::AuthOverride::Override(a) => {
-                builder = builder.auth(a);
-            }
-        }
-
-        let proxy_override = proxy::parse_proxy(proxy)?;
-
-        let (proxy_headers, proxy_tls_config) = proxy::extract_proxy_extras(py, proxy)?;
-
-        if let ProxyOverride::Override(ref url) = proxy_override {
-            let mut p = eggfetch_core::Proxy::all_compat(&proxy::normalize_compat_proxy_url(url))
-                .map_err(map_err)?;
-            if let Some(ref hdrs) = proxy_headers {
-                p = p.proxy_headers(hdrs.clone());
-            }
-            if let Some(tls) = proxy_tls_config {
-                p = p.with_proxy_tls_config(tls);
-            }
-            builder = builder.proxy(p);
-        }
-
-        let trust_env = trust_env.unwrap_or(true);
-        if trust_env && proxy_override == ProxyOverride::Inherit {
-            #[cfg(feature = "proxy")]
-            {
-                for (scheme, env_proxy) in proxy::env_proxy_urls(py)? {
-                    let mut p = match scheme {
-                        "http" => eggfetch_core::Proxy::http(&env_proxy),
-                        "https" => eggfetch_core::Proxy::https(&env_proxy),
-                        _ => eggfetch_core::Proxy::all(&env_proxy),
-                    }
-                    .map_err(map_err)?;
-                    if let Some(no_proxy) = proxy::env_no_proxy(py)? {
-                        let rules = eggfetch_core::NoProxy::parse_httpx(&no_proxy).map_err(
-                            |err| match err {
-                                eggfetch_core::Error::InvalidProxyUrl(message) => {
-                                    InvalidUrl::new_err(message)
-                                }
-                                other => map_err(other),
-                            },
-                        )?;
-                        p = p.no_proxy(rules);
-                    }
-                    builder = builder.environment_proxy(p);
-                }
-            }
-        }
-
-        let retry_policy = retry::parse_retry_option(retries)?;
-        if let Some(ref policy) = retry_policy {
-            builder = builder.retry(policy.clone());
-        }
-
-        // Forward advanced transport options.
-        if let Some(addr_str) = local_address {
-            let addr = crate::conversion::parse_local_address(addr_str)?;
-            builder = builder.local_address(addr);
-        }
-        if let Some(opts) = socket_options {
-            let rust_opts = crate::conversion::parse_socket_options(opts)?;
-            if !rust_opts.is_empty() {
-                builder = builder.socket_options(rust_opts);
-            }
-        }
-        if let Some(path) = uds {
-            builder = builder.uds_path(path.to_owned());
-        }
-
-        let client = builder.build();
+        let verify_disabled = prepared.verify_disabled;
+        let decompress = prepared.decompress;
+        let client = crate::request_preparation::apply_client_config(prepared)?;
 
         Ok(Self {
             runtime: std::sync::Mutex::new(Some(runtime)),

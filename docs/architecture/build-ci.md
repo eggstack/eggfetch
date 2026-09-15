@@ -51,7 +51,7 @@ See [verification-policy.md](../verification-policy.md) for the normative policy
 | Python build | `maturin develop -m crates/eggfetch-python/Cargo.toml` (active venv required; rebuild after every binding Rust change) |
 | Native Python API | `python scripts/check_native_python_api.py` (root exports, symbol kinds, exception MRO, important signatures, and version) |
 | Python typing fixture | `python scripts/check_python_typing.py` (reviewed public stubs with mypy) |
-| Python tests | `python -m pytest crates/eggfetch-python/tests/ -q --ignore=.../compat` |
+| Python tests | `python -m pytest crates/eggfetch-python/tests/ -q --ignore=.../compat` (includes native async-body and SSL interop coverage) |
 | HTTPX compat smoke | `python -m pytest .../test_imports.py .../test_client.py .../test_exceptions.py .../test_corrective_kernel.py -v` (Tier 2 runs the full suite with `EGGFETCH_COMPAT_REQUIRED=1 ... --strict-markers`) |
 | Node prototype | `cargo test -p eggfetch-node --all-features`, then `node test.js` only when `node` and a built `crates/eggfetch-node/eggfetch.node` artifact are present (explicit skip otherwise) |
 
