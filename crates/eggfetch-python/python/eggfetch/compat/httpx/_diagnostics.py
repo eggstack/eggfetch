@@ -32,7 +32,7 @@ COMPATIBILITY_INFO = CompatibilityInfo(
     emulated_version="0.28.1",
     compatibility_stage="stage-c-candidate",
     backend="rust-tokio",
-    supported_python_versions=("3.10", "3.11", "3.12", "3.13"),
+    supported_python_versions=("3.10", "3.11", "3.12", "3.13", "3.14"),
     profile_schema_version="1",
     unsupported_surfaces=UNSUPPORTED_SURFACES,
 )

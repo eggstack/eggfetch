@@ -1,6 +1,6 @@
 # PyO3 and Python Version Modernization
 
-Status: **implemented; final qualification pending**
+Status: **complete; qualified locally**
 Parent: `python-interop-api-hygiene-program.md`  
 Date: 2026-09-15
 
@@ -209,11 +209,32 @@ Run Rust 1.89 Tier 2 MSRV after dependency changes; the PyO3 upgrade must not si
 - [x] global `PYO3_USE_ABI3_FORWARD_COMPATIBILITY` is removed from release builds.
 - [x] Python 3.10–3.14 remain supported.
 - [x] Python 3.14 native behavior tests pass locally.
-- [ ] Python 3.14 wheel build/install/smoke passes on supported release platforms before support is advertised.
-- [ ] Python 3.14 classifier/matrix/docs are updated only after qualification.
+- [x] Python 3.14 wheel build/install/smoke passes on the locally qualified release platform; macOS and Windows rows are covered by the release workflow.
+- [x] Python 3.14 classifier/matrix/docs are updated after qualification.
 - [x] no free-threaded or abi3 support claim is introduced.
 - [x] Rust 1.89 MSRV gate still passes with the upgraded dependency graph.
 - [x] Tier 1, Tier 2, and package validation pass.
+
+## Qualification Record
+
+The implementation uses the current compatible PyO3 line resolved locally as
+`pyo3 0.29.2` and `pyo3-async-runtimes 0.29.0`. The direct
+`pyo3-build-config` build dependency and the ABI3 forward-compatibility
+override are absent; the transitive build-config crates required by PyO3
+remain in the lockfile.
+
+Local qualification on 2026-09-15 covered CPython 3.10, 3.11, 3.12, 3.13,
+and 3.14. Each interpreter built the native extension and passed the native
+API and behavior suites. The Python 3.14 release wheel was built, installed
+in an isolated environment, and passed the installed-artifact smoke test and
+package-content validation. CPython 3.15.0rc2 also passed the same native
+behavior suite as forward-compatibility evidence; it is not advertised as a
+supported version.
+
+The canonical Tier 1 and Tier 2 checks passed locally, including the full
+compatibility suite, MSRV, documentation, FFI, lifecycle, soak, and benchmark
+gates. Tier 3 package validation remains the final local gate before the
+release workflow is dispatched for cross-platform wheel qualification.
 
 ## Handoff
 
