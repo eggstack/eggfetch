@@ -24,6 +24,24 @@ the native API oracle. Release validation also checks that the native runtime
 version, coordinated Cargo/`pyproject.toml` version, and installed wheel
 metadata agree.
 
+### PEP 561 typing contract
+
+`eggfetch/py.typed` marks the package as typed. The reviewed native stubs are
+`eggfetch/__init__.pyi` (the explicit package re-export surface) and
+`eggfetch/_native.pyi` (the extension declarations); the structural typing
+check compares them with `tests/native_api_manifest.json` and the runtime
+oracle checks signatures and exception MRO. `mypy` consumer fixtures cover
+native and compatibility entry points, including the negative sync-client /
+async-body case. Built-wheel validation repeats the consumer smoke from the
+installed artifact. Private underscore-prefixed implementation modules are
+not part of the typing promise.
+
+The native aliases distinguish `SyncBody` from `AsyncBody`: synchronous
+clients and helpers accept buffered bytes-like/text values or synchronous
+iterables, while `AsyncClient` additionally accepts lazy async iterables.
+Compatibility-facade types remain versioned and should not be substituted for
+native `eggfetch` types.
+
 ## Module Map
 
 | Module | Purpose |

@@ -31,6 +31,15 @@ CI must install `pytest-asyncio` and `mypy` explicitly. The binding uses
 interpreter-specific PyO3 wheels; do not add an ABI3 forward-compatibility
 environment override.
 
+PEP 561 typing is a reviewed contract for the public native package. Run
+`python scripts/check_python_typing_surface.py` for stub/manifest/exception
+drift, then `python scripts/check_python_typing.py` for native and compatibility
+consumer fixtures. Package validation runs
+`python scripts/check_wheel_typing.py --wheel <wheel>` so the installed wheel,
+not the source tree, is checked. The native `_native` module remains private;
+the compatibility facades have concise package stubs only for intentionally
+public entry points and do not promise typed private implementation modules.
+
 ## Key Constraints
 
 - All HTTP logic lives in eggfetch-core. The Python crate is a thin adapter.

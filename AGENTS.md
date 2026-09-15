@@ -22,6 +22,7 @@ cargo fmt --all -- --check
 
 - `check.sh` refuses to run outside an active venv with Python 3.10+, maturin, pytest, pytest-asyncio, and mypy. Setup: `python3 -m venv .venv && source .venv/bin/activate && python -m pip install maturin pytest pytest-asyncio mypy`. Tier 2 requires the exact Rust 1.89.0 toolchain and fails with `rustup toolchain install 1.89.0 --profile minimal` when it is unavailable; it does not skip the MSRV gate.
 - After changing `crates/eggfetch-python` Rust code, rebuild before testing: `maturin develop -m crates/eggfetch-python/Cargo.toml`. Stale `.so` causes confusing failures. The binding uses the ordinary interpreter-specific PyO3 build; no ABI3 forward-compatibility escape hatch is required.
+- Native typing validation is split between `scripts/check_python_typing_surface.py` (stub syntax, manifest exports, and exception bases) and `scripts/check_python_typing.py` (native/facade consumers plus the negative sync/async-body fixture). Package validation additionally runs `scripts/check_wheel_typing.py` against the installed wheel.
 - The external-style native body/TLS qualification is manual and uses only published `eggfetch-core` APIs: `cargo run --manifest-path qualification/native-http-body-tls/Cargo.toml`. It is not a routine CI gate and its build output must remain untracked.
 - Never parallelize Rust workspace tests (`--test-threads=1`): resource-stabilization tests measure process RSS; concurrency makes them flaky.
 

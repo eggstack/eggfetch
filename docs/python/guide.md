@@ -25,6 +25,22 @@ not import it or rely on names registered there. The runtime package version is
 derived from the native release metadata and wheel validation compares it with
 `importlib.metadata.version("eggfetch")`.
 
+## Typing
+
+The native package is PEP 561 typed. The reviewed `__init__.pyi` and
+`_native.pyi` files describe the supported `eggfetch.__all__` surface, and
+the repository qualifies them with mypy. The versioned compatibility facades
+(`eggfetch.compat.httpx` and `eggfetch.compat.httpx2`) have concise public
+entry-point stubs; their underscore-prefixed implementation modules are not a
+typed API promise. Native and facade types should not be mixed interchangeably.
+
+Request-body typing follows runtime behavior: `Client` and synchronous helper
+functions accept buffered bytes-like/text content or a synchronous iterable;
+`AsyncClient` additionally accepts an `AsyncIterable[bytes | str]`. An
+async-only iterable passed to a synchronous API is rejected statically by the
+reviewed stubs and at runtime before dispatch. JSON input and JSON response
+values remain broadly typed because they follow Python JSON serialization.
+
 ## Top-Level Functions
 
 The quickest way to make requests. Each function creates a short-lived client internally.

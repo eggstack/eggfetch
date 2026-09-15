@@ -117,6 +117,11 @@ tier1_native_api() {
     "$PYTHON_BIN" "$SCRIPT_DIR/check_native_python_api.py"
 }
 
+tier1_python_typing_surface() {
+    info "Python typing surface"
+    "$PYTHON_BIN" "$SCRIPT_DIR/check_python_typing_surface.py"
+}
+
 tier1_python_typing() {
     info "Python typing fixture"
     "$PYTHON_BIN" "$SCRIPT_DIR/check_python_typing.py"
@@ -168,6 +173,7 @@ run_tier1() {
     tier1_rust_tests
     tier1_python_build
     tier1_native_api
+    tier1_python_typing_surface
     tier1_python_typing
     tier1_python_tests
     tier1_compat_smoke
@@ -416,6 +422,12 @@ tier3_package_content() {
     "$PYTHON_BIN" "$SCRIPT_DIR/validate_package_content.py" "$PACKAGE_WHEEL"
 }
 
+tier3_wheel_typing() {
+    info "Installed wheel typing smoke"
+    require_file "$SCRIPT_DIR/check_wheel_typing.py"
+    "$PYTHON_BIN" "$SCRIPT_DIR/check_wheel_typing.py" --wheel "$PACKAGE_WHEEL"
+}
+
 run_tier3() {
     run_tier1
     PACKAGE_TMP="$(mktemp -d)"
@@ -425,6 +437,7 @@ run_tier3() {
     PACKAGE_WHEEL="$(find_single_wheel "$PACKAGE_TMP/wheels")"
     tier3_wheel_smoke
     tier3_package_content
+    tier3_wheel_typing
 }
 
 # ── Check required tools ──────────────────────────────────────────────────

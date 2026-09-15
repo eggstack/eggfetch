@@ -120,6 +120,10 @@ The native package supports Python 3.10–3.14 and includes a `py.typed` marker
 with reviewed stubs for its public API. Native wheels are interpreter-specific
 and do not claim ABI3 compatibility. `AsyncClient` can consume an async
 generator as request content lazily, without buffering it before dispatch.
+Mypy-compatible consumer typing is checked from both the source package and
+the installed wheel; the versioned compatibility facades have separate,
+concise public entry-point stubs, while private underscore-prefixed modules
+are not supported typing surfaces.
 The supported native import surface is `eggfetch`; its explicit
 `eggfetch.__all__` contract includes the documented exception hierarchy and
 the concrete `NetworkStream`/`AsyncNetworkStream` upgrade wrappers.

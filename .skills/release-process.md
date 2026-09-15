@@ -39,7 +39,7 @@ PyPI uses Trusted Publishing (OIDC). No API token is needed.
 ```sh
 ./scripts/check.sh          # Tier 1: required before every commit, including native API checks
 ./scripts/check.sh extended # Tier 2: before release (full compat, API oracle, feature matrix, MSRV, docs, FFI, soak)
-./scripts/check.sh package  # Tier 3: before publish, including installed wheel smoke
+./scripts/check.sh package  # Tier 3: before publish, including installed wheel and typing smoke
 ```
 
 Tier 2 runs Tier 1 first and requires the exact Rust 1.89.0 toolchain for its
@@ -63,7 +63,7 @@ crates.io versions are immutable. If publication is partial, bump and republish.
 
 ## CI
 
-- Routine CI (`.github/workflows/ci.yml`): runs `./scripts/check.sh` on pushes and pull requests. One Ubuntu job, no matrix.
+- Routine CI (`.github/workflows/ci.yml`): runs `./scripts/check.sh` on pushes and pull requests. One Ubuntu job, no matrix; this includes the reviewed native/facade typing fixtures and stub drift check.
 - PyPI CI (`.github/workflows/pypi.yml`): manually dispatched, builds 15 wheels + 1 sdist (linux-x86_64, macos-arm64, windows-x86_64 × Python 3.10–3.14).
 
 ## Architecture References
