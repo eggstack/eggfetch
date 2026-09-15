@@ -20,15 +20,17 @@ classification can use `RequestBuilder::send_detailed()` or
 - `timeout_phase()` — the existing `TimeoutPhase`, or `None` for transport-I/O
   inactivity and other error families.
 
-This surface never searches error text. The standard Hyper connector can prove
-connection refusal from `io::ErrorKind`; its resolver error type is opaque to
-eggfetch, so unresolved standard-route failures remain generic. The direct
+This surface never searches error text. The standard Hyper connector preserves
+typed resolver provenance, so standard HTTP/HTTPS resolution failures report
+`Dns`, while connection refusal still comes from `io::ErrorKind`. The direct
 connector reports DNS resolution failures before address attempts and applies
 the deterministic address-fallback rule: DNS only for resolution failure,
 `ConnectionRefused` only when every attempted address was refused, and generic
 `Connect` for mixed/other failures. Proxy, UDS, HTTP/3, and caller-owned
 `Dialer` routes return no subtype unless their current structured boundary can
 prove one. An absent subtype is therefore unknown, not a negative diagnosis.
+Standard-route DNS detail does not change the legacy `HyperClient` error or
+its `kind()` value.
 
 The context is allocated only for detailed sends, remains bounded to one
 terminal classification, and is cleared between retry attempts. A transient

@@ -78,7 +78,8 @@ docs/
   historical Tonic 0.12.3 evidence in the adapter plan.
 - Security-sensitive information belongs in `docs/security/` or `docs/architecture/`.
 - Native request-failure documentation must distinguish stable `Error::kind()`
-  values from opt-in `RequestFailure` subtypes. Describe DNS/refusal only as
-  evidence-backed and keep route gaps explicit; do not recommend matching
-  error display strings. `max_decoded_body_size` documentation must include
-  unencoded/identity buffered and streaming responses.
+  values from opt-in `RequestFailure` subtypes. Standard HTTP/HTTPS DNS and
+  refusal detail are evidence-backed; keep proxy, UDS, H3, and custom-dialer
+  route gaps explicit, and do not recommend matching error display strings.
+  `max_decoded_body_size` documentation must include unencoded/identity
+  buffered and streaming responses.

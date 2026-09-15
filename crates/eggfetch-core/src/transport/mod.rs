@@ -16,12 +16,14 @@ pub(crate) enum ConnectFailureKind {
 
 /// TLS-capable connector used by the hyper client.
 #[cfg(feature = "tls-rustls")]
-pub(crate) type Connector =
-    hyper_rustls::HttpsConnector<hyper_util::client::legacy::connect::HttpConnector>;
+pub(crate) type Connector = hyper_rustls::HttpsConnector<
+    hyper_util::client::legacy::connect::HttpConnector<standard_resolver::DefaultResolver>,
+>;
 
 /// Cleartext connector used when Rustls is not compiled in.
 #[cfg(not(feature = "tls-rustls"))]
-pub(crate) type Connector = hyper_util::client::legacy::connect::HttpConnector;
+pub(crate) type Connector =
+    hyper_util::client::legacy::connect::HttpConnector<standard_resolver::DefaultResolver>;
 
 /// HTTP request body type expected by the hyper client.
 pub(crate) type HyperRequestBody =
@@ -79,6 +81,7 @@ pub(crate) mod direct;
 pub mod direct_connector;
 pub mod lifecycle;
 pub mod metrics;
+pub(crate) mod standard_resolver;
 #[cfg(all(unix, any(feature = "http1", feature = "http2")))]
 pub(crate) mod uds;
 

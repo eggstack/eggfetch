@@ -48,14 +48,16 @@ context through retry and redirect reconstruction; ordinary requests carry
 H3-to-H1/H2 fallback does not retain a failed pre-commit route.
 
 The classifier runs before the transport boundary collapses direct connector
-errors into `Error::Connect(String)`. It uses typed I/O refusal evidence and a
-private direct-connector category; it never parses `Display`/`Debug` text.
-Standard Hyper resolver failures remain generic because hyper-util does not
-expose a public resolver-error type. Direct address fallback reports DNS only
-for resolution failure, refusal only when every attempted address was refused,
-and generic connect for mixed or otherwise unproven failures. Proxy, UDS,
-HTTP/3, and caller-owned dialer routes remain generic/unknown where their
-current boundaries do not expose sufficient evidence.
+errors into `Error::Connect(String)`. It uses typed I/O refusal evidence,
+private direct-connector categories, and a crate-private wrapper around
+Hyper-util's standard resolver; it never parses `Display`/`Debug` text.
+Standard HTTP/HTTPS resolver failures therefore report DNS while Hyper-util
+continues to own address selection, Happy Eyeballs, and TCP establishment.
+Direct address fallback reports DNS only for resolution failure, refusal only
+when every attempted address was refused, and generic connect for mixed or
+otherwise unproven failures. Proxy, UDS, HTTP/3, and caller-owned dialer
+routes remain generic/unknown where their current boundaries do not expose
+sufficient evidence.
 
 ### Native frame execution
 

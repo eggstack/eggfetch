@@ -1622,8 +1622,36 @@ impl ClientBuilder {
 /// Build the standard cleartext connector.
 #[cfg(not(feature = "tls-rustls"))]
 fn build_standard_connector(enabler: crate::http_version::HttpVersionPolicyEnabler) -> Connector {
+    build_standard_connector_with_resolver(
+        hyper_util::client::legacy::connect::dns::GaiResolver::new(),
+        enabler,
+    )
+}
+
+/// Build a standard cleartext connector with a caller-selected private
+/// resolver. Production callers use the default system resolver; tests use
+/// this generic seam to keep resolver provenance deterministic.
+#[cfg(not(feature = "tls-rustls"))]
+fn build_standard_connector_with_resolver<R>(
+    resolver: R,
+    enabler: crate::http_version::HttpVersionPolicyEnabler,
+) -> hyper_util::client::legacy::connect::HttpConnector<
+    crate::transport::standard_resolver::ClassifyingResolver<R>,
+>
+where
+    R: tower_service::Service<hyper_util::client::legacy::connect::dns::Name>
+        + Clone
+        + Send
+        + Sync
+        + 'static,
+    R::Response: Iterator<Item = std::net::SocketAddr>,
+    R::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
+    R::Future: Send + 'static,
+{
     let _ = enabler;
-    let mut connector = hyper_util::client::legacy::connect::HttpConnector::new();
+    let mut connector = hyper_util::client::legacy::connect::HttpConnector::new_with_resolver(
+        crate::transport::standard_resolver::ClassifyingResolver::new(resolver),
+    );
     connector.enforce_http(true);
     connector
 }
@@ -1631,26 +1659,59 @@ fn build_standard_connector(enabler: crate::http_version::HttpVersionPolicyEnabl
 /// Build the standard TLS connector from the authoritative [`TlsConfig`].
 #[cfg(feature = "tls-rustls")]
 fn build_standard_connector(
-    mut config: rustls::ClientConfig,
+    config: rustls::ClientConfig,
     enabler: crate::http_version::HttpVersionPolicyEnabler,
 ) -> Connector {
+    build_standard_connector_with_resolver(
+        config,
+        enabler,
+        hyper_util::client::legacy::connect::dns::GaiResolver::new(),
+    )
+}
+
+/// Build the standard Rustls connector around an explicitly constructed
+/// Hyper resolver connector so DNS provenance survives the TLS wrapper.
+#[cfg(feature = "tls-rustls")]
+fn build_standard_connector_with_resolver<R>(
+    mut config: rustls::ClientConfig,
+    enabler: crate::http_version::HttpVersionPolicyEnabler,
+    resolver: R,
+) -> hyper_rustls::HttpsConnector<
+    hyper_util::client::legacy::connect::HttpConnector<
+        crate::transport::standard_resolver::ClassifyingResolver<R>,
+    >,
+>
+where
+    R: tower_service::Service<hyper_util::client::legacy::connect::dns::Name>
+        + Clone
+        + Send
+        + Sync
+        + 'static,
+    R::Response: Iterator<Item = std::net::SocketAddr>,
+    R::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
+    R::Future: Send + 'static,
+{
     // hyper-rustls fills ALPN from the selected protocol methods.
     config.alpn_protocols.clear();
+    let mut http = hyper_util::client::legacy::connect::HttpConnector::new_with_resolver(
+        crate::transport::standard_resolver::ClassifyingResolver::new(resolver),
+    );
+    http.enforce_http(false);
     let builder = hyper_rustls::HttpsConnectorBuilder::new()
         .with_tls_config(config)
         .https_or_http();
     #[cfg(feature = "http2")]
     {
         match (enabler.enable_http1(), enabler.enable_http2()) {
-            (true, true) => builder.enable_http1().enable_http2().build(),
-            (true | false, false) => builder.enable_http1().build(),
-            (false, true) => builder.enable_http2().build(),
+            (true, true) => builder.enable_http1().enable_http2().wrap_connector(http),
+            (true | false, false) => builder.enable_http1().wrap_connector(http),
+            (false, true) => builder.enable_http2().wrap_connector(http),
         }
     }
     #[cfg(not(feature = "http2"))]
     {
         let _ = enabler;
-        builder.enable_http1().build()
+        builder.enable_http1().wrap_connector(http)
     }
 }
 
@@ -1721,6 +1782,14 @@ mod tests {
     #[cfg(feature = "proxy")]
     use crate::proxy::ProxyAuth;
     use bytes::Bytes;
+    #[cfg(any(feature = "http1", feature = "http2"))]
+    use std::future::{ready, Ready};
+    #[cfg(any(feature = "http1", feature = "http2"))]
+    use std::net::SocketAddr;
+    #[cfg(any(feature = "http1", feature = "http2"))]
+    use std::task::{Context, Poll};
+    #[cfg(any(feature = "http1", feature = "http2"))]
+    use tower_service::Service;
 
     #[test]
     fn client_constructs() {
@@ -1759,6 +1828,70 @@ mod tests {
     #[test]
     fn client_builder() {
         let _client = Client::builder().user_agent("test-agent").build();
+    }
+
+    #[cfg(any(feature = "http1", feature = "http2"))]
+    #[tokio::test]
+    async fn standard_connector_preserves_resolver_failure_for_detailed_mapping() {
+        #[derive(Clone, Copy)]
+        struct FailingResolver;
+
+        impl Service<hyper_util::client::legacy::connect::dns::Name> for FailingResolver {
+            type Response = std::vec::IntoIter<SocketAddr>;
+            type Error = std::io::Error;
+            type Future = Ready<std::result::Result<Self::Response, Self::Error>>;
+
+            fn poll_ready(
+                &mut self,
+                _: &mut Context<'_>,
+            ) -> Poll<std::result::Result<(), Self::Error>> {
+                Poll::Ready(Ok(()))
+            }
+
+            fn call(&mut self, _: hyper_util::client::legacy::connect::dns::Name) -> Self::Future {
+                ready(Err(std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    "synthetic standard resolver failure",
+                )))
+            }
+        }
+
+        let enabler = crate::http_version::HttpVersionPolicyEnabler::from_policy(
+            HttpVersionPolicy::Http1Only,
+        );
+        #[cfg(feature = "tls-rustls")]
+        let connector = build_standard_connector_with_resolver(
+            rustls::ClientConfig::builder()
+                .with_root_certificates(rustls::RootCertStore::empty())
+                .with_no_client_auth(),
+            enabler,
+            FailingResolver,
+        );
+        #[cfg(not(feature = "tls-rustls"))]
+        let connector = build_standard_connector_with_resolver(FailingResolver, enabler);
+
+        let client =
+            hyper_util::client::legacy::Client::builder(TokioExecutor::new()).build(connector);
+        #[cfg(feature = "tls-rustls")]
+        let uri = "https://synthetic.example/";
+        #[cfg(not(feature = "tls-rustls"))]
+        let uri = "http://synthetic.example/";
+        let request = http::Request::get(uri)
+            .body(http_body_util::Empty::<Bytes>::new())
+            .expect("synthetic request is valid");
+        let error = client
+            .request(request)
+            .await
+            .expect_err("synthetic resolver should fail");
+        let context = crate::error::RequestFailureContext::new();
+        let mapped = crate::transport::direct::map_send_error_with_context(error, Some(&context));
+
+        assert_eq!(mapped.kind(), "hyper_client");
+        let failure = crate::error::RequestFailure::from_context(mapped, &context);
+        assert_eq!(
+            failure.network_failure_kind(),
+            Some(crate::error::NetworkFailureKind::Dns)
+        );
     }
 
     #[test]

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Native detailed request failures now preserve typed DNS provenance on the
+  standard Hyper HTTP/HTTPS route without changing the public `Error` or
+  ordinary request behavior.
+
 ## [0.1.4] - 2026-09-13
 
 ### Added

@@ -496,6 +496,7 @@ pub(crate) fn map_send_error_with_context(
     failure_context: Option<&crate::error::RequestFailureContext>,
 ) -> Error {
     let mut refused = false;
+    let mut resolver_failed = false;
     let mut current: Option<&dyn std::error::Error> = Some(&err);
     for _ in 0..32 {
         let Some(e) = current else { break };
@@ -516,6 +517,11 @@ pub(crate) fn map_send_error_with_context(
                 });
             }
             return Error::Connect(direct_error.message().to_owned());
+        }
+        if e.downcast_ref::<crate::transport::standard_resolver::ResolverFailure>()
+            .is_some()
+        {
+            resolver_failed = true;
         }
         if let Some(core_error) = e.downcast_ref::<Error>() {
             return core_error.clone();
@@ -548,12 +554,11 @@ pub(crate) fn map_send_error_with_context(
 
     if let Some(context) = failure_context {
         if err.is_connect() {
-            context.record(if refused {
+            context.record(if resolver_failed {
+                crate::error::NetworkFailureKind::Dns
+            } else if refused {
                 crate::error::NetworkFailureKind::ConnectionRefused
             } else {
-                // hyper-util does not expose a public resolver-error type;
-                // unresolved standard-connector failures therefore remain
-                // generic rather than being inferred from display text.
                 crate::error::NetworkFailureKind::Connect
             });
         }

@@ -155,8 +155,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 The opt-in `json` feature adds `RequestBuilder::json()` / `Response::json()` Serde helpers. Native Rust callers can use `resolved_addresses()` for direct-only physical routing, or separately pin proxy peers with `Proxy::resolved_addresses()` and supported HTTPS CONNECT/local-SOCKS5 targets with `RequestBuilder::proxy_target_addresses()`; these snapshots never fall back to DNS and remain independent controls. See [`docs/rust/guide.md`](docs/rust/guide.md) for the full Rust API reference.
 
 Native embedders that need structured timeout/DNS/refusal detail can opt into
-`RequestBuilder::send_detailed()`; the [Rust guide](docs/rust/guide.md) shows
-the string-free handling pattern.
+`RequestBuilder::send_detailed()`. Standard HTTP/HTTPS resolver failures and
+typed refusals are reported when proven; the [Rust guide](docs/rust/guide.md)
+shows the string-free handling pattern and route-dependent limits.
 
 Rustls crypto providers are selected per `TlsConfig`, not process-wide. Native
 applications that need a different provider can depend on the matching Rustls

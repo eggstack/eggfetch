@@ -186,9 +186,12 @@ match failure.network_failure_kind() {
 }
 ```
 
-`RequestFailure::into_error()` recovers the unchanged public `Error`. Network
-subtypes are evidence-backed and route-dependent; an absent subtype means the
-current transport boundary could not prove DNS or refusal.
+`RequestFailure::into_error()` recovers the unchanged public `Error`. Standard
+HTTP/HTTPS resolver failures can report `Dns`; network subtypes remain
+evidence-backed and route-dependent, so an absent subtype means the current
+transport boundary could not prove DNS or refusal. The public `Error` and
+`Error::kind()` are unchanged, including the standard route's `hyper_client`
+category.
 
 ## RequestBuilder API
 
