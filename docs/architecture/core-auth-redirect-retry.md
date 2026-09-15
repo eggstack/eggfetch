@@ -68,7 +68,7 @@ On redirect (single `advance_redirect_hop()` transformation + shared
 - **Cross-origin**: `Authorization`, `Cookie`, and `Proxy-Authorization` are stripped, plus `Host` is reset to the new destination; client-level auth is not reapplied.
 - `Host` header is updated to the new destination.
 - `Content-Length`, `Content-Type`, and `Transfer-Encoding` are stripped when the body is dropped.
-- Destination-specific transport hints (`target`, `sni_hostname`, `trace`) attach only on the first hop and are cleared thereafter. A native `resolved_target` is retained only for same-origin redirects; cross-origin redirects return `Error::ResolvedTargetRedirect` before dispatch. Per-request decompression and proxy overrides persist across all hops. The redirects-disabled fast path uses the same first-hop builder, so it cannot diverge except for loop behavior.
+- Destination-specific wire hints (`target`, `sni_hostname`, `trace`) attach only on the first hop and are cleared thereafter. Native physical-route snapshots are separate: direct `resolved_target` and private `proxied_target` are retained only for same-origin redirects; cross-origin redirects return `Error::ResolvedTargetRedirect` before dispatch. A proxied target snapshot is valid only with a compatible effective proxy route; unsupported proxy combinations fail before I/O. Per-request decompression and proxy overrides persist across all hops. The redirects-disabled fast path uses the same first-hop builder, so it cannot diverge except for loop behavior.
 
 ### Body Replay
 

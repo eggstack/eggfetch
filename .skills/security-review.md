@@ -26,6 +26,16 @@ Use this skill when performing security reviews or addressing security findings 
   CIDR malformed input never broadens bypass, `FunctionAuth` redirect/retry
   timing leaks no credentials, `Headers` merge preserves redaction.
 - Proxy auth not forwarded to destination.
+- Native proxy route pinning is split by hop: `Proxy::resolved_addresses()` pins
+  the physical proxy peer while preserving the logical proxy URI/TLS identity,
+  and `RequestBuilder::proxy_target_addresses()` separately pins the ultimate
+  HTTPS CONNECT or local SOCKS5 destination. Direct `resolved_target` remains
+  direct-only; pinned routes never fall back to DNS, SOCKS5H and plaintext
+  forward-proxy target pinning fail closed before I/O, and snapshots survive
+  retries and same-origin redirects but reject cross-origin reuse. SOCKS cache
+  keys include both snapshots, hand-rolled HTTP proxy tunnels are not pooled,
+  and no Python/HTTPX or Egress-policy dependency is introduced for these
+  native controls.
 - Cookie jar integrity maintained across redirects.
 - Alt-Svc learns only from authenticated HTTPS (verified TLS, no proxy,
   hop-local origin); alternatives never change cookies/auth/Host policy;

@@ -59,6 +59,9 @@ This checklist must be completed before any release of eggfetch. Each item has a
 - [ ] Proxy credential URL rejection tests pass (redacted error on `http://user:pass@proxy/`)
 - [ ] NO_PROXY matching tests pass (exact, domain suffix, wildcard, port-specific)
 - [ ] Proxy response parsing bounds tests pass (header size limits, line limits)
+- [ ] Native proxy-peer pinning preserves logical proxy URI/TLS identity and never falls back to DNS
+- [ ] Native proxy-target pinning is limited to HTTPS CONNECT/local SOCKS5; SOCKS5H and plaintext forward-proxy combinations fail before I/O
+- [ ] Pinned proxy routes survive retries and same-origin redirects, reject cross-origin reuse, and use route-aware SOCKS cache keys
 
 ## Decompression and Body Limits
 

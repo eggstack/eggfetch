@@ -56,6 +56,9 @@ The proxy is semi-trusted. The user configures the proxy, so the proxy is not an
 - A malicious or compromised proxy may inject headers, modify responses, or return crafted redirect targets.
 - CONNECT tunnel data is a transparent byte stream; eggfetch does not inspect or modify tunnel content beyond the initial handshake.
 - Proxy response parsing (status line, headers) must be bounded to prevent resource exhaustion from oversized responses.
+- Caller-pinned proxy peers and destinations must remain physical-route controls:
+  they must not rewrite logical proxy/origin identities, silently fall back to
+  DNS, or cross an origin boundary during redirects.
 
 ### eggfetch <-> TLS Layer
 

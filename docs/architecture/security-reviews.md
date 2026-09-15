@@ -127,9 +127,28 @@ No critical or high-severity findings. Cross-origin credential stripping is comp
 - **Explicit core proxy**: the Rust core does not read proxy environment variables. The HTTPX compatibility facade explicitly opts into scheme-aware environment translation only when `trust_env=True`.
 - **NO_PROXY available explicitly**: `NoProxy::from_env()` and `NoProxy::parse()` are available for callers who want to read environment variables explicitly.
 
+### Route Pinning and Egress Interoperability
+
+- **Proxy-peer pinning**: Native `Proxy::resolved_addresses()` pins the
+  physical proxy peer without changing the logical proxy URI, proxy TLS SNI,
+  or certificate identity. A pinned peer set is ordered, non-empty, and never
+  falls back to DNS.
+- **Destination pinning**: Native
+  `RequestBuilder::proxy_target_addresses()` is independent of proxy-peer
+  pinning and is supported only for HTTPS CONNECT and local-resolution SOCKS5
+  routes. SOCKS5H and plaintext HTTP forward-proxy combinations reject the
+  request before I/O.
+- **Redirect/retry scope**: Both snapshots are retained across retries and
+  same-origin redirects. Cross-origin redirects fail closed rather than
+  reusing a caller-supplied physical route. SOCKS cache keys include the
+  snapshots, while hand-rolled HTTP proxy tunnels are not pooled.
+- **Boundary**: These controls are native Rust transport controls only; the
+  Python/HTTPX facades do not expose them and the core does not depend on an
+  external Egress policy crate.
+
 ### Findings
 
-No critical or high-severity findings. Proxy credentials are correctly isolated from destination requests. CONNECT tunnels are properly opaque. Response parsing is bounded.
+No critical or high-severity findings. Proxy credentials are correctly isolated from destination requests. CONNECT tunnels are properly opaque. Response parsing is bounded. Native route pinning preserves logical identities, fails closed on unsupported combinations, and does not introduce a DNS fallback path.
 
 ---
 
