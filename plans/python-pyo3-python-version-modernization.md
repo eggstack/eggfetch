@@ -1,6 +1,6 @@
 # PyO3 and Python Version Modernization
 
-Status: **implementation complete; cross-platform qualification in progress**
+Status: **complete; qualified locally and remotely**
 Parent: `python-interop-api-hygiene-program.md`  
 Date: 2026-09-15
 
@@ -209,7 +209,7 @@ Run Rust 1.89 Tier 2 MSRV after dependency changes; the PyO3 upgrade must not si
 - [x] global `PYO3_USE_ABI3_FORWARD_COMPATIBILITY` is removed from release builds.
 - [x] Python 3.10–3.14 remain supported.
 - [x] Python 3.14 native behavior tests pass locally.
-- [x] Python 3.14 wheel build/install/smoke passes on the locally qualified release platform; macOS and Windows rows are covered by the release workflow.
+- [x] Python 3.14 wheel build/install/smoke passes on Linux x86_64, macOS arm64, and Windows x86_64 release jobs.
 - [x] Python 3.14 classifier/matrix/docs are updated after qualification.
 - [x] no free-threaded or abi3 support claim is introduced.
 - [x] Rust 1.89 MSRV gate still passes with the upgraded dependency graph.
@@ -233,5 +233,9 @@ supported version.
 
 The canonical Tier 1 and Tier 2 checks passed locally, including the full
 compatibility suite, MSRV, documentation, FFI, lifecycle, soak, and benchmark
-gates. Tier 3 package validation also passed locally. The build-only release
-workflow is the remaining cross-platform qualification gate.
+gates. Tier 3 package validation also passed locally. The build-only [PyPI
+Wheels workflow run 35028386004](https://github.com/eggstack/eggfetch/actions/runs/35028386004),
+with `publish=false`, passed the 15-wheel matrix (Python 3.10–3.14 on Linux
+x86_64, macOS arm64, and Windows x86_64) plus sdist on 2026-09-15. It performed
+wheel build, installed-artifact smoke, metadata, and package/content
+validation. No distribution was published.
