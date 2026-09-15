@@ -2,6 +2,26 @@
 
 This directory contains active implementation plans, live qualification/status records, and historical implementation records. Completed plans are non-normative unless another current document explicitly says otherwise. Verification and release policy remain governed by `docs/verification-policy.md` and `docs/releases/process.md`.
 
+## Active corrective handoff — standard-route DNS provenance (2026-09-15)
+
+Plan: `standard-route-dns-provenance-correction.md`
+
+Status: ready for implementation. This is a narrow correction to the completed
+native request-failure introspection work. The standard Hyper HTTP/HTTPS route
+should preserve typed resolver-failure provenance through a crate-private
+resolver wrapper so `send_detailed()` can report `NetworkFailureKind::Dns`
+without error-string matching, a new public resolver API, or a transport
+rewrite. Hyper-util must continue to own standard TCP/address-selection
+behavior; `DirectConnector` must not become the default route merely to obtain
+diagnostics.
+
+The implementation should add no dependency or MSRV increase, preserve the
+existing public `Error`/`Error::kind()` and ordinary `send()` semantics, and
+re-run the repository's existing exact-SHA compatibility process because the
+work changes executable core connector/error plumbing. Gregg is motivating
+requirements evidence only; no downstream-specific type or adapter belongs in
+eggfetch.
+
 ## Completed — native Tower service adapter (2026-09-15)
 
 Plan: `native-tower-service-adapter.md`
