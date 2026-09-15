@@ -29,6 +29,7 @@ use std::time::Duration;
 
 use bytes::Bytes;
 use eggfetch_core::body::{BoxBytesStream, RequestBody};
+#[cfg(feature = "multipart")]
 use eggfetch_core::error::Error;
 use eggfetch_core::redirect::{build_redirect_request, drops_body_on_redirect, redirect_method};
 use eggfetch_core::retry::RetryPolicy;

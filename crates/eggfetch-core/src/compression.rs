@@ -1395,6 +1395,7 @@ mod tests {
         assert_eq!(err.kind(), "decoded_body_too_large");
     }
 
+    #[cfg(any(feature = "compression-gzip", feature = "compression-deflate"))]
     fn gzip_compress(data: &[u8]) -> Vec<u8> {
         use flate2::write::GzEncoder;
         use flate2::Compression;

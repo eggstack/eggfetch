@@ -34,8 +34,12 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
+#[cfg(feature = "multipart")]
 use bytes::Bytes;
-use eggfetch_core::{Client, Proxy, ProxyAuth, Timeout};
+#[cfg(feature = "multipart")]
+use eggfetch_core::ProxyAuth;
+use eggfetch_core::{Client, Proxy, Timeout};
+#[cfg(feature = "compression-gzip")]
 use futures_util::StreamExt;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};

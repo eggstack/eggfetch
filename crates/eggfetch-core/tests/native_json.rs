@@ -1,11 +1,11 @@
+//! Loopback coverage for the native Rust JSON and response-limit APIs.
+
 #![cfg(feature = "json")]
 #![allow(
     clippy::missing_panics_doc,
     clippy::too_many_lines,
     clippy::type_complexity
 )]
-
-//! Loopback coverage for the native Rust JSON and response-limit APIs.
 
 #[cfg(feature = "compression-gzip")]
 use std::io::Write;
