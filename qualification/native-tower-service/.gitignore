@@ -1,0 +1,2 @@
+# The fixture builds outside the workspace during manual qualification.
+target/

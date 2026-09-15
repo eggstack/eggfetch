@@ -56,6 +56,16 @@ status; it cannot be rejected earlier without knowing the response status.
 Existing `RequestBody`, `ResponseBody`, `bytes_stream()`, and
 `Response::trailers()` semantics are unchanged.
 
+`Client::native_service()` is an ergonomic wrapper over this same native
+execution boundary. It implements the standard
+`tower_service::Service<http::Request<B>>` trait without buffering request
+bodies or flattening response frames. `poll_ready()` always returns ready;
+the request-scoped origin pool permit and transport backpressure are acquired
+inside `call()` and released by the same response-body lifecycle. The service
+does not forward arbitrary request extensions as a Hyper contract and does
+not apply high-level request policy. The full Tower framework is not a core
+dependency.
+
 ## Response Body
 
 `ResponseBody` has four variants:

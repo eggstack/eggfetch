@@ -49,6 +49,7 @@ pub mod request;
 pub mod response;
 pub(crate) mod response_decode;
 pub mod retry;
+pub mod service;
 pub(crate) mod stream;
 pub mod timeout;
 #[cfg(feature = "tls-rustls")]
@@ -86,6 +87,7 @@ pub use retry::{
     BackoffPolicy, MethodPolicy, ReplayCheck, RetryCause, RetryContext, RetryPolicy,
     RetryPolicyBuilder, StatusPolicy,
 };
+pub use service::NativeHttpService;
 pub use timeout::{Timeout, TimeoutBuilder, TimeoutPhase};
 #[cfg(feature = "tls-rustls")]
 pub use tls::{ClientIdentity, TlsConfig, TlsConfigBuilder, TlsVersion, TrustStore};

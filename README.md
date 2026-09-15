@@ -178,6 +178,13 @@ The native `execute_http_body()` surface starts response read timeouts when
 the returned body is first polled, preserves DATA/trailer frames, and leaves
 redirects, retries, cookies, auth, decompression, and upgrades to the caller
 or high-level API as documented there.
+`Client::native_service()` exposes that same transport-only surface through
+`tower_service::Service<http::Request<B>>`; it is always ready to accept a
+request, with origin-pool and transport backpressure applied inside the
+returned future. It does not add the full Tower framework or guarantee
+arbitrary request-extension passthrough. The standalone
+`qualification/native-tower-service/` fixture checks generic Tonic transport
+interoperability without making Tonic an eggfetch feature.
 The public frame/provider/private-PKI boundary is also exercised by the
 standalone `qualification/native-http-body-tls/` fixture; that manual fixture
 is not part of the routine CI matrix.

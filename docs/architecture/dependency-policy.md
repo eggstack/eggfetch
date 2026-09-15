@@ -32,7 +32,7 @@ owning feature is selected.
 - **thiserror** -- ergonomic error definitions.
 - **cookie** -- RFC 6265 cookie parsing and representation (optional, behind `cookies` feature).
 - **percent-encoding** -- percent-encoding for URL query strings and cookie values.
-- **tower-service** -- `Service` trait for transport connector abstraction (UDS, SOCKS, connect-timeout wrappers).
+- **tower-service** -- `Service` trait for transport connector abstractions (UDS, SOCKS, connect-timeout wrappers) and the public `NativeHttpService` interoperability boundary. The full `tower` framework, `tower-layer`, and Tonic remain outside the core dependency graph.
 - **base64** -- Basic authentication credential encoding.
 - **flate2** -- buffered gzip/deflate decompression for non-streaming response reads (optional, behind `compression-gzip`/`compression-deflate`).
 - **getrandom** -- cryptographically secure random bytes for multipart
@@ -48,7 +48,7 @@ owning feature is selected.
   paths and other platform loaders are selected inside the same authoritative
   `TlsConfig` root builder.
 
-The native frame API adds no dependency: it exposes the existing direct
+The native frame API and `NativeHttpService` adapter add no dependency: they expose the existing direct
 `http-body` 1.x contract and erases bodies at the existing Hyper boundary.
 Likewise, `TlsConfigBuilder::crypto_provider` accepts a caller-owned Rustls
 `CryptoProvider`; eggfetch does not add AWS-LC, FIPS, or another provider to

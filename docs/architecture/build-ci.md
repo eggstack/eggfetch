@@ -96,6 +96,21 @@ output and must not be committed. Current exact-SHA compatibility and plan
 closure evidence lives in `plans/httpx-parity-correction-status.md` and the
 native body/TLS closure plan.
 
+### Native Tower service qualification (manual, not CI)
+
+The external-style `qualification/native-tower-service/` fixture checks the
+public `NativeHttpService` against Tonic's generic transport bounds and
+explicit-origin constructor. It is intentionally not a workspace member or a
+routine CI matrix entry; Tonic's dependency tree belongs only to this fixture.
+Run it with:
+
+```sh
+cargo run --manifest-path qualification/native-tower-service/Cargo.toml
+```
+
+Its generated `target/` directory is ignored build output and must not be
+committed.
+
 ### Package Validation (Tier 3)
 
 Run `./scripts/check.sh package` for: core publish dry-run (`cargo publish --dry-run -p eggfetch-core`), dependent-crate package-structure validation (`cargo package --list` plus structured internal dependency version verification via cargo metadata for eggfetch-cli, eggfetch-ffi, eggfetch-python, eggfetch-node), wheel build, exactly-one-wheel resolution, wheel smoke, and package content validation. Uses fresh temporary artifacts; stale repository wheels are never used.

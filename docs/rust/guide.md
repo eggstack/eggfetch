@@ -259,6 +259,40 @@ does not consume that budget. It is intended for native gateways, service
 meshes, middleware, and custom-network clients; the existing `RequestBuilder`
 API remains the application-oriented choice.
 
+### Native Tower service interoperability
+
+For callers using Tower-native middleware, `Client::native_service()` is a
+small wrapper around the same `execute_http_body()` path:
+
+```rust
+use bytes::Bytes;
+use eggfetch_core::Client;
+use http_body_util::Empty;
+use tower_service::Service;
+
+let mut service = Client::new().native_service();
+let request = http::Request::get("https://api.example.com/")
+    .body(Empty::<Bytes>::new())?;
+let response = service.call(request).await?;
+```
+
+`NativeHttpService` is cloneable and accepts the same body bounds as
+`execute_http_body()`. Use `NativeHttpService::new(client)` or
+`.with_options(NativeRequestOptions)` when service-instance defaults are
+clearer than direct calls. Its `poll_ready()` always returns ready: Tower
+readiness means the adapter can accept a request, while origin-aware logical
+pool admission, physical connection admission, and transport backpressure
+occur inside the future returned by `call()`. A Tower `LoadShed` layer placed
+directly around this service therefore does not observe eggfetch pool
+saturation; callers may add their own global policy layers.
+
+The service preserves native DATA/trailer and lifecycle behavior and does not
+add redirects, logical retries, cookies, authentication, decompression, or
+decoded-body limits. Middleware-local request extensions can be used before
+the adapter, but arbitrary extensions are not guaranteed to reach Hyper. The
+full `tower` framework and Tonic/gRPC remain optional caller/qualification
+dependencies; neither is an eggfetch-core feature.
+
 ### TLS provider and additional roots
 
 Rustls provider choice is local to `TlsConfig`:

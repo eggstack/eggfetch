@@ -77,6 +77,19 @@ headers identify the status; callers that may receive upgrades must use the
 high-level upgrade API because the native request can already have transferred
 its body by that point.
 
+`Client::native_service()` exposes this exact native path through
+`NativeHttpService`, which implements
+`tower_service::Service<http::Request<B>>` for the same body bounds and
+response type. The adapter only clones the client/options and delegates from
+`call()`; it does not inspect request extensions or add a second policy layer.
+Its `poll_ready()` is intentionally always ready because the request is
+needed to identify the origin pool. Logical pool admission, physical
+connection admission, and transport backpressure therefore occur in the
+returned future. This means readiness-based Tower load shedding does not
+represent eggfetch pool saturation. Request extensions are not a guaranteed
+passthrough contract, and Tonic/gRPC is supported only as an external
+consumer pattern, not by an eggfetch-specific API.
+
 ## RequestBuilder
 
 Fluent builder for constructing requests. Supports method, URL, headers, query params, body, auth, proxy override, retry override, timeout override, and transport hints.

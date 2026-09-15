@@ -75,6 +75,7 @@ eggfetch/
 ├── qualification/embedded/ Tiny downstream footprint fixtures (opt-in, non-product)
 ├── qualification/embedded-custom-dialer/ External-style native transport fixture
 ├── qualification/native-http-body-tls/ External-style frame/TLS fixture
+├── qualification/native-tower-service/ External-style Tower/Tonic fixture
 └── scripts/                check.sh tiers, manifest/compare, H3 + embedded runners,
                             doc checkers, wheel/package validators
 ```
@@ -106,7 +107,7 @@ This `overview.md` is the entry point. For a focused review of any component, fo
 
 ### eggfetch-core (the engine)
 
-All HTTP behavior lives here (~29.7k lines across 27 source files plus `transport/` and `stream/` trees). This is the single authority for networking — no other crate performs I/O.
+All HTTP behavior lives here (~29.7k lines across 28 source files plus `transport/` and `stream/` trees). This is the single authority for networking — no other crate performs I/O.
 
 | Module | Public? | Purpose |
 |--------|---------|---------|
@@ -114,6 +115,7 @@ All HTTP behavior lives here (~29.7k lines across 27 source files plus `transpor
 | `request` | Yes | `Request`, `RequestBuilder`, `ProxyOverride`, `ResolvedTarget`, `TransportHints` — fluent request construction (`header()`, `query()`, `body()`, `json()`, `timeout()`, `auth()`, `decompress()`, `proxy()`, `retry()`, `resolved_addresses()`). `TransportHints` carries wire-level overrides (`target`, `sni_hostname`, `resolved_target`, `trace`) that do not affect logical URL semantics; hints survive retry reconstruction, while same-origin redirects retain only a resolved destination and cross-origin redirects fail closed. `send()` delegates to client. |
 | `response` | Yes | `Response`, `HistoryEntry` — status, version, headers, URL, body, redirect history, trailers (`trailers()` after EOF). Consumption: `bytes()`, `text()`, `bytes_stream()`, `raw_bytes_stream()`, `text_lines()`. |
 | `body` | Yes | `RequestBody`, `ResponseBody`, `BoxBytesStream`, `SharedTrailers` — single-consumption body model. Request: `Empty \| Bytes \| Stream`. Response: `Buffered \| Streaming \| EncodedStreaming \| Consumed`. Streaming bodies carry pool permits via `PoolGuardArc` (RAII); trailers populate without buffering via shared store. |
+| `service` | Yes | `NativeHttpService` — always-ready `tower_service::Service` adapter over native frame execution. |
 | `headers` | Yes | `Headers` — case-insensitive header map wrapper around `http::HeaderMap`. |
 | `error` | Yes | `Error` enum and `Result<T>` alias. Comprehensive taxonomy (`InvalidUrl` … `Http2*`, `H3*`, `ResolvedTargetRedirect`, JSON errors, `TraceCallbackAborted`) with `kind()` returning static strings for programmatic matching. |
 | `auth` | Yes | `AuthScheme`, `BasicAuth`, `BearerAuth` — CR/LF injection prevention, redacted `Debug`/`Display`. Precedence: request > disabled > client > none. |
@@ -275,6 +277,21 @@ frames, custom dialing, an explicitly selected Rustls provider, and additive
 private trust. It is a bounded qualification fixture rather than a routine CI
 matrix; run it with `cargo run --manifest-path
 qualification/native-http-body-tls/Cargo.toml`.
+
+### Native Tower service qualification (`qualification/native-tower-service/`)
+
+The standalone fixture compiles `NativeHttpService` against Tonic's generic
+`GrpcService` transport boundary and constructs a client with an explicit
+origin. It is external-style qualification only: Tonic and the full Tower
+framework remain outside eggfetch-core, HTTP/2 selection remains ordinary
+`HttpVersionPolicy`, and no server or code-generation pipeline is required.
+Run it manually with:
+
+```sh
+cargo run --manifest-path qualification/native-tower-service/Cargo.toml
+```
+
+The fixture's `target/` output is ignored and must not be committed.
 
 ### Examples (`examples/`)
 

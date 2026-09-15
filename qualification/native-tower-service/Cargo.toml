@@ -1,0 +1,15 @@
+[package]
+name = "eggfetch-native-tower-service-fixture"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[dependencies]
+bytes = "1"
+eggfetch-core = { path = "../../crates/eggfetch-core", default-features = false, features = ["http1", "http2", "tls-rustls"] }
+http = "1"
+http-body = "1"
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+tonic = { version = "0.12", default-features = false, features = ["codegen", "transport"] }
