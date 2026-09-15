@@ -183,8 +183,10 @@ or high-level API as documented there.
 request, with origin-pool and transport backpressure applied inside the
 returned future. It does not add the full Tower framework or guarantee
 arbitrary request-extension passthrough. The standalone
-`qualification/native-tower-service/` fixture checks generic Tonic transport
-interoperability without making Tonic an eggfetch feature.
+`qualification/native-tower-service/` fixture is pinned to Tonic 0.14.6 with
+the `codegen` feature only; it checks generic generated-client transport
+interoperability without making Tonic an eggfetch feature or enabling Tonic's
+`transport`/`Channel` stack.
 The public frame/provider/private-PKI boundary is also exercised by the
 standalone `qualification/native-http-body-tls/` fixture; that manual fixture
 is not part of the routine CI matrix.

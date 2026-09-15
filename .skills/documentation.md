@@ -72,6 +72,10 @@ docs/
   `qualification/embedded/`); link there instead of copying byte counts
   into README/guides. Never claim slimming: the current record is not a
   footprint win.
+- The external `qualification/native-tower-service/` fixture is manual
+  qualification, pinned to Tonic 0.14.6 with `codegen` only. Keep its
+  Tonic `transport`/`Channel`-free scope and distinguish it from the
+  historical Tonic 0.12.3 evidence in the adapter plan.
 - Security-sensitive information belongs in `docs/security/` or `docs/architecture/`.
 - Native request-failure documentation must distinguish stable `Error::kind()`
   values from opt-in `RequestFailure` subtypes. Describe DNS/refusal only as

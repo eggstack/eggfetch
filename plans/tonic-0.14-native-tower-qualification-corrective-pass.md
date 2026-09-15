@@ -2,7 +2,35 @@
 
 Planning baseline: `d112d06c4d0318ab34b53e0a4b6204702507b191` (`main`, 2026-09-15; eggfetch-core 0.1.4)
 
-Status: ready for implementation
+Status: complete (2026-09-15)
+
+## Closure record (2026-09-15)
+
+Corrective fixture commit: `598f80d5aed4ae8d2f8e46dc00fb4b9d3973c04d`.
+Production code changed: no. The fixture is pinned exactly to Tonic 0.14.6,
+with `codegen` only; Tonic `transport`/`Channel`, server, and TLS features are
+not enabled. It uses `tonic::body::Body`, the Tonic 0.14 ordinary generated-
+client `GrpcService` bounds, and `Grpc::with_origin()` over
+`NativeHttpService`.
+
+Validation completed:
+
+- `cargo check --locked` and `cargo run --locked` for the fixture: passed;
+- focused native Tower service, native body, trailer, and HTTP/2 suites:
+  passed (7, 9, 6, and 21 tests, respectively);
+- `cargo fmt --all -- --check` and fixture formatting check: passed;
+- Tier 1: passed on the final documentation/fixture tree; the existing
+  optional Node artifact check was explicitly skipped because
+  `crates/eggfetch-node/eggfetch.node` is not built locally;
+- dependency trees: Tonic 0.14.6 is fixture-only and `eggfetch-core` has no
+  Tonic or full Tower dependency; the fixture does not enable Tonic transport;
+- `git diff --check`: passed.
+
+The historical Tonic 0.12.3 qualification remains recorded in
+`plans/native-tower-service-adapter.md` and was not rewritten. The existing
+embedded-footprint conclusion remains **not a footprint win**. This pass is
+closed; the final documentation commit is a docs-only descendant of the
+corrective fixture commit above.
 
 ## Purpose
 

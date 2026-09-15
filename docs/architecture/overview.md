@@ -75,7 +75,7 @@ eggfetch/
 ├── qualification/embedded/ Tiny downstream footprint fixtures (opt-in, non-product)
 ├── qualification/embedded-custom-dialer/ External-style native transport fixture
 ├── qualification/native-http-body-tls/ External-style frame/TLS fixture
-├── qualification/native-tower-service/ External-style Tower/Tonic fixture
+├── qualification/native-tower-service/ External-style Tower/Tonic 0.14.6 fixture
 └── scripts/                check.sh tiers, manifest/compare, H3 + embedded runners,
                             doc checkers, wheel/package validators
 ```
@@ -280,11 +280,13 @@ qualification/native-http-body-tls/Cargo.toml`.
 
 ### Native Tower service qualification (`qualification/native-tower-service/`)
 
-The standalone fixture compiles `NativeHttpService` against Tonic's generic
-`GrpcService` transport boundary and constructs a client with an explicit
-origin. It is external-style qualification only: Tonic and the full Tower
-framework remain outside eggfetch-core, HTTP/2 selection remains ordinary
-`HttpVersionPolicy`, and no server or code-generation pipeline is required.
+The standalone fixture is pinned to Tonic 0.14.6 and compiles
+`NativeHttpService` against the generic `GrpcService` transport boundary using
+`tonic::body::Body`, then constructs a client with an explicit origin. It is
+external-style qualification only: it enables Tonic `codegen` without Tonic
+`transport`/`Channel`, server, or TLS features; Tonic and the full Tower
+framework remain outside eggfetch-core; HTTP/2 selection remains ordinary
+`HttpVersionPolicy`; and no server or code-generation pipeline is required.
 Run it manually with:
 
 ```sh

@@ -41,6 +41,25 @@ footprint win**; no binary-size reduction is claimed.
 All remaining plan changes after the executable freeze are documentation,
 compatibility-profile, and plan-index ledger updates.
 
+## Corrective closure (2026-09-15)
+
+The original executable adapter freeze remains
+`490320f6e99fbb7916280d6bcdd21660bd74f858`; production code did not change.
+A later audit found that the external fixture still exercised Tonic 0.12.3
+while the relevant downstream generation uses Tonic 0.14. The fixture-only
+corrective commit `598f80d5aed4ae8d2f8e46dc00fb4b9d3973c04d` pins exact Tonic
+0.14.6, uses the current `tonic::body::Body` generated-client transport shape,
+and disables Tonic `transport`/`Channel`, server, and TLS features.
+
+The fixture compiled and ran with `--locked`. The focused native Tower service,
+native body, trailer, and HTTP/2 suites passed (7, 9, 6, and 21 tests); the
+required Tier 1 validation also passed. Dependency inspection confirmed that
+Tonic remains qualification-only and that no Tonic or full Tower dependency was
+added to `eggfetch-core`. The bounded footprint result remains **not a
+footprint win**; no binary-size claim changed. Validation commands and the
+current corrective status are recorded in
+`tonic-0.14-native-tower-qualification-corrective-pass.md`.
+
 ## Objective
 
 Expose eggfetch's existing native frame-preserving HTTP execution surface through the standard `tower_service::Service<http::Request<B>>` interface so unrelated Tower-native Rust consumers can reuse eggfetch's HTTP/TLS/pooling/transport engine without writing a local adapter.

@@ -99,10 +99,11 @@ native body/TLS closure plan.
 ### Native Tower service qualification (manual, not CI)
 
 The external-style `qualification/native-tower-service/` fixture checks the
-public `NativeHttpService` against Tonic's generic transport bounds and
-explicit-origin constructor. It is intentionally not a workspace member or a
-routine CI matrix entry; Tonic's dependency tree belongs only to this fixture.
-Run it with:
+public `NativeHttpService` against Tonic 0.14.6's generic generated-client
+transport bounds and explicit-origin constructor. It enables Tonic's `codegen`
+feature only; Tonic `transport`/`Channel`, server, and TLS features are
+intentionally disabled. It is not a workspace member or a routine CI matrix
+entry; Tonic's dependency tree belongs only to this fixture. Run it with:
 
 ```sh
 cargo run --manifest-path qualification/native-tower-service/Cargo.toml

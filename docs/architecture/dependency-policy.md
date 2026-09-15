@@ -32,7 +32,7 @@ owning feature is selected.
 - **thiserror** -- ergonomic error definitions.
 - **cookie** -- RFC 6265 cookie parsing and representation (optional, behind `cookies` feature).
 - **percent-encoding** -- percent-encoding for URL query strings and cookie values.
-- **tower-service** -- `Service` trait for transport connector abstractions (UDS, SOCKS, connect-timeout wrappers) and the public `NativeHttpService` interoperability boundary. The full `tower` framework, `tower-layer`, and Tonic remain outside the core dependency graph.
+- **tower-service** -- `Service` trait for transport connector abstractions (UDS, SOCKS, connect-timeout wrappers) and the public `NativeHttpService` interoperability boundary. The full `tower` framework, `tower-layer`, and Tonic remain outside the core dependency graph; the manual Tonic 0.14.6 qualification fixture owns its `codegen`-only dependency separately.
 - **base64** -- Basic authentication credential encoding.
 - **flate2** -- buffered gzip/deflate decompression for non-streaming response reads (optional, behind `compression-gzip`/`compression-deflate`).
 - **getrandom** -- cryptographically secure random bytes for multipart

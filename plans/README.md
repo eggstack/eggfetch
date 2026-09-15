@@ -11,13 +11,16 @@ Status: complete. Executable freeze:
 cloneable `NativeHttpService` and `Client::native_service()` over the existing
 frame-preserving native execution path. The adapter is always ready to accept
 requests; origin-pool admission and transport backpressure remain in the
-delegated future. Full Tower/Tonic remain outside the core dependency graph,
-with Tonic interoperability covered by the standalone fixture.
+delegated future. Full Tower/Tonic remain outside the core dependency graph.
+The standalone fixture now qualifies Tonic 0.14.6 generated-client bounds with
+`codegen` only; Tonic `transport`/`Channel` remains disabled.
 
 Tier 1, extended, package, focused feature/dependency checks, the external
-Tonic fixture, and the exact-SHA compatibility validation passed. The bounded
+Tonic 0.14.6 fixture, and the exact-SHA compatibility validation passed. The bounded
 footprint measurement remains **not a footprint win** and no binary-size
-reduction is claimed. The plan contains the complete closure record; this
+reduction is claimed. The plan contains the complete closure record; the Tonic
+0.14 corrective closure is recorded in
+`tonic-0.14-native-tower-qualification-corrective-pass.md`. This
 entry and the compatibility profiles are documentation-only descendants of
 the executable freeze.
 
