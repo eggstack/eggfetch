@@ -28,11 +28,14 @@ created = "2026-09-10"
 # executable freeze below.
 # The native Tower service adapter then changed executable source/test inputs;
 # this profile was renewed on the final clean executable freeze below.
+# The standard-route DNS provenance correction then changed core connector
+# plumbing; this profile was renewed on the final clean executable freeze
+# below.
 stage = "stage-c-qualified"
 status = "qualified"
-qualification-sha = "490320f6e99fbb7916280d6bcdd21660bd74f858"
+qualification-sha = "312cd4402ea2b4b27bf54cf7dc36924a1d449adc"
 qualification-date = "2026-09-15"
-historical-current-qualification-sha = "13c4ab4d3ce37ab17becd62942182c0e63399229"
+historical-current-qualification-sha = "490320f6e99fbb7916280d6bcdd21660bd74f858"
 reference = "httpx2==2.12.0"
 
 [reference]

@@ -7,7 +7,7 @@ the independently pinned HTTPX 0.28.1 contract and must not be rewritten
 to HTTPX2 semantics.
 
 Status: **Stage C qualified** on frozen executable SHA
-`13c4ab4d3ce37ab17becd62942182c0e63399229`. Earlier bindings are historical
+`312cd4402ea2b4b27bf54cf7dc36924a1d449adc`. Earlier bindings are historical
 after subsequent qualification-sensitive changes, including the native JSON
 completion and its regression coverage. See `profile.toml` and
 `plans/httpx-parity-correction-status.md`. Implementation lives in

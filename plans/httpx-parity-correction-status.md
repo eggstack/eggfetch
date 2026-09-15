@@ -4,6 +4,47 @@ This record is the exact-SHA-bound status for the HTTPX 0.28.1 compatibility
 facade. Historical phase and corrective-pass records remain in the git history
 and referenced plans; counts below are only from the runs named here.
 
+## Recorded state — Stage C renewed after standard-route DNS provenance correction (2026-09-15)
+
+Recorded designation: **Stage C qualified** for both the documented HTTPX
+0.28.1 and httpx2 2.12.0 asyncio surfaces, bound to executable SHA
+`312cd4402ea2b4b27bf54cf7dc36924a1d449adc`. The preceding
+`490320f6e99fbb7916280d6bcdd21660bd74f858` binding is historical because the
+standard Hyper HTTP/HTTPS connector now preserves typed resolver-failure
+provenance for native detailed failures. Both profiles record this SHA and the
+2026-09-15 qualification date.
+
+Qualification evidence on the frozen executable tree:
+
+- Tier 1 passed; extended validation passed with the documented optional local
+  skips; clean package validation passed, including crate dry-run, wheel smoke,
+  and package-content checks.
+- The standard resolver seam tests passed 3/3, the actual standard connector
+  DNS-provenance regression passed, and the native request-failure suite passed
+  4/4. All feature-profile checks, clippy, docs, FFI, resource, lifecycle,
+  soak, and benchmark checks passed.
+- Three consecutive full pinned compatibility runs each passed 1,870 tests
+  with 26 non-failing warnings (244.08s, 244.37s, and 245.69s). No files or
+  dependencies changed between runs.
+- The 0.28.1 API oracle reported 71 allowed matches, zero stale allowed
+  entries, zero unexplained differences, and zero resolved-in-active entries.
+  The httpx2 2.12.0 oracle reported 79, zero, zero, and zero respectively.
+- No production dependency or feature-tree change was introduced. The MSRV
+  check recorded the repository's existing truthful optional skip because
+  Rust 1.80/Cargo cannot parse the current crates.io resolution; Node JS and
+  downstream artifact checks were also explicitly skipped under existing policy.
+
+The closing plan is `plans/standard-route-dns-provenance-correction.md`.
+The correction uses the crate-private `ClassifyingResolver<R>` and
+`ResolverFailure` types in `transport::standard_resolver`; production standard
+HTTP and HTTPS connectors explicitly construct Hyper-util's
+`HttpConnector<ClassifyingResolver<GaiResolver>>`, with Rustls using
+`HttpsConnectorBuilder::wrap_connector(...)`. Hyper-util continues to own
+address selection, TCP establishment, and Happy Eyeballs behavior. The public
+`Error` enum, `Error::kind()`, ordinary `send()` APIs, and non-detailed
+allocation behavior are unchanged; DNS classification uses only the typed
+resolver marker and no message matching.
+
 ## Recorded state — Stage C renewed after native Tower service adapter (2026-09-15)
 
 Recorded designation: **Stage C qualified** for both the documented HTTPX

@@ -2,11 +2,12 @@
 
 This directory contains active implementation plans, live qualification/status records, and historical implementation records. Completed plans are non-normative unless another current document explicitly says otherwise. Verification and release policy remain governed by `docs/verification-policy.md` and `docs/releases/process.md`.
 
-## Active corrective handoff — standard-route DNS provenance (2026-09-15)
+## Completed corrective closure — standard-route DNS provenance (2026-09-15)
 
 Plan: `standard-route-dns-provenance-correction.md`
 
-Status: ready for implementation. This is a narrow correction to the completed
+Status: complete. Executable freeze:
+`312cd4402ea2b4b27bf54cf7dc36924a1d449adc`. This is a narrow correction to the completed
 native request-failure introspection work. The standard Hyper HTTP/HTTPS route
 should preserve typed resolver-failure provenance through a crate-private
 resolver wrapper so `send_detailed()` can report `NetworkFailureKind::Dns`
@@ -21,6 +22,14 @@ re-run the repository's existing exact-SHA compatibility process because the
 work changes executable core connector/error plumbing. Gregg is motivating
 requirements evidence only; no downstream-specific type or adapter belongs in
 eggfetch.
+
+Tier 1, extended, clean package validation, dependency/feature checks, focused
+resolver/refusal/timeout tests, both API oracles, and three consecutive exact-
+SHA 1,870-test compatibility runs passed. The plan contains the implementation
+and closure evidence; the live profiles and ledger were renewed on the exact
+freeze SHA. The three documented optional local skips remain: unbuilt Node JS
+artifact, Rust 1.80/Cargo resolution incompatibility, and absent downstream
+artifact manifest.
 
 ## Completed — native Tower service adapter (2026-09-15)
 

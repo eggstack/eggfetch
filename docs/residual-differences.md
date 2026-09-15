@@ -2,7 +2,7 @@
 
 The HTTPX compatibility profile is Stage C qualified for its documented
 Python 3.10+ asyncio surface on frozen executable SHA
-`13c4ab4d3ce37ab17becd62942182c0e63399229`. HTTP/3 remains separately
+`312cd4402ea2b4b27bf54cf7dc36924a1d449adc`. HTTP/3 remains separately
 experimental. These are the retained, tested bounded differences; the active
 ledger and parity registry are authoritative.
 

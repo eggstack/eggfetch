@@ -1,7 +1,8 @@
 # Standard Route DNS Provenance Correction
 
 Planning baseline: `76d3fb78ad346aaacb617d25897fa5346a043a47` (`main`, 2026-09-15)
-Status: ready for implementation
+Status: complete. Executable freeze:
+`312cd4402ea2b4b27bf54cf7dc36924a1d449adc`.
 Related completed work: `native-request-failure-introspection.md`
 Motivating downstream review: Gregg system-monitor client integration. Gregg is requirements evidence only; no Gregg type, endpoint model, status mapping, feature flag, or adapter belongs in eggfetch.
 
@@ -286,3 +287,59 @@ Once closed, this plan becomes a historical implementation record under the norm
 - [ ] No new dependency or MSRV increase is introduced without explicit, reviewed justification.
 - [ ] Current documentation and `[Unreleased]` changelog describe the corrected standard-route coverage without overstating other routes.
 - [ ] Tier 1, extended, package, dependency/MSRV and applicable exact-SHA compatibility checks pass under existing repository policy.
+
+## Closure record
+
+Implementation completed on executable freeze
+`312cd4402ea2b4b27bf54cf7dc36924a1d449adc`.
+
+- Private provenance types are `transport::standard_resolver::ClassifyingResolver<R>`
+  and `ResolverFailure`. The default resolver is
+  `ClassifyingResolver<GaiResolver>`; successful resolution preserves the
+  original iterator and address order, while call/readiness failures retain
+  the original source beneath the private marker. The success path uses a
+  future `map_err` adapter and adds no provenance allocation.
+- Plain HTTP constructs `HttpConnector::new_with_resolver` with the wrapped
+  `GaiResolver` and keeps the existing Hyper client, timeout, lifecycle, pool,
+  and HTTP-only policy. Rustls constructs the same wrapped Hyper connector,
+  configures `enforce_http(false)`, and passes it through
+  `HttpsConnectorBuilder::wrap_connector` with the existing HTTP/1/HTTP/2
+  policy. Hyper-util remains responsible for TCP establishment, address
+  selection, and Happy Eyeballs behavior; `DirectConnector` is not the default.
+- `map_send_error_with_context` recognizes only the typed resolver marker for
+  DNS. Typed refusal and direct-connector provenance retain their prior
+  precedence, unrelated connect failures remain generic `Connect`, and no
+  error display/message matching was added.
+- The public `Error` enum, `Error::kind()` tokens, ordinary `send()` APIs,
+  retry/redirect/pool/timeout/TLS/proxy behavior, and non-detailed request
+  allocation behavior are unchanged. The actual standard connector regression
+  returned the existing `hyper_client` error kind while recording `Dns` only
+  in `RequestFailure` metadata.
+- Focused results: standard resolver unit tests 3/3; actual standard connector
+  provenance regression 1/1; native request-failure integration tests 4/4;
+  all-feature core clippy, focused tests, feature-profile checks, formatting,
+  docs/examples/links, and the full workspace gates passed.
+- Tier 1 passed. Extended passed with the existing explicit skips for the
+  unbuilt Node JS artifact, Rust 1.80/Cargo resolution incompatibility, and
+  absent downstream artifact manifest. Clean Tier 3 package validation passed
+  (crate dry-run, dependent package lists, wheel build/smoke, and package
+  content validation). The dependency tree, feature tree, and duplicate
+  dependency audit showed no new runtime dependency or feature activation.
+- Exact-SHA qualification was run after freezing the executable tree: all
+  three pinned full compatibility runs passed 1,870 tests with 26 warnings in
+  244.08s, 244.37s, and 245.69s. Both API oracles were clean: 71 allowed
+  matches for HTTPX 0.28.1 and 79 for httpx2 2.12.0, with no stale,
+  unexplained, or resolved-in-active entries. Both profiles and the live
+  ledger now bind to the freeze SHA; subsequent closure edits are
+  documentation/profile/plan metadata only.
+- Updated documentation and guidance: `README.md`, `AGENTS.md`,
+  `.skills/rust-development.md`, `.skills/documentation.md`,
+  `.skills/python-bindings.md`, `CHANGELOG.md`,
+  `docs/architecture/core-engine.md`, `docs/architecture/overview.md`,
+  `docs/architecture/core-tls-proxy-protocols.md`,
+  `docs/architecture/python-bindings.md`, `docs/reference/errors.md`,
+  `docs/reference/compatibility.md`,
+  `docs/reference/compatibility-stage-decision.md`,
+  `docs/residual-differences.md`, `docs/rust/guide.md`, and the two
+  compatibility profile READMEs. The historical introspection plan was left
+  unchanged.
