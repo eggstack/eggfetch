@@ -27,8 +27,14 @@ Qualification evidence on the final executable tree:
 The proxy route-pinning closure is
 `plans/post-proxy-route-pinning-qualification-and-closure.md`. Its follow-up
 documentation/profile/plan-index commit is intentionally a docs-only
-descendant of this executable freeze. Remote CI status is recorded after the
-push.
+descendant of this executable freeze. Remote CI status for the pushed closure
+is recorded here:
+
+- Workflow: `CI`, run `34925868741`
+- Head SHA: `a7994ab55da7d1c072758ebcd9fa36e5db1d1a4e`
+- Conclusion: success (9m18s, 2026-09-15)
+- The only annotation is the repository's existing GitHub Actions Node.js 20
+  deprecation notice; no validation step failed.
 
 ## Historical state — Stage C renewed after native request-failure introspection (2026-09-14)
 
