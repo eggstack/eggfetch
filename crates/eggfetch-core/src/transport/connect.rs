@@ -1,6 +1,7 @@
 //! HTTPS CONNECT tunnel support for proxy connections.
 
 use bytes::{Bytes, BytesMut};
+use std::net::SocketAddr;
 
 use crate::body::{BoxBytesStream, RequestBody, ResponseBody};
 use crate::error::{Error, Result};
@@ -27,6 +28,70 @@ pub(crate) async fn send_https_connect_request(
     transport_hints: &crate::request::TransportHints,
     ctx: &ProxyRequestContext<'_>,
 ) -> Result<Response> {
+    let targets: Vec<Option<SocketAddr>> = match ctx.proxied_target {
+        Some(target) => target.addresses().iter().copied().map(Some).collect(),
+        None => vec![None],
+    };
+    let last = targets.len().saturating_sub(1);
+    let mut body = Some(body);
+    let mut last_error = None;
+
+    for (index, target) in targets.into_iter().enumerate() {
+        let attempt_body = if index == last {
+            body.take()
+                .expect("last CONNECT target owns the request body")
+        } else {
+            body.as_ref()
+                .expect("a CONNECT target remains after the body")
+                .try_clone_for_retry()?
+        };
+        match send_https_connect_request_once(
+            dest_url,
+            method,
+            headers,
+            attempt_body,
+            version,
+            proxy_config,
+            transport_hints,
+            ctx,
+            target,
+        )
+        .await
+        {
+            Ok(response) => return Ok(response),
+            Err(error) if index < last && target_failure_may_retry(&error) => {
+                last_error = Some(error);
+            }
+            Err(error) => return Err(error),
+        }
+    }
+
+    Err(last_error.expect("at least one CONNECT target was attempted"))
+}
+
+fn target_failure_may_retry(error: &Error) -> bool {
+    matches!(
+        error,
+        Error::ProxyConnectRejected {
+            status: 502 | 504,
+            ..
+        }
+    )
+}
+
+#[allow(clippy::too_many_lines)] // CONNECT owns the ordered proxy/tunnel/origin phases.
+#[allow(clippy::too_many_arguments)] // Target pinning is an internal transport parameter.
+async fn send_https_connect_request_once(
+    dest_url: &url::Url,
+    method: &http::Method,
+    headers: &Headers,
+    body: RequestBody,
+    version: http::Version,
+    proxy_config: &ProxyConfig,
+    transport_hints: &crate::request::TransportHints,
+    ctx: &ProxyRequestContext<'_>,
+    proxied_target: Option<SocketAddr>,
+) -> Result<Response> {
     use tokio::io::AsyncWriteExt;
 
     let mut stream = connect_to_proxy(
@@ -44,7 +109,10 @@ pub(crate) async fn send_https_connect_request(
         .host_str()
         .ok_or_else(|| Error::InvalidUrl("destination URL has no host".into()))?;
     let dest_port = dest_url.port_or_known_default().unwrap_or(443);
-    let connect_target = authority_form_target(dest_host, dest_port);
+    let connect_target = proxied_target.map_or_else(
+        || authority_form_target(dest_host, dest_port),
+        |address| authority_form_target(&address.ip().to_string(), address.port()),
+    );
 
     let mut connect_req =
         format!("CONNECT {connect_target} HTTP/1.1\r\nHost: {connect_target}\r\n");

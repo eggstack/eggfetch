@@ -469,8 +469,9 @@ impl ClientInner {
     pub(crate) async fn socks_client(
         &self,
         proxy: &crate::proxy::ProxyConfig,
+        target: Option<&crate::request::ResolvedTarget>,
     ) -> Result<crate::transport::TimeoutSocksClient> {
-        let key = crate::transport::socks::SocksRouteKey::from_proxy(proxy)?;
+        let key = crate::transport::socks::SocksRouteKey::from_proxy(proxy, target)?;
         let mut clients = self.socks_clients.lock().await;
         if let Some(client) = clients.get(&key) {
             return Ok(client.clone());
@@ -495,6 +496,7 @@ impl ClientInner {
             proxy.clone(),
             Some(tokio_rustls::TlsConnector::from(Arc::new(tls_config))),
             None,
+            target,
         );
         let connector = crate::transport::connect_timeout::ConnectTimeout::new(
             connector,

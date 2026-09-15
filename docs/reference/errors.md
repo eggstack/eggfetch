@@ -35,6 +35,15 @@ terminal classification, and is cleared between retry attempts. A transient
 H3 fallback or failed retry cannot leak into a later success; existing Python,
 CLI, HTTPX, and ordinary Rust `send()` callers do not opt into this API.
 
+Invalid or unsupported native route pins fail before transport I/O. Empty or
+port-mismatched direct/proxied address sets use `InvalidResolvedTarget`, while
+empty or port-mismatched `Proxy::resolved_addresses()` configuration uses
+`InvalidProxyUrl`. `proxy_target_addresses()` is supported only for HTTPS
+CONNECT and local-resolution SOCKS5; SOCKS5H and plaintext HTTP forward-proxy
+target pins return `Unsupported`. Pinned routes never fall back to DNS, and
+the existing detailed-failure taxonomy does not infer proxy/origin failure
+stages from error display text.
+
 | Variant | `kind()` | Description |
 |---------|----------|-------------|
 | `InvalidUrl` | `invalid_url` | URL could not be parsed |

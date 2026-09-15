@@ -33,6 +33,8 @@
 //! - Credentials in proxy URLs are rejected with redacted errors.
 
 use std::fmt;
+use std::net::SocketAddr;
+use std::sync::Arc;
 
 use crate::error::{Error, Result};
 
@@ -606,7 +608,7 @@ pub enum ProxyDecision {
 /// Contains the proxy URI, optional authentication, and optional
 /// proxy-only headers that must be sent to the proxy endpoint but
 /// never forwarded to the origin server.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ProxyConfig {
     /// Proxy URI (e.g., `http://proxy.example:8080`).
     pub(crate) uri: url::Url,
@@ -622,6 +624,30 @@ pub struct ProxyConfig {
     /// (custom CA, client identity, verification toggle) does **not**
     /// fall back into the proxy handshake.
     pub(crate) proxy_tls_config: Option<crate::tls::TlsConfig>,
+    /// Caller-supplied physical proxy peers. The proxy URI remains the
+    /// logical identity used for TLS and proxy policy.
+    pub(crate) resolved_addresses: Option<Arc<[SocketAddr]>>,
+}
+
+impl fmt::Debug for ProxyConfig {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ProxyConfig")
+            .field("uri", &self.uri)
+            .field("auth", &self.auth)
+            .field("proxy_headers", &self.proxy_headers)
+            .field(
+                "proxy_tls_config",
+                &self.proxy_tls_config.as_ref().map(|_| "<redacted>"),
+            )
+            .field(
+                "resolved_addresses",
+                &self
+                    .resolved_addresses
+                    .as_ref()
+                    .map(|addresses| addresses.len()),
+            )
+            .finish()
+    }
 }
 
 impl ProxyConfig {
@@ -691,6 +717,12 @@ impl ProxyConfig {
     pub fn proxy_tls_config(&self) -> Option<&crate::tls::TlsConfig> {
         self.proxy_tls_config.as_ref()
     }
+
+    /// Returns the caller-supplied physical proxy peers, if configured.
+    #[must_use]
+    pub fn resolved_addresses(&self) -> Option<&[SocketAddr]> {
+        self.resolved_addresses.as_deref()
+    }
 }
 
 /// An HTTP proxy configuration.
@@ -732,6 +764,8 @@ pub struct Proxy {
         reason = "Proxy is already in the proxy context; 'proxy_tls_config' is unambiguous within this scope"
     )]
     proxy_tls_config: Option<crate::tls::TlsConfig>,
+    /// Optional caller-supplied physical peers for the proxy endpoint.
+    resolved_addresses: Option<Arc<[SocketAddr]>>,
 }
 
 impl Proxy {
@@ -750,6 +784,7 @@ impl Proxy {
             bypass: None,
             proxy_headers: crate::headers::Headers::new(),
             proxy_tls_config: None,
+            resolved_addresses: None,
         })
     }
 
@@ -797,6 +832,7 @@ impl Proxy {
             bypass: None,
             proxy_headers: crate::headers::Headers::new(),
             proxy_tls_config: None,
+            resolved_addresses: None,
         })
     }
 
@@ -814,6 +850,7 @@ impl Proxy {
             bypass: None,
             proxy_headers: crate::headers::Headers::new(),
             proxy_tls_config: None,
+            resolved_addresses: None,
         })
     }
 
@@ -861,6 +898,37 @@ impl Proxy {
     pub fn with_proxy_tls_config(mut self, config: crate::tls::TlsConfig) -> Self {
         self.proxy_tls_config = Some(config);
         self
+    }
+
+    /// Pin proxy TCP connections to caller-supplied physical peers.
+    ///
+    /// The proxy URL remains the logical identity for proxy TLS SNI and
+    /// certificate verification. The addresses are attempted in order and
+    /// are never replaced by a system DNS lookup.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::Error::InvalidProxyUrl`] when the set is empty or an
+    /// address uses a port different from the proxy URL's effective port.
+    pub fn resolved_addresses<I>(mut self, addresses: I) -> Result<Self>
+    where
+        I: IntoIterator<Item = SocketAddr>,
+    {
+        let target = crate::request::ResolvedTarget::new(addresses).map_err(|error| {
+            Error::InvalidProxyUrl(format!("invalid resolved proxy peers: {error}"))
+        })?;
+        let expected_port = self.config().port()?;
+        if target
+            .addresses()
+            .iter()
+            .any(|address| address.port() != expected_port)
+        {
+            return Err(Error::InvalidProxyUrl(format!(
+                "all resolved proxy peers must use the proxy URL's effective port {expected_port}"
+            )));
+        }
+        self.resolved_addresses = Some(target.addresses().to_vec().into());
+        Ok(self)
     }
 
     /// Returns a reference to the `NO_PROXY` bypass rules, if configured.
@@ -920,6 +988,7 @@ impl Proxy {
             auth,
             proxy_headers: self.proxy_headers.clone(),
             proxy_tls_config: self.proxy_tls_config.clone(),
+            resolved_addresses: self.resolved_addresses.clone(),
         }
     }
 
@@ -956,6 +1025,13 @@ impl fmt::Debug for Proxy {
             .field(
                 "proxy_tls_config",
                 &self.proxy_tls_config.as_ref().map(|_| "<redacted>"),
+            )
+            .field(
+                "resolved_addresses",
+                &self
+                    .resolved_addresses
+                    .as_ref()
+                    .map(|addresses| addresses.len()),
             )
             .finish()
     }
@@ -1329,12 +1405,55 @@ mod tests {
     }
 
     #[test]
+    fn proxy_resolved_addresses_validate_and_preserve_order() {
+        let proxy = Proxy::all("http://proxy.example:3128")
+            .unwrap()
+            .resolved_addresses([
+                "198.51.100.21:3128".parse().unwrap(),
+                "198.51.100.20:3128".parse().unwrap(),
+            ])
+            .unwrap();
+        assert_eq!(
+            proxy.config().resolved_addresses().unwrap(),
+            &[
+                "198.51.100.21:3128".parse().unwrap(),
+                "198.51.100.20:3128".parse().unwrap(),
+            ]
+        );
+    }
+
+    #[test]
+    fn proxy_resolved_addresses_reject_empty_and_wrong_port() {
+        let proxy = Proxy::all("http://proxy.example:3128").unwrap();
+        assert!(matches!(
+            proxy.clone().resolved_addresses(Vec::<SocketAddr>::new()),
+            Err(Error::InvalidProxyUrl(_))
+        ));
+        assert!(matches!(
+            proxy.resolved_addresses(["198.51.100.20:8080".parse().unwrap()]),
+            Err(Error::InvalidProxyUrl(_))
+        ));
+    }
+
+    #[test]
+    fn proxy_debug_reports_peer_count_without_topology() {
+        let proxy = Proxy::all("http://proxy.example:3128")
+            .unwrap()
+            .resolved_addresses(["198.51.100.20:3128".parse().unwrap()])
+            .unwrap();
+        let debug = format!("{proxy:?}");
+        assert!(debug.contains("resolved_addresses: Some(1)"));
+        assert!(!debug.contains("198.51.100.20"));
+    }
+
+    #[test]
     fn proxy_config_unknown_scheme_has_no_panic_port() {
         let config = ProxyConfig {
             uri: url::Url::parse("unknown://proxy.example").unwrap(),
             auth: None,
             proxy_headers: crate::headers::Headers::new(),
             proxy_tls_config: None,
+            resolved_addresses: None,
         };
         assert!(matches!(config.port(), Err(Error::InvalidProxyUrl(_))));
     }

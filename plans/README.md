@@ -2,6 +2,18 @@
 
 This directory contains active implementation plans, live qualification/status records, and historical implementation records. Completed plans are non-normative unless another current document explicitly says otherwise. Verification and release policy remain governed by `docs/verification-policy.md` and `docs/releases/process.md`.
 
+## Completed program — proxy route pinning and egress interoperability (2026-09-15)
+
+The proxy route-pinning program is complete on the executable freeze recorded
+in `proxy-route-pinning-and-egress-interoperability-program.md`. Native Rust
+callers can pin proxy peers with `Proxy::resolved_addresses()` and supported
+proxied ultimate destinations with
+`RequestBuilder::proxy_target_addresses()`. HTTPS CONNECT and local-resolution
+SOCKS5 preserve logical URL/Host/TLS identity and never fall back to DNS;
+SOCKS5H and plaintext HTTP forward-proxy target pins fail closed. No Egress
+dependency was added; external route policy remains above eggfetch and can
+use the generic `Dialer` seam.
+
 ## Completed — native request failure introspection (2026-09-14)
 
 Plan: `native-request-failure-introspection.md`

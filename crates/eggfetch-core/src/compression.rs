@@ -929,7 +929,14 @@ impl futures_core::Stream for LimitingStream {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use futures_util::{FutureExt, StreamExt};
+    use futures_util::FutureExt;
+    #[cfg(any(
+        feature = "compression-gzip",
+        feature = "compression-brotli",
+        feature = "compression-zstd",
+        feature = "compression-deflate"
+    ))]
+    use futures_util::StreamExt;
 
     #[test]
     fn content_coding_from_wire() {

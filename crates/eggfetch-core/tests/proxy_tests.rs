@@ -30,14 +30,19 @@
 #![cfg(feature = "proxy")]
 #![allow(clippy::module_name_repetitions)]
 
+mod tls_fixtures;
+
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
 use bytes::Bytes;
-use eggfetch_core::{Client, Error, Proxy, ProxyAuth, RequestBody, Timeout, TimeoutPhase};
+use eggfetch_core::{
+    Client, Error, Proxy, ProxyAuth, RequestBody, Timeout, TimeoutPhase, TlsConfig,
+};
 use futures_util::StreamExt;
+use tls_fixtures::{CertAuthority, TlsTestServer};
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::watch;
@@ -695,6 +700,146 @@ async fn http_proxy_large_body() {
 
     proxy.shutdown();
     echo.shutdown();
+}
+
+// ---------------------------------------------------------------------------
+// Route pinning tests
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn pinned_proxy_peer_does_not_resolve_logical_proxy_host() {
+    let origin = EchoHttpServer::start().await;
+    let proxy_server = HttpProxyServer::start(HttpProxyConfig::default()).await;
+    let proxy = Proxy::all(&format!(
+        "http://unresolvable-proxy.invalid:{}",
+        proxy_server.port
+    ))
+    .unwrap()
+    .resolved_addresses([format!("127.0.0.1:{}", proxy_server.port).parse().unwrap()])
+    .unwrap();
+    let client = Client::builder().proxy(proxy).build();
+
+    let mut response = client.get(&origin.url()).unwrap().send().await.unwrap();
+    assert!(response.text().await.unwrap().starts_with("GET /"));
+
+    proxy_server.shutdown();
+    origin.shutdown();
+}
+
+#[tokio::test]
+async fn pinned_connect_target_uses_ip_but_preserves_origin_tls_identity() {
+    let ca = CertAuthority::new();
+    let origin = TlsTestServer::start(&ca, &["origin.invalid"]).await;
+    let proxy_server = HttpProxyServer::start(HttpProxyConfig::default()).await;
+    let proxy = Proxy::all(&format!(
+        "http://unresolvable-proxy.invalid:{}",
+        proxy_server.port
+    ))
+    .unwrap()
+    .resolved_addresses([format!("127.0.0.1:{}", proxy_server.port).parse().unwrap()])
+    .unwrap();
+    let client = Client::builder()
+        .proxy(proxy)
+        .tls_config(
+            TlsConfig::builder()
+                .ca_certificate_pem(&ca.cert_pem())
+                .unwrap()
+                .build(),
+        )
+        .build();
+
+    let mut response = client
+        .get(&format!("https://origin.invalid:{}/", origin.port()))
+        .unwrap()
+        .proxy_target_addresses([format!("127.0.0.1:{}", origin.port()).parse().unwrap()])
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.url().host_str(), Some("origin.invalid"));
+    assert_eq!(response.text().await.unwrap(), "OK");
+
+    proxy_server.shutdown();
+    origin.shutdown();
+}
+
+#[tokio::test]
+async fn pinned_socks5_target_uses_ip_without_origin_dns() {
+    let origin = EchoHttpServer::start().await;
+    let socks = Socks5Server::start(Socks5Config::default()).await;
+    let proxy = Proxy::all(&format!(
+        "socks5://unresolvable-proxy.invalid:{}",
+        socks.port
+    ))
+    .unwrap()
+    .resolved_addresses([format!("127.0.0.1:{}", socks.port).parse().unwrap()])
+    .unwrap();
+    let client = Client::builder().proxy(proxy).build();
+
+    let mut response = client
+        .get(&format!("http://origin.invalid:{}/", origin.port))
+        .unwrap()
+        .proxy_target_addresses([format!("127.0.0.1:{}", origin.port).parse().unwrap()])
+        .send()
+        .await
+        .unwrap();
+    assert!(response.text().await.unwrap().starts_with("GET /"));
+    assert_eq!(
+        socks.last_connect().map(|(host, _, atyp)| (host, atyp)),
+        Some(("127.0.0.1".into(), 0x01))
+    );
+
+    socks.shutdown();
+    origin.shutdown();
+}
+
+#[tokio::test]
+async fn unsupported_pinned_proxy_target_routes_fail_before_proxy_io() {
+    let proxy_server = HttpProxyServer::start(HttpProxyConfig::default()).await;
+    let client = Client::builder()
+        .proxy(
+            Proxy::all(&proxy_server.url())
+                .unwrap()
+                .resolved_addresses([format!("127.0.0.1:{}", proxy_server.port).parse().unwrap()])
+                .unwrap(),
+        )
+        .build();
+
+    let error = client
+        .get("http://example.invalid/")
+        .unwrap()
+        .proxy_target_addresses(["127.0.0.1:80".parse().unwrap()])
+        .send()
+        .await
+        .unwrap_err();
+    assert_eq!(error.kind(), "unsupported");
+    assert_eq!(proxy_server.connection_count(), 0);
+
+    proxy_server.shutdown();
+}
+
+#[tokio::test]
+async fn socks5h_rejects_pinned_target_before_proxy_io() {
+    let socks = Socks5Server::start(Socks5Config::default()).await;
+    let client = Client::builder()
+        .proxy(
+            Proxy::all(&socks.url_remote_dns())
+                .unwrap()
+                .resolved_addresses([format!("127.0.0.1:{}", socks.port).parse().unwrap()])
+                .unwrap(),
+        )
+        .build();
+
+    let error = client
+        .get("http://example.invalid/")
+        .unwrap()
+        .proxy_target_addresses(["127.0.0.1:80".parse().unwrap()])
+        .send()
+        .await
+        .unwrap_err();
+    assert_eq!(error.kind(), "unsupported");
+    assert_eq!(socks.last_connect(), None);
+
+    socks.shutdown();
 }
 
 // ---------------------------------------------------------------------------

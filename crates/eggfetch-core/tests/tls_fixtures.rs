@@ -186,6 +186,10 @@ impl TlsTestServer {
         format!("https://127.0.0.1:{}/", self.port)
     }
 
+    pub fn port(&self) -> u16 {
+        self.port
+    }
+
     pub fn shutdown(&self) {
         let _ = self.shutdown_tx.send(true);
     }

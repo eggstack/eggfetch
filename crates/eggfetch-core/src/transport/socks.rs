@@ -16,6 +16,7 @@
 
 use crate::error::{Error, Result};
 use crate::proxy::{ProxyAuth, ProxyConfig};
+use crate::request::ResolvedTarget;
 use crate::timeout::TimeoutPhase;
 
 /// Internal cache identity for one SOCKS route. The type deliberately does
@@ -27,10 +28,12 @@ pub(crate) struct SocksRouteKey {
     host: String,
     port: u16,
     auth: Option<(String, String)>,
+    proxy_addresses: Option<Vec<std::net::SocketAddr>>,
+    target_addresses: Option<Vec<std::net::SocketAddr>>,
 }
 
 impl SocksRouteKey {
-    pub(crate) fn from_proxy(proxy: &ProxyConfig) -> Result<Self> {
+    pub(crate) fn from_proxy(proxy: &ProxyConfig, target: Option<&ResolvedTarget>) -> Result<Self> {
         let auth = proxy.auth().map(|auth| match auth {
             ProxyAuth::Basic { username, password } => (username.clone(), password.clone()),
         });
@@ -39,6 +42,10 @@ impl SocksRouteKey {
             host: proxy.host().unwrap_or_default().to_owned(),
             port: proxy.port()?,
             auth,
+            proxy_addresses: proxy
+                .resolved_addresses()
+                .map(<[std::net::SocketAddr]>::to_vec),
+            target_addresses: target.map(|target| target.addresses().to_vec()),
         })
     }
 }
@@ -109,8 +116,22 @@ pub(crate) async fn socks5_handshake(
     dest_port: u16,
     remote_dns: bool,
     remaining_total: Option<std::time::Duration>,
+    pinned_targets: Option<&[std::net::SocketAddr]>,
 ) -> Result<tokio::net::TcpStream> {
     let deadline = remaining_total.map(|duration| std::time::Instant::now() + duration);
+
+    if let Some(targets) = pinned_targets {
+        let mut last_err = None;
+        for (index, target) in targets.iter().copied().enumerate() {
+            let mut stream = establish_socks_proxy_connection(proxy_config, deadline).await?;
+            match send_connect_ip(&mut stream, target.ip(), target.port(), deadline).await {
+                Ok(()) => return Ok(stream),
+                Err(error) if index + 1 < targets.len() => last_err = Some(error),
+                Err(error) => return Err(error),
+            }
+        }
+        return Err(last_err.expect("pinned SOCKS target set is non-empty"));
+    }
 
     // Local-DNS path with multiple resolved addresses: try each destination
     // address with a fresh proxy connection; the first successful CONNECT
@@ -157,9 +178,39 @@ async fn establish_socks_proxy_connection(
 
     // Phase 1: TCP connect to proxy.
     let connect_future = async {
-        let stream = tokio::net::TcpStream::connect((proxy_host, proxy_port))
-            .await
-            .map_err(|e| Error::ProxyConnect(format!("failed to connect to SOCKS5 proxy: {e}")))?;
+        let addresses: Vec<std::net::SocketAddr> =
+            if let Some(addresses) = proxy_config.resolved_addresses() {
+                addresses.to_vec()
+            } else {
+                tokio::net::lookup_host(format!("{proxy_host}:{proxy_port}"))
+                    .await
+                    .map_err(|e| {
+                        Error::ProxyConnect(format!(
+                            "DNS resolution failed for SOCKS5 proxy {proxy_host}:{proxy_port}: {e}"
+                        ))
+                    })?
+                    .collect()
+            };
+        let mut last_error = None;
+        let mut connected = None;
+        for address in addresses {
+            match tokio::net::TcpStream::connect(address).await {
+                Ok(stream) => {
+                    connected = Some(stream);
+                    break;
+                }
+                Err(error) => last_error = Some(error),
+            }
+        }
+        let stream = connected.ok_or_else(|| {
+            Error::ProxyConnect(format!(
+                "TCP connect to SOCKS5 proxy {proxy_host}:{proxy_port} failed: {}",
+                last_error.map_or_else(
+                    || "no addresses resolved".to_owned(),
+                    |error| error.to_string()
+                )
+            ))
+        })?;
         stream
             .set_nodelay(true)
             .map_err(|e| Error::ProxyConnect(format!("failed to set nodelay: {e}")))?;
@@ -286,6 +337,7 @@ pub(crate) struct SocksConnector {
     proxy: ProxyConfig,
     tls: Option<std::sync::Arc<tokio_rustls::TlsConnector>>,
     timeout: Option<std::time::Duration>,
+    target: Option<std::sync::Arc<[std::net::SocketAddr]>>,
 }
 
 impl SocksConnector {
@@ -293,11 +345,13 @@ impl SocksConnector {
         proxy: ProxyConfig,
         tls: Option<tokio_rustls::TlsConnector>,
         timeout: Option<std::time::Duration>,
+        target: Option<&ResolvedTarget>,
     ) -> Self {
         Self {
             proxy,
             tls: tls.map(std::sync::Arc::new),
             timeout,
+            target: target.map(|target| target.addresses().to_vec().into()),
         }
     }
 }
@@ -323,6 +377,7 @@ impl tower_service::Service<http::Uri> for SocksConnector {
         let proxy = self.proxy.clone();
         let tls = self.tls.clone();
         let timeout = self.timeout;
+        let target = self.target.clone();
         Box::pin(async move {
             let host = dst.host().ok_or_else(|| -> Self::Error {
                 Error::InvalidUrl("SOCKS destination has no host".into()).into()
@@ -331,9 +386,16 @@ impl tower_service::Service<http::Uri> for SocksConnector {
                 .port_u16()
                 .or_else(|| (dst.scheme_str() == Some("https")).then_some(443))
                 .unwrap_or(80);
-            let stream = socks5_handshake(&proxy, host, port, proxy.socks_remote_dns(), timeout)
-                .await
-                .map_err(|e| -> Self::Error { e.into() })?;
+            let stream = socks5_handshake(
+                &proxy,
+                host,
+                port,
+                proxy.socks_remote_dns(),
+                timeout,
+                target.as_deref(),
+            )
+            .await
+            .map_err(|e| -> Self::Error { e.into() })?;
             if dst.scheme_str() != Some("https") {
                 return Ok(hyper_util::rt::TokioIo::new(SocksStream::Tcp(stream)));
             }

@@ -16,7 +16,7 @@ eggfetch is a Rust-native async HTTP client engine (tokio + hyper) with Python b
 - **Pooling, timeouts, observability** — separate logical pool and live Hyper-connection controls, phase-aware timeouts (pool/connect/write/read/total), established-I/O guardrails, and connector/lifecycle/DNS/TLS/H3 transport metrics ([pool/timeouts](docs/architecture/core-timeout-pool.md))
 - **Native embedded transport control** — optional caller-owned raw-stream dialing, explicit Hyper stale-connection retry control, physical-connection admission, and established-I/O inactivity guardrails ([Rust guide](docs/rust/guide.md))
 - **TLS** — rustls with explicit per-client crypto providers, replacement or additive CA roots, mTLS client certs, version policy, and verification toggle ([TLS](docs/concepts/tls.md))
-- **Proxy** — HTTP forwarding, HTTPS CONNECT, proxy auth, per-request override, `NO_PROXY`; SOCKS5 and UDS routes ([proxy](docs/concepts/proxy.md))
+- **Proxy** — HTTP forwarding, HTTPS CONNECT, proxy auth, per-request override, `NO_PROXY`, native proxy-peer/CONNECT/SOCKS5 route pinning; SOCKS5 and UDS routes ([proxy](docs/concepts/proxy.md))
 - **Cookies, auth, multipart** — RFC 6265 jar, Basic/Bearer with redaction, streaming multipart uploads ([cookies](docs/concepts/cookies.md))
 - **Retries and redirects** — policy-driven backoff with `Retry-After`, replayable-body redirect handling ([retry](docs/concepts/retry.md))
 - **Compression** — feature-gated streaming gzip/brotli/zstd/deflate with zip-bomb limits ([compression](docs/concepts/compression.md))
@@ -152,7 +152,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-The opt-in `json` feature adds `RequestBuilder::json()` / `Response::json()` Serde helpers, and `resolved_addresses()` pins caller-validated destinations without a second DNS lookup. See [`docs/rust/guide.md`](docs/rust/guide.md) for the full Rust API reference.
+The opt-in `json` feature adds `RequestBuilder::json()` / `Response::json()` Serde helpers. Native Rust callers can use `resolved_addresses()` for direct-only physical routing, or separately pin proxy peers with `Proxy::resolved_addresses()` and supported proxied targets with `RequestBuilder::proxy_target_addresses()`; these snapshots never fall back to DNS. See [`docs/rust/guide.md`](docs/rust/guide.md) for the full Rust API reference.
 
 Native embedders that need structured timeout/DNS/refusal detail can opt into
 `RequestBuilder::send_detailed()`; the [Rust guide](docs/rust/guide.md) shows

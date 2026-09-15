@@ -198,6 +198,7 @@ pub(crate) struct RequestParts {
     pub(crate) proxy_override: ProxyOverride,
     pub(crate) retry: Option<RetryPolicy>,
     pub(crate) transport_hints: TransportHints,
+    pub(crate) proxied_target: Option<ResolvedTarget>,
     pub(crate) failure_context: Option<Arc<crate::error::RequestFailureContext>>,
 }
 
@@ -229,6 +230,7 @@ impl RequestParts {
             proxy_override,
             retry,
             transport_hints,
+            proxied_target,
             failure_context,
         } = self;
         let mut request = Request::new(method, url);
@@ -248,6 +250,7 @@ impl RequestParts {
         let _ = proxy_override;
         request.set_retry(retry);
         request.set_transport_hints(transport_hints);
+        request.set_proxied_target(proxied_target);
         request.set_failure_context(failure_context);
         request
     }
@@ -285,6 +288,7 @@ impl RequestParts {
         request.set_proxy_override(self.proxy_override.clone());
         request.set_retry(self.retry.clone());
         request.set_transport_hints(self.transport_hints.clone());
+        request.set_proxied_target(self.proxied_target.clone());
         request.set_failure_context(self.failure_context.clone());
         Ok(request)
     }
@@ -333,6 +337,8 @@ pub struct Request {
     retry: Option<RetryPolicy>,
     /// Typed transport-level hints (target override, SNI hostname, etc.).
     transport_hints: TransportHints,
+    /// Caller-supplied physical destination for a proxied request.
+    proxied_target: Option<ResolvedTarget>,
     /// Optional native detailed-failure context; ordinary requests leave it
     /// absent so they do not allocate diagnostics state.
     failure_context: Option<Arc<crate::error::RequestFailureContext>>,
@@ -356,6 +362,7 @@ impl std::fmt::Debug for Request {
             .field("proxy_override", &self.proxy_override)
             .field("retry", &self.retry)
             .field("transport_hints", &self.transport_hints)
+            .field("proxied_target", &self.proxied_target)
             .field(
                 "failure_context",
                 &self.failure_context.as_ref().map(|_| "configured"),
@@ -383,6 +390,7 @@ impl Request {
             proxy_override: ProxyOverride::Inherit,
             retry: None,
             transport_hints: TransportHints::default(),
+            proxied_target: None,
             failure_context: None,
         }
     }
@@ -552,6 +560,18 @@ impl Request {
         self.transport_hints = hints;
     }
 
+    /// Returns the caller-supplied physical destination for a proxied
+    /// request, if configured.
+    #[must_use]
+    pub fn proxied_target(&self) -> Option<&ResolvedTarget> {
+        self.proxied_target.as_ref()
+    }
+
+    /// Set the caller-supplied physical destination for a proxied request.
+    pub fn set_proxied_target(&mut self, target: Option<ResolvedTarget>) {
+        self.proxied_target = target;
+    }
+
     pub(crate) fn set_failure_context(
         &mut self,
         context: Option<Arc<crate::error::RequestFailureContext>>,
@@ -579,6 +599,7 @@ impl Request {
             proxy_override: self.proxy_override,
             retry: self.retry,
             transport_hints: self.transport_hints,
+            proxied_target: self.proxied_target,
             failure_context: self.failure_context,
         }
     }
@@ -601,6 +622,7 @@ pub struct RequestBuilder {
     proxy_override: ProxyOverride,
     retry: Option<RetryPolicy>,
     transport_hints: TransportHints,
+    proxied_target: Option<ResolvedTarget>,
     error: Option<crate::Error>,
 }
 
@@ -623,6 +645,7 @@ impl RequestBuilder {
             proxy_override: ProxyOverride::Inherit,
             retry: None,
             transport_hints: TransportHints::default(),
+            proxied_target: None,
             error: None,
         }
     }
@@ -844,6 +867,30 @@ impl RequestBuilder {
         self
     }
 
+    /// Pin a proxied request to caller-supplied physical destinations.
+    ///
+    /// This is distinct from [`Self::resolved_addresses`], which remains a
+    /// direct-only route. The logical URL remains authoritative for proxy
+    /// selection, HTTP Host, TLS SNI/certificate verification, redirects,
+    /// cookies, and authentication. HTTP CONNECT and local-resolution
+    /// SOCKS5 use these addresses without an origin DNS lookup. SOCKS5H and
+    /// plaintext HTTP forward-proxy requests reject this option.
+    #[must_use]
+    pub fn proxy_target_addresses<I>(mut self, addresses: I) -> Self
+    where
+        I: IntoIterator<Item = SocketAddr>,
+    {
+        match ResolvedTarget::new(addresses) {
+            Ok(target) => self.proxied_target = Some(target),
+            Err(error) => {
+                if self.error.is_none() {
+                    self.error = Some(error);
+                }
+            }
+        }
+        self
+    }
+
     /// Build the request without sending it.
     ///
     /// # Errors
@@ -870,6 +917,22 @@ impl RequestBuilder {
                 )));
             }
         }
+        if let Some(target) = &self.proxied_target {
+            let expected_port = self.url.port_or_known_default().ok_or_else(|| {
+                crate::Error::InvalidResolvedTarget(
+                    "proxied destinations require an HTTP or HTTPS URL".into(),
+                )
+            })?;
+            if target
+                .addresses()
+                .iter()
+                .any(|address| address.port() != expected_port)
+            {
+                return Err(crate::Error::InvalidResolvedTarget(format!(
+                    "all proxied destinations must use the URL's effective port {expected_port}"
+                )));
+            }
+        }
         let request_target = self
             .transport_hints
             .target
@@ -890,6 +953,7 @@ impl RequestBuilder {
         req.proxy_override = self.proxy_override;
         req.retry = self.retry;
         req.transport_hints = self.transport_hints;
+        req.proxied_target = self.proxied_target;
         Ok(req)
     }
 

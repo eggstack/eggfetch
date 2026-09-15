@@ -333,6 +333,7 @@ struct HopBuildParams {
     #[cfg(feature = "proxy")]
     proxy_override: ProxyOverride,
     transport_hints: crate::request::TransportHints,
+    proxied_target: Option<crate::request::ResolvedTarget>,
     auth: Option<crate::auth::AuthScheme>,
     auth_disabled: bool,
     /// True only for the first hop of the logical request.
@@ -375,6 +376,7 @@ fn build_hop_request(client: &Client, params: HopBuildParams) -> Result<Request>
         #[cfg(feature = "proxy")]
         proxy_override,
         transport_hints,
+        proxied_target,
         auth,
         auth_disabled,
         is_first_hop,
@@ -399,12 +401,14 @@ fn build_hop_request(client: &Client, params: HopBuildParams) -> Result<Request>
     // retained only when the redirect loop explicitly permits it.
     if is_first_hop {
         hop.set_transport_hints(transport_hints);
+        hop.set_proxied_target(proxied_target);
     } else if preserve_resolved_target {
         let resolved_hints = crate::request::TransportHints {
             resolved_target: transport_hints.resolved_target,
             ..Default::default()
         };
         hop.set_transport_hints(resolved_hints);
+        hop.set_proxied_target(proxied_target);
     }
 
     hop.set_auth(if credentials_allowed { auth } else { None });
@@ -528,6 +532,7 @@ fn advance_redirect_hop(
         proxy_override: _,
         retry: _,
         transport_hints: _,
+        proxied_target: _,
         failure_context: _,
     } = redirect_req.into_parts();
 
@@ -554,6 +559,7 @@ struct PreparedRequest {
     body: RequestBody,
     version: http::Version,
     transport_hints: crate::request::TransportHints,
+    proxied_target: Option<crate::request::ResolvedTarget>,
     #[cfg(feature = "proxy")]
     effective_proxy: Option<ProxyConfig>,
     decompression_enabled: bool,
@@ -804,6 +810,7 @@ pub(crate) async fn send_with_redirects(client: &Client, request: Request) -> Re
         proxy_override: request_proxy,
         retry: _request_retry,
         transport_hints: request_transport_hints,
+        proxied_target: request_proxied_target,
         failure_context,
     } = request.into_parts();
 
@@ -846,6 +853,7 @@ pub(crate) async fn send_with_redirects(client: &Client, request: Request) -> Re
                 #[cfg(feature = "proxy")]
                 proxy_override: request_proxy,
                 transport_hints: request_transport_hints,
+                proxied_target: request_proxied_target,
                 auth: req_auth,
                 auth_disabled: req_auth_disabled,
                 is_first_hop: true,
@@ -924,7 +932,8 @@ pub(crate) async fn send_with_redirects(client: &Client, request: Request) -> Re
             {
                 cookie_header_allowed = false;
             }
-            if request_transport_hints.resolved_target.is_some() {
+            if request_transport_hints.resolved_target.is_some() || request_proxied_target.is_some()
+            {
                 return Err(Error::ResolvedTargetRedirect);
             }
         }
@@ -944,6 +953,7 @@ pub(crate) async fn send_with_redirects(client: &Client, request: Request) -> Re
                 #[cfg(feature = "proxy")]
                 proxy_override: request_proxy.clone(),
                 transport_hints: request_transport_hints.clone(),
+                proxied_target: request_proxied_target.clone(),
                 auth: req_auth.clone(),
                 auth_disabled: req_auth_disabled,
                 is_first_hop,
@@ -1207,6 +1217,7 @@ async fn prepare_single_request(
         proxy_override,
         retry: _,
         transport_hints,
+        proxied_target,
         failure_context,
         max_decoded_body_size: request_max_decoded_body_size,
         max_decompression_ratio: request_max_decompression_ratio,
@@ -1237,6 +1248,21 @@ async fn prepare_single_request(
         }
     }
 
+    if let Some(target) = &proxied_target {
+        let expected_port = url.port_or_known_default().ok_or_else(|| {
+            Error::InvalidResolvedTarget("proxied destinations require an HTTP or HTTPS URL".into())
+        })?;
+        if target
+            .addresses()
+            .iter()
+            .any(|address| address.port() != expected_port)
+        {
+            return Err(Error::InvalidResolvedTarget(format!(
+                "all proxied destinations must use the URL's effective port {expected_port}"
+            )));
+        }
+    }
+
     #[cfg(feature = "tls-rustls")]
     if url.scheme() == "https" {
         if let Some(error) = &inner.tls_config_error {
@@ -1262,6 +1288,34 @@ async fn prepare_single_request(
     #[cfg(not(feature = "proxy"))]
     {
         let _ = proxy_override;
+    }
+
+    if proxied_target.is_some() {
+        #[cfg(feature = "proxy")]
+        {
+            let proxy = effective_proxy.as_ref().ok_or_else(|| {
+                Error::Unsupported(
+                    "caller-supplied proxied destinations require proxy routing".into(),
+                )
+            })?;
+            if proxy.socks_remote_dns() {
+                return Err(Error::Unsupported(
+                    "proxied destinations are incompatible with SOCKS5H remote DNS".into(),
+                ));
+            }
+            if url.scheme() == "http" && !proxy.is_socks() {
+                return Err(Error::Unsupported(
+                    "proxied destinations are unsupported for plaintext HTTP forward proxies"
+                        .into(),
+                ));
+            }
+        }
+        #[cfg(not(feature = "proxy"))]
+        {
+            return Err(Error::Unsupported(
+                "caller-supplied proxied destinations require proxy support".into(),
+            ));
+        }
     }
 
     if transport_hints.resolved_target.is_some() {
@@ -1395,6 +1449,7 @@ async fn prepare_single_request(
         body,
         version,
         transport_hints,
+        proxied_target,
         #[cfg(feature = "proxy")]
         effective_proxy,
         decompression_enabled,
@@ -1435,6 +1490,7 @@ pub(crate) async fn send_single_request(
         body,
         version,
         transport_hints,
+        proxied_target,
         #[cfg(feature = "proxy")]
         effective_proxy,
         decompression_enabled,
@@ -1450,6 +1506,8 @@ pub(crate) async fn send_single_request(
     // feature no route consumes it.
     #[cfg(not(feature = "proxy"))]
     let _ = &deadline;
+    #[cfg(not(feature = "proxy"))]
+    let _ = &proxied_target;
 
     #[cfg(all(unix, any(feature = "http1", feature = "http2")))]
     let has_uds = inner.uds_client.is_some();
@@ -1612,7 +1670,9 @@ pub(crate) async fn send_single_request(
                 let socks_client = {
                     let socks_proxy = effective_proxy.as_ref().filter(|proxy| proxy.is_socks());
                     match socks_proxy {
-                        Some(proxy) => Some(inner.socks_client(proxy).await?),
+                        Some(proxy) => {
+                            Some(inner.socks_client(proxy, proxied_target.as_ref()).await?)
+                        }
                         None => None,
                     }
                 };
@@ -1643,6 +1703,7 @@ pub(crate) async fn send_single_request(
                         // or origin verify=False from leaking into the proxy
                         // handshake.
                         proxy_tls_config: proxy_config.proxy_tls_config(),
+                        proxied_target: proxied_target.as_ref(),
                         socks_client,
                         transport_metrics: Some(inner.transport_metrics.clone()),
                     },
@@ -2300,7 +2361,7 @@ fn resolve_request_uri(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::request::{RequestParts, TransportHints};
+    use crate::request::{RequestParts, ResolvedTarget, TransportHints};
     use bytes::Bytes;
     use std::sync::Arc;
     use std::time::Duration;
@@ -2347,6 +2408,10 @@ mod tests {
             resolved_target: None,
             trace: Some(Arc::new(crate::trace::NoopTraceObserver)),
         });
+        req.set_proxied_target(Some(
+            ResolvedTarget::new(["192.0.2.10:443".parse().expect("valid address")])
+                .expect("non-empty target"),
+        ));
         req
     }
 
@@ -2370,6 +2435,7 @@ mod tests {
         let expected_target = req.transport_hints().target.clone();
         let expected_sni = req.transport_hints().sni_hostname.clone();
         let expected_has_trace = req.transport_hints().trace.is_some();
+        let expected_proxied_target = req.proxied_target().cloned();
 
         let parts = req.into_parts();
         // Touch every field so wildcard destructuring cannot silently pass.
@@ -2389,6 +2455,7 @@ mod tests {
             proxy_override: _,
             retry: _,
             transport_hints: _,
+            proxied_target: _,
             failure_context: _,
         } = &parts;
         let rebuilt = parts.into_request();
@@ -2442,6 +2509,7 @@ mod tests {
             rebuilt.transport_hints().trace.is_some(),
             expected_has_trace
         );
+        assert_eq!(rebuilt.proxied_target(), expected_proxied_target.as_ref());
         match rebuilt.body() {
             RequestBody::Bytes(b) => assert_eq!(b, "payload"),
             other => panic!("expected bytes body, got {other:?}"),
@@ -2494,6 +2562,10 @@ mod tests {
             Some("sni.example")
         );
         assert!(attempt.transport_hints().trace.is_some());
+        let expected_proxied_target =
+            ResolvedTarget::new(["192.0.2.10:443".parse().expect("valid address")])
+                .expect("non-empty target");
+        assert_eq!(attempt.proxied_target(), Some(&expected_proxied_target));
         match attempt.body() {
             RequestBody::Bytes(b) => assert_eq!(b, "payload"),
             other => panic!("expected replayed bytes, got {other:?}"),
@@ -2606,6 +2678,7 @@ mod tests {
                     resolved_target: None,
                     trace: Some(Arc::new(crate::trace::NoopTraceObserver)),
                 },
+                proxied_target: None,
                 auth: None,
                 auth_disabled: false,
                 is_first_hop: true,
@@ -2664,6 +2737,7 @@ mod tests {
                     resolved_target: None,
                     trace: Some(Arc::new(crate::trace::NoopTraceObserver)),
                 },
+                proxied_target: None,
                 auth: Some(AuthScheme::Basic(
                     BasicAuth::new("req", "pw").expect("valid auth"),
                 )),
@@ -2729,6 +2803,7 @@ mod tests {
                 #[cfg(feature = "proxy")]
                 proxy_override: crate::request::ProxyOverride::Direct,
                 transport_hints: mk_hints(),
+                proxied_target: None,
                 auth: None,
                 auth_disabled: false,
                 is_first_hop: true,
@@ -2754,6 +2829,7 @@ mod tests {
                 #[cfg(feature = "proxy")]
                 proxy_override: crate::request::ProxyOverride::Direct,
                 transport_hints: mk_hints(),
+                proxied_target: None,
                 auth: None,
                 auth_disabled: false,
                 is_first_hop: true,

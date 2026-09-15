@@ -337,6 +337,40 @@ client, so ordinary pooled connections cannot bypass the pin. This is distinct
 from local source-address binding and from an SNI override, and is a routing
 primitive rather than an SSRF policy.
 
+### Proxied physical route pinning
+
+Proxy peer and proxied target addresses are separate native controls:
+
+```rust
+let proxy = Proxy::all("https://proxy.example:8443")?
+    .resolved_addresses(["198.51.100.20:8443".parse()?])?;
+let client = Client::builder().proxy(proxy).build();
+
+let response = client
+    .get("https://service.example/data")?
+    .proxy_target_addresses(["203.0.113.10:443".parse()?])
+    .send().await?;
+```
+
+`Proxy::resolved_addresses()` pins only the TCP peer of the logical proxy;
+the proxy URL still controls matching, credentials, and HTTPS-proxy TLS
+identity. `RequestBuilder::proxy_target_addresses()` pins only the ultimate
+destination communicated through the proxy. HTTPS CONNECT and local-DNS
+`socks5://` use the supplied target without origin DNS and preserve the
+logical origin URL, `Host`, SNI, and certificate name. `socks5h://` target
+pinning and plaintext HTTP forward-proxy target pinning fail closed before
+proxy I/O. Empty sets and port mismatches are rejected. The caller must
+validate these physical addresses; eggfetch does not add an authorization or
+SSRF policy engine.
+
+Both snapshots are immutable across retries and same-origin redirects, never
+fall back to DNS, and cannot be reused across cross-origin redirects. The
+hand-rolled proxy paths do not pool proxy tunnels; the SOCKS client cache keys
+include proxy-peer and target snapshots so incompatible physical routes do
+not share a connection. Applications that want an external proxy chain or
+policy engine should use the native `Dialer` seam instead of adding that
+policy to eggfetch.
+
 ### Timeout
 
 ```rust

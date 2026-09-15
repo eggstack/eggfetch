@@ -117,6 +117,37 @@ Per-request override via `RequestBuilder::proxy(ProxyOverride)`:
 - `Direct` — bypass proxy.
 - `Override(proxy)` — use different proxy.
 
+### Physical route pinning
+
+Native callers can pin the proxy's physical TCP peer while keeping the proxy
+URL as its logical identity:
+
+```rust
+let proxy = Proxy::all("https://proxy.example:8443")?
+    .resolved_addresses(["198.51.100.20:8443".parse()?])?;
+```
+
+The peer snapshot is attempted in order, shares the existing proxy-connect
+deadline, survives retries, and never falls back to proxy-host DNS. HTTPS
+proxy TLS still uses `proxy.example` for SNI and certificate verification.
+
+For proxied requests, `RequestBuilder::proxy_target_addresses()` is a
+separate ultimate-target pin. HTTPS CONNECT may send the supplied IP in its
+authority while destination TLS and HTTP `Host` continue to use the logical
+origin hostname. Local-resolution `socks5://` sends the supplied IP in the
+SOCKS CONNECT command; `socks5h://` and plaintext HTTP forward-proxy target
+pinning fail closed before network I/O. Empty sets and port mismatches are
+rejected. Both physical snapshots are caller-validated, immutable across
+retries and same-origin redirects, and rejected on cross-origin redirects.
+The native direct `resolved_addresses()` option remains direct-only.
+
+The hand-rolled HTTP proxy/CONNECT paths do not pool tunnels. SOCKS client
+cache keys include the logical proxy plus any proxy-peer and ultimate-target
+snapshots, preventing incompatible physical routes from sharing a pooled
+connection. Eggfetch does not import an Egress policy or routing dependency;
+applications that want Egress to own a complete chain should use the generic
+`Dialer` seam.
+
 ### Proxy-Only Headers
 
 `Proxy::proxy_headers(headers)` attaches headers that are sent to the

@@ -65,6 +65,9 @@ pub(crate) struct ProxyRequestContext<'a> {
     /// configuration is independent and is never reused as a fallback
     /// for the proxy handshake.
     pub(crate) proxy_tls_config: Option<&'a crate::tls::TlsConfig>,
+    /// Optional caller-pinned physical ultimate destinations for the
+    /// proxied origin. The logical URL remains authoritative for identity.
+    pub(crate) proxied_target: Option<&'a crate::request::ResolvedTarget>,
     pub(crate) socks_client: Option<crate::transport::TimeoutSocksClient>,
     /// Shared transport observability counters. `None` disables metering.
     pub(crate) transport_metrics:
@@ -207,13 +210,19 @@ pub(crate) async fn connect_to_proxy(
     let proxy_port = proxy_config.port()?;
 
     let connect_future = async {
-        let addrs = tokio::net::lookup_host(format!("{proxy_host}:{proxy_port}"))
-            .await
-            .map_err(|e| {
-                Error::ProxyConnect(format!(
-                    "DNS resolution failed for proxy {proxy_host}:{proxy_port}: {e}"
-                ))
-            })?;
+        let addrs: Vec<std::net::SocketAddr> =
+            if let Some(addresses) = proxy_config.resolved_addresses() {
+                addresses.to_vec()
+            } else {
+                tokio::net::lookup_host(format!("{proxy_host}:{proxy_port}"))
+                    .await
+                    .map_err(|e| {
+                        Error::ProxyConnect(format!(
+                            "DNS resolution failed for proxy {proxy_host}:{proxy_port}: {e}"
+                        ))
+                    })?
+                    .collect()
+            };
         let mut last_error: Option<String> = None;
         let mut connected: Option<tokio::net::TcpStream> = None;
         for addr in addrs {

@@ -22,6 +22,37 @@ let client = Client::builder()
     .build();
 ```
 
+### Physical route pinning (native Rust)
+
+Native callers may pin the physical proxy peer without changing the logical
+proxy URI. The addresses are attempted in order, never trigger proxy-host
+DNS, and are retained across retries. The proxy URI remains authoritative for
+proxy matching, credentials, and HTTPS-proxy TLS SNI/certificate verification.
+
+```rust
+let proxy = Proxy::all("https://proxy.example:8443")?
+    .resolved_addresses(["198.51.100.20:8443".parse()?])?;
+```
+
+For a request through a proxy, `proxy_target_addresses()` separately pins the
+physical ultimate destination:
+
+```rust
+let response = client
+    .get("https://service.example/data")?
+    .proxy_target_addresses(["203.0.113.10:443".parse()?])
+    .send()
+    .await?;
+```
+
+The logical origin URL remains authoritative for HTTP `Host`, TLS SNI and
+certificate verification. Pinned targets are supported for HTTPS CONNECT and
+local-resolution `socks5://`; SOCKS5H remote DNS and plaintext HTTP
+forward-proxy requests reject this option before opening the proxy. The
+caller is responsible for validating supplied addresses. Direct
+`resolved_addresses()` remains a separate direct-only API, and a complete
+physical route requires pinning both the proxy peer and proxied target.
+
 ```python
 client = eggfetch.Client(proxy="http://proxy.example:8080")
 ```
@@ -113,6 +144,10 @@ configuration when `trust_env=True`.
 ## Limitations
 
 - Limited connection reuse through proxies (each request opens a fresh connection)
+- Pinned proxy peers and proxied targets are immutable route snapshots. They
+  survive retries and same-origin redirects, never fall back to DNS, and are
+  rejected on cross-origin redirects. CONNECT target fallback is conservative
+  and only cycles on typed 502/504 target rejection.
 - The compatibility facade accepts URL credentials for HTTP/HTTPS and SOCKS5 endpoints and redacts them from display/error output; native Rust callers use `.auth()` for explicit credentials.
 
 ## CLI
