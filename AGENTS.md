@@ -27,6 +27,10 @@ cargo fmt --all -- --check
 
 ## Boundaries and lint
 
+Proxy target candidate fallback is typed: only destination-specific CONNECT
+or SOCKS failures may advance to another supplied address; proxy
+authentication, policy, protocol, and malformed-response failures stop.
+
 - `eggfetch-core`: no PyO3, no clap, no CLI parsing. `eggfetch-cli`/`eggfetch-python`: no direct hyper/tokio TCP — all I/O through core. Hard rule: no parallel sync networking path; Python sync blocks on the async engine with GIL released. If you write HTTP logic outside core, refactor.
 - `unsafe_code = "forbid"` workspace-wide; only `eggfetch-ffi` and `eggfetch-node` override to `"allow"`. Never add new `unsafe` without explicit discussion.
 - Pedantic clippy (`-D warnings`); `missing_docs = "warn"`. `scripts/check_lint_suppressions.sh` (Tier 1) rejects `allow(warnings)`, `clippy::all`, `clippy::pedantic` (except inside FFI/Node), `clippy::nursery`, `clippy::restriction`. Use specific lint names with a justifying comment.

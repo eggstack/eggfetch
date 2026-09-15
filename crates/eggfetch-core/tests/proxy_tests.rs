@@ -63,6 +63,8 @@ struct HttpProxyServer {
     /// Used to assert *which* route served a request (e.g. that a
     /// per-request bypass produced zero proxy traffic).
     connection_count: Arc<AtomicUsize>,
+    /// CONNECT authorities observed by the proxy, in request order.
+    connect_targets: Arc<std::sync::Mutex<Vec<String>>>,
     shutdown: watch::Sender<bool>,
 }
 
@@ -74,6 +76,8 @@ impl HttpProxyServer {
         let required_auth = config.required_auth;
         let connection_count = Arc::new(AtomicUsize::new(0));
         let counter = connection_count.clone();
+        let connect_targets = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let connect_targets_clone = connect_targets.clone();
 
         tokio::spawn(async move {
             loop {
@@ -83,8 +87,9 @@ impl HttpProxyServer {
                             Ok((stream, _)) => {
                                 counter.fetch_add(1, Ordering::SeqCst);
                                 let auth = required_auth.clone();
+                                let targets = connect_targets_clone.clone();
                                 tokio::spawn(async move {
-                                    if let Err(e) = handle_proxy_connection(stream, auth).await {
+                                    if let Err(e) = handle_proxy_connection(stream, auth, targets).await {
                                         eprintln!("proxy connection error: {e}");
                                     }
                                 });
@@ -105,6 +110,7 @@ impl HttpProxyServer {
         Self {
             port,
             connection_count,
+            connect_targets,
             shutdown: shutdown_tx,
         }
     }
@@ -117,6 +123,10 @@ impl HttpProxyServer {
         self.connection_count.load(Ordering::SeqCst)
     }
 
+    fn connect_targets(&self) -> Vec<String> {
+        self.connect_targets.lock().unwrap().clone()
+    }
+
     fn shutdown(&self) {
         let _ = self.shutdown.send(true);
     }
@@ -126,6 +136,7 @@ impl HttpProxyServer {
 async fn handle_proxy_connection(
     mut client_stream: TcpStream,
     required_auth: Option<(String, String)>,
+    connect_targets: Arc<std::sync::Mutex<Vec<String>>>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     use std::fmt::Write as _;
     let mut buf_reader = BufReader::new(&mut client_stream);
@@ -180,6 +191,7 @@ async fn handle_proxy_connection(
     let target = parts[1];
 
     if method.eq_ignore_ascii_case("CONNECT") {
+        connect_targets.lock().unwrap().push(target.to_owned());
         drop(buf_reader);
         handle_connect_tunnel(&mut client_stream, target).await?;
     } else {
@@ -757,6 +769,10 @@ async fn pinned_connect_target_uses_ip_but_preserves_origin_tls_identity() {
         .unwrap();
     assert_eq!(response.url().host_str(), Some("origin.invalid"));
     assert_eq!(response.text().await.unwrap(), "OK");
+    assert_eq!(
+        proxy_server.connect_targets(),
+        vec![format!("127.0.0.1:{}", origin.port())]
+    );
 
     proxy_server.shutdown();
     origin.shutdown();
@@ -793,6 +809,67 @@ async fn pinned_socks5_target_uses_ip_without_origin_dns() {
 }
 
 #[tokio::test]
+async fn pinned_socks5_target_fallback_uses_only_candidate_specific_replies() {
+    let origin = EchoHttpServer::start().await;
+    let socks = Socks5Server::start(Socks5Config {
+        reject_target: Some(("192.0.2.1".into(), 0x05)),
+        ..Default::default()
+    })
+    .await;
+    let client = Client::builder()
+        .proxy(Proxy::all(&socks.url()).unwrap())
+        .build();
+
+    let mut response = client
+        .get(&format!("http://origin.invalid:{}/", origin.port))
+        .unwrap()
+        .proxy_target_addresses([
+            format!("192.0.2.1:{}", origin.port).parse().unwrap(),
+            format!("127.0.0.1:{}", origin.port).parse().unwrap(),
+        ])
+        .send()
+        .await
+        .unwrap();
+    assert!(response.text().await.unwrap().starts_with("GET /"));
+    assert_eq!(
+        socks.last_connect().map(|(host, _, atyp)| (host, atyp)),
+        Some(("127.0.0.1".into(), 0x01))
+    );
+
+    socks.shutdown();
+    origin.shutdown();
+}
+
+#[tokio::test]
+async fn pinned_socks5_target_stops_on_proxy_policy_rejection() {
+    let origin = EchoHttpServer::start().await;
+    let socks = Socks5Server::start(Socks5Config {
+        reject_target: Some(("192.0.2.1".into(), 0x02)),
+        ..Default::default()
+    })
+    .await;
+    let client = Client::builder()
+        .proxy(Proxy::all(&socks.url()).unwrap())
+        .build();
+
+    let error = client
+        .get(&format!("http://origin.invalid:{}/", origin.port))
+        .unwrap()
+        .proxy_target_addresses([
+            format!("192.0.2.1:{}", origin.port).parse().unwrap(),
+            format!("127.0.0.1:{}", origin.port).parse().unwrap(),
+        ])
+        .send()
+        .await
+        .unwrap_err();
+    assert_eq!(error.kind(), "proxy_connect");
+    assert_eq!(socks.connect_count(), 1);
+
+    socks.shutdown();
+    origin.shutdown();
+}
+
+#[tokio::test]
 async fn unsupported_pinned_proxy_target_routes_fail_before_proxy_io() {
     let proxy_server = HttpProxyServer::start(HttpProxyConfig::default()).await;
     let client = Client::builder()
@@ -812,6 +889,35 @@ async fn unsupported_pinned_proxy_target_routes_fail_before_proxy_io() {
         .await
         .unwrap_err();
     assert_eq!(error.kind(), "unsupported");
+    assert_eq!(proxy_server.connection_count(), 0);
+
+    proxy_server.shutdown();
+}
+
+#[tokio::test]
+async fn pinned_proxy_target_validation_fails_before_proxy_io() {
+    let proxy_server = HttpProxyServer::start(HttpProxyConfig::default()).await;
+    let client = Client::builder()
+        .proxy(Proxy::all(&proxy_server.url()).unwrap())
+        .build();
+
+    let empty = client
+        .get("https://example.invalid/")
+        .unwrap()
+        .proxy_target_addresses(Vec::<std::net::SocketAddr>::new())
+        .send()
+        .await
+        .unwrap_err();
+    assert_eq!(empty.kind(), "invalid_resolved_target");
+
+    let mismatch = client
+        .get("https://example.invalid/")
+        .unwrap()
+        .proxy_target_addresses(["127.0.0.1:80".parse().unwrap()])
+        .send()
+        .await
+        .unwrap_err();
+    assert_eq!(mismatch.kind(), "invalid_resolved_target");
     assert_eq!(proxy_server.connection_count(), 0);
 
     proxy_server.shutdown();
@@ -1859,6 +1965,8 @@ struct Socks5Config {
     reject_all: bool,
     /// If true, send malformed responses.
     malformed: bool,
+    /// Optional destination-specific reply code for one requested host.
+    reject_target: Option<(String, u8)>,
 }
 
 /// A minimal local SOCKS5 server for testing.
@@ -1871,6 +1979,8 @@ struct Socks5Server {
     shutdown: watch::Sender<bool>,
     /// Records the last CONNECT destination (host, port, atyp).
     last_connect: Arc<std::sync::Mutex<Option<(String, u16, u8)>>>,
+    /// Number of CONNECT commands received.
+    connect_count: Arc<AtomicUsize>,
 }
 
 impl Socks5Server {
@@ -1880,6 +1990,8 @@ impl Socks5Server {
         let (shutdown_tx, mut shutdown_rx) = watch::channel(false);
         let last_connect = Arc::new(std::sync::Mutex::new(None));
         let last_connect_clone = last_connect.clone();
+        let connect_count = Arc::new(AtomicUsize::new(0));
+        let connect_count_clone = connect_count.clone();
 
         tokio::spawn(async move {
             loop {
@@ -1890,10 +2002,12 @@ impl Socks5Server {
                                 let auth = config.auth.clone();
                                 let reject = config.reject_all;
                                 let malformed = config.malformed;
+                                let reject_target = config.reject_target.clone();
                                 let lc = last_connect_clone.clone();
+                                let cc = connect_count_clone.clone();
                                 tokio::spawn(async move {
                                     if let Err(e) = handle_socks5_connection(
-                                        stream, auth, reject, malformed, lc,
+                                        stream, auth, reject, malformed, reject_target, lc, cc,
                                     ).await {
                                         eprintln!("SOCKS5 connection error: {e}");
                                     }
@@ -1916,6 +2030,7 @@ impl Socks5Server {
             port,
             shutdown: shutdown_tx,
             last_connect,
+            connect_count,
         }
     }
 
@@ -1935,6 +2050,10 @@ impl Socks5Server {
         self.last_connect.lock().unwrap().clone()
     }
 
+    fn connect_count(&self) -> usize {
+        self.connect_count.load(Ordering::SeqCst)
+    }
+
     fn shutdown(&self) {
         let _ = self.shutdown.send(true);
     }
@@ -1947,7 +2066,9 @@ async fn handle_socks5_connection(
     required_auth: Option<(String, String)>,
     reject_all: bool,
     malformed: bool,
+    reject_target: Option<(String, u8)>,
     last_connect: Arc<std::sync::Mutex<Option<(String, u16, u8)>>>,
+    connect_count: Arc<AtomicUsize>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
@@ -2060,6 +2181,7 @@ async fn handle_socks5_connection(
         let mut lc = last_connect.lock().unwrap();
         *lc = Some((dest_host.clone(), dest_port, atyp));
     }
+    connect_count.fetch_add(1, Ordering::SeqCst);
 
     // Send reply.
     if malformed {
@@ -2068,10 +2190,18 @@ async fn handle_socks5_connection(
         return Ok(());
     }
 
-    if reject_all {
-        // Send "connection refused" reply.
+    if reject_all
+        || reject_target
+            .as_ref()
+            .is_some_and(|(host, _)| host == &dest_host)
+    {
+        // Send the configured destination or default connection-failure reply.
+        let reply_code = reject_target
+            .as_ref()
+            .filter(|(host, _)| host == &dest_host)
+            .map_or(0x05, |(_, code)| *code);
         stream
-            .write_all(&[0x05, 0x05, 0x00, 0x01, 0, 0, 0, 0, 0, 0])
+            .write_all(&[0x05, reply_code, 0x00, 0x01, 0, 0, 0, 0, 0, 0])
             .await?;
         return Ok(());
     }

@@ -147,7 +147,9 @@ configuration when `trust_env=True`.
 - Pinned proxy peers and proxied targets are immutable route snapshots. They
   survive retries and same-origin redirects, never fall back to DNS, and are
   rejected on cross-origin redirects. CONNECT target fallback is conservative
-  and only cycles on typed 502/504 target rejection.
+  and only cycles on typed 502/504 target rejection; SOCKS5 target fallback
+  cycles only on destination-specific network/host-unreachable or connection-
+  refused replies, never on proxy authentication or policy failures.
 - The compatibility facade accepts URL credentials for HTTP/HTTPS and SOCKS5 endpoints and redacts them from display/error output; native Rust callers use `.auth()` for explicit credentials.
 
 ## CLI

@@ -86,6 +86,33 @@ const MAX_SOCKS5_DOMAIN_LEN: usize = 255;
 /// Maximum username/password length for SOCKS5 (RFC 1929).
 const MAX_SOCKS5_CREDENTIAL_LEN: usize = 255;
 
+/// Classifies a failed SOCKS5 target attempt without changing the public
+/// error taxonomy.
+///
+/// Only reply codes that identify the requested destination as unreachable or
+/// refused are safe candidate-specific failures. Authentication, method,
+/// protocol, and malformed-response failures belong to the proxy leg and
+/// must stop the address sequence rather than being retried against another
+/// target.
+enum TargetAttemptError {
+    /// The proxy explicitly reported a destination-specific failure.
+    Retryable(Error),
+    /// The failure is not safe to attribute to this destination alone.
+    Terminal(Error),
+}
+
+impl TargetAttemptError {
+    fn terminal(error: Error) -> Self {
+        Self::Terminal(error)
+    }
+
+    fn into_error(self) -> Error {
+        match self {
+            Self::Retryable(error) | Self::Terminal(error) => error,
+        }
+    }
+}
+
 /// Perform a SOCKS5 handshake and establish a tunnel to the destination.
 ///
 /// Returns a `BufReader<TcpStream>` connected through the SOCKS5 proxy,
@@ -126,8 +153,10 @@ pub(crate) async fn socks5_handshake(
             let mut stream = establish_socks_proxy_connection(proxy_config, deadline).await?;
             match send_connect_ip(&mut stream, target.ip(), target.port(), deadline).await {
                 Ok(()) => return Ok(stream),
-                Err(error) if index + 1 < targets.len() => last_err = Some(error),
-                Err(error) => return Err(error),
+                Err(TargetAttemptError::Retryable(error)) if index + 1 < targets.len() => {
+                    last_err = Some(error);
+                }
+                Err(error) => return Err(error.into_error()),
             }
         }
         return Err(last_err.expect("pinned SOCKS target set is non-empty"));
@@ -259,7 +288,9 @@ async fn handshake_with_ip(
     deadline: Option<std::time::Instant>,
 ) -> Result<tokio::net::TcpStream> {
     let mut stream = establish_socks_proxy_connection(proxy_config, deadline).await?;
-    send_connect_ip(&mut stream, dest_ip, dest_port, deadline).await?;
+    send_connect_ip(&mut stream, dest_ip, dest_port, deadline)
+        .await
+        .map_err(TargetAttemptError::into_error)?;
     Ok(stream)
 }
 
@@ -600,7 +631,7 @@ async fn send_connect_ip(
     dest_ip: std::net::IpAddr,
     dest_port: u16,
     deadline: Option<std::time::Instant>,
-) -> Result<()> {
+) -> std::result::Result<(), TargetAttemptError> {
     let mut request = Vec::with_capacity(64);
     request.push(SOCKS5_VERSION);
     request.push(SOCKS5_CMD_CONNECT);
@@ -617,10 +648,12 @@ async fn send_connect_ip(
     }
     request.extend_from_slice(&dest_port.to_be_bytes());
 
-    write_all_timeout(stream, &request, deadline, "SOCKS5 CONNECT").await?;
+    write_all_timeout(stream, &request, deadline, "SOCKS5 CONNECT")
+        .await
+        .map_err(TargetAttemptError::terminal)?;
 
     // Parse the reply.
-    parse_connect_reply(stream, deadline).await
+    parse_connect_reply_for_target(stream, deadline).await
 }
 
 /// Resolve a destination host to all IP addresses.
@@ -691,45 +724,67 @@ async fn parse_connect_reply(
     stream: &mut tokio::net::TcpStream,
     deadline: Option<std::time::Instant>,
 ) -> Result<()> {
+    parse_connect_reply_for_target(stream, deadline)
+        .await
+        .map_err(TargetAttemptError::into_error)
+}
+
+/// Parse a SOCKS5 CONNECT reply while preserving candidate-specific failure
+/// evidence for pinned target fallback.
+async fn parse_connect_reply_for_target(
+    stream: &mut tokio::net::TcpStream,
+    deadline: Option<std::time::Instant>,
+) -> std::result::Result<(), TargetAttemptError> {
     // Read: version(1) + rep(1) + rsv(1) + atyp(1)
     let mut header = [0u8; 4];
-    read_exact_timeout(stream, &mut header, deadline, "SOCKS5 CONNECT reply").await?;
+    read_exact_timeout(stream, &mut header, deadline, "SOCKS5 CONNECT reply")
+        .await
+        .map_err(TargetAttemptError::terminal)?;
 
     if header[0] != SOCKS5_VERSION {
-        return Err(Error::ProxyConnect(format!(
+        return Err(TargetAttemptError::Terminal(Error::ProxyConnect(format!(
             "SOCKS5 reply has invalid version: {}",
             header[0]
-        )));
+        ))));
     }
 
     if header[1] != SOCKS5_REP_SUCCESS {
-        let msg = match header[1] {
-            0x01 => "general SOCKS server failure",
-            0x02 => "connection not allowed by ruleset",
-            0x03 => "network unreachable",
-            0x04 => "host unreachable",
-            0x05 => "connection refused",
-            0x06 => "TTL expired",
-            0x07 => "command not supported",
-            0x08 => "address type not supported",
+        let (retryable, msg) = match header[1] {
+            0x01 => (false, "general SOCKS server failure"),
+            0x02 => (false, "connection not allowed by ruleset"),
+            0x03 => (true, "network unreachable"),
+            0x04 => (true, "host unreachable"),
+            0x05 => (true, "connection refused"),
+            0x06 => (false, "TTL expired"),
+            0x07 => (false, "command not supported"),
+            0x08 => (false, "address type not supported"),
             code => {
-                return Err(Error::ProxyConnect(format!(
+                return Err(TargetAttemptError::Terminal(Error::ProxyConnect(format!(
                     "SOCKS5 CONNECT failed with unknown reply code: {code}"
-                )))
+                ))));
             }
         };
-        return Err(Error::ProxyConnect(format!("SOCKS5 CONNECT failed: {msg}")));
+        let error = Error::ProxyConnect(format!("SOCKS5 CONNECT failed: {msg}"));
+        return Err(if retryable {
+            TargetAttemptError::Retryable(error)
+        } else {
+            TargetAttemptError::Terminal(error)
+        });
     }
 
     // Read the bound address (variable length based on address type).
     match header[3] {
         SOCKS5_ATYP_IPV4 => {
             let mut addr = [0u8; 4 + 2]; // IPv4 + port
-            read_exact_timeout(stream, &mut addr, deadline, "SOCKS5 bound IPv4 address").await?;
+            read_exact_timeout(stream, &mut addr, deadline, "SOCKS5 bound IPv4 address")
+                .await
+                .map_err(TargetAttemptError::terminal)?;
         }
         SOCKS5_ATYP_IPV6 => {
             let mut addr = [0u8; 16 + 2]; // IPv6 + port
-            read_exact_timeout(stream, &mut addr, deadline, "SOCKS5 bound IPv6 address").await?;
+            read_exact_timeout(stream, &mut addr, deadline, "SOCKS5 bound IPv6 address")
+                .await
+                .map_err(TargetAttemptError::terminal)?;
         }
         SOCKS5_ATYP_DOMAIN => {
             let mut domain_len = [0u8; 1];
@@ -739,7 +794,8 @@ async fn parse_connect_reply(
                 deadline,
                 "SOCKS5 bound domain length",
             )
-            .await?;
+            .await
+            .map_err(TargetAttemptError::terminal)?;
             let len = domain_len[0] as usize;
             let mut domain_and_port = vec![0u8; len + 2]; // domain + port
             read_exact_timeout(
@@ -748,11 +804,12 @@ async fn parse_connect_reply(
                 deadline,
                 "SOCKS5 bound domain address",
             )
-            .await?;
+            .await
+            .map_err(TargetAttemptError::terminal)?;
         }
         other => {
-            return Err(Error::MalformedProxyResponse(format!(
-                "SOCKS5 reply has unknown address type: {other}"
+            return Err(TargetAttemptError::Terminal(Error::MalformedProxyResponse(
+                format!("SOCKS5 reply has unknown address type: {other}"),
             )));
         }
     }

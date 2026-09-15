@@ -4,6 +4,11 @@ Use this skill when writing, modifying, or reviewing Rust code in the eggfetch w
 
 ## Workflow
 
+For multi-target proxy pins, preserve typed fallback boundaries: only
+destination-specific CONNECT/SOCKS failures may advance to another supplied
+address; proxy-wide authentication, policy, protocol, and malformed-response
+failures stop.
+
 1. Read `AGENTS.md` for crate boundaries, lint policy, and quick commands.
 2. Read `docs/architecture/dependency-policy.md` before adding any dependency.
 3. Read `CONTRIBUTING.md` for coding conventions.
