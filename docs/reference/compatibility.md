@@ -5,7 +5,7 @@ claims refer specifically to the pinned 0.28.1 asyncio-supported facade
 (`eggfetch.compat.httpx`), not all HTTPX transports or concurrency backends.
 HTTPX2 claims refer specifically to the sibling 2.12.0 facade
 (`eggfetch.compat.httpx2`, Stage C qualified on frozen executable SHA
-`e10c4efdff6af9a73a89d015584df15fa6e2900c`, profile in
+`13c4ab4d3ce37ab17becd62942182c0e63399229`, profile in
 `compat/httpx2/2.12.0/profile.toml`);
 the two contracts are independent and never collapsed into one "HTTPX parity"
 claim. HTTPX 1.0 pre-releases are preview-only (`compat/httpx/1.0-preview/`)
@@ -125,7 +125,7 @@ eggfetch targets HTTPX 0.28.1 compatibility in phases. The current status:
   lifecycle hardening, observability cleanup. Historical evidence only.
 - **Current requalification**: HTTPX 0.28.1 and HTTPX2 2.12.0 are Stage C
   qualified on frozen executable SHA
-  `e10c4efdff6af9a73a89d015584df15fa6e2900c` (2026-09-14). Earlier
+  `13c4ab4d3ce37ab17becd62942182c0e63399229` (2026-09-15). Earlier
   `639bf186...` binding is historical after the post-freeze HTTP/3
   diagnostics audit corrected native counter semantics. The earlier
   `65beb67` binding remains historical. Full status is in

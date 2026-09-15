@@ -53,6 +53,11 @@ caller is responsible for validating supplied addresses. Direct
 `resolved_addresses()` remains a separate direct-only API, and a complete
 physical route requires pinning both the proxy peer and proxied target.
 
+For multiple pinned local-SOCKS5 targets, only replies 0x03 (network
+unreachable), 0x04 (host unreachable), and 0x05 (connection refused) advance
+to the next candidate; proxy-wide authentication, policy, protocol, and
+malformed-response failures stop.
+
 ```python
 client = eggfetch.Client(proxy="http://proxy.example:8080")
 ```

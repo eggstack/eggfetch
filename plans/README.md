@@ -14,7 +14,7 @@ SOCKS5H and plaintext HTTP forward-proxy target pins fail closed. No Egress
 dependency was added; external route policy remains above eggfetch and can
 use the generic `Dialer` seam.
 
-Executable freeze: `e8260cd472c70edd87663191c6d984e0c7fabab8`; the final plan
+Executable freeze: `13c4ab4`; the final plan
 status/validation closure is a documentation-only descendant.
 
 ## Completed — native request failure introspection (2026-09-14)

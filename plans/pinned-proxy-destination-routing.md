@@ -332,7 +332,7 @@ Before child-plan completion, also run all existing direct resolved-target, cust
 ## Implementation record
 
 Implemented on executable freeze
-`e8260cd472c70edd87663191c6d984e0c7fabab8`. The separate
+`13c4ab4`. The separate
 `RequestBuilder::proxy_target_addresses()` API carries an immutable physical
 target snapshot through request reconstruction. HTTPS CONNECT uses the
 approved target authority while preserving logical origin Host/URL/TLS

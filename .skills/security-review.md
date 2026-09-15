@@ -34,8 +34,9 @@ Use this skill when performing security reviews or addressing security findings 
   forward-proxy target pinning fail closed before I/O, and snapshots survive
   retries and same-origin redirects but reject cross-origin reuse. SOCKS cache
   keys include both snapshots, hand-rolled HTTP proxy tunnels are not pooled,
-  and no Python/HTTPX or Egress-policy dependency is introduced for these
-  native controls.
+  and typed candidate fallback is limited to CONNECT 502/504 rejection or
+  local-SOCKS5 replies 0x03/0x04/0x05; no Python/HTTPX or Egress-policy
+  dependency is introduced for these native controls.
 - Cookie jar integrity maintained across redirects.
 - Alt-Svc learns only from authenticated HTTPS (verified TLS, no proxy,
   hop-local origin); alternatives never change cookies/auth/Host policy;

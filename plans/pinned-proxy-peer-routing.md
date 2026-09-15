@@ -274,7 +274,7 @@ Before marking the child plan complete, also run affected proxy, TLS, retry, red
 ## Implementation record
 
 Implemented on executable freeze
-`e8260cd472c70edd87663191c6d984e0c7fabab8`. The public `Proxy` builder now
+`13c4ab4`. The public `Proxy` builder now
 accepts an ordered, validated peer snapshot; pinned dialing skips proxy-host
 DNS and preserves logical proxy identity. HTTP, HTTPS CONNECT, HTTPS-proxy,
 SOCKS5, and SOCKS5H proxy-peer paths consume the snapshot, while route-aware

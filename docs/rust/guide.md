@@ -367,9 +367,12 @@ Both snapshots are immutable across retries and same-origin redirects, never
 fall back to DNS, and cannot be reused across cross-origin redirects. The
 hand-rolled proxy paths do not pool proxy tunnels; the SOCKS client cache keys
 include proxy-peer and target snapshots so incompatible physical routes do
-not share a connection. Applications that want an external proxy chain or
-policy engine should use the native `Dialer` seam instead of adding that
-policy to eggfetch.
+not share a connection. HTTPS CONNECT candidates advance only on typed 502/504
+proxy rejection. Local-SOCKS5 candidates advance only on replies 0x03 (network
+unreachable), 0x04 (host unreachable), or 0x05 (connection refused); proxy-wide
+authentication, policy, protocol, and malformed-response failures stop.
+Applications that want an external proxy chain or policy engine should use the
+native `Dialer` seam instead of adding that policy to eggfetch.
 
 ### Timeout
 

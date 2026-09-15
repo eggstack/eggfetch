@@ -27,9 +27,10 @@ cargo fmt --all -- --check
 
 ## Boundaries and lint
 
-Proxy target candidate fallback is typed: only destination-specific CONNECT
-or SOCKS failures may advance to another supplied address; proxy
-authentication, policy, protocol, and malformed-response failures stop.
+Proxy target candidate fallback is typed: HTTPS CONNECT advances only on typed
+502/504 proxy rejection, and local SOCKS5 advances only on destination-specific
+0x03/0x04/0x05 replies; proxy authentication, policy, protocol, and malformed-
+response failures stop.
 
 - `eggfetch-core`: no PyO3, no clap, no CLI parsing. `eggfetch-cli`/`eggfetch-python`: no direct hyper/tokio TCP — all I/O through core. Hard rule: no parallel sync networking path; Python sync blocks on the async engine with GIL released. If you write HTTP logic outside core, refactor.
 - `unsafe_code = "forbid"` workspace-wide; only `eggfetch-ffi` and `eggfetch-node` override to `"allow"`. Never add new `unsafe` without explicit discussion.
@@ -48,7 +49,7 @@ authentication, policy, protocol, and malformed-response failures stop.
 
 ## HTTPX compat (easy to break)
 
-Facades `eggfetch.compat.httpx` (0.28.1) and `eggfetch.compat.httpx2` (2.12.0) coexist without cross-mutation; `compat/httpx/1.0-preview/` is reconnaissance only. Both are Stage C qualified on frozen SHA `e10c4efdff6af9a73a89d015584df15fa6e2900c` (`compat/*/profile.toml`); any executable change invalidates qualification. Never hand-edit generated API manifests — regenerate via `scripts/generate_httpx_api_manifest.py` + `scripts/compare_httpx_api_manifest.py`.
+Facades `eggfetch.compat.httpx` (0.28.1) and `eggfetch.compat.httpx2` (2.12.0) coexist without cross-mutation; `compat/httpx/1.0-preview/` is reconnaissance only. Both are Stage C qualified on frozen SHA `13c4ab4d3ce37ab17becd62942182c0e63399229` (`compat/*/profile.toml`); any executable change invalidates qualification. Never hand-edit generated API manifests — regenerate via `scripts/generate_httpx_api_manifest.py` + `scripts/compare_httpx_api_manifest.py`.
 
 - Timeouts: map only `connect`/`read`/`write`/`pool`; never synthesize native `total`. Preserve omitted-vs-`None`; reject bare `Timeout()`. Proxy setup uses one monotonic deadline (min of explicit `total` + phase budgets).
 - `NO_PROXY`: compat env parser accepts bare unbracketed IPv6 but rejects bracketed/CIDR-looking forms; native `NoProxy::parse()` is richer. Do not unify.

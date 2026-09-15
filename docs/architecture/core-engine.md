@@ -153,7 +153,10 @@ Pinned routes perform no DNS fallback. Proxy tunnels in the hand-rolled HTTP
 transport are not pooled; SOCKS client-cache keys include both snapshots.
 Retries and same-origin redirects retain snapshots, while cross-origin
 redirects reject them. HTTPS CONNECT target fallback is deliberately limited
-to typed 502/504 proxy rejection; other proxy errors stop immediately.
+to typed 502/504 proxy rejection. Local-resolution SOCKS5 target fallback is
+limited to destination-specific replies 0x03 (network unreachable), 0x04 (host
+unreachable), and 0x05 (connection refused); authentication, policy, protocol,
+and malformed-response failures stop immediately.
 SOCKS5H target pinning and plaintext HTTP forward-proxy target pinning fail
 before I/O because their protocol semantics cannot enforce a local ultimate
 destination. These controls accept caller-validated addresses only and do not

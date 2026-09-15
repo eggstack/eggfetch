@@ -217,7 +217,7 @@ The program closes only when all are true:
 ## Closure record
 
 The executable/test/fixture freeze is
-`e8260cd472c70edd87663191c6d984e0c7fabab8`, based on the baseline
+`13c4ab4`, based on the baseline
 `d681da848e36199846604b71f2162a1054d24aa6`. It adds the native
 `Proxy::resolved_addresses()` peer pin and
 `RequestBuilder::proxy_target_addresses()` proxied-target pin, with no new

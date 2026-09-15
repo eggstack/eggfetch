@@ -144,11 +144,13 @@ The native direct `resolved_addresses()` option remains direct-only.
 The hand-rolled HTTP proxy/CONNECT paths do not pool tunnels. SOCKS client
 cache keys include the logical proxy plus any proxy-peer and ultimate-target
 snapshots, preventing incompatible physical routes from sharing a pooled
-connection. For multiple pinned SOCKS5 targets, only the protocol's
-destination-specific `network unreachable`, `host unreachable`, and
-`connection refused` replies permit trying the next address. Authentication,
-proxy-policy, malformed-response, and other proxy-wide failures stop the
-sequence under the same request deadline. Eggfetch does not import an Egress
+connection. HTTPS CONNECT candidates advance only on typed 502/504 proxy
+rejection. For multiple pinned SOCKS5 targets, only the protocol's
+destination-specific 0x03 (`network unreachable`), 0x04 (`host unreachable`),
+and 0x05 (`connection refused`) replies permit trying the next address.
+Authentication, proxy-policy, protocol, malformed-response, and other
+proxy-wide failures stop the sequence under the same request deadline. Eggfetch
+does not import an Egress
 policy or routing dependency; applications that want Egress to own a complete
 chain should use the generic `Dialer` seam.
 
@@ -804,7 +806,7 @@ pass yet; concrete blockers:
 
 1. No two-independent-non-Quinn-server interoperability pass recorded
    on the current executable freeze
-   `e10c4efdff6af9a73a89d015584df15fa6e2900c` (2026-09-14; the
+   `13c4ab4d3ce37ab17becd62942182c0e63399229` (2026-09-15; the
    deterministic H3 suites re-passed on this tree — hardening 12/12,
    Alt-Svc discovery 17/17, interop controls 20/20); the current evidence ledger is
    `plans/http3-independent-interop-and-impairment-qualification-evidence.json`;

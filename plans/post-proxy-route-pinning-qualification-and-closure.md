@@ -291,7 +291,7 @@ Mark the parent/child plans complete only after the final executable evidence is
 
 ## Closure record
 
-Executable freeze: `e8260cd472c70edd87663191c6d984e0c7fabab8`.
+Executable freeze: `13c4ab4`.
 Documentation-only closure is recorded in the descendant commit that updates
 these plan statuses and evidence.
 
@@ -301,9 +301,17 @@ caller-owned address validation, and no Python/CLI/HTTPX exposure. Local wire
 fixtures prove pinned proxy peer/target behavior and logical TLS/HTTP identity;
 unsupported SOCKS5H and plaintext-forward combinations fail before proxy I/O.
 Retry/redirect reconstruction, timeout-budgeted candidate loops, and route-aware
-SOCKS cache keys preserve the snapshots without cross-route reuse. Dependency
+SOCKS cache keys preserve the snapshots without cross-route reuse. HTTPS CONNECT
+candidate fallback is limited to typed 502/504 proxy rejection, while local
+SOCKS5 candidate fallback is limited to destination-specific 0x03/0x04/0x05
+replies; proxy-wide failures stop. Dependency
 and feature review found zero production dependency delta and no `eggress-*`
 package. Egress remains an external policy/dialer composition layer.
+
+The dependency audit covered the minimal direct recipe, the proxy-enabled
+recipe, the full feature graph, and duplicate-package output from `cargo tree`.
+The production graph remains on the existing Hyper/Rustls/Tokio stack, with no
+`eggress-*` package and no new production dependency or feature.
 
 Validation on the freeze passed Tier 1, extended, and package gates, including
 documentation examples/links, FFI, resource/lifecycle/soak suites, and the

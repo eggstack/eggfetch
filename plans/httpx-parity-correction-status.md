@@ -4,7 +4,33 @@ This record is the exact-SHA-bound status for the HTTPX 0.28.1 compatibility
 facade. Historical phase and corrective-pass records remain in the git history
 and referenced plans; counts below are only from the runs named here.
 
-## Recorded state — Stage C renewed after native request-failure introspection (2026-09-14)
+## Recorded state — Stage C renewed after proxy route-pinning closure (2026-09-15)
+
+Recorded designation: **Stage C qualified** for both the documented HTTPX
+0.28.1 and httpx2 2.12.0 asyncio surfaces, bound to executable SHA
+`13c4ab4d3ce37ab17becd62942182c0e63399229`. The preceding
+`e10c4efdff6af9a73a89d015584df15fa6e2900c`
+binding is historical because the native proxy route-pinning qualification
+changed executable behavior and test coverage. Both profiles record this SHA
+and the 2026-09-15 qualification date.
+
+Qualification evidence on the final executable tree:
+
+- the focused proxy suite passed 44 tests, including typed CONNECT/SOCKS5
+  candidate fallback and proxy-wide failure-stop cases;
+- the final extended gate passed, including the full 1,870-test compatibility
+  suite and the documented feature, FFI,
+  lifecycle, resource, soak, and package-adjacent checks;
+- no new production dependency was added and no Egress-policy dependency was
+  introduced.
+
+The proxy route-pinning closure is
+`plans/post-proxy-route-pinning-qualification-and-closure.md`. Its follow-up
+documentation/profile/plan-index commit is intentionally a docs-only
+descendant of this executable freeze. Remote CI status is recorded after the
+push.
+
+## Historical state — Stage C renewed after native request-failure introspection (2026-09-14)
 
 Recorded designation: **Stage C qualified** for both the documented HTTPX
 0.28.1 and httpx2 2.12.0 asyncio surfaces, bound to executable SHA

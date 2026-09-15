@@ -4,10 +4,10 @@ Use this skill when writing, modifying, or reviewing Rust code in the eggfetch w
 
 ## Workflow
 
-For multi-target proxy pins, preserve typed fallback boundaries: only
-destination-specific CONNECT/SOCKS failures may advance to another supplied
-address; proxy-wide authentication, policy, protocol, and malformed-response
-failures stop.
+For multi-target proxy pins, preserve typed fallback boundaries: HTTPS CONNECT
+advances only on typed 502/504 proxy rejection, and local SOCKS5 advances only
+on destination-specific 0x03/0x04/0x05 replies; proxy-wide authentication,
+policy, protocol, and malformed-response failures stop.
 
 1. Read `AGENTS.md` for crate boundaries, lint policy, and quick commands.
 2. Read `docs/architecture/dependency-policy.md` before adding any dependency.
@@ -102,7 +102,7 @@ native JSON helpers are opt-in and must remain absent from minimal profiles.
   (parser/cache + suppressor transitions). The deterministic H3 suites
   (hardening 12/12, Alt-Svc discovery 17/17, interop controls 20/20)
   re-passed on the current executable freeze
-  `e10c4efdff6af9a73a89d015584df15fa6e2900c` (2026-09-14, see the live
+  `13c4ab4d3ce37ab17becd62942182c0e63399229` (2026-09-15, see the live
   ledger `plans/httpx-parity-correction-status.md`); earlier freeze SHAs
   in plan history are not the current binding.
   The graduation gate and named blockers live in

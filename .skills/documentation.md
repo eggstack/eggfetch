@@ -43,7 +43,7 @@ docs/
 ## Plans Directory (`plans/`)
 
 - Completed plans are **historical records, not active requirements** (verification-policy principle 9). Do not treat their step lists as current CI or release gates.
-- The one live ledger is `plans/httpx-parity-correction-status.md`: it records the exact executable SHA that the HTTPX 0.28.1 and httpx2 2.12.0 Stage C qualifications are bound to (`e10c4efdff6af9a73a89d015584df15fa6e2900c` at the current freeze). Earlier bindings are historical after subsequent qualification-sensitive changes. Any change to executable code (Rust sources, tests, build/validation scripts, packaging config) invalidates the current binding and requires a fresh exact-SHA requalification from a new freeze, following the current closure plan and status procedure.
+- The one live ledger is `plans/httpx-parity-correction-status.md`: it records the exact executable SHA that the HTTPX 0.28.1 and httpx2 2.12.0 Stage C qualifications are bound to (`13c4ab4d3ce37ab17becd62942182c0e63399229` at the current freeze). Earlier bindings are historical after subsequent qualification-sensitive changes. Any change to executable code (Rust sources, tests, build/validation scripts, packaging config) invalidates the current binding and requires a fresh exact-SHA requalification from a new freeze, following the current closure plan and status procedure.
 - Docs-only commits do not invalidate the SHA binding.
 - When finishing new work that changes a compatibility claim, update the status ledger and both `compat/httpx/0.28.1/profile.toml` and `compat/httpx2/2.12.0/profile.toml` together; never hand-edit generated manifests.
 - The canonical embedded/core feature recipes are the profile matrix in
@@ -63,7 +63,7 @@ docs/
   `docs/architecture/core-tls-proxy-protocols.md`
   (§ "Production Graduation Decision"). The deterministic H3 suites
   re-passed on the current executable freeze
-  `e10c4efdff6af9a73a89d015584df15fa6e2900c` (2026-09-14, live ledger
+  `13c4ab4d3ce37ab17becd62942182c0e63399229` (2026-09-15, live ledger
   `plans/httpx-parity-correction-status.md`); earlier freeze SHAs in plan
   history are not the current binding. Do not describe documented controls
   as independent-server or production evidence.
