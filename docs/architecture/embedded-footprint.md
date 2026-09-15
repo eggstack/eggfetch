@@ -18,7 +18,7 @@ JSON fixture uses `eggfetch-core/json`; static resolved-destination routing is
 an independent native transport capability and is not part of the size
 workload.
 
-## Latest control-closure measurement (2026-09-14)
+## Latest native Tower service measurement (2026-09-15)
 
 ```sh
 scripts/qualify-embedded-footprint.sh --output-dir /tmp/eggfetch-embedded-footprint
@@ -26,7 +26,7 @@ scripts/qualify-embedded-footprint.sh --output-dir /tmp/eggfetch-embedded-footpr
 
 | Item | Value |
 |---|---|
-| eggfetch SHA | `43c68bd1bcff45301fc8b6b163b6b6e06d98a786` |
+| eggfetch SHA | `490320f6e99fbb7916280d6bcdd21660bd74f858` |
 | reqwest | `0.12.28` (resolved via crates.io at run time) |
 | rustc | `1.98.1 (48a229cea 2026-09-01)` |
 | cargo | `1.98.1 (797e8a9bc 2026-08-05)` |
@@ -39,19 +39,19 @@ Ordinary profiles on this host remain larger than aligned reqwest profiles:
 
 | Profile | eggfetch stripped | reqwest stripped | Delta |
 |---|---:|---:|---:|
-| minimal WebPKI | 3,643,952 | 3,079,840 | +564,112 |
-| minimal native roots | 3,678,296 | 3,116,968 | +561,328 |
-| JSON WebPKI | 3,769,600 | 3,223,256 | +546,344 |
-| JSON native roots | 3,804,008 | 3,256,288 | +547,720 |
+| minimal WebPKI | 3,654,432 | 3,079,840 | +574,592 |
+| minimal native roots | 3,688,968 | 3,116,968 | +572,000 |
+| JSON WebPKI | 3,780,016 | 3,223,256 | +556,760 |
+| JSON native roots | 3,814,552 | 3,256,288 | +558,264 |
 
 The custom-control fixture is measured separately because reqwest has no
 equivalent first-party profile:
 
 | Profile | stripped | unstripped | unique packages |
 |---|---:|---:|---:|
-| `eggfetch-custom-dialer` | 4,369,848 | 6,077,008 | 117 |
+| `eggfetch-custom-dialer` | 4,380,200 | 6,086,232 | 117 |
 
-The runner also measured `eggfetch-default` at 3,759,976 stripped bytes and
+The runner also measured `eggfetch-default` at 3,774,552 stripped bytes and
 `reqwest-default` at 2,401,392; that pair is informational and not equivalent.
 These x86_64 values supersede neither the historical aarch64 record below nor
 the classification: eggfetch is still **not a footprint win** in the aligned

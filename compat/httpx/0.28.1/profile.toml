@@ -33,11 +33,13 @@ rebaseline-sha = "f9eb1a455907d43210886b7b047d18bde8716652"
 # 1.0-preview tracking, oracle generalization (httpx2 sentinel), and
 # extended-tier dual-profile gates changed executable/test/validation
 # behavior, invalidating the prior binding per the exact-SHA rule.
+# The native Tower service adapter then changed executable source/test inputs;
+# this profile was renewed on the final clean executable freeze below.
 stage = "stage-c-qualified"
 status = "qualified"
-qualification-sha = "13c4ab4d3ce37ab17becd62942182c0e63399229"
+qualification-sha = "490320f6e99fbb7916280d6bcdd21660bd74f858"
 qualification-date = "2026-09-15"
-historical-current-qualification-sha = "639bf186a71c054e11278d1b160ffe7a6f172c02"
+historical-current-qualification-sha = "13c4ab4d3ce37ab17becd62942182c0e63399229"
 historical-qualification-sha = "cc90f5ed561bbe10d4c26accc54ed3b916518f98, d034a1005857a7f403222dda4bda5f2f204a44fe, d24101be6ed7be64463813750da5b4043d9905ec, 5c7899fefb6df087dfa1b3578fbef9ba64f87742, 9ffa6cd85848fd16a424b65f73254351911777c4, c44d4f25ffebc1a792335163ae4bc106076b3963"
 reference = "httpx==0.28.1"
 

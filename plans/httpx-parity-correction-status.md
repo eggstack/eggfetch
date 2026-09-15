@@ -4,6 +4,32 @@ This record is the exact-SHA-bound status for the HTTPX 0.28.1 compatibility
 facade. Historical phase and corrective-pass records remain in the git history
 and referenced plans; counts below are only from the runs named here.
 
+## Recorded state — Stage C renewed after native Tower service adapter (2026-09-15)
+
+Recorded designation: **Stage C qualified** for both the documented HTTPX
+0.28.1 and httpx2 2.12.0 asyncio surfaces, bound to executable SHA
+`490320f6e99fbb7916280d6bcdd21660bd74f858`. The preceding
+`13c4ab4d3ce37ab17becd62942182c0e63399229` binding is historical because the
+native Tower service adapter changed executable source/test/qualification
+inputs. Both profiles record this SHA and the 2026-09-15 qualification date.
+
+Qualification evidence on the final executable tree:
+
+- the full 1,870-test compatibility suite passed in the extended gate;
+- Tier 1, feature matrix, docs, FFI, resource, lifecycle, soak, and
+  benchmark checks passed;
+- package validation passed, including crate dry-run, wheel smoke, and
+  package-content checks;
+- no new core runtime dependency was added: the adapter uses the existing
+  `tower-service` dependency, while full Tower/Tonic remain fixture-only.
+
+The native Tower service closure is
+`plans/native-tower-service-adapter.md`. Its follow-up
+documentation/profile/plan-index commit is intentionally a docs-only
+descendant of this executable freeze. The three documented optional local
+skips remain: unbuilt Node JS artifact, unsupported Rust 1.80/Cargo
+resolution, and absent downstream artifact manifest.
+
 ## Recorded state — Stage C renewed after proxy route-pinning closure (2026-09-15)
 
 Recorded designation: **Stage C qualified** for both the documented HTTPX

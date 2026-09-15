@@ -1,7 +1,45 @@
 # Native Tower Service Adapter
 
 Planning baseline: `9ed1d78cbbac80a9bd55481c672909aa76eb8446` (`main`, 2026-09-15; eggfetch-core 0.1.4)
-Status: ready for implementation
+Status: complete
+
+## Closure record (2026-09-15)
+
+Executable freeze: `490320f6e99fbb7916280d6bcdd21660bd74f858`
+
+The implementation adds the small cloneable `NativeHttpService` wrapper and
+`Client::native_service()` constructor. It implements
+`tower_service::Service<http::Request<B>>` with the existing native body/error
+bounds, returns `http::Response<NativeResponseBody>`, stays always ready for
+request acceptance, and delegates the call future directly to
+`Client::execute_http_body()`. No full Tower, Tonic, middleware, or
+downstream-specific API was added to `eggfetch-core`.
+
+Validation on the executable freeze:
+
+- focused native Tower service tests: 7 passed;
+- supported feature slices, dependency/tree checks, and core rustdoc: passed;
+- external-style Tonic 0.12.3 fixture: compiled and ran successfully;
+- Tier 1: passed;
+- extended: passed, including the full 1,870-test compatibility suite,
+  feature matrix, docs, FFI, lifecycle, resource, soak, and benchmark checks;
+- package: passed, including crate dry-run, wheel smoke, and package-content
+  validation. The initial package attempt was correctly rejected for a dirty
+  tree; the committed rerun passed with an absolute venv interpreter;
+- exact-SHA HTTPX 0.28.1/HTTPX2 2.12.0 compatibility evidence was renewed on
+  this freeze under the current verification policy. The three existing
+  optional local skips remain documented by the extended gate: missing Node
+  artifact, unsupported Rust 1.80/Cargo resolution, and absent downstream
+  artifact manifest.
+
+The bounded embedded-footprint run at `/tmp/eggfetch-native-tower-footprint`
+measured the minimal WebPKI profile at 3,654,432 stripped bytes versus
+3,079,840 for aligned reqwest, and the JSON WebPKI profile at 3,780,016
+versus 3,223,256. The adapter adds no core dependency and this remains **not a
+footprint win**; no binary-size reduction is claimed.
+
+All remaining plan changes after the executable freeze are documentation,
+compatibility-profile, and plan-index ledger updates.
 
 ## Objective
 
@@ -425,24 +463,24 @@ This plan does not:
 
 The plan is complete when all of the following are true:
 
-- [ ] `eggfetch-core` exports one small cloneable native HTTP service wrapper.
-- [ ] `Client::native_service()` creates the wrapper with default `NativeRequestOptions`.
-- [ ] the wrapper implements `tower_service::Service<http::Request<B>>` for the same body class accepted by `execute_http_body()`.
-- [ ] `Service::Response` is `http::Response<NativeResponseBody>` and `Service::Error` remains eggfetch's public `Error`.
-- [ ] `poll_ready()` is intentionally always ready and documented as request-acceptance readiness rather than origin-pool availability.
-- [ ] `call()` delegates to `execute_http_body()` and does not duplicate native dispatch/policy logic.
-- [ ] request/response DATA frames and trailers remain preserved.
-- [ ] pool lease, timeout, cancellation and transport lifecycle behavior matches direct native execution.
-- [ ] high-level redirect/retry/auth/cookie/decompression policy remains absent from the service path.
-- [ ] no full Tower or Tonic runtime dependency is added to `eggfetch-core`.
-- [ ] no downstream-specific public API is added.
-- [ ] arbitrary request extensions are not silently promoted into a new transport contract.
-- [ ] an isolated external-style fixture proves ordinary Tower use and Tonic-compatible transport bounds without an eggfetch-specific Tonic adapter.
-- [ ] supported feature slices compile and focused deterministic tests pass.
-- [ ] dependency/feature and minimal-consumer footprint effects are measured and recorded.
-- [ ] required Tier 1/extended/package/compatibility validation passes under the repository's current verification policy.
-- [ ] one executable SHA is frozen after implementation and tests stabilize.
-- [ ] documentation and `plans/README.md` record the final supported boundary and closure SHA.
+- [x] `eggfetch-core` exports one small cloneable native HTTP service wrapper.
+- [x] `Client::native_service()` creates the wrapper with default `NativeRequestOptions`.
+- [x] the wrapper implements `tower_service::Service<http::Request<B>>` for the same body class accepted by `execute_http_body()`.
+- [x] `Service::Response` is `http::Response<NativeResponseBody>` and `Service::Error` remains eggfetch's public `Error`.
+- [x] `poll_ready()` is intentionally always ready and documented as request-acceptance readiness rather than origin-pool availability.
+- [x] `call()` delegates to `execute_http_body()` and does not duplicate native dispatch/policy logic.
+- [x] request/response DATA frames and trailers remain preserved.
+- [x] pool lease, timeout, cancellation and transport lifecycle behavior matches direct native execution.
+- [x] high-level redirect/retry/auth/cookie/decompression policy remains absent from the service path.
+- [x] no full Tower or Tonic runtime dependency is added to `eggfetch-core`.
+- [x] no downstream-specific public API is added.
+- [x] arbitrary request extensions are not silently promoted into a new transport contract.
+- [x] an isolated external-style fixture proves ordinary Tower use and Tonic-compatible transport bounds without an eggfetch-specific Tonic adapter.
+- [x] supported feature slices compile and focused deterministic tests pass.
+- [x] dependency/feature and minimal-consumer footprint effects are measured and recorded.
+- [x] required Tier 1/extended/package/compatibility validation passes under the repository's current verification policy.
+- [x] one executable SHA is frozen after implementation and tests stabilize.
+- [x] documentation and `plans/README.md` record the final supported boundary and closure SHA.
 
 ## Handoff summary
 

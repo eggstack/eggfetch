@@ -2,6 +2,25 @@
 
 This directory contains active implementation plans, live qualification/status records, and historical implementation records. Completed plans are non-normative unless another current document explicitly says otherwise. Verification and release policy remain governed by `docs/verification-policy.md` and `docs/releases/process.md`.
 
+## Completed — native Tower service adapter (2026-09-15)
+
+Plan: `native-tower-service-adapter.md`
+
+Status: complete. Executable freeze:
+`490320f6e99fbb7916280d6bcdd21660bd74f858`. `eggfetch-core` now exports the
+cloneable `NativeHttpService` and `Client::native_service()` over the existing
+frame-preserving native execution path. The adapter is always ready to accept
+requests; origin-pool admission and transport backpressure remain in the
+delegated future. Full Tower/Tonic remain outside the core dependency graph,
+with Tonic interoperability covered by the standalone fixture.
+
+Tier 1, extended, package, focused feature/dependency checks, the external
+Tonic fixture, and the exact-SHA compatibility validation passed. The bounded
+footprint measurement remains **not a footprint win** and no binary-size
+reduction is claimed. The plan contains the complete closure record; this
+entry and the compatibility profiles are documentation-only descendants of
+the executable freeze.
+
 ## Completed program — proxy route pinning and egress interoperability (2026-09-15)
 
 The proxy route-pinning program is complete on the executable freeze recorded
