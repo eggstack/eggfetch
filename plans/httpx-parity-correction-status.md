@@ -4,6 +4,33 @@ This record is the exact-SHA-bound status for the HTTPX 0.28.1 compatibility
 facade. Historical phase and corrective-pass records remain in the git history
 and referenced plans; counts below are only from the runs named here.
 
+## Recorded state — Stage C renewed after Rust 1.89 MSRV migration (2026-09-15)
+
+Recorded designation: **Stage C qualified** for both the documented HTTPX
+0.28.1 and httpx2 2.12.0 asyncio surfaces, bound to executable SHA
+`97e87e42c8f4d5659739e7b23ff9005a4ec1ae53`. The preceding
+`312cd4402ea2b4b27bf54cf7dc36924a1d449adc` binding is historical because the
+workspace MSRV, Cargo resolver, validation tooling, and stable-Clippy source
+compatibility inputs changed. Both compatibility profiles record this SHA and
+the 2026-09-15 qualification date.
+
+Qualification evidence on the frozen executable tree:
+
+- Exact Rust 1.89.0 metadata, feature-matrix, package-surface, and one-time
+  crate proof passed; Tier 1, extended validation, and package validation
+  passed. The MSRV result was required and non-skipped.
+- The HTTPX 0.28.1 and httpx2 2.12.0 API oracles passed. Three consecutive
+  full pinned compatibility runs each collected 1,870 tests with no failures.
+- The committed `Cargo.lock`, direct dependency requirements, and feature
+  ownership are unchanged. A disposable Rust-1.89 fresh-resolution audit
+  generated a compatible 282-package graph and passed the core and workspace
+  MSRV checks; that evidence lockfile was not committed.
+- The only remaining local skips are documented unrelated optional Node JS
+  artifact and downstream artifact checks. Historical Rust 1.80 skip entries
+  remain unchanged as historical evidence.
+
+The closure record is `plans/post-msrv-1.89-qualification-and-closure.md`.
+
 ## Recorded state — Stage C renewed after standard-route DNS provenance correction (2026-09-15)
 
 Recorded designation: **Stage C qualified** for both the documented HTTPX

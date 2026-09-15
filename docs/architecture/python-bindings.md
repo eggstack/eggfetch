@@ -161,7 +161,7 @@ Body kwargs (`content`, `data`, `json`) are mutually exclusive. `files` may comb
 Two versioned, independent facades share the single Rust engine:
 
 - `eggfetch.compat.httpx` — HTTPX 0.28.1 (Stage C qualified on frozen
-  executable SHA `312cd4402ea2b4b27bf54cf7dc36924a1d449adc`; profile in
+  executable SHA `97e87e42c8f4d5659739e7b23ff9005a4ec1ae53`; profile in
   `compat/httpx/0.28.1/`, ledger in `plans/httpx-parity-correction-status.md`).
 - `eggfetch.compat.httpx2` — httpx2 2.12.0 sibling (independently Stage C
   qualified on the same frozen SHA; the prior `639bf186...` binding is

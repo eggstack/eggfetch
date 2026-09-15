@@ -1,6 +1,6 @@
 # Rust 1.89 MSRV Migration Program
 
-Status: **ready for implementation**  
+Status: **complete**  
 Date: 2026-09-15  
 Target repository: `eggstack/eggfetch`  
 Target MSRV: **Rust 1.89.0**
@@ -15,6 +15,30 @@ an MSRV that its own current Cargo dependency graph cannot reliably validate.
 This is a build/tooling/package-contract program. It must not alter HTTP
 behavior, public Rust/Python APIs, feature semantics, dependency ownership, or
 runtime defaults merely to justify the compiler-floor change.
+
+## Closure Record
+
+Implemented in candidate commit `97e87e42c8f4d5659739e7b23ff9005a4ec1ae53`
+(parent `a1ca8d9468b6227897110e26a4352f51ae05e73f`). The workspace now uses
+MSRV 1.89 and Cargo resolver 3 while retaining Edition 2021 and the stable
+development toolchain. The committed `Cargo.lock` and dependency/feature
+ownership are unchanged; the only Rust source changes are stable-Clippy
+compatibility corrections with no runtime or public-API behavior change.
+
+Exact toolchain evidence: `rustc 1.89.0 (29483883e 2025-08-04)` and
+`cargo 1.89.0 (c24e10642 2025-06-23)`. The exact MSRV matrix, one-time crate
+proofs, Tier 1, extended Tier 2, and package validation all passed. A
+disposable Rust-1.89 fresh-resolution audit locked 282 packages and passed the
+minimal core, all-feature core, and workspace all-target/all-feature checks;
+that evidence lockfile was not committed. The packaged core manifest retained
+`rust-version = "1.89"`.
+
+The post-migration executable candidate passed the HTTPX 0.28.1 and httpx2
+2.12.0 API oracles and three consecutive full pinned compatibility runs,
+collecting 1,870 tests per run with no failures. Both profiles and the live
+ledger are renewed to the candidate SHA. The only remaining local skips are
+the repository's documented unrelated optional Node artifact/downstream
+artifact checks; the MSRV check is a required non-skipped pass.
 
 ## Current State and Trigger
 
@@ -132,25 +156,25 @@ Execute these plans in order:
 
 The program is complete only when all of the following are true:
 
-- [ ] Root `Cargo.toml` declares `rust-version = "1.89"`.
-- [ ] All publishable workspace crates inherit the workspace Rust version.
-- [ ] The workspace uses resolver 3, or the implementation records a concrete
+- [x] Root `Cargo.toml` declares `rust-version = "1.89"`.
+- [x] All publishable workspace crates inherit the workspace Rust version.
+- [x] The workspace uses resolver 3, or the implementation records a concrete
       technical reason resolver 3 could not be adopted and demonstrates an
       equivalent Rust-version-aware dependency-resolution strategy.
-- [ ] `rust-toolchain.toml` still targets `stable`.
-- [ ] Tier 2 invokes Rust **1.89.0** explicitly and cannot convert compiler or
+- [x] `rust-toolchain.toml` still targets `stable`.
+- [x] Tier 2 invokes Rust **1.89.0** explicitly and cannot convert compiler or
       Cargo incompatibility into an MSRV pass.
-- [ ] The MSRV gate checks every publishable crate plus core minimal/all-feature
+- [x] The MSRV gate checks every publishable crate plus core minimal/all-feature
       profiles.
-- [ ] A clean/fresh dependency resolution under Rust 1.89 succeeds using the
+- [x] A clean/fresh dependency resolution under Rust 1.89 succeeds using the
       intended resolver policy.
-- [ ] Any `Cargo.lock` change is intentional, fully reviewed, and contains no
+- [x] Any `Cargo.lock` change is intentional, fully reviewed, and contains no
       unrelated dependency churn.
-- [ ] Current/live docs no longer claim Rust 1.80 is supported.
-- [ ] Historical records are left truthful rather than rewritten.
-- [ ] Tier 1 passes.
-- [ ] Tier 2 passes with a real, non-skipped Rust 1.89 result.
-- [ ] Package validation passes.
-- [ ] Exact-SHA HTTPX 0.28.1 and HTTPX2 2.12.0 qualification is renewed on the
+- [x] Current/live docs no longer claim Rust 1.80 is supported.
+- [x] Historical records are left truthful rather than rewritten.
+- [x] Tier 1 passes.
+- [x] Tier 2 passes with a real, non-skipped Rust 1.89 result.
+- [x] Package validation passes.
+- [x] Exact-SHA HTTPX 0.28.1 and HTTPX2 2.12.0 qualification is renewed on the
       post-migration freeze.
-- [ ] No HTTP/runtime/API behavior change is required to complete the program.
+- [x] No HTTP/runtime/API behavior change is required to complete the program.

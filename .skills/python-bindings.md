@@ -76,7 +76,7 @@ EggfetchError
 
 ## HTTPX Compatibility Layer
 
-The `eggfetch.compat.httpx` module provides an HTTPX 0.28.1 compatibility facade over the eggfetch Rust engine (Stage C qualified on frozen executable SHA `312cd4402ea2b4b27bf54cf7dc36924a1d449adc`). The sibling `eggfetch.compat.httpx2` module targets httpx2 2.12.0 and is independently Stage C qualified on the same SHA; earlier bindings are historical after subsequent qualification-sensitive changes. The two facades coexist and importing one never mutates the other. Import paths:
+The `eggfetch.compat.httpx` module provides an HTTPX 0.28.1 compatibility facade over the eggfetch Rust engine (Stage C qualified on frozen executable SHA `97e87e42c8f4d5659739e7b23ff9005a4ec1ae53`). The sibling `eggfetch.compat.httpx2` module targets httpx2 2.12.0 and is independently Stage C qualified on the same SHA; earlier bindings are historical after subsequent qualification-sensitive changes. The two facades coexist and importing one never mutates the other. Import paths:
 
 ```python
 from eggfetch.compat.httpx import Client, AsyncClient, Request, Response
@@ -125,7 +125,7 @@ tests `test_httpx2_api_parity.py` + `test_httpx2_behavior.py` (core),
 
 - Corrective passes 01–08, the post-audit maturation program, the next-scope,
   H3 requalification, and embedded-engine requalification are complete; Stage
-  C is qualified on `312cd4402ea2b4b27bf54cf7dc36924a1d449adc` (also recorded
+  C is qualified on `97e87e42c8f4d5659739e7b23ff9005a4ec1ae53` (also recorded
   in both compatibility profiles and `plans/httpx-parity-correction-status.md`).
   Executable changes require a new exact-SHA qualification.
 - Closure evidence: typed difference records gated by `allowed-differences.toml`, lossless merge semantics (`crates/eggfetch-python/tests/compat/test_merge_lossless.py`), separate sync/async auth drivers, behavioral downstream fixtures (`compat/downstream/behavioral_fixtures/`), and native lifecycle proof fixtures (`test_native_timeout_classification.py`, `test_soak.py`, proxy and TLS tests).

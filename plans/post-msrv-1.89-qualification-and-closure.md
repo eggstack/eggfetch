@@ -1,6 +1,6 @@
 # Post-MSRV 1.89 Qualification and Closure
 
-Status: **blocked on `msrv-1.89-policy-and-validation-migration.md`**  
+Status: **complete**  
 Parent program: `msrv-1.89-migration-program.md`  
 Date: 2026-09-15
 
@@ -16,6 +16,23 @@ scripts, and potentially dependency resolution. Those inputs are not a
 documentation-only descendant of the currently qualified tree. The existing
 HTTPX 0.28.1 / HTTPX2 2.12.0 exact-SHA qualification must therefore be renewed
 rather than implicitly carried forward.
+
+## Closure Record
+
+Closed on candidate executable SHA
+`97e87e42c8f4d5659739e7b23ff9005a4ec1ae53` (parent
+`a1ca8d9468b6227897110e26a4352f51ae05e73f`). Exact Rust 1.89.0 compiler and
+Cargo proofs, the fresh-resolution audit, Tier 1, extended Tier 2, package
+validation, API oracles, and the required three consecutive full pinned
+compatibility runs passed. Each compatibility run collected 1,870 tests with
+no failures. The prior `312cd440...` qualification is historical; both
+compatibility profiles and the live ledger now bind to the candidate.
+
+The committed `Cargo.lock` did not change, no direct dependency or feature
+ownership changed, and Rust source edits were limited to stable-Clippy
+compatibility corrections. A final docs/profile/ledger descendant is the only
+post-freeze change. The exact toolchain was `rustc 1.89.0 (29483883e
+2025-08-04)` with Cargo `1.89.0 (c24e10642 2025-06-23)`.
 
 ## Entry Criteria
 
@@ -256,47 +273,47 @@ repository/compatibility closure is sufficient.
 
 ### Compiler contract
 
-- [ ] Candidate compiles with exact Rust 1.89.0.
-- [ ] All publishable crates report Rust 1.89 in Cargo metadata.
-- [ ] Minimal core profile compiles on 1.89.
-- [ ] Core all-features compiles/tests on 1.89.
-- [ ] Workspace all-target/all-feature check passes on 1.89.
-- [ ] FFI/Node 1.89 tests and Python/CLI 1.89 checks pass.
-- [ ] No MSRV check is skipped or run with `--ignore-rust-version`.
+- [x] Candidate compiles with exact Rust 1.89.0.
+- [x] All publishable crates report Rust 1.89 in Cargo metadata.
+- [x] Minimal core profile compiles on 1.89.
+- [x] Core all-features compiles/tests on 1.89.
+- [x] Workspace all-target/all-feature check passes on 1.89.
+- [x] FFI/Node 1.89 tests and Python/CLI 1.89 checks pass.
+- [x] No MSRV check is skipped or run with `--ignore-rust-version`.
 
 ### Resolution / packaging
 
-- [ ] Fresh Rust-1.89 dependency resolution succeeds.
-- [ ] Committed lockfile is unchanged or every change is required/reviewed.
-- [ ] No unrelated dependency upgrade is present.
-- [ ] Packaged crate metadata carries `rust-version = "1.89"`.
-- [ ] `cargo publish --dry-run -p eggfetch-core` succeeds.
+- [x] Fresh Rust-1.89 dependency resolution succeeds.
+- [x] Committed lockfile is unchanged or every change is required/reviewed.
+- [x] No unrelated dependency upgrade is present.
+- [x] Packaged crate metadata carries `rust-version = "1.89"`.
+- [x] `cargo publish --dry-run -p eggfetch-core` succeeds.
 
 ### Repository quality
 
-- [ ] Tier 1 passes.
-- [ ] Tier 2 passes with real MSRV evidence.
-- [ ] Package validation passes.
-- [ ] Feature/dependency ownership is unchanged.
-- [ ] No product/runtime/API semantic change was introduced solely for MSRV.
+- [x] Tier 1 passes.
+- [x] Tier 2 passes with real MSRV evidence.
+- [x] Package validation passes.
+- [x] Feature/dependency ownership is unchanged.
+- [x] No product/runtime/API semantic change was introduced solely for MSRV.
 
 ### Compatibility
 
-- [ ] HTTPX 0.28.1 API oracle passes.
-- [ ] HTTPX2 2.12.0 API oracle passes.
-- [ ] Full pinned compatibility suite passes on the exact candidate SHA.
-- [ ] Required consecutive exact-SHA runs pass.
-- [ ] Both compatibility profiles are rebound to the new qualification SHA.
-- [ ] Live parity/status ledger records the new freeze.
+- [x] HTTPX 0.28.1 API oracle passes.
+- [x] HTTPX2 2.12.0 API oracle passes.
+- [x] Full pinned compatibility suite passes on the exact candidate SHA.
+- [x] Required consecutive exact-SHA runs pass.
+- [x] Both compatibility profiles are rebound to the new qualification SHA.
+- [x] Live parity/status ledger records the new freeze.
 
 ### Documentation / closure
 
-- [ ] All live compiler-support docs say Rust 1.89+.
-- [ ] Stable remains the normal repository toolchain.
-- [ ] Edition remains 2021.
-- [ ] Historical Rust 1.80 records remain truthful.
-- [ ] Parent program and this plan record final SHAs/evidence.
-- [ ] Any post-freeze descendant is proven documentation/profile/ledger-only.
+- [x] All live compiler-support docs say Rust 1.89+.
+- [x] Stable remains the normal repository toolchain.
+- [x] Edition remains 2021.
+- [x] Historical Rust 1.80 records remain truthful.
+- [x] Parent program and this plan record final SHAs/evidence.
+- [x] Any post-freeze descendant is proven documentation/profile/ledger-only.
 
 ## Final Outcome Required
 

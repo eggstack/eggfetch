@@ -1,6 +1,6 @@
 # Rust 1.89 MSRV Policy and Validation Migration
 
-Status: **ready for implementation**  
+Status: **complete**  
 Parent program: `msrv-1.89-migration-program.md`  
 Date: 2026-09-15
 
@@ -14,6 +14,17 @@ and live documentation changes needed for the migration. It does **not** own the
 final exact-SHA compatibility requalification; that is handled by
 `post-msrv-1.89-qualification-and-closure.md` after this implementation is
 stable.
+
+## Implementation Record
+
+Implemented in `97e87e42c8f4d5659739e7b23ff9005a4ec1ae53`. The workspace
+metadata, resolver, fail-closed exact-1.89 Tier 2 gate, and live MSRV docs are
+updated. Rust 1.89.0 (`rustc 1.89.0 (29483883e 2025-08-04)`, Cargo
+`1.89.0 (c24e10642 2025-06-23)`) passed the required matrix and one-time
+core/FFI/Node/Python/CLI proof. The disposable fresh-resolution audit
+generated a compatible 282-package graph and passed its MSRV checks. The
+committed lockfile is unchanged and no direct dependencies or feature
+ownership changed.
 
 ## Baseline Findings
 
@@ -303,47 +314,47 @@ Freeze first; closure owns the exact-SHA qualification.
 
 ### Manifest / resolver
 
-- [ ] `[workspace.package].rust-version = "1.89"`.
-- [ ] Every publishable crate still uses `rust-version.workspace = true`.
-- [ ] Edition remains 2021.
-- [ ] `rust-toolchain.toml` remains `stable`.
-- [ ] Workspace resolver is 3, or a concrete documented blocker and equivalent
+- [x] `[workspace.package].rust-version = "1.89"`.
+- [x] Every publishable crate still uses `rust-version.workspace = true`.
+- [x] Edition remains 2021.
+- [x] `rust-toolchain.toml` remains `stable`.
+- [x] Workspace resolver is 3, or a concrete documented blocker and equivalent
       Rust-version-aware strategy is recorded.
 
 ### Validation
 
-- [ ] Tier 2 names and executes Rust 1.89.0.
-- [ ] Missing `rustup`/1.89 toolchain fails with actionable instructions.
-- [ ] No Edition-2024/old-Cargo skip branch remains.
-- [ ] MSRV validation uses `--locked` for the committed-graph proof.
-- [ ] Minimal core and all-feature core compile on 1.89.
-- [ ] All publishable workspace crates compile on 1.89.
-- [ ] One-time 1.89 tests/checks listed above pass.
-- [ ] A disposable fresh dependency resolution succeeds on 1.89.
+- [x] Tier 2 names and executes Rust 1.89.0.
+- [x] Missing `rustup`/1.89 toolchain fails with actionable instructions.
+- [x] No Edition-2024/old-Cargo skip branch remains.
+- [x] MSRV validation uses `--locked` for the committed-graph proof.
+- [x] Minimal core and all-feature core compile on 1.89.
+- [x] All publishable workspace crates compile on 1.89.
+- [x] One-time 1.89 tests/checks listed above pass.
+- [x] A disposable fresh dependency resolution succeeds on 1.89.
 
 ### Metadata / dependency graph
 
-- [ ] `cargo metadata` reports Rust 1.89 for every publishable crate.
-- [ ] Packaged crate metadata reports Rust 1.89.
-- [ ] Existing lockfile remains unchanged, or every unavoidable change is
+- [x] `cargo metadata` reports Rust 1.89 for every publishable crate.
+- [x] Packaged crate metadata reports Rust 1.89.
+- [x] Existing lockfile remains unchanged, or every unavoidable change is
       reviewed and documented.
-- [ ] No unrelated dependency upgrade lands.
+- [x] No unrelated dependency upgrade lands.
 
 ### Documentation
 
-- [ ] Live policy docs describe Rust 1.89+.
-- [ ] Live docs no longer describe the Rust 1.80 resolver skip as current
+- [x] Live policy docs describe Rust 1.89+.
+- [x] Live docs no longer describe the Rust 1.80 resolver skip as current
       behavior.
-- [ ] Changelog records the compiler-floor increase as a pre-1.0 breaking
+- [x] Changelog records the compiler-floor increase as a pre-1.0 breaking
       compatibility change.
-- [ ] Historical evidence is not falsified by rewriting old records.
+- [x] Historical evidence is not falsified by rewriting old records.
 
 ### Regression gates
 
-- [ ] Tier 1 passes.
-- [ ] Tier 2 passes with non-skipped MSRV evidence.
-- [ ] Package validation passes.
-- [ ] No runtime/public-API behavior change was introduced.
+- [x] Tier 1 passes.
+- [x] Tier 2 passes with non-skipped MSRV evidence.
+- [x] Package validation passes.
+- [x] No runtime/public-API behavior change was introduced.
 
 ## Handoff Note
 

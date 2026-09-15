@@ -110,7 +110,7 @@ native JSON helpers are opt-in and must remain absent from minimal profiles.
   (parser/cache + suppressor transitions). The deterministic H3 suites
   (hardening 12/12, Alt-Svc discovery 17/17, interop controls 20/20)
   re-passed on the current executable freeze
-  `13c4ab4d3ce37ab17becd62942182c0e63399229` (2026-09-15, see the live
+  `97e87e42c8f4d5659739e7b23ff9005a4ec1ae53` (2026-09-15, see the live
   ledger `plans/httpx-parity-correction-status.md`); earlier freeze SHAs
   in plan history are not the current binding.
   The graduation gate and named blockers live in
