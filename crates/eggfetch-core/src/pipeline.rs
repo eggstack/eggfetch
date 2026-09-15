@@ -2136,16 +2136,26 @@ where
 
     let raw_response = match route {
         TransportRoute::Uds => {
-            let uds_client = inner
-                .uds_client
-                .as_ref()
-                .ok_or_else(|| Error::Unsupported("UDS client not available".into()))?;
-            let hyper_request = build_http_request(&method, uri, version, &headers, body)?;
-            send_with_total_timeout(
-                crate::transport::direct::send_raw_request(uds_client, hyper_request, trace),
-                remaining_total,
-            )
-            .await?
+            #[cfg(unix)]
+            {
+                let uds_client = inner
+                    .uds_client
+                    .as_ref()
+                    .ok_or_else(|| Error::Unsupported("UDS client not available".into()))?;
+                let hyper_request = build_http_request(&method, uri, version, &headers, body)?;
+                send_with_total_timeout(
+                    crate::transport::direct::send_raw_request(uds_client, hyper_request, trace),
+                    remaining_total,
+                )
+                .await?
+            }
+            #[cfg(not(unix))]
+            {
+                let _ = (method, uri, headers, body, version);
+                return Err(Error::Unsupported(
+                    "Unix domain sockets are not supported on this platform".into(),
+                ));
+            }
         }
         TransportRoute::Custom => {
             let custom_client = if let Some(sni_hostname) = transport_hints.sni_hostname.as_deref()

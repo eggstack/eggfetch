@@ -1,6 +1,6 @@
 # PyO3 and Python Version Modernization
 
-Status: **complete; qualified locally**
+Status: **implementation complete; cross-platform qualification in progress**
 Parent: `python-interop-api-hygiene-program.md`  
 Date: 2026-09-15
 
@@ -233,9 +233,5 @@ supported version.
 
 The canonical Tier 1 and Tier 2 checks passed locally, including the full
 compatibility suite, MSRV, documentation, FFI, lifecycle, soak, and benchmark
-gates. Tier 3 package validation remains the final local gate before the
-release workflow is dispatched for cross-platform wheel qualification.
-
-## Handoff
-
-After this pass stabilizes, implement `python-pep561-typing-surface.md`. Defer exact-SHA compatibility profile rebinding to final closure.
+gates. Tier 3 package validation also passed locally. The build-only release
+workflow is the remaining cross-platform qualification gate.
