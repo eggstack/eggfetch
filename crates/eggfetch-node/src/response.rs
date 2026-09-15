@@ -39,7 +39,8 @@ impl EggfetchResponse {
             for i in 0..header_count {
                 let mut name: *mut std::os::raw::c_char = ptr::null_mut();
                 let mut value: *mut std::os::raw::c_char = ptr::null_mut();
-                let rc = eggfetch_ffi::eggfetch_response_header(resp, i, &mut name, &mut value);
+                let rc =
+                    eggfetch_ffi::eggfetch_response_header(resp, i, &raw mut name, &raw mut value);
                 if rc == 0 {
                     let n = if name.is_null() {
                         String::new()
@@ -67,17 +68,18 @@ impl EggfetchResponse {
 
             let mut body_ptr = ptr::null_mut();
             let mut body_len = 0;
-            let body = if eggfetch_ffi::eggfetch_response_body(resp, &mut body_ptr, &mut body_len)
-                == 0
-                && body_len > 0
-                && !body_ptr.is_null()
-            {
-                let body = std::slice::from_raw_parts(body_ptr, body_len).to_vec();
-                eggfetch_ffi::eggfetch_body_free(body_ptr, body_len);
-                body
-            } else {
-                Vec::new()
-            };
+            let body =
+                if eggfetch_ffi::eggfetch_response_body(resp, &raw mut body_ptr, &raw mut body_len)
+                    == 0
+                    && body_len > 0
+                    && !body_ptr.is_null()
+                {
+                    let body = std::slice::from_raw_parts(body_ptr, body_len).to_vec();
+                    eggfetch_ffi::eggfetch_body_free(body_ptr, body_len);
+                    body
+                } else {
+                    Vec::new()
+                };
 
             eggfetch_ffi::eggfetch_response_free(resp);
 

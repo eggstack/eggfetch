@@ -89,6 +89,7 @@ The binary is placed in `target/release/eggfetch`.
 
 ## Rust version
 
-The minimum supported Rust version (MSRV) is **1.80**, declared in
-`workspace.package.rust-version` and checked in extended validation.
+The minimum supported Rust version (MSRV) is **1.89**, declared in
+`workspace.package.rust-version` and checked in extended validation with the
+exact 1.89.0 toolchain.
 `rust-toolchain.toml` pins the stable channel for development.

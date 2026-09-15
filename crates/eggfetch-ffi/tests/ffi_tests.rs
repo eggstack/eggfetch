@@ -117,7 +117,7 @@ fn null_safety() {
 
         let req = eggfetch_ffi::eggfetch_client_get(client, url.as_ptr());
         let mut err: *mut eggfetch_ffi::ErrorHandle = ptr::null_mut();
-        let resp = eggfetch_ffi::eggfetch_client_send(ptr::null(), req, &mut err);
+        let resp = eggfetch_ffi::eggfetch_client_send(ptr::null(), req, &raw mut err);
         assert!(resp.is_null());
         assert!(!err.is_null());
         eggfetch_ffi::eggfetch_error_free(err);
@@ -133,7 +133,7 @@ fn error_handle() {
         let url = CString::new("http://invalid.example.test:99999/nope").unwrap();
         let req = eggfetch_ffi::eggfetch_client_get(client, url.as_ptr());
         let mut err: *mut eggfetch_ffi::ErrorHandle = ptr::null_mut();
-        let resp = eggfetch_ffi::eggfetch_client_send(client, req, &mut err);
+        let resp = eggfetch_ffi::eggfetch_client_send(client, req, &raw mut err);
 
         if resp.is_null() {
             assert!(!err.is_null());
@@ -243,7 +243,7 @@ fn full_request_response() {
         assert!(!req.is_null());
 
         let mut err: *mut eggfetch_ffi::ErrorHandle = ptr::null_mut();
-        let resp = eggfetch_ffi::eggfetch_client_send(client, req, &mut err);
+        let resp = eggfetch_ffi::eggfetch_client_send(client, req, &raw mut err);
 
         if resp.is_null() {
             let err_msg = if err.is_null() {
@@ -272,7 +272,7 @@ fn full_request_response() {
         for i in 0..header_count {
             let mut name: *mut std::os::raw::c_char = ptr::null_mut();
             let mut value: *mut std::os::raw::c_char = ptr::null_mut();
-            let rc = eggfetch_ffi::eggfetch_response_header(resp, i, &mut name, &mut value);
+            let rc = eggfetch_ffi::eggfetch_response_header(resp, i, &raw mut name, &raw mut value);
             assert_eq!(rc, 0);
             let name_str = CString::from_raw(name).into_string().unwrap();
             let value_str = CString::from_raw(value).into_string().unwrap();
@@ -651,7 +651,7 @@ fn streaming_response_basic() {
         assert!(!req.is_null());
 
         let mut err: *mut eggfetch_ffi::ErrorHandle = ptr::null_mut();
-        let resp = eggfetch_ffi::eggfetch_client_send_streaming(client, req, &mut err);
+        let resp = eggfetch_ffi::eggfetch_client_send_streaming(client, req, &raw mut err);
 
         if resp.is_null() {
             let err_msg = if err.is_null() {
@@ -706,7 +706,7 @@ fn streaming_response_chunked() {
         assert!(!req.is_null());
 
         let mut err: *mut eggfetch_ffi::ErrorHandle = ptr::null_mut();
-        let resp = eggfetch_ffi::eggfetch_client_send_streaming(client, req, &mut err);
+        let resp = eggfetch_ffi::eggfetch_client_send_streaming(client, req, &raw mut err);
 
         if resp.is_null() {
             let err_msg = if err.is_null() {
@@ -785,7 +785,7 @@ fn streaming_response_headers() {
         let req = eggfetch_ffi::eggfetch_client_get(client, url_c.as_ptr());
 
         let mut err: *mut eggfetch_ffi::ErrorHandle = ptr::null_mut();
-        let resp = eggfetch_ffi::eggfetch_client_send_streaming(client, req, &mut err);
+        let resp = eggfetch_ffi::eggfetch_client_send_streaming(client, req, &raw mut err);
 
         assert!(!resp.is_null(), "streaming headers test: request failed");
 
@@ -798,7 +798,12 @@ fn streaming_response_headers() {
         for i in 0..header_count {
             let mut name: *mut std::os::raw::c_char = ptr::null_mut();
             let mut value: *mut std::os::raw::c_char = ptr::null_mut();
-            let rc = eggfetch_ffi::eggfetch_response_stream_header(resp, i, &mut name, &mut value);
+            let rc = eggfetch_ffi::eggfetch_response_stream_header(
+                resp,
+                i,
+                &raw mut name,
+                &raw mut value,
+            );
             assert_eq!(rc, 0);
             let name_str = CString::from_raw(name).into_string().unwrap();
             let value_str = CString::from_raw(value).into_string().unwrap();
@@ -854,7 +859,7 @@ fn streaming_cancel() {
         let req = eggfetch_ffi::eggfetch_client_get(client, url_c.as_ptr());
 
         let mut err: *mut eggfetch_ffi::ErrorHandle = ptr::null_mut();
-        let resp = eggfetch_ffi::eggfetch_client_send_streaming(client, req, &mut err);
+        let resp = eggfetch_ffi::eggfetch_client_send_streaming(client, req, &raw mut err);
 
         assert!(!resp.is_null(), "streaming cancel test: request failed");
 
@@ -910,7 +915,7 @@ fn streaming_cancel_wakes_blocked_next() {
         let req = eggfetch_ffi::eggfetch_client_get(client, url_c.as_ptr());
 
         let mut err: *mut eggfetch_ffi::ErrorHandle = ptr::null_mut();
-        let resp = eggfetch_ffi::eggfetch_client_send_streaming(client, req, &mut err);
+        let resp = eggfetch_ffi::eggfetch_client_send_streaming(client, req, &raw mut err);
         assert!(!resp.is_null(), "idle-stream test: request failed");
 
         // Raw handle pointers are not `Send`; this cross-thread watchdog
@@ -1017,7 +1022,7 @@ fn streaming_error_distinguishable_from_clean_eof() {
         let req = eggfetch_ffi::eggfetch_client_get(client, url_c.as_ptr());
 
         let mut err: *mut eggfetch_ffi::ErrorHandle = ptr::null_mut();
-        let resp = eggfetch_ffi::eggfetch_client_send_streaming(client, req, &mut err);
+        let resp = eggfetch_ffi::eggfetch_client_send_streaming(client, req, &raw mut err);
         assert!(!resp.is_null(), "truncated-stream test: request failed");
 
         let mut got_chunk = false;
@@ -1059,7 +1064,7 @@ fn streaming_error_null_after_clean_eof() {
         let req = eggfetch_ffi::eggfetch_client_get(client, url_c.as_ptr());
 
         let mut err: *mut eggfetch_ffi::ErrorHandle = ptr::null_mut();
-        let resp = eggfetch_ffi::eggfetch_client_send_streaming(client, req, &mut err);
+        let resp = eggfetch_ffi::eggfetch_client_send_streaming(client, req, &raw mut err);
         assert!(!resp.is_null());
 
         while !eggfetch_ffi::eggfetch_response_stream_next(resp).is_null() {}
@@ -1078,7 +1083,7 @@ fn error_handle_message_and_kind() {
         let url = CString::new("http://invalid.example.test:99999/nope").unwrap();
         let req = eggfetch_ffi::eggfetch_client_get(client, url.as_ptr());
         let mut err: *mut eggfetch_ffi::ErrorHandle = ptr::null_mut();
-        let resp = eggfetch_ffi::eggfetch_client_send(client, req, &mut err);
+        let resp = eggfetch_ffi::eggfetch_client_send(client, req, &raw mut err);
 
         if resp.is_null() {
             assert!(!err.is_null());
@@ -1114,7 +1119,7 @@ fn response_body_text() {
         let req = eggfetch_ffi::eggfetch_client_get(client, url_c.as_ptr());
 
         let mut err: *mut eggfetch_ffi::ErrorHandle = ptr::null_mut();
-        let resp = eggfetch_ffi::eggfetch_client_send(client, req, &mut err);
+        let resp = eggfetch_ffi::eggfetch_client_send(client, req, &raw mut err);
 
         assert!(!resp.is_null());
 

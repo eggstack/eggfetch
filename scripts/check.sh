@@ -241,29 +241,27 @@ tier2_feature_tests() {
 }
 
 tier2_msrv() {
-    info "MSRV check (Rust 1.80)"
-    if ! command -v rustup &>/dev/null; then
-        record_skip "MSRV" "rustup is not installed"
-        return 0
+    local msrv_toolchain="1.89.0"
+    info "MSRV check (Rust ${msrv_toolchain})"
+    require_command rustup
+
+    if ! rustup run "$msrv_toolchain" rustc --version &>/dev/null; then
+        fail "Rust ${msrv_toolchain} is required for the MSRV gate. Install it with: rustup toolchain install ${msrv_toolchain} --profile minimal"
     fi
-    if ! rustup toolchain list | grep -Eq '^1\.80([.-]|$)'; then
-        record_skip "MSRV" "Rust 1.80 toolchain is not installed"
-        return 0
-    fi
-    local msrv_log
-    msrv_log="$(mktemp)"
-    if rustup run 1.80 cargo check -p eggfetch-core --no-default-features --features http1,tls-rustls >"$msrv_log" 2>&1; then
-        rm -f "$msrv_log"
-        return 0
-    fi
-    if grep -Eq 'feature `edition2024` is required|requires rustc' "$msrv_log"; then
-        record_skip "MSRV" "Rust 1.80 cannot parse the current crates.io resolution; use a newer Cargo or a resolver-compatible lock for a definitive MSRV run"
-        rm -f "$msrv_log"
-        return 0
-    fi
-    cat "$msrv_log" >&2
-    rm -f "$msrv_log"
-    fail "MSRV check failed for a reason other than an unavailable Rust 1.80 dependency graph"
+
+    local checks=(
+        "--locked -p eggfetch-core --no-default-features"
+        "--locked -p eggfetch-core --no-default-features --features http1"
+        "--locked -p eggfetch-core --no-default-features --features http1,tls-rustls"
+        "--locked -p eggfetch-core --all-features"
+        "--locked --workspace --all-targets --all-features"
+    )
+    local check_args
+    for check_args in "${checks[@]}"; do
+        info "MSRV: rustup run ${msrv_toolchain} cargo check ${check_args}"
+        # shellcheck disable=SC2086
+        rustup run "$msrv_toolchain" cargo check $check_args
+    done
 }
 
 tier2_docs() {

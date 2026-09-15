@@ -1173,7 +1173,7 @@ pub(crate) fn resolve_proxy(
                 .chain(inner.config.environment_proxies.iter());
             candidates
                 .filter(|p| p.should_use_for_scheme(url.scheme()))
-                .find(|p| p.no_proxy_rules().map_or(true, |np| !np.should_bypass(url)))
+                .find(|p| p.no_proxy_rules().is_none_or(|np| !np.should_bypass(url)))
                 .map(Proxy::config)
         }
     }

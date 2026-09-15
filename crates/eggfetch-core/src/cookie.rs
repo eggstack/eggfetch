@@ -584,7 +584,7 @@ impl CookieJar {
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         jar.cookies
-            .retain(|_, c| !c.persistent || c.expires.map_or(true, |exp| now < exp));
+            .retain(|_, c| !c.persistent || c.expires.is_none_or(|exp| now < exp));
     }
 }
 

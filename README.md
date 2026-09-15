@@ -274,4 +274,4 @@ eggfetch is licensed under the [MIT License](LICENSE-MIT).
 
 ## MSRV
 
-The minimum supported Rust version is **1.80**, declared in `workspace.package.rust-version` and checked in extended validation. `rust-toolchain.toml` pins the stable channel for development.
+The minimum supported Rust version is **1.89**, declared in `workspace.package.rust-version` and checked in extended validation with the exact 1.89.0 toolchain. `rust-toolchain.toml` pins the stable channel for normal development.

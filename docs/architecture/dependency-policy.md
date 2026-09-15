@@ -96,7 +96,7 @@ Rustls; a dependency can still be shared by other optional routes.
 The matrix intentionally does not gate tiny ubiquitous dependencies merely to
 reduce crate count. In particular, `getrandom` cannot be made multipart-only
 without changing retry jitter behavior. No dependency upgrade was needed, so
-the workspace MSRV remains Rust 1.80.
+the workspace MSRV is Rust 1.89.
 
 These are small, well-audited crates with minimal transitive trees. Together
 with the default feature set, they provide the dependencies required to build

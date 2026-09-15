@@ -2,12 +2,12 @@
 
 ## Rust MSRV Policy
 
-The minimum supported Rust version (MSRV) is declared in `workspace.package.rust-version` (currently **1.80**) and checked in extended validation via a `cargo check` with the 1.80 toolchain; `rust-toolchain.toml` pins the stable channel for day-to-day development.
+The minimum supported Rust version (MSRV) is declared in `workspace.package.rust-version` (currently **1.89**) and checked in extended validation via the exact 1.89.0 toolchain; `rust-toolchain.toml` pins the stable channel for day-to-day development.
 
 - The MSRV may be raised in minor releases. A MSRV bump is announced at least one minor release in advance.
 - The MSRV is never raised in a patch release.
 - The MSRV is chosen to balance access to language features with distribution packager compatibility.
-- The MSRV is checked in extended validation (`./scripts/check.sh extended`) via a `cargo check` with the 1.80 toolchain; the check is skipped when that toolchain is not installed. Routine CI does not run an MSRV matrix.
+- The MSRV is checked in extended validation (`./scripts/check.sh extended`) via the exact 1.89.0 toolchain. The check fails when that toolchain is not installed; use `rustup toolchain install 1.89.0 --profile minimal`. Routine CI does not run an MSRV matrix.
 
 ## Python Supported Versions
 

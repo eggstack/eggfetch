@@ -198,7 +198,7 @@ impl EggfetchClient {
                 }
 
                 let mut err: *mut ErrorHandle = ptr::null_mut();
-                let resp = unsafe { eggfetch_ffi::eggfetch_client_send(client, req, &mut err) };
+                let resp = unsafe { eggfetch_ffi::eggfetch_client_send(client, req, &raw mut err) };
 
                 if resp.is_null() {
                     if !err.is_null() {

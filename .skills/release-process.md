@@ -42,8 +42,10 @@ PyPI uses Trusted Publishing (OIDC). No API token is needed.
 ./scripts/check.sh package  # Tier 3: before publish
 ```
 
-Tier 2 runs Tier 1 first; Tier 3 runs Tier 1 first. All require a clean
-worktree. See `docs/releases/process.md` and `docs/verification-policy.md`.
+Tier 2 runs Tier 1 first and requires the exact Rust 1.89.0 toolchain for its
+MSRV matrix; Tier 3 runs Tier 1 first. All require a clean worktree. See
+`docs/releases/process.md` and `docs/verification-policy.md`. Install the
+MSRV toolchain with `rustup toolchain install 1.89.0 --profile minimal`.
 
 ## Publication
 

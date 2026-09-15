@@ -96,9 +96,9 @@ pushing one); see `docs/releases/process.md`.
 
 ## MSRV policy
 
-The minimum supported Rust version (MSRV) is documented in
+The minimum supported Rust version (MSRV) is **1.89**, documented in
 `workspace.package.rust-version` and checked in extended validation with the
-declared toolchain; `rust-toolchain.toml` pins the stable channel for
+exact 1.89.0 toolchain; `rust-toolchain.toml` pins the stable channel for
 development. MSRV
 changes are treated as breaking changes and require a minor version bump.
 

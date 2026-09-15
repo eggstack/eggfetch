@@ -1224,7 +1224,7 @@ mod tests {
         );
 
         #[allow(clippy::cast_precision_loss)]
-        let limit_value = ((total_ratio + inner_step) / 2.0).ceil();
+        let limit_value = total_ratio.midpoint(inner_step).ceil();
         let limit = DecompressionLimit {
             max_decoded_body_size: None,
             max_decompression_ratio: Some(limit_value),
@@ -1244,9 +1244,8 @@ mod tests {
         let inner = gzip_compress(&payload);
         let outer = gzip_compress(&inner);
         #[allow(clippy::cast_precision_loss)]
-        let limit_value = ((payload.len() as f64 / outer.len() as f64)
-            + (payload.len() as f64 / inner.len() as f64))
-            / 2.0;
+        let limit_value = (payload.len() as f64 / outer.len() as f64)
+            .midpoint(payload.len() as f64 / inner.len() as f64);
         let limit = DecompressionLimit {
             max_decoded_body_size: None,
             max_decompression_ratio: Some(limit_value.ceil()),
@@ -1285,7 +1284,7 @@ mod tests {
         assert!(total > per_layer_limit);
         let limit = DecompressionLimit {
             max_decoded_body_size: None,
-            max_decompression_ratio: Some((per_layer_limit + total) / 2.0),
+            max_decompression_ratio: Some(per_layer_limit.midpoint(total)),
         };
         let input: BoxBytesStream = Box::pin(futures_util::stream::once(async move {
             Ok(bytes::Bytes::from(outer))

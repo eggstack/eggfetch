@@ -186,9 +186,9 @@ impl Headers {
                 size.checked_add(name.as_str().len() + value.as_bytes().len() + 4)
             })
         });
-        if size.map_or(true, |size| {
+        if size.is_none_or(|size| {
             size.checked_add(2)
-                .map_or(true, |size| size > MAX_REQUEST_HEADER_BYTES)
+                .is_none_or(|size| size > MAX_REQUEST_HEADER_BYTES)
         }) {
             return Err(Error::RequestBuild(format!(
                 "request headers exceed maximum size of {MAX_REQUEST_HEADER_BYTES} bytes"

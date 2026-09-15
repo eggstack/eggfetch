@@ -830,7 +830,7 @@ mod tests {
         let pool = Pool::new(PoolConfig::default());
         let pool2 = pool.clone();
         // Both share the same inner state.
-        assert!(std::ptr::eq(&*pool.inner, &*pool2.inner));
+        assert!(Arc::ptr_eq(&pool.inner, &pool2.inner));
     }
 
     #[tokio::test]

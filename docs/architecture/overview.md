@@ -471,6 +471,10 @@ Dependency policy (audits, bans, licenses): [dependency-policy.md](dependency-po
 
 All milestones A–Z are complete. Test counts change with every commit; the
 evidence bound to the qualified executable SHA is recorded in
-`plans/httpx-parity-correction-status.md`. MSRV is Rust 1.80 (`workspace.package.rust-version`; `rust-toolchain.toml` pins stable for development). CI enforces `RUSTFLAGS=-D warnings` with pedantic clippy. Python support is 3.10–3.13 (asyncio only; Trio/AnyIO out of scope).
+`plans/httpx-parity-correction-status.md`. MSRV is Rust 1.89
+(`workspace.package.rust-version`; `rust-toolchain.toml` pins stable for
+development, while Tier 2 validates exact Rust 1.89.0). CI enforces
+`RUSTFLAGS=-D warnings` with pedantic clippy. Python support is 3.10–3.13
+(asyncio only; Trio/AnyIO out of scope).
 
 The `test-util` feature enables `tokio/test-util` for deterministic time testing in timeout-related tests.

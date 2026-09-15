@@ -63,6 +63,13 @@ cargo check -p eggfetch-core --all-features
 # plus tier2_feature_tests: gzip/brotli/zstd/deflate/proxy subsets
 ```
 
+Tier 2 also runs the exact Rust 1.89.0 MSRV matrix: core with no features,
+`http1`, and `http1,tls-rustls`, core with all features, and the complete
+workspace with all targets/features. The MSRV toolchain is required for this
+gate; install it with `rustup toolchain install 1.89.0 --profile minimal`.
+Stable remains the normal development and CI toolchain, and the workspace
+continues to use Edition 2021.
+
 See `docs/architecture/feature-flags.md` for the exact validation matrix and
 the supported core profile recipes. The
 `http3` and `multipart,proxy` combos there are manual checks, not Tier 2

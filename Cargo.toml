@@ -1,5 +1,5 @@
 [workspace]
-resolver = "2"
+resolver = "3"
 members = [
     "crates/eggfetch-core",
     "crates/eggfetch-cli",
@@ -11,7 +11,7 @@ members = [
 
 [workspace.package]
 edition = "2021"
-rust-version = "1.80"
+rust-version = "1.89"
 license = "MIT"
 repository = "https://github.com/eggstack/eggfetch"
 homepage = "https://github.com/eggstack/eggfetch"

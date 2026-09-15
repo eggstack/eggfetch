@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Raised the workspace MSRV from Rust 1.80 to Rust 1.89, while retaining
+  Edition 2021 and stable as the normal development toolchain. This is a
+  pre-1.0 breaking compatibility change for Rust consumers.
+
 ### Fixed
 
 - Native detailed request failures now preserve typed DNS provenance on the

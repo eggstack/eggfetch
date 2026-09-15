@@ -411,7 +411,7 @@ impl NoProxy {
                 } => {
                     if url.scheme().eq_ignore_ascii_case(scheme)
                         && host.eq_ignore_ascii_case(rule_host)
-                        && rule_port.map_or(true, |rule_port| {
+                        && rule_port.is_none_or(|rule_port| {
                             port == Some(rule_port)
                                 || (port.is_none()
                                     && Self::default_port_for_scheme(url.scheme()) == rule_port)

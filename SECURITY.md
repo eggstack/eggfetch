@@ -92,9 +92,9 @@ Credential redaction is enforced by regression tests in the core crate. Any new 
 
 ## MSRV and Supply Chain
 
-The minimum supported Rust version (MSRV) is **1.80**. This is a conservative pin that avoids pulling in unstable compiler features and reduces the attack surface of the build toolchain.
+The minimum supported Rust version (MSRV) is **1.89**. This is a conservative pin that avoids pulling in unstable compiler features and reduces the attack surface of the build toolchain.
 
-The toolchain is pinned via `rust-toolchain.toml` on the stable channel. CI uses the same pinned version to ensure reproducible builds.
+The normal development and CI toolchain is pinned via `rust-toolchain.toml` and the workflows to the stable channel. Release qualification additionally verifies the exact Rust 1.89.0 MSRV toolchain.
 
 Dependency verification:
 
