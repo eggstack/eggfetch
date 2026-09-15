@@ -930,12 +930,7 @@ impl futures_core::Stream for LimitingStream {
 mod tests {
     use super::*;
     use futures_util::FutureExt;
-    #[cfg(any(
-        feature = "compression-gzip",
-        feature = "compression-brotli",
-        feature = "compression-zstd",
-        feature = "compression-deflate"
-    ))]
+    #[cfg(feature = "compression-gzip")]
     use futures_util::StreamExt;
 
     #[test]

@@ -2,7 +2,7 @@
 //! and broken-route suppression for HTTP/3.
 //!
 //! This module is the single owner of Alt-Svc semantics. It is logically
-//! separate from [`super::http3::H3Connector`]'s `sender_cache`: an origin
+//! separate from the H3 connector's `sender_cache`: an origin
 //! may advertise an alternative even when no QUIC connection exists, and a
 //! failed H3 connection must not erase the origin's advertised HTTPS
 //! semantics.
