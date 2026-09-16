@@ -1676,7 +1676,74 @@ pub(crate) async fn send_single_request(
                         None => None,
                     }
                 };
-                Box::pin(send_proxy_request(
+                #[cfg(any(feature = "http1", feature = "http2"))]
+                let forward_client = if url.scheme() == "http" && !proxy_config.is_socks() {
+                    Some(
+                        inner
+                            .forward_client(
+                                proxy_config,
+                                &url,
+                                hop_timeout.connect,
+                                remaining_total,
+                            )
+                            .await?,
+                    )
+                } else {
+                    None
+                };
+                #[cfg(any(feature = "http1", feature = "http2"))]
+                let connect_client = if url.scheme() == "https"
+                    && !proxy_config.is_socks()
+                    && transport_hints
+                        .target
+                        .as_ref()
+                        .is_none_or(|target| target.starts_with(b"/"))
+                    && proxied_target
+                        .as_ref()
+                        .is_none_or(|target| target.addresses().len() <= 1)
+                {
+                    let target = proxied_target
+                        .as_ref()
+                        .and_then(|target| target.addresses().first().copied());
+                    Some(
+                        inner
+                            .connect_client(
+                                proxy_config,
+                                &url,
+                                &transport_hints,
+                                target,
+                                hop_timeout.connect,
+                                remaining_total,
+                            )
+                            .await?,
+                    )
+                } else {
+                    None
+                };
+                let proxy_context = crate::transport::proxy::ProxyRequestContext {
+                    remaining_total,
+                    deadline,
+                    connect_timeout: hop_timeout.connect,
+                    proxy_connect_timeout: hop_timeout.connect,
+                    proxy_tls_timeout: hop_timeout.connect,
+                    write_timeout: hop_timeout.write,
+                    read_timeout: hop_timeout.read,
+                    http_version_policy: inner.config.http_version_policy,
+                    origin_tls_config: inner.config.tls_config.as_ref(),
+                    // Proxy TLS config is independent from origin TLS
+                    // config. When the proxy endpoint has no explicit TLS
+                    // configuration we use its own default trust roots.
+                    proxy_tls_config: proxy_config.proxy_tls_config(),
+                    proxied_target: proxied_target.as_ref(),
+                    socks_client,
+                    #[cfg(any(feature = "http1", feature = "http2"))]
+                    forward_client,
+                    #[cfg(any(feature = "http1", feature = "http2"))]
+                    connect_client,
+                    failure_context: failure_context.as_deref(),
+                    transport_metrics: Some(inner.transport_metrics.clone()),
+                };
+                let proxy_future = Box::pin(send_proxy_request(
                     &url,
                     &method,
                     &headers,
@@ -1684,31 +1751,9 @@ pub(crate) async fn send_single_request(
                     version,
                     proxy_config,
                     &transport_hints,
-                    &crate::transport::proxy::ProxyRequestContext {
-                        remaining_total,
-                        deadline,
-                        connect_timeout: hop_timeout.connect,
-                        proxy_connect_timeout: hop_timeout.connect,
-                        proxy_tls_timeout: hop_timeout.connect,
-                        write_timeout: hop_timeout.write,
-                        read_timeout: hop_timeout.read,
-                        http_version_policy: inner.config.http_version_policy,
-                        origin_tls_config: inner.config.tls_config.as_ref(),
-                        // Proxy TLS config is independent from origin TLS
-                        // config. When the proxy endpoint has no explicit
-                        // TLS configuration we use the proxy endpoint's own
-                        // default trust roots rather than reusing the origin
-                        // CA / client identity / verification policy. This
-                        // prevents a custom origin CA, origin mTLS identity,
-                        // or origin verify=False from leaking into the proxy
-                        // handshake.
-                        proxy_tls_config: proxy_config.proxy_tls_config(),
-                        proxied_target: proxied_target.as_ref(),
-                        socks_client,
-                        transport_metrics: Some(inner.transport_metrics.clone()),
-                    },
-                ))
-                .await?
+                    &proxy_context,
+                ));
+                send_with_total_timeout(proxy_future, remaining_total).await?
             }
             #[cfg(not(feature = "proxy"))]
             {

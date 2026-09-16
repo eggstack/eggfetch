@@ -291,7 +291,7 @@ See [`docs/reference/compatibility.md`](docs/reference/compatibility.md) for the
 
 ## Security
 
-- **Dependency auditing:** `cargo-deny` configured in `deny.toml`
+- **Dependency auditing:** run the fail-closed live preflight with `./scripts/check_security.sh` (`cargo-deny` and `cargo-audit` are intentionally outside routine CI)
 - **Secret redaction:** all `Debug`/`Display`/error output redacts credentials, cookies, bearer tokens, and proxy passwords
 - **Threat model:** see [docs/architecture/threat-model.md](docs/architecture/threat-model.md)
 - **Vulnerability reporting:** see [SECURITY.md](SECURITY.md)

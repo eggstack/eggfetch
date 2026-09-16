@@ -141,7 +141,8 @@ No critical or high-severity findings. Cross-origin credential stripping is comp
 - **Redirect/retry scope**: Both snapshots are retained across retries and
   same-origin redirects. Cross-origin redirects fail closed rather than
   reusing a caller-supplied physical route. SOCKS cache keys include the
-  snapshots, while hand-rolled HTTP proxy tunnels are not pooled.
+  snapshots. Successful ordinary forward and compatible CONNECT traffic uses
+  bounded Hyper pools; multi-target CONNECT fallback remains handshake-specific.
 - **Boundary**: These controls are native Rust transport controls only; the
   Python/HTTPX facades do not expose them and the core does not depend on an
   external Egress policy crate.

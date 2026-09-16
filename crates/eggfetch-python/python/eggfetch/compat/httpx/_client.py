@@ -359,7 +359,11 @@ def _convert_proxy(proxy):
             )
         return url
     if isinstance(proxy, str):
-        return proxy
+        # Keep URL user-info inside the compatibility Proxy object. The
+        # native adapter deliberately rejects credential-bearing URL strings,
+        # while HTTPX accepts them and sends the decoded credentials on the
+        # proxy leg (including SOCKS username/password negotiation).
+        return Proxy(proxy)
     return None
 
 

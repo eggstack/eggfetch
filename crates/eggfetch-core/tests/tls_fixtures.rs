@@ -154,19 +154,28 @@ impl TlsTestServer {
                                     };
                                     let mut buf_reader = BufReader::new(tls_stream);
                                     let mut request_line = String::new();
-                                    if buf_reader.read_line(&mut request_line).await.is_err() {
-                                        return;
-                                    }
                                     loop {
-                                        let mut line = String::new();
-                                        if buf_reader.read_line(&mut line).await.is_err() || line.trim().is_empty() {
-                                            break;
+                                        request_line.clear();
+                                        match buf_reader.read_line(&mut request_line).await {
+                                            Ok(0) | Err(_) => return,
+                                            Ok(_) if request_line.trim().is_empty() => return,
+                                            Ok(_) => {}
+                                        }
+                                        loop {
+                                            let mut line = String::new();
+                                            match buf_reader.read_line(&mut line).await {
+                                                Ok(0) | Err(_) => return,
+                                                Ok(_) if line.trim().is_empty() => break,
+                                                Ok(_) => {}
+                                            }
+                                        }
+                                        let response = b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\nConnection: keep-alive\r\n\r\nOK";
+                                        if buf_reader.get_mut().write_all(response).await.is_err()
+                                            || buf_reader.get_mut().flush().await.is_err()
+                                        {
+                                            return;
                                         }
                                     }
-                                    let response = b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK";
-                                    let mut stream = buf_reader.into_inner();
-                                    let _ = stream.write_all(response).await;
-                                    let _ = stream.flush().await;
                                 });
                             }
                             Err(_) => break,

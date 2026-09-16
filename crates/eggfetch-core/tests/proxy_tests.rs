@@ -1381,6 +1381,89 @@ async fn repeated_proxy_requests_create_separate_connections() {
     server.shutdown();
 }
 
+#[tokio::test]
+async fn hyper_forward_proxy_reuses_keep_alive_connection() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let accepted = Arc::new(AtomicUsize::new(0));
+    let accepted_task = accepted.clone();
+    let (shutdown_tx, mut shutdown_rx) = watch::channel(false);
+    tokio::spawn(async move {
+        tokio::select! {
+            result = listener.accept() => {
+                let (stream, _) = result.unwrap();
+                accepted_task.fetch_add(1, Ordering::SeqCst);
+                let mut stream = BufReader::new(stream);
+                loop {
+                    let mut request = Vec::new();
+                    loop {
+                        let mut line = Vec::new();
+                        if stream.read_until(b'\n', &mut line).await.unwrap() == 0 {
+                            return;
+                        }
+                        request.extend_from_slice(&line);
+                        if request.ends_with(b"\r\n\r\n") {
+                            break;
+                        }
+                    }
+                    stream
+                        .get_mut()
+                        .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: keep-alive\r\n\r\nok")
+                        .await
+                        .unwrap();
+                    stream.get_mut().flush().await.unwrap();
+                }
+            }
+            _ = shutdown_rx.changed() => {}
+        }
+    });
+
+    let client = test_client(&format!("http://127.0.0.1:{port}"));
+    for path in ["/one", "/two"] {
+        let mut response = client
+            .get(&format!("http://origin.invalid{path}"))
+            .unwrap()
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.text().await.unwrap(), "ok");
+    }
+    assert_eq!(accepted.load(Ordering::SeqCst), 1);
+    let _ = shutdown_tx.send(true);
+}
+
+#[tokio::test]
+async fn hyper_connect_proxy_reuses_keep_alive_tunnel() {
+    let ca = CertAuthority::new();
+    let origin = TlsTestServer::start(&ca, &["origin.invalid"]).await;
+    let proxy_server = HttpProxyServer::start(HttpProxyConfig::default()).await;
+    let proxy = Proxy::all(&proxy_server.url()).unwrap();
+    let client = Client::builder()
+        .proxy(proxy)
+        .tls_config(
+            TlsConfig::builder()
+                .ca_certificate_pem(&ca.cert_pem())
+                .unwrap()
+                .build(),
+        )
+        .build();
+
+    for _ in 0..2 {
+        let mut response = client
+            .get(&format!("https://origin.invalid:{}/", origin.port()))
+            .unwrap()
+            .proxy_target_addresses([format!("127.0.0.1:{}", origin.port()).parse().unwrap()])
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.text().await.unwrap(), "OK");
+    }
+    assert_eq!(proxy_server.connection_count(), 1);
+
+    proxy_server.shutdown();
+    origin.shutdown();
+}
+
 // ---------------------------------------------------------------------------
 // CONNECT Authority Validation Tests
 // ---------------------------------------------------------------------------

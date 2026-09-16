@@ -137,7 +137,11 @@ Client certificates (mTLS) are supported via `TlsConfig::builder().client_certif
 
 ## Dependency Audit
 
-eggfetch tracks Rust advisory databases and runs `cargo audit` as part of CI. Python dependencies in the test harness are pinned and audited. The workspace uses `forbid(unsafe_code)` so no `unsafe` blocks are introduced without explicit review.
+Run `./scripts/check_security.sh` for the fail-closed live RustSec preflight;
+routine CI intentionally does not depend on time-varying advisory databases.
+Release-critical Python build tools are pinned in
+`scripts/release-requirements.txt`. The workspace uses `forbid(unsafe_code)`
+except for the narrowly scoped FFI/Node ABI adapters.
 
 ## Supported Versions
 

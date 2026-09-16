@@ -141,11 +141,20 @@ rejected. Both physical snapshots are caller-validated, immutable across
 retries and same-origin redirects, and rejected on cross-origin redirects.
 The native direct `resolved_addresses()` option remains direct-only.
 
-The hand-rolled HTTP proxy/CONNECT paths do not pool tunnels. SOCKS client
-cache keys include the logical proxy plus any proxy-peer and ultimate-target
-snapshots, preventing incompatible physical routes from sharing a pooled
-connection. HTTPS CONNECT candidates advance only on typed 502/504 proxy
-rejection. For multiple pinned SOCKS5 targets, only the protocol's
+Successful ordinary HTTP forward-proxy responses and compatible HTTPS CONNECT
+origin responses are framed by Hyper's legacy client and reuse its bounded
+keep-alive pool. The route connector still owns proxy TCP/TLS setup and the
+CONNECT handshake, including structured rejection parsing. Forward clients
+are isolated by destination origin and proxy-leg policy; CONNECT clients also
+include origin TLS/SNI, protocol policy, credentials, and a single pinned
+target in their opaque cache identity. Hyper's generic `Tunnel` remains a
+recorded no-go because it cannot preserve these contracts. Multi-address
+CONNECT fallback retains the handshake-specific path so typed 502/504 retry
+behavior is not weakened. SOCKS client cache keys include the logical proxy
+plus any proxy-peer and ultimate-target snapshots, preventing incompatible
+physical routes from sharing a pooled connection. HTTPS CONNECT candidates
+advance only on typed 502/504 proxy rejection. For multiple pinned SOCKS5
+targets, only the protocol's
 destination-specific 0x03 (`network unreachable`), 0x04 (`host unreachable`),
 and 0x05 (`connection refused`) replies permit trying the next address.
 Authentication, proxy-policy, protocol, malformed-response, and other
@@ -283,10 +292,10 @@ cancelled establishment, or client teardown. `TransportIoTimeout` applies
 only after establishment and resets on real byte progress, including
 vectored writes and pending flush/shutdown.
 
-This is a Hyper transport control, not a universal socket cap. The
-hand-rolled HTTP forward/CONNECT proxy path and the independent QUIC/H3 path
-retain their existing proxy-phase and QUIC idle semantics and are outside
-this wrapper.
+This is a Hyper transport control, not a universal socket cap. HTTP
+forward-proxy and compatible CONNECT connectors participate in the wrapper;
+the independent QUIC/H3 path retains its existing proxy-independent idle
+semantics and remains outside it.
 
 The tunneled body stream knows the declared `Content-Length` (when the
 response carries an explicit non-chunked length) and uses it only to tell

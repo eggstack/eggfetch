@@ -585,7 +585,7 @@ async = false
 tests = ["test_h2_differential.py::TestH2ProxyConnectResidual"]
 result = "bounded-difference"
 phase = 4
-notes = "The proxy CONNECT handshake is HTTP/1.1 and the post-CONNECT origin path remains the hand-rolled HTTP/1.1 transport. Direct TLS, cleartext prior knowledge, and specialized direct/UDS H2 paths are separately covered by H2-001 through H2-007."
+notes = "The proxy CONNECT handshake is HTTP/1.1. Compatible single-target requests use the Hyper-managed origin connection; multi-address or otherwise unsupported combinations retain the legacy HTTP/1.1 fallback so proxy rejection and pinning semantics remain typed. Direct TLS, cleartext prior knowledge, and specialized direct/UDS H2 paths are separately covered by H2-001 through H2-007."
 
 [[case]]
 id = "H2-010"

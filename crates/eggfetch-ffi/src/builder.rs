@@ -438,12 +438,20 @@ pub unsafe extern "C" fn eggfetch_client_builder_danger_accept_invalid_certs(
     accept: i32,
 ) -> i32 {
     crate::ffi_guard!(-1, {
-        let Some(handle) = handle.as_mut() else {
+        #[cfg(not(feature = "tls-rustls"))]
+        {
+            let _ = (handle, accept);
             return -1;
-        };
-        update_builder(handle, |builder| {
-            builder.danger_accept_invalid_certs(accept != 0)
-        })
+        }
+        #[cfg(feature = "tls-rustls")]
+        {
+            let Some(handle) = handle.as_mut() else {
+                return -1;
+            };
+            update_builder(handle, |builder| {
+                builder.danger_accept_invalid_certs(accept != 0)
+            })
+        }
     })
 }
 

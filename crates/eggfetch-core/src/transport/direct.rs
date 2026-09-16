@@ -164,6 +164,34 @@ where
     }
 }
 
+/// Issue a request through a forward proxy. Hyper owns framing and pooling,
+/// but parse-size failures retain eggfetch's proxy-specific public error
+/// classification.
+#[cfg(feature = "proxy")]
+pub(crate) async fn send_proxy_request<C>(
+    hyper_client: &hyper_util::client::legacy::Client<C, HyperRequestBody>,
+    request: http::Request<HyperRequestBody>,
+    url: url::Url,
+    trace: Option<&dyn TraceObserver>,
+    failure_context: Option<&crate::error::RequestFailureContext>,
+) -> Result<Response>
+where
+    C: hyper_util::client::legacy::connect::Connect + Clone + Send + Sync + 'static,
+{
+    emit_send_start(trace, request.method().as_str(), &request.uri().to_string())?;
+    let result = hyper_client
+        .request(request)
+        .await
+        .map_err(|error| map_send_error_for_proxy(error, failure_context));
+    match result {
+        Ok(hyper_response) => Ok(finish_hyper_response(hyper_response, url, trace).await),
+        Err(error) => {
+            emit_send_failed(trace);
+            Err(error)
+        }
+    }
+}
+
 /// Issue a Hyper request and return its raw response body for the native
 /// frame-preserving API. This deliberately stops at the response-header
 /// boundary; body ownership is transferred to `NativeResponseBody` by the
@@ -564,6 +592,26 @@ pub(crate) fn map_send_error_with_context(
         }
     }
     Error::HyperClient(std::sync::Arc::new(err))
+}
+
+#[cfg(feature = "proxy")]
+fn map_send_error_for_proxy(
+    err: hyper_util::client::legacy::Error,
+    failure_context: Option<&crate::error::RequestFailureContext>,
+) -> Error {
+    let mut current: Option<&dyn std::error::Error> = Some(&err);
+    for _ in 0..32 {
+        let Some(error) = current else { break };
+        if let Some(hyper_error) = error.downcast_ref::<hyper::Error>() {
+            if hyper_error.is_parse() {
+                return Error::MalformedProxyResponse(
+                    "proxy response could not be parsed by Hyper".into(),
+                );
+            }
+        }
+        current = error.source();
+    }
+    map_send_error_with_context(err, failure_context)
 }
 
 /// Attempt to classify a `hyper::Error` as a specific HTTP/2 error.

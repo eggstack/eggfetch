@@ -30,7 +30,6 @@ use errors::map_err;
 use headers::PyHeaders;
 use limits::PyLimits;
 use multipart::PyFile;
-use proxy::ProxyOverride;
 use response::PyResponse;
 use retry::PyRetry;
 use streaming::{
@@ -81,19 +80,7 @@ fn request<'py>(
     retries: Option<&Bound<'py, PyAny>>,
     limits: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let request_preparation::PreparedRequest {
-        method: http_method,
-        url: target_url,
-        headers: rust_headers,
-        body: request_body,
-        timeout: rust_timeout,
-        auth: auth_override,
-        proxy: proxy_override,
-        retry: retry_override,
-        follow_redirects,
-        max_redirects,
-        ..
-    } = request_preparation::prepare_request(
+    let prepared = request_preparation::prepare_request(
         py,
         method,
         url,
@@ -119,63 +106,34 @@ fn request<'py>(
 
     let tls_config = tls::build_tls_config(verify, cert, None)?;
 
-    let mut builder = eggfetch_core::Client::builder()
+    let mut client_builder = eggfetch_core::Client::builder()
         .redirect_policy(eggfetch_core::redirect::RedirectPolicy::new(
             follow_redirects.unwrap_or(false),
             max_redirects.unwrap_or(20),
         ))
         .tls_config(tls_config);
 
-    match auth_override {
-        auth::AuthOverride::Inherit | auth::AuthOverride::Disable => {}
-        auth::AuthOverride::Override(a) => {
-            builder = builder.auth(a);
-        }
-    }
-
-    if let proxy::ProxyOverride::Override(ref url) = proxy_override {
-        let p = eggfetch_core::Proxy::all(url).map_err(map_err)?;
-        builder = builder.proxy(p);
-    }
-
     if let Some(l) = limits {
         let py_limits: PyLimits = l.extract()?;
-        builder = builder.limits(py_limits.inner);
+        client_builder = client_builder.limits(py_limits.inner);
     }
 
-    let client = builder.build();
+    let client = client_builder.build();
+    let dispatch = request_preparation::prepare_core_dispatch(
+        &client,
+        prepared,
+        request_preparation::RequestDispatchDefaults {
+            redirect_policy: eggfetch_core::redirect::RedirectPolicy::new(
+                follow_redirects.unwrap_or(false),
+                max_redirects.unwrap_or(20),
+            ),
+            decompress,
+        },
+    )?;
+    let builder = dispatch.builder;
 
     let result = py.detach(|| {
         runtime.block_on(async {
-            let mut builder = client
-                .request(http_method, target_url.as_str())
-                .map_err(map_err)?;
-
-            builder = builder.headers(rust_headers);
-
-            if let Some(body) = request_body {
-                builder = builder.body(body);
-            }
-
-            if let Some(t) = rust_timeout {
-                builder = builder.timeout(t);
-            }
-
-            if let Some(d) = decompress {
-                builder = builder.decompress(d);
-            }
-
-            match proxy_override {
-                ProxyOverride::Inherit | ProxyOverride::Override(_) => {}
-                ProxyOverride::Disable => {
-                    builder = builder.without_proxy();
-                }
-            }
-
-            if let Some(retry_policy) = retry_override.as_ref() {
-                builder = builder.retry(retry_policy.clone());
-            }
-
             let mut response = Box::pin(builder.send()).await.map_err(map_err)?;
             let content = response.bytes().await.map_err(map_err)?;
             Ok::<_, PyErr>((response, content))

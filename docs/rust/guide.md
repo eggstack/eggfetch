@@ -108,9 +108,9 @@ HTTP/3 uses its separate QUIC lifecycle and retry rules.
 `PhysicalConnectionPolicy` caps live Hyper connections, including idle pooled
 connections, while `TransportIoTimeout` guards inactivity after establishment.
 They are native Hyper-route controls: the policy covers standard, direct,
-resolved-target, SNI, custom-dialer, UDS, and SOCKS clients, while the
-hand-rolled HTTP proxy and experimental HTTP/3/QUIC paths keep their existing
-controls. `max_live` must be greater than zero when set, and
+resolved-target, SNI, custom-dialer, UDS, SOCKS, HTTP forward-proxy, and
+compatible HTTPS CONNECT clients, while the experimental HTTP/3/QUIC path
+keeps its existing controls. `max_live` must be greater than zero when set, and
 `admission_timeout` is meaningful only with a live cap. Use
 `client.transport_metrics().snapshot()` for admission/live/high-water and
 I/O-timeout counters. Admission waits are distinct from `Timeout.pool`, and
@@ -401,8 +401,8 @@ validate these physical addresses; eggfetch does not add an authorization or
 SSRF policy engine.
 
 Both snapshots are immutable across retries and same-origin redirects, never
-fall back to DNS, and cannot be reused across cross-origin redirects. The
-hand-rolled proxy paths do not pool proxy tunnels; the SOCKS client cache keys
+fall back to DNS, and cannot be reused across cross-origin redirects. Forward
+and compatible CONNECT proxy clients use bounded Hyper pools; the SOCKS client cache keys
 include proxy-peer and target snapshots so incompatible physical routes do
 not share a connection. HTTPS CONNECT candidates advance only on typed 502/504
 proxy rejection. Local-SOCKS5 candidates advance only on replies 0x03 (network

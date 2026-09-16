@@ -73,12 +73,15 @@ and parity case `H2-008`.
 
 ## HTTP/2 through HTTP CONNECT
 
-For an HTTPS origin reached through an HTTP proxy, the CONNECT handshake and
-post-CONNECT origin path remain the hand-rolled HTTP/1.1 transport. Thus an
-H2-only request through this proxy route does not use HTTP/2 framing at the
-origin. Direct TLS, cleartext prior knowledge, direct/local-address and
-socket-option routes, SNI override, SOCKS, and UDS H2 are separately enforced
-and tested.
+For an HTTPS origin reached through an HTTP proxy, the CONNECT handshake is
+still HTTP/1.1. Ordinary single-target requests then use the Hyper-managed
+origin connection when the route is compatible; multi-address target
+snapshots and other unsupported framing combinations retain the legacy
+HTTP/1.1 fallback so typed proxy rejection and pinning semantics remain
+unchanged. The compatibility fixture continues to assert the bounded
+H2-only behavior of its local proxy/server combination. Direct TLS, cleartext
+prior knowledge, direct/local-address and socket-option routes, SNI override,
+SOCKS, and UDS H2 are separately enforced and tested.
 
 Evidence: `TestH2ProxyConnectResidual::test_candidate_proxy_connect_remains_http1`
 and parity case `H2-009`.

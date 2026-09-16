@@ -105,6 +105,13 @@ pub fn parse_proxy(proxy: Option<&Bound<'_, PyAny>>) -> PyResult<ProxyOverride> 
                 return Ok(ProxyOverride::Disable);
             }
             if let Ok(url) = val.extract::<String>() {
+                if let Ok(parsed) = url::Url::parse(&url) {
+                    if !parsed.username().is_empty() || parsed.password().is_some() {
+                        return Err(crate::errors::ProxyError::new_err(
+                            "proxy URL credentials must be supplied with Proxy(auth=...), not embedded in the URL",
+                        ));
+                    }
+                }
                 return Ok(ProxyOverride::Override(normalize_compat_proxy_url(&url)));
             }
             // Handle Proxy objects: extract URL and embed auth if present.

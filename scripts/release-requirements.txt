@@ -1,0 +1,4 @@
+# Exact versions for tools that build or validate published Python artifacts.
+# Update these deliberately in a reviewed repository diff.
+maturin==1.14.1
+twine==6.1.0

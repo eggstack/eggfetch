@@ -34,8 +34,18 @@ Version numbers follow [Semantic Versioning](https://semver.org/). Until 1.0, mi
 
    Package validation is fail-closed and requires a clean worktree. `eggfetch-core` receives a full `cargo publish --dry-run` since it has no internal dependencies. Dependent crates (`eggfetch-cli`, `eggfetch-ffi`, `eggfetch-python`, `eggfetch-node`) receive local package-structure validation via `cargo package --list` and manifest version verification, because their internal dependencies are not yet on crates.io. Full `cargo publish --dry-run -p <crate>` runs at publication time, after each crate's dependencies are visible in the registry.
 
-7. **Review package contents** for changed packaging surfaces.
-8. **Confirm credentials exist only in your local Cargo configuration or temporary environment.**
+7. **Run the live dependency-security preflight:**
+
+   ```sh
+   ./scripts/check_security.sh
+   ```
+
+   This is deliberately separate from routine and extended validation because
+   it refreshes time-dependent advisory databases. It must pass immediately
+   before crates.io publication.
+
+8. **Review package contents** for changed packaging surfaces.
+9. **Confirm credentials exist only in your local Cargo configuration or temporary environment.**
 
 ## crates.io Publication
 

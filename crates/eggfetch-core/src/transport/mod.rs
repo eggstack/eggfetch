@@ -67,6 +67,22 @@ pub(crate) type TimeoutSocksClient = hyper_util::client::legacy::Client<
     HyperRequestBody,
 >;
 
+/// Hyper client for ordinary HTTP forward-proxy requests. The connector
+/// establishes the proxy leg and marks it as proxied so Hyper owns absolute
+/// form framing, response parsing, and connection reuse.
+#[cfg(feature = "proxy")]
+pub(crate) type TimeoutForwardClient = hyper_util::client::legacy::Client<
+    lifecycle::LifecycleConnector<connect_timeout::ConnectTimeout<proxy::ForwardProxyConnector>>,
+    HyperRequestBody,
+>;
+
+/// Hyper client for one HTTPS origin reached through an HTTP CONNECT tunnel.
+#[cfg(feature = "proxy")]
+pub(crate) type TimeoutConnectClient = hyper_util::client::legacy::Client<
+    lifecycle::LifecycleConnector<connect_timeout::ConnectTimeout<connect::ConnectProxyConnector>>,
+    HyperRequestBody,
+>;
+
 pub mod alt_svc;
 pub(crate) mod connect_timeout;
 pub(crate) mod custom_connector {

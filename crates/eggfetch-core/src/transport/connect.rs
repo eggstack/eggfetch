@@ -15,6 +15,227 @@ use super::proxy::{
     ProxyRequestContext,
 };
 
+/// Internal identity for one reusable CONNECT tunnel client.
+#[cfg(any(feature = "http1", feature = "http2"))]
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub(crate) struct ConnectRouteKey {
+    proxy_identity: Vec<u8>,
+    origin: String,
+    target: Option<SocketAddr>,
+    origin_tls_identity: usize,
+    sni_hostname: Option<String>,
+    http_version_policy: crate::http_version::HttpVersionPolicy,
+    connect_timeout: Option<std::time::Duration>,
+    proxy_tls_timeout: Option<std::time::Duration>,
+}
+
+#[cfg(any(feature = "http1", feature = "http2"))]
+impl ConnectRouteKey {
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "the cache identity must enumerate every connection-affecting CONNECT policy"
+    )]
+    pub(crate) fn new(
+        proxy: &ProxyConfig,
+        origin: &url::Url,
+        target: Option<SocketAddr>,
+        origin_tls_config: Option<&crate::tls::TlsConfig>,
+        sni_hostname: Option<&str>,
+        http_version_policy: crate::http_version::HttpVersionPolicy,
+        connect_timeout: Option<std::time::Duration>,
+        proxy_tls_timeout: Option<std::time::Duration>,
+    ) -> Self {
+        Self {
+            proxy_identity: proxy.connection_identity(),
+            origin: format!(
+                "{}://{}:{}",
+                origin.scheme(),
+                origin.host_str().unwrap_or_default(),
+                origin.port_or_known_default().unwrap_or(443)
+            ),
+            target,
+            origin_tls_identity: origin_tls_config
+                .map_or(0, crate::tls::TlsConfig::connection_identity),
+            sni_hostname: sni_hostname.map(str::to_owned),
+            http_version_policy,
+            connect_timeout,
+            proxy_tls_timeout,
+        }
+    }
+}
+
+/// Origin-ready TLS stream returned by the Hyper CONNECT connector.
+#[cfg(any(feature = "http1", feature = "http2"))]
+pub(crate) struct ConnectProxyStream {
+    inner: tokio_rustls::client::TlsStream<ProxyTunnel<super::proxy::ProxyIo>>,
+}
+
+#[cfg(any(feature = "http1", feature = "http2"))]
+impl tokio::io::AsyncRead for ConnectProxyStream {
+    fn poll_read(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        buf: &mut tokio::io::ReadBuf<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        std::pin::Pin::new(&mut self.inner).poll_read(cx, buf)
+    }
+}
+
+#[cfg(any(feature = "http1", feature = "http2"))]
+impl tokio::io::AsyncWrite for ConnectProxyStream {
+    fn poll_write(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        bytes: &[u8],
+    ) -> std::task::Poll<std::io::Result<usize>> {
+        std::pin::Pin::new(&mut self.inner).poll_write(cx, bytes)
+    }
+
+    fn poll_flush(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        std::pin::Pin::new(&mut self.inner).poll_flush(cx)
+    }
+
+    fn poll_shutdown(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        std::pin::Pin::new(&mut self.inner).poll_shutdown(cx)
+    }
+}
+
+#[cfg(any(feature = "http1", feature = "http2"))]
+impl hyper_util::client::legacy::connect::Connection for ConnectProxyStream {
+    fn connected(&self) -> hyper_util::client::legacy::connect::Connected {
+        let connected = hyper_util::client::legacy::connect::Connected::new();
+        if self
+            .inner
+            .get_ref()
+            .1
+            .alpn_protocol()
+            .is_some_and(|protocol| protocol == b"h2")
+        {
+            connected.negotiated_h2()
+        } else {
+            connected
+        }
+    }
+}
+
+/// Narrow CONNECT connector retaining eggfetch's handshake policy while
+/// returning an origin-ready stream to Hyper's reusable client.
+#[cfg(any(feature = "http1", feature = "http2"))]
+#[derive(Clone)]
+pub(crate) struct ConnectProxyConnector {
+    dest_url: url::Url,
+    proxy: ProxyConfig,
+    transport_hints: crate::request::TransportHints,
+    proxied_target: Option<SocketAddr>,
+    origin_tls_config: Option<crate::tls::TlsConfig>,
+    connect_timeout: Option<std::time::Duration>,
+    proxy_connect_timeout: Option<std::time::Duration>,
+    proxy_tls_timeout: Option<std::time::Duration>,
+    setup_timeout: Option<std::time::Duration>,
+    http_version_policy: crate::http_version::HttpVersionPolicy,
+    metrics: std::sync::Arc<crate::transport::metrics::TransportMetrics>,
+}
+
+#[cfg(any(feature = "http1", feature = "http2"))]
+impl ConnectProxyConnector {
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn new(
+        dest_url: url::Url,
+        proxy: ProxyConfig,
+        transport_hints: crate::request::TransportHints,
+        proxied_target: Option<SocketAddr>,
+        origin_tls_config: Option<crate::tls::TlsConfig>,
+        connect_timeout: Option<std::time::Duration>,
+        proxy_connect_timeout: Option<std::time::Duration>,
+        proxy_tls_timeout: Option<std::time::Duration>,
+        setup_timeout: Option<std::time::Duration>,
+        http_version_policy: crate::http_version::HttpVersionPolicy,
+        metrics: std::sync::Arc<crate::transport::metrics::TransportMetrics>,
+    ) -> Self {
+        Self {
+            dest_url,
+            proxy,
+            transport_hints,
+            proxied_target,
+            origin_tls_config,
+            connect_timeout,
+            proxy_connect_timeout,
+            proxy_tls_timeout,
+            setup_timeout,
+            http_version_policy,
+            metrics,
+        }
+    }
+}
+
+#[cfg(any(feature = "http1", feature = "http2"))]
+impl tower_service::Service<http::Uri> for ConnectProxyConnector {
+    type Response = hyper_util::rt::TokioIo<ConnectProxyStream>;
+    type Error = Box<dyn std::error::Error + Send + Sync>;
+    type Future = std::pin::Pin<
+        Box<
+            dyn std::future::Future<Output = std::result::Result<Self::Response, Self::Error>>
+                + Send,
+        >,
+    >;
+
+    fn poll_ready(
+        &mut self,
+        _cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<std::result::Result<(), Self::Error>> {
+        std::task::Poll::Ready(Ok(()))
+    }
+
+    fn call(&mut self, _dst: http::Uri) -> Self::Future {
+        let dest_url = self.dest_url.clone();
+        let proxy = self.proxy.clone();
+        let transport_hints = self.transport_hints.clone();
+        let proxied_target = self.proxied_target;
+        let origin_tls_config = self.origin_tls_config.clone();
+        let connect_timeout = self.connect_timeout;
+        let proxy_connect_timeout = self.proxy_connect_timeout;
+        let proxy_tls_timeout = self.proxy_tls_timeout;
+        let setup_timeout = self.setup_timeout;
+        let http_version_policy = self.http_version_policy;
+        let metrics = self.metrics.clone();
+        Box::pin(async move {
+            let ctx = ProxyRequestContext {
+                remaining_total: None,
+                deadline: setup_timeout.map(|timeout| std::time::Instant::now() + timeout),
+                connect_timeout,
+                proxy_connect_timeout,
+                proxy_tls_timeout,
+                write_timeout: None,
+                read_timeout: None,
+                http_version_policy,
+                origin_tls_config: origin_tls_config.as_ref(),
+                proxy_tls_config: proxy.proxy_tls_config(),
+                proxied_target: None,
+                socks_client: None,
+                #[cfg(any(feature = "http1", feature = "http2"))]
+                forward_client: None,
+                #[cfg(any(feature = "http1", feature = "http2"))]
+                connect_client: None,
+                failure_context: None,
+                transport_metrics: Some(metrics),
+            };
+            let stream =
+                establish_https_tunnel(&dest_url, &proxy, &transport_hints, &ctx, proxied_target)
+                    .await
+                    .map_err(|error| Box::new(error) as Box<dyn std::error::Error + Send + Sync>)?;
+            Ok(hyper_util::rt::TokioIo::new(ConnectProxyStream {
+                inner: stream,
+            }))
+        })
+    }
+}
+
 /// Send an HTTPS request through an HTTP proxy using CONNECT tunneling.
 #[allow(clippy::too_many_lines)] // CONNECT owns the ordered proxy/tunnel/origin phases.
 #[allow(clippy::too_many_arguments)] // Transport hints added as a typed parameter.
@@ -28,6 +249,20 @@ pub(crate) async fn send_https_connect_request(
     transport_hints: &crate::request::TransportHints,
     ctx: &ProxyRequestContext<'_>,
 ) -> Result<Response> {
+    #[cfg(any(feature = "http1", feature = "http2"))]
+    if let Some(client) = ctx.connect_client.as_ref() {
+        return send_https_connect_request_hyper(
+            dest_url,
+            method,
+            headers,
+            body,
+            version,
+            transport_hints,
+            client,
+            ctx.failure_context,
+        )
+        .await;
+    }
     let targets: Vec<Option<SocketAddr>> = match ctx.proxied_target {
         Some(target) => target.addresses().iter().copied().map(Some).collect(),
         None => vec![None],
@@ -69,6 +304,69 @@ pub(crate) async fn send_https_connect_request(
     Err(last_error.expect("at least one CONNECT target was attempted"))
 }
 
+/// Send an origin-form request over a CONNECT tunnel whose transport and
+/// lifecycle are owned by Hyper's reusable client.
+#[cfg(any(feature = "http1", feature = "http2"))]
+#[allow(clippy::too_many_arguments)]
+async fn send_https_connect_request_hyper(
+    dest_url: &url::Url,
+    method: &http::Method,
+    headers: &Headers,
+    body: RequestBody,
+    version: http::Version,
+    transport_hints: &crate::request::TransportHints,
+    client: &crate::transport::TimeoutConnectClient,
+    failure_context: Option<&crate::error::RequestFailureContext>,
+) -> Result<Response> {
+    let target = if let Some(target) = transport_hints.target.as_deref() {
+        crate::pipeline::validate_target(target)?;
+        std::str::from_utf8(target)
+            .map_err(|_| Error::InvalidUrl("target extension is not valid UTF-8".into()))?
+            .to_owned()
+    } else {
+        match dest_url.query() {
+            Some(query) => format!("{}?{query}", dest_url.path()),
+            None => dest_url.path().to_owned(),
+        }
+    };
+    // Hyper needs an absolute URI to select the connector. Because the
+    // connector reports an origin connection, Hyper emits only the
+    // path-and-query on the wire. Preserve ordinary origin-form overrides by
+    // attaching them to the logical authority; unusual targets fall back to
+    // the legacy path below.
+    let request_uri = if target.starts_with('/') {
+        format!(
+            "{}://{}{}",
+            dest_url.scheme(),
+            dest_url.host_str().unwrap_or_default(),
+            target
+        )
+    } else {
+        dest_url.as_str().to_owned()
+    };
+    let uri = request_uri
+        .parse::<http::Uri>()
+        .map_err(|error| Error::RequestBuild(format!("invalid CONNECT target: {error}")))?;
+    let mut request = http::Request::builder()
+        .method(method)
+        .uri(uri)
+        .version(version);
+    for (name, value) in headers.iter() {
+        request = request.header(name, value);
+    }
+    let request = request
+        .body(body.into_http_body())
+        .map_err(|error| Error::RequestBuild(error.to_string()))?;
+    crate::transport::direct::send_request(
+        client,
+        request,
+        dest_url.clone(),
+        transport_hints.trace.as_deref(),
+        failure_context,
+    )
+    .await
+}
+
 fn target_failure_may_retry(error: &Error) -> bool {
     matches!(
         error,
@@ -77,6 +375,125 @@ fn target_failure_may_retry(error: &Error) -> bool {
             ..
         }
     )
+}
+
+/// Establish and authenticate an HTTPS CONNECT tunnel, returning the
+/// origin-ready TLS stream. Hyper owns HTTP framing after this boundary.
+#[allow(clippy::too_many_lines)]
+#[allow(clippy::too_many_arguments)]
+pub(crate) async fn establish_https_tunnel(
+    dest_url: &url::Url,
+    proxy_config: &ProxyConfig,
+    transport_hints: &crate::request::TransportHints,
+    ctx: &ProxyRequestContext<'_>,
+    proxied_target: Option<SocketAddr>,
+) -> Result<tokio_rustls::client::TlsStream<ProxyTunnel<super::proxy::ProxyIo>>> {
+    use tokio::io::AsyncWriteExt;
+    let mut stream = connect_to_proxy(
+        proxy_config,
+        ctx.proxy_connect_timeout,
+        ctx.proxy_tls_timeout,
+        ctx.deadline,
+        ctx.proxy_tls_config,
+        ctx.transport_metrics.as_ref(),
+    )
+    .await?;
+    let dest_host = dest_url
+        .host_str()
+        .ok_or_else(|| Error::InvalidUrl("destination URL has no host".into()))?;
+    let dest_port = dest_url.port_or_known_default().unwrap_or(443);
+    let connect_target = proxied_target.map_or_else(
+        || authority_form_target(dest_host, dest_port),
+        |address| authority_form_target(&address.ip().to_string(), address.port()),
+    );
+    let mut connect_req =
+        format!("CONNECT {connect_target} HTTP/1.1\r\nHost: {connect_target}\r\n");
+    if let Some(auth) = proxy_config.auth() {
+        use std::fmt::Write;
+        let _ = write!(
+            connect_req,
+            "Proxy-Authorization: {}\r\n",
+            auth.header_value()
+        );
+    }
+    for (name, value) in proxy_config.proxy_headers().iter() {
+        if name.as_str().eq_ignore_ascii_case("proxy-authorization") {
+            continue;
+        }
+        if let Ok(value_str) = value.to_str() {
+            use std::fmt::Write;
+            let _ = write!(connect_req, "{}: {value_str}\r\n", name.as_str());
+        }
+    }
+    connect_req.push_str("\r\n");
+    if connect_req.len() > crate::headers::MAX_REQUEST_HEADER_BYTES {
+        return Err(Error::RequestBuild(format!(
+            "request headers exceed maximum size of {} bytes",
+            crate::headers::MAX_REQUEST_HEADER_BYTES
+        )));
+    }
+    let write = stream.write_all(connect_req.as_bytes());
+    match effective_timeout(ctx.deadline, ctx.write_timeout)? {
+        Some(duration) => tokio::time::timeout(duration, write)
+            .await
+            .map_err(|_| Error::Timeout {
+                phase: TimeoutPhase::Write,
+                elapsed: duration,
+            })?
+            .map_err(|e| Error::ProxyConnect(format!("failed to send CONNECT: {e}")))?,
+        None => write
+            .await
+            .map_err(|e| Error::ProxyConnect(format!("failed to send CONNECT: {e}")))?,
+    }
+    let read = read_proxy_response(&mut stream);
+    let (status, resp_headers, initial_buf, _reason_phrase) =
+        match effective_timeout(ctx.deadline, ctx.read_timeout)? {
+            Some(duration) => {
+                tokio::time::timeout(duration, read)
+                    .await
+                    .map_err(|_| Error::Timeout {
+                        phase: TimeoutPhase::Read,
+                        elapsed: duration,
+                    })??
+            }
+            None => read.await?,
+        };
+    if status != 200 {
+        return Err(Error::ProxyConnectRejected {
+            status,
+            body: proxy_rejection_body(&resp_headers, &initial_buf),
+        });
+    }
+    let tunnel = ProxyTunnel::new(initial_buf, stream.into_inner());
+    let default_tls_config = crate::tls::TlsConfig::default();
+    let tls_config = ctx.origin_tls_config.unwrap_or(&default_tls_config);
+    let rustls_config = tls_config
+        .build_rustls_config()
+        .map_err(|e| Error::Tls(format!("failed to build TLS config for tunnel: {e}")))?;
+    let rustls_config = crate::client::configure_tls_alpn(
+        rustls_config,
+        crate::http_version::HttpVersionPolicyEnabler::from_policy(ctx.http_version_policy),
+    );
+    let tls_connector = tokio_rustls::TlsConnector::from(std::sync::Arc::new(rustls_config));
+    let sni_name = transport_hints.sni_hostname.as_deref().unwrap_or(dest_host);
+    let domain = crate::transport::direct_connector::tls_server_name(sni_name)
+        .map_err(|e| Error::Tls(format!("invalid TLS server name: {e}")))?;
+    let tls_handshake = tls_connector.connect(domain, tunnel);
+    match effective_timeout(ctx.deadline, ctx.connect_timeout)? {
+        Some(dur) => match tokio::time::timeout(dur, tls_handshake).await {
+            Ok(Ok(stream)) => Ok(stream),
+            Ok(Err(e)) => Err(Error::Tls(format!(
+                "TLS handshake through tunnel failed: {e}"
+            ))),
+            Err(_) => Err(Error::Timeout {
+                phase: TimeoutPhase::Connect,
+                elapsed: dur,
+            }),
+        },
+        None => tls_handshake
+            .await
+            .map_err(|e| Error::Tls(format!("TLS handshake through tunnel failed: {e}"))),
+    }
 }
 
 #[allow(clippy::too_many_lines)] // CONNECT owns the ordered proxy/tunnel/origin phases.
@@ -92,139 +509,9 @@ async fn send_https_connect_request_once(
     ctx: &ProxyRequestContext<'_>,
     proxied_target: Option<SocketAddr>,
 ) -> Result<Response> {
-    use tokio::io::AsyncWriteExt;
-
-    let mut stream = connect_to_proxy(
-        proxy_config,
-        ctx.proxy_connect_timeout,
-        ctx.proxy_tls_timeout,
-        ctx.deadline,
-        ctx.proxy_tls_config,
-        ctx.transport_metrics.as_ref(),
-    )
-    .await?;
-
-    // Send CONNECT request.
-    let dest_host = dest_url
-        .host_str()
-        .ok_or_else(|| Error::InvalidUrl("destination URL has no host".into()))?;
-    let dest_port = dest_url.port_or_known_default().unwrap_or(443);
-    let connect_target = proxied_target.map_or_else(
-        || authority_form_target(dest_host, dest_port),
-        |address| authority_form_target(&address.ip().to_string(), address.port()),
-    );
-
-    let mut connect_req =
-        format!("CONNECT {connect_target} HTTP/1.1\r\nHost: {connect_target}\r\n");
-    if let Some(auth) = proxy_config.auth() {
-        use std::fmt::Write;
-        let _ = write!(
-            connect_req,
-            "Proxy-Authorization: {}\r\n",
-            auth.header_value()
-        );
-    }
-    // Write proxy-only headers on the CONNECT request.
-    for (name, value) in proxy_config.proxy_headers().iter() {
-        // Skip proxy-authorization — handled above from configured auth.
-        if name.as_str().eq_ignore_ascii_case("proxy-authorization") {
-            continue;
-        }
-        if let Ok(value_str) = value.to_str() {
-            use std::fmt::Write;
-            let _ = write!(connect_req, "{}: {value_str}\r\n", name.as_str());
-        }
-    }
-    connect_req.push_str("\r\n");
-
-    if connect_req.len() > crate::headers::MAX_REQUEST_HEADER_BYTES {
-        return Err(Error::RequestBuild(format!(
-            "request headers exceed maximum size of {} bytes",
-            crate::headers::MAX_REQUEST_HEADER_BYTES
-        )));
-    }
-
-    let write = stream.write_all(connect_req.as_bytes());
-    match effective_timeout(ctx.deadline, ctx.write_timeout)? {
-        Some(duration) => tokio::time::timeout(duration, write)
-            .await
-            .map_err(|_| Error::Timeout {
-                phase: TimeoutPhase::Write,
-                elapsed: duration,
-            })?
-            .map_err(|e| Error::ProxyConnect(format!("failed to send CONNECT: {e}")))?,
-        None => write
-            .await
-            .map_err(|e| Error::ProxyConnect(format!("failed to send CONNECT: {e}")))?,
-    }
-
-    // Read the CONNECT response.
-    let read = read_proxy_response(&mut stream);
-    let (status, resp_headers, initial_buf, _reason_phrase) =
-        match effective_timeout(ctx.deadline, ctx.read_timeout)? {
-            Some(duration) => {
-                tokio::time::timeout(duration, read)
-                    .await
-                    .map_err(|_| Error::Timeout {
-                        phase: TimeoutPhase::Read,
-                        elapsed: duration,
-                    })??
-            }
-            None => read.await?,
-        };
-
-    if status != 200 {
-        return Err(Error::ProxyConnectRejected {
-            status,
-            body: proxy_rejection_body(&resp_headers, &initial_buf),
-        });
-    }
-
-    // The tunnel is established. Get the raw TCP stream.
-    let tcp_stream = stream.into_inner();
-
-    // Wrap with initial buffer for TLS.
-    let tunnel = ProxyTunnel::new(initial_buf, tcp_stream);
-
-    // Perform TLS handshake with the destination through the tunnel.
-    let default_tls_config = crate::tls::TlsConfig::default();
-    let tls_config = ctx.origin_tls_config.unwrap_or(&default_tls_config);
-    let rustls_config = tls_config
-        .build_rustls_config()
-        .map_err(|e| Error::Tls(format!("failed to build TLS config for tunnel: {e}")))?;
-    let rustls_config = crate::client::configure_tls_alpn(
-        rustls_config,
-        crate::http_version::HttpVersionPolicyEnabler::from_policy(ctx.http_version_policy),
-    );
-    let tls_connector = tokio_rustls::TlsConnector::from(std::sync::Arc::new(rustls_config));
-
-    // Use sni_hostname override for TLS SNI and certificate verification
-    // while TCP still connects to dest_host (the URL host).
-    let sni_name = transport_hints.sni_hostname.as_deref().unwrap_or(dest_host);
-    let domain = crate::transport::direct_connector::tls_server_name(sni_name)
-        .map_err(|e| Error::Tls(format!("invalid TLS server name: {e}")))?;
-
-    let tls_handshake = tls_connector.connect(domain, tunnel);
-    let tls_timeout = effective_timeout(ctx.deadline, ctx.connect_timeout)?;
-    let tls_stream = match tls_timeout {
-        Some(dur) => match tokio::time::timeout(dur, tls_handshake).await {
-            Ok(Ok(s)) => s,
-            Ok(Err(e)) => {
-                return Err(Error::Tls(format!(
-                    "TLS handshake through tunnel failed: {e}"
-                )))
-            }
-            Err(_) => {
-                return Err(Error::Timeout {
-                    phase: TimeoutPhase::Connect,
-                    elapsed: dur,
-                });
-            }
-        },
-        None => tls_handshake
-            .await
-            .map_err(|e| Error::Tls(format!("TLS handshake through tunnel failed: {e}")))?,
-    };
+    let tls_stream =
+        establish_https_tunnel(dest_url, proxy_config, transport_hints, ctx, proxied_target)
+            .await?;
 
     // Send the actual HTTP request over the TLS connection.
     // CONNECT switches the request to the origin connection. HTTPX/httpcore

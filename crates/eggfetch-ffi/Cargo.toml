@@ -25,10 +25,11 @@ must_use_candidate = "allow"
 crate-type = ["cdylib", "staticlib", "rlib"]
 
 [features]
-default = ["http1", "tls-rustls", "cookies", "proxy", "compression-gzip"]
+default = ["http1", "tls-rustls", "tls-native-roots", "cookies", "proxy", "compression-gzip"]
 http1 = ["eggfetch-core/http1"]
 http2 = ["eggfetch-core/http2"]
 tls-rustls = ["eggfetch-core/tls-rustls"]
+tls-native-roots = ["tls-rustls", "eggfetch-core/tls-native-roots"]
 http3 = ["eggfetch-core/http3"]
 cookies = ["eggfetch-core/cookies"]
 proxy = ["eggfetch-core/proxy"]
@@ -39,7 +40,7 @@ compression-deflate = ["eggfetch-core/compression-deflate"]
 multipart = ["eggfetch-core/multipart"]
 
 [dependencies]
-eggfetch-core = { version = "0.1.4", path = "../eggfetch-core" }
+eggfetch-core = { version = "0.1.4", path = "../eggfetch-core", default-features = false }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "net", "sync"] }
 bytes = "1"
 http = "1"

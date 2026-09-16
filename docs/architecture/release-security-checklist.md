@@ -13,13 +13,14 @@ This checklist must be completed before any release of eggfetch. Each item has a
 
 - [ ] `cargo-deny` passes with no advisory violations
 - [ ] `cargo-audit` reports no known vulnerabilities in the dependency tree
+- [ ] `./scripts/check_security.sh` passes immediately before publication (record tool versions and scan time)
 - [ ] No new dependencies have been added without explicit documentation in `docs/architecture/dependency-policy.md`
 - [ ] License audit passes (no GPL-incompatible licenses in the dependency tree)
 
 ## Fuzz and Property Testing
 
 - [ ] No high-severity findings from fuzz targets (review `fuzz/artifacts/` for new crash inputs)
-- [ ] All fuzz targets build successfully: `cd fuzz && cargo +nightly fuzz build`
+- [ ] Any required fuzz campaign is bounded and run manually; routine CI does not imply continuous fuzzing
 - [ ] Property tests pass: `cargo test -p eggfetch-core --all-features`
 - [ ] New fuzz targets added for any new parsing or state-machine code
 

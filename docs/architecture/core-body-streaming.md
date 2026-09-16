@@ -49,8 +49,8 @@ lifecycle control.
 
 This native surface deliberately does not apply high-level redirects,
 logical retries, cookies, auth, decompression, or decoded-body limits. The
-current hand-rolled proxy and experimental H3 routes reject native frame
-execution before body transfer because they do not yet expose the same frame
+current high-level proxy and experimental H3 routes reject native frame
+execution before body transfer because they do not expose the same frame
 contract. A 101 upgrade is rejected after response headers identify the
 status; it cannot be rejected earlier without knowing the response status.
 Existing `RequestBody`, `ResponseBody`, `bytes_stream()`, and

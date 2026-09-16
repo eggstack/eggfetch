@@ -5,10 +5,8 @@ use std::sync::{Arc, Mutex};
 
 use pyo3::prelude::*;
 
-use crate::auth;
 use crate::cookies::PyCookies;
 use crate::errors::map_err;
-use crate::proxy::{self, ProxyOverride};
 use crate::response::PyResponse;
 use crate::streaming::PyStreamingResponse;
 use crate::trace_bridge::take_callback_error;
@@ -84,6 +82,7 @@ pub struct PyClient {
     client: Mutex<Option<eggfetch_core::Client>>,
     decompress: Option<bool>,
     verify_disabled: bool,
+    redirect_policy: eggfetch_core::redirect::RedirectPolicy,
 }
 
 #[pymethods]
@@ -147,6 +146,7 @@ impl PyClient {
         )?));
         let verify_disabled = prepared.verify_disabled;
         let decompress = prepared.decompress;
+        let redirect_policy = prepared.redirect_policy.clone();
         let client = crate::request_preparation::apply_client_config(prepared)?;
 
         Ok(Self {
@@ -154,6 +154,7 @@ impl PyClient {
             client: Mutex::new(Some(client)),
             decompress,
             verify_disabled,
+            redirect_policy,
         })
     }
 
@@ -192,21 +193,7 @@ impl PyClient {
             ));
         }
 
-        let crate::request_preparation::PreparedRequest {
-            method: http_method,
-            url: target_url,
-            headers: rust_headers,
-            body: request_body,
-            timeout: rust_timeout,
-            auth: auth_override,
-            proxy: proxy_override,
-            proxy_headers,
-            proxy_tls_config,
-            retry: retry_override,
-            extensions: extracted,
-            follow_redirects: prepared_follow_redirects,
-            max_redirects: prepared_max_redirects,
-        } = crate::request_preparation::prepare_request(
+        let prepared = crate::request_preparation::prepare_request(
             py,
             method,
             url,
@@ -226,81 +213,21 @@ impl PyClient {
             extensions,
             false,
         )?;
-        let transport_hints = extracted.hints;
 
         let client = self.clone_client()?;
-        let trace_slot = extracted.trace_error_slot.clone();
+        let dispatch = crate::request_preparation::prepare_core_dispatch(
+            &client,
+            prepared,
+            crate::request_preparation::RequestDispatchDefaults {
+                redirect_policy: self.redirect_policy.clone(),
+                decompress: decompress.or(self.decompress),
+            },
+        )?;
+        let trace_slot = dispatch.trace_error_slot.clone();
+        let builder = dispatch.builder;
         let (runtime_guard, runtime_handle) = self.runtime_for_dispatch()?;
-        let effective_decompress = decompress.or(self.decompress);
         let result = py.detach(|| {
             runtime_handle.block_on(async {
-                let mut builder = client
-                    .request(http_method, target_url.as_str())
-                    .map_err(map_err)?;
-
-                builder = builder.headers(rust_headers);
-
-                if let Some(body) = request_body {
-                    builder = builder.body(body);
-                }
-
-                if let Some(t) = rust_timeout {
-                    builder = builder.timeout(t);
-                }
-
-                if let Some(d) = effective_decompress {
-                    builder = builder.decompress(d);
-                }
-
-                match auth_override {
-                    auth::AuthOverride::Inherit => {}
-                    auth::AuthOverride::Disable => {
-                        builder = builder.without_auth();
-                    }
-                    auth::AuthOverride::Override(a) => {
-                        builder = builder.auth(a);
-                    }
-                }
-
-                match proxy_override {
-                    ProxyOverride::Inherit => {}
-                    ProxyOverride::Disable => {
-                        builder = builder.without_proxy();
-                    }
-                    ProxyOverride::Override(url) => {
-                        let mut p = eggfetch_core::Proxy::all_compat(
-                            &proxy::normalize_compat_proxy_url(&url),
-                        )
-                        .map_err(map_err)?;
-                        if let Some(ref hdrs) = proxy_headers {
-                            p = p.proxy_headers(hdrs.clone());
-                        }
-                        if let Some(ref tls) = proxy_tls_config {
-                            p = p.with_proxy_tls_config(tls.clone());
-                        }
-                        builder = builder.proxy(&p);
-                    }
-                }
-
-                if prepared_follow_redirects.is_some() || prepared_max_redirects.is_some() {
-                    let mut redirect = eggfetch_core::redirect::RedirectPolicy::default();
-                    if let Some(f) = prepared_follow_redirects {
-                        redirect.follow = f;
-                    }
-                    if let Some(m) = prepared_max_redirects {
-                        redirect.max_redirects = m;
-                    }
-                    builder = builder.redirect_policy(redirect);
-                }
-
-                if let Some(retry_policy) = retry_override.as_ref() {
-                    builder = builder.retry(retry_policy.clone());
-                }
-
-                // Install transport hints from the Python `extensions`
-                // dict.  When no hints are supplied this is a no-op.
-                builder = builder.transport_hints(transport_hints.clone());
-
                 let mut response = Box::pin(builder.send()).await.map_err(map_err)?;
                 // Consume the body on the client's persistent runtime.  The
                 // response owns transport state (including the pool lease),
@@ -694,21 +621,7 @@ impl PyClient {
             ));
         }
 
-        let crate::request_preparation::PreparedRequest {
-            method: http_method,
-            url: target_url,
-            headers: rust_headers,
-            body: request_body,
-            timeout: rust_timeout,
-            auth: auth_override,
-            proxy: proxy_override,
-            proxy_headers,
-            proxy_tls_config,
-            retry: retry_override,
-            extensions: extracted,
-            follow_redirects: prepared_follow_redirects,
-            max_redirects: prepared_max_redirects,
-        } = crate::request_preparation::prepare_request(
+        let prepared = crate::request_preparation::prepare_request(
             py,
             method,
             url,
@@ -728,81 +641,21 @@ impl PyClient {
             extensions,
             false,
         )?;
-        let transport_hints = extracted.hints;
-        let trace_slot = extracted.trace_error_slot.clone();
 
         let client = self.clone_client()?;
+        let dispatch = crate::request_preparation::prepare_core_dispatch(
+            &client,
+            prepared,
+            crate::request_preparation::RequestDispatchDefaults {
+                redirect_policy: self.redirect_policy.clone(),
+                decompress: decompress.or(self.decompress),
+            },
+        )?;
+        let trace_slot = dispatch.trace_error_slot.clone();
+        let builder = dispatch.builder;
         let (runtime_guard, runtime_handle) = self.runtime_for_dispatch()?;
-        let effective_decompress = decompress.or(self.decompress);
         let result = py.detach(|| {
             runtime_handle.block_on(async {
-                let mut builder = client
-                    .request(http_method, target_url.as_str())
-                    .map_err(map_err)?;
-
-                builder = builder.headers(rust_headers);
-
-                if let Some(body) = request_body {
-                    builder = builder.body(body);
-                }
-
-                if let Some(t) = rust_timeout {
-                    builder = builder.timeout(t);
-                }
-
-                if let Some(d) = effective_decompress {
-                    builder = builder.decompress(d);
-                }
-
-                match auth_override {
-                    auth::AuthOverride::Inherit => {}
-                    auth::AuthOverride::Disable => {
-                        builder = builder.without_auth();
-                    }
-                    auth::AuthOverride::Override(a) => {
-                        builder = builder.auth(a);
-                    }
-                }
-
-                match proxy_override {
-                    ProxyOverride::Inherit => {}
-                    ProxyOverride::Disable => {
-                        builder = builder.without_proxy();
-                    }
-                    ProxyOverride::Override(url) => {
-                        let mut p = eggfetch_core::Proxy::all_compat(
-                            &proxy::normalize_compat_proxy_url(&url),
-                        )
-                        .map_err(map_err)?;
-                        if let Some(ref hdrs) = proxy_headers {
-                            p = p.proxy_headers(hdrs.clone());
-                        }
-                        if let Some(ref tls) = proxy_tls_config {
-                            p = p.with_proxy_tls_config(tls.clone());
-                        }
-                        builder = builder.proxy(&p);
-                    }
-                }
-
-                if prepared_follow_redirects.is_some() || prepared_max_redirects.is_some() {
-                    let mut redirect = eggfetch_core::redirect::RedirectPolicy::default();
-                    if let Some(f) = prepared_follow_redirects {
-                        redirect.follow = f;
-                    }
-                    if let Some(m) = prepared_max_redirects {
-                        redirect.max_redirects = m;
-                    }
-                    builder = builder.redirect_policy(redirect);
-                }
-
-                if let Some(retry_policy) = retry_override.as_ref() {
-                    builder = builder.retry(retry_policy.clone());
-                }
-
-                // Apply pre-extracted transport hints (no-op when none were
-                // supplied via `extensions=`).
-                builder = builder.transport_hints(transport_hints.clone());
-
                 let response = Box::pin(builder.send()).await.map_err(map_err)?;
                 Ok::<_, PyErr>(response)
             })

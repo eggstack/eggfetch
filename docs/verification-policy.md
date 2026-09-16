@@ -15,6 +15,13 @@ This document is the normative statement of CI, verification, and release policy
 9. **Historical qualification plans are non-normative.** Completed plans are records of past work, not active CI or release requirements.
 10. **Verification infrastructure must remain materially simpler than the behavior it verifies.** If verification costs more than the behavior it catches, the verification is wrong.
 
+Routine validation does not fetch live RustSec data. The explicit,
+fail-closed `./scripts/check_security.sh` command is required before package
+publication and is also required by the manual PyPI workflow when
+`publish=true`; it refreshes advisory data and reports the scan time and tool
+versions. This is release-time vulnerability intelligence, not an automatic
+merge gate or a claim that vulnerabilities cannot exist.
+
 ## Complexity Budget
 
 | Item | Limit |
@@ -100,7 +107,10 @@ The PyPI wheel workflow (`.github/workflows/pypi.yml`) is a manually dispatched,
 ### Workflow Modes
 
 - **Build-only** (`publish=false`): builds all wheels and sdist, assembles the release set, skips publication.
-- **Publish** (`publish=true`): additionally publishes to PyPI via Trusted Publishing (OIDC). Requires a `v<SEMVER>` tag, the `pypi` GitHub environment, and environment approval.
+- **Publish** (`publish=true`): validates that the checked-out commit is the
+  exact matching `v<SEMVER>` tag, runs the live security preflight, and then
+  publishes to PyPI via Trusted Publishing (OIDC). It requires the `pypi`
+  GitHub environment and environment approval.
 
 ### Publication Security
 

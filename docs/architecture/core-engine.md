@@ -164,8 +164,10 @@ logical origin URL     -> Host / destination TLS identity / redirect policy
 target snapshot        -> CONNECT or SOCKS5 destination address
 ```
 
-Pinned routes perform no DNS fallback. Proxy tunnels in the hand-rolled HTTP
-transport are not pooled; SOCKS client-cache keys include both snapshots.
+Pinned routes perform no DNS fallback. Successful ordinary forward-proxy and
+single-target CONNECT routes use bounded Hyper clients whose keys retain the
+proxy and destination policy; multi-address CONNECT fallback remains on the
+handshake-specific path. SOCKS client-cache keys include both snapshots.
 Retries and same-origin redirects retain snapshots, while cross-origin
 redirects reject them. HTTPS CONNECT target fallback is deliberately limited
 to typed 502/504 proxy rejection. Local-resolution SOCKS5 target fallback is
@@ -267,8 +269,13 @@ it. An idle pooled connection still counts, HTTP/2 streams do not consume
 additional permits, and failed or cancelled connects release the permit.
 Admission wait has its own identifiable error query. The wrapper is shared by
 standard, direct/resolved, SNI, custom-dialer, UDS, and SOCKS Hyper routes;
-the hand-rolled HTTP proxy and independent H3/QUIC transports are not Hyper
-connector routes.
+HTTP forward-proxy and compatible HTTPS CONNECT routes now also use Hyper
+connectors and its response/body lifecycle. Forward-proxy clients are
+bounded and keyed by destination origin plus proxy transport policy. CONNECT
+clients are additionally isolated by origin TLS/SNI, protocol policy,
+credentials, and any single pinned target. Multi-address CONNECT fallback
+retains the handshake-specific path so typed 502/504 retry behavior is not
+weakened. Independent H3/QUIC transport remains outside this lifecycle.
 
 When `TransportIoTimeout` is enabled, established reads and writes are
 guarded at this same boundary. The timers reset on actual byte progress,

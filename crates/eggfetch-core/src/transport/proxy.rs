@@ -9,6 +9,48 @@ use crate::proxy::{ProxyAuth, ProxyConfig};
 use crate::response::Response;
 use crate::timeout::TimeoutPhase;
 
+/// Internal cache key for a Hyper forward-proxy client.
+///
+/// The byte identity intentionally has no `Debug` implementation: it can
+/// contain credential material and header values, but is never rendered in
+/// diagnostics or metrics. The proxy configuration itself is retained by the
+/// connector, so the key also includes the connection-affecting TLS identity.
+#[cfg(any(feature = "http1", feature = "http2"))]
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub(crate) struct ForwardRouteKey {
+    identity: Vec<u8>,
+    origin: String,
+    connect_timeout: Option<std::time::Duration>,
+    proxy_tls_timeout: Option<std::time::Duration>,
+}
+
+#[cfg(any(feature = "http1", feature = "http2"))]
+impl ForwardRouteKey {
+    pub(crate) fn new(
+        proxy: &ProxyConfig,
+        origin: &url::Url,
+        connect_timeout: Option<std::time::Duration>,
+        proxy_tls_timeout: Option<std::time::Duration>,
+    ) -> Self {
+        Self {
+            identity: proxy.connection_identity(),
+            origin: origin_origin(origin),
+            connect_timeout,
+            proxy_tls_timeout,
+        }
+    }
+}
+
+#[cfg(any(feature = "http1", feature = "http2"))]
+fn origin_origin(url: &url::Url) -> String {
+    format!(
+        "{}://{}:{}",
+        url.scheme(),
+        url.host_str().unwrap_or_default(),
+        url.port_or_known_default().unwrap_or(0)
+    )
+}
+
 /// Combine one phase timeout with the optional native request deadline.
 ///
 /// Compatibility callers provide only the four HTTPX phase budgets. Native
@@ -69,6 +111,14 @@ pub(crate) struct ProxyRequestContext<'a> {
     /// proxied origin. The logical URL remains authoritative for identity.
     pub(crate) proxied_target: Option<&'a crate::request::ResolvedTarget>,
     pub(crate) socks_client: Option<crate::transport::TimeoutSocksClient>,
+    /// Hyper client for ordinary HTTP forwarding. `None` retains the
+    /// handshake-specific implementation for routes that cannot use it.
+    #[cfg(any(feature = "http1", feature = "http2"))]
+    pub(crate) forward_client: Option<crate::transport::TimeoutForwardClient>,
+    /// Hyper client for a compatible HTTPS CONNECT route.
+    #[cfg(any(feature = "http1", feature = "http2"))]
+    pub(crate) connect_client: Option<crate::transport::TimeoutConnectClient>,
+    pub(crate) failure_context: Option<&'a crate::error::RequestFailureContext>,
     /// Shared transport observability counters. `None` disables metering.
     pub(crate) transport_metrics:
         Option<std::sync::Arc<crate::transport::metrics::TransportMetrics>>,
@@ -81,6 +131,141 @@ pub(crate) enum ProxyIo {
     Tcp(tokio::net::TcpStream),
     /// TLS-protected proxy connection.
     Tls(Box<tokio_rustls::client::TlsStream<tokio::net::TcpStream>>),
+}
+
+/// A Hyper-compatible connection that has already been connected to an HTTP
+/// proxy. The buffered reader is retained because a proxy TLS handshake or
+/// prior parser may have read ahead; forward requests begin with an empty
+/// buffer, while the type remains reusable for the common connector seam.
+#[cfg(any(feature = "http1", feature = "http2"))]
+pub(crate) struct ForwardProxyConnection {
+    inner: tokio::io::BufReader<ProxyIo>,
+}
+
+#[cfg(any(feature = "http1", feature = "http2"))]
+impl ForwardProxyConnection {
+    fn new(inner: tokio::io::BufReader<ProxyIo>) -> Self {
+        Self { inner }
+    }
+}
+
+#[cfg(any(feature = "http1", feature = "http2"))]
+impl tokio::io::AsyncRead for ForwardProxyConnection {
+    fn poll_read(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        buf: &mut tokio::io::ReadBuf<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        std::pin::Pin::new(&mut self.inner).poll_read(cx, buf)
+    }
+}
+
+#[cfg(any(feature = "http1", feature = "http2"))]
+impl tokio::io::AsyncWrite for ForwardProxyConnection {
+    fn poll_write(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        bytes: &[u8],
+    ) -> std::task::Poll<std::io::Result<usize>> {
+        std::pin::Pin::new(&mut self.inner).poll_write(cx, bytes)
+    }
+
+    fn poll_flush(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        std::pin::Pin::new(&mut self.inner).poll_flush(cx)
+    }
+
+    fn poll_shutdown(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        std::pin::Pin::new(&mut self.inner).poll_shutdown(cx)
+    }
+}
+
+#[cfg(any(feature = "http1", feature = "http2"))]
+impl hyper_util::client::legacy::connect::Connection for ForwardProxyConnection {
+    fn connected(&self) -> hyper_util::client::legacy::connect::Connected {
+        hyper_util::client::legacy::connect::Connected::new().proxy(true)
+    }
+}
+
+/// Connector used by Hyper's reusable HTTP forward-proxy client.
+#[cfg(any(feature = "http1", feature = "http2"))]
+#[derive(Clone)]
+pub(crate) struct ForwardProxyConnector {
+    proxy: ProxyConfig,
+    proxy_connect_timeout: Option<std::time::Duration>,
+    proxy_tls_timeout: Option<std::time::Duration>,
+    setup_timeout: Option<std::time::Duration>,
+    proxy_tls_config: Option<crate::tls::TlsConfig>,
+    metrics: std::sync::Arc<crate::transport::metrics::TransportMetrics>,
+}
+
+#[cfg(any(feature = "http1", feature = "http2"))]
+impl ForwardProxyConnector {
+    pub(crate) fn new(
+        proxy: ProxyConfig,
+        proxy_connect_timeout: Option<std::time::Duration>,
+        proxy_tls_timeout: Option<std::time::Duration>,
+        setup_timeout: Option<std::time::Duration>,
+        metrics: std::sync::Arc<crate::transport::metrics::TransportMetrics>,
+    ) -> Self {
+        let proxy_tls_config = proxy.proxy_tls_config.clone();
+        Self {
+            proxy,
+            proxy_connect_timeout,
+            proxy_tls_timeout,
+            setup_timeout,
+            proxy_tls_config,
+            metrics,
+        }
+    }
+}
+
+#[cfg(any(feature = "http1", feature = "http2"))]
+impl tower_service::Service<http::Uri> for ForwardProxyConnector {
+    type Response = hyper_util::rt::TokioIo<ForwardProxyConnection>;
+    type Error = Box<dyn std::error::Error + Send + Sync>;
+    type Future = std::pin::Pin<
+        Box<
+            dyn std::future::Future<Output = std::result::Result<Self::Response, Self::Error>>
+                + Send,
+        >,
+    >;
+
+    fn poll_ready(
+        &mut self,
+        _cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<std::result::Result<(), Self::Error>> {
+        std::task::Poll::Ready(Ok(()))
+    }
+
+    fn call(&mut self, _dst: http::Uri) -> Self::Future {
+        let proxy = self.proxy.clone();
+        let proxy_connect_timeout = self.proxy_connect_timeout;
+        let proxy_tls_timeout = self.proxy_tls_timeout;
+        let setup_timeout = self.setup_timeout;
+        let proxy_tls_config = self.proxy_tls_config.clone();
+        let metrics = self.metrics.clone();
+        Box::pin(async move {
+            let stream = connect_to_proxy(
+                &proxy,
+                proxy_connect_timeout,
+                proxy_tls_timeout,
+                setup_timeout.map(|timeout| std::time::Instant::now() + timeout),
+                proxy_tls_config.as_ref(),
+                Some(&metrics),
+            )
+            .await
+            .map_err(|error| Box::new(error) as Box<dyn std::error::Error + Send + Sync>)?;
+            Ok(hyper_util::rt::TokioIo::new(ForwardProxyConnection::new(
+                stream,
+            )))
+        })
+    }
 }
 
 impl tokio::io::AsyncRead for ProxyIo {
@@ -357,6 +542,10 @@ fn proxy_server_name(proxy_host: &str) -> Result<rustls::pki_types::ServerName<'
 }
 
 /// Send an HTTP request through an HTTP forward proxy.
+#[allow(
+    clippy::too_many_lines,
+    reason = "the legacy fallback remains a bounded compatibility path for unsupported Hyper targets"
+)]
 #[allow(clippy::too_many_arguments)] // Forwarding needs the request and phase-specific proxy context.
 async fn send_http_proxy_request(
     dest_url: &url::Url,
@@ -393,6 +582,22 @@ async fn send_http_proxy_request(
                 "target extension must be absolute-form (http:// or https://) for forward-proxy requests".into(),
             ));
         }
+    }
+
+    #[cfg(any(feature = "http1", feature = "http2"))]
+    if let Some(forward_client) = ctx.forward_client.as_ref() {
+        return send_http_proxy_request_hyper(
+            dest_url,
+            method,
+            headers,
+            body,
+            version,
+            proxy_config,
+            transport_hints,
+            forward_client,
+            ctx.failure_context,
+        )
+        .await;
     }
 
     let mut stream = connect_to_proxy(
@@ -473,6 +678,68 @@ async fn send_http_proxy_request(
     let mut response = Response::new(status, version, resp_headers_map, url, body);
     response.set_wire_reason_phrase(reason_phrase);
     Ok(response)
+}
+
+/// Send an ordinary HTTP request through Hyper's legacy client and reusable
+/// pool. The connector has already selected the proxy transport and marks it
+/// with `Connected::proxy(true)`, so Hyper emits absolute-form targets and
+/// owns all successful request/response framing.
+#[cfg(any(feature = "http1", feature = "http2"))]
+#[allow(clippy::too_many_arguments)]
+async fn send_http_proxy_request_hyper(
+    dest_url: &url::Url,
+    method: &http::Method,
+    headers: &Headers,
+    body: RequestBody,
+    version: http::Version,
+    proxy_config: &ProxyConfig,
+    transport_hints: &crate::request::TransportHints,
+    client: &crate::transport::TimeoutForwardClient,
+    failure_context: Option<&crate::error::RequestFailureContext>,
+) -> Result<Response> {
+    let absolute_uri = transport_hints
+        .target
+        .as_deref()
+        .map(|target| {
+            std::str::from_utf8(target)
+                .map(str::to_owned)
+                .map_err(|_| Error::InvalidUrl("target extension is not valid UTF-8".into()))
+        })
+        .transpose()?
+        .unwrap_or_else(|| dest_url.as_str().to_owned());
+    let uri = absolute_uri
+        .parse::<http::Uri>()
+        .map_err(|error| Error::RequestBuild(format!("invalid forward-proxy target: {error}")))?;
+
+    let mut request = http::Request::builder()
+        .method(method)
+        .uri(uri)
+        .version(version);
+    for (name, value) in headers.iter() {
+        request = request.header(name, value);
+    }
+    if let Some(auth) = proxy_config.auth() {
+        request = request.header("proxy-authorization", auth.header_value());
+    }
+    for (name, value) in proxy_config.proxy_headers().iter() {
+        if name.as_str().eq_ignore_ascii_case("proxy-authorization")
+            && proxy_config.auth().is_some()
+        {
+            continue;
+        }
+        request = request.header(name, value);
+    }
+    let request = request
+        .body(body.into_http_body())
+        .map_err(|error| Error::RequestBuild(error.to_string()))?;
+    crate::transport::direct::send_proxy_request(
+        client,
+        request,
+        dest_url.clone(),
+        transport_hints.trace.as_deref(),
+        failure_context,
+    )
+    .await
 }
 
 /// Append one header line, writing the value's raw bytes.

@@ -262,6 +262,106 @@ pub(crate) struct PreparedRequest {
     pub max_redirects: Option<usize>,
 }
 
+/// Runtime-neutral defaults needed while applying one prepared request.
+pub(crate) struct RequestDispatchDefaults {
+    pub redirect_policy: eggfetch_core::redirect::RedirectPolicy,
+    pub decompress: Option<bool>,
+}
+
+/// A core request builder plus callback state that must be checked by the
+/// runtime-specific dispatcher after the send future completes.
+pub(crate) struct PreparedDispatch {
+    pub builder: eggfetch_core::RequestBuilder,
+    pub trace_error_slot: Option<crate::trace_bridge::CallbackErrorSlot>,
+}
+
+/// Apply normalized Python request state to a core builder.
+///
+/// This function deliberately performs no I/O and contains no Python or
+/// runtime handling. Sync and async adapters share this mapping while keeping
+/// their own GIL, runtime, response, and callback-error boundaries.
+pub(crate) fn prepare_core_dispatch(
+    client: &eggfetch_core::Client,
+    request: PreparedRequest,
+    defaults: RequestDispatchDefaults,
+) -> PyResult<PreparedDispatch> {
+    let PreparedRequest {
+        method,
+        url,
+        headers,
+        body,
+        timeout,
+        auth,
+        proxy,
+        proxy_headers,
+        proxy_tls_config,
+        retry,
+        extensions,
+        follow_redirects,
+        max_redirects,
+    } = request;
+    let RequestDispatchDefaults {
+        redirect_policy,
+        decompress,
+    } = defaults;
+
+    let mut builder = client.request(method, url.as_str()).map_err(map_err)?;
+    builder = builder.headers(headers);
+    if let Some(body) = body {
+        builder = builder.body(body);
+    }
+    if let Some(timeout) = timeout {
+        builder = builder.timeout(timeout);
+    }
+    if let Some(decompress) = decompress {
+        builder = builder.decompress(decompress);
+    }
+
+    match auth {
+        AuthOverride::Inherit => {}
+        AuthOverride::Disable => builder = builder.without_auth(),
+        AuthOverride::Override(auth) => builder = builder.auth(auth),
+    }
+
+    match proxy {
+        ProxyOverride::Inherit => {}
+        ProxyOverride::Disable => builder = builder.without_proxy(),
+        ProxyOverride::Override(url) => {
+            let mut proxy =
+                eggfetch_core::Proxy::all_compat(&proxy::normalize_compat_proxy_url(&url))
+                    .map_err(map_err)?;
+            if let Some(headers) = proxy_headers {
+                proxy = proxy.proxy_headers(headers);
+            }
+            if let Some(tls_config) = proxy_tls_config {
+                proxy = proxy.with_proxy_tls_config(tls_config);
+            }
+            builder = builder.proxy(&proxy);
+        }
+    }
+
+    if follow_redirects.is_some() || max_redirects.is_some() {
+        let mut redirect = redirect_policy;
+        if let Some(follow) = follow_redirects {
+            redirect.follow = follow;
+        }
+        if let Some(max) = max_redirects {
+            redirect.max_redirects = max;
+        }
+        builder = builder.redirect_policy(redirect);
+    }
+
+    if let Some(retry) = retry {
+        builder = builder.retry(retry);
+    }
+    builder = builder.transport_hints(extensions.hints);
+
+    Ok(PreparedDispatch {
+        builder,
+        trace_error_slot: extensions.trace_error_slot,
+    })
+}
+
 /// Normalize the common request arguments while the GIL is held.
 // This boundary intentionally mirrors the public request signature so sync
 // and async adapters cannot silently diverge in argument handling.

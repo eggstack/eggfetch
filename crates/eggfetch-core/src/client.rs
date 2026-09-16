@@ -196,6 +196,19 @@ pub(crate) struct ClientInner {
     pub(crate) socks_clients: Mutex<
         HashMap<crate::transport::socks::SocksRouteKey, crate::transport::TimeoutSocksClient>,
     >,
+    /// Persistent Hyper clients for ordinary HTTP forward-proxy routes.
+    /// Keys include the destination origin and every proxy-leg policy that
+    /// can affect a reusable connection. The cache is bounded because
+    /// request-scoped proxy overrides are allowed.
+    #[cfg(feature = "proxy")]
+    pub(crate) forward_clients: Mutex<
+        HashMap<crate::transport::proxy::ForwardRouteKey, crate::transport::TimeoutForwardClient>,
+    >,
+    /// Persistent Hyper clients for one HTTPS origin reached through CONNECT.
+    #[cfg(feature = "proxy")]
+    pub(crate) connect_clients: Mutex<
+        HashMap<crate::transport::connect::ConnectRouteKey, crate::transport::TimeoutConnectClient>,
+    >,
     pub(crate) config: ClientConfig,
     pub(crate) pool: Pool,
     /// Transport observability counters shared by all connectors owned by
@@ -219,6 +232,14 @@ const SNI_CLIENT_CACHE_MAX_ENTRIES: usize = 256;
 /// Upper bound on cached SOCKS-route hyper clients.
 #[cfg(feature = "proxy")]
 const SOCKS_CLIENT_CACHE_MAX_ENTRIES: usize = 64;
+
+/// Upper bound on cached HTTP forward-proxy Hyper clients.
+#[cfg(feature = "proxy")]
+const FORWARD_CLIENT_CACHE_MAX_ENTRIES: usize = 64;
+
+/// Upper bound on cached HTTPS CONNECT Hyper clients.
+#[cfg(feature = "proxy")]
+const CONNECT_CLIENT_CACHE_MAX_ENTRIES: usize = 64;
 
 /// Evict an arbitrary entry when a bounded client cache reaches capacity.
 ///
@@ -516,6 +537,115 @@ impl ClientInner {
         configure_hyper_builder_policy(&mut builder, &self.config, None, None);
         let client = builder.build(connector);
         if clients.len() >= SOCKS_CLIENT_CACHE_MAX_ENTRIES {
+            evict_one(&mut clients);
+        }
+        clients.insert(key, client.clone());
+        Ok(client)
+    }
+
+    /// Get or create a Hyper client for one HTTP forward-proxy route.
+    ///
+    /// The client is scoped to the destination origin rather than sharing a
+    /// pool across arbitrary origins. Hyper still owns keep-alive handling,
+    /// framing, response bodies, and stale-idle recovery for each entry.
+    #[cfg(any(feature = "http1", feature = "http2"))]
+    pub(crate) async fn forward_client(
+        &self,
+        proxy: &crate::proxy::ProxyConfig,
+        origin: &url::Url,
+        connect_timeout: Option<Duration>,
+        setup_timeout: Option<Duration>,
+    ) -> Result<crate::transport::TimeoutForwardClient> {
+        let proxy_tls_timeout = connect_timeout;
+        let key = crate::transport::proxy::ForwardRouteKey::new(
+            proxy,
+            origin,
+            connect_timeout,
+            proxy_tls_timeout,
+        );
+        let mut clients = self.forward_clients.lock().await;
+        if let Some(client) = clients.get(&key) {
+            return Ok(client.clone());
+        }
+
+        let connector = crate::transport::proxy::ForwardProxyConnector::new(
+            proxy.clone(),
+            connect_timeout,
+            proxy_tls_timeout,
+            setup_timeout,
+            self.transport_metrics.clone(),
+        );
+        let connector =
+            crate::transport::connect_timeout::ConnectTimeout::new(connector, connect_timeout);
+        let connector =
+            crate::transport::lifecycle::LifecycleConnector::new(connector, self.lifecycle.clone());
+        let mut builder =
+            hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new());
+        configure_hyper_builder_policy(&mut builder, &self.config, self.pool.idle_timeout(), None);
+        let client = builder.build(connector);
+        if clients.len() >= FORWARD_CLIENT_CACHE_MAX_ENTRIES {
+            evict_one(&mut clients);
+        }
+        clients.insert(key, client.clone());
+        Ok(client)
+    }
+
+    /// Get or create a Hyper client for one compatible HTTPS CONNECT route.
+    /// Multi-address target snapshots remain on the legacy path so their
+    /// typed 502/504 fallback semantics are not weakened.
+    #[cfg(any(feature = "http1", feature = "http2"))]
+    pub(crate) async fn connect_client(
+        &self,
+        proxy: &crate::proxy::ProxyConfig,
+        origin: &url::Url,
+        transport_hints: &crate::request::TransportHints,
+        target: Option<std::net::SocketAddr>,
+        connect_timeout: Option<Duration>,
+        setup_timeout: Option<Duration>,
+    ) -> Result<crate::transport::TimeoutConnectClient> {
+        let key = crate::transport::connect::ConnectRouteKey::new(
+            proxy,
+            origin,
+            target,
+            self.config.tls_config.as_ref(),
+            transport_hints.sni_hostname.as_deref(),
+            self.config.http_version_policy,
+            connect_timeout,
+            connect_timeout,
+        );
+        let mut clients = self.connect_clients.lock().await;
+        if let Some(client) = clients.get(&key) {
+            return Ok(client.clone());
+        }
+        let connector = crate::transport::connect::ConnectProxyConnector::new(
+            origin.clone(),
+            proxy.clone(),
+            transport_hints.clone(),
+            target,
+            self.config.tls_config.clone(),
+            connect_timeout,
+            connect_timeout,
+            connect_timeout,
+            setup_timeout,
+            self.config.http_version_policy,
+            self.transport_metrics.clone(),
+        );
+        let connector =
+            crate::transport::connect_timeout::ConnectTimeout::new(connector, connect_timeout);
+        let connector =
+            crate::transport::lifecycle::LifecycleConnector::new(connector, self.lifecycle.clone());
+        let mut builder =
+            hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new());
+        #[cfg(feature = "http2")]
+        if matches!(
+            self.config.http_version_policy,
+            crate::HttpVersionPolicy::Http2Only
+        ) {
+            builder.http2_only(true);
+        }
+        configure_hyper_builder_policy(&mut builder, &self.config, self.pool.idle_timeout(), None);
+        let client = builder.build(connector);
+        if clients.len() >= CONNECT_CLIENT_CACHE_MAX_ENTRIES {
             evict_one(&mut clients);
         }
         clients.insert(key, client.clone());
@@ -1605,6 +1735,10 @@ impl ClientBuilder {
                 uds_client,
                 #[cfg(feature = "proxy")]
                 socks_clients: Mutex::new(HashMap::new()),
+                #[cfg(feature = "proxy")]
+                forward_clients: Mutex::new(HashMap::new()),
+                #[cfg(feature = "proxy")]
+                connect_clients: Mutex::new(HashMap::new()),
                 config,
                 pool,
                 transport_metrics,

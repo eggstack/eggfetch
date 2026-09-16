@@ -146,8 +146,9 @@ native JSON helpers are opt-in and must remain absent from minimal profiles.
   guards established Hyper reads/writes, resets only on byte progress, and
   includes vectored writes plus pending flush/shutdown. The lifecycle wrapper
   is used by standard, direct/resolved, SNI, custom-dialer, UDS, and SOCKS
-  Hyper clients; hand-rolled HTTP proxy and H3/QUIC paths are intentionally
-  outside this policy. Deterministic lifecycle tests are in
+  Hyper clients, including ordinary forward-proxy and compatible CONNECT
+  routes; multi-address handshakes and H3/QUIC are intentionally outside this
+  policy. Deterministic lifecycle tests are in
   `transport/lifecycle.rs` and metrics snapshots include admission/live/high-
   water and read/write inactivity counters.
 - **Underlying attempt control**: `ClientBuilder::retry_canceled_requests`

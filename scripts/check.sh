@@ -95,6 +95,16 @@ tier1_lint_suppressions() {
     bash "$SCRIPT_DIR/check_lint_suppressions.sh"
 }
 
+tier1_adapter_features() {
+    info "Adapter feature ownership"
+    "$PYTHON_BIN" "$SCRIPT_DIR/check_adapter_features.py"
+}
+
+tier1_release_validation() {
+    info "Release version/ref validation"
+    "$PYTHON_BIN" "$SCRIPT_DIR/test_validate_release_versions.py"
+}
+
 tier1_clippy() {
     info "Rust clippy"
     cargo clippy --workspace --all-targets --all-features -- -D warnings
@@ -169,6 +179,8 @@ run_tier1() {
     require_python_env
     tier1_rust_format
     tier1_lint_suppressions
+    tier1_adapter_features
+    tier1_release_validation
     tier1_clippy
     tier1_rust_tests
     tier1_python_build

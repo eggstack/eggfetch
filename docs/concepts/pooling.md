@@ -12,9 +12,10 @@ Per-origin limits are keyed by `(scheme, host, port)`, where the port uses the s
 
 When a proxy is involved, the pool key extends to `(proxy_origin, destination_origin, tunnel_mode)`. Direct and proxied requests to the same destination have independent concurrency slots. HTTP forwarding and HTTPS CONNECT tunneling through the same proxy are keyed separately.
 
-Physical route constraints are separate from logical pool permits. The
-hand-rolled HTTP forward/CONNECT proxy paths open a fresh proxy route per
-request. SOCKS Hyper clients are cached only when their cache key proves the
+Physical route constraints are separate from logical pool permits. Successful
+ordinary HTTP forward-proxy and compatible HTTPS CONNECT traffic uses bounded
+Hyper clients keyed by the destination plus connection-affecting proxy/TLS
+policy. SOCKS Hyper clients are cached only when their cache key proves the
 same logical proxy, authentication, proxy-peer snapshot, and proxied-target
 snapshot; pinned and unpinned routes therefore cannot cross-reuse a tunnel.
 

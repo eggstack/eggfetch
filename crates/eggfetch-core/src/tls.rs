@@ -148,6 +148,16 @@ impl Default for TlsConfig {
 }
 
 impl TlsConfig {
+    /// Return an opaque identity for internal connection-client caches.
+    ///
+    /// Cloned configurations share this identity; separately constructed
+    /// configurations do not pool together even when their visible settings
+    /// happen to match. The value is never exposed in diagnostics.
+    #[cfg(all(feature = "proxy", feature = "tls-rustls"))]
+    pub(crate) fn connection_identity(&self) -> usize {
+        Arc::as_ptr(&self.root_store) as usize
+    }
+
     /// Create a builder with secure defaults (verification enabled, native
     /// roots preferred, SNI enabled).
     #[must_use]

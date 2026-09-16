@@ -33,8 +33,10 @@ Use this skill when performing security reviews or addressing security findings 
   direct-only; pinned routes never fall back to DNS, SOCKS5H and plaintext
   forward-proxy target pinning fail closed before I/O, and snapshots survive
   retries and same-origin redirects but reject cross-origin reuse. SOCKS cache
-  keys include both snapshots, hand-rolled HTTP proxy tunnels are not pooled,
-  and typed candidate fallback is limited to CONNECT 502/504 rejection or
+  keys include both snapshots; ordinary forward-proxy and compatible
+  single-target CONNECT routes use bounded Hyper pools while multi-address
+  handshakes retain the legacy fallback. Typed candidate fallback is limited
+  to CONNECT 502/504 rejection or
   local-SOCKS5 replies 0x03/0x04/0x05; no Python/HTTPX or Egress-policy
   dependency is introduced for these native controls.
 - Cookie jar integrity maintained across redirects.

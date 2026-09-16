@@ -45,8 +45,40 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
 
-      - name: Validate release versions
+      - name: Validate release versions (build-only)
+        if: inputs.publish != true
         run: python scripts/validate_release_versions.py
+
+      - name: Validate publication identity
+        if: inputs.publish == true
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF_TYPE}" != "tag" ]]; then
+            echo "FAIL: publication requires a tag ref (got ${GITHUB_REF_TYPE})" >&2
+            exit 1
+          fi
+          if [[ ! "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([+-].+)?$ ]]; then
+            echo "FAIL: publication ref is not a v<SEMVER> tag: ${GITHUB_REF_NAME}" >&2
+            exit 1
+          fi
+          tag_commit="$(git rev-list -n 1 "${GITHUB_REF_NAME}")"
+          checked_commit="$(git rev-parse HEAD)"
+          if [[ "${tag_commit}" != "${checked_commit}" ]]; then
+            echo "FAIL: checked commit ${checked_commit} is not the selected tag commit ${tag_commit}" >&2
+            exit 1
+          fi
+          python scripts/validate_release_versions.py --tag "${GITHUB_REF_NAME}" --publish
+
+      - name: Install pinned security tools
+        if: inputs.publish == true
+        run: |
+          cargo install cargo-deny --version 0.19.0 --locked
+          cargo install cargo-audit --version 0.22.2 --locked
+
+      - name: Run live security preflight
+        if: inputs.publish == true
+        run: ./scripts/check_security.sh
 
       - name: Validate internal dependency topology
         run: python scripts/validate_publishable_internal_dependencies.py
@@ -55,7 +87,7 @@ jobs:
         run: |
           python -m venv .venv
           source .venv/bin/activate
-          python -m pip install maturin pytest pytest-asyncio mypy
+          python -m pip install -r scripts/release-requirements.txt pytest pytest-asyncio mypy
           ./scripts/check.sh
 
       - name: Run package validation
@@ -177,6 +209,7 @@ jobs:
       - name: Build wheel
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
         with:
+          maturin-version: 1.14.1
           args: --release --out dist ${{ matrix.maturin-args }} -i python${{ matrix.python }} -m crates/eggfetch-python/Cargo.toml
           manylinux: ${{ matrix.manylinux || 'auto' }}
 
@@ -266,7 +299,7 @@ jobs:
 
       - name: Build sdist
         run: |
-          pip install maturin
+          pip install -r scripts/release-requirements.txt
           maturin sdist --out dist -m crates/eggfetch-python/Cargo.toml
 
       - name: Verify exactly one sdist
@@ -296,7 +329,7 @@ jobs:
             PYTHON=.venv/bin/python
             PIP=.venv/bin/pip
           fi
-          $PIP install maturin
+          $PIP install maturin==1.14.1
           $PIP wheel --no-deps --no-build-isolation "$(basename $SDIST)" --wheel-dir wheels/
           whls=(wheels/*.whl)
           if [[ ${#whls[@]} -ne 1 ]]; then
@@ -378,7 +411,7 @@ jobs:
           python scripts/validate_wheel_coverage.py wheels/
 
           # Run twine check
-          pip install twine
+          pip install -r scripts/release-requirements.txt
           twine check wheels/*
 
       - name: Package for upload

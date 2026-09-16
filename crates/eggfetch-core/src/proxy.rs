@@ -651,6 +651,41 @@ impl fmt::Debug for ProxyConfig {
 }
 
 impl ProxyConfig {
+    /// Return an opaque connection-affecting identity for internal caches.
+    /// It intentionally has no formatting implementation and therefore
+    /// cannot disclose credentials through diagnostics.
+    #[cfg(feature = "proxy")]
+    pub(crate) fn connection_identity(&self) -> Vec<u8> {
+        let mut identity = Vec::new();
+        identity.extend_from_slice(self.uri.as_str().as_bytes());
+        identity.push(0);
+        if let Some(auth) = self.auth.as_ref() {
+            identity.extend_from_slice(auth.header_value().as_bytes());
+        }
+        identity.push(0);
+        for (name, value) in self.proxy_headers.iter() {
+            identity.extend_from_slice(name.as_str().as_bytes());
+            identity.push(b':');
+            identity.extend_from_slice(value.as_bytes());
+            identity.push(0);
+        }
+        identity.extend_from_slice(
+            self.proxy_tls_config
+                .as_ref()
+                .map_or(0usize, crate::tls::TlsConfig::connection_identity)
+                .to_ne_bytes()
+                .as_slice(),
+        );
+        identity.push(0);
+        if let Some(addresses) = self.resolved_addresses.as_ref() {
+            for address in addresses.iter() {
+                identity.extend_from_slice(address.to_string().as_bytes());
+                identity.push(0);
+            }
+        }
+        identity
+    }
+
     /// Returns the proxy URI.
     #[must_use]
     pub fn uri(&self) -> &url::Url {

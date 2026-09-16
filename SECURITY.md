@@ -65,7 +65,19 @@ The advisory will be published at the same time as (or shortly after) the fix co
 
 ## Dependency Audit
 
-`cargo-deny` and `cargo-audit` are wired into CI and run on every push. The advisory database is checked against all workspace dependencies, including transitive ones. Deny rules enforce:
+Routine push/PR CI is intentionally deterministic and does not fetch live
+advisory databases. Before publication, maintainers must run the fail-closed
+repository command:
+
+```sh
+./scripts/check_security.sh
+```
+
+It requires `cargo-deny` and `cargo-audit`, validates the checked-in lockfile,
+refreshes their advisory databases, and checks all workspace dependencies,
+including transitive ones. The command records its tool versions and scan
+time in its output; a live scan is time-bounded intelligence, not proof that
+the dependency tree is vulnerability-free. Deny rules enforce:
 
 - No known vulnerable crates (RUSTSEC advisories).
 - No unmaintained or yanked crates without an explicit exception.
@@ -106,13 +118,16 @@ Dependency verification:
 
 The following security measures are active in the eggfetch repository:
 
-- **cargo-deny** in CI: advisory database checks, license enforcement, dependency source allowlists.
-- **cargo-audit** in CI: RUSTSEC advisory scanning on every push.
+- **Live dependency preflight**: `./scripts/check_security.sh` before release
+  publication; routine CI remains free of live advisory database fetches.
 - **CI security checks**: lint, typecheck, and test suite run on pushes and pull requests.
 - **Threat model**: documented in `docs/security/`, covers the five trust boundaries (local app, eggfetch core, remote server, network, dependency ecosystem).
 - **Security reviews**: TLS configuration, redirect/auth/cookie handling, proxy tunneling, body streaming, retry policy, Python bindings, and CLI are reviewed for misuse and injection vectors.
 - **Credential redaction**: regression-tested across Debug, Display, error, and log output.
-- **Safe Rust only**: `unsafe_code` is set to `forbid` workspace-wide; no unsafe code is permitted without explicit discussion and justification.
+- **Unsafe boundaries**: core and ordinary workspace code forbid unsafe Rust;
+  `eggfetch-ffi` and `eggfetch-node` have narrow crate-level allowances for
+  their C/N-API ABI boundaries. New unsafe blocks require explicit review and
+  must remain inside those adapters with documented safety contracts.
 
 ## Scope of Security Reviews
 

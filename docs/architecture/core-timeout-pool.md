@@ -79,10 +79,10 @@ TLS remain under the connect phase.
 The lifecycle wrapper is installed after `ConnectTimeout`, so admission wait
 does not consume the connect budget and DNS/TCP/custom dialing/destination
 TLS remain connect-phase work. It is shared by standard, direct,
-resolved-target, SNI, custom-dialer, UDS, and SOCKS Hyper clients. HTTP
-forward/CONNECT proxy requests use the separate hand-rolled proxy transport,
-and HTTP/3 uses QUIC; those paths retain their existing phase/idle controls
-and are outside this Hyper-specific policy.
+resolved-target, SNI, custom-dialer, UDS, SOCKS, HTTP forward-proxy, and
+compatible HTTPS CONNECT Hyper clients. HTTP/3 uses QUIC and remains outside
+this Hyper-specific policy. Proxy connector setup still reports proxy-connect
+and proxy-TLS phases; a reused proxy connection does not rerun those phases.
 
 ### Error Model
 

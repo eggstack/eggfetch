@@ -163,11 +163,12 @@ The project uses:
 - **cargo-deny** for license compliance, advisory database checks, duplicate dependency detection, and source restrictions. Configuration lives in `deny.toml` at the workspace root.
 - **cargo-audit** for known vulnerability scanning against the RustSec advisory database.
 
-These are **optional manual security-review tools**. They are not part of routine CI or `./scripts/check.sh extended`. When installed, maintainers may run:
+These are **explicit live security-review tools**. They are not part of routine
+CI or `./scripts/check.sh extended`, because their advisory databases are
+time-dependent. The canonical fail-closed release/security gate is:
 
 ```sh
-cargo deny check
-cargo audit
+./scripts/check_security.sh
 ```
 
 Findings should be addressed during security review, but these tools are not automatic merge or release gates under the simplified CI policy.
@@ -235,18 +236,12 @@ compatible TCP/TLS connections across requests. Each request:
 
 For proxy connections specifically:
 
-- **HTTP forward proxying**: each request opens a new TCP connection to
-  the proxy, sends the request with absolute-form URI, reads the
-  response, and closes the connection.
-- **HTTPS CONNECT tunneling**: each request opens a new TCP connection to
-  the proxy, sends CONNECT, reads the 200 response, performs TLS through
-  the tunnel, sends the HTTP request, reads the response, and closes the
-  connection.
-
-The pool permit key includes the proxy origin to prevent excessive parallel
-connections through the same proxy, but the current HTTP forward and HTTPS
-CONNECT proxy paths open a fresh proxy socket per request. SOCKS routes use
-their own persistent Hyper pools. Static resolved-destination requests use
+Successful ordinary HTTP forward-proxy and compatible HTTPS CONNECT requests
+use bounded Hyper client pools. Their connectors retain proxy DNS/pinning,
+proxy TLS, CONNECT rejection parsing, origin TLS/SNI, and phase-aware setup
+policy. Multi-address CONNECT fallback remains handshake-specific to preserve
+typed 502/504 retry semantics. SOCKS routes use their own persistent Hyper
+pools. Static resolved-destination requests use
 an isolated direct client so ordinary DNS and incompatible static route
 connections cannot cross the caller's constraint.
 
