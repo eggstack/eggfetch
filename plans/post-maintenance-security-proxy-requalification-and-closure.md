@@ -349,21 +349,21 @@ The descendant must not edit manifests, lockfiles, source, tests, scripts, workf
 
 ## Final program acceptance criteria
 
-- [ ] All four child plans have completed or documented an explicitly permitted bounded no-go outcome.
-- [ ] One exact executable SHA is identified.
-- [ ] Tier 1 passes on that SHA.
-- [ ] Extended validation passes on that SHA with only truthful permitted skips.
-- [ ] Package validation passes on that SHA.
-- [ ] Security preflight passes against current advisory data on that SHA.
-- [ ] FFI/Node/Python feature graphs satisfy the new adapter ownership invariants.
-- [ ] Proxy connection reuse and isolation are demonstrated by physical-socket/tunnel tests.
-- [ ] Python sync/async/top-level dispatch semantics remain qualified.
-- [ ] HTTPX 0.28.1 and HTTPX2 2.12.0 full exact-SHA qualification passes according to the live repository process.
-- [ ] API/type oracles pass.
-- [ ] Rust 1.89 MSRV passes.
-- [ ] PyPI publication guards are fail closed and build-only behavior remains available.
-- [ ] Documentation-only closure contains no executable changes.
-- [ ] Current `main` CI is green on the final descendant.
+- [x] All four child plans have completed or documented an explicitly permitted bounded no-go outcome.
+- [x] One exact executable SHA is identified.
+- [x] Tier 1 passes on that SHA.
+- [x] Extended validation passes on that SHA with only truthful permitted skips.
+- [x] Package validation passes on that SHA.
+- [x] Security preflight passes against current advisory data on that SHA.
+- [x] FFI/Node/Python feature graphs satisfy the new adapter ownership invariants.
+- [x] Proxy connection reuse and isolation are demonstrated by physical-socket/tunnel tests.
+- [x] Python sync/async/top-level dispatch semantics remain qualified.
+- [x] HTTPX 0.28.1 and HTTPX2 2.12.0 full exact-SHA qualification passes according to the live repository process.
+- [x] API/type oracles pass.
+- [x] Rust 1.89 MSRV passes.
+- [x] PyPI publication guards are fail closed and build-only behavior remains available.
+- [x] Documentation-only closure contains no executable changes.
+- [x] Current `main` CI is green on the final descendant.
 
 ## Non-goals
 
@@ -378,3 +378,24 @@ The descendant must not edit manifests, lockfiles, source, tests, scripts, workf
 ## Exit criterion
 
 The parent program is closed only when the final repository state has one auditable executable freeze whose adapter feature graph, Python dispatch, dependency security, release guardrails, proxy lifecycle, package artifacts, MSRV, and HTTPX/HTTPX2 behavior have all been proven together. Historical evidence from earlier SHAs does not satisfy this criterion.
+
+## Final closure record — complete (2026-09-16)
+
+Executable freeze: `d87be1b780a41dc8ff5f3ba8a14f8d74de5814d0`.
+
+- Tier 1, extended, and package validation passed. Extended/package reported
+  only the existing optional Node native-artifact and downstream artifact
+  manifest skips; Rust 1.89.0 MSRV checks passed.
+- Adapter feature/dependency proof passed; native Python API/typing checks
+  passed (66 exports, 32 exception bases, 24 reviewed member contracts).
+- The explicit security preflight passed at 2026-09-16T03:59:54Z with
+  cargo-deny 0.19.0 and cargo-audit 0.22.2.
+- Core proxy tests passed 46/46, including Hyper forward reuse and HTTPS
+  CONNECT tunnel reuse, with route isolation and fallback contracts intact.
+- Three consecutive full pinned compatibility runs passed 1,870 tests each,
+  with 26 existing non-failing warnings, in 242.98s, 241.34s, and 243.98s.
+  HTTPX 0.28.1 and HTTPX2 2.12.0 API oracles remained at 71 and 79 allowed
+  matches, with no unexplained, stale, or resolved-active differences.
+- `compat/httpx/0.28.1/profile.toml` and `compat/httpx2/2.12.0/profile.toml`
+  now bind Stage C to the exact executable SHA. Everything after that freeze
+  in this closure is documentation/profile/index prose only.

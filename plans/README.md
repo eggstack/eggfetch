@@ -2,13 +2,15 @@
 
 This directory contains active implementation plans, live qualification/status records, and historical implementation records. Completed plans are non-normative unless another current document explicitly says otherwise. Verification and release policy remain governed by `docs/verification-policy.md` and `docs/releases/process.md`.
 
-## Active program — post-audit maintenance, security, and proxy modernization (2026-09-15)
+## Completed program — post-audit maintenance, security, and proxy modernization (2026-09-16)
 
 Handoff program: `post-audit-maintenance-security-and-proxy-modernization-program.md`
 
 Planning baseline: `025b1a5a6a94b017b3f3b183c3d562e7ee9bcca7`.
 
-This program follows the completed post-audit maturation, embedded-consumer,
+Status: complete. Executable freeze:
+d87be1b780a41dc8ff5f3ba8a14f8d74de5814d0; the final plan/profile/index
+closure is documentation-only. This program follows the completed post-audit maturation, embedded-consumer,
 transport-extensibility, proxy-pinning, and Python interop lines. It does not
 reopen Node maturation or HTTP/3 graduation. The new source audit found a
 narrower set of ownership/maintenance defects: FFI feature leakage into core
@@ -39,7 +41,9 @@ Execution order:
    Tier 1/extended/package gates, renew exact-SHA HTTPX 0.28.1 / HTTPX2 2.12.0
    qualification, then perform documentation/index closure.
 
-The proxy plan must not introduce a parallel custom connection pool before
+The proxy plan did not introduce a parallel custom connection pool: Hyper owns
+eligible forward/CONNECT reuse and narrow handshake fallbacks preserve the
+remaining contracts. The proxy plan must not introduce a parallel custom connection pool before
 proving Hyper's existing pool insufficient. Upstream proxy helpers are reused
 only where they preserve eggfetch's richer route/security contracts. The
 security plan must preserve the single automatic push/PR workflow required by

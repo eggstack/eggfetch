@@ -11,7 +11,10 @@ See also: [overview.md](overview.md).
 - `unsafe_code = "allow"` — sole exception for FFI boundary.
 - Depends only on `eggfetch-core`'s public API. Zero networking logic.
 - Produces `cdylib`, `staticlib`, and `rlib` targets.
-- Mirrors `eggfetch-core`'s feature flags.
+- Forwards the core feature families explicitly. Its default profile preserves
+  the established secure FFI behavior (http1, Rustls, native roots, cookies,
+  proxy, and gzip); default-features = false now really disables core defaults
+  until the caller selects forwarding features.
 
 ### Handle Types
 
@@ -97,7 +100,9 @@ Direct dispatch is not blocked on feasibility — core `Client` is
 
 ### Architecture
 
-- Prototype using napi-rs to wrap `eggfetch-ffi`.
+- Prototype using napi-rs to wrap eggfetch-ffi; its Cargo manifest explicitly
+  selects the required H1/Rustls/native-root profile instead of relying on FFI
+  dependency defaults.
 - `unsafe_code = "allow"` — sole exception for N-API.
 - Modules: `client.rs`, `response.rs`, `lib.rs`.
 - Ordinary requests execute the **blocking C ABI**

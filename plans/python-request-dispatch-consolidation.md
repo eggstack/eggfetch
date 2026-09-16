@@ -107,8 +107,8 @@ Do not assume two visually similar branches are semantically identical. In parti
 
 Acceptance:
 
-- [ ] Every `PreparedRequest` field has an explicit owner in each dispatch path.
-- [ ] Intentional differences are identified before code is moved.
+- [x] Every `PreparedRequest` field has an explicit owner in each dispatch path.
+- [x] Intentional differences are identified before code is moved.
 
 # 2. Introduce one core-builder application primitive
 
@@ -156,8 +156,8 @@ Where a field is intentionally runtime-specific, have the shared transformation 
 
 Acceptance:
 
-- [ ] Adding a new non-defaulted `PreparedRequest` field requires touching the shared dispatch transformation or an explicitly documented runtime-specific boundary.
-- [ ] Sync and async request methods no longer contain parallel manual application of the same request settings.
+- [x] Adding a new non-defaulted `PreparedRequest` field requires touching the shared dispatch transformation or an explicitly documented runtime-specific boundary.
+- [x] Sync and async request methods no longer contain parallel manual application of the same request settings.
 
 # 4. Preserve auth and proxy three-state semantics
 
@@ -255,13 +255,13 @@ Prefer table-driven or shared tests where practical so the test suite itself doe
 
 ## Code-quality acceptance criteria
 
-- [ ] Request normalization remains separate from network dispatch.
-- [ ] One crate-private transformation applies common `PreparedRequest` state to `eggfetch_core::RequestBuilder`.
-- [ ] Sync and async methods contain only runtime-specific dispatch/response mechanics plus calls to the shared preparation code.
-- [ ] Top-level helpers share the common mapping wherever semantically valid.
-- [ ] No new public Rust or Python type is introduced solely for the refactor.
-- [ ] No core HTTP policy is duplicated in the Python crate.
-- [ ] Existing explicit `#[allow(clippy::too_many_arguments)]` boundaries are reduced where the new owned configuration naturally permits it, but no abstraction is added solely to silence Clippy.
+- [x] Request normalization remains separate from network dispatch.
+- [x] One crate-private transformation applies common `PreparedRequest` state to `eggfetch_core::RequestBuilder`.
+- [x] Sync and async methods contain only runtime-specific dispatch/response mechanics plus calls to the shared preparation code.
+- [x] Top-level helpers share the common mapping wherever semantically valid.
+- [x] No new public Rust or Python type is introduced solely for the refactor.
+- [x] No core HTTP policy is duplicated in the Python crate.
+- [x] Existing explicit `#[allow(clippy::too_many_arguments)]` boundaries are reduced where the new owned configuration naturally permits it, but no abstraction is added solely to silence Clippy.
 
 ## Required validation
 
@@ -291,3 +291,13 @@ If the refactor changes exported symbols, signatures, stubs, or package contents
 ## Exit criteria
 
 This plan is complete when normalized Python request state has one authoritative runtime-independent mapping into the core request builder, all intentional surface differences remain explicit and tested, Tier 1 remains green, and the change is ready for the parent program's final exact-SHA compatibility qualification.
+
+## Closure record — complete (2026-09-16)
+
+`prepare_core_dispatch()` is now the single crate-private mapping from owned
+`PreparedRequest` state to the core builder, shared by sync, async, streaming,
+and top-level paths. Runtime ownership, response adaptation, and trace callback
+handling remain at their respective boundaries. The compatibility-only proxy URL
+conversion correction preserves HTTPX credential semantics while native raw
+proxy parsing remains fail closed. Native Python tests passed 560/560 and the
+final exact-SHA compatibility qualification passed 1,870/1,870 in each run.

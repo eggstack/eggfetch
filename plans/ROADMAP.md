@@ -8,7 +8,7 @@ eggfetch is a Rust-native HTTP client platform with Python bindings and a CLI la
 
 The remaining roadmap is therefore not primarily about proving feasibility. It is about tightening semantics, completing the expected HTTP-client feature set, expanding transport capabilities, and establishing production-grade release, security, testing, and documentation practices.
 
-## Current product position (2026-09-14)
+## Current product position (2026-09-16)
 
 The embedded Rust client, extensible transport, and native HTTP body/TLS
 extensibility programs are complete on implementation freeze
@@ -40,6 +40,14 @@ evidence is still incomplete (evidence/status:
 The follow-on HTTP/3 production qualification program is complete as a
 retained-experimental outcome; its missing evidence is recorded in
 `http3-production-qualification-evidence.md` rather than treated as a pass.
+
+The post-audit maintenance, security, and proxy modernization program is now
+complete on executable freeze d87be1b780a41dc8ff5f3ba8a14f8d74de5814d0.
+Adapter feature ownership is explicit, Python request dispatch has one shared
+core-builder mapping, release publication is tag/version-bound, and eligible
+HTTP forward/CONNECT routes use bounded Hyper-managed reuse. HTTPX 0.28.1 and
+HTTPX2 2.12.0 remain Stage C-qualified on that exact SHA; HTTP/3 and the Node
+binding remain unchanged experimental surfaces.
 
 ### Current supported surfaces
 

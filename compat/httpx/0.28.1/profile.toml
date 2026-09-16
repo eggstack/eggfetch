@@ -47,6 +47,12 @@ rebaseline-sha = "f9eb1a455907d43210886b7b047d18bde8716652"
 # after three consecutive full compatibility passes on the final executable
 # candidate below. The immediately preceding `97e87e42...` binding is
 # historical only.
+# The post-audit maintenance/security/proxy program then corrected adapter
+# feature ownership, consolidated Python dispatch, hardened release checks,
+# and moved compatible proxy framing into bounded Hyper pools. This profile was
+# renewed after three consecutive full compatibility passes on the final
+# executable candidate below. The immediately preceding `c28bbcad...` binding
+# is historical only.
 # The PEP 561 method-contract correction then strengthened the native member
 # typing/drift gate and installed-wheel typing proof; this profile was renewed
 # after three consecutive full compatibility passes on the final executable
@@ -54,9 +60,9 @@ rebaseline-sha = "f9eb1a455907d43210886b7b047d18bde8716652"
 # historical only.
 stage = "stage-c-qualified"
 status = "qualified"
-qualification-sha = "c28bbcad6bf9c420721731e8b7a18c2ec1707dd1"
+qualification-sha = "d87be1b780a41dc8ff5f3ba8a14f8d74de5814d0"
 qualification-date = "2026-09-16"
-previous-qualification-sha = "2281345f3eaf636c62ec21d2c963d6f90ea764a8"
+previous-qualification-sha = "c28bbcad6bf9c420721731e8b7a18c2ec1707dd1"
 historical-current-qualification-sha = "312cd4402ea2b4b27bf54cf7dc36924a1d449adc"
 historical-qualification-sha = "cc90f5ed561bbe10d4c26accc54ed3b916518f98, d034a1005857a7f403222dda4bda5f2f204a44fe, d24101be6ed7be64463813750da5b4043d9905ec, 5c7899fefb6df087dfa1b3578fbef9ba64f87742, 9ffa6cd85848fd16a424b65f73254351911777c4, c44d4f25ffebc1a792335163ae4bc106076b3963"
 reference = "httpx==0.28.1"

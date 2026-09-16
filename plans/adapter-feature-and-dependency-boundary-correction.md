@@ -77,9 +77,9 @@ Explicitly identify which path currently activates:
 
 Acceptance:
 
-- [ ] The accidental FFI -> core default-feature path is demonstrated before correction.
-- [ ] Node's actual pre-change transport/TLS feature set is recorded.
-- [ ] Python direct TLS dependencies are classified as behavioral owners, feature-unification-only dependencies, or residue.
+- [x] The accidental FFI -> core default-feature path is demonstrated before correction.
+- [x] Node's actual pre-change transport/TLS feature set is recorded.
+- [x] Python direct TLS dependencies are classified as behavioral owners, feature-unification-only dependencies, or residue.
 
 # 2. Make FFI forwarding authoritative
 
@@ -107,10 +107,10 @@ Audit all other FFI forwarded features for the same issue. Do not add an FFI fea
 
 Acceptance:
 
-- [ ] `eggfetch-ffi --no-default-features` does not activate core H1/Rustls/native-root defaults.
-- [ ] FFI default HTTPS behavior retains its current secure root policy.
-- [ ] Each FFI Cargo feature maps to an explicit core feature edge.
-- [ ] `cargo tree -p eggfetch-ffi --no-default-features -e features` proves the corrected graph.
+- [x] `eggfetch-ffi --no-default-features` does not activate core H1/Rustls/native-root defaults.
+- [x] FFI default HTTPS behavior retains its current secure root policy.
+- [x] Each FFI Cargo feature maps to an explicit core feature edge.
+- [x] `cargo tree -p eggfetch-ffi --no-default-features -e features` proves the corrected graph.
 
 # 3. Make Node's transport profile explicit
 
@@ -135,9 +135,9 @@ Do not use this plan to mature Node. Keep the existing N-API -> FFI architecture
 
 Acceptance:
 
-- [ ] Node no longer depends on transitive Cargo defaults for HTTPS capability.
-- [ ] Node does not gain unused FFI feature families during correction.
-- [ ] Rust-side Node tests and the optional JS smoke surface retain existing behavior.
+- [x] Node no longer depends on transitive Cargo defaults for HTTPS capability.
+- [x] Node does not gain unused FFI feature families during correction.
+- [x] Rust-side Node tests and the optional JS smoke surface retain existing behavior.
 
 # 4. Audit and remove redundant Python TLS dependencies
 
@@ -171,9 +171,9 @@ Do not weaken or change:
 
 Acceptance:
 
-- [ ] Every direct Python TLS dependency has a source-backed owner or is removed.
-- [ ] The before/after effective feature graph is equivalent for supported Python behavior.
-- [ ] No wheel/API/HTTPX behavior is changed by dependency cleanup.
+- [x] Every direct Python TLS dependency has a source-backed owner or is removed.
+- [x] The before/after effective feature graph is equivalent for supported Python behavior.
+- [x] No wheel/API/HTTPX behavior is changed by dependency cleanup.
 
 # 5. Delete obsolete core configuration placeholder
 
@@ -185,8 +185,8 @@ Search docs for stale references to the placeholder and update only those direct
 
 Acceptance:
 
-- [ ] No milestone-era placeholder remains in the core source tree.
-- [ ] No public API is removed as a consequence.
+- [x] No milestone-era placeholder remains in the core source tree.
+- [x] No public API is removed as a consequence.
 
 # 6. Decide the Python HTTP/3 build-cost issue explicitly
 
@@ -205,8 +205,8 @@ A future optional-wheel/extras architecture is outside this plan.
 
 Acceptance:
 
-- [ ] The always-compiled Python H3 surface is explicitly classified as intentional or changed through a separately justified compatible design.
-- [ ] No unsupported binary-size claim is made.
+- [x] The always-compiled Python H3 surface is explicitly classified as intentional or changed through a separately justified compatible design.
+- [x] No unsupported binary-size claim is made.
 
 # 7. Add bounded feature-graph regression checks
 
@@ -273,3 +273,13 @@ Where the exact Rust 1.89 toolchain is available, include the corrected adapter 
 ## Exit criteria
 
 This plan is complete when adapter manifests describe reality: disabling FFI defaults truly disables core defaults, Node explicitly asks for the capabilities it uses, Python has no unexplained TLS dependency duplication, stale core placeholder code is gone, and routine/package validation proves the corrections without an API regression.
+
+## Closure record — complete (2026-09-16)
+
+Implemented on executable freeze `d87be1b780a41dc8ff5f3ba8a14f8d74de5814d0`:
+FFI disables core defaults and forwards native roots explicitly, Node requests
+its H1/Rustls/native-root profile explicitly, redundant Python TLS dependencies
+were removed after source/graph review, and the orphaned `config.rs` was deleted.
+`scripts/check_adapter_features.py`, no-default FFI compilation, Python checks,
+the full workspace gates, and package validation passed. The effective FFI
+default secure profile remains unchanged.

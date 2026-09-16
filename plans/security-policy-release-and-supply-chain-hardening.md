@@ -103,9 +103,9 @@ Remove the obsolete PyO3 ignores once the live scan confirms the current lockfil
 
 Acceptance:
 
-- [ ] No ignore remains merely because a historical upgrade used to be pending.
-- [ ] Every remaining exception has a current, specific rationale.
-- [ ] The live current lockfile has no unacknowledged known vulnerability finding at plan closure.
+- [x] No ignore remains merely because a historical upgrade used to be pending.
+- [x] Every remaining exception has a current, specific rationale.
+- [x] The live current lockfile has no unacknowledged known vulnerability finding at plan closure.
 
 # 2. Add one explicit fail-closed security preflight
 
@@ -134,9 +134,9 @@ Decide explicitly whether `./scripts/check.sh extended` should call it. The defa
 
 Acceptance:
 
-- [ ] There is one documented security command with fail-closed prerequisites.
-- [ ] Routine CI remains one workflow/job and does not fetch live vulnerability databases.
-- [ ] Release documentation requires the security command before crates.io publication.
+- [x] There is one documented security command with fail-closed prerequisites.
+- [x] Routine CI remains one workflow/job and does not fetch live vulnerability databases.
+- [x] Release documentation requires the security command before crates.io publication.
 
 # 3. Run the security preflight in the manual PyPI publication path
 
@@ -150,9 +150,9 @@ Do not create `.github/workflows/security.yml` or another automatic workflow.
 
 Acceptance:
 
-- [ ] `publish=true` cannot reach artifact publication without a successful live dependency-security preflight.
-- [ ] The security tool versions used by publication are reviewable/pinned.
-- [ ] Routine push/PR workflow complexity is unchanged.
+- [x] `publish=true` cannot reach artifact publication without a successful live dependency-security preflight.
+- [x] The security tool versions used by publication are reviewable/pinned.
+- [x] Routine push/PR workflow complexity is unchanged.
 
 # 4. Enforce immutable publication identity
 
@@ -181,11 +181,11 @@ Do not weaken the existing environment approval or OIDC controls.
 
 Acceptance:
 
-- [ ] A branch dispatch with `publish=false` remains valid.
-- [ ] A branch dispatch with `publish=true` fails before publication.
-- [ ] A malformed tag fails.
-- [ ] A valid tag whose version differs from Cargo/pyproject metadata fails.
-- [ ] A correct matching tag may proceed to the existing protected environment and OIDC publish step.
+- [x] A branch dispatch with `publish=false` remains valid.
+- [x] A branch dispatch with `publish=true` fails before publication.
+- [x] A malformed tag fails.
+- [x] A valid tag whose version differs from Cargo/pyproject metadata fails.
+- [x] A correct matching tag may proceed to the existing protected environment and OIDC publish step.
 
 # 5. Pin release-critical Python tooling
 
@@ -204,8 +204,8 @@ The wheel-building `PyO3/maturin-action` is already SHA-pinned. Do not install a
 
 Acceptance:
 
-- [ ] Re-running a release workflow at the same repository SHA does not silently pick a newer maturin/twine simply because PyPI changed.
-- [ ] Tool updates are ordinary reviewed repository diffs.
+- [x] Re-running a release workflow at the same repository SHA does not silently pick a newer maturin/twine simply because PyPI changed.
+- [x] Tool updates are ordinary reviewed repository diffs.
 
 # 6. Reconcile security documentation
 
@@ -296,3 +296,14 @@ Record the live security scan date and tool versions in the plan closure section
 ## Exit criteria
 
 This plan is complete when security documentation, advisory configuration, and release enforcement tell the same story: routine CI remains intentionally small; explicit/release security scanning is current and fail closed; obsolete advisory exceptions are gone; bounded unsafe ABI exceptions are documented truthfully; and PyPI publication cannot occur from an unversioned or mismatched ref even if external environment configuration is permissive.
+
+## Closure record — complete (2026-09-16)
+
+`deny.toml` has no stale advisory ignores. `scripts/check_security.sh` is the
+canonical fail-closed live preflight and is invoked by the publish path without
+adding a second automatic workflow. Publication now requires an exact matching
+`v<SEMVER>` tag and HEAD identity, while build-only branch dispatch remains
+valid. Release-critical maturin/twine versions and the pinned security tool
+versions are repository-controlled. The final preflight passed at
+2026-09-16T03:59:54Z with cargo-deny 0.19.0 and cargo-audit 0.22.2; the only
+reported findings were non-failing duplicate getrandom/hashbrown warnings.

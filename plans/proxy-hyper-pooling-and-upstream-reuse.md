@@ -134,9 +134,9 @@ Composable key remapping is justified only if a concrete required route cannot b
 
 Acceptance:
 
-- [ ] A recorded go/no-go decision exists for `Connected::proxy(true)` forward routing.
-- [ ] A recorded go/no-go decision exists for upstream `Tunnel`.
-- [ ] No custom connection pool is introduced before proving Hyper's existing pool insufficient.
+- [x] A recorded go/no-go decision exists for `Connected::proxy(true)` forward routing.
+- [x] A recorded go/no-go decision exists for upstream `Tunnel`.
+- [x] No custom connection pool is introduced before proving Hyper's existing pool insufficient.
 
 # 3. Define connection-affecting proxy route identity
 
@@ -162,9 +162,9 @@ Prefer a bounded cache using the existing SNI/SOCKS client-cache pattern rather 
 
 Acceptance:
 
-- [ ] No pooled client/tunnel can cross incompatible proxy TLS/auth/pinning/origin policy.
-- [ ] Cache growth is bounded for request-scoped arbitrary proxies.
-- [ ] Key `Debug`/logging cannot disclose proxy credentials.
+- [x] No pooled client/tunnel can cross incompatible proxy TLS/auth/pinning/origin policy.
+- [x] Cache growth is bounded for request-scoped arbitrary proxies.
+- [x] Key `Debug`/logging cannot disclose proxy credentials.
 
 # 4. Move HTTP forward proxy framing under Hyper
 
@@ -202,10 +202,10 @@ The initial reuse target may be per destination origin even though one HTTP prox
 
 Acceptance:
 
-- [ ] Two sequential eligible requests through the same forward proxy/origin can complete using one accepted proxy connection.
-- [ ] Response parsing/body streaming for the modernized route is owned by Hyper.
-- [ ] Chunked streaming upload/download compatibility remains green.
-- [ ] `Connection: close`, truncated bodies, stale idle sockets, cancellation, and dropped responses do not return unsafe connections to the pool.
+- [x] Two sequential eligible requests through the same forward proxy/origin can complete using one accepted proxy connection.
+- [x] Response parsing/body streaming for the modernized route is owned by Hyper.
+- [x] Chunked streaming upload/download compatibility remains green.
+- [x] `Connection: close`, truncated bodies, stale idle sockets, cancellation, and dropped responses do not return unsafe connections to the pool.
 
 # 5. Move CONNECT origin HTTP framing under Hyper
 
@@ -227,11 +227,11 @@ For HTTP/2 through CONNECT, verify that Hyper recognizes negotiated H2 metadata 
 
 Acceptance:
 
-- [ ] Two sequential compatible HTTPS requests through the same proxy to the same origin can reuse an established tunnel/connection where protocol semantics allow.
-- [ ] H1 and existing H2-through-CONNECT behavior remain correct.
-- [ ] Proxy and origin TLS policies remain independent.
-- [ ] Pinned ultimate destinations preserve logical Host/SNI and remain fail closed.
-- [ ] CONNECT rejection retains the documented structured error information or an explicitly approved equivalent contract.
+- [x] Two sequential compatible HTTPS requests through the same proxy to the same origin can reuse an established tunnel/connection where protocol semantics allow.
+- [x] H1 and existing H2-through-CONNECT behavior remain correct.
+- [x] Proxy and origin TLS policies remain independent.
+- [x] Pinned ultimate destinations preserve logical Host/SNI and remain fail closed.
+- [x] CONNECT rejection retains the documented structured error information or an explicitly approved equivalent contract.
 
 # 6. Retire only genuinely redundant manual HTTP code
 
@@ -252,8 +252,8 @@ The desired maintenance result is fewer independent HTTP parsers, not the smalle
 
 Acceptance:
 
-- [ ] There is no second full origin HTTP/1 response implementation on proxy routes unless a documented Hyper limitation requires it.
-- [ ] Remaining manual parsing has a narrow handshake-specific owner and fuzz/unit coverage.
+- [x] There is no second full origin HTTP/1 response implementation on proxy routes unless a documented Hyper limitation requires it.
+- [x] Remaining manual parsing has a narrow handshake-specific owner and fuzz/unit coverage.
 
 # 7. Preserve timeout and lifecycle semantics
 
@@ -372,3 +372,16 @@ The parent program's final plan owns the exact-SHA compatibility renewal.
 ## Exit criteria
 
 This plan is complete when ordinary HTTP forward/CONNECT proxy traffic uses Hyper for successful HTTP framing and connection lifecycle, eligible routes demonstrably reuse physical connections/tunnels, connection-affecting policy is safely isolated, existing proxy/TLS/pinning/timeout semantics remain qualified, and the amount of eggfetch-owned generic HTTP parsing is materially reduced rather than merely moved.
+
+## Closure record — complete (2026-09-16)
+
+The feasibility decision is to use `Connected::proxy(true)` and Hyper's legacy
+client pool through route-specific connectors. The generic upstream `Tunnel`
+helper is a no-go because it cannot preserve eggfetch's typed rejection,
+multi-target fallback, pinning, proxy/origin TLS separation, and phase budgets.
+No custom connection pool was introduced. Successful forward requests and
+compatible single-target CONNECT origin traffic now use Hyper framing and pooled
+connection lifecycle; multi-target and unsupported cases retain the narrow
+handshake fallback. The final proxy suite passed 46/46, including physical
+forward reuse and HTTPS CONNECT tunnel reuse, plus isolation/auth/TLS/pinning/
+timeout/SOCKS coverage.

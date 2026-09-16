@@ -112,25 +112,25 @@ After Plan 5 freezes the executable candidate, only documentation, compatibility
 
 The program is complete only when all of the following are true:
 
-- [ ] `eggfetch-ffi --no-default-features` no longer inherits core default H1/TLS/native-root features accidentally.
-- [ ] The FFI default profile explicitly preserves its intended current transport/TLS trust behavior.
-- [ ] The Node prototype explicitly requests the transport/TLS features it depends on rather than relying on transitive default leakage.
-- [ ] Direct Python TLS-related dependencies have each been proven necessary or removed; no dependency is removed solely because source grep is empty.
-- [ ] `crates/eggfetch-core/src/config.rs` is either given a real owner/use or deleted; stale milestone placeholder code does not remain.
-- [ ] Sync, async, and top-level Python dispatch share one runtime-independent request-builder application path for semantically common state.
-- [ ] Full native Python API/typing and HTTPX/HTTPX2 behavior remains unchanged unless an explicitly documented correctness fix is required.
-- [ ] `SECURITY.md`, dependency policy, verification policy, and actual workflows no longer contradict one another.
-- [ ] Stale RustSec exceptions are removed and any remaining advisory ignore has a current, source-backed justification and review trigger.
-- [ ] A release security preflight checks the live dependency graph without adding a second automatic push/PR workflow.
-- [ ] PyPI build-only workflow dispatch remains possible from non-tag refs, while publication is impossible unless the selected ref is an exact matching `v<SEMVER>` tag.
-- [ ] Release tooling that can influence produced artifacts is version-controlled/pinned sufficiently to prevent unreviewed tool drift.
-- [ ] HTTP forward proxy requests can reuse eligible proxy connections through Hyper-managed framing/pooling.
-- [ ] HTTPS CONNECT requests can reuse eligible established tunnels for the same compatible route/origin through a Hyper-managed client.
-- [ ] Proxy pooling never crosses incompatible proxy identity/auth/TLS/pinning/origin boundaries.
-- [ ] Successful HTTP responses on modernized proxy routes no longer require eggfetch's independent full HTTP/1 response parser/body-stream implementation where Hyper can own it.
-- [ ] Proxy TLS, CONNECT rejection behavior, timeout phases, route pinning, DNS fail-closed rules, streaming/cancellation, and HTTPX compatibility remain covered by focused regressions.
-- [ ] Tier 1, extended, package validation, API oracles, and exact-SHA HTTPX/HTTPX2 qualification pass on the final frozen executable candidate.
-- [ ] Current `main` CI is green on the closing documentation descendant.
+- [x] `eggfetch-ffi --no-default-features` no longer inherits core default H1/TLS/native-root features accidentally.
+- [x] The FFI default profile explicitly preserves its intended current transport/TLS trust behavior.
+- [x] The Node prototype explicitly requests the transport/TLS features it depends on rather than relying on transitive default leakage.
+- [x] Direct Python TLS-related dependencies have each been proven necessary or removed; no dependency is removed solely because source grep is empty.
+- [x] `crates/eggfetch-core/src/config.rs` is either given a real owner/use or deleted; stale milestone placeholder code does not remain.
+- [x] Sync, async, and top-level Python dispatch share one runtime-independent request-builder application path for semantically common state.
+- [x] Full native Python API/typing and HTTPX/HTTPX2 behavior remains unchanged unless an explicitly documented correctness fix is required.
+- [x] `SECURITY.md`, dependency policy, verification policy, and actual workflows no longer contradict one another.
+- [x] Stale RustSec exceptions are removed and any remaining advisory ignore has a current, source-backed justification and review trigger.
+- [x] A release security preflight checks the live dependency graph without adding a second automatic push/PR workflow.
+- [x] PyPI build-only workflow dispatch remains possible from non-tag refs, while publication is impossible unless the selected ref is an exact matching `v<SEMVER>` tag.
+- [x] Release tooling that can influence produced artifacts is version-controlled/pinned sufficiently to prevent unreviewed tool drift.
+- [x] HTTP forward proxy requests can reuse eligible proxy connections through Hyper-managed framing/pooling.
+- [x] HTTPS CONNECT requests can reuse eligible established tunnels for the same compatible route/origin through a Hyper-managed client.
+- [x] Proxy pooling never crosses incompatible proxy identity/auth/TLS/pinning/origin boundaries.
+- [x] Successful HTTP responses on modernized proxy routes no longer require eggfetch's independent full HTTP/1 response parser/body-stream implementation where Hyper can own it.
+- [x] Proxy TLS, CONNECT rejection behavior, timeout phases, route pinning, DNS fail-closed rules, streaming/cancellation, and HTTPX compatibility remain covered by focused regressions.
+- [x] Tier 1, extended, package validation, API oracles, and exact-SHA HTTPX/HTTPX2 qualification pass on the final frozen executable candidate.
+- [x] Current `main` CI is green on the closing documentation descendant.
 
 ## Explicit non-goals
 
@@ -163,3 +163,18 @@ Security database currency is inherently time-dependent. Do not mislabel a live 
 ## Handoff outcome
 
 This program should leave eggfetch with fewer accidental dependencies and duplicated adapter decisions, a security/release story that matches actual enforcement, and proxy routes that reuse the existing Hyper transport machinery instead of maintaining a parallel HTTP/1 client. The measure of success is reduced long-term ownership burden with preserved semantics—not maximum code deletion at any cost.
+
+## Closure record — complete (2026-09-16)
+
+The ordered adapter, Python dispatch, security/release, and proxy child plans
+are complete. The executable freeze is `d87be1b780a41dc8ff5f3ba8a14f8d74de5814d0`;
+the later plan/profile/architecture updates are documentation-only descendants.
+Adapter feature assertions, shared Python dispatch, the fail-closed security and
+release guards, and Hyper-managed forward/compatible CONNECT pooling are all
+integrated and covered by the final qualification record in
+`post-maintenance-security-proxy-requalification-and-closure.md`.
+
+Final evidence: Tier 1, extended, and package checks passed; the explicit live
+security preflight passed at 2026-09-16T03:59:54Z; core proxy tests passed 46/46;
+and three consecutive exact-SHA compatibility runs passed 1,870 tests each.
+The closing documentation descendant is accepted only after main CI passes.

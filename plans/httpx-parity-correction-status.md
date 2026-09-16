@@ -4,6 +4,35 @@ This record is the exact-SHA-bound status for the HTTPX 0.28.1 compatibility
 facade. Historical phase and corrective-pass records remain in the git history
 and referenced plans; counts below are only from the runs named here.
 
+## Recorded state — Stage C renewed after post-audit maintenance/security/proxy program (2026-09-16)
+
+Recorded designation: **Stage C qualified** for both documented facades, bound
+to executable SHA `d87be1b780a41dc8ff5f3ba8a14f8d74de5814d0`. The preceding
+`c28bbcad6bf9c420721731e8b7a18c2ec1707dd1` binding is historical because the
+adapter feature graph, shared Python dispatch, release/security checks, and
+Hyper-managed forward/CONNECT proxy routes changed executable behavior.
+
+Qualification evidence on the frozen executable tree:
+
+- Tier 1 passed through the extended and package entry points; package checks,
+  native API/typing checks, FFI/Node checks, and Rust 1.89.0 MSRV checks passed.
+- The HTTPX 0.28.1 oracle reported 71 allowed matches; the HTTPX2 2.12.0
+  oracle reported 79; both had zero unexplained, stale, or resolved-active
+  differences.
+- Three consecutive full pinned compatibility runs each passed 1,870 tests:
+  pass 1 (242.98s), pass 2 (241.34s), and pass 3 (243.98s), with no files or
+  dependencies changed between runs. Each had 26 existing
+  non-failing warnings.
+- Proxy focused evidence passed 46/46 core proxy tests, including Hyper
+  forward-proxy keep-alive reuse, proxy auth/TLS/pinning/timeout behavior, and
+  CONNECT tunnel reuse, the SOCKS matrix, and the direct HTTPX proxy/auth
+  regressions after the compatibility conversion correction.
+- Final live security preflight passed at 2026-09-16T03:59:54Z with
+  cargo-deny 0.19.0 and cargo-audit 0.22.2 against the refreshed advisory DB.
+
+The complete implementation and closure record is
+`plans/post-maintenance-security-proxy-requalification-and-closure.md`.
+
 ## Recorded state — Stage C renewed after PEP 561 method-contract correction (2026-09-16)
 
 Recorded designation: **Stage C qualified** for both the documented HTTPX
