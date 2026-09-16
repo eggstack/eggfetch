@@ -22,8 +22,9 @@ maturin develop -m crates/eggfetch-python/Cargo.toml
 python -m pytest crates/eggfetch-python/tests/ -q --ignore=crates/eggfetch-python/tests/compat
 ```
 
-Requires an active venv with Python 3.10+, maturin, pytest, pytest-asyncio
-(`check.sh` refuses to run without it). Rebuild after every Rust change in
+Requires an active venv with the pinned tooling in
+`scripts/ci-requirements.txt` (Python 3.10+, maturin, pytest, pytest-asyncio;
+`check.sh` refuses to run without it). Rebuild after every Rust change in
 `crates/eggfetch-python` — a stale `.so` causes confusing failures.
 Tier 2 compat runs `EGGFETCH_COMPAT_REQUIRED=1 pytest .../compat/ -v --strict-markers`.
 

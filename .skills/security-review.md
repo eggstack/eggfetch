@@ -9,6 +9,10 @@ Use this skill when performing security reviews or addressing security findings 
 3. Read `docs/architecture/security-findings.md` for tracked findings.
 4. Read `docs/architecture/release-security-checklist.md` for the release checklist.
 5. Read `SECURITY.md` for the vulnerability reporting policy.
+6. Read `docs/architecture/dependency-policy.md` for the cargo-deny graph
+   coverage (`all-features = true`, Windows x86_64 included) and run the
+   live fail-closed gate `./scripts/check_security.sh` before publication;
+   never add blanket advisory ignores to make the gate green.
 
 ## Key Security Properties
 

@@ -63,10 +63,10 @@ require_python_env() {
     if ! "$PYTHON_BIN" -c 'import sys; raise SystemExit(0 if sys.prefix != sys.base_prefix else 1)'; then
         cat >&2 <<'SETUP_GUIDE'
 Python validation requires an active virtual environment.
-Create one and install test tooling:
+Create one and install the pinned test tooling:
   python3 -m venv .venv
   source .venv/bin/activate
-  python -m pip install maturin pytest pytest-asyncio mypy
+  python -m pip install -r scripts/ci-requirements.txt
 SETUP_GUIDE
         exit 1
     fi

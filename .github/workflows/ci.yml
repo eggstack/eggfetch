@@ -47,7 +47,7 @@ jobs:
         run: |
           python -m venv .venv
           source .venv/bin/activate
-          python -m pip install maturin pytest pytest-asyncio mypy
+          python -m pip install -r scripts/ci-requirements.txt
 
       - name: Run validation
         run: |

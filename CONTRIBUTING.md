@@ -62,10 +62,11 @@ counts for the qualified SHA) is recorded in
 
 ### Python tests
 
-Python tests require an active venv (Python 3.10+, maturin, pytest, pytest-asyncio) and a fresh extension build — stale `.so` files cause confusing failures:
+Python tests require an active venv with the pinned tooling in `scripts/ci-requirements.txt` (Python 3.10+, maturin, pytest, pytest-asyncio) and a fresh extension build — stale `.so` files cause confusing failures:
 
 ```sh
-PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1 maturin develop -m crates/eggfetch-python/Cargo.toml
+python -m pip install -r scripts/ci-requirements.txt
+maturin develop -m crates/eggfetch-python/Cargo.toml
 python -m pytest crates/eggfetch-python/tests/ -q --ignore=crates/eggfetch-python/tests/compat
 ```
 

@@ -31,6 +31,13 @@ cargo-deny configuration for:
 - Dependency bans
 - Source restrictions
 
+The policy graph covers all supported optional dependency families
+(`[graph] all-features = true`, valid because core features are additive)
+and all supported publication targets (Linux x86_64, macOS x86_64/arm64,
+Windows x86_64). HTTP/3 dependencies are scanned while HTTP/3 stays
+experimental. See [dependency-policy.md](dependency-policy.md) for the
+coverage rationale and the tool-bump update rule.
+
 ## CI Pipeline
 
 Two GitHub Actions workflows:
@@ -135,6 +142,12 @@ Run manually via `workflow_dispatch` from `.github/workflows/pypi.yml`. The pipe
 - `RUSTFLAGS=-D warnings` — warnings are errors
 - PyO3 builds ordinary interpreter-specific extension artifacts; ABI3 is not
   enabled or claimed.
+- Routine Python validation tooling is pinned in
+  `scripts/ci-requirements.txt` (maturin/pytest/pytest-asyncio/mypy); CI
+  installs it with `python -m pip install -r
+  scripts/ci-requirements.txt`. The maturin pin stays aligned with
+  `scripts/release-requirements.txt`. Tool bumps are reviewed diffs, never
+  automated.
 
 ## Lint Policy
 

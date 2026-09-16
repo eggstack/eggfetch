@@ -1,13 +1,31 @@
 # cargo-deny configuration for eggfetch
 # https://github.com/EmbarkStudios/cargo-deny
+#
+# Dependency-policy graph: this file audits the dependency families users can
+# enable in supported combinations, not just the default build. `all-features`
+# is a valid superset here because eggfetch-core features are additive (no
+# mutually exclusive feature semantics); it is dependency policy rather than
+# behavioral qualification, so runtime product profiles in
+# docs/architecture/feature-flags.md remain authoritative for behavior.
+# HTTP/3 dependencies are included in scanning while HTTP/3 itself stays
+# experimental; inclusion is not a graduation claim.
+# Tool bumps are reviewed repository changes: bump deliberately, run
+# ./scripts/check.sh plus affected packaging/type gates, and never auto-update
+# validation tooling independently of source review.
 
 [graph]
 targets = [
     { triple = "x86_64-unknown-linux-gnu" },
     { triple = "x86_64-apple-darwin" },
     { triple = "aarch64-apple-darwin" },
+    # Windows x86_64 is a supported PyPI wheel/release target
+    # (docs/releases/process.md § "Supported Wheel Matrix"); it must stay
+    # visible to cargo-deny so Windows-only branches are audited.
+    # Linux AArch64 is intentionally omitted: it is not a documented
+    # release/support target.
+    { triple = "x86_64-pc-windows-msvc" },
 ]
-all-features = false
+all-features = true
 no-default-features = false
 
 # Advisory database checks

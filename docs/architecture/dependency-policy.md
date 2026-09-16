@@ -173,6 +173,40 @@ time-dependent. The canonical fail-closed release/security gate is:
 
 Findings should be addressed during security review, but these tools are not automatic merge or release gates under the simplified CI policy.
 
+### Dependency-policy graph coverage
+
+`deny.toml` audits the dependency families users can enable in supported
+combinations, not just the default build:
+
+- `[graph] all-features = true` is a valid superset for policy purposes:
+  `eggfetch-core` features are additive with no mutually exclusive semantics,
+  so full-feature scanning covers HTTP/1 + HTTP/2, Rustls/native roots,
+  proxy/SOCKS, cookies, compression codecs, tracing, JSON, experimental
+  HTTP/3 dependencies, and workspace crates where cargo-deny sees them.
+  Runtime product profiles in [feature-flags.md](feature-flags.md) remain
+  authoritative for behavior; the deny graph is dependency policy.
+- HTTP/3 dependencies are included in scanning while HTTP/3 itself stays
+  experimental; inclusion is not a graduation claim.
+- `[graph] targets` covers the supported publication families: Linux x86_64,
+  macOS x86_64/arm64, and Windows x86_64 (a supported wheel/release target
+  per `docs/releases/process.md`). Linux AArch64 is omitted because it is
+  not a documented release target. Do not add targets indiscriminately.
+- `cargo-audit` lockfile scanning remains an independent RustSec check; deny
+  all-features coverage does not replace it.
+
+### Routine validation tooling pins
+
+Routine CI installs exact Python tool versions from
+`scripts/ci-requirements.txt` (`python -m pip install -r
+scripts/ci-requirements.txt`), so a given eggfetch SHA always selects the
+same maturin/pytest/pytest-asyncio/mypy. The maturin pin there must stay
+aligned with `scripts/release-requirements.txt`; a maturin bump changes both
+files in one reviewed diff. Update rule: tool bumps are reviewed repository
+changes — bump one tool set deliberately, run `./scripts/check.sh` plus
+affected packaging/type gates, and never auto-update validation tooling
+independently of source review. No Dependabot/Renovate automation owns these
+files.
+
 Every dependency in the tree must have an explicit reason documented in code or review.
 
 ## Pool Key Semantics

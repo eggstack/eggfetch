@@ -1,4 +1,6 @@
 # Exact versions for tools that build or validate published Python artifacts.
 # Update these deliberately in a reviewed repository diff.
+# maturin MUST stay aligned with scripts/ci-requirements.txt: a deliberate
+# maturin bump changes both files in one reviewed diff.
 maturin==1.14.1
 twine==6.1.0

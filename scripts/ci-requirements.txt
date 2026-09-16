@@ -1,0 +1,16 @@
+# Exact pins for routine Python validation tooling (Tier 1 CI + local check.sh).
+# This file is repository-controlled: the same eggfetch SHA must select the
+# same tool versions. Update deliberately in a reviewed repository diff:
+# bump one tool set at a time, run ./scripts/check.sh plus affected
+# packaging/type gates, and do not auto-update independently of source review.
+# No Dependabot/Renovate automation owns this file.
+#
+# maturin MUST stay aligned with scripts/release-requirements.txt. Both files
+# pin the same maturin version; a deliberate maturin bump changes both files
+# in one reviewed diff so validation and release tooling cannot silently
+# diverge. (Installing both files together fails predictably on a version
+# conflict, which is the intended signal.)
+maturin==1.14.1
+pytest==9.1.1
+pytest-asyncio==1.4.0
+mypy==2.3.1
