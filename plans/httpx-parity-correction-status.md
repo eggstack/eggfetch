@@ -47,6 +47,11 @@ The closing plan is `plans/post-core-integrity-requalification-and-closure.md`.
 The closing program is
 `plans/post-maintenance-core-integrity-and-verification-program.md`.
 
+The pushed closure tree passed GitHub CI run `35122780050` (head
+`1952295306f9bab97cd79bf1c1b6c0dc17998b22`, a documentation/profile/ledger
+descendant of the executable freeze, so the run covers the frozen executable
+tree): conclusion success (16:34–16:44Z, ~10min). No validation step failed.
+
 ## Recorded state — Stage C renewed after proxy cached total-deadline corrective pass (2026-09-16)
 
 Recorded designation: **Stage C qualified** for both documented facades, bound

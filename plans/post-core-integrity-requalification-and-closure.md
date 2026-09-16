@@ -337,6 +337,14 @@ worktree).
 - Child-plan closure records: this file; per-plan implementation notes in
   the freeze commits and module docs.
 
+### Remote CI
+
+Routine CI (`./scripts/check.sh`, Tier 1) runs on every push; no special
+qualification workflow was created. Pushed closure head `19522953`
+(docs/profile/ledger descendant of executable freeze `bfda3889`, so the
+run covers the frozen executable tree): workflow `CI`, run `35122780050`,
+conclusion success (2026-09-16 16:34–16:44Z). No validation step failed.
+
 ### Final acceptance
 
 - [x] All six executable child plans are complete.
