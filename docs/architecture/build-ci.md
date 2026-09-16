@@ -53,6 +53,8 @@ See [verification-policy.md](../verification-policy.md) for the normative policy
 |------|---------|
 | Rust formatting | `cargo fmt --all -- --check` |
 | Lint suppression | `bash scripts/check_lint_suppressions.sh` |
+| Adapter feature ownership | `python scripts/check_adapter_features.py` (core stays transport-only; adapters own their feature additions) |
+| Release version/ref validation | `python scripts/test_validate_release_versions.py` |
 | Rust clippy | `cargo clippy --workspace --all-targets --all-features -- -D warnings` |
 | Rust tests | `cargo test --workspace --exclude eggfetch-python --all-features -- --test-threads=1` (single-threaded: RSS tests) |
 | Python build | `maturin develop -m crates/eggfetch-python/Cargo.toml` (active venv required; rebuild after every binding Rust change) |

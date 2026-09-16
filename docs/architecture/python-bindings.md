@@ -65,14 +65,14 @@ native `eggfetch` types.
 | `response.rs` | `PyResponse` — buffered response surface |
 | `headers.rs` | `PyHeaders` — header wrapper |
 | `errors.rs` | Exception hierarchy |
-| `auth.rs` | `BasicAuth`, `BearerAuth` |
+| `auth.rs` | `BasicAuth`, `BearerAuth`, `NoAuth` |
 | `cookies.rs` | Cookie handling |
-| `proxy.rs` | Proxy configuration |
-| `retry.rs` | Retry configuration |
+| `proxy.rs` | Internal proxy-override parsing (`ProxyOverride`, `env_proxy_urls()`); the public `Proxy` class lives in the compat facade, not here |
+| `retry.rs` | `Retry` configuration class |
 | `timeout.rs` | Timeout configuration |
 | `tls.rs` | TLS configuration (`verify`, `cert` kwargs) |
 | `multipart.rs` | `File` wrapper for multipart uploads |
-| `streaming.rs` | `StreamingResponse` — sync/async response iterators |
+| `streaming.rs` | `StreamingResponse` + sync/async bytes/text/lines/raw-bytes iterators |
 | `conversion.rs` | Python↔Rust type conversion (shared by sync/async) |
 | `request_preparation.rs` | Shared client configuration and method/URL/header/body/auth/proxy/retry normalization |
 | `limits.rs` | `PyLimits` — pool concurrency limits |
@@ -225,7 +225,7 @@ EggfetchError
 | `auth` | Auth/NOAUTH | Authentication override |
 | `follow_redirects` | bool | Redirect following |
 | `max_redirects` | int | Maximum redirects |
-| `verify` | bool/str | TLS verification |
+| `verify` | bool/str/`SSLContext`/list[bytes] | TLS verification (bool, CA path, `ssl.SSLContext`, or DER list) |
 | `cert` | str/tuple | Client certificate |
 | `http2` | bool | HTTP/2 negotiation |
 | `http3` | bool | HTTP/3 (experimental) |

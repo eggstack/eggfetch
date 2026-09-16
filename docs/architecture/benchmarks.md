@@ -32,7 +32,7 @@ A blocking server keeps the measured client the only async actor in the process 
 
 ### `microbench` — core internals
 
-In-process costs without network I/O: URL parsing and request building, header map operations against raw `http::HeaderMap`, auth scheme construction (`BasicAuth`/`BearerAuth`), retry policy construction, and similar `eggfetch-core` object-level work.
+In-process costs without network I/O: URL parsing and request building, header map operations against raw `http::HeaderMap`, auth scheme construction (`BasicAuth`/`BearerAuth`) and application, retry-policy construction and retry decisions, cookie matching, multipart encoding, and decompression.
 
 ### `e2e` — full client against BenchServer
 

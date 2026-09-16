@@ -124,6 +124,11 @@ Features that are not core to HTTP/1.1 client behavior are optional and feature-
 
 These dependencies stay optional. They do not enter `default` features without discussion.
 
+Note: `eggfetch-python` enables the full core profile (`cookies`,
+`multipart`, `proxy`, all four compression codecs, `http2`, `http3`), so
+everything listed above except `clap`/`tracing` enters the Python wheel's
+dependency tree. The CLI enables only `cookies`, `multipart`, `proxy`.
+
 ## Python Compatibility Optional Dependencies (httpx2 SSE/WS)
 
 The `httpx2` 2.12.0 streaming surface reuses the single Rust engine and

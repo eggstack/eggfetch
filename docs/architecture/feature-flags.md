@@ -218,7 +218,6 @@ cargo check -p eggfetch-core --no-default-features --features http1
 cargo check -p eggfetch-core --no-default-features --features http1,tls-rustls
 cargo check -p eggfetch-core --no-default-features --features http1,tls-rustls,tls-native-roots
 cargo check -p eggfetch-core --all-features
-cargo check -p eggfetch-core --no-default-features --features http1,tls-rustls,json
 cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,compression-gzip
 cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,compression-brotli
 cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,compression-zstd

@@ -125,8 +125,20 @@ The compatibility test suite lives in `crates/eggfetch-python/tests/compat/` and
 | `test_httpx_required.py` | Required tests that must pass; fail-closed on missing httpx |
 | `test_httpx_extras.py` | Optional extras tests (HTTP/2, retry) |
 | `test_behavior_cases.py` | Parametrized behavior cases with stable IDs |
-| `fixtures.py` | Reusable test server and `BehaviorCase` dataclass |
+| `test_httpx2_api_parity.py` + `test_httpx2_behavior.py` | Core httpx2 differentials |
+| `test_httpx2_sse.py` + `test_httpx2_websocket.py` | Streaming-protocol suites (in-memory fake streams + MockTransport, no network) |
+| `test_socks_transport.py` + `test_uds_transport.py` | Corrective transport matrix |
+| `test_ssl_context_translation.py` | Fail-closed `SSLContext` translation |
+| `test_corrective_*.py` + `test_corrective_kernel.py` | Corrective suites + Tier 1 smoke kernel |
+| `fixtures.py` (+ `native_fixtures.py`) | Reusable test server and `BehaviorCase` dataclass |
 | `conftest.py` | Skip auditor; fails CI on unexplained skips |
+
+The directory holds ~80 files (transport, proxy/env-precedence, redirect,
+retry, typing-surface, downstream-portfolio, and upstream-derived cases
+alongside the rows above); the table names the load-bearing suites rather
+than enumerating every file. Tier 1 runs only the smoke kernel
+(`test_imports.py`, `test_client.py`, `test_exceptions.py`,
+`test_corrective_kernel.py`); Tier 2 runs the full suite.
 
 Run with `EGGFETCH_COMPAT_REQUIRED=1` for fail-closed behavior. Tier 2 (`tier2_full_compat`) enforces this.
 

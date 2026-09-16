@@ -30,6 +30,7 @@ The URL is the only positional argument. The method is set with `-X`/`--method` 
 | `--auth user:pass` | `ClientBuilder::auth()` |
 | `--bearer TOKEN` | `ClientBuilder::auth()` |
 | `--proxy URL` | `ClientBuilder::proxy()` |
+| `--proxy-auth user:pass` | Proxy auth (`EGGFETCH_PROXY_AUTH`) |
 | `--no-proxy` | Proxy bypass |
 | `--cookie`/`--cookie-jar` | Cookie handling |
 | `--no-verify` | `ClientBuilder::tls_config()` (verification off) |
@@ -48,6 +49,13 @@ The URL is the only positional argument. The method is set with `-X`/`--method` 
 | `--no-compress` | `ClientBuilder::automatic_decompression(false)` |
 | `--check-status` | Exit 6 on HTTP error status |
 | `--base64` | Include `body_base64` in JSON output |
+| `-v`/`--verbose` | Verbose request/response info to stderr |
+| `--generate-completion SHELL` | Print shell completions (bash/zsh/fish/powershell/elvish) and exit |
+
+`--auth`/`--bearer`, `--follow`/`--no-follow`, `--json-output`/`--ndjson`,
+and `--http1`/`--http2`/`--http3` are mutually exclusive (rejected with exit
+2). mTLS requires both `--cert` and `--key` together. `--cookie-jar` reads
+`NAME=VALUE` lines (simple/Netscape jar format).
 
 ### Environment Variables
 

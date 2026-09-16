@@ -209,6 +209,8 @@ Key methods:
 - `text()` → buffered body as `String`
 - `json()` → optional `DeserializeOwned` decoding through the same single-consume `bytes()` path
 - `bytes_stream()` → streaming `BoxBytesStream`
+- `raw_bytes_stream()` → streaming body without decompression
+- `network_stream()` / `network_stream_mut()` / `take_network_stream()` / `into_network_stream()` → 101 upgrade IO accessors (`None` for ordinary/CONNECT responses)
 - `text_lines()` → line-by-line text iterator
 - `trailers()` → `Option<HeaderMap>` after body EOF (H1 chunked, H2 trailing HEADERS, H3 trailing headers; `None` until arrival, on no-trailers, or on pre-trailer errors; H1 duplicates collapse upstream)
 - `history()` → `&[HistoryEntry]` (redirect chain)
