@@ -124,6 +124,11 @@ Mypy-compatible consumer typing is checked from both the source package and
 the installed wheel; the versioned compatibility facades have separate,
 concise public entry-point stubs, while private underscore-prefixed modules
 are not supported typing surfaces.
+The native typing gate also compares every reviewed public class property and
+method with the native API manifest, including sync/async shape and selected
+semantic returns such as `start_tls()` and context-manager exits. `verify=`
+accepts a concrete `list[bytes]` of DER certificates in addition to its other
+documented forms; unsupported sequence shapes remain rejected.
 The supported native import surface is `eggfetch`; its explicit
 `eggfetch.__all__` contract includes the documented exception hierarchy and
 the concrete `NetworkStream`/`AsyncNetworkStream` upgrade wrappers.
@@ -264,7 +269,7 @@ More patterns are in [`docs/cookbook/`](docs/cookbook/).
 
 ## HTTPX Compatibility
 
-Two versioned, independent facades over the single Rust engine — `eggfetch.compat.httpx` (0.28.1) and `eggfetch.compat.httpx2` (2.12.0, adds `FunctionAuth`, `Origin`/`URL.origin`, `QUERY`, SSE, optional WebSocket). Both are Stage C qualified on frozen executable SHA `2281345f3eaf636c62ec21d2c963d6f90ea764a8`; HTTPX 1.0 preview under `compat/httpx/1.0-preview/` is reconnaissance only.
+Two versioned, independent facades over the single Rust engine — `eggfetch.compat.httpx` (0.28.1) and `eggfetch.compat.httpx2` (2.12.0, adds `FunctionAuth`, `Origin`/`URL.origin`, `QUERY`, SSE, optional WebSocket). Both are Stage C qualified on the exact executable SHA recorded in `plans/httpx-parity-correction-status.md`; HTTPX 1.0 preview under `compat/httpx/1.0-preview/` is reconnaissance only.
 
 See [`docs/reference/compatibility.md`](docs/reference/compatibility.md) for the full feature matrix and retained differences.
 

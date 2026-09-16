@@ -33,12 +33,14 @@ environment override.
 
 PEP 561 typing is a reviewed contract for the public native package. Run
 `python scripts/check_python_typing_surface.py` for stub/manifest/exception
-drift, then `python scripts/check_python_typing.py` for native and compatibility
-consumer fixtures. Package validation runs
-`python scripts/check_wheel_typing.py --wheel <wheel>` so the installed wheel,
-not the source tree, is checked. The native `_native` module remains private;
-the compatibility facades have concise package stubs only for intentionally
-public entry points and do not promise typed private implementation modules.
+drift plus reviewed class-member, signature-shape, sync/async, and semantic
+return checks, then `python scripts/check_python_typing.py` for native and
+compatibility consumer fixtures. Package validation runs
+`python scripts/check_wheel_typing.py --wheel <wheel>` so the installed wheel
+is checked for the same surface contract and positive/negative consumers, not
+just the source tree. The native `_native` module remains private; the
+compatibility facades have concise package stubs only for intentionally public
+entry points and do not promise typed private implementation modules.
 
 ## Key Constraints
 
@@ -108,7 +110,7 @@ EggfetchError
 
 ## HTTPX Compatibility Layer
 
-The `eggfetch.compat.httpx` module provides an HTTPX 0.28.1 compatibility facade over the eggfetch Rust engine (Stage C qualified on frozen executable SHA `2281345f3eaf636c62ec21d2c963d6f90ea764a8`). The sibling `eggfetch.compat.httpx2` module targets httpx2 2.12.0 and is independently Stage C qualified on the same SHA; the prior `97e87e42c8f4d5659739e7b23ff9005a4ec1ae53` binding is historical. The two facades coexist and importing one never mutates the other. Import paths:
+The `eggfetch.compat.httpx` module provides an HTTPX 0.28.1 compatibility facade over the eggfetch Rust engine. The sibling `eggfetch.compat.httpx2` module targets httpx2 2.12.0 and is independently Stage C qualified; the exact active executable SHA is recorded in the live status ledger and both profiles. The two facades coexist and importing one never mutates the other. Import paths:
 
 ```python
 from eggfetch.compat.httpx import Client, AsyncClient, Request, Response
@@ -156,15 +158,17 @@ tests `test_httpx2_api_parity.py` + `test_httpx2_behavior.py` (core),
 **Differential closure / corrective passes (current state):**
 
 - Corrective passes 01–08, the post-audit maturation program, the next-scope,
-  H3 requalification, and embedded-engine requalification are complete; Stage
- C is qualified on `2281345f3eaf636c62ec21d2c963d6f90ea764a8` (also recorded
-  in both compatibility profiles and `plans/httpx-parity-correction-status.md`).
-  Executable changes require a new exact-SHA qualification.
+  H3 requalification, and embedded-engine requalification are complete; the
+  active Stage C SHA is recorded in both compatibility profiles and
+  `plans/httpx-parity-correction-status.md`. Executable or qualification-input
+  changes require a new exact-SHA qualification.
 - Closure evidence: typed difference records gated by `allowed-differences.toml`, lossless merge semantics (`crates/eggfetch-python/tests/compat/test_merge_lossless.py`), separate sync/async auth drivers, behavioral downstream fixtures (`compat/downstream/behavioral_fixtures/`), and native lifecycle proof fixtures (`test_native_timeout_classification.py`, `test_soak.py`, proxy and TLS tests).
 
-The facade is Stage C qualified for the documented Python 3.10+ asyncio
-surface on the frozen SHA above. HTTP/3 remains separately experimental;
-that transport decision does not change the HTTPX parity claim.
+The facade qualification SHA is the exact executable freeze recorded in the
+live status ledger and compatibility profiles. Qualification-sensitive
+typing, validation, test, or packaging changes require a fresh exact-SHA
+closure before the Stage C claim is renewed. HTTP/3 remains separately
+experimental; that transport decision does not change the HTTPX parity claim.
 Key boundaries:
 
 - Timeout conversion forwards only HTTPX's `connect`, `read`, `write`, `pool`; native `total` is EggFetch-only. The compat `Timeout` constructor uses a private `UNSET` sentinel so omitted phase values inherit the scalar while explicit `None` disables only that phase; `Timeout()` follows HTTPX validation and requires a scalar or all four phases.

@@ -21,6 +21,10 @@ FIXTURES = (
     ROOT / "crates/eggfetch-python/tests/typing/consumer.py",
     ROOT / "crates/eggfetch-python/tests/typing/compat_consumer.py",
 )
+NEGATIVE_FIXTURES = (
+    ROOT / "crates/eggfetch-python/tests/typing/negative_sync_async_body.py",
+    ROOT / "crates/eggfetch-python/tests/typing/negative_verify_and_return.py",
+)
 
 
 def main() -> int:
@@ -53,6 +57,24 @@ def main() -> int:
             print(install.stderr, end="", file=sys.stderr)
             return install.returncode
 
+        surface = subprocess.run(
+            [
+                sys.executable,
+                str(ROOT / "scripts/check_python_typing_surface.py"),
+                "--package",
+                str(target / "eggfetch"),
+                "--manifest",
+                str(ROOT / "crates/eggfetch-python/tests/native_api_manifest.json"),
+            ],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+        )
+        if surface.returncode:
+            print(surface.stdout, end="")
+            print(surface.stderr, end="", file=sys.stderr)
+            return surface.returncode
+
         env = {**os.environ, "MYPYPATH": str(target)}
         command = [
             sys.executable,
@@ -67,7 +89,27 @@ def main() -> int:
         if result.returncode:
             return result.returncode
 
-    print("Installed wheel typing smoke passed")
+        for fixture in NEGATIVE_FIXTURES:
+            negative = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "mypy",
+                    "--strict",
+                    "--no-site-packages",
+                    "--no-incremental",
+                    str(fixture),
+                ],
+                cwd=ROOT,
+                env=env,
+                capture_output=True,
+                text=True,
+            )
+            if negative.returncode == 0:
+                print(f"FAIL: negative wheel typing fixture unexpectedly passed: {fixture}")
+                return 1
+
+    print("Installed wheel typing smoke passed (positive and negative fixtures)")
     return 0
 
 

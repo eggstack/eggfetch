@@ -41,6 +41,15 @@ async-only iterable passed to a synchronous API is rejected statically by the
 reviewed stubs and at runtime before dispatch. JSON input and JSON response
 values remain broadly typed because they follow Python JSON serialization.
 
+The reviewed native contract also types `Client.is_closed` and
+`Client.cookies`, plus the corresponding `AsyncClient` members and its
+`close()`/`aclose()` lifecycle methods. A sync `NetworkStream.start_tls()`
+returns a new `NetworkStream`; awaiting async `start_tls()` returns a new
+`AsyncNetworkStream`. Both stream classes expose `is_upgraded: bool`.
+`verify=` accepts `bool`, a CA path string, `ssl.SSLContext`, or a concrete
+`list[bytes]` of DER certificates. Other sequence shapes are not widened into
+the typing contract when the runtime rejects them.
+
 ## Top-Level Functions
 
 The quickest way to make requests. Each function creates a short-lived client internally.

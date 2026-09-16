@@ -130,5 +130,214 @@
     "Response.raise_for_status": "(self, /)",
     "StreamingResponse.close": "(self, /)",
     "StreamingResponse.aclose": "(self, /)"
+  },
+  "members": {
+    "Headers": {
+      "properties": {},
+      "methods": {
+        "__getitem__": {"kind": "sync", "signature": "(self, key, /)"},
+        "__contains__": {"kind": "sync", "signature": "(self, key, /)"},
+        "__iter__": {"kind": "sync", "signature": "(self, /)"},
+        "__len__": {"kind": "sync", "signature": "(self, /)"},
+        "get": {"kind": "sync", "signature": "(self, /, name, default=None)"},
+        "keys": {"kind": "sync", "signature": "(self, /)"},
+        "values": {"kind": "sync", "signature": "(self, /)"},
+        "items": {"kind": "sync", "signature": "(self, /)"},
+        "get_list": {"kind": "sync", "signature": "(self, /, name)"}
+      }
+    },
+    "Cookie": {
+      "properties": {
+        "name": "str", "value": "str", "domain": "str", "is_host_only": "bool",
+        "path": "str", "is_secure": "bool", "is_http_only": "bool", "same_site": "str | None",
+        "expires": "float | None", "is_persistent": "bool", "name_value_pair": "str"
+      },
+      "methods": {}
+    },
+    "Cookies": {
+      "properties": {},
+      "methods": {
+        "__getitem__": {"kind": "sync", "signature": "(self, key, /)"},
+        "__setitem__": {"kind": "sync", "signature": "(self, key, value, /)"},
+        "__delitem__": {"kind": "sync", "signature": "(self, key, /)"},
+        "__contains__": {"kind": "sync", "signature": "(self, key, /)"},
+        "__iter__": {"kind": "sync", "signature": "(self, /)"},
+        "__len__": {"kind": "sync", "signature": "(self, /)"},
+        "get": {"kind": "sync", "signature": "(self, /, name, default=None)"},
+        "set": {"kind": "sync", "signature": "(self, /, name, value, *, domain=None, path='/')"},
+        "clear": {"kind": "sync", "signature": "(self, /)"},
+        "values": {"kind": "sync", "signature": "(self, /)"},
+        "items": {"kind": "sync", "signature": "(self, /)"}
+      }
+    },
+    "Timeout": {
+      "properties": {"pool": "float | None", "connect": "float | None", "write": "float | None", "read": "float | None", "total": "float | None"},
+      "methods": {"has_any": {"kind": "sync", "signature": "(self, /)"}}
+    },
+    "Limits": {
+      "properties": {"max_connections": "int | None", "max_keepalive_connections": "int | None", "keepalive_expiry": "float | None", "max_connections_per_host": "int | None"},
+      "methods": {}
+    },
+    "Retry": {
+      "properties": {"max_attempts": "int", "backoff_factor": "float", "initial_delay": "float", "max_delay": "float", "respect_retry_after": "bool", "statuses": "list[int]", "max_elapsed": "float | None", "allow_post": "bool", "allow_put": "bool", "allow_delete": "bool", "allow_patch": "bool"},
+      "methods": {}
+    },
+    "BasicAuth": {
+      "properties": {"username": "str"},
+      "methods": {}
+    },
+    "BearerAuth": {
+      "properties": {},
+      "methods": {}
+    },
+    "NoAuth": {
+      "properties": {},
+      "methods": {}
+    },
+    "File": {
+      "properties": {"path": "str", "filename": "str", "content_type": "str"},
+      "methods": {}
+    },
+    "NetworkStream": {
+      "properties": {"is_upgraded": "bool"},
+      "methods": {
+        "read": {"kind": "sync", "signature": "(self, /, max_bytes=65536, timeout=None)"},
+        "write": {"kind": "sync", "signature": "(self, /, data, timeout=None)"},
+        "close": {"kind": "sync", "signature": "(self, /)"},
+        "get_extra_info": {"kind": "sync", "signature": "(self, /, key)"},
+        "start_tls": {"kind": "sync", "signature": "(self, /, ssl_context, server_hostname, *, timeout=None)"}
+      }
+    },
+    "AsyncNetworkStream": {
+      "properties": {"is_upgraded": "bool"},
+      "methods": {
+        "read": {"kind": "async", "signature": "(self, /, max_bytes=65536, timeout=None)"},
+        "write": {"kind": "async", "signature": "(self, /, data, timeout=None)"},
+        "aclose": {"kind": "async", "signature": "(self, /)"},
+        "get_extra_info": {"kind": "sync", "signature": "(self, /, key)"},
+        "start_tls": {"kind": "async", "signature": "(self, /, ssl_context, server_hostname, *, timeout=None)"}
+      }
+    },
+    "Response": {
+      "properties": {
+        "status_code": "int", "headers": "Headers", "url": "str", "reason_phrase": "str", "http_version": "str", "encoding": "str | None", "history": "list[Response]", "cookies": "Cookies", "extensions": "dict[str, Any]", "content": "bytes", "text": "str", "is_informational": "bool", "is_success": "bool", "is_redirect": "bool", "is_client_error": "bool", "is_server_error": "bool", "is_error": "bool"
+      },
+      "methods": {
+        "json": {"kind": "sync", "signature": "(self, /, **kwargs)"},
+        "iter_bytes": {"kind": "sync", "signature": "(self, /, chunk_size=8192)"},
+        "iter_text": {"kind": "sync", "signature": "(self, /, chunk_size=8192)"},
+        "iter_lines": {"kind": "sync", "signature": "(self, /)"},
+        "raise_for_status": {"kind": "sync", "signature": "(self, /)"},
+        "close": {"kind": "sync", "signature": "(self, /)"},
+        "aclose": {"kind": "async", "signature": "(self, /)"}
+      }
+    },
+    "StreamingResponse": {
+      "properties": {
+        "status_code": "int", "headers": "Headers", "url": "str", "reason_phrase": "str", "http_version": "str", "encoding": "str | None", "history": "list[Response]", "cookies": "Cookies", "extensions": "dict[str, Any]", "network_stream": "NetworkStream | AsyncNetworkStream | None", "is_informational": "bool", "is_success": "bool", "is_redirect": "bool", "is_client_error": "bool", "is_server_error": "bool", "is_error": "bool"
+      },
+      "methods": {
+        "__enter__": {"kind": "sync", "signature": "(self, /)"},
+        "__exit__": {"kind": "sync", "signature": "(self, /, _exc_type=None, _exc_value=None, _traceback=None)"},
+        "__aenter__": {"kind": "async", "signature": "(self, /)"},
+        "__aexit__": {"kind": "async", "signature": "(self, /, _exc_type=None, _exc_value=None, _traceback=None)"},
+        "iter_bytes": {"kind": "sync", "signature": "(self, /, *, chunk_size=8192)"},
+        "iter_text": {"kind": "sync", "signature": "(self, /, *, chunk_size=8192, encoding=None)"},
+        "iter_lines": {"kind": "sync", "signature": "(self, /, *, chunk_size=8192, encoding=None)"},
+        "iter_raw": {"kind": "sync", "signature": "(self, /, *, chunk_size=None)"},
+        "aiter_bytes": {"kind": "sync", "signature": "(self, /, *, chunk_size=8192)"},
+        "aiter_text": {"kind": "sync", "signature": "(self, /, *, chunk_size=8192, encoding=None)"},
+        "aiter_lines": {"kind": "sync", "signature": "(self, /, *, chunk_size=8192, encoding=None)"},
+        "aiter_raw": {"kind": "sync", "signature": "(self, /, *, chunk_size=None)"},
+        "read": {"kind": "sync", "signature": "(self, /)"},
+        "text": {"kind": "sync", "signature": "(self, /)"},
+        "aread": {"kind": "async", "signature": "(self, /)"},
+        "raise_for_status": {"kind": "sync", "signature": "(self, /)"},
+        "close": {"kind": "sync", "signature": "(self, /)"},
+        "aclose": {"kind": "async", "signature": "(self, /)"}
+      }
+    },
+    "StreamingBytesIterator": {
+      "properties": {},
+      "methods": {"__iter__": {"kind": "sync", "signature": "(self, /)"}, "__next__": {"kind": "sync", "signature": "(self, /)"}}
+    },
+    "StreamingTextIterator": {
+      "properties": {},
+      "methods": {"__iter__": {"kind": "sync", "signature": "(self, /)"}, "__next__": {"kind": "sync", "signature": "(self, /)"}}
+    },
+    "StreamingLinesIterator": {
+      "properties": {},
+      "methods": {"__iter__": {"kind": "sync", "signature": "(self, /)"}, "__next__": {"kind": "sync", "signature": "(self, /)"}}
+    },
+    "StreamingRawBytesIterator": {
+      "properties": {},
+      "methods": {"__iter__": {"kind": "sync", "signature": "(self, /)"}, "__next__": {"kind": "sync", "signature": "(self, /)"}}
+    },
+    "AsyncStreamingBytesIterator": {
+      "properties": {},
+      "methods": {"__aiter__": {"kind": "sync", "signature": "(self, /)"}, "__anext__": {"kind": "async", "signature": "(self, /)"}}
+    },
+    "AsyncStreamingTextIterator": {
+      "properties": {},
+      "methods": {"__aiter__": {"kind": "sync", "signature": "(self, /)"}, "__anext__": {"kind": "async", "signature": "(self, /)"}}
+    },
+    "AsyncStreamingLinesIterator": {
+      "properties": {},
+      "methods": {"__aiter__": {"kind": "sync", "signature": "(self, /)"}, "__anext__": {"kind": "async", "signature": "(self, /)"}}
+    },
+    "AsyncStreamingRawBytesIterator": {
+      "properties": {},
+      "methods": {"__aiter__": {"kind": "sync", "signature": "(self, /)"}, "__anext__": {"kind": "async", "signature": "(self, /)"}}
+    },
+    "Client": {
+      "properties": {"is_closed": "bool", "cookies": "Cookies"},
+      "methods": {
+        "__enter__": {"kind": "sync", "signature": "(self, /)"},
+        "__exit__": {"kind": "sync", "signature": "(self, /, _exc_type=None, _exc_value=None, _traceback=None)"},
+        "request": {"kind": "sync", "signature": "(self, /, method, url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None, retries=None, extensions=None)"},
+        "get": {"kind": "sync", "signature": "(self, /, url, *, headers=None, params=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None, retries=None, extensions=None)"},
+        "post": {"kind": "sync", "signature": "(self, /, url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None, retries=None, extensions=None)"},
+        "put": {"kind": "sync", "signature": "(self, /, url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None, retries=None, extensions=None)"},
+        "patch": {"kind": "sync", "signature": "(self, /, url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None, retries=None, extensions=None)"},
+        "delete": {"kind": "sync", "signature": "(self, /, url, *, headers=None, params=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None, retries=None, extensions=None)"},
+        "head": {"kind": "sync", "signature": "(self, /, url, *, headers=None, params=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None, retries=None, extensions=None)"},
+        "options": {"kind": "sync", "signature": "(self, /, url, *, headers=None, params=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None, retries=None, extensions=None)"},
+        "stream": {"kind": "sync", "signature": "(self, /, method, url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None, retries=None, extensions=None)"},
+        "close": {"kind": "sync", "signature": "(self, /)"}
+      }
+    },
+    "AsyncClient": {
+      "properties": {"is_closed": "bool", "cookies": "Cookies"},
+      "methods": {
+        "__aenter__": {"kind": "async", "signature": "(self, /)"},
+        "__aexit__": {"kind": "async", "signature": "(self, /, _exc_type=None, _exc_value=None, _traceback=None)"},
+        "request": {"kind": "async", "signature": "(self, /, method, url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None, retries=None, extensions=None)"},
+        "get": {"kind": "async", "signature": "(self, /, url, *, headers=None, params=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None, retries=None, extensions=None)"},
+        "post": {"kind": "async", "signature": "(self, /, url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None, retries=None, extensions=None)"},
+        "put": {"kind": "async", "signature": "(self, /, url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None, retries=None, extensions=None)"},
+        "patch": {"kind": "async", "signature": "(self, /, url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None, retries=None, extensions=None)"},
+        "delete": {"kind": "async", "signature": "(self, /, url, *, headers=None, params=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None, retries=None, extensions=None)"},
+        "head": {"kind": "async", "signature": "(self, /, url, *, headers=None, params=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None, retries=None, extensions=None)"},
+        "options": {"kind": "async", "signature": "(self, /, url, *, headers=None, params=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None, retries=None, extensions=None)"},
+        "stream": {"kind": "async", "signature": "(self, /, method, url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None, retries=None, extensions=None)"},
+        "close": {"kind": "sync", "signature": "(self, /)"},
+        "aclose": {"kind": "async", "signature": "(self, /)"}
+      }
+    }
+  },
+  "semantic_contracts": {
+    "NetworkStream.start_tls": "NetworkStream",
+    "AsyncNetworkStream.start_tls": "AsyncNetworkStream",
+    "Client.is_closed": "bool",
+    "Client.cookies": "Cookies",
+    "Client.__exit__": "bool",
+    "AsyncClient.close": "None",
+    "AsyncClient.is_closed": "bool",
+    "AsyncClient.cookies": "Cookies",
+    "AsyncClient.__aexit__": "bool",
+    "StreamingResponse.__exit__": "bool",
+    "StreamingResponse.__aexit__": "bool",
+    "Response.raise_for_status": "None",
+    "StreamingResponse.raise_for_status": "None"
   }
 }

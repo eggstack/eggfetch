@@ -34,6 +34,7 @@ for path, expected_success in (
     (ROOT / "crates/eggfetch-python/tests/typing/consumer.py", True),
     (ROOT / "crates/eggfetch-python/tests/typing/compat_consumer.py", True),
     (ROOT / "crates/eggfetch-python/tests/typing/negative_sync_async_body.py", False),
+    (ROOT / "crates/eggfetch-python/tests/typing/negative_verify_and_return.py", False),
 ):
     code = run(path, expected_success=expected_success)
     if code:

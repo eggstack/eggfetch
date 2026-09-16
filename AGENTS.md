@@ -22,7 +22,7 @@ cargo fmt --all -- --check
 
 - `check.sh` refuses to run outside an active venv with Python 3.10+, maturin, pytest, pytest-asyncio, and mypy. Setup: `python3 -m venv .venv && source .venv/bin/activate && python -m pip install maturin pytest pytest-asyncio mypy`. Tier 2 requires the exact Rust 1.89.0 toolchain and fails with `rustup toolchain install 1.89.0 --profile minimal` when it is unavailable; it does not skip the MSRV gate.
 - After changing `crates/eggfetch-python` Rust code, rebuild before testing: `maturin develop -m crates/eggfetch-python/Cargo.toml`. Stale `.so` causes confusing failures. The binding uses the ordinary interpreter-specific PyO3 build; no ABI3 forward-compatibility escape hatch is required.
-- Native typing validation is split between `scripts/check_python_typing_surface.py` (stub syntax, manifest exports, and exception bases) and `scripts/check_python_typing.py` (native/facade consumers plus the negative sync/async-body fixture). Package validation additionally runs `scripts/check_wheel_typing.py` against the installed wheel.
+- Native typing validation is split between `scripts/check_python_typing_surface.py` (stub syntax, manifest exports, exception bases, class-member/signature drift, sync/async classification, and reviewed semantic returns) and `scripts/check_python_typing.py` (native/facade consumers plus negative body, verify-input, and return-contract fixtures). Package validation additionally runs the same surface contract and positive/negative consumer checks against the installed wheel via `scripts/check_wheel_typing.py`.
 - The external-style native body/TLS qualification is manual and uses only published `eggfetch-core` APIs: `cargo run --manifest-path qualification/native-http-body-tls/Cargo.toml`. It is not a routine CI gate and its build output must remain untracked.
 - Never parallelize Rust workspace tests (`--test-threads=1`): resource-stabilization tests measure process RSS; concurrency makes them flaky.
 
@@ -51,7 +51,7 @@ response failures stop.
 
 ## HTTPX compat (easy to break)
 
-Facades `eggfetch.compat.httpx` (0.28.1) and `eggfetch.compat.httpx2` (2.12.0) coexist without cross-mutation; `compat/httpx/1.0-preview/` is reconnaissance only. Both are Stage C qualified on frozen SHA `2281345f3eaf636c62ec21d2c963d6f90ea764a8` (`compat/*/profile.toml`); any executable change invalidates qualification. Never hand-edit generated API manifests — regenerate via `scripts/generate_httpx_api_manifest.py` + `scripts/compare_httpx_api_manifest.py`.
+Facades `eggfetch.compat.httpx` (0.28.1) and `eggfetch.compat.httpx2` (2.12.0) coexist without cross-mutation; `compat/httpx/1.0-preview/` is reconnaissance only. Both profiles are bound to the exact executable SHA recorded in `plans/httpx-parity-correction-status.md`; any executable or validation-input change invalidates qualification until the closure procedure renews it. Never hand-edit generated API manifests — regenerate via `scripts/generate_httpx_api_manifest.py` + `scripts/compare_httpx_api_manifest.py`.
 
 - Timeouts: map only `connect`/`read`/`write`/`pool`; never synthesize native `total`. Preserve omitted-vs-`None`; reject bare `Timeout()`. Proxy setup uses one monotonic deadline (min of explicit `total` + phase budgets).
 - `NO_PROXY`: compat env parser accepts bare unbracketed IPv6 but rejects bracketed/CIDR-looking forms; native `NoProxy::parse()` is richer. Do not unify.

@@ -64,6 +64,32 @@ def main() -> int:
         except (AttributeError, TypeError, ValueError) as error:
             errors.append(f"signature unavailable for {name}: {error}")
 
+    # The typing contract extends the runtime manifest with the complete
+    # reviewed member inventory.  Keep this check live as well so a PyO3
+    # getter or method cannot disappear while the stubs still pass their
+    # static-only checks.
+    for class_name, contract in manifest.get("members", {}).items():
+        cls = getattr(eggfetch, class_name, None)
+        if cls is None:
+            errors.append(f"member contract owner missing: {class_name}")
+            continue
+        for property_name in contract.get("properties", {}):
+            if not hasattr(cls, property_name):
+                errors.append(f"runtime property missing: {class_name}.{property_name}")
+        for method_name, method_contract in contract.get("methods", {}).items():
+            try:
+                value = getattr(cls, method_name)
+                if not callable(value):
+                    errors.append(f"runtime member is not callable: {class_name}.{method_name}")
+                actual_signature = str(inspect.signature(value))
+                if actual_signature != method_contract["signature"]:
+                    errors.append(
+                        f"member signature drift: {class_name}.{method_name} = "
+                        f"{actual_signature!r}, expected {method_contract['signature']!r}"
+                    )
+            except (AttributeError, TypeError, ValueError) as error:
+                errors.append(f"runtime member unavailable: {class_name}.{method_name}: {error}")
+
     # The re-exported native types remain discoverable from the supported
     # package even though PyO3 reports their implementation module as builtins.
     for name in manifest["symbol_kinds"]["class"]:

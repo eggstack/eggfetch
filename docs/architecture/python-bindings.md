@@ -28,13 +28,26 @@ metadata agree.
 
 `eggfetch/py.typed` marks the package as typed. The reviewed native stubs are
 `eggfetch/__init__.pyi` (the explicit package re-export surface) and
-`eggfetch/_native.pyi` (the extension declarations); the structural typing
-check compares them with `tests/native_api_manifest.json` and the runtime
-oracle checks signatures and exception MRO. `mypy` consumer fixtures cover
-native and compatibility entry points, including the negative sync-client /
-async-body case. Built-wheel validation repeats the consumer smoke from the
-installed artifact. Private underscore-prefixed implementation modules are
-not part of the typing promise.
+`eggfetch/_native.pyi` (the extension declarations). The native API manifest
+also carries a reviewed member inventory and semantic contract table.
+`check_python_typing_surface.py` verifies every tracked property and method,
+sync/async declaration shape, reliable parameter structure, and selected
+return/property annotations; the native runtime oracle checks the same
+inventory against live PyO3 members and signatures. This keeps runtime
+signatures as evidence without attempting to synthesize Python unions from
+Rust types. `mypy` consumer fixtures cover native and compatibility entry
+points, including negative sync-client/async-body, unsupported verify-sequence,
+and stale `start_tls() -> None` cases. Built-wheel validation repeats both the
+surface and consumer checks from the installed artifact. Private
+underscore-prefixed implementation modules are not part of the typing promise.
+
+The native stream contract types sync `NetworkStream.start_tls()` as returning
+a new `NetworkStream`, and async `AsyncNetworkStream.start_tls()` as an
+awaitable resolving to a new `AsyncNetworkStream`. Both expose
+`is_upgraded: bool`. `Client` and `AsyncClient` expose typed `is_closed` and
+`cookies`; `AsyncClient.close()` is synchronous while `aclose()` is awaitable.
+The reviewed `Verify` alias accepts only `bool`, a CA path `str`, an
+`ssl.SSLContext`, or a concrete `list[bytes]` of DER certificates.
 
 The native aliases distinguish `SyncBody` from `AsyncBody`: synchronous
 clients and helpers accept buffered bytes-like/text values or synchronous
@@ -224,9 +237,9 @@ Body kwargs (`content`, `data`, `json`) are mutually exclusive. `files` may comb
 
 Two versioned, independent facades share the single Rust engine:
 
-- `eggfetch.compat.httpx` — HTTPX 0.28.1, Stage C qualified on executable SHA
-  `2281345f3eaf636c62ec21d2c963d6f90ea764a8`; the prior
-  `97e87e42c8f4d5659739e7b23ff9005a4ec1ae53` binding is historical.
+- `eggfetch.compat.httpx` — HTTPX 0.28.1, Stage C qualified on the exact
+  executable SHA recorded in `plans/httpx-parity-correction-status.md`; prior
+  bindings are historical after qualification-sensitive changes.
 - `eggfetch.compat.httpx2` — httpx2 2.12.0 sibling (independently Stage C
   qualified on the same frozen SHA; the prior `639bf186...` binding is
   historical after the post-freeze HTTP/3 diagnostics audit;
