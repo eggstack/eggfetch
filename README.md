@@ -11,17 +11,16 @@ eggfetch is a Rust-native async HTTP client engine (tokio + hyper) with Python b
 
 ## Features
 
-- **HTTP/1.1, HTTP/2, HTTP/3** — ALPN negotiation; HTTP/3 over QUIC stays experimental ([graduation gate](docs/architecture/core-tls-proxy-protocols.md))
-- **Streaming** — high-level byte bodies without eager buffering (`bytes_stream()`, `text_lines()`), plus an additive native `http_body::Body` frame boundary that preserves DATA/trailers ([guide](docs/rust/guide.md))
-- **Pooling, timeouts, observability** — separate logical pool and live Hyper-connection controls, phase-aware timeouts (pool/connect/write/read/total), established-I/O guardrails, and connector/lifecycle/DNS/TLS/H3 transport metrics ([pool/timeouts](docs/architecture/core-timeout-pool.md))
-- **Native embedded transport control** — optional caller-owned raw-stream dialing, explicit Hyper stale-connection retry control, physical-connection admission, and established-I/O inactivity guardrails ([Rust guide](docs/rust/guide.md))
-- **TLS** — rustls with explicit per-client crypto providers, replacement or additive CA roots, mTLS client certs, version policy, and verification toggle ([TLS](docs/concepts/tls.md))
-- **Proxy** — HTTP forwarding and HTTPS CONNECT use bounded Hyper reuse where compatible; each dispatch still enforces its own shrinking total deadline. Also includes proxy auth, per-request override, `NO_PROXY`, native proxy-peer and supported proxied-target pinning (HTTPS CONNECT/local SOCKS5), SOCKS5, and UDS routes ([proxy](docs/concepts/proxy.md))
+- **HTTP/1.1, HTTP/2, HTTP/3** — ALPN negotiation; HTTP/3 over QUIC is experimental ([guide](docs/rust/guide.md))
+- **Streaming** — response bodies stream without eager buffering (`bytes_stream()`, `text_lines()`), with trailers after EOF ([guide](docs/rust/guide.md))
+- **Pooling and timeouts** — per-origin connection pools, phase-aware timeouts (pool/connect/write/read/total), and transport metrics ([pool/timeouts](docs/architecture/core-timeout-pool.md))
+- **TLS** — rustls with per-client crypto providers, custom or additive CA roots, mTLS client certs, version policy, and verification toggle ([TLS](docs/concepts/tls.md))
+- **Proxy** — HTTP forwarding, HTTPS CONNECT, proxy auth, per-request override, `NO_PROXY`, SOCKS5, and UDS routes ([proxy](docs/concepts/proxy.md))
 - **Cookies, auth, multipart** — RFC 6265 jar, Basic/Bearer with redaction, streaming multipart uploads ([cookies](docs/concepts/cookies.md))
 - **Retries and redirects** — policy-driven backoff with `Retry-After`, replayable-body redirect handling ([retry](docs/concepts/retry.md))
 - **Compression** — feature-gated streaming gzip/brotli/zstd/deflate with zip-bomb limits ([compression](docs/concepts/compression.md))
-- **Native Rust JSON (opt-in)** — replayable `RequestBuilder::json()`, single-consumption `Response::json()` via the `json` feature ([guide](docs/rust/guide.md))
-- **Python API** — requests/HTTPX-compatible sync and async interfaces ([guide](docs/python/guide.md)), lazy synchronous and asynchronous request bodies, PEP 561 typing, plus versioned `eggfetch.compat.httpx` (0.28.1) and `eggfetch.compat.httpx2` (2.12.0) facades ([compatibility](#httpx-compatibility))
+- **Native Rust JSON (opt-in)** — `RequestBuilder::json()` / `Response::json()` via the `json` feature ([guide](docs/rust/guide.md))
+- **Python API** — requests/HTTPX-compatible sync and async interfaces ([guide](docs/python/guide.md)), lazy request bodies, PEP 561 typing, plus versioned `eggfetch.compat.httpx` (0.28.1) and `eggfetch.compat.httpx2` (2.12.0) facades ([compatibility](#httpx-compatibility))
 - **Upgrades** — 101 responses expose an owned `network_stream` (WebSocket/SSE building blocks); CONNECT tunnels stay body-iterator only
 - **CLI** — streaming output, machine-readable formats, shell completions ([guide](docs/cli/guide.md))
 - **C ABI and Node.js prototype** — opaque-handle FFI plus an experimental N-API wrapper ([ffi-and-node](docs/architecture/ffi-and-node.md))
@@ -38,10 +37,10 @@ pip install eggfetch
 
 ```toml
 [dependencies]
-eggfetch-core = { version = "0.1", features = ["http1", "tls-rustls", "tls-native-roots"] }
+eggfetch-core = "0.1"
 ```
 
-See the [feature profile matrix](docs/architecture/feature-flags.md#supported-core-profiles) for minimal, deterministic, and embedded recipes.
+The default features are the secure HTTP/1.1 client with Rustls and native roots. See the [feature profile matrix](docs/architecture/feature-flags.md#supported-core-profiles) for minimal, deterministic, and embedded recipes.
 
 **CLI:**
 
@@ -116,42 +115,9 @@ from eggfetch.compat.httpx2 import Client as H2Client  # httpx2 2.12.0 surface
 
 See [`docs/python/guide.md`](docs/python/guide.md) for the full Python API reference.
 
-The native package supports Python 3.10–3.14 and includes a `py.typed` marker
-with reviewed stubs for its public API. Native wheels are interpreter-specific
-and do not claim ABI3 compatibility. `AsyncClient` can consume an async
-generator as request content lazily, without buffering it before dispatch.
-Mypy-compatible consumer typing is checked from both the source package and
-the installed wheel; the versioned compatibility facades have separate,
-concise public entry-point stubs, while private underscore-prefixed modules
-are not supported typing surfaces.
-The native typing gate also compares every reviewed public class property and
-method with the native API manifest, including sync/async shape and selected
-semantic returns such as `start_tls()` and context-manager exits. `verify=`
-accepts a concrete `list[bytes]` of DER certificates in addition to its other
-documented forms; unsupported sequence shapes remain rejected.
-The supported native import surface is `eggfetch`; its explicit
-`eggfetch.__all__` contract includes the documented exception hierarchy and
-the concrete `NetworkStream`/`AsyncNetworkStream` upgrade wrappers.
-`eggfetch._native` is a private implementation module and must not be imported
-by applications. The package and native extension use the coordinated release
-version, and wheel smoke validation checks it against installed distribution
-metadata.
-
-`Client` and top-level synchronous helpers accept lazy synchronous
-`content=` iterables and reject async-only iterables before dispatch.
-`AsyncClient` accepts lazy `AsyncIterable[bytes | str]` bodies; each chunk is
-awaited through the same asyncio context only when the Rust transport asks for
-it. Producer failures surface as `BodyError`, and request cancellation stops
-further pulls.
+The native package supports Python 3.10–3.14 and ships `py.typed` stubs for its public API. `Client` and the top-level sync helpers accept lazy sync `content=` iterables (async-only iterables are rejected before dispatch); `AsyncClient` additionally accepts lazy async iterables, pulled only as the transport asks for them. `eggfetch._native` is a private implementation module — import from `eggfetch`.
 
 ## Usage -- Rust
-
-Native Rust consumers can keep their own route while eggfetch owns HTTP and
-destination TLS. A `Dialer` receives only the logical host and effective port;
-it does not replace URL/Host/SNI identity. A request target override changes
-only the wire path/query. The custom route is intentionally
-incompatible with built-in proxy, UDS, resolved-address, local-binding,
-socket-option, and HTTP/3 routing.
 
 ```rust
 use eggfetch_core::Client;
@@ -180,48 +146,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-The opt-in `json` feature adds `RequestBuilder::json()` / `Response::json()` Serde helpers. Native Rust callers can use `resolved_addresses()` for direct-only physical routing, or separately pin proxy peers with `Proxy::resolved_addresses()` and supported HTTPS CONNECT/local-SOCKS5 targets with `RequestBuilder::proxy_target_addresses()`; these snapshots never fall back to DNS and remain independent controls. See [`docs/rust/guide.md`](docs/rust/guide.md) for the full Rust API reference.
-
-Native embedders that need structured timeout/DNS/refusal detail can opt into
-`RequestBuilder::send_detailed()`. Standard HTTP/HTTPS resolver failures and
-typed refusals are reported when proven; the [Rust guide](docs/rust/guide.md)
-shows the string-free handling pattern and route-dependent limits.
-
-Rustls crypto providers are selected per `TlsConfig`, not process-wide. Native
-applications that need a different provider can depend on the matching Rustls
-provider feature and pass its `Arc<CryptoProvider>` to
-`TlsConfigBuilder::crypto_provider`; the ordinary eggfetch profile remains
-ring-backed. Provider capabilities, including FIPS or post-quantum properties,
-depend on the caller's exact provider build.
-
-Native callers that need strict attempt accounting can set
-`Client::builder().retry_canceled_requests(false)`. This disables only
-Hyper's transparent retry after a reused idle connection is found unusable;
-it does not disable or alter eggfetch's explicit `RetryPolicy`. The default is
-`true`, and the setting does not apply to the independent HTTP/3 transport.
-Embedded orchestrators can additionally set `PhysicalConnectionPolicy` and
-`TransportIoTimeout` to bound live Hyper connections and established I/O
-inactivity independently from logical pool limits and request timeouts. See
-the [Rust guide](docs/rust/guide.md) for the integration boundary and limits.
-The native `execute_http_body()` surface starts response read timeouts when
-the returned body is first polled, preserves DATA/trailer frames, and leaves
-redirects, retries, cookies, auth, decompression, and upgrades to the caller
-or high-level API as documented there.
-`Client::native_service()` exposes that same transport-only surface through
-`tower_service::Service<http::Request<B>>`; it is always ready to accept a
-request, with origin-pool and transport backpressure applied inside the
-returned future. It does not add the full Tower framework or guarantee
-arbitrary request-extension passthrough. The standalone
-`qualification/native-tower-service/` fixture is pinned to Tonic 0.14.6 with
-the `codegen` feature only; it checks generic generated-client transport
-interoperability without making Tonic an eggfetch feature or enabling Tonic's
-`transport`/`Channel` stack.
-The public frame/provider/private-PKI boundary is also exercised by the
-standalone `qualification/native-http-body-tls/` fixture; that manual fixture
-is not part of the routine CI matrix.
-
-For native Rust HTTPS clients that need a private CA in addition to the
-selected native or WebPKI roots, use the additive TLS methods:
+The opt-in `json` feature adds `RequestBuilder::json()` / `Response::json()` Serde helpers. For a private CA in addition to the selected native or WebPKI roots, use the additive TLS methods:
 
 ```rust
 let tls = eggfetch_core::TlsConfig::builder()
@@ -230,11 +155,7 @@ let tls = eggfetch_core::TlsConfig::builder()
 let client = eggfetch_core::Client::builder().tls_config(tls).build();
 ```
 
-`additional_ca_certificate_path`, `additional_ca_certificate_pem`, and
-`additional_ca_certificate_der` augment the selected base trust store.
-`ca_certificate_*` remains replacement-style, and the legacy
-`add_ca_certificate_path` was deliberately not repurposed: existing callers
-use it to build a replacement custom set.
+`additional_ca_certificate_*` augments the base trust store; `ca_certificate_*` replaces it. Advanced embedding — custom dialers, direct/proxy address pinning, detailed failure introspection, frame-level bodies, the Tower service adapter, and physical-connection guards — is covered in [`docs/rust/guide.md`](docs/rust/guide.md).
 
 ## Usage -- CLI
 
@@ -269,7 +190,7 @@ More patterns are in [`docs/cookbook/`](docs/cookbook/).
 
 ## HTTPX Compatibility
 
-Two versioned, independent facades over the single Rust engine — `eggfetch.compat.httpx` (0.28.1) and `eggfetch.compat.httpx2` (2.12.0, adds `FunctionAuth`, `Origin`/`URL.origin`, `QUERY`, SSE, optional WebSocket). Both are Stage C qualified on the exact executable SHA recorded in `plans/httpx-parity-correction-status.md`; HTTPX 1.0 preview under `compat/httpx/1.0-preview/` is reconnaissance only.
+Two versioned, independent facades over the single Rust engine — `eggfetch.compat.httpx` (0.28.1) and `eggfetch.compat.httpx2` (2.12.0, adds `FunctionAuth`, `Origin`/`URL.origin`, `QUERY`, SSE, optional WebSocket).
 
 See [`docs/reference/compatibility.md`](docs/reference/compatibility.md) for the full feature matrix and retained differences.
 
@@ -291,7 +212,7 @@ See [`docs/reference/compatibility.md`](docs/reference/compatibility.md) for the
 
 ## Security
 
-- **Dependency auditing:** run the fail-closed live preflight with `./scripts/check_security.sh` (`cargo-deny` and `cargo-audit` are intentionally outside routine CI)
+- **Dependency auditing:** run the live preflight with `./scripts/check_security.sh` before publication
 - **Secret redaction:** all `Debug`/`Display`/error output redacts credentials, cookies, bearer tokens, and proxy passwords
 - **Threat model:** see [docs/architecture/threat-model.md](docs/architecture/threat-model.md)
 - **Vulnerability reporting:** see [SECURITY.md](SECURITY.md)
