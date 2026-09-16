@@ -97,6 +97,18 @@ isolated from origin trust.
 
 `TlsConfigBuilder::danger_accept_invalid_certs(true)` disables certificate verification. This is a deliberate escape hatch with documentation warnings.
 
+### Route-cache TLS identity
+
+Reusable proxy/origin route caches never use the lazily built root-store
+pointer as TLS compatibility identity. Each `TlsConfigBuilder::build()`
+mints a fresh opaque token; `Clone` shares it, and the consuming
+`TlsConfig::danger_accept_invalid_certs` mutator mints a new one. Proxy
+(`ProxyConfig::connection_identity`) and CONNECT origin
+(`ConnectRouteKey::origin_tls_identity`) keys carry that token, so a weak
+clone can never alias a strict route through shared cache ancestry, while
+unchanged clones keep pooling. The token carries no key material and never
+appears in `Debug`/diagnostics.
+
 ### Version Policy
 
 `TlsVersion` configures minimum and maximum supported TLS versions (e.g., TLS 1.2, TLS 1.3). QUIC mandates TLS 1.3.

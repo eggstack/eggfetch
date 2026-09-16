@@ -195,3 +195,163 @@ If executable or validation code changes during documentation closure, invalidat
 ## Non-goals
 
 No new compatibility reference version, feature expansion, release publication, H3 graduation, Node graduation, new CI topology, or unrelated dependency update belongs in this closure.
+
+## Closure record (2026-09-16)
+
+### Preconditions — all six executable child plans complete
+
+1. Proxy TLS route-cache identity corrective — implemented in freeze
+   `6a4738ae` (opaque per-build token, clone-shared, mutator-minted) plus
+   `bfda3889` (feature-gate hardening). The standalone plan file existed
+   before implementation; this closure implements it rather than finding it
+   already landed.
+2. Hyper idle-pool policy corrective — `43a843e8` (pool timer + uniform
+   per-route idle timeout/cap, deterministic expiry/reconnect/cap tests).
+3. Reusable route-cache invariant hardening — implemented in freeze
+   `6a4738ae` (key equality/isolation matrices, deadline ownership,
+   per-request read-budget proof, lock-scope audit, checklist in
+   `transport::hyper_client`) plus the CONNECT trace-retention removal.
+4. Hyper client construction/cache consolidation — `648d726a` (central
+   `HyperClientPolicy`/`build_hyper_client`/`BoundedClientCache`, pool
+   do-not-adopt recorded).
+5. Pipeline responsibility decomposition — `bad4dbc5` (`pipeline/` modules
+   with orchestration-oriented `mod.rs`).
+6. Dependency graph/validation reproducibility hardening — `3fd4f186`
+   (cargo-deny all-features + Windows, pinned CI requirements, one
+   workflow/job preserved).
+
+### 1. Final source audit (before freeze)
+
+- TLS/cache: `TlsConfig::connection_identity()` is the opaque token
+  (`*policy_token`); `build()` mints fresh, `Clone` shares,
+  `danger_accept_invalid_certs` mints new; builder setters all flow through
+  fresh builds. `ProxyConfig::connection_identity()` and
+  `ConnectRouteKey::origin_tls_identity` use the token. Route keys
+  (`Forward`/`Connect`/`Socks`) implement no `Debug`/`Display`;
+  `TlsConfig`/`ProxyConfig` debugs are redacted/non-exhaustive and never
+  render the token.
+- Connector ownership: `ForwardProxyConnector`, `ConnectProxyConnector`
+  (SNI-only hint retained; trace/target no longer cached),
+  and `SocksConnector` carry no `remaining_total`, absolute deadline,
+  read/write budgets, retry/redirect state, body, cookies, auth headers,
+  decompression policy, trace observers, or failure contexts. Current
+  request budgets stay authoritative at the outer
+  `send_with_total_timeout` dispatch boundary; multi-target CONNECT
+  fallback remains handshake-specific and request-local.
+- Hyper idle: `HyperClientPolicy::apply` installs `TokioTimer` whenever an
+  idle timeout is configured; all persistent families (standard, direct,
+  UDS, custom, resolved, SNI, SOCKS, forward, CONNECT) share the resolved
+  idle timeout and effective per-host cap via `Pool::idle_timeout` /
+  `Pool::max_idle_per_host`. Logical pool permits remain separate.
+- Refactor: one `HyperClientPolicy` owner, explicit per-route connectors,
+  orchestration-oriented `pipeline/mod.rs` (643 lines; largest child
+  `redirect.rs` 805 lines, no 100KB catch-all), private retry/redirect/
+  preparation/route/proxy/H3/finalization boundaries, native-body path
+  unchanged in policy scope.
+- Verification: cargo-deny covers all features + Windows x86_64 release
+  targets; routine CI tools pinned in `scripts/ci-requirements.txt`
+  (maturin aligned with release pins); one automatic workflow/job/no-matrix
+  intact; live advisory scan stays in explicit `check_security.sh`.
+
+### 2. Freeze
+
+Executable freeze SHA: `bfda3889cbeff5f6fbd98bf3eee12f77fab301c4`
+(follow-up to `6a4738ae`, which was invalidated by the extended
+feature-matrix gate: an unused non-proxy identity duplicate and two
+ungated forward-route tests. No qualification had been recorded on
+`6a4738ae`; all gates below were collected on `bfda3889` with a clean
+worktree).
+
+### 3. Focused corrective/invariant gates on the freeze
+
+- `cargo test -p eggfetch-core --all-features --lib`: 732 passed.
+- `cargo test -p eggfetch-core --all-features --test proxy_tests`: 53
+  passed, including `forward_proxy_weak_then_strict_does_not_reuse_weak_route`,
+  `forward_proxy_strict_then_weak_uses_separate_routes`,
+  `connect_proxy_weak_then_strict_does_not_reuse_weak_route`,
+  `connect_proxy_strict_then_weak_uses_separate_routes`,
+  `forward_proxy_per_request_read_budget_is_not_retained`,
+  `hyper_connect_proxy_does_not_reuse_short_total_on_reconnect`,
+  `hyper_connect_proxy_reconnect_honors_short_current_total`,
+  `hyper_forward_proxy_reuses_keep_alive_connection`,
+  `hyper_connect_proxy_reuses_keep_alive_tunnel`.
+- `cargo test -p eggfetch-core --all-features --test pool_tests`: passed.
+- TLS identity unit tests (clone shares, mutation fragments, independent
+  builds differ, policy dimensions, opacity) and route-key matrices
+  (SOCKS/forward/CONNECT) green.
+
+### 4. Canonical repository gates on the freeze
+
+- `./scripts/check.sh` (Tier 1): passed.
+- `./scripts/check.sh extended`: passed, with only the two existing
+  optional skips (unbuilt Node JS artifact, absent downstream artifact
+  manifest). Includes full compat (1,870 passed, 26 warnings, 250.99s),
+  feature matrix (incl. no-default/http1/tls profiles), docs, FFI, MSRV
+  Rust 1.89.0 checks, lifecycle/soak, and benchmarks.
+- `./scripts/check.sh package`: passed (crate dry-runs, wheel build/smoke,
+  package-content and installed-wheel typing checks).
+- `./scripts/check_security.sh`: passed at 2026-09-16T16:12:19Z with
+  cargo-deny 0.19.0 and cargo-audit 0.22.2; advisories/bans/licenses/
+  sources ok; only non-failing duplicate warnings (getrandom, hashbrown).
+
+### 5. Feature/dependency claims
+
+- MSRV Rust 1.89.0 gate passes (extended).
+- Default/minimal profiles compile (extended feature matrix).
+- All optional feature families resolve under cargo-deny all-features;
+  Windows x86_64 covered by policy targets.
+- No production dependency added (manifest/lockfile untouched by this
+  closure's executable work; only `rcgen`/`tokio-rustls` test-fixture use,
+  both pre-existing dev/test paths).
+- HTTP/3 remains feature-gated experimental; Node remains experimental
+  prototype (Tier 1 truthful skip preserved).
+
+### 6. Compatibility qualification on the freeze
+
+- HTTPX 0.28.1 oracle: 71 allowed matches, 0 stale, 0 unexplained,
+  0 resolved-in-active.
+- HTTPX2 2.12.0 oracle: 79 allowed matches, 0 stale, 0 unexplained,
+  0 resolved-in-active.
+- Three consecutive `EGGFETCH_COMPAT_REQUIRED=1 pytest
+  crates/eggfetch-python/tests/compat/ -q --strict-markers` runs, no files
+  changed between runs: 1,870 passed / 26 warnings in 260.11s, 247.60s,
+  and 250.06s. Directly affected proxy/TLS/limits/timeout/streaming cases
+  included. No regression; no new allowed difference.
+
+### 7. Profiles and ledger
+
+- `compat/httpx/0.28.1/profile.toml` and
+  `compat/httpx2/2.12.0/profile.toml` renewed to `bfda3889` / 2026-09-16
+  with `de00479e` recorded as previous.
+- `plans/httpx-parity-correction-status.md` renewed with the Stage C
+  evidence above; H3/Node remain experimental.
+
+### 8. Documentation and plan closure (descendants of the freeze)
+
+- `plans/README.md`: program indexed as complete.
+- `plans/ROADMAP.md`: updated only if product position changed (no new
+  surface; see below).
+- Architecture docs: TLS identity (`core-tls-proxy-protocols.md`), route
+  identity/connector ownership (`core-engine.md`), checklist/matrix
+  (`transport::hyper_client` rustdoc, the normative code comment).
+- Child-plan closure records: this file; per-plan implementation notes in
+  the freeze commits and module docs.
+
+### Final acceptance
+
+- [x] All six executable child plans are complete.
+- [x] One clean exact executable/test/build/validation SHA is recorded
+  (`bfda3889`).
+- [x] Focused TLS/cache/idle/deadline/refactor regressions pass on it.
+- [x] Tier 1 passes.
+- [x] Extended validation passes.
+- [x] Package validation passes.
+- [x] Live security preflight passes with scan metadata recorded.
+- [x] MSRV/feature/dependency claims remain truthful.
+- [x] HTTPX 0.28.1 full qualification and API oracle pass under Stage C.
+- [x] HTTPX2 2.12.0 full qualification and API oracle pass under Stage C.
+- [x] Both compatibility profiles and live ledger bind to the final SHA.
+- [x] HTTP/3 remains experimental.
+- [x] Node remains experimental.
+- [x] Post-freeze descendants are documentation/profile/ledger only
+  (to be verified by final descendant audit before push).

@@ -55,11 +55,18 @@ created = "2026-09-10"
 # total state from reusable Hyper forward/CONNECT connectors; this profile was
 # renewed after the exact-SHA qualification below. The immediately preceding
 # `d87be1b...` binding is historical only.
+# The post-maintenance core integrity program then corrected proxy TLS route
+# identity (opaque per-build token replacing root-store pointer aliasing),
+# enforced Hyper idle-pool timer/uniform per-route policy, hardened reusable
+# route-cache invariants, centralized Hyper client construction/caches, and
+# decomposed the pipeline by responsibility; this profile was renewed after
+# three consecutive full compatibility passes on the final executable freeze
+# below. The immediately preceding `de00479e...` binding is historical only.
 stage = "stage-c-qualified"
 status = "qualified"
-qualification-sha = "de00479ef1161ec24c7f2c34a1cc95c7872e7643"
+qualification-sha = "bfda3889cbeff5f6fbd98bf3eee12f77fab301c4"
 qualification-date = "2026-09-16"
-previous-qualification-sha = "d87be1b780a41dc8ff5f3ba8a14f8d74de5814d0"
+previous-qualification-sha = "de00479ef1161ec24c7f2c34a1cc95c7872e7643"
 historical-current-qualification-sha = "312cd4402ea2b4b27bf54cf7dc36924a1d449adc"
 reference = "httpx2==2.12.0"
 

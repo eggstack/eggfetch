@@ -2,6 +2,27 @@
 
 This directory contains active implementation plans, live qualification/status records, and historical implementation records. Completed plans are non-normative unless another current document explicitly says otherwise. Verification and release policy remain governed by `docs/verification-policy.md` and `docs/releases/process.md`.
 
+## Completed program — post-maintenance core integrity and verification (2026-09-16)
+
+Handoff program: `post-maintenance-core-integrity-and-verification-program.md`
+
+Status: complete. Executable freeze: `bfda3889cbeff5f6fbd98bf3eee12f77fab301c4`;
+the final profile/ledger/plan-index closure is documentation-only. All six
+executable child plans landed before the freeze: proxy TLS route-cache
+identity corrective (opaque per-build token), Hyper idle-pool policy
+corrective (pool timer + uniform per-route idle policy), reusable route-cache
+invariant hardening (key matrices, deadline ownership, checklist), Hyper
+client construction/cache consolidation (central policy/cache owners,
+hyper-util pool do-not-adopt recorded), pipeline decomposition
+(responsibility-owned `pipeline/` modules), and dependency/validation
+reproducibility hardening (cargo-deny all-features + Windows, pinned CI
+tooling). Tier 1, extended (incl. Rust 1.89.0 MSRV), package, live security
+preflight, both API oracles, and three consecutive 1,870-test compatibility
+passes renewed Stage C on the freeze for HTTPX 0.28.1 and HTTPX2 2.12.0.
+HTTP/3 and Node remain experimental. Closure evidence:
+`post-core-integrity-requalification-and-closure.md` and
+`httpx-parity-correction-status.md`.
+
 ## Corrective — proxy cached total-deadline ownership (2026-09-16)
 
 Plan: `proxy-cached-total-deadline-corrective-pass.md`

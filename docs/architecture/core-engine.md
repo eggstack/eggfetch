@@ -316,6 +316,20 @@ module rather than repeating builder/lifecycle/cache plumbing per route:
   identity coexisting with legacy physical pooling and the lifecycle
   wrappers. Adoption would add an abstraction layer without removing code.
 
+Reusable route caches own only connection-scoped policy. Every
+connection-affecting distinction (proxy endpoint/auth/headers, proxy TLS
+token, pinned peer/target, origin TLS token, SNI, socket/dialer identity,
+protocol policy, connect-phase timeouts) participates in the route key;
+request-scoped state (total/read/write/pool deadlines, retry/redirect
+state, bodies, cookies/auth headers, decompression limits, trace observers,
+failure contexts) is never captured by reusable connectors nor added to
+keys. The cached CONNECT connector retains only the keyed SNI hint for
+tunnel establishment; wire target overrides and trace observers belong to
+the current dispatch. The contributor checklist and full connection-vs-
+request matrix live in `transport::hyper_client` module docs, with
+equality/isolation table tests on `SocksRouteKey`, `ForwardRouteKey`, and
+`ConnectRouteKey`.
+
 When `TransportIoTimeout` is enabled, established reads and writes are
 guarded at this same boundary. The timers reset on actual byte progress,
 cover vectored writes and pending flush/shutdown, and surface as

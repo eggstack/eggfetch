@@ -4,6 +4,49 @@ This record is the exact-SHA-bound status for the HTTPX 0.28.1 compatibility
 facade. Historical phase and corrective-pass records remain in the git history
 and referenced plans; counts below are only from the runs named here.
 
+## Recorded state — Stage C renewed after post-core integrity program (2026-09-16)
+
+Recorded designation: **Stage C qualified** for both documented facades, bound
+to executable SHA `bfda3889cbeff5f6fbd98bf3eee12f77fab301c4`. The preceding
+`de00479ef1161ec24c7f2c34a1cc95c7872e7643` binding is historical because the
+post-maintenance core integrity program changed executable behavior: proxy TLS
+route identity is now an opaque per-build token (root-store pointer aliasing
+removed), Hyper idle-pool timer/uniform per-route policy is enforced, reusable
+route-cache invariants are hardened, Hyper client construction/caches are
+centralized, and the pipeline is decomposed by responsibility.
+
+Qualification evidence on the corrected executable tree:
+
+- Tier 1, extended, and package validation passed. Extended included the
+  required Rust 1.89.0 MSRV check; package validation included crate, wheel,
+  package-content, and installed-wheel typing checks. The only extended skips
+  are the existing missing Node JS artifact and downstream artifact manifest.
+- The 0.28.1 API oracle reported 71 allowed matches and the HTTPX2 2.12.0
+  oracle reported 79; both had zero unexplained, stale, or resolved-active
+  differences.
+- Three consecutive full pinned compatibility runs each passed 1,870 tests
+  with 26 existing non-failing warnings, taking 260.11s, 247.60s, and
+  250.06s. No executable files or dependencies changed between runs.
+  (Extended validation on the same freeze separately passed 1,870 tests with
+  26 warnings in 250.99s.)
+- The focused core proxy suite passed all 53 tests, including the new
+  weak->strict and strict->weak proxy-TLS route isolation for forward and
+  CONNECT routes, unchanged-clone reuse, per-request read-budget isolation,
+  forced CONNECT reconnects in both total-budget directions, differing-total
+  route reuse, legacy multi-target fallback, proxy TLS, pinning, auth,
+  timeout, SOCKS, cancellation, and stale-idle coverage.
+- The focused core library suite passed all 732 tests, including TLS
+  clone/mutator identity, independent-build freshness, policy-dimension
+  coverage, and route-key equality/isolation matrices for SOCKS, forward,
+  and CONNECT.
+- Live security preflight passed at 2026-09-16T16:12:19Z with cargo-deny
+  0.19.0 and cargo-audit 0.22.2; advisories, bans, licenses, and sources ok
+  with only non-failing duplicate warnings (getrandom, hashbrown).
+
+The closing plan is `plans/post-core-integrity-requalification-and-closure.md`.
+The closing program is
+`plans/post-maintenance-core-integrity-and-verification-program.md`.
+
 ## Recorded state — Stage C renewed after proxy cached total-deadline corrective pass (2026-09-16)
 
 Recorded designation: **Stage C qualified** for both documented facades, bound

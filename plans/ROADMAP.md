@@ -42,11 +42,12 @@ retained-experimental outcome; its missing evidence is recorded in
 `http3-production-qualification-evidence.md` rather than treated as a pass.
 
 The post-audit maintenance, security, and proxy modernization program is now
-complete on executable freeze d87be1b780a41dc8ff5f3ba8a14f8d74de5814d0.
-Adapter feature ownership is explicit, Python request dispatch has one shared
-core-builder mapping, release publication is tag/version-bound, and eligible
-HTTP forward/CONNECT routes use bounded Hyper-managed reuse. HTTPX 0.28.1 and
-HTTPX2 2.12.0 remain Stage C-qualified on that exact SHA; HTTP/3 and the Node
+complete, followed by the proxy cached total-deadline corrective and the
+post-maintenance core integrity program (opaque proxy-TLS route identity,
+uniform Hyper idle-pool policy, route-cache invariants, centralized Hyper
+client construction, decomposed pipeline, hardened dependency/validation
+graph). HTTPX 0.28.1 and HTTPX2 2.12.0 remain Stage C-qualified on executable
+freeze bfda3889cbeff5f6fbd98bf3eee12f77fab301c4; HTTP/3 and the Node
 binding remain unchanged experimental surfaces.
 
 ### Current supported surfaces
