@@ -298,6 +298,12 @@ impl RequestParts {
     /// Returns the timeout with `total` replaced by `total - elapsed`
     /// (saturating). Used by both retry and redirect loops so the original
     /// total deadline shrinks rather than restarting on each attempt/hop.
+    ///
+    /// Per-phase (`connect`/`read`/`write`/`pool`) values are intentionally
+    /// left unclamped: the remaining total stays authoritative as the outer
+    /// `send_with_total_timeout` bound around each attempt/hop, so a late
+    /// attempt cannot overshoot the total budget even with full per-phase
+    /// values.
     pub(crate) fn shrink_total_deadline(
         timeout: &Timeout,
         elapsed: std::time::Duration,

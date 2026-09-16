@@ -156,6 +156,9 @@ pub(crate) async fn socks5_handshake(
     let deadline = remaining_total.map(|duration| std::time::Instant::now() + duration);
 
     if let Some(targets) = pinned_targets {
+        if targets.is_empty() {
+            return Err(Error::Connect("empty SOCKS target set".into()));
+        }
         let mut last_err = None;
         for (index, target) in targets.iter().copied().enumerate() {
             let mut stream = establish_socks_proxy_connection(proxy_config, deadline).await?;
@@ -167,7 +170,7 @@ pub(crate) async fn socks5_handshake(
                 Err(error) => return Err(error.into_error()),
             }
         }
-        return Err(last_err.expect("pinned SOCKS target set is non-empty"));
+        return Err(last_err.unwrap_or_else(|| Error::Connect("empty SOCKS target set".into())));
     }
 
     // Local-DNS path with multiple resolved addresses: try each destination

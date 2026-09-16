@@ -57,11 +57,15 @@ fn bench_warm_client(c: &mut Criterion) {
 
     let mut group = c.benchmark_group("warm_client");
     for n in [1, 5, 10] {
+        // Share one client across iters so the pool stays warm; cloning is
+        // cheap (`Arc`) and preserves the shared connection pool.
+        let client = make_client();
+        let url = url.clone();
         group.bench_function(format!("sequential_{n}_requests"), |b| {
             b.to_async(&rt).iter(|| {
                 let url = url.clone();
+                let client = client.clone();
                 async move {
-                    let client = make_client();
                     for _ in 0..n {
                         let mut resp = client.get(&url).unwrap().send().await.unwrap();
                         let _ = resp.bytes().await;
@@ -84,14 +88,18 @@ fn bench_concurrent_requests(c: &mut Criterion) {
     let url = server.url();
 
     c.bench_function("concurrent_10_get", |b| {
+        // Share one client across iters so the pool stays warm; clones share
+        // the underlying pool via `Arc`.
+        let client = make_client();
         b.to_async(&rt).iter(|| {
             let url = url.clone();
+            let client = client.clone();
             async move {
                 let futs: Vec<_> = (0..10)
                     .map(|_| {
                         let url = url.clone();
+                        let client = client.clone();
                         async move {
-                            let client = make_client();
                             let mut resp = client.get(&url).unwrap().send().await.unwrap();
                             let _ = resp.bytes().await;
                         }
@@ -230,6 +238,8 @@ fn bench_http2_handshake(c: &mut Criterion) {
     });
 
     group.bench_function("auto_negotiate", |b| {
+        // NOTE: `BenchServer` speaks H1 only, so `Auto` always falls back to
+        // H1 here. This measures auto-fallback overhead, not H2 negotiation.
         b.to_async(&rt).iter(|| {
             let url = url.clone();
             async move {

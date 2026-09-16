@@ -568,17 +568,7 @@ impl CookieJar {
     /// cannot leave it inconsistent.
     pub fn expire_stale(&self) {
         let now = SystemTime::now();
-        let has_expired = self
-            .inner
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .cookies
-            .values()
-            .any(|c| c.persistent && c.expires.is_some_and(|exp| now >= exp));
-        if !has_expired {
-            return;
-        }
-
+        // Single write-locked check-and-evict; no read-then-write window.
         let mut jar = self
             .inner
             .write()

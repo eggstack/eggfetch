@@ -815,9 +815,9 @@ async fn run(cli: Cli) -> Result<()> {
     };
     client_builder = client_builder.http_version_policy(http_version_policy);
 
-    if cli.no_compress {
-        client_builder = client_builder.automatic_decompression(false);
-    }
+    // `--no-compress` is enforced per-request below (`decompress(false)`),
+    // which is sufficient for this single-request CLI; no client-level
+    // `automatic_decompression(false)` is needed.
 
     if let Some(max_size) = cli.max_body_size {
         client_builder = client_builder.max_decoded_body_size(max_size);

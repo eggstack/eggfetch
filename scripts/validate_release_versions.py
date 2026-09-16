@@ -71,11 +71,18 @@ def parse_cargo_toml_version(path: str) -> str | None:
             content = f.read()
     except OSError:
         return None
+    in_package = False
     for line in content.splitlines():
         stripped = line.strip()
-        m = re.match(r'^version\s*=\s*["\']([^"\']+)["\']', stripped)
-        if m:
-            return m.group(1)
+        if stripped.startswith("["):
+            # Track `[package]` like the pyproject parser so a `version=`
+            # in a dependency table cannot shadow the package version.
+            in_package = stripped == "[package]"
+            continue
+        if in_package:
+            m = re.match(r'^version\s*=\s*["\']([^"\']+)["\']', stripped)
+            if m:
+                return m.group(1)
     return None
 
 

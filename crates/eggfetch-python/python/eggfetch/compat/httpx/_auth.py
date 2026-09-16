@@ -105,7 +105,7 @@ class BasicAuth(Auth):
         yield request
 
     def __repr__(self) -> str:
-        return f"BasicAuth(username={self._username!r})"
+        return "BasicAuth(<redacted>)"
 
 
 # ---------------------------------------------------------------------------

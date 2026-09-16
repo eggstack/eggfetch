@@ -61,7 +61,8 @@ class TestBasicAuth:
 
     def test_repr(self):
         auth = BasicAuth("admin")
-        assert "admin" in repr(auth)
+        assert "admin" not in repr(auth)
+        assert "<redacted>" in repr(auth)
 
     def test_empty_credentials(self):
         auth = BasicAuth()

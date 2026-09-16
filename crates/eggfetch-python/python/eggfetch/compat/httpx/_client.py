@@ -1129,6 +1129,15 @@ def _clean_redirect_extensions(request: Request) -> dict:
     """Build extensions dict for a redirect request."""
     extensions = dict(request.extensions)
     extensions.pop("_eggfetch_started_at", None)
+    # Wire-level transport hints are single-hop only: native redirect hops
+    # clear `target`/`sni_hostname`/`trace` (except same-origin resolved
+    # destination, which is Rust-only and never set from Python). The compat
+    # facade reimplements redirects in Python with native redirects disabled,
+    # so clear them here to prevent an attacker-controlled 302 from pinning
+    # the next hop's wire target/SNI/trace to the wrong origin.
+    extensions.pop("target", None)
+    extensions.pop("sni_hostname", None)
+    extensions.pop("trace", None)
     return extensions
 
 

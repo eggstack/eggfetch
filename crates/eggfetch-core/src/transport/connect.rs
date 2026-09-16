@@ -288,11 +288,14 @@ pub(crate) async fn send_https_connect_request(
 
     for (index, target) in targets.into_iter().enumerate() {
         let attempt_body = if index == last {
-            body.take()
-                .expect("last CONNECT target owns the request body")
+            body.take().ok_or_else(|| {
+                crate::error::Error::Connect("missing request body for CONNECT attempt".into())
+            })?
         } else {
             body.as_ref()
-                .expect("a CONNECT target remains after the body")
+                .ok_or_else(|| {
+                    crate::error::Error::Connect("missing request body for CONNECT retry".into())
+                })?
                 .try_clone_for_retry()?
         };
         match send_https_connect_request_once(
@@ -316,7 +319,8 @@ pub(crate) async fn send_https_connect_request(
         }
     }
 
-    Err(last_error.expect("at least one CONNECT target was attempted"))
+    Err(last_error
+        .unwrap_or_else(|| crate::error::Error::Connect("no CONNECT targets attempted".into())))
 }
 
 /// Send an origin-form request over a CONNECT tunnel whose transport and

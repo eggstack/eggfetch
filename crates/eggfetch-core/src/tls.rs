@@ -47,11 +47,14 @@ static TLS_POLICY_TOKEN_NEXT: AtomicU64 = AtomicU64::new(1);
 
 /// Mint a fresh opaque policy token for a newly built or mutated `TlsConfig`.
 fn mint_tls_policy_token() -> Arc<u64> {
-    let mut id = TLS_POLICY_TOKEN_NEXT.fetch_add(1, Ordering::Relaxed);
-    if id == 0 {
-        id = TLS_POLICY_TOKEN_NEXT.fetch_add(1, Ordering::Relaxed);
+    // Skip `0` (reserved for "no TLS config"). Each `fetch_add` return value
+    // is distinct, so retrying on `0` cannot collide with a concurrent minter.
+    loop {
+        let id = TLS_POLICY_TOKEN_NEXT.fetch_add(1, Ordering::Relaxed);
+        if id != 0 {
+            return Arc::new(id);
+        }
     }
-    Arc::new(id)
 }
 
 /// Trust store source for certificate verification.

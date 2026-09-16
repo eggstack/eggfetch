@@ -484,8 +484,9 @@ impl Multipart {
     ///
     /// Before encoding, checks that the boundary does not accidentally appear
     /// within any buffered part body. If a collision is detected, the boundary
-    /// is regenerated. Streamed parts cannot be checked and are documented
-    /// accordingly.
+    /// is regenerated. Streamed parts cannot be checked: callers must ensure
+    /// streamed part bytes do not contain the boundary, or a
+    /// server-misparsable request may result.
     #[must_use]
     pub fn into_body(mut self) -> RequestBody {
         if !self.ensure_no_boundary_collision() {

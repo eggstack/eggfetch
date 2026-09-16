@@ -32,8 +32,9 @@ impl PyBasicAuth {
         self.inner.username()
     }
 
+    #[allow(clippy::unused_self)]
     fn __repr__(&self) -> String {
-        format!("BasicAuth(username={})", self.inner.username())
+        "BasicAuth(<redacted>)".to_string()
     }
 }
 

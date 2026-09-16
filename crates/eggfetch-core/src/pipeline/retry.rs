@@ -102,6 +102,12 @@ fn has_budget(policy: &RetryPolicy, attempt: usize, start_time: std::time::Insta
 ///
 /// Retries restart the complete logical request (including redirects)
 /// under the original total deadline. Stream bodies are never retried.
+///
+/// Retry eligibility is intentionally original-method-scoped: `should_retry`
+/// is evaluated with the logical (pre-redirect) method and replayable body,
+/// not the post-redirect wire method. A `POST → 301 → GET → 503` therefore
+/// does not retry under a `GET`-only policy, because retrying would replay
+/// the original non-idempotent `POST`.
 #[allow(clippy::too_many_lines)]
 pub(crate) async fn send_with_retry(client: &Client, request: Request) -> Result<Response> {
     let body_replayable = request.body().is_replayable();

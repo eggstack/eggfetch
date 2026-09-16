@@ -324,7 +324,9 @@ pub(super) async fn send_h3_route(
                 if let Some(context) = failure_context {
                     context.clear();
                 }
-                let fb_body = fallback_body.expect("checked above");
+                let Some(fb_body) = fallback_body else {
+                    return Err(dispatch.error);
+                };
                 send_hyper_request(
                     inner,
                     method,

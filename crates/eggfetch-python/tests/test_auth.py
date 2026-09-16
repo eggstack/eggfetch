@@ -297,8 +297,9 @@ class TestAuthRedaction:
     def test_basic_auth_repr_shows_username_not_password(self):
         auth = eggfetch.BasicAuth("admin", "s3cret")
         r = repr(auth)
-        assert "admin" in r
+        assert "admin" not in r
         assert "s3cret" not in r
+        assert "<redacted>" in r
 
     def test_basic_auth_username_property(self):
         auth = eggfetch.BasicAuth("myuser", "mypass")

@@ -493,8 +493,8 @@ impl NoProxy {
 ///
 /// # Security
 ///
-/// The `Debug` and `Display` implementations redact the password.
-/// The raw password is never exposed in error messages or logs.
+/// The `Debug` and `Display` implementations redact both username and
+/// password. Credentials are never exposed in error messages or logs.
 #[derive(Clone)]
 pub enum ProxyAuth {
     /// HTTP Basic proxy authentication.
@@ -560,9 +560,9 @@ impl ProxyAuth {
 impl fmt::Debug for ProxyAuth {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Basic { username, .. } => f
+            Self::Basic { .. } => f
                 .debug_struct("ProxyAuth::Basic")
-                .field("username", username)
+                .field("username", &"<redacted>")
                 .field("password", &"<redacted>")
                 .finish(),
         }
@@ -572,9 +572,7 @@ impl fmt::Debug for ProxyAuth {
 impl fmt::Display for ProxyAuth {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Basic { username, .. } => {
-                write!(f, "Basic(username={username})")
-            }
+            Self::Basic { .. } => f.write_str("Basic(<redacted>)"),
         }
     }
 }
@@ -667,7 +665,13 @@ impl ProxyConfig {
         identity.extend_from_slice(self.uri.as_str().as_bytes());
         identity.push(0);
         if let Some(auth) = self.auth.as_ref() {
-            identity.extend_from_slice(auth.header_value().as_bytes());
+            // Hash credential bytes instead of retaining them in the
+            // long-lived route key. The hash preserves cache separation
+            // without storing key material for the entry lifetime.
+            use std::hash::{Hash, Hasher};
+            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+            auth.header_value().hash(&mut hasher);
+            identity.extend_from_slice(&hasher.finish().to_ne_bytes());
         }
         identity.push(0);
         for (name, value) in self.proxy_headers.iter() {
@@ -1358,7 +1362,7 @@ mod tests {
     fn proxy_auth_redacted_debug() {
         let auth = ProxyAuth::basic("user", "secret123").unwrap();
         let debug = format!("{auth:?}");
-        assert!(debug.contains("user"));
+        assert!(!debug.contains("\"user\""));
         assert!(debug.contains("<redacted>"));
         assert!(!debug.contains("secret123"));
     }
@@ -1367,8 +1371,9 @@ mod tests {
     fn proxy_auth_redacted_display() {
         let auth = ProxyAuth::basic("user", "secret123").unwrap();
         let display = format!("{auth}");
-        assert!(display.contains("user"));
+        assert!(!display.contains("user"));
         assert!(!display.contains("secret123"));
+        assert!(display.contains("<redacted>"));
     }
 
     #[test]

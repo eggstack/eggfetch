@@ -27,6 +27,10 @@ use crate::body::BoxBytesStream;
 use crate::error::{Error, Result};
 
 /// Limits applied during response body decompression.
+///
+/// Nested content encodings are additionally capped at 4 layers
+/// (`MAX_NESTING_DEPTH`); `max_decompression_ratio` remains the primary
+/// defense against large expansion ratios.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct DecompressionLimit {
     /// Hard limit on total decoded bytes.

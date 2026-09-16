@@ -87,8 +87,8 @@ impl std::fmt::Debug for AuthScheme {
 ///
 /// # Security
 ///
-/// The `Debug` and `Display` implementations redact the password.
-/// The raw password is never exposed in error messages or logs.
+/// The `Debug` and `Display` implementations redact both username and
+/// password. Credentials are never exposed in error messages or logs.
 ///
 /// # Policy
 ///
@@ -149,7 +149,7 @@ impl BasicAuth {
 impl std::fmt::Debug for BasicAuth {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("BasicAuth")
-            .field("username", &self.username)
+            .field("username", &"<redacted>")
             .field("password", &"<redacted>")
             .finish()
     }
@@ -157,7 +157,7 @@ impl std::fmt::Debug for BasicAuth {
 
 impl std::fmt::Display for BasicAuth {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "BasicAuth(username={})", self.username)
+        f.write_str("BasicAuth(<redacted>)")
     }
 }
 
@@ -340,7 +340,7 @@ mod tests {
     fn basic_auth_redacted_debug() {
         let auth = BasicAuth::new("user", "secret123").unwrap();
         let debug = format!("{auth:?}");
-        assert!(debug.contains("user"));
+        assert!(!debug.contains("\"user\""));
         assert!(debug.contains("<redacted>"));
         assert!(!debug.contains("secret123"));
     }
@@ -349,8 +349,9 @@ mod tests {
     fn basic_auth_redacted_display() {
         let auth = BasicAuth::new("user", "secret123").unwrap();
         let display = format!("{auth}");
-        assert!(display.contains("user"));
+        assert!(!display.contains("user"));
         assert!(!display.contains("secret123"));
+        assert!(display.contains("<redacted>"));
     }
 
     #[test]
@@ -490,7 +491,7 @@ mod tests {
     fn auth_scheme_debug_does_not_leak_basic_password() {
         let scheme = AuthScheme::basic("admin", "hunter2").unwrap();
         let debug = format!("{scheme:?}");
-        assert!(debug.contains("admin"));
+        assert!(!debug.contains("admin"));
         assert!(!debug.contains("hunter2"));
         assert!(debug.contains("<redacted>"));
     }
@@ -611,9 +612,9 @@ mod tests {
     fn basic_auth_display_shows_username_not_password() {
         let auth = BasicAuth::new("admin", "s3cret").unwrap();
         let display = format!("{auth}");
-        assert!(display.contains("admin"));
+        assert!(!display.contains("admin"));
         assert!(!display.contains("s3cret"));
-        assert!(display.starts_with("BasicAuth(username="));
+        assert!(display.contains("<redacted>"));
     }
 
     #[test]

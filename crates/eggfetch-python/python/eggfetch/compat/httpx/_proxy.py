@@ -66,8 +66,16 @@ class Proxy:
 
     def __repr__(self) -> str:
         url_str = str(self._url)
-        if self._url.password:
-            url_str = url_str.replace(f":{self._url.password}@", ":***@")
+        if self._url.username or self._url.password:
+            # Redact the full userinfo (username is secret in proxy context).
+            # Preserve scheme/host/port/path by replacing only the userinfo
+            # segment between "://" and the last "@".
+            if "@" in url_str and "://" in url_str:
+                prefix, remainder = url_str.split("://", 1)
+                _userinfo, hostpart = remainder.rsplit("@", 1)
+                url_str = f"{prefix}://***@{hostpart}"
+            else:
+                url_str = "***"
         parts = [f"url={url_str!r}"]
         if self._headers:
             redacted_headers = [

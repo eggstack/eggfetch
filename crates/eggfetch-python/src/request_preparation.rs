@@ -151,6 +151,10 @@ pub(crate) fn prepare_client_config(
         .transpose()?
         .unwrap_or_default();
 
+    // Flag any disabled verification (bool `verify=False`, `CERT_NONE`
+    // SSLContext, or hostname checks off) so `__repr__` can warn. The TLS
+    // config is the source of truth; the bool fast-path is subsumed by it.
+    let verify_disabled = !tls_config.verify_certificate() || !tls_config.verify_hostname();
     Ok(PreparedClientConfig {
         tls_config,
         http_version_policy,
@@ -172,9 +176,7 @@ pub(crate) fn prepare_client_config(
         socket_options,
         uds: uds.map(str::to_owned),
         decompress,
-        verify_disabled: verify
-            .and_then(|value| value.extract::<bool>().ok())
-            .is_some_and(|value| !value),
+        verify_disabled,
     })
 }
 

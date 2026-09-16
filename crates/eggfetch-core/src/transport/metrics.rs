@@ -200,7 +200,7 @@ pub struct TransportMetrics {
     pub h3_reconnected: AtomicUsize,
     /// Bounded H3 connection snapshots, when HTTP/3 is enabled.
     #[cfg(feature = "http3")]
-    h3_diagnostics: Mutex<Vec<H3ConnectionDiagnostic>>,
+    h3_diagnostics: Mutex<std::collections::VecDeque<H3ConnectionDiagnostic>>,
 }
 
 impl TransportMetrics {
@@ -401,9 +401,9 @@ impl TransportMetrics {
             return;
         }
         if diagnostics.len() >= 64 {
-            diagnostics.remove(0);
+            diagnostics.pop_front();
         }
-        diagnostics.push(diagnostic);
+        diagnostics.push_back(diagnostic);
     }
 
     /// Return bounded H3 connection snapshots without retaining live Quinn
@@ -413,7 +413,7 @@ impl TransportMetrics {
     pub fn h3_diagnostics(&self) -> Vec<H3ConnectionDiagnostic> {
         self.h3_diagnostics
             .lock()
-            .map(|diagnostics| diagnostics.clone())
+            .map(|diagnostics| diagnostics.iter().cloned().collect())
             .unwrap_or_default()
     }
 

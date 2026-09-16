@@ -288,8 +288,9 @@ fn workload_cancelled_requests(_url: &str) -> (String, u64) {
                 let mut resp = client.get(&url).unwrap().send().await.unwrap();
                 let _ = resp.bytes().await;
             });
-            // Drop the handle immediately to simulate cancellation.
-            drop(handle);
+            // Actually cancel the task (dropping a JoinHandle detaches).
+            handle.abort();
+            let _ = handle.await;
             if let Some(rss) = current_rss_bytes() {
                 peak = peak.max(rss);
             }

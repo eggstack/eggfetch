@@ -142,7 +142,9 @@ impl std::error::Error for DirectConnectError {
 ///
 /// Mirrors the Python `socket` module's tuple representation used by HTTPX.
 /// `level` and `option` are integers matching OS socket option constants.
-/// `value` is the raw bytes to set.
+/// `value` is the raw bytes to set, interpreted in native endianness
+/// (`from_ne_bytes`); values must be produced and consumed in-process and
+/// never persisted or passed across differing-endian boundaries.
 #[derive(Debug, Clone)]
 pub struct SocketOption {
     /// Socket level (e.g., `IPPROTO_TCP`).
