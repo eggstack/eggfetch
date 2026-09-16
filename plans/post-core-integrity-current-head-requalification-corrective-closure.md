@@ -221,7 +221,7 @@ Acceptance:
 
 - [x] Final descendant audit is recorded.
 - [x] Post-freeze commits are documentation/profile/ledger only.
-- [ ] Pushed routine CI is green for the final closure head.
+- [x] Pushed routine CI is green for the final closure head.
 
 ## Expected files changed by implementation
 
@@ -253,7 +253,7 @@ Unexpected changes to Rust/Python production source, tests, manifests, lockfiles
 - [x] HTTP/3 remains experimental.
 - [x] Node remains experimental.
 - [x] Final pushed descendant contains only documentation/profile/ledger closure changes.
-- [ ] Routine GitHub CI for the final closure head is green.
+- [x] Routine GitHub CI for the final closure head is green.
 
 ## Closure record (executed 2026-09-16)
 
@@ -392,9 +392,21 @@ Counts are evidence only, not product-contract numbers.
 
 - HTTP/3 remains experimental; the Node binding remains an experimental
   prototype. Neither status changed in this corrective.
-- (To be filled after push: final descendant audit
-  `1f52d846..PUSHED_HEAD` plus the pushed routine CI run for the final
-  documentation/profile/ledger closure head.)
+- Final descendant audit: `1f52d846..9112f6ef` contains only
+  documentation/profile/ledger changes (2 compat `profile.toml`, 2 compat
+  READMEs, `plans/*` ledger/index/closure, `docs/reference/*`,
+  `docs/architecture/core-tls-proxy-protocols.md`, `.skills/*`,
+  `plans/ROADMAP.md`). No Rust/Python source, test, manifest, lockfile,
+  build script, CI workflow, compatibility runner, or validation script
+  changed after the freeze.
+- Pushed routine CI for the final closure head is green: workflow `CI`,
+  run `35140415963`, head
+  `9112f6ef1be0f7069ef82398a3c3ddf1e6f8058c` (a
+  documentation/profile/ledger descendant of the executable freeze, so the
+  run covers the frozen executable tree): conclusion success
+  (19:24–19:34Z, ~10min). The only annotation is the repository's
+  existing GitHub Actions Node.js 20 deprecation notice; no validation
+  step failed.
 
 ## Closure rule
 

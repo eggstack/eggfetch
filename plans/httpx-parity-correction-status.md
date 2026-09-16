@@ -46,9 +46,14 @@ Qualification evidence on the corrected executable tree:
 
 The closing plan is
 `plans/post-core-integrity-current-head-requalification-corrective-closure.md`.
-The pushed closure tree's GitHub CI result is recorded in that plan once
-available (the closure commits after the freeze are documentation/profile/
-ledger only, so routine CI covers the frozen executable tree).
+
+The pushed closure tree passed GitHub CI run `35140415963` (head
+`9112f6ef1be0f7069ef82398a3c3ddf1e6f8058c`, a documentation/profile/ledger
+descendant of the executable freeze, so the run covers the frozen executable
+tree): conclusion success (19:24–19:34Z, ~10min). The only annotation is the
+repository's existing GitHub Actions Node.js 20 deprecation notice; no
+validation step failed. The executable freeze itself also passed routine CI
+in run `35131783083` (head `1f52d846`, conclusion success).
 
 ## Recorded state — Stage C renewed after post-core integrity program (2026-09-16)
 
