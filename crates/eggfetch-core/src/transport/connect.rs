@@ -137,7 +137,6 @@ pub(crate) struct ConnectProxyConnector {
     connect_timeout: Option<std::time::Duration>,
     proxy_connect_timeout: Option<std::time::Duration>,
     proxy_tls_timeout: Option<std::time::Duration>,
-    setup_timeout: Option<std::time::Duration>,
     http_version_policy: crate::http_version::HttpVersionPolicy,
     metrics: std::sync::Arc<crate::transport::metrics::TransportMetrics>,
 }
@@ -154,7 +153,6 @@ impl ConnectProxyConnector {
         connect_timeout: Option<std::time::Duration>,
         proxy_connect_timeout: Option<std::time::Duration>,
         proxy_tls_timeout: Option<std::time::Duration>,
-        setup_timeout: Option<std::time::Duration>,
         http_version_policy: crate::http_version::HttpVersionPolicy,
         metrics: std::sync::Arc<crate::transport::metrics::TransportMetrics>,
     ) -> Self {
@@ -167,7 +165,6 @@ impl ConnectProxyConnector {
             connect_timeout,
             proxy_connect_timeout,
             proxy_tls_timeout,
-            setup_timeout,
             http_version_policy,
             metrics,
         }
@@ -201,13 +198,15 @@ impl tower_service::Service<http::Uri> for ConnectProxyConnector {
         let connect_timeout = self.connect_timeout;
         let proxy_connect_timeout = self.proxy_connect_timeout;
         let proxy_tls_timeout = self.proxy_tls_timeout;
-        let setup_timeout = self.setup_timeout;
         let http_version_policy = self.http_version_policy;
         let metrics = self.metrics.clone();
         Box::pin(async move {
+            // The cached connector owns only connection-scoped policy. The
+            // current logical request's total budget is enforced around the
+            // Hyper dispatch future, not captured by this reusable client.
             let ctx = ProxyRequestContext {
                 remaining_total: None,
-                deadline: setup_timeout.map(|timeout| std::time::Instant::now() + timeout),
+                deadline: None,
                 connect_timeout,
                 proxy_connect_timeout,
                 proxy_tls_timeout,

@@ -54,6 +54,8 @@ use tokio::sync::watch;
 #[derive(Default)]
 struct HttpProxyConfig {
     required_auth: Option<(String, String)>,
+    /// Delay one CONNECT handshake by connection number.
+    connect_delay: Option<(usize, Duration)>,
 }
 
 struct HttpProxyServer {
@@ -65,6 +67,8 @@ struct HttpProxyServer {
     connection_count: Arc<AtomicUsize>,
     /// CONNECT authorities observed by the proxy, in request order.
     connect_targets: Arc<std::sync::Mutex<Vec<String>>>,
+    close_tunnel: tokio::sync::broadcast::Sender<()>,
+    closed_tunnel_count: Arc<AtomicUsize>,
     shutdown: watch::Sender<bool>,
 }
 
@@ -78,6 +82,11 @@ impl HttpProxyServer {
         let counter = connection_count.clone();
         let connect_targets = Arc::new(std::sync::Mutex::new(Vec::new()));
         let connect_targets_clone = connect_targets.clone();
+        let (close_tunnel, _) = tokio::sync::broadcast::channel(8);
+        let close_tunnel_clone = close_tunnel.clone();
+        let closed_tunnel_count = Arc::new(AtomicUsize::new(0));
+        let closed_tunnel_count_clone = closed_tunnel_count.clone();
+        let connect_delay = config.connect_delay;
 
         tokio::spawn(async move {
             loop {
@@ -85,11 +94,23 @@ impl HttpProxyServer {
                     result = listener.accept() => {
                         match result {
                             Ok((stream, _)) => {
-                                counter.fetch_add(1, Ordering::SeqCst);
+                                let connection_number = counter.fetch_add(1, Ordering::SeqCst) + 1;
                                 let auth = required_auth.clone();
                                 let targets = connect_targets_clone.clone();
+                                let close_rx = close_tunnel_clone.subscribe();
+                                let close_count = closed_tunnel_count_clone.clone();
+                                let delay = connect_delay
+                                    .filter(|(number, _)| *number == connection_number)
+                                    .map(|(_, duration)| duration);
                                 tokio::spawn(async move {
-                                    if let Err(e) = handle_proxy_connection(stream, auth, targets).await {
+                                    if let Err(e) = handle_proxy_connection(
+                                        stream,
+                                        auth,
+                                        targets,
+                                        delay,
+                                        close_rx,
+                                        close_count,
+                                    ).await {
                                         eprintln!("proxy connection error: {e}");
                                     }
                                 });
@@ -111,6 +132,8 @@ impl HttpProxyServer {
             port,
             connection_count,
             connect_targets,
+            close_tunnel,
+            closed_tunnel_count,
             shutdown: shutdown_tx,
         }
     }
@@ -127,6 +150,20 @@ impl HttpProxyServer {
         self.connect_targets.lock().unwrap().clone()
     }
 
+    fn close_tunnels(&self) {
+        let _ = self.close_tunnel.send(());
+    }
+
+    async fn wait_for_closed_tunnels(&self, expected: usize) {
+        tokio::time::timeout(Duration::from_secs(1), async {
+            while self.closed_tunnel_count.load(Ordering::SeqCst) < expected {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("proxy tunnel did not close");
+    }
+
     fn shutdown(&self) {
         let _ = self.shutdown.send(true);
     }
@@ -137,6 +174,9 @@ async fn handle_proxy_connection(
     mut client_stream: TcpStream,
     required_auth: Option<(String, String)>,
     connect_targets: Arc<std::sync::Mutex<Vec<String>>>,
+    connect_delay: Option<Duration>,
+    mut close_rx: tokio::sync::broadcast::Receiver<()>,
+    closed_tunnel_count: Arc<AtomicUsize>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     use std::fmt::Write as _;
     let mut buf_reader = BufReader::new(&mut client_stream);
@@ -193,7 +233,14 @@ async fn handle_proxy_connection(
     if method.eq_ignore_ascii_case("CONNECT") {
         connect_targets.lock().unwrap().push(target.to_owned());
         drop(buf_reader);
-        handle_connect_tunnel(&mut client_stream, target).await?;
+        handle_connect_tunnel(
+            &mut client_stream,
+            target,
+            connect_delay,
+            &mut close_rx,
+            &closed_tunnel_count,
+        )
+        .await?;
     } else {
         let content_length: usize = headers
             .get("content-length")
@@ -341,7 +388,13 @@ async fn handle_proxy_connection(
 async fn handle_connect_tunnel(
     client_stream: &mut TcpStream,
     target: &str,
+    connect_delay: Option<Duration>,
+    close_rx: &mut tokio::sync::broadcast::Receiver<()>,
+    closed_tunnel_count: &AtomicUsize,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    if let Some(delay) = connect_delay {
+        tokio::time::sleep(delay).await;
+    }
     if let Ok(dest_stream) = TcpStream::connect(target).await {
         let resp = b"HTTP/1.1 200 Connection Established\r\n\r\n";
         client_stream.write_all(resp).await?;
@@ -362,6 +415,9 @@ async fn handle_connect_tunnel(
         tokio::select! {
             () = c2d => {}
             () = d2c => {}
+            Ok(()) = close_rx.recv() => {
+                closed_tunnel_count.fetch_add(1, Ordering::SeqCst);
+            }
         }
     } else {
         let resp = b"HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n";
@@ -584,6 +640,7 @@ async fn http_proxy_auth_sent_to_proxy_not_destination() {
     let echo = EchoHttpServer::start().await;
     let proxy = HttpProxyServer::start(HttpProxyConfig {
         required_auth: Some(("testuser".into(), "testpass".into())),
+        ..Default::default()
     })
     .await;
 
@@ -617,6 +674,7 @@ async fn http_proxy_auth_failure_returns_error() {
     let echo = EchoHttpServer::start().await;
     let proxy = HttpProxyServer::start(HttpProxyConfig {
         required_auth: Some(("testuser".into(), "testpass".into())),
+        ..Default::default()
     })
     .await;
 
@@ -1000,6 +1058,7 @@ async fn connect_tunnel_auth_required() {
     let echo = EchoServer::start().await;
     let proxy = HttpProxyServer::start(HttpProxyConfig {
         required_auth: Some(("user".into(), "pass".into())),
+        ..Default::default()
     })
     .await;
 
@@ -1037,6 +1096,7 @@ async fn connect_tunnel_auth_with_valid_creds() {
     let echo = EchoServer::start().await;
     let proxy = HttpProxyServer::start(HttpProxyConfig {
         required_auth: Some(("user".into(), "pass".into())),
+        ..Default::default()
     })
     .await;
 
@@ -1130,6 +1190,7 @@ async fn proxy_auth_header_never_reaches_destination() {
 async fn credentials_not_in_error_messages() {
     let proxy = HttpProxyServer::start(HttpProxyConfig {
         required_auth: Some(("secretuser".into(), "secretpass".into())),
+        ..Default::default()
     })
     .await;
 
@@ -1419,10 +1480,17 @@ async fn hyper_forward_proxy_reuses_keep_alive_connection() {
     });
 
     let client = test_client(&format!("http://127.0.0.1:{port}"));
-    for path in ["/one", "/two"] {
+    for (path, total) in [
+        ("/one", Duration::from_millis(500)),
+        ("/two", Duration::from_secs(5)),
+    ] {
         let mut response = client
             .get(&format!("http://origin.invalid{path}"))
             .unwrap()
+            .timeout(Timeout {
+                total: Some(total),
+                ..Default::default()
+            })
             .send()
             .await
             .unwrap();
@@ -1448,17 +1516,143 @@ async fn hyper_connect_proxy_reuses_keep_alive_tunnel() {
         )
         .build();
 
-    for _ in 0..2 {
+    for total in [Duration::from_millis(500), Duration::from_secs(5)] {
         let mut response = client
             .get(&format!("https://origin.invalid:{}/", origin.port()))
             .unwrap()
             .proxy_target_addresses([format!("127.0.0.1:{}", origin.port()).parse().unwrap()])
+            .timeout(Timeout {
+                total: Some(total),
+                ..Default::default()
+            })
             .send()
             .await
             .unwrap();
         assert_eq!(response.text().await.unwrap(), "OK");
     }
     assert_eq!(proxy_server.connection_count(), 1);
+
+    proxy_server.shutdown();
+    origin.shutdown();
+}
+
+#[tokio::test]
+async fn hyper_connect_proxy_does_not_reuse_short_total_on_reconnect() {
+    let ca = CertAuthority::new();
+    let origin = TlsTestServer::start(&ca, &["origin.invalid"]).await;
+    let proxy_server = HttpProxyServer::start(HttpProxyConfig {
+        connect_delay: Some((2, Duration::from_millis(700))),
+        ..Default::default()
+    })
+    .await;
+    let client = Client::builder()
+        .proxy(Proxy::all(&proxy_server.url()).unwrap())
+        .tls_config(
+            TlsConfig::builder()
+                .ca_certificate_pem(&ca.cert_pem())
+                .unwrap()
+                .build(),
+        )
+        .build();
+    let origin_url = format!("https://origin.invalid:{}/", origin.port());
+    let target = format!("127.0.0.1:{}", origin.port()).parse().unwrap();
+
+    let mut first = client
+        .get(&origin_url)
+        .unwrap()
+        .proxy_target_addresses([target])
+        .timeout(Timeout {
+            total: Some(Duration::from_millis(500)),
+            connect: Some(Duration::from_secs(2)),
+            ..Default::default()
+        })
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(first.text().await.unwrap(), "OK");
+
+    proxy_server.close_tunnels();
+    proxy_server.wait_for_closed_tunnels(1).await;
+
+    let mut second = client
+        .get(&origin_url)
+        .unwrap()
+        .proxy_target_addresses([target])
+        .timeout(Timeout {
+            total: Some(Duration::from_secs(2)),
+            connect: Some(Duration::from_secs(2)),
+            ..Default::default()
+        })
+        .send()
+        .await
+        .expect("a reused CONNECT client must use the current request total budget");
+    assert_eq!(second.text().await.unwrap(), "OK");
+    assert_eq!(proxy_server.connection_count(), 2);
+    assert_eq!(proxy_server.connect_targets().len(), 2);
+
+    proxy_server.shutdown();
+    origin.shutdown();
+}
+
+#[tokio::test]
+async fn hyper_connect_proxy_reconnect_honors_short_current_total() {
+    let ca = CertAuthority::new();
+    let origin = TlsTestServer::start(&ca, &["origin.invalid"]).await;
+    let proxy_server = HttpProxyServer::start(HttpProxyConfig {
+        connect_delay: Some((2, Duration::from_millis(400))),
+        ..Default::default()
+    })
+    .await;
+    let client = Client::builder()
+        .proxy(Proxy::all(&proxy_server.url()).unwrap())
+        .tls_config(
+            TlsConfig::builder()
+                .ca_certificate_pem(&ca.cert_pem())
+                .unwrap()
+                .build(),
+        )
+        .build();
+    let origin_url = format!("https://origin.invalid:{}/", origin.port());
+    let target = format!("127.0.0.1:{}", origin.port()).parse().unwrap();
+
+    let mut first = client
+        .get(&origin_url)
+        .unwrap()
+        .proxy_target_addresses([target])
+        .timeout(Timeout {
+            total: Some(Duration::from_secs(2)),
+            connect: Some(Duration::from_secs(2)),
+            ..Default::default()
+        })
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(first.text().await.unwrap(), "OK");
+
+    proxy_server.close_tunnels();
+    proxy_server.wait_for_closed_tunnels(1).await;
+
+    let error = client
+        .get(&origin_url)
+        .unwrap()
+        .proxy_target_addresses([target])
+        .timeout(Timeout {
+            total: Some(Duration::from_millis(100)),
+            connect: Some(Duration::from_secs(2)),
+            ..Default::default()
+        })
+        .send()
+        .await
+        .expect_err("the current short total budget must cancel reconnect setup");
+    assert!(matches!(
+        error,
+        Error::Timeout {
+            phase: TimeoutPhase::Total,
+            ..
+        }
+    ));
+    assert_eq!(proxy_server.connection_count(), 2);
+    assert_eq!(proxy_server.connect_targets().len(), 2);
 
     proxy_server.shutdown();
     origin.shutdown();
@@ -1975,6 +2169,7 @@ async fn test_proxy_tls_timeout_on_stalling_destination() {
         .proxy(Proxy::all(&proxy.url()).unwrap())
         .timeout(Timeout {
             total: Some(Duration::from_millis(300)),
+            connect: Some(Duration::from_millis(100)),
             ..Default::default()
         })
         .build();

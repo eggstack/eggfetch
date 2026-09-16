@@ -199,7 +199,6 @@ pub(crate) struct ForwardProxyConnector {
     proxy: ProxyConfig,
     proxy_connect_timeout: Option<std::time::Duration>,
     proxy_tls_timeout: Option<std::time::Duration>,
-    setup_timeout: Option<std::time::Duration>,
     proxy_tls_config: Option<crate::tls::TlsConfig>,
     metrics: std::sync::Arc<crate::transport::metrics::TransportMetrics>,
 }
@@ -210,7 +209,6 @@ impl ForwardProxyConnector {
         proxy: ProxyConfig,
         proxy_connect_timeout: Option<std::time::Duration>,
         proxy_tls_timeout: Option<std::time::Duration>,
-        setup_timeout: Option<std::time::Duration>,
         metrics: std::sync::Arc<crate::transport::metrics::TransportMetrics>,
     ) -> Self {
         let proxy_tls_config = proxy.proxy_tls_config.clone();
@@ -218,7 +216,6 @@ impl ForwardProxyConnector {
             proxy,
             proxy_connect_timeout,
             proxy_tls_timeout,
-            setup_timeout,
             proxy_tls_config,
             metrics,
         }
@@ -247,15 +244,17 @@ impl tower_service::Service<http::Uri> for ForwardProxyConnector {
         let proxy = self.proxy.clone();
         let proxy_connect_timeout = self.proxy_connect_timeout;
         let proxy_tls_timeout = self.proxy_tls_timeout;
-        let setup_timeout = self.setup_timeout;
         let proxy_tls_config = self.proxy_tls_config.clone();
         let metrics = self.metrics.clone();
         Box::pin(async move {
+            // The cached connector owns only connection-scoped policy. The
+            // current logical request's total budget is enforced around the
+            // Hyper dispatch future, not captured by this reusable client.
             let stream = connect_to_proxy(
                 &proxy,
                 proxy_connect_timeout,
                 proxy_tls_timeout,
-                setup_timeout.map(|timeout| std::time::Instant::now() + timeout),
+                None,
                 proxy_tls_config.as_ref(),
                 Some(&metrics),
             )

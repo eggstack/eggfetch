@@ -554,7 +554,6 @@ impl ClientInner {
         proxy: &crate::proxy::ProxyConfig,
         origin: &url::Url,
         connect_timeout: Option<Duration>,
-        setup_timeout: Option<Duration>,
     ) -> Result<crate::transport::TimeoutForwardClient> {
         let proxy_tls_timeout = connect_timeout;
         let key = crate::transport::proxy::ForwardRouteKey::new(
@@ -572,7 +571,6 @@ impl ClientInner {
             proxy.clone(),
             connect_timeout,
             proxy_tls_timeout,
-            setup_timeout,
             self.transport_metrics.clone(),
         );
         let connector =
@@ -601,7 +599,6 @@ impl ClientInner {
         transport_hints: &crate::request::TransportHints,
         target: Option<std::net::SocketAddr>,
         connect_timeout: Option<Duration>,
-        setup_timeout: Option<Duration>,
     ) -> Result<crate::transport::TimeoutConnectClient> {
         let key = crate::transport::connect::ConnectRouteKey::new(
             proxy,
@@ -626,7 +623,6 @@ impl ClientInner {
             connect_timeout,
             connect_timeout,
             connect_timeout,
-            setup_timeout,
             self.config.http_version_policy,
             self.transport_metrics.clone(),
         );

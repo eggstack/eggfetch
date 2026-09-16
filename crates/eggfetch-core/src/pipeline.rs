@@ -1680,12 +1680,7 @@ pub(crate) async fn send_single_request(
                 let forward_client = if url.scheme() == "http" && !proxy_config.is_socks() {
                     Some(
                         inner
-                            .forward_client(
-                                proxy_config,
-                                &url,
-                                hop_timeout.connect,
-                                remaining_total,
-                            )
+                            .forward_client(proxy_config, &url, hop_timeout.connect)
                             .await?,
                     )
                 } else {
@@ -1713,7 +1708,6 @@ pub(crate) async fn send_single_request(
                                 &transport_hints,
                                 target,
                                 hop_timeout.connect,
-                                remaining_total,
                             )
                             .await?,
                     )
