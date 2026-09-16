@@ -108,7 +108,7 @@ This `overview.md` is the entry point. For a focused review of any component, fo
 
 ### eggfetch-core (the engine)
 
-All HTTP behavior lives here (~29.7k lines across 28 source files plus `transport/` and `stream/` trees). This is the single authority for networking — no other crate performs I/O.
+All HTTP behavior lives here (~29.7k lines across 28 source files plus `transport/`, `stream/`, and `pipeline/` trees). This is the single authority for networking — no other crate performs I/O.
 
 | Module | Public? | Purpose |
 |--------|---------|---------|
@@ -135,7 +135,7 @@ All HTTP behavior lives here (~29.7k lines across 28 source files plus `transpor
 | `timeout` | Yes | `Timeout`, `TimeoutBuilder`, `TimeoutPhase` — 7 phases (Pool, Connect, ProxyConnect, ProxyTls, Write, Read, Total). Request-level overrides merge with client-level per-field. |
 | `tls` | Yes | `TlsConfig`, `TlsConfigBuilder`, `TlsVersion`, `TrustStore`, `ClientIdentity` — replacement or additional CA roots, mTLS certs, verification toggle, version bounds. |
 | `trace` | Yes | `TraceObserver`, `TraceEvent` — synchronous lifecycle callbacks; coroutine callbacks rejected at adapters. |
-| `pipeline` | No | `send_with_retry()`, `send_with_redirects()`, `send_single_request()` — lifecycle orchestration: retry loop (typed `RequestParts::retry_request`) → redirect loop → preparation (`PreparedRequest`) → declarative dispatch (`TransportRoute::select_route`) → common post-transport policy. |
+| `pipeline/` | No | Lifecycle orchestration split by responsibility (`mod` entry points): `retry` (retry loop/backoff/discard drain) → `redirect` (redirect loop, shared hop builder) → `prepare` (`PreparedRequest` normalization, pool acquisition) → `route` (`TransportRoute::select_route`) → `hyper_dispatch` / `proxy_dispatch` / `h3_dispatch` → `finalize` (common post-transport policy). |
 | `transport` | Mixed | `mod` (Hyper client aliases), `dialer` (public caller-owned raw-stream seam plus private Hyper adapter), `lifecycle` (physical admission and established-I/O guards), `direct`, `direct_connector` (socket options + local bind), `proxy`, `socks` (per-route persistent pools), `uds`, `http3` (QUIC/draining, explicit `H3DispatchError`), `alt_svc` (authenticated cache + suppressor), `connect`, `connect_timeout`, `metrics`. `direct` owns the shared Hyper response lifecycle (`finish_hyper_response`, `wrap_incoming`, `await_upgrade`). |
 | `stream` | No | Per-chunk read/write timeout wrappers (`read_timeout`, `write_timeout`). |
 | `h2_headers` | No | HTTP/2 forbidden-header stripping. |
@@ -322,7 +322,7 @@ Semaphore-based logical in-flight concurrency (`max_in_flight_requests*`, `max_c
 
 ### TLS, proxy, SOCKS, UDS
 
-rustls with custom CA bundles, mTLS client certs, version policy, verification toggle; `ssl.SSLContext` translation is fail-closed (construction fingerprint; subclasses/unrepresentable state → `TypeError`; proxy TLS comes only from `Proxy(ssl_context=…)`). HTTP forwarding, HTTPS CONNECT tunneling, proxy auth, per-request override, `NO_PROXY` bypass (compat env parser vs richer native `NoProxy::parse()` — intentionally not unified). Forward and compatible CONNECT routes use bounded Hyper pools; SOCKS5 uses per-route persistent Hyper pools. UDS route for local sockets. Native callers may supply a client-scoped raw-stream `Dialer`; eggfetch retains logical HTTP/TLS identity and rejects incompatible proxy, UDS, resolved-target, socket, and H3 combinations. Transport dispatch order `prepare_single_request()` + `select_route()`: UDS → custom dialer → direct → proxy/SOCKS → SNI → H3 → standard, sharing one post-transport policy.
+rustls with custom CA bundles, mTLS client certs, version policy, verification toggle; `ssl.SSLContext` translation is fail-closed (construction fingerprint; subclasses/unrepresentable state → `TypeError`; proxy TLS comes only from `Proxy(ssl_context=…)`). HTTP forwarding, HTTPS CONNECT tunneling, proxy auth, per-request override, `NO_PROXY` bypass (compat env parser vs richer native `NoProxy::parse()` — intentionally not unified). Forward and compatible CONNECT routes use bounded Hyper pools; SOCKS5 uses per-route persistent Hyper pools. UDS route for local sockets. Native callers may supply a client-scoped raw-stream `Dialer`; eggfetch retains logical HTTP/TLS identity and rejects incompatible proxy, UDS, resolved-target, socket, and H3 combinations. Transport dispatch order `pipeline::prepare` + `pipeline::route`: UDS → custom dialer → direct → proxy/SOCKS → SNI → H3 → standard, sharing one post-transport policy (`pipeline::finalize`).
 
 **Deep dive:** [core-tls-proxy-protocols.md](core-tls-proxy-protocols.md)
 
@@ -392,17 +392,17 @@ Normative verification tiers and complexity budget: `../verification-policy.md`.
 
 ```
 Client::send()
-  → retry loop (send_with_retry via RequestParts::retry_request, total deadline shrinks)
-    → redirect loop (send_with_redirects via shared HopBuildParams builder)
+  → retry loop (`pipeline::retry::send_with_retry` via RequestParts::retry_request, total deadline shrinks)
+    → redirect loop (`pipeline::redirect::send_with_redirects` via shared HopBuildParams builder)
       → header merge (client defaults + request overrides)
       → hop build (cookies, auth, hints; retries preserve pins, same-origin redirects retain only the pin)
       → redirect transformation (single advance_redirect_hop step)
-      → preparation (prepare_single_request → PreparedRequest)
+      → preparation (`pipeline::prepare` → PreparedRequest)
         → accept-encoding / Content-Length / user-agent / H2 stripping / size check
         → proxy resolution + origin keying + pool acquisition
         → write-timeout wrapping + remaining-total/deadline computation
-      → transport dispatch (select_route → UDS / Custom Dialer / Static Direct / Direct / Proxy / SNI / H3 / Standard)
-      → common post-transport policy (Alt-Svc learning, decompression, decoded-size limit)
+      → transport dispatch (`pipeline::route::select_route` → UDS / Custom Dialer / Static Direct / Direct / Proxy / SNI / H3 / Standard)
+      → common post-transport policy (`pipeline::finalize`: Alt-Svc learning, decompression, decoded-size limit)
       → read timeout + pool lease attachment
 ```
 
@@ -415,7 +415,7 @@ timeout.
 ### Transport Dispatch Order
 
 `send_single_request()` separates preparation from execution. After
-`prepare_single_request()` builds a `PreparedRequest`, `select_route()`
+`pipeline::prepare` builds a `PreparedRequest`, `pipeline::route::select_route()`
 selects one declarative route (precedence unchanged, directly unit-tested):
 
 1. **Unix Domain Socket** — when `ClientBuilder::uds_path()` is configured

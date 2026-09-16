@@ -1,7 +1,7 @@
 //! Transport layer abstractions.
 //!
 //! Direct and proxy send paths live here. The redirect pipeline and
-//! request normalization stay in `pipeline.rs` and `client.rs`.
+//! request normalization stay in `pipeline/` and `client.rs`.
 //! HTTP/3 transport over QUIC is available when the `http3` feature is enabled.
 
 use bytes::Bytes;

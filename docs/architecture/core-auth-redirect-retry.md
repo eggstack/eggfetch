@@ -62,8 +62,8 @@ overrides per request.
 
 ### Header Handling
 
-On redirect (single `advance_redirect_hop()` transformation + shared
-`HopBuildParams` hop builder):
+On redirect (single `pipeline::redirect::advance_redirect_hop()` transformation + shared
+`HopBuildParams` hop builder, owned by `pipeline::redirect`):
 - **Same-origin**: `Authorization`/`Proxy-Authorization` are stripped from the cloned set, then configured client-level auth is re-applied; `Cookie`/`Host` survive.
 - **Cross-origin**: `Authorization`, `Cookie`, and `Proxy-Authorization` are stripped, plus `Host` is reset to the new destination; client-level auth is not reapplied.
 - `Host` header is updated to the new destination.
@@ -144,7 +144,7 @@ matter.
 
 Retries restart the complete logical request (including redirects) under
 the original total deadline via the typed `RequestParts::retry_request()`
-transformation, which preserves every request-local override (transport
+transformation (driven by `pipeline::retry::send_with_retry`), which preserves every request-local override (transport
 hints, proxy/decompression overrides, auth-disable state, redirect and
 retry policy) and applies the shrunk total budget. Before retrying,
 replayability is verified through one explicit operation:

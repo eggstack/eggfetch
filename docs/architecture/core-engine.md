@@ -18,7 +18,7 @@ Focused subset for the engine lifecycle (client → request → pipeline → res
 | `network_stream` | Yes | `NetworkStream`, `UpgradedStream`, `ConnectionMetadata` — upgrade IO + connection metadata |
 | `trace` | Yes | `TraceObserver`, `TraceEvent` — synchronous lifecycle event callbacks |
 | `error` | Yes | `Error` enum, `RequestFailure` opt-in detail wrapper, `Result<T>` alias |
-| `pipeline` | Crate-internal | Full request lifecycle orchestration |
+| `pipeline/` | Crate-internal | Request lifecycle orchestration split by responsibility: `retry`, `redirect`, `prepare`, `route`, `hyper_dispatch`, `proxy_dispatch`, `h3_dispatch`, `finalize`, plus short `mod` entry points |
 | `transport` | Yes | Direct, caller-owned raw-stream dialer, direct-with-socket-options, UDS, proxy, HTTP/3 transport dispatch |
 | `stream` | Crate-internal | Per-chunk read/write timeout wrappers |
 
@@ -225,21 +225,21 @@ Metadata-only redirect record: status code, URL, headers (redacted for cross-ori
 
 ## Pipeline Lifecycle
 
-The `pipeline` module orchestrates the full request lifecycle. Entry point: `send_with_retry()`.
+The `pipeline/` directory orchestrates the full request lifecycle. Entry point: `send_with_retry()` (`pipeline::retry`).
 
 ```
-send_with_retry()           ← retry loop
-  send_with_redirects()     ← redirect loop
-    send_single_request()   ← one HTTP round-trip
+send_with_retry()           ← retry loop (pipeline::retry)
+  send_with_redirects()     ← redirect loop (pipeline::redirect)
+    send_single_request()   ← one HTTP round-trip (pipeline::mod orchestration)
 ```
 
 ### send_single_request phases:
 
-Preparation (`prepare_single_request()` → `PreparedRequest`) centralizes
+Preparation (`pipeline::prepare` → `PreparedRequest`) centralizes
 request policy so transports own only connection/protocol work:
 
 1. Header merge (client defaults + request overrides) and timeout merging
-   (per-field) happen in `send_with_redirects()`; the hop itself is built
+   (per-field) happen in `pipeline::redirect::send_with_redirects()`; the hop itself is built
    by the shared `HopBuildParams` builder (cookies, auth, hints).
 2. Preparation normalizes accept-encoding, Content-Length, user-agent, and
    H2-forbidden headers, validates request size, resolves the wire URI
@@ -247,15 +247,15 @@ request policy so transports own only connection/protocol work:
    resolves the effective proxy/origin, acquires the pool guard, and
    computes the remaining-total/deadline. One-shot bodies are moved, never
    cloned.
-3. Dispatch selects one `TransportRoute` via `select_route()` (UDS → custom
+3. Dispatch selects one `TransportRoute` via `pipeline::route::select_route()` (UDS → custom
    dialer → static/specialized direct → proxy/SOCKS → SNI-direct → H3 →
    standard Hyper). A configured custom dialer is never silently bypassed;
    unsupported combinations with proxy, UDS, resolved targets, local socket
    controls, or H3 fail during preparation before network I/O.
    H3 is `Http3Only` direct or `Auto`-discovered (fresh Alt-Svc + not
-   suppressed); safe `Auto` fallback to standard is pre-commit replayable
-   only. Hyper request scaffolding is built once via `build_hyper_request()`.
-4. One common post-transport policy applies to every route: Alt-Svc learning
+   suppressed; `pipeline::h3_dispatch`); safe `Auto` fallback to standard is pre-commit replayable
+   only. Hyper request scaffolding is built once via `pipeline::hyper_dispatch::build_hyper_request()`.
+4. One common post-transport policy (`pipeline::finalize::finalize_response()`) applies to every route: Alt-Svc learning
    (learnable routes only), decompression wrapping, decoded-size limiting,
    then read-timeout + pool-lease attachment.
 

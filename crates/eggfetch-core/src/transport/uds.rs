@@ -295,5 +295,5 @@ pub(crate) async fn send_request(
 }
 
 // Unix domain sockets are unsupported on this platform. The non-Unix
-// dispatch site in `pipeline.rs` returns `Error::Unsupported` directly,
+// dispatch site in `pipeline/` returns `Error::Unsupported` directly,
 // so no fallback helper lives here.

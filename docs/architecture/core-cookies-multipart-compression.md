@@ -157,7 +157,7 @@ core remains authoritative for decoder selection.
 
 ### Response Decode Pipeline (`response_decode`)
 
-The crate-internal `response_decode` module is the single dispatch point where decompression is applied to a completed response. `pipeline::send_single_request` calls it after transport dispatch (step 10 of the lifecycle in [core-engine.md](core-engine.md)).
+The crate-internal `response_decode` module is the single dispatch point where decompression is applied to a completed response. `pipeline::finalize` calls it from the common post-transport policy after transport dispatch (step 10 of the lifecycle in [core-engine.md](core-engine.md)).
 
 Entry point: `apply_decompression(response, content_encoding, limit)`:
 
