@@ -51,7 +51,7 @@ This document is the bird's-eye view: what each discrete module, tool, and capab
 
 ```
 eggfetch/
-├── Cargo.toml          # Workspace root (resolver v2, 6 member crates)
+├── Cargo.toml          # Workspace root (resolver v3, 6 member crates)
 ├── crates/
 │   ├── eggfetch-core/      Async HTTP engine — all networking lives here
 │   ├── eggfetch-cli/       CLI binary — argument parsing, output formatting
@@ -69,7 +69,10 @@ eggfetch/
 │   ├── python|rust|cli|   Per-surface user guides
 │   ├── reference/          Compatibility/feature/error matrices
 │   └── verification-policy.md  Normative CI/verification/release policy
-├── examples/               Rust consumer example
+├── examples/               Python sync/async consumer examples
+│                           (`python_sync.py`, `python_async.py`); core Rust
+│                           quickstart lives at
+│                           `crates/eggfetch-core/examples/quickstart.rs`
 ├── fuzz/                   cargo-fuzz (12 targets) + corpus + regressions
 ├── plans/                  Milestone plans and roadmap (historical record)
 ├── qualification/http3/    H3 machine-readable corpus + runners (opt-in)
@@ -140,7 +143,6 @@ All HTTP behavior lives here (top-level modules plus `transport/`, `stream/`, an
 | `stream` | No | Per-chunk read/write timeout wrappers (`read_timeout`, `write_timeout`). |
 | `h2_headers` | No | HTTP/2 forbidden-header stripping. |
 | `response_decode` | No | Content-Encoding parsing and decompression dispatch. |
-| `config` | No | Dead placeholder (`Config { _private }`); pool/timeout/redirect config live in their own modules. Not exported from `lib.rs`. |
 
 **Deep dive:** [core-engine.md](core-engine.md) · [core-body-streaming.md](core-body-streaming.md) · [core-timeout-pool.md](core-timeout-pool.md) · [core-auth-redirect-retry.md](core-auth-redirect-retry.md) · [core-tls-proxy-protocols.md](core-tls-proxy-protocols.md) · [core-cookies-multipart-compression.md](core-cookies-multipart-compression.md)
 
@@ -179,6 +181,7 @@ Rust source modules via PyO3/maturin. Enables all core features including HTTP/2
 | `multipart.rs` | `File` wrapper for multipart uploads. |
 | `streaming.rs` | `StreamingResponse` — sync/async iterators for bytes, text, lines, raw bytes. |
 | `conversion.rs` | Python↔Rust type conversion (shared by sync/async). |
+| `request_preparation.rs` | Shared `prepare_client_config`/`apply_client_config` client setup (shared by sync/async). |
 | `extensions.rs` | Request-extension extraction (`target`, `sni_hostname`, `trace`) into core `TransportHints`; native resolved destinations remain Rust-only. |
 | `network_stream.rs` | `PyNetworkStream` (sync) / `PyAsyncNetworkStream` (async) behind `EitherNetworkStream`; `start_tls`, `get_extra_info`, and `is_upgraded`. Clones share one stream (Arc/Mutex); leading rewind bytes honored. |
 | `trace_bridge.rs` | `PyTraceObserver` — wraps sync Python callables as core `TraceObserver`; rejects coroutines eagerly with `TypeError`. |
@@ -296,9 +299,12 @@ cargo run --manifest-path qualification/native-tower-service/Cargo.toml
 
 The fixture's `target/` output is ignored and must not be committed.
 
-### Examples (`examples/`)
+### Examples (`examples/` + `crates/eggfetch-core/examples/`)
 
-`rust_consumer.rs` — minimal external-consumer smoke example for the core crate API.
+`examples/python_sync.py` and `examples/python_async.py` — minimal
+external-consumer smoke examples for the Python API.
+`crates/eggfetch-core/examples/quickstart.rs` — minimal external-consumer
+smoke example for the core crate API.
 
 ### Skill workflows (`.skills/`)
 
