@@ -1,12 +1,18 @@
 //! Async client entry point.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use http::Method;
 #[cfg(any(feature = "http1", feature = "http2"))]
-use hyper_util::rt::TokioExecutor;
+use crate::transport::hyper_client::{
+    build_hyper_client, BoundedClientCache, HyperClientPolicy, SNI_CLIENT_CACHE_MAX_ENTRIES,
+};
+#[cfg(feature = "proxy")]
+use crate::transport::hyper_client::{
+    CONNECT_CLIENT_CACHE_MAX_ENTRIES, FORWARD_CLIENT_CACHE_MAX_ENTRIES,
+    SOCKS_CLIENT_CACHE_MAX_ENTRIES,
+};
+use http::Method;
 #[cfg(any(feature = "http1", feature = "http2"))]
 use tokio::sync::Mutex;
 
@@ -170,9 +176,8 @@ pub(crate) struct ClientInner {
     /// separates DNS/TCP (to the original URL host) from TLS (with the
     /// SNI override hostname), keeping the default path unchanged.
     ///
-    /// Bounded by [`SNI_CLIENT_CACHE_MAX_ENTRIES`] with arbitrary-entry
-    /// eviction so long-lived processes touching many hostnames cannot
-    /// grow it without limit.
+    /// Bounded by [`SNI_CLIENT_CACHE_MAX_ENTRIES`] via the shared
+    /// [`BoundedClientCache`] mechanics (see `transport::hyper_client`).
     ///
     /// The cache is keyed only by hostname because `ClientInner::config`
     /// (including `http_version_policy` and `tls_config` ALPN) is immutable
@@ -181,20 +186,28 @@ pub(crate) struct ClientInner {
     /// `tls_config` identity) in the key to avoid serving a client with
     /// stale ALPN (e.g. H2 vs H1) for the same hostname.
     #[cfg(any(feature = "http1", feature = "http2"))]
-    pub(crate) sni_clients: Mutex<HashMap<String, crate::transport::TimeoutDirectClient>>,
+    pub(crate) sni_clients:
+        Mutex<BoundedClientCache<String, crate::transport::TimeoutDirectClient>>,
     /// Cached custom-dialer clients for per-request SNI overrides.
     #[cfg(any(feature = "http1", feature = "http2"))]
-    pub(crate) sni_custom_clients: Mutex<HashMap<String, crate::transport::TimeoutCustomClient>>,
+    pub(crate) sni_custom_clients:
+        Mutex<BoundedClientCache<String, crate::transport::TimeoutCustomClient>>,
     /// Hyper client for Unix domain socket requests.
     #[cfg(unix)]
     #[cfg(any(feature = "http1", feature = "http2"))]
     pub(crate) uds_client: Option<crate::transport::TimeoutUdsClient>,
     /// Persistent Hyper clients keyed by effective SOCKS route.
     ///
-    /// Bounded like [`ClientInner::sni_clients`].
+    /// Bounded like [`ClientInner::sni_clients`] via the shared
+    /// [`BoundedClientCache`] mechanics (see `transport::hyper_client`).
+    /// SOCKS clients intentionally receive no Hyper idle-pool tuning today;
+    /// the pending idle-pool corrective owns that propagation.
     #[cfg(feature = "proxy")]
     pub(crate) socks_clients: Mutex<
-        HashMap<crate::transport::socks::SocksRouteKey, crate::transport::TimeoutSocksClient>,
+        BoundedClientCache<
+            crate::transport::socks::SocksRouteKey,
+            crate::transport::TimeoutSocksClient,
+        >,
     >,
     /// Persistent Hyper clients for ordinary HTTP forward-proxy routes.
     /// Keys include the destination origin and every proxy-leg policy that
@@ -202,12 +215,18 @@ pub(crate) struct ClientInner {
     /// request-scoped proxy overrides are allowed.
     #[cfg(feature = "proxy")]
     pub(crate) forward_clients: Mutex<
-        HashMap<crate::transport::proxy::ForwardRouteKey, crate::transport::TimeoutForwardClient>,
+        BoundedClientCache<
+            crate::transport::proxy::ForwardRouteKey,
+            crate::transport::TimeoutForwardClient,
+        >,
     >,
     /// Persistent Hyper clients for one HTTPS origin reached through CONNECT.
     #[cfg(feature = "proxy")]
     pub(crate) connect_clients: Mutex<
-        HashMap<crate::transport::connect::ConnectRouteKey, crate::transport::TimeoutConnectClient>,
+        BoundedClientCache<
+            crate::transport::connect::ConnectRouteKey,
+            crate::transport::TimeoutConnectClient,
+        >,
     >,
     pub(crate) config: ClientConfig,
     pub(crate) pool: Pool,
@@ -224,34 +243,6 @@ pub(crate) struct ClientInner {
     /// without it there is no discovery and no state to keep.
     #[cfg(feature = "http3")]
     pub(crate) alt_svc_state: Arc<crate::transport::alt_svc::AltSvcState>,
-}
-
-/// Upper bound on cached SNI-keyed hyper clients.
-const SNI_CLIENT_CACHE_MAX_ENTRIES: usize = 256;
-
-/// Upper bound on cached SOCKS-route hyper clients.
-#[cfg(feature = "proxy")]
-const SOCKS_CLIENT_CACHE_MAX_ENTRIES: usize = 64;
-
-/// Upper bound on cached HTTP forward-proxy Hyper clients.
-#[cfg(feature = "proxy")]
-const FORWARD_CLIENT_CACHE_MAX_ENTRIES: usize = 64;
-
-/// Upper bound on cached HTTPS CONNECT Hyper clients.
-#[cfg(feature = "proxy")]
-const CONNECT_CLIENT_CACHE_MAX_ENTRIES: usize = 64;
-
-/// Evict an arbitrary entry when a bounded client cache reaches capacity.
-///
-/// Entries hold pooled connections but no unsynchronized state, so any
-/// entry can be dropped safely; the next request recreates it lazily.
-/// Eviction is hash-order arbitrary via `HashMap::keys().next()`; with the
-/// bounded caps (`256` for SNI, `64` for SOCKS) this is acceptable and
-/// avoids an extra LRU dependency for a low-churn cache.
-fn evict_one<K: std::clone::Clone + Eq + std::hash::Hash, V>(map: &mut HashMap<K, V>) {
-    if let Some(key) = map.keys().next().cloned() {
-        map.remove(&key);
-    }
 }
 
 /// Apply the selected HTTP protocol policy to a rustls client configuration.
@@ -271,22 +262,6 @@ pub(crate) fn configure_tls_alpn(
         config.alpn_protocols.push(b"http/1.1".to_vec());
     }
     config
-}
-
-#[cfg(any(feature = "http1", feature = "http2"))]
-fn configure_hyper_builder_policy(
-    builder: &mut hyper_util::client::legacy::Builder,
-    config: &ClientConfig,
-    idle_timeout: Option<Duration>,
-    max_idle_per_host: Option<usize>,
-) {
-    builder.retry_canceled_requests(config.retry_canceled_requests);
-    if let Some(idle_timeout) = idle_timeout {
-        builder.pool_idle_timeout(idle_timeout);
-    }
-    if let Some(max_idle_per_host) = max_idle_per_host {
-        builder.pool_max_idle_per_host(max_idle_per_host);
-    }
 }
 
 impl ClientInner {
@@ -332,25 +307,19 @@ impl ClientInner {
         if let Some(sni_hostname) = sni_hostname {
             connector = connector.with_sni(sni_hostname.to_owned());
         }
-        let connector =
-            crate::transport::connect_timeout::ConnectTimeout::new(connector, connect_timeout);
-        let connector =
-            crate::transport::lifecycle::LifecycleConnector::new(connector, self.lifecycle.clone());
-        let mut builder = hyper_util::client::legacy::Client::builder(TokioExecutor::new());
-        #[cfg(feature = "http2")]
-        if !crate::http_version::HttpVersionPolicyEnabler::from_policy(
-            self.config.http_version_policy,
-        )
-        .enable_http1()
-            && crate::http_version::HttpVersionPolicyEnabler::from_policy(
+        let policy = HyperClientPolicy::cached_route(
+            self.config.retry_canceled_requests,
+            self.pool.idle_timeout(),
+            crate::http_version::HttpVersionPolicyEnabler::from_policy(
                 self.config.http_version_policy,
-            )
-            .enable_http2()
-        {
-            builder.http2_only(true);
-        }
-        configure_hyper_builder_policy(&mut builder, &self.config, self.pool.idle_timeout(), None);
-        Ok(builder.build(connector))
+            ),
+        );
+        Ok(build_hyper_client(
+            connector,
+            &policy,
+            connect_timeout,
+            &self.lifecycle,
+        ))
     }
 
     /// Get or create a cached hyper client with TLS SNI hostname override.
@@ -370,8 +339,9 @@ impl ClientInner {
         }
 
         let connect_timeout = self.config.timeout.as_ref().and_then(|t| t.connect);
-        #[cfg(any(feature = "tls-rustls", feature = "http2"))]
-        let policy = self.config.http_version_policy;
+        let enabler = crate::http_version::HttpVersionPolicyEnabler::from_policy(
+            self.config.http_version_policy,
+        );
 
         #[cfg(feature = "tls-rustls")]
         let tls_connector = {
@@ -379,10 +349,7 @@ impl ClientInner {
             let rc = tls_config
                 .build_rustls_config()
                 .map_err(|e| Error::Tls(format!("failed to build TLS config: {e}")))?;
-            let rc = configure_tls_alpn(
-                rc,
-                crate::http_version::HttpVersionPolicyEnabler::from_policy(policy),
-            );
+            let rc = configure_tls_alpn(rc, enabler);
             Some(tokio_rustls::TlsConnector::from(Arc::new(rc)))
         };
         #[cfg(not(feature = "tls-rustls"))]
@@ -400,26 +367,16 @@ impl ClientInner {
             self.transport_metrics.clone(),
         );
         let sni_connector = base_connector.with_sni(sni_hostname.to_owned());
-        let connector =
-            crate::transport::connect_timeout::ConnectTimeout::new(sni_connector, connect_timeout);
-        let connector =
-            crate::transport::lifecycle::LifecycleConnector::new(connector, self.lifecycle.clone());
-
-        let mut builder =
-            hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new());
-        #[cfg(feature = "http2")]
-        if matches!(policy, crate::HttpVersionPolicy::Http2Only) {
-            builder.http2_only(true);
-        }
         // Idle-connection lifetime comes from the pool configuration
         // (`Limits::keepalive_expiry`), matching the standard, direct,
         // and UDS paths. `Timeout.pool`/`total` are acquisition budgets
         // and must not close idle connections early.
-        configure_hyper_builder_policy(&mut builder, &self.config, self.pool.idle_timeout(), None);
-        let client = builder.build(connector);
-        if clients.len() >= SNI_CLIENT_CACHE_MAX_ENTRIES {
-            evict_one(&mut clients);
-        }
+        let policy = HyperClientPolicy::cached_route(
+            self.config.retry_canceled_requests,
+            self.pool.idle_timeout(),
+            enabler,
+        );
+        let client = build_hyper_client(sni_connector, &policy, connect_timeout, &self.lifecycle);
         clients.insert(sni_hostname.to_owned(), client.clone());
         Ok(client)
     }
@@ -457,29 +414,22 @@ impl ClientInner {
             ),
             Some(sni_hostname),
         )?;
-        let connector = crate::transport::connect_timeout::ConnectTimeout::new(
+        let policy = HyperClientPolicy::cached_route(
+            self.config.retry_canceled_requests,
+            self.pool.idle_timeout(),
+            crate::http_version::HttpVersionPolicyEnabler::from_policy(
+                self.config.http_version_policy,
+            ),
+        );
+        let client = build_hyper_client(
             connector,
+            &policy,
             self.config
                 .timeout
                 .as_ref()
                 .and_then(|timeout| timeout.connect),
+            &self.lifecycle,
         );
-        let connector =
-            crate::transport::lifecycle::LifecycleConnector::new(connector, self.lifecycle.clone());
-        let mut builder =
-            hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new());
-        #[cfg(feature = "http2")]
-        if matches!(
-            self.config.http_version_policy,
-            crate::HttpVersionPolicy::Http2Only
-        ) {
-            builder.http2_only(true);
-        }
-        configure_hyper_builder_policy(&mut builder, &self.config, self.pool.idle_timeout(), None);
-        let client = builder.build(connector);
-        if clients.len() >= SNI_CLIENT_CACHE_MAX_ENTRIES {
-            evict_one(&mut clients);
-        }
         clients.insert(sni_hostname.to_owned(), client.clone());
         Ok(client)
     }
@@ -498,7 +448,9 @@ impl ClientInner {
             return Ok(client.clone());
         }
 
-        let policy = self.config.http_version_policy;
+        let enabler = crate::http_version::HttpVersionPolicyEnabler::from_policy(
+            self.config.http_version_policy,
+        );
 
         let tls_config = if let Some(config) = self.config.tls_config.as_ref() {
             config
@@ -509,36 +461,26 @@ impl ClientInner {
                 .build_rustls_config()
                 .map_err(|e| Error::Tls(format!("failed to build default SOCKS TLS config: {e}")))?
         };
-        let tls_config = configure_tls_alpn(
-            tls_config,
-            crate::http_version::HttpVersionPolicyEnabler::from_policy(policy),
-        );
+        let tls_config = configure_tls_alpn(tls_config, enabler);
         let connector = crate::transport::socks::SocksConnector::new(
             proxy.clone(),
             Some(tokio_rustls::TlsConnector::from(Arc::new(tls_config))),
             None,
             target,
         );
-        let connector = crate::transport::connect_timeout::ConnectTimeout::new(
+        // SOCKS pools receive no Hyper idle tuning today; the pending
+        // idle-pool corrective owns that propagation.
+        let policy =
+            HyperClientPolicy::cached_route(self.config.retry_canceled_requests, None, enabler);
+        let client = build_hyper_client(
             connector,
+            &policy,
             self.config
                 .timeout
                 .as_ref()
                 .and_then(|timeout| timeout.connect),
+            &self.lifecycle,
         );
-        let connector =
-            crate::transport::lifecycle::LifecycleConnector::new(connector, self.lifecycle.clone());
-        let mut builder =
-            hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new());
-        #[cfg(feature = "http2")]
-        if matches!(policy, crate::HttpVersionPolicy::Http2Only) {
-            builder.http2_only(true);
-        }
-        configure_hyper_builder_policy(&mut builder, &self.config, None, None);
-        let client = builder.build(connector);
-        if clients.len() >= SOCKS_CLIENT_CACHE_MAX_ENTRIES {
-            evict_one(&mut clients);
-        }
         clients.insert(key, client.clone());
         Ok(client)
     }
@@ -573,17 +515,11 @@ impl ClientInner {
             proxy_tls_timeout,
             self.transport_metrics.clone(),
         );
-        let connector =
-            crate::transport::connect_timeout::ConnectTimeout::new(connector, connect_timeout);
-        let connector =
-            crate::transport::lifecycle::LifecycleConnector::new(connector, self.lifecycle.clone());
-        let mut builder =
-            hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new());
-        configure_hyper_builder_policy(&mut builder, &self.config, self.pool.idle_timeout(), None);
-        let client = builder.build(connector);
-        if clients.len() >= FORWARD_CLIENT_CACHE_MAX_ENTRIES {
-            evict_one(&mut clients);
-        }
+        let policy = HyperClientPolicy::forward_route(
+            self.config.retry_canceled_requests,
+            self.pool.idle_timeout(),
+        );
+        let client = build_hyper_client(connector, &policy, connect_timeout, &self.lifecycle);
         clients.insert(key, client.clone());
         Ok(client)
     }
@@ -626,24 +562,14 @@ impl ClientInner {
             self.config.http_version_policy,
             self.transport_metrics.clone(),
         );
-        let connector =
-            crate::transport::connect_timeout::ConnectTimeout::new(connector, connect_timeout);
-        let connector =
-            crate::transport::lifecycle::LifecycleConnector::new(connector, self.lifecycle.clone());
-        let mut builder =
-            hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new());
-        #[cfg(feature = "http2")]
-        if matches!(
-            self.config.http_version_policy,
-            crate::HttpVersionPolicy::Http2Only
-        ) {
-            builder.http2_only(true);
-        }
-        configure_hyper_builder_policy(&mut builder, &self.config, self.pool.idle_timeout(), None);
-        let client = builder.build(connector);
-        if clients.len() >= CONNECT_CLIENT_CACHE_MAX_ENTRIES {
-            evict_one(&mut clients);
-        }
+        let policy = HyperClientPolicy::cached_route(
+            self.config.retry_canceled_requests,
+            self.pool.idle_timeout(),
+            crate::http_version::HttpVersionPolicyEnabler::from_policy(
+                self.config.http_version_policy,
+            ),
+        );
+        let client = build_hyper_client(connector, &policy, connect_timeout, &self.lifecycle);
         clients.insert(key, client.clone());
         Ok(client)
     }
@@ -1402,6 +1328,18 @@ impl ClientBuilder {
             self.transport_io_timeout,
             transport_metrics.clone(),
         ));
+        // Shared builder policy for the persistent per-client Hyper
+        // singletons below (standard, direct, UDS, custom dialer). Cached and
+        // isolated route clients resolve their own narrower policy at use.
+        #[cfg(any(feature = "http1", feature = "http2"))]
+        let persistent_policy = HyperClientPolicy::persistent(
+            self.retry_canceled_requests,
+            pool_config.idle_timeout,
+            pool_config
+                .max_idle_connections_per_host
+                .or(pool_config.max_idle_connections),
+            enabler,
+        );
 
         #[cfg(feature = "cookies")]
         let cookie_jar = self.cookie_jar.unwrap_or_default();
@@ -1431,39 +1369,13 @@ impl ClientBuilder {
             None
         } else if let Ok(rc) = tls_config_result {
             let https = build_standard_connector(rc, enabler);
-
-            // Wrap the connector with connect-phase timeout if configured.
             let connect_timeout = self.timeout.as_ref().and_then(|t| t.connect);
-            let https =
-                crate::transport::connect_timeout::ConnectTimeout::new(https, connect_timeout);
-            let https =
-                crate::transport::lifecycle::LifecycleConnector::new(https, lifecycle.clone());
-
-            let mut builder = hyper_util::client::legacy::Client::builder(TokioExecutor::new());
-            // When HTTP/1 is disabled and HTTP/2 is enabled, mark the legacy
-            // client as HTTP/2-only. This is what enforces the protocol
-            // contract: hyper-util will attempt an HTTP/2 handshake on every
-            // socket (including cleartext, where it falls through to HTTP/2
-            // prior knowledge). When ALPN does not negotiate `h2`, the
-            // HTTP/2 handshake fails with a `Connect` error rather than
-            // silently downgrading to HTTP/1.1.
-            #[cfg(feature = "http2")]
-            if !enabler.enable_http1() && enabler.enable_http2() {
-                builder.http2_only(true);
-            }
-            let builder_config = ClientConfig {
-                retry_canceled_requests: self.retry_canceled_requests,
-                ..ClientConfig::default()
-            };
-            configure_hyper_builder_policy(
-                &mut builder,
-                &builder_config,
-                pool_config.idle_timeout,
-                pool_config
-                    .max_idle_connections_per_host
-                    .or(pool_config.max_idle_connections),
-            );
-            Some(builder.build(https))
+            Some(build_hyper_client(
+                https,
+                &persistent_policy,
+                connect_timeout,
+                &lifecycle,
+            ))
         } else {
             None
         };
@@ -1476,26 +1388,13 @@ impl ClientBuilder {
             None
         } else {
             let connector = build_standard_connector(enabler);
-            let connector = crate::transport::connect_timeout::ConnectTimeout::new(
+            let connect_timeout = self.timeout.as_ref().and_then(|t| t.connect);
+            Some(build_hyper_client(
                 connector,
-                self.timeout.as_ref().and_then(|t| t.connect),
-            );
-            let connector =
-                crate::transport::lifecycle::LifecycleConnector::new(connector, lifecycle.clone());
-            let mut builder = hyper_util::client::legacy::Client::builder(TokioExecutor::new());
-            let builder_config = ClientConfig {
-                retry_canceled_requests: self.retry_canceled_requests,
-                ..ClientConfig::default()
-            };
-            configure_hyper_builder_policy(
-                &mut builder,
-                &builder_config,
-                pool_config.idle_timeout,
-                pool_config
-                    .max_idle_connections_per_host
-                    .or(pool_config.max_idle_connections),
-            );
-            Some(builder.build(connector))
+                &persistent_policy,
+                connect_timeout,
+                &lifecycle,
+            ))
         };
         #[cfg(feature = "http3")]
         let h3_connector = if enabler.use_http3() {
@@ -1545,38 +1444,12 @@ impl ClientBuilder {
                     tls_connector,
                     transport_metrics.clone(),
                 );
-            let direct_connector = crate::transport::connect_timeout::ConnectTimeout::new(
+            Some(build_hyper_client(
                 direct_connector,
+                &persistent_policy,
                 connect_timeout,
-            );
-            let direct_connector = crate::transport::lifecycle::LifecycleConnector::new(
-                direct_connector,
-                lifecycle.clone(),
-            );
-
-            let mut builder = hyper_util::client::legacy::Client::builder(TokioExecutor::new());
-            // Match the standard hyper-rustls path: when H2-only, force
-            // http2_only on the legacy client so HTTP/2 handshake runs even
-            // when the connector does not advertise ALPN h2. The
-            // DirectConnector itself signals ALPN h2 via `Connected::negotiated_h2`
-            // when TLS selected it.
-            #[cfg(feature = "http2")]
-            if !enabler.enable_http1() && enabler.enable_http2() {
-                builder.http2_only(true);
-            }
-            let builder_config = ClientConfig {
-                retry_canceled_requests: self.retry_canceled_requests,
-                ..ClientConfig::default()
-            };
-            configure_hyper_builder_policy(
-                &mut builder,
-                &builder_config,
-                pool_config.idle_timeout,
-                pool_config
-                    .max_idle_connections_per_host
-                    .or(pool_config.max_idle_connections),
-            );
-            Some(builder.build(direct_connector))
+                &lifecycle,
+            ))
         } else {
             None
         };
@@ -1611,33 +1484,8 @@ impl ClientBuilder {
                 tls_connector,
                 transport_metrics.clone(),
             );
-            let connector = crate::transport::connect_timeout::ConnectTimeout::new(
-                connector,
-                self.timeout.as_ref().and_then(|timeout| timeout.connect),
-            );
-            let connector =
-                crate::transport::lifecycle::LifecycleConnector::new(connector, lifecycle.clone());
-            let mut builder = hyper_util::client::legacy::Client::builder(TokioExecutor::new());
-            // Mirror the standard and direct paths: when H2-only, force
-            // http2_only on the legacy client. The UDS connector signals ALPN
-            // h2 via `Connected::negotiated_h2` when TLS selected it.
-            #[cfg(feature = "http2")]
-            if !enabler.enable_http1() && enabler.enable_http2() {
-                builder.http2_only(true);
-            }
-            let builder_config = ClientConfig {
-                retry_canceled_requests: self.retry_canceled_requests,
-                ..ClientConfig::default()
-            };
-            configure_hyper_builder_policy(
-                &mut builder,
-                &builder_config,
-                pool_config.idle_timeout,
-                pool_config
-                    .max_idle_connections_per_host
-                    .or(pool_config.max_idle_connections),
-            );
-            builder.build(connector)
+            let connect_timeout = self.timeout.as_ref().and_then(|timeout| timeout.connect);
+            build_hyper_client(connector, &persistent_policy, connect_timeout, &lifecycle)
         });
 
         #[cfg(any(feature = "http1", feature = "http2"))]
@@ -1655,32 +1503,13 @@ impl ClientBuilder {
             custom_config.and_then(|custom_config| {
                 let connector =
                     build_custom_connector(custom_config, dialer, enabler, None).ok()?;
-                let connector = crate::transport::connect_timeout::ConnectTimeout::new(
+                let connect_timeout = self.timeout.as_ref().and_then(|timeout| timeout.connect);
+                Some(build_hyper_client(
                     connector,
-                    self.timeout.as_ref().and_then(|timeout| timeout.connect),
-                );
-                let connector = crate::transport::lifecycle::LifecycleConnector::new(
-                    connector,
-                    lifecycle.clone(),
-                );
-                let mut builder = hyper_util::client::legacy::Client::builder(TokioExecutor::new());
-                #[cfg(feature = "http2")]
-                if !enabler.enable_http1() && enabler.enable_http2() {
-                    builder.http2_only(true);
-                }
-                let builder_config = ClientConfig {
-                    retry_canceled_requests: self.retry_canceled_requests,
-                    ..ClientConfig::default()
-                };
-                configure_hyper_builder_policy(
-                    &mut builder,
-                    &builder_config,
-                    pool_config.idle_timeout,
-                    pool_config
-                        .max_idle_connections_per_host
-                        .or(pool_config.max_idle_connections),
-                );
-                Some(builder.build(connector))
+                    &persistent_policy,
+                    connect_timeout,
+                    &lifecycle,
+                ))
             })
         } else {
             None
@@ -1724,17 +1553,23 @@ impl ClientBuilder {
                 #[cfg(any(feature = "http1", feature = "http2"))]
                 direct_connector_config: stored_direct_config,
                 #[cfg(any(feature = "http1", feature = "http2"))]
-                sni_clients: Mutex::new(HashMap::new()),
+                sni_clients: Mutex::new(BoundedClientCache::new(SNI_CLIENT_CACHE_MAX_ENTRIES)),
                 #[cfg(any(feature = "http1", feature = "http2"))]
-                sni_custom_clients: Mutex::new(HashMap::new()),
+                sni_custom_clients: Mutex::new(BoundedClientCache::new(
+                    SNI_CLIENT_CACHE_MAX_ENTRIES,
+                )),
                 #[cfg(all(unix, any(feature = "http1", feature = "http2")))]
                 uds_client,
                 #[cfg(feature = "proxy")]
-                socks_clients: Mutex::new(HashMap::new()),
+                socks_clients: Mutex::new(BoundedClientCache::new(SOCKS_CLIENT_CACHE_MAX_ENTRIES)),
                 #[cfg(feature = "proxy")]
-                forward_clients: Mutex::new(HashMap::new()),
+                forward_clients: Mutex::new(BoundedClientCache::new(
+                    FORWARD_CLIENT_CACHE_MAX_ENTRIES,
+                )),
                 #[cfg(feature = "proxy")]
-                connect_clients: Mutex::new(HashMap::new()),
+                connect_clients: Mutex::new(BoundedClientCache::new(
+                    CONNECT_CLIENT_CACHE_MAX_ENTRIES,
+                )),
                 config,
                 pool,
                 transport_metrics,
@@ -1912,6 +1747,8 @@ mod tests {
     #[cfg(feature = "proxy")]
     use crate::proxy::ProxyAuth;
     use bytes::Bytes;
+    #[cfg(any(feature = "http1", feature = "http2"))]
+    use hyper_util::rt::TokioExecutor;
     #[cfg(any(feature = "http1", feature = "http2"))]
     use std::future::{ready, Ready};
     #[cfg(any(feature = "http1", feature = "http2"))]

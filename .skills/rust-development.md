@@ -157,7 +157,15 @@ native JSON helpers are opt-in and must remain absent from minimal profiles.
   idle connection is unusable before transmission. Set it to `false` for
   strict native attempt accounting; this is independent of eggfetch's
   explicit `RetryPolicy`, applies to every Hyper HTTP/1/2 client route through
-  the common builder policy, and has no meaning for the independent H3 path.
+  `HyperClientPolicy` in `transport::hyper_client`, and has no meaning for
+  the independent H3 path.
+- **Route-client caches**: SNI/custom-SNI (256 entries) and SOCKS/forward/
+  CONNECT (64 each) share `BoundedClientCache` get-or-build-and-evict
+  mechanics; only the connectors and keys differ per route. Never add an LRU
+  crate or adopt `hyper-util::client::pool` for this (qualified and rejected:
+  unkeyed/unbounded/unnameable primitives). Keep capacities explicit,
+  immutable-client policy out of keys, and construction under the cache lock
+  free of network I/O.
 - Limits: `max_in_flight_requests*` preferred (logical); `max_connections*`
   are pre-1.0 aliases (new wins). Facade `Limits` unchanged.
 - Trace: request/response headers emitted; DNS/connect/TLS via metrics

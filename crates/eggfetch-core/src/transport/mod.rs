@@ -85,6 +85,8 @@ pub(crate) type TimeoutConnectClient = hyper_util::client::legacy::Client<
 
 pub mod alt_svc;
 pub(crate) mod connect_timeout;
+#[cfg(any(feature = "http1", feature = "http2"))]
+pub(crate) mod hyper_client;
 pub(crate) mod custom_connector {
     #[cfg(feature = "tls-rustls")]
     pub(crate) type CustomConnector = hyper_rustls::HttpsConnector<super::dialer::DialerConnector>;

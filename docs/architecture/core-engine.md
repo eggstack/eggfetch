@@ -283,6 +283,36 @@ credentials, and any single pinned target. Multi-address CONNECT fallback
 retains the handshake-specific path so typed 502/504 retry behavior is not
 weakened. Independent H3/QUIC transport remains outside this lifecycle.
 
+### Hyper client construction ownership (`transport::hyper_client`)
+
+All persistent H1/H2 Hyper clients are built through one crate-private
+module rather than repeating builder/lifecycle/cache plumbing per route:
+
+- `HyperClientPolicy` owns the shared builder knobs (canceled-request
+  retry, H2-only selection, idle timeout, per-host idle cap). Persistent
+  singletons (standard, direct, UDS, custom dialer) use `persistent()`;
+  cached/isolated routes use `cached_route()`; the forward-proxy cache uses
+  `forward_route()`, which never sets `http2_only` because the proxy leg is
+  H1 absolute-form framing. SOCKS call sites pass no idle tuning, preserving
+  current behavior until the idle-pool corrective lands.
+- `build_hyper_client()` wraps each route connector as `route connector ->
+  ConnectTimeout -> LifecycleConnector` and builds the legacy client with a
+  Tokio executor. Concrete monomorphized connector types are kept; no boxed
+  dynamic connectors were introduced.
+- `BoundedClientCache` centralizes the bounded get-or-build-and-evict
+  protocol. Capacities are explicit and unchanged: 256 for SNI/custom-SNI,
+  64 each for SOCKS/forward/CONNECT. Eviction is arbitrary-entry (no LRU
+  dependency). Construction under the cache lock is CPU/local configuration
+  only — no network I/O — and failures return before insert so they never
+  poison the cache. Route-specific connector construction stays in the route
+  modules and `ClientInner` methods.
+- Upstream `hyper-util::client::pool` (`cache`/`map`/`singleton`) was
+  qualified and not adopted: those primitives cache single-destination or
+  unbounded unkeyed services with unnameable types, while eggfetch needs
+  bounded maps of configured legacy clients keyed by secret-safe route
+  identity coexisting with legacy physical pooling and the lifecycle
+  wrappers. Adoption would add an abstraction layer without removing code.
+
 When `TransportIoTimeout` is enabled, established reads and writes are
 guarded at this same boundary. The timers reset on actual byte progress,
 cover vectored writes and pending flush/shutdown, and surface as
@@ -312,9 +342,11 @@ request target.
 
 `retry_canceled_requests(false)` disables only Hyper's implicit retry when a
 reused idle connection is unusable before the request begins. All Hyper
-legacy-client construction goes through the crate-internal common builder
-policy, which also applies shared idle-pool settings; route-specific
-`http2_only` configuration remains at each connector. The setting is shared
+legacy-client construction goes through `HyperClientPolicy`
+(`transport::hyper_client`), which also applies shared idle-pool settings;
+route-specific `http2_only` configuration remains at each policy
+constructor, with the forward-proxy route as the documented H1-only
+exception. The setting is shared
 by standard, direct, resolved-target, SNI, UDS, SOCKS, and custom-dialer
 clients, but not the independent HTTP/3 transport. It is separate from the
 opt-in eggfetch `RetryPolicy`, whose behavior is unchanged, and no socket-reuse
