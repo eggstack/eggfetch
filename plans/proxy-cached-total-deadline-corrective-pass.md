@@ -343,18 +343,18 @@ Do not expand this corrective into:
 
 This corrective pass is complete only when:
 
-- [ ] Reusable forward/CONNECT connectors contain no logical request total/deadline state.
-- [ ] `ForwardRouteKey` and `ConnectRouteKey` remain independent of logical `Timeout.total`.
-- [ ] Differing per-request total budgets still reuse an otherwise compatible cached route.
-- [ ] A forced reconnect cannot inherit a previous request's shorter total budget.
-- [ ] A forced reconnect cannot escape the current request's shorter total budget because an earlier request had a longer one.
-- [ ] Current request total expiry remains `TimeoutPhase::Total`; connection-phase expiry remains `TimeoutPhase::Connect` where that phase is authoritative.
-- [ ] Multi-target CONNECT fallback retains current request-local deadline/replay/fail-closed semantics.
-- [ ] Proxy auth/TLS/pinning/origin isolation and pooling behavior remain unchanged.
-- [ ] No dependency or public API change is introduced.
-- [ ] Focused proxy tests, Tier 1, extended, package, API/type oracles, MSRV, and exact-SHA HTTPX 0.28.1 / HTTPX2 2.12.0 qualification all pass on one final executable freeze.
-- [ ] Compatibility profiles/ledger are rebound only to that exact corrected freeze.
-- [ ] Any final plan/index/profile edits after freeze are documentation-only.
+- [x] Reusable forward/CONNECT connectors contain no logical request total/deadline state.
+- [x] `ForwardRouteKey` and `ConnectRouteKey` remain independent of logical `Timeout.total`.
+- [x] Differing per-request total budgets still reuse an otherwise compatible cached route.
+- [x] A forced reconnect cannot inherit a previous request's shorter total budget.
+- [x] A forced reconnect cannot escape the current request's shorter total budget because an earlier request had a longer one.
+- [x] Current request total expiry remains `TimeoutPhase::Total`; connection-phase expiry remains `TimeoutPhase::Connect` where that phase is authoritative.
+- [x] Multi-target CONNECT fallback retains current request-local deadline/replay/fail-closed semantics.
+- [x] Proxy auth/TLS/pinning/origin isolation and pooling behavior remain unchanged.
+- [x] No dependency or public API change is introduced.
+- [x] Focused proxy tests, Tier 1, extended, package, API/type oracles, MSRV, and exact-SHA HTTPX 0.28.1 / HTTPX2 2.12.0 qualification all pass on one final executable freeze.
+- [x] Compatibility profiles/ledger are rebound only to that exact corrected freeze.
+- [x] Any final plan/index/profile edits after freeze are documentation-only.
 
 ## Exit criterion
 
@@ -404,9 +404,9 @@ Extended: `./scripts/check.sh extended` — passed; Rust 1.89.0 MSRV,
 feature matrix, docs, FFI, lifecycle, resource, soak, and benchmark checks
 passed.
 
-Package: `./scripts/check.sh package` — pending rerun on the clean
-documentation closure tree; the initial attempt reached package validation
-but correctly rejected the uncommitted README edit.
+Package: `./scripts/check.sh package` — passed on the clean documentation
+closure tree, including crate dry-run, wheel build/smoke, package contents,
+and installed-wheel typing.
 
 HTTPX 0.28.1: three consecutive exact-SHA full pinned runs passed 1,870
 tests (245.12 s, 246.48 s, 242.26 s), with 26 existing non-failing warnings
@@ -429,5 +429,6 @@ behavioral fixtures (artifact manifest absent), both existing policy skips.
 Residual limitations: HTTP/3 proxy support, Node JS artifact qualification,
 and downstream artifact qualification remain outside this corrective's scope.
 
-Documentation-only descendant SHA: pending final profile, ledger, and CI
-closure edits.
+Documentation-only descendant SHA: `0da37ab` (the documentation-only closure
+commit descended from the executable freeze; subsequent profile/ledger edits
+are also documentation-only).

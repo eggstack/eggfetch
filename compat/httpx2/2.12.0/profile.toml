@@ -51,11 +51,15 @@ created = "2026-09-10"
 # after three consecutive full compatibility passes on the final executable
 # candidate below. The immediately preceding `2281345f...` binding is
 # historical only.
+# The proxy cached total-deadline corrective pass then removed logical request
+# total state from reusable Hyper forward/CONNECT connectors; this profile was
+# renewed after the exact-SHA qualification below. The immediately preceding
+# `d87be1b...` binding is historical only.
 stage = "stage-c-qualified"
 status = "qualified"
-qualification-sha = "d87be1b780a41dc8ff5f3ba8a14f8d74de5814d0"
+qualification-sha = "de00479ef1161ec24c7f2c34a1cc95c7872e7643"
 qualification-date = "2026-09-16"
-previous-qualification-sha = "c28bbcad6bf9c420721731e8b7a18c2ec1707dd1"
+previous-qualification-sha = "d87be1b780a41dc8ff5f3ba8a14f8d74de5814d0"
 historical-current-qualification-sha = "312cd4402ea2b4b27bf54cf7dc36924a1d449adc"
 reference = "httpx2==2.12.0"
 

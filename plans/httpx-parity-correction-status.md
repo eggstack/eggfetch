@@ -4,6 +4,37 @@ This record is the exact-SHA-bound status for the HTTPX 0.28.1 compatibility
 facade. Historical phase and corrective-pass records remain in the git history
 and referenced plans; counts below are only from the runs named here.
 
+## Recorded state — Stage C renewed after proxy cached total-deadline corrective pass (2026-09-16)
+
+Recorded designation: **Stage C qualified** for both documented facades, bound
+to executable SHA `de00479ef1161ec24c7f2c34a1cc95c7872e7643`. The preceding
+`d87be1b780a41dc8ff5f3ba8a14f8d74de5814d0` binding is historical because the
+corrective removed request-total state from reusable Hyper forward/CONNECT
+connectors while preserving the outer per-dispatch total deadline.
+
+Qualification evidence on the corrected executable tree:
+
+- Tier 1, extended, and package validation passed. Extended included the
+  required Rust 1.89.0 MSRV check; package validation included crate, wheel,
+  package-content, and installed-wheel typing checks.
+- The 0.28.1 API oracle reported 71 allowed matches and the HTTPX2 2.12.0
+  oracle reported 79; both had zero unexplained, stale, or resolved-active
+  differences. Native API/type checks passed with 66 exports, 32 exception
+  bases, and 24 reviewed member contracts.
+- Three consecutive full pinned compatibility runs each passed 1,870 tests
+  with 26 existing non-failing warnings, taking 245.12s, 246.48s, and
+  242.26s. No executable files or dependencies changed between runs.
+- The focused core proxy suite passed all 48 tests, including forced
+  CONNECT reconnects in both total-budget directions, differing-total route
+  reuse, legacy multi-target fallback, proxy TLS, pinning, auth, timeout,
+  SOCKS, cancellation, and stale-idle coverage.
+- The baseline regression was reproduced red on `753d6931` and green on the
+  corrected freeze: `hyper_connect_proxy_does_not_reuse_short_total_on_reconnect`.
+
+The closing plan is `plans/proxy-cached-total-deadline-corrective-pass.md`.
+The only local optional skips are the existing missing Node JS artifact and
+downstream artifact manifest; neither is in this corrective's scope.
+
 ## Recorded state — Stage C renewed after post-audit maintenance/security/proxy program (2026-09-16)
 
 Recorded designation: **Stage C qualified** for both documented facades, bound
