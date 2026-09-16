@@ -423,6 +423,11 @@ stale, or resolved-active differences.
 
 MSRV: Rust 1.89.0 check passed through extended validation.
 
+CI: GitHub `CI` run `35060621229` for pushed head `f1e7ba04` passed; the
+single `ci` job passed in 11m23s. The only annotation was the existing
+platform warning that actions currently targeting Node.js 20 are forced to
+Node.js 24.
+
 Known optional skips: Node JS surface (native artifact absent) and downstream
 behavioral fixtures (artifact manifest absent), both existing policy skips.
 

@@ -35,6 +35,10 @@ The closing plan is `plans/proxy-cached-total-deadline-corrective-pass.md`.
 The only local optional skips are the existing missing Node JS artifact and
 downstream artifact manifest; neither is in this corrective's scope.
 
+The pushed corrected tree passed GitHub CI run `35060621229` (job
+`104679965897`); the workflow ran the existing Tier 1 path and emitted only
+the platform-level Node.js 20 action deprecation annotation.
+
 ## Recorded state — Stage C renewed after post-audit maintenance/security/proxy program (2026-09-16)
 
 Recorded designation: **Stage C qualified** for both documented facades, bound
