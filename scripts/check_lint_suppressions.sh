@@ -21,6 +21,9 @@
 #   - allow(clippy::pedantic) — use specific lint names instead
 #   - allow(clippy::nursery)
 #   - allow(clippy::restriction)
+#   - deny(clippy::all|pedantic|nursery|restriction) and deny(warnings) —
+#     blanket deny forms escalate whole lint groups and evade the allow-based
+#     policy above; use workspace lints plus specific per-item attributes.
 #
 # Crates with explicit exceptions (FFI/Node unsafe):
 #   - crates/eggfetch-ffi/ (unsafe_code = "allow" per project policy)
@@ -76,6 +79,13 @@ fi
 # Check for allow(clippy::restriction) — forbidden (restrictive lints)
 if search_suppressions '#!\[allow\(clippy::restriction\)\]|#\[allow\(clippy::restriction\)\]'; then
     echo "ERROR: Found 'allow(clippy::restriction)' — restriction lints conflict with pedantic."
+    EXIT_CODE=1
+fi
+
+# Check for blanket deny(...) forms — forbidden (evades the allow-based policy;
+# use workspace lints plus specific per-item attributes instead)
+if search_suppressions '#!\[deny\((warnings|clippy::(all|pedantic|nursery|restriction))\)\]|#\[deny\((warnings|clippy::(all|pedantic|nursery|restriction))\)\]'; then
+    echo "ERROR: Found blanket 'deny(...)' — use workspace lints with specific lint names instead."
     EXIT_CODE=1
 fi
 

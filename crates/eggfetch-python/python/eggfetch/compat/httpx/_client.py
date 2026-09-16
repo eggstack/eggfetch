@@ -271,6 +271,11 @@ def _merge_default_headers(user_headers) -> Headers:
 
 def _convert_timeout(timeout):
     if isinstance(timeout, Timeout):
+        # NOTE: `Timeout.total` is intentionally not forwarded. Like HTTPX,
+        # this layer enforces only the four phases (connect/read/write/pool);
+        # the project policy is to never synthesize a native outer deadline
+        # from `total` (see `Timeout.total` docs). A scalar `Timeout(5.0)`
+        # already fans out into the four phases, so nothing is lost.
         return eggfetch.Timeout(
             connect=timeout.connect,
             read=timeout.read,
@@ -1144,6 +1149,10 @@ def _clean_redirect_extensions(request: Request) -> dict:
 # ── Client ──────────────────────────────────────────────────────────────
 
 class Client:
+    # NOTE: no `decompress` parameter, by design. HTTPX 0.28.1 `Client` has
+    # no such knob (decoding is automatic), so the facade keeps the exact
+    # HTTPX signature for parity. Native `eggfetch.Client` (and per-request
+    # `decompress=`) remains the escape hatch for direct users.
     def __init__(
         self,
         *,
@@ -1865,6 +1874,7 @@ class Client:
 
 
 class AsyncClient:
+    # NOTE: no `decompress` parameter, by design (see `Client` above).
     def __init__(
         self,
         *,

@@ -10,7 +10,9 @@
 //! `docs/architecture/ffi-and-node.md` for the explicit support contract
 //! and the list of intentionally unsupported capabilities.
 
-#![deny(clippy::all)]
+//! Lint stance follows the workspace `lints` table (pedantic warnings);
+//! keep crate-level blanket `allow`/`deny(clippy::...)` forms out so
+//! `scripts/check_lint_suppressions.sh` stays authoritative.
 
 mod client;
 mod response;

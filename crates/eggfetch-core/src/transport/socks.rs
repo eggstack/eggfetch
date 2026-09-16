@@ -837,6 +837,13 @@ async fn parse_connect_reply_for_target(
 }
 
 /// Write all bytes with an optional timeout.
+///
+/// All SOCKS5 stages (TCP connect, method negotiation, auth, CONNECT
+/// command) intentionally report [`TimeoutPhase::ProxyConnect`]: they are
+/// all part of proxy-connection establishment, and splitting them into
+/// dedicated phases would churn the public [`TimeoutPhase`] enum plus its
+/// exhaustive matches. The per-stage `phase` label is still carried in
+/// non-timeout errors (e.g. `"{phase} write failed: ..."`).
 async fn write_all_timeout(
     stream: &mut tokio::net::TcpStream,
     data: &[u8],
@@ -864,6 +871,10 @@ async fn write_all_timeout(
 }
 
 /// Read exact bytes with an optional timeout.
+///
+/// Like [`write_all_timeout`], timeout errors intentionally share
+/// [`TimeoutPhase::ProxyConnect`] across all SOCKS5 stages; the `phase`
+/// label is preserved in non-timeout errors.
 async fn read_exact_timeout(
     stream: &mut tokio::net::TcpStream,
     buf: &mut [u8],

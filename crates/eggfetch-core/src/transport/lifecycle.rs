@@ -467,6 +467,12 @@ impl<C> tokio::io::AsyncWrite for LifecycleConnection<C>
 where
     C: tokio::io::AsyncWrite + Unpin,
 {
+    // Intentionally untimed: this impl serves app-owned upgraded (101)
+    // streams (WS/SSE over Tokio I/O), where the application — not the
+    // Hyper dispatch path — owns write pacing. The `hyper::rt::Write`
+    // impl above enforces `io_timeout.write` for protocol writes; routing
+    // upgraded-stream writes through the same inactivity timer here would
+    // time out legitimate application idle periods.
     fn poll_write(
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,

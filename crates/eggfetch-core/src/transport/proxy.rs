@@ -431,24 +431,27 @@ pub(crate) async fn connect_to_proxy(
 
     let connect_timeout = effective_timeout(deadline, proxy_connect_timeout)?;
     let stream = match connect_timeout {
-        Some(dur) => match tokio::time::timeout(dur, connect_future).await {
-            Ok(Ok(s)) => s,
-            Ok(Err(e)) => {
-                if let Some(m) = metrics {
-                    m.record_proxy_failure();
+        Some(dur) => {
+            let start = std::time::Instant::now();
+            match tokio::time::timeout(dur, connect_future).await {
+                Ok(Ok(s)) => s,
+                Ok(Err(e)) => {
+                    if let Some(m) = metrics {
+                        m.record_proxy_failure();
+                    }
+                    return Err(e);
                 }
-                return Err(e);
-            }
-            Err(_) => {
-                if let Some(m) = metrics {
-                    m.record_proxy_failure();
+                Err(_) => {
+                    if let Some(m) = metrics {
+                        m.record_proxy_failure();
+                    }
+                    return Err(Error::Timeout {
+                        phase: TimeoutPhase::ProxyConnect,
+                        elapsed: start.elapsed(),
+                    });
                 }
-                return Err(Error::Timeout {
-                    phase: TimeoutPhase::ProxyConnect,
-                    elapsed: dur,
-                });
             }
-        },
+        }
         None => match connect_future.await {
             Ok(s) => s,
             Err(e) => {
@@ -470,24 +473,27 @@ pub(crate) async fn connect_to_proxy(
         let handshake = connector.connect(domain, stream);
         let tls_timeout = effective_timeout(deadline, proxy_tls_timeout)?;
         let tls_stream = match tls_timeout {
-            Some(dur) => match tokio::time::timeout(dur, handshake).await {
-                Ok(Ok(stream)) => stream,
-                Ok(Err(e)) => {
-                    if let Some(m) = metrics {
-                        m.record_proxy_tls_failure();
+            Some(dur) => {
+                let start = std::time::Instant::now();
+                match tokio::time::timeout(dur, handshake).await {
+                    Ok(Ok(stream)) => stream,
+                    Ok(Err(e)) => {
+                        if let Some(m) = metrics {
+                            m.record_proxy_tls_failure();
+                        }
+                        return Err(Error::Tls(format!("proxy TLS handshake failed: {e}")));
                     }
-                    return Err(Error::Tls(format!("proxy TLS handshake failed: {e}")));
-                }
-                Err(_) => {
-                    if let Some(m) = metrics {
-                        m.record_proxy_tls_failure();
+                    Err(_) => {
+                        if let Some(m) = metrics {
+                            m.record_proxy_tls_failure();
+                        }
+                        return Err(Error::Timeout {
+                            phase: TimeoutPhase::ProxyTls,
+                            elapsed: start.elapsed(),
+                        });
                     }
-                    return Err(Error::Timeout {
-                        phase: TimeoutPhase::ProxyTls,
-                        elapsed: dur,
-                    });
                 }
-            },
+            }
             None => match handshake.await {
                 Ok(s) => s,
                 Err(e) => {

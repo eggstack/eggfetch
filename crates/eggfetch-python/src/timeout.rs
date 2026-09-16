@@ -133,13 +133,19 @@ impl PyTimeout {
     }
 
     fn __repr__(&self) -> String {
+        fn secs(value: Option<std::time::Duration>) -> String {
+            match value {
+                Some(d) => format!("{:?}", d.as_secs_f64()),
+                None => "None".to_owned(),
+            }
+        }
         format!(
-            "Timeout(pool={:?}, connect={:?}, write={:?}, read={:?}, total={:?})",
-            self.inner.pool,
-            self.inner.connect,
-            self.inner.write,
-            self.inner.read,
-            self.inner.total
+            "Timeout(pool={}, connect={}, write={}, read={}, total={})",
+            secs(self.inner.pool),
+            secs(self.inner.connect),
+            secs(self.inner.write),
+            secs(self.inner.read),
+            secs(self.inner.total)
         )
     }
 }

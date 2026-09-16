@@ -359,6 +359,11 @@ fn parse_quoted_string(s: &str) -> Option<(String, &str)> {
                 if c != b'"' && c != b'\\' {
                     return None;
                 }
+                // Bound authority length before pushing so a hostile value
+                // can never grow the buffer past 512 bytes.
+                if out.len() >= 512 {
+                    return None;
+                }
                 out.push(c as char);
                 i += 1;
             }
@@ -367,13 +372,13 @@ fn parse_quoted_string(s: &str) -> Option<(String, &str)> {
             }
             c if c < 0x20 || c == 0x7f => return None,
             c => {
+                // Bound authority length before pushing (see above).
+                if out.len() >= 512 {
+                    return None;
+                }
                 out.push(c as char);
                 i += 1;
             }
-        }
-        // Bound authority length to avoid unbounded allocation.
-        if out.len() > 512 {
-            return None;
         }
     }
     None
@@ -1127,5 +1132,17 @@ mod tests {
         ] {
             assert!(!bad.trustworthy());
         }
+    }
+
+    #[test]
+    fn quoted_string_enforces_512_byte_cap() {
+        // Exactly 512 bytes is accepted; 513 is rejected without ever
+        // growing the buffer past the cap.
+        let ok = format!("\"{}\"", "a".repeat(512));
+        let (value, rest) = parse_quoted_string(&ok).expect("512-byte value parses");
+        assert_eq!(value.len(), 512);
+        assert_eq!(rest, "");
+        let too_long = format!("\"{}\"", "a".repeat(513));
+        assert!(parse_quoted_string(&too_long).is_none());
     }
 }

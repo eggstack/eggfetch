@@ -309,6 +309,25 @@ fn map_error_to_exit_code(err: &eggfetch_core::Error) -> u8 {
     }
 }
 
+/// Exit code for errors that are neither [`eggfetch_core::Error`] nor
+/// [`std::io::Error`] (e.g. [`StatusError`], `anyhow` usage errors, file
+/// output failures wrapped with context).
+///
+/// Uses typed downcasts only — never message-substring heuristics — so an
+/// unrelated error mentioning "status" or "parse" cannot mis-map.
+fn map_unknown_error_to_exit_code(err: &anyhow::Error) -> u8 {
+    if err.downcast_ref::<StatusError>().is_some() {
+        return EXIT_STATUS;
+    }
+    if err
+        .chain()
+        .any(|cause| cause.downcast_ref::<std::io::Error>().is_some())
+    {
+        return EXIT_IO;
+    }
+    EXIT_USAGE
+}
+
 fn parse_header(s: &str) -> Result<(&str, &str)> {
     let (name, value) = s
         .split_once(':')
@@ -1277,14 +1296,7 @@ async fn main() -> ExitCode {
                 ExitCode::from(EXIT_IO)
             } else {
                 eprintln!("Error: {err}");
-                let msg_lower = msg.to_lowercase();
-                if msg_lower.contains("usage") || msg_lower.contains("parse") {
-                    ExitCode::from(EXIT_USAGE)
-                } else if msg_lower.contains("status") {
-                    ExitCode::from(EXIT_STATUS)
-                } else {
-                    EXIT_USAGE.into()
-                }
+                ExitCode::from(map_unknown_error_to_exit_code(&err))
             }
         }
     }
@@ -1585,6 +1597,29 @@ mod tests {
             map_error_to_exit_code(&Error::ProxyConnect("test".into())),
             EXIT_CONNECT
         );
+    }
+
+    #[test]
+    fn unknown_error_mapping_uses_types_not_substrings() {
+        // HTTP error statuses map to EXIT_STATUS via the typed error,
+        // not via the word "status" in the message.
+        let status: anyhow::Error = StatusError(500).into();
+        assert_eq!(map_unknown_error_to_exit_code(&status), EXIT_STATUS);
+
+        // Wrapped I/O errors map to EXIT_IO even with context messages
+        // that mention neither "usage" nor "parse".
+        let io: anyhow::Error = anyhow::Error::new(std::io::Error::other("boom"))
+            .context("failed to create output file: /tmp/x");
+        assert_eq!(map_unknown_error_to_exit_code(&io), EXIT_IO);
+
+        // A decoy message containing "status" must not mis-map to
+        // EXIT_STATUS; unknown errors default to EXIT_USAGE.
+        let decoy = anyhow::anyhow!("status report unavailable");
+        assert_eq!(map_unknown_error_to_exit_code(&decoy), EXIT_USAGE);
+
+        // Usage errors keep EXIT_USAGE.
+        let usage = anyhow::anyhow!("--http1, --http2, and --http3 are mutually exclusive");
+        assert_eq!(map_unknown_error_to_exit_code(&usage), EXIT_USAGE);
     }
 
     #[test]

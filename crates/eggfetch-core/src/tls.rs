@@ -411,16 +411,27 @@ impl TlsConfig {
 
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             for path in pem_paths {
-                if let Ok(certs) = load_pem_certs_from_path(Path::new(path)) {
-                    for cert in certs {
-                        if let Err(e) = roots.add(cert) {
-                            #[cfg(feature = "tracing")]
-                            tracing::warn!(
-                                "eggfetch: skipped invalid CA certificate in {path}: {e}"
-                            );
-                            #[cfg(not(feature = "tracing"))]
-                            let _ = (path, &e);
+                match load_pem_certs_from_path(Path::new(path)) {
+                    Ok(certs) => {
+                        for cert in certs {
+                            if let Err(e) = roots.add(cert) {
+                                #[cfg(feature = "tracing")]
+                                tracing::warn!(
+                                    "eggfetch: skipped invalid CA certificate in {path}: {e}"
+                                );
+                                #[cfg(not(feature = "tracing"))]
+                                let _ = (path, &e);
+                            }
                         }
+                    }
+                    Err(e) => {
+                        // A missing or unreadable system bundle silently falls
+                        // back toward WebPKI roots below; log it so operators
+                        // have a signal instead of a silent trust change.
+                        #[cfg(feature = "tracing")]
+                        tracing::warn!("eggfetch: failed to load native CA bundle {path}: {e}");
+                        #[cfg(not(feature = "tracing"))]
+                        let _ = (path, &e);
                     }
                 }
             }

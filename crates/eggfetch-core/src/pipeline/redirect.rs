@@ -474,16 +474,13 @@ pub(super) async fn send_with_redirects(client: &Client, request: Request) -> Re
             // Bound the drain by the remaining total deadline, but drain
             // with the byte-capped helper rather than buffering the whole
             // redirect body in memory just to release the connection.
+            // Draining is best-effort connection release: if the remaining
+            // budget expires first, proceed with the redirect anyway (the
+            // undrained connection closes instead of being reused) rather
+            // than failing a redirect that could otherwise continue. The
+            // overall total deadline is still enforced around the dispatch.
             let dur = total.saturating_sub(start_time.elapsed());
-            if tokio::time::timeout(dur, drain_response_body(&mut response))
-                .await
-                .is_err()
-            {
-                return Err(Error::Timeout {
-                    phase: TimeoutPhase::Total,
-                    elapsed: start_time.elapsed(),
-                });
-            }
+            let _ = tokio::time::timeout(dur, drain_response_body(&mut response)).await;
         } else {
             drain_response_body(&mut response).await;
         }
