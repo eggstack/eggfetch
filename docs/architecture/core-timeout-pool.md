@@ -106,7 +106,12 @@ origin TLS, and proxy request/response-header setup each use the smaller of
 their configured phase budget and the remaining total budget. A phase never
 receives a fresh copy of the original total duration. HTTPX compatibility
 requests configure only connect/read/write/pool; native callers may set
-`total` explicitly as the outer cap.
+`total` explicitly as the outer cap. For cached Hyper forward-proxy and
+single-target CONNECT routes, the reusable connector has no request-total
+state: `ConnectTimeout` owns configured connection establishment, while the
+current request's outer `send_with_total_timeout` cancels a fresh connector
+invocation when its remaining total budget expires. Multi-target fallback
+continues to receive the request-local deadline for candidate sequencing.
 
 ## Connection Pool
 

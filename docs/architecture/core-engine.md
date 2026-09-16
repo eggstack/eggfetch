@@ -168,6 +168,12 @@ Pinned routes perform no DNS fallback. Successful ordinary forward-proxy and
 single-target CONNECT routes use bounded Hyper clients whose keys retain the
 proxy and destination policy; multi-address CONNECT fallback remains on the
 handshake-specific path. SOCKS client-cache keys include both snapshots.
+The reusable forward/CONNECT factories and connectors retain only
+connection-scoped policy: logical `Timeout.total` and the request's
+`remaining_total` are neither cache identity nor connector state. The pipeline
+wraps each proxy dispatch in the current request's outer total timeout, so a
+stale pooled connection that needs a new physical connection cannot inherit a
+predecessor's budget.
 Retries and same-origin redirects retain snapshots, while cross-origin
 redirects reject them. HTTPS CONNECT target fallback is deliberately limited
 to typed 502/504 proxy rejection. Local-resolution SOCKS5 target fallback is

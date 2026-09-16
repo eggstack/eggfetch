@@ -359,3 +359,75 @@ This corrective pass is complete only when:
 ## Exit criterion
 
 The defect is closed when cached proxy clients are reusable across compatible requests regardless of each request's `Timeout.total`, while every dispatch remains bounded by its own shrinking total deadline and all prior proxy route, security, pooling, and compatibility contracts remain qualified on the corrected exact SHA.
+
+## Closure record — 2026-09-16
+
+Executable freeze SHA: `de00479ef1161ec24c7f2c34a1cc95c7872e7643`.
+
+Implementation summary: removed `remaining_total`/`setup_timeout` from the
+reusable forward and compatible single-target CONNECT client factories and
+connectors. The existing outer `send_with_total_timeout(proxy_future,
+remaining_total)` remains authoritative; route keys and the legacy
+multi-target fallback were unchanged. No dependency, public API, Python,
+FFI, Node, or HTTP/3 changes were introduced.
+
+Baseline red regression: `hyper_connect_proxy_does_not_reuse_short_total_on_reconnect`
+failed on planning baseline `753d6931` with a stale predecessor-budget
+`TimeoutPhase::Read` timeout at approximately 500 ms during the forced second
+CONNECT. It passed after the correction with the same cached client and a
+fresh physical CONNECT attempt.
+
+CONNECT short -> long forced-reconnect proof: `hyper_connect_proxy_does_not_reuse_short_total_on_reconnect`
+passed; Request A total 500 ms, Request B total 2 s, delayed second CONNECT
+700 ms, two proxy connections and two CONNECT handshakes.
+
+CONNECT long -> short forced-reconnect proof: `hyper_connect_proxy_reconnect_honors_short_current_total`
+passed; Request A total 2 s, Request B total 100 ms, delayed second CONNECT
+400 ms, resulting error remained `TimeoutPhase::Total`.
+
+CONNECT differing-total reuse proof: `hyper_connect_proxy_reuses_keep_alive_tunnel`
+passed with sequential 500 ms and 5 s totals on one reusable tunnel.
+
+Forward differing-total reuse proof: `hyper_forward_proxy_reuses_keep_alive_connection`
+passed with sequential 500 ms and 5 s totals on one reusable proxy connection.
+
+Legacy multi-target fallback proof: the existing multi-target, candidate-reply,
+replay, pinning, and SOCKS coverage remained green in the 48-test focused
+proxy suite.
+
+Focused proxy suite: `cargo test -p eggfetch-core --all-features --test
+proxy_tests -- --test-threads=1` — 48 passed.
+
+Tier 1: `./scripts/check.sh` — passed.
+
+Extended: `./scripts/check.sh extended` — passed; Rust 1.89.0 MSRV,
+feature matrix, docs, FFI, lifecycle, resource, soak, and benchmark checks
+passed.
+
+Package: `./scripts/check.sh package` — pending rerun on the clean
+documentation closure tree; the initial attempt reached package validation
+but correctly rejected the uncommitted README edit.
+
+HTTPX 0.28.1: three consecutive exact-SHA full pinned runs passed 1,870
+tests (245.12 s, 246.48 s, 242.26 s), with 26 existing non-failing warnings
+per run.
+
+HTTPX2 2.12.0: included in the same exact-SHA dual-facade compatibility
+suite and repeated three-run qualification process; no unexplained,
+stale, or resolved-active differences.
+
+API/type oracles: native API/type gates passed (66 exports, 32 exception
+bases, 24 reviewed member contracts). The HTTPX 0.28.1 oracle reported 71
+allowed matches and HTTPX2 2.12.0 reported 79; both reported zero unexplained,
+stale, or resolved-active differences.
+
+MSRV: Rust 1.89.0 check passed through extended validation.
+
+Known optional skips: Node JS surface (native artifact absent) and downstream
+behavioral fixtures (artifact manifest absent), both existing policy skips.
+
+Residual limitations: HTTP/3 proxy support, Node JS artifact qualification,
+and downstream artifact qualification remain outside this corrective's scope.
+
+Documentation-only descendant SHA: pending final profile, ledger, and CI
+closure edits.

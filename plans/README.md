@@ -2,6 +2,16 @@
 
 This directory contains active implementation plans, live qualification/status records, and historical implementation records. Completed plans are non-normative unless another current document explicitly says otherwise. Verification and release policy remain governed by `docs/verification-policy.md` and `docs/releases/process.md`.
 
+## Corrective — proxy cached total-deadline ownership (2026-09-16)
+
+Plan: `proxy-cached-total-deadline-corrective-pass.md`
+
+Status: implementation and executable validation complete on freeze
+`de00479ef1161ec24c7f2c34a1cc95c7872e7643`; compatibility/profile and CI
+closure evidence is recorded in that plan and the live parity ledger. The
+correction removes request-total state from reusable Hyper forward/CONNECT
+connectors while retaining the outer per-dispatch total deadline.
+
 ## Completed program — post-audit maintenance, security, and proxy modernization (2026-09-16)
 
 Handoff program: `post-audit-maintenance-security-and-proxy-modernization-program.md`

@@ -15,7 +15,10 @@ When a proxy is involved, the pool key extends to `(proxy_origin, destination_or
 Physical route constraints are separate from logical pool permits. Successful
 ordinary HTTP forward-proxy and compatible HTTPS CONNECT traffic uses bounded
 Hyper clients keyed by the destination plus connection-affecting proxy/TLS
-policy. SOCKS Hyper clients are cached only when their cache key proves the
+policy. Per-request `Timeout.total` is deliberately excluded from those keys
+and from reusable connectors; the outer request dispatch enforces the current
+shrinking total budget even when a stale pooled connection triggers a fresh
+establishment. SOCKS Hyper clients are cached only when their cache key proves the
 same logical proxy, authentication, proxy-peer snapshot, and proxied-target
 snapshot; pinned and unpinned routes therefore cannot cross-reuse a tunnel.
 

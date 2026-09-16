@@ -406,6 +406,12 @@ Client::send()
       → read timeout + pool lease attachment
 ```
 
+Compatible forward-proxy and single-target CONNECT clients are cached by
+connection-affecting route policy only. The request-local shrinking total
+deadline remains outside those reusable connectors at the proxy dispatch
+boundary, so stale-connection recovery cannot inherit another request's
+timeout.
+
 ### Transport Dispatch Order
 
 `send_single_request()` separates preparation from execution. After

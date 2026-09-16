@@ -402,7 +402,11 @@ SSRF policy engine.
 
 Both snapshots are immutable across retries and same-origin redirects, never
 fall back to DNS, and cannot be reused across cross-origin redirects. Forward
-and compatible CONNECT proxy clients use bounded Hyper pools; the SOCKS client cache keys
+and compatible CONNECT proxy clients use bounded Hyper pools; their route keys
+and reusable connectors contain only connection-affecting policy. A request's
+logical `Timeout.total` is excluded from cache identity and connector state,
+while the outer request dispatch enforces that request's shrinking total
+deadline, including when stale pooled connections require reconnection. The SOCKS client cache keys
 include proxy-peer and target snapshots so incompatible physical routes do
 not share a connection. HTTPS CONNECT candidates advance only on typed 502/504
 proxy rejection. Local-SOCKS5 candidates advance only on replies 0x03 (network

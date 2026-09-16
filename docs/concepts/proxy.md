@@ -9,6 +9,21 @@ eggfetch supports HTTP forward proxying and HTTPS CONNECT tunneling with proxy a
 
 Both modes use the same `Proxy` configuration. The transport layer selects the appropriate mode based on the target URL's scheme.
 
+## Pooling and total deadlines
+
+Compatible HTTP forward-proxy requests and single-target HTTPS CONNECT
+requests reuse bounded Hyper clients and their keep-alive connections. Cache
+identity contains only connection-affecting proxy, origin, TLS, protocol, and
+pinning policy; a request's logical `Timeout.total` is never part of the key or
+stored in the reusable connector.
+
+The pipeline computes the remaining total budget for each request, including
+redirects and retries, and applies it around that request's proxy dispatch.
+Consequently, a fresh connection or tunnel created after a stale pooled
+connection is detected uses the current request's budget. Multi-target CONNECT
+fallback remains request-scoped because candidate retry and body replay need
+the current deadline.
+
 ## Proxy Configuration
 
 ### Client-Level
@@ -148,7 +163,6 @@ configuration when `trust_env=True`.
 
 ## Limitations
 
-- Limited connection reuse through proxies (each request opens a fresh connection)
 - Pinned proxy peers and proxied targets are immutable route snapshots. They
   survive retries and same-origin redirects, never fall back to DNS, and are
   rejected on cross-origin redirects. CONNECT target fallback is conservative

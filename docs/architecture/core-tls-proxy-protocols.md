@@ -147,7 +147,10 @@ keep-alive pool. The route connector still owns proxy TCP/TLS setup and the
 CONNECT handshake, including structured rejection parsing. Forward clients
 are isolated by destination origin and proxy-leg policy; CONNECT clients also
 include origin TLS/SNI, protocol policy, credentials, and a single pinned
-target in their opaque cache identity. Hyper's generic `Tunnel` remains a
+target in their opaque cache identity. Logical request totals are intentionally
+excluded from both route keys and connector state; the outer request dispatch
+continues to enforce each request's shrinking total deadline when Hyper has to
+establish a new pooled connection. Hyper's generic `Tunnel` remains a
 recorded no-go because it cannot preserve these contracts. Multi-address
 CONNECT fallback retains the handshake-specific path so typed 502/504 retry
 behavior is not weakened. SOCKS client cache keys include the logical proxy
