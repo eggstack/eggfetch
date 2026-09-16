@@ -1,6 +1,6 @@
 # Python PEP 561 Method Contract Corrective Pass
 
-Status: **ready for implementation**
+Status: **complete; qualified and closed**
 Date: 2026-09-15
 Parent historical program: `python-interop-api-hygiene-program.md`
 Preceding typing plan: `python-pep561-typing-surface.md`
@@ -11,6 +11,35 @@ Closure handoff: `post-python-typing-corrective-qualification-and-closure.md`
 Correct the narrow residual left after the completed Python interop/API-hygiene program: the packaged PEP 561 stubs cover the public export set, but the current structural checker does not prove that public class members, properties, argument contracts, and return annotations match the actual PyO3 runtime API.
 
 This is a typing-contract correction, not a Python runtime redesign and not a new HTTP feature program.
+
+## Implementation and validation record
+
+Implementation is complete in `c28bbcad6bf9c420721731e8b7a18c2ec1707dd1`.
+The corrective commit changed 16 files: the native stub, reviewed native API
+manifest, runtime-oracle/member checks, source and wheel typing gates, typing
+fixtures, and related documentation. No PyO3 Rust source, package metadata,
+dependency, Cargo.lock, compatibility-facade, or transport implementation
+changed.
+
+The reviewed manifest now covers 24 native member contracts in addition to
+the existing 66-export and 32-exception checks. The checker validates required
+methods/properties, sync/async declaration kind, reliable signature shape,
+semantic annotations, and exact member-specific allowlists. Synthetic tests
+prove rejection of missing methods/properties, async-kind drift, signature
+drift, semantic return drift, and unreviewed stub-only members.
+
+The corrected surface includes native stream `start_tls` result types and
+`is_upgraded`, client lifecycle/cookie members, the concrete DER
+`list[bytes]` verify form, explicit `AsyncClient` construction, iterator and
+context-manager protocols, and `raise_for_status() -> None` on the native
+response type. Runtime introspection and focused tests confirmed the existing
+PyO3 behavior; no runtime behavior change was needed.
+
+Focused validation passed: native API/member checks, 8 focused Python tests,
+all four source-tree typing fixtures, 560 Python behavior tests, the
+compatibility smoke kernel, and the installed-wheel typing gate. Exact-SHA
+qualification and closure evidence is recorded in
+`post-python-typing-corrective-qualification-and-closure.md`.
 
 ## Current Qualified Baseline
 
@@ -252,24 +281,24 @@ Therefore the current `2281345f...` Stage C binding becomes historical after imp
 
 ## Acceptance Criteria
 
-- [ ] all confirmed stub/runtime mismatches listed above are corrected;
-- [ ] `NetworkStream.start_tls` is typed as returning `NetworkStream`;
-- [ ] `AsyncNetworkStream.start_tls` is typed as awaiting to `AsyncNetworkStream`;
-- [ ] both stream classes expose typed `is_upgraded: bool`;
-- [ ] `Client` and `AsyncClient` lifecycle/cookie members match runtime;
-- [ ] `Verify` includes exactly the supported DER-list form without unsupported widening;
-- [ ] `AsyncClient.__init__` no longer collapses the supported constructor to `**kwargs: Any`;
-- [ ] context-manager exit return annotations match actual runtime values;
-- [ ] every manifest-tracked public method is represented in `_native.pyi`;
-- [ ] public runtime/stub member drift is mechanically detected;
-- [ ] selected semantic return types are mechanically checked through a reviewed contract table/manifest extension;
-- [ ] allowlists, if any, are member-specific and documented;
-- [ ] positive and negative consumer typing fixtures exercise the corrected contracts;
-- [ ] installed-wheel typing validation catches the same drift;
-- [ ] no unintended runtime API change is introduced;
-- [ ] no `eggfetch-core` Python-specific coupling is introduced;
-- [ ] Tier 1 and package validation pass before final freeze;
-- [ ] final exact-SHA closure is handed off to `post-python-typing-corrective-qualification-and-closure.md`.
+- [x] all confirmed stub/runtime mismatches listed above are corrected;
+- [x] `NetworkStream.start_tls` is typed as returning `NetworkStream`;
+- [x] `AsyncNetworkStream.start_tls` is typed as awaiting to `AsyncNetworkStream`;
+- [x] both stream classes expose typed `is_upgraded: bool`;
+- [x] `Client` and `AsyncClient` lifecycle/cookie members match runtime;
+- [x] `Verify` includes exactly the supported DER-list form without unsupported widening;
+- [x] `AsyncClient.__init__` no longer collapses the supported constructor to `**kwargs: Any`;
+- [x] context-manager exit return annotations match actual runtime values;
+- [x] every manifest-tracked public method is represented in `_native.pyi`;
+- [x] public runtime/stub member drift is mechanically detected;
+- [x] selected semantic return types are mechanically checked through a reviewed contract table/manifest extension;
+- [x] allowlists, if any, are member-specific and documented;
+- [x] positive and negative consumer typing fixtures exercise the corrected contracts;
+- [x] installed-wheel typing validation catches the same drift;
+- [x] no unintended runtime API change is introduced;
+- [x] no `eggfetch-core` Python-specific coupling is introduced;
+- [x] Tier 1 and package validation pass before final freeze;
+- [x] final exact-SHA closure is handed off to `post-python-typing-corrective-qualification-and-closure.md`.
 
 ## Handoff
 

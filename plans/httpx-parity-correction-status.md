@@ -4,6 +4,33 @@ This record is the exact-SHA-bound status for the HTTPX 0.28.1 compatibility
 facade. Historical phase and corrective-pass records remain in the git history
 and referenced plans; counts below are only from the runs named here.
 
+## Recorded state — Stage C renewed after PEP 561 method-contract correction (2026-09-16)
+
+Recorded designation: **Stage C qualified** for both the documented HTTPX
+0.28.1 and httpx2 2.12.0 asyncio surfaces, bound to executable SHA
+`c28bbcad6bf9c420721731e8b7a18c2ec1707dd1`. The preceding
+`2281345f3eaf636c62ec21d2c963d6f90ea764a8` binding is historical because the
+native PEP 561 surface and its runtime↔stub validation gates were corrected.
+Both profiles record this SHA and the 2026-09-16 qualification date.
+
+Qualification evidence on the frozen executable tree:
+
+- Tier 1, extended, and package validation passed, including the strengthened
+  native member-contract checker and installed-wheel typing proof. The Rust
+  1.89.0 MSRV gate passed.
+- The HTTPX 0.28.1 oracle reported 71 allowed matches, zero stale allowed
+  entries, zero unexplained differences, and zero resolved-in-active entries.
+  The HTTPX2 2.12.0 oracle reported 79 and the same zero counts.
+- Three consecutive full pinned compatibility runs each passed 1,870 tests
+  with 26 existing non-failing warnings, taking 246.45s, 243.57s, and
+  244.52s. No files or dependencies changed between runs.
+- No compatibility-facade behavior or new allowed difference was introduced;
+  the triggering delta was limited to native stubs, the reviewed member
+  manifest, typing/checker fixtures, and documentation.
+
+The closing plans are `plans/python-pep561-method-contract-corrective-pass.md`
+and `plans/post-python-typing-corrective-qualification-and-closure.md`.
+
 ## Recorded state — Stage C renewed after Python interop/API closure (2026-09-15)
 
 Recorded designation: **Stage C qualified** for both the documented HTTPX

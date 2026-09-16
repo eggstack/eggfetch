@@ -2,14 +2,17 @@
 
 This directory contains active implementation plans, live qualification/status records, and historical implementation records. Completed plans are non-normative unless another current document explicitly says otherwise. Verification and release policy remain governed by `docs/verification-policy.md` and `docs/releases/process.md`.
 
-## Active corrective — Python PEP 561 method contract (2026-09-15)
+## Completed corrective — Python PEP 561 method contract (2026-09-16)
 
-The completed Python interop/API-hygiene program remains the historical baseline on executable/package freeze `2281345f3eaf636c62ec21d2c963d6f90ea764a8`, but a follow-up audit found that the typing gate proves exports and exception bases without fully proving public class methods, properties, and semantic return annotations. The active corrective line is intentionally narrow and does not reopen the Python runtime architecture.
+The completed Python interop/API-hygiene program remains the historical baseline on executable/package freeze `2281345f3eaf636c62ec21d2c963d6f90ea764a8`, but a follow-up audit found that the typing gate proved exports and exception bases without fully proving public class methods, properties, and semantic return annotations. The corrective line was intentionally narrow and did not reopen the Python runtime architecture. Its executable/package freeze is `c28bbcad6bf9c420721731e8b7a18c2ec1707dd1`.
 
 Execution order:
 
-1. `python-pep561-method-contract-corrective-pass.md` — correct the confirmed `_native.pyi` mismatches, make `AsyncClient` constructor typing explicit, add missing lifecycle/network-stream members, tighten `Verify`, and strengthen runtime↔stub member/return drift detection.
-2. `post-python-typing-corrective-qualification-and-closure.md` — freeze one candidate, run source and installed-wheel typing proof plus canonical repository gates, then renew exact-SHA HTTPX 0.28.1 / HTTPX2 2.12.0 qualification under the current policy.
+1. `python-pep561-method-contract-corrective-pass.md` — completed the native
+   `_native.pyi` and runtime↔stub member/return drift correction.
+2. `post-python-typing-corrective-qualification-and-closure.md` — completed
+   source and installed-wheel proof, canonical repository gates, and exact-SHA
+   HTTPX 0.28.1 / HTTPX2 2.12.0 qualification renewal.
 
 Do not change runtime behavior merely to fit existing stubs. The stubs must describe the actual native API, and any runtime defect discovered during implementation must be called out explicitly before expanding scope.
 

@@ -7,10 +7,10 @@ the independently pinned HTTPX 0.28.1 contract and must not be rewritten
 to HTTPX2 semantics.
 
 Status: **Stage C qualified** on frozen executable SHA
-`2281345f3eaf636c62ec21d2c963d6f90ea764a8`. The prior
-`97e87e42c8f4d5659739e7b23ff9005a4ec1ae53` binding is historical
-after subsequent qualification-sensitive changes, including the native JSON
-completion and its regression coverage. See `profile.toml` and
+`c28bbcad6bf9c420721731e8b7a18c2ec1707dd1`. The prior
+`2281345f3eaf636c62ec21d2c963d6f90ea764a8` binding is historical after the
+PEP 561 method-contract correction and its strengthened typing/compatibility
+validation. See `profile.toml` and
 `plans/httpx-parity-correction-status.md`. Implementation lives in
 `eggfetch.compat.httpx2` (see
 `crates/eggfetch-python/python/eggfetch/compat/httpx2/`).

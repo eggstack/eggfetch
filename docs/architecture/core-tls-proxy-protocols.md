@@ -806,7 +806,7 @@ pass yet; concrete blockers:
 
 1. No two-independent-non-Quinn-server interoperability pass recorded
    on the current executable freeze
-   `2281345f3eaf636c62ec21d2c963d6f90ea764a8` (2026-09-15; the
+   `c28bbcad6bf9c420721731e8b7a18c2ec1707dd1` (2026-09-16; the
    deterministic H3 suites re-passed on this tree — hardening 12/12,
    Alt-Svc discovery 17/17, interop controls 20/20); the current evidence ledger is
    `plans/http3-independent-interop-and-impairment-qualification-evidence.json`;

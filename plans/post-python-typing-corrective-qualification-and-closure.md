@@ -1,6 +1,6 @@
 # Post-Python Typing Corrective Qualification and Closure
 
-Status: **blocked on `python-pep561-method-contract-corrective-pass.md`**
+Status: **complete; qualified and closed**
 Date: 2026-09-15
 Parent corrective plan: `python-pep561-method-contract-corrective-pass.md`
 Prior qualified executable/package SHA: `2281345f3eaf636c62ec21d2c963d6f90ea764a8`
@@ -10,6 +10,45 @@ Prior qualified executable/package SHA: `2281345f3eaf636c62ec21d2c963d6f90ea764a
 Close the narrow PEP 561 method-contract correction on one exact candidate SHA, renew qualification evidence invalidated by the typing/package/test changes, and prove that the stronger runtime↔stub contract is actually enforced from both source and installed wheels.
 
 This closure is intentionally smaller than the preceding Python interop/API-hygiene program. It must not reopen already-qualified runtime architecture unless the corrective implementation discovers a real runtime defect.
+
+## Final closure record — 2026-09-16
+
+The corrective implementation froze at
+`c28bbcad6bf9c420721731e8b7a18c2ec1707dd1` (parent `1bc90362`). The final
+qualification tree is that same executable commit; profile, ledger, plan, and
+documentation updates are a documentation-only descendant. The change was
+limited to native PEP 561 stubs, the reviewed member-contract manifest,
+typing/runtime-oracle scripts, no-network consumer fixtures, and
+documentation. No Rust executable source, `pyproject.toml`, maturin
+configuration, package-content logic, Cargo.lock, dependency, or
+compatibility-facade behavior changed.
+
+The source and installed-wheel checks passed with 66 runtime exports, 32
+exception bases, and 24 reviewed member contracts. Synthetic regression tests
+covered missing methods/properties, sync/async kind drift, signature drift,
+semantic return drift, and unreviewed public stub members. Positive and
+expected-negative typing fixtures passed; the release-style wheel contained
+`py.typed` and both public stubs, and package-content/version validation
+passed. Runtime spot checks confirmed existing stream, lifecycle,
+verify-boundary, and context-manager behavior; this was a stub/checker
+correction only.
+
+Tier 1, extended, and package gates passed. Extended/package retained only
+the existing local skips for the unbuilt Node JS artifact and absent
+downstream artifact manifest. The Rust 1.89.0 MSRV gate passed. Because no
+PyO3 Rust source, packaging configuration, or platform-sensitive behavior
+changed, prior Python 3.10–3.14 cross-platform wheel evidence remains
+applicable; no Python 3.15, abi3, or free-threaded claim is made.
+
+The HTTPX 0.28.1 oracle passed with 71 allowed matches, zero stale allowed,
+zero unexplained, and zero resolved-in-active entries. The HTTPX2 2.12.0
+oracle passed with 79 allowed matches and the same zero counts. Three
+consecutive exact-SHA full pinned compatibility runs each passed 1,870 tests
+with 26 existing non-failing warnings, in 246.45s, 243.57s, and 244.52s.
+No files or dependencies changed between runs, and no new allowed difference
+or compatibility-facade behavior change was introduced. Both profiles and the
+live ledger now bind to the final SHA; the previous `2281345f...` binding is
+historical.
 
 ## Entry Criteria
 
@@ -206,40 +245,40 @@ Update the original `python-pep561-typing-surface.md` only with a short historic
 
 ### Stub/runtime contract
 
-- [ ] every confirmed method/property/type mismatch is corrected;
-- [ ] all supported native class members have an explicit typing decision;
-- [ ] method/property drift is mechanically checked;
-- [ ] sync/async member classification is checked where reliable;
-- [ ] reviewed semantic return types are checked;
-- [ ] unsupported input forms are not widened in stubs;
-- [ ] `AsyncClient` constructor is explicitly typed.
+- [x] every confirmed method/property/type mismatch is corrected;
+- [x] all supported native class members have an explicit typing decision;
+- [x] method/property drift is mechanically checked;
+- [x] sync/async member classification is checked where reliable;
+- [x] reviewed semantic return types are checked;
+- [x] unsupported input forms are not widened in stubs;
+- [x] `AsyncClient` constructor is explicitly typed.
 
 ### Typing behavior
 
-- [ ] corrected positive consumer fixtures pass;
-- [ ] expected-negative consumer fixtures fail for the intended reason;
-- [ ] source-tree typing gate passes;
-- [ ] installed-wheel typing gate passes;
-- [ ] `py.typed` and stubs are present in the wheel.
+- [x] corrected positive consumer fixtures pass;
+- [x] expected-negative consumer fixtures fail for the intended reason;
+- [x] source-tree typing gate passes;
+- [x] installed-wheel typing gate passes;
+- [x] `py.typed` and stubs are present in the wheel.
 
 ### Runtime/package safety
 
-- [ ] focused runtime semantics tests pass;
-- [ ] installed runtime version still equals distribution metadata;
-- [ ] no unintended native Python API behavior change is introduced;
-- [ ] no unintended dependency/MSRV/platform change is introduced;
-- [ ] Rust 1.89.0 MSRV remains green.
+- [x] focused runtime semantics tests pass;
+- [x] installed runtime version still equals distribution metadata;
+- [x] no unintended native Python API behavior change is introduced;
+- [x] no unintended dependency/MSRV/platform change is introduced;
+- [x] Rust 1.89.0 MSRV remains green.
 
 ### Repository/compatibility
 
-- [ ] Tier 1 passes;
-- [ ] Tier 2 passes;
-- [ ] package validation passes;
-- [ ] HTTPX 0.28.1 API oracle passes;
-- [ ] HTTPX2 2.12.0 API oracle passes;
-- [ ] current Stage C exact-SHA compatibility procedure passes;
-- [ ] both compatibility profiles and live ledger bind to the new candidate when required by policy;
-- [ ] any post-freeze descendant is documentation/profile/ledger-only.
+- [x] Tier 1 passes;
+- [x] Tier 2 passes;
+- [x] package validation passes;
+- [x] HTTPX 0.28.1 API oracle passes;
+- [x] HTTPX2 2.12.0 API oracle passes;
+- [x] current Stage C exact-SHA compatibility procedure passes;
+- [x] both compatibility profiles and live ledger bind to the new candidate when required by policy;
+- [x] any post-freeze descendant is documentation/profile/ledger-only.
 
 ## Final Outcome Required
 

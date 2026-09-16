@@ -5,7 +5,7 @@ claims refer specifically to the pinned 0.28.1 asyncio-supported facade
 (`eggfetch.compat.httpx`), not all HTTPX transports or concurrency backends.
 HTTPX2 claims refer specifically to the sibling 2.12.0 facade
 (`eggfetch.compat.httpx2`, Stage C qualified on frozen executable SHA
-`2281345f3eaf636c62ec21d2c963d6f90ea764a8`, profile in
+`c28bbcad6bf9c420721731e8b7a18c2ec1707dd1`, profile in
 `compat/httpx2/2.12.0/profile.toml`);
 the two contracts are independent and never collapsed into one "HTTPX parity"
 claim. HTTPX 1.0 pre-releases are preview-only (`compat/httpx/1.0-preview/`)
