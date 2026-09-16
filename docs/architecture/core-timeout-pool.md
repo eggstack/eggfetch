@@ -121,6 +121,35 @@ This distinction is intentional: use `PoolConfig` for logical work and
 `PhysicalConnectionPolicy` for an independent live-connection cap. Existing
 `PoolConfig.max_connections` semantics are unchanged.
 
+### Hyper Idle-Pool Policy
+
+The physical idle policy is resolved once from `PoolConfig` and applied
+uniformly to every persistent H1/H2 Hyper client family (standard, direct,
+UDS, custom dialer, resolved-target, SNI, custom-SNI, SOCKS, HTTP
+forward-proxy, and HTTPS CONNECT):
+
+- `idle_timeout` (`Limits::keepalive_expiry`) — how long an idle connection
+  is retained. When set, the shared Hyper builder policy also installs a
+  `hyper_util::rt::TokioTimer`, which hyper-util requires for idle eviction
+  to run in the background (the builder defaults to no timer). Without the
+  timer an expired connection would linger until the next checkout happened
+  to discard it; with it, idle sockets are closed proactively. `Timeout.pool`
+  and `Timeout.total` remain acquisition/outer budgets and are never reused
+  as idle policy.
+- Effective per-host idle cap —
+  `max_idle_connections_per_host.or(max_idle_connections)` (see
+  `PoolConfig::effective_max_idle_per_host` / `Pool::max_idle_per_host`) —
+  passed as Hyper's per-host idle limit. There is no global idle-connection
+  cap: Hyper only supports per-host capping. A zero cap disables idle
+  retention for that client. The cap needs no timer; Hyper enforces it
+  synchronously when a connection goes idle.
+
+Isolated one-shot clients (resolved target) receive the same values for
+consistency even though they are not retained. The forward-proxy route keeps
+its documented H1-only framing exception; H2-only selection and
+canceled-request retry policy are unchanged. H3/QUIC idle policy stays with
+the H3 connector and never takes the Hyper timer.
+
 ### Semaphore-Based Concurrency
 
 The pool uses tokio semaphores to limit concurrent in-flight requests:

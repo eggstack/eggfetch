@@ -20,18 +20,13 @@
 //!   custom-SNI, SOCKS, forward-proxy, and CONNECT route caches, with
 //!   route-specific capacities ([`SNI_CLIENT_CACHE_MAX_ENTRIES`] and friends).
 //!
-//! Baseline note: the corrective/invariant predecessors (proxy TLS cache
-//! identity, Hyper idle-pool timer propagation, route-cache invariant tests)
-//! have not landed yet, so this module centralizes current behavior exactly
-//! as-is. It must not be read as the corrected policy:
-//!
-//! - no Hyper pool timer is installed here (the pending idle-pool corrective
-//!   owns `pool_timer` installation in [`HyperClientPolicy::apply`]);
-//! - SOCKS route clients receive no Hyper idle timeout/cap (call sites pass
-//!   `None`; the pending corrective owns propagation);
-//! - proxy TLS compatibility identity is untouched.
-//!
-//! Centralizing first means those corrections later land in one place.
+//! Idle-pool contract: the resolved idle timeout and effective per-host idle
+//! cap (see `Pool::idle_timeout` / `Pool::max_idle_per_host`) apply uniformly
+//! to every persistent Hyper client family. When an idle timeout is
+//! configured, [`HyperClientPolicy::apply`] also installs a Hyper pool timer
+//! (`hyper_util::rt::TokioTimer`), which hyper-util requires for idle eviction
+//! to run; without it, expiry is only observed lazily at checkout. H3/QUIC
+//! idle policy remains owned by the H3 connector and never takes this timer.
 //!
 //! Locking contract: route caches are held behind an async mutex while the
 //! configured client is built. Connector construction (`new`/`with_*`) and
@@ -109,21 +104,23 @@ impl HyperClientPolicy {
     }
 
     /// Policy for bounded route caches and isolated route clients (resolved
-    /// target, SNI, custom-SNI, CONNECT): shared idle timeout, no per-host
-    /// idle cap.
+    /// target, SNI, custom-SNI, SOCKS, CONNECT): shared idle timeout plus the
+    /// effective per-host idle cap resolved from `Pool`.
     ///
-    /// SOCKS call sites pass `None` for `idle_timeout` to preserve current
-    /// behavior (SOCKS pools receive no Hyper idle tuning today); the pending
-    /// idle-pool corrective owns that propagation.
+    /// Isolated one-shot clients (resolved target) are not retained, so the
+    /// cap is less material there, but it is still applied for consistency:
+    /// no route silently omits configured policy merely because it owns a
+    /// custom connector.
     pub(crate) fn cached_route(
         retry_canceled_requests: bool,
         idle_timeout: Option<Duration>,
+        max_idle_per_host: Option<usize>,
         enabler: HttpVersionPolicyEnabler,
     ) -> Self {
         Self {
             retry_canceled_requests,
             idle_timeout,
-            max_idle_per_host: None,
+            max_idle_per_host,
             http2_only: Self::http2_only(enabler),
         }
     }
@@ -132,22 +129,33 @@ impl HyperClientPolicy {
     ///
     /// The proxy leg uses H1 absolute-form framing owned by Hyper, so
     /// `http2_only` is never set even under an H2-only client policy. This is
-    /// an intentional route exception, not an oversight.
+    /// an intentional route exception, not an oversight. Idle timeout and
+    /// per-host cap match every other persistent Hyper family.
     #[cfg(feature = "proxy")]
     pub(crate) fn forward_route(
         retry_canceled_requests: bool,
         idle_timeout: Option<Duration>,
+        max_idle_per_host: Option<usize>,
     ) -> Self {
         Self {
             retry_canceled_requests,
             idle_timeout,
-            max_idle_per_host: None,
+            max_idle_per_host,
             http2_only: false,
         }
     }
 
     /// Apply the shared knobs to a legacy Hyper builder. Only configured
     /// values are set so Hyper defaults apply otherwise.
+    ///
+    /// When an idle timeout is configured, a Tokio pool timer is installed
+    /// first: hyper-util requires a timer for idle eviction to run in the
+    /// background (`Builder::pool_timer`; the builder defaults to no timer).
+    /// Without it, an expired idle connection would linger until the next
+    /// checkout happened to discard it. A per-host idle cap needs no timer;
+    /// Hyper enforces it synchronously when a connection goes idle. H3/QUIC
+    /// never flows through this path; its idle policy stays with the H3
+    /// connector.
     ///
     /// When HTTP/1 is disabled and HTTP/2 is enabled, the legacy client is
     /// marked HTTP/2-only. This is what enforces the protocol contract:
@@ -164,6 +172,7 @@ impl HyperClientPolicy {
         #[cfg(not(feature = "http2"))]
         let _ = self.http2_only;
         if let Some(idle_timeout) = self.idle_timeout {
+            builder.pool_timer(hyper_util::rt::TokioTimer::new());
             builder.pool_idle_timeout(idle_timeout);
         }
         if let Some(max_idle_per_host) = self.max_idle_per_host {
@@ -317,11 +326,11 @@ mod tests {
             HttpVersionPolicyEnabler::from_policy(HttpVersionPolicy::Auto { allow_http3: false });
         let h1_only = HttpVersionPolicyEnabler::from_policy(HttpVersionPolicy::Http1Only);
         #[cfg(feature = "http2")]
-        assert!(HyperClientPolicy::cached_route(true, None, h2_only).http2_only);
+        assert!(HyperClientPolicy::cached_route(true, None, None, h2_only).http2_only);
         #[cfg(not(feature = "http2"))]
-        assert!(!HyperClientPolicy::cached_route(true, None, h2_only).http2_only);
-        assert!(!HyperClientPolicy::cached_route(true, None, auto).http2_only);
-        assert!(!HyperClientPolicy::cached_route(true, None, h1_only).http2_only);
+        assert!(!HyperClientPolicy::cached_route(true, None, None, h2_only).http2_only);
+        assert!(!HyperClientPolicy::cached_route(true, None, None, auto).http2_only);
+        assert!(!HyperClientPolicy::cached_route(true, None, None, h1_only).http2_only);
     }
 
     #[test]
@@ -330,6 +339,50 @@ mod tests {
         // The forward constructor takes no version policy at all: the proxy
         // leg is H1 absolute-form regardless of client configuration.
         let _ = h2_only;
-        assert!(!HyperClientPolicy::forward_route(true, None).http2_only);
+        assert!(!HyperClientPolicy::forward_route(true, None, None).http2_only);
+    }
+
+    #[test]
+    fn cached_route_carries_resolved_idle_policy() {
+        use std::time::Duration;
+
+        let enabler =
+            HttpVersionPolicyEnabler::from_policy(HttpVersionPolicy::Auto { allow_http3: false });
+        // The constructors SOCKS, SNI, CONNECT, and resolved-target routes
+        // share must carry the same resolved timeout and effective per-host
+        // cap as the persistent singletons: no route silently omits policy
+        // merely because it owns a custom connector.
+        let policy = HyperClientPolicy::cached_route(
+            true,
+            Some(Duration::from_millis(100)),
+            Some(3),
+            enabler,
+        );
+        assert_eq!(policy.idle_timeout, Some(Duration::from_millis(100)));
+        assert_eq!(policy.max_idle_per_host, Some(3));
+    }
+
+    #[test]
+    fn forward_route_carries_resolved_idle_policy() {
+        use std::time::Duration;
+
+        let policy =
+            HyperClientPolicy::forward_route(true, Some(Duration::from_millis(100)), Some(3));
+        assert_eq!(policy.idle_timeout, Some(Duration::from_millis(100)));
+        assert_eq!(policy.max_idle_per_host, Some(3));
+        assert!(!policy.http2_only);
+    }
+
+    #[test]
+    fn persistent_and_cached_routes_agree_on_resolved_values() {
+        use std::time::Duration;
+
+        let enabler =
+            HttpVersionPolicyEnabler::from_policy(HttpVersionPolicy::Auto { allow_http3: false });
+        let timeout = Some(Duration::from_secs(5));
+        let persistent = HyperClientPolicy::persistent(true, timeout, Some(20), enabler);
+        let cached = HyperClientPolicy::cached_route(true, timeout, Some(20), enabler);
+        assert_eq!(persistent.idle_timeout, cached.idle_timeout);
+        assert_eq!(persistent.max_idle_per_host, cached.max_idle_per_host);
     }
 }

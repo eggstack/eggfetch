@@ -54,8 +54,16 @@ pub struct Limits {
     pub max_idle_connections: Option<usize>,
     /// Maximum number of idle connections per host (physical).
     /// Maps to hyper's pool per-host idle limit.
+    ///
+    /// Together with [`Self::max_idle_connections`] this resolves to one
+    /// effective per-host cap
+    /// (`max_idle_connections_per_host.or(max_idle_connections)`) shared by
+    /// every persistent Hyper client family.
     pub max_idle_connections_per_host: Option<usize>,
     /// Duration after which idle connections are closed (physical).
+    ///
+    /// When set, every persistent Hyper client also receives the pool timer
+    /// Hyper requires for background idle eviction.
     pub keepalive_expiry: Option<Duration>,
 }
 

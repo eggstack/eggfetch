@@ -165,7 +165,9 @@ native JSON helpers are opt-in and must remain absent from minimal profiles.
   crate or adopt `hyper-util::client::pool` for this (qualified and rejected:
   unkeyed/unbounded/unnameable primitives). Keep capacities explicit,
   immutable-client policy out of keys, and construction under the cache lock
-  free of network I/O.
+  free of network I/O. Every persistent Hyper family shares the resolved
+  idle timeout (with the Hyper pool timer the timeout requires) and the
+  effective per-host idle cap from `Pool`; forward stays H1-only.
 - Limits: `max_in_flight_requests*` preferred (logical); `max_connections*`
   are pre-1.0 aliases (new wins). Facade `Limits` unchanged.
 - Trace: request/response headers emitted; DNS/connect/TLS via metrics

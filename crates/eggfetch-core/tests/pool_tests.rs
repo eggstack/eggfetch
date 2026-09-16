@@ -251,6 +251,73 @@ fn test_idle_timeout_config() {
         .build();
 }
 
+/// A configured idle timeout does not prevent connection reuse while the
+/// connection is still fresh (control case for the eviction tests below).
+#[tokio::test]
+async fn test_idle_timeout_allows_reuse_within_timeout() {
+    let mut server = TestServer::start(&TestServerConfig::default());
+    let url = server.url();
+
+    let client = Client::builder()
+        .idle_timeout(Duration::from_secs(30))
+        .build();
+
+    for _ in 0..3 {
+        let resp = client.get(&url).unwrap().send().await.unwrap();
+        assert!(resp.is_success());
+    }
+
+    // All three rapid sequential requests must share pooled connections:
+    // without reuse this would be 3 accepted connections.
+    assert!(
+        server.connections_accepted() <= 2,
+        "expected connection reuse within the idle timeout, got {} accepted",
+        server.connections_accepted()
+    );
+
+    server.shutdown();
+}
+
+/// The Hyper pool timer evicts idle connections in the background, without
+/// waiting for the next checkout.
+///
+/// `pool_idle_timeout` alone only discards expired entries lazily when the
+/// next request checks one out; the installed `pool_timer` is what closes an
+/// idle socket proactively. This test issues a single request and then polls
+/// the server-side open-connection gauge: it must drop to zero with no
+/// second request involved.
+#[tokio::test]
+async fn test_idle_timer_evicts_connection_in_background() {
+    let mut server = TestServer::start(&TestServerConfig::default());
+    let url = server.url();
+
+    let client = Client::builder()
+        .idle_timeout(Duration::from_millis(100))
+        .build();
+
+    let resp = client.get(&url).unwrap().send().await.unwrap();
+    assert!(resp.is_success());
+    drop(resp);
+    assert_eq!(server.connections_accepted(), 1);
+    assert_eq!(server.open_connections(), 1);
+
+    // Hyper clamps its proactive idle check to at least ~90 ms, so poll
+    // with a generous deadline rather than asserting an exact schedule.
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    loop {
+        if server.open_connections() == 0 {
+            break;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "idle connection was not evicted in the background; still open"
+        );
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+
+    server.shutdown();
+}
+
 /// Multiple sequential requests to the same server reuse connections.
 #[tokio::test]
 async fn test_connection_reuse_same_host() {
@@ -499,6 +566,103 @@ async fn test_idle_timeout_closes_stale_connection() {
         server.connections_accepted()
     );
 
+    server.shutdown();
+}
+
+/// A cached route-specific client (SNI override) obeys the same idle policy
+/// as the standard path.
+///
+/// The SNI route previously received the idle timeout but no per-host cap;
+/// both now resolve from the same `Pool` helpers. Two SNI requests separated
+/// by more than the idle timeout must open a second server-side connection
+/// while still succeeding through the one cached route client.
+#[tokio::test]
+async fn test_sni_cached_client_obeys_idle_policy() {
+    use eggfetch_core::TransportHints;
+
+    let mut server = TestServer::start(&TestServerConfig::default());
+    let url = server.url();
+
+    let client = Client::builder()
+        .idle_timeout(Duration::from_millis(100))
+        .build();
+
+    let sni_hints = || TransportHints {
+        sni_hostname: Some("sni-idle.test".to_owned()),
+        ..Default::default()
+    };
+
+    let resp = client
+        .get(&url)
+        .unwrap()
+        .transport_hints(sni_hints())
+        .send()
+        .await
+        .unwrap();
+    assert!(resp.is_success());
+    drop(resp);
+    assert_eq!(server.connections_accepted(), 1);
+
+    // Materially beyond the configured idle timeout (Hyper clamps its
+    // proactive check to ~90 ms, so 300 ms leaves generous margin).
+    tokio::time::sleep(Duration::from_millis(300)).await;
+
+    let resp = client
+        .get(&url)
+        .unwrap()
+        .transport_hints(sni_hints())
+        .send()
+        .await
+        .unwrap();
+    assert!(resp.is_success());
+    assert!(
+        server.connections_accepted() >= 2,
+        "expected the SNI route to reconnect after idle timeout, got {}",
+        server.connections_accepted()
+    );
+
+    server.shutdown();
+}
+
+/// The effective per-host idle cap reaches Hyper: a zero cap disables idle
+/// retention, so sequential requests each open a fresh connection.
+///
+/// Both the per-host name and its `max_idle_connections` fallback feed the
+/// same resolved policy (`Pool::max_idle_per_host`), so both spellings are
+/// exercised at the wire level; precedence itself is pinned by unit tests in
+/// `src/pool.rs`.
+#[tokio::test]
+async fn test_idle_per_host_cap_zero_disables_reuse() {
+    let mut server = TestServer::start(&TestServerConfig::default());
+    let url = server.url();
+
+    let client = Client::builder().max_idle_connections_per_host(0).build();
+    for _ in 0..3 {
+        let resp = client.get(&url).unwrap().send().await.unwrap();
+        assert!(resp.is_success());
+    }
+    assert_eq!(
+        server.connections_accepted(),
+        3,
+        "zero per-host idle cap must prevent reuse, got {}",
+        server.connections_accepted()
+    );
+    server.shutdown();
+
+    let mut server = TestServer::start(&TestServerConfig::default());
+    let url = server.url();
+
+    let client = Client::builder().max_idle_connections(0).build();
+    for _ in 0..2 {
+        let resp = client.get(&url).unwrap().send().await.unwrap();
+        assert!(resp.is_success());
+    }
+    assert_eq!(
+        server.connections_accepted(),
+        2,
+        "zero fallback idle cap must prevent reuse, got {}",
+        server.connections_accepted()
+    );
     server.shutdown();
 }
 

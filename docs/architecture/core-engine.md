@@ -293,8 +293,11 @@ module rather than repeating builder/lifecycle/cache plumbing per route:
   singletons (standard, direct, UDS, custom dialer) use `persistent()`;
   cached/isolated routes use `cached_route()`; the forward-proxy cache uses
   `forward_route()`, which never sets `http2_only` because the proxy leg is
-  H1 absolute-form framing. SOCKS call sites pass no idle tuning, preserving
-  current behavior until the idle-pool corrective lands.
+  H1 absolute-form framing. Every persistent family receives the same
+  resolved idle timeout and effective per-host cap from `Pool`; when a
+  timeout is configured the policy also installs the Hyper pool timer the
+  timeout requires for background eviction (see
+  [core-timeout-pool.md](core-timeout-pool.md)).
 - `build_hyper_client()` wraps each route connector as `route connector ->
   ConnectTimeout -> LifecycleConnector` and builds the legacy client with a
   Tokio executor. Concrete monomorphized connector types are kept; no boxed

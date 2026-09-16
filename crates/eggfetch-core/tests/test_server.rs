@@ -79,6 +79,15 @@ pub struct TestServer {
     connections_accepted: Arc<AtomicUsize>,
     #[allow(dead_code)]
     requests_served: Arc<AtomicUsize>,
+    /// Currently open TCP connections (accepted minus closed).
+    ///
+    /// Incremented on accept and decremented when the per-connection handler
+    /// exits. Used by idle-eviction tests to observe background pool expiry
+    /// without issuing a second request: when Hyper's idle timer evicts a
+    /// pooled connection it closes the socket, which the handler observes
+    /// as EOF and exits.
+    #[allow(dead_code)]
+    open_connections: Arc<AtomicUsize>,
     shutdown: Arc<AtomicBool>,
     handle: Option<JoinHandle<()>>,
 }
@@ -101,10 +110,12 @@ impl TestServer {
         let port = listener.local_addr().unwrap().port();
         let connections_accepted = Arc::new(AtomicUsize::new(0));
         let requests_served = Arc::new(AtomicUsize::new(0));
+        let open_connections = Arc::new(AtomicUsize::new(0));
         let shutdown = Arc::new(AtomicBool::new(false));
 
         let ca = connections_accepted.clone();
         let rs = requests_served.clone();
+        let oc = open_connections.clone();
         let sd = shutdown.clone();
         let close = config.close_connection;
         let delay = config.response_delay_ms;
@@ -120,7 +131,9 @@ impl TestServer {
             while !sd.load(Ordering::Relaxed) {
                 if let Ok((stream, _)) = listener.accept() {
                     ca.fetch_add(1, Ordering::SeqCst);
+                    oc.fetch_add(1, Ordering::SeqCst);
                     let rs = rs.clone();
+                    let oc = oc.clone();
                     let conn_config = ConnectionConfig {
                         close_connection: close,
                         response_delay_ms: delay,
@@ -138,6 +151,7 @@ impl TestServer {
                             chunk_stall_ms,
                             &rs,
                         );
+                        oc.fetch_sub(1, Ordering::SeqCst);
                     });
                 } else if sd.load(Ordering::Relaxed) {
                     break;
@@ -151,6 +165,7 @@ impl TestServer {
             port,
             connections_accepted,
             requests_served,
+            open_connections,
             shutdown,
             handle: Some(handle),
         }
@@ -181,6 +196,13 @@ impl TestServer {
     #[must_use]
     pub fn requests_served(&self) -> usize {
         self.requests_served.load(Ordering::SeqCst)
+    }
+
+    /// Returns the number of currently open TCP connections.
+    #[allow(dead_code)]
+    #[must_use]
+    pub fn open_connections(&self) -> usize {
+        self.open_connections.load(Ordering::SeqCst)
     }
 
     /// Shut down the server and wait for the accept loop to exit.

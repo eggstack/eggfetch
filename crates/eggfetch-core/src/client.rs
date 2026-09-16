@@ -200,8 +200,8 @@ pub(crate) struct ClientInner {
     ///
     /// Bounded like [`ClientInner::sni_clients`] via the shared
     /// [`BoundedClientCache`] mechanics (see `transport::hyper_client`).
-    /// SOCKS clients intentionally receive no Hyper idle-pool tuning today;
-    /// the pending idle-pool corrective owns that propagation.
+    /// SOCKS route clients share the resolved Hyper idle-pool policy with
+    /// every other persistent Hyper family.
     #[cfg(feature = "proxy")]
     pub(crate) socks_clients: Mutex<
         BoundedClientCache<
@@ -310,6 +310,7 @@ impl ClientInner {
         let policy = HyperClientPolicy::cached_route(
             self.config.retry_canceled_requests,
             self.pool.idle_timeout(),
+            self.pool.max_idle_per_host(),
             crate::http_version::HttpVersionPolicyEnabler::from_policy(
                 self.config.http_version_policy,
             ),
@@ -370,10 +371,12 @@ impl ClientInner {
         // Idle-connection lifetime comes from the pool configuration
         // (`Limits::keepalive_expiry`), matching the standard, direct,
         // and UDS paths. `Timeout.pool`/`total` are acquisition budgets
-        // and must not close idle connections early.
+        // and must not close idle connections early. The effective
+        // per-host idle cap is shared as well; see `Pool::max_idle_per_host`.
         let policy = HyperClientPolicy::cached_route(
             self.config.retry_canceled_requests,
             self.pool.idle_timeout(),
+            self.pool.max_idle_per_host(),
             enabler,
         );
         let client = build_hyper_client(sni_connector, &policy, connect_timeout, &self.lifecycle);
@@ -417,6 +420,7 @@ impl ClientInner {
         let policy = HyperClientPolicy::cached_route(
             self.config.retry_canceled_requests,
             self.pool.idle_timeout(),
+            self.pool.max_idle_per_host(),
             crate::http_version::HttpVersionPolicyEnabler::from_policy(
                 self.config.http_version_policy,
             ),
@@ -468,10 +472,16 @@ impl ClientInner {
             None,
             target,
         );
-        // SOCKS pools receive no Hyper idle tuning today; the pending
-        // idle-pool corrective owns that propagation.
-        let policy =
-            HyperClientPolicy::cached_route(self.config.retry_canceled_requests, None, enabler);
+        // SOCKS route clients share the resolved Hyper idle-pool policy
+        // (timeout plus effective per-host cap) with every other persistent
+        // Hyper family. `HyperClientPolicy::apply` installs the pool timer
+        // the timeout requires.
+        let policy = HyperClientPolicy::cached_route(
+            self.config.retry_canceled_requests,
+            self.pool.idle_timeout(),
+            self.pool.max_idle_per_host(),
+            enabler,
+        );
         let client = build_hyper_client(
             connector,
             &policy,
@@ -518,6 +528,7 @@ impl ClientInner {
         let policy = HyperClientPolicy::forward_route(
             self.config.retry_canceled_requests,
             self.pool.idle_timeout(),
+            self.pool.max_idle_per_host(),
         );
         let client = build_hyper_client(connector, &policy, connect_timeout, &self.lifecycle);
         clients.insert(key, client.clone());
@@ -565,6 +576,7 @@ impl ClientInner {
         let policy = HyperClientPolicy::cached_route(
             self.config.retry_canceled_requests,
             self.pool.idle_timeout(),
+            self.pool.max_idle_per_host(),
             crate::http_version::HttpVersionPolicyEnabler::from_policy(
                 self.config.http_version_policy,
             ),
@@ -1335,9 +1347,7 @@ impl ClientBuilder {
         let persistent_policy = HyperClientPolicy::persistent(
             self.retry_canceled_requests,
             pool_config.idle_timeout,
-            pool_config
-                .max_idle_connections_per_host
-                .or(pool_config.max_idle_connections),
+            pool_config.effective_max_idle_per_host(),
             enabler,
         );
 

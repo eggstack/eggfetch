@@ -68,6 +68,8 @@ The `idle_timeout` configuration controls how long an idle connection remains in
 
 These settings control hyper's internal connection pool, not eggfetch's concurrency semaphores. eggfetch delegates connection lifecycle management to hyper.
 
+The idle policy is resolved once (`max_idle_connections_per_host.or(max_idle_connections)` plus `idle_timeout`) and applied uniformly to every persistent Hyper client family — standard, direct, UDS, custom dialer, SNI, SOCKS, forward-proxy, and CONNECT. When an idle timeout is set, eggfetch also installs the Hyper pool timer the timeout requires for background eviction; there is no global idle-connection cap because Hyper only supports per-host capping.
+
 Native Rust callers can additionally set `PhysicalConnectionPolicy` to cap
 live established Hyper connections. That cap is independent of logical
 in-flight limits and includes idle pooled connections; HTTP/2 streams sharing

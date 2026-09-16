@@ -139,7 +139,10 @@ pub struct PoolConfig {
     pub max_in_flight_requests_per_origin: Option<usize>,
     /// Duration after which an idle connection is closed.
     ///
-    /// Physical idle lifetime, not a concurrency bound.
+    /// Physical idle lifetime, not a concurrency bound. When set, every
+    /// persistent Hyper client also receives the pool timer Hyper requires
+    /// for background idle eviction; `Timeout.pool`/`total` are never reused
+    /// for this. See `HyperClientPolicy` and `Pool::max_idle_per_host`.
     pub idle_timeout: Option<std::time::Duration>,
 }
 
@@ -155,6 +158,19 @@ impl PoolConfig {
     pub(crate) fn effective_max_in_flight_per_origin(&self) -> Option<usize> {
         self.max_in_flight_requests_per_origin
             .or(self.max_connections_per_host)
+    }
+
+    /// Effective Hyper per-host idle-connection cap.
+    ///
+    /// Single crate-private source for the physical idle-pool cap passed to
+    /// every persistent Hyper client. Precedence is
+    /// `max_idle_connections_per_host.or(max_idle_connections)`, matching the
+    /// long-standing `ClientBuilder::build` behavior; `None` leaves Hyper's
+    /// default (unbounded) in place.
+    #[must_use]
+    pub(crate) fn effective_max_idle_per_host(&self) -> Option<usize> {
+        self.max_idle_connections_per_host
+            .or(self.max_idle_connections)
     }
 }
 
@@ -518,6 +534,17 @@ impl Pool {
         self.inner.config.idle_timeout
     }
 
+    /// Returns the effective Hyper per-host idle-connection cap, if any.
+    ///
+    /// Resolved once from [`PoolConfig::effective_max_idle_per_host`] so
+    /// every persistent Hyper client family shares the same value. See the
+    /// `PoolConfig` physical-vs-logical docs: this is idle-pool policy, not
+    /// logical concurrency.
+    #[must_use]
+    pub(crate) fn max_idle_per_host(&self) -> Option<usize> {
+        self.inner.config.effective_max_idle_per_host()
+    }
+
     /// Acquire a pool slot for the given origin.
     ///
     /// If a global and per-origin limit are configured, the global permit is
@@ -680,6 +707,36 @@ mod tests {
         };
         assert_eq!(config.effective_max_in_flight(), Some(10));
         assert_eq!(config.effective_max_in_flight_per_origin(), Some(5));
+    }
+
+    #[test]
+    fn effective_idle_cap_prefers_per_host() {
+        let config = PoolConfig {
+            max_idle_connections: Some(20),
+            max_idle_connections_per_host: Some(7),
+            ..PoolConfig::default()
+        };
+        assert_eq!(config.effective_max_idle_per_host(), Some(7));
+        let pool = Pool::new(config);
+        assert_eq!(pool.max_idle_per_host(), Some(7));
+    }
+
+    #[test]
+    fn effective_idle_cap_falls_back_to_global() {
+        let config = PoolConfig {
+            max_idle_connections: Some(20),
+            ..PoolConfig::default()
+        };
+        assert_eq!(config.effective_max_idle_per_host(), Some(20));
+        let pool = Pool::new(config);
+        assert_eq!(pool.max_idle_per_host(), Some(20));
+    }
+
+    #[test]
+    fn effective_idle_cap_absent_when_unset() {
+        let pool = Pool::new(PoolConfig::default());
+        assert_eq!(pool.max_idle_per_host(), None);
+        assert_eq!(pool.idle_timeout(), None);
     }
 
     #[tokio::test]
