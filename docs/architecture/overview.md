@@ -108,7 +108,7 @@ This `overview.md` is the entry point. For a focused review of any component, fo
 
 ### eggfetch-core (the engine)
 
-All HTTP behavior lives here (~29.7k lines across 28 source files plus `transport/`, `stream/`, and `pipeline/` trees). This is the single authority for networking — no other crate performs I/O.
+All HTTP behavior lives here (top-level modules plus `transport/`, `stream/`, and `pipeline/` trees). This is the single authority for networking — no other crate performs I/O.
 
 | Module | Public? | Purpose |
 |--------|---------|---------|
@@ -146,7 +146,7 @@ All HTTP behavior lives here (~29.7k lines across 28 source files plus `transpor
 
 ### eggfetch-cli (the CLI)
 
-Single source file (`main.rs`, ~1.8k lines). Thin binary over `eggfetch-core` (enables `cookies`, `multipart`, `proxy`; no compression decoders, no `http2`/`http3` — it never sends `Accept-Encoding`):
+Single source file (`main.rs`). Thin binary over `eggfetch-core` (enables `cookies`, `multipart`, `proxy`; no compression decoders, no `http2`/`http3` — it never sends `Accept-Encoding`):
 
 - **Argument parsing**: clap-based (`#[derive(Parser)]`), maps flags to `ClientBuilder`/`RequestBuilder` calls
 - **Body modes**: `--body`, `--body-file`, `--json`, `--form`, `--file @path`
@@ -161,7 +161,7 @@ Single source file (`main.rs`, ~1.8k lines). Thin binary over `eggfetch-core` (e
 
 ### eggfetch-python + compat facades (the Python bindings)
 
-19 Rust source modules via PyO3/maturin (~9.2k lines). Enables all core features including HTTP/2, HTTP/3, cookies, multipart, proxy, all compressions.
+Rust source modules via PyO3/maturin. Enables all core features including HTTP/2, HTTP/3, cookies, multipart, proxy, all compressions.
 
 | Module | Purpose |
 |--------|---------|
@@ -191,7 +191,7 @@ Python package surface (`python/eggfetch/__init__.py` + `compat/`): native `Clie
 
 ### eggfetch-ffi (the C ABI)
 
-10 source modules (~2.3k lines). Sole `unsafe_code = "allow"` crate alongside Node (required for FFI):
+Sole `unsafe_code = "allow"` crate alongside Node (required for FFI):
 
 | Module | Purpose |
 |--------|---------|
@@ -212,7 +212,7 @@ Thread safety: `ClientHandle` is `Send + Sync` (shared). `RequestHandle`, `Respo
 
 ### eggfetch-node (the Node.js prototype)
 
-3 source modules (~450 lines). Explicitly experimental prototype that wraps the blocking `eggfetch-ffi` surface inside `spawn_blocking` (string-only bodies, buffered responses, unstructured errors, stub declarations):
+Explicitly experimental prototype that wraps the blocking `eggfetch-ffi` surface inside `spawn_blocking` (string-only bodies, buffered responses, unstructured errors, stub declarations):
 
 | Module | Purpose |
 |--------|---------|
