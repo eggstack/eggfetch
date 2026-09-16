@@ -53,18 +53,18 @@ with no parity claim.
 | Unix domain sockets | No | Yes | Yes | N/A | Yes |
 | Local address binding | No | Yes | Yes | N/A | Yes |
 | Socket options | No | Yes | Yes | N/A | Yes |
-| Response decompression (gzip) | Yes | Yes | Yes | Yes | Yes |
-| Response decompression (brotli) | Yes | Yes | Yes | Yes | Yes |
-| Response decompression (zstd) | Yes | Yes | Yes | Yes | Yes |
-| Response decompression (deflate) | Yes | Yes | Yes | Yes | Yes |
+| Response decompression (gzip) | Yes | Yes | Yes | No (no decoders; `--no-compress` passes through) | Yes |
+| Response decompression (brotli) | Yes | Yes | Yes | No (no decoders; `--no-compress` passes through) | Yes |
+| Response decompression (zstd) | Yes | Yes | Yes | No (no decoders; `--no-compress` passes through) | Yes |
+| Response decompression (deflate) | Yes | Yes | Yes | No (no decoders; `--no-compress` passes through) | Yes |
 | Multipart file upload | Yes | Yes | Yes | Yes | Yes |
 | Timeouts (connect, read, write) | Partial | Yes | Yes | Yes | Yes |
 | Timeout (total wall-clock) | No | No | Yes (native `total`; facade maps 4 phases only) | Yes | Yes |
 | Timeout (pool wait) | No | Yes | Yes | Yes | Yes |
 | Retry policy | No | No | Yes | Yes | Yes |
 | Retry-After header | No | No | Yes | N/A | Yes |
-| HTTP/2 | No | Yes | Yes | Yes | Yes |
-| HTTP/3 (experimental) | No | No | Yes | Yes | Yes |
+| HTTP/2 | No | Yes | Yes | No (CLI builds without `http2`/`http3`) | Yes |
+| HTTP/3 (experimental) | No | No | Yes | No (CLI builds without `http2`/`http3`) | Yes |
 | Cross-origin credential stripping | Automatic (host change) | Automatic (cross-origin) | Automatic | Automatic | Automatic |
 | Proxy env vars (HTTP_PROXY) | Yes | Yes | Facade Yes (`trust_env=True`); native Python Yes by default (`trust_env=True`), Rust/CLI explicit-only | CLI explicit (`--proxy`/`EGGFETCH_PROXY` only) | Explicit-only |
 | Custom transports (sync/async) | No | Yes | Facade Yes (native: N/A) | N/A | N/A |

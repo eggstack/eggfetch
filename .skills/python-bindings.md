@@ -156,19 +156,13 @@ tests `test_httpx2_api_parity.py` + `test_httpx2_behavior.py` (core),
 - SOCKS5 proxy support with persistent per-route pools and NO_PROXY bypass
 - Typed difference records in the API oracle, lossless merge tests, behavioral downstream fixtures, native lifecycle proof fixtures
 
-**Differential closure / corrective passes (current state):**
-
-- Corrective passes 01–08, the post-audit maturation program, the next-scope,
-  H3 requalification, and embedded-engine requalification are complete; the
-  active Stage C SHA is recorded in both compatibility profiles and
-  `plans/httpx-parity-correction-status.md`. Executable or qualification-input
-  changes require a new exact-SHA qualification.
-- Closure evidence: typed difference records gated by `allowed-differences.toml`, lossless merge semantics (`crates/eggfetch-python/tests/compat/test_merge_lossless.py`), separate sync/async auth drivers, behavioral downstream fixtures (`compat/downstream/behavioral_fixtures/`), and native lifecycle proof fixtures (`test_native_timeout_classification.py`, `test_soak.py`, proxy and TLS tests).
-
-The facade qualification SHA is the exact executable freeze recorded in the
-live status ledger and compatibility profiles. Qualification-sensitive
-typing, validation, test, or packaging changes require a fresh exact-SHA
-closure before the Stage C claim is renewed. HTTP/3 remains separately
+**Qualification state (current):** both facades are Stage C qualified on the
+exact executable SHA recorded in the live ledger
+`plans/httpx-parity-correction-status.md` and both
+`compat/*/profile.toml` files. Executable or qualification-input changes
+require a new exact-SHA qualification; docs-only commits do not. Historical
+corrective-pass and phase plans remain in `plans/` as records only — do not
+treat their step lists as current gates. HTTP/3 remains separately
 experimental; that transport decision does not change the HTTPX parity claim.
 Key boundaries:
 

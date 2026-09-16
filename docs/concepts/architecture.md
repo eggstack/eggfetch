@@ -31,7 +31,7 @@ C ABI bindings exposing eggfetch-core over a stable C interface. Uses opaque han
 
 ### eggfetch-node
 
-Node.js N-API binding prototype. Wraps eggfetch-core via napi-rs. Also uses `unsafe_code = "allow"`.
+Node.js N-API binding prototype. Wraps the blocking `eggfetch-ffi` surface via napi-rs (`spawn_blocking`). Also uses `unsafe_code = "allow"`. Experimental only — not a supported binding.
 
 ### eggfetch-bench
 
@@ -75,6 +75,7 @@ eggfetch-core uses feature flags to keep the default build small. The Python cra
 | `http2` | HTTP/2 via ALPN negotiation |
 | `http3` | HTTP/3 over QUIC (experimental) |
 | `tls-rustls` | TLS via rustls (default) |
+| `tls-native-roots` | System trust-store loading (default; without it, packaged WebPKI roots only) |
 | `cookies` | RFC 6265 cookie jar |
 | `multipart` | Streaming multipart/form-data |
 | `proxy` | HTTP proxy and HTTPS CONNECT tunneling |

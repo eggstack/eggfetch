@@ -20,7 +20,8 @@ Use this skill when preparing or executing a release of eggfetch.
 
 crates.io index propagation requires verification between publishes. Do not encode fixed sleeps.
 
-`eggfetch-bench` and `eggfetch-fuzz` are never published (dev-only harnesses).
+`eggfetch-bench` is never published (dev-only harness). `fuzz/` is a
+separate cargo-fuzz workspace, not a publishable crate.
 
 ### PyPI (GitHub Actions, manual dispatch)
 

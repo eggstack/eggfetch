@@ -1,7 +1,7 @@
 # Agent Guide
 
 eggfetch is a Rust-native async HTTP client (tokio + hyper). All networking lives in `eggfetch-core`; CLI, Python, FFI, and Node are thin adapters.
-Start at `docs/architecture/overview.md` (§ Deep-Dive Index). Normative CI/release rules: `docs/verification-policy.md`. Task workflows: `.skills/`.
+Start at `docs/architecture/overview.md` (§ Deep-Dive Index). Normative CI/release rules: `docs/verification-policy.md`. Task workflows: `.skills/` (`rust-development`, `python-bindings`, `cli-development`, `ffi-development`, `fuzz-testing`, `security-review`, `release-process`, `documentation`).
 
 ## Commands
 
@@ -17,6 +17,8 @@ Start at `docs/architecture/overview.md` (§ Deep-Dive Index). Normative CI/rele
 - Focused equivalents (same flags `check.sh` uses):
   - `cargo test --workspace --exclude eggfetch-python --all-features -- --test-threads=1`
   - `cargo test -p eggfetch-core --all-features <filter> -- --test-threads=1`
+  - `python scripts/check_adapter_features.py` + `python scripts/test_validate_release_versions.py`
+  - `python scripts/check_native_python_api.py` + `python scripts/check_python_typing_surface.py` + `python scripts/check_python_typing.py`
   - `python -m pytest crates/eggfetch-python/tests/ -q --ignore=crates/eggfetch-python/tests/compat`
   - `EGGFETCH_COMPAT_REQUIRED=1 python -m pytest crates/eggfetch-python/tests/compat/ -v --strict-markers`
   - `cargo clippy --workspace --all-targets --all-features -- -D warnings`
