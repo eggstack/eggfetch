@@ -2,6 +2,50 @@
 
 This directory contains active implementation plans, live qualification/status records, and historical implementation records. Completed plans are non-normative unless another current document explicitly says otherwise. Verification and release policy remain governed by `docs/verification-policy.md` and `docs/releases/process.md`.
 
+## Active program — post-audit maintenance, security, and proxy modernization (2026-09-15)
+
+Handoff program: `post-audit-maintenance-security-and-proxy-modernization-program.md`
+
+Planning baseline: `025b1a5a6a94b017b3f3b183c3d562e7ee9bcca7`.
+
+This program follows the completed post-audit maturation, embedded-consumer,
+transport-extensibility, proxy-pinning, and Python interop lines. It does not
+reopen Node maturation or HTTP/3 graduation. The new source audit found a
+narrower set of ownership/maintenance defects: FFI feature leakage into core
+defaults, probable adapter dependency residue, duplicated Python
+request-to-core dispatch, stale security/release claims, and one-shot manual
+HTTP forward/CONNECT proxy paths that duplicate Hyper framing and cannot reuse
+connections.
+
+Execution order:
+
+1. `adapter-feature-and-dependency-boundary-correction.md` — make FFI/core
+   feature forwarding truthful, preserve explicit Node transport/TLS behavior,
+   audit Python TLS dependency ownership, and delete obsolete core placeholder
+   configuration.
+2. `python-request-dispatch-consolidation.md` — establish one runtime-neutral
+   mapping from normalized Python request state to the core request builder
+   while preserving sync/async/top-level runtime semantics.
+3. `security-policy-release-and-supply-chain-hardening.md` — remove stale
+   advisory ignores, add a fail-closed explicit/release security preflight,
+   reconcile security policy with the simplified CI model, and make PyPI
+   publication version-tag identity fail closed.
+4. `proxy-hyper-pooling-and-upstream-reuse.md` — qualify current hyper-util
+   proxy connector primitives, move successful forward/CONNECT HTTP framing
+   back under Hyper, and add safe connection/tunnel reuse without regressing
+   proxy TLS, pinning, timeout, auth, or error contracts.
+5. `post-maintenance-security-proxy-requalification-and-closure.md` — freeze
+   one final executable SHA, run feature/dependency/security/proxy proofs plus
+   Tier 1/extended/package gates, renew exact-SHA HTTPX 0.28.1 / HTTPX2 2.12.0
+   qualification, then perform documentation/index closure.
+
+The proxy plan must not introduce a parallel custom connection pool before
+proving Hyper's existing pool insufficient. Upstream proxy helpers are reused
+only where they preserve eggfetch's richer route/security contracts. The
+security plan must preserve the single automatic push/PR workflow required by
+`docs/verification-policy.md`; live advisory currency belongs to the explicit
+security/release path rather than being mislabeled deterministic routine CI.
+
 ## Completed corrective — Python PEP 561 method contract (2026-09-16)
 
 The completed Python interop/API-hygiene program remains the historical baseline on executable/package freeze `2281345f3eaf636c62ec21d2c963d6f90ea764a8`, but a follow-up audit found that the typing gate proved exports and exception bases without fully proving public class methods, properties, and semantic return annotations. The corrective line was intentionally narrow and did not reopen the Python runtime architecture. Its executable/package freeze is `c28bbcad6bf9c420721731e8b7a18c2ec1707dd1`.
@@ -102,7 +146,7 @@ extended, package validation, and three consecutive exact-SHA 1,870-test
 compatibility runs passed. The compatibility profiles were renewed on this
 SHA; the closing documentation/profile commit is a docs-only descendant.
 
-Objective: add an opt-in, transport-generic native Rust request-failure surface that can preserve structured DNS/refusal/connect provenance before the existing public `Error::Connect(String)` collapse, without changing the existing `Error` enum, `Error::kind()` tokens, ordinary `send()` APIs, Python/CLI/HTTPX behavior, or transport policy. The same plan clarifies that `max_decoded_body_size` already bounds unencoded/identity responses as well as decoded compressed bodies; it does not add another body-limit implementation.
+Objective: add an opt-in, transport-generic native Rust request-failure surface that can preserve structured DNS/refusal/connect provenance before the existing public `Error::Connect(String)` collapse, without changing the existing public `Error` enum, `Error::kind()` tokens, ordinary `send()` APIs, Python/CLI/HTTPX behavior, or transport policy. The same plan clarifies that `max_decoded_body_size` already bounds unencoded/identity responses as well as decoded compressed bodies; it does not add another body-limit implementation.
 
 The motivating Gregg review is requirements evidence only. No Gregg, EggPool, monitoring, endpoint-status, provider, or other downstream-specific type or adapter belongs in eggfetch. This is a maintenance/ergonomics improvement for unrelated native embedders, not a binary-footprint claim.
 
