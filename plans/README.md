@@ -2,6 +2,24 @@
 
 This directory contains active implementation plans, live qualification/status records, and historical implementation records. Completed plans are non-normative unless another current document explicitly says otherwise. Verification and release policy remain governed by `docs/verification-policy.md` and `docs/releases/process.md`.
 
+## Corrective closure — current-head requalification (2026-09-16)
+
+Plan: `post-core-integrity-current-head-requalification-corrective-closure.md`
+
+Status: complete. Executable freeze:
+`1f52d846c186b061481ebb14a7be414f5c78ec7e`; the final profile/ledger/plan-index
+closure is documentation-only. This is a qualification corrective only: the
+post-freeze reusable route-cache invariant hardening pass (expanded
+SOCKS/forward/CONNECT route-key matrices, route/client ownership
+documentation, forward-proxy trace-observer non-retention regression) changed
+test/source-comment inputs after the `bfda3889` freeze without changing
+production behavior, invalidating that binding per the exact-SHA rule. Focused
+invariant tests, Tier 1, extended (incl. Rust 1.89.0 MSRV), package, live
+security preflight, both API oracles, and three consecutive 1,870-test
+compatibility passes renewed Stage C on the new freeze for HTTPX 0.28.1 and
+HTTPX2 2.12.0. HTTP/3 and Node remain experimental. Closure evidence is in
+the plan and `httpx-parity-correction-status.md`.
+
 ## Completed program — post-maintenance core integrity and verification (2026-09-16)
 
 Handoff program: `post-maintenance-core-integrity-and-verification-program.md`
@@ -21,7 +39,9 @@ preflight, both API oracles, and three consecutive 1,870-test compatibility
 passes renewed Stage C on the freeze for HTTPX 0.28.1 and HTTPX2 2.12.0.
 HTTP/3 and Node remain experimental. Closure evidence:
 `post-core-integrity-requalification-and-closure.md` and
-`httpx-parity-correction-status.md`.
+`httpx-parity-correction-status.md`. The `bfda3889` binding recorded here is
+historical: it was superseded by the corrective closure above after the
+post-freeze route-cache invariant hardening pass.
 
 ## Corrective — proxy cached total-deadline ownership (2026-09-16)
 

@@ -2,11 +2,12 @@
 
 This directory contains the machine-readable compatibility profile for
 HTTPX 0.28.1. The current Stage C claim is bound to frozen executable SHA
-`bfda3889cbeff5f6fbd98bf3eee12f77fab301c4` (2026-09-16). The prior
-`de00479ef1161ec24c7f2c34a1cc95c7872e7643` binding is historical after the
-post-maintenance core integrity program (opaque proxy TLS route identity,
-uniform Hyper idle-pool policy, route-cache invariants, centralized client
-construction, pipeline decomposition).
+`1f52d846c186b061481ebb14a7be414f5c78ec7e` (2026-09-16). The prior
+`bfda3889cbeff5f6fbd98bf3eee12f77fab301c4` binding is historical after the
+post-freeze reusable route-cache invariant hardening pass (expanded
+SOCKS/forward/CONNECT route-key matrices, route/client ownership
+documentation, forward-proxy trace-observer non-retention regression;
+test/source-comment inputs only, no production behavior change).
 
 ## Files
 

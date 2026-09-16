@@ -4,6 +4,52 @@ This record is the exact-SHA-bound status for the HTTPX 0.28.1 compatibility
 facade. Historical phase and corrective-pass records remain in the git history
 and referenced plans; counts below are only from the runs named here.
 
+## Recorded state — Stage C renewed after current-head requalification corrective closure (2026-09-16)
+
+Recorded designation: **Stage C qualified** for both documented facades, bound
+to executable SHA `1f52d846c186b061481ebb14a7be414f5c78ec7e`. The preceding
+`bfda3889cbeff5f6fbd98bf3eee12f77fab301c4` binding is historical because the
+post-freeze reusable route-cache invariant hardening pass changed
+test/source-comment qualification inputs after that freeze: expanded
+SOCKS/forward/CONNECT route-key equality-isolation matrices, route/client
+ownership documentation, and a forward-proxy trace-observer non-retention
+regression. No production behavior changed; the delta was classified file by
+file (source changes are rustdoc/source-comment and test-only) before
+requalification.
+
+Qualification evidence on the corrected executable tree:
+
+- Focused route-cache/invariant tests passed: TLS clone identity and policy
+  mutation fragmentation (5 `connection_identity` lib tests), SOCKS/forward/
+  CONNECT route-key isolation and request-policy non-fragmentation (4
+  `route_key` lib tests), reusable-cache size bounds (3 `bounded_cache` lib
+  tests), all 47 `tls` lib tests, 9 proxy integration tests (forward/CONNECT
+  keep-alive reuse across 500 ms vs 5 s totals, short→long and long→short
+  total-budget reconnects, per-request read-budget and trace-observer
+  non-retention, weak→strict route isolation, pinned-target TLS identity),
+  the SNI cached-client idle-policy test, and the deterministic H3 suites
+  (hardening 12/12, Alt-Svc discovery 17/17, interop controls 20/20).
+- Tier 1, extended, and package validation passed. Extended included the
+  required Rust 1.89.0 MSRV check; package validation included crate, wheel,
+  package-content, and installed-wheel typing checks. The only extended skips
+  are the existing missing Node JS artifact and downstream artifact manifest.
+- The 0.28.1 API oracle reported 71 allowed matches and the HTTPX2 2.12.0
+  oracle reported 79; both had zero unexplained, stale, or resolved-active
+  differences.
+- Three consecutive full pinned compatibility runs each passed 1,870 tests
+  with 26 existing non-failing warnings, taking 256.24s, 244.63s, and
+  246.60s. No executable files or dependencies changed between runs.
+- Live security preflight passed at 2026-09-16T19:00:19Z with cargo-deny
+  0.19.0 and cargo-audit 0.22.2; advisories, bans, licenses, and sources ok.
+- HTTP/3 remains experimental and the Node binding remains an experimental
+  prototype; neither status changed in this corrective.
+
+The closing plan is
+`plans/post-core-integrity-current-head-requalification-corrective-closure.md`.
+The pushed closure tree's GitHub CI result is recorded in that plan once
+available (the closure commits after the freeze are documentation/profile/
+ledger only, so routine CI covers the frozen executable tree).
+
 ## Recorded state — Stage C renewed after post-core integrity program (2026-09-16)
 
 Recorded designation: **Stage C qualified** for both documented facades, bound

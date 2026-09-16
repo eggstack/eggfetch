@@ -4,9 +4,9 @@
 
 The documented Python 3.10+ asyncio-supported HTTPX 0.28.1 surface and the
 documented httpx2 2.12.0 sibling surface are qualified on executable SHA
-`bfda3889cbeff5f6fbd98bf3eee12f77fab301c4` (2026-09-16, post-maintenance
-core integrity program). The prior
-`de00479ef1161ec24c7f2c34a1cc95c7872e7643` binding is historical. The final executable tree passed
+`1f52d846c186b061481ebb14a7be414f5c78ec7e` (2026-09-16, current-head
+requalification corrective closure). The prior
+`bfda3889cbeff5f6fbd98bf3eee12f77fab301c4` binding is historical. The final executable tree passed
 the full compatibility suite and repository validation tiers; the prior
 three-run evidence remains recorded on the historical predecessor freeze.
 HTTP/3 remains separately experimental; its graduation blockers do not alter

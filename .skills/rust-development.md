@@ -112,8 +112,8 @@ native JSON helpers are opt-in and must remain absent from minimal profiles.
   + `transport/alt_svc.rs`. Fuzz: `fuzz/fuzz_targets/fuzz_alt_svc.rs`
   (parser/cache + suppressor transitions). The deterministic H3 suites
   (hardening 12/12, Alt-Svc discovery 17/17, interop controls 20/20)
-  re-passed on the current executable freeze
-  `bfda3889cbeff5f6fbd98bf3eee12f77fab301c4` (2026-09-16, see the live
+   re-passed on the current executable freeze
+   `1f52d846c186b061481ebb14a7be414f5c78ec7e` (2026-09-16, see the live
   ledger `plans/httpx-parity-correction-status.md`); earlier freeze SHAs
   in plan history are not the current binding.
   The graduation gate and named blockers live in

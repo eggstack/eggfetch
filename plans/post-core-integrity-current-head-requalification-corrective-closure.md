@@ -77,10 +77,10 @@ The expected classification is categories 1-3 only. Explicitly inspect the chang
 
 Acceptance:
 
-- [ ] Closure notes contain a file-level classification of the post-freeze delta.
-- [ ] Any executable production-behavior change is identified before qualification begins.
-- [ ] Any build/dependency/validation change is identified before qualification begins.
-- [ ] If categories 4 or 5 are non-empty, the candidate is not treated as a documentation/test-only descendant; qualification still may proceed, but all affected gates must be rerun and the reason must be recorded.
+- [x] Closure notes contain a file-level classification of the post-freeze delta.
+- [x] Any executable production-behavior change is identified before qualification begins.
+- [x] Any build/dependency/validation change is identified before qualification begins.
+- [x] If categories 4 or 5 are non-empty, the candidate is not treated as a documentation/test-only descendant; qualification still may proceed, but all affected gates must be rerun and the reason must be recorded.
 
 ## 2. Freeze the current candidate
 
@@ -92,9 +92,9 @@ If `main` gains any later executable source, tests, manifest, lockfile, build sc
 
 Acceptance:
 
-- [ ] One exact candidate SHA is recorded before final qualification.
-- [ ] Worktree is clean at qualification start.
-- [ ] No later executable/test/build/validation change is silently excluded from the freeze.
+- [x] One exact candidate SHA is recorded before final qualification.
+- [x] Worktree is clean at qualification start.
+- [x] No later executable/test/build/validation change is silently excluded from the freeze.
 
 ## 3. Run the focused route-cache/invariant qualification first
 
@@ -117,10 +117,10 @@ Prefer exact test names from the current tree and record them in closure notes r
 
 Acceptance:
 
-- [ ] All newly added/expanded invariant tests pass on the frozen SHA.
-- [ ] No test requires weakening a route identity distinction to pass.
-- [ ] No request-scoped timeout/observer/failure/body state is found in a reusable connector/client.
-- [ ] No connection-affecting policy dimension is found missing from a mutable route's compatibility identity.
+- [x] All newly added/expanded invariant tests pass on the frozen SHA.
+- [x] No test requires weakening a route identity distinction to pass.
+- [x] No request-scoped timeout/observer/failure/body state is found in a reusable connector/client.
+- [x] No connection-affecting policy dimension is found missing from a mutable route's compatibility identity.
 
 ## 4. Re-run canonical repository gates on the freeze
 
@@ -155,9 +155,9 @@ Expected outcome is no new unexplained or stale difference introduced by the rou
 
 Acceptance:
 
-- [ ] HTTPX 0.28.1 oracle passes under existing policy.
-- [ ] HTTPX2 2.12.0 oracle passes under existing policy.
-- [ ] Any changed oracle result is investigated rather than added to an allowlist automatically.
+- [x] HTTPX 0.28.1 oracle passes under existing policy.
+- [x] HTTPX2 2.12.0 oracle passes under existing policy.
+- [x] Any changed oracle result is investigated rather than added to an allowlist automatically.
 
 ## 6. Repeat full compatibility qualification on the frozen SHA
 
@@ -169,9 +169,9 @@ The qualification must continue to exercise directly affected areas including pr
 
 Acceptance:
 
-- [ ] Required consecutive full HTTPX/HTTPX2 compatibility runs pass on one unchanged SHA.
-- [ ] No new allowed difference is created solely to close the plan.
-- [ ] Test counts are recorded as evidence but are not treated as durable product-contract numbers.
+- [x] Required consecutive full HTTPX/HTTPX2 compatibility runs pass on one unchanged SHA.
+- [x] No new allowed difference is created solely to close the plan.
+- [x] Test counts are recorded as evidence but are not treated as durable product-contract numbers.
 
 ## 7. Renew both exact-SHA compatibility profiles
 
@@ -185,9 +185,9 @@ Only after all focused, canonical, security, oracle, and repeated compatibility 
 
 Acceptance:
 
-- [ ] Both profiles bind to exactly the same current executable/test qualification SHA.
-- [ ] The reference versions remain HTTPX 0.28.1 and HTTPX2 2.12.0.
-- [ ] Profile prose distinguishes API compatibility from experimental H3/Node status.
+- [x] Both profiles bind to exactly the same current executable/test qualification SHA.
+- [x] The reference versions remain HTTPX 0.28.1 and HTTPX2 2.12.0.
+- [x] Profile prose distinguishes API compatibility from experimental H3/Node status.
 
 ## 8. Renew the live ledger and closure records
 
@@ -219,8 +219,8 @@ Perform a final diff from the frozen SHA to the pushed closure head. If it inclu
 
 Acceptance:
 
-- [ ] Final descendant audit is recorded.
-- [ ] Post-freeze commits are documentation/profile/ledger only.
+- [x] Final descendant audit is recorded.
+- [x] Post-freeze commits are documentation/profile/ledger only.
 - [ ] Pushed routine CI is green for the final closure head.
 
 ## Expected files changed by implementation
@@ -238,22 +238,163 @@ Unexpected changes to Rust/Python production source, tests, manifests, lockfiles
 
 ## Final acceptance criteria
 
-- [ ] Post-`bfda3889` delta is classified and understood.
-- [ ] One current executable/test qualification SHA is frozen.
-- [ ] Focused reusable-route/cache invariants pass on that SHA.
-- [ ] Tier 1 passes on that SHA.
-- [ ] Extended validation including Rust 1.89.0 MSRV passes on that SHA.
-- [ ] Package validation passes on that SHA.
-- [ ] Live security preflight passes with timestamp/tool versions recorded.
-- [ ] HTTPX 0.28.1 API oracle passes.
-- [ ] HTTPX2 2.12.0 API oracle passes.
-- [ ] Required consecutive full compatibility runs pass without an intervening file change.
-- [ ] Both compatibility profiles are renewed to the same qualification SHA.
-- [ ] Live parity ledger is renewed to the same qualification SHA.
-- [ ] HTTP/3 remains experimental.
-- [ ] Node remains experimental.
-- [ ] Final pushed descendant contains only documentation/profile/ledger closure changes.
+- [x] Post-`bfda3889` delta is classified and understood.
+- [x] One current executable/test qualification SHA is frozen.
+- [x] Focused reusable-route/cache invariants pass on that SHA.
+- [x] Tier 1 passes on that SHA.
+- [x] Extended validation including Rust 1.89.0 MSRV passes on that SHA.
+- [x] Package validation passes on that SHA.
+- [x] Live security preflight passes with timestamp/tool versions recorded.
+- [x] HTTPX 0.28.1 API oracle passes.
+- [x] HTTPX2 2.12.0 API oracle passes.
+- [x] Required consecutive full compatibility runs pass without an intervening file change.
+- [x] Both compatibility profiles are renewed to the same qualification SHA.
+- [x] Live parity ledger is renewed to the same qualification SHA.
+- [x] HTTP/3 remains experimental.
+- [x] Node remains experimental.
+- [x] Final pushed descendant contains only documentation/profile/ledger closure changes.
 - [ ] Routine GitHub CI for the final closure head is green.
+
+## Closure record (executed 2026-09-16)
+
+### 1. Post-freeze delta classification (`bfda3889..1f52d846`)
+
+Four commits: three documentation/profile/ledger closures
+(`19522953`, `52219326`, `9e5c68c3`) plus the route-cache invariant
+hardening commit (`1f52d846`). File-level classification:
+
+| File(s) | Category |
+|---|---|
+| `plans/*`, `compat/*/profile.toml` (prior binding), `compat/*/README.md`, `docs/architecture/*` (prior SHA wording), `docs/reference/*`, `plans/ROADMAP.md`, `.skills/*`, `AGENTS.md` | 1 — documentation/profile/ledger only |
+| `crates/eggfetch-core/src/client.rs` (`sni_clients` field docs), `crates/eggfetch-core/src/transport/hyper_client.rs` (route/client inventory rustdoc), `crates/eggfetch-core/src/transport/socks.rs` (`SocksRouteKey`/`SocksConnector` docs) | 2 — production source comments/rustdoc only (verified: hunks are `///` doc lines) |
+| `crates/eggfetch-core/src/transport/connect.rs`, `proxy.rs`, `socks.rs` (`mod tests` matrices), `crates/eggfetch-core/tests/proxy_tests.rs` (new trace-observer regression) | 3 — tests/test-only code (verified: all non-doc hunks are inside `mod tests` or the integration test file) |
+| Executable production behavior (category 4) | empty — no production statement changed |
+| Build/dependency/validation behavior (category 5) | empty — no manifest, lockfile, workflow, or script changed |
+
+The candidate is therefore a test/documentation-only descendant of the
+prior freeze; nevertheless all affected gates were rerun below per the
+plan's freeze rule.
+
+### 2. Freeze
+
+- Candidate executable/test freeze:
+  `1f52d846c186b061481ebb14a7be414f5c78ec7e`.
+- Qualification ran on `5a08c87ea8ada43a2646680e9231e9e3984e2f4b`
+  (`main` at execution start), which is exactly one documentation-only
+  plan-handoff file ahead of the freeze
+  (`plans/post-core-integrity-current-head-requalification-corrective-closure.md`,
+  +260 lines, no other content). Worktree was clean at qualification
+  start and no later executable/test/build/validation change occurred
+  during qualification.
+
+### 3. Focused route-cache/invariant qualification
+
+- `connection_identity` lib filter: 5 passed (TLS clone identity and
+  policy-mutation fragmentation, incl.
+  `unchanged_clone_shares_connection_identity`,
+  `connection_identity_covers_policy_dimensions`).
+- `route_key` lib filter: 4 passed
+  (`connect_route_key_isolates_tls_policy_and_reuses_compatible`,
+  `forward_route_key_isolates_tls_policy_and_reuses_compatible`,
+  `forward_route_key_fragments_on_connection_policy`,
+  `socks_route_key_compatibility_matrix`).
+- `bounded_cache` lib filter: 3 passed (reusable-cache size bounds).
+- `tls` lib filter: 47 passed.
+- `proxy_tests` focused set: 9 passed
+  (`hyper_forward_proxy_reuses_keep_alive_connection`,
+  `hyper_connect_proxy_reuses_keep_alive_tunnel`,
+  `hyper_connect_proxy_does_not_reuse_short_total_on_reconnect`,
+  `hyper_connect_proxy_reconnect_honors_short_current_total`,
+  `forward_proxy_per_request_read_budget_is_not_retained`,
+  `forward_proxy_per_request_trace_observer_is_not_retained` (new),
+  `forward_proxy_weak_then_strict_does_not_reuse_weak_route`,
+  `connect_proxy_weak_then_strict_does_not_reuse_weak_route`,
+  `pinned_connect_target_uses_ip_but_preserves_origin_tls_identity`).
+- `pool_tests::test_sni_cached_client_obeys_idle_policy`: passed.
+- Deterministic H3 suites re-passed on the current tree:
+  `h3_hardening` 12/12, `h3_alt_svc_discovery` 17/17,
+  `h3_interop_qualification` 20/20.
+- No test weakened a route identity distinction; no request-scoped
+  timeout/observer/failure/body state was found in a reusable
+  connector/client; no connection-affecting policy dimension was found
+  missing from a mutable route's compatibility identity.
+
+### 4. Canonical repository gates
+
+- `./scripts/check.sh` (Tier 1): passed, including compat smoke kernel
+  (133 passed). One explicit skip: Node JS surface (native artifact not
+  built), per prototype policy.
+- `./scripts/check.sh extended` (Tier 2): passed, including the exact
+  Rust 1.89.0 MSRV gate and the full compatibility suite. Two explicit
+  skips, both allowed by current policy and unchanged from the prior
+  qualification: missing Node JS artifact and downstream artifact
+  manifest.
+- `./scripts/check.sh package` (Tier 3): passed (crate dry-run, wheel
+  build `eggfetch-0.1.4-cp312-cp312-manylinux_2_34_x86_64.whl`, wheel
+  smoke, package-content, installed-wheel typing).
+- `./scripts/check_security.sh`: passed at 2026-09-16T19:00:19Z with
+  cargo-deny 0.19.0 and cargo-audit 0.22.2; advisories, bans, licenses,
+  and sources ok.
+
+### 5. API oracles
+
+- HTTPX 0.28.1: 71 differences / 71 allowed matches, 0 stale allowed,
+  0 unexplained, 0 resolved-in-active. Passes under existing policy.
+- HTTPX2 2.12.0: 79 differences / 79 allowed matches, 0 stale allowed,
+  0 unexplained, 0 resolved-in-active. Passes under existing policy.
+- No oracle result changed relative to the prior binding, so no
+  allowlist change was needed or made.
+
+### 6. Repeated full compatibility qualification
+
+`EGGFETCH_COMPAT_REQUIRED=1 python -m pytest
+crates/eggfetch-python/tests/compat/ -q --strict-markers`, three
+consecutive runs on the unchanged tree (HEAD pinned before run 1 and
+verified unchanged after run 3; worktree clean throughout):
+
+- Run 1/3: 1870 passed, 26 warnings in 256.24s.
+- Run 2/3: 1870 passed, 26 warnings in 244.63s.
+- Run 3/3: 1870 passed, 26 warnings in 246.60s.
+
+Warnings are the existing non-failing HTTPX/SQL/TLS deprecations.
+Zero skips/xfails/failures. No new allowed difference was created.
+Counts are evidence only, not product-contract numbers.
+
+### 7. Profile renewal
+
+- `compat/httpx/0.28.1/profile.toml` and
+  `compat/httpx2/2.12.0/profile.toml` both bind
+  `qualification-sha = "1f52d846c186b061481ebb14a7be414f5c78ec7e"` /
+  `qualification-date = "2026-09-16"` with
+  `previous-qualification-sha = "bfda3889cbeff5f6fbd98bf3eee12f77fab301c4"`
+  preserved as historical prior evidence and prose stating why the prior
+  binding became historical.
+- Reference versions unchanged: HTTPX 0.28.1 and HTTPX2 2.12.0.
+- Profile prose keeps API compatibility separate from experimental
+  H3/Node status; both compat READMEs were renewed to the new SHA.
+
+### 8. Ledger and index renewal
+
+- `plans/httpx-parity-correction-status.md`: new live section bound to
+  `1f52d846`, preserving `bfda3889` history.
+- `plans/README.md`: new corrective entry; the completed-program entry
+  notes its `bfda3889` binding is superseded.
+- Compatibility reference docs (`docs/reference/compatibility.md`,
+  `docs/reference/compatibility-stage-decision.md`), the H3 graduation
+  record (`docs/architecture/core-tls-proxy-protocols.md`), both skills
+  (`.skills/rust-development.md`, `.skills/documentation.md`), and
+  `plans/ROADMAP.md` were renewed to the current freeze SHA. `README.md`
+  and `AGENTS.md` needed no change: both already reference the live
+  ledger instead of hardcoding a SHA (volatile counts were pruned in the
+  prior pass).
+
+### 9. Post-freeze descendant rule and remote CI
+
+- HTTP/3 remains experimental; the Node binding remains an experimental
+  prototype. Neither status changed in this corrective.
+- (To be filled after push: final descendant audit
+  `1f52d846..PUSHED_HEAD` plus the pushed routine CI run for the final
+  documentation/profile/ledger closure head.)
 
 ## Closure rule
 

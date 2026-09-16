@@ -62,11 +62,21 @@ created = "2026-09-10"
 # decomposed the pipeline by responsibility; this profile was renewed after
 # three consecutive full compatibility passes on the final executable freeze
 # below. The immediately preceding `de00479e...` binding is historical only.
+# The `bfda3889...` evidence is retained as historical only: the post-freeze
+# reusable route-cache invariant hardening pass expanded SOCKS/forward/CONNECT
+# route-key equality-isolation matrices, added route/client ownership
+# documentation, and added a forward-proxy trace-observer non-retention
+# regression, changing test/source-comment inputs without changing production
+# behavior and invalidating the prior binding per the exact-SHA rule. This
+# profile was renewed after focused invariant tests, Tier 1, extended (incl.
+# Rust 1.89.0 MSRV), package, live security preflight, both API oracles, and
+# three consecutive full compatibility passes on the final executable freeze
+# below. The immediately preceding `bfda3889...` binding is historical only.
 stage = "stage-c-qualified"
 status = "qualified"
-qualification-sha = "bfda3889cbeff5f6fbd98bf3eee12f77fab301c4"
+qualification-sha = "1f52d846c186b061481ebb14a7be414f5c78ec7e"
 qualification-date = "2026-09-16"
-previous-qualification-sha = "de00479ef1161ec24c7f2c34a1cc95c7872e7643"
+previous-qualification-sha = "bfda3889cbeff5f6fbd98bf3eee12f77fab301c4"
 historical-current-qualification-sha = "312cd4402ea2b4b27bf54cf7dc36924a1d449adc"
 reference = "httpx2==2.12.0"
 

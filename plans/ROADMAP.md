@@ -47,7 +47,7 @@ post-maintenance core integrity program (opaque proxy-TLS route identity,
 uniform Hyper idle-pool policy, route-cache invariants, centralized Hyper
 client construction, decomposed pipeline, hardened dependency/validation
 graph). HTTPX 0.28.1 and HTTPX2 2.12.0 remain Stage C-qualified on executable
-freeze bfda3889cbeff5f6fbd98bf3eee12f77fab301c4; HTTP/3 and the Node
+freeze 1f52d846c186b061481ebb14a7be414f5c78ec7e; HTTP/3 and the Node
 binding remain unchanged experimental surfaces.
 
 ### Current supported surfaces
