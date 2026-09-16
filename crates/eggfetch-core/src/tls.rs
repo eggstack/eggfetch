@@ -194,16 +194,6 @@ impl TlsConfig {
         *self.policy_token
     }
 
-    /// Origin-TLS identity for reusable CONNECT clients.
-    ///
-    /// This is the same opaque token as the proxy-TLS identity; it is a
-    /// separate method only so `transport::connect` does not depend on the
-    /// `proxy` feature gate for a TLS-only concept.
-    #[cfg(all(not(feature = "proxy"), feature = "tls-rustls"))]
-    pub(crate) fn connection_identity(&self) -> u64 {
-        *self.policy_token
-    }
-
     /// Create a builder with secure defaults (verification enabled, native
     /// roots preferred, SNI enabled).
     #[must_use]

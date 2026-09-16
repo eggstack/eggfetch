@@ -372,6 +372,7 @@ mod tests {
         assert!(!HyperClientPolicy::cached_route(true, None, None, h1_only).http2_only);
     }
 
+    #[cfg(feature = "proxy")]
     #[test]
     fn forward_route_never_selects_http2_only() {
         let h2_only = HttpVersionPolicyEnabler::from_policy(HttpVersionPolicy::Http2Only);
@@ -401,6 +402,7 @@ mod tests {
         assert_eq!(policy.max_idle_per_host, Some(3));
     }
 
+    #[cfg(feature = "proxy")]
     #[test]
     fn forward_route_carries_resolved_idle_policy() {
         use std::time::Duration;
