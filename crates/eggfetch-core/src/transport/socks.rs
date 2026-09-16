@@ -22,6 +22,14 @@ use crate::timeout::TimeoutPhase;
 /// Internal cache identity for one SOCKS route. The type deliberately does
 /// not implement `Debug` or `Display`: credentials remain memory-only key
 /// material and can never be emitted by route diagnostics.
+///
+/// Connection-scoped: proxy scheme/host/port, auth, pinned proxy peer,
+/// pinned ultimate target. Origin TLS, HTTP version/ALPN, and
+/// connect-phase timeouts are immutable at `ClientInner` scope (the
+/// connector is built from client config), and proxy-only headers have no
+/// SOCKS leg, so none of those participate. Request-scoped state
+/// (total/read/write/pool deadlines, retry/redirect, body, trace/failure
+/// context, decompression limits) is never represented.
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub(crate) struct SocksRouteKey {
     scheme: String,
@@ -363,6 +371,14 @@ impl hyper_util::client::legacy::connect::Connection for SocksStream {
 }
 
 /// Hyper connector that establishes one SOCKS5 tunnel per origin connection.
+///
+/// The connector owns only connection-scoped policy (proxy endpoint/auth,
+/// origin TLS built from immutable client config, pinned target). Its
+/// `timeout` handshake budget is always `None` for cached routes: the
+/// current request's total budget is enforced at the outer dispatch
+/// boundary and by the `ConnectTimeout` wrapper, never captured here.
+/// Request trace observers, failure contexts, bodies, and retry/redirect
+/// state are never retained.
 #[derive(Clone)]
 pub(crate) struct SocksConnector {
     proxy: ProxyConfig,
@@ -904,32 +920,78 @@ mod tests {
     #[test]
     fn socks_route_key_compatibility_matrix() {
         use crate::proxy::Proxy;
+        use crate::request::ResolvedTarget;
         // Connection-scoped: scheme/host/port, auth, pinned proxy peer,
-        // pinned target. Request-scoped (never in key): total/read/write
-        // deadlines, retry/redirect, body, trace/failure context.
-        // Keys intentionally lack `Debug` (credential material), so compare
-        // with `==`/`!=` rather than `assert_eq!`/`assert_ne!`.
+        // pinned target. Origin TLS, HTTP version, and connect-phase
+        // timeouts are immutable at `ClientInner` scope for SOCKS (the
+        // connector is built from client config; its handshake timeout is
+        // `None` so the outer dispatch total plus `ConnectTimeout` apply),
+        // and proxy-only headers have no SOCKS leg, so none of those
+        // appear in the key. Request-scoped (never in key): total/read/
+        // write/pool deadlines, retry/redirect, body, cookies/auth headers,
+        // decompression limits, trace/failure context.
+        // Keys intentionally lack `Debug`/`Display` (credential material),
+        // so compare with `==`/`!=` rather than `assert_eq!`/`assert_ne!`.
         let base = Proxy::all("socks5://proxy.example:1080").unwrap();
         let key_a = SocksRouteKey::from_proxy(&base.config(), None).unwrap();
         let key_b = SocksRouteKey::from_proxy(&base.config(), None).unwrap();
         assert!(key_a == key_b, "same SOCKS policy must reuse");
 
-        let authed = Proxy::all("socks5://user:pass@proxy.example:1080").unwrap();
+        // Table-driven connection-affecting mutations: each must fragment.
+        let cases: Vec<(&str, Proxy)> = vec![
+            (
+                "auth change must fragment identity",
+                Proxy::all("socks5://user:pass@proxy.example:1080").unwrap(),
+            ),
+            (
+                "endpoint change must fragment identity",
+                Proxy::all("socks5://other.example:1080").unwrap(),
+            ),
+            (
+                "scheme change must fragment identity",
+                Proxy::all("socks5h://proxy.example:1080").unwrap(),
+            ),
+            (
+                "port change must fragment identity",
+                Proxy::all("socks5://proxy.example:1081").unwrap(),
+            ),
+            (
+                "pinned proxy peer must fragment identity",
+                Proxy::all("socks5://proxy.example:1080")
+                    .unwrap()
+                    .resolved_addresses(["127.0.0.1:1080".parse().unwrap()])
+                    .unwrap(),
+            ),
+        ];
+        for (message, proxy) in cases {
+            assert!(
+                key_a != SocksRouteKey::from_proxy(&proxy.config(), None).unwrap(),
+                "{message}"
+            );
+        }
+
+        // Pinned ultimate target fragments identity; unpinned reuses.
+        let target_a =
+            ResolvedTarget::new(["127.0.0.1:80".parse::<std::net::SocketAddr>().unwrap()]).unwrap();
+        let target_b =
+            ResolvedTarget::new(["127.0.0.1:81".parse::<std::net::SocketAddr>().unwrap()]).unwrap();
         assert!(
-            key_a != SocksRouteKey::from_proxy(&authed.config(), None).unwrap(),
-            "SOCKS auth change must fragment identity"
+            SocksRouteKey::from_proxy(&base.config(), Some(&target_a)).unwrap()
+                != SocksRouteKey::from_proxy(&base.config(), Some(&target_b)).unwrap(),
+            "pinned SOCKS target change must fragment identity"
+        );
+        assert!(
+            SocksRouteKey::from_proxy(&base.config(), None).unwrap()
+                != SocksRouteKey::from_proxy(&base.config(), Some(&target_a)).unwrap(),
+            "adding a pinned SOCKS target must fragment identity"
         );
 
-        let other_host = Proxy::all("socks5://other.example:1080").unwrap();
-        assert!(
-            key_a != SocksRouteKey::from_proxy(&other_host.config(), None).unwrap(),
-            "SOCKS endpoint change must fragment identity"
-        );
-
-        let other_scheme = Proxy::all("socks5h://proxy.example:1080").unwrap();
-        assert!(
-            key_a != SocksRouteKey::from_proxy(&other_scheme.config(), None).unwrap(),
-            "SOCKS scheme change must fragment identity"
-        );
+        // Request-only state is not represented: same connection policy
+        // with different logical timeouts/budgets still reuses the route.
+        // (Totals are not constructor inputs by design; this asserts the
+        // type-level invariant alongside the behavior tests in
+        // `proxy_tests.rs`.)
+        let key_c = SocksRouteKey::from_proxy(&base.config(), None).unwrap();
+        assert!(key_a == key_c, "request-only mutations must not fragment");
     }
 }

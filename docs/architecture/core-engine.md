@@ -316,6 +316,28 @@ module rather than repeating builder/lifecycle/cache plumbing per route:
   identity coexisting with legacy physical pooling and the lifecycle
   wrappers. Adoption would add an abstraction layer without removing code.
 
+Route/client inventory (authoritative keys live in code; this table is the
+map):
+
+| Family | Lifetime | Key/identity | Physical reuse owner |
+|---|---|---|---|
+| standard Hyper client | client lifetime | immutable client config | Hyper |
+| direct advanced client | client lifetime | immutable client config | Hyper |
+| UDS client | client lifetime | client UDS/TLS config | Hyper |
+| custom-dialer client | client lifetime | dialer/client config | Hyper |
+| SNI client | bounded route cache (256) | SNI hostname + immutable client policy | Hyper |
+| custom-SNI client | bounded route cache (256) | SNI hostname + dialer/client policy | Hyper |
+| resolved-target client | request scoped / isolated | no retained route cache | Hyper within request-owned client only |
+| SOCKS client | bounded route cache (64) | `SocksRouteKey` | Hyper |
+| HTTP forward proxy | bounded route cache (64) | `ForwardRouteKey` | Hyper |
+| HTTPS CONNECT | bounded route cache (64) | `ConnectRouteKey` | Hyper |
+| H3 | separate QUIC cache (64) | H3 origin/Alt-Svc policy | H3 connector |
+
+SNI caches use plain hostname strings because every other
+connection-affecting dimension is immutable at `ClientInner` scope;
+resolved-target clients are never retained because each address snapshot
+is request-scoped.
+
 Reusable route caches own only connection-scoped policy. Every
 connection-affecting distinction (proxy endpoint/auth/headers, proxy TLS
 token, pinned peer/target, origin TLS token, SNI, socket/dialer identity,

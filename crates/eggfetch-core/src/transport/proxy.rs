@@ -1648,32 +1648,81 @@ mod tests {
     fn forward_route_key_fragments_on_connection_policy() {
         use super::ForwardRouteKey;
         use crate::proxy::Proxy;
+        use std::time::Duration;
 
         let origin = url::Url::parse("http://origin.example/").unwrap();
         let base = Proxy::all("http://proxy.example:8080").unwrap();
         let base_config = base.config();
         let base_key = ForwardRouteKey::new(&base_config, &origin, None, None);
 
+        // Table-driven connection-affecting mutations: each must fragment.
         let other_origin = url::Url::parse("http://other.example/").unwrap();
-        assert!(
-            base_key != ForwardRouteKey::new(&base_config, &other_origin, None, None),
-            "origin change must fragment forward identity"
-        );
-
         let authed = Proxy::all("http://proxy.example:8080")
             .unwrap()
             .auth(crate::proxy::ProxyAuth::basic("user", "pass").unwrap());
         let authed_config = authed.config();
+        let other_proxy = Proxy::all("http://proxy2.example:8080").unwrap();
+        let other_config = other_proxy.config();
+        let mut headers = crate::headers::Headers::new();
+        headers.insert("x-proxy-test", "1").unwrap();
+        let with_headers = Proxy::all("http://proxy.example:8080")
+            .unwrap()
+            .proxy_headers(headers);
+        let headers_config = with_headers.config();
+        let pinned = Proxy::all("http://proxy.example:8080")
+            .unwrap()
+            .resolved_addresses(["127.0.0.1:8080".parse().unwrap()])
+            .unwrap();
+        let pinned_config = pinned.config();
+
+        assert!(
+            base_key != ForwardRouteKey::new(&base_config, &other_origin, None, None),
+            "origin change must fragment forward identity"
+        );
         assert!(
             base_key != ForwardRouteKey::new(&authed_config, &origin, None, None),
             "proxy auth change must fragment forward identity"
         );
-
-        let other_proxy = Proxy::all("http://proxy2.example:8080").unwrap();
-        let other_config = other_proxy.config();
         assert!(
             base_key != ForwardRouteKey::new(&other_config, &origin, None, None),
             "proxy endpoint change must fragment forward identity"
         );
+        assert!(
+            base_key != ForwardRouteKey::new(&headers_config, &origin, None, None),
+            "proxy-only header change must fragment forward identity"
+        );
+        assert!(
+            base_key != ForwardRouteKey::new(&pinned_config, &origin, None, None),
+            "pinned proxy peer change must fragment forward identity"
+        );
+        assert!(
+            base_key
+                != ForwardRouteKey::new(
+                    &base_config,
+                    &origin,
+                    Some(Duration::from_millis(100)),
+                    None,
+                ),
+            "connect timeout change must fragment forward identity"
+        );
+        assert!(
+            base_key
+                != ForwardRouteKey::new(
+                    &base_config,
+                    &origin,
+                    None,
+                    Some(Duration::from_millis(100)),
+                ),
+            "proxy TLS timeout change must fragment forward identity"
+        );
+
+        // Request-only state is not represented: totals, read/write
+        // budgets, retry/redirect, body, trace/failure context never enter
+        // the key. Totals are not constructor inputs by design; the reuse
+        // behavior tests in `proxy_tests.rs` prove sharing across
+        // differing totals.
+        let key_a = ForwardRouteKey::new(&base_config, &origin, None, None);
+        let key_b = ForwardRouteKey::new(&base_config, &origin, None, None);
+        assert!(key_a == key_b, "request-only mutations must not fragment");
     }
 }

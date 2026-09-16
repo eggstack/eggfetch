@@ -947,14 +947,26 @@ mod tests {
     }
 
     #[cfg(any(feature = "http1", feature = "http2"))]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "route-key matrix enumerates every connection dimension"
+    )]
     #[test]
     fn connect_route_key_isolates_tls_policy_and_reuses_compatible() {
         use super::ConnectRouteKey;
         use crate::http_version::HttpVersionPolicy;
         use crate::proxy::Proxy;
         use crate::tls::TlsConfig;
+        use std::time::Duration;
 
-        // Keys intentionally lack `Debug`, so compare with `==`/`!=`.
+        // Connection-vs-request matrix (CONNECT route): connection-scoped
+        // = proxy URI/auth/headers/TLS/pinned peer, origin, pinned target,
+        // origin TLS token, SNI, HTTP version policy, connect-phase
+        // timeouts. Request-scoped (never in key) = total/read/write/pool
+        // deadlines, retry/redirect, body, cookies/auth headers,
+        // decompression limits, trace/failure context, wire target
+        // overrides. Keys intentionally lack `Debug`/`Display` (credential
+        // material), so compare with `==`/`!=`.
         let proxy_base = TlsConfig::builder().build();
         let strict_proxy = Proxy::all("http://proxy.example:8080")
             .unwrap()
@@ -1022,5 +1034,124 @@ mod tests {
             strict_key != weak_origin_key,
             "origin TLS change must fragment CONNECT identity"
         );
+
+        // Table-driven remaining connection-affecting mutations.
+        let other_origin = url::Url::parse("https://other.example/").unwrap();
+        assert!(
+            strict_key
+                != ConnectRouteKey::new(
+                    &strict_proxy,
+                    &other_origin,
+                    None,
+                    Some(&origin_tls),
+                    None,
+                    policy,
+                    None,
+                    None,
+                ),
+            "origin change must fragment CONNECT identity"
+        );
+        let target: std::net::SocketAddr = "127.0.0.1:443".parse().unwrap();
+        assert!(
+            strict_key
+                != ConnectRouteKey::new(
+                    &strict_proxy,
+                    &origin,
+                    Some(target),
+                    Some(&origin_tls),
+                    None,
+                    policy,
+                    None,
+                    None,
+                ),
+            "pinned target change must fragment CONNECT identity"
+        );
+        assert!(
+            strict_key
+                != ConnectRouteKey::new(
+                    &strict_proxy,
+                    &origin,
+                    None,
+                    Some(&origin_tls),
+                    Some("other.example"),
+                    policy,
+                    None,
+                    None,
+                ),
+            "SNI change must fragment CONNECT identity"
+        );
+        assert!(
+            strict_key
+                != ConnectRouteKey::new(
+                    &strict_proxy,
+                    &origin,
+                    None,
+                    Some(&origin_tls),
+                    None,
+                    HttpVersionPolicy::Http1Only,
+                    None,
+                    None,
+                ),
+            "HTTP version change must fragment CONNECT identity"
+        );
+        assert!(
+            strict_key
+                != ConnectRouteKey::new(
+                    &strict_proxy,
+                    &origin,
+                    None,
+                    Some(&origin_tls),
+                    None,
+                    policy,
+                    Some(Duration::from_millis(100)),
+                    None,
+                ),
+            "connect timeout change must fragment CONNECT identity"
+        );
+        let authed = Proxy::all("http://proxy.example:8080")
+            .unwrap()
+            .auth(crate::proxy::ProxyAuth::basic("user", "pass").unwrap())
+            .config()
+            .clone();
+        assert!(
+            strict_key
+                != ConnectRouteKey::new(
+                    &authed,
+                    &origin,
+                    None,
+                    Some(&origin_tls),
+                    None,
+                    policy,
+                    None,
+                    None,
+                ),
+            "proxy auth change must fragment CONNECT identity"
+        );
+
+        // Request-only state is not represented: totals and other logical
+        // request policy are not constructor inputs by design. Differing
+        // totals reuse the same key; the behavior tests in `proxy_tests.rs`
+        // prove sharing across 500 ms vs 5 s totals with forced reconnect.
+        let key_a = ConnectRouteKey::new(
+            &strict_proxy,
+            &origin,
+            None,
+            Some(&origin_tls),
+            None,
+            policy,
+            None,
+            None,
+        );
+        let key_b = ConnectRouteKey::new(
+            &strict_proxy,
+            &origin,
+            None,
+            Some(&origin_tls),
+            None,
+            policy,
+            None,
+            None,
+        );
+        assert!(key_a == key_b, "request-only mutations must not fragment");
     }
 }

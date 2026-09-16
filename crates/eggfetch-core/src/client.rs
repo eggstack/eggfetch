@@ -179,12 +179,18 @@ pub(crate) struct ClientInner {
     /// Bounded by [`SNI_CLIENT_CACHE_MAX_ENTRIES`] via the shared
     /// [`BoundedClientCache`] mechanics (see `transport::hyper_client`).
     ///
-    /// The cache is keyed only by hostname because `ClientInner::config`
-    /// (including `http_version_policy` and `tls_config` ALPN) is immutable
-    /// after `ClientBuilder::build`. If the TLS ALPN ever became mutable,
-    /// this cache would need to include `HttpVersionPolicy` (and
-    /// `tls_config` identity) in the key to avoid serving a client with
-    /// stale ALPN (e.g. H2 vs H1) for the same hostname.
+    /// The cache is keyed only by hostname because every other
+    /// connection-affecting dimension is immutable at `ClientInner` scope
+    /// after `ClientBuilder::build`: `http_version_policy` and `tls_config`
+    /// ALPN, `direct_connector_config` socket/local-address policy,
+    /// `timeout.connect` phase policy, and the absence of a custom dialer
+    /// on this path. If any of those became per-request mutable, this
+    /// cache would need to include the changed dimension in the key to
+    /// avoid serving a client with stale policy (e.g. H2 vs H1) for the
+    /// same hostname. Request-scoped state (total/read/write/pool
+    /// deadlines, retry/redirect, body, trace/failure context,
+    /// decompression limits, cookies/auth headers) is never keyed and
+    /// never retained by the cached connector.
     #[cfg(any(feature = "http1", feature = "http2"))]
     pub(crate) sni_clients:
         Mutex<BoundedClientCache<String, crate::transport::TimeoutDirectClient>>,

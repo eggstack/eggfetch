@@ -35,6 +35,28 @@
 //! I/O, it must be restructured to build outside the lock. Construction
 //! failures return before insert so they never poison the cache.
 //!
+//! Route/client inventory (H1/H2 unless noted):
+//!
+//! | Family | Lifetime | Key/identity | Physical reuse owner |
+//! |---|---|---|
+//! | standard Hyper client | client lifetime | immutable client config | Hyper |
+//! | direct advanced client | client lifetime | immutable client config | Hyper |
+//! | UDS client | client lifetime | client UDS/TLS config | Hyper |
+//! | custom-dialer client | client lifetime | dialer/client config | Hyper |
+//! | SNI client | bounded route cache (256) | SNI hostname + immutable client policy | Hyper |
+//! | custom-SNI client | bounded route cache (256) | SNI hostname + dialer/client policy | Hyper |
+//! | resolved-target client | request scoped / isolated | no retained route cache | Hyper within request-owned client only |
+//! | SOCKS client | bounded route cache (64) | `SocksRouteKey` | Hyper |
+//! | HTTP forward proxy | bounded route cache (64) | `ForwardRouteKey` | Hyper |
+//! | HTTPS CONNECT | bounded route cache (64) | `ConnectRouteKey` | Hyper |
+//! | H3 | separate QUIC cache (64) | H3 origin/Alt-Svc policy | H3 connector |
+//!
+//! SNI caches use plain hostname strings because every other
+//! connection-affecting dimension (origin/dialer/socket/TLS/ALPN/version
+//! policy, connect timeouts) is immutable at `ClientInner` scope; see the
+//! `sni_clients` field docs. Resolved-target clients are never retained
+//! because each address snapshot is request-scoped.
+//!
 //! Reusable route-cache checklist (required for any new route/client cache):
 //!
 //! - What is connection identity? Every connection-affecting distinction

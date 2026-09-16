@@ -2141,6 +2141,73 @@ async fn forward_proxy_per_request_read_budget_is_not_retained() {
     proxy_server.shutdown();
 }
 
+#[tokio::test]
+async fn forward_proxy_per_request_trace_observer_is_not_retained() {
+    // Same cached forward route, alternating trace observers: the second
+    // request must emit only to its own observer, never to the first
+    // request's observer. This proves reusable connectors do not retain
+    // request-scoped trace state (correct ownership, not cache-key
+    // fragmentation).
+    use eggfetch_core::trace::CollectingTraceObserver;
+    use eggfetch_core::TransportHints;
+    use std::sync::Arc;
+
+    let echo = EchoHttpServer::start().await;
+    let proxy = HttpProxyServer::start(HttpProxyConfig::default()).await;
+    let client = test_client(&proxy.url());
+
+    let first_observer = Arc::new(CollectingTraceObserver::new());
+    let mut first = client
+        .get(&format!("{}/one", echo.url()))
+        .unwrap()
+        .transport_hints(TransportHints {
+            trace: Some(first_observer.clone()),
+            ..Default::default()
+        })
+        .send()
+        .await
+        .expect("first traced request must succeed");
+    let first_body = first.text().await.unwrap();
+    assert!(
+        first_body.contains("GET /one"),
+        "unexpected echo body: {first_body}"
+    );
+    assert!(
+        !first_observer.is_empty(),
+        "first request must emit to its own observer"
+    );
+    let first_count = first_observer.len();
+
+    let second_observer = Arc::new(CollectingTraceObserver::new());
+    let mut second = client
+        .get(&format!("{}/two", echo.url()))
+        .unwrap()
+        .transport_hints(TransportHints {
+            trace: Some(second_observer.clone()),
+            ..Default::default()
+        })
+        .send()
+        .await
+        .expect("second traced request must succeed on the cached route");
+    let second_body = second.text().await.unwrap();
+    assert!(
+        second_body.contains("GET /two"),
+        "unexpected echo body: {second_body}"
+    );
+    assert!(
+        !second_observer.is_empty(),
+        "second request must emit to its own observer"
+    );
+    assert_eq!(
+        first_observer.len(),
+        first_count,
+        "cached route must not replay the second request into the first observer"
+    );
+
+    echo.shutdown();
+    proxy.shutdown();
+}
+
 // ---------------------------------------------------------------------------
 // CONNECT Authority Validation Tests
 // ---------------------------------------------------------------------------
