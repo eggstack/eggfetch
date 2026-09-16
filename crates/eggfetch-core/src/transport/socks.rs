@@ -900,4 +900,36 @@ mod tests {
     fn max_domain_len() {
         assert_eq!(MAX_SOCKS5_DOMAIN_LEN, 255);
     }
+
+    #[test]
+    fn socks_route_key_compatibility_matrix() {
+        use crate::proxy::Proxy;
+        // Connection-scoped: scheme/host/port, auth, pinned proxy peer,
+        // pinned target. Request-scoped (never in key): total/read/write
+        // deadlines, retry/redirect, body, trace/failure context.
+        // Keys intentionally lack `Debug` (credential material), so compare
+        // with `==`/`!=` rather than `assert_eq!`/`assert_ne!`.
+        let base = Proxy::all("socks5://proxy.example:1080").unwrap();
+        let key_a = SocksRouteKey::from_proxy(&base.config(), None).unwrap();
+        let key_b = SocksRouteKey::from_proxy(&base.config(), None).unwrap();
+        assert!(key_a == key_b, "same SOCKS policy must reuse");
+
+        let authed = Proxy::all("socks5://user:pass@proxy.example:1080").unwrap();
+        assert!(
+            key_a != SocksRouteKey::from_proxy(&authed.config(), None).unwrap(),
+            "SOCKS auth change must fragment identity"
+        );
+
+        let other_host = Proxy::all("socks5://other.example:1080").unwrap();
+        assert!(
+            key_a != SocksRouteKey::from_proxy(&other_host.config(), None).unwrap(),
+            "SOCKS endpoint change must fragment identity"
+        );
+
+        let other_scheme = Proxy::all("socks5h://proxy.example:1080").unwrap();
+        assert!(
+            key_a != SocksRouteKey::from_proxy(&other_scheme.config(), None).unwrap(),
+            "SOCKS scheme change must fragment identity"
+        );
+    }
 }

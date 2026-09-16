@@ -1595,4 +1595,85 @@ mod tests {
         let fallback = build_proxy_tls_config(None).expect("fallback proxy TLS config builds");
         assert_eq!(fallback.alpn_protocols, vec![b"http/1.1".to_vec()]);
     }
+
+    #[cfg(any(feature = "http1", feature = "http2"))]
+    #[test]
+    fn forward_route_key_isolates_tls_policy_and_reuses_compatible() {
+        use super::ForwardRouteKey;
+        use crate::proxy::Proxy;
+        use crate::tls::TlsConfig;
+
+        // Connection-vs-request matrix (forward route): connection-scoped =
+        // proxy URI/auth/headers, proxy TLS token, pinned proxy peer, origin
+        // identity, connect-phase timeouts. Request-scoped (never in key) =
+        // total/read/write/pool deadlines, retry/redirect state, body,
+        // cookies/auth headers, decompression limits, trace/failure context.
+        // Keys intentionally lack `Debug`, so compare with `==`/`!=`.
+        let base = TlsConfig::builder().build();
+        let strict_proxy = Proxy::all("http://proxy.example:8080")
+            .unwrap()
+            .with_proxy_tls_config(base.clone())
+            .config()
+            .clone();
+        let weak_proxy = Proxy::all("http://proxy.example:8080")
+            .unwrap()
+            .with_proxy_tls_config(base.clone().danger_accept_invalid_certs(true))
+            .config()
+            .clone();
+        let origin = url::Url::parse("http://origin.example/").unwrap();
+        let strict_key = ForwardRouteKey::new(&strict_proxy, &origin, None, None);
+        let strict_again = ForwardRouteKey::new(&strict_proxy, &origin, None, None);
+        let weak_key = ForwardRouteKey::new(&weak_proxy, &origin, None, None);
+        assert!(
+            strict_key == strict_again,
+            "compatible proxy TLS must reuse"
+        );
+        assert!(
+            strict_key != weak_key,
+            "weak proxy TLS must not alias strict route"
+        );
+
+        // Differing total deadlines must not fragment the key: totals are
+        // request-scoped and enforced at the outer dispatch boundary.
+        // ForwardRouteKey carries no total field by construction; this
+        // asserts the type-level invariant alongside the behavior tests in
+        // `proxy_tests.rs`.
+        let key_a = ForwardRouteKey::new(&strict_proxy, &origin, None, None);
+        let key_b = ForwardRouteKey::new(&strict_proxy, &origin, None, None);
+        assert!(key_a == key_b);
+    }
+
+    #[cfg(any(feature = "http1", feature = "http2"))]
+    #[test]
+    fn forward_route_key_fragments_on_connection_policy() {
+        use super::ForwardRouteKey;
+        use crate::proxy::Proxy;
+
+        let origin = url::Url::parse("http://origin.example/").unwrap();
+        let base = Proxy::all("http://proxy.example:8080").unwrap();
+        let base_config = base.config();
+        let base_key = ForwardRouteKey::new(&base_config, &origin, None, None);
+
+        let other_origin = url::Url::parse("http://other.example/").unwrap();
+        assert!(
+            base_key != ForwardRouteKey::new(&base_config, &other_origin, None, None),
+            "origin change must fragment forward identity"
+        );
+
+        let authed = Proxy::all("http://proxy.example:8080")
+            .unwrap()
+            .auth(crate::proxy::ProxyAuth::basic("user", "pass").unwrap());
+        let authed_config = authed.config();
+        assert!(
+            base_key != ForwardRouteKey::new(&authed_config, &origin, None, None),
+            "proxy auth change must fragment forward identity"
+        );
+
+        let other_proxy = Proxy::all("http://proxy2.example:8080").unwrap();
+        let other_config = other_proxy.config();
+        assert!(
+            base_key != ForwardRouteKey::new(&other_config, &origin, None, None),
+            "proxy endpoint change must fragment forward identity"
+        );
+    }
 }

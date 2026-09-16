@@ -564,7 +564,7 @@ impl ClientInner {
         let connector = crate::transport::connect::ConnectProxyConnector::new(
             origin.clone(),
             proxy.clone(),
-            transport_hints.clone(),
+            transport_hints,
             target,
             self.config.tls_config.clone(),
             connect_timeout,

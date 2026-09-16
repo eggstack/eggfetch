@@ -22,7 +22,7 @@ pub(crate) struct ConnectRouteKey {
     proxy_identity: Vec<u8>,
     origin: String,
     target: Option<SocketAddr>,
-    origin_tls_identity: usize,
+    origin_tls_identity: u64,
     sni_hostname: Option<String>,
     http_version_policy: crate::http_version::HttpVersionPolicy,
     connect_timeout: Option<std::time::Duration>,
@@ -126,12 +126,19 @@ impl hyper_util::client::legacy::connect::Connection for ConnectProxyStream {
 
 /// Narrow CONNECT connector retaining eggfetch's handshake policy while
 /// returning an origin-ready stream to Hyper's reusable client.
+///
+/// The connector owns only connection-scoped policy. In particular it must
+/// never retain request-scoped `TransportHints::target`/`trace`,
+/// read/write/total budgets, retry/redirect state, bodies, or failure
+/// contexts: the SNI hostname is part of the route key and therefore safe to
+/// retain, while wire target overrides and trace observers belong to the
+/// current request and are supplied separately at dispatch time.
 #[cfg(any(feature = "http1", feature = "http2"))]
 #[derive(Clone)]
 pub(crate) struct ConnectProxyConnector {
     dest_url: url::Url,
     proxy: ProxyConfig,
-    transport_hints: crate::request::TransportHints,
+    sni_hostname: Option<String>,
     proxied_target: Option<SocketAddr>,
     origin_tls_config: Option<crate::tls::TlsConfig>,
     connect_timeout: Option<std::time::Duration>,
@@ -147,7 +154,7 @@ impl ConnectProxyConnector {
     pub(crate) fn new(
         dest_url: url::Url,
         proxy: ProxyConfig,
-        transport_hints: crate::request::TransportHints,
+        transport_hints: &crate::request::TransportHints,
         proxied_target: Option<SocketAddr>,
         origin_tls_config: Option<crate::tls::TlsConfig>,
         connect_timeout: Option<std::time::Duration>,
@@ -159,7 +166,10 @@ impl ConnectProxyConnector {
         Self {
             dest_url,
             proxy,
-            transport_hints,
+            // Retain only the connection-affecting SNI hint (already part of
+            // `ConnectRouteKey`). Wire target overrides, resolved targets,
+            // and trace observers stay request-scoped and are never cached.
+            sni_hostname: transport_hints.sni_hostname.clone(),
             proxied_target,
             origin_tls_config,
             connect_timeout,
@@ -192,7 +202,7 @@ impl tower_service::Service<http::Uri> for ConnectProxyConnector {
     fn call(&mut self, _dst: http::Uri) -> Self::Future {
         let dest_url = self.dest_url.clone();
         let proxy = self.proxy.clone();
-        let transport_hints = self.transport_hints.clone();
+        let sni_hostname = self.sni_hostname.clone();
         let proxied_target = self.proxied_target;
         let origin_tls_config = self.origin_tls_config.clone();
         let connect_timeout = self.connect_timeout;
@@ -204,6 +214,12 @@ impl tower_service::Service<http::Uri> for ConnectProxyConnector {
             // The cached connector owns only connection-scoped policy. The
             // current logical request's total budget is enforced around the
             // Hyper dispatch future, not captured by this reusable client.
+            // Only the keyed SNI hint is retained; wire target overrides,
+            // resolved targets, and trace observers stay request-scoped.
+            let transport_hints = crate::request::TransportHints {
+                sni_hostname,
+                ..Default::default()
+            };
             let ctx = ProxyRequestContext {
                 remaining_total: None,
                 deadline: None,
@@ -927,6 +943,84 @@ mod tests {
         assert_eq!(
             proxy_rejection_body(&headers, b"ignored"),
             "deniedsecret: hunter2"
+        );
+    }
+
+    #[cfg(any(feature = "http1", feature = "http2"))]
+    #[test]
+    fn connect_route_key_isolates_tls_policy_and_reuses_compatible() {
+        use super::ConnectRouteKey;
+        use crate::http_version::HttpVersionPolicy;
+        use crate::proxy::Proxy;
+        use crate::tls::TlsConfig;
+
+        // Keys intentionally lack `Debug`, so compare with `==`/`!=`.
+        let proxy_base = TlsConfig::builder().build();
+        let strict_proxy = Proxy::all("http://proxy.example:8080")
+            .unwrap()
+            .with_proxy_tls_config(proxy_base.clone())
+            .config()
+            .clone();
+        let weak_proxy = Proxy::all("http://proxy.example:8080")
+            .unwrap()
+            .with_proxy_tls_config(proxy_base.clone().danger_accept_invalid_certs(true))
+            .config()
+            .clone();
+        let origin = url::Url::parse("https://origin.example/").unwrap();
+        let origin_tls = TlsConfig::builder().build();
+        let policy = HttpVersionPolicy::Auto { allow_http3: false };
+
+        let strict_key = ConnectRouteKey::new(
+            &strict_proxy,
+            &origin,
+            None,
+            Some(&origin_tls),
+            None,
+            policy,
+            None,
+            None,
+        );
+        let strict_again = ConnectRouteKey::new(
+            &strict_proxy,
+            &origin,
+            None,
+            Some(&origin_tls),
+            None,
+            policy,
+            None,
+            None,
+        );
+        assert!(strict_key == strict_again, "compatible CONNECT must reuse");
+
+        let weak_key = ConnectRouteKey::new(
+            &weak_proxy,
+            &origin,
+            None,
+            Some(&origin_tls),
+            None,
+            policy,
+            None,
+            None,
+        );
+        assert!(
+            strict_key != weak_key,
+            "proxy TLS change must fragment CONNECT identity"
+        );
+
+        let weak_origin = origin_tls.clone().danger_accept_invalid_certs(true);
+        let weak_origin_key = ConnectRouteKey::new(
+            &strict_proxy,
+            &origin,
+            None,
+            Some(&weak_origin),
+            None,
+            policy,
+            None,
+            None,
+        );
+        assert!(
+            strict_key != weak_origin_key,
+            "origin TLS change must fragment CONNECT identity"
         );
     }
 }

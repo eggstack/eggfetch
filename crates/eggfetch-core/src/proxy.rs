@@ -654,6 +654,13 @@ impl ProxyConfig {
     /// Return an opaque connection-affecting identity for internal caches.
     /// It intentionally has no formatting implementation and therefore
     /// cannot disclose credentials through diagnostics.
+    ///
+    /// The proxy TLS component uses the corrected opaque
+    /// `TlsConfig::connection_identity()` token: two proxy configs cloned
+    /// from the same base but with different connection-affecting TLS
+    /// policy (verification flags, trust roots, provider, mTLS identity,
+    /// version bounds, SNI) never alias, while unchanged clones share
+    /// identity and remain reusable.
     #[cfg(feature = "proxy")]
     pub(crate) fn connection_identity(&self) -> Vec<u8> {
         let mut identity = Vec::new();
@@ -672,7 +679,7 @@ impl ProxyConfig {
         identity.extend_from_slice(
             self.proxy_tls_config
                 .as_ref()
-                .map_or(0usize, crate::tls::TlsConfig::connection_identity)
+                .map_or(0u64, crate::tls::TlsConfig::connection_identity)
                 .to_ne_bytes()
                 .as_slice(),
         );
@@ -1864,6 +1871,52 @@ mod tests {
         assert!(np.should_bypass(&url1));
         assert!(np.should_bypass(&url2));
         assert!(!np.should_bypass(&url3));
+    }
+
+    #[cfg(feature = "proxy")]
+    #[test]
+    fn proxy_tls_weak_and_strict_identities_do_not_alias() {
+        use crate::tls::TlsConfig;
+        let base = TlsConfig::builder().build();
+        let strict_tls = base.clone();
+        let weak_tls = base.clone().danger_accept_invalid_certs(true);
+        let strict = Proxy::all("https://proxy.example:8443")
+            .unwrap()
+            .with_proxy_tls_config(strict_tls)
+            .config()
+            .clone();
+        let weak = Proxy::all("https://proxy.example:8443")
+            .unwrap()
+            .with_proxy_tls_config(weak_tls)
+            .config()
+            .clone();
+        assert_ne!(
+            strict.connection_identity(),
+            weak.connection_identity(),
+            "proxy TLS verification change must fragment route identity"
+        );
+        let strict_again = strict.clone();
+        assert_eq!(
+            strict.connection_identity(),
+            strict_again.connection_identity(),
+            "unchanged proxy clones must remain reusable"
+        );
+    }
+
+    #[cfg(feature = "proxy")]
+    #[test]
+    fn proxy_identity_is_opaque_and_non_renderable() {
+        let proxy = Proxy::all("http://proxy.example:8080")
+            .unwrap()
+            .auth(ProxyAuth::basic("user", "secret-pass").unwrap());
+        let config = proxy.config();
+        let identity = config.connection_identity();
+        assert!(!identity.is_empty());
+        let debug = format!("{config:?}");
+        assert!(
+            !debug.contains("secret-pass"),
+            "proxy identity diagnostics must not leak credentials: {debug}"
+        );
     }
 }
 

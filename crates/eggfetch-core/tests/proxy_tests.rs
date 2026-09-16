@@ -169,6 +169,211 @@ impl HttpProxyServer {
     }
 }
 
+// ---------------------------------------------------------------------------
+// HTTPS (TLS-terminating) proxy fixture for proxy-TLS route-isolation tests
+// ---------------------------------------------------------------------------
+
+/// Minimal TLS-terminating proxy: counts TCP accepts, performs a server-side
+/// TLS handshake with a self-signed `localhost` cert, then serves forward
+/// requests with a synthetic keep-alive `200 ok` and CONNECT requests with a
+/// real TCP tunnel. Strict clients that do not trust the self-signed cert
+/// fail the proxy TLS handshake instead of reusing a weak route's pooled
+/// connection.
+struct HttpsProxyServer {
+    port: u16,
+    connection_count: Arc<AtomicUsize>,
+    connect_targets: Arc<std::sync::Mutex<Vec<String>>>,
+    shutdown: watch::Sender<bool>,
+}
+
+impl HttpsProxyServer {
+    async fn start_self_signed() -> Self {
+        let sans = vec!["localhost".to_string()];
+        let mut params = rcgen::CertificateParams::new(sans).unwrap();
+        params.is_ca = rcgen::IsCa::NoCa;
+        let key = rcgen::KeyPair::generate().unwrap();
+        let cert = params.self_signed(&key).unwrap();
+        let cert_der = rustls::pki_types::CertificateDer::from(cert.der().to_vec());
+        let key_der = rustls::pki_types::PrivateKeyDer::Pkcs8(
+            rustls::pki_types::PrivatePkcs8KeyDer::from(key.serialize_der()),
+        );
+        let server_config = rustls::ServerConfig::builder()
+            .with_no_client_auth()
+            .with_single_cert(vec![cert_der], key_der)
+            .unwrap();
+        let acceptor = tokio_rustls::TlsAcceptor::from(Arc::new(server_config));
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let (shutdown_tx, mut shutdown_rx) = watch::channel(false);
+        let connection_count = Arc::new(AtomicUsize::new(0));
+        let counter = connection_count.clone();
+        let connect_targets = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let targets_clone = connect_targets.clone();
+
+        tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    result = listener.accept() => {
+                        match result {
+                            Ok((stream, _)) => {
+                                counter.fetch_add(1, Ordering::SeqCst);
+                                let acceptor = acceptor.clone();
+                                let targets = targets_clone.clone();
+                                tokio::spawn(async move {
+                                    let tls_stream = match acceptor.accept(stream).await {
+                                        Ok(s) => s,
+                                        Err(_) => return,
+                                    };
+                                    if let Err(e) = handle_https_proxy_connection(
+                                        tls_stream, targets,
+                                    )
+                                    .await
+                                    {
+                                        eprintln!("https proxy connection error: {e}");
+                                    }
+                                });
+                            }
+                            Err(e) => {
+                                eprintln!("https proxy accept error: {e}");
+                                break;
+                            }
+                        }
+                    }
+                    _ = shutdown_rx.changed() => {
+                        break;
+                    }
+                }
+            }
+        });
+
+        Self {
+            port,
+            connection_count,
+            connect_targets,
+            shutdown: shutdown_tx,
+        }
+    }
+
+    fn url(&self) -> String {
+        format!("https://localhost:{}", self.port)
+    }
+
+    fn connection_count(&self) -> usize {
+        self.connection_count.load(Ordering::SeqCst)
+    }
+
+    fn connect_targets(&self) -> Vec<String> {
+        self.connect_targets.lock().unwrap().clone()
+    }
+
+    fn shutdown(&self) {
+        let _ = self.shutdown.send(true);
+    }
+}
+
+async fn handle_https_proxy_connection(
+    tls_stream: tokio_rustls::server::TlsStream<TcpStream>,
+    connect_targets: Arc<std::sync::Mutex<Vec<String>>>,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let mut reader = BufReader::new(tls_stream);
+    loop {
+        let mut request_line = String::new();
+        match reader.read_line(&mut request_line).await {
+            Ok(0) => return Ok(()),
+            Ok(_) => {}
+            Err(_) => return Ok(()),
+        }
+        if request_line.trim().is_empty() {
+            continue;
+        }
+        let mut content_length: usize = 0;
+        loop {
+            let mut line = String::new();
+            match reader.read_line(&mut line).await {
+                Ok(0) | Err(_) => return Ok(()),
+                Ok(_) => {}
+            }
+            if line.trim().is_empty() {
+                break;
+            }
+            if let Some((name, value)) = line.split_once(':') {
+                if name.trim().eq_ignore_ascii_case("content-length") {
+                    content_length = value.trim().parse().unwrap_or(0);
+                }
+            }
+        }
+        let parts: Vec<&str> = request_line.split_whitespace().collect();
+        if parts.len() < 2 {
+            return Ok(());
+        }
+        let method = parts[0];
+        let target = parts[1].to_owned();
+
+        if method.eq_ignore_ascii_case("CONNECT") {
+            connect_targets.lock().unwrap().push(target.clone());
+            // Connect before responding so failures stay 502, mirroring the
+            // plaintext fixture.
+            if let Ok(mut origin) = TcpStream::connect(&target).await {
+                reader
+                    .get_mut()
+                    .write_all(b"HTTP/1.1 200 Connection Established\r\n\r\n")
+                    .await?;
+                reader.get_mut().flush().await?;
+                let mut tls_stream = reader.into_inner();
+                let _ = tokio::io::copy_bidirectional(&mut tls_stream, &mut origin).await;
+                return Ok(());
+            }
+            reader
+                .get_mut()
+                .write_all(b"HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n")
+                .await?;
+            reader.get_mut().flush().await?;
+            return Ok(());
+        }
+
+        // Forward path: synthetic keep-alive response; the origin is never
+        // contacted. This is sufficient for route-identity tests: success
+        // proves the proxy-TLS handshake passed and the request reached the
+        // proxy leg, while connection counts prove Hyper client reuse.
+        // A `/slow` path delays the response so per-request read budgets can
+        // be proven request-scoped on a reused route.
+        if content_length > 0 {
+            let mut remaining = content_length;
+            let mut discard = vec![0u8; 4096];
+            while remaining > 0 {
+                let want = remaining.min(discard.len());
+                match reader.read(&mut discard[..want]).await {
+                    Ok(0) | Err(_) => return Ok(()),
+                    Ok(n) => remaining -= n,
+                }
+            }
+        }
+        if target.contains("/slow") {
+            // Delay the body (not the headers) so per-request *read* budgets
+            // apply to the body stream on a reused route. Headers arrive
+            // immediately; the 300ms body delay exceeds the short test budget
+            // but fits the long one.
+            reader
+                .get_mut()
+                .write_all(
+                    b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: keep-alive\r\n\r\n",
+                )
+                .await?;
+            reader.get_mut().flush().await?;
+            tokio::time::sleep(Duration::from_millis(300)).await;
+            reader.get_mut().write_all(b"ok").await?;
+            reader.get_mut().flush().await?;
+            continue;
+        }
+        reader
+            .get_mut()
+            .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: keep-alive\r\n\r\nok")
+            .await?;
+        reader.get_mut().flush().await?;
+    }
+}
+
 #[allow(clippy::too_many_lines)]
 async fn handle_proxy_connection(
     mut client_stream: TcpStream,
@@ -1656,6 +1861,284 @@ async fn hyper_connect_proxy_reconnect_honors_short_current_total() {
 
     proxy_server.shutdown();
     origin.shutdown();
+}
+
+// ---------------------------------------------------------------------------
+// Proxy-TLS route-identity wire tests (weak vs strict, forward + CONNECT)
+// ---------------------------------------------------------------------------
+
+/// Build a weak proxy TLS config (accepts the self-signed fixture cert) and
+/// a strict clone (default trust, rejects it) from one base, exercising the
+/// `TlsConfig` clone-mutation path that previously aliased.
+fn weak_and_strict_proxy_tls() -> (TlsConfig, TlsConfig) {
+    let base = TlsConfig::builder().build();
+    let strict = base.clone();
+    let weak = base.danger_accept_invalid_certs(true);
+    (weak, strict)
+}
+
+#[tokio::test]
+async fn forward_proxy_weak_then_strict_does_not_reuse_weak_route() {
+    let proxy_server = HttpsProxyServer::start_self_signed().await;
+    let (weak_tls, strict_tls) = weak_and_strict_proxy_tls();
+    // Holders own the cloned-ancestry configs: strict shares the base token,
+    // weak mints a new one via the consuming mutator.
+    let weak_holder = Proxy::all(&proxy_server.url())
+        .unwrap()
+        .with_proxy_tls_config(weak_tls);
+    let strict_holder = Proxy::all(&proxy_server.url())
+        .unwrap()
+        .with_proxy_tls_config(strict_tls);
+
+    let client = Client::builder().build();
+
+    let mut first = client
+        .get("http://origin.invalid/")
+        .unwrap()
+        .proxy(&weak_holder)
+        .send()
+        .await
+        .expect("weak proxy TLS must establish the fixture route");
+    assert_eq!(first.text().await.unwrap(), "ok");
+    assert_eq!(proxy_server.connection_count(), 1);
+
+    let strict_result = client
+        .get("http://origin.invalid/")
+        .unwrap()
+        .proxy(&strict_holder)
+        .send()
+        .await;
+    assert!(
+        strict_result.is_err(),
+        "strict proxy TLS must not silently reuse the weak pooled route"
+    );
+    assert_eq!(
+        proxy_server.connection_count(),
+        2,
+        "strict request must open its own proxy connection rather than reuse weak"
+    );
+
+    proxy_server.shutdown();
+}
+
+#[tokio::test]
+async fn forward_proxy_strict_then_weak_uses_separate_routes() {
+    let proxy_server = HttpsProxyServer::start_self_signed().await;
+    let weak_holder = Proxy::all(&proxy_server.url())
+        .unwrap()
+        .with_proxy_tls_config(
+            TlsConfig::builder()
+                .build()
+                .danger_accept_invalid_certs(true),
+        );
+    let strict_holder = Proxy::all(&proxy_server.url()).unwrap();
+    let client = Client::builder().build();
+
+    // Strict first: fails closed against the self-signed fixture, leaving no
+    // reusable strict route behind.
+    assert!(
+        client
+            .get("http://origin.invalid/")
+            .unwrap()
+            .proxy(&strict_holder)
+            .send()
+            .await
+            .is_err(),
+        "strict proxy TLS must reject the self-signed fixture"
+    );
+    assert_eq!(proxy_server.connection_count(), 1);
+
+    // Weak second: succeeds on its own route.
+    let mut response = client
+        .get("http://origin.invalid/")
+        .unwrap()
+        .proxy(&weak_holder)
+        .send()
+        .await
+        .expect("weak proxy TLS must succeed on its own route");
+    assert_eq!(response.text().await.unwrap(), "ok");
+    assert_eq!(proxy_server.connection_count(), 2);
+
+    // Unchanged weak clone reuses the weak pooled connection.
+    let mut again = client
+        .get("http://origin.invalid/")
+        .unwrap()
+        .proxy(&weak_holder)
+        .send()
+        .await
+        .expect("unchanged weak proxy TLS must reuse its route");
+    assert_eq!(again.text().await.unwrap(), "ok");
+    assert_eq!(
+        proxy_server.connection_count(),
+        2,
+        "unchanged proxy TLS clones must share the cached route client"
+    );
+
+    proxy_server.shutdown();
+}
+
+#[tokio::test]
+async fn connect_proxy_weak_then_strict_does_not_reuse_weak_route() {
+    let ca = CertAuthority::new();
+    let origin = TlsTestServer::start(&ca, &["origin.invalid"]).await;
+    let proxy_server = HttpsProxyServer::start_self_signed().await;
+    let origin_tls = TlsConfig::builder()
+        .ca_certificate_pem(&ca.cert_pem())
+        .unwrap()
+        .build();
+    let weak_holder = Proxy::all(&proxy_server.url())
+        .unwrap()
+        .with_proxy_tls_config(
+            TlsConfig::builder()
+                .build()
+                .danger_accept_invalid_certs(true),
+        );
+    let strict_holder = Proxy::all(&proxy_server.url()).unwrap();
+    let client = Client::builder().tls_config(origin_tls).build();
+    let origin_url = format!("https://origin.invalid:{}/", origin.port());
+    let target: std::net::SocketAddr = format!("127.0.0.1:{}", origin.port()).parse().unwrap();
+
+    let mut first = client
+        .get(&origin_url)
+        .unwrap()
+        .proxy(&weak_holder)
+        .proxy_target_addresses([target])
+        .send()
+        .await
+        .expect("weak proxy TLS must establish the CONNECT route");
+    assert_eq!(first.text().await.unwrap(), "OK");
+    assert_eq!(proxy_server.connection_count(), 1);
+    assert_eq!(proxy_server.connect_targets().len(), 1);
+
+    let strict_result = client
+        .get(&origin_url)
+        .unwrap()
+        .proxy(&strict_holder)
+        .proxy_target_addresses([target])
+        .send()
+        .await;
+    assert!(
+        strict_result.is_err(),
+        "strict proxy TLS must not reuse the weak CONNECT route"
+    );
+    assert_eq!(
+        proxy_server.connection_count(),
+        2,
+        "strict CONNECT must open its own proxy connection"
+    );
+
+    proxy_server.shutdown();
+    origin.shutdown();
+}
+
+#[tokio::test]
+async fn connect_proxy_strict_then_weak_uses_separate_routes() {
+    let ca = CertAuthority::new();
+    let origin = TlsTestServer::start(&ca, &["origin.invalid"]).await;
+    let proxy_server = HttpsProxyServer::start_self_signed().await;
+    let origin_tls = TlsConfig::builder()
+        .ca_certificate_pem(&ca.cert_pem())
+        .unwrap()
+        .build();
+    let weak_holder = Proxy::all(&proxy_server.url())
+        .unwrap()
+        .with_proxy_tls_config(
+            TlsConfig::builder()
+                .build()
+                .danger_accept_invalid_certs(true),
+        );
+    let strict_holder = Proxy::all(&proxy_server.url()).unwrap();
+    let client = Client::builder().tls_config(origin_tls).build();
+    let origin_url = format!("https://origin.invalid:{}/", origin.port());
+    let target: std::net::SocketAddr = format!("127.0.0.1:{}", origin.port()).parse().unwrap();
+
+    assert!(
+        client
+            .get(&origin_url)
+            .unwrap()
+            .proxy(&strict_holder)
+            .proxy_target_addresses([target])
+            .send()
+            .await
+            .is_err(),
+        "strict proxy TLS must reject the self-signed CONNECT proxy"
+    );
+    assert_eq!(proxy_server.connection_count(), 1);
+
+    let mut response = client
+        .get(&origin_url)
+        .unwrap()
+        .proxy(&weak_holder)
+        .proxy_target_addresses([target])
+        .send()
+        .await
+        .expect("weak proxy TLS must succeed on its own CONNECT route");
+    assert_eq!(response.text().await.unwrap(), "OK");
+    assert_eq!(proxy_server.connection_count(), 2);
+    assert_eq!(proxy_server.connect_targets().len(), 1);
+
+    proxy_server.shutdown();
+    origin.shutdown();
+}
+
+#[tokio::test]
+async fn forward_proxy_per_request_read_budget_is_not_retained() {
+    // Same cached forward route, alternating read budgets: the second
+    // request must observe its own short budget, not the first request's
+    // long budget. This proves request-scoped timeouts are enforced at the
+    // outer dispatch boundary rather than captured by the reusable connector.
+    let proxy_server = HttpsProxyServer::start_self_signed().await;
+    let weak_holder = Proxy::all(&proxy_server.url())
+        .unwrap()
+        .with_proxy_tls_config(
+            TlsConfig::builder()
+                .build()
+                .danger_accept_invalid_certs(true),
+        );
+    let client = Client::builder().build();
+
+    let mut first = client
+        .get("http://origin.invalid/slow")
+        .unwrap()
+        .proxy(&weak_holder)
+        .timeout(Timeout {
+            read: Some(Duration::from_secs(2)),
+            total: Some(Duration::from_secs(5)),
+            ..Default::default()
+        })
+        .send()
+        .await
+        .expect("long read budget must succeed on the cached forward route");
+    assert_eq!(first.text().await.unwrap(), "ok");
+
+    let mut second = client
+        .get("http://origin.invalid/slow")
+        .unwrap()
+        .proxy(&weak_holder)
+        .timeout(Timeout {
+            read: Some(Duration::from_millis(50)),
+            total: Some(Duration::from_secs(5)),
+            ..Default::default()
+        })
+        .send()
+        .await
+        .expect("headers arrive immediately; the read budget applies to the body");
+    let error = second
+        .text()
+        .await
+        .expect_err("short read budget must apply to the current request body");
+    assert!(
+        matches!(
+            error,
+            Error::Timeout {
+                phase: TimeoutPhase::Read,
+                ..
+            }
+        ),
+        "expected read timeout, got: {error:?}"
+    );
+
+    proxy_server.shutdown();
 }
 
 // ---------------------------------------------------------------------------

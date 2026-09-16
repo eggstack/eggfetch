@@ -34,6 +34,45 @@
 //! I/O, so holding the lock is safe. If a future construction path performs
 //! I/O, it must be restructured to build outside the lock. Construction
 //! failures return before insert so they never poison the cache.
+//!
+//! Reusable route-cache checklist (required for any new route/client cache):
+//!
+//! - What is connection identity? Every connection-affecting distinction
+//!   (endpoint, auth/headers used at establishment, pinned peer/target, TLS
+//!   policy token, SNI, protocol policy, connect-phase timeouts) must
+//!   participate; false hits are security defects, false misses are safe.
+//! - What request state is explicitly excluded? Total/read/write/pool
+//!   deadlines, retry/redirect state, body, cookies/auth headers,
+//!   decompression limits, trace observers, and failure contexts must never
+//!   be captured by reusable connectors or added to keys to avoid ownership
+//!   bugs. The current request budget stays authoritative at the outer
+//!   `send_with_total_timeout` dispatch boundary.
+//! - How is cache growth bounded? Use [`BoundedClientCache`] with an explicit
+//!   route-specific capacity; arbitrary eviction is acceptable, LRU needs
+//!   measurement.
+//! - How are secrets kept out of diagnostics? Keys carry connection identity
+//!   only, implement no `Debug`/`Display` when they hold credentials, and
+//!   never log contents.
+//! - Who owns physical pooling? Hyper owns H1/H2 physical reuse; eggfetch
+//!   caches configured clients/connectors keyed by route policy. H3/QUIC
+//!   stays in its separate cache.
+//! - How are current-request deadlines enforced on reconnect? Reconnects must
+//!   read the current request's remaining budget, never a cached prior total.
+//! - Which regression proves false-hit isolation? Add equality/isolation
+//!   table tests plus a weak-vs-strict (or equivalent) wire test counting
+//!   physical connections.
+//!
+//! Connection-vs-request policy matrix (H1/H2 routes):
+//!
+//! - Connection-scoped (may affect reuse identity): proxy URI/scheme, proxy
+//!   auth, proxy-only headers, proxy TLS token, proxy pinned addresses,
+//!   proxied target address, origin TLS token, SNI override, local
+//!   address/socket options, custom dialer identity, HTTP version/ALPN
+//!   policy, connect and proxy-TLS/connect phase timeouts.
+//! - Request-scoped (must never be retained or keyed): total/read/write/pool
+//!   timeouts, retry policy/attempt state, redirect policy/hops, request
+//!   body/replayability, trace observers, failure contexts,
+//!   decoded-body/decompression policy, cookies and request auth headers.
 
 use std::collections::HashMap;
 use std::hash::Hash;

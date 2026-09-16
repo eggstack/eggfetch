@@ -29,12 +29,30 @@
 //! parameter docstring.
 
 use std::path::Path;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::sync::OnceLock;
 
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 
 use crate::error::{Error, Result};
+
+/// Monotonic source for opaque TLS connection-policy tokens.
+///
+/// Each independently built `TlsConfig` mints a fresh token; `Clone` shares
+/// the token. The value is never rendered in diagnostics and carries no key
+/// material — it is only an equality token for reusable-client caches. `0`
+/// is reserved for "no TLS config" in route keys, so issuance starts at `1`.
+static TLS_POLICY_TOKEN_NEXT: AtomicU64 = AtomicU64::new(1);
+
+/// Mint a fresh opaque policy token for a newly built or mutated `TlsConfig`.
+fn mint_tls_policy_token() -> Arc<u64> {
+    let mut id = TLS_POLICY_TOKEN_NEXT.fetch_add(1, Ordering::Relaxed);
+    if id == 0 {
+        id = TLS_POLICY_TOKEN_NEXT.fetch_add(1, Ordering::Relaxed);
+    }
+    Arc::new(id)
+}
 
 /// Trust store source for certificate verification.
 #[derive(Debug, Clone, Default)]
@@ -119,6 +137,14 @@ pub struct TlsConfig {
     max_version: Option<TlsVersion>,
     sni_enabled: bool,
     root_store: Arc<OnceLock<Result<rustls::RootCertStore>>>,
+    /// Opaque connection-policy identity shared by unchanged clones.
+    ///
+    /// Any operation that creates a `TlsConfig` with changed
+    /// connection-affecting semantics mints a new token. The token is
+    /// crate-private, never rendered, and carries no key material. The
+    /// lazily built `root_store` cache is an implementation cache only and
+    /// never participates in identity on its own.
+    policy_token: Arc<u64>,
 }
 
 impl std::fmt::Debug for TlsConfig {
@@ -152,10 +178,30 @@ impl TlsConfig {
     ///
     /// Cloned configurations share this identity; separately constructed
     /// configurations do not pool together even when their visible settings
-    /// happen to match. The value is never exposed in diagnostics.
+    /// happen to match, and any consuming mutator that changes
+    /// connection-affecting policy mints a new token. The value is never
+    /// exposed in diagnostics and carries no key material.
+    ///
+    /// Field/mutator inventory (all connection-affecting): trust-store
+    /// selection and custom/additional CA roots, explicit crypto provider,
+    /// mTLS client identity, `verify_hostname` / `verify_certificate`
+    /// (including `danger_accept_invalid_certs`), min/max TLS versions, and
+    /// SNI enablement. The lazily built `root_store` cache is explicitly
+    /// excluded: clones share it, but sharing it no longer implies
+    /// compatibility.
     #[cfg(all(feature = "proxy", feature = "tls-rustls"))]
-    pub(crate) fn connection_identity(&self) -> usize {
-        Arc::as_ptr(&self.root_store) as usize
+    pub(crate) fn connection_identity(&self) -> u64 {
+        *self.policy_token
+    }
+
+    /// Origin-TLS identity for reusable CONNECT clients.
+    ///
+    /// This is the same opaque token as the proxy-TLS identity; it is a
+    /// separate method only so `transport::connect` does not depend on the
+    /// `proxy` feature gate for a TLS-only concept.
+    #[cfg(all(not(feature = "proxy"), feature = "tls-rustls"))]
+    pub(crate) fn connection_identity(&self) -> u64 {
+        *self.policy_token
     }
 
     /// Create a builder with secure defaults (verification enabled, native
@@ -176,10 +222,15 @@ impl TlsConfig {
 
     /// Enable or disable certificate and hostname verification while
     /// retaining the rest of this configuration.
+    ///
+    /// This mints a fresh opaque connection identity: a clone modified this
+    /// way must never compare as cache-compatible with its parent, even
+    /// though both share the same lazily built root-store cache.
     #[must_use]
     pub fn danger_accept_invalid_certs(mut self, accept: bool) -> Self {
         self.verify_certificate = !accept;
         self.verify_hostname = !accept;
+        self.policy_token = mint_tls_policy_token();
         self
     }
 
@@ -810,6 +861,10 @@ impl TlsConfigBuilder {
     }
 
     /// Build the [`TlsConfig`].
+    ///
+    /// Each call mints a fresh opaque connection identity, even for
+    /// structurally identical policy. Unchanged `Clone`s share identity;
+    /// separate builds never pool together implicitly.
     #[must_use]
     pub fn build(self) -> TlsConfig {
         TlsConfig {
@@ -824,6 +879,7 @@ impl TlsConfigBuilder {
             max_version: self.max_version,
             sni_enabled: self.sni_enabled,
             root_store: Arc::new(OnceLock::new()),
+            policy_token: mint_tls_policy_token(),
         }
     }
 }
@@ -1484,6 +1540,116 @@ mod tests {
         let debug = format!("{config:?}");
         assert!(debug.contains("verify_hostname: true"));
         assert!(debug.contains("verify_certificate: true"));
+    }
+
+    #[cfg(all(feature = "proxy", feature = "tls-rustls"))]
+    #[test]
+    fn unchanged_clone_shares_connection_identity() {
+        let base = TlsConfig::builder().build();
+        let strict = base.clone();
+        assert_eq!(
+            base.connection_identity(),
+            strict.connection_identity(),
+            "unchanged clones must remain cache-compatible"
+        );
+    }
+
+    #[cfg(all(feature = "proxy", feature = "tls-rustls"))]
+    #[test]
+    fn danger_mutation_mints_new_connection_identity() {
+        // Baseline-red regression for the proxy-TLS aliasing defect: a clone
+        // modified with `danger_accept_invalid_certs(true)` previously shared
+        // the root-store pointer identity with its strict parent.
+        let base = TlsConfig::builder().build();
+        let strict = base.clone();
+        let weak = base.clone().danger_accept_invalid_certs(true);
+        assert_ne!(
+            strict.connection_identity(),
+            weak.connection_identity(),
+            "changed verification policy must not alias through clone ancestry"
+        );
+    }
+
+    #[cfg(all(feature = "proxy", feature = "tls-rustls"))]
+    #[test]
+    fn independent_builds_never_share_connection_identity() {
+        let first = TlsConfig::builder().build();
+        let second = TlsConfig::builder().build();
+        assert_ne!(
+            first.connection_identity(),
+            second.connection_identity(),
+            "separate builds mint fresh identity even for identical policy"
+        );
+    }
+
+    #[cfg(all(feature = "proxy", feature = "tls-rustls"))]
+    #[test]
+    fn connection_identity_covers_policy_dimensions() {
+        // Each dimension builds an independent config; all must differ from
+        // the base because every build mints a fresh opaque token. The
+        // assertions document the connection-affecting surface, not structural
+        // equality: false misses are acceptable, false hits are not.
+        let base = TlsConfig::builder().build();
+        let base_id = base.connection_identity();
+
+        let sni_off = TlsConfig::builder().sni(false).build();
+        assert_ne!(base_id, sni_off.connection_identity());
+
+        let min_tls = TlsConfig::builder()
+            .min_tls_version(TlsVersion::Tls13)
+            .build();
+        assert_ne!(base_id, min_tls.connection_identity());
+
+        let max_tls = TlsConfig::builder()
+            .max_tls_version(TlsVersion::Tls12)
+            .build();
+        assert_ne!(base_id, max_tls.connection_identity());
+
+        let webpki = TlsConfig::builder()
+            .trust_store(TrustStore::WebPkiOnly)
+            .build();
+        assert_ne!(base_id, webpki.connection_identity());
+
+        let provider = Arc::new(rustls::crypto::ring::default_provider());
+        let explicit_provider = TlsConfig::builder()
+            .crypto_provider(provider)
+            .trust_store(TrustStore::WebPkiOnly)
+            .build();
+        assert_ne!(base_id, explicit_provider.connection_identity());
+
+        let custom_ca = TlsConfig::builder()
+            .ca_certificate_der(vec![vec![0u8; 32]])
+            .unwrap()
+            .build();
+        assert_ne!(base_id, custom_ca.connection_identity());
+
+        let additional_ca = TlsConfig::builder()
+            .trust_store(TrustStore::WebPkiOnly)
+            .additional_ca_certificate_der(vec![vec![1u8; 32]])
+            .unwrap()
+            .build();
+        assert_ne!(base_id, additional_ca.connection_identity());
+
+        let identity = ClientIdentity::Pem {
+            cert_chain: vec![],
+            private_key_der: vec![2u8; 16],
+            key_label: "PRIVATE KEY".to_string(),
+        };
+        let mtls = TlsConfig::builder().client_identity(identity).build();
+        assert_ne!(base_id, mtls.connection_identity());
+    }
+
+    #[cfg(all(feature = "proxy", feature = "tls-rustls"))]
+    #[test]
+    fn connection_identity_is_opaque_and_non_renderable() {
+        let config = TlsConfig::builder().build();
+        let id = config.connection_identity();
+        assert_ne!(id, 0, "0 is reserved for no-TLS-config keys");
+        let debug = format!("{config:?}");
+        assert!(
+            !debug.contains(&id.to_string()),
+            "opaque token must never appear in diagnostics: {debug}"
+        );
     }
 
     #[test]
