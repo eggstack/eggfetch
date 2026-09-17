@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.1.5] - 2026-09-17
 
 ### Changed
 
@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Native detailed request failures now preserve typed DNS provenance on the
   standard Hyper HTTP/HTTPS route without changing the public `Error` or
   ordinary request behavior.
+
+## [Unreleased]
 
 ## [0.1.4] - 2026-09-13
 
@@ -86,7 +88,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Multipart boundary validation
 - Proxy authentication boundary enforcement
 
-[Unreleased]: https://github.com/eggstack/eggfetch/compare/v0.1.4...HEAD
+[Unreleased]: https://github.com/eggstack/eggfetch/compare/v0.1.5...HEAD
+[0.1.5]: https://github.com/eggstack/eggfetch/releases/tag/v0.1.5
 [0.1.4]: https://github.com/eggstack/eggfetch/releases/tag/v0.1.4
 [0.1.3]: https://github.com/eggstack/eggfetch/releases/tag/v0.1.3
 [0.1.2]: https://github.com/eggstack/eggfetch/releases/tag/v0.1.2

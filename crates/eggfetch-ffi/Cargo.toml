@@ -1,6 +1,6 @@
 [package]
 name = "eggfetch-ffi"
-version = "0.1.4"
+version = "0.1.5"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -40,7 +40,7 @@ compression-deflate = ["eggfetch-core/compression-deflate"]
 multipart = ["eggfetch-core/multipart"]
 
 [dependencies]
-eggfetch-core = { version = "0.1.4", path = "../eggfetch-core", default-features = false }
+eggfetch-core = { version = "0.1.5", path = "../eggfetch-core", default-features = false }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "net", "sync"] }
 bytes = "1"
 http = "1"
