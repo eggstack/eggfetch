@@ -460,7 +460,10 @@ impl DirectConnector {
     }
 
     /// Create a connector clone pinned to the supplied destination snapshot.
-    pub(crate) fn with_resolved_target(&self, target: &crate::request::ResolvedTarget) -> Self {
+    pub(crate) fn with_resolved_target(
+        &self,
+        target: &crate::transport_hints::ResolvedTarget,
+    ) -> Self {
         Self {
             config: self.config.clone(),
             tls: self.tls.clone(),

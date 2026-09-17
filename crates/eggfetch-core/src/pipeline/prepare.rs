@@ -18,8 +18,9 @@ use crate::headers::Headers;
 use crate::pool::{OriginKey, PoolGuard};
 #[cfg(feature = "proxy")]
 use crate::proxy::{Proxy, ProxyConfig};
-#[cfg(feature = "proxy")]
+#[cfg(all(feature = "high-level-url", feature = "proxy"))]
 use crate::request::ProxyOverride;
+#[cfg(feature = "high-level-url")]
 use crate::request::Request;
 use crate::stream::write_timeout_stream;
 use crate::timeout::{Timeout, TimeoutPhase};
@@ -30,6 +31,10 @@ use crate::timeout::{Timeout, TimeoutPhase};
 /// execution path without reimplementing content-length, version, or header
 /// policy. The body is owned so one-shot streams are moved, never cloned,
 /// to satisfy the abstraction.
+///
+/// High-level only: the native frame API bypasses URL policy and pool-key
+/// construction goes through [`crate::http_origin::HttpOrigin`] directly.
+#[cfg(feature = "high-level-url")]
 pub(super) struct PreparedRequest {
     pub(super) method: http::Method,
     pub(super) url: url::Url,
@@ -37,8 +42,8 @@ pub(super) struct PreparedRequest {
     pub(super) headers: Headers,
     pub(super) body: RequestBody,
     pub(super) version: http::Version,
-    pub(super) transport_hints: crate::request::TransportHints,
-    pub(super) proxied_target: Option<crate::request::ResolvedTarget>,
+    pub(super) transport_hints: crate::transport_hints::TransportHints,
+    pub(super) proxied_target: Option<crate::transport_hints::ResolvedTarget>,
     #[cfg(feature = "proxy")]
     pub(super) effective_proxy: Option<ProxyConfig>,
     pub(super) decompression_enabled: bool,
@@ -127,6 +132,33 @@ pub(super) fn resolve_proxy(
     }
 }
 
+/// Whether the built-in proxy routes would apply to a native origin.
+///
+/// Mirrors [`resolve_proxy`] with `Inherit` but uses native
+/// scheme/host/explicit-port components so the native frame API never
+/// reparses its URI through `url::Url`. Shares the exact
+/// `should_use_for_scheme` + `should_bypass_components` evaluation with the
+/// high-level path.
+#[cfg(feature = "proxy")]
+pub(super) fn native_would_use_proxy(
+    inner: &ClientInner,
+    origin: &crate::http_origin::HttpOrigin,
+    explicit_port: Option<u16>,
+) -> bool {
+    let scheme = origin.scheme_str();
+    let host = origin.host();
+    inner
+        .config
+        .proxy
+        .iter()
+        .chain(inner.config.environment_proxies.iter())
+        .filter(|p| p.should_use_for_scheme(scheme))
+        .any(|p| {
+            p.no_proxy_rules()
+                .is_none_or(|np| !np.should_bypass_components(scheme, host, explicit_port))
+        })
+}
+
 /// Validate a `target` extension value for request smuggling safety.
 ///
 /// Rejects C0 control characters and DEL bytes. The target must also be
@@ -164,9 +196,12 @@ pub(crate) fn validate_target(target: &[u8]) -> Result<()> {
 ///
 /// When `target` is set, the wire URI is overridden while the logical URL
 /// is preserved for routing, Host header, cookies, and auth decisions.
+///
+/// High-level only; the native path uses [`resolve_native_request_uri`].
+#[cfg(feature = "high-level-url")]
 pub(super) fn resolve_request_uri(
     url: &url::Url,
-    transport_hints: &crate::request::TransportHints,
+    transport_hints: &crate::transport_hints::TransportHints,
 ) -> Result<http::Uri> {
     let logical_uri: http::Uri = url
         .as_str()
@@ -197,6 +232,41 @@ pub(super) fn resolve_request_uri(
     }
 }
 
+/// Build the native wire URI from an already-validated `http::Uri`.
+///
+/// Returns the original absolute URI when no `TransportHints::target`
+/// override is present. When `target` is present, validates it with the
+/// shared request-smuggling guard and replaces only `path_and_query` while
+/// preserving the original scheme/authority used for connector routing and
+/// TLS. Host-header policy is unchanged. Shares [`validate_target`] with
+/// the high-level helper so security checks cannot diverge.
+pub(super) fn resolve_native_request_uri(
+    uri: &http::Uri,
+    transport_hints: &crate::transport_hints::TransportHints,
+) -> Result<http::Uri> {
+    if let Some(ref target) = transport_hints.target {
+        validate_target(target)?;
+        let target_str = std::str::from_utf8(target)
+            .map_err(|_| Error::InvalidUrl("target extension is not valid UTF-8".into()))?;
+        // Same wire-target logic as the high-level helper: Hyper's legacy
+        // client requires an absolute URI for connector selection, then
+        // converts to origin-form on the wire. Preserve `*` support.
+        let target_uri = target_str.parse::<http::Uri>().ok();
+        let path_and_query = target_uri
+            .as_ref()
+            .and_then(http::Uri::path_and_query)
+            .cloned()
+            .or_else(|| target_str.parse().ok())
+            .ok_or_else(|| Error::InvalidUrl("failed to convert target to URI".into()))?;
+        let mut parts = uri.clone().into_parts();
+        parts.path_and_query = Some(path_and_query);
+        http::Uri::from_parts(parts)
+            .map_err(|e| Error::InvalidUrl(format!("failed to convert target to URI: {e}")))
+    } else {
+        Ok(uri.clone())
+    }
+}
+
 /// Preparation phase for single-request dispatch: normalize headers, body,
 /// version, and proxy/pool/timeout state into a transport-ready form.
 ///
@@ -210,6 +280,9 @@ pub(super) fn resolve_request_uri(
 ///
 /// Returns an error for TLS misconfiguration, proxy origin resolution,
 /// pool timeouts, content-length mismatches, or oversized requests.
+///
+/// High-level only; requires the `high-level-url` feature.
+#[cfg(feature = "high-level-url")]
 #[allow(
     clippy::too_many_lines,
     reason = "preparation centralizes header/body/version/proxy/pool policy in one place so transports do not reimplement it"
@@ -241,7 +314,7 @@ pub(super) async fn prepare_single_request(
         max_decompression_ratio: request_max_decompression_ratio,
     } = request.into_parts();
 
-    #[cfg(any(feature = "http1", feature = "http2"))]
+    #[cfg(any(feature = "native-http1", feature = "native-http2"))]
     if inner.lifecycle.invalid {
         return Err(Error::RequestBuild(
             "physical connection policy requires max_live > 0 and admission_timeout only with max_live"
@@ -343,7 +416,7 @@ pub(super) async fn prepare_single_request(
                 "caller-supplied resolved destinations require direct routing; disable the proxy explicitly".into(),
             ));
         }
-        #[cfg(all(unix, any(feature = "http1", feature = "http2")))]
+        #[cfg(all(unix, any(feature = "native-http1", feature = "native-http2")))]
         if inner.uds_client.is_some() {
             return Err(Error::Unsupported(
                 "caller-supplied resolved destinations are incompatible with Unix-domain routing"
@@ -358,7 +431,7 @@ pub(super) async fn prepare_single_request(
                 "custom dialing is incompatible with caller-supplied resolved destinations".into(),
             ));
         }
-        #[cfg(any(feature = "http1", feature = "http2"))]
+        #[cfg(any(feature = "native-http1", feature = "native-http2"))]
         if inner.direct_connector_config.is_some() {
             return Err(Error::Unsupported(
                 "custom dialing is incompatible with local-address or socket-option routing".into(),
@@ -485,12 +558,13 @@ pub(super) async fn prepare_single_request(
 mod tests {
     use super::*;
 
+    #[cfg(feature = "high-level-url")]
     #[test]
     fn target_override_keeps_logical_authority_for_routing() {
         // The wire URI carries the caller's path while the logical URL
         // remains authoritative for routing/TLS/Host decisions upstream.
         let url = url::Url::parse("https://example.com/original").expect("valid URL");
-        let hints = crate::request::TransportHints {
+        let hints = crate::transport_hints::TransportHints {
             target: Some(bytes::Bytes::from("/wire-path?q=1")),
             ..Default::default()
         };
@@ -500,6 +574,26 @@ mod tests {
             Some("/wire-path?q=1")
         );
         assert_eq!(uri.host(), Some("example.com"));
+    }
+
+    #[test]
+    fn native_target_override_keeps_logical_authority() {
+        let uri: http::Uri = "https://example.com/original".parse().expect("valid URI");
+        let hints = crate::transport_hints::TransportHints {
+            target: Some(bytes::Bytes::from("/wire-path?q=1")),
+            ..Default::default()
+        };
+        let resolved = resolve_native_request_uri(&uri, &hints).expect("target resolves");
+        assert_eq!(
+            resolved
+                .path_and_query()
+                .map(http::uri::PathAndQuery::as_str),
+            Some("/wire-path?q=1")
+        );
+        assert_eq!(resolved.host(), Some("example.com"));
+        // No override returns the original URI unchanged.
+        let plain = crate::transport_hints::TransportHints::default();
+        assert_eq!(resolve_native_request_uri(&uri, &plain).unwrap(), uri);
     }
 
     #[test]

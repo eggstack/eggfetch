@@ -197,7 +197,7 @@ pub(super) async fn send_h3_route(
     h3_alt: Option<H3AltTarget>,
     hop_timeout: Timeout,
     remaining_total: Option<Duration>,
-    transport_hints: &crate::request::TransportHints,
+    transport_hints: &crate::transport_hints::TransportHints,
     failure_context: Option<&crate::error::RequestFailureContext>,
 ) -> Result<crate::response::Response> {
     let h3_connector = inner.h3_connector.as_ref().ok_or_else(|| {

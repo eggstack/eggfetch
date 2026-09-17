@@ -29,24 +29,24 @@ pub(crate) type Connector =
 pub(crate) type HyperRequestBody =
     http_body_util::combinators::UnsyncBoxBody<Bytes, Box<dyn std::error::Error + Send + Sync>>;
 
-#[cfg(any(feature = "http1", feature = "http2"))]
+#[cfg(any(feature = "native-http1", feature = "native-http2"))]
 pub(crate) type CustomConnector = custom_connector::CustomConnector;
 
-#[cfg(any(feature = "http1", feature = "http2"))]
+#[cfg(any(feature = "native-http1", feature = "native-http2"))]
 pub(crate) type TimeoutCustomClient = hyper_util::client::legacy::Client<
     lifecycle::LifecycleConnector<connect_timeout::ConnectTimeout<CustomConnector>>,
     HyperRequestBody,
 >;
 
 /// Hyper legacy client type with a connect-phase timeout wrapper.
-#[cfg(any(feature = "http1", feature = "http2"))]
+#[cfg(any(feature = "native-http1", feature = "native-http2"))]
 pub(crate) type TimeoutHyperClient = hyper_util::client::legacy::Client<
     lifecycle::LifecycleConnector<connect_timeout::ConnectTimeout<Connector>>,
     HyperRequestBody,
 >;
 
 /// Hyper legacy client type using the direct connector with socket options.
-#[cfg(any(feature = "http1", feature = "http2"))]
+#[cfg(any(feature = "native-http1", feature = "native-http2"))]
 pub(crate) type TimeoutDirectClient = hyper_util::client::legacy::Client<
     lifecycle::LifecycleConnector<
         connect_timeout::ConnectTimeout<direct_connector::DirectConnector>,
@@ -55,7 +55,7 @@ pub(crate) type TimeoutDirectClient = hyper_util::client::legacy::Client<
 >;
 
 #[cfg(unix)]
-#[cfg(any(feature = "http1", feature = "http2"))]
+#[cfg(any(feature = "native-http1", feature = "native-http2"))]
 pub(crate) type TimeoutUdsClient = hyper_util::client::legacy::Client<
     lifecycle::LifecycleConnector<connect_timeout::ConnectTimeout<uds::UdsConnector>>,
     HyperRequestBody,
@@ -85,7 +85,7 @@ pub(crate) type TimeoutConnectClient = hyper_util::client::legacy::Client<
 
 pub mod alt_svc;
 pub(crate) mod connect_timeout;
-#[cfg(any(feature = "http1", feature = "http2"))]
+#[cfg(any(feature = "native-http1", feature = "native-http2"))]
 pub(crate) mod hyper_client;
 pub(crate) mod custom_connector {
     #[cfg(feature = "tls-rustls")]
@@ -94,13 +94,13 @@ pub(crate) mod custom_connector {
     pub(crate) type CustomConnector = super::dialer::DialerConnector;
 }
 pub mod dialer;
-#[cfg(any(feature = "http1", feature = "http2"))]
+#[cfg(any(feature = "native-http1", feature = "native-http2"))]
 pub(crate) mod direct;
 pub mod direct_connector;
 pub mod lifecycle;
 pub mod metrics;
 pub(crate) mod standard_resolver;
-#[cfg(all(unix, any(feature = "http1", feature = "http2")))]
+#[cfg(all(unix, any(feature = "native-http1", feature = "native-http2")))]
 pub(crate) mod uds;
 
 #[cfg(feature = "proxy")]

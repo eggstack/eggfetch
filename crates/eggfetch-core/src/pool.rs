@@ -202,19 +202,40 @@ pub(crate) struct OriginKey {
 }
 
 impl OriginKey {
-    /// Build an `OriginKey` from a scheme and `url::Url`.
-    pub(crate) fn from_url(scheme: &str, url: &url::Url) -> Option<Self> {
-        let host = url.host_str()?.to_owned();
-        let port = url.port_or_known_default()?;
-        Some(Self {
+    /// Build an `OriginKey` from canonical native origin components.
+    ///
+    /// This is the production constructor for the native transport path and
+    /// does not require `url::Url`.
+    pub(crate) fn from_components(scheme: &str, host: &str, port: u16) -> Self {
+        Self {
             scheme: scheme.to_owned(),
-            host,
+            host: host.to_owned(),
             port,
             proxy_host: None,
             proxy_port: None,
             proxy_scheme: None,
             is_tunnel: false,
-        })
+        }
+    }
+
+    /// Build an `OriginKey` from a native [`crate::http_origin::HttpOrigin`].
+    pub(crate) fn from_origin(origin: &crate::http_origin::HttpOrigin) -> Self {
+        Self::from_components(origin.scheme_str(), origin.host(), origin.port_ref())
+    }
+
+    /// Build an `OriginKey` from a scheme and `url::Url`.
+    ///
+    /// High-level adapter: reduces immediately to the same canonical
+    /// component representation as [`Self::from_origin`].
+    #[cfg(feature = "high-level-url")]
+    pub(crate) fn from_url(scheme: &str, url: &url::Url) -> Option<Self> {
+        let host = url.host_str()?.to_owned();
+        let port = url.port_or_known_default()?;
+        Some(Self::from_components(
+            scheme,
+            &host.to_ascii_lowercase(),
+            port,
+        ))
     }
 
     /// Build an origin key including the proxy endpoint scheme.
@@ -231,7 +252,7 @@ impl OriginKey {
         let port = url.port_or_known_default()?;
         Some(Self {
             scheme: scheme.to_owned(),
-            host,
+            host: host.to_ascii_lowercase(),
             port,
             proxy_host: proxy_host.map(str::to_owned),
             proxy_port,
@@ -245,15 +266,7 @@ impl OriginKey {
     #[cfg(any(test, feature = "test-util"))]
     #[allow(dead_code)]
     pub(crate) fn from_parts(scheme: &str, host: &str, port: u16) -> Self {
-        Self {
-            scheme: scheme.to_owned(),
-            host: host.to_owned(),
-            port,
-            proxy_host: None,
-            proxy_port: None,
-            proxy_scheme: None,
-            is_tunnel: false,
-        }
+        Self::from_components(scheme, host, port)
     }
 
     /// Build an `OriginKey` with proxy route info for tests or callers
@@ -968,6 +981,7 @@ mod tests {
         drop(g2);
     }
 
+    #[cfg(feature = "high-level-url")]
     #[test]
     fn origin_key_from_url_http() {
         let url = url::Url::parse("http://example.com:8080/path").unwrap();
@@ -977,6 +991,7 @@ mod tests {
         assert_eq!(key.port(), 8080);
     }
 
+    #[cfg(feature = "high-level-url")]
     #[test]
     fn origin_key_from_url_https_default_port() {
         let url = url::Url::parse("https://example.com/path").unwrap();
@@ -986,12 +1001,27 @@ mod tests {
         assert_eq!(key.port(), 443);
     }
 
+    #[cfg(feature = "high-level-url")]
     #[test]
     fn origin_key_from_url_http_default_port() {
         let url = url::Url::parse("http://example.com/path").unwrap();
         let key = OriginKey::from_url("http", &url).unwrap();
         assert_eq!(key.scheme(), "http");
         assert_eq!(key.port(), 80);
+    }
+
+    #[test]
+    fn origin_key_from_native_origin() {
+        let uri: http::Uri = "https://example.com:8443/path".parse().expect("valid URI");
+        let origin = crate::http_origin::HttpOrigin::from_uri(&uri).expect("native origin parses");
+        let key = OriginKey::from_origin(&origin);
+        assert_eq!(key.host(), "example.com");
+        assert_eq!(key.to_string(), "https://example.com:8443");
+        // Component constructor shares the same canonical representation.
+        assert_eq!(
+            key,
+            OriginKey::from_components("https", "example.com", 8443)
+        );
     }
 
     #[test]
@@ -1042,6 +1072,7 @@ mod tests {
         assert_ne!(http, https);
     }
 
+    #[cfg(feature = "high-level-url")]
     #[test]
     fn origin_key_from_url_uses_scheme_default_port() {
         // URL with explicit port is honored; URL without port uses scheme default.

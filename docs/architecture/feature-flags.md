@@ -15,22 +15,31 @@ The following features are declared in `crates/eggfetch-core/Cargo.toml`:
 ```toml
 [features]
 default = ["http1", "tls-rustls", "tls-native-roots"]
-http1 = ["hyper/http1", "hyper-util/http1", "hyper-rustls?/http1"]
-http2 = ["dep:h2", "hyper/http2", "hyper-util/http2", "hyper-rustls?/http2"]
+http1 = ["native-http1", "high-level-url"]
+http2 = ["native-http2", "high-level-url"]
+native-http1 = ["hyper/http1", "hyper-util/http1", "hyper-rustls?/http1"]
+native-http2 = ["dep:h2", "hyper/http2", "hyper-util/http2", "hyper-rustls?/http2"]
+high-level-url = ["dep:url", "dep:percent-encoding"]
 tls-rustls = ["dep:hyper-rustls", "dep:pem-rfc7468", "dep:rustls", "dep:tokio-rustls", "dep:webpki-roots", "hyper-rustls/ring", "hyper-rustls/logging", "hyper-rustls/tls12"]
 tls-native-roots = ["tls-rustls", "dep:rustls-native-certs"]
-http3 = ["http1", "tls-rustls", "dep:quinn", "dep:h3", "dep:h3-quinn"]
+http3 = ["http1", "tls-rustls", "dep:quinn", "dep:h3", "dep:h3-quinn", "high-level-url"]
 json = ["dep:serde", "dep:serde_json"]
 compression-gzip = ["dep:async-compression", "async-compression/gzip", "dep:tokio-util", "tokio/io-util", "dep:flate2"]
 compression-brotli = ["dep:async-compression", "async-compression/brotli", "dep:tokio-util", "tokio/io-util", "dep:brotli"]
 compression-zstd = ["dep:async-compression", "async-compression/zstd", "dep:tokio-util", "tokio/io-util", "dep:zstd"]
 compression-deflate = ["dep:async-compression", "async-compression/deflate", "dep:tokio-util", "tokio/io-util", "dep:flate2"]
-cookies = ["dep:cookie"]
+cookies = ["dep:cookie", "high-level-url"]
 multipart = []
-proxy = ["http1", "tls-rustls", "tokio/io-util"]
+proxy = ["http1", "tls-rustls", "tokio/io-util", "high-level-url"]
 tracing = ["dep:tracing"]
 test-util = ["tokio/test-util"]
 ```
+
+`http1`/`http2` are compatibility aliases: they preserve the existing
+high-level string/URL API. `native-http1`/`native-http2` are the low-level
+`http::Request`/`http::Uri` transport slices; selecting them without
+`high-level-url` omits the `url`/`idna`/ICU closure. Native callers own any
+IDNA/punycode conversion before constructing `http::Uri`.
 
 ## Default Features
 
@@ -67,19 +76,47 @@ Rustls because HTTPS proxy endpoints and tunnels need them. Add
 `tls-native-roots` explicitly when those profiles should prefer the platform
 trust store.
 
+Native embedding slices (manual, not Tier 2 gates): replace `http1` with
+`native-http1` (and `http2` with `native-http2`) and omit `high-level-url`
+to build the `Client::execute_http_body`/`NativeHttpService` transport
+without `url`, `idna`, ICU, or `percent-encoding`. Example:
+`default-features = false, features = ["native-http1", "tls-rustls"]`.
+Built-in proxy, cookies, HTTP/3, and the string-URL `RequestBuilder` API
+require `high-level-url` and are unavailable in the minimal slice.
+
 ## Feature Reference
 
 ### http1
 
 **Status:** implemented.
-Enables HTTP/1.1 support. This is the primary protocol for the MVP, backed by hyper.
-The feature owns H1 support in Hyper and Hyper-util. It does not imply TLS, so
-`http1` alone is suitable for cleartext-only embedded clients.
+High-level HTTP/1.1 surface: `native-http1` transport plus `high-level-url`
+string/URL API. For the transport-only slice without `url`, select
+`native-http1` directly. `http1` alone (without TLS) is cleartext-only.
 
 ### http2
 
 **Status:** implemented.
-Enables HTTP/2 support. When enabled, the client can negotiate HTTP/2 via ALPN for HTTPS connections. The `HttpVersionPolicy` enum controls which protocol versions are advertised. `Auto` (default) advertises both `h2` and `http/1.1`; `Http2Only` advertises only `h2`; `Http1Only` advertises only `http/1.1`. Without this feature, `Http2Only` and `Auto` silently downgrade to `Http1Only`. The Python crate exposes `Client(http2=True)` and `AsyncClient(http2=True)` for enabling HTTP/2 negotiation, and `Client(http1=False, http2=True)` / `AsyncClient(http1=False, http2=True)` for HTTP/2-only prior-knowledge mode.
+High-level HTTP/2 surface: `native-http2` transport plus `high-level-url`.
+When enabled, the client can negotiate HTTP/2 via ALPN for HTTPS connections. The `HttpVersionPolicy` enum controls which protocol versions are advertised. `Auto` (default) advertises both `h2` and `http/1.1`; `Http2Only` advertises only `h2`; `Http1Only` advertises only `http/1.1`. Without this feature, `Http2Only` and `Auto` silently downgrade to `Http1Only`. The Python crate exposes `Client(http2=True)` and `AsyncClient(http2=True)` for enabling HTTP/2 negotiation, and `Client(http1=False, http2=True)` / `AsyncClient(http1=False, http2=True)` for HTTP/2-only prior-knowledge mode.
+
+### native-http1 / native-http2
+
+**Status:** implemented.
+Low-level transport slices for `http::Request`/`http_body::Body` embedding
+(`Client::execute_http_body`, `NativeHttpService`). They own the Hyper
+H1/H2 protocol flags without the high-level URL layer. Select without
+`high-level-url` for minimal embedding builds without `url`/`idna`/ICU.
+Existing `http1`/`http2` names retain their high-level behavior; use the
+`native-*` names only when explicitly omitting the URL layer.
+
+### high-level-url
+
+**Status:** implemented.
+High-level string/URL request semantics backed by `url` (plus
+`percent-encoding` for proxy auth decoding). Required by `Request`,
+`RequestBuilder`, `Response`, redirects, cookies, and built-in proxy/HTTP/3
+routing. Native callers provide a valid `http::Uri` and own any
+IDNA/punycode conversion; the native path performs none.
 
 ### http3
 

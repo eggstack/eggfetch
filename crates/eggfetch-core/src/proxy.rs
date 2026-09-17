@@ -326,9 +326,22 @@ impl NoProxy {
     /// Returns `true` if the given URL should bypass the proxy (go direct).
     #[must_use]
     pub fn should_bypass(&self, url: &url::Url) -> bool {
-        let host = url.host_str().unwrap_or("");
-        let port = url.port();
+        self.should_bypass_components(url.scheme(), url.host_str().unwrap_or(""), url.port())
+    }
 
+    /// Component-based bypass check for native `http::Uri` origins.
+    ///
+    /// Shares the exact rule evaluation with [`Self::should_bypass`] so
+    /// native transport does not need `url::Url`. `explicit_port` is the
+    /// URI's explicit port (`None` when implicit) to preserve the
+    /// explicit-vs-default distinction in `HostPortHttpx` and related rules.
+    #[must_use]
+    pub(crate) fn should_bypass_components(
+        &self,
+        scheme: &str,
+        host: &str,
+        port: Option<u16>,
+    ) -> bool {
         for rule in &self.rules {
             match rule {
                 NoProxyRule::Wildcard => return true,
@@ -369,7 +382,7 @@ impl NoProxy {
                 NoProxyRule::HostPort(h, p) => {
                     let port_matches = match port {
                         Some(pu) => pu == *p,
-                        None => Self::default_port_for_scheme(url.scheme()) == *p,
+                        None => Self::default_port_for_scheme(scheme) == *p,
                     };
                     let host_matches = if h.starts_with('.') {
                         Self::matches_domain_suffix(host, h)
@@ -383,7 +396,7 @@ impl NoProxy {
                 NoProxyRule::HostPortExact(h, p) => {
                     let port_matches = match port {
                         Some(pu) => pu == *p,
-                        None => Self::default_port_for_scheme(url.scheme()) == *p,
+                        None => Self::default_port_for_scheme(scheme) == *p,
                     };
                     if port_matches && Self::matches_exact_host(host, h) {
                         return true;
@@ -405,16 +418,16 @@ impl NoProxy {
                     }
                 }
                 NoProxyRule::SchemeHostPort {
-                    scheme,
+                    scheme: rule_scheme,
                     host: rule_host,
                     port: rule_port,
                 } => {
-                    if url.scheme().eq_ignore_ascii_case(scheme)
+                    if scheme.eq_ignore_ascii_case(rule_scheme)
                         && host.eq_ignore_ascii_case(rule_host)
                         && rule_port.is_none_or(|rule_port| {
                             port == Some(rule_port)
                                 || (port.is_none()
-                                    && Self::default_port_for_scheme(url.scheme()) == rule_port)
+                                    && Self::default_port_for_scheme(scheme) == rule_port)
                         })
                     {
                         return true;
@@ -1004,7 +1017,7 @@ impl Proxy {
     where
         I: IntoIterator<Item = SocketAddr>,
     {
-        let target = crate::request::ResolvedTarget::new(addresses).map_err(|error| {
+        let target = crate::transport_hints::ResolvedTarget::new(addresses).map_err(|error| {
             Error::InvalidProxyUrl(format!("invalid resolved proxy peers: {error}"))
         })?;
         let expected_port = self.config().port()?;

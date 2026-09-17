@@ -40,7 +40,7 @@ pip install eggfetch
 eggfetch-core = "0.1"
 ```
 
-The default features are the secure HTTP/1.1 client with Rustls and native roots. See the [feature profile matrix](docs/architecture/feature-flags.md#supported-core-profiles) for minimal, deterministic, and embedded recipes.
+The default features are the secure HTTP/1.1 client with Rustls and native roots. See the [feature profile matrix](docs/architecture/feature-flags.md#supported-core-profiles) for minimal, deterministic, and embedded recipes. Low-level embedding without the `url`/`idna`/ICU closure selects `native-http1` (or `native-http2`) without `high-level-url` and uses `Client::execute_http_body` with a caller-owned `http::Uri` (callers own IDNA/punycode conversion).
 
 **CLI:**
 

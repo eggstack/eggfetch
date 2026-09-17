@@ -109,6 +109,7 @@ impl AltSvcOrigin {
     }
 
     /// Build from a `url::Url`. Returns `None` when the URL has no host.
+    #[cfg(feature = "high-level-url")]
     #[must_use]
     pub fn from_url(url: &url::Url) -> Option<Self> {
         let host = url.host_str()?;

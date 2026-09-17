@@ -34,6 +34,7 @@ pub mod cookie;
 pub mod error;
 mod h2_headers;
 pub mod headers;
+pub(crate) mod http_origin;
 pub mod http_version;
 pub mod limits;
 #[cfg(feature = "multipart")]
@@ -45,8 +46,11 @@ pub mod pool;
 pub mod proxy;
 pub mod redact;
 pub mod redirect;
+#[cfg(feature = "high-level-url")]
 pub mod request;
+#[cfg(feature = "high-level-url")]
 pub mod response;
+#[cfg(feature = "high-level-url")]
 pub(crate) mod response_decode;
 pub mod retry;
 pub mod service;
@@ -56,6 +60,7 @@ pub mod timeout;
 pub mod tls;
 pub mod trace;
 pub mod transport;
+pub mod transport_hints;
 
 pub use auth::{AuthScheme, BasicAuth, BearerAuth};
 pub use body::{BoxBytesStream, NativeResponseBody, RequestBody, ResponseBody, SharedTrailers};
@@ -77,16 +82,17 @@ pub use pool::{Pool, PoolConfig};
 pub use proxy::{
     NoProxy, NoProxyRule, Proxy, ProxyAuth, ProxyConfig, ProxyDecision, ProxyEnvironment, ProxyRule,
 };
-pub use redact::{
-    is_sensitive_header, redact_headers, redact_url, redact_url_string, SENSITIVE_HEADERS,
-};
+pub use redact::{is_sensitive_header, redact_headers, SENSITIVE_HEADERS};
+#[cfg(feature = "high-level-url")]
+pub use redact::{redact_url, redact_url_string};
+#[cfg(feature = "high-level-url")]
 pub use redirect::{
     build_redirect_request_with_redirect_policy, check_https_downgrade, is_https_downgrade,
-    RedirectDowngradePolicy, RedirectPolicy,
 };
-pub use request::{
-    NativeRequestOptions, ProxyOverride, Request, RequestBuilder, ResolvedTarget, TransportHints,
-};
+pub use redirect::{RedirectDowngradePolicy, RedirectPolicy};
+#[cfg(feature = "high-level-url")]
+pub use request::{ProxyOverride, Request, RequestBuilder};
+#[cfg(feature = "high-level-url")]
 pub use response::{HistoryEntry, Response};
 pub use retry::{
     BackoffPolicy, MethodPolicy, ReplayCheck, RetryCause, RetryContext, RetryPolicy,
@@ -105,3 +111,4 @@ pub use transport::lifecycle::{
 #[cfg(feature = "http3")]
 pub use transport::metrics::{H3CloseKind, H3CloseSummary, H3ConnectionDiagnostic, H3RouteKind};
 pub use transport::metrics::{TransportMetrics, TransportSnapshot};
+pub use transport_hints::{NativeRequestOptions, ResolvedTarget, TransportHints};

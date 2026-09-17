@@ -1,7 +1,7 @@
 # Native URI Dependency Separation
 
 Planning baseline: `b0a09eed95b88199db2d0188ea68bf100c43b50a` (`main`, 2026-09-17; `eggfetch-core` 0.1.6)
-Status: planned
+Status: implemented
 
 Depends on: `native-pool-map-dependency-reduction.md`
 
@@ -377,3 +377,53 @@ This plan is complete when:
 - repository qualification and packaging gates are green.
 
 Record the executable freeze and measurements in this plan at closure. Any downstream adoption or version bump belongs in the downstream repository after an upstream release is available.
+
+## Closure evidence
+
+- Implementation commit: (to be recorded after commit; pre-commit HEAD is
+  `158c159d` plus this working tree).
+- Feature split: `http1 = ["native-http1", "high-level-url"]`,
+  `http2 = ["native-http2", "high-level-url"]`,
+  `high-level-url = ["dep:url", "dep:percent-encoding"]`;
+  `url` and `percent-encoding` are optional in `eggfetch-core`;
+  `cookies`/`proxy`/`http3` imply `high-level-url`.
+- Native origin: `src/http_origin.rs` (`HttpOrigin`/`HttpScheme` from
+  `http::Uri`; HTTP/HTTPS only, authority required, userinfo rejected,
+  IPv4/bracketed-IPv6 handled, explicit ports preserved, malformed ports fail
+  closed, no IDNA). `OriginKey::from_origin`/`from_components` canonical;
+  `from_url` remains as a high-level adapter. `ResolvedRouteKey::from_origin`
+  canonical (`scheme://host:port` + ordered addresses + exact SNI);
+  high-level `new()` retained test-only. Native wire helper
+  `prepare::resolve_native_request_uri` shares `validate_target` with the
+  high-level helper. `ResolvedTarget`/`TransportHints`/`NativeRequestOptions`
+  moved to `src/transport_hints.rs` (root re-exports unchanged;
+  `request::...` paths re-exported when `high-level-url` is enabled).
+- Native proxy check shares policy via
+  `NoProxy::should_bypass_components` + `prepare::native_would_use_proxy`
+  (no `Url` reparse; explicit-vs-default port distinction preserved).
+- Dependency closure (`cargo tree -e normal`, same toolchain):
+  `native-http1,tls-rustls` = 70 packages; `+tls-native-roots` = 72;
+  `native-http2,tls-rustls` = 78; high-level `http1,tls-rustls` = 106;
+  default = 108. `cargo tree -i url|idna|dashmap` in the native slice matches
+  no package; `cargo tree` shows no `url`/`idna`/ICU/`percent-encoding`.
+  External-style construction fixture (`Client::builder`,
+  `http::Request::get`, `NativeRequestOptions::default`) links and runs
+  (`native link ok`) with no `url` in its tree.
+- Artifact sizes (same release profile/toolchain, construction-only fixture;
+  both sides use only the native API so the linker prunes unused high-level
+  code in the baseline too): stripped baseline (`http1`) 1,830,280 bytes vs
+  stripped native (`native-http1`) 1,830,880 bytes (essentially identical,
+  +600 bytes). Recorded rather than optimized; no size gate added.
+- Tests: `cargo test -p eggfetch-core --all-features -- --test-threads=1`
+  → 1313 passed (31 suites). New: `http_origin` 16 unit tests (defaults,
+  explicit ports, IPv4/IPv6, missing scheme/authority, unsupported scheme,
+  userinfo, malformed ports, identity/case); `OriginKey::from_origin` +
+  `ResolvedRouteKey::from_origin` unit tests; `prepare::resolve_native_...`
+  target-override test; `native_http_body_tests` 15 passed (6 new:
+  unsupported scheme, userinfo, resolved-port mismatch, smuggling target,
+  Host header, no-redirect). High-level redirect/cookie/proxy/HTTPX suites
+  remain green via Tier 1 (see CI).
+- Qualification: Tier 1 (`./scripts/check.sh`) green locally before commit;
+  Tier 2/3 per verification policy at release (feature matrix in
+  `feature-flags.md` notes native slices as manual, not Tier 2 gates; no CI
+  jobs/matrices added).

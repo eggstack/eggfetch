@@ -16,8 +16,8 @@
 
 use crate::error::{Error, Result};
 use crate::proxy::{ProxyAuth, ProxyConfig};
-use crate::request::ResolvedTarget;
 use crate::timeout::TimeoutPhase;
+use crate::transport_hints::ResolvedTarget;
 
 /// Internal cache identity for one SOCKS route. The type deliberately does
 /// not implement `Debug` or `Display`: credentials remain memory-only key
@@ -934,7 +934,7 @@ mod tests {
     #[test]
     fn socks_route_key_compatibility_matrix() {
         use crate::proxy::Proxy;
-        use crate::request::ResolvedTarget;
+        use crate::transport_hints::ResolvedTarget;
         // Connection-scoped: scheme/host/port, auth, pinned proxy peer,
         // pinned target. Origin TLS, HTTP version, and connect-phase
         // timeouts are immutable at `ClientInner` scope for SOCKS (the

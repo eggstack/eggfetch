@@ -168,7 +168,9 @@ standard-library map discipline.
 
 ### Origin Keying
 
-Per-origin pool limits are keyed by a composite `OriginKey`:
+Per-origin pool limits are keyed by a composite `OriginKey` built from
+canonical components (`OriginKey::from_components` / `from_origin`); the
+high-level `from_url` adapter reduces to the same representation:
 
 | Scenario | Key |
 |----------|-----|

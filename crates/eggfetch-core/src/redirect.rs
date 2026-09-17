@@ -6,11 +6,13 @@
 //! Python layer only configures policy and exposes response history.
 
 use http::Method;
+#[cfg(feature = "high-level-url")]
 use url::Url;
 
 use crate::body::RequestBody;
 use crate::error::{Error, Result};
 use crate::headers::Headers;
+#[cfg(feature = "high-level-url")]
 use crate::request::Request;
 
 /// Policy for HTTPS-to-HTTP redirect downgrades.
@@ -110,6 +112,7 @@ impl RedirectPolicy {
     /// # Errors
     ///
     /// Returns [`Error::InvalidRedirectLocation`] on a denied downgrade.
+    #[cfg(feature = "high-level-url")]
     pub fn check_downgrade(&self, from: &Url, to: &Url) -> Result<()> {
         check_https_downgrade(from, to, self.downgrade)
     }
@@ -121,6 +124,7 @@ impl RedirectPolicy {
 /// `Location` values resolved against the originating URL), so this is a
 /// plain scheme comparison.
 #[must_use]
+#[cfg(feature = "high-level-url")]
 pub fn is_https_downgrade(from: &Url, to: &Url) -> bool {
     from.scheme() == "https" && to.scheme() == "http"
 }
@@ -135,6 +139,7 @@ pub fn is_https_downgrade(from: &Url, to: &Url) -> bool {
 /// # Errors
 ///
 /// Returns [`Error::InvalidRedirectLocation`] on a denied downgrade.
+#[cfg(feature = "high-level-url")]
 pub fn check_https_downgrade(from: &Url, to: &Url, policy: RedirectDowngradePolicy) -> Result<()> {
     if policy == RedirectDowngradePolicy::Deny && is_https_downgrade(from, to) {
         return Err(Error::InvalidRedirectLocation(
@@ -217,6 +222,7 @@ pub fn drops_body_on_redirect(status: http::StatusCode, current_method: &Method)
 /// - The redirect location is missing or invalid
 /// - The redirect URL uses an unsupported scheme
 /// - The body needs to be resent but is not replayable
+#[cfg(feature = "high-level-url")]
 pub fn build_redirect_request(
     original: &Request,
     status: http::StatusCode,
@@ -244,6 +250,7 @@ pub fn build_redirect_request(
 ///
 /// Same as [`build_redirect_request`], plus
 /// [`Error::InvalidRedirectLocation`] on a denied downgrade.
+#[cfg(feature = "high-level-url")]
 pub fn build_redirect_request_with_redirect_policy(
     original: &Request,
     status: http::StatusCode,
@@ -267,6 +274,7 @@ pub fn build_redirect_request_with_redirect_policy(
 ///
 /// Same as [`build_redirect_request`], plus
 /// [`Error::InvalidRedirectLocation`] on a denied downgrade.
+#[cfg(feature = "high-level-url")]
 pub(crate) fn build_redirect_request_with_policy(
     original: &Request,
     location: &str,
@@ -287,6 +295,7 @@ pub(crate) fn build_redirect_request_with_policy(
 ///
 /// Same as [`build_redirect_request`], plus
 /// [`Error::InvalidRedirectLocation`] on a denied downgrade.
+#[cfg(feature = "high-level-url")]
 fn build_redirect_request_with_method(
     original: &Request,
     location: &str,
@@ -326,12 +335,14 @@ fn build_redirect_request_with_method(
 /// Resolve a redirect Location against the original URL.
 ///
 /// Supports absolute URLs, relative paths, and scheme-relative URLs.
+#[cfg(feature = "high-level-url")]
 fn resolve_redirect_url(base: &Url, location: &str) -> Result<Url> {
     base.join(location)
         .map_err(|e| Error::InvalidRedirectLocation(format!("{e}")))
 }
 
 /// Validate that a redirect URL uses an allowed scheme.
+#[cfg(feature = "high-level-url")]
 fn validate_redirect_url(url: &Url) -> Result<()> {
     if !url.username().is_empty() || url.password().is_some() {
         return Err(Error::InvalidRedirectLocation(
@@ -347,6 +358,7 @@ fn validate_redirect_url(url: &Url) -> Result<()> {
 }
 
 /// Strip sensitive and body-specific headers for a redirect request.
+#[cfg(feature = "high-level-url")]
 fn strip_headers_for_redirect(
     headers: &mut Headers,
     original_url: &Url,
@@ -381,7 +393,7 @@ fn strip_headers_for_redirect(
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "high-level-url"))]
 mod tests {
     use super::*;
     use bytes::Bytes;

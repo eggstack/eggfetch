@@ -43,8 +43,8 @@ struct HopBuildParams {
     max_decompression_ratio: Option<f64>,
     #[cfg(feature = "proxy")]
     proxy_override: crate::request::ProxyOverride,
-    transport_hints: crate::request::TransportHints,
-    proxied_target: Option<crate::request::ResolvedTarget>,
+    transport_hints: crate::transport_hints::TransportHints,
+    proxied_target: Option<crate::transport_hints::ResolvedTarget>,
     auth: Option<crate::auth::AuthScheme>,
     auth_disabled: bool,
     /// True only for the first hop of the logical request.
@@ -114,7 +114,7 @@ fn build_hop_request(client: &Client, params: HopBuildParams) -> Result<Request>
         hop.set_transport_hints(transport_hints);
         hop.set_proxied_target(proxied_target);
     } else if preserve_resolved_target {
-        let resolved_hints = crate::request::TransportHints {
+        let resolved_hints = crate::transport_hints::TransportHints {
             resolved_target: transport_hints.resolved_target,
             ..Default::default()
         };
@@ -531,8 +531,8 @@ pub(super) async fn send_with_redirects(client: &Client, request: Request) -> Re
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::request::TransportHints;
     use crate::timeout::Timeout;
+    use crate::transport_hints::TransportHints;
 
     fn test_url() -> url::Url {
         url::Url::parse("https://example.com/path").expect("valid test URL")

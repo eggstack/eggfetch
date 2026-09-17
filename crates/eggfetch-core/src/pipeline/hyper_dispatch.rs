@@ -7,13 +7,15 @@
 
 use std::time::Duration;
 
+#[cfg(feature = "high-level-url")]
 use super::prepare::resolve_request_uri;
 use crate::body::RequestBody;
 use crate::client::ClientInner;
 use crate::error::{Error, Result};
 use crate::headers::Headers;
-use crate::request::TransportHints;
+#[cfg(feature = "high-level-url")]
 use crate::response::Response;
+use crate::transport_hints::TransportHints;
 
 /// Build a Hyper request from prepared parts.
 ///
@@ -55,6 +57,7 @@ pub(super) fn build_http_request<B>(
 
 /// UDS route: configured Unix-domain-socket client.
 #[allow(clippy::too_many_arguments)]
+#[cfg(feature = "high-level-url")]
 pub(super) async fn send_uds_route(
     inner: &ClientInner,
     method: &http::Method,
@@ -66,7 +69,7 @@ pub(super) async fn send_uds_route(
     transport_hints: &TransportHints,
     remaining_total: Option<Duration>,
 ) -> Result<Response> {
-    #[cfg(all(unix, any(feature = "http1", feature = "http2")))]
+    #[cfg(all(unix, any(feature = "native-http1", feature = "native-http2")))]
     {
         let uds_client = inner
             .uds_client
@@ -93,6 +96,7 @@ pub(super) async fn send_uds_route(
 /// Custom-dialer route: caller-supplied raw-stream client, with per-request
 /// SNI override support.
 #[allow(clippy::too_many_arguments)]
+#[cfg(feature = "high-level-url")]
 pub(super) async fn send_custom_route(
     inner: &ClientInner,
     method: &http::Method,
@@ -128,6 +132,7 @@ pub(super) async fn send_custom_route(
 /// Specialized-direct route: static resolved destination or configured
 /// direct connector (socket options / local address).
 #[allow(clippy::too_many_arguments)]
+#[cfg(feature = "high-level-url")]
 pub(super) async fn send_direct_route(
     inner: &ClientInner,
     method: &http::Method,
@@ -142,8 +147,17 @@ pub(super) async fn send_direct_route(
 ) -> Result<Response> {
     let resolved_client;
     let direct_client = if let Some(target) = transport_hints.resolved_target.as_ref() {
+        let http_origin = crate::http_origin::HttpOrigin::from_url(&url).ok_or_else(|| {
+            Error::InvalidResolvedTarget(
+                "resolved destinations require an HTTP or HTTPS URL".into(),
+            )
+        })?;
         resolved_client = inner
-            .resolved_client(&url, target, transport_hints.sni_hostname.as_deref())
+            .resolved_client(
+                &http_origin,
+                target,
+                transport_hints.sni_hostname.as_deref(),
+            )
             .await?;
         &resolved_client
     } else {
@@ -165,6 +179,7 @@ pub(super) async fn send_direct_route(
 
 /// SNI-direct route: cached override client separating DNS/TCP from TLS.
 #[allow(clippy::too_many_arguments)]
+#[cfg(feature = "high-level-url")]
 pub(super) async fn send_sni_route(
     inner: &ClientInner,
     method: &http::Method,
@@ -202,6 +217,7 @@ pub(super) async fn send_sni_route(
 /// their respective `transport::direct`/`transport::uds` converters, so this
 /// helper exists only to keep the standard Hyper dispatch explicit.
 #[allow(clippy::too_many_arguments)] // Keeps the direct-send helper explicit; timeout wrapping is the only added phase input.
+#[cfg(feature = "high-level-url")]
 pub(super) async fn send_hyper_request(
     inner: &ClientInner,
     method: &http::Method,

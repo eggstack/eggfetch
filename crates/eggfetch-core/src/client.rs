@@ -3,7 +3,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-#[cfg(any(feature = "http1", feature = "http2"))]
+#[cfg(any(feature = "native-http1", feature = "native-http2"))]
 use crate::transport::hyper_client::{
     build_hyper_client, BoundedClientCache, HyperClientPolicy, RESOLVED_CLIENT_CACHE_MAX_ENTRIES,
     SNI_CLIENT_CACHE_MAX_ENTRIES,
@@ -13,8 +13,9 @@ use crate::transport::hyper_client::{
     CONNECT_CLIENT_CACHE_MAX_ENTRIES, FORWARD_CLIENT_CACHE_MAX_ENTRIES,
     SOCKS_CLIENT_CACHE_MAX_ENTRIES,
 };
+#[cfg(feature = "high-level-url")]
 use http::Method;
-#[cfg(any(feature = "http1", feature = "http2"))]
+#[cfg(any(feature = "native-http1", feature = "native-http2"))]
 use tokio::sync::Mutex;
 
 use crate::error::{Error, Result};
@@ -25,15 +26,18 @@ use crate::pool::{Pool, PoolConfig, PoolMetrics};
 #[cfg(feature = "proxy")]
 use crate::proxy::Proxy;
 use crate::redirect::RedirectPolicy;
-use crate::request::{NativeRequestOptions, Request, RequestBuilder};
+#[cfg(feature = "high-level-url")]
+use crate::request::{Request, RequestBuilder};
+#[cfg(feature = "high-level-url")]
 use crate::response::Response;
 use crate::retry::RetryPolicy;
 use crate::timeout::Timeout;
 use crate::transport::dialer::Dialer;
-#[cfg(any(feature = "http1", feature = "http2"))]
+#[cfg(any(feature = "native-http1", feature = "native-http2"))]
 use crate::transport::lifecycle::LifecycleConfig;
 use crate::transport::lifecycle::{PhysicalConnectionPolicy, TransportIoTimeout};
 use crate::transport::Connector;
+use crate::transport_hints::NativeRequestOptions;
 
 #[cfg(feature = "cookies")]
 use crate::cookie::CookieJar;
@@ -153,21 +157,21 @@ impl std::fmt::Debug for Client {
 /// diagnostics. Compare with `==`/`!=` in tests.
 ///
 /// Connection-scoped: normalized logical HTTP origin (scheme, host, effective
-/// port via the `url` crate's origin ASCII serialization; no path/query/
-/// fragment), the full ordered physical address snapshot (order controls
-/// attempt/failover order, so reordering fragments identity), and the exact
-/// optional SNI override (no normalization: a redundant miss is safe, a false
-/// hit is a security defect). TLS config/provider/trust policy, HTTP
-/// version/ALPN policy, direct socket/local-address configuration, connect
-/// timeout, lifecycle policy, canceled-request retry behavior, and idle-pool
-/// policy are immutable at `ClientInner` scope after `ClientBuilder::build`
-/// and therefore stay outside the per-route key. Request-scoped state
-/// (total/read/write/pool deadlines, retry/redirect state, body, cookies/auth
-/// headers, decompression limits, trace observers, failure contexts) is never
-/// represented. If any currently client-wide connection-affecting field
-/// becomes request-scoped, this key must be expanded before the new
-/// variability may use the cache.
-#[cfg(any(feature = "http1", feature = "http2"))]
+/// port as `scheme://host:port` with an always-explicit port and no
+/// path/query/fragment), the full ordered physical address snapshot (order
+/// controls attempt/failover order, so reordering fragments identity), and
+/// the exact optional SNI override (no normalization: a redundant miss is
+/// safe, a false hit is a security defect). TLS config/provider/trust
+/// policy, HTTP version/ALPN policy, direct socket/local-address
+/// configuration, connect timeout, lifecycle policy, canceled-request retry
+/// behavior, and idle-pool policy are immutable at `ClientInner` scope after
+/// `ClientBuilder::build` and therefore stay outside the per-route key.
+/// Request-scoped state (total/read/write/pool deadlines, retry/redirect
+/// state, body, cookies/auth headers, decompression limits, trace observers,
+/// failure contexts) is never represented. If any currently client-wide
+/// connection-affecting field becomes request-scoped, this key must be
+/// expanded before the new variability may use the cache.
+#[cfg(any(feature = "native-http1", feature = "native-http2"))]
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub(crate) struct ResolvedRouteKey {
     origin: String,
@@ -175,26 +179,52 @@ pub(crate) struct ResolvedRouteKey {
     sni_hostname: Option<String>,
 }
 
-#[cfg(any(feature = "http1", feature = "http2"))]
+#[cfg(any(feature = "native-http1", feature = "native-http2"))]
 impl ResolvedRouteKey {
-    pub(crate) fn new(
-        origin_url: &url::Url,
-        target: &crate::request::ResolvedTarget,
+    /// Canonical constructor from a native origin.
+    pub(crate) fn from_origin(
+        origin: &crate::http_origin::HttpOrigin,
+        target: &crate::transport_hints::ResolvedTarget,
         sni_hostname: Option<&str>,
     ) -> Self {
         Self {
-            origin: origin_url.origin().ascii_serialization(),
+            origin: origin.origin_string(),
             addresses: target.addresses_shared(),
             sni_hostname: sni_hostname.map(str::to_owned),
+        }
+    }
+
+    /// High-level adapter from `url::Url`; reduces to the same canonical
+    /// `scheme://host:port` representation as [`Self::from_origin`].
+    ///
+    /// Test-only: production high-level routes convert via
+    /// `HttpOrigin::from_url` + `from_origin` so pool and route identity
+    /// share one canonical constructor.
+    #[cfg(all(feature = "high-level-url", any(test, feature = "test-util")))]
+    #[allow(dead_code)]
+    pub(crate) fn new(
+        origin_url: &url::Url,
+        target: &crate::transport_hints::ResolvedTarget,
+        sni_hostname: Option<&str>,
+    ) -> Self {
+        match crate::http_origin::HttpOrigin::from_url(origin_url) {
+            Some(origin) => Self::from_origin(&origin, target, sni_hostname),
+            None => Self {
+                // Fall back to the legacy serialization for non-HTTP(S) or
+                // hostless URLs; such routes fail closed before I/O.
+                origin: origin_url.origin().ascii_serialization(),
+                addresses: target.addresses_shared(),
+                sni_hostname: sni_hostname.map(str::to_owned),
+            },
         }
     }
 }
 
 pub(crate) struct ClientInner {
-    #[cfg(any(feature = "http1", feature = "http2"))]
+    #[cfg(any(feature = "native-http1", feature = "native-http2"))]
     pub(crate) hyper_client: Option<crate::transport::TimeoutHyperClient>,
     /// Hyper client backed by the caller-supplied native dialer.
-    #[cfg(any(feature = "http1", feature = "http2"))]
+    #[cfg(any(feature = "native-http1", feature = "native-http2"))]
     pub(crate) custom_client: Option<crate::transport::TimeoutCustomClient>,
     /// Error captured while building the configured TLS policy, if any.
     ///
@@ -206,12 +236,12 @@ pub(crate) struct ClientInner {
     /// Direct connector for requests with advanced socket options or local
     /// address binding. Uses a custom connector instead of the standard
     /// hyper-rustls connector path.
-    #[cfg(any(feature = "http1", feature = "http2"))]
+    #[cfg(any(feature = "native-http1", feature = "native-http2"))]
     pub(crate) direct_client: Option<crate::transport::TimeoutDirectClient>,
     /// Base direct-connector configuration (local address / socket options)
     /// used to construct SNI-override clients so they preserve source
     /// binding and socket tuning.
-    #[cfg(any(feature = "http1", feature = "http2"))]
+    #[cfg(any(feature = "native-http1", feature = "native-http2"))]
     pub(crate) direct_connector_config:
         Option<crate::transport::direct_connector::DirectConnectorConfig>,
     /// Cached hyper clients keyed by TLS SNI hostname override.
@@ -236,11 +266,11 @@ pub(crate) struct ClientInner {
     /// deadlines, retry/redirect, body, trace/failure context,
     /// decompression limits, cookies/auth headers) is never keyed and
     /// never retained by the cached connector.
-    #[cfg(any(feature = "http1", feature = "http2"))]
+    #[cfg(any(feature = "native-http1", feature = "native-http2"))]
     pub(crate) sni_clients:
         Mutex<BoundedClientCache<String, crate::transport::TimeoutDirectClient>>,
     /// Cached custom-dialer clients for per-request SNI overrides.
-    #[cfg(any(feature = "http1", feature = "http2"))]
+    #[cfg(any(feature = "native-http1", feature = "native-http2"))]
     pub(crate) sni_custom_clients:
         Mutex<BoundedClientCache<String, crate::transport::TimeoutCustomClient>>,
     /// Cached Hyper clients for direct resolved-target routes.
@@ -262,12 +292,12 @@ pub(crate) struct ClientInner {
     /// became request-scoped, the key must be expanded first. Ordinary
     /// DNS/direct clients and resolved-target clients never share an entry,
     /// and proxy resolved routing stays in the SOCKS/forward/CONNECT caches.
-    #[cfg(any(feature = "http1", feature = "http2"))]
+    #[cfg(any(feature = "native-http1", feature = "native-http2"))]
     pub(crate) resolved_clients:
         Mutex<BoundedClientCache<ResolvedRouteKey, crate::transport::TimeoutDirectClient>>,
     /// Hyper client for Unix domain socket requests.
     #[cfg(unix)]
-    #[cfg(any(feature = "http1", feature = "http2"))]
+    #[cfg(any(feature = "native-http1", feature = "native-http2"))]
     pub(crate) uds_client: Option<crate::transport::TimeoutUdsClient>,
     /// Persistent Hyper clients keyed by effective SOCKS route.
     ///
@@ -307,7 +337,7 @@ pub(crate) struct ClientInner {
     /// this client. Distinct from [`Pool`] logical-permit metrics.
     pub(crate) transport_metrics: Arc<crate::transport::metrics::TransportMetrics>,
     /// Shared admission permits and established-I/O timeout policy.
-    #[cfg(any(feature = "http1", feature = "http2"))]
+    #[cfg(any(feature = "native-http1", feature = "native-http2"))]
     pub(crate) lifecycle: Arc<LifecycleConfig>,
     #[cfg(feature = "http3")]
     pub(crate) h3_connector: Option<crate::transport::http3::H3Connector>,
@@ -347,14 +377,14 @@ impl ClientInner {
     /// H1 keep-alive / H2 multiplexed connections); any change in those
     /// dimensions selects a different entry. Ordinary DNS/direct clients never
     /// share these entries.
-    #[cfg(any(feature = "http1", feature = "http2"))]
+    #[cfg(any(feature = "native-http1", feature = "native-http2"))]
     pub(crate) async fn resolved_client(
         &self,
-        origin_url: &url::Url,
-        target: &crate::request::ResolvedTarget,
+        origin: &crate::http_origin::HttpOrigin,
+        target: &crate::transport_hints::ResolvedTarget,
         sni_hostname: Option<&str>,
     ) -> Result<crate::transport::TimeoutDirectClient> {
-        let key = ResolvedRouteKey::new(origin_url, target, sni_hostname);
+        let key = ResolvedRouteKey::from_origin(origin, target, sni_hostname);
         let mut clients = self.resolved_clients.lock().await;
         if let Some(client) = clients.get(&key) {
             return Ok(client.clone());
@@ -379,7 +409,7 @@ impl ClientInner {
     /// performs no network I/O, so callers may hold the route-cache mutex
     /// while building, matching the documented route-cache locking contract.
     /// Construction failures return before insert and never poison the cache.
-    #[cfg(any(feature = "http1", feature = "http2"))]
+    #[cfg(any(feature = "native-http1", feature = "native-http2"))]
     #[allow(clippy::too_many_arguments)]
     fn build_resolved_client(
         config: &ClientConfig,
@@ -387,7 +417,7 @@ impl ClientInner {
         transport_metrics: &Arc<crate::transport::metrics::TransportMetrics>,
         pool: &Pool,
         lifecycle: &Arc<LifecycleConfig>,
-        target: &crate::request::ResolvedTarget,
+        target: &crate::transport_hints::ResolvedTarget,
         sni_hostname: Option<&str>,
     ) -> Result<crate::transport::TimeoutDirectClient> {
         let connect_timeout = config.timeout.as_ref().and_then(|t| t.connect);
@@ -443,7 +473,7 @@ impl ClientInner {
     /// that separates DNS/TCP resolution (to the original URL host) from
     /// TLS negotiation (with the SNI hostname). Clients are cached by
     /// SNI hostname for connection reuse.
-    #[cfg(any(feature = "http1", feature = "http2"))]
+    #[cfg(any(feature = "native-http1", feature = "native-http2"))]
     pub(crate) async fn sni_client(
         &self,
         sni_hostname: &str,
@@ -499,7 +529,7 @@ impl ClientInner {
     }
 
     /// Get or create a custom-dialer Hyper client with a fixed SNI override.
-    #[cfg(any(feature = "http1", feature = "http2"))]
+    #[cfg(any(feature = "native-http1", feature = "native-http2"))]
     pub(crate) async fn sni_custom_client(
         &self,
         sni_hostname: &str,
@@ -558,7 +588,7 @@ impl ClientInner {
     pub(crate) async fn socks_client(
         &self,
         proxy: &crate::proxy::ProxyConfig,
-        target: Option<&crate::request::ResolvedTarget>,
+        target: Option<&crate::transport_hints::ResolvedTarget>,
     ) -> Result<crate::transport::TimeoutSocksClient> {
         let key = crate::transport::socks::SocksRouteKey::from_proxy(proxy, target)?;
         let mut clients = self.socks_clients.lock().await;
@@ -614,7 +644,7 @@ impl ClientInner {
     /// The client is scoped to the destination origin rather than sharing a
     /// pool across arbitrary origins. Hyper still owns keep-alive handling,
     /// framing, response bodies, and stale-idle recovery for each entry.
-    #[cfg(any(feature = "http1", feature = "http2"))]
+    #[cfg(any(feature = "native-http1", feature = "native-http2"))]
     pub(crate) async fn forward_client(
         &self,
         proxy: &crate::proxy::ProxyConfig,
@@ -652,12 +682,12 @@ impl ClientInner {
     /// Get or create a Hyper client for one compatible HTTPS CONNECT route.
     /// Multi-address target snapshots remain on the legacy path so their
     /// typed 502/504 fallback semantics are not weakened.
-    #[cfg(any(feature = "http1", feature = "http2"))]
+    #[cfg(any(feature = "native-http1", feature = "native-http2"))]
     pub(crate) async fn connect_client(
         &self,
         proxy: &crate::proxy::ProxyConfig,
         origin: &url::Url,
-        transport_hints: &crate::request::TransportHints,
+        transport_hints: &crate::transport_hints::TransportHints,
         target: Option<std::net::SocketAddr>,
         connect_timeout: Option<Duration>,
     ) -> Result<crate::transport::TimeoutConnectClient> {
@@ -719,6 +749,7 @@ impl Client {
     /// # Errors
     ///
     /// Returns [`Error::InvalidUrl`] if `url` cannot be parsed.
+    #[cfg(feature = "high-level-url")]
     pub fn get(&self, url: &str) -> Result<RequestBuilder> {
         self.request(Method::GET, url)
     }
@@ -728,6 +759,7 @@ impl Client {
     /// # Errors
     ///
     /// Returns [`Error::InvalidUrl`] if `url` cannot be parsed.
+    #[cfg(feature = "high-level-url")]
     pub fn post(&self, url: &str) -> Result<RequestBuilder> {
         self.request(Method::POST, url)
     }
@@ -737,6 +769,7 @@ impl Client {
     /// # Errors
     ///
     /// Returns [`Error::InvalidUrl`] if `url` cannot be parsed.
+    #[cfg(feature = "high-level-url")]
     pub fn put(&self, url: &str) -> Result<RequestBuilder> {
         self.request(Method::PUT, url)
     }
@@ -746,6 +779,7 @@ impl Client {
     /// # Errors
     ///
     /// Returns [`Error::InvalidUrl`] if `url` cannot be parsed.
+    #[cfg(feature = "high-level-url")]
     pub fn patch(&self, url: &str) -> Result<RequestBuilder> {
         self.request(Method::PATCH, url)
     }
@@ -755,6 +789,7 @@ impl Client {
     /// # Errors
     ///
     /// Returns [`Error::InvalidUrl`] if `url` cannot be parsed.
+    #[cfg(feature = "high-level-url")]
     pub fn delete(&self, url: &str) -> Result<RequestBuilder> {
         self.request(Method::DELETE, url)
     }
@@ -764,6 +799,7 @@ impl Client {
     /// # Errors
     ///
     /// Returns [`Error::InvalidUrl`] if `url` cannot be parsed.
+    #[cfg(feature = "high-level-url")]
     pub fn head(&self, url: &str) -> Result<RequestBuilder> {
         self.request(Method::HEAD, url)
     }
@@ -773,6 +809,7 @@ impl Client {
     /// # Errors
     ///
     /// Returns [`Error::InvalidUrl`] if `url` cannot be parsed.
+    #[cfg(feature = "high-level-url")]
     pub fn options(&self, url: &str) -> Result<RequestBuilder> {
         self.request(Method::OPTIONS, url)
     }
@@ -782,6 +819,7 @@ impl Client {
     /// # Errors
     ///
     /// Returns [`Error::InvalidUrl`] if `url` cannot be parsed.
+    #[cfg(feature = "high-level-url")]
     pub fn request(&self, method: Method, url: &str) -> Result<RequestBuilder> {
         let parsed = parse_url(url)?;
         Ok(RequestBuilder::new(self.clone(), method, parsed))
@@ -836,6 +874,7 @@ impl Client {
     ///
     /// Returns an error if the request fails at any stage (connect, TLS,
     /// protocol, body) or if a timeout elapses.
+    #[cfg(feature = "high-level-url")]
     pub(crate) async fn send(&self, request: Request) -> Result<Response> {
         Box::pin(crate::pipeline::send_with_retry(self, request)).await
     }
@@ -851,6 +890,7 @@ impl Client {
     /// # Errors
     ///
     /// Returns the original request error wrapped in [`crate::RequestFailure`].
+    #[cfg(feature = "high-level-url")]
     pub async fn send_detailed(
         &self,
         mut request: Request,
@@ -869,6 +909,7 @@ impl Client {
     /// This handles pool acquisition, timeout application, and body
     /// processing for one request/response cycle. It does NOT handle
     /// redirects—that is the responsibility of [`Client::send`].
+    #[cfg(feature = "high-level-url")]
     pub(crate) async fn send_single_request(
         &self,
         request: Request,
@@ -1461,9 +1502,9 @@ impl ClientBuilder {
     #[must_use]
     #[allow(clippy::too_many_lines)]
     pub fn build(self) -> Client {
-        #[cfg(any(feature = "http1", feature = "http2"))]
+        #[cfg(any(feature = "native-http1", feature = "native-http2"))]
         use crate::http_version::HttpVersionPolicyEnabler;
-        #[cfg(any(feature = "http1", feature = "http2"))]
+        #[cfg(any(feature = "native-http1", feature = "native-http2"))]
         let enabler = HttpVersionPolicyEnabler::from_policy(self.http_version_policy);
         let transport_metrics = Arc::new(crate::transport::metrics::TransportMetrics::new());
 
@@ -1494,7 +1535,7 @@ impl ClientBuilder {
                 pool_config.idle_timeout = limits_config.idle_timeout;
             }
         }
-        #[cfg(any(feature = "http1", feature = "http2"))]
+        #[cfg(any(feature = "native-http1", feature = "native-http2"))]
         let lifecycle = Arc::new(LifecycleConfig::from_policy(
             self.physical_connection_policy,
             self.transport_io_timeout,
@@ -1503,7 +1544,7 @@ impl ClientBuilder {
         // Shared builder policy for the persistent per-client Hyper
         // singletons below (standard, direct, UDS, custom dialer). Cached and
         // isolated route clients resolve their own narrower policy at use.
-        #[cfg(any(feature = "http1", feature = "http2"))]
+        #[cfg(any(feature = "native-http1", feature = "native-http2"))]
         let persistent_policy = HyperClientPolicy::persistent(
             self.retry_canceled_requests,
             pool_config.idle_timeout,
@@ -1550,7 +1591,10 @@ impl ClientBuilder {
             None
         };
 
-        #[cfg(all(not(feature = "tls-rustls"), any(feature = "http1", feature = "http2")))]
+        #[cfg(all(
+            not(feature = "tls-rustls"),
+            any(feature = "native-http1", feature = "native-http2")
+        ))]
         let hyper_client = if matches!(
             self.http_version_policy,
             crate::HttpVersionPolicy::Http3Only
@@ -1581,9 +1625,9 @@ impl ClientBuilder {
         // Build the direct connector client for advanced socket options / local
         // address binding. This uses a custom connector path instead of the
         // standard hyper-rustls connector.
-        #[cfg(any(feature = "http1", feature = "http2"))]
+        #[cfg(any(feature = "native-http1", feature = "native-http2"))]
         let stored_direct_config = self.direct_connector_config.clone();
-        #[cfg(any(feature = "http1", feature = "http2"))]
+        #[cfg(any(feature = "native-http1", feature = "native-http2"))]
         let direct_client = if let Some(dc_config) = self.direct_connector_config {
             let connect_timeout = self.timeout.as_ref().and_then(|t| t.connect);
 
@@ -1630,7 +1674,7 @@ impl ClientBuilder {
         #[cfg(not(unix))]
         let _ = &self.uds_path;
 
-        #[cfg(all(unix, any(feature = "http1", feature = "http2")))]
+        #[cfg(all(unix, any(feature = "native-http1", feature = "native-http2")))]
         let uds_client = self.uds_path.clone().map(|path| {
             #[cfg(feature = "tls-rustls")]
             let tls_connector = self
@@ -1658,7 +1702,7 @@ impl ClientBuilder {
             build_hyper_client(connector, &persistent_policy, connect_timeout, &lifecycle)
         });
 
-        #[cfg(any(feature = "http1", feature = "http2"))]
+        #[cfg(any(feature = "native-http1", feature = "native-http2"))]
         let custom_client = if let Some(dialer) = self.dialer.clone() {
             #[cfg(feature = "tls-rustls")]
             let custom_config = self
@@ -1712,27 +1756,27 @@ impl ClientBuilder {
 
         Client {
             inner: Arc::new(ClientInner {
-                #[cfg(any(feature = "http1", feature = "http2"))]
+                #[cfg(any(feature = "native-http1", feature = "native-http2"))]
                 hyper_client,
-                #[cfg(any(feature = "http1", feature = "http2"))]
+                #[cfg(any(feature = "native-http1", feature = "native-http2"))]
                 custom_client,
                 #[cfg(feature = "tls-rustls")]
                 tls_config_error,
-                #[cfg(any(feature = "http1", feature = "http2"))]
+                #[cfg(any(feature = "native-http1", feature = "native-http2"))]
                 direct_client,
-                #[cfg(any(feature = "http1", feature = "http2"))]
+                #[cfg(any(feature = "native-http1", feature = "native-http2"))]
                 direct_connector_config: stored_direct_config,
-                #[cfg(any(feature = "http1", feature = "http2"))]
+                #[cfg(any(feature = "native-http1", feature = "native-http2"))]
                 sni_clients: Mutex::new(BoundedClientCache::new(SNI_CLIENT_CACHE_MAX_ENTRIES)),
-                #[cfg(any(feature = "http1", feature = "http2"))]
+                #[cfg(any(feature = "native-http1", feature = "native-http2"))]
                 sni_custom_clients: Mutex::new(BoundedClientCache::new(
                     SNI_CLIENT_CACHE_MAX_ENTRIES,
                 )),
-                #[cfg(any(feature = "http1", feature = "http2"))]
+                #[cfg(any(feature = "native-http1", feature = "native-http2"))]
                 resolved_clients: Mutex::new(BoundedClientCache::new(
                     RESOLVED_CLIENT_CACHE_MAX_ENTRIES,
                 )),
-                #[cfg(all(unix, any(feature = "http1", feature = "http2")))]
+                #[cfg(all(unix, any(feature = "native-http1", feature = "native-http2")))]
                 uds_client,
                 #[cfg(feature = "proxy")]
                 socks_clients: Mutex::new(BoundedClientCache::new(SOCKS_CLIENT_CACHE_MAX_ENTRIES)),
@@ -1747,7 +1791,7 @@ impl ClientBuilder {
                 config,
                 pool,
                 transport_metrics,
-                #[cfg(any(feature = "http1", feature = "http2"))]
+                #[cfg(any(feature = "native-http1", feature = "native-http2"))]
                 lifecycle,
                 #[cfg(feature = "http3")]
                 h3_connector,
@@ -1839,7 +1883,7 @@ where
     let builder = hyper_rustls::HttpsConnectorBuilder::new()
         .with_tls_config(config)
         .https_or_http();
-    #[cfg(feature = "http2")]
+    #[cfg(feature = "native-http2")]
     {
         match (enabler.enable_http1(), enabler.enable_http2()) {
             (true, true) => builder.enable_http1().enable_http2().wrap_connector(http),
@@ -1847,14 +1891,17 @@ where
             (false, true) => builder.enable_http2().wrap_connector(http),
         }
     }
-    #[cfg(not(feature = "http2"))]
+    #[cfg(not(feature = "native-http2"))]
     {
         let _ = enabler;
         builder.enable_http1().wrap_connector(http)
     }
 }
 
-#[cfg(all(feature = "tls-rustls", any(feature = "http1", feature = "http2")))]
+#[cfg(all(
+    feature = "tls-rustls",
+    any(feature = "native-http1", feature = "native-http2")
+))]
 fn build_custom_connector(
     config: rustls::ClientConfig,
     dialer: Arc<dyn Dialer>,
@@ -1878,7 +1925,10 @@ fn build_custom_connector(
     ))
 }
 
-#[cfg(all(not(feature = "tls-rustls"), any(feature = "http1", feature = "http2")))]
+#[cfg(all(
+    not(feature = "tls-rustls"),
+    any(feature = "native-http1", feature = "native-http2")
+))]
 fn build_custom_connector(
     _config: (),
     dialer: Arc<dyn Dialer>,
@@ -1894,6 +1944,7 @@ impl Default for ClientBuilder {
     }
 }
 
+#[cfg(feature = "high-level-url")]
 fn parse_url(url_str: &str) -> Result<url::Url> {
     // Deliberately do not echo `url_str` into the error: parsing has
     // failed, so `redact_url_string` would fall back to the raw input
@@ -1921,15 +1972,15 @@ mod tests {
     #[cfg(feature = "proxy")]
     use crate::proxy::ProxyAuth;
     use bytes::Bytes;
-    #[cfg(any(feature = "http1", feature = "http2"))]
+    #[cfg(any(feature = "native-http1", feature = "native-http2"))]
     use hyper_util::rt::TokioExecutor;
-    #[cfg(any(feature = "http1", feature = "http2"))]
+    #[cfg(any(feature = "native-http1", feature = "native-http2"))]
     use std::future::{ready, Ready};
-    #[cfg(any(feature = "http1", feature = "http2"))]
+    #[cfg(any(feature = "native-http1", feature = "native-http2"))]
     use std::net::SocketAddr;
-    #[cfg(any(feature = "http1", feature = "http2"))]
+    #[cfg(any(feature = "native-http1", feature = "native-http2"))]
     use std::task::{Context, Poll};
-    #[cfg(any(feature = "http1", feature = "http2"))]
+    #[cfg(any(feature = "native-http1", feature = "native-http2"))]
     use tower_service::Service;
 
     #[test]
@@ -1961,17 +2012,20 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "high-level-url")]
     #[test]
     fn client_default() {
         let _client = Client::default();
     }
 
+    #[cfg(feature = "high-level-url")]
     #[test]
     fn client_builder() {
         let _client = Client::builder().user_agent("test-agent").build();
     }
 
-    #[cfg(any(feature = "http1", feature = "http2"))]
+    #[cfg(any(feature = "native-http1", feature = "native-http2"))]
+    #[cfg(feature = "high-level-url")]
     #[tokio::test]
     async fn standard_connector_preserves_resolver_failure_for_detailed_mapping() {
         #[derive(Clone, Copy)]
@@ -2136,7 +2190,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "http2")]
+    #[cfg(feature = "native-http2")]
     fn client_builder_http2_only() {
         let client = Client::builder()
             .http_version_policy(HttpVersionPolicy::Http2Only)
@@ -2147,12 +2201,13 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "high-level-url")]
     #[test]
     fn connector_builds_for_all_policies() {
         for policy in [
             HttpVersionPolicy::Http1Only,
             HttpVersionPolicy::Auto { allow_http3: false },
-            #[cfg(feature = "http2")]
+            #[cfg(feature = "native-http2")]
             HttpVersionPolicy::Http2Only,
             #[cfg(feature = "http3")]
             HttpVersionPolicy::Http3Only,
@@ -2169,7 +2224,8 @@ mod tests {
         }
     }
 
-    #[cfg(feature = "http2")]
+    #[cfg(feature = "native-http2")]
+    #[cfg(feature = "high-level-url")]
     #[test]
     fn custom_connector_alpn_matches_http_version_policy() {
         let config = rustls::ClientConfig::builder()
@@ -2195,23 +2251,27 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "high-level-url")]
     #[test]
     fn parse_valid_urls() {
         assert!(parse_url("https://example.com").is_ok());
         assert!(parse_url("http://localhost:8080").is_ok());
     }
 
+    #[cfg(feature = "high-level-url")]
     #[test]
     fn parse_invalid_schemes() {
         assert!(parse_url("ftp://example.com").is_err());
         assert!(parse_url("file:///tmp/test").is_err());
     }
 
+    #[cfg(feature = "high-level-url")]
     #[test]
     fn parse_invalid_urls() {
         assert!(parse_url("not a url").is_err());
     }
 
+    #[cfg(feature = "high-level-url")]
     #[test]
     fn get_request_builder() {
         let client = Client::new();
@@ -2220,6 +2280,7 @@ mod tests {
         assert_eq!(*req.method(), Method::GET);
     }
 
+    #[cfg(feature = "high-level-url")]
     #[test]
     fn hyper_canceled_request_retry_defaults_on_and_is_independently_configurable() {
         assert!(Client::new().inner.config.retry_canceled_requests);
@@ -2228,6 +2289,7 @@ mod tests {
         assert!(strict.inner.config.retry.is_none());
     }
 
+    #[cfg(feature = "high-level-url")]
     #[test]
     fn physical_policy_and_transport_io_timeout_are_separate_from_logical_pooling() {
         let client = Client::builder()
@@ -2254,6 +2316,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "high-level-url")]
     #[test]
     fn apply_content_length_empty_body() {
         let headers = Headers::new();
@@ -2262,6 +2325,7 @@ mod tests {
         assert_eq!(out.get("content-length").unwrap().to_str().unwrap(), "0");
     }
 
+    #[cfg(feature = "high-level-url")]
     #[test]
     fn apply_content_length_bytes_body() {
         let headers = Headers::new();
@@ -2270,6 +2334,7 @@ mod tests {
         assert_eq!(out.get("content-length").unwrap().to_str().unwrap(), "5");
     }
 
+    #[cfg(feature = "high-level-url")]
     #[test]
     fn apply_content_length_stream_known() {
         let headers = Headers::new();
@@ -2279,6 +2344,7 @@ mod tests {
         assert_eq!(out.get("content-length").unwrap().to_str().unwrap(), "7");
     }
 
+    #[cfg(feature = "high-level-url")]
     #[test]
     fn apply_content_length_stream_unknown() {
         let headers = Headers::new();
@@ -2288,6 +2354,7 @@ mod tests {
         assert!(out.get("content-length").is_none());
     }
 
+    #[cfg(feature = "high-level-url")]
     #[test]
     fn apply_content_length_user_matches() {
         let mut headers = Headers::new();
@@ -2297,6 +2364,7 @@ mod tests {
         assert_eq!(out.get("content-length").unwrap().to_str().unwrap(), "5");
     }
 
+    #[cfg(feature = "high-level-url")]
     #[test]
     fn apply_content_length_user_mismatch_errors() {
         let mut headers = Headers::new();
@@ -2306,6 +2374,7 @@ mod tests {
         assert_eq!(err.kind(), "request_build");
     }
 
+    #[cfg(feature = "high-level-url")]
     #[test]
     fn apply_content_length_rejects_invalid_value() {
         let mut headers = Headers::new();
@@ -2315,6 +2384,7 @@ mod tests {
         assert_eq!(err.kind(), "invalid_header_value");
     }
 
+    #[cfg(feature = "high-level-url")]
     #[test]
     fn apply_content_length_rejects_unknown_stream_override() {
         let mut headers = Headers::new();
@@ -2325,6 +2395,7 @@ mod tests {
         assert_eq!(err.kind(), "request_build");
     }
 
+    #[cfg(feature = "high-level-url")]
     #[test]
     fn parse_url_rejects_userinfo_without_echoing_credentials() {
         let err = parse_url("https://user:secret@example.com").unwrap_err();
@@ -2333,6 +2404,7 @@ mod tests {
     }
 
     #[cfg(feature = "proxy")]
+    #[cfg(feature = "high-level-url")]
     #[tokio::test]
     async fn proxy_auth_conflict_with_header() {
         let proxy = Proxy::all("http://proxy.example:8080")
@@ -2351,6 +2423,7 @@ mod tests {
     }
 
     #[cfg(feature = "proxy")]
+    #[cfg(feature = "high-level-url")]
     #[tokio::test]
     async fn proxy_auth_no_conflict_without_header() {
         let proxy = Proxy::all("http://proxy.example:8080")
@@ -2367,6 +2440,7 @@ mod tests {
     }
 
     #[cfg(feature = "proxy")]
+    #[cfg(feature = "high-level-url")]
     #[tokio::test]
     async fn proxy_auth_no_conflict_with_header_only() {
         let proxy = Proxy::all("http://proxy.example:8080").unwrap();
@@ -2381,10 +2455,11 @@ mod tests {
         assert_ne!(err.kind(), "conflicting_auth");
     }
 
-    #[cfg(any(feature = "http1", feature = "http2"))]
+    #[cfg(any(feature = "native-http1", feature = "native-http2"))]
+    #[cfg(feature = "high-level-url")]
     #[test]
     fn resolved_route_key_matrix() {
-        use crate::request::ResolvedTarget;
+        use crate::transport_hints::ResolvedTarget;
 
         // Keys intentionally lack `Debug`/`Display` (connection identity
         // only, never request state), so compare with `==`/`!=`.
@@ -2483,13 +2558,54 @@ mod tests {
         );
     }
 
-    #[cfg(any(feature = "http1", feature = "http2"))]
+    #[cfg(any(feature = "native-http1", feature = "native-http2"))]
+    #[test]
+    fn resolved_route_key_from_native_origin() {
+        use crate::http_origin::HttpOrigin;
+        use crate::transport_hints::ResolvedTarget;
+
+        let uri: http::Uri = "http://origin.example/".parse().expect("valid URI");
+        let origin = HttpOrigin::from_uri(&uri).expect("native origin parses");
+        let target = ResolvedTarget::new(["127.0.0.1:80".parse::<SocketAddr>().unwrap()]).unwrap();
+        let base = ResolvedRouteKey::from_origin(&origin, &target, None);
+        let same = ResolvedRouteKey::from_origin(&origin, &target, None);
+        // Keys intentionally lack `Debug`/`Display`; compare with `==`/`!=`.
+        assert!(
+            base == same,
+            "same native origin + addresses + SNI must reuse"
+        );
+
+        // Explicit default port shares identity; scheme/host/port changes
+        // fragment; address order and SNI fragment.
+        let explicit: http::Uri = "http://origin.example:80/a?b=1".parse().expect("valid URI");
+        let explicit_origin = HttpOrigin::from_uri(&explicit).expect("origin parses");
+        assert!(
+            base == ResolvedRouteKey::from_origin(&explicit_origin, &target, None),
+            "explicit default port must reuse"
+        );
+
+        let https: http::Uri = "https://origin.example/".parse().expect("valid URI");
+        let https_origin = HttpOrigin::from_uri(&https).expect("origin parses");
+        let https_target =
+            ResolvedTarget::new(["127.0.0.1:443".parse::<SocketAddr>().unwrap()]).unwrap();
+        assert!(
+            base != ResolvedRouteKey::from_origin(&https_origin, &https_target, None),
+            "scheme change must fragment resolved identity"
+        );
+        assert!(
+            base != ResolvedRouteKey::from_origin(&origin, &target, Some("sni.example")),
+            "SNI override must fragment resolved identity"
+        );
+    }
+
+    #[cfg(any(feature = "native-http1", feature = "native-http2"))]
+    #[cfg(feature = "high-level-url")]
     #[test]
     fn resolved_route_cache_is_bounded() {
-        use crate::request::ResolvedTarget;
         use crate::transport::hyper_client::{
             BoundedClientCache, RESOLVED_CLIENT_CACHE_MAX_ENTRIES,
         };
+        use crate::transport_hints::ResolvedTarget;
 
         assert_eq!(
             RESOLVED_CLIENT_CACHE_MAX_ENTRIES, 64,

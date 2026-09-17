@@ -9,15 +9,18 @@
 //! `finalize` (common post-transport policy). This module wires those phases
 //! together and keeps the narrower native frame-execution semantics explicit.
 
+#[cfg(feature = "high-level-url")]
 mod finalize;
 #[cfg(feature = "http3")]
 mod h3_dispatch;
-#[cfg(any(feature = "http1", feature = "http2"))]
+#[cfg(any(feature = "native-http1", feature = "native-http2"))]
 mod hyper_dispatch;
 mod prepare;
 #[cfg(feature = "proxy")]
 mod proxy_dispatch;
+#[cfg(feature = "high-level-url")]
 mod redirect;
+#[cfg(feature = "high-level-url")]
 mod retry;
 mod route;
 
@@ -26,6 +29,7 @@ mod route;
 // modules, so its re-export follows the same feature gate.
 #[cfg(feature = "proxy")]
 pub(crate) use prepare::validate_target;
+#[cfg(feature = "high-level-url")]
 pub(crate) use retry::send_with_retry;
 // `apply_content_length` is exercised directly by `client.rs` unit tests
 // through the pre-decomposition path; preparation itself uses it in-file.
@@ -34,15 +38,18 @@ pub(crate) use prepare::apply_content_length;
 
 use std::time::Duration;
 
-#[cfg(any(feature = "http1", feature = "http2"))]
+#[cfg(any(feature = "native-http1", feature = "native-http2"))]
 use bytes::Bytes;
 
 use crate::body::{NativeRequestBody, NativeResponseBody};
 use crate::client::ClientInner;
 use crate::error::{Error, Result};
-use crate::request::{NativeRequestOptions, Request};
+#[cfg(feature = "high-level-url")]
+use crate::request::Request;
+#[cfg(feature = "high-level-url")]
 use crate::response::Response;
 use crate::timeout::Timeout;
+use crate::transport_hints::NativeRequestOptions;
 
 /// Bound a complete transport future only by an explicitly configured native
 /// total deadline. Direct Hyper/UDS/H3 transports do not expose a clean
@@ -87,7 +94,10 @@ where
 /// (`finalize::finalize_response`: decompression, decoded-size limiting,
 /// read-timeout and pool-lease attachment) applies to every route.
 #[allow(clippy::too_many_lines)]
-#[cfg(any(feature = "http1", feature = "http2"))]
+#[cfg(all(
+    any(feature = "native-http1", feature = "native-http2"),
+    feature = "high-level-url"
+))]
 pub(crate) async fn send_single_request(
     inner: &ClientInner,
     request: Request,
@@ -121,7 +131,7 @@ pub(crate) async fn send_single_request(
     #[cfg(not(feature = "proxy"))]
     let _ = &proxied_target;
 
-    #[cfg(all(unix, any(feature = "http1", feature = "http2")))]
+    #[cfg(all(unix, any(feature = "native-http1", feature = "native-http2")))]
     let has_uds = inner.uds_client.is_some();
     #[cfg(not(unix))]
     let has_uds = false;
@@ -319,7 +329,7 @@ pub(crate) async fn send_single_request(
 
 /// Execute a caller-owned `http_body::Body` through eggfetch's transport
 /// engine without applying high-level request policy.
-#[cfg(any(feature = "http1", feature = "http2"))]
+#[cfg(any(feature = "native-http1", feature = "native-http2"))]
 #[allow(
     clippy::too_many_lines,
     reason = "native dispatch keeps route validation, pool admission, and the shared route matrix together"
@@ -336,21 +346,15 @@ where
     use http_body_util::BodyExt;
 
     use crate::headers::Headers;
+    use crate::http_origin::HttpOrigin;
     use crate::pool::OriginKey;
     use crate::timeout::TimeoutPhase;
 
-    let logical_url = url::Url::parse(&request.uri().to_string())
-        .map_err(|e| Error::InvalidUrl(format!("native request URI must be absolute: {e}")))?;
-    if !matches!(logical_url.scheme(), "http" | "https") || logical_url.host_str().is_none() {
-        return Err(Error::Unsupported(
-            "native request URI must use http or https and include an authority".into(),
-        ));
-    }
-    if !logical_url.username().is_empty() || logical_url.password().is_some() {
-        return Err(Error::InvalidUrl(
-            "URL userinfo is not supported; configure authentication explicitly".into(),
-        ));
-    }
+    // Native transport facts come directly from `http::Uri`; never reparse
+    // through `url::Url`.
+    let http_origin = HttpOrigin::from_uri(request.uri())?;
+    #[cfg(feature = "proxy")]
+    let explicit_port = request.uri().port_u16();
 
     let NativeRequestOptions {
         timeout: request_timeout,
@@ -362,11 +366,7 @@ where
     };
 
     if let Some(target) = &transport_hints.resolved_target {
-        let expected_port = logical_url.port_or_known_default().ok_or_else(|| {
-            Error::InvalidResolvedTarget(
-                "resolved destinations require an HTTP or HTTPS URL".into(),
-            )
-        })?;
+        let expected_port = http_origin.port_ref();
         if target
             .addresses()
             .iter()
@@ -379,9 +379,7 @@ where
     }
 
     #[cfg(feature = "proxy")]
-    if prepare::resolve_proxy(inner, &logical_url, &crate::request::ProxyOverride::Inherit)
-        .is_some()
-    {
+    if prepare::native_would_use_proxy(inner, &http_origin, explicit_port) {
         return Err(Error::Unsupported(
             "native frame bodies are not supported through the built-in proxy routes".into(),
         ));
@@ -425,13 +423,13 @@ where
     }
 
     #[cfg(feature = "tls-rustls")]
-    if logical_url.scheme() == "https" {
+    if http_origin.is_https() {
         if let Some(error) = &inner.tls_config_error {
             return Err(Error::Tls(error.clone()));
         }
     }
 
-    let uri = prepare::resolve_request_uri(&logical_url, &transport_hints)?;
+    let uri = prepare::resolve_native_request_uri(request.uri(), &transport_hints)?;
     let method = request.method().clone();
     let version = request.version();
     let headers = Headers::from(request.headers().clone());
@@ -441,7 +439,7 @@ where
     .boxed_unsync();
     let body = NativeRequestBody::new(Box::pin(body), timeout.write).boxed_unsync();
 
-    let origin = OriginKey::from_url(logical_url.scheme(), &logical_url);
+    let origin_key = OriginKey::from_origin(&http_origin);
     let started = std::time::Instant::now();
     let pool_deadline = match (timeout.pool, timeout.total) {
         (Some(pool), Some(total)) if total < pool => Some((total, TimeoutPhase::Total)),
@@ -451,7 +449,7 @@ where
     };
     let guard = match pool_deadline {
         Some((duration, phase)) => {
-            match tokio::time::timeout(duration, inner.pool.acquire(origin.as_ref())).await {
+            match tokio::time::timeout(duration, inner.pool.acquire(Some(&origin_key))).await {
                 Ok(guard) => guard?,
                 Err(_) => {
                     return Err(Error::Timeout {
@@ -461,7 +459,7 @@ where
                 }
             }
         }
-        None => inner.pool.acquire(origin.as_ref()).await?,
+        None => inner.pool.acquire(Some(&origin_key)).await?,
     };
 
     let remaining_total = timeout
@@ -529,7 +527,7 @@ where
             let direct_client = if let Some(target) = transport_hints.resolved_target.as_ref() {
                 resolved_client = inner
                     .resolved_client(
-                        &logical_url,
+                        &http_origin,
                         target,
                         transport_hints.sni_hostname.as_deref(),
                     )
@@ -595,7 +593,7 @@ where
 }
 
 /// Report that no HTTP protocol feature was selected for native bodies.
-#[cfg(not(any(feature = "http1", feature = "http2")))]
+#[cfg(not(any(feature = "native-http1", feature = "native-http2")))]
 pub(crate) async fn send_native_http_body<B>(
     _inner: &ClientInner,
     _request: http::Request<B>,
@@ -607,7 +605,10 @@ pub(crate) async fn send_native_http_body<B>(
 }
 
 /// Report that no HTTP protocol feature was selected.
-#[cfg(not(any(feature = "http1", feature = "http2")))]
+#[cfg(all(
+    not(any(feature = "native-http1", feature = "native-http2")),
+    feature = "high-level-url"
+))]
 pub(crate) async fn send_single_request(
     _inner: &ClientInner,
     _request: Request,

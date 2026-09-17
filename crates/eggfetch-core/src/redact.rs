@@ -5,6 +5,7 @@
 //! canonical set of sensitive header names and URL sanitization.
 
 use http::{HeaderMap, HeaderValue};
+#[cfg(feature = "high-level-url")]
 use url::Url;
 
 /// Header names that may contain secrets.
@@ -38,6 +39,7 @@ pub fn redact_headers(headers: &HeaderMap) -> HeaderMap {
 }
 
 /// Sanitize a URL by stripping userinfo, query parameters, and fragments.
+#[cfg(feature = "high-level-url")]
 #[must_use]
 pub fn redact_url(url: &Url) -> String {
     let mut safe = url.clone();
@@ -52,11 +54,21 @@ pub fn redact_url(url: &Url) -> String {
 ///
 /// If the string parses as a valid URL, credentials are stripped. If parsing
 /// fails, the original string is returned unchanged.
+///
+/// Requires the `high-level-url` feature; without it the input is returned
+/// unchanged because there is no URL parser in the minimal native slice.
 #[must_use]
 pub fn redact_url_string(url_str: &str) -> String {
-    match Url::parse(url_str) {
-        Ok(url) => redact_url(&url),
-        Err(_) => url_str.to_owned(),
+    #[cfg(feature = "high-level-url")]
+    {
+        match Url::parse(url_str) {
+            Ok(url) => redact_url(&url),
+            Err(_) => url_str.to_owned(),
+        }
+    }
+    #[cfg(not(feature = "high-level-url"))]
+    {
+        url_str.to_owned()
     }
 }
 
@@ -91,6 +103,7 @@ mod tests {
         assert_eq!(redacted.get("content-type").unwrap(), "text/html");
     }
 
+    #[cfg(feature = "high-level-url")]
     #[test]
     fn redact_url_strips_userinfo_and_query() {
         let url = Url::parse("https://user:pass@example.com/path?q=secret#frag").unwrap();
@@ -98,6 +111,7 @@ mod tests {
         assert_eq!(redacted, "https://example.com/path");
     }
 
+    #[cfg(feature = "high-level-url")]
     #[test]
     fn redact_url_preserves_path() {
         let url = Url::parse("https://example.com/some/path").unwrap();
@@ -127,6 +141,7 @@ mod tests {
         assert_eq!(redacted.get("set-cookie").unwrap(), "<redacted>");
     }
 
+    #[cfg(feature = "high-level-url")]
     #[test]
     fn redact_url_with_no_secrets() {
         let url = Url::parse("https://example.com/api").unwrap();
@@ -134,6 +149,7 @@ mod tests {
         assert_eq!(redacted, "https://example.com/api");
     }
 
+    #[cfg(feature = "high-level-url")]
     #[test]
     fn redact_url_with_query_params() {
         let url = Url::parse("https://example.com/api?key=secret&other=value").unwrap();
@@ -149,6 +165,7 @@ mod tests {
         assert!(redacted.is_empty());
     }
 
+    #[cfg(feature = "high-level-url")]
     #[test]
     fn redact_url_with_fragment() {
         let url = Url::parse("https://example.com/path#section").unwrap();
@@ -156,6 +173,7 @@ mod tests {
         assert!(!redacted.contains('#'));
     }
 
+    #[cfg(feature = "high-level-url")]
     #[test]
     fn redact_url_with_password_only() {
         let url = Url::parse("https://user@example.com/path").unwrap();
@@ -163,6 +181,7 @@ mod tests {
         assert!(!redacted.contains("user"));
     }
 
+    #[cfg(feature = "high-level-url")]
     #[test]
     fn redact_url_string_strips_credentials() {
         let redacted = redact_url_string("https://user:pass@example.com/path?q=secret");
@@ -171,12 +190,14 @@ mod tests {
         assert!(!redacted.contains("pass"));
     }
 
+    #[cfg(feature = "high-level-url")]
     #[test]
     fn redact_url_string_no_credentials() {
         let redacted = redact_url_string("https://example.com/api");
         assert_eq!(redacted, "https://example.com/api");
     }
 
+    #[cfg(feature = "high-level-url")]
     #[test]
     fn redact_url_string_invalid_returns_original() {
         let input = "not a url at all";

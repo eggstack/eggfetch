@@ -1,6 +1,6 @@
 //! Direct (non-proxy) hyper client send path.
 
-#[cfg(feature = "http2")]
+#[cfg(feature = "native-http2")]
 use std::error::Error as StdError;
 use std::sync::Arc;
 
@@ -9,6 +9,7 @@ use bytes::Bytes;
 use crate::body::{BoxBytesStream, ResponseBody, SharedTrailers};
 use crate::error::{Error, Result};
 use crate::network_stream::{ConnectionMetadata, NetworkStream, UpgradedStream};
+#[cfg(feature = "high-level-url")]
 use crate::response::Response;
 use crate::trace::{OnEventAction, TraceEvent, TraceObserver, TracePhase};
 use crate::transport::HyperRequestBody;
@@ -73,6 +74,7 @@ pub(crate) fn emit_send_failed(trace: Option<&dyn TraceObserver>) {
 /// event, awaits the upgrade future, and attaches the resulting
 /// [`UpgradedStream`]. This is the single response-lifecycle implementation
 /// shared by the standard and specialized-direct paths.
+#[cfg(feature = "high-level-url")]
 async fn finish_hyper_response(
     mut hyper_response: http::Response<hyper::body::Incoming>,
     url: url::Url,
@@ -138,6 +140,7 @@ async fn finish_hyper_response(
 /// For 101 Switching Protocols responses, captures the upgrade future and
 /// attaches an [`UpgradedStream`] to the response. For ordinary responses,
 /// attaches read-only connection metadata when available.
+#[cfg(feature = "high-level-url")]
 pub(crate) async fn send_request<C>(
     hyper_client: &hyper_util::client::legacy::Client<C, HyperRequestBody>,
     request: http::Request<HyperRequestBody>,
@@ -226,6 +229,7 @@ where
 ///
 /// When a trace observer is provided, emits `send_request_headers` and
 /// `receive_response_headers` lifecycle events.
+#[cfg(feature = "high-level-url")]
 pub(crate) async fn send_direct_request<C>(
     hyper_client: &hyper_util::client::legacy::Client<C, HyperRequestBody>,
     request: http::Request<HyperRequestBody>,
@@ -565,7 +569,7 @@ pub(crate) fn map_send_error_with_context(
         }
         if let Some(hyper_err) = e.downcast_ref::<hyper::Error>() {
             // Try to extract h2-specific error information.
-            #[cfg(feature = "http2")]
+            #[cfg(feature = "native-http2")]
             if let Some(h2_err) = classify_h2_hyper_error(hyper_err) {
                 return h2_err;
             }
@@ -619,7 +623,7 @@ fn map_send_error_for_proxy(
 /// Prefer the typed `h2::Error` exposed through Hyper's source chain. The
 /// message fallback is retained for Hyper errors that do not expose that
 /// cause, but it only recognizes the existing protocol markers.
-#[cfg(feature = "http2")]
+#[cfg(feature = "native-http2")]
 fn classify_h2_hyper_error(err: &hyper::Error) -> Option<Error> {
     let msg = err.to_string();
     let mut source = StdError::source(err);
@@ -654,7 +658,7 @@ fn classify_h2_hyper_error(err: &hyper::Error) -> Option<Error> {
     classify_h2_message(&msg)
 }
 
-#[cfg(feature = "http2")]
+#[cfg(feature = "native-http2")]
 fn classify_h2_message(msg: &str) -> Option<Error> {
     let lower = msg.to_ascii_lowercase();
 
@@ -681,7 +685,7 @@ fn classify_h2_message(msg: &str) -> Option<Error> {
     None
 }
 
-#[cfg(all(test, feature = "http2"))]
+#[cfg(all(test, feature = "native-http2"))]
 mod tests {
     use super::classify_h2_message;
 

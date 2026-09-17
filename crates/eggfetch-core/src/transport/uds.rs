@@ -22,6 +22,7 @@ use crate::body::{BoxBytesStream, ResponseBody};
 #[cfg(unix)]
 use crate::error::{Error, Result};
 #[cfg(unix)]
+#[cfg(feature = "high-level-url")]
 use crate::response::Response;
 
 #[cfg(unix)]
@@ -227,6 +228,7 @@ impl Service<Uri> for UdsConnector {
 /// transport kind (`Unix`/`TlsUnix`) is observable without inventing IP
 /// addresses; local/peer remain explicitly `None`.
 #[cfg(unix)]
+#[cfg(feature = "high-level-url")]
 pub(crate) async fn send_request(
     client: &crate::transport::TimeoutUdsClient,
     request: http::Request<crate::transport::HyperRequestBody>,

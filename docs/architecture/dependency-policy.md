@@ -31,7 +31,11 @@ owning feature is selected.
 - **tokio** -- async runtime.
 - **tokio-rustls** -- optional async TLS streams for tokio + Rustls
   (`tls-rustls`).
-- **url** -- URI parsing and query string serialization.
+- **url** -- high-level string-URL parsing, query serialization, redirects,
+  cookies, proxy/no-proxy matching (optional, behind `high-level-url`;
+  absent from minimal native transport slices).
+- **percent-encoding** -- proxy auth decoding for high-level proxy URLs
+  (optional, behind `high-level-url`; absent from minimal native slices).
 - **thiserror** -- ergonomic error definitions.
 - **cookie** -- RFC 6265 cookie parsing and representation (optional, behind `cookies` feature).
 - **percent-encoding** -- percent-encoding for URL query strings and cookie values.
@@ -92,8 +96,8 @@ Rustls; a dependency can still be shared by other optional routes.
 | `base64` | Basic auth and proxy auth | yes | shared | no | foundational |
 | `tower-service` | custom connector `Service` implementations | yes | shared | no | foundational |
 | `pin-project-lite` | timeout/body stream projections | yes | shared | no | foundational |
-| `percent-encoding` | proxy and URL value encoding | yes | shared | no | foundational |
-| `url` | URL parsing, routing, and pool keys | yes | shared | no | foundational |
+| `percent-encoding` | high-level proxy auth decoding | no | no | `high-level-url` | optional; absent from native slices |
+| `url` | high-level URL parsing, routing, pool keys, redirects/cookies/proxy | no | no | `high-level-url` | optional; native transport uses `http::Uri` via `http_origin::HttpOrigin` |
 | `thiserror` | public error taxonomy | yes | shared | no | foundational |
 
 The matrix intentionally does not gate tiny ubiquitous dependencies merely to
@@ -118,7 +122,11 @@ Downstream size/dependency evidence for the minimal profiles lives in
 [embedded-footprint.md](embedded-footprint.md) (manual qualification in
 `qualification/embedded/`). Minimal trees verifiably exclude
 cookies/proxy/compression/multipart/H2/H3 and JSON; serde/serde_json enter
-only when the native json feature is selected.
+only when the native json feature is selected. The minimal native transport
+slice (`native-http1` + `tls-rustls` without `high-level-url`) additionally
+excludes `url`, `idna`, ICU, `percent-encoding`, and `dashmap`; the native
+`http::Request` path derives scheme/host/effective-port from `http::Uri`
+(`http_origin::HttpOrigin`) without reparsing through `url::Url`.
 The exact supported core recipes and their excluded capabilities are listed in
 [feature-flags.md](feature-flags.md#supported-core-profiles).
 

@@ -64,17 +64,17 @@ impl HttpVersionPolicyEnabler {
     #[must_use]
     pub(crate) fn from_policy(policy: HttpVersionPolicy) -> Self {
         match policy {
-            #[cfg(not(feature = "http2"))]
+            #[cfg(not(feature = "native-http2"))]
             HttpVersionPolicy::Http2Only => Self(HttpVersionPolicy::Http1Only),
             #[cfg(not(feature = "http3"))]
             HttpVersionPolicy::Http3Only => Self(HttpVersionPolicy::Http1Only),
             #[allow(unused_variables)]
             HttpVersionPolicy::Auto { allow_http3 } => {
-                #[cfg(not(feature = "http2"))]
+                #[cfg(not(feature = "native-http2"))]
                 return Self(HttpVersionPolicy::Http1Only);
-                #[cfg(all(feature = "http2", not(feature = "http3")))]
+                #[cfg(all(feature = "native-http2", not(feature = "http3")))]
                 return Self(HttpVersionPolicy::Auto { allow_http3: false });
-                #[cfg(all(feature = "http2", feature = "http3"))]
+                #[cfg(all(feature = "native-http2", feature = "http3"))]
                 return Self(HttpVersionPolicy::Auto { allow_http3 });
             }
             _ => Self(policy),
@@ -134,7 +134,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "http2")]
+    #[cfg(feature = "native-http2")]
     fn auto_enables_both() {
         let enabler =
             HttpVersionPolicyEnabler::from_policy(HttpVersionPolicy::Auto { allow_http3: false });
@@ -144,7 +144,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(not(feature = "http2"))]
+    #[cfg(not(feature = "native-http2"))]
     fn auto_downgrades_without_feature() {
         let enabler =
             HttpVersionPolicyEnabler::from_policy(HttpVersionPolicy::Auto { allow_http3: false });
@@ -153,7 +153,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "http2")]
+    #[cfg(feature = "native-http2")]
     fn http2_only_enables_http2_only() {
         let enabler = HttpVersionPolicyEnabler::from_policy(HttpVersionPolicy::Http2Only);
         assert!(!enabler.enable_http1());
@@ -161,7 +161,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(not(feature = "http2"))]
+    #[cfg(not(feature = "native-http2"))]
     fn http2_only_downgrades_without_feature() {
         let enabler = HttpVersionPolicyEnabler::from_policy(HttpVersionPolicy::Http2Only);
         assert!(enabler.enable_http1());

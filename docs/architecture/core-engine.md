@@ -62,12 +62,14 @@ sufficient evidence.
 ### Native frame execution
 
 `Client::execute_http_body()` is a sibling transport surface for callers that
-already own HTTP-level policy. It validates an absolute logical HTTP(S) URI,
-acquires the same logical pool permit, and dispatches through the existing
-standard/direct/resolved/SNI/custom-dialer/UDS Hyper clients. The request
-`http_body::Body` is erased to the same internal Hyper body type used by the
-high-level path; the raw Hyper response is then wrapped in
-`NativeResponseBody` at the response-header boundary.
+already own HTTP-level policy. It derives scheme/host/effective-port directly
+from the caller-owned `http::Uri` via `http_origin::HttpOrigin` (no
+`url::Url` reparse; callers own IDNA/punycode), acquires the same logical
+pool permit through the component-based `OriginKey::from_origin`, and
+dispatches through the existing standard/direct/resolved/SNI/custom-dialer/UDS
+Hyper clients. The request `http_body::Body` is erased to the same internal
+Hyper body type used by the high-level path; the raw Hyper response is then
+wrapped in `NativeResponseBody` at the response-header boundary.
 
 The high-level pipeline continues to own header defaults, content-length
 normalization, redirects, retries, cookies, auth, decompression and decoded

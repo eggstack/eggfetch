@@ -143,7 +143,7 @@ impl RetryPolicy {
     /// Returns `true` if the given error is eligible for retry.
     #[must_use]
     pub fn is_error_retryable(error: &Error) -> bool {
-        #[cfg(any(feature = "http1", feature = "http2"))]
+        #[cfg(any(feature = "native-http1", feature = "native-http2"))]
         if matches!(error, Error::HyperClient(_)) {
             return true;
         }

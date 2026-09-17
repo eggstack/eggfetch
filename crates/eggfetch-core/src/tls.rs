@@ -329,11 +329,11 @@ impl TlsConfig {
         // Direct use of `build_rustls_config` without override intentionally
         // retains this default; an empty default would silently downgrade
         // `tls_connector`/`start_tls` users to HTTP/1.1.
-        #[cfg(feature = "http2")]
+        #[cfg(feature = "native-http2")]
         {
             config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
         }
-        #[cfg(not(feature = "http2"))]
+        #[cfg(not(feature = "native-http2"))]
         {
             config.alpn_protocols = vec![b"http/1.1".to_vec()];
         }

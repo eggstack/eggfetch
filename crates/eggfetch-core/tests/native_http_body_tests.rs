@@ -428,3 +428,131 @@ async fn native_response_error_releases_logical_pool_lease() {
     );
     task.await.unwrap();
 }
+
+#[tokio::test]
+async fn native_body_rejects_unsupported_scheme_before_io() {
+    let client = Client::new();
+    let request = http::Request::get("ftp://example.com/file")
+        .body(http_body_util::Empty::<Bytes>::new())
+        .unwrap();
+    let error = client.execute_http_body_default(request).await.unwrap_err();
+    // Unsupported scheme is a route rejection, never a network attempt.
+    assert_eq!(error.kind(), "unsupported");
+}
+
+#[tokio::test]
+async fn native_body_rejects_userinfo_before_io() {
+    let client = Client::new();
+    let request = http::Request::get("http://user:pass@example.com/")
+        .body(http_body_util::Empty::<Bytes>::new())
+        .unwrap();
+    let error = client.execute_http_body_default(request).await.unwrap_err();
+    assert_eq!(error.kind(), "invalid_url");
+}
+
+#[tokio::test]
+async fn native_body_rejects_resolved_target_port_mismatch() {
+    use eggfetch_core::{ResolvedTarget, TransportHints};
+
+    let client = Client::new();
+    // Logical URI uses an ephemeral port; pin a different effective port.
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    drop(listener);
+    let wrong_port = if address.port() == 80 { 8080 } else { 80 };
+    let target = ResolvedTarget::new([format!("127.0.0.1:{wrong_port}").parse().unwrap()]).unwrap();
+    let request = http::Request::get(format!("http://127.0.0.1:{}/", address.port()))
+        .body(http_body_util::Empty::<Bytes>::new())
+        .unwrap();
+    let options = NativeRequestOptions::default().transport_hints(TransportHints {
+        resolved_target: Some(target),
+        ..Default::default()
+    });
+    let error = client
+        .execute_http_body(request, options)
+        .await
+        .unwrap_err();
+    assert_eq!(error.kind(), "invalid_resolved_target");
+}
+
+#[tokio::test]
+async fn native_body_rejects_smuggling_target_before_io() {
+    use eggfetch_core::TransportHints;
+
+    let client = Client::new();
+    let request = http::Request::get("http://example.com/")
+        .body(http_body_util::Empty::<Bytes>::new())
+        .unwrap();
+    let options = NativeRequestOptions::default().transport_hints(TransportHints {
+        target: Some(Bytes::from_static(b"/bad\r\nInjected: 1")),
+        ..Default::default()
+    });
+    let error = client
+        .execute_http_body(request, options)
+        .await
+        .unwrap_err();
+    assert_eq!(error.kind(), "request_build");
+}
+
+#[tokio::test]
+async fn native_body_sends_logical_host_header() {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let task = tokio::spawn(async move {
+        let (mut socket, _) = listener.accept().await.unwrap();
+        let mut buf = [0_u8; 2048];
+        let n = socket.read(&mut buf).await.unwrap();
+        let request_text = String::from_utf8_lossy(&buf[..n]).into_owned();
+        socket
+            .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok")
+            .await
+            .unwrap();
+        request_text
+    });
+    let request = http::Request::get(format!("http://{address}/path"))
+        .body(http_body_util::Empty::<Bytes>::new())
+        .unwrap();
+    let response = Client::new()
+        .execute_http_body_default(request)
+        .await
+        .unwrap();
+    assert_eq!(
+        response.into_body().collect().await.unwrap().to_bytes(),
+        "ok"
+    );
+    let seen = task.await.unwrap();
+    assert!(
+        seen.contains(&format!("host: {address}")),
+        "native Host header must carry the logical authority, got: {seen}"
+    );
+}
+
+#[tokio::test]
+async fn native_body_does_not_follow_redirects() {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let task = tokio::spawn(async move {
+        let (mut socket, _) = listener.accept().await.unwrap();
+        let mut buf = [0_u8; 1024];
+        let _ = socket.read(&mut buf).await;
+        // Single 302 response; a high-level client would follow, native must not.
+        socket
+            .write_all(b"HTTP/1.1 302 Found\r\nLocation: /elsewhere\r\nContent-Length: 0\r\n\r\n")
+            .await
+            .unwrap();
+        // Do not accept a second connection: if native followed, this task
+        // would hang waiting for it and the timeout below would fail.
+    });
+    let request = http::Request::get(format!("http://{address}/start"))
+        .body(http_body_util::Empty::<Bytes>::new())
+        .unwrap();
+    let response = tokio::time::timeout(
+        Duration::from_secs(2),
+        Client::new().execute_http_body_default(request),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(response.status(), http::StatusCode::FOUND);
+    task.await.unwrap();
+}
