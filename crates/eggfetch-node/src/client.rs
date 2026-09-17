@@ -5,11 +5,40 @@ use std::ptr;
 
 use eggfetch_ffi::ErrorHandle;
 
+/// Pointer to the FFI client handle.
+///
+/// Stored as a raw pointer (not `usize`) so pointer provenance is preserved
+/// under Miri/provenance-strict tooling. The wrapper is `Send + Sync`
+/// because the underlying `ClientHandle` is `Send + Sync` per eggfetch-ffi
+/// documentation; lifetime safety for in-flight requests still relies on
+/// napi-rs holding a strong reference on `this` (see below).
+#[derive(Clone, Copy)]
+struct SendClientPtr(*mut eggfetch_ffi::ClientHandle);
+
+impl SendClientPtr {
+    /// Consume the wrapper and return the raw handle.
+    ///
+    /// Taking `self` by value keeps closure-capture analysis on the `Send`
+    /// wrapper itself: a direct `.0` field access inside `spawn_blocking`
+    /// would capture only the bare `*mut` field (which is not `Send`).
+    fn into_inner(self) -> *mut eggfetch_ffi::ClientHandle {
+        self.0
+    }
+}
+
+// SAFETY: the pointed-to `ClientHandle` is documented as `Send + Sync`, so
+// moving the pointer across threads (for `spawn_blocking`) is sound. The
+// pointee is freed only by `Drop for EggfetchClient`, which napi-rs
+// finalization keeps alive until in-flight request futures resolve.
+unsafe impl Send for SendClientPtr {}
+unsafe impl Sync for SendClientPtr {}
+
 /// HTTP client wrapping eggfetch-ffi.
 ///
-/// The client pointer is stored as `usize` to satisfy napi's `Send` requirement
-/// for async futures. The underlying `ClientHandle` is `Send + Sync` per
-/// eggfetch-ffi documentation.
+/// The client pointer is stored as a [`SendClientPtr`] raw-pointer wrapper
+/// to satisfy napi's `Send` requirement for async futures while preserving
+/// pointer provenance (no `usize ↔ *mut` round-trip). The underlying
+/// `ClientHandle` is `Send + Sync` per eggfetch-ffi documentation.
 ///
 /// # Lifetime safety for in-flight requests
 ///
@@ -23,9 +52,12 @@ use eggfetch_ffi::ErrorHandle;
 /// request future is outstanding. Do not replace this with a pattern that
 /// frees the handle independently of napi's reference tracking without
 /// adding an equivalent guard.
+///
+/// This remains an experimental prototype (see `lib.rs`): requests execute
+/// through the synchronous C ABI inside `spawn_blocking`.
 #[napi]
 pub struct EggfetchClient {
-    inner: usize,
+    inner: SendClientPtr,
 }
 
 #[napi]
@@ -44,7 +76,7 @@ impl EggfetchClient {
             ));
         }
         Ok(Self {
-            inner: inner as usize,
+            inner: SendClientPtr(inner),
         })
     }
 
@@ -159,8 +191,9 @@ impl EggfetchClient {
         let body = body.map(String::from);
 
         async move {
+            let wrapper = client_ptr;
             napi::bindgen_prelude::spawn_blocking(move || {
-                let client = client_ptr as *mut eggfetch_ffi::ClientHandle;
+                let client = wrapper.into_inner();
                 let method_c = std::ffi::CString::new(method)
                     .map_err(|e| napi::Error::from_reason(format!("invalid method string: {e}")))?;
                 let url_c = std::ffi::CString::new(url)
@@ -246,9 +279,9 @@ impl EggfetchClient {
 
 impl Drop for EggfetchClient {
     fn drop(&mut self) {
-        if self.inner != 0 {
+        if !self.inner.0.is_null() {
             unsafe {
-                eggfetch_ffi::eggfetch_client_free(self.inner as *mut eggfetch_ffi::ClientHandle);
+                eggfetch_ffi::eggfetch_client_free(self.inner.0);
             }
         }
     }

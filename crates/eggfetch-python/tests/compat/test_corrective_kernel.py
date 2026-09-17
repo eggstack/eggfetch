@@ -31,6 +31,24 @@ def test_map_exception_reraises_non_native_exception():
         _map_exception(error)
 
 
+def test_map_exception_bare_timeout_stays_generic_despite_message():
+    """Bare native TimeoutException maps by type, never message substrings."""
+    import eggfetch
+    from eggfetch.compat.httpx._client import _map_exception
+    from eggfetch.compat.httpx._exceptions import TimeoutException
+
+    for msg in (
+        "pool timeout after 5s",
+        "proxy connect timeout after 5s",
+        "connect timeout after 5s",
+        "read timeout after 5s",
+        "write timeout after 5s",
+        "total timeout after 5s",
+    ):
+        mapped = _map_exception(eggfetch.TimeoutException(msg))
+        assert type(mapped) is TimeoutException, f"{msg!r} must stay generic"
+
+
 @pytest.mark.parametrize("method", ["POST", "PUT", "PATCH"])
 def test_empty_body_header(method):
     assert Request(method, "https://example.com").headers["content-length"] == "0"

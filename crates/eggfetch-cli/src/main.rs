@@ -314,7 +314,9 @@ fn map_error_to_exit_code(err: &eggfetch_core::Error) -> u8 {
 /// output failures wrapped with context).
 ///
 /// Uses typed downcasts only — never message-substring heuristics — so an
-/// unrelated error mentioning "status" or "parse" cannot mis-map.
+/// unrelated error mentioning "status" or "parse" cannot mis-map. (The
+/// SIGINT fallback in `main` uses the same typed chain scan for
+/// `ErrorKind::Interrupted`.)
 fn map_unknown_error_to_exit_code(err: &anyhow::Error) -> u8 {
     if err.downcast_ref::<StatusError>().is_some() {
         return EXIT_STATUS;
@@ -1283,8 +1285,11 @@ async fn main() -> ExitCode {
     match result {
         Ok(()) => ExitCode::from(EXIT_SUCCESS),
         Err(err) => {
-            let msg = format!("{err:#}");
-            if msg.contains("Interrupted") {
+            if err.chain().any(|cause| {
+                cause
+                    .downcast_ref::<std::io::Error>()
+                    .is_some_and(|io| io.kind() == std::io::ErrorKind::Interrupted)
+            }) {
                 return ExitCode::from(130);
             }
             if let Some(eggfetch_err) = err.downcast_ref::<eggfetch_core::Error>() {

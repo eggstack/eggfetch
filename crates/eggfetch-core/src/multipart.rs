@@ -47,9 +47,10 @@ impl Boundary {
     ///
     /// Falls back to a time- and counter-seeded value if the system RNG
     /// fails, so multipart construction never aborts the process.
-    // The fallback seed mixes a u128 nanosecond timestamp into a u64 state
-    // and truncates hashed bytes to u8; both truncations are intentional
-    // for this non-cryptographic degradation path.
+    // The fallback seed mixes the low 64 bits of a u128 nanosecond
+    // timestamp into a u64 state and truncates hashed bytes to u8; both
+    // truncations are intentional for this non-cryptographic degradation
+    // path (uniqueness within this process is what boundary safety needs).
     #[allow(clippy::cast_possible_truncation)]
     #[must_use]
     pub fn random() -> Self {
@@ -58,9 +59,11 @@ impl Boundary {
             // Degraded mode: derive pseudo-random bytes from the current
             // time plus a process-wide counter. Uniqueness within this
             // process is preserved, which is what boundary safety needs.
+            // Mask to the low 64 bits first so the `as u64` is an explicit
+            // truncation of high bits, portable to wider-than-64-bit targets.
             let nanos = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .map_or(0, |d| d.as_nanos() as u64);
+                .map_or(0, |d| (d.as_nanos() & u128::from(u64::MAX)) as u64);
             let mut state = nanos
                 ^ FALLBACK_SEQUENCE
                     .fetch_add(1, Ordering::Relaxed)
@@ -152,10 +155,14 @@ impl std::fmt::Debug for PartBody {
 
 impl PartBody {
     /// Returns the known length of this body, if available.
+    ///
+    /// Returns `None` when the length does not fit in a `u64` (only
+    /// possible on wider-than-64-bit targets); callers treat unknown
+    /// length as unframed rather than truncated.
     #[must_use]
     pub fn len(&self) -> Option<u64> {
         match self {
-            Self::Bytes(b) => Some(b.len() as u64),
+            Self::Bytes(b) => u64::try_from(b.len()).ok(),
             Self::Stream { length, .. } => *length,
         }
     }
@@ -318,6 +325,13 @@ impl Part {
 /// Builds the multipart body and provides encoding via [`into_body`] or
 /// [`encoder`].
 ///
+/// Before encoding, the boundary is checked against buffered part bodies
+/// and regenerated on collision. Streamed parts cannot be checked because
+/// their bytes are not yet available: callers must ensure streamed content
+/// does not contain the boundary, or pin a known-safe boundary with
+/// [`with_boundary`](Multipart::with_boundary) after pre-validating. A
+/// stream containing the boundary sequence will corrupt framing on the wire.
+///
 /// [`into_body`]: Multipart::into_body
 /// [`encoder`]: Multipart::encoder
 pub struct Multipart {
@@ -416,6 +430,11 @@ impl Multipart {
 
     /// Add a file part from a stream.
     ///
+    /// Streamed content is not scanned for boundary collisions (bytes are
+    /// not yet available); the caller must ensure the stream cannot emit
+    /// the boundary sequence, or pre-validate and pin one via
+    /// [`with_boundary`](Multipart::with_boundary).
+    ///
     /// # Errors
     ///
     /// Returns an error if the name or filename contains invalid characters.
@@ -460,20 +479,22 @@ impl Multipart {
 
     /// Calculate the total Content-Length, if all parts have known lengths.
     ///
-    /// Uses checked arithmetic to prevent overflow.
+    /// Uses checked arithmetic to prevent overflow. Lengths that do not
+    /// fit in a `u64` (only possible on wider-than-64-bit targets) yield
+    /// `None` rather than a truncated length.
     #[must_use]
     pub fn content_length(&self) -> Option<u64> {
         let mut total: u64 = 0;
         let boundary_str = self.boundary.as_str();
         for part in &self.parts {
             let header = format_part_header(boundary_str, part);
-            total = total.checked_add(header.len() as u64)?;
+            total = total.checked_add(u64::try_from(header.len()).ok()?)?;
             let body_len = part.body.len()?;
             total = total.checked_add(body_len)?;
             total = total.checked_add(2)?; // trailing \r\n
         }
         // Final boundary: --boundary--\r\n
-        total = total.checked_add((boundary_str.len() + 6) as u64)?;
+        total = total.checked_add(u64::try_from(boundary_str.len() + 6).ok()?)?;
         Some(total)
     }
 
@@ -558,7 +579,7 @@ impl Multipart {
             let blen = boundary_bytes.len();
             let collision = self.parts.iter().any(|part| {
                 if let PartBody::Bytes(ref data) = part.body {
-                    data.windows(blen).any(|window| window == boundary_bytes)
+                    data.len() >= blen && data.windows(blen).any(|window| window == boundary_bytes)
                 } else {
                     false
                 }

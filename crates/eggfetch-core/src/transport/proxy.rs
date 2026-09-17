@@ -1194,7 +1194,7 @@ impl<S: tokio::io::AsyncRead + Unpin> futures_core::Stream for ProxyResponseStre
                 }
             };
             if n > 0 {
-                this.delivered += n as u64;
+                this.delivered = this.delivered.saturating_add(n as u64);
                 return std::task::Poll::Ready(Some(Ok(this.chunk.split_to(n).freeze())));
             }
         }
@@ -1211,7 +1211,7 @@ impl<S: tokio::io::AsyncRead + Unpin> futures_core::Stream for ProxyResponseStre
             std::task::Poll::Ready(Ok(())) => {
                 let n = read_buf.filled().len();
                 if n > 0 {
-                    this.delivered += n as u64;
+                    this.delivered = this.delivered.saturating_add(n as u64);
                     std::task::Poll::Ready(Some(Ok(this.chunk.split_to(n).freeze())))
                 } else {
                     std::task::Poll::Ready(None)

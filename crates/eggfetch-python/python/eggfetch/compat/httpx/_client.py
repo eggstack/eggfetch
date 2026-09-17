@@ -387,19 +387,12 @@ def _map_exception(native_exc, compat_request=None):
     if isinstance(native_exc, eggfetch.WriteTimeout):
         return WriteTimeout(message=msg, request=compat_request)
     if isinstance(native_exc, eggfetch.TimeoutException):
-        msg_lower = msg.lower()
-        if "pool timeout" in msg_lower:
-            return PoolTimeout(message=msg, request=compat_request)
-        if "proxy connect" in msg_lower or "proxy tls" in msg_lower or "connect timeout" in msg_lower:
-            return ConnectTimeout(message=msg, request=compat_request)
-        if "write timeout" in msg_lower:
-            return WriteTimeout(message=msg, request=compat_request)
-        # A native total-phase expiry is a whole-request wall-clock
-        # deadline, not a read-phase failure; it stays the generic
-        # TimeoutException (matching httpx, where `total` has no
-        # dedicated exception subclass).
-        if "read timeout" in msg_lower:
-            return ReadTimeout(message=msg, request=compat_request)
+        # Typed phases arrive as distinct native subclasses (PoolTimeout,
+        # ConnectTimeout, ReadTimeout, WriteTimeout) handled above. A bare
+        # TimeoutException is the total-phase wall-clock deadline, which
+        # stays generic (matching httpx, where `total` has no dedicated
+        # subclass). Branch on type only — never message substrings — so a
+        # core error-message rewording cannot silently mis-map.
         return TimeoutException(message=msg, request=compat_request)
 
     if isinstance(native_exc, eggfetch.NetworkError):

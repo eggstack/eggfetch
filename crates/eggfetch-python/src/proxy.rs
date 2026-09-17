@@ -13,6 +13,28 @@ pub(crate) enum ProxyOverride {
     Override(String),
 }
 
+impl std::fmt::Debug for ProxyOverride {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Inherit => write!(f, "Inherit"),
+            Self::Disable => write!(f, "Disable"),
+            Self::Override(url) => {
+                let has_credentials = url::Url::parse(url).is_ok_and(|parsed| {
+                    !parsed.username().is_empty() || parsed.password().is_some()
+                });
+                if has_credentials {
+                    // Never render credential-bearing URLs: the value is
+                    // transient (consumed by route resolution), so diagnostics
+                    // must not leak the password.
+                    write!(f, "Override(\"<redacted>\")")
+                } else {
+                    f.debug_tuple("Override").field(url).finish()
+                }
+            }
+        }
+    }
+}
+
 /// Return the environment proxies in HTTPX's scheme-aware order.
 ///
 /// HTTPX delegates this lookup to `urllib.request.getproxies()`, which gives
@@ -128,8 +150,16 @@ pub fn parse_proxy(proxy: Option<&Bound<'_, PyAny>>) -> PyResult<ProxyOverride> 
                                         auth_tuple.get_item(1)?.extract::<String>(),
                                     ) {
                                         if let Ok(mut parsed) = url::Url::parse(&url) {
-                                            let _ = parsed.set_username(&username);
-                                            let _ = parsed.set_password(Some(&password));
+                                            parsed.set_username(&username).map_err(|()| {
+                                                PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                                                    "proxy username contains invalid characters",
+                                                )
+                                            })?;
+                                            parsed.set_password(Some(&password)).map_err(|()| {
+                                                PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                                                    "proxy password contains invalid characters",
+                                                )
+                                            })?;
                                             url = parsed.to_string();
                                         }
                                     }
@@ -181,4 +211,30 @@ pub(crate) fn extract_proxy_extras(
     let ssl_ctx = proxy_obj.getattr("ssl_context").ok();
     let tls = crate::tls::ssl_context_to_tls_config(py, ssl_ctx.as_ref())?;
     Ok((headers, tls))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn override_debug_redacts_credential_url() {
+        let credentialed =
+            ProxyOverride::Override("http://user:s3cret@example.com:8080".to_owned());
+        let rendered = format!("{credentialed:?}");
+        assert!(
+            rendered.contains("<redacted>"),
+            "credential-bearing override must redact: {rendered}"
+        );
+        assert!(
+            !rendered.contains("s3cret"),
+            "password must not appear in Debug: {rendered}"
+        );
+        let plain = ProxyOverride::Override("http://example.com:8080".to_owned());
+        let rendered = format!("{plain:?}");
+        assert!(
+            rendered.contains("http://example.com:8080"),
+            "credential-free URL stays visible: {rendered}"
+        );
+    }
 }

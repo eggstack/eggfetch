@@ -667,11 +667,23 @@ impl ProxyConfig {
         if let Some(auth) = self.auth.as_ref() {
             // Hash credential bytes instead of retaining them in the
             // long-lived route key. The hash preserves cache separation
-            // without storing key material for the entry lifetime.
+            // without storing key material for the entry lifetime. This is
+            // a cache-separation heuristic, not a security boundary: two
+            // domain-separated `DefaultHasher` (SipHash, random per-process
+            // keys) outputs give a 128-bit separator, so an accidental
+            // alias between different credentials is negligible. Keys are
+            // little-endian by construction; the identity is in-process
+            // only, never persisted or compared across endian targets.
             use std::hash::{Hash, Hasher};
-            let mut hasher = std::collections::hash_map::DefaultHasher::new();
-            auth.header_value().hash(&mut hasher);
-            identity.extend_from_slice(&hasher.finish().to_ne_bytes());
+            let header = auth.header_value();
+            let mut first = std::collections::hash_map::DefaultHasher::new();
+            0u8.hash(&mut first);
+            header.hash(&mut first);
+            let mut second = std::collections::hash_map::DefaultHasher::new();
+            1u8.hash(&mut second);
+            header.hash(&mut second);
+            identity.extend_from_slice(&first.finish().to_le_bytes());
+            identity.extend_from_slice(&second.finish().to_le_bytes());
         }
         identity.push(0);
         for (name, value) in self.proxy_headers.iter() {

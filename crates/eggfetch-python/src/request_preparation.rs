@@ -69,6 +69,11 @@ pub(crate) fn prepare_client_config(
     uds: Option<&str>,
 ) -> PyResult<PreparedClientConfig> {
     let tls_config = crate::tls::build_tls_config(verify, cert, trust_env)?;
+    if http3 == Some(true) && (http1 == Some(true) || http2 == Some(true)) {
+        return Err(pyo3::exceptions::PyValueError::new_err(
+            "http3=True is exclusive: pass http1=False and http2=False to select HTTP/3, or omit http3",
+        ));
+    }
     let http1_enabled = http1.unwrap_or(true);
     let http2_enabled = http2.unwrap_or(false);
     let http_version_policy = if http3 == Some(true) {

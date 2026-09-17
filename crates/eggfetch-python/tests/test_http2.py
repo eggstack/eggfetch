@@ -107,6 +107,44 @@ class TestSyncClientHttp2:
 
 
 # ---------------------------------------------------------------------------
+# Native http3 exclusivity (B1)
+# ---------------------------------------------------------------------------
+
+class TestHttp3ProtocolConflict:
+    def test_client_rejects_http1_and_http3(self):
+        with pytest.raises(ValueError, match="http3=True is exclusive"):
+            eggfetch.Client(http1=True, http3=True)
+
+    def test_client_rejects_http2_and_http3(self):
+        with pytest.raises(ValueError, match="http3=True is exclusive"):
+            eggfetch.Client(http2=True, http3=True)
+
+    def test_client_rejects_all_three(self):
+        with pytest.raises(ValueError, match="http3=True is exclusive"):
+            eggfetch.Client(http1=True, http2=True, http3=True)
+
+    def test_client_http3_alone_ok(self):
+        client = eggfetch.Client(http3=True)
+        assert client is not None
+
+    def test_client_http3_with_explicit_opt_out_ok(self):
+        client = eggfetch.Client(http1=False, http2=False, http3=True)
+        assert client is not None
+
+    def test_async_client_rejects_http1_and_http3(self):
+        with pytest.raises(ValueError, match="http3=True is exclusive"):
+            eggfetch.AsyncClient(http1=True, http3=True)
+
+    def test_async_client_rejects_http2_and_http3(self):
+        with pytest.raises(ValueError, match="http3=True is exclusive"):
+            eggfetch.AsyncClient(http2=True, http3=True)
+
+    def test_async_client_http3_alone_ok(self):
+        client = eggfetch.AsyncClient(http3=True)
+        assert client is not None
+
+
+# ---------------------------------------------------------------------------
 # Async client http2 option
 # ---------------------------------------------------------------------------
 

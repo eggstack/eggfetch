@@ -406,7 +406,14 @@ pub fn decompress_buffered(
                 clippy::cast_precision_loss,
                 reason = "the finite non-negative ratio is clamped to the usize allocation limit"
             )]
-            Some(limit.min(usize::MAX as f64) as usize)
+            // `usize::MAX as f64` rounds up to 2^64, and float→int casts
+            // saturate, which would yield `usize::MAX - 1`. Saturate
+            // explicitly so the extreme budget keeps the full limit.
+            Some(if limit >= usize::MAX as f64 {
+                usize::MAX
+            } else {
+                limit.min(usize::MAX as f64) as usize
+            })
         } else {
             None
         }

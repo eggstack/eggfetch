@@ -397,50 +397,44 @@ impl TlsConfig {
     fn try_native_roots() -> Result<rustls::RootCertStore> {
         let mut roots = rustls::RootCertStore::empty();
 
-        #[cfg(feature = "tls-native-roots")]
-        {
-            #[cfg(all(target_os = "linux", feature = "tls-native-roots"))]
-            let pem_paths: &[&str] = &[
-                "/etc/ssl/certs/ca-certificates.crt",
-                "/etc/pki/tls/certs/ca-bundle.crt",
-                "/etc/ssl/ca-bundle.pem",
-            ];
+        #[cfg(target_os = "linux")]
+        let pem_paths: &[&str] = &[
+            "/etc/ssl/certs/ca-certificates.crt",
+            "/etc/pki/tls/certs/ca-bundle.crt",
+            "/etc/ssl/ca-bundle.pem",
+        ];
 
-            #[cfg(all(target_os = "macos", feature = "tls-native-roots"))]
-            let pem_paths: &[&str] = &["/etc/ssl/cert.pem", "/usr/local/etc/openssl/cert.pem"];
+        #[cfg(target_os = "macos")]
+        let pem_paths: &[&str] = &["/etc/ssl/cert.pem", "/usr/local/etc/openssl/cert.pem"];
 
-            #[cfg(any(target_os = "linux", target_os = "macos"))]
-            for path in pem_paths {
-                match load_pem_certs_from_path(Path::new(path)) {
-                    Ok(certs) => {
-                        for cert in certs {
-                            if let Err(e) = roots.add(cert) {
-                                #[cfg(feature = "tracing")]
-                                tracing::warn!(
-                                    "eggfetch: skipped invalid CA certificate in {path}: {e}"
-                                );
-                                #[cfg(not(feature = "tracing"))]
-                                let _ = (path, &e);
-                            }
+        #[cfg(any(target_os = "linux", target_os = "macos"))]
+        for path in pem_paths {
+            match load_pem_certs_from_path(Path::new(path)) {
+                Ok(certs) => {
+                    for cert in certs {
+                        if let Err(e) = roots.add(cert) {
+                            #[cfg(feature = "tracing")]
+                            tracing::warn!(
+                                "eggfetch: skipped invalid CA certificate in {path}: {e}"
+                            );
+                            #[cfg(not(feature = "tracing"))]
+                            let _ = (path, &e);
                         }
                     }
-                    Err(e) => {
-                        // A missing or unreadable system bundle silently falls
-                        // back toward WebPKI roots below; log it so operators
-                        // have a signal instead of a silent trust change.
-                        #[cfg(feature = "tracing")]
-                        tracing::warn!("eggfetch: failed to load native CA bundle {path}: {e}");
-                        #[cfg(not(feature = "tracing"))]
-                        let _ = (path, &e);
-                    }
+                }
+                Err(e) => {
+                    // A missing or unreadable system bundle silently falls
+                    // back toward WebPKI roots below; log it so operators
+                    // have a signal instead of a silent trust change.
+                    #[cfg(feature = "tracing")]
+                    tracing::warn!("eggfetch: failed to load native CA bundle {path}: {e}");
+                    #[cfg(not(feature = "tracing"))]
+                    let _ = (path, &e);
                 }
             }
         }
 
-        #[cfg(all(
-            feature = "tls-native-roots",
-            not(any(target_os = "linux", target_os = "macos"))
-        ))]
+        #[cfg(not(any(target_os = "linux", target_os = "macos")))]
         {
             for cert in rustls_native_certs::load_native_certs().certs {
                 if let Err(e) = roots.add(cert) {
