@@ -380,8 +380,7 @@ Record the executable freeze and measurements in this plan at closure. Any downs
 
 ## Closure evidence
 
-- Implementation commit: (to be recorded after commit; pre-commit HEAD is
-  `158c159d` plus this working tree).
+- Implementation commit: `ac446fc7`.
 - Feature split: `http1 = ["native-http1", "high-level-url"]`,
   `http2 = ["native-http2", "high-level-url"]`,
   `high-level-url = ["dep:url", "dep:percent-encoding"]`;
