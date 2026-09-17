@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.1.6] - 2026-09-17
+
+### Added
+
+- Strict redirect transport policy: `RedirectDowngradePolicy::{Allow, Deny}`
+  on `RedirectPolicy` (default `Allow` for compatibility),
+  `RedirectPolicy::strict()` / `with_downgrade()` constructors,
+  `ClientBuilder::redirect_downgrade_policy()`, and
+  `build_redirect_request_with_redirect_policy()`. Under `Deny`, HTTPS ->
+  HTTP downgrades fail with `InvalidRedirectLocation` before second-hop I/O.
+- Explicit opt-in environment proxy resolution: `ProxyEnvironment`
+  (`from_map()` for tests, `from_env()` snapshot at the call site,
+  `resolve()` per URL, `client_proxies()` for builder integration) plus
+  fallible `ClientBuilder::proxy_environment()`. Native default stays
+  environment-independent. Lowercase proxy variables win, `ALL_PROXY` is the
+  per-scheme fallback, `NO_PROXY` uses native parsing and applies before
+  dispatch, and invalid values fail closed with redacted errors. Also adds
+  `Proxy::http_compat()` / `https_compat()` for credential-bearing
+  environment URLs.
+
+### Changed
+
+- `eggfetch-core` unconditional `base64` dependency aligned from 0.22 to
+  0.23 (source-compatible `Engine` API); the minimal updater-style feature
+  set (`http1,tls-rustls,tls-native-roots,proxy`) now carries a single
+  `base64` 0.23 line in its runtime graph.
+
 ## [0.1.5] - 2026-09-17
 
 ### Changed

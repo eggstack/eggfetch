@@ -1,6 +1,6 @@
 [package]
 name = "eggfetch-core"
-version = "0.1.5"
+version = "0.1.6"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -66,7 +66,7 @@ serde = { version = "1", optional = true }
 serde_json = { version = "1", optional = true }
 
 tower-service = "0.3"
-base64 = "0.22"
+base64 = "0.23"
 cookie = { version = "0.18", default-features = false, features = ["percent-encode"], optional = true }
 async-compression = { version = "0.4", default-features = false, features = ["tokio"], optional = true }
 tokio-util = { version = "0.7", features = ["io"], optional = true }
