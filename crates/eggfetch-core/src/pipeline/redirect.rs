@@ -183,6 +183,10 @@ struct RedirectHop {
 /// Returns [`Error::BodyNotReplayableForRedirect`] when a method-preserving
 /// redirect requires replaying a one-shot stream body, or propagates URL
 /// and header errors from the redirect engine.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "hop transformation needs the seven original inputs plus the downgrade policy enforced before the next hop dispatches"
+)]
 fn advance_redirect_hop(
     cur_method: &http::Method,
     cur_url: &url::Url,
@@ -191,6 +195,7 @@ fn advance_redirect_hop(
     replay_body: &mut Option<Bytes>,
     status: http::StatusCode,
     location: &str,
+    downgrade: crate::redirect::RedirectDowngradePolicy,
 ) -> Result<RedirectHop> {
     let new_method = redirect::redirect_method(status, cur_method);
     let drop_body = redirect::drops_body_on_redirect(status, cur_method);
@@ -223,6 +228,7 @@ fn advance_redirect_hop(
         location,
         new_method.clone(),
         drop_body,
+        downgrade,
     )?;
 
     // Destructure exhaustively so a new `RequestParts` field fails to
@@ -495,7 +501,10 @@ pub(super) async fn send_with_redirects(client: &Client, request: Request) -> Re
 
         let redirect_status = response.status();
         // Single redirect transformation step: method/body policy, replay
-        // check, and header stripping live in `advance_redirect_hop`.
+        // check, downgrade policy, and header stripping live in
+        // `advance_redirect_hop`. The downgrade check runs before the next
+        // hop is dispatched, so a denied HTTPS -> HTTP target never
+        // receives request bytes.
         let hop = advance_redirect_hop(
             &cur_method,
             &cur_url,
@@ -504,6 +513,7 @@ pub(super) async fn send_with_redirects(client: &Client, request: Request) -> Re
             &mut replay_body,
             redirect_status,
             &location,
+            effective_redirect.downgrade,
         )?;
 
         history.push(HistoryEntry::from_response(&response));
@@ -746,6 +756,7 @@ mod tests {
             &mut replay,
             http::StatusCode::MOVED_PERMANENTLY,
             "https://example.com/other",
+            crate::redirect::RedirectDowngradePolicy::Allow,
         )
         .expect("301 POST redirects");
 
@@ -769,6 +780,7 @@ mod tests {
             &mut replay,
             http::StatusCode::TEMPORARY_REDIRECT,
             "https://example.com/other",
+            crate::redirect::RedirectDowngradePolicy::Allow,
         )
         .expect("307 POST preserves body");
 
@@ -792,6 +804,7 @@ mod tests {
             &mut replay,
             http::StatusCode::TEMPORARY_REDIRECT,
             "https://example.com/other",
+            crate::redirect::RedirectDowngradePolicy::Allow,
         )
         .unwrap_err();
         assert!(

@@ -894,6 +894,22 @@ impl Proxy {
         })
     }
 
+    /// Create an HTTP-only proxy accepting inline URL credentials.
+    ///
+    /// Mirrors [`Proxy::all_compat`] for the `Http` routing rule: percent-
+    /// encoded userinfo is extracted into [`ProxyAuth`] rather than rejected.
+    /// Used by environment-proxy resolution, where `HTTP_PROXY` values
+    /// commonly embed `user:pass@` credentials.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the URL, credentials, or proxy scheme is invalid.
+    pub fn http_compat(url: &str) -> Result<Self> {
+        let mut proxy = Self::all_compat(url)?;
+        proxy.rule = ProxyRule::Http;
+        Ok(proxy)
+    }
+
     /// Create a proxy that routes only HTTPS requests.
     ///
     /// # Errors
@@ -910,6 +926,22 @@ impl Proxy {
             proxy_tls_config: None,
             resolved_addresses: None,
         })
+    }
+
+    /// Create an HTTPS-only proxy accepting inline URL credentials.
+    ///
+    /// Mirrors [`Proxy::all_compat`] for the `Https` routing rule. Used by
+    /// environment-proxy resolution, where `HTTPS_PROXY` values commonly
+    /// embed `user:pass@` credentials and the proxy endpoint serves as the
+    /// CONNECT proxy for HTTPS targets.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the URL, credentials, or proxy scheme is invalid.
+    pub fn https_compat(url: &str) -> Result<Self> {
+        let mut proxy = Self::all_compat(url)?;
+        proxy.rule = ProxyRule::Https;
+        Ok(proxy)
     }
 
     /// Set proxy authentication credentials.
@@ -1105,6 +1137,261 @@ impl fmt::Display for Proxy {
     }
 }
 
+/// Explicit opt-in snapshot of proxy environment configuration.
+///
+/// The native client never reads process environment implicitly. Construct
+/// this value explicitly — via [`ProxyEnvironment::from_map`] in tests or
+/// [`ProxyEnvironment::from_env`] at a call site — and hand it to
+/// [`crate::client::ClientBuilder::proxy_environment`] to preserve the
+/// command-line client's environment-proxy reachability.
+///
+/// # Precedence
+///
+/// For each of `HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY` / `NO_PROXY`,
+/// the lowercase variant wins when both cases are present and non-empty;
+/// otherwise the uppercase variant is used. Empty values are treated as
+/// absent. This matches the `urllib.request.getproxies()` precedence used
+/// by the Python compatibility facade.
+///
+/// # Routing
+///
+/// - `https` targets use `HTTPS_PROXY` / `https_proxy`, falling back to
+///   `ALL_PROXY` / `all_proxy`.
+/// - `http` targets use `HTTP_PROXY` / `http_proxy`, falling back to
+///   `ALL_PROXY` / `all_proxy`.
+/// - An `http://` proxy URL serves as the CONNECT proxy for HTTPS targets;
+///   `socks5://` / `socks5h://` values work wherever the existing proxy
+///   parser accepts them (no new SOCKS implementation).
+/// - `NO_PROXY` / `no_proxy` is parsed with the native [`NoProxy::parse`]
+///   (not the HTTPX-compat parser) and applied before proxy dispatch: a
+///   bypassed URL resolves to direct transport (`None`).
+///
+/// Proxy URLs without a scheme (e.g. `proxy:8080`) are normalized with an
+/// `http://` prefix, mirroring the Python facade's environment helper.
+/// Invalid proxy or `NO_PROXY` values fail closed with a redacted
+/// [`Error::InvalidProxyUrl`] rather than silently falling back to direct
+/// transport.
+///
+/// The snapshot owns its strings: later process-environment changes do not
+/// affect an already-constructed value.
+#[derive(Clone, Default)]
+#[allow(
+    clippy::struct_field_names,
+    reason = "fields name the four conventional proxy environment variables; the shared `proxy` suffix is the domain vocabulary"
+)]
+pub struct ProxyEnvironment {
+    http_proxy: Option<String>,
+    https_proxy: Option<String>,
+    all_proxy: Option<String>,
+    no_proxy: Option<String>,
+}
+
+impl fmt::Debug for ProxyEnvironment {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Never render raw environment values: proxy URLs may embed
+        // credentials. Report presence only.
+        f.debug_struct("ProxyEnvironment")
+            .field("http_proxy", &self.http_proxy.as_ref().map(|_| "<set>"))
+            .field("https_proxy", &self.https_proxy.as_ref().map(|_| "<set>"))
+            .field("all_proxy", &self.all_proxy.as_ref().map(|_| "<set>"))
+            .field("no_proxy", &self.no_proxy.as_ref().map(|_| "<set>"))
+            .finish()
+    }
+}
+
+impl ProxyEnvironment {
+    /// Create an empty environment (no proxy routing; direct transport).
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Parse a supplied environment snapshot.
+    ///
+    /// Takes any iterator of `(key, value)` pairs so tests can supply maps
+    /// without mutating process environment. Only the eight conventional
+    /// keys are read (`HTTP_PROXY` / `http_proxy`, `HTTPS_PROXY` /
+    /// `https_proxy`, `ALL_PROXY` / `all_proxy`, `NO_PROXY` / `no_proxy`);
+    /// all other entries are ignored and no broader environment capture
+    /// occurs.
+    #[must_use]
+    pub fn from_map<I, K, V>(vars: I) -> Self
+    where
+        I: IntoIterator<Item = (K, V)>,
+        K: AsRef<str>,
+        V: AsRef<str>,
+    {
+        let mut lower_http: Option<String> = None;
+        let mut upper_http: Option<String> = None;
+        let mut lower_https: Option<String> = None;
+        let mut upper_https: Option<String> = None;
+        let mut lower_all: Option<String> = None;
+        let mut upper_all: Option<String> = None;
+        let mut lower_no: Option<String> = None;
+        let mut upper_no: Option<String> = None;
+
+        for (key, value) in vars {
+            let value = value.as_ref().trim().to_owned();
+            if value.is_empty() {
+                continue;
+            }
+            match key.as_ref() {
+                "http_proxy" => lower_http = Some(value),
+                "HTTP_PROXY" => upper_http = Some(value),
+                "https_proxy" => lower_https = Some(value),
+                "HTTPS_PROXY" => upper_https = Some(value),
+                "all_proxy" => lower_all = Some(value),
+                "ALL_PROXY" => upper_all = Some(value),
+                "no_proxy" => lower_no = Some(value),
+                "NO_PROXY" => upper_no = Some(value),
+                _ => {}
+            }
+        }
+
+        Self {
+            http_proxy: lower_http.or(upper_http),
+            https_proxy: lower_https.or(upper_https),
+            all_proxy: lower_all.or(upper_all),
+            no_proxy: lower_no.or(upper_no),
+        }
+    }
+
+    /// Snapshot the current process environment once.
+    ///
+    /// This is the only entry point that touches `std::env`, and it copies
+    /// the relevant values into an owned snapshot. Prefer
+    /// [`ProxyEnvironment::from_map`] in tests to avoid global environment
+    /// mutation under parallelism.
+    #[must_use]
+    pub fn from_env() -> Self {
+        Self::from_map(std::env::vars())
+    }
+
+    /// Returns `true` when no proxy route is configured.
+    ///
+    /// A `NO_PROXY`-only snapshot still counts as empty: without an
+    /// `HTTP(S)_PROXY` / `ALL_PROXY` value there is nothing to route.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.http_proxy.is_none() && self.https_proxy.is_none() && self.all_proxy.is_none()
+    }
+
+    /// Parse the snapshot's `NO_PROXY` value with native semantics.
+    fn no_proxy_rules(&self) -> Result<Option<NoProxy>> {
+        self.no_proxy.as_deref().map(NoProxy::parse).transpose()
+    }
+
+    /// Normalize an environment proxy URL.
+    ///
+    /// Values without a scheme (e.g. `proxy:8080`) are treated as `http`
+    /// proxies, mirroring the Python facade's `normalize_environment_proxy_url`.
+    fn normalize_proxy_url(raw: &str) -> String {
+        let trimmed = raw.trim();
+        if trimmed.contains("://") {
+            trimmed.to_owned()
+        } else {
+            format!("http://{trimmed}")
+        }
+    }
+
+    /// Resolve the explicit proxy route for `url`.
+    ///
+    /// Returns `Ok(None)` for direct transport: no proxy configured for the
+    /// URL's scheme, or `NO_PROXY` bypasses it. Returns `Ok(Some(proxy))`
+    /// with the proxy's `NO_PROXY` rules attached. Returns a redacted
+    /// [`Error::InvalidProxyUrl`] for invalid proxy or `NO_PROXY` values
+    /// (fail closed; never silently direct).
+    ///
+    /// Only `http` and `https` targets are proxied; other schemes resolve
+    /// to direct transport.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::InvalidProxyUrl`] when a configured proxy URL or
+    /// the `NO_PROXY` value cannot be parsed.
+    pub fn resolve(&self, url: &url::Url) -> Result<Option<Proxy>> {
+        let no_proxy = self.no_proxy_rules()?;
+        if let Some(ref rules) = no_proxy {
+            if rules.should_bypass(url) {
+                return Ok(None);
+            }
+        }
+
+        let (raw, rule) = match url.scheme() {
+            "https" => match self.https_proxy.as_deref().or(self.all_proxy.as_deref()) {
+                Some(raw) => (raw, ProxyRule::Https),
+                None => return Ok(None),
+            },
+            "http" => match self.http_proxy.as_deref().or(self.all_proxy.as_deref()) {
+                Some(raw) => (raw, ProxyRule::Http),
+                None => return Ok(None),
+            },
+            _ => return Ok(None),
+        };
+        // A fallback `ALL_PROXY` value routes both schemes; keep the
+        // per-URL rule specific except when the value came from ALL_PROXY.
+        let from_all = match url.scheme() {
+            "https" => self.https_proxy.is_none(),
+            "http" => self.http_proxy.is_none(),
+            _ => false,
+        };
+
+        let normalized = Self::normalize_proxy_url(raw);
+        let mut proxy = match (rule, from_all) {
+            (_, true) | (ProxyRule::All, false) => Proxy::all_compat(&normalized)?,
+            (ProxyRule::Http, false) => Proxy::http_compat(&normalized)?,
+            (ProxyRule::Https, false) => Proxy::https_compat(&normalized)?,
+        };
+        if let Some(rules) = no_proxy {
+            proxy = proxy.no_proxy(rules);
+        }
+        Ok(Some(proxy))
+    }
+
+    /// Expand the snapshot into explicit scheme-scoped proxies.
+    ///
+    /// Returns up to three proxies (`Http`, `Https`, `All` for the
+    /// configured values) in specific-before-fallback order, each carrying
+    /// the snapshot's `NO_PROXY` rules. Used by
+    /// [`crate::client::ClientBuilder::proxy_environment`]. Fails closed on
+    /// invalid values with a redacted error.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::InvalidProxyUrl`] when any configured proxy URL or
+    /// the `NO_PROXY` value cannot be parsed.
+    pub fn client_proxies(&self) -> Result<Vec<Proxy>> {
+        let no_proxy = self.no_proxy_rules()?;
+        let mut proxies = Vec::new();
+
+        if let Some(ref raw) = self.http_proxy {
+            let normalized = Self::normalize_proxy_url(raw);
+            let mut proxy = Proxy::http_compat(&normalized)?;
+            if let Some(ref rules) = no_proxy {
+                proxy = proxy.no_proxy(rules.clone());
+            }
+            proxies.push(proxy);
+        }
+        if let Some(ref raw) = self.https_proxy {
+            let normalized = Self::normalize_proxy_url(raw);
+            let mut proxy = Proxy::https_compat(&normalized)?;
+            if let Some(ref rules) = no_proxy {
+                proxy = proxy.no_proxy(rules.clone());
+            }
+            proxies.push(proxy);
+        }
+        if let Some(ref raw) = self.all_proxy {
+            let normalized = Self::normalize_proxy_url(raw);
+            let mut proxy = Proxy::all_compat(&normalized)?;
+            if let Some(ref rules) = no_proxy {
+                proxy = proxy.no_proxy(rules.clone());
+            }
+            proxies.push(proxy);
+        }
+        Ok(proxies)
+    }
+}
+
 /// Parse and validate a proxy URL.
 ///
 /// Requirements:
@@ -1112,8 +1399,9 @@ impl fmt::Display for Proxy {
 /// - host must be present
 /// - no fragment
 /// - no query string
-/// - for `http`/`https`: userinfo is extracted as Basic credentials
-/// - for `socks5`/`socks5h`: userinfo is extracted as SOCKS credentials
+/// - for `http`/`https`: userinfo is rejected here (use the `*_compat`
+///   constructors, which extract it into [`ProxyAuth`])
+/// - for `socks5`/`socks5h`: inline userinfo is accepted and validated
 fn parse_proxy_url(url_str: &str) -> Result<url::Url> {
     // Deliberately do not echo `url_str` into the error: parsing has
     // failed, so `redact_url_string` would fall back to the raw input
@@ -1210,6 +1498,215 @@ mod tests {
             !msg.contains("proxy-secret-2"),
             "compat proxy parse error must not leak credentials: {msg}"
         );
+    }
+
+    #[test]
+    fn compat_constructors_extract_inline_credentials() {
+        let proxy = Proxy::https_compat("http://user:pass@proxy.example:8080").unwrap();
+        assert_eq!(proxy.rule(), ProxyRule::Https);
+        assert!(proxy.config().auth().is_some());
+
+        let proxy = Proxy::http_compat("http://user:pass@proxy.example:8080").unwrap();
+        assert_eq!(proxy.rule(), ProxyRule::Http);
+        assert!(proxy.config().auth().is_some());
+    }
+
+    // --- ProxyEnvironment tests (supplied snapshots; never mutate process env) ---
+
+    fn https_url() -> url::Url {
+        url::Url::parse("https://example.com/resource").unwrap()
+    }
+
+    fn http_url() -> url::Url {
+        url::Url::parse("http://example.com/resource").unwrap()
+    }
+
+    #[test]
+    fn proxy_environment_https_proxy_selected() {
+        let env = ProxyEnvironment::from_map([("HTTPS_PROXY", "http://proxy.example:8080")]);
+        let proxy = env
+            .resolve(&https_url())
+            .expect("resolve succeeds")
+            .expect("https proxy selected");
+        assert_eq!(proxy.uri().host_str(), Some("proxy.example"));
+        assert_eq!(proxy.rule(), ProxyRule::Https);
+    }
+
+    #[test]
+    fn proxy_environment_lowercase_precedence() {
+        // Lowercase wins when both cases are present (matches
+        // urllib.request.getproxies() precedence used by the Python facade).
+        let env = ProxyEnvironment::from_map([
+            ("HTTPS_PROXY", "http://upper.example:8080"),
+            ("https_proxy", "http://lower.example:8080"),
+        ]);
+        let proxy = env
+            .resolve(&https_url())
+            .expect("resolve succeeds")
+            .expect("proxy selected");
+        assert_eq!(proxy.uri().host_str(), Some("lower.example"));
+    }
+
+    #[test]
+    fn proxy_environment_all_proxy_fallback() {
+        let env = ProxyEnvironment::from_map([("ALL_PROXY", "http://fallback.example:8080")]);
+        let https = env
+            .resolve(&https_url())
+            .expect("resolve succeeds")
+            .expect("all_proxy fallback for https");
+        assert_eq!(https.uri().host_str(), Some("fallback.example"));
+
+        let http = env
+            .resolve(&http_url())
+            .expect("resolve succeeds")
+            .expect("all_proxy fallback for http");
+        assert_eq!(http.uri().host_str(), Some("fallback.example"));
+    }
+
+    #[test]
+    fn proxy_environment_scheme_specific_beats_fallback() {
+        let env = ProxyEnvironment::from_map([
+            ("HTTPS_PROXY", "http://specific.example:8080"),
+            ("ALL_PROXY", "http://fallback.example:8080"),
+        ]);
+        let proxy = env
+            .resolve(&https_url())
+            .expect("resolve succeeds")
+            .expect("proxy selected");
+        assert_eq!(proxy.uri().host_str(), Some("specific.example"));
+    }
+
+    #[test]
+    fn proxy_environment_no_proxy_bypass_exact_and_domain() {
+        let env = ProxyEnvironment::from_map([
+            ("HTTPS_PROXY", "http://proxy.example:8080"),
+            ("NO_PROXY", "example.com, .internal.example"),
+        ]);
+        // Exact host bypass.
+        assert!(env
+            .resolve(&https_url())
+            .expect("resolve succeeds")
+            .is_none());
+
+        // Domain-suffix bypass.
+        let sub = url::Url::parse("https://api.internal.example/data").unwrap();
+        assert!(env.resolve(&sub).expect("resolve succeeds").is_none());
+
+        // Unrelated host still routes via the proxy.
+        let other = url::Url::parse("https://other.example/data").unwrap();
+        assert!(env.resolve(&other).expect("resolve succeeds").is_some());
+    }
+
+    #[test]
+    fn proxy_environment_http_proxy_connect_for_https() {
+        // An http:// proxy URL serves as the CONNECT proxy for HTTPS targets.
+        let env =
+            ProxyEnvironment::from_map([("HTTPS_PROXY", "http://connect-proxy.example:3128")]);
+        let proxy = env
+            .resolve(&https_url())
+            .expect("resolve succeeds")
+            .expect("CONNECT proxy selected");
+        assert_eq!(proxy.uri().scheme(), "http");
+        assert_eq!(proxy.uri().host_str(), Some("connect-proxy.example"));
+    }
+
+    #[test]
+    fn proxy_environment_socks_falls_out_of_parser() {
+        let env = ProxyEnvironment::from_map([("HTTPS_PROXY", "socks5h://socks.example:1080")]);
+        let proxy = env
+            .resolve(&https_url())
+            .expect("resolve succeeds")
+            .expect("SOCKS proxy selected");
+        assert!(proxy.config().is_socks());
+    }
+
+    #[test]
+    fn proxy_environment_bare_host_gets_http_scheme() {
+        let env = ProxyEnvironment::from_map([("HTTPS_PROXY", "proxy.example:8080")]);
+        let proxy = env
+            .resolve(&https_url())
+            .expect("resolve succeeds")
+            .expect("bare host normalized");
+        assert_eq!(proxy.uri().scheme(), "http");
+        assert_eq!(proxy.uri().host_str(), Some("proxy.example"));
+    }
+
+    #[test]
+    fn proxy_environment_invalid_proxy_fails_closed_redacted() {
+        let env = ProxyEnvironment::from_map([("HTTPS_PROXY", "http://user:env-secret-9@[::1")]);
+        let err = env.resolve(&https_url()).unwrap_err();
+        assert!(matches!(err, Error::InvalidProxyUrl(_)));
+        let msg = err.to_string();
+        assert!(
+            !msg.contains("env-secret-9"),
+            "environment proxy error must not leak credentials: {msg}"
+        );
+        assert_eq!(err.kind(), "invalid_proxy_url");
+    }
+
+    #[test]
+    fn proxy_environment_no_resolver_means_direct() {
+        let env = ProxyEnvironment::new();
+        assert!(env.is_empty());
+        assert!(env
+            .resolve(&https_url())
+            .expect("resolve succeeds")
+            .is_none());
+        assert!(env
+            .resolve(&http_url())
+            .expect("resolve succeeds")
+            .is_none());
+        assert!(env.client_proxies().expect("proxies succeed").is_empty());
+    }
+
+    #[test]
+    fn proxy_environment_snapshot_stable_after_source_changes() {
+        let mut source = vec![(
+            "HTTPS_PROXY".to_owned(),
+            "http://first.example:8080".to_owned(),
+        )];
+        let env = ProxyEnvironment::from_map(source.clone());
+        // Mutating the source after the snapshot must not affect resolution.
+        source[0].1 = "http://second.example:8080".to_owned();
+        let proxy = env
+            .resolve(&https_url())
+            .expect("resolve succeeds")
+            .expect("proxy selected");
+        assert_eq!(proxy.uri().host_str(), Some("first.example"));
+    }
+
+    #[test]
+    fn proxy_environment_debug_redacts_values() {
+        let env = ProxyEnvironment::from_map([
+            (
+                "HTTPS_PROXY",
+                "http://user:debug-secret-7@proxy.example:8080",
+            ),
+            ("NO_PROXY", "example.com"),
+        ]);
+        let rendered = format!("{env:?}");
+        assert!(
+            !rendered.contains("debug-secret-7"),
+            "Debug must not leak proxy credentials: {rendered}"
+        );
+        assert!(
+            !rendered.contains("proxy.example"),
+            "Debug must not echo proxy host: {rendered}"
+        );
+    }
+
+    #[test]
+    fn proxy_environment_client_proxies_specific_before_fallback() {
+        let env = ProxyEnvironment::from_map([
+            ("HTTP_PROXY", "http://http-proxy.example:8080"),
+            ("HTTPS_PROXY", "http://https-proxy.example:8080"),
+            ("ALL_PROXY", "http://fallback.example:8080"),
+        ]);
+        let proxies = env.client_proxies().expect("proxies succeed");
+        assert_eq!(proxies.len(), 3);
+        assert_eq!(proxies[0].rule(), ProxyRule::Http);
+        assert_eq!(proxies[1].rule(), ProxyRule::Https);
+        assert_eq!(proxies[2].rule(), ProxyRule::All);
     }
 
     #[test]

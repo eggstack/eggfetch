@@ -1046,6 +1046,24 @@ impl ClientBuilder {
         self
     }
 
+    /// Set the HTTPS-downgrade rule for redirects without replacing the
+    /// rest of the redirect policy.
+    ///
+    /// Select
+    /// [`RedirectDowngradePolicy::Deny`](crate::redirect::RedirectDowngradePolicy::Deny)
+    /// to reject HTTPS -> HTTP downgrades before the downgraded request
+    /// is dispatched. The default is
+    /// [`Allow`](crate::redirect::RedirectDowngradePolicy::Allow) for
+    /// compatibility.
+    #[must_use]
+    pub fn redirect_downgrade_policy(
+        mut self,
+        policy: crate::redirect::RedirectDowngradePolicy,
+    ) -> Self {
+        self.redirect.downgrade = policy;
+        self
+    }
+
     /// Set a shared cookie jar for this client.
     ///
     /// When set, the client will automatically inject matching cookies
@@ -1087,6 +1105,34 @@ impl ClientBuilder {
     pub fn environment_proxy(mut self, proxy: Proxy) -> Self {
         self.environment_proxies.push(proxy);
         self
+    }
+
+    /// Opt into environment-proxy routing from an explicit snapshot.
+    ///
+    /// The native default stays environment-independent: without this call
+    /// the client never reads proxy environment variables. Pass
+    /// [`crate::proxy::ProxyEnvironment::from_env`] at the call site to
+    /// preserve command-line environment reachability, or
+    /// [`crate::proxy::ProxyEnvironment::from_map`] in tests for a pure
+    /// snapshot without global environment mutation.
+    ///
+    /// Each configured value becomes a scheme-scoped fallback proxy
+    /// (specific before `ALL_PROXY`); `NO_PROXY` bypass is attached to
+    /// every proxy. Invalid values fail closed with a redacted error.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::error::Error::InvalidProxyUrl`] when a configured
+    /// proxy URL or the `NO_PROXY` value cannot be parsed.
+    #[cfg(feature = "proxy")]
+    pub fn proxy_environment(
+        mut self,
+        env: &crate::proxy::ProxyEnvironment,
+    ) -> crate::error::Result<Self> {
+        for proxy in env.client_proxies()? {
+            self.environment_proxies.push(proxy);
+        }
+        Ok(self)
     }
 
     /// Set `NO_PROXY` bypass rules for the default proxy.

@@ -58,6 +58,7 @@ the profiles exclude `http2`, `http3`, `json`, all compression features,
 | H1 deterministic HTTPS | `default-features = false, features = ["http1", "tls-rustls"]` | H1, Rustls, packaged WebPKI roots; no system-store loading |
 | H1 native-root HTTPS | `default-features = false, features = ["http1", "tls-rustls", "tls-native-roots"]` | H1, Rustls, native roots with WebPKI construction fallback; explicit form of the default trust profile |
 | H1 + native Rust JSON | `default-features = false, features = ["http1", "tls-rustls", "json"]` | Deterministic H1 HTTPS plus Serde request/response helpers; JSON is not in the default graph |
+| H1 updater transport | `default-features = false, features = ["http1", "tls-rustls", "tls-native-roots", "proxy"]` | H1, Rustls, native roots with WebPKI fallback, explicit proxy routing (incl. opt-in `ProxyEnvironment`); excludes http2/http3/compression/cookies/multipart/json/tracing |
 
 Add `http2` to an H1/TLS profile for HTTP/2 ALPN and multiplexing. The
 `http3` feature implies `http1` and `tls-rustls` but not `tls-native-roots`;

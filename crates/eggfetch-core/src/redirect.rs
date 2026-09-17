@@ -13,6 +13,30 @@ use crate::error::{Error, Result};
 use crate::headers::Headers;
 use crate::request::Request;
 
+/// Policy for HTTPS-to-HTTP redirect downgrades.
+///
+/// This is a transport-security boundary, not an updater or
+/// application policy. When [`RedirectDowngradePolicy::Deny`] is selected,
+/// a redirect whose origin uses `https` and whose resolved target uses
+/// `http` is rejected before the next hop is dispatched. No request bytes
+/// are sent to the downgraded destination.
+///
+/// Relative and scheme-relative `Location` values resolve against the
+/// originating URL first, so a relative redirect from an `https` origin
+/// remains `https` and is allowed under `Deny`. Only an explicit
+/// downgrade to the `http` scheme is rejected.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum RedirectDowngradePolicy {
+    /// Allow HTTPS -> HTTP redirects (historical compatibility default).
+    ///
+    /// This preserves the pre-existing redirect behavior for callers that
+    /// have not opted into strict transport policy.
+    #[default]
+    Allow,
+    /// Reject HTTPS -> HTTP redirects before second-hop I/O.
+    Deny,
+}
+
 /// Configuration for HTTP redirect behavior.
 #[derive(Debug, Clone)]
 pub struct RedirectPolicy {
@@ -20,6 +44,12 @@ pub struct RedirectPolicy {
     pub follow: bool,
     /// Maximum number of redirects to follow before erroring.
     pub max_redirects: usize,
+    /// How to handle HTTPS -> HTTP redirect downgrades.
+    ///
+    /// Defaults to [`RedirectDowngradePolicy::Allow`] for compatibility.
+    /// Select [`RedirectDowngradePolicy::Deny`] to reject downgrades
+    /// before the downgraded request is dispatched.
+    pub downgrade: RedirectDowngradePolicy,
 }
 
 impl Default for RedirectPolicy {
@@ -28,19 +58,90 @@ impl Default for RedirectPolicy {
         Self {
             follow: false,
             max_redirects: 20,
+            downgrade: RedirectDowngradePolicy::Allow,
         }
     }
 }
 
 impl RedirectPolicy {
     /// Create a new redirect policy with explicit settings.
+    ///
+    /// The downgrade policy defaults to
+    /// [`RedirectDowngradePolicy::Allow`] for compatibility. Use
+    /// [`RedirectPolicy::strict`] or [`RedirectPolicy::with_downgrade`]
+    /// to opt into downgrade rejection.
     #[must_use]
     pub fn new(follow: bool, max_redirects: usize) -> Self {
         Self {
             follow,
             max_redirects,
+            downgrade: RedirectDowngradePolicy::Allow,
         }
     }
+
+    /// Create a strict policy that follows redirects but rejects
+    /// HTTPS -> HTTP downgrades before second-hop I/O.
+    #[must_use]
+    pub fn strict(max_redirects: usize) -> Self {
+        Self {
+            follow: true,
+            max_redirects,
+            downgrade: RedirectDowngradePolicy::Deny,
+        }
+    }
+
+    /// Set the downgrade policy, returning the updated policy.
+    #[must_use]
+    pub fn with_downgrade(mut self, downgrade: RedirectDowngradePolicy) -> Self {
+        self.downgrade = downgrade;
+        self
+    }
+
+    /// Check whether a redirect from `from` to `to` is permitted by this
+    /// policy's downgrade rule.
+    ///
+    /// Returns `Ok(())` when the hop is allowed. Returns
+    /// [`Error::InvalidRedirectLocation`] when the hop is an HTTPS -> HTTP
+    /// downgrade and the policy is [`RedirectDowngradePolicy::Deny`].
+    /// Scheme allow-listing (`http`/`https` only) and userinfo rejection
+    /// are enforced separately by [`validate_redirect_url`]; this method
+    /// only enforces the downgrade boundary.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::InvalidRedirectLocation`] on a denied downgrade.
+    pub fn check_downgrade(&self, from: &Url, to: &Url) -> Result<()> {
+        check_https_downgrade(from, to, self.downgrade)
+    }
+}
+
+/// Returns `true` when a redirect moves from `https` to `http`.
+///
+/// Both URLs must already be resolved (relative and scheme-relative
+/// `Location` values resolved against the originating URL), so this is a
+/// plain scheme comparison.
+#[must_use]
+pub fn is_https_downgrade(from: &Url, to: &Url) -> bool {
+    from.scheme() == "https" && to.scheme() == "http"
+}
+
+/// Enforce a downgrade policy for a resolved redirect hop.
+///
+/// Returns `Ok(())` when the hop is allowed. When `policy` is
+/// [`RedirectDowngradePolicy::Deny`] and `to` is an `http` downgrade of an
+/// `https` origin, returns [`Error::InvalidRedirectLocation`] before any
+/// request is dispatched to `to`.
+///
+/// # Errors
+///
+/// Returns [`Error::InvalidRedirectLocation`] on a denied downgrade.
+pub fn check_https_downgrade(from: &Url, to: &Url, policy: RedirectDowngradePolicy) -> Result<()> {
+    if policy == RedirectDowngradePolicy::Deny && is_https_downgrade(from, to) {
+        return Err(Error::InvalidRedirectLocation(
+            "redirect downgrade from https to http is not allowed".into(),
+        ));
+    }
+    Ok(())
 }
 
 /// Headers that should be removed when the body is dropped (e.g., on
@@ -102,6 +203,14 @@ pub fn drops_body_on_redirect(status: http::StatusCode, current_method: &Method)
 /// redirects, removes body-specific headers when the body is dropped,
 /// and returns the new request with an empty body.
 ///
+/// This compatibility entry point preserves the historical behavior of
+/// allowing HTTPS -> HTTP downgrades. Callers that need downgrade
+/// rejection should use
+/// [`build_redirect_request_with_redirect_policy`] with a
+/// [`RedirectPolicy`] whose [`downgrade`](RedirectPolicy::downgrade) is
+/// [`RedirectDowngradePolicy::Deny`]; the redirect pipeline enforces the
+/// client policy automatically.
+///
 /// # Errors
 ///
 /// Returns an error if:
@@ -115,27 +224,81 @@ pub fn build_redirect_request(
 ) -> Result<Request> {
     let new_method = redirect_method(status, original.method());
     let drop_body = drops_body_on_redirect(status, original.method());
-    build_redirect_request_with_policy(original, location, new_method, drop_body)
+    build_redirect_request_with_method(
+        original,
+        location,
+        new_method,
+        drop_body,
+        RedirectDowngradePolicy::Allow,
+    )
+}
+
+/// Build a follow-up request while enforcing a [`RedirectPolicy`]'s
+/// downgrade rule.
+///
+/// Behaves like [`build_redirect_request`], except an HTTPS -> HTTP
+/// downgrade is rejected before the returned request could be dispatched
+/// when `policy.downgrade` is [`RedirectDowngradePolicy::Deny`].
+///
+/// # Errors
+///
+/// Same as [`build_redirect_request`], plus
+/// [`Error::InvalidRedirectLocation`] on a denied downgrade.
+pub fn build_redirect_request_with_redirect_policy(
+    original: &Request,
+    status: http::StatusCode,
+    location: &str,
+    policy: &RedirectPolicy,
+) -> Result<Request> {
+    let new_method = redirect_method(status, original.method());
+    let drop_body = drops_body_on_redirect(status, original.method());
+    build_redirect_request_with_method(original, location, new_method, drop_body, policy.downgrade)
 }
 
 /// Build a follow-up request using a precomputed redirect method and
 /// body-dropping decision.
 ///
 /// Internal fast path for the pipeline, which already evaluated
-/// [`redirect_method`] and [`drops_body_on_redirect`] for the hop.
+/// [`redirect_method`] and [`drops_body_on_redirect`] for the hop. The
+/// `downgrade` policy is enforced after URL resolution and before the
+/// caller can dispatch the next hop.
 ///
 /// # Errors
 ///
-/// Same as [`build_redirect_request`].
+/// Same as [`build_redirect_request`], plus
+/// [`Error::InvalidRedirectLocation`] on a denied downgrade.
 pub(crate) fn build_redirect_request_with_policy(
     original: &Request,
     location: &str,
     new_method: Method,
     drop_body: bool,
+    downgrade: RedirectDowngradePolicy,
+) -> Result<Request> {
+    build_redirect_request_with_method(original, location, new_method, drop_body, downgrade)
+}
+
+/// Shared redirect-request constructor.
+///
+/// Kept private so the public surface stays at the two entry points
+/// above plus the pipeline path. `downgrade` is enforced after scheme
+/// validation and before headers/body are finalized.
+///
+/// # Errors
+///
+/// Same as [`build_redirect_request`], plus
+/// [`Error::InvalidRedirectLocation`] on a denied downgrade.
+fn build_redirect_request_with_method(
+    original: &Request,
+    location: &str,
+    new_method: Method,
+    drop_body: bool,
+    downgrade: RedirectDowngradePolicy,
 ) -> Result<Request> {
     let new_url = resolve_redirect_url(original.url(), location)?;
 
     validate_redirect_url(&new_url)?;
+
+    check_https_downgrade(original.url(), &new_url, downgrade)?;
 
     // Build new headers.
     let mut new_headers = original.headers().clone();
@@ -541,6 +704,7 @@ mod tests {
         let policy = RedirectPolicy::default();
         assert!(!policy.follow);
         assert_eq!(policy.max_redirects, 20);
+        assert_eq!(policy.downgrade, RedirectDowngradePolicy::Allow);
     }
 
     #[test]
@@ -548,6 +712,173 @@ mod tests {
         let policy = RedirectPolicy::new(true, 5);
         assert!(policy.follow);
         assert_eq!(policy.max_redirects, 5);
+        // Compatibility: historical behavior allows downgrades unless the
+        // caller opts into strict mode.
+        assert_eq!(policy.downgrade, RedirectDowngradePolicy::Allow);
+    }
+
+    #[test]
+    fn redirect_policy_strict_denies_downgrade() {
+        let policy = RedirectPolicy::strict(10);
+        assert!(policy.follow);
+        assert_eq!(policy.max_redirects, 10);
+        assert_eq!(policy.downgrade, RedirectDowngradePolicy::Deny);
+    }
+
+    #[test]
+    fn redirect_policy_with_downgrade() {
+        let policy = RedirectPolicy::new(true, 5).with_downgrade(RedirectDowngradePolicy::Deny);
+        assert_eq!(policy.downgrade, RedirectDowngradePolicy::Deny);
+    }
+
+    #[test]
+    fn is_https_downgrade_detects_scheme_change() {
+        let https = Url::parse("https://example.com/a").unwrap();
+        let https_other = Url::parse("https://other.com/b").unwrap();
+        let http = Url::parse("http://example.com/b").unwrap();
+        let http_origin = Url::parse("http://example.com/a").unwrap();
+
+        assert!(is_https_downgrade(&https, &http));
+        assert!(!is_https_downgrade(&https, &https_other));
+        assert!(!is_https_downgrade(&http_origin, &http));
+        // Upgrades are never downgrades.
+        assert!(!is_https_downgrade(&http_origin, &https));
+    }
+
+    #[test]
+    fn strict_policy_allows_https_to_https() {
+        let policy = RedirectPolicy::strict(5);
+        let from = Url::parse("https://example.com/a").unwrap();
+        let to = Url::parse("https://other.com/b").unwrap();
+        assert!(policy.check_downgrade(&from, &to).is_ok());
+    }
+
+    #[test]
+    fn strict_policy_allows_relative_https_equivalent() {
+        // A relative Location resolves against the https origin, so the
+        // resolved target stays https and must succeed under Deny.
+        let policy = RedirectPolicy::strict(5);
+        let req = Request::new(Method::GET, Url::parse("https://example.com/a").unwrap());
+        let redirect =
+            build_redirect_request_with_redirect_policy(&req, StatusCode::FOUND, "/b/c", &policy)
+                .expect("relative redirect from https must succeed under Deny");
+        assert_eq!(redirect.url().as_str(), "https://example.com/b/c");
+    }
+
+    #[test]
+    fn strict_policy_allows_scheme_relative_https() {
+        let policy = RedirectPolicy::strict(5);
+        let req = Request::new(Method::GET, Url::parse("https://example.com/a").unwrap());
+        let redirect = build_redirect_request_with_redirect_policy(
+            &req,
+            StatusCode::FOUND,
+            "//other.com/b",
+            &policy,
+        )
+        .expect("scheme-relative redirect from https resolves to https");
+        assert_eq!(redirect.url().as_str(), "https://other.com/b");
+    }
+
+    #[test]
+    fn strict_policy_rejects_https_to_http() {
+        let policy = RedirectPolicy::strict(5);
+        let from = Url::parse("https://example.com/a").unwrap();
+        let to = Url::parse("http://example.com/b").unwrap();
+        let err = policy.check_downgrade(&from, &to).unwrap_err();
+        assert!(matches!(err, Error::InvalidRedirectLocation(_)));
+        assert_eq!(err.kind(), "invalid_redirect_location");
+    }
+
+    #[test]
+    fn compat_policy_allows_https_to_http() {
+        // Default/compat behavior is unchanged when strict mode is not
+        // selected: downgrades still build.
+        let policy = RedirectPolicy::new(true, 5);
+        let req = Request::new(Method::GET, Url::parse("https://example.com/a").unwrap());
+        let redirect = build_redirect_request_with_redirect_policy(
+            &req,
+            StatusCode::FOUND,
+            "http://example.com/b",
+            &policy,
+        )
+        .expect("compat policy must allow downgrade");
+        assert_eq!(redirect.url().scheme(), "http");
+    }
+
+    #[test]
+    fn compat_build_redirect_request_allows_downgrade() {
+        // The historical entry point stays compatibility-preserving.
+        let req = Request::new(Method::GET, Url::parse("https://example.com/a").unwrap());
+        let redirect = build_redirect_request(&req, StatusCode::FOUND, "http://example.com/b")
+            .expect("compat entry point allows downgrade");
+        assert_eq!(redirect.url().scheme(), "http");
+    }
+
+    #[test]
+    fn strict_build_redirect_rejects_downgrade_before_dispatch() {
+        // The builder returns Err without producing a dispatchable
+        // request: there is no next-hop request object to send, so no
+        // second-hop I/O can occur.
+        let policy = RedirectPolicy::strict(5);
+        let req = Request::new(Method::GET, Url::parse("https://example.com/a").unwrap());
+        let err = build_redirect_request_with_redirect_policy(
+            &req,
+            StatusCode::FOUND,
+            "http://example.com/b",
+            &policy,
+        )
+        .unwrap_err();
+        assert!(matches!(err, Error::InvalidRedirectLocation(_)));
+    }
+
+    #[test]
+    fn strict_multi_hop_chain_rejects_on_downgrade_hop() {
+        // Simulate a multi-hop HTTPS chain followed by a downgrade: the
+        // first hops succeed, the downgrade hop fails.
+        let policy = RedirectPolicy::strict(5);
+        let first = Request::new(Method::GET, Url::parse("https://a.example/1").unwrap());
+        let second = build_redirect_request_with_redirect_policy(
+            &first,
+            StatusCode::FOUND,
+            "https://b.example/2",
+            &policy,
+        )
+        .expect("https -> https hop succeeds");
+        assert_eq!(second.url().as_str(), "https://b.example/2");
+
+        let err = build_redirect_request_with_redirect_policy(
+            &second,
+            StatusCode::FOUND,
+            "http://c.example/3",
+            &policy,
+        )
+        .unwrap_err();
+        assert!(matches!(err, Error::InvalidRedirectLocation(_)));
+    }
+
+    #[test]
+    fn strict_cross_origin_https_preserves_header_stripping() {
+        // Sensitive-header stripping is unchanged for allowed
+        // cross-origin redirects under strict mode.
+        let policy = RedirectPolicy::strict(5);
+        let mut req = Request::new(Method::GET, Url::parse("https://example.com/a").unwrap());
+        req.headers_mut()
+            .insert("authorization", "Bearer tok")
+            .unwrap();
+        req.headers_mut().insert("cookie", "session=abc").unwrap();
+        req.headers_mut().insert("x-custom", "keep").unwrap();
+
+        let redirect = build_redirect_request_with_redirect_policy(
+            &req,
+            StatusCode::FOUND,
+            "https://other.com/b",
+            &policy,
+        )
+        .expect("allowed cross-origin https redirect succeeds");
+
+        assert!(redirect.headers().get("authorization").is_none());
+        assert!(redirect.headers().get("cookie").is_none());
+        assert!(redirect.headers().get("x-custom").is_some());
     }
 
     proptest::proptest! {

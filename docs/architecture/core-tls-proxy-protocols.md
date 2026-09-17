@@ -214,7 +214,20 @@ Proxy-only headers are applied as follows:
 - host/domain and host:port entries
 - IPv4/IPv6 literals and CIDR networks
 
-The Rust core does not read proxy environment variables. The HTTPX Python
+The Rust core does not read proxy environment variables implicitly. Native
+callers that want command-line environment reachability opt in explicitly
+with `ProxyEnvironment::from_env()` plus
+`ClientBuilder::proxy_environment()`; tests use the pure
+`ProxyEnvironment::from_map()` snapshot without mutating process
+environment. The snapshot owns its strings (later environment changes have
+no effect), applies `NO_PROXY` before dispatch, uses `HTTPS_PROXY` /
+`HTTP_PROXY` with `ALL_PROXY` fallback per scheme, normalizes scheme-less
+values as `http://` (so an `http://` proxy serves CONNECT for HTTPS
+targets), reuses the existing proxy parser (SOCKS included, no new SOCKS
+implementation), and fails closed with a redacted `InvalidProxyUrl` on bad
+values. Lowercase names win over uppercase; `NO_PROXY` uses native
+`NoProxy::parse()` semantics. `Debug` reports presence only, never raw
+values. The HTTPX Python
 compatibility facade may translate `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`,
 and `NO_PROXY` into explicit scheme-aware native proxy configuration when
 `trust_env=True`; native Rust callers must configure proxies explicitly. The

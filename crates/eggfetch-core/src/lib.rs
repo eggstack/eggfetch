@@ -74,11 +74,16 @@ pub use network_stream::{
 };
 pub use pool::{Pool, PoolConfig};
 #[cfg(feature = "proxy")]
-pub use proxy::{NoProxy, NoProxyRule, Proxy, ProxyAuth, ProxyConfig, ProxyDecision, ProxyRule};
+pub use proxy::{
+    NoProxy, NoProxyRule, Proxy, ProxyAuth, ProxyConfig, ProxyDecision, ProxyEnvironment, ProxyRule,
+};
 pub use redact::{
     is_sensitive_header, redact_headers, redact_url, redact_url_string, SENSITIVE_HEADERS,
 };
-pub use redirect::RedirectPolicy;
+pub use redirect::{
+    build_redirect_request_with_redirect_policy, check_https_downgrade, is_https_downgrade,
+    RedirectDowngradePolicy, RedirectPolicy,
+};
 pub use request::{
     NativeRequestOptions, ProxyOverride, Request, RequestBuilder, ResolvedTarget, TransportHints,
 };

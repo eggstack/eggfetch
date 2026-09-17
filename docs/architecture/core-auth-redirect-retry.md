@@ -46,11 +46,27 @@ do not.
 
 ### Policy
 
-`RedirectPolicy { follow: bool, max_redirects: usize }` configures redirect
-behavior (default: `follow = false`, matching HTTPX; `max_redirects = 20`).
+`RedirectPolicy { follow: bool, max_redirects: usize, downgrade: RedirectDowngradePolicy }`
+configures redirect behavior (default: `follow = false`, matching HTTPX;
+`max_redirects = 20`; `downgrade = Allow` for compatibility).
 `ClientBuilder::follow_redirects()` / `max_redirects()` /
-`redirect_policy()` set the client default; `RequestBuilder::redirect_policy()`
-overrides per request.
+`redirect_policy()` / `redirect_downgrade_policy()` set the client default;
+`RequestBuilder::redirect_policy()` overrides per request.
+`RedirectPolicy::strict(max)` follows redirects while rejecting HTTPS ->
+HTTP downgrades.
+
+### Downgrade Policy
+
+`RedirectDowngradePolicy::{Allow, Deny}` is a transport-security boundary:
+under `Deny`, a redirect whose resolved target downgrades `https` to `http`
+fails with `Error::InvalidRedirectLocation` before the next hop dispatches,
+so no request bytes reach the downgraded destination. Relative and
+scheme-relative `Location` values resolve against the origin first, so a
+relative redirect from `https` stays `https` and remains allowed. The public
+`build_redirect_request()` entry point stays compatibility-preserving
+(`Allow`); `build_redirect_request_with_redirect_policy()` and the pipeline
+enforce the configured policy. Credential stripping, body replayability,
+method rewrites, loop bounds, and scheme allow-listing are unchanged.
 
 ### Method Rewriting
 
