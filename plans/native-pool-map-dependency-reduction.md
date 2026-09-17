@@ -1,7 +1,7 @@
 # Native Pool Map Dependency Reduction
 
 Planning baseline: `b0a09eed95b88199db2d0188ea68bf100c43b50a` (`main`, 2026-09-17; `eggfetch-core` 0.1.6)
-Status: planned
+Status: implemented
 
 ## Objective
 
@@ -196,16 +196,39 @@ Explicitly verify a no-default-features native slice because that is where depen
 
 ## Closure evidence
 
-Record in this plan when implemented:
+- Implementation commit: `196046f821415ea38a1eb3dd53d5df498c3bdcd6`.
+- Minimal native slice (`cargo tree -p eggfetch-core
+  --no-default-features --features http1 -e normal --prefix none | sort -u |
+  wc -l`): **92 packages before → 86 after**. Removed closure:
+  `dashmap`, `crossbeam-utils`, `hashbrown 0.14.5`, `lock_api`,
+  `scopeguard`, `parking_lot_core`. (`hashbrown 0.17.1` remains in some
+  wider profiles via unrelated dependencies, not via `dashmap`.)
+- `dashmap` in the workspace graph: **gone**. `cargo tree --workspace -i
+  dashmap` no longer matches any package and the workspace `Cargo.lock`
+  contains no `dashmap` entry. Isolated non-workspace lockfiles (`fuzz/`,
+  `qualification/*/`) still pin `dashmap` until those manual fixtures are
+  next re-resolved; they are not part of the routine CI graph.
+- Bounded smoke (temporary in-crate harness, removed before commit, no CI
+  threshold added): hot origin 32×500 acquires ≈ 15.6 ms; 64 origins × 100
+  acquires ≈ 7.1 ms; 5000-origin churn ≈ 15.2 ms with the table left at 1
+  entry. No material regression; `RwLock` read fast path kept (no `Mutex`
+  fallback needed).
+- Focused pool tests: `cargo test -p eggfetch-core --all-features pool --
+  --test-threads=1` → 73 passed. New regressions cover same-origin limit,
+  waiter-release on cancellation, repeated-cancel recovery, live-permit and
+  registered-waiter eviction immunity, barrier-seamed concurrent creation
+  sharing one semaphore, churn-plus-cancellation limit preservation, and
+  metrics meanings. Existing integration tests
+  (`tests/pool_tests.rs`, incl. waiter-eviction) remain green.
+- Standard qualification: `./scripts/check.sh` (Tier 1) green locally;
+  feature-slice `cargo check` matrix green (`--no-default-features`;
+  `http1`; `http1,tls-rustls`; `http1,tls-rustls,tls-native-roots`;
+  `--all-features`); proxy subset
+  (`--no-default-features --features http1,tls-rustls,proxy`) 621 lib tests
+  green.
 
-- implementation commit SHA;
-- before/after resolved package count for a consistent minimal native feature slice;
-- whether `dashmap` remains anywhere in the workspace graph and why if it does;
-- bounded benchmark/smoke result;
-- focused pool-test result;
-- standard repository qualification result.
-
-Do not claim a binary-size win unless measured under the same toolchain/target/profile/strip settings. Dependency removal is independently valuable even if linker output is approximately flat.
+No binary-size claim is made (not measured under identical
+toolchain/target/profile/strip settings).
 
 ## Completion criteria
 

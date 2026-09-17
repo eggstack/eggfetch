@@ -78,11 +78,11 @@
 //! - HTTP forwarding and HTTPS CONNECT tunneling through the same
 //!   proxy are keyed separately.
 
+use std::collections::HashMap;
 use std::fmt;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
-use dashmap::DashMap;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
 use crate::error::{Error, Result};
@@ -431,13 +431,13 @@ struct PoolInner {
     /// Global concurrency semaphore. `None` when no global limit is set.
     global_semaphore: Option<Arc<Semaphore>>,
     /// Per-origin concurrency semaphores, created lazily on first use.
-    per_origin: DashMap<OriginKey, Arc<PerOriginSemaphore>>,
-    /// Serializes per-origin table eviction with the immediate acquire path.
     ///
-    /// Without this guard, an idle semaphore could be removed after a
-    /// request cloned it but before that request acquired its permit. A new
-    /// semaphore for the same origin could then admit a second request.
-    per_origin_table_lock: tokio::sync::Mutex<()>,
+    /// Guarded by a short-lived standard-library `RwLock`. The lock is held
+    /// only for map lookup/clone, bounded idle-entry sweep, and insertion;
+    /// it is never held across `.await`, semaphore acquisition, network I/O,
+    /// or response-body lifetime. Waiter registration happens while the
+    /// table lock is still held so eviction cannot race lookup.
+    per_origin: RwLock<HashMap<OriginKey, Arc<PerOriginSemaphore>>>,
     /// Pool configuration.
     config: PoolConfig,
     /// Observable metrics.
@@ -462,18 +462,20 @@ impl PerOriginSemaphore {
     }
 }
 
-/// RAII guard that increments `waiters` on creation and decrements on drop.
+/// RAII guard that decrements `waiters` on drop.
 ///
-/// This ensures the counter cannot be left incremented if the future is
-/// cancelled (e.g., via `tokio::time::timeout`) between the increment and
-/// the explicit decrement.
+/// The counter is incremented by the table helper while the table lock is
+/// still held; this guard only ensures the counter is decremented exactly
+/// once even if the acquire future is cancelled (e.g., via
+/// `tokio::time::timeout`) between registration and permit grant.
 struct WaiterGuard {
     entry: Arc<PerOriginSemaphore>,
 }
 
 impl WaiterGuard {
-    fn new(entry: Arc<PerOriginSemaphore>) -> Self {
-        entry.waiters.fetch_add(1, Ordering::AcqRel);
+    /// Wrap an already-registered entry. The caller must have incremented
+    /// `entry.waiters` while holding the table lock.
+    fn from_registered(entry: Arc<PerOriginSemaphore>) -> Self {
         Self { entry }
     }
 }
@@ -505,6 +507,84 @@ pub struct Pool {
     inner: Arc<PoolInner>,
 }
 
+impl PoolInner {
+    /// Look up the per-origin entry and register as a waiter atomically
+    /// with table membership.
+    ///
+    /// Existing origins take only the table read lock: the entry is cloned
+    /// and its `waiters` count incremented before the lock is released.
+    /// Missing origins take the write lock, re-check, sweep only fully idle
+    /// entries (`available_permits == max` and `waiters == 0`), insert the
+    /// new entry, and register before releasing. The returned lock is never
+    /// held; semaphore acquisition happens after this returns.
+    fn lookup_or_create_registered(
+        &self,
+        origin: &OriginKey,
+        max_per_origin: usize,
+    ) -> Result<(Arc<PerOriginSemaphore>, WaiterGuard)> {
+        // Fast path: existing origin under a read lock.
+        {
+            let table = self
+                .per_origin
+                .read()
+                .map_err(|_| Error::Pool("per-origin table lock poisoned".to_owned()))?;
+            if let Some(entry) = table.get(origin).cloned() {
+                entry.waiters.fetch_add(1, Ordering::AcqRel);
+                let guard = WaiterGuard::from_registered(Arc::clone(&entry));
+                return Ok((entry, guard));
+            }
+        }
+        // Slow path: missing origin under a write lock.
+        {
+            let mut table = self
+                .per_origin
+                .write()
+                .map_err(|_| Error::Pool("per-origin table lock poisoned".to_owned()))?;
+            if let Some(entry) = table.get(origin).cloned() {
+                entry.waiters.fetch_add(1, Ordering::AcqRel);
+                let guard = WaiterGuard::from_registered(Arc::clone(&entry));
+                return Ok((entry, guard));
+            }
+            table.retain(|_, entry| {
+                entry.semaphore.available_permits() < max_per_origin
+                    || entry.waiters.load(Ordering::Acquire) > 0
+            });
+            let entry = Arc::new(PerOriginSemaphore::new(max_per_origin));
+            entry.waiters.fetch_add(1, Ordering::AcqRel);
+            let guard = WaiterGuard::from_registered(Arc::clone(&entry));
+            table.insert(origin.clone(), Arc::clone(&entry));
+            Ok((entry, guard))
+        }
+    }
+
+    #[cfg(any(test, feature = "test-util"))]
+    #[allow(dead_code, reason = "test hook for pool-table assertions")]
+    fn per_origin_len_for_test(&self) -> usize {
+        self.per_origin.read().map_or(0, |t| t.len())
+    }
+
+    #[cfg(any(test, feature = "test-util"))]
+    #[allow(dead_code, reason = "test hook for pool-table assertions")]
+    fn per_origin_is_empty_for_test(&self) -> bool {
+        self.per_origin.read().map_or(true, |t| t.is_empty())
+    }
+
+    #[cfg(any(test, feature = "test-util"))]
+    #[allow(dead_code, reason = "test hook for pool-table assertions")]
+    fn per_origin_contains_for_test(&self, origin: &OriginKey) -> bool {
+        self.per_origin.read().is_ok_and(|t| t.contains_key(origin))
+    }
+
+    #[cfg(any(test, feature = "test-util"))]
+    #[allow(dead_code, reason = "test hook for pool-table assertions")]
+    fn per_origin_get_for_test(&self, origin: &OriginKey) -> Option<Arc<PerOriginSemaphore>> {
+        self.per_origin
+            .read()
+            .ok()
+            .and_then(|t| t.get(origin).cloned())
+    }
+}
+
 impl Pool {
     /// Create a new pool from the given configuration.
     #[must_use]
@@ -516,8 +596,7 @@ impl Pool {
         Self {
             inner: Arc::new(PoolInner {
                 global_semaphore,
-                per_origin: DashMap::new(),
-                per_origin_table_lock: tokio::sync::Mutex::new(()),
+                per_origin: RwLock::new(HashMap::new()),
                 config,
                 metrics: PoolMetrics::default(),
             }),
@@ -585,45 +664,28 @@ impl Pool {
             self.inner.config.effective_max_in_flight_per_origin(),
             origin,
         ) {
-            // Existing origins avoid the table lock entirely. The waiter guard
-            // keeps the entry alive across the semaphore acquisition so an
-            // eviction sweep cannot remove it between lookup and permit grant.
-            // The guard's Drop ensures the counter is decremented even if the
-            // future is cancelled (e.g., via `tokio::time::timeout`).
-            let entry = if let Some(entry) = self.inner.per_origin.get(origin) {
-                entry.clone()
-            } else {
-                // Bound table growth before inserting so the entry created
-                // below can never be evicted immediately after creation.
-                //
-                // `retain` iterates `DashMap` shards while holding
-                // `per_origin_table_lock`; `available_permits()` is lock-free
-                // but the iteration still blocks concurrent `acquire` fast-paths
-                // that need the table lock for eviction. With many origins this
-                // is a scalability bottleneck but not a correctness bug; it is
-                // mitigated by the per-origin lock and the bounded eviction
-                // (only idle entries are removed).
-                let table_lock = self.inner.per_origin_table_lock.lock().await;
-                let entry = if let Some(entry) = self.inner.per_origin.get(origin) {
-                    entry.clone()
-                } else {
-                    self.inner.per_origin.retain(|_, entry| {
-                        entry.semaphore.available_permits() < max_per_origin
-                            || entry.waiters.load(Ordering::Acquire) > 0
-                    });
+            // Lookup/create and waiter registration are one table-locked
+            // operation: the helper increments `waiters` while still holding
+            // the read (existing origin) or write (missing origin) lock, so
+            // an eviction sweep cannot remove the entry between lookup and
+            // registration. The table lock is released before any `.await`
+            // below; only the semaphore wait remains outside the lock.
+            // `WaiterGuard` decrements on Drop, so cancellation between
+            // registration and permit grant cannot leak the counter.
+            let (entry, mut waiter_guard) = match self
+                .inner
+                .lookup_or_create_registered(origin, max_per_origin)
+            {
+                Ok(registered) => (registered.0, Some(registered.1)),
+                Err(e) => {
                     self.inner
-                        .per_origin
-                        .entry(origin.clone())
-                        .or_insert_with(|| Arc::new(PerOriginSemaphore::new(max_per_origin)))
-                        .clone()
-                };
-                drop(table_lock);
-                entry
+                        .metrics
+                        .acquisition_cancellations
+                        .fetch_add(1, Ordering::Relaxed);
+                    drop(global_permit);
+                    return Err(e);
+                }
             };
-
-            // `WaiterGuard` decrements on Drop, so cancellation between the
-            // increment and the explicit decrement cannot leak the counter.
-            let mut waiter_guard = Some(WaiterGuard::new(Arc::clone(&entry)));
             // Try immediate acquire first. `try_acquire_owned` consumes an
             // `Arc`, so the fast path clones once. The waiter marker is held
             // across both the fast and waiting paths to coordinate eviction.
@@ -764,7 +826,7 @@ mod tests {
     fn pool_constructs_with_defaults() {
         let pool = Pool::new(PoolConfig::default());
         assert!(pool.inner.global_semaphore.is_none());
-        assert!(pool.inner.per_origin.is_empty());
+        assert!(pool.inner.per_origin_is_empty_for_test());
     }
 
     #[test]
@@ -859,8 +921,7 @@ mod tests {
         let origin_guard = origin_pool.acquire(Some(&origin)).await.unwrap();
         origin_pool
             .inner
-            .per_origin
-            .get(&origin)
+            .per_origin_get_for_test(&origin)
             .unwrap()
             .semaphore
             .close();
@@ -1183,7 +1244,7 @@ mod tests {
             tokio::task::yield_now().await;
         }
 
-        assert!(pool.inner.per_origin.get(&waiting_origin).is_none());
+        assert!(!pool.inner.per_origin_contains_for_test(&waiting_origin));
         drop(first);
         drop(waiter.await.unwrap().unwrap());
     }
@@ -1201,17 +1262,17 @@ mod tests {
         }
 
         // With `--test-threads=1` (CI) the sweep leaves at most one idle
-        // entry; under parallel test execution the `DashMap` may retain up
+        // entry; under parallel test execution the table may retain up
         // to `8` entries until the next acquire on the same origin. The
         // assertion is relaxed to `<= 8` so local `cargo test` without the
         // required ` -- --test-threads=1` does not flake, while still
         // guaranteeing the table cannot grow without bound.
-        assert!(pool.inner.per_origin.len() <= 8);
+        assert!(pool.inner.per_origin_len_for_test() <= 8);
         // When single-threaded, the stronger bound holds; keep it as a
         // debug check for CI where `scripts/check.sh` enforces
         // `--test-threads=1`.
         if std::env::var("EGGFETCH_STRICT_POOL_EVICTION").is_ok() {
-            assert!(pool.inner.per_origin.len() <= 1);
+            assert!(pool.inner.per_origin_len_for_test() <= 1);
         }
     }
 
@@ -1277,5 +1338,280 @@ mod tests {
         let g2 = pool.acquire(Some(&b)).await.unwrap();
         assert!(g1.origin().is_some());
         assert!(g2.origin().is_some());
+    }
+
+    #[tokio::test]
+    async fn same_origin_concurrency_never_exceeds_limit() {
+        use std::sync::atomic::AtomicUsize;
+
+        let pool = Pool::new(PoolConfig {
+            max_connections_per_host: Some(3),
+            ..Default::default()
+        });
+        let origin = OriginKey::from_parts("http", "hot.example", 80);
+        let current = Arc::new(AtomicUsize::new(0));
+        let max_seen = Arc::new(AtomicUsize::new(0));
+        let mut handles = Vec::new();
+        for _ in 0..12 {
+            let pool = pool.clone();
+            let origin = origin.clone();
+            let current = current.clone();
+            let max_seen = max_seen.clone();
+            handles.push(tokio::spawn(async move {
+                let _guard = pool.acquire(Some(&origin)).await.unwrap();
+                let n = current.fetch_add(1, Ordering::AcqRel) + 1;
+                max_seen.fetch_max(n, Ordering::AcqRel);
+                tokio::task::yield_now().await;
+                current.fetch_sub(1, Ordering::AcqRel);
+            }));
+        }
+        for h in handles {
+            h.await.unwrap();
+        }
+        assert!(
+            max_seen.load(Ordering::Acquire) <= 3,
+            "same-origin concurrency exceeded the per-origin limit"
+        );
+    }
+
+    #[tokio::test]
+    async fn cancellation_releases_waiter_registration() {
+        let pool = Pool::new(PoolConfig {
+            max_connections_per_host: Some(1),
+            ..Default::default()
+        });
+        let origin = OriginKey::from_parts("http", "cancel.example", 80);
+        let _holder = pool.acquire(Some(&origin)).await.unwrap();
+        let timed_out = tokio::time::timeout(
+            std::time::Duration::from_millis(20),
+            pool.acquire(Some(&origin)),
+        )
+        .await;
+        assert!(timed_out.is_err(), "waiter should have timed out");
+        let entry = pool.inner.per_origin_get_for_test(&origin).unwrap();
+        assert_eq!(
+            entry.waiters.load(Ordering::Acquire),
+            0,
+            "cancelled waiter must release its registration"
+        );
+    }
+
+    #[tokio::test]
+    async fn repeated_cancellation_does_not_wedge_origin() {
+        let pool = Pool::new(PoolConfig {
+            max_connections_per_host: Some(1),
+            ..Default::default()
+        });
+        let origin = OriginKey::from_parts("http", "wedge.example", 80);
+        for _ in 0..10 {
+            let holder = pool.acquire(Some(&origin)).await.unwrap();
+            let timed_out = tokio::time::timeout(
+                std::time::Duration::from_millis(10),
+                pool.acquire(Some(&origin)),
+            )
+            .await;
+            assert!(timed_out.is_err());
+            drop(holder);
+        }
+        // After repeated cancel cycles a valid request must still succeed and
+        // leave no leaked waiter registration.
+        let _guard = tokio::time::timeout(
+            std::time::Duration::from_secs(2),
+            pool.acquire(Some(&origin)),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        let entry = pool.inner.per_origin_get_for_test(&origin).unwrap();
+        assert_eq!(entry.waiters.load(Ordering::Acquire), 0);
+    }
+
+    #[tokio::test]
+    async fn live_permit_blocks_eviction_on_churn() {
+        let pool = Pool::new(PoolConfig {
+            max_connections_per_host: Some(1),
+            ..Default::default()
+        });
+        let pinned = OriginKey::from_parts("http", "pinned.example", 80);
+        let _holder = pool.acquire(Some(&pinned)).await.unwrap();
+        for index in 0..16 {
+            let origin = OriginKey::from_parts("http", &format!("churn-{index}.example"), 80);
+            drop(pool.acquire(Some(&origin)).await.unwrap());
+        }
+        assert!(
+            pool.inner.per_origin_contains_for_test(&pinned),
+            "entry with a live permit must not be evicted"
+        );
+        // The limit must still be enforced for the pinned origin.
+        assert!(
+            tokio::time::timeout(
+                std::time::Duration::from_millis(10),
+                pool.acquire(Some(&pinned))
+            )
+            .await
+            .is_err(),
+            "pinned origin must still enforce its per-origin limit"
+        );
+    }
+
+    #[tokio::test]
+    async fn registered_waiter_blocks_eviction_on_churn() {
+        let pool = Pool::new(PoolConfig {
+            max_connections_per_host: Some(1),
+            ..Default::default()
+        });
+        let origin = OriginKey::from_parts("http", "waited.example", 80);
+        let holder = pool.acquire(Some(&origin)).await.unwrap();
+        let pool_for_task = pool.clone();
+        let origin_for_task = origin.clone();
+        let waiter =
+            tokio::spawn(async move { pool_for_task.acquire(Some(&origin_for_task)).await });
+        // Wait until the waiter has registered (bounded spin, no fixed sleep).
+        let mut registered = false;
+        for _ in 0..200 {
+            tokio::task::yield_now().await;
+            if let Some(entry) = pool.inner.per_origin_get_for_test(&origin) {
+                if entry.waiters.load(Ordering::Acquire) == 1 {
+                    registered = true;
+                    break;
+                }
+            }
+        }
+        assert!(registered, "waiter must register before churn");
+        for index in 0..16 {
+            let churn = OriginKey::from_parts("http", &format!("churn-w-{index}.example"), 80);
+            drop(pool.acquire(Some(&churn)).await.unwrap());
+        }
+        assert!(
+            pool.inner.per_origin_contains_for_test(&origin),
+            "entry with a registered waiter must not be evicted"
+        );
+        drop(holder);
+        let guard = tokio::time::timeout(std::time::Duration::from_secs(2), waiter)
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+        drop(guard);
+    }
+
+    #[tokio::test]
+    async fn concurrent_missing_origin_creation_shares_one_semaphore() {
+        use tokio::sync::Barrier;
+
+        let pool = Pool::new(PoolConfig {
+            max_connections_per_host: Some(3),
+            ..Default::default()
+        });
+        let origin = OriginKey::from_parts("http", "race.example", 80);
+        // Deterministic seam around the table helper: all tasks rendezvous
+        // before touching the missing key, maximizing the creation race
+        // window without relying on sleep timing.
+        let barrier = Arc::new(Barrier::new(16));
+        let mut handles = Vec::new();
+        for _ in 0..16 {
+            let pool = pool.clone();
+            let origin = origin.clone();
+            let barrier = barrier.clone();
+            handles.push(tokio::spawn(async move {
+                barrier.wait().await;
+                let (entry, guard) = pool.inner.lookup_or_create_registered(&origin, 3).unwrap();
+                let ptr = Arc::as_ptr(&entry) as usize;
+                drop(guard);
+                ptr
+            }));
+        }
+        let mut ptrs = Vec::new();
+        for h in handles {
+            ptrs.push(h.await.unwrap());
+        }
+        assert!(
+            ptrs.windows(2).all(|w| w[0] == w[1]),
+            "concurrent creation must share one semaphore allocation"
+        );
+        assert_eq!(pool.inner.per_origin_len_for_test(), 1);
+    }
+
+    #[tokio::test]
+    async fn churn_plus_cancellation_preserves_per_origin_limit() {
+        use std::sync::atomic::AtomicUsize;
+
+        let pool = Pool::new(PoolConfig {
+            max_connections_per_host: Some(2),
+            ..Default::default()
+        });
+        let hot = OriginKey::from_parts("http", "hot-churn.example", 80);
+        // Interleave churn, cancellations, and hot-origin load. No hot-origin
+        // waiter may observe more than the configured permits at once.
+        let current = Arc::new(AtomicUsize::new(0));
+        let max_seen = Arc::new(AtomicUsize::new(0));
+        let mut handles = Vec::new();
+        for index in 0..24 {
+            let pool = pool.clone();
+            let hot = hot.clone();
+            let current = current.clone();
+            let max_seen = max_seen.clone();
+            handles.push(tokio::spawn(async move {
+                if index % 3 == 0 {
+                    let churn = OriginKey::from_parts("http", &format!("mix-{index}.example"), 80);
+                    drop(pool.acquire(Some(&churn)).await.unwrap());
+                } else if index % 3 == 1 {
+                    let _ = tokio::time::timeout(
+                        std::time::Duration::from_millis(5),
+                        pool.acquire(Some(&hot)),
+                    )
+                    .await;
+                } else {
+                    let _guard = pool.acquire(Some(&hot)).await.unwrap();
+                    let n = current.fetch_add(1, Ordering::AcqRel) + 1;
+                    max_seen.fetch_max(n, Ordering::AcqRel);
+                    tokio::task::yield_now().await;
+                    current.fetch_sub(1, Ordering::AcqRel);
+                }
+            }));
+        }
+        for h in handles {
+            h.await.unwrap();
+        }
+        assert!(
+            max_seen.load(Ordering::Acquire) <= 2,
+            "churn plus cancellation must not exceed the per-origin limit"
+        );
+        // The hot entry must still be usable afterwards.
+        let _guard =
+            tokio::time::timeout(std::time::Duration::from_secs(2), pool.acquire(Some(&hot)))
+                .await
+                .unwrap()
+                .unwrap();
+    }
+
+    #[tokio::test]
+    async fn pool_metrics_meanings_preserved() {
+        // Immediate acquisitions never count as waits.
+        let pool = Pool::new(PoolConfig {
+            max_connections_per_host: Some(2),
+            ..Default::default()
+        });
+        let origin = OriginKey::from_parts("http", "metrics.example", 80);
+        let _g = pool.acquire(Some(&origin)).await.unwrap();
+        assert_eq!(pool.metrics().acquisition_waits.load(Ordering::Relaxed), 0);
+        // A blocked acquisition that eventually succeeds counts exactly one wait.
+        let pool = Pool::new(PoolConfig {
+            max_connections: Some(1),
+            ..Default::default()
+        });
+        let holder = pool.acquire(None).await.unwrap();
+        let pool_for_task = pool.clone();
+        let waiter = tokio::spawn(async move { pool_for_task.acquire(None).await.unwrap() });
+        tokio::task::yield_now().await;
+        drop(holder);
+        drop(waiter.await.unwrap());
+        assert_eq!(pool.metrics().acquisition_waits.load(Ordering::Relaxed), 1);
+        assert_eq!(
+            pool.metrics()
+                .acquisition_cancellations
+                .load(Ordering::Relaxed),
+            0
+        );
     }
 }

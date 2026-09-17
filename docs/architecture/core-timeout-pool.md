@@ -158,6 +158,14 @@ The pool uses tokio semaphores to limit concurrent in-flight requests:
 
 Under H1 one request typically owns its slot; under H2/H3 many permits multiplex over one connection/QUIC session. One permit never equals one TCP connection.
 
+The per-origin semaphore table is a standard-library `RwLock<HashMap<OriginKey, Arc<PerOriginSemaphore>>>`.
+Lookup/create and waiter registration are one table-locked operation (the
+`waiters` count is incremented while the read/write lock is still held), so
+idle eviction cannot race registration; the lock is never held across
+`.await`, semaphore acquisition, or I/O. A poisoned table lock surfaces as an
+`Error::Pool` acquisition failure. Alt-Svc and H3 sender caches use the same
+standard-library map discipline.
+
 ### Origin Keying
 
 Per-origin pool limits are keyed by a composite `OriginKey`:

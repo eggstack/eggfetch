@@ -44,7 +44,6 @@ test-util = ["tokio/test-util"]
 
 [dependencies]
 bytes = "1"
-dashmap = "6"
 eggfetch-http-connect = { version = "0.1.6", path = "../eggfetch-http-connect" }
 futures-core = "0.3"
 futures-util = { version = "0.3", default-features = false, features = ["alloc"] }

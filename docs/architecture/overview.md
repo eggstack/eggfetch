@@ -483,7 +483,6 @@ only), decompression, and lease handling as the standard path.
 | `clap` 4 | CLI argument parsing |
 | `napi-rs` | Node.js N-API bindings |
 | `thiserror` | Error derive macros |
-| `dashmap` | Concurrent hash map (pool origins, cookie jar) |
 | `async-compression` | Streaming decompression |
 | `cookie` | RFC 6265 cookie parsing |
 

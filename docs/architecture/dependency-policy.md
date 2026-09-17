@@ -13,7 +13,6 @@ owning feature is selected.
   only internal HTTP-logic exception to core ownership; it carries no
   sockets, TLS, retry, or policy and is published before `eggfetch-core`.
 - **bytes** -- efficient byte buffer types for request and response bodies.
-- **dashmap** -- concurrent hash map for per-host pool semaphore storage.
 - **futures-core** -- `Stream` trait definition.
 - **futures-util** -- `StreamExt` for stream combinators.
 - **http** -- standard HTTP types (`Method`, `StatusCode`, `HeaderMap`, `Uri`).
@@ -72,7 +71,6 @@ Rustls; a dependency can still be shared by other optional routes.
 | --- | --- | ---: | ---: | --- | --- |
 | `eggfetch-http-connect` | CONNECT wire bytes (`transport/connect`) | yes | shared | no | internal leaf, unconditional to avoid a second CONNECT impl |
 | `bytes` | bodies, headers, request/response types | yes | shared | no | foundational |
-| `dashmap` | pool and Alt-Svc state | yes | shared | no | foundational |
 | `futures-core`, `futures-util` | streams, bodies, pipeline, retry | yes | shared | no | foundational |
 | `http`, `http-body`, `http-body-util` | HTTP types and Hyper body adaptation | yes | shared | no | foundational |
 | `hyper` | client protocol engine | H1 via `http1`; H2 via `http2` | shared when TLS | no | protocol features own H1/H2 flags |
@@ -106,6 +104,10 @@ the workspace MSRV is Rust 1.89.
 These are small, well-audited crates with minimal transitive trees. Together
 with the default feature set, they provide the dependencies required to build
 a working HTTPS client.
+
+Per-origin pool semaphores, Alt-Svc state, and the H3 sender cache use
+standard-library `RwLock<HashMap<...>>` with short-lived locks (never held
+across `.await` or I/O); no concurrent-map crate is in the dependency graph.
 
 `eggfetch-http-connect` itself depends only on `tokio` (`io-util` for
 `AsyncRead`/`AsyncWrite`/`BufReader`), `base64` (Basic auth encoding), and

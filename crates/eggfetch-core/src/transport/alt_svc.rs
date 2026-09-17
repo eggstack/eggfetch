@@ -42,10 +42,10 @@
 //! endpoints never change origin authentication: QUIC TLS validates the
 //! original origin (SNI = origin host), not the alternative hostname.
 
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::RwLock;
 use std::time::{Duration, Instant};
-
-use dashmap::DashMap;
 
 /// Upper bound on cached Alt-Svc origin entries.
 ///
@@ -463,8 +463,14 @@ fn parse_authority(authority: &str) -> Option<(String, u16)> {
 }
 
 /// Bounded Alt-Svc cache owned by the client.
+///
+/// Guarded by a short-lived standard-library `RwLock`; the lock is never
+/// held across `.await` or I/O. Lock poisoning is recovered from internally:
+/// the table is a plain map with no cross-entry invariants, so a panicked
+/// writer cannot leave it structurally inconsistent (same rationale as
+/// `CookieJar`).
 pub struct AltSvcCache {
-    entries: DashMap<AltSvcOrigin, AltSvcEntry>,
+    entries: RwLock<HashMap<AltSvcOrigin, AltSvcEntry>>,
     sequence: AtomicU64,
 }
 
@@ -479,28 +485,40 @@ impl AltSvcCache {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            entries: DashMap::new(),
+            entries: RwLock::new(HashMap::new()),
             sequence: AtomicU64::new(1),
         }
+    }
+
+    fn read_entries(&self) -> std::sync::RwLockReadGuard<'_, HashMap<AltSvcOrigin, AltSvcEntry>> {
+        self.entries
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    fn write_entries(&self) -> std::sync::RwLockWriteGuard<'_, HashMap<AltSvcOrigin, AltSvcEntry>> {
+        self.entries
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
     /// Number of cached origins.
     #[must_use]
     pub fn len(&self) -> usize {
-        self.entries.len()
+        self.read_entries().len()
     }
 
     /// Returns `true` when empty.
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.entries.is_empty()
+        self.read_entries().is_empty()
     }
 
     /// Returns `true` when `origin` has any entry (fresh or expired).
     #[cfg(any(test, feature = "test-util"))]
     #[must_use]
     pub fn contains_origin(&self, origin: &AltSvcOrigin) -> bool {
-        self.entries.contains_key(origin)
+        self.read_entries().contains_key(origin)
     }
 
     /// Get the fresh alternative for `origin`, if any.
@@ -509,13 +527,12 @@ impl AltSvcCache {
     /// expired (after removal), or when `origin` is unusable. No panics.
     #[must_use]
     pub fn get_fresh(&self, origin: &AltSvcOrigin, now: Instant) -> Option<AltSvcEntry> {
-        let entry = self.entries.get(origin)?.clone();
+        let entry = self.read_entries().get(origin).cloned()?;
         if entry.is_expired(now) {
-            drop(entry);
-            self.entries.remove(origin);
+            self.write_entries().remove(origin);
             return None;
         }
-        self.entries.get(origin).map(|e| e.clone())
+        Some(entry)
     }
 
     /// Get fresh with expiry metering.
@@ -527,20 +544,19 @@ impl AltSvcCache {
         origin: &AltSvcOrigin,
         now: Instant,
     ) -> (Option<AltSvcEntry>, bool) {
-        let Some(entry) = self.entries.get(origin).map(|e| e.clone()) else {
+        let Some(entry) = self.read_entries().get(origin).cloned() else {
             return (None, false);
         };
         if entry.is_expired(now) {
-            drop(entry);
-            self.entries.remove(origin);
+            self.write_entries().remove(origin);
             return (None, true);
         }
-        (self.entries.get(origin).map(|e| e.clone()), false)
+        (Some(entry), false)
     }
 
     /// Remove the entry for `origin`. Returns `true` when one existed.
     pub fn clear(&self, origin: &AltSvcOrigin) -> bool {
-        self.entries.remove(origin).is_some()
+        self.write_entries().remove(origin).is_some()
     }
 
     /// Learn from combined Alt-Svc header values for `origin`.
@@ -615,7 +631,10 @@ impl AltSvcCache {
         // suppression: the route is still the same broken alternative.
         // Only a changed authority/port creates a new generation that
         // re-enables the route without waiting on stale failure state.
-        if let Some(existing) = self.entries.get(origin).map(|e| e.clone()) {
+        // All map mutation happens under one write lock so bound enforcement
+        // and insert are atomic with the existence check.
+        let mut table = self.write_entries();
+        if let Some(existing) = table.get(origin).cloned() {
             if existing.alt_host == alt_host && existing.alt_port == alt_port {
                 // Refresh expiry without changing generation; preserve
                 // suppression (do not call `note_new_advertisement`).
@@ -624,7 +643,7 @@ impl AltSvcCache {
                 let new_expiry = expires_at.max(existing.expires_at);
                 // Only write when expiry actually moves to avoid churn.
                 if new_expiry != existing.expires_at {
-                    self.entries.insert(
+                    table.insert(
                         origin.clone(),
                         AltSvcEntry {
                             alt_host,
@@ -637,9 +656,9 @@ impl AltSvcCache {
                 return (AltSvcLearnOutcome::Learned, false);
             }
         }
-        self.ensure_bound(origin);
+        Self::ensure_bound_locked(&mut table, origin);
         let generation = self.sequence.fetch_add(1, Ordering::Relaxed);
-        self.entries.insert(
+        table.insert(
             origin.clone(),
             AltSvcEntry {
                 alt_host,
@@ -654,21 +673,18 @@ impl AltSvcCache {
     /// Test-only direct insert (explicit test injection bypassing trust).
     #[cfg(any(test, feature = "test-util"))]
     pub fn insert_for_test(&self, origin: AltSvcOrigin, entry: AltSvcEntry) {
-        self.ensure_bound(&origin);
-        self.entries.insert(origin, entry);
+        let mut table = self.write_entries();
+        Self::ensure_bound_locked(&mut table, &origin);
+        table.insert(origin, entry);
     }
 
-    /// Ensure boundedness without evicting `except`.
-    fn ensure_bound(&self, except: &AltSvcOrigin) {
-        if self.entries.len() < ALTSVC_CACHE_MAX_ENTRIES {
+    fn ensure_bound_locked(table: &mut HashMap<AltSvcOrigin, AltSvcEntry>, except: &AltSvcOrigin) {
+        if table.len() < ALTSVC_CACHE_MAX_ENTRIES {
             return;
         }
-        let victim = self.entries.iter().find_map(|e| {
-            let k = e.key().clone();
-            (k != *except).then_some(k)
-        });
+        let victim = table.keys().find(|k| *k != except).cloned();
         if let Some(victim) = victim {
-            self.entries.remove(&victim);
+            table.remove(&victim);
         }
     }
 }
@@ -677,8 +693,10 @@ impl std::fmt::Debug for AltSvcCache {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // Never log authorities in full debug builds that might be scraped;
         // report only the count (no secrets are stored anyway).
+        // `try_read` so diagnostics never block; `None` when unavailable.
+        let len = self.entries.try_read().map(|t| t.len()).ok();
         f.debug_struct("AltSvcCache")
-            .field("len", &self.entries.len())
+            .field("len", &len)
             .finish_non_exhaustive()
     }
 }
@@ -725,8 +743,12 @@ impl H3FailureClass {
 }
 
 /// Bounded per-origin broken-route suppression.
+///
+/// Same locking discipline as [`AltSvcCache`]: short-lived standard-library
+/// `RwLock`, never held across `.await`/I/O, poisoning recovered via
+/// `into_inner` because the plain map has no cross-entry invariants.
 pub struct BrokenRouteSuppressor {
-    entries: DashMap<AltSvcOrigin, SuppressionEntry>,
+    entries: RwLock<HashMap<AltSvcOrigin, SuppressionEntry>>,
 }
 
 #[derive(Debug, Clone)]
@@ -752,8 +774,24 @@ impl BrokenRouteSuppressor {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            entries: DashMap::new(),
+            entries: RwLock::new(HashMap::new()),
         }
+    }
+
+    fn read_entries(
+        &self,
+    ) -> std::sync::RwLockReadGuard<'_, HashMap<AltSvcOrigin, SuppressionEntry>> {
+        self.entries
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    fn write_entries(
+        &self,
+    ) -> std::sync::RwLockWriteGuard<'_, HashMap<AltSvcOrigin, SuppressionEntry>> {
+        self.entries
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
     /// Returns `true` when `origin@generation` is suppressed at `now`.
@@ -762,7 +800,7 @@ impl BrokenRouteSuppressor {
     /// failure state never blocks a fresh advertisement.
     #[must_use]
     pub fn is_suppressed(&self, origin: &AltSvcOrigin, generation: u64, now: Instant) -> bool {
-        let Some(entry) = self.entries.get(origin).map(|e| e.clone()) else {
+        let Some(entry) = self.read_entries().get(origin).cloned() else {
             return false;
         };
         if entry.generation != generation {
@@ -783,8 +821,8 @@ impl BrokenRouteSuppressor {
         now: Instant,
         reason: H3FailureClass,
     ) {
-        // Fast path: new generation resets.
-        if let Some(mut entry) = self.entries.get_mut(origin) {
+        let mut table = self.write_entries();
+        if let Some(entry) = table.get_mut(origin) {
             if entry.generation != generation {
                 entry.generation = generation;
                 entry.failures = 1;
@@ -803,8 +841,8 @@ impl BrokenRouteSuppressor {
             entry.suppressed_until = now + backoff;
             return;
         }
-        self.ensure_bound(origin);
-        self.entries.insert(
+        Self::ensure_bound_locked(&mut table, origin);
+        table.insert(
             origin.clone(),
             SuppressionEntry {
                 generation,
@@ -817,15 +855,19 @@ impl BrokenRouteSuppressor {
 
     /// Record success; clears suppression for `origin`.
     pub fn record_success(&self, origin: &AltSvcOrigin) {
-        self.entries.remove(origin);
+        self.write_entries().remove(origin);
     }
 
     /// A new advertisement generation clears stale suppression.
     pub fn note_new_advertisement(&self, origin: &AltSvcOrigin, generation: u64) {
-        if let Some(entry) = self.entries.get(origin).map(|e| e.clone()) {
-            if entry.generation != generation {
-                self.entries.remove(origin);
-            }
+        // Read-then-write with re-check: removal is idempotent, so a
+        // concurrent update between the two locks cannot corrupt state.
+        let stale = self
+            .read_entries()
+            .get(origin)
+            .is_some_and(|e| e.generation != generation);
+        if stale {
+            self.write_entries().remove(origin);
         }
     }
 
@@ -833,34 +875,35 @@ impl BrokenRouteSuppressor {
     #[cfg(any(test, feature = "test-util"))]
     #[must_use]
     pub fn len(&self) -> usize {
-        self.entries.len()
+        self.read_entries().len()
     }
 
     /// Returns `true` when empty (for tests).
     #[cfg(any(test, feature = "test-util"))]
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.entries.is_empty()
+        self.read_entries().is_empty()
     }
 
-    fn ensure_bound(&self, except: &AltSvcOrigin) {
-        if self.entries.len() < SUPPRESSION_MAX_ENTRIES {
+    fn ensure_bound_locked(
+        table: &mut HashMap<AltSvcOrigin, SuppressionEntry>,
+        except: &AltSvcOrigin,
+    ) {
+        if table.len() < SUPPRESSION_MAX_ENTRIES {
             return;
         }
-        let victim = self.entries.iter().find_map(|e| {
-            let k = e.key().clone();
-            (k != *except).then_some(k)
-        });
+        let victim = table.keys().find(|k| *k != except).cloned();
         if let Some(victim) = victim {
-            self.entries.remove(&victim);
+            table.remove(&victim);
         }
     }
 }
 
 impl std::fmt::Debug for BrokenRouteSuppressor {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let len = self.entries.try_read().map(|t| t.len()).ok();
         f.debug_struct("BrokenRouteSuppressor")
-            .field("len", &self.entries.len())
+            .field("len", &len)
             .finish_non_exhaustive()
     }
 }

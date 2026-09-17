@@ -79,13 +79,13 @@
 //! complete. Reconnect creates a new generation. No upstream bug is worked
 //! around by normalizing close errors into success.
 
+use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
 use bytes::Buf;
-use dashmap::DashMap;
 
 use crate::body::{RequestBody, ResponseBody};
 use crate::error::{Error, Result};
@@ -237,11 +237,58 @@ type CachedH3SenderCell = Arc<tokio::sync::OnceCell<CachedH3Sender>>;
 /// h3 senders are cached per origin so that the same h3 connection
 /// (and therefore the same QUIC connection) is reused for subsequent
 /// requests to the same host:port.
+/// Per-origin H3 sender cache.
+///
+/// Standard-library `RwLock` around a plain map; locks are short-lived and
+/// never held across `.await` or I/O. Poisoning is recovered via
+/// `into_inner` (same rationale as `CookieJar`/`AltSvcCache`): the map has
+/// no cross-entry invariants, so a panicked holder cannot leave it
+/// structurally inconsistent.
+type H3SenderCache = Arc<RwLock<HashMap<String, CachedH3SenderCell>>>;
+
+fn h3_cache_get(cache: &H3SenderCache, key: &str) -> Option<CachedH3SenderCell> {
+    cache
+        .read()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .get(key)
+        .cloned()
+}
+
+fn h3_cache_insert(cache: &H3SenderCache, key: String, cell: CachedH3SenderCell) {
+    cache
+        .write()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .insert(key, cell);
+}
+
+fn h3_cache_remove(cache: &H3SenderCache, key: &str) {
+    cache
+        .write()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .remove(key);
+}
+
+fn h3_cache_get_or_insert_default(cache: &H3SenderCache, key: String) -> CachedH3SenderCell {
+    // Fast read path first to avoid write contention on hot origins.
+    if let Some(cell) = h3_cache_get(cache, &key) {
+        return cell;
+    }
+    let mut table = cache
+        .write()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if let Some(cell) = table.get(&key).cloned() {
+        return cell;
+    }
+    let cell: CachedH3SenderCell = Arc::new(tokio::sync::OnceCell::new());
+    table.insert(key, cell.clone());
+    cell
+}
+
 #[derive(Clone)]
 pub(crate) struct H3Connector {
     endpoint: quinn::Endpoint,
     tls_config: Option<crate::tls::TlsConfig>,
-    sender_cache: Arc<DashMap<String, CachedH3SenderCell>>,
+    sender_cache: H3SenderCache,
     /// Effective QUIC idle timeout derived from pool keepalive configuration.
     quinn_idle_timeout: Duration,
     /// Effective maximum concurrent bidirectional streams per QUIC connection.
@@ -378,7 +425,7 @@ impl H3Connector {
         Ok(Self {
             endpoint,
             tls_config,
-            sender_cache: Arc::new(DashMap::new()),
+            sender_cache: Arc::new(RwLock::new(HashMap::new())),
             quinn_idle_timeout: derive_quinn_idle_timeout(pool_config),
             max_bidi_streams: derive_max_bidi_streams(pool_config),
             metrics,
@@ -389,14 +436,20 @@ impl H3Connector {
     #[cfg(any(test, feature = "test-util"))]
     #[allow(dead_code, reason = "test hook for bounded-cache assertions")]
     pub(crate) fn cache_len(&self) -> usize {
-        self.sender_cache.len()
+        self.sender_cache
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .len()
     }
 
     /// Returns `true` when `origin_key` (`host:port`) has a cache entry.
     #[cfg(any(test, feature = "test-util"))]
     #[allow(dead_code, reason = "test hook for eviction assertions")]
     pub(crate) fn contains_origin(&self, origin_key: &str) -> bool {
-        self.sender_cache.contains_key(origin_key)
+        self.sender_cache
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .contains_key(origin_key)
     }
 
     /// Effective QUIC idle timeout for this connector.
@@ -425,15 +478,18 @@ impl H3Connector {
     /// Eviction drops only cache ownership; in-flight streams hold their own
     /// sender clones and the detached driver keeps them alive.
     fn ensure_cache_bound(&self, except_key: &str) {
-        if self.sender_cache.len() < H3_CACHE_MAX_ENTRIES {
-            return;
-        }
-        let victim = self.sender_cache.iter().find_map(|entry| {
-            let key = entry.key().clone();
-            (key != except_key).then_some(key)
-        });
+        let victim = {
+            let table = self
+                .sender_cache
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if table.len() < H3_CACHE_MAX_ENTRIES {
+                return;
+            }
+            table.keys().find(|k| *k != except_key).cloned()
+        };
         if let Some(victim) = victim {
-            self.sender_cache.remove(&victim);
+            h3_cache_remove(&self.sender_cache, &victim);
             if let Some(ref m) = self.metrics {
                 m.record_h3_eviction();
             }
@@ -446,14 +502,24 @@ impl H3Connector {
     /// removing by key could drop the fresh connection. Pointer comparison
     /// keeps eviction scoped to the failed generation.
     fn evict_if_current(&self, key: &str, cell: &CachedH3SenderCell) {
-        if self
-            .sender_cache
-            .get(key)
-            .is_some_and(|current| Arc::ptr_eq(&current, cell))
-        {
-            self.sender_cache.remove(key);
-            if let Some(ref m) = self.metrics {
-                m.record_h3_eviction();
+        let is_current = h3_cache_get(&self.sender_cache, key)
+            .is_some_and(|current| Arc::ptr_eq(&current, cell));
+        if is_current {
+            // Re-check under the write lock so a concurrent reconnect that
+            // replaced the entry between the read and write cannot be
+            // dropped. Removal is idempotent.
+            let mut table = self
+                .sender_cache
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if table
+                .get(key)
+                .is_some_and(|current| Arc::ptr_eq(current, cell))
+            {
+                table.remove(key);
+                if let Some(ref m) = self.metrics {
+                    m.record_h3_eviction();
+                }
             }
         }
     }
@@ -654,7 +720,7 @@ impl H3Connector {
     #[cfg(any(test, feature = "test-util"))]
     #[allow(dead_code, reason = "test hook for drain assertions")]
     pub(crate) fn is_draining_key(&self, origin_key: &str) -> bool {
-        self.sender_cache.get(origin_key).is_some_and(|r| {
+        h3_cache_get(&self.sender_cache, origin_key).is_some_and(|r| {
             r.get()
                 .is_some_and(|cached| cached.draining.load(Ordering::Relaxed))
         })
@@ -665,7 +731,7 @@ impl H3Connector {
     #[cfg(any(test, feature = "test-util"))]
     #[allow(dead_code, reason = "test hook for close-code assertions")]
     pub(crate) fn close_reason_key(&self, origin_key: &str) -> Option<String> {
-        self.sender_cache.get(origin_key).and_then(|r| {
+        h3_cache_get(&self.sender_cache, origin_key).and_then(|r| {
             let cached = r.get()?;
             cached.close_reason.lock().ok()?.clone()
         })
@@ -754,11 +820,7 @@ impl H3Connector {
         };
 
         self.ensure_cache_bound(&cache_key);
-        let mut cell = self
-            .sender_cache
-            .entry(cache_key.clone())
-            .or_default()
-            .clone();
+        let mut cell = h3_cache_get_or_insert_default(&self.sender_cache, cache_key.clone());
 
         // Generation change (new advertisement) evicts the old QUIC session
         // so the new alternative is used immediately without waiting on
@@ -772,7 +834,7 @@ impl H3Connector {
                 self.evict_if_current(&cache_key, &cell);
                 let fresh: CachedH3SenderCell = Arc::new(tokio::sync::OnceCell::new());
                 self.ensure_cache_bound(&cache_key);
-                self.sender_cache.insert(cache_key.clone(), fresh.clone());
+                h3_cache_insert(&self.sender_cache, cache_key.clone(), fresh.clone());
                 cell = fresh;
                 // A fresh generation after eviction counts as a reconnect
                 // once it establishes successfully below.
@@ -1021,10 +1083,10 @@ impl H3Connector {
                                 }
                                 Ok(None) => {}
                                 Err(e) => {
-                                    if cache_for_body.get(&key_for_body).is_some_and(|current| {
-                                        Arc::ptr_eq(&current, &cell_for_body)
-                                    }) {
-                                        cache_for_body.remove(&key_for_body);
+                                    if h3_cache_get(&cache_for_body, &key_for_body).is_some_and(
+                                        |current| Arc::ptr_eq(&current, &cell_for_body),
+                                    ) {
+                                        h3_cache_remove(&cache_for_body, &key_for_body);
                                     }
                                     return Some((
                                         Err(Error::H3Protocol(format!("recv trailers: {e}"))),
@@ -1035,11 +1097,10 @@ impl H3Connector {
                             None
                         }
                         Err(e) => {
-                            if cache_for_body
-                                .get(&key_for_body)
+                            if h3_cache_get(&cache_for_body, &key_for_body)
                                 .is_some_and(|current| Arc::ptr_eq(&current, &cell_for_body))
                             {
-                                cache_for_body.remove(&key_for_body);
+                                h3_cache_remove(&cache_for_body, &key_for_body);
                             }
                             Some((
                                 Err(Error::H3Protocol(format!("recv data: {e}"))),
@@ -1195,16 +1256,16 @@ mod tests {
         for i in 0..(H3_CACHE_MAX_ENTRIES + 10) {
             let key = format!("host-{i}.example:443");
             connector.ensure_cache_bound(&key);
-            connector.sender_cache.entry(key).or_default();
+            h3_cache_get_or_insert_default(&connector.sender_cache, key);
         }
         assert!(
-            connector.sender_cache.len() <= H3_CACHE_MAX_ENTRIES,
+            connector.cache_len() <= H3_CACHE_MAX_ENTRIES,
             "cache must stay bounded, got {}",
-            connector.sender_cache.len()
+            connector.cache_len()
         );
         // The most recently inserted origin survives its own insertion.
         let current = format!("host-{}.example:443", H3_CACHE_MAX_ENTRIES + 9);
-        assert!(connector.sender_cache.contains_key(&current));
+        assert!(connector.contains_origin(&current));
     }
 
     #[tokio::test]
@@ -1216,7 +1277,7 @@ mod tests {
         for i in 0..(H3_CACHE_MAX_ENTRIES + 5) {
             let key = format!("host-{i}.example:443");
             connector.ensure_cache_bound(&key);
-            connector.sender_cache.entry(key).or_default();
+            h3_cache_get_or_insert_default(&connector.sender_cache, key);
         }
         let evictions = metrics
             .h3_cache_evictions
@@ -1241,18 +1302,18 @@ mod tests {
         let connector = H3Connector::new(None, &PoolConfig::default()).expect("connector builds");
         let key = "example.com:443".to_owned();
         let first: CachedH3SenderCell = Arc::new(tokio::sync::OnceCell::new());
-        connector.sender_cache.insert(key.clone(), first.clone());
+        h3_cache_insert(&connector.sender_cache, key.clone(), first.clone());
         // A stale generation must not drop a fresh replacement.
         let second: CachedH3SenderCell = Arc::new(tokio::sync::OnceCell::new());
-        connector.sender_cache.insert(key.clone(), second.clone());
+        h3_cache_insert(&connector.sender_cache, key.clone(), second.clone());
         connector.evict_if_current(&key, &first);
         assert!(
-            connector.sender_cache.contains_key(&key),
+            connector.contains_origin(&key),
             "eviction of a stale cell must not remove the current generation"
         );
         connector.evict_if_current(&key, &second);
         assert!(
-            !connector.sender_cache.contains_key(&key),
+            !connector.contains_origin(&key),
             "eviction of the current cell must remove the stale origin"
         );
     }
@@ -1551,7 +1612,7 @@ mod tests {
         // later requests are unaffected (no poison, no spurious eviction).
         let key = format!("127.0.0.1:{}", server.addr.port());
         assert!(
-            connector.sender_cache.contains_key(&key),
+            connector.contains_origin(&key),
             "write timeout must not evict the shared connection"
         );
         let _ = server;
