@@ -14,6 +14,7 @@ use super::proxy::{
     connect_to_proxy, effective_timeout, read_proxy_response, write_proxy_request,
     ProxyRequestContext,
 };
+use eggfetch_http_connect::{ConnectRequest, ConnectResponseLimits, ConnectTarget};
 
 /// Internal identity for one reusable CONNECT tunnel client.
 #[cfg(any(feature = "http1", feature = "http2"))]
@@ -398,6 +399,12 @@ fn target_failure_may_retry(error: &Error) -> bool {
 
 /// Establish and authenticate an HTTPS CONNECT tunnel, returning the
 /// origin-ready TLS stream. Hyper owns HTTP framing after this boundary.
+///
+/// CONNECT wire mechanics (authority formatting, request serialization,
+/// bounded response-head parsing) are owned by `eggfetch-http-connect`.
+/// This function retains Eggfetch policy: proxy dialing/TLS, phase
+/// timeouts, exact status policy, rejection-body handling, origin TLS,
+/// pooling/route identity, and metrics.
 #[allow(clippy::too_many_lines)]
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn establish_https_tunnel(
@@ -421,37 +428,30 @@ pub(crate) async fn establish_https_tunnel(
         .host_str()
         .ok_or_else(|| Error::InvalidUrl("destination URL has no host".into()))?;
     let dest_port = dest_url.port_or_known_default().unwrap_or(443);
-    let connect_target = proxied_target.map_or_else(
-        || authority_form_target(dest_host, dest_port),
-        |address| authority_form_target(&address.ip().to_string(), address.port()),
-    );
-    let mut connect_req =
-        format!("CONNECT {connect_target} HTTP/1.1\r\nHost: {connect_target}\r\n");
-    if let Some(auth) = proxy_config.auth() {
-        use std::fmt::Write;
-        let _ = write!(
-            connect_req,
-            "Proxy-Authorization: {}\r\n",
-            auth.header_value()
-        );
+    let target = if let Some(address) = proxied_target {
+        ConnectTarget::new(address.ip().to_string(), address.port())
+    } else {
+        ConnectTarget::new(dest_host, dest_port)
     }
-    for (name, value) in proxy_config.proxy_headers().iter() {
-        if name.as_str().eq_ignore_ascii_case("proxy-authorization") {
-            continue;
-        }
-        if let Ok(value_str) = value.to_str() {
-            use std::fmt::Write;
-            let _ = write!(connect_req, "{}: {value_str}\r\n", name.as_str());
-        }
-    }
-    connect_req.push_str("\r\n");
-    if connect_req.len() > crate::headers::MAX_REQUEST_HEADER_BYTES {
-        return Err(Error::RequestBuild(format!(
-            "request headers exceed maximum size of {} bytes",
-            crate::headers::MAX_REQUEST_HEADER_BYTES
-        )));
-    }
-    let write = stream.write_all(connect_req.as_bytes());
+    .map_err(|_| Error::RequestBuild("invalid CONNECT target".into()))?;
+    let auth_value = proxy_config
+        .auth()
+        .map(crate::proxy::ProxyAuth::header_value);
+    let extra_headers: Vec<(String, Vec<u8>)> = proxy_config
+        .proxy_headers()
+        .iter()
+        .filter(|(name, _)| !name.as_str().eq_ignore_ascii_case("proxy-authorization"))
+        .map(|(name, value)| (name.as_str().to_owned(), value.as_bytes().to_vec()))
+        .collect();
+    let connect_request = ConnectRequest {
+        target: &target,
+        proxy_authorization: auth_value.as_deref(),
+        extra_headers: &extra_headers,
+        max_head_bytes: crate::headers::MAX_REQUEST_HEADER_BYTES,
+    };
+    let connect_bytes = eggfetch_http_connect::encode_connect_request(&connect_request)
+        .map_err(map_connect_error)?;
+    let write = stream.write_all(&connect_bytes);
     match effective_timeout(ctx.deadline, ctx.write_timeout)? {
         Some(duration) => tokio::time::timeout(duration, write)
             .await
@@ -464,19 +464,29 @@ pub(crate) async fn establish_https_tunnel(
             .await
             .map_err(|e| Error::ProxyConnect(format!("failed to send CONNECT: {e}")))?,
     }
-    let read = read_proxy_response(&mut stream);
-    let (status, resp_headers, initial_buf, _reason_phrase) =
-        match effective_timeout(ctx.deadline, ctx.read_timeout)? {
-            Some(duration) => {
-                tokio::time::timeout(duration, read)
-                    .await
-                    .map_err(|_| Error::Timeout {
-                        phase: TimeoutPhase::Read,
-                        elapsed: duration,
-                    })??
-            }
-            None => read.await?,
-        };
+    let connect_limits = ConnectResponseLimits::default();
+    let read = eggfetch_http_connect::read_connect_response_head(&mut stream, &connect_limits);
+    let head = match effective_timeout(ctx.deadline, ctx.read_timeout)? {
+        Some(duration) => tokio::time::timeout(duration, read)
+            .await
+            .map_err(|_| Error::Timeout {
+                phase: TimeoutPhase::Read,
+                elapsed: duration,
+            })?
+            .map_err(map_connect_response_error)?,
+        None => read.await.map_err(map_connect_response_error)?,
+    };
+    let status = head.status;
+    let resp_headers = head.headers;
+    // The shared parser leaves read-ahead in `stream`'s buffer; drain it
+    // into the owned prefix for the existing `ProxyTunnel` adapter.
+    let initial_buf = {
+        use tokio::io::AsyncBufReadExt;
+        let buffered = stream.buffer().to_vec();
+        let consumed = buffered.len();
+        stream.consume(consumed);
+        buffered
+    };
     if status != 200 {
         return Err(Error::ProxyConnectRejected {
             status,
@@ -617,15 +627,38 @@ async fn send_https_connect_request_once(
     Ok(response)
 }
 
-/// Build an authority-form `host:port` target for a CONNECT request.
+/// Map shared CONNECT request-serialization failures to Eggfetch errors.
 ///
-/// Authority-form requires brackets around IPv6 literals; the url crate
-/// strips them from `host_str()`, so they are restored here.
-fn authority_form_target(host: &str, port: u16) -> String {
-    if host.contains(':') {
-        format!("[{host}]:{port}")
-    } else {
-        format!("{host}:{port}")
+/// The shared diagnostics are already bounded and credential-free; the
+/// mapping preserves Eggfetch's existing `RequestBuild` classification for
+/// local framing failures.
+fn map_connect_error(error: eggfetch_http_connect::ConnectError) -> Error {
+    match error {
+        eggfetch_http_connect::ConnectError::RequestHeadTooLarge { .. } => {
+            Error::RequestBuild(format!(
+                "request headers exceed maximum size of {} bytes",
+                crate::headers::MAX_REQUEST_HEADER_BYTES
+            ))
+        }
+        eggfetch_http_connect::ConnectError::Io(message) => {
+            Error::ProxyConnect(format!("failed to send CONNECT: {message}"))
+        }
+        _ => Error::RequestBuild("invalid CONNECT request".into()),
+    }
+}
+
+/// Map shared CONNECT response-head failures to Eggfetch errors.
+///
+/// Transport I/O stays `ProxyConnect` (matching the historical
+/// `read_proxy_response` mapping); malformed or over-limit heads stay
+/// `MalformedProxyResponse`. Timeout classification remains owned by the
+/// surrounding `effective_timeout` wrapper.
+fn map_connect_response_error(error: eggfetch_http_connect::ConnectError) -> Error {
+    match error {
+        eggfetch_http_connect::ConnectError::Io(message) => {
+            Error::ProxyConnect(format!("failed to read CONNECT response: {message}"))
+        }
+        other => Error::MalformedProxyResponse(other.to_string()),
     }
 }
 
@@ -850,7 +883,7 @@ impl<S: tokio::io::AsyncWrite + Unpin> tokio::io::AsyncWrite for ProxyTunnel<S> 
 
 #[cfg(test)]
 mod tests {
-    use super::{authority_form_target, proxy_rejection_body, TlsProxyResponseStream};
+    use super::{proxy_rejection_body, TlsProxyResponseStream};
     use futures_util::StreamExt as _;
 
     /// Simulates a tunneled peer that sends `data` then closes abruptly
@@ -912,14 +945,33 @@ mod tests {
     }
 
     #[test]
-    fn authority_form_target_brackets_ipv6() {
-        assert_eq!(authority_form_target("::1", 8080), "[::1]:8080");
+    fn connect_target_authority_brackets_ipv6_via_shared_primitive() {
+        // Authority formatting is owned by `eggfetch-http-connect`; this
+        // regression pins the Eggfetch-facing values through that crate.
         assert_eq!(
-            authority_form_target("2001:db8::1", 443),
+            eggfetch_http_connect::ConnectTarget::new("::1", 8080)
+                .unwrap()
+                .authority(),
+            "[::1]:8080"
+        );
+        assert_eq!(
+            eggfetch_http_connect::ConnectTarget::new("2001:db8::1", 443)
+                .unwrap()
+                .authority(),
             "[2001:db8::1]:443"
         );
-        assert_eq!(authority_form_target("example.com", 80), "example.com:80");
-        assert_eq!(authority_form_target("127.0.0.1", 9090), "127.0.0.1:9090");
+        assert_eq!(
+            eggfetch_http_connect::ConnectTarget::new("example.com", 80)
+                .unwrap()
+                .authority(),
+            "example.com:80"
+        );
+        assert_eq!(
+            eggfetch_http_connect::ConnectTarget::new("127.0.0.1", 9090)
+                .unwrap()
+                .authority(),
+            "127.0.0.1:9090"
+        );
     }
 
     #[test]

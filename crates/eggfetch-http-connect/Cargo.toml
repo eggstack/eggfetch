@@ -1,0 +1,24 @@
+[package]
+name = "eggfetch-http-connect"
+version = "0.1.6"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme.workspace = true
+description = "Small HTTP/1 CONNECT wire primitive over a caller-owned async byte stream (no sockets, TLS, or retry policy)"
+documentation = "https://docs.rs/eggfetch-http-connect"
+keywords = ["http", "proxy", "connect", "tunnel"]
+categories = ["network-programming", "web-programming"]
+
+[lints]
+workspace = true
+
+[dependencies]
+tokio = { version = "1", default-features = false, features = ["io-util"] }
+base64 = "0.23"
+thiserror = "2"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "io-util", "net"] }

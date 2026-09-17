@@ -45,7 +45,7 @@ entry points and do not promise typed private implementation modules.
 
 ## Key Constraints
 
-- All HTTP logic lives in eggfetch-core. The Python crate is a thin adapter.
+- All HTTP logic lives in eggfetch-core (CONNECT wire in `eggfetch-http-connect`). The Python crate is a thin adapter.
 - Sync API blocks on async engine and releases the GIL during network I/O.
 - Sync streaming responses keep using the originating client Tokio runtime for
   body reads and iterator producers; do not introduce a shared replacement

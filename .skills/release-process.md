@@ -12,11 +12,12 @@ Use this skill when preparing or executing a release of eggfetch.
 
 ### crates.io (manual, local)
 
-1. `eggfetch-core`
-2. `eggfetch-cli`
-3. `eggfetch-ffi`
-4. `eggfetch-python`
-5. `eggfetch-node`
+1. `eggfetch-http-connect`
+2. `eggfetch-core`
+3. `eggfetch-cli`
+4. `eggfetch-ffi`
+5. `eggfetch-python`
+6. `eggfetch-node`
 
 crates.io index propagation requires verification between publishes. Do not encode fixed sleeps.
 
@@ -53,6 +54,7 @@ MSRV toolchain with `rustup toolchain install 1.89.0 --profile minimal`.
 Publish locally from a trusted environment:
 
 ```sh
+cargo publish -p eggfetch-http-connect
 cargo publish -p eggfetch-core
 cargo publish -p eggfetch-cli
 cargo publish -p eggfetch-ffi

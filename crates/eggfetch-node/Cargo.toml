@@ -19,7 +19,7 @@ crate-type = ["cdylib"]
 napi-build = "2"
 
 [dependencies]
-eggfetch-ffi = { version = "0.1.5", path = "../eggfetch-ffi", default-features = false, features = ["http1", "tls-rustls", "tls-native-roots"] }
+eggfetch-ffi = { version = "0.1.6", path = "../eggfetch-ffi", default-features = false, features = ["http1", "tls-rustls", "tls-native-roots"] }
 napi = { version = "2", features = ["async", "napi8", "serde-json"] }
 napi-derive = "2"
 serde = { version = "1", features = ["derive"] }

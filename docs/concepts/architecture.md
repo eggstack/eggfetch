@@ -1,12 +1,16 @@
 # Architecture
 
-eggfetch is a six-crate Rust workspace. Understanding the boundaries between crates explains why the library behaves the way it does.
+eggfetch is a seven-crate Rust workspace. Understanding the boundaries between crates explains why the library behaves the way it does.
 
-## The Six Crates
+## The Crates
+
+### eggfetch-http-connect
+
+The shared HTTP/1 CONNECT wire primitive: target/authority formatting, CONNECT request serialization, proxy auth/header encoding, and bounded response-head parsing over a caller-owned async stream. It has no sockets, TLS, retry, or client policy and is published before `eggfetch-core`.
 
 ### eggfetch-core
 
-The async HTTP engine. Every networking call, TLS handshake, cookie parse, redirect hop, and body decode happens here. There is exactly one implementation of HTTP behavior in the workspace, and it lives in this crate.
+The async HTTP engine. Every networking call, TLS handshake, cookie parse, redirect hop, and body decode happens here, except the CONNECT wire bytes owned by `eggfetch-http-connect`. There is exactly one implementation of HTTP behavior in the workspace, and it lives in these two crates with clear ownership.
 
 If you are reading the source to understand why a request behaves a certain way, start here. The core owns:
 
@@ -113,6 +117,6 @@ The public API of eggfetch-core centers on a few key types:
 
 ## Crate Boundary Invariant
 
-eggfetch-core must not depend on PyO3, clap, or CLI argument parsing. The CLI, Python, FFI, and Node crates must not contain independent HTTP behavior. All network I/O goes through eggfetch-core. This invariant is enforced by code review and the workspace dependency structure.
+eggfetch-core must not depend on PyO3, clap, or CLI argument parsing. The CLI, Python, FFI, and Node crates must not contain independent HTTP behavior. All network I/O goes through eggfetch-core, except the generic CONNECT wire bytes owned by `eggfetch-http-connect`. This invariant is enforced by code review and the workspace dependency structure.
 
-If you find yourself writing HTTP logic outside of eggfetch-core, stop and refactor. There is exactly one networking implementation.
+If you find yourself writing HTTP logic outside of eggfetch-core, stop and refactor. There is exactly one networking implementation (`eggfetch-http-connect` owns only the shared CONNECT wire bytes).

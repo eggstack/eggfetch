@@ -1,6 +1,7 @@
 [workspace]
 resolver = "3"
 members = [
+    "crates/eggfetch-http-connect",
     "crates/eggfetch-core",
     "crates/eggfetch-cli",
     "crates/eggfetch-python",

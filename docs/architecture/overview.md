@@ -1,6 +1,6 @@
 # Architecture Overview
 
-eggfetch is a Rust-native async HTTP client engine with Python bindings, a CLI tool, C ABI bindings, and a Node.js prototype. The core crate owns all HTTP behavior; every other crate is a thin adapter that delegates to it.
+eggfetch is a Rust-native async HTTP client engine with Python bindings, a CLI tool, C ABI bindings, and a Node.js prototype. The core crate owns all HTTP behavior except the small shared CONNECT wire primitive; every other crate is a thin adapter that delegates to it.
 
 This document is the bird's-eye view: what each discrete module, tool, and capability does, how they fit together, and where to go for a focused review. Each section ends with a link to a dedicated deep-dive document in this directory.
 
@@ -11,6 +11,7 @@ This document is the bird's-eye view: what each discrete module, tool, and capab
 - [Crate Dependency Graph](#crate-dependency-graph)
 - [How to Use This Documentation](#how-to-use-this-documentation)
 - [Modules](#modules)
+  - [eggfetch-http-connect (the shared CONNECT wire primitive)](#eggfetch-http-connect-the-shared-connect-wire-primitive)
   - [eggfetch-core (the engine)](#eggfetch-core-the-engine)
   - [eggfetch-cli (the CLI)](#eggfetch-cli-the-cli)
   - [eggfetch-python + compat facades](#eggfetch-python--compat-facades-the-python-bindings)
@@ -41,7 +42,7 @@ This document is the bird's-eye view: what each discrete module, tool, and capab
 
 ## Design Principles
 
-1. **Single networking implementation** — all HTTP logic lives in `eggfetch-core`. CLI, Python, FFI, and Node never touch the network directly.
+1. **Single networking implementation** — all HTTP logic lives in `eggfetch-core` plus the small `eggfetch-http-connect` CONNECT wire primitive it owns. CLI, Python, FFI, and Node never touch the network directly.
 2. **Async-first** — the Rust engine is async-only (tokio). Synchronous APIs are adapter-layer concerns that block on the async engine (Python sync releases the GIL; Node prototype uses `spawn_blocking` over FFI).
 3. **Feature-gated modularity** — default is HTTP/1.1 + Rustls TLS. HTTP/2, HTTP/3, cookies, compression, multipart, and proxy are opt-in via Cargo features.
 4. **Security by default** — `unsafe_code = "forbid"` workspace-wide (only `eggfetch-ffi` and `eggfetch-node` override to `"allow"` for FFI/N-API), credential redaction, CR/LF injection prevention, fail-closed TLS translation.
@@ -51,8 +52,9 @@ This document is the bird's-eye view: what each discrete module, tool, and capab
 
 ```
 eggfetch/
-├── Cargo.toml          # Workspace root (resolver v3, 6 member crates)
+├── Cargo.toml          # Workspace root (resolver v3, 7 member crates)
 ├── crates/
+│   ├── eggfetch-http-connect/  Shared CONNECT wire primitive (no sockets/TLS/retry)
 │   ├── eggfetch-core/      Async HTTP engine — all networking lives here
 │   ├── eggfetch-cli/       CLI binary — argument parsing, output formatting
 │   ├── eggfetch-python/    Python bindings via PyO3/maturin (+ compat facades;
@@ -87,13 +89,16 @@ eggfetch/
 ## Crate Dependency Graph
 
 ```
+eggfetch-http-connect
+        |
+        v
 eggfetch-core  ←  eggfetch-cli
-              ←  eggfetch-python (via PyO3)
-              ←  eggfetch-ffi  ←  eggfetch-node (via napi-rs)
+               ←  eggfetch-python (via PyO3)
+               ←  eggfetch-ffi  ←  eggfetch-node (via napi-rs)
 eggfetch-bench → eggfetch-core (dev-only harness, not published)
 ```
 
-**Hard rules** (see `AGENTS.md`): `eggfetch-core` has no PyO3/clap/CLI parsing; `eggfetch-cli`/`eggfetch-python` have no direct hyper/tokio TCP — all I/O through core. No parallel sync networking path; Python sync blocks on the async engine with GIL released.
+**Hard rules** (see `AGENTS.md`): `eggfetch-core` has no PyO3/clap/CLI parsing; `eggfetch-cli`/`eggfetch-python` have no direct hyper/tokio TCP — all I/O through core. `eggfetch-http-connect` is the only exception: it owns generic CONNECT wire bytes with no sockets, TLS, retry, or client policy. No parallel sync networking path; Python sync blocks on the async engine with GIL released.
 
 ## How to Use This Documentation
 
@@ -109,9 +114,13 @@ This `overview.md` is the entry point. For a focused review of any component, fo
 
 ## Modules
 
+### eggfetch-http-connect (the shared CONNECT wire primitive)
+
+Small publishable crate with no sockets, TLS, retry, or client policy. It owns CONNECT authority formatting (`ConnectTarget`), byte-oriented request serialization (`encode_connect_request`, `basic_auth_value`), caller-provided response limits (`ConnectResponseLimits`), and bounded response-head parsing (`read_connect_response_head`) over a caller-owned `BufReader`. `eggfetch-core` wraps it with proxy dialing/TLS, phase timeouts, exact status policy, rejection bodies, origin TLS, and pooling. See `crates/eggfetch-http-connect/src/lib.rs`.
+
 ### eggfetch-core (the engine)
 
-All HTTP behavior lives here (top-level modules plus `transport/`, `stream/`, and `pipeline/` trees). This is the single authority for networking — no other crate performs I/O.
+All HTTP behavior lives here (top-level modules plus `transport/`, `stream/`, and `pipeline/` trees), except the CONNECT wire bytes owned by `eggfetch-http-connect`. This is the single authority for networking — no other adapter crate performs I/O.
 
 | Module | Public? | Purpose |
 |--------|---------|---------|

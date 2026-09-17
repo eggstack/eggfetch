@@ -396,18 +396,19 @@ validate_publishable_dependencies() {
 tier3_crate_packages() {
     info "Crate package validation"
 
-    # eggfetch-core has no internal deps — full dry-run succeeds independently.
-    info "  cargo publish --dry-run -p eggfetch-core"
-    cargo publish -p eggfetch-core --dry-run
+    # eggfetch-http-connect is the dependency leaf — full dry-run succeeds independently.
+    info "  cargo publish --dry-run -p eggfetch-http-connect"
+    cargo publish -p eggfetch-http-connect --dry-run
 
     # Dependent crates cannot run cargo package --no-verify or cargo publish --dry-run
-    # because their internal dependencies (eggfetch-core, eggfetch-ffi) are not yet on
-    # crates.io. This is a Cargo limitation. The local fallback validates:
+    # because their internal dependencies (eggfetch-http-connect, eggfetch-core,
+    # eggfetch-ffi) are not yet on crates.io. This is a Cargo limitation.
+    # The local fallback validates:
     #   1. cargo package --list succeeds (manifest/package inclusion)
     #   2. Cargo.toml contains a non-path version for every publishable dependency
     #   3. The crate builds and tests pass through Tier 1 validation
     # Full cargo publish --dry-run runs at publication time, after deps are visible.
-    for crate in eggfetch-cli eggfetch-ffi eggfetch-python eggfetch-node; do
+    for crate in eggfetch-core eggfetch-cli eggfetch-ffi eggfetch-python eggfetch-node; do
         info "  cargo package --list -p $crate"
         cargo package --list -p "$crate" >/dev/null
     done

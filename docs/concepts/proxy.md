@@ -2,6 +2,8 @@
 
 eggfetch supports HTTP forward proxying and HTTPS CONNECT tunneling with proxy authentication and NO_PROXY bypass rules.
 
+CONNECT wire bytes (authority formatting, request serialization, bounded response-head parsing) live in the small `eggfetch-http-connect` crate; `eggfetch-core` owns dialing, TLS, timeouts, status policy, rejection bodies, and pooling around it. See `docs/architecture/core-tls-proxy-protocols.md` § "CONNECT Tunnel".
+
 ## HTTP Proxying vs HTTPS Tunneling
 
 - **HTTP targets**: The request is forwarded through the proxy. The proxy sees the full URL, headers, and body.

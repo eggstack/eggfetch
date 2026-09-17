@@ -6,6 +6,7 @@ Release timing and publication are maintainer decisions performed from a trusted
 
 All publishable crates share a single coordinated version number:
 
+- `eggfetch-http-connect`
 - `eggfetch-core`
 - `eggfetch-cli`
 - `eggfetch-ffi`
@@ -32,7 +33,7 @@ Version numbers follow [Semantic Versioning](https://semver.org/). Until 1.0, mi
    ./scripts/check.sh package
    ```
 
-   Package validation is fail-closed and requires a clean worktree. `eggfetch-core` receives a full `cargo publish --dry-run` since it has no internal dependencies. Dependent crates (`eggfetch-cli`, `eggfetch-ffi`, `eggfetch-python`, `eggfetch-node`) receive local package-structure validation via `cargo package --list` and manifest version verification, because their internal dependencies are not yet on crates.io. Full `cargo publish --dry-run -p <crate>` runs at publication time, after each crate's dependencies are visible in the registry.
+    Package validation is fail-closed and requires a clean worktree. `eggfetch-http-connect` (the dependency leaf) receives a full `cargo publish --dry-run`. Dependent crates (`eggfetch-core`, `eggfetch-cli`, `eggfetch-ffi`, `eggfetch-python`, `eggfetch-node`) receive local package-structure validation via `cargo package --list` and manifest version verification, because their internal dependencies are not yet on crates.io. Full `cargo publish --dry-run -p <crate>` runs at publication time, after each crate's dependencies are visible in the registry.
 
 7. **Run the live dependency-security preflight:**
 
@@ -52,6 +53,10 @@ Version numbers follow [Semantic Versioning](https://semver.org/). Until 1.0, mi
 Publish manually in dependency order. Before publishing a dependent crate, verify the preceding crate/version is visible to crates.io resolution. Do not encode fixed sleeps as policy — inspect actual registry availability.
 
 ```sh
+cargo publish -p eggfetch-http-connect
+# Wait for crates.io index to propagate, verify with:
+# cargo search eggfetch-http-connect
+
 cargo publish -p eggfetch-core
 # Wait for crates.io index to propagate, verify with:
 # cargo search eggfetch-core

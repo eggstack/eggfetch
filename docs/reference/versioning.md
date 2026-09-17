@@ -7,9 +7,10 @@ change, and what stability expectations users can rely on.
 ## Coordinated versioning
 
 All publishable crates in the workspace share a single version number. When
-eggfetch-core is at `0.3.0`, the CLI, Python bindings, FFI bindings, and Node
-bindings are also at `0.3.0`. This eliminates version-matrix confusion for
-consumers who depend on multiple crates from the project.
+eggfetch-core is at `0.3.0`, the CONNECT wire primitive, CLI, Python
+bindings, FFI bindings, and Node bindings are also at `0.3.0`. This
+eliminates version-matrix confusion for consumers who depend on multiple
+crates from the project.
 
 The bench and fuzz crates are internal and not published. Their versions are
 not coordinated with the public crates.

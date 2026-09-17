@@ -289,10 +289,34 @@ four-element null-pointer form remains intentionally bounded out.
 ### CONNECT Tunnel
 
 For HTTPS through a proxy, the transport establishes a CONNECT tunnel:
-1. Send `CONNECT host:port HTTP/1.1` to the proxy.
-2. Read the 200 response.
-3. Upgrade the connection to TLS.
-4. Send the actual HTTP request over the TLS tunnel.
+
+```text
+caller-owned transport stream
+        |
+        v
+eggfetch-http-connect (wire only: target/authority, request bytes,
+  proxy auth/header encoding, bounded response-head parse, read-ahead)
+        |
+        +--> eggfetch-core policy adapter (dialing/TLS, timeouts,
+             exact status policy, rejection bodies, origin TLS, pooling)
+```
+
+1. `eggfetch-core` dials the proxy (`transport/proxy::connect_to_proxy`).
+2. Shared `ConnectTarget` formats the authority; `encode_connect_request`
+   serializes `CONNECT host:port HTTP/1.1` + identical `Host` + optional
+   `Proxy-Authorization` + proxy-only headers, bounded by
+   `MAX_REQUEST_HEADER_BYTES`. Eggfetch wraps the write with its `Write`
+   phase timeout.
+3. Shared `read_connect_response_head` parses the bounded response head
+   over the same `BufReader`, preserving read-ahead for `ProxyTunnel`.
+   Eggfetch wraps the read with its `Read` phase timeout.
+4. Eggfetch applies its exact status policy (200 success, typed
+   `ProxyConnectRejected` otherwise with sanitized rejection body),
+   then performs origin TLS/ALPN and hands the tunnel to Hyper.
+
+The shared crate never dials, does TLS, retries, decides success, or owns
+deadlines. Ordinary forward-proxy body parsing stays in `eggfetch-core`
+where it is not shared behavior.
 
 ### Caller-owned raw-stream dialing
 

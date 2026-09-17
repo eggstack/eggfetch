@@ -18,6 +18,7 @@ import subprocess
 import sys
 
 PUBLISHABLE_CRATES = [
+    "eggfetch-http-connect",
     "eggfetch-core",
     "eggfetch-cli",
     "eggfetch-ffi",

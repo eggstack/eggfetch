@@ -8,6 +8,10 @@ eggfetch-core has the following direct dependencies. The `optional` marker
 means the dependency is absent from the core dependency graph unless its
 owning feature is selected.
 
+- **eggfetch-http-connect** -- shared CONNECT wire primitive (authority
+  formatting, request serialization, bounded response-head parsing). The
+  only internal HTTP-logic exception to core ownership; it carries no
+  sockets, TLS, retry, or policy and is published before `eggfetch-core`.
 - **bytes** -- efficient byte buffer types for request and response bodies.
 - **dashmap** -- concurrent hash map for per-host pool semaphore storage.
 - **futures-core** -- `Stream` trait definition.
@@ -66,6 +70,7 @@ Rustls; a dependency can still be shared by other optional routes.
 
 | Dependency | Core use sites | Cleartext H1 | Rustls TLS | Optional-only owner | Gating decision |
 | --- | --- | ---: | ---: | --- | --- |
+| `eggfetch-http-connect` | CONNECT wire bytes (`transport/connect`) | yes | shared | no | internal leaf, unconditional to avoid a second CONNECT impl |
 | `bytes` | bodies, headers, request/response types | yes | shared | no | foundational |
 | `dashmap` | pool and Alt-Svc state | yes | shared | no | foundational |
 | `futures-core`, `futures-util` | streams, bodies, pipeline, retry | yes | shared | no | foundational |
@@ -101,6 +106,11 @@ the workspace MSRV is Rust 1.89.
 These are small, well-audited crates with minimal transitive trees. Together
 with the default feature set, they provide the dependencies required to build
 a working HTTPS client.
+
+`eggfetch-http-connect` itself depends only on `tokio` (`io-util` for
+`AsyncRead`/`AsyncWrite`/`BufReader`), `base64` (Basic auth encoding), and
+`thiserror` (neutral protocol errors). It has no Hyper, TLS, DNS, socket,
+retry, or routing dependencies by design.
 
 Downstream size/dependency evidence for the minimal profiles lives in
 [embedded-footprint.md](embedded-footprint.md) (manual qualification in

@@ -14,6 +14,8 @@ Optional maintainer checklist for release preparation. This is not a required ga
 
 ## crates.io Publication
 
+- [ ] `cargo publish -p eggfetch-http-connect` succeeds
+- [ ] Verify propagation: `cargo search eggfetch-http-connect`
 - [ ] `cargo publish -p eggfetch-core` succeeds
 - [ ] Verify propagation: `cargo search eggfetch-core`
 - [ ] `cargo publish -p eggfetch-cli` succeeds

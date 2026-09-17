@@ -11,7 +11,7 @@ Use this skill when working on the eggfetch-ffi or eggfetch-node crates.
 ## Key Constraints
 
 - Both crates use `unsafe_code = "allow"` — the sole exceptions to the workspace `forbid`.
-- All HTTP logic lives in eggfetch-core. FFI and Node are adapters.
+- All HTTP logic lives in eggfetch-core (CONNECT wire in `eggfetch-http-connect`). FFI and Node are adapters.
 - FFI uses opaque handle pattern. Consumers never see internal struct layouts.
 - FFI functions are `extern "C"` with `#[repr(C)]` types.
 - Null pointer inputs are treated as no-ops for all free functions.

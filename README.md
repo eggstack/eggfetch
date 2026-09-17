@@ -7,7 +7,7 @@
 [![PyPI Downloads](https://static.pepy.tech/personalized-badge/eggfetch?period=total&units=INTERNATIONAL_SYSTEM&left_color=BLACK&right_color=GREEN&left_text=downloads)](https://pepy.tech/projects/eggfetch)
 [![License](https://img.shields.io/crates/l/eggfetch-core)](LICENSE-MIT)
 
-eggfetch is a Rust-native async HTTP client engine (tokio + hyper) with Python bindings and a CLI. There is exactly one networking implementation, living entirely in `eggfetch-core`; the Python sync API blocks on the async engine while releasing the GIL, and the async API integrates with asyncio.
+eggfetch is a Rust-native async HTTP client engine (tokio + hyper) with Python bindings and a CLI. There is exactly one networking implementation, living entirely in `eggfetch-core` plus the small `eggfetch-http-connect` CONNECT wire primitive it owns; the Python sync API blocks on the async engine while releasing the GIL, and the async API integrates with asyncio.
 
 ## Features
 
@@ -15,7 +15,7 @@ eggfetch is a Rust-native async HTTP client engine (tokio + hyper) with Python b
 - **Streaming** — response bodies stream without eager buffering (`bytes_stream()`, `text_lines()`), with trailers after EOF ([guide](docs/rust/guide.md))
 - **Pooling and timeouts** — per-origin connection pools, phase-aware timeouts (pool/connect/write/read/total), and transport metrics ([pool/timeouts](docs/architecture/core-timeout-pool.md))
 - **TLS** — rustls with per-client crypto providers, custom or additive CA roots, mTLS client certs, version policy, and verification toggle ([TLS](docs/concepts/tls.md))
-- **Proxy** — HTTP forwarding, HTTPS CONNECT, proxy auth, per-request override, `NO_PROXY`, SOCKS5, and UDS routes ([proxy](docs/concepts/proxy.md))
+- **Proxy** — HTTP forwarding, HTTPS CONNECT, proxy auth, per-request override, `NO_PROXY`, SOCKS5, and UDS routes ([proxy](docs/concepts/proxy.md)). CONNECT wire bytes live in the small `eggfetch-http-connect` crate (no sockets/TLS/retry) consumed by `eggfetch-core`.
 - **Cookies, auth, multipart** — RFC 6265 jar, Basic/Bearer with redaction, streaming multipart uploads ([cookies](docs/concepts/cookies.md))
 - **Retries and redirects** — policy-driven backoff with `Retry-After`, replayable-body redirect handling ([retry](docs/concepts/retry.md))
 - **Compression** — feature-gated streaming gzip/brotli/zstd/deflate with zip-bomb limits ([compression](docs/concepts/compression.md))

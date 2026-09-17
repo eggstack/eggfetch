@@ -5,10 +5,11 @@ Uses `cargo metadata --format-version 1 --no-deps` and stdlib json.
 No third-party dependencies.
 
 Expected publishable internal crates and their dependency edges:
-  eggfetch-cli  -> eggfetch-core
-  eggfetch-ffi  -> eggfetch-core
+  eggfetch-core   -> eggfetch-http-connect
+  eggfetch-cli    -> eggfetch-core
+  eggfetch-ffi    -> eggfetch-core
   eggfetch-python -> eggfetch-core
-  eggfetch-node -> eggfetch-ffi
+  eggfetch-node   -> eggfetch-ffi
 """
 
 import json
@@ -16,6 +17,7 @@ import subprocess
 import sys
 
 EXPECTED_DEPENDENCIES: dict[str, set[str]] = {
+    "eggfetch-core": {"eggfetch-http-connect"},
     "eggfetch-cli": {"eggfetch-core"},
     "eggfetch-ffi": {"eggfetch-core"},
     "eggfetch-python": {"eggfetch-core"},

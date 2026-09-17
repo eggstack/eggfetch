@@ -126,7 +126,7 @@ committed.
 
 ### Package Validation (Tier 3)
 
-Run `./scripts/check.sh package` for: core publish dry-run (`cargo publish --dry-run -p eggfetch-core`), dependent-crate package-structure validation (`cargo package --list` plus structured internal dependency version verification via cargo metadata for eggfetch-cli, eggfetch-ffi, eggfetch-python, eggfetch-node), wheel build, exactly-one-wheel resolution, wheel smoke (including runtime version equality with installed distribution metadata and the PEP 561 files), package content validation, and installed-wheel surface plus positive/negative mypy typing checks. Uses fresh temporary artifacts; stale repository wheels are never used.
+Run `./scripts/check.sh package` for: leaf publish dry-run (`cargo publish --dry-run -p eggfetch-http-connect`), dependent-crate package-structure validation (`cargo package --list` plus structured internal dependency version verification via cargo metadata for eggfetch-core, eggfetch-cli, eggfetch-ffi, eggfetch-python, eggfetch-node), wheel build, exactly-one-wheel resolution, wheel smoke (including runtime version equality with installed distribution metadata and the PEP 561 files), package content validation, and installed-wheel surface plus positive/negative mypy typing checks. Uses fresh temporary artifacts; stale repository wheels are never used.
 
 ### PyPI Wheel Pipeline
 
@@ -175,10 +175,11 @@ Release timing and publication are maintainer decisions. See `docs/releases/proc
 
 ### Publishing Order
 
-1. `eggfetch-core`
-2. `eggfetch-cli`
-3. `eggfetch-ffi`
-4. `eggfetch-python`
-5. `eggfetch-node`
+1. `eggfetch-http-connect`
+2. `eggfetch-core`
+3. `eggfetch-cli`
+4. `eggfetch-ffi`
+5. `eggfetch-python`
+6. `eggfetch-node`
 
 crates.io index propagation requires verification between publishes. Bench and fuzz crates are not published.

@@ -1,6 +1,6 @@
 # Agent Guide
 
-eggfetch is a Rust-native async HTTP client (tokio + hyper). All networking lives in `eggfetch-core`; CLI, Python, FFI, and Node are thin adapters.
+eggfetch is a Rust-native async HTTP client (tokio + hyper). All networking lives in `eggfetch-core` plus the small `eggfetch-http-connect` CONNECT wire primitive it owns; CLI, Python, FFI, and Node are thin adapters.
 Start at `docs/architecture/overview.md` (§ Deep-Dive Index). Normative CI/release rules: `docs/verification-policy.md`. Task workflows: `.skills/` (`rust-development`, `python-bindings`, `cli-development`, `ffi-development`, `fuzz-testing`, `security-review`, `release-process`, `documentation`).
 
 ## Commands
@@ -28,7 +28,7 @@ Start at `docs/architecture/overview.md` (§ Deep-Dive Index). Normative CI/rele
 
 ## Boundaries and lint
 
-- `eggfetch-core`: no PyO3, no clap, no CLI parsing. `eggfetch-cli`/`eggfetch-python`: no direct hyper/tokio TCP — all I/O through core. No parallel sync networking path; Python sync blocks on the async engine with GIL released. If you write HTTP logic outside core, refactor.
+- `eggfetch-core`: no PyO3, no clap, no CLI parsing. `eggfetch-cli`/`eggfetch-python`: no direct hyper/tokio TCP — all I/O through core. `eggfetch-http-connect` is the only exception to core-owned HTTP logic: it owns generic CONNECT wire bytes (target formatting, request serialization, bounded response-head parsing) with no sockets, TLS, retry, or client policy. No parallel sync networking path; Python sync blocks on the async engine with GIL released. If you write HTTP logic outside core, refactor (CONNECT wire belongs in `eggfetch-http-connect`).
 - `unsafe_code = "forbid"` workspace-wide; only `eggfetch-ffi` and `eggfetch-node` override to `"allow"`. Never add new `unsafe` without explicit discussion.
 - Pedantic clippy (`-D warnings`); `scripts/check_lint_suppressions.sh` rejects `allow(warnings)`, `clippy::all`, `clippy::pedantic` (except FFI/Node), `clippy::nursery`, `clippy::restriction`. Use specific lint names with a justifying comment.
 - Core default: `http1 + tls-rustls + tls-native-roots` (`http1` alone is cleartext-only). Canonical recipes in `docs/architecture/feature-flags.md#supported-core-profiles`. CLI enables cookies/multipart/proxy (no compression, no http2/http3); Python enables http2/http3/cookies/multipart/proxy + all compressions.
@@ -48,4 +48,4 @@ Start at `docs/architecture/overview.md` (§ Deep-Dive Index). Normative CI/rele
 ## Working style
 
 - Make the workspace green before adding functionality; run Tier 1 before committing. One logical change per commit; never commit without an explicit user request.
-- Never add CI jobs, matrices, evidence schemas, or publish automation without an explicit request. CI is one job (`ci.yml`) repeating `check.sh`; releases are manual (order: core → cli → ffi → python → node, then tag; PyPI via manually dispatched `pypi.yml`, Trusted Publishing). See `docs/verification-policy.md`.
+- Never add CI jobs, matrices, evidence schemas, or publish automation without an explicit request. CI is one job (`ci.yml`) repeating `check.sh`; releases are manual (order: http-connect → core → cli → ffi → python → node, then tag; PyPI via manually dispatched `pypi.yml`, Trusted Publishing). See `docs/verification-policy.md`.

@@ -130,9 +130,9 @@ The Python sync API must block on the async Rust engine and release the GIL duri
 
 ## No Duplicate Networking
 
-All network I/O goes through eggfetch-core. There must not be a second synchronous networking implementation in the Python crate, the CLI crate, or anywhere else. Synchronous Python adapters block on the async engine. This is a hard architectural invariant.
+All network I/O goes through eggfetch-core, except the generic CONNECT wire bytes owned by `eggfetch-http-connect` (no sockets, TLS, retry, or policy). There must not be a second synchronous networking implementation in the Python crate, the CLI crate, or anywhere else. Synchronous Python adapters block on the async engine. This is a hard architectural invariant.
 
-If you find yourself writing HTTP logic outside of eggfetch-core, stop and refactor.
+If you find yourself writing HTTP logic outside of eggfetch-core, stop and refactor (CONNECT wire belongs in `eggfetch-http-connect`).
 
 ## Working Context
 

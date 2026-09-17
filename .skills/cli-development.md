@@ -10,7 +10,7 @@ Use this skill when working on the eggfetch-cli crate.
 
 ## Key Constraints
 
-- CLI is a thin adapter over eggfetch-core. No HTTP logic here.
+- CLI is a thin adapter over eggfetch-core. No HTTP logic here (CONNECT wire lives in `eggfetch-http-connect`).
 - All I/O goes through eggfetch-core's public API.
 - Exit codes: 0 success, 2 usage, 3 DNS/connect/TLS/pool/proxy transport error, 4 timeout, 5 protocol, 6 status (with `--check-status` on any non-2xx), 7 I/O, 130 interrupted.
 - Auth/proxy/cookie headers are redacted in verbose output.

@@ -9,7 +9,7 @@ This document is the normative statement of CI, verification, and release policy
 3. **Routine CI does not publish packages or create releases.** GitHub Actions holds no publication credentials and performs no publication steps in the push/PR workflow.
 4. **Local validation is canonical.** The checked-in `./scripts/check.sh` is the single source of validation. CI repeats the same command on Ubuntu.
 5. **Extended checks are opt-in.** Slower or less frequently useful checks run via `./scripts/check.sh extended` and are not triggered by every push or pull request.
-6. **Packaging checks are local validation.** `./scripts/check.sh package` validates packaging without publication. `eggfetch-core` receives a full `cargo publish --dry-run`. Dependent crates receive package-structure validation via `cargo package --list` and manifest version verification; full `cargo publish --dry-run` runs at publication time.
+6. **Packaging checks are local validation.** `./scripts/check.sh package` validates packaging without publication. `eggfetch-http-connect` (the dependency leaf) receives a full `cargo publish --dry-run`. Dependent crates receive package-structure validation via `cargo package --list` and manifest version verification; full `cargo publish --dry-run` runs at publication time.
 7. **crates.io publication is manual.** A maintainer publishes from a trusted local environment. GitHub Actions does not publish.
 8. **PyPI publication is manually dispatched.** The PyPI wheel workflow (`.github/workflows/pypi.yml`) is triggered only by `workflow_dispatch`. It is not a merge gate and does not run on push or pull request.
 9. **Historical qualification plans are non-normative.** Completed plans are records of past work, not active CI or release requirements.
