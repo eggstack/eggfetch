@@ -196,7 +196,7 @@ Explicitly verify a no-default-features native slice because that is where depen
 
 ## Closure evidence
 
-- Implementation commit: `196046f821415ea38a1eb3dd53d5df498c3bdcd6`.
+- Implementation commit: `9f1d11c46236880d886dcd49b5605e52f73f0f4d`.
 - Minimal native slice (`cargo tree -p eggfetch-core
   --no-default-features --features http1 -e normal --prefix none | sort -u |
   wc -l`): **92 packages before → 86 after**. Removed closure:
