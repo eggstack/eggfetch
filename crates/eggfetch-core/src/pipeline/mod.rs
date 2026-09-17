@@ -527,8 +527,13 @@ where
         route::TransportRoute::Direct => {
             let resolved_client;
             let direct_client = if let Some(target) = transport_hints.resolved_target.as_ref() {
-                resolved_client =
-                    inner.resolved_client(target, transport_hints.sni_hostname.as_deref())?;
+                resolved_client = inner
+                    .resolved_client(
+                        &logical_url,
+                        target,
+                        transport_hints.sni_hostname.as_deref(),
+                    )
+                    .await?;
                 &resolved_client
             } else {
                 inner

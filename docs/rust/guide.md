@@ -369,10 +369,12 @@ The supplied addresses are used exactly and DNS is never attempted, including
 on retries. Each address must use the URL's effective HTTP/HTTPS port. A
 same-origin redirect retains the destination snapshot; a cross-origin
 redirect, configured proxy, Unix-domain-socket route, or HTTP/3 route fails
-closed before network I/O. Static requests use an isolated direct connection
-client, so ordinary pooled connections cannot bypass the pin. This is distinct
-from local source-address binding and from an SNI override, and is a routing
-primitive rather than an SSRF policy.
+closed before network I/O. Static requests use a bounded direct route cache
+keyed by origin plus the ordered snapshot plus SNI, so ordinary pooled
+connections cannot bypass the pin and identical routes reuse Hyper keep-alive
+(H1) / multiplexed (H2) connections. This is distinct from local
+source-address binding and from an SNI override, and is a routing primitive
+rather than an SSRF policy.
 
 ### Proxied physical route pinning
 

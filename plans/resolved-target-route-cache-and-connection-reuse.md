@@ -374,3 +374,75 @@ Implementation owner should append:
 - Tier 1 / extended / package outcomes;
 - exact-SHA compatibility/profile renewal outcome;
 - any deviation from this plan and rationale.
+
+### Implementation record (2026-09-17)
+
+- Baseline: planning baseline `0e798ac4372fd1a6005eeb552e1c5d3395241c2c`;
+  work started at `4212cdb6159ce1df6927cb7914609b6b13d3c1c1` (plan handoff
+  commit). Implementation commit: the commit containing this record
+  (`feat(core): resolved-target route cache and connection reuse`).
+- Route key (`crates/eggfetch-core/src/client.rs::ResolvedRouteKey`,
+  crate-private, no `Debug`/`Display`):
+  `origin: String` (`url.origin().ascii_serialization()`, no
+  path/query/fragment), `addresses: Arc<[SocketAddr]>` (caller's ordered
+  snapshot via new `ResolvedTarget::addresses_shared()` helper, never
+  sorted/deduped), `sni_hostname: Option<String>` (exact override).
+- Cache: `ClientInner::resolved_clients:
+  Mutex<BoundedClientCache<ResolvedRouteKey, TimeoutDirectClient>>` under
+  `http1`/`http2`, capacity `RESOLVED_CLIENT_CACHE_MAX_ENTRIES = 64` in
+  `transport/hyper_client.rs` (conservative, matches SOCKS/forward/CONNECT).
+  Lookup is async cached (`resolved_client(origin, target, sni)`); construction
+  is a sync `build_resolved_client()` helper (CPU/local only, no I/O under
+  lock, failures return before insert). `send_direct_route()` and the native
+  `send_native_http_body` direct path await the lookup. Hyper remains the only
+  physical pool via `HyperClientPolicy::cached_route()`.
+- Focused tests:
+  - `client.rs`: `resolved_route_key_matrix` (same-key reuse; path/query/
+    fragment + explicit-default-port reuse; HTTP-vs-HTTPS, host, effective
+    port, address, order, SNI-None-vs-override, SNI-A-vs-B fragmentation) and
+    `resolved_route_cache_is_bounded` (64-entry bound) — 2 passed.
+  - `tests/resolved_route_cache_tests.rs` (14 tests, all-features): H1
+    same-key reuse (3 reqs, 1 accept), path/query reuse (1 accept),
+    snapshot isolation (`[good]` vs `[good, good]`, 2 accepts), order
+    isolation (`[good,bad]` vs `[bad,good]`, 2 accepts), origin isolation
+    (2 origins, 2 accepts), SNI fragmentation (None vs override, 2 accepts),
+    TLS SNI correctness (matching SAN succeeds, mismatch fails closed),
+    no-DNS-fallback, same-origin redirect reuse (2 hops, 1 accept),
+    cross-origin `ResolvedTargetRedirect`, eviction safety (80-entry pressure,
+    both servers still correct), construction-failure non-poisoning (invalid
+    TLS version range fails, valid client succeeds), cancellation/drop safety,
+    H2 retained-client reuse (3 streams, 1 accept). Feature profiles:
+    `http1` 11 passed, `http1,tls-rustls` 13 passed,
+    `http1,http2,tls-rustls` 14 passed, `--all-features` 14 passed.
+  - Full `cargo test -p eggfetch-core --all-features -- --test-threads=1`:
+    1287 passed (31 suites).
+- Workstream 0 failing evidence: the new H1 reuse test FAILED on the baseline
+  (3 accepts vs 1 expected), PASSED after the cache (1 accept).
+- Performance (loopback `TestServer`, keep-alive, ~40ms delayed-ACK floor):
+  - Isolated baseline (fresh `Client` per request, approximates old
+    per-request Hyper client): 20 reqs sequential, 20 accepts, 24.0 RPS.
+  - Cached: 200 reqs conc=1, 1 accept, 24.3 RPS (no regression); conc=10,
+    20 accepts; conc=50, 54 accepts; conc=100, 100 accepts — churn reduced
+    from request-count to concurrency-level. H2: 3 streams over 1 TCP
+    connection (multiplexed, retained client).
+- Tier 1: `./scripts/check.sh` green locally (see commit CI); `cargo fmt`,
+  `check_lint_suppressions.sh`, `cargo clippy --workspace --all-targets
+  --all-features -- -D warnings` clean.
+- Extended (`check.sh extended`), package (`check.sh package`), and exact-SHA
+  HTTPX 0.28.1 / HTTPX2 2.12.0 compatibility renewal were not run as part of
+  this change; they remain maintainer-controlled release gates per
+  `docs/verification-policy.md`. No new CI job, matrix, evidence schema, or
+  publication step was added.
+- Docs: `transport/hyper_client.rs` inventory (resolved row now bounded-64
+  with `ResolvedRouteKey`), `ClientInner::resolved_clients` field docs,
+  `docs/architecture/core-engine.md` inventory, `core-timeout-pool.md`
+  cached-route policy line, `core-tls-proxy-protocols.md` resolved section,
+  `docs/rust/guide.md` static-routing paragraph, `.skills/rust-development.md`
+  route-cache list, `.skills/security-review.md` pool note, `CHANGELOG.md`
+  Unreleased entry. README and AGENTS.md needed no change (no stale lifetime
+  claim). No public API, feature flag, dependency, or second pool added.
+- Deviation: none material. Origin uses `url.origin().ascii_serialization()`
+  per the plan's preference (rather than manual `scheme://host:port`
+  formatting) so IPv6/host normalization matches `url` semantics; effective
+  ports remain distinct via the origin (default-port omission still denotes
+  the same origin, which is correct).

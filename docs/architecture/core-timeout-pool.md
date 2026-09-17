@@ -144,8 +144,8 @@ forward-proxy, and HTTPS CONNECT):
   retention for that client. The cap needs no timer; Hyper enforces it
   synchronously when a connection goes idle.
 
-Isolated one-shot clients (resolved target) receive the same values for
-consistency even though they are not retained. The forward-proxy route keeps
+Bounded resolved-route clients receive the same values through the shared
+cached-route policy. The forward-proxy route keeps
 its documented H1-only framing exception; H2-only selection and
 canceled-request retry policy are unchanged. H3/QUIC idle policy stays with
 the H3 connector and never takes the Hyper timer.

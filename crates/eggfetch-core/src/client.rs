@@ -5,7 +5,8 @@ use std::time::Duration;
 
 #[cfg(any(feature = "http1", feature = "http2"))]
 use crate::transport::hyper_client::{
-    build_hyper_client, BoundedClientCache, HyperClientPolicy, SNI_CLIENT_CACHE_MAX_ENTRIES,
+    build_hyper_client, BoundedClientCache, HyperClientPolicy, RESOLVED_CLIENT_CACHE_MAX_ENTRIES,
+    SNI_CLIENT_CACHE_MAX_ENTRIES,
 };
 #[cfg(feature = "proxy")]
 use crate::transport::hyper_client::{
@@ -145,6 +146,50 @@ impl std::fmt::Debug for Client {
     }
 }
 
+/// Internal cache identity for one direct resolved-target route.
+///
+/// The type deliberately does not implement `Debug` or `Display`: route keys
+/// carry connection identity only and must never render request state in
+/// diagnostics. Compare with `==`/`!=` in tests.
+///
+/// Connection-scoped: normalized logical HTTP origin (scheme, host, effective
+/// port via the `url` crate's origin ASCII serialization; no path/query/
+/// fragment), the full ordered physical address snapshot (order controls
+/// attempt/failover order, so reordering fragments identity), and the exact
+/// optional SNI override (no normalization: a redundant miss is safe, a false
+/// hit is a security defect). TLS config/provider/trust policy, HTTP
+/// version/ALPN policy, direct socket/local-address configuration, connect
+/// timeout, lifecycle policy, canceled-request retry behavior, and idle-pool
+/// policy are immutable at `ClientInner` scope after `ClientBuilder::build`
+/// and therefore stay outside the per-route key. Request-scoped state
+/// (total/read/write/pool deadlines, retry/redirect state, body, cookies/auth
+/// headers, decompression limits, trace observers, failure contexts) is never
+/// represented. If any currently client-wide connection-affecting field
+/// becomes request-scoped, this key must be expanded before the new
+/// variability may use the cache.
+#[cfg(any(feature = "http1", feature = "http2"))]
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub(crate) struct ResolvedRouteKey {
+    origin: String,
+    addresses: Arc<[std::net::SocketAddr]>,
+    sni_hostname: Option<String>,
+}
+
+#[cfg(any(feature = "http1", feature = "http2"))]
+impl ResolvedRouteKey {
+    pub(crate) fn new(
+        origin_url: &url::Url,
+        target: &crate::request::ResolvedTarget,
+        sni_hostname: Option<&str>,
+    ) -> Self {
+        Self {
+            origin: origin_url.origin().ascii_serialization(),
+            addresses: target.addresses_shared(),
+            sni_hostname: sni_hostname.map(str::to_owned),
+        }
+    }
+}
+
 pub(crate) struct ClientInner {
     #[cfg(any(feature = "http1", feature = "http2"))]
     pub(crate) hyper_client: Option<crate::transport::TimeoutHyperClient>,
@@ -198,6 +243,28 @@ pub(crate) struct ClientInner {
     #[cfg(any(feature = "http1", feature = "http2"))]
     pub(crate) sni_custom_clients:
         Mutex<BoundedClientCache<String, crate::transport::TimeoutCustomClient>>,
+    /// Cached Hyper clients for direct resolved-target routes.
+    ///
+    /// Bounded by [`RESOLVED_CLIENT_CACHE_MAX_ENTRIES`] via the shared
+    /// [`BoundedClientCache`] mechanics (see `transport::hyper_client`).
+    /// Hyper remains the physical pool owner: each entry is a configured
+    /// Hyper client whose H1 keep-alive / H2 multiplexed connections are
+    /// reused only when the full [`ResolvedRouteKey`] (logical origin +
+    /// ordered address snapshot + exact SNI override) matches.
+    ///
+    /// The key contains origin + ordered target + SNI because each of those
+    /// dimensions changes the physical/TLS route: different logical origins
+    /// must never share a pool even when the addresses coincide, address
+    /// order controls failover, and SNI changes certificate identity.
+    /// Immutable client-wide TLS/ALPN/socket/connect/lifecycle/idle policy
+    /// is intentionally not duplicated into every key because it is fixed at
+    /// `ClientInner` scope after `ClientBuilder::build`; if any such field
+    /// became request-scoped, the key must be expanded first. Ordinary
+    /// DNS/direct clients and resolved-target clients never share an entry,
+    /// and proxy resolved routing stays in the SOCKS/forward/CONNECT caches.
+    #[cfg(any(feature = "http1", feature = "http2"))]
+    pub(crate) resolved_clients:
+        Mutex<BoundedClientCache<ResolvedRouteKey, crate::transport::TimeoutDirectClient>>,
     /// Hyper client for Unix domain socket requests.
     #[cfg(unix)]
     #[cfg(any(feature = "http1", feature = "http2"))]
@@ -271,26 +338,69 @@ pub(crate) fn configure_tls_alpn(
 }
 
 impl ClientInner {
-    /// Build an isolated direct Hyper client for a request-scoped resolved
-    /// destination. Isolation prevents a connection established for ordinary
-    /// DNS routing, or for another address snapshot, from being reused.
+    /// Get or create a cached Hyper client for one direct resolved-target
+    /// route.
+    ///
+    /// The cache key is the normalized logical origin plus the full ordered
+    /// physical address snapshot plus the exact SNI override. Identical route
+    /// identity reuses the configured Hyper client (and therefore Hyper-owned
+    /// H1 keep-alive / H2 multiplexed connections); any change in those
+    /// dimensions selects a different entry. Ordinary DNS/direct clients never
+    /// share these entries.
     #[cfg(any(feature = "http1", feature = "http2"))]
-    pub(crate) fn resolved_client(
+    pub(crate) async fn resolved_client(
         &self,
+        origin_url: &url::Url,
         target: &crate::request::ResolvedTarget,
         sni_hostname: Option<&str>,
     ) -> Result<crate::transport::TimeoutDirectClient> {
-        let connect_timeout = self.config.timeout.as_ref().and_then(|t| t.connect);
+        let key = ResolvedRouteKey::new(origin_url, target, sni_hostname);
+        let mut clients = self.resolved_clients.lock().await;
+        if let Some(client) = clients.get(&key) {
+            return Ok(client.clone());
+        }
+        let client = Self::build_resolved_client(
+            &self.config,
+            self.direct_connector_config.as_ref(),
+            &self.transport_metrics,
+            &self.pool,
+            &self.lifecycle,
+            target,
+            sni_hostname,
+        )?;
+        clients.insert(key, client.clone());
+        Ok(client)
+    }
+
+    /// Build a configured resolved-route Hyper client without touching the
+    /// route cache.
+    ///
+    /// CPU/local configuration only (connector + TLS policy + Hyper builder);
+    /// performs no network I/O, so callers may hold the route-cache mutex
+    /// while building, matching the documented route-cache locking contract.
+    /// Construction failures return before insert and never poison the cache.
+    #[cfg(any(feature = "http1", feature = "http2"))]
+    #[allow(clippy::too_many_arguments)]
+    fn build_resolved_client(
+        config: &ClientConfig,
+        direct_connector_config: Option<&crate::transport::direct_connector::DirectConnectorConfig>,
+        transport_metrics: &Arc<crate::transport::metrics::TransportMetrics>,
+        pool: &Pool,
+        lifecycle: &Arc<LifecycleConfig>,
+        target: &crate::request::ResolvedTarget,
+        sni_hostname: Option<&str>,
+    ) -> Result<crate::transport::TimeoutDirectClient> {
+        let connect_timeout = config.timeout.as_ref().and_then(|t| t.connect);
         #[cfg(feature = "tls-rustls")]
         let tls_connector = {
-            let tls_config = self.config.tls_config.clone().unwrap_or_default();
+            let tls_config = config.tls_config.clone().unwrap_or_default();
             let rustls_config = tls_config
                 .build_rustls_config()
                 .map_err(|e| Error::Tls(format!("failed to build TLS config: {e}")))?;
             let rustls_config = configure_tls_alpn(
                 rustls_config,
                 crate::http_version::HttpVersionPolicyEnabler::from_policy(
-                    self.config.http_version_policy,
+                    config.http_version_policy,
                 ),
             );
             Some(tokio_rustls::TlsConnector::from(Arc::new(rustls_config)))
@@ -298,7 +408,7 @@ impl ClientInner {
         #[cfg(not(feature = "tls-rustls"))]
         let tls_connector = None;
 
-        let base_config = self.direct_connector_config.clone().unwrap_or(
+        let base_config = direct_connector_config.cloned().unwrap_or(
             crate::transport::direct_connector::DirectConnectorConfig {
                 local_address: None,
                 socket_options: Vec::new(),
@@ -307,25 +417,23 @@ impl ClientInner {
         let mut connector = crate::transport::direct_connector::DirectConnector::with_metrics(
             base_config,
             tls_connector,
-            self.transport_metrics.clone(),
+            transport_metrics.clone(),
         )
         .with_resolved_target(target);
         if let Some(sni_hostname) = sni_hostname {
             connector = connector.with_sni(sni_hostname.to_owned());
         }
         let policy = HyperClientPolicy::cached_route(
-            self.config.retry_canceled_requests,
-            self.pool.idle_timeout(),
-            self.pool.max_idle_per_host(),
-            crate::http_version::HttpVersionPolicyEnabler::from_policy(
-                self.config.http_version_policy,
-            ),
+            config.retry_canceled_requests,
+            pool.idle_timeout(),
+            pool.max_idle_per_host(),
+            crate::http_version::HttpVersionPolicyEnabler::from_policy(config.http_version_policy),
         );
         Ok(build_hyper_client(
             connector,
             &policy,
             connect_timeout,
-            &self.lifecycle,
+            lifecycle,
         ))
     }
 
@@ -1620,6 +1728,10 @@ impl ClientBuilder {
                 sni_custom_clients: Mutex::new(BoundedClientCache::new(
                     SNI_CLIENT_CACHE_MAX_ENTRIES,
                 )),
+                #[cfg(any(feature = "http1", feature = "http2"))]
+                resolved_clients: Mutex::new(BoundedClientCache::new(
+                    RESOLVED_CLIENT_CACHE_MAX_ENTRIES,
+                )),
                 #[cfg(all(unix, any(feature = "http1", feature = "http2")))]
                 uds_client,
                 #[cfg(feature = "proxy")]
@@ -2267,5 +2379,136 @@ mod tests {
             .unwrap();
         let err = client.send(request).await.unwrap_err();
         assert_ne!(err.kind(), "conflicting_auth");
+    }
+
+    #[cfg(any(feature = "http1", feature = "http2"))]
+    #[test]
+    fn resolved_route_key_matrix() {
+        use crate::request::ResolvedTarget;
+
+        // Keys intentionally lack `Debug`/`Display` (connection identity
+        // only, never request state), so compare with `==`/`!=`.
+        let origin = url::Url::parse("http://origin.example/").unwrap();
+        let target: ResolvedTarget =
+            ResolvedTarget::new(["127.0.0.1:80".parse::<SocketAddr>().unwrap()]).unwrap();
+        let base = ResolvedRouteKey::new(&origin, &target, None);
+        let same = ResolvedRouteKey::new(&origin, &target, None);
+        assert!(
+            base == same,
+            "same origin + same ordered addresses + same SNI must reuse"
+        );
+
+        // Path/query/fragment never participate: same logical origin.
+        let with_path = url::Url::parse("http://origin.example/a?b=1#f").unwrap();
+        let other_path = url::Url::parse("http://origin.example/other").unwrap();
+        assert!(
+            ResolvedRouteKey::new(&with_path, &target, None)
+                == ResolvedRouteKey::new(&other_path, &target, None),
+            "path/query/fragment must not fragment resolved identity"
+        );
+        // Explicit default port normalizes to the same origin.
+        let explicit_default = url::Url::parse("http://origin.example:80/").unwrap();
+        assert!(
+            ResolvedRouteKey::new(&origin, &target, None)
+                == ResolvedRouteKey::new(&explicit_default, &target, None),
+            "explicit default port must reuse"
+        );
+
+        // HTTP vs HTTPS: logical/TLS origin differs.
+        let https = url::Url::parse("https://origin.example/").unwrap();
+        let https_target: ResolvedTarget =
+            ResolvedTarget::new(["127.0.0.1:443".parse::<SocketAddr>().unwrap()]).unwrap();
+        assert!(
+            base != ResolvedRouteKey::new(&https, &https_target, None),
+            "scheme change must fragment resolved identity"
+        );
+
+        // Host differs: logical Host/TLS identity differs.
+        let other_host = url::Url::parse("http://other.example/").unwrap();
+        assert!(
+            base != ResolvedRouteKey::new(&other_host, &target, None),
+            "host change must fragment resolved identity"
+        );
+
+        // Effective port differs: origin/socket identity differs.
+        let other_port = url::Url::parse("http://origin.example:8080/").unwrap();
+        let other_port_target: ResolvedTarget =
+            ResolvedTarget::new(["127.0.0.1:8080".parse::<SocketAddr>().unwrap()]).unwrap();
+        assert!(
+            base != ResolvedRouteKey::new(&other_port, &other_port_target, None),
+            "effective port change must fragment resolved identity"
+        );
+
+        // One address differs: physical route differs.
+        let other_addr: ResolvedTarget =
+            ResolvedTarget::new(["127.0.0.2:80".parse::<SocketAddr>().unwrap()]).unwrap();
+        assert!(
+            base != ResolvedRouteKey::new(&origin, &other_addr, None),
+            "address change must fragment resolved identity"
+        );
+
+        // Same addresses, different order: attempt/failover order differs.
+        let ordered: ResolvedTarget = ResolvedTarget::new([
+            "127.0.0.1:80".parse::<SocketAddr>().unwrap(),
+            "127.0.0.2:80".parse::<SocketAddr>().unwrap(),
+        ])
+        .unwrap();
+        let reordered: ResolvedTarget = ResolvedTarget::new([
+            "127.0.0.2:80".parse::<SocketAddr>().unwrap(),
+            "127.0.0.1:80".parse::<SocketAddr>().unwrap(),
+        ])
+        .unwrap();
+        assert!(
+            ResolvedRouteKey::new(&origin, &ordered, None)
+                != ResolvedRouteKey::new(&origin, &reordered, None),
+            "address reorder must fragment resolved identity"
+        );
+
+        // SNI None vs override: TLS identity differs.
+        assert!(
+            base != ResolvedRouteKey::new(&origin, &target, Some("sni.example")),
+            "adding an SNI override must fragment resolved identity"
+        );
+
+        // SNI override A vs B: TLS identity differs.
+        assert!(
+            ResolvedRouteKey::new(&origin, &target, Some("a.example"))
+                != ResolvedRouteKey::new(&origin, &target, Some("b.example")),
+            "SNI override change must fragment resolved identity"
+        );
+        assert!(
+            ResolvedRouteKey::new(&origin, &target, Some("a.example"))
+                == ResolvedRouteKey::new(&origin, &target, Some("a.example")),
+            "same SNI override must reuse"
+        );
+    }
+
+    #[cfg(any(feature = "http1", feature = "http2"))]
+    #[test]
+    fn resolved_route_cache_is_bounded() {
+        use crate::request::ResolvedTarget;
+        use crate::transport::hyper_client::{
+            BoundedClientCache, RESOLVED_CLIENT_CACHE_MAX_ENTRIES,
+        };
+
+        assert_eq!(
+            RESOLVED_CLIENT_CACHE_MAX_ENTRIES, 64,
+            "resolved-route cache uses the conservative 64-entry bound"
+        );
+        let mut cache: BoundedClientCache<ResolvedRouteKey, usize> =
+            BoundedClientCache::new(RESOLVED_CLIENT_CACHE_MAX_ENTRIES);
+        for index in 0..(RESOLVED_CLIENT_CACHE_MAX_ENTRIES + 16) {
+            let origin =
+                url::Url::parse(&format!("http://host-{index}.example/")).expect("valid URL");
+            let target =
+                ResolvedTarget::new(["127.0.0.1:80".parse::<SocketAddr>().expect("valid addr")])
+                    .expect("non-empty");
+            cache.insert(ResolvedRouteKey::new(&origin, &target, None), index);
+            assert!(
+                cache.len() <= RESOLVED_CLIENT_CACHE_MAX_ENTRIES,
+                "insertion beyond capacity must not grow the cache"
+            );
+        }
+        assert_eq!(cache.len(), RESOLVED_CLIENT_CACHE_MAX_ENTRIES);
     }
 }

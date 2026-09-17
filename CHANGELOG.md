@@ -48,6 +48,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Resolved-target connection reuse: identical direct `resolved_addresses()`
+  routes (same logical origin, same ordered address snapshot, same SNI
+  override) now reuse one bounded Hyper client (64 entries) for H1 keep-alive
+  / H2 multiplexing instead of building an isolated client per request.
+  Routing semantics are unchanged (no DNS fallback, same-origin redirect
+  retention, cross-origin fail-closed, proxy/UDS/H3 rejection).
+
 ## [0.1.4] - 2026-09-13
 
 ### Added

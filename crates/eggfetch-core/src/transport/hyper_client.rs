@@ -17,8 +17,9 @@
 //!   configuration share one function because the generic bounds are identical;
 //!   a separate wrap-only helper would not be clearer.
 //! - [`BoundedClientCache`]: the tiny bounded-map mechanics shared by the SNI,
-//!   custom-SNI, SOCKS, forward-proxy, and CONNECT route caches, with
-//!   route-specific capacities ([`SNI_CLIENT_CACHE_MAX_ENTRIES`] and friends).
+//!   custom-SNI, resolved-route, SOCKS, forward-proxy, and CONNECT route
+//!   caches, with route-specific capacities ([`SNI_CLIENT_CACHE_MAX_ENTRIES`]
+//!   and friends).
 //!
 //! Idle-pool contract: the resolved idle timeout and effective per-host idle
 //! cap (see `Pool::idle_timeout` / `Pool::max_idle_per_host`) apply uniformly
@@ -45,7 +46,7 @@
 //! | custom-dialer client | client lifetime | dialer/client config | Hyper |
 //! | SNI client | bounded route cache (256) | SNI hostname + immutable client policy | Hyper |
 //! | custom-SNI client | bounded route cache (256) | SNI hostname + dialer/client policy | Hyper |
-//! | resolved-target client | request scoped / isolated | no retained route cache | Hyper within request-owned client only |
+//! | resolved-target client | bounded route cache (64) | `ResolvedRouteKey` (origin + ordered addresses + SNI) | Hyper |
 //! | SOCKS client | bounded route cache (64) | `SocksRouteKey` | Hyper |
 //! | HTTP forward proxy | bounded route cache (64) | `ForwardRouteKey` | Hyper |
 //! | HTTPS CONNECT | bounded route cache (64) | `ConnectRouteKey` | Hyper |
@@ -54,8 +55,11 @@
 //! SNI caches use plain hostname strings because every other
 //! connection-affecting dimension (origin/dialer/socket/TLS/ALPN/version
 //! policy, connect timeouts) is immutable at `ClientInner` scope; see the
-//! `sni_clients` field docs. Resolved-target clients are never retained
-//! because each address snapshot is request-scoped.
+//! `sni_clients` field docs. Resolved-route clients are keyed by logical
+//! origin plus the full ordered physical address snapshot plus the exact SNI
+//! override (see `ResolvedRouteKey`); ordinary DNS/direct clients never share
+//! those entries, and every other connection-affecting dimension stays
+//! immutable at `ClientInner` scope exactly as for the SNI caches.
 //!
 //! Reusable route-cache checklist (required for any new route/client cache):
 //!
@@ -126,6 +130,14 @@ pub(crate) const FORWARD_CLIENT_CACHE_MAX_ENTRIES: usize = 64;
 #[cfg(feature = "proxy")]
 pub(crate) const CONNECT_CLIENT_CACHE_MAX_ENTRIES: usize = 64;
 
+/// Upper bound on cached resolved-route Hyper clients.
+///
+/// Each entry owns its own Hyper idle pool and a physical snapshot may have
+/// higher cardinality than a simple hostname override, so the conservative
+/// 64-entry bound matches the multidimensional SOCKS/forward/CONNECT route
+/// caches rather than the 256-entry hostname-only SNI caches.
+pub(crate) const RESOLVED_CLIENT_CACHE_MAX_ENTRIES: usize = 64;
+
 /// Immutable H1/H2 builder policy shared by every persistent Hyper client.
 ///
 /// Resolved from client configuration at construction time; route call sites
@@ -164,14 +176,12 @@ impl HyperClientPolicy {
         }
     }
 
-    /// Policy for bounded route caches and isolated route clients (resolved
-    /// target, SNI, custom-SNI, SOCKS, CONNECT): shared idle timeout plus the
-    /// effective per-host idle cap resolved from `Pool`.
+    /// Policy for bounded route caches (resolved target, SNI, custom-SNI,
+    /// SOCKS, CONNECT): shared idle timeout plus the effective per-host idle
+    /// cap resolved from `Pool`.
     ///
-    /// Isolated one-shot clients (resolved target) are not retained, so the
-    /// cap is less material there, but it is still applied for consistency:
-    /// no route silently omits configured policy merely because it owns a
-    /// custom connector.
+    /// The policy is applied uniformly so no route silently omits configured
+    /// policy merely because it owns a custom connector.
     pub(crate) fn cached_route(
         retry_canceled_requests: bool,
         idle_timeout: Option<Duration>,

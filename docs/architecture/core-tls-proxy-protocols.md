@@ -515,9 +515,13 @@ connect budget and does not invoke `lookup_host()`. The logical URL remains
 authoritative for the request target, `Host`, HTTPS certificate verification,
 and SNI; an optional `sni_hostname` override still changes only SNI.
 
-Resolved destinations use an isolated direct Hyper client so pooled ordinary
-connections cannot cross the static-routing constraint. Retries retain the
-pin. A same-origin redirect retains it, while a cross-origin redirect returns
+Resolved destinations use a bounded direct Hyper route cache keyed by logical
+origin plus the full ordered address snapshot plus the exact SNI override, so
+pooled ordinary connections cannot cross the static-routing constraint and
+different snapshots/origins/SNI values cannot share a pool. Identical route
+identity reuses the configured Hyper client (H1 keep-alive / H2
+multiplexing); Hyper remains the only physical pool. Retries retain the pin.
+A same-origin redirect retains it, while a cross-origin redirect returns
 `Error::ResolvedTargetRedirect`. Static destinations reject proxy, UDS, and
 HTTP/3 routes before network I/O. This API is not an SSRF policy and does not
 authorize callers to connect to arbitrary addresses.

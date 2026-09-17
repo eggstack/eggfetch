@@ -2,6 +2,22 @@
 
 This directory contains active implementation plans, live qualification/status records, and historical implementation records. Completed plans are non-normative unless another current document explicitly says otherwise. Verification and release policy remain governed by `docs/verification-policy.md` and `docs/releases/process.md`.
 
+## Completed — resolved-target route cache and connection reuse (2026-09-17)
+
+Plan: `resolved-target-route-cache-and-connection-reuse.md`
+
+Status: implementation complete. Same logical origin + same ordered physical
+snapshot + same SNI reuses one bounded (64-entry) Hyper client via the new
+crate-private `ResolvedRouteKey`; Hyper remains the only physical pool (H1
+keep-alive / H2 multiplexing). Routing semantics unchanged (no DNS fallback,
+same-origin retention, cross-origin fail-closed, proxy/UDS/H3 rejection). Key
+matrix, bound, H1/H2 reuse, isolation, redirect, eviction, construction-
+failure, and cancellation regressions are in `client.rs` unit tests and
+`tests/resolved_route_cache_tests.rs`; loopback churn drops from request-count
+to concurrency-level with no RPS regression. Tier 1 green locally; extended,
+package, and exact-SHA compatibility renewal remain maintainer-controlled
+release gates. Closure evidence is in the plan's implementation record.
+
 ## Corrective closure — current-head requalification (2026-09-16)
 
 Plan: `post-core-integrity-current-head-requalification-corrective-closure.md`

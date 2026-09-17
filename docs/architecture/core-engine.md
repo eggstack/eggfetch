@@ -329,16 +329,19 @@ map):
 | custom-dialer client | client lifetime | dialer/client config | Hyper |
 | SNI client | bounded route cache (256) | SNI hostname + immutable client policy | Hyper |
 | custom-SNI client | bounded route cache (256) | SNI hostname + dialer/client policy | Hyper |
-| resolved-target client | request scoped / isolated | no retained route cache | Hyper within request-owned client only |
+| resolved-target client | bounded route cache (64) | `ResolvedRouteKey` (origin + ordered addresses + SNI) | Hyper |
 | SOCKS client | bounded route cache (64) | `SocksRouteKey` | Hyper |
 | HTTP forward proxy | bounded route cache (64) | `ForwardRouteKey` | Hyper |
 | HTTPS CONNECT | bounded route cache (64) | `ConnectRouteKey` | Hyper |
 | H3 | separate QUIC cache (64) | H3 origin/Alt-Svc policy | H3 connector |
 
 SNI caches use plain hostname strings because every other
-connection-affecting dimension is immutable at `ClientInner` scope;
-resolved-target clients are never retained because each address snapshot
-is request-scoped.
+connection-affecting dimension is immutable at `ClientInner` scope.
+Resolved-route entries are keyed by logical origin plus the full ordered
+physical address snapshot plus the exact SNI override; ordinary DNS/direct
+clients never share those entries, and every other connection-affecting
+dimension stays immutable at `ClientInner` scope exactly as for the SNI
+caches.
 
 Reusable route caches own only connection-scoped policy. Every
 connection-affecting distinction (proxy endpoint/auth/headers, proxy TLS
@@ -351,8 +354,8 @@ keys. The cached CONNECT connector retains only the keyed SNI hint for
 tunnel establishment; wire target overrides and trace observers belong to
 the current dispatch. The contributor checklist and full connection-vs-
 request matrix live in `transport::hyper_client` module docs, with
-equality/isolation table tests on `SocksRouteKey`, `ForwardRouteKey`, and
-`ConnectRouteKey`.
+equality/isolation table tests on `ResolvedRouteKey`, `SocksRouteKey`,
+`ForwardRouteKey`, and `ConnectRouteKey`.
 
 When `TransportIoTimeout` is enabled, established reads and writes are
 guarded at this same boundary. The timers reset on actual byte progress,

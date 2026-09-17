@@ -58,6 +58,15 @@ impl ResolvedTarget {
     pub fn addresses(&self) -> &[SocketAddr] {
         &self.addresses
     }
+
+    /// Cheaply clone the ordered address snapshot for route-cache keying.
+    ///
+    /// Crate-private so the public API does not grow merely for `HashMap`
+    /// key convenience. The order is preserved exactly; callers must not
+    /// sort, deduplicate, or otherwise canonicalize it.
+    pub(crate) fn addresses_shared(&self) -> Arc<[SocketAddr]> {
+        Arc::clone(&self.addresses)
+    }
 }
 
 impl std::fmt::Debug for ResolvedTarget {
