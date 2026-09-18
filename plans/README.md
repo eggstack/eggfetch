@@ -4,39 +4,45 @@ This directory contains active implementation plans, live qualification/status r
 
 ## Active corrective — total deadline across response body lifecycle (2026-09-18)
 
-Plan: `total-deadline-response-body-lifecycle-corrective.md`
+Parent plan: `total-deadline-response-body-lifecycle-corrective.md`
 
-Planning baseline: `60a6e2b384519507e04cf296ffd484388e872e47`
-(eggfetch-core 0.1.6 plus the post-release lean route/policy feature work).
+Follow-up corrective: `total-deadline-response-body-api-compatibility-corrective-pass.md`
 
-Status: active. The public native timeout contract says `Timeout.total` is a
-wall-clock cap across the entire request lifecycle, but the current H1/H2/native
-response path drops the absolute deadline after response headers and retains
-only the per-chunk read inactivity timer. A post-header body can therefore
-stall indefinitely when `read` is unset or trickle indefinitely while staying
-inside each read interval.
+Original planning baseline: `60a6e2b384519507e04cf296ffd484388e872e47`.
+Behavioral implementation commit: `dd52f8c4a8d54fbaa403a7995a41bf60b235f7ac`.
 
-The corrective must first record a deterministic baseline-red body regression,
-then propagate the existing request-local absolute deadline through the common
-response finalizer and the frame-preserving `NativeResponseBody` path. Total
-must not restart on first body poll, body chunks, decoding, redirects, or
-retries; read remains a separate first-poll/per-chunk inactivity timeout.
-Buffered, streamed, raw/decoded, trailer, pool-lease, redirect, lean-profile,
-proxy, and deterministic H3 behavior are rechecked. No public timeout API,
-dependency, proxy-cache state, HTTPX total semantic, feature-graph redesign,
-or downstream-specific helper belongs in this pass.
+Status: implementation landed but closure is still active. `dd52f8c4`
+correctly carries native `Timeout.total` through high-level and
+frame-preserving response-body EOF/trailers, with lazy consuming-runtime
+timers, read-vs-total precedence, raw/decoded coverage, trailer handling,
+pool-lease release, redirect propagation, and lean standard-route coverage.
+Routine push CI run 607 passed on that commit.
 
-No new bounded-body API is planned: `max_decoded_body_size` already enforces
-an authoritative stream-level cap even when `Content-Length` is absent or
-wrong. Downstream small-metadata consumers should use that existing policy
-rather than buffer first and inspect length afterward.
+A follow-up audit found one release-blocking source-compatibility regression:
+the implementation added public `read_timeout` and `total_deadline` fields
+to the public, exhaustive `ResponseBody::Streaming` and
+`ResponseBody::EncodedStreaming` variants. The published/pre-corrective
+variant field shape must be restored without weakening the corrected timeout
+semantics. The child corrective requires an external integration compile
+contract that is green on `60a6e2b3`, red on `dd52f8c4`, and green after
+the fix.
 
-Because the correction changes executable core response semantics, closure
-requires the native frame-body fixture, Tier 1, release-time extended/package/
-security gates, and renewal of the repository's exact-SHA HTTPX 0.28.1 and
-HTTPX2 2.12.0 evidence on the final executable freeze. The corrected crate must
-be included in a normal coordinated crates.io patch release before downstream
-handoff is considered complete.
+The follow-up also owns proof hardening: replace the permissive redirect timing
+bound with a discrimination window that fails if total restarts after final
+headers; add a logical retry -> successful headers -> slow final body
+remaining-budget regression; replace the tautological native second-request
+assertion with an explicit success/status assertion; and remove or explicitly
+justify the now-non-authoritative standalone `ReadTimeoutStream`.
+
+No new bounded-body API is needed. `max_decoded_body_size` already provides
+the stream-level bound for identity and decoded compressed bodies when
+`Content-Length` is absent or false.
+
+The line remains active until the corrected executable is frozen, Tier 1 plus
+release-time extended/package/security gates pass, HTTPX 0.28.1 and HTTPX2
+2.12.0 exact-SHA evidence is renewed, both plan closure records are filled,
+and a coordinated crates.io patch containing the fix is published. Missing
+qualification or publication evidence must not be converted into closure.
 
 ## Completed — linked binary footprint reduction (2026-09-17 → 2026-09-18)
 
