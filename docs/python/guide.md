@@ -8,7 +8,7 @@ eggfetch is a fast, modern HTTP client for Python powered by a Rust core. It sup
 pip install eggfetch
 ```
 
-Requires Python 3.10 through 3.14. Wheels are interpreter-specific; ABI3 is
+Requires Python 3.10 through 3.15. Wheels are interpreter-specific; ABI3 is
 not enabled or claimed.
 
 The native package ships a PEP 561 `py.typed` marker and reviewed stubs for

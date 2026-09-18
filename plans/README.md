@@ -7,14 +7,15 @@ This directory contains active implementation plans, live qualification/status r
 
 Plan: `python-3.15-pypi-wheel-production.md`
 
-Status: planned. Extend the existing release-only PyPI matrix from CPython
-3.10–3.14 to 3.10–3.15 on Linux x86_64, macOS arm64, and Windows x86_64.
-The plan keeps version-specific GIL-enabled CPython wheels (no abi3/abi3t or
-free-threaded expansion), moves release accounting from 15 wheels + 1 sdist to
-18 wheels + 1 sdist, updates the coverage validator and public release
-documentation, and requires a full `publish=false` 18-wheel rehearsal before
-the support claim closes. Python 3.15 is still prerelease at planning time, so
-the workflow must use bounded 3.15-only prerelease fallback that naturally
+Status: implementation complete, pending build-only qualification. The
+matrix now builds CPython 3.10–3.15 on Linux x86_64, macOS arm64, and
+Windows x86_64 (18 wheels + 1 sdist = 19 distributions); the coverage
+validator, package classifier, and release documentation match. Tier 1
+and package validation are green locally. The required `publish=false`
+18-wheel rehearsal has not been dispatched yet — dispatch it from the
+implementation commit before claiming 3.15 support in a published
+release (see the plan's Closure record). Python 3.15 is still
+prerelease at implementation time, so the workflow must use bounded 3.15-only prerelease fallback that naturally
 selects stable 3.15.x after GA without changing the 3.10–3.14 behavior.
 
 ## Completed corrective — total deadline across response body lifecycle (2026-09-18)

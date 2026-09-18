@@ -3,8 +3,8 @@
 
 Expected coverage:
   - 3 platforms: linux x86_64, macOS arm64, Windows x86_64
-  - 5 Python versions: 3.10, 3.11, 3.12, 3.13, 3.14
-  - 15 total wheels
+  - 6 Python versions: 3.10, 3.11, 3.12, 3.13, 3.14, 3.15
+  - 18 total wheels
 
 Parses wheel filenames (PEP 427) to extract tags. No third-party dependencies.
 """
@@ -19,7 +19,7 @@ EXPECTED_PLATFORMS = {
     "win_amd64",
 }
 
-EXPECTED_PYTHON_VERSIONS = {"cp310", "cp311", "cp312", "cp313", "cp314"}
+EXPECTED_PYTHON_VERSIONS = {"cp310", "cp311", "cp312", "cp313", "cp314", "cp315"}
 
 # Wheel filename pattern: {distribution}-{version}(-{build tag})?-{python tag}-{abi tag}-{platform tag}.whl
 WHEEL_RE = re.compile(
@@ -141,8 +141,8 @@ def main() -> int:
             errors.append(f"Unexpected wheel: {platform} py{py}")
 
     # Check total count
-    if len(observed) != 15:
-        errors.append(f"Expected 15 wheels, observed {len(observed)}")
+    if len(observed) != 18:
+        errors.append(f"Expected 18 wheels, observed {len(observed)}")
 
     if errors:
         for e in errors:

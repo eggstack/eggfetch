@@ -99,8 +99,9 @@ httpcore-version = "2.12.0"
 [eggfetch]
 distribution = "eggfetch"
 # API compatibility is separate from distribution support: eggfetch wheels
-# cover Python 3.10–3.14 (see AGENTS.md Release). HTTPX2 3.15-only syntax is
-# not advertised as supported; Python 3.15 remains forward-only evidence.
+# cover Python 3.10–3.15 (see docs/releases/process.md). Facade Stage C
+# qualification remains bound to 3.10–3.14 until renewed on a 3.15-tested
+# executable SHA; HTTPX2 3.15-only syntax is not advertised as supported.
 python-versions = ["3.10", "3.11", "3.12", "3.13", "3.14"]
 sync-backend = "rust-tokio"
 async-backend = "rust-tokio"

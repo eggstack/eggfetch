@@ -11,7 +11,7 @@ pip install eggfetch
 ```
 
 eggfetch compiles a native Rust binary extension. There is no pure-Python
-fallback. Python 3.10 through 3.14 are supported.
+fallback. Python 3.10 through 3.15 are supported.
 
 ## Sessions and clients
 

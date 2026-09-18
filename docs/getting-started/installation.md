@@ -6,7 +6,7 @@
 pip install eggfetch
 ```
 
-Requires Python 3.10 through 3.14. Binary wheels are available for
+Requires Python 3.10 through 3.15. Binary wheels are available for
 Linux, macOS, and Windows. There is no pure-Python fallback; the package
 compiles a native Rust extension via maturin.
 

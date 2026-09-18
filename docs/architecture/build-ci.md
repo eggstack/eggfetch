@@ -43,7 +43,7 @@ coverage rationale and the tool-bump update rule.
 Two GitHub Actions workflows:
 
 - **`ci.yml`** — routine push/PR validation. One Ubuntu job, no matrix, no artifact exchange. Calls `./scripts/check.sh`. This is the only automatic workflow.
-- **`pypi.yml`** — manual-dispatch PyPI release pipeline. Builds 15 wheels across 3 platforms (linux-x86_64, macos-arm64, windows-x86_64) and Python 3.10–3.14, builds and validates an sdist, assembles the release set, and optionally publishes via Trusted Publishing (OIDC).
+- **`pypi.yml`** — manual-dispatch PyPI release pipeline. Builds 18 wheels across 3 platforms (linux-x86_64, macos-arm64, windows-x86_64) and Python 3.10–3.15, builds and validates an sdist, assembles the release set, and optionally publishes via Trusted Publishing (OIDC).
 
 See [verification-policy.md](../verification-policy.md) for the normative policy.
 
@@ -134,9 +134,9 @@ Run `./scripts/check.sh package` for: leaf publish dry-run (`cargo publish --dry
 Run manually via `workflow_dispatch` from `.github/workflows/pypi.yml`. The pipeline:
 
 1. **validate-release** — version coherence, internal dependency topology, routine + package validation
-2. **build-wheel** — 15 wheel jobs across 3 platforms × 5 Python versions
+2. **build-wheel** — 18 wheel jobs across 3 platforms × 6 Python versions
 3. **build-sdist** — source distribution with isolated build test
-4. **assemble** — downloads all artifacts, validates coverage matrix (15 wheels + 1 sdist), runs twine check
+4. **assemble** — downloads all artifacts, validates coverage matrix (18 wheels + 1 sdist), runs twine check
 5. **publish** — optional OIDC upload to PyPI (requires `publish=true` input plus `pypi` environment approval)
 
 ## Environment

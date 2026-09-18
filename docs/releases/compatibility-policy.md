@@ -11,11 +11,11 @@ The minimum supported Rust version (MSRV) is declared in `workspace.package.rust
 
 ## Python Supported Versions
 
-The supported Python versions are **3.10 through 3.14**. The PyPI release workflow builds interpreter-specific wheels for all five versions on Linux, macOS, and Windows.
+The supported Python versions are **3.10 through 3.15**. The PyPI release workflow builds interpreter-specific wheels for all six versions on Linux, macOS, and Windows.
 
-Python 3.14 is included in the implementation and release matrix; the first
+Python 3.15 is included in the implementation and release matrix; the first
 published release claiming it remains gated on the final package and wheel
-qualification pass.
+qualification pass (a `publish=false` 18-wheel rehearsal).
 
 - New Python versions are supported as soon as their stable release is compatible with PyO3.
 - Dropped Python versions receive a deprecation notice at least one minor release before removal.

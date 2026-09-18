@@ -252,7 +252,7 @@ cd fuzz && cargo +nightly fuzz build
 ## Python Tests
 
 Routine CI tests use Python 3.12 on ubuntu-latest (single job, no matrix);
-wheel builds (`pypi.yml`) cover Python 3.10–3.14 across Linux/macOS/Windows.
+wheel builds (`pypi.yml`) cover Python 3.10–3.15 across Linux/macOS/Windows.
 
 ```sh
 # Build and install (from the repo root, inside the venv)

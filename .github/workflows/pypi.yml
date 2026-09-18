@@ -136,6 +136,12 @@ jobs:
             maturin-args: --target x86_64-unknown-linux-gnu
             manylinux: "2014"
             python: "3.14"
+          - os: linux
+            arch: x86_64
+            runner: ubuntu-latest
+            maturin-args: --target x86_64-unknown-linux-gnu
+            manylinux: "2014"
+            python: "3.15"
           # macOS arm64
           - os: macos
             arch: arm64
@@ -162,6 +168,11 @@ jobs:
             runner: macos-latest
             maturin-args: --target aarch64-apple-darwin
             python: "3.14"
+          - os: macos
+            arch: arm64
+            runner: macos-latest
+            maturin-args: --target aarch64-apple-darwin
+            python: "3.15"
           # Windows x86_64
           - os: windows
             arch: x86_64
@@ -188,6 +199,11 @@ jobs:
             runner: windows-latest
             maturin-args: --target x86_64-pc-windows-msvc
             python: "3.14"
+          - os: windows
+            arch: x86_64
+            runner: windows-latest
+            maturin-args: --target x86_64-pc-windows-msvc
+            python: "3.15"
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
@@ -199,6 +215,11 @@ jobs:
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: ${{ matrix.python }}
+          # Python 3.15 is prerelease until 3.15.0 final (2026-10-01): only the
+          # 3.15 rows may fall back to the current prerelease. 3.10-3.14 keep
+          # selecting stable interpreters. After GA the same row resolves
+          # stable 3.15.x with no further change.
+          allow-prereleases: ${{ matrix.python == '3.15' }}
 
       - name: Set up QEMU
         if: matrix.arch == 'aarch64'
@@ -398,8 +419,8 @@ jobs:
           echo "Sdists: $sdist_count"
           echo "Total: $total"
 
-          if [[ $wheel_count -ne 15 ]]; then
-            echo "FAIL: expected 15 wheels, found $wheel_count" >&2; exit 1
+          if [[ $wheel_count -ne 18 ]]; then
+            echo "FAIL: expected 18 wheels, found $wheel_count" >&2; exit 1
           fi
           if [[ $sdist_count -ne 1 ]]; then
             echo "FAIL: expected 1 sdist, found $sdist_count" >&2; exit 1
@@ -459,8 +480,8 @@ jobs:
           set -euo pipefail
           count=$(find dist/ -type f \( -name '*.whl' -o -name '*.tar.gz' \) | wc -l)
           echo "Distributions to publish: $count"
-          if [[ $count -ne 16 ]]; then
-            echo "FAIL: expected 16 distributions, found $count" >&2; exit 1
+          if [[ $count -ne 19 ]]; then
+            echo "FAIL: expected 19 distributions, found $count" >&2; exit 1
           fi
 
       - name: Publish to PyPI

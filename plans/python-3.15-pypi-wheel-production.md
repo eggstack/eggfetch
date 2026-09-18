@@ -1,7 +1,7 @@
 # Python 3.15 PyPI Wheel Production
 
 Planning baseline: `c249ddc1a11c93d0ab6463dd6bc3b0550e419e4f` (`main`, 2026-09-18)
-Status: planned
+Status: implementation complete, pending build-only rehearsal
 Scope: extend the existing manually dispatched PyPI wheel production matrix from CPython 3.10–3.14 to CPython 3.10–3.15 on the already-supported release platforms; preserve the current version-specific CPython ABI model, release security model, MSRV, and package behavior.
 
 ## Objective
@@ -339,16 +339,34 @@ The implementation is complete only when all of the following are true:
 
 ## Closure record
 
-Leave this section incomplete until implementation and build-only qualification have actually run.
+Implementation (local gates green; `publish=false` rehearsal pending
+maintainer dispatch):
 
-Record at closure:
-
-- implementation commit SHA;
-- exact `publish=false` workflow run URL/ID;
-- selected CPython 3.15 patch/prerelease on Linux, macOS, and Windows;
-- the three CPython 3.15 wheel filenames;
-- final 18-wheel coverage-validator output;
-- Tier 1/package-check results;
-- whether the existing PyO3 0.29.x and maturin 1.14.1 pins remained unchanged;
-- any runner-specific workflow adjustment required;
-- whether qualification occurred before or after Python 3.15.0 final.
+- implementation: matrix + validator + classifier + docs changes on
+  `main` (see `plans/README.md` active entry); Tier 1 (`./scripts/check.sh`)
+  and Tier 3 (`./scripts/check.sh package`) pass locally after the change.
+- `publish=false` workflow run URL/ID: pending — dispatch
+  `.github/workflows/pypi.yml` with `publish=false` from the
+  implementation commit and record the run here before publishing a
+  release that claims 3.15 wheels.
+- selected CPython 3.15 patch/prerelease per platform: pending rehearsal
+  (expected 3.15.0rc2-line prerelease before 2026-10-01, stable 3.15.x after).
+- CPython 3.15 wheel filenames: pending rehearsal (must be
+  `cp315-cp315` for manylinux x86_64, macosx arm64, win_amd64).
+- 18-wheel coverage-validator output: proven locally against an
+  18-filename fixture set (pass on full matrix; fail-closed on a missing
+  wheel and on abi3/`py3-none-any` intruders).
+- Tier 1/package-check results: green locally (Node JS surface explicit
+  SKIP, no built `eggfetch.node` artifact — pre-existing).
+- PyO3 0.29.x and maturin 1.14.1 pins: unchanged, as required.
+- runner-specific workflow adjustment: none — maturin keeps the uniform
+  `-i python${{ matrix.python }}` invocation; only the
+  `allow-prereleases: ${{ matrix.python == '3.15' }}` expression was added.
+- qualification timing: implementation landed before Python 3.15.0 final
+  (2026-10-01); rehearsal patch identity to be recorded at dispatch.
+- deliberately unchanged: `compat/*/profile.toml` facade `python-versions`
+  and httpx `_diagnostics.py` (exact-SHA Stage C evidence stays
+  3.10–3.14-bound until renewed on a 3.15-tested SHA); only the httpx2
+  profile comment was refreshed to keep the wheel-vs-facade distinction
+  truthful. No dependency, MSRV, public API, Trusted Publishing,
+  security-preflight, or release-authentication change.
