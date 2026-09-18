@@ -86,6 +86,7 @@ use std::sync::{Arc, RwLock};
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
 use crate::error::{Error, Result};
+use crate::timeout::ResponseDeadline;
 
 /// Configuration for the connection pool.
 ///
@@ -381,6 +382,20 @@ pub struct PoolMetrics {
     pub acquisition_cancellations: AtomicUsize,
 }
 
+/// Crate-private response-body lifecycle policy carried behind the pool lease.
+///
+/// Conceptually separate from semaphore permit ownership: permits bound
+/// logical concurrency, while this policy bounds the read/total deadlines
+/// enforced at the final response stream boundary. Stored behind
+/// [`PoolGuard`] so [`crate::body::ResponseBody`]'s public variant shape
+/// stays unchanged; initialized before the guard is placed behind the lease
+/// `Arc`, then read when the body selects raw or decoded consumption.
+#[derive(Debug, Clone, Copy, Default)]
+struct ResponseLifecycle {
+    read_timeout: Option<std::time::Duration>,
+    total_deadline: Option<ResponseDeadline>,
+}
+
 /// RAII guard representing an acquired pool slot.
 ///
 /// Dropping the guard releases all held semaphore permits back to the pool.
@@ -394,6 +409,7 @@ pub struct PoolGuard {
     pub(crate) global_permit: Option<OwnedSemaphorePermit>,
     #[allow(dead_code)]
     pub(crate) origin_permit: Option<OwnedSemaphorePermit>,
+    response_lifecycle: ResponseLifecycle,
 }
 
 impl PoolGuard {
@@ -409,7 +425,31 @@ impl PoolGuard {
             origin,
             global_permit,
             origin_permit,
+            response_lifecycle: ResponseLifecycle::default(),
         }
+    }
+
+    /// Install the response-body read/total policy before the guard is
+    /// placed behind the lease `Arc`.
+    pub(crate) fn set_response_timeouts(
+        &mut self,
+        read_timeout: Option<std::time::Duration>,
+        total_deadline: Option<ResponseDeadline>,
+    ) {
+        self.response_lifecycle = ResponseLifecycle {
+            read_timeout,
+            total_deadline,
+        };
+    }
+
+    /// Per-chunk read inactivity timeout for the final selected body stream.
+    pub(crate) fn response_read_timeout(&self) -> Option<std::time::Duration> {
+        self.response_lifecycle.read_timeout
+    }
+
+    /// Absolute logical-request total deadline for the final body stream.
+    pub(crate) fn response_total_deadline(&self) -> Option<ResponseDeadline> {
+        self.response_lifecycle.total_deadline
     }
 
     /// Returns the origin this guard was acquired for, if any.

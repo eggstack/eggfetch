@@ -263,9 +263,11 @@ request policy so transports own only connection/protocol work:
 4. One common post-transport policy (`pipeline::finalize::finalize_response()`) applies to every route: Alt-Svc learning
    (learnable routes only), decompression wrapping, decoded-size limiting,
    then read/total-timeout + pool-lease attachment. The absolute total
-   deadline is retained with body state and enforced at the final stream
-   boundary for every consumption mode; no Tokio timer is created at
-   finalization so bodies can cross runtimes before first poll.
+   deadline is installed behind the private `PoolGuard` response lifecycle
+   before the guard is placed behind the lease `Arc`, and enforced at the
+   final stream boundary for every consumption mode; no Tokio timer is
+   created at finalization so bodies can cross runtimes before first poll.
+   Public `ResponseBody` variant shapes are unchanged.
 
 ### Connector lifecycle ordering
 

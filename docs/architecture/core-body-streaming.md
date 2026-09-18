@@ -76,9 +76,15 @@ dependency.
 | Variant | Description |
 |---------|-------------|
 | `Buffered { bytes }` | Collected body — fully in memory |
-| `Streaming { stream, lease }` | Live chunk stream (`BoxBytesStream`) with optional pool permit (`Option<PoolGuardArc>`) |
-| `EncodedStreaming` | Encoded source for streaming compressed responses; first body-consuming operation selects decoded vs raw mode one-shot |
+| `Streaming { stream, lease }` | Live chunk stream (`BoxBytesStream`) with optional pool permit (`Option<PoolGuardArc>`). Public shape is frozen: no timeout fields. |
+| `EncodedStreaming { stream, lease, content_encoding, limit }` | Encoded source for streaming compressed responses; first body-consuming operation selects decoded vs raw mode one-shot. Public shape is frozen. |
 | `Consumed` | Body already consumed — second access returns error |
+
+The published `ResponseBody` field shapes are a compatibility contract
+(external crates may match them exhaustively without `..`; see
+`tests/response_body_public_shape.rs`). Read/total timeout state never
+appears as public variant fields; it travels behind the private
+`PoolGuard` response lifecycle (see below).
 
 ### Single-Consumption Semantics
 
@@ -96,11 +102,13 @@ behavior therefore remain unchanged; parse errors do not expose the payload.
 
 ### LeasedResponseStream
 
-Streaming responses carry an internal `Arc<PoolGuard>` (the `PoolGuardArc`). This holds the pool permits acquired for the request. Permits are released when:
+Streaming responses carry an internal `Arc<PoolGuard>` (the `PoolGuardArc`). This holds the pool permits acquired for the request plus the private
+response read/total lifecycle policy installed at finalization. Permits are released when:
 - The response body is fully consumed.
 - The response body is dropped.
 
-Buffered and already-consumed responses do not carry a lease.
+Buffered and already-consumed responses do not carry a lease. Manually
+constructed lease-free bodies carry no implicit client timeout.
 
 This ensures per-origin logical-request limits remain meaningful while response bodies are in flight. Dropping early releases the permit without waiting for trailers.
 
@@ -118,24 +126,27 @@ pub type BoxBytesStream = Pin<Box<dyn Stream<Item = Result<Bytes>> + Send>>;
 
 Used for both request and response streaming. The `stream` module provides two wrapper adapters:
 
-### ReadTimeoutStream / BodyTimeoutStream
+### BodyTimeoutStream
 
-Wraps a `BoxBytesStream` and enforces response-body deadlines with one
-common owner. The per-chunk read timeout yields `Error::Timeout { phase:
-Read }` when no chunk arrives in time and resets on every chunk arrival;
-its timer starts on first body poll. The absolute native total deadline
-yields `Error::Timeout { phase: Total }`, never resets, can already be
-expired on first poll (winning before inner transport is polled), and wins
-ties when both deadlines are observably expired together. A ready chunk at
-or after the absolute deadline never extends the request. After a timeout
-the stream fuses (next poll is EOF) so the outer lease wrapper releases the
-pool permit; drop remains ordinary cancellation.
+Wraps a `BoxBytesStream` and is the single authoritative high-level
+response timeout owner. The per-chunk read timeout yields
+`Error::Timeout { phase: Read }` when no chunk arrives in time and resets
+on every chunk arrival; its timer starts on first body poll. The absolute
+native total deadline yields `Error::Timeout { phase: Total }`, never
+resets, can already be expired on first poll (winning before inner
+transport is polled), and wins ties when both deadlines are observably
+expired together. A ready chunk at or after the absolute deadline never
+extends the request. After a timeout the stream fuses (next poll is EOF)
+so the outer lease wrapper releases the pool permit; drop remains ordinary
+cancellation. The former focused `ReadTimeoutStream` was removed once its
+read-only coverage moved here.
 
-`ResponseBody` retains read/total with body state; `bytes()`,
-`bytes_stream()`, `raw_bytes_stream()` (and therefore `text()`/`json()`)
-enforce them at the final stream boundary for the selected mode, so raw
-encoded and decoded compressed paths share one mechanism with the timeout
-outside the decoder.
+The private read/total policy travels behind the `PoolGuard` lease, never
+as public `ResponseBody` fields. `bytes()`, `bytes_stream()`,
+`raw_bytes_stream()` (and therefore `text()`/`json()`) read that policy
+from the lease and enforce it at the final stream boundary for the
+selected mode, so raw encoded and decoded compressed paths share one
+mechanism with the timeout outside the decoder.
 
 ### WriteTimeoutStream
 
@@ -156,7 +167,7 @@ Streaming uses `StreamingResponse` with a four-state machine: `streaming` → `b
 
 The compatibility facade's `iter_raw(chunk_size=None)` and `aiter_raw(chunk_size=None)` yield undecoded transport-level bytes, with bounded splitting/coalescing performed after each source chunk. Live compatibility streams become consumed before the first source read; normal exhaustion closes them, while partial iterator finalization and source failure remain distinguishable from explicit response close. The native Python `StreamingRawBytesIterator` and `AsyncStreamingRawBytesIterator` accept an optional chunk size and expose native source boundaries when available.
 
-Compressed streaming responses use `ResponseBody::EncodedStreaming` internally. The encoded source remains single-owner until the first body-consuming operation selects one mode: `Response::raw_bytes_stream()` returns encoded bytes unchanged, while `bytes_stream()`, `bytes()`, and `text()` construct the existing decoder chain. The selection is mutually exclusive and one-shot; the read-timeout wrapper and pool lease remain attached to the selected source. Python must not add a second decompressor or buffer/tee the body. Automatic decompression continues to remove `Content-Encoding` and `Content-Length` from core response headers. Core retains only the original values of those two wire headers in narrow read-only response metadata so the HTTPX compatibility facade can overlay them without changing core's decoded-header policy or deriving wire length from decoded bytes.
+Compressed streaming responses use `ResponseBody::EncodedStreaming` internally. The encoded source remains single-owner until the first body-consuming operation selects one mode: `Response::raw_bytes_stream()` returns encoded bytes unchanged, while `bytes_stream()`, `bytes()`, and `text()` construct the existing decoder chain. The selection is mutually exclusive and one-shot; the private read/total policy behind the pool lease applies to the selected source. Python must not add a second decompressor or buffer/tee the body. Automatic decompression continues to remove `Content-Encoding` and `Content-Length` from core response headers. Core retains only the original values of those two wire headers in narrow read-only response metadata so the HTTPX compatibility facade can overlay them without changing core's decoded-header policy or deriving wire length from decoded bytes.
 
 ### Request streaming
 

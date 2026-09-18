@@ -517,23 +517,44 @@ async fn total_timeout_releases_pool_lease() {
 
 #[tokio::test]
 async fn redirect_final_body_uses_remaining_original_budget() {
-    // Final server trickles the body slowly.
-    let mut final_server = TestServer::start(&TestServerConfig {
-        chunked: true,
-        response_body: Some(b"0123456789ABCDEFGHIJ0123456789".to_vec()),
-        chunk_delay_ms: 100,
-        ..Default::default()
+    // Discrimination window: a fresh total after final headers would need
+    // the full `total` again, while the correct remaining budget resolves
+    // much sooner. The external timeout sits between those two deadlines.
+    //
+    // total = 1500ms, first hop ~= 1000ms, remaining ~= 500ms,
+    // discrimination = 900ms, fresh restarted total = 1500ms after headers.
+    let total = Duration::from_millis(1500);
+    let discrimination = Duration::from_millis(900);
+
+    // Final origin: headers immediately, then stall well beyond both the
+    // remaining budget and a freshly restarted total.
+    let final_listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let final_addr = final_listener.local_addr().unwrap();
+    let final_url = format!("http://{final_addr}/");
+    tokio::spawn(async move {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        if let Ok((mut socket, _)) = final_listener.accept().await {
+            let mut buf = vec![0u8; 4096];
+            let _ = tokio::time::timeout(Duration::from_secs(5), socket.read(&mut buf)).await;
+            let _ = socket
+                .write_all(b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n")
+                .await;
+            let _ = socket.flush().await;
+            // Stall past both the remaining budget (~500ms) and a fresh
+            // total (1500ms) so only the deadline decides the outcome.
+            tokio::time::sleep(Duration::from_millis(3000)).await;
+            let _ = socket.write_all(b"0\r\n\r\n").await;
+        }
     });
-    let final_url = final_server.url();
-    // First hop consumes ~200ms via header delay, then redirects.
+
+    // First hop consumes most of the total via header delay, then redirects.
     let mut first_server = TestServer::start(&TestServerConfig {
-        response_delay_ms: 200,
+        response_delay_ms: 1000,
         redirect: Some((302, final_url.clone())),
         ..Default::default()
     });
     let first_url = first_server.url();
 
-    let total = Duration::from_millis(500);
     let client = Client::builder()
         .follow_redirects(true)
         .timeout(Timeout {
@@ -550,21 +571,29 @@ async fn redirect_final_body_uses_remaining_original_budget() {
         .expect("redirect reaches final headers before original total");
     // Final URL reached; body must still respect the original deadline.
     assert_eq!(resp.url().as_str(), final_url.as_str());
-    let err = resp.bytes().await.unwrap_err();
-    assert_total(&err);
-    let elapsed = start.elapsed();
-    // Near the original logical deadline, not one fresh total after final
-    // headers (~200ms + 500ms). Generous upper tolerance for CI scheduling.
-    assert!(
-        elapsed < total + Duration::from_millis(1200),
-        "body must not receive a fresh total after redirect; elapsed={elapsed:?}"
+
+    // After final headers, the body must fail with Total inside the
+    // discrimination window. A restarted fresh total would still be pending
+    // here, surfacing as the outer test timeout instead of Total.
+    let body_start = Instant::now();
+    let outcome = tokio::time::timeout(discrimination, resp.bytes()).await;
+    let body_elapsed = body_start.elapsed();
+    let result = outcome.expect(
+        "final body must resolve within the discrimination window; \
+         a fresh total after redirect would still be pending",
     );
+    let err = result.unwrap_err();
+    assert_total(&err);
     assert!(
-        elapsed >= total.saturating_sub(Duration::from_millis(200)),
-        "body must survive until near the original deadline; elapsed={elapsed:?}"
+        body_elapsed < discrimination,
+        "body must use the remaining original budget, not a fresh total; body_elapsed={body_elapsed:?}"
+    );
+    let elapsed = start.elapsed();
+    assert!(
+        elapsed < Duration::from_millis(1000) + discrimination + Duration::from_millis(600),
+        "overall request must stay near the original deadline; elapsed={elapsed:?}"
     );
     first_server.shutdown();
-    final_server.shutdown();
 }
 
 // --- Body-size controls remain authoritative (Part F) ---
@@ -800,16 +829,18 @@ mod native {
         }
         assert!(saw_total, "first native body must hit Total");
         drop(body);
-        // Lease released: a second request must proceed.
+        // Lease released: the second same-origin request owns the only
+        // logical permit and must reach response headers successfully.
         let request2 = http::Request::get(&slow_url)
             .body(http_body_util::Empty::<Bytes>::new())
             .unwrap();
-        let second = tokio::time::timeout(
+        let response = tokio::time::timeout(
             Duration::from_secs(3),
             client.execute_http_body_default(request2),
         )
         .await
-        .expect("lease released after native Total");
-        assert!(second.is_ok() || second.is_err());
+        .expect("second request admitted after total timeout")
+        .expect("second request should reach response headers");
+        assert_eq!(response.status(), http::StatusCode::OK);
     }
 }

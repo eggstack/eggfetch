@@ -163,7 +163,7 @@ Entry point: `apply_decompression(response, content_encoding, limit)`:
 
 1. **Validate first**: unsupported `Content-Encoding` values fail with `UnsupportedContentEncoding` before any body transformation.
 2. **Transform the body** according to its variant:
-   - `Streaming` + encoding → `ResponseBody::EncodedStreaming`. When the streaming body carries a pool lease, it is attached directly to the encoded wrapper so lease ownership never routes through a destructure/rebuild round-trip.
+   - `Streaming` + encoding → `ResponseBody::EncodedStreaming`. When the streaming body carries a pool lease, it is moved directly to the encoded wrapper so lease ownership — including the private read/total policy behind it — never routes through a timeout destructure/rebuild round-trip.
    - `Buffered` + non-empty bytes → decoded synchronously via `decompress_buffered()`.
    - Empty buffered bodies and already-encoded bodies pass through unchanged.
 3. **Strip visible headers**: `Content-Encoding` and `Content-Length` are removed from the header map; their original wire values remain available via `Response::wire_content_encoding()` / `wire_content_length()` (see above).

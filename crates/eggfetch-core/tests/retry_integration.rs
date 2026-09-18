@@ -674,3 +674,108 @@ async fn retry_honors_retry_after_over_backoff() {
         "Retry-After (1s) should replace the 30s backoff delay, took {elapsed:?}"
     );
 }
+
+#[tokio::test]
+async fn retry_final_body_uses_remaining_original_budget() {
+    // Explicit logical-retry -> successful headers -> slow final body must
+    // observe the remaining original `Timeout.total`, not a fresh total.
+    //
+    // total = 1500ms, attempt 1 consumes ~800ms then 503, backoff ~50ms,
+    // remaining ~= 650ms, discrimination = 1000ms, fresh = 1500ms.
+    let total = Duration::from_millis(1500);
+    let discrimination = Duration::from_millis(1000);
+
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let request_count = Arc::new(AtomicUsize::new(0));
+    let rc = request_count.clone();
+    tokio::spawn(async move {
+        loop {
+            let Ok((mut stream, _)) = listener.accept().await else {
+                break;
+            };
+            let rc = rc.clone();
+            tokio::spawn(async move {
+                let mut buf_reader = BufReader::new(&mut stream);
+                let mut request_line = String::new();
+                buf_reader.read_line(&mut request_line).await.ok();
+                loop {
+                    let mut line = String::new();
+                    buf_reader.read_line(&mut line).await.ok();
+                    if line.trim().is_empty() {
+                        break;
+                    }
+                }
+                let count = rc.fetch_add(1, Ordering::SeqCst);
+                if count == 0 {
+                    // Material attempt-1 cost before the retryable failure.
+                    tokio::time::sleep(Duration::from_millis(800)).await;
+                    stream
+                        .write_all(
+                            b"HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+                        )
+                        .await
+                        .ok();
+                } else {
+                    // Successful final headers immediately, then stall the
+                    // body well beyond both the remaining budget and a fresh
+                    // total so only the deadline decides the outcome.
+                    stream
+                        .write_all(b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n")
+                        .await
+                        .ok();
+                    stream.flush().await.ok();
+                    tokio::time::sleep(Duration::from_millis(3000)).await;
+                    stream.write_all(b"0\r\n\r\n").await.ok();
+                }
+            });
+        }
+    });
+
+    let policy = RetryPolicy::builder()
+        .max_attempts(3)
+        .backoff_factor(0.0)
+        .initial_delay(Duration::from_millis(50))
+        .max_delay(Duration::from_millis(50))
+        .build();
+    let client = Client::builder().retry(policy).build();
+    let url = format!("http://127.0.0.1:{port}/");
+    let mut resp = client
+        .get(&url)
+        .unwrap()
+        .timeout(Timeout {
+            total: Some(total),
+            ..Timeout::default()
+        })
+        .send()
+        .await
+        .expect("retry must reach final headers before the original total");
+
+    assert_eq!(
+        request_count.load(Ordering::SeqCst),
+        2,
+        "explicit logical retry must have produced two attempts"
+    );
+    assert_eq!(resp.status(), 200);
+
+    // Final body must fail with Total inside the discrimination window. A
+    // fresh total after retry would still be pending here.
+    let body_start = std::time::Instant::now();
+    let outcome = tokio::time::timeout(discrimination, resp.bytes()).await;
+    let body_elapsed = body_start.elapsed();
+    let result = outcome.expect(
+        "final body must resolve within the discrimination window; \
+         a fresh total after retry would still be pending",
+    );
+    match result {
+        Err(Error::Timeout {
+            phase: TimeoutPhase::Total,
+            ..
+        }) => {}
+        other => panic!("expected final body Total, got {other:?}"),
+    }
+    assert!(
+        body_elapsed < discrimination,
+        "final body must use the remaining original budget; body_elapsed={body_elapsed:?}"
+    );
+}

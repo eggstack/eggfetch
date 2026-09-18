@@ -30,24 +30,18 @@ use crate::timeout::ResponseDeadline;
 /// created here, so the body can cross runtime boundaries before first poll.
 pub(super) fn apply_timeouts_and_lease(
     response: &mut Response,
-    guard: PoolGuard,
+    mut guard: PoolGuard,
     read_timeout: Option<Duration>,
     total_deadline: Option<ResponseDeadline>,
 ) {
+    // Timeout metadata lives behind the private lease lifecycle, never in
+    // the public `ResponseBody` variant shape. Initialize before the guard
+    // is placed behind the lease `Arc`; consumption reads it back when the
+    // final raw/decoded stream is selected.
+    guard.set_response_timeouts(read_timeout, total_deadline);
     let body = std::mem::replace(&mut response.body, ResponseBody::buffered(Bytes::new()));
-    let new_body = body.attach_lease_and_timeouts(Arc::new(guard), read_timeout, total_deadline);
+    let new_body = body.attach_lease(Arc::new(guard));
     response.set_body(new_body);
-}
-
-/// Backwards-compatible alias retained for narrow unit-test paths that only
-/// exercise the read timeout.
-#[allow(dead_code)]
-pub(super) fn apply_read_timeout_and_lease(
-    response: &mut Response,
-    guard: PoolGuard,
-    read_timeout: Option<Duration>,
-) {
-    apply_timeouts_and_lease(response, guard, read_timeout, None);
 }
 
 /// Apply the common post-transport policy to every successful route.

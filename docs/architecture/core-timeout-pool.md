@@ -46,8 +46,9 @@ resets after each successful chunk/frame.
 Total timeout: absolute request-lifecycle deadline, starts with the logical
 request, includes pool/transport/headers/body/trailers, never resets, and
 can already be expired when the caller first polls the body. Dropping
-before EOF remains ordinary cancellation; the contract is that the body
-retains the absolute deadline and reports `Total` when polled after expiry.
+before EOF remains ordinary cancellation; the contract is that the private
+lease lifecycle retains the absolute deadline and the final selected stream
+reports `Total` when polled after expiry.
 It does not force an error into an unpolled response asynchronously. When
 both read and total are observably expired at the same poll boundary,
 `Total` is preferred as the outer cap. A ready chunk/frame at or after the
@@ -203,10 +204,13 @@ Port uses the scheme's default when not explicit. Examples:
 
 ### PoolGuard
 
-When a request acquires a pool slot, it receives a `PoolGuard` (wrapped in `Arc` for streaming responses). The guard holds the semaphore permit and releases it on drop. This ensures:
+When a request acquires a pool slot, it receives a `PoolGuard` (wrapped in `Arc` for streaming responses). The guard holds the semaphore permit and releases it on drop, plus a small private
+response-lifecycle policy (read timeout + absolute `ResponseDeadline`) kept
+conceptually separate from semaphore logic. This ensures:
 - Streaming responses hold their slot until fully consumed.
 - Dropped responses release their slot immediately.
 - Buffered responses release their slot after the body is collected.
+- `ResponseBody` public variant shapes stay frozen; timeout state is never a public field.
 
 ### Pool Metrics vs Transport Metrics
 

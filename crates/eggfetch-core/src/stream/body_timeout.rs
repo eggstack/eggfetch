@@ -326,4 +326,46 @@ mod tests {
         assert_eq!(s.next().await.unwrap().unwrap(), "b");
         assert!(s.next().await.is_none());
     }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn read_only_stall_reports_read() {
+        let inner = stream::pending::<Result<Bytes>>();
+        let mut s = Box::pin(BodyTimeoutStream::new(
+            inner,
+            Some(Duration::from_millis(50)),
+            None,
+        ));
+        let err = s.next().await.unwrap().unwrap_err();
+        assert!(matches!(
+            err,
+            Error::Timeout {
+                phase: TimeoutPhase::Read,
+                ..
+            }
+        ));
+        assert!(s.next().await.is_none());
+    }
+
+    #[tokio::test]
+    async fn read_only_propagates_inner_error() {
+        let inner = stream::iter(vec![Err(Error::Body("oops".into()))]);
+        let mut s = Box::pin(BodyTimeoutStream::new(
+            inner,
+            Some(Duration::from_secs(1)),
+            None,
+        ));
+        let err = s.next().await.unwrap().unwrap_err();
+        assert!(matches!(err, Error::Body(_)));
+    }
+
+    #[tokio::test]
+    async fn read_only_eof_terminates() {
+        let inner = stream::empty::<Result<Bytes>>();
+        let mut s = Box::pin(BodyTimeoutStream::new(
+            inner,
+            Some(Duration::from_secs(1)),
+            None,
+        ));
+        assert!(s.next().await.is_none());
+    }
 }

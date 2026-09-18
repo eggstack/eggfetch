@@ -346,12 +346,6 @@ impl ResponseDeadline {
         self.deadline
     }
 
-    /// The hop total budget this deadline was derived from.
-    #[must_use]
-    pub(crate) fn hop_total(&self) -> Duration {
-        self.total
-    }
-
     /// Returns `true` when the wall-clock deadline has passed.
     #[must_use]
     pub(crate) fn is_expired(&self) -> bool {
