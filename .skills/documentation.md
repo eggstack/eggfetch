@@ -69,8 +69,10 @@ docs/
 - Embedded footprint numbers live only in
   `docs/architecture/embedded-footprint.md` (manual qualification in
   `qualification/embedded/`); link there instead of copying byte counts
-  into README/guides. Never claim slimming: the current record is not a
-  footprint win.
+  into README/guides. The full compatibility profile is not a footprint
+  win; the lean `standard-http1` profile is a measured linked-byte
+  improvement on its target/toolchain — never claim slimming beyond
+  `embedded-footprint.md`.
 - The external `qualification/native-tower-service/` fixture is manual
   qualification, pinned to Tonic 0.14.6 with `codegen` only. Keep its
   Tonic `transport`/`Channel`-free scope and distinguish it from the

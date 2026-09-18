@@ -10,10 +10,14 @@ Logical retry (`logical-retry`), redirect following (`redirects`), and
 Basic auth (`basic-auth`) are coarse Cargo capability features. The
 `http1`/`http2`/default compatibility aliases enable all three, preserving
 every existing API and behavior. The lean high-level profile selects
-`native-http1` + `high-level-url` + `tls-rustls` without them: Bearer-only
+`standard-http1` + `tls-rustls` without them (transport + standard route +
+URL API, without `advanced-routing` or the policy bundle): Bearer-only
 auth, single-attempt dispatch under the outer total deadline, 3xx returned
 without following and with empty history, and no core `base64`/`httpdate`
 edge (core's direct `getrandom` edge is jointly owned with `multipart`).
+The policy-only `native-http1` + `high-level-url` + `tls-rustls` recipe
+without the three policy features remains a valid manual profile where
+advanced routing (Dialer, pinned/SNI, UDS) is still needed.
 `Client::send`/`send_detailed` dispatch to `pipeline::retry::send_with_retry`
 when `logical-retry` is present, to
 `pipeline::redirect::send_with_redirects` when only `redirects` is present,

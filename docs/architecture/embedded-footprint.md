@@ -129,7 +129,9 @@ scripts/qualify-embedded-footprint.sh --output-dir /tmp/eggfetch-embedded-footpr
 | release profile | `lto="thin"`, `codegen-units=1`, `strip=false`, `debug=false`, `panic="unwind"`; `stripped` is an explicit `strip` copy |
 | build isolation | isolated `CARGO_TARGET_DIR` per profile (clean) |
 
-Ordinary profiles on this host remain larger than aligned reqwest profiles:
+Ordinary full-compatibility profiles on this host remain larger than aligned reqwest profiles
+(pre-lean record; the 2026-09-18 lean section above supersedes this for
+standard-route Bearer clients):
 
 | Profile | eggfetch stripped | reqwest stripped | Delta |
 |---|---:|---:|---:|
@@ -190,7 +192,14 @@ dynamically linked system OpenSSL (`default-tls`) plus `charset`/`http2`/
 smaller reqwest-default artifact reflects different crypto linkage, not a
 slimmer equivalent static stack.
 
-## Dependency and feature shape
+## Dependency and feature shape (historical pre-lean tree)
+
+The tree below describes the pre-lean dependency shape at the recorded
+SHAs (includes `dashmap`; `getrandom` unconditional). Since then DashMap
+was removed, `getrandom`/`httpdate`/`base64` became optional behind
+`logical-retry`/`multipart`/`basic-auth`, and `eggfetch-http-connect`
+became `proxy`-owned; see the 2026-09-18 lean section above for the
+current ownership.
 
 Unique resolved packages (`cargo tree --prefix none | sort -u | wc -l`):
 
@@ -252,13 +261,17 @@ would not violate the plan's prohibitions:
 - No dead compat helper or duplicate DashMap major is introduced by
   eggfetch's own manifest.
 
-## Classification: not a footprint win
+## Historical classification (pre-lean): full profiles not a footprint win
+
+This section preserves the pre-lean assessment for full compatibility
+profiles. It is superseded for standard-route Bearer clients by the
+2026-09-18 lean section above.
 
 The historical aarch64 record below showed eggfetch materially larger than the
 equivalently scoped reqwest configuration by +327,728 stripped bytes in every
 Rustls-aligned profile. The latest x86_64 record shows the same direction with
 host-specific deltas of +546,344 to +564,112 bytes. Do not describe migration
-as slimming.
+as slimming beyond the lean record above.
 
 The difference is inherent to the current engine rather than an
 avoidable wiring error: both stacks share Hyper/Tokio/Rustls

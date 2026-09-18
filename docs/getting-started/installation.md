@@ -58,8 +58,16 @@ For a deterministic embedded HTTPS client without system trust loading:
 eggfetch-core = { version = "0.1", default-features = false, features = ["http1", "tls-rustls"] }
 ```
 
+For a lean Bearer-only standard-route client (no advanced routing or
+retry/redirect/Basic machinery):
+
+```toml
+eggfetch-core = { version = "0.1", default-features = false, features = ["standard-http1", "tls-rustls"] }
+```
+
 For cleartext-only: `features = ["http1"]` alone. Measured downstream
-size/dependency evidence (not a footprint win) lives in
+size/dependency evidence (full compat not a footprint win; lean
+`standard-http1` measured improvement) lives in
 `docs/architecture/embedded-footprint.md`; fixtures in
 `qualification/embedded/`.
 

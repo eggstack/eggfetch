@@ -88,7 +88,8 @@ Tiny downstream fixtures under `qualification/embedded/` plus
 `scripts/qualify-embedded-footprint.sh` record dependency trees and
 stripped release sizes against an equivalently scoped reqwest
 configuration. No size gate, dashboard, or scheduled workflow. The
-current evidence is `embedded-footprint.md` (not a footprint win).
+current evidence is `embedded-footprint.md` (full compat not a footprint win;
+lean `standard-http1` measured improvement).
 
 ### Native HTTP Body and TLS Qualification (manual, not CI)
 

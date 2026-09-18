@@ -44,11 +44,19 @@ For a minimal embedded HTTPS client (deterministic WebPKI roots):
 eggfetch-core = { version = "0.1", default-features = false, features = ["http1", "tls-rustls"] }
 ```
 
+For a lean Bearer-only standard-route client without advanced routing or
+retry/redirect/Basic machinery:
+
+```toml
+eggfetch-core = { version = "0.1", default-features = false, features = ["standard-http1", "tls-rustls"] }
+```
+
 `http1` alone is cleartext-only. The opt-in `json` feature adds native
 `RequestBuilder::json()` and `Response::json()` helpers; it does not change
 the default dependency graph. Measured downstream size/dependency evidence lives in
-`docs/architecture/embedded-footprint.md` — the current record is not a
-footprint win, so do not describe migration as slimming.
+`docs/architecture/embedded-footprint.md` — the full compatibility record is not a
+footprint win while the lean `standard-http1` profile is a measured improvement
+on its target/toolchain, so do not describe migration as slimming beyond that record.
 
 The profile recipes and their excluded capabilities are listed in
 [`docs/architecture/feature-flags.md`](../architecture/feature-flags.md).

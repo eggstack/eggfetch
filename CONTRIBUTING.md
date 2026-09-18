@@ -92,8 +92,8 @@ scripts/qualify-embedded-footprint.sh --output-dir /tmp/eggfetch-embedded-footpr
 ```
 
 See `qualification/embedded/README.md` and
-`docs/architecture/embedded-footprint.md` (current record: not a
-footprint win).
+`docs/architecture/embedded-footprint.md` (full compat not a
+footprint win; lean `standard-http1` measured improvement).
 
 ## Dependencies
 
