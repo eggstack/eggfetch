@@ -18,9 +18,10 @@ workspace = true
 [features]
 default = ["http1", "tls-rustls", "tls-native-roots"]
 # Compatibility/high-level aliases: existing `http1`/`http2` names retain
-# their current user-visible behavior (transport + high-level URL API).
-http1 = ["native-http1", "high-level-url"]
-http2 = ["native-http2", "high-level-url"]
+# their current user-visible behavior (transport + high-level URL API +
+# logical retry + redirect following + Basic auth).
+http1 = ["native-http1", "high-level-url", "logical-retry", "redirects", "basic-auth"]
+http2 = ["native-http2", "high-level-url", "logical-retry", "redirects", "basic-auth"]
 # Low-level slices for `http::Request`/`http::Uri` consumers. Selecting
 # `native-http1` without `high-level-url` omits the string/URL request API
 # and its `url`/`idna`/ICU closure.
@@ -29,6 +30,16 @@ native-http2 = ["dep:h2", "hyper/http2", "hyper-util/http2", "hyper-rustls?/http
 # High-level string/URL request semantics (backed by `url`; native callers
 # own any IDNA/punycode conversion before constructing `http::Uri`).
 high-level-url = ["dep:url", "dep:percent-encoding"]
+# Logical retry orchestration (policy types, backoff/jitter, `Retry-After`
+# HTTP-date parsing). Omitted by the lean high-level profile, which
+# dispatches once under the outer total deadline.
+logical-retry = ["dep:getrandom", "dep:httpdate"]
+# Redirect-following loop, hop reconstruction, and history. Omitted by the
+# lean profile, which returns 3xx responses without following.
+redirects = []
+# Basic auth owns the core `base64` dependency; Bearer auth needs no Base64
+# and remains available without this feature.
+basic-auth = ["dep:base64"]
 tls-rustls = [
     "dep:hyper-rustls",
     "dep:pem-rfc7468",
@@ -47,9 +58,9 @@ compression-brotli = ["dep:async-compression", "async-compression/brotli", "dep:
 compression-zstd = ["dep:async-compression", "async-compression/zstd", "dep:tokio-util", "tokio/io-util", "dep:zstd"]
 compression-deflate = ["dep:async-compression", "async-compression/deflate", "dep:tokio-util", "tokio/io-util", "dep:flate2"]
 cookies = ["dep:cookie", "high-level-url"]
-proxy = ["http1", "tls-rustls", "tokio/io-util", "high-level-url", "dep:eggfetch-http-connect"]
+proxy = ["http1", "tls-rustls", "tokio/io-util", "high-level-url", "dep:eggfetch-http-connect", "dep:base64"]
 tracing = ["dep:tracing"]
-multipart = []
+multipart = ["dep:getrandom"]
 test-util = ["tokio/test-util"]
 
 [dependencies]
@@ -76,7 +87,7 @@ serde = { version = "1", optional = true }
 serde_json = { version = "1", optional = true }
 
 tower-service = "0.3"
-base64 = "0.23"
+base64 = { version = "0.23", optional = true }
 cookie = { version = "0.18", default-features = false, features = ["percent-encode"], optional = true }
 async-compression = { version = "0.4", default-features = false, features = ["tokio"], optional = true }
 tokio-util = { version = "0.7", features = ["io"], optional = true }
@@ -84,8 +95,8 @@ flate2 = { version = "1", optional = true }
 brotli = { version = "8", optional = true, default-features = false, features = ["std"] }
 zstd = { version = "0.13", optional = true }
 tracing = { version = "0.1", optional = true }
-getrandom = "0.2"
-httpdate = "1"
+getrandom = { version = "0.2", optional = true }
+httpdate = { version = "1", optional = true }
 webpki-roots = { version = "0.26", optional = true }
 pem-rfc7468 = { version = "0.1", features = ["alloc"], optional = true }
 quinn = { version = "0.11", default-features = false, features = ["rustls", "ring", "runtime-tokio"], optional = true }

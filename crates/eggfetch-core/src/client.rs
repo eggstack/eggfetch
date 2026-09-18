@@ -25,11 +25,13 @@ use crate::limits::Limits;
 use crate::pool::{Pool, PoolConfig, PoolMetrics};
 #[cfg(feature = "proxy")]
 use crate::proxy::Proxy;
+#[cfg(feature = "redirects")]
 use crate::redirect::RedirectPolicy;
 #[cfg(feature = "high-level-url")]
 use crate::request::{Request, RequestBuilder};
 #[cfg(feature = "high-level-url")]
 use crate::response::Response;
+#[cfg(feature = "logical-retry")]
 use crate::retry::RetryPolicy;
 use crate::timeout::Timeout;
 use crate::transport::dialer::Dialer;
@@ -52,6 +54,7 @@ pub(crate) struct ClientConfig {
     pub(crate) default_headers: Headers,
     pub(crate) user_agent: Option<String>,
     pub(crate) timeout: Option<Timeout>,
+    #[cfg(feature = "redirects")]
     pub(crate) redirect: RedirectPolicy,
     pub(crate) auth: Option<crate::auth::AuthScheme>,
     #[cfg(feature = "cookies")]
@@ -65,6 +68,7 @@ pub(crate) struct ClientConfig {
     pub(crate) environment_proxies: Vec<Proxy>,
     #[cfg(feature = "tls-rustls")]
     pub(crate) tls_config: Option<crate::tls::TlsConfig>,
+    #[cfg(feature = "logical-retry")]
     pub(crate) retry: Option<RetryPolicy>,
     pub(crate) retry_canceled_requests: bool,
     pub(crate) dialer: Option<Arc<dyn Dialer>>,
@@ -82,9 +86,10 @@ impl std::fmt::Debug for ClientConfig {
         debug
             .field("default_headers", &self.default_headers)
             .field("user_agent", &self.user_agent)
-            .field("timeout", &self.timeout)
-            .field("redirect", &self.redirect)
-            .field("auth", &self.auth);
+            .field("timeout", &self.timeout);
+        #[cfg(feature = "redirects")]
+        debug.field("redirect", &self.redirect);
+        debug.field("auth", &self.auth);
         #[cfg(feature = "cookies")]
         debug.field("cookie_jar", &self.cookie_jar);
         debug
@@ -97,8 +102,9 @@ impl std::fmt::Debug for ClientConfig {
             .field("environment_proxies", &self.environment_proxies);
         #[cfg(feature = "tls-rustls")]
         debug.field("tls_config", &self.tls_config);
+        #[cfg(feature = "logical-retry")]
+        debug.field("retry", &self.retry);
         debug
-            .field("retry", &self.retry)
             .field("retry_canceled_requests", &self.retry_canceled_requests)
             .field("dialer", &self.dialer.as_ref().map(|_| "configured"))
             .field("uds_configured", &self.uds_configured)
@@ -113,6 +119,7 @@ impl Default for ClientConfig {
             default_headers: Headers::new(),
             user_agent: None,
             timeout: None,
+            #[cfg(feature = "redirects")]
             redirect: RedirectPolicy::default(),
             auth: None,
             #[cfg(feature = "cookies")]
@@ -126,6 +133,7 @@ impl Default for ClientConfig {
             environment_proxies: Vec::new(),
             #[cfg(feature = "tls-rustls")]
             tls_config: None,
+            #[cfg(feature = "logical-retry")]
             retry: None,
             retry_canceled_requests: true,
             dialer: None,
@@ -862,13 +870,17 @@ impl Client {
     /// Send a request and return the response, following redirects if
     /// the client's redirect policy allows.
     ///
-    /// The redirect loop enforces `max_redirects`, performs method
-    /// rewrites per HTTP semantics, strips sensitive headers on
-    /// cross-origin hops, and records redirect history.
+    /// When the `redirects` feature is enabled, the redirect loop enforces
+    /// `max_redirects`, performs method rewrites per HTTP semantics, strips
+    /// sensitive headers on cross-origin hops, and records redirect history.
+    /// Without it, 3xx responses are returned as ordinary responses.
     ///
-    /// If a retry policy is configured (on the client or request), the
-    /// entire logical request is retried on failure according to the
-    /// policy.
+    /// When the `logical-retry` feature is enabled and a retry policy is
+    /// configured (on the client or request), the entire logical request is
+    /// retried on failure according to the policy. Without it, each
+    /// high-level request is dispatched once under the outer total deadline.
+    /// Hyper's distinct canceled-idle-request retry remains governed by
+    /// `retry_canceled_requests` in all profiles.
     ///
     /// # Errors
     ///
@@ -876,7 +888,18 @@ impl Client {
     /// protocol, body) or if a timeout elapses.
     #[cfg(feature = "high-level-url")]
     pub(crate) async fn send(&self, request: Request) -> Result<Response> {
-        Box::pin(crate::pipeline::send_with_retry(self, request)).await
+        #[cfg(feature = "logical-retry")]
+        {
+            Box::pin(crate::pipeline::send_with_retry(self, request)).await
+        }
+        #[cfg(all(not(feature = "logical-retry"), feature = "redirects"))]
+        {
+            Box::pin(crate::pipeline::send_with_redirects(self, request)).await
+        }
+        #[cfg(all(not(feature = "logical-retry"), not(feature = "redirects")))]
+        {
+            Box::pin(crate::pipeline::send_lean(self, request)).await
+        }
     }
 
     /// Send a request and return optional structured native failure detail.
@@ -898,7 +921,13 @@ impl Client {
         let context = crate::error::RequestFailureContext::new();
         context.clear();
         request.set_failure_context(Some(context.clone()));
-        match Box::pin(crate::pipeline::send_with_retry(self, request)).await {
+        #[cfg(feature = "logical-retry")]
+        let result = Box::pin(crate::pipeline::send_with_retry(self, request)).await;
+        #[cfg(all(not(feature = "logical-retry"), feature = "redirects"))]
+        let result = Box::pin(crate::pipeline::send_with_redirects(self, request)).await;
+        #[cfg(all(not(feature = "logical-retry"), not(feature = "redirects")))]
+        let result = Box::pin(crate::pipeline::send_lean(self, request)).await;
+        match result {
             Ok(response) => Ok(response),
             Err(error) => Err(crate::RequestFailure::from_context(error, &context)),
         }
@@ -981,6 +1010,7 @@ pub struct ClientBuilder {
     pool_config: PoolConfig,
     timeout: Option<Timeout>,
     limits: Option<Limits>,
+    #[cfg(feature = "redirects")]
     redirect: RedirectPolicy,
     auth: Option<crate::auth::AuthScheme>,
     #[cfg(feature = "cookies")]
@@ -994,6 +1024,7 @@ pub struct ClientBuilder {
     environment_proxies: Vec<Proxy>,
     #[cfg(feature = "tls-rustls")]
     tls_config: Option<crate::tls::TlsConfig>,
+    #[cfg(feature = "logical-retry")]
     retry: Option<RetryPolicy>,
     retry_canceled_requests: bool,
     dialer: Option<Arc<dyn Dialer>>,
@@ -1016,6 +1047,7 @@ impl ClientBuilder {
             pool_config: PoolConfig::default(),
             timeout: None,
             limits: None,
+            #[cfg(feature = "redirects")]
             redirect: RedirectPolicy::default(),
             auth: None,
             #[cfg(feature = "cookies")]
@@ -1029,6 +1061,7 @@ impl ClientBuilder {
             environment_proxies: Vec::new(),
             #[cfg(feature = "tls-rustls")]
             tls_config: None,
+            #[cfg(feature = "logical-retry")]
             retry: None,
             retry_canceled_requests: true,
             dialer: None,
@@ -1175,6 +1208,11 @@ impl ClientBuilder {
     }
 
     /// Set the redirect policy for this client.
+    ///
+    /// Only available with the `redirects` feature (enabled by the `http1`/`http2`
+    /// compatibility aliases). The lean profile omits redirect following and
+    /// returns 3xx responses without a second hop.
+    #[cfg(feature = "redirects")]
     #[must_use]
     pub fn follow_redirects(mut self, follow: bool) -> Self {
         self.redirect.follow = follow;
@@ -1182,6 +1220,9 @@ impl ClientBuilder {
     }
 
     /// Set the maximum number of redirects to follow.
+    ///
+    /// Only available with the `redirects` feature.
+    #[cfg(feature = "redirects")]
     #[must_use]
     pub fn max_redirects(mut self, max: usize) -> Self {
         self.redirect.max_redirects = max;
@@ -1189,6 +1230,9 @@ impl ClientBuilder {
     }
 
     /// Set the full redirect policy.
+    ///
+    /// Only available with the `redirects` feature.
+    #[cfg(feature = "redirects")]
     #[must_use]
     pub fn redirect_policy(mut self, policy: RedirectPolicy) -> Self {
         self.redirect = policy;
@@ -1198,12 +1242,15 @@ impl ClientBuilder {
     /// Set the HTTPS-downgrade rule for redirects without replacing the
     /// rest of the redirect policy.
     ///
+    /// Only available with the `redirects` feature.
+    ///
     /// Select
     /// [`RedirectDowngradePolicy::Deny`](crate::redirect::RedirectDowngradePolicy::Deny)
     /// to reject HTTPS -> HTTP downgrades before the downgraded request
     /// is dispatched. The default is
     /// [`Allow`](crate::redirect::RedirectDowngradePolicy::Allow) for
     /// compatibility.
+    #[cfg(feature = "redirects")]
     #[must_use]
     pub fn redirect_downgrade_policy(
         mut self,
@@ -1369,9 +1416,14 @@ impl ClientBuilder {
 
     /// Set the retry policy for this client.
     ///
+    /// Only available with the `logical-retry` feature (enabled by the `http1`/`http2`
+    /// compatibility aliases). The lean profile dispatches once under the outer
+    /// total deadline with no retry backoff/jitter/status policy.
+    ///
     /// When set, failed requests that match the policy (safe methods,
     /// retryable statuses/errors, replayable bodies) are automatically
     /// retried with exponential backoff.
+    #[cfg(feature = "logical-retry")]
     #[must_use]
     pub fn retry(mut self, policy: RetryPolicy) -> Self {
         self.retry = Some(policy);
@@ -1381,7 +1433,8 @@ impl ClientBuilder {
     /// Allow or disallow Hyper's implicit retry when a reused idle
     /// connection is found unusable before a request starts writing.
     ///
-    /// This is separate from eggfetch's explicit [`RetryPolicy`]. The
+    /// This is separate from eggfetch's explicit logical retry (the
+    /// `logical-retry` feature and [`RetryPolicy`]). The
     /// default is `true`, preserving Hyper's existing behavior.
     #[must_use]
     pub fn retry_canceled_requests(mut self, enabled: bool) -> Self {
@@ -1732,6 +1785,7 @@ impl ClientBuilder {
             default_headers: self.default_headers,
             user_agent: self.user_agent,
             timeout: self.timeout,
+            #[cfg(feature = "redirects")]
             redirect: self.redirect,
             auth: self.auth,
             #[cfg(feature = "cookies")]
@@ -1745,6 +1799,7 @@ impl ClientBuilder {
             environment_proxies: self.environment_proxies,
             #[cfg(feature = "tls-rustls")]
             tls_config: self.tls_config,
+            #[cfg(feature = "logical-retry")]
             retry: self.retry,
             retry_canceled_requests: self.retry_canceled_requests,
             dialer: self.dialer,
@@ -2286,6 +2341,7 @@ mod tests {
         assert!(Client::new().inner.config.retry_canceled_requests);
         let strict = Client::builder().retry_canceled_requests(false).build();
         assert!(!strict.inner.config.retry_canceled_requests);
+        #[cfg(feature = "logical-retry")]
         assert!(strict.inner.config.retry.is_none());
     }
 

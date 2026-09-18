@@ -301,12 +301,14 @@ pub(super) async fn prepare_single_request(
         body,
         version,
         timeout: _request_timeout,
-        redirect: _request_redirect,
+        #[cfg(feature = "redirects")]
+            redirect: _request_redirect,
         auth: _,
         auth_disabled: _,
         decompress: request_decompress,
         proxy_override,
-        retry: _,
+        #[cfg(feature = "logical-retry")]
+            retry: _,
         transport_hints,
         proxied_target,
         failure_context,

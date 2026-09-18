@@ -15,6 +15,8 @@ use crate::response::Response;
 use crate::retry::{should_retry, RetryCause, RetryPolicy};
 use crate::timeout::TimeoutPhase;
 
+use super::drain_response_body;
+
 /// Sleep for the backoff delay if the total budget allows it.
 ///
 /// Returns `Err(RetryBudgetExhausted)` if sleeping would exceed the
@@ -33,51 +35,6 @@ async fn sleep_if_budget_allows(
     }
     tokio::time::sleep(delay).await;
     Ok(())
-}
-
-/// Upper bound on how much of a discarded response body is drained so
-/// the underlying connection can be returned to the pool. Bodies larger
-/// than this are abandoned (the connection closes instead), matching
-/// common client practice (e.g. Go's `net/http` 256 KiB drain cap) and
-/// guaranteeing retry/redirect processing cannot be stalled indefinitely
-/// by a slow-dripping server when no read timeout is configured.
-const DRAIN_MAX_BYTES: usize = 256 * 1024;
-
-/// Upper bound on how long a best-effort drain may run when no explicit
-/// total deadline governs it. Without this, a slow-drip server could
-/// stall retry/redirect processing indefinitely even though only a
-/// bounded number of bytes would ever be drained.
-const DRAIN_MAX_TIME: Duration = Duration::from_secs(30);
-
-/// Best-effort drain of a discarded response body.
-///
-/// Uses the raw (encoded) byte stream so a zip-bomb response does not
-/// abort the drain via `DecompressionRatioExceeded` and abandon the
-/// connection. Drain errors are ignored; draining stops after
-/// [`DRAIN_MAX_BYTES`] or [`DRAIN_MAX_TIME`].
-///
-/// Shared by the retry loop and the redirect loop; both discard a response
-/// body before the next attempt/hop.
-pub(super) async fn drain_response_body(response: &mut Response) {
-    let Ok(stream) = response.raw_bytes_stream() else {
-        return; // body already consumed; nothing to drain
-    };
-    let mut remaining = DRAIN_MAX_BYTES;
-    let mut stream = std::pin::pin!(stream);
-    let drain = async {
-        while let Some(chunk) = futures_util::StreamExt::next(&mut stream).await {
-            match chunk {
-                Ok(bytes) => {
-                    if bytes.len() >= remaining {
-                        break;
-                    }
-                    remaining -= bytes.len();
-                }
-                Err(_) => break,
-            }
-        }
-    };
-    let _ = tokio::time::timeout(DRAIN_MAX_TIME, drain).await;
 }
 
 /// Check if there is budget remaining for another retry attempt.
@@ -108,6 +65,23 @@ fn has_budget(policy: &RetryPolicy, attempt: usize, start_time: std::time::Insta
 /// not the post-redirect wire method. A `POST → 301 → GET → 503` therefore
 /// does not retry under a `GET`-only policy, because retrying would replay
 /// the original non-idempotent `POST`.
+/// Send one logical attempt through the inner policy layer.
+///
+/// When the `redirects` feature is enabled this is the redirect loop;
+/// otherwise it is the lean single-hop dispatch. The retry loop itself is
+/// unchanged: it restarts the complete logical request under the original
+/// total deadline.
+async fn dispatch_attempt(client: &Client, request: Request) -> Result<Response> {
+    #[cfg(feature = "redirects")]
+    {
+        Box::pin(super::redirect::send_with_redirects(client, request)).await
+    }
+    #[cfg(not(feature = "redirects"))]
+    {
+        Box::pin(super::lean::send_lean(client, request)).await
+    }
+}
+
 #[allow(clippy::too_many_lines)]
 pub(crate) async fn send_with_retry(client: &Client, request: Request) -> Result<Response> {
     let body_replayable = request.body().is_replayable();
@@ -120,13 +94,13 @@ pub(crate) async fn send_with_retry(client: &Client, request: Request) -> Result
     let policy = match effective_policy {
         Some(p) if p.is_enabled() => p,
         _ => {
-            return Box::pin(super::redirect::send_with_redirects(client, request)).await;
+            return dispatch_attempt(client, request).await;
         }
     };
 
     // If the body is not replayable, we can only attempt once.
     if !body_replayable {
-        return Box::pin(super::redirect::send_with_redirects(client, request)).await;
+        return dispatch_attempt(client, request).await;
     }
 
     // Save the complete logical-request state for replay. The typed
@@ -201,11 +175,7 @@ pub(crate) async fn send_with_retry(client: &Client, request: Request) -> Result
         // Reconstruct the attempt through the single typed transformation.
         let attempt_request = saved.retry_request(attempt_timeout)?;
 
-        let result = Box::pin(super::redirect::send_with_redirects(
-            client,
-            attempt_request,
-        ))
-        .await;
+        let result = dispatch_attempt(client, attempt_request).await;
 
         match result {
             Ok(response) => {
@@ -303,7 +273,11 @@ mod tests {
     }
 
     fn full_request() -> Request {
+        #[cfg(not(feature = "basic-auth"))]
+        use crate::auth::AuthScheme;
+        #[cfg(feature = "basic-auth")]
         use crate::auth::{AuthScheme, BasicAuth};
+        #[cfg(feature = "redirects")]
         use crate::redirect::RedirectPolicy;
         use crate::retry::RetryPolicy;
 
@@ -323,10 +297,14 @@ mod tests {
                 .total(Duration::from_secs(30))
                 .build(),
         ));
+        #[cfg(feature = "redirects")]
         req.set_redirect(Some(RedirectPolicy::new(true, 7)));
+        #[cfg(feature = "basic-auth")]
         req.set_auth(Some(AuthScheme::Basic(
             BasicAuth::new("user", "pass").expect("valid auth"),
         )));
+        #[cfg(not(feature = "basic-auth"))]
+        req.set_auth(Some(AuthScheme::bearer("tok").expect("valid auth")));
         req.set_auth_disabled(false);
         req.set_decompress(Some(false));
         req.set_max_decoded_body_size(Some(1024));
@@ -357,6 +335,7 @@ mod tests {
         let expected_headers = req.headers().clone();
         let expected_version = req.version();
         let expected_timeout = req.timeout().copied();
+        #[cfg(feature = "redirects")]
         let expected_redirect = req.redirect().cloned();
         let expected_auth = req.auth().cloned();
         let expected_auth_disabled = req.is_auth_disabled();
@@ -378,7 +357,8 @@ mod tests {
             body: _,
             version: _,
             timeout: _,
-            redirect: _,
+            #[cfg(feature = "redirects")]
+                redirect: _,
             auth: _,
             auth_disabled: _,
             decompress: _,
@@ -411,6 +391,7 @@ mod tests {
             }
             (a, b) => panic!("timeout mismatch: {a:?} vs {b:?}"),
         }
+        #[cfg(feature = "redirects")]
         assert_eq!(
             rebuilt.redirect().map(|r| (r.follow, r.max_redirects)),
             expected_redirect.map(|r| (r.follow, r.max_redirects))
@@ -473,6 +454,7 @@ mod tests {
             Some(Duration::from_secs(25)),
             "total deadline is replaced by the shrunk attempt budget"
         );
+        #[cfg(feature = "redirects")]
         assert!(attempt.redirect().is_some());
         assert!(attempt.auth().is_some());
         assert!(!attempt.is_auth_disabled());

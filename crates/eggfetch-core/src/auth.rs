@@ -27,6 +27,11 @@ use crate::error::{Error, Result};
 #[derive(Clone)]
 pub enum AuthScheme {
     /// HTTP Basic Authentication (`Authorization: Basic <credentials>`).
+    ///
+    /// Only available with the `basic-auth` feature (enabled by the `http1`/`http2`
+    /// compatibility aliases). The lean Bearer-only profile omits this variant
+    /// and its `base64` dependency.
+    #[cfg(feature = "basic-auth")]
     Basic(BasicAuth),
     /// HTTP Bearer Token Authentication (`Authorization: Bearer <token>`).
     Bearer(BearerAuth),
@@ -35,10 +40,13 @@ pub enum AuthScheme {
 impl AuthScheme {
     /// Create a Basic auth scheme from username and password.
     ///
+    /// Only available with the `basic-auth` feature.
+    ///
     /// # Errors
     ///
     /// Returns [`Error::InvalidAuthHeader`] if the username contains `:`
     /// or if credentials contain invalid header-value bytes.
+    #[cfg(feature = "basic-auth")]
     pub fn basic(username: impl Into<String>, password: impl Into<String>) -> Result<Self> {
         Ok(Self::Basic(BasicAuth::new(username, password)?))
     }
@@ -59,6 +67,7 @@ impl AuthScheme {
     /// Returns an error if the header value is invalid.
     pub(crate) fn apply(&self, headers: &mut crate::headers::Headers) -> Result<()> {
         match self {
+            #[cfg(feature = "basic-auth")]
             Self::Basic(b) => {
                 let value = b.header_value();
                 headers.insert("authorization", &value)?;
@@ -75,6 +84,7 @@ impl AuthScheme {
 impl std::fmt::Debug for AuthScheme {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            #[cfg(feature = "basic-auth")]
             Self::Basic(b) => f.debug_tuple("Basic").field(b).finish(),
             Self::Bearer(b) => f.debug_tuple("Bearer").field(b).finish(),
         }
@@ -84,6 +94,10 @@ impl std::fmt::Debug for AuthScheme {
 /// HTTP Basic Authentication credentials.
 ///
 /// Generates `Authorization: Basic base64(username:password)` headers.
+///
+/// Only available with the `basic-auth` feature (enabled by the `http1`/`http2`
+/// compatibility aliases). Bearer-only lean profiles omit this type and the
+/// core `base64` dependency.
 ///
 /// # Security
 ///
@@ -96,12 +110,14 @@ impl std::fmt::Debug for AuthScheme {
 /// - Passwords may be empty.
 /// - Credentials are encoded as UTF-8 bytes.
 /// - CR/LF characters in username or password are rejected.
+#[cfg(feature = "basic-auth")]
 #[derive(Clone)]
 pub struct BasicAuth {
     username: String,
     password: String,
 }
 
+#[cfg(feature = "basic-auth")]
 impl BasicAuth {
     /// Create new Basic auth credentials.
     ///
@@ -146,6 +162,7 @@ impl BasicAuth {
     }
 }
 
+#[cfg(feature = "basic-auth")]
 impl std::fmt::Debug for BasicAuth {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("BasicAuth")
@@ -155,6 +172,7 @@ impl std::fmt::Debug for BasicAuth {
     }
 }
 
+#[cfg(feature = "basic-auth")]
 impl std::fmt::Display for BasicAuth {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("BasicAuth(<redacted>)")
@@ -285,10 +303,13 @@ pub(crate) fn resolve_request_auth(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(feature = "basic-auth")]
     use base64::Engine;
 
     // --- BasicAuth tests ---
 
+    #[cfg(feature = "basic-auth")]
+    #[cfg(feature = "basic-auth")]
     #[test]
     fn basic_auth_header_value() {
         let auth = BasicAuth::new("user", "pass").unwrap();
@@ -296,6 +317,7 @@ mod tests {
         assert_eq!(auth.header_value(), "Basic dXNlcjpwYXNz");
     }
 
+    #[cfg(feature = "basic-auth")]
     #[test]
     fn basic_auth_empty_password() {
         let auth = BasicAuth::new("user", "").unwrap();
@@ -303,6 +325,7 @@ mod tests {
         assert_eq!(auth.header_value(), "Basic dXNlcjo=");
     }
 
+    #[cfg(feature = "basic-auth")]
     #[test]
     fn basic_auth_utf8_credentials() {
         use base64::Engine;
@@ -317,6 +340,7 @@ mod tests {
         assert_eq!(String::from_utf8(decoded).unwrap(), "usér:päss");
     }
 
+    #[cfg(feature = "basic-auth")]
     #[test]
     fn basic_auth_rejects_colon_in_username() {
         let err = BasicAuth::new("user:name", "pass").unwrap_err();
@@ -324,18 +348,21 @@ mod tests {
         assert!(!err.to_string().contains("pass"));
     }
 
+    #[cfg(feature = "basic-auth")]
     #[test]
     fn basic_auth_rejects_cr_in_username() {
         let err = BasicAuth::new("user\r", "pass").unwrap_err();
         assert_eq!(err.kind(), "invalid_auth_header");
     }
 
+    #[cfg(feature = "basic-auth")]
     #[test]
     fn basic_auth_rejects_lf_in_password() {
         let err = BasicAuth::new("user", "pass\n").unwrap_err();
         assert_eq!(err.kind(), "invalid_auth_header");
     }
 
+    #[cfg(feature = "basic-auth")]
     #[test]
     fn basic_auth_redacted_debug() {
         let auth = BasicAuth::new("user", "secret123").unwrap();
@@ -345,6 +372,7 @@ mod tests {
         assert!(!debug.contains("secret123"));
     }
 
+    #[cfg(feature = "basic-auth")]
     #[test]
     fn basic_auth_redacted_display() {
         let auth = BasicAuth::new("user", "secret123").unwrap();
@@ -354,6 +382,7 @@ mod tests {
         assert!(display.contains("<redacted>"));
     }
 
+    #[cfg(feature = "basic-auth")]
     #[test]
     fn basic_auth_username_accessor() {
         let auth = BasicAuth::new("admin", "pw").unwrap();
@@ -400,9 +429,12 @@ mod tests {
 
     #[test]
     fn auth_scheme_debug() {
-        let scheme = AuthScheme::basic("user", "pass").unwrap();
-        let debug = format!("{scheme:?}");
-        assert!(debug.contains("Basic"));
+        #[cfg(feature = "basic-auth")]
+        {
+            let scheme = AuthScheme::basic("user", "pass").unwrap();
+            let debug = format!("{scheme:?}");
+            assert!(debug.contains("Basic"));
+        }
 
         let scheme = AuthScheme::bearer("token").unwrap();
         let debug = format!("{scheme:?}");
@@ -439,6 +471,7 @@ mod tests {
             AuthScheme::Bearer(b) => {
                 assert_eq!(b.header_value(), "Bearer req-tok");
             }
+            #[cfg(feature = "basic-auth")]
             AuthScheme::Basic(_) => panic!("expected Bearer"),
         }
     }
@@ -487,6 +520,7 @@ mod tests {
         assert_eq!(r1.is_none(), r2.is_none());
     }
 
+    #[cfg(feature = "basic-auth")]
     #[test]
     fn auth_scheme_debug_does_not_leak_basic_password() {
         let scheme = AuthScheme::basic("admin", "hunter2").unwrap();
@@ -504,6 +538,7 @@ mod tests {
         assert!(debug.contains("<redacted>"));
     }
 
+    #[cfg(feature = "basic-auth")]
     #[test]
     fn basic_auth_empty_username_and_password() {
         let auth = BasicAuth::new("", "").unwrap();
@@ -518,6 +553,7 @@ mod tests {
         assert_eq!(auth.header_value(), "Bearer ");
     }
 
+    #[cfg(feature = "basic-auth")]
     #[test]
     fn basic_auth_colon_in_password_is_allowed() {
         let auth = BasicAuth::new("user", "p:a:s:s").unwrap();
@@ -538,6 +574,7 @@ mod tests {
         assert!(auth.header_value().contains("tökën-üñîçödé"));
     }
 
+    #[cfg(feature = "basic-auth")]
     #[test]
     fn basic_auth_header_format() {
         let auth = BasicAuth::new("user", "pass").unwrap();
@@ -574,6 +611,7 @@ mod tests {
         let second = resolve_request_auth(first.as_ref(), false, None, &headers).unwrap();
         match second.unwrap() {
             AuthScheme::Bearer(b) => assert_eq!(b.header_value(), "Bearer req-tok"),
+            #[cfg(feature = "basic-auth")]
             AuthScheme::Basic(_) => panic!("expected Bearer"),
         }
     }
@@ -608,6 +646,7 @@ mod tests {
         assert!(req.auth().is_some());
     }
 
+    #[cfg(feature = "basic-auth")]
     #[test]
     fn basic_auth_display_shows_username_not_password() {
         let auth = BasicAuth::new("admin", "s3cret").unwrap();
@@ -625,6 +664,7 @@ mod tests {
         assert!(display.contains("<redacted>"));
     }
 
+    #[cfg(feature = "basic-auth")]
     #[test]
     fn resolve_request_overrides_client_different_types() {
         let headers = crate::headers::Headers::new();

@@ -2,16 +2,36 @@
 
 This document covers the authentication subsystem, redirect following, and retry with backoff.
 
-See also: [overview.md](overview.md), [core-engine.md](core-engine.md).
+See also: [overview.md](overview.md), [core-engine.md](core-engine.md), [feature-flags.md](feature-flags.md).
+
+## Capability Features
+
+Logical retry (`logical-retry`), redirect following (`redirects`), and
+Basic auth (`basic-auth`) are coarse Cargo capability features. The
+`http1`/`http2`/default compatibility aliases enable all three, preserving
+every existing API and behavior. The lean high-level profile selects
+`native-http1` + `high-level-url` + `tls-rustls` without them: Bearer-only
+auth, single-attempt dispatch under the outer total deadline, 3xx returned
+without following and with empty history, and no core `base64`/`httpdate`
+edge (core's direct `getrandom` edge is jointly owned with `multipart`).
+`Client::send`/`send_detailed` dispatch to `pipeline::retry::send_with_retry`
+when `logical-retry` is present, to
+`pipeline::redirect::send_with_redirects` when only `redirects` is present,
+and to `pipeline::lean::send_lean` when both are absent. Hyper's distinct
+canceled-idle-request retry (`retry_canceled_requests`) is transport policy
+and stays available in every profile. Typed DNS/refused/timeout failures,
+body caps, pooling, TLS, and high-level response semantics are unchanged.
+Lean coverage lives in `crates/eggfetch-core/tests/lean_policy_tests.rs`
+(passes under both lean and full feature sets).
 
 ## Authentication
 
 ### Supported Schemes
 
-| Scheme | Header | Construction |
-|--------|--------|--------------|
-| Basic | `Authorization: Basic <base64(user:pass)>` | `BasicAuth::new(username, password)` |
-| Bearer | `Authorization: Bearer <token>` | `BearerAuth::new(token)` |
+| Scheme | Header | Construction | Feature |
+|--------|--------|--------------|---------|
+| Basic | `Authorization: Basic <base64(user:pass)>` | `BasicAuth::new(username, password)` | `basic-auth` (in `http1`/`http2`) |
+| Bearer | `Authorization: Bearer <token>` | `BearerAuth::new(token)` | always (lean-safe) |
 
 ### Security Properties
 

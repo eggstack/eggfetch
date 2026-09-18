@@ -197,7 +197,9 @@ impl RequestBody {
 
     /// Attempt to clone this body for use in a retry attempt.
     ///
-    /// This is the retry counterpart to [`Self::try_clone_for_redirect`]:
+    /// Only available with the `logical-retry` feature (or `proxy`, whose
+    /// CONNECT multi-address fallback reuses the same replay check). This
+    /// is the retry counterpart to [`Self::try_clone_for_redirect`]:
     /// only replayable bodies (`Empty`/`Bytes`) succeed. One-shot streams
     /// return the retry-specific error classification so callers preserve
     /// the existing retry error taxonomy.
@@ -206,6 +208,7 @@ impl RequestBody {
     ///
     /// Returns [`Error::BodyNotReplayableForRetry`] if the body is a
     /// live stream that cannot be replayed for another attempt.
+    #[cfg(any(feature = "logical-retry", feature = "proxy"))]
     pub(crate) fn try_clone_for_retry(&self) -> Result<Self> {
         match self {
             Self::Empty => Ok(Self::Empty),

@@ -15,12 +15,14 @@ mod finalize;
 mod h3_dispatch;
 #[cfg(any(feature = "native-http1", feature = "native-http2"))]
 mod hyper_dispatch;
+#[cfg(all(feature = "high-level-url", not(feature = "redirects")))]
+mod lean;
 mod prepare;
 #[cfg(feature = "proxy")]
 mod proxy_dispatch;
-#[cfg(feature = "high-level-url")]
+#[cfg(all(feature = "high-level-url", feature = "redirects"))]
 mod redirect;
-#[cfg(feature = "high-level-url")]
+#[cfg(all(feature = "high-level-url", feature = "logical-retry"))]
 mod retry;
 mod route;
 
@@ -29,8 +31,23 @@ mod route;
 // modules, so its re-export follows the same feature gate.
 #[cfg(feature = "proxy")]
 pub(crate) use prepare::validate_target;
-#[cfg(feature = "high-level-url")]
+#[cfg(all(feature = "high-level-url", feature = "logical-retry"))]
 pub(crate) use retry::send_with_retry;
+// Re-exported for `Client::{send, send_detailed}` only when the retry loop
+// is absent; the retry loop itself reaches the redirect/lean modules via
+// `super::` paths.
+#[cfg(all(
+    feature = "high-level-url",
+    not(feature = "redirects"),
+    not(feature = "logical-retry")
+))]
+pub(crate) use lean::send_lean;
+#[cfg(all(
+    feature = "high-level-url",
+    feature = "redirects",
+    not(feature = "logical-retry")
+))]
+pub(crate) use redirect::send_with_redirects;
 // `apply_content_length` is exercised directly by `client.rs` unit tests
 // through the pre-decomposition path; preparation itself uses it in-file.
 #[cfg(test)]
@@ -80,6 +97,63 @@ where
         }
         None => send_future.await,
     }
+}
+
+/// Upper bound on how much of a discarded response body is drained so
+/// the underlying connection can be returned to the pool. Bodies larger
+/// than this are abandoned (the connection closes instead), matching
+/// common client practice (e.g. Go's `net/http` 256 KiB drain cap) and
+/// guaranteeing retry/redirect processing cannot be stalled indefinitely
+/// by a slow-dripping server when no read timeout is configured.
+#[cfg(all(
+    feature = "high-level-url",
+    any(feature = "logical-retry", feature = "redirects")
+))]
+const DRAIN_MAX_BYTES: usize = 256 * 1024;
+
+/// Upper bound on how long a best-effort drain may run when no explicit
+/// total deadline governs it. Without this, a slow-drip server could
+/// stall retry/redirect processing indefinitely even though only a
+/// bounded number of bytes would ever be drained.
+#[cfg(all(
+    feature = "high-level-url",
+    any(feature = "logical-retry", feature = "redirects")
+))]
+const DRAIN_MAX_TIME: Duration = Duration::from_secs(30);
+
+/// Best-effort drain of a discarded response body.
+///
+/// Uses the raw (encoded) byte stream so a zip-bomb response does not
+/// abort the drain via `DecompressionRatioExceeded` and abandon the
+/// connection. Drain errors are ignored; draining stops after
+/// [`DRAIN_MAX_BYTES`] or [`DRAIN_MAX_TIME`].
+///
+/// Shared by the retry loop and the redirect loop; both discard a response
+/// body before the next attempt/hop.
+#[cfg(all(
+    feature = "high-level-url",
+    any(feature = "logical-retry", feature = "redirects")
+))]
+pub(super) async fn drain_response_body(response: &mut Response) {
+    let Ok(stream) = response.raw_bytes_stream() else {
+        return; // body already consumed; nothing to drain
+    };
+    let mut remaining = DRAIN_MAX_BYTES;
+    let mut stream = std::pin::pin!(stream);
+    let drain = async {
+        while let Some(chunk) = futures_util::StreamExt::next(&mut stream).await {
+            match chunk {
+                Ok(bytes) => {
+                    if bytes.len() >= remaining {
+                        break;
+                    }
+                    remaining -= bytes.len();
+                }
+                Err(_) => break,
+            }
+        }
+    };
+    let _ = tokio::time::timeout(DRAIN_MAX_TIME, drain).await;
 }
 
 /// Send a single HTTP request and return the streaming response.

@@ -15,11 +15,14 @@ The following features are declared in `crates/eggfetch-core/Cargo.toml`:
 ```toml
 [features]
 default = ["http1", "tls-rustls", "tls-native-roots"]
-http1 = ["native-http1", "high-level-url"]
-http2 = ["native-http2", "high-level-url"]
+http1 = ["native-http1", "high-level-url", "logical-retry", "redirects", "basic-auth"]
+http2 = ["native-http2", "high-level-url", "logical-retry", "redirects", "basic-auth"]
 native-http1 = ["hyper/http1", "hyper-util/http1", "hyper-rustls?/http1"]
 native-http2 = ["dep:h2", "hyper/http2", "hyper-util/http2", "hyper-rustls?/http2"]
 high-level-url = ["dep:url", "dep:percent-encoding"]
+logical-retry = ["dep:getrandom", "dep:httpdate"]
+redirects = []
+basic-auth = ["dep:base64"]
 tls-rustls = ["dep:hyper-rustls", "dep:pem-rfc7468", "dep:rustls", "dep:tokio-rustls", "dep:webpki-roots", "hyper-rustls/ring", "hyper-rustls/logging", "hyper-rustls/tls12"]
 tls-native-roots = ["tls-rustls", "dep:rustls-native-certs"]
 http3 = ["http1", "tls-rustls", "dep:quinn", "dep:h3", "dep:h3-quinn", "high-level-url"]
@@ -29,16 +32,20 @@ compression-brotli = ["dep:async-compression", "async-compression/brotli", "dep:
 compression-zstd = ["dep:async-compression", "async-compression/zstd", "dep:tokio-util", "tokio/io-util", "dep:zstd"]
 compression-deflate = ["dep:async-compression", "async-compression/deflate", "dep:tokio-util", "tokio/io-util", "dep:flate2"]
 cookies = ["dep:cookie", "high-level-url"]
-multipart = []
-proxy = ["http1", "tls-rustls", "tokio/io-util", "high-level-url", "dep:eggfetch-http-connect"]
+multipart = ["dep:getrandom"]
+proxy = ["http1", "tls-rustls", "tokio/io-util", "high-level-url", "dep:eggfetch-http-connect", "dep:base64"]
 tracing = ["dep:tracing"]
 test-util = ["tokio/test-util"]
 ```
 
 `http1`/`http2` are compatibility aliases: they preserve the existing
-high-level string/URL API. `native-http1`/`native-http2` are the low-level
+high-level string/URL API plus logical retry, redirect following, and Basic
+auth. `native-http1`/`native-http2` are the low-level
 `http::Request`/`http::Uri` transport slices; selecting them without
-`high-level-url` omits the `url`/`idna`/ICU closure. Native callers own any
+`high-level-url` omits the `url`/`idna`/ICU closure. `logical-retry`,
+`redirects`, and `basic-auth` are coarse capability features: the lean
+high-level profile selects `native-http1` + `high-level-url` without them
+for a single-attempt Bearer-only client. Native callers own any
 IDNA/punycode conversion before constructing `http::Uri`.
 
 ## Default Features
@@ -68,6 +75,7 @@ the profiles exclude `http2`, `http3`, `json`, all compression features,
 | H1 native-root HTTPS | `default-features = false, features = ["http1", "tls-rustls", "tls-native-roots"]` | H1, Rustls, native roots with WebPKI construction fallback; explicit form of the default trust profile |
 | H1 + native Rust JSON | `default-features = false, features = ["http1", "tls-rustls", "json"]` | Deterministic H1 HTTPS plus Serde request/response helpers; JSON is not in the default graph |
 | H1 updater transport | `default-features = false, features = ["http1", "tls-rustls", "tls-native-roots", "proxy"]` | H1, Rustls, native roots with WebPKI fallback, explicit proxy routing (incl. opt-in `ProxyEnvironment`); excludes http2/http3/compression/cookies/multipart/json/tracing |
+| H1 lean Bearer client | `default-features = false, features = ["native-http1", "high-level-url", "tls-rustls"]` | H1, Rustls, packaged WebPKI roots, high-level URL API with Bearer auth, timeouts, body limits, pooling, TLS, and typed failures; omits logical retry (`logical-retry`), redirect following (`redirects`), and Basic auth (`basic-auth`). 3xx returns without a second hop; each request dispatches once under the outer total deadline. |
 
 Add `http2` to an H1/TLS profile for HTTP/2 ALPN and multiplexing. The
 `http3` feature implies `http1` and `tls-rustls` but not `tls-native-roots`;
@@ -90,13 +98,18 @@ require `high-level-url` and are unavailable in the minimal slice.
 
 **Status:** implemented.
 High-level HTTP/1.1 surface: `native-http1` transport plus `high-level-url`
-string/URL API. For the transport-only slice without `url`, select
-`native-http1` directly. `http1` alone (without TLS) is cleartext-only.
+string/URL API plus `logical-retry`, `redirects`, and `basic-auth` policy
+capabilities. For the transport-only slice without `url`, select
+`native-http1` directly. For a Bearer-only single-attempt client without
+retry/redirect/Basic machinery, select `native-http1` + `high-level-url`
+without the policy features. `http1` alone (without TLS) is cleartext-only.
 
 ### http2
 
 **Status:** implemented.
-High-level HTTP/2 surface: `native-http2` transport plus `high-level-url`.
+High-level HTTP/2 surface: `native-http2` transport plus `high-level-url`
+plus `logical-retry`, `redirects`, and `basic-auth` (same policy bundle as
+`http1`).
 When enabled, the client can negotiate HTTP/2 via ALPN for HTTPS connections. The `HttpVersionPolicy` enum controls which protocol versions are advertised. `Auto` (default) advertises both `h2` and `http/1.1`; `Http2Only` advertises only `h2`; `Http1Only` advertises only `http/1.1`. Without this feature, `Http2Only` and `Auto` silently downgrade to `Http1Only`. The Python crate exposes `Client(http2=True)` and `AsyncClient(http2=True)` for enabling HTTP/2 negotiation, and `Client(http1=False, http2=True)` / `AsyncClient(http1=False, http2=True)` for HTTP/2-only prior-knowledge mode.
 
 ### native-http1 / native-http2
@@ -117,6 +130,40 @@ High-level string/URL request semantics backed by `url` (plus
 `RequestBuilder`, `Response`, redirects, cookies, and built-in proxy/HTTP/3
 routing. Native callers provide a valid `http::Uri` and own any
 IDNA/punycode conversion; the native path performs none.
+
+### logical-retry
+
+**Status:** implemented.
+Logical retry orchestration: `RetryPolicy`/`RetryPolicyBuilder`,
+`BackoffPolicy`/`MethodPolicy`/`StatusPolicy`, backoff/jitter
+(`getrandom`), `Retry-After` HTTP-date parsing (`httpdate`), replay checks,
+and the `ClientBuilder::retry` / `RequestBuilder::retry` /
+`without_retry` APIs plus the `pipeline::retry` loop. Enabled by the
+`http1`/`http2` compatibility aliases; omitted by the lean profile, which
+dispatches once under the outer total deadline. Hyper's distinct
+canceled-idle-request retry (`retry_canceled_requests`) is transport policy
+and remains available in all profiles.
+
+### redirects
+
+**Status:** implemented.
+Redirect-following loop, hop reconstruction (`advance_redirect_hop`),
+history (`Response::history`), and the `RedirectPolicy` /
+`ClientBuilder::follow_redirects` / `max_redirects` / `redirect_policy` /
+`RequestBuilder::redirect_policy` APIs. Enabled by the `http1`/`http2`
+compatibility aliases; omitted by the lean profile, which returns 3xx
+responses as ordinary responses with no second hop and no history.
+
+### basic-auth
+
+**Status:** implemented.
+Basic auth (`BasicAuth`, `AuthScheme::basic`, `AuthScheme::Basic`) and the
+core `base64` dependency. Enabled by the `http1`/`http2` compatibility
+aliases; omitted by the lean Bearer-only profile. Bearer auth
+(`BearerAuth`, `AuthScheme::bearer`) needs no Base64 and remains available
+without this feature. Proxy auth (`ProxyAuth`, CONNECT helpers) is owned
+by the `proxy` feature's own `base64` edge plus the separate
+`eggfetch-http-connect` crate.
 
 ### http3
 
@@ -208,9 +255,11 @@ Enables streaming multipart/form-data request bodies. Provides `Multipart`, `Par
 
 Python `files=` accepts bytes, `(filename, data)` tuples, `(filename, data, content_type)` triples, `(filename, data, content_type, headers)` quads, and `eggfetch.File(path)` objects. Files are read via synchronous std::fs (blocking in GIL context) for path-backed parts. Cancellation safely drops file handles and streams.
 
-Boundary generation uses the foundational `getrandom` dependency to seed its
-internal xorshift PRNG. It remains unconditional because retry backoff jitter
-also uses the same crate; gating it on `multipart` would break retry behavior.
+Boundary generation uses `getrandom` to seed its internal xorshift PRNG.
+The feature owns `dep:getrandom` jointly with `logical-retry` (Cargo
+unification keeps randomness when either capability is selected); builds
+with neither feature omit core's direct `getrandom` edge (transitive
+`getrandom` via ring/Rustls for TLS crypto remains).
 
 ### proxy
 
@@ -225,7 +274,8 @@ bypass behavior. The Python crate exposes `Client(proxy=...)`,
 `AsyncClient(proxy=...)`, and per-request `proxy=` kwarg. The feature flag is
 required for proxy functionality; it pulls in tunnel and proxy-protocol
 dependencies, including the shared `eggfetch-http-connect` CONNECT wire
-crate, which is absent from non-proxy profiles.
+crate (absent from non-proxy profiles) and its own `dep:base64` edge for
+`Proxy-Authorization` encoding (independent of `basic-auth`).
 
 ### tracing
 

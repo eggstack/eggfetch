@@ -2,7 +2,7 @@
 
 Planning baseline: current tree after `standard-route-advanced-routing-feature-boundary.md`
 Parent program: `plans/linked-binary-footprint-reduction-program.md`
-Status: planned
+Status: complete (2026-09-18; standard-route plan still `planned`, implemented independently)
 
 ## Objective
 
@@ -233,12 +233,112 @@ Run relevant extended feature checks because public feature availability in the 
 
 ## Exit criteria
 
-- [ ] Logical retry has an explicit feature owner and can be absent from a supported lean high-level profile.
-- [ ] Redirect-following has an explicit feature owner and can be absent from that profile.
-- [ ] Existing compatibility aliases retain retry/redirect APIs and behavior.
-- [ ] Bearer auth works without core Basic-auth Base64 when `basic-auth` is omitted.
-- [ ] Retry-only `httpdate` is absent when retry is omitted.
-- [ ] `getrandom` ownership is truthful across retry/multipart.
-- [ ] Typed failure, timeout, body-limit, TLS, pool, and high-level response semantics remain available.
-- [ ] Linked-byte effect is measured.
-- [ ] Tier 1 and focused compatibility tests pass.
+- [x] Logical retry has an explicit feature owner and can be absent from a supported lean high-level profile.
+- [x] Redirect-following has an explicit feature owner and can be absent from that profile.
+- [x] Existing compatibility aliases retain retry/redirect APIs and behavior.
+- [x] Bearer auth works without core Basic-auth Base64 when `basic-auth` is omitted.
+- [x] Retry-only `httpdate` is absent when retry is omitted.
+- [x] `getrandom` ownership is truthful across retry/multipart.
+- [x] Typed failure, timeout, body-limit, TLS, pool, and high-level response semantics remain available.
+- [x] Linked-byte effect is measured.
+- [x] Tier 1 and focused compatibility tests pass.
+
+## Closure record (2026-09-18)
+
+Parent plan 2 (`standard-route-advanced-routing-feature-boundary.md`) remains
+`planned`, so this plan was implemented independently against current `main`
+(no standard-route delta to build on). The lean profile below is the
+`native-http1` + `high-level-url` + `tls-rustls` high-level recipe without
+the three new policy features.
+
+### Feature design (as implemented)
+
+```toml
+logical-retry = ["dep:getrandom", "dep:httpdate"]
+redirects = []
+basic-auth = ["dep:base64"]
+
+http1 = ["native-http1", "high-level-url", "logical-retry", "redirects", "basic-auth"]
+http2 = ["native-http2", "high-level-url", "logical-retry", "redirects", "basic-auth"]
+multipart = ["dep:getrandom"]
+proxy = ["http1", "tls-rustls", "tokio/io-util", "high-level-url", "dep:eggfetch-http-connect", "dep:base64"]
+```
+
+`base64`/`getrandom`/`httpdate` are now optional. `proxy` carries its own
+`dep:base64` edge for `Proxy-Authorization` (independent of `basic-auth`);
+`multipart` jointly owns `dep:getrandom` with `logical-retry` (unification
+keeps it when either is selected). `httpdate` is owned solely by
+`logical-retry`.
+
+### Code boundaries
+
+- `auth.rs`: `BasicAuth`, `AuthScheme::Basic`, `AuthScheme::basic()` gated
+  on `basic-auth`; `BearerAuth` always available; redaction/validation
+  unchanged.
+- `retry.rs` / `pipeline/retry.rs` (`send_with_retry`): gated on
+  `logical-retry`. Shared discard drain moved to `pipeline::mod`
+  (`any(logical-retry, redirects)`).
+- `redirect.rs` / `pipeline/redirect.rs` (`send_with_redirects`,
+  `advance_redirect_hop`): gated on `redirects`.
+- New `pipeline/lean.rs` (`send_lean`): single-hop dispatch used when
+  `redirects` is absent (as the retry-loop inner when only retry is
+  enabled, and directly from `Client::{send, send_detailed}` when both
+  policy features are absent). Returns 3xx without following, empty
+  history, no cross-origin reconstruction.
+- `Request`/`RequestBuilder`/`RequestParts`/`ClientConfig`/`ClientBuilder`:
+  `redirect`/`retry` fields and builder methods gated on their features;
+  exhaustive destructuring preserved (new fields still fail to compile).
+  `#[cfg]` on assignment statements is rejected by rustc (E0658), so
+  cfg'd fields use the `set_*` setters.
+- `body.rs::try_clone_for_retry` gated on `any(logical-retry, proxy)`
+  (CONNECT multi-address fallback reuses it);
+  `RequestParts::shrink_total_deadline` on `logical-retry`;
+  `HistoryEntry::from_response`/`Response::set_history` on `redirects`.
+- `lib.rs` re-exports gated accordingly. Python/CLI/FFI/Node adapters
+  unchanged: they resolve `http1`/`http2`, which retain the full policy
+  bundle.
+
+### Tests
+
+- New `crates/eggfetch-core/tests/lean_policy_tests.rs` (6 tests, stable
+  APIs only so they pass under both profiles): 503 single attempt, 302
+  passthrough with empty history, Bearer header + redaction, typed
+  refused/timeout/body-cap failures.
+  - `--all-features`: 6 passed.
+  - `--no-default-features --features native-http1,high-level-url,tls-rustls`:
+    6 passed.
+- Compatibility: `cargo test -p eggfetch-core --all-features` 1320 passed;
+  full Tier 1 (`./scripts/check.sh`) green, including workspace tests,
+  Python suite, compat smoke kernel, and Node check.
+- Focused feature checks: `cargo check` clean for `--no-default-features`,
+  `http1`, `http1,tls-rustls`, `http1,tls-rustls,tls-native-roots`,
+  `--all-features`, lean, lean+each-policy-feature, lean+all-three,
+  and `http1,tls-rustls,proxy` / `multipart,proxy` combos.
+
+### Footprint measurement
+
+Same toolchain/profile/fixture for both (`rustc 1.98.1`,
+`x86_64-unknown-linux-gnu`, `qualification/embedded/eggfetch-min` release
+shape `lto="thin"`, `codegen-units=1`, `panic="unwind"`, `strip` copy;
+lean fixture is the same streaming-GET source with
+`native-http1,high-level-url,tls-rustls`):
+
+- Unstripped: full 8,683,352 B → lean 8,605,056 B (−78,296 B).
+- Stripped: full 3,669,840 B → lean 3,600,816 B (−69,024 B, −1.9%).
+- `cargo bloat --crates`: `eggfetch_core` .text 262.0 KiB → 236.9 KiB
+  (−25.1 KiB eggfetch-owned). `httpdate`/`base64` absent from the lean
+  link; `getrandom` 748 B remains via ring/Rustls TLS crypto (transitive,
+  not core's direct edge).
+- `cargo tree --depth 1`: lean drops core's direct `base64`, `getrandom`,
+  and `httpdate` edges (full fixture tree 189 lines → lean 183).
+- `nm --size-sort`: zero `eggfetch_core::{retry,redirect,pipeline::retry,
+  pipeline::redirect}` symbols in lean (remaining "retry" hits are
+  rustls `HelloRetryRequest` only); full profile retains
+  `send_with_retry`/`send_with_redirects`/`RetryPolicy`/`redirect_method`/etc.
+
+### Security posture
+
+No change to roots, verification, SNI, TLS versions, crypto provider, proxy
+auth validation/redaction, or typed failures. Bearer redaction/validation
+unchanged; Basic redaction unchanged where enabled. Exact-SHA compatibility
+renewal remains deferred to program closure per the program closure rule.

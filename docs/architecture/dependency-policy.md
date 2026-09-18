@@ -41,12 +41,17 @@ owning feature is selected.
 - **cookie** -- RFC 6265 cookie parsing and representation (optional, behind `cookies` feature).
 - **percent-encoding** -- percent-encoding for URL query strings and cookie values.
 - **tower-service** -- `Service` trait for transport connector abstractions (UDS, SOCKS, connect-timeout wrappers) and the public `NativeHttpService` interoperability boundary. The full `tower` framework, `tower-layer`, and Tonic remain outside the core dependency graph; the manual Tonic 0.14.6 qualification fixture owns its `codegen`-only dependency separately.
-- **base64** -- Basic authentication credential encoding.
+- **base64** -- Basic auth credential encoding (optional, behind
+  `basic-auth`; proxy auth carries its own `dep:base64` edge behind `proxy`).
+  Bearer-only lean profiles omit core's direct `base64` edge.
 - **flate2** -- buffered gzip/deflate decompression for non-streaming response reads (optional, behind `compression-gzip`/`compression-deflate`).
-- **getrandom** -- cryptographically secure random bytes for multipart
-  boundary generation and retry jitter. It is intentionally unconditional;
-  multipart is not its only production owner.
-- **httpdate** -- HTTP-date parsing for Retry-After header support.
+- **getrandom** -- cryptographically secure random bytes for retry jitter
+  (optional, behind `logical-retry`) and multipart boundary generation
+  (optional, behind `multipart`). Cargo unification keeps it when either
+  capability is selected; builds with neither omit core's direct edge
+  (transitive `getrandom` via ring/Rustls for TLS crypto remains).
+- **httpdate** -- HTTP-date parsing for Retry-After header support
+  (optional, behind `logical-retry`; absent from lean profiles).
 - **pem-rfc7468** -- optional PEM parsing for custom CA bundles and client
   certificates (`tls-rustls`).
 - **webpki-roots** -- optional packaged Mozilla/WebPKI root certificates
@@ -92,9 +97,9 @@ Rustls; a dependency can still be shared by other optional routes.
 | `brotli`, `zstd` | buffered codec support | no | no | brotli/zstd | optional |
 | `cookie` | cookie jar | no | no | `cookies` | optional |
 | `tracing` | opt-in diagnostics | no | no | `tracing` | optional |
-| `getrandom` | retry jitter and multipart boundaries | yes | shared | no (multipart is only one owner) | intentionally unconditional |
-| `httpdate` | Retry-After parsing | yes | shared | no | foundational to retry policy |
-| `base64` | Basic auth and proxy auth | yes | shared | no | foundational |
+| `getrandom` | retry jitter (`retry.rs`) and multipart boundaries (`multipart.rs`) | no | no | `logical-retry` + `multipart` (joint owners) | optional; unification keeps it when either is selected |
+| `httpdate` | Retry-After parsing (`retry.rs`) | no | no | `logical-retry` | optional; absent from lean profiles |
+| `base64` | Basic auth (`auth.rs`); proxy auth (`proxy.rs`, own edge) | no | no | `basic-auth` + `proxy` | optional; Bearer-only lean profiles omit the direct edge |
 | `tower-service` | custom connector `Service` implementations | yes | shared | no | foundational |
 | `pin-project-lite` | timeout/body stream projections | yes | shared | no | foundational |
 | `percent-encoding` | high-level proxy auth decoding | no | no | `high-level-url` | optional; absent from native slices |
@@ -102,8 +107,10 @@ Rustls; a dependency can still be shared by other optional routes.
 | `thiserror` | public error taxonomy | yes | shared | no | foundational |
 
 The matrix intentionally does not gate tiny ubiquitous dependencies merely to
-reduce crate count. In particular, `getrandom` cannot be made multipart-only
-without changing retry jitter behavior. No dependency upgrade was needed, so
+reduce crate count. `getrandom` is jointly owned by `logical-retry` and
+`multipart` (unification keeps it when either is selected); `httpdate` is
+owned by `logical-retry`; `base64` is owned by `basic-auth` plus the
+`proxy` feature's own edge. No dependency upgrade was needed, so
 the workspace MSRV is Rust 1.89.
 
 These are small, well-audited crates with minimal transitive trees. Together
@@ -122,8 +129,10 @@ retry, or routing dependencies by design.
 Downstream size/dependency evidence for the minimal profiles lives in
 [embedded-footprint.md](embedded-footprint.md) (manual qualification in
 `qualification/embedded/`). Minimal trees verifiably exclude
-cookies/proxy/compression/multipart/H2/H3, JSON, and the proxy-owned
-`eggfetch-http-connect` wire crate; serde/serde_json enter
+cookies/proxy/compression/multipart/H2/H3, JSON, the proxy-owned
+`eggfetch-http-connect` wire crate, and (in lean high-level profiles
+without the policy features) core's direct `base64`/`httpdate`/`getrandom`
+edges; serde/serde_json enter
 only when the native json feature is selected. The minimal native transport
 slice (`native-http1` + `tls-rustls` without `high-level-url`) additionally
 excludes `url`, `idna`, ICU, and `percent-encoding`; the native

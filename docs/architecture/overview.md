@@ -44,7 +44,7 @@ This document is the bird's-eye view: what each discrete module, tool, and capab
 
 1. **Single networking implementation** — all HTTP logic lives in `eggfetch-core` plus the small `eggfetch-http-connect` CONNECT wire primitive it owns. CLI, Python, FFI, and Node never touch the network directly.
 2. **Async-first** — the Rust engine is async-only (tokio). Synchronous APIs are adapter-layer concerns that block on the async engine (Python sync releases the GIL; Node prototype uses `spawn_blocking` over FFI).
-3. **Feature-gated modularity** — default is HTTP/1.1 + Rustls TLS with the high-level URL API. HTTP/2, HTTP/3, cookies, compression, multipart, and proxy are opt-in via Cargo features; `native-http1`/`native-http2` without `high-level-url` select the low-level `http::Request` transport without `url`/`idna`/ICU.
+3. **Feature-gated modularity** — default is HTTP/1.1 + Rustls TLS with the high-level URL API plus logical retry, redirect following, and Basic auth. HTTP/2, HTTP/3, cookies, compression, multipart, and proxy are opt-in via Cargo features; `native-http1`/`native-http2` without `high-level-url` select the low-level `http::Request` transport without `url`/`idna`/ICU. The lean Bearer-only profile selects `native-http1` + `high-level-url` without `logical-retry`/`redirects`/`basic-auth` for single-attempt 3xx-passthrough clients.
 4. **Security by default** — `unsafe_code = "forbid"` workspace-wide (only `eggfetch-ffi` and `eggfetch-node` override to `"allow"` for FFI/N-API), credential redaction, CR/LF injection prevention, fail-closed TLS translation.
 5. **Typed reconstruction, no silent drops** — request rebuilds for retry/redirect go through exhaustive helpers (`RequestParts::retry_request`, `into_request`, `advance_redirect_hop`); a new field must fail to compile, never be silently dropped.
 
@@ -131,7 +131,7 @@ All HTTP behavior lives here (top-level modules plus `transport/`, `stream/`, an
 | `service` | Yes | `NativeHttpService` — always-ready `tower_service::Service` adapter over native frame execution. |
 | `headers` | Yes | `Headers` — case-insensitive header map wrapper around `http::HeaderMap`. |
 | `error` | Yes | `Error` enum and `Result<T>` alias. Comprehensive taxonomy (`InvalidUrl` … `Http2*`, `H3*`, `ResolvedTargetRedirect`, JSON errors, `TraceCallbackAborted`) with `kind()` returning static strings for programmatic matching. |
-| `auth` | Yes | `AuthScheme`, `BasicAuth`, `BearerAuth` — CR/LF injection prevention, redacted `Debug`/`Display`. Precedence: request > disabled > client > none. |
+| `auth` | Yes | `AuthScheme`, `BasicAuth` (requires `basic-auth`), `BearerAuth` — CR/LF injection prevention, redacted `Debug`/`Display`. Precedence: request > disabled > client > none. Bearer needs no Base64 and stays available in the lean profile. |
 | `compression` | Yes | `ContentCoding`, `DecompressionLimit` — streaming decompression (gzip, brotli, zstd, deflate). Zip-bomb protection via max decoded size and ratio. |
 | `cookie` | Yes | `CookieJar`, `Cookie`, `SameSite` — RFC 6265 jar with domain/path matching, cross-origin stripping, thread-safe storage. (cfg `cookies`) |
 | `http_version` | Yes | `HttpVersionPolicy` — HTTP/1.1, HTTP/2, HTTP/3 negotiation (`Auto` / `Http2Only` / `Http3Only`). |
@@ -142,12 +142,12 @@ All HTTP behavior lives here (top-level modules plus `transport/`, `stream/`, an
 | `transport/metrics` | Yes | `TransportMetrics`, `TransportSnapshot` — connector/DNS/TLS, UDS/proxy, physical admission waits/timeouts/live/high-water, established I/O inactivity timeouts, H3 creation/eviction, Alt-Svc learned/expired/cleared/rejected, H3 attempted/suppressed/fallback/drain/close/reconnect, 101 upgrades. Separate from `PoolMetrics`; physical Hyper reuse is not represented as a logical permit metric. |
 | `proxy` | Yes | `Proxy`, `ProxyConfig`, `ProxyAuth`, `NoProxy`, `NoProxyRule`, `ProxyDecision` — HTTP forwarding, HTTPS CONNECT tunneling, SOCKS5. Per-request override model. (cfg `proxy`) |
 | `redact` | Yes | `redact_headers()`, `SENSITIVE_HEADERS` plus `redact_url()`/`redact_url_string()` (require `high-level-url`) — centralized secret redaction for all `Debug`/`Display`/error output. |
-| `redirect` | Yes | `RedirectPolicy`, `redirect_method()`, `build_redirect_request()` — method rewrites (303→GET), cross-origin header stripping, body replayability checks. |
-| `retry` | Yes | `RetryPolicy`, `RetryPolicyBuilder`, `BackoffPolicy`, `MethodPolicy`, `StatusPolicy`, `RetryCause` — exponential backoff+jitter, `Retry-After` support. POST/PATCH not retried by default. |
+| `redirect` | Yes (requires `redirects`) | `RedirectPolicy`, `redirect_method()`, `build_redirect_request()` — method rewrites (303→GET), cross-origin header stripping, body replayability checks. Absent in the lean profile, which returns 3xx without following. |
+| `retry` | Yes (requires `logical-retry`) | `RetryPolicy`, `RetryPolicyBuilder`, `BackoffPolicy`, `MethodPolicy`, `StatusPolicy`, `RetryCause` — exponential backoff+jitter, `Retry-After` support. POST/PATCH not retried by default. Absent in the lean profile, which dispatches once. |
 | `timeout` | Yes | `Timeout`, `TimeoutBuilder`, `TimeoutPhase` — 7 phases (Pool, Connect, ProxyConnect, ProxyTls, Write, Read, Total). Request-level overrides merge with client-level per-field. |
 | `tls` | Yes | `TlsConfig`, `TlsConfigBuilder`, `TlsVersion`, `TrustStore`, `ClientIdentity` — replacement or additional CA roots, mTLS certs, verification toggle, version bounds. |
 | `trace` | Yes | `TraceObserver`, `TraceEvent` — synchronous lifecycle callbacks; coroutine callbacks rejected at adapters. |
-| `pipeline/` | No | Lifecycle orchestration split by responsibility (`mod` entry points): `retry` (retry loop/backoff/discard drain) → `redirect` (redirect loop, shared hop builder) → `prepare` (`PreparedRequest` normalization, pool acquisition) → `route` (`TransportRoute::select_route`) → `hyper_dispatch` / `proxy_dispatch` / `h3_dispatch` → `finalize` (common post-transport policy). |
+| `pipeline/` | No | Lifecycle orchestration split by responsibility (`mod` entry points): `retry` (retry loop/backoff/discard drain, requires `logical-retry`) → `redirect` (redirect loop, shared hop builder, requires `redirects`) → `lean` (single-hop dispatch when `redirects` is absent) → `prepare` (`PreparedRequest` normalization, pool acquisition) → `route` (`TransportRoute::select_route`) → `hyper_dispatch` / `proxy_dispatch` / `h3_dispatch` → `finalize` (common post-transport policy). Shared discard drain lives in `mod` (requires `logical-retry` or `redirects`). |
 | `transport` | Mixed | `mod` (Hyper client aliases), `dialer` (public caller-owned raw-stream seam plus private Hyper adapter), `lifecycle` (physical admission and established-I/O guards), `direct`, `direct_connector` (socket options + local bind), `proxy`, `socks` (per-route persistent pools), `uds`, `http3` (QUIC/draining, explicit `H3DispatchError`), `alt_svc` (authenticated cache + suppressor), `connect`, `connect_timeout`, `metrics`. `direct` owns the shared Hyper response lifecycle (`finish_hyper_response`, `wrap_incoming`, `await_upgrade`). |
 | `stream` | No | Per-chunk read/write timeout wrappers (`read_timeout`, `write_timeout`). |
 | `h2_headers` | No | HTTP/2 forbidden-header stripping. |
@@ -343,7 +343,7 @@ rustls with custom CA bundles, mTLS client certs, version policy, verification t
 
 ### Auth, redirect, retry
 
-Basic/Bearer with redaction and CR/LF rejection; precedence request > disabled > client > none; URL-embedded credentials rejected. Redirects: 303→GET rewrites, cross-origin stripping, buffered-body replay (one-shot streams rejected before next hop). Retry: policy-driven exponential backoff+jitter, `Retry-After`, per-method/status policies (POST/PATCH off by default), replay checks.
+Basic (requires `basic-auth`)/Bearer with redaction and CR/LF rejection; precedence request > disabled > client > none; URL-embedded credentials rejected. Redirects (requires `redirects`): 303→GET rewrites, cross-origin stripping, buffered-body replay (one-shot streams rejected before next hop). Retry (requires `logical-retry`): policy-driven exponential backoff+jitter, `Retry-After`, per-method/status policies (POST/PATCH off by default), replay checks. The lean profile (`native-http1` + `high-level-url` without the three policy features) keeps Bearer auth, timeouts, body limits, pooling, TLS, and typed failures while dispatching once and returning 3xx without following.
 
 **Deep dive:** [core-auth-redirect-retry.md](core-auth-redirect-retry.md)
 
@@ -420,6 +420,11 @@ Client::send()
       → common post-transport policy (`pipeline::finalize`: Alt-Svc learning, decompression, decoded-size limit)
       → read timeout + pool lease attachment
 ```
+
+Without `logical-retry`, `Client::send` enters at the redirect loop (or
+at the lean single-hop `pipeline::lean::send_lean` when `redirects` is also
+absent, returning 3xx without following and with empty history). The
+remaining stages are identical in all profiles.
 
 Compatible forward-proxy and single-target CONNECT clients are cached by
 connection-affecting route policy only. The request-local shrinking total

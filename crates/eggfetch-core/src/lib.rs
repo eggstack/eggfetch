@@ -45,6 +45,7 @@ pub mod pool;
 #[cfg(feature = "proxy")]
 pub mod proxy;
 pub mod redact;
+#[cfg(feature = "redirects")]
 pub mod redirect;
 #[cfg(feature = "high-level-url")]
 pub mod request;
@@ -52,6 +53,7 @@ pub mod request;
 pub mod response;
 #[cfg(feature = "high-level-url")]
 pub(crate) mod response_decode;
+#[cfg(feature = "logical-retry")]
 pub mod retry;
 pub mod service;
 pub(crate) mod stream;
@@ -62,7 +64,9 @@ pub mod trace;
 pub mod transport;
 pub mod transport_hints;
 
-pub use auth::{AuthScheme, BasicAuth, BearerAuth};
+#[cfg(feature = "basic-auth")]
+pub use auth::BasicAuth;
+pub use auth::{AuthScheme, BearerAuth};
 pub use body::{BoxBytesStream, NativeResponseBody, RequestBody, ResponseBody, SharedTrailers};
 pub use client::{Client, ClientBuilder};
 pub use compression::{accept_encoding_value, ContentCoding};
@@ -85,15 +89,17 @@ pub use proxy::{
 pub use redact::{is_sensitive_header, redact_headers, SENSITIVE_HEADERS};
 #[cfg(feature = "high-level-url")]
 pub use redact::{redact_url, redact_url_string};
-#[cfg(feature = "high-level-url")]
+#[cfg(all(feature = "high-level-url", feature = "redirects"))]
 pub use redirect::{
     build_redirect_request_with_redirect_policy, check_https_downgrade, is_https_downgrade,
 };
+#[cfg(feature = "redirects")]
 pub use redirect::{RedirectDowngradePolicy, RedirectPolicy};
 #[cfg(feature = "high-level-url")]
 pub use request::{ProxyOverride, Request, RequestBuilder};
 #[cfg(feature = "high-level-url")]
 pub use response::{HistoryEntry, Response};
+#[cfg(feature = "logical-retry")]
 pub use retry::{
     BackoffPolicy, MethodPolicy, ReplayCheck, RetryCause, RetryContext, RetryPolicy,
     RetryPolicyBuilder, StatusPolicy,

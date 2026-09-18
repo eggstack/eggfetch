@@ -54,6 +54,10 @@ impl std::fmt::Debug for HistoryEntry {
 impl HistoryEntry {
     /// Create a history entry from a response that has already been
     /// drained (body consumed).
+    ///
+    /// Only available with the `redirects` feature; the lean profile
+    /// constructs no redirect history.
+    #[cfg(feature = "redirects")]
     pub(crate) fn from_response(response: &Response) -> Self {
         let reason = response
             .wire_reason_phrase
@@ -349,6 +353,10 @@ impl Response {
     }
 
     /// Set the redirect history.
+    ///
+    /// Only available with the `redirects` feature; the lean profile leaves
+    /// history empty.
+    #[cfg(feature = "redirects")]
     pub(crate) fn set_history(&mut self, history: Vec<HistoryEntry>) {
         self.history = history;
     }

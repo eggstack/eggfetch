@@ -15,8 +15,10 @@ use crate::body::RequestBody;
 use crate::client::Client;
 use crate::error::Result;
 use crate::headers::Headers;
+#[cfg(feature = "redirects")]
 use crate::redirect::RedirectPolicy;
 use crate::response::Response;
+#[cfg(feature = "logical-retry")]
 use crate::retry::RetryPolicy;
 use crate::timeout::Timeout;
 
@@ -64,6 +66,7 @@ pub(crate) struct RequestParts {
     pub(crate) body: RequestBody,
     pub(crate) version: Version,
     pub(crate) timeout: Option<Timeout>,
+    #[cfg(feature = "redirects")]
     pub(crate) redirect: Option<RedirectPolicy>,
     pub(crate) auth: Option<AuthScheme>,
     pub(crate) auth_disabled: bool,
@@ -71,6 +74,7 @@ pub(crate) struct RequestParts {
     pub(crate) max_decoded_body_size: Option<usize>,
     pub(crate) max_decompression_ratio: Option<f64>,
     pub(crate) proxy_override: ProxyOverride,
+    #[cfg(feature = "logical-retry")]
     pub(crate) retry: Option<RetryPolicy>,
     pub(crate) transport_hints: TransportHints,
     pub(crate) proxied_target: Option<ResolvedTarget>,
@@ -96,6 +100,7 @@ impl RequestParts {
             body,
             version,
             timeout,
+            #[cfg(feature = "redirects")]
             redirect,
             auth,
             auth_disabled,
@@ -103,6 +108,7 @@ impl RequestParts {
             max_decoded_body_size,
             max_decompression_ratio,
             proxy_override,
+            #[cfg(feature = "logical-retry")]
             retry,
             transport_hints,
             proxied_target,
@@ -113,7 +119,10 @@ impl RequestParts {
         request.set_body(body);
         request.set_version(version);
         request.set_timeout(timeout);
+        #[cfg(feature = "redirects")]
         request.set_redirect(redirect);
+        #[cfg(not(feature = "redirects"))]
+        let _ = ();
         request.set_auth(auth);
         request.set_auth_disabled(auth_disabled);
         request.set_decompress(decompress);
@@ -123,7 +132,10 @@ impl RequestParts {
         request.set_proxy_override(proxy_override);
         #[cfg(not(feature = "proxy"))]
         let _ = proxy_override;
+        #[cfg(feature = "logical-retry")]
         request.set_retry(retry);
+        #[cfg(not(feature = "logical-retry"))]
+        let _ = ();
         request.set_transport_hints(transport_hints);
         request.set_proxied_target(proxied_target);
         request.set_failure_context(failure_context);
@@ -132,7 +144,8 @@ impl RequestParts {
 
     /// Build the retry attempt for the same logical request.
     ///
-    /// Preserves every request-local override that remains valid for
+    /// Only available with the `logical-retry` feature. Preserves every
+    /// request-local override that remains valid for
     /// another attempt (including transport hints, proxy/decompression
     /// overrides, auth-disable state, redirect and retry policy) while
     /// applying the shrunk `attempt_timeout` for the remaining total
@@ -143,6 +156,7 @@ impl RequestParts {
     ///
     /// Returns [`crate::error::Error::BodyNotReplayableForRetry`] when the
     /// saved body is a one-shot stream.
+    #[cfg(feature = "logical-retry")]
     pub(crate) fn retry_request(
         &self,
         attempt_timeout: Option<Timeout>,
@@ -153,6 +167,7 @@ impl RequestParts {
         request.set_body(replayed);
         request.set_version(self.version);
         request.set_timeout(attempt_timeout);
+        #[cfg(feature = "redirects")]
         request.set_redirect(self.redirect.clone());
         request.set_auth(self.auth.clone());
         request.set_auth_disabled(self.auth_disabled);
@@ -170,15 +185,18 @@ impl RequestParts {
 
     /// Apply a shrunk total deadline to a timeout value.
     ///
-    /// Returns the timeout with `total` replaced by `total - elapsed`
-    /// (saturating). Used by both retry and redirect loops so the original
-    /// total deadline shrinks rather than restarting on each attempt/hop.
+    /// Only available with the `logical-retry` feature. Returns the timeout
+    /// with `total` replaced by `total - elapsed` (saturating). The retry
+    /// loop uses this so the original total deadline shrinks rather than
+    /// restarting on each attempt; the redirect loop inlines the same
+    /// shrinking for per-hop budgets.
     ///
     /// Per-phase (`connect`/`read`/`write`/`pool`) values are intentionally
     /// left unclamped: the remaining total stays authoritative as the outer
     /// `send_with_total_timeout` bound around each attempt/hop, so a late
     /// attempt cannot overshoot the total budget even with full per-phase
     /// values.
+    #[cfg(feature = "logical-retry")]
     pub(crate) fn shrink_total_deadline(
         timeout: &Timeout,
         elapsed: std::time::Duration,
@@ -206,6 +224,7 @@ pub struct Request {
     body: RequestBody,
     version: Version,
     timeout: Option<Timeout>,
+    #[cfg(feature = "redirects")]
     redirect: Option<RedirectPolicy>,
     auth: Option<AuthScheme>,
     auth_disabled: bool,
@@ -214,7 +233,8 @@ pub struct Request {
     max_decompression_ratio: Option<f64>,
     /// Proxy override: `None` = inherit, `Some(None)` = direct, `Some(Some(c))` = explicit.
     proxy_override: ProxyOverride,
-    /// Per-request retry policy override.
+    /// Per-request retry policy override. Only available with `logical-retry`.
+    #[cfg(feature = "logical-retry")]
     retry: Option<RetryPolicy>,
     /// Typed transport-level hints (target override, SNI hostname, etc.).
     transport_hints: TransportHints,
@@ -227,21 +247,26 @@ pub struct Request {
 
 impl std::fmt::Debug for Request {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Request")
+        let mut debug = f.debug_struct("Request");
+        debug
             .field("method", &self.method)
             .field("url", &crate::redact::redact_url(&self.url))
             .field("headers", &self.headers)
             .field("body", &self.body)
             .field("version", &self.version)
-            .field("timeout", &self.timeout)
-            .field("redirect", &self.redirect)
+            .field("timeout", &self.timeout);
+        #[cfg(feature = "redirects")]
+        debug.field("redirect", &self.redirect);
+        debug
             .field("auth", &self.auth)
             .field("auth_disabled", &self.auth_disabled)
             .field("decompress", &self.decompress)
             .field("max_decoded_body_size", &self.max_decoded_body_size)
             .field("max_decompression_ratio", &self.max_decompression_ratio)
-            .field("proxy_override", &self.proxy_override)
-            .field("retry", &self.retry)
+            .field("proxy_override", &self.proxy_override);
+        #[cfg(feature = "logical-retry")]
+        debug.field("retry", &self.retry);
+        debug
             .field("transport_hints", &self.transport_hints)
             .field("proxied_target", &self.proxied_target)
             .field(
@@ -262,6 +287,7 @@ impl Request {
             body: RequestBody::default(),
             version: Version::HTTP_11,
             timeout: None,
+            #[cfg(feature = "redirects")]
             redirect: None,
             auth: None,
             auth_disabled: false,
@@ -269,6 +295,7 @@ impl Request {
             max_decoded_body_size: None,
             max_decompression_ratio: None,
             proxy_override: ProxyOverride::Inherit,
+            #[cfg(feature = "logical-retry")]
             retry: None,
             transport_hints: TransportHints::default(),
             proxied_target: None,
@@ -333,12 +360,18 @@ impl Request {
     }
 
     /// Returns the request-level redirect policy override, if set.
+    ///
+    /// Only available with the `redirects` feature.
+    #[cfg(feature = "redirects")]
     #[must_use]
     pub fn redirect(&self) -> Option<&RedirectPolicy> {
         self.redirect.as_ref()
     }
 
     /// Set the request-level redirect policy override.
+    ///
+    /// Only available with the `redirects` feature.
+    #[cfg(feature = "redirects")]
     pub fn set_redirect(&mut self, redirect: Option<RedirectPolicy>) {
         self.redirect = redirect;
     }
@@ -420,12 +453,18 @@ impl Request {
     }
 
     /// Returns the per-request retry policy override, if set.
+    ///
+    /// Only available with the `logical-retry` feature.
+    #[cfg(feature = "logical-retry")]
     #[must_use]
     pub fn retry(&self) -> Option<&RetryPolicy> {
         self.retry.as_ref()
     }
 
     /// Set the per-request retry policy override.
+    ///
+    /// Only available with the `logical-retry` feature.
+    #[cfg(feature = "logical-retry")]
     pub fn set_retry(&mut self, retry: Option<RetryPolicy>) {
         self.retry = retry;
     }
@@ -471,6 +510,7 @@ impl Request {
             body: self.body,
             version: self.version,
             timeout: self.timeout,
+            #[cfg(feature = "redirects")]
             redirect: self.redirect,
             auth: self.auth,
             auth_disabled: self.auth_disabled,
@@ -478,6 +518,7 @@ impl Request {
             max_decoded_body_size: self.max_decoded_body_size,
             max_decompression_ratio: self.max_decompression_ratio,
             proxy_override: self.proxy_override,
+            #[cfg(feature = "logical-retry")]
             retry: self.retry,
             transport_hints: self.transport_hints,
             proxied_target: self.proxied_target,
@@ -494,6 +535,7 @@ pub struct RequestBuilder {
     headers: Headers,
     body: RequestBody,
     timeout: Option<Timeout>,
+    #[cfg(feature = "redirects")]
     redirect: Option<RedirectPolicy>,
     auth: Option<AuthScheme>,
     auth_disabled: bool,
@@ -501,6 +543,7 @@ pub struct RequestBuilder {
     max_decoded_body_size: Option<usize>,
     max_decompression_ratio: Option<f64>,
     proxy_override: ProxyOverride,
+    #[cfg(feature = "logical-retry")]
     retry: Option<RetryPolicy>,
     transport_hints: TransportHints,
     proxied_target: Option<ResolvedTarget>,
@@ -517,6 +560,7 @@ impl RequestBuilder {
             headers: Headers::new(),
             body: RequestBody::default(),
             timeout: None,
+            #[cfg(feature = "redirects")]
             redirect: None,
             auth: None,
             auth_disabled: false,
@@ -524,6 +568,7 @@ impl RequestBuilder {
             max_decoded_body_size: None,
             max_decompression_ratio: None,
             proxy_override: ProxyOverride::Inherit,
+            #[cfg(feature = "logical-retry")]
             retry: None,
             transport_hints: TransportHints::default(),
             proxied_target: None,
@@ -606,8 +651,9 @@ impl RequestBuilder {
 
     /// Override the redirect policy for this specific request.
     ///
-    /// When set, this overrides the client-level redirect policy for
-    /// this request only.
+    /// Only available with the `redirects` feature. When set, this overrides
+    /// the client-level redirect policy for this request only.
+    #[cfg(feature = "redirects")]
     #[must_use]
     pub fn redirect_policy(mut self, policy: RedirectPolicy) -> Self {
         self.redirect = Some(policy);
@@ -700,8 +746,9 @@ impl RequestBuilder {
 
     /// Override the retry policy for this specific request.
     ///
-    /// When set, this overrides the client-level retry policy for
-    /// this request only.
+    /// Only available with the `logical-retry` feature. When set, this
+    /// overrides the client-level retry policy for this request only.
+    #[cfg(feature = "logical-retry")]
     #[must_use]
     pub fn retry(mut self, policy: RetryPolicy) -> Self {
         self.retry = Some(policy);
@@ -710,6 +757,9 @@ impl RequestBuilder {
 
     /// Disable retries for this specific request, even if the client
     /// has a retry policy configured.
+    ///
+    /// Only available with the `logical-retry` feature.
+    #[cfg(feature = "logical-retry")]
     #[must_use]
     pub fn without_retry(mut self) -> Self {
         self.retry = Some(RetryPolicy::default());
@@ -825,14 +875,16 @@ impl RequestBuilder {
         req.headers = self.headers;
         req.body = self.body;
         req.timeout = self.timeout;
-        req.redirect = self.redirect;
+        #[cfg(feature = "redirects")]
+        req.set_redirect(self.redirect);
         req.auth = self.auth;
         req.auth_disabled = self.auth_disabled;
         req.decompress = self.decompress;
         req.max_decoded_body_size = self.max_decoded_body_size;
         req.max_decompression_ratio = self.max_decompression_ratio;
         req.proxy_override = self.proxy_override;
-        req.retry = self.retry;
+        #[cfg(feature = "logical-retry")]
+        req.set_retry(self.retry);
         req.transport_hints = self.transport_hints;
         req.proxied_target = self.proxied_target;
         Ok(req)
@@ -881,7 +933,9 @@ mod tests {
     use proptest::prelude::*;
 
     use super::{Request, ResolvedTarget};
-    use crate::auth::{AuthScheme, BasicAuth};
+    use crate::auth::AuthScheme;
+    #[cfg(feature = "basic-auth")]
+    use crate::auth::BasicAuth;
     use bytes::Bytes;
     use std::net::SocketAddr;
 
@@ -923,9 +977,12 @@ mod tests {
         req.set_body(crate::body::RequestBody::Bytes(Bytes::from(
             "password=form-secret",
         )));
+        #[cfg(feature = "basic-auth")]
         req.set_auth(Some(AuthScheme::Basic(
             BasicAuth::new("user", "auth-secret").unwrap(),
         )));
+        #[cfg(not(feature = "basic-auth"))]
+        req.set_auth(Some(AuthScheme::bearer("auth-secret").unwrap()));
         let debug = format!("{req:?}");
         for leaked in [
             "top-secret-key",

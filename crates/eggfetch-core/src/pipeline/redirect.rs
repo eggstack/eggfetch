@@ -11,7 +11,7 @@ use std::sync::Arc;
 
 use bytes::Bytes;
 
-use super::retry::drain_response_body;
+use super::drain_response_body;
 use crate::body::RequestBody;
 use crate::client::Client;
 use crate::error::{Error, Result};
@@ -247,7 +247,8 @@ fn advance_redirect_hop(
         max_decoded_body_size: _,
         max_decompression_ratio: _,
         proxy_override: _,
-        retry: _,
+        #[cfg(feature = "logical-retry")]
+            retry: _,
         transport_hints: _,
         proxied_target: _,
         failure_context: _,
@@ -268,7 +269,7 @@ fn advance_redirect_hop(
 /// handles header merging, timeout computation, cookie injection,
 /// authentication, the redirect loop, and response post-processing.
 #[allow(clippy::too_many_lines)]
-pub(super) async fn send_with_redirects(client: &Client, request: Request) -> Result<Response> {
+pub(crate) async fn send_with_redirects(client: &Client, request: Request) -> Result<Response> {
     let crate::request::RequestParts {
         method,
         url,
@@ -283,7 +284,8 @@ pub(super) async fn send_with_redirects(client: &Client, request: Request) -> Re
         max_decoded_body_size: request_max_decoded_body_size,
         max_decompression_ratio: request_max_decompression_ratio,
         proxy_override: request_proxy,
-        retry: _request_retry,
+        #[cfg(feature = "logical-retry")]
+            retry: _request_retry,
         transport_hints: request_transport_hints,
         proxied_target: request_proxied_target,
         failure_context,
@@ -594,14 +596,29 @@ mod tests {
 
     #[test]
     fn hop_builder_redirect_hop_clears_hints_and_drops_credentials() {
+        #[cfg(not(feature = "basic-auth"))]
+        use crate::auth::AuthScheme;
+        #[cfg(feature = "basic-auth")]
         use crate::auth::{AuthScheme, BasicAuth};
 
+        #[cfg(feature = "basic-auth")]
         let client = crate::client::Client::builder()
             .auth(AuthScheme::basic("client", "secret").expect("valid auth"))
+            .build();
+        #[cfg(not(feature = "basic-auth"))]
+        let client = crate::client::Client::builder()
+            .auth(AuthScheme::bearer("secret").expect("valid auth"))
             .build();
         let mut headers = Headers::new();
         headers.insert("cookie", "session=abc").unwrap();
         headers.insert("x-custom", "keep").unwrap();
+
+        #[cfg(feature = "basic-auth")]
+        let req_auth = Some(AuthScheme::Basic(
+            BasicAuth::new("req", "pw").expect("valid auth"),
+        ));
+        #[cfg(not(feature = "basic-auth"))]
+        let req_auth = Some(AuthScheme::bearer("req-tok").expect("valid auth"));
 
         let hop = build_hop_request(
             &client,
@@ -624,9 +641,7 @@ mod tests {
                     trace: Some(Arc::new(crate::trace::NoopTraceObserver)),
                 },
                 proxied_target: None,
-                auth: Some(AuthScheme::Basic(
-                    BasicAuth::new("req", "pw").expect("valid auth"),
-                )),
+                auth: req_auth,
                 auth_disabled: false,
                 is_first_hop: false,
                 preserve_resolved_target: false,

@@ -600,6 +600,7 @@ mod tests {
         assert_eq!(err.kind(), "http2_protocol");
     }
 
+    #[cfg(feature = "logical-retry")]
     #[test]
     fn http2_refused_stream_is_retryable() {
         let err = Error::Http2StreamReset {
@@ -608,6 +609,7 @@ mod tests {
         assert!(crate::retry::RetryPolicy::is_error_retryable(&err));
     }
 
+    #[cfg(feature = "logical-retry")]
     #[test]
     fn http2_cancel_is_not_retryable() {
         let err = Error::Http2StreamReset {
@@ -616,6 +618,7 @@ mod tests {
         assert!(!crate::retry::RetryPolicy::is_error_retryable(&err));
     }
 
+    #[cfg(feature = "logical-retry")]
     #[test]
     fn http2_go_away_is_not_retryable() {
         let err = Error::Http2GoAway {
