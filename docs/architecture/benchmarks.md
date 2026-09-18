@@ -63,7 +63,7 @@ cargo bench -p eggfetch-bench --bench resources
 
 ## resource_monitor
 
-A standalone binary that detects unbounded memory growth by measuring peak RSS across several scripted workloads (Linux `/proc/self/status`; macOS `task_info` — no unsafe, returns `None` where unavailable). It prints a JSON report to stdout with pass/fail status against predefined thresholds for CI consumption:
+A standalone binary that detects unbounded memory growth by measuring peak RSS across several scripted workloads (Linux `/proc/self/status`; macOS `ps -o rss=` subprocess — no unsafe, returns `None` where unavailable). It prints a JSON report to stdout with pass/fail status against predefined thresholds for CI consumption:
 
 ```sh
 cargo build --release -p eggfetch-bench --bin resource_monitor

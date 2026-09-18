@@ -13,14 +13,14 @@ Focused subset for the engine lifecycle (client → request → pipeline → res
 | `client` | Yes | `Client`, `ClientBuilder` — entry point |
 | `request` | Yes | `Request`, `RequestBuilder` — fluent request construction |
 | `response` | Yes | `Response`, `HistoryEntry` — response + redirect history |
-| `body` | Yes | `RequestBody`, `ResponseBody`, `NativeResponseBody`, `BoxBytesStream` |
+| `body` | Yes | `RequestBody`, `ResponseBody`, `NativeResponseBody`, `BoxBytesStream`, `SharedTrailers` |
 | `headers` | Yes | `Headers` — case-insensitive header map wrapper |
 | `network_stream` | Yes | `NetworkStream`, `UpgradedStream`, `ConnectionMetadata` — upgrade IO + connection metadata |
 | `trace` | Yes | `TraceObserver`, `TraceEvent` — synchronous lifecycle event callbacks |
-| `error` | Yes | `Error` enum, `RequestFailure` opt-in detail wrapper, `Result<T>` alias |
-| `pipeline/` | Crate-internal | Request lifecycle orchestration split by responsibility: `retry`, `redirect`, `prepare`, `route`, `hyper_dispatch`, `proxy_dispatch`, `h3_dispatch`, `finalize`, plus short `mod` entry points |
+| `error` | Yes | `Error` enum, `RequestFailure` opt-in detail wrapper, `NetworkFailureKind` classifier, `Result<T>` alias |
+| `pipeline/` | Crate-internal | Request lifecycle orchestration split by responsibility: `retry` (requires `logical-retry`), `redirect` (requires `redirects`), `lean` (requires `high-level-url` without `redirects`), `prepare`, `route`, `hyper_dispatch`, `proxy_dispatch`, `h3_dispatch`, `finalize`, plus short `mod` entry points |
 | `transport` | Yes | Direct, caller-owned raw-stream dialer, direct-with-socket-options, UDS, proxy, HTTP/3 transport dispatch |
-| `stream` | Crate-internal | Unified response-body timeout (`BodyTimeoutStream`: read inactivity + absolute total) plus per-chunk write timeout |
+| `stream` | Crate-internal | Response-body timeout (`BodyTimeoutStream`: read inactivity + absolute total) plus a separate per-chunk write timeout (`WriteTimeoutStream` in `stream::write_timeout`) |
 
 ## Client
 
@@ -463,7 +463,7 @@ method returning a static string for programmatic matching.
 | Category | Variants |
 |----------|----------|
 | **Input validation** | `InvalidUrl`, `InvalidMethod`, `InvalidHeaderName`, `InvalidHeaderValue`, `RequestBuild`, `InvalidResolvedTarget` |
-| **Connection** | `Connect`, `Tls`, `Protocol`, `Hyper`, `HyperClient`, `Io` |
+| **Connection** | `Connect`, `Tls`, `Protocol`, `Hyper`, `HyperClient`, `Io`, `CustomTransport` (caller-owned dialer failures) |
 | **Timeout** | `Timeout { phase, elapsed }` — phase is `Pool`, `Connect`, `ProxyConnect`, `ProxyTls`, `Write`, `Read`, or `Total`; established transport stalls use `TransportIoTimeout { direction, elapsed }` |
 | **Pool** | `Pool`; physical admission timeouts remain distinguishable with `Error::is_physical_connection_admission_timeout()` |
 | **Redirect** | `InvalidRedirectLocation`, `TooManyRedirects { followed, max }`, `BodyNotReplayableForRedirect`, `ResolvedTargetRedirect` |

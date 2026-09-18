@@ -121,7 +121,7 @@ The following security measures are active in the eggfetch repository:
 - **Live dependency preflight**: `./scripts/check_security.sh` before release
   publication; routine CI remains free of live advisory database fetches.
 - **CI security checks**: lint, typecheck, and test suite run on pushes and pull requests.
-- **Threat model**: documented in `docs/security/`, covers the five trust boundaries (local app, eggfetch core, remote server, network, dependency ecosystem).
+- **Threat model**: documented in `docs/architecture/threat-model.md`, covers the five trust boundaries (local app, eggfetch core, remote server, network, dependency ecosystem).
 - **Security reviews**: TLS configuration, redirect/auth/cookie handling, proxy tunneling, body streaming, retry policy, Python bindings, and CLI are reviewed for misuse and injection vectors.
 - **Credential redaction**: regression-tested across Debug, Display, error, and log output.
 - **Unsafe boundaries**: core and ordinary workspace code forbid unsafe Rust;

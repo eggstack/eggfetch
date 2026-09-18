@@ -208,5 +208,5 @@ After the incident is resolved, conduct a retrospective:
 
 - **Security reports**: dbowman91@proton.me
 - **PGP**: Available on request
-- **Response time**: Acknowledgment within 48 hours
+- **Response time**: Severity-differentiated per `SECURITY.md` (Critical: 24h, High: 48h, Medium: 1 week, Low: 2 weeks)
 - **Disclosure**: Via GitHub Security Advisory
