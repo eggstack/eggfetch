@@ -2,6 +2,42 @@
 
 This directory contains active implementation plans, live qualification/status records, and historical implementation records. Completed plans are non-normative unless another current document explicitly says otherwise. Verification and release policy remain governed by `docs/verification-policy.md` and `docs/releases/process.md`.
 
+## Active corrective — total deadline across response body lifecycle (2026-09-18)
+
+Plan: `total-deadline-response-body-lifecycle-corrective.md`
+
+Planning baseline: `60a6e2b384519507e04cf296ffd484388e872e47`
+(eggfetch-core 0.1.6 plus the post-release lean route/policy feature work).
+
+Status: active. The public native timeout contract says `Timeout.total` is a
+wall-clock cap across the entire request lifecycle, but the current H1/H2/native
+response path drops the absolute deadline after response headers and retains
+only the per-chunk read inactivity timer. A post-header body can therefore
+stall indefinitely when `read` is unset or trickle indefinitely while staying
+inside each read interval.
+
+The corrective must first record a deterministic baseline-red body regression,
+then propagate the existing request-local absolute deadline through the common
+response finalizer and the frame-preserving `NativeResponseBody` path. Total
+must not restart on first body poll, body chunks, decoding, redirects, or
+retries; read remains a separate first-poll/per-chunk inactivity timeout.
+Buffered, streamed, raw/decoded, trailer, pool-lease, redirect, lean-profile,
+proxy, and deterministic H3 behavior are rechecked. No public timeout API,
+dependency, proxy-cache state, HTTPX total semantic, feature-graph redesign,
+or downstream-specific helper belongs in this pass.
+
+No new bounded-body API is planned: `max_decoded_body_size` already enforces
+an authoritative stream-level cap even when `Content-Length` is absent or
+wrong. Downstream small-metadata consumers should use that existing policy
+rather than buffer first and inspect length afterward.
+
+Because the correction changes executable core response semantics, closure
+requires the native frame-body fixture, Tier 1, release-time extended/package/
+security gates, and renewal of the repository's exact-SHA HTTPX 0.28.1 and
+HTTPX2 2.12.0 evidence on the final executable freeze. The corrected crate must
+be included in a normal coordinated crates.io patch release before downstream
+handoff is considered complete.
+
 ## Completed — linked binary footprint reduction (2026-09-17 → 2026-09-18)
 
 Handoff program: `linked-binary-footprint-reduction-program.md`
