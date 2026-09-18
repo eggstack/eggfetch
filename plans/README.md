@@ -2,6 +2,21 @@
 
 This directory contains active implementation plans, live qualification/status records, and historical implementation records. Completed plans are non-normative unless another current document explicitly says otherwise. Verification and release policy remain governed by `docs/verification-policy.md` and `docs/releases/process.md`.
 
+
+## Active — Python 3.15 PyPI wheel production (2026-09-18)
+
+Plan: `python-3.15-pypi-wheel-production.md`
+
+Status: planned. Extend the existing release-only PyPI matrix from CPython
+3.10–3.14 to 3.10–3.15 on Linux x86_64, macOS arm64, and Windows x86_64.
+The plan keeps version-specific GIL-enabled CPython wheels (no abi3/abi3t or
+free-threaded expansion), moves release accounting from 15 wheels + 1 sdist to
+18 wheels + 1 sdist, updates the coverage validator and public release
+documentation, and requires a full `publish=false` 18-wheel rehearsal before
+the support claim closes. Python 3.15 is still prerelease at planning time, so
+the workflow must use bounded 3.15-only prerelease fallback that naturally
+selects stable 3.15.x after GA without changing the 3.10–3.14 behavior.
+
 ## Completed corrective — total deadline across response body lifecycle (2026-09-18)
 
 Parent plan: `total-deadline-response-body-lifecycle-corrective.md`
