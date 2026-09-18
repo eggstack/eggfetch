@@ -39,7 +39,6 @@ owning feature is selected.
   (optional, behind `high-level-url`; absent from minimal native slices).
 - **thiserror** -- ergonomic error definitions.
 - **cookie** -- RFC 6265 cookie parsing and representation (optional, behind `cookies` feature).
-- **percent-encoding** -- percent-encoding for URL query strings and cookie values.
 - **tower-service** -- `Service` trait for transport connector abstractions (UDS, SOCKS, connect-timeout wrappers) and the public `NativeHttpService` interoperability boundary. The full `tower` framework, `tower-layer`, and Tonic remain outside the core dependency graph; the manual Tonic 0.14.6 qualification fixture owns its `codegen`-only dependency separately.
 - **base64** -- Basic auth credential encoding (optional, behind
   `basic-auth`; proxy auth carries its own `dep:base64` edge behind `proxy`).

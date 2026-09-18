@@ -195,7 +195,11 @@ Program outcome: **material linked-footprint improvement**.
 ### Freeze
 
 - Executable delta: policy boundary (`263e7749`) + standard-route boundary
-  (this tree). Final SHA recorded at the closure commit (see `git log`).
+  (`f1988fa0a39a057946dd0e73bfd81065612b7711`). Executable freeze
+  `f1988fa0a39a057946dd0e73bfd81065612b7711`; docs-only descendants
+  (e.g. `9a6b83c2`) do not change the executable binding per the program
+  closure rule. Final closure SHA is the docs commit landing this record
+  (see `git log`).
 - `eggfetch-core` 0.1.6; Rust 1.98.1 for measurements (MSRV 1.89.0 unchanged;
   Tier 2 MSRV gate remains release-time per `docs/verification-policy.md`);
   `standard-http1`/`standard-http2`/`transport-http*`/`standard-route`/

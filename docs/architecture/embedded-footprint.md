@@ -22,8 +22,9 @@ workload.
 
 Parent program: `plans/linked-binary-footprint-reduction-program.md`.
 Executable freeze: policy boundary `263e7749` plus the standard-route
-boundary in this tree (see `plans/standard-route-advanced-routing-feature-boundary.md`;
-final SHA recorded at closure commit). Fixture: `qualification/embedded/eggfetch-min`
+boundary `f1988fa0a39a057946dd0e73bfd81065612b7711` (see `plans/standard-route-advanced-routing-feature-boundary.md`;
+docs-only descendants after that freeze do not change the executable
+binding). Fixture: `qualification/embedded/eggfetch-min`
 source (streaming HTTPS GET, same source for all eggfetch profiles below) plus
 temporary downstream-style copies with lean feature sets (same source, same
 release shape `lto="thin"`, `codegen-units=1`, `panic="unwind"`, `strip=false`;
