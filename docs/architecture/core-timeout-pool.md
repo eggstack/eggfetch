@@ -35,15 +35,30 @@ Request-level overrides are per-field: only fields present in the request-level 
 | Phase | Enforcement |
 |-------|-------------|
 | Pool | `tokio::time::timeout` around pool acquisition |
-| Total | `tokio::time::timeout` around the full send |
-| Read | Per-chunk wrapper stream (`ReadTimeoutStream`) — deadline resets on each body chunk; direct Hyper/UDS/H3 header acquisition remains owned by the transport future |
+| Total | `tokio::time::timeout` around the transport future up to response headers, plus a crate-private absolute response-body deadline (`ResponseDeadline`) through body EOF/trailers |
+| Read | Per-chunk wrapper stream (`BodyTimeoutStream`) — starts on first body poll, deadline resets on each body chunk/frame; direct Hyper/UDS/H3 header acquisition remains owned by the transport future |
 | Write | Per-chunk wrapper stream (`WriteTimeoutStream`) — deadline resets on each chunk delivery; H3 propagates `Write` without masking or evicting |
 | Connect | Enforced by the direct connector, by proxy TCP/TLS/origin-TLS setup, and by the H3 connector (DNS + QUIC + h3 init as one budget shared across address fallback with fair per-address shares) |
 
-The native `execute_http_body()` response wrapper uses the same read phase
-contract: its timer starts when the caller first polls the body and resets
-after each returned frame. A delay between response headers and the first body
-poll therefore does not consume `Timeout.read`; `TransportIoTimeout` remains
+Read timeout: inactivity timeout, starts when body consumption begins,
+resets after each successful chunk/frame.
+
+Total timeout: absolute request-lifecycle deadline, starts with the logical
+request, includes pool/transport/headers/body/trailers, never resets, and
+can already be expired when the caller first polls the body. Dropping
+before EOF remains ordinary cancellation; the contract is that the body
+retains the absolute deadline and reports `Total` when polled after expiry.
+It does not force an error into an unpolled response asynchronously. When
+both read and total are observably expired at the same poll boundary,
+`Total` is preferred as the outer cap. A ready chunk/frame at or after the
+absolute deadline never extends the request.
+
+The native `execute_http_body()` response wrapper uses the same contract:
+its read timer starts when the caller first polls the body and resets
+after each returned frame, while its total deadline starts with the request
+lifecycle and never resets on DATA/trailer frames. A delay between response
+headers and the first body poll therefore does not consume `Timeout.read`
+but can already exhaust `Timeout.total`; `TransportIoTimeout` remains
 the separate established-connection inactivity control.
 
 Native embedded consumers may additionally set `PhysicalConnectionPolicy` and

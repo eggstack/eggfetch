@@ -2,10 +2,11 @@
 //! every successful route.
 //!
 //! Owns decompression wrapping, decoded-body size/ratio limits, the
-//! read-timeout stream, pool-lease attachment, and common metadata
+//! read/total-timeout attachment, pool-lease attachment, and common metadata
 //! finalization (Alt-Svc learning on learnable routes, 101 upgrade
 //! accounting). Transport-specific response metadata must already be present
-//! before this step.
+//! before this step. The total deadline is route-neutral: H1, H2, proxy,
+//! direct/advanced routes, and H3 share this one policy.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -18,63 +19,42 @@ use crate::client::ClientInner;
 use crate::error::Result;
 use crate::pool::PoolGuard;
 use crate::response::Response;
-use crate::stream::read_timeout_stream;
+use crate::timeout::ResponseDeadline;
 
-/// Apply the read-timeout wrapper to the streaming response body and
-/// attach the pool permit so it is held until the body is consumed or
-/// dropped.
+/// Attach read/total timeouts plus the pool permit to the streaming
+/// response body.
+///
+/// The absolute total deadline (when configured) is retained with
+/// response-body state; the unified timeout wrapper enforces it at the final
+/// stream boundary used by the chosen consumption mode. No Tokio timer is
+/// created here, so the body can cross runtime boundaries before first poll.
+pub(super) fn apply_timeouts_and_lease(
+    response: &mut Response,
+    guard: PoolGuard,
+    read_timeout: Option<Duration>,
+    total_deadline: Option<ResponseDeadline>,
+) {
+    let body = std::mem::replace(&mut response.body, ResponseBody::buffered(Bytes::new()));
+    let new_body = body.attach_lease_and_timeouts(Arc::new(guard), read_timeout, total_deadline);
+    response.set_body(new_body);
+}
+
+/// Backwards-compatible alias retained for narrow unit-test paths that only
+/// exercise the read timeout.
+#[allow(dead_code)]
 pub(super) fn apply_read_timeout_and_lease(
     response: &mut Response,
     guard: PoolGuard,
     read_timeout: Option<Duration>,
 ) {
-    let body = std::mem::replace(&mut response.body, ResponseBody::buffered(Bytes::new()));
-
-    let new_body = match body {
-        ResponseBody::Streaming { mut stream, .. } => {
-            if let Some(dur) = read_timeout {
-                let inner = std::mem::replace(
-                    &mut stream,
-                    Box::pin(futures_util::stream::empty::<crate::error::Result<Bytes>>()),
-                );
-                stream = read_timeout_stream(inner, dur);
-            }
-            ResponseBody::streaming_with_lease(stream, Arc::new(guard))
-        }
-        ResponseBody::EncodedStreaming {
-            mut stream,
-            content_encoding,
-            limit,
-            ..
-        } => {
-            if let Some(dur) = read_timeout {
-                let inner = std::mem::replace(
-                    &mut stream,
-                    Box::pin(futures_util::stream::empty::<crate::error::Result<Bytes>>()),
-                );
-                stream = read_timeout_stream(inner, dur);
-            }
-            ResponseBody::encoded_streaming_with_lease(
-                stream,
-                Arc::new(guard),
-                content_encoding,
-                limit,
-            )
-        }
-        other => {
-            drop(guard);
-            other
-        }
-    };
-
-    response.set_body(new_body);
+    apply_timeouts_and_lease(response, guard, read_timeout, None);
 }
 
 /// Apply the common post-transport policy to every successful route.
 ///
 /// Receives the transported response plus the prepared policy: Alt-Svc
 /// learning (learnable routes only), 101 upgrade accounting, decompression
-/// wrapping, decoded-size limiting, then read-timeout + pool-lease
+/// wrapping, decoded-size limiting, then read/total-timeout + pool-lease
 /// attachment.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn finalize_response(
@@ -88,6 +68,7 @@ pub(super) fn finalize_response(
     max_decompression_ratio: Option<f64>,
     guard: PoolGuard,
     read_timeout: Option<Duration>,
+    total_deadline: Option<ResponseDeadline>,
 ) -> Result<Response> {
     // Authenticated Alt-Svc learning: only from learnable routes
     // (Standard/Direct/H3) with `https`, verified TLS, no proxy. UDS, SNI,
@@ -148,7 +129,7 @@ pub(super) fn finalize_response(
         response.body = response.body.limit_decoded_size(max)?;
     }
 
-    apply_read_timeout_and_lease(&mut response, guard, read_timeout);
+    apply_timeouts_and_lease(&mut response, guard, read_timeout, total_deadline);
 
     Ok(response)
 }

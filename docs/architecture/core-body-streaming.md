@@ -43,9 +43,12 @@ eggfetch-owned body implements `http_body::Body<Data = Bytes, Error = Error>`
 and forwards DATA/trailer frames while holding the logical pool lease until
 EOF, error, or drop. Hyper's `Incoming` is not part of the public contract.
 Read timeouts start when the caller first polls the body and reset after each
-frame, so delaying body consumption after receiving headers does not consume
-the read budget. Established transport I/O inactivity remains the lower-level
-lifecycle control.
+frame; the absolute native total deadline starts with the logical request,
+never resets on DATA/trailer frames, and can already be expired on first
+poll (Total wins when already expired or tied). Delaying body consumption
+after receiving headers therefore does not consume the read budget but can
+exhaust the total budget. Established transport I/O inactivity remains the
+lower-level lifecycle control.
 
 This native surface deliberately does not apply high-level redirects,
 logical retries, cookies, auth, decompression, or decoded-body limits. The
@@ -103,7 +106,7 @@ This ensures per-origin logical-request limits remain meaningful while response 
 
 ### Trailers (`SharedTrailers`, `Response::trailers()`)
 
-Hyper yields trailers as a final `Frame::trailers` (H1 chunked trailers, H2 trailing HEADERS); H3 trailing headers come from `recv_trailers()` after data EOF. `wrap_incoming` stores them in a shared `Arc<Mutex<Option<HeaderMap>>>` without buffering the body; the H3 unfold does the same. `Response::trailers()` clones them after EOF and is `None` until arrival, on no-trailers, or on pre-trailer body errors (errors stay body errors). H1 duplicate same-name trailers collapse upstream in hyper (`insert`); H2 duplicates are preserved via `get_all`. Read timeouts apply while waiting for trailers at the body boundary. Python/FFI/Node defer exposure; the HTTPX facade is unchanged.
+Hyper yields trailers as a final `Frame::trailers` (H1 chunked trailers, H2 trailing HEADERS); H3 trailing headers come from `recv_trailers()` after data EOF. `wrap_incoming` stores them in a shared `Arc<Mutex<Option<HeaderMap>>>` without buffering the body; the H3 unfold does the same. `Response::trailers()` clones them after EOF and is `None` until arrival, on no-trailers, or on pre-trailer body errors (errors stay body errors). H1 duplicate same-name trailers collapse upstream in hyper (`insert`); H2 duplicates are preserved via `get_all`. Read timeouts apply while waiting for trailers at the body boundary, and the absolute total deadline spans trailer completion (delayed trailers past total report `Total` with trailers `None`). Python/FFI/Node defer exposure; the HTTPX facade is unchanged.
 
 ## BoxBytesStream
 
@@ -115,9 +118,24 @@ pub type BoxBytesStream = Pin<Box<dyn Stream<Item = Result<Bytes>> + Send>>;
 
 Used for both request and response streaming. The `stream` module provides two wrapper adapters:
 
-### ReadTimeoutStream
+### ReadTimeoutStream / BodyTimeoutStream
 
-Wraps a `BoxBytesStream` and enforces a per-chunk read timeout. If no chunk arrives within the configured duration, yields `Error::Timeout { phase: Read }`. The deadline resets on every chunk arrival.
+Wraps a `BoxBytesStream` and enforces response-body deadlines with one
+common owner. The per-chunk read timeout yields `Error::Timeout { phase:
+Read }` when no chunk arrives in time and resets on every chunk arrival;
+its timer starts on first body poll. The absolute native total deadline
+yields `Error::Timeout { phase: Total }`, never resets, can already be
+expired on first poll (winning before inner transport is polled), and wins
+ties when both deadlines are observably expired together. A ready chunk at
+or after the absolute deadline never extends the request. After a timeout
+the stream fuses (next poll is EOF) so the outer lease wrapper releases the
+pool permit; drop remains ordinary cancellation.
+
+`ResponseBody` retains read/total with body state; `bytes()`,
+`bytes_stream()`, `raw_bytes_stream()` (and therefore `text()`/`json()`)
+enforce them at the final stream boundary for the selected mode, so raw
+encoded and decoded compressed paths share one mechanism with the timeout
+outside the decoder.
 
 ### WriteTimeoutStream
 

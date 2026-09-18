@@ -419,6 +419,16 @@ pub(crate) async fn send_single_request(
     #[cfg(not(feature = "proxy"))]
     let via_proxy = false;
 
+    // Carry the final hop/attempt's absolute deadline into the returned
+    // body rather than assigning a fresh total after headers: retry and
+    // redirect loops already shrank `hop_timeout.total`, so this deadline
+    // is the remaining original logical budget.
+    let total_deadline = match (deadline, hop_timeout.total) {
+        (Some(deadline), Some(total)) => {
+            Some(crate::timeout::ResponseDeadline::new(deadline, total))
+        }
+        _ => None,
+    };
     finalize::finalize_response(
         inner,
         response,
@@ -430,6 +440,7 @@ pub(crate) async fn send_single_request(
         max_decompression_ratio,
         guard,
         hop_timeout.read,
+        total_deadline,
     )
 }
 
@@ -585,6 +596,12 @@ where
     let remaining_total = timeout
         .total
         .map(|total| total.saturating_sub(started.elapsed()));
+    // Absolute native total deadline starts with the request lifecycle
+    // (pool admission), not the first frame poll, and never resets on DATA
+    // or trailer frames.
+    let total_deadline = timeout
+        .total
+        .map(|total| crate::timeout::ResponseDeadline::new(started + total, total));
     let trace = transport_hints.trace.as_deref();
     #[cfg(all(unix, feature = "advanced-routing"))]
     let has_uds = inner.uds_client.is_some();
@@ -715,8 +732,12 @@ where
     }
 
     let (parts, incoming) = raw_response.into_parts();
-    let native_body =
-        NativeResponseBody::from_incoming(incoming, std::sync::Arc::new(guard), timeout.read);
+    let native_body = NativeResponseBody::from_incoming(
+        incoming,
+        std::sync::Arc::new(guard),
+        timeout.read,
+        total_deadline,
+    );
     Ok(http::Response::from_parts(parts, native_body))
 }
 

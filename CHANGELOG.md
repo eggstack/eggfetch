@@ -48,6 +48,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Native `Timeout.total` is once again one absolute request-lifecycle
+  deadline through response-body EOF/trailers for high-level
+  (`bytes()`/`text()`/`json()`/`bytes_stream()`/`raw_bytes_stream()`,
+  decoded and raw compressed paths) and frame-preserving native
+  (`Client::execute_http_body()`, `NativeHttpService`) surfaces. The
+  deadline never resets on chunk/frame arrival, decode selection, or first
+  body poll; an already-expired deadline reports `TimeoutPhase::Total`
+  without accepting a ready chunk, and `Total` wins ties with `Read`.
+  Redirect final bodies use the remaining original budget; retry aggregate
+  semantics unchanged. No public API, dependency, MSRV, or
+  compatibility-facade change.
+
 ### Changed
 
 - Resolved-target connection reuse: identical direct `resolved_addresses()`

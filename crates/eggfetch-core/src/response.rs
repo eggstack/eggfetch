@@ -121,8 +121,10 @@ impl HistoryEntry {
 /// errors, never fabricated trailer state). Partial consumption or early
 /// drop never reports trailers and releases the pool permit without
 /// waiting for them. Read timeouts apply while waiting for trailers at
-/// the body boundary; the explicit native `total` deadline bounds
-/// transport setup and is not restarted per trailer wait.
+/// the body boundary; the absolute native `total` deadline spans the full
+/// lifecycle through body EOF/trailers, never resets per trailer wait, and
+/// reports `Total` when polled after expiry. Dropping before EOF remains
+/// ordinary cancellation.
 pub struct Response {
     status: StatusCode,
     version: Version,

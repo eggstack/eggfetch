@@ -243,3 +243,36 @@ async fn lean_rejects_advanced_hints() {
     }
     server.shutdown();
 }
+
+#[tokio::test]
+async fn lean_standard_total_body_deadline() {
+    // Lean `standard-http1` bypasses redirect policy but shares the common
+    // finalizer: headers may arrive before total while body completion
+    // exceeds it, and must report `Total`.
+    let mut server = TestServer::start(&TestServerConfig {
+        chunked: true,
+        response_body: Some(b"0123456789ABCDEFGHIJ".to_vec()),
+        chunk_delay_ms: 100,
+        ..Default::default()
+    });
+    let url = server.url();
+    let client = Client::builder()
+        .timeout(Timeout {
+            total: Some(Duration::from_millis(250)),
+            ..Timeout::default()
+        })
+        .build();
+    let mut resp = client.get(&url).unwrap().send().await.unwrap();
+    let err = resp.bytes().await.unwrap_err();
+    assert!(
+        matches!(
+            err,
+            Error::Timeout {
+                phase: TimeoutPhase::Total,
+                ..
+            }
+        ),
+        "lean body must respect absolute total, got: {err:?}"
+    );
+    server.shutdown();
+}

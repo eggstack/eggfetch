@@ -107,6 +107,11 @@ where
 }
 
 /// Convenience constructor: wrap a `BoxBytesStream` with a read timeout.
+///
+/// Retained for focused unit tests; production response bodies use the unified
+/// [`super::body_timeout_stream`] wrapper so read and total share one
+/// deadline owner.
+#[allow(dead_code)]
 pub(crate) fn read_timeout_stream(stream: BoxBytesStream, duration: Duration) -> BoxBytesStream {
     Box::pin(ReadTimeoutStream::new(stream, duration))
 }

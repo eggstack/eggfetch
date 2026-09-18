@@ -20,7 +20,7 @@ Focused subset for the engine lifecycle (client → request → pipeline → res
 | `error` | Yes | `Error` enum, `RequestFailure` opt-in detail wrapper, `Result<T>` alias |
 | `pipeline/` | Crate-internal | Request lifecycle orchestration split by responsibility: `retry`, `redirect`, `prepare`, `route`, `hyper_dispatch`, `proxy_dispatch`, `h3_dispatch`, `finalize`, plus short `mod` entry points |
 | `transport` | Yes | Direct, caller-owned raw-stream dialer, direct-with-socket-options, UDS, proxy, HTTP/3 transport dispatch |
-| `stream` | Crate-internal | Per-chunk read/write timeout wrappers |
+| `stream` | Crate-internal | Unified response-body timeout (`BodyTimeoutStream`: read inactivity + absolute total) plus per-chunk write timeout |
 
 ## Client
 
@@ -262,7 +262,10 @@ request policy so transports own only connection/protocol work:
    only. Hyper request scaffolding is built once via `pipeline::hyper_dispatch::build_hyper_request()`.
 4. One common post-transport policy (`pipeline::finalize::finalize_response()`) applies to every route: Alt-Svc learning
    (learnable routes only), decompression wrapping, decoded-size limiting,
-   then read-timeout + pool-lease attachment.
+   then read/total-timeout + pool-lease attachment. The absolute total
+   deadline is retained with body state and enforced at the final stream
+   boundary for every consumption mode; no Tokio timer is created at
+   finalization so bodies can cross runtimes before first poll.
 
 ### Connector lifecycle ordering
 

@@ -50,6 +50,7 @@ use pin_project_lite::pin_project;
 
 use crate::compression::DecompressionLimit;
 use crate::error::{Error, Result};
+use crate::timeout::ResponseDeadline;
 
 // ---------------------------------------------------------------------------
 // Request body
@@ -434,13 +435,21 @@ pin_project! {
     /// while the internal pool lease remains held until EOF, an error, or
     /// drop. The type is opaque so Hyper's `Incoming` does not become part
     /// of eggfetch's public API.
+    ///
+    /// Enforces the per-frame read inactivity timeout (starts on first
+    /// frame poll, resets per frame) and the absolute native total deadline
+    /// (starts with the logical request, never resets, may already be
+    /// expired on first poll). Total wins when already expired or when both
+    /// deadlines fire together. Timers are created on first poll in the
+    /// consuming runtime; no Tokio sleep crosses a runtime boundary.
     pub struct NativeResponseBody {
         #[pin]
         inner: Pin<Box<dyn http_body::Body<Data = Bytes, Error = Error> + Send>>,
         lease: Option<PoolGuardArc>,
         read_timeout: Option<Duration>,
-        #[pin]
-        timer: tokio::time::Sleep,
+        total_deadline: Option<ResponseDeadline>,
+        read_sleep: Option<Pin<Box<tokio::time::Sleep>>>,
+        total_sleep: Option<Pin<Box<tokio::time::Sleep>>>,
         started: bool,
         done: bool,
     }
@@ -457,7 +466,12 @@ impl std::fmt::Debug for NativeResponseBody {
 
 impl NativeResponseBody {
     /// Construct a native body around an eggfetch-owned response body.
-    pub(crate) fn new<B>(body: B, lease: PoolGuardArc, read_timeout: Option<Duration>) -> Self
+    pub(crate) fn new<B>(
+        body: B,
+        lease: PoolGuardArc,
+        read_timeout: Option<Duration>,
+        total_deadline: Option<ResponseDeadline>,
+    ) -> Self
     where
         B: http_body::Body<Data = Bytes, Error = Error> + Send + 'static,
     {
@@ -465,9 +479,18 @@ impl NativeResponseBody {
             inner: Box::pin(body),
             lease: Some(lease),
             read_timeout,
-            timer: tokio::time::sleep(Duration::MAX),
+            total_deadline,
+            read_sleep: None,
+            total_sleep: None,
             started: false,
             done: false,
+        }
+    }
+
+    fn total_timeout_error(total: &ResponseDeadline) -> Error {
+        Error::Timeout {
+            phase: crate::timeout::TimeoutPhase::Total,
+            elapsed: total.elapsed(),
         }
     }
 }
@@ -485,21 +508,56 @@ impl http_body::Body for NativeResponseBody {
             return Poll::Ready(None);
         }
 
-        if let Some(timeout) = *this.read_timeout {
-            if !*this.started {
-                *this.started = true;
-                this.timer
-                    .as_mut()
-                    .reset(tokio::time::Instant::now() + timeout);
+        // First poll in the consuming runtime: materialize timers here so
+        // no Tokio sleep crosses a runtime boundary. An already-expired
+        // total deadline wins without polling the inner transport.
+        if !*this.started {
+            *this.started = true;
+            if let Some(total) = this.total_deadline.as_ref() {
+                if total.is_expired() {
+                    *this.done = true;
+                    this.lease.take();
+                    return Poll::Ready(Some(Err(Self::total_timeout_error(total))));
+                }
+                let tokio_deadline = tokio::time::Instant::from_std(total.deadline());
+                *this.total_sleep = Some(Box::pin(tokio::time::sleep_until(tokio_deadline)));
+            }
+            if let Some(timeout) = *this.read_timeout {
+                *this.read_sleep = Some(Box::pin(tokio::time::sleep(timeout)));
+            }
+        }
+
+        // Absolute deadline is authoritative: a ready frame at or after the
+        // deadline must not extend the request.
+        if let Some(total) = this.total_deadline.as_ref() {
+            if total.is_expired() {
+                *this.read_sleep = None;
+                *this.total_sleep = None;
+                *this.done = true;
+                this.lease.take();
+                return Poll::Ready(Some(Err(Self::total_timeout_error(total))));
             }
         }
 
         match this.inner.as_mut().poll_frame(cx) {
             Poll::Ready(Some(Ok(frame))) => {
-                if let Some(timeout) = *this.read_timeout {
-                    this.timer
+                // Same-poll race: frame and absolute deadline observable
+                // together; the outer lifecycle cap wins.
+                if let Some(total) = this.total_deadline.as_ref() {
+                    if total.is_expired() {
+                        *this.read_sleep = None;
+                        *this.total_sleep = None;
+                        *this.done = true;
+                        this.lease.take();
+                        return Poll::Ready(Some(Err(Self::total_timeout_error(total))));
+                    }
+                }
+                if let (Some(read_sleep), Some(timeout)) =
+                    (this.read_sleep.as_mut(), this.read_timeout.as_ref())
+                {
+                    read_sleep
                         .as_mut()
-                        .reset(tokio::time::Instant::now() + timeout);
+                        .reset(tokio::time::Instant::now() + *timeout);
                 }
                 Poll::Ready(Some(Ok(frame)))
             }
@@ -514,13 +572,32 @@ impl http_body::Body for NativeResponseBody {
                 Poll::Ready(None)
             }
             Poll::Pending => {
-                if let Some(timeout) = *this.read_timeout {
-                    if this.timer.as_mut().poll(cx).is_ready() {
+                // Total wins when both deadlines fire together.
+                let total_fired = match this.total_sleep.as_mut() {
+                    Some(sleep) => sleep.as_mut().poll(cx).is_ready(),
+                    None => false,
+                };
+                if total_fired {
+                    if let Some(total) = this.total_deadline.as_ref() {
+                        let err = Self::total_timeout_error(total);
+                        *this.read_sleep = None;
+                        *this.total_sleep = None;
+                        *this.done = true;
+                        this.lease.take();
+                        return Poll::Ready(Some(Err(err)));
+                    }
+                }
+                if let (Some(read_sleep), Some(timeout)) =
+                    (this.read_sleep.as_mut(), this.read_timeout.as_ref())
+                {
+                    if read_sleep.as_mut().poll(cx).is_ready() {
+                        *this.read_sleep = None;
+                        *this.total_sleep = None;
                         *this.done = true;
                         this.lease.take();
                         return Poll::Ready(Some(Err(Error::Timeout {
                             phase: crate::timeout::TimeoutPhase::Read,
-                            elapsed: timeout,
+                            elapsed: *timeout,
                         })));
                     }
                 }
@@ -576,8 +653,14 @@ impl NativeResponseBody {
         incoming: hyper::body::Incoming,
         lease: PoolGuardArc,
         read_timeout: Option<Duration>,
+        total_deadline: Option<ResponseDeadline>,
     ) -> Self {
-        Self::new(IncomingErrorBody { inner: incoming }, lease, read_timeout)
+        Self::new(
+            IncomingErrorBody { inner: incoming },
+            lease,
+            read_timeout,
+            total_deadline,
+        )
     }
 }
 
@@ -727,6 +810,14 @@ pub enum ResponseBody {
         stream: BoxBytesStream,
         /// Optional pool permit holder. Released on drop.
         lease: Option<PoolGuardArc>,
+        /// Per-chunk read inactivity timeout, enforced at the final stream
+        /// boundary. Starts on first body poll, resets per chunk.
+        read_timeout: Option<Duration>,
+        /// Absolute native total deadline as `(deadline, hop total)`,
+        /// enforced at the final stream boundary. Stored as public std types
+        /// so the crate-private deadline model never appears in the public
+        /// body API; never resets; may already be expired on first poll.
+        total_deadline: Option<(std::time::Instant, Duration)>,
     },
     /// A compressed streaming body whose encoded source is retained until
     /// the caller selects raw or decoded consumption.
@@ -739,6 +830,10 @@ pub enum ResponseBody {
         content_encoding: String,
         /// Limits applied when decoded mode is selected.
         limit: DecompressionLimit,
+        /// Per-chunk read inactivity timeout for the final selected stream.
+        read_timeout: Option<Duration>,
+        /// Absolute native total deadline for the final selected stream.
+        total_deadline: Option<(std::time::Instant, Duration)>,
     },
     /// The streaming body has already been consumed.
     Consumed,
@@ -773,15 +868,59 @@ impl ResponseBody {
         Self::Streaming {
             stream,
             lease: None,
+            read_timeout: None,
+            total_deadline: None,
         }
     }
 
     /// Create a streaming response body with an attached pool permit.
     /// The permit is released when the body is dropped.
+    #[allow(dead_code)]
     pub(crate) fn streaming_with_lease(stream: BoxBytesStream, lease: PoolGuardArc) -> Self {
         Self::Streaming {
             stream,
             lease: Some(lease),
+            read_timeout: None,
+            total_deadline: None,
+        }
+    }
+
+    /// Attach the pool lease plus read/total timeouts to a streaming or
+    /// encoded-streaming body. This is the single finalization ownership
+    /// point: transports create lease-free bodies, preparation supplies the
+    /// timeouts, and consumption enforces them at the final stream boundary.
+    /// Buffered/consumed bodies drop the lease; they are already complete.
+    pub(crate) fn attach_lease_and_timeouts(
+        self,
+        lease: PoolGuardArc,
+        read_timeout: Option<Duration>,
+        total_deadline: Option<ResponseDeadline>,
+    ) -> Self {
+        let total_deadline = total_deadline.map(|d| (d.deadline(), d.hop_total()));
+        match self {
+            Self::Streaming { stream, .. } => Self::Streaming {
+                stream,
+                lease: Some(lease),
+                read_timeout,
+                total_deadline,
+            },
+            Self::EncodedStreaming {
+                stream,
+                content_encoding,
+                limit,
+                ..
+            } => Self::EncodedStreaming {
+                stream,
+                lease: Some(lease),
+                content_encoding,
+                limit,
+                read_timeout,
+                total_deadline,
+            },
+            other => {
+                drop(lease);
+                other
+            }
         }
     }
 
@@ -796,6 +935,8 @@ impl ResponseBody {
             lease: None,
             content_encoding,
             limit,
+            read_timeout: None,
+            total_deadline: None,
         }
     }
 
@@ -812,6 +953,8 @@ impl ResponseBody {
             lease: Some(lease),
             content_encoding,
             limit,
+            read_timeout: None,
+            total_deadline: None,
         }
     }
 
@@ -861,40 +1004,23 @@ impl ResponseBody {
     /// Returns an error if the body has already been consumed or if a
     /// stream chunk fails.
     pub async fn bytes(&mut self) -> Result<Bytes> {
-        let old = std::mem::replace(self, Self::Consumed);
-        match old {
-            Self::Buffered { bytes } => Ok(bytes),
-            Self::Streaming {
-                mut stream, lease, ..
-            } => {
-                let mut buf = BytesMut::new();
-                while let Some(chunk) = stream.next().await {
-                    buf.extend_from_slice(&chunk?);
-                }
-                drop(lease);
-                Ok(buf.freeze())
+        // Buffered fast path stays O(1); streaming paths share the final
+        // stream boundary (`take_stream`) so timeouts, decompression,
+        // limits, and lease release cannot diverge between `bytes()` and
+        // `bytes_stream()`.
+        if matches!(self, Self::Buffered { .. }) {
+            let old = std::mem::replace(self, Self::Consumed);
+            if let Self::Buffered { bytes } = old {
+                return Ok(bytes);
             }
-            Self::EncodedStreaming {
-                stream,
-                lease,
-                content_encoding,
-                limit,
-            } => {
-                let mut stream = crate::compression::decompress_stream(
-                    stream,
-                    Some(&content_encoding),
-                    true,
-                    limit,
-                )?;
-                let mut buf = BytesMut::new();
-                while let Some(chunk) = stream.next().await {
-                    buf.extend_from_slice(&chunk?);
-                }
-                drop(lease);
-                Ok(buf.freeze())
-            }
-            Self::Consumed => Err(Error::Body("body already consumed".into())),
+            return Err(Error::Body("response body state mismatch".into()));
         }
+        let mut stream = self.take_stream(false)?;
+        let mut buf = BytesMut::new();
+        while let Some(chunk) = stream.next().await {
+            buf.extend_from_slice(&chunk?);
+        }
+        Ok(buf.freeze())
     }
 
     /// Enforce a maximum decoded size for this body.
@@ -902,7 +1028,12 @@ impl ResponseBody {
         match self {
             Self::Buffered { bytes } if bytes.len() > max => Err(Error::DecodedBodyTooLarge),
             Self::Buffered { bytes } => Ok(Self::Buffered { bytes }),
-            Self::Streaming { stream, lease } => Ok(Self::Streaming {
+            Self::Streaming {
+                stream,
+                lease,
+                read_timeout,
+                total_deadline,
+            } => Ok(Self::Streaming {
                 stream: Box::pin(LimitedResponseStream {
                     inner: stream,
                     max,
@@ -910,12 +1041,16 @@ impl ResponseBody {
                     limit_exceeded: false,
                 }),
                 lease,
+                read_timeout,
+                total_deadline,
             }),
             Self::EncodedStreaming {
                 stream,
                 lease,
                 content_encoding,
                 limit: mut existing_limit,
+                read_timeout,
+                total_deadline,
             } => {
                 existing_limit.max_decoded_body_size = Some(
                     existing_limit
@@ -927,6 +1062,8 @@ impl ResponseBody {
                     lease,
                     content_encoding,
                     limit: existing_limit,
+                    read_timeout,
+                    total_deadline,
                 })
             }
             body @ Self::Consumed => Ok(body),
@@ -983,9 +1120,23 @@ impl ResponseBody {
             }
             Self::Streaming { .. } => {
                 let old = std::mem::replace(self, Self::Consumed);
-                if let Self::Streaming { stream, lease } = old {
+                if let Self::Streaming {
+                    stream,
+                    lease,
+                    read_timeout,
+                    total_deadline,
+                } = old
+                {
+                    // Final stream boundary: one unified timeout wrapper
+                    // covers read inactivity and the absolute total deadline,
+                    // then the lease wrapper releases the pool permit on
+                    // terminal timeout/EOF/error.
+                    let total_deadline = total_deadline
+                        .map(|(deadline, total)| ResponseDeadline::new(deadline, total));
+                    let timed =
+                        crate::stream::body_timeout_stream(stream, read_timeout, total_deadline);
                     Ok(Box::pin(LeasedResponseStream {
-                        inner: stream,
+                        inner: timed,
                         _lease: lease,
                     }))
                 } else {
@@ -1002,6 +1153,8 @@ impl ResponseBody {
                     lease,
                     content_encoding,
                     limit,
+                    read_timeout,
+                    total_deadline,
                 } = old
                 {
                     let stream = if raw {
@@ -1014,8 +1167,16 @@ impl ResponseBody {
                             limit,
                         )
                     }?;
+                    // Same single mechanism on the final selected stream:
+                    // raw encoded bytes and decoded bytes share total/read
+                    // semantics; decoder buffering cannot bypass the outer
+                    // absolute deadline because it sits outside the decoder.
+                    let total_deadline = total_deadline
+                        .map(|(deadline, total)| ResponseDeadline::new(deadline, total));
+                    let timed =
+                        crate::stream::body_timeout_stream(stream, read_timeout, total_deadline);
                     Ok(Box::pin(LeasedResponseStream {
-                        inner: stream,
+                        inner: timed,
                         _lease: lease,
                     }))
                 } else {

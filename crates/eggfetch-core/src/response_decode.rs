@@ -29,20 +29,56 @@ pub(crate) fn apply_decompression(
     let old_body = std::mem::replace(&mut response.body, ResponseBody::buffered(Bytes::new()));
     let mut decoder_applied = false;
     let new_body = match old_body {
-        ResponseBody::Streaming { stream, lease } => {
+        ResponseBody::Streaming {
+            stream,
+            lease,
+            read_timeout,
+            total_deadline,
+        } => {
             if let Some(ce) = content_encoding.filter(|value| !value.trim().is_empty()) {
-                // Construct the encoded body once, attaching the pool
-                // lease directly when present so ownership is never
+                // Construct the encoded body once, preserving any timeouts
+                // already retained with the body so ownership is never
                 // routed through a destructure/rebuild round-trip.
-                if let Some(lease) = lease {
-                    decoder_applied = crate::compression::parse_content_encodings(ce).is_some();
+                decoder_applied = crate::compression::parse_content_encodings(ce).is_some();
+                let mut encoded = if let Some(lease) = lease {
                     ResponseBody::encoded_streaming_with_lease(stream, lease, ce.to_owned(), limit)
                 } else {
-                    decoder_applied = crate::compression::parse_content_encodings(ce).is_some();
                     ResponseBody::encoded_streaming(stream, ce.to_owned(), limit)
+                };
+                // Timeouts are retained with body state at this stage;
+                // finalization attaches lease+timeouts, so preserve any
+                // already-present values when re-wrapping here.
+                if read_timeout.is_some() || total_deadline.is_some() {
+                    // Re-attach preserved timeouts without a lease change:
+                    // encoded constructors start with None, so patch via
+                    // a temporary lease-free rebuild is unnecessary —
+                    // instead reconstruct with timeouts directly.
+                    if let ResponseBody::EncodedStreaming {
+                        stream,
+                        lease,
+                        content_encoding,
+                        limit,
+                        ..
+                    } = encoded
+                    {
+                        encoded = ResponseBody::EncodedStreaming {
+                            stream,
+                            lease,
+                            content_encoding,
+                            limit,
+                            read_timeout,
+                            total_deadline,
+                        };
+                    }
                 }
+                encoded
             } else {
-                ResponseBody::Streaming { stream, lease }
+                ResponseBody::Streaming {
+                    stream,
+                    lease,
+                    read_timeout,
+                    total_deadline,
+                }
             }
         }
         ResponseBody::Buffered { bytes } => {

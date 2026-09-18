@@ -14,8 +14,15 @@
 //!   Only applies to streamed request bodies; buffered bodies complete
 //!   synchronously.
 //! - **Read**: time to wait for response headers and each response body
-//!   chunk. The deadline resets on every chunk arrival.
-//! - **Total**: wall-clock cap across the entire request lifecycle.
+//!   chunk. The deadline resets on every chunk arrival. The timer starts
+//!   when body consumption begins, not when response headers arrive.
+//! - **Total**: absolute wall-clock deadline across the entire request
+//!   lifecycle, from logical request start through response-body EOF (or
+//!   terminal body error), including pool acquisition, transport setup,
+//!   response headers, body chunks, decompression, and trailers. It never
+//!   resets on chunk arrival, decoding selection, or first body poll. A body
+//!   that is first polled after the deadline reports `Total` without
+//!   accepting a ready inner chunk.
 //!
 //! # Proxy timeout phases
 //!
@@ -34,7 +41,15 @@
 //! - **Pool** and **Total** are enforced with `tokio::time::timeout`.
 //! - **Read** is enforced by a per-chunk wrapper stream that fires
 //!   `Error::Timeout { phase: Read }` if no chunk arrives within the
-//!   configured duration. The deadline resets on every chunk.
+//!   configured duration. The deadline starts on first body poll and resets
+//!   on every chunk.
+//! - **Total** is enforced in two stages: `tokio::time::timeout` bounds the
+//!   transport future up to response headers, and a crate-private absolute
+//!   response-body deadline (`ResponseDeadline`) bounds body streaming
+//!   through EOF/trailers. The absolute instant never resets; an
+//!   already-expired deadline wins before polling the inner body, and when
+//!   both read and total are observably expired at the same poll boundary
+//!   `Total` is preferred as the outer lifecycle cap.
 //! - **Write** is enforced by a per-chunk wrapper stream that fires
 //!   `Error::Timeout { phase: Write }` if the producer does not yield
 //!   the next chunk within the configured duration. The deadline resets
@@ -105,7 +120,10 @@ impl std::fmt::Display for TimeoutPhase {
 ///   does not yield a chunk within the configured duration. Resets on
 ///   every chunk delivery. Only applies to streamed request bodies;
 ///   buffered bodies complete synchronously.
-/// - `total`: enforced via `tokio::time::timeout` around the full send.
+/// - `total`: absolute wall-clock deadline from logical request start
+///   through response-body EOF/trailers. Enforced around the transport
+///   future and retained on the response body; never restarted per chunk,
+///   decode selection, redirect hop, retry attempt, or first body poll.
 /// - `connect`: enforced by wrapping the underlying connector with a
 ///   timeout that bounds DNS resolution, TCP connect, and TLS handshake.
 ///   Fires `Error::Timeout { phase: Connect }` if the connection is not
@@ -289,6 +307,68 @@ impl Timeout {
             || self.write.is_some()
             || self.read.is_some()
             || self.total.is_some()
+    }
+}
+
+/// Crate-private absolute response-body deadline for the native `total`
+/// timeout.
+///
+/// The instant is computed once during request preparation
+/// (`started + total`) and never changes afterwards: it does not start on
+/// first body poll, reset on chunk/frame arrival, restart on decode
+/// selection, or restart across redirect/retry hops. The owning stream
+/// retains only this `std::time::Instant` plus the hop total used for
+/// `Error::Timeout` elapsed reporting; Tokio timers are created lazily on
+/// first body poll in the consuming runtime so a response handed to another
+/// runtime (e.g. the synchronous Python adapter) never carries a
+/// runtime-bound sleep across the boundary.
+///
+/// Dropping a response before EOF remains ordinary cancellation and never
+/// manufactures a timeout; the deadline only surfaces as
+/// `TimeoutPhase::Total` when the body is polled at or after expiry.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct ResponseDeadline {
+    deadline: std::time::Instant,
+    total: Duration,
+}
+
+impl ResponseDeadline {
+    /// Capture the absolute deadline with the hop total used for elapsed
+    /// reporting.
+    #[must_use]
+    pub(crate) fn new(deadline: std::time::Instant, total: Duration) -> Self {
+        Self { deadline, total }
+    }
+
+    /// The absolute instant the logical request expires.
+    #[must_use]
+    pub(crate) fn deadline(&self) -> std::time::Instant {
+        self.deadline
+    }
+
+    /// The hop total budget this deadline was derived from.
+    #[must_use]
+    pub(crate) fn hop_total(&self) -> Duration {
+        self.total
+    }
+
+    /// Returns `true` when the wall-clock deadline has passed.
+    #[must_use]
+    pub(crate) fn is_expired(&self) -> bool {
+        std::time::Instant::now() >= self.deadline
+    }
+
+    /// Elapsed time for `Error::Timeout` reporting: time since the hop
+    /// started (`deadline - total`), matching the transport-stage total
+    /// convention of reporting hop-local elapsed rather than a bare
+    /// zero-duration expiry.
+    #[must_use]
+    pub(crate) fn elapsed(&self) -> Duration {
+        let started = self
+            .deadline
+            .checked_sub(self.total)
+            .unwrap_or(self.deadline);
+        started.elapsed()
     }
 }
 
