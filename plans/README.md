@@ -2,6 +2,55 @@
 
 This directory contains active implementation plans, live qualification/status records, and historical implementation records. Completed plans are non-normative unless another current document explicitly says otherwise. Verification and release policy remain governed by `docs/verification-policy.md` and `docs/releases/process.md`.
 
+## Active program — linked binary footprint reduction (2026-09-17)
+
+Handoff program: `linked-binary-footprint-reduction-program.md`
+
+Planning baseline: `6093a66959165f132f02102ffb727ac3e710917c`
+(eggfetch-core 0.1.6 after the completed native pool-map and native URI
+dependency-separation work).
+
+Status: planned. The program targets the remaining linked-binary overhead paid
+by small Rust consumers without removing or weakening any existing default or
+compatibility capability. Gregg's measured reqwest -> eggfetch regression is
+motivating evidence only; all changes must remain general-purpose eggfetch
+feature/ownership improvements.
+
+Execution order:
+
+1. `linked-byte-baseline-and-attribution.md` — remeasure current main using a
+   real Gregg-like high-level request path and aligned reqwest/0.1.5/native
+   controls; collect stripped bytes plus crate/symbol attribution before
+   executable changes.
+2. `standard-route-advanced-routing-feature-boundary.md` — add an opt-in
+   standard DNS/TCP/TLS route profile that does not compile custom Dialer,
+   resolved-target/SNI override, socket-option/local-address, or UDS machinery,
+   while existing `native-http1`/`http1` aliases retain all current
+   capabilities.
+3. `high-level-policy-footprint-feature-boundary.md` — allow the lean
+   high-level profile to omit logical retry, redirect-following, and Basic-auth
+   Base64 while retaining URL/request/response ergonomics, Bearer auth,
+   timeouts, body limits, pooling, TLS, and typed failures.
+4. `conditional-tls-and-residual-dependency-footprint-tuning.md` — remeasure,
+   then make only evidence-justified residual splits such as proxy-owned
+   `eggfetch-http-connect`, TLS PEM/logging ownership, or metrics boundaries;
+   explicitly stop rather than proliferating micro-features for negligible
+   byte savings.
+5. `post-footprint-reduction-requalification-and-closure.md` — freeze one
+   final executable SHA, rerun the comparable footprint matrix, prove the
+   Gregg-like lean path and full-capability regressions, run Tier 1/extended/
+   package/security gates, renew exact-SHA HTTPX/HTTPX2 evidence, and update
+   feature/dependency/footprint documentation.
+
+The program is additive by design. Existing default, `http1`, `http2`,
+`native-http1`, `native-http2`, Python, CLI, FFI, Node prototype,
+HTTPX/HTTPX2, proxy, advanced routing, retry, redirect, Basic/Bearer auth, TLS,
+H2/H3, cookies, compression, multipart and other established capabilities
+remain available under their current compatibility/default profiles. No second
+client, pool, HTTP engine, TLS backend, or downstream-specific Gregg API is
+allowed. Binary size is measured under identical release settings; package
+count alone is not success evidence.
+
 ## Completed — resolved-target route cache and connection reuse (2026-09-17)
 
 Plan: `resolved-target-route-cache-and-connection-reuse.md`
