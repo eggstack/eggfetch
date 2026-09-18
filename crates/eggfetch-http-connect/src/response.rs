@@ -5,7 +5,7 @@
 //! the status without imposing any success policy and never consumes the
 //! response body.
 
-use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, BufReader};
+use tokio::io::{AsyncRead, AsyncReadExt, BufReader};
 
 use crate::error::ConnectError;
 
@@ -242,22 +242,4 @@ fn is_token_byte(byte: u8) -> bool {
             | b'A'..=b'Z'
             | b'a'..=b'z'
     )
-}
-
-/// Drain bytes already buffered past the head without touching the socket.
-///
-/// Convenience for callers that want the read-ahead as an owned prefix for
-/// a tunnel wrapper. The bytes remain available in `stream`'s buffer as
-/// well until consumed; callers should consume exactly the returned length
-/// (see example) or leave the buffer untouched and read through `stream`.
-#[allow(dead_code)]
-pub(crate) fn take_buffered_head_readahead<S>(stream: &mut BufReader<S>) -> Vec<u8>
-where
-    S: AsyncRead + Unpin,
-{
-    use AsyncBufReadExt as _;
-    let buffered = stream.buffer().to_vec();
-    let consumed = buffered.len();
-    stream.consume(consumed);
-    buffered
 }
