@@ -46,7 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   standard Hyper HTTP/HTTPS route without changing the public `Error` or
   ordinary request behavior.
 
-## [Unreleased]
+## [0.1.7] - 2026-09-18
 
 ### Fixed
 
@@ -138,7 +138,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Multipart boundary validation
 - Proxy authentication boundary enforcement
 
-[Unreleased]: https://github.com/eggstack/eggfetch/compare/v0.1.5...HEAD
+[Unreleased]: https://github.com/eggstack/eggfetch/compare/v0.1.7...HEAD
+[0.1.7]: https://github.com/eggstack/eggfetch/releases/tag/v0.1.7
+[0.1.6]: https://github.com/eggstack/eggfetch/releases/tag/v0.1.6
 [0.1.5]: https://github.com/eggstack/eggfetch/releases/tag/v0.1.5
 [0.1.4]: https://github.com/eggstack/eggfetch/releases/tag/v0.1.4
 [0.1.3]: https://github.com/eggstack/eggfetch/releases/tag/v0.1.3

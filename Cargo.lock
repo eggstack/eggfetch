@@ -501,7 +501,7 @@ dependencies = [
 
 [[package]]
 name = "eggfetch-cli"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "anyhow",
  "bytes",
@@ -518,7 +518,7 @@ dependencies = [
 
 [[package]]
 name = "eggfetch-core"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "async-compression",
  "base64 0.23.1",
@@ -564,7 +564,7 @@ dependencies = [
 
 [[package]]
 name = "eggfetch-ffi"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "bytes",
  "eggfetch-core",
@@ -576,7 +576,7 @@ dependencies = [
 
 [[package]]
 name = "eggfetch-http-connect"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "base64 0.23.1",
  "thiserror",
@@ -585,7 +585,7 @@ dependencies = [
 
 [[package]]
 name = "eggfetch-node"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "eggfetch-ffi",
  "napi",
@@ -597,7 +597,7 @@ dependencies = [
 
 [[package]]
 name = "eggfetch-python"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "bytes",
  "eggfetch-core",
