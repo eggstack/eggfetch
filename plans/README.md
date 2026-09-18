@@ -6,43 +6,51 @@ This directory contains active implementation plans, live qualification/status r
 
 Parent plan: `total-deadline-response-body-lifecycle-corrective.md`
 
-Follow-up corrective: `total-deadline-response-body-api-compatibility-corrective-pass.md`
+API-compatibility corrective:
+`total-deadline-response-body-api-compatibility-corrective-pass.md`
 
-Original planning baseline: `60a6e2b384519507e04cf296ffd484388e872e47`.
-Behavioral implementation commit: `dd52f8c4a8d54fbaa403a7995a41bf60b235f7ac`.
+Final closure plan:
+`total-deadline-final-proof-qualification-release-closure.md`
 
-Status: implementation landed but closure is still active. `dd52f8c4`
-correctly carries native `Timeout.total` through high-level and
-frame-preserving response-body EOF/trailers, with lazy consuming-runtime
-timers, read-vs-total precedence, raw/decoded coverage, trailer handling,
-pool-lease release, redirect propagation, and lean standard-route coverage.
-Routine push CI run 607 passed on that commit.
+Original planning baseline:
+`60a6e2b384519507e04cf296ffd484388e872e47`.
 
-A follow-up audit found one release-blocking source-compatibility regression:
-the implementation added public `read_timeout` and `total_deadline` fields
-to the public, exhaustive `ResponseBody::Streaming` and
-`ResponseBody::EncodedStreaming` variants. The published/pre-corrective
-variant field shape must be restored without weakening the corrected timeout
-semantics. The child corrective requires an external integration compile
-contract that is green on `60a6e2b3`, red on `dd52f8c4`, and green after
-the fix.
+Behavioral implementation:
+`dd52f8c4a8d54fbaa403a7995a41bf60b235f7ac`.
 
-The follow-up also owns proof hardening: replace the permissive redirect timing
-bound with a discrimination window that fails if total restarts after final
-headers; add a logical retry -> successful headers -> slow final body
-remaining-budget regression; replace the tautological native second-request
-assertion with an explicit success/status assertion; and remove or explicitly
-justify the now-non-authoritative standalone `ReadTimeoutStream`.
+Public-API compatibility correction:
+`2c68b44176b3a189e1f1fdc6586d8678a0945284`.
 
-No new bounded-body API is needed. `max_decoded_body_size` already provides
-the stream-level bound for identity and decoded compressed bodies when
-`Content-Length` is absent or false.
+Status: executable implementation is substantially complete; closure remains
+active. The total deadline now survives response headers and applies through
+body EOF/trailers for high-level and native frame-preserving responses.
+`ResponseBody`'s published exhaustive variant shape has been restored, timeout
+metadata now lives behind private response-lease lifecycle state, the duplicate
+standalone read-timeout implementation has been removed, and stronger redirect
+and logical-retry remaining-budget proofs are present. Routine push CI run 610
+passed on `2c68b441`.
 
-The line remains active until the corrected executable is frozen, Tier 1 plus
-release-time extended/package/security gates pass, HTTPX 0.28.1 and HTTPX2
-2.12.0 exact-SHA evidence is renewed, both plan closure records are filled,
-and a coordinated crates.io patch containing the fix is published. Missing
-qualification or publication evidence must not be converted into closure.
+One final proof correction remains before freezing the executable/test tree:
+the native pool-lease regression currently drops the timed-out
+`NativeResponseBody` before issuing the second same-origin request. The final
+closure plan requires the timed-out body to remain alive while the second
+request reaches successful response headers, proving that timeout
+terminalization itself releases the logical permit rather than relying on
+Drop.
+
+After that narrow test correction, the final closure plan owns the exact-SHA
+freeze, historical baseline-red and three-state public-shape evidence, Tier 1,
+extended/package/security/MSRV release gates, HTTPX 0.28.1 and HTTPX2 2.12.0
+exact-SHA renewal, parent/child closure records, remote CI confirmation, and
+normal coordinated patch publication.
+
+No new bounded-body API is needed. `max_decoded_body_size` remains the
+authoritative stream-level bound for identity and decoded compressed bodies
+when `Content-Length` is absent or false.
+
+The line must remain active until the corrected patch is publicly available
+from crates.io. Missing qualification or publication evidence must not be
+converted into closure.
 
 ## Completed — linked binary footprint reduction (2026-09-17 → 2026-09-18)
 
