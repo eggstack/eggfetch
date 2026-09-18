@@ -44,6 +44,7 @@ docs/
 
 - Completed plans are **historical records, not active requirements** (verification-policy principle 9). Do not treat their step lists as current CI or release gates.
 - The one live ledger is `plans/httpx-parity-correction-status.md`: it records the exact executable SHA that the HTTPX 0.28.1 and httpx2 2.12.0 Stage C qualifications are bound to. Earlier bindings are historical after subsequent qualification-sensitive changes. Any change to executable code (Rust sources, tests, build/validation scripts, packaging config) invalidates the current binding and requires a fresh exact-SHA requalification from a new freeze, following the current closure plan and status procedure. Never hardcode a SHA in docs or skills — always reference the ledger.
+- The only places that state the current binding SHA are the canonical qualification records (`docs/residual-differences.md`, `docs/reference/compatibility.md`, `docs/reference/compatibility-stage-decision.md`). Every other doc and skill must reference the live ledger instead of naming a SHA. When the ledger advances to a new freeze, update those three records together (demoting the previous SHA to historical) and leave historical plan entries untouched.
 - Docs-only commits do not invalidate the SHA binding.
 - When finishing new work that changes a compatibility claim, update the status ledger and both `compat/httpx/0.28.1/profile.toml` and `compat/httpx2/2.12.0/profile.toml` together; never hand-edit generated manifests.
 - The canonical embedded/core feature recipes are the profile matrix in

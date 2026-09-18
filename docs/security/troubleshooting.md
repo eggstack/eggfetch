@@ -10,7 +10,7 @@ Common errors and how to resolve them.
 
 The server's certificate is not trusted by the system trust store.
 
-- Use `verify="/path/to/ca-bundle.crt"` (Python) or `--ca-bundle /path/to/ca-bundle.crt` (CLI) to provide a custom CA bundle.
+- Use `verify="/path/to/ca-bundle.crt"` (Python) or `--cacert /path/to/ca-bundle.crt` (CLI) to provide a custom CA bundle.
 - For self-signed certificates in development, use `verify=False` (Python) or `--no-verify` (CLI). Never disable verification in production.
 - Ensure the system clock is correct; an incorrect clock causes valid certificates to appear expired.
 
@@ -25,7 +25,7 @@ client = eggfetch.Client(verify="/path/to/proxy-ca.crt")
 ```
 
 ```sh
-eggfetch --ca-bundle /path/to/proxy-ca.crt https://example.com
+eggfetch --cacert /path/to/proxy-ca.crt https://example.com
 ```
 
 ## Connection Timeouts

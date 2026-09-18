@@ -278,8 +278,9 @@ Machine-readable corpus (`corpus.json`), server manifests (`servers.example.json
 
 ### Embedded footprint qualification (`qualification/embedded/` + `scripts/qualify-embedded-footprint.sh`)
 
-Tiny downstream-style fixtures (`eggfetch-min/-json/-default`,
-`reqwest-min/-json/-default`, plus the control-using
+Tiny downstream-style fixtures (`qualification/embedded/eggfetch-min`,
+`eggfetch-json`, `eggfetch-default`, `reqwest-min`, `reqwest-json`,
+`reqwest-default`, plus the control-using
 `qualification/embedded-custom-dialer/`) plus a manual runner that gathers `cargo
 tree` evidence and stripped release sizes. Opt-in, never a CI gate. The
 current evidence record is [embedded-footprint.md](embedded-footprint.md):

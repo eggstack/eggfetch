@@ -97,7 +97,7 @@ response = client.get(url, proxy="http://other-proxy:3128")
 ### Disabling Proxy Per-Request
 
 ```python
-response = client.get(url, proxy=eggfetch.NO_PROXY)
+response = client.get(url, proxy=None)
 ```
 
 ## Routing Rules

@@ -875,10 +875,10 @@ The objective gate in
 pass yet; concrete blockers:
 
 1. No two-independent-non-Quinn-server interoperability pass recorded
-   on the current executable freeze
-   `1f52d846c186b061481ebb14a7be414f5c78ec7e` (2026-09-16; the
-   deterministic H3 suites re-passed on this tree — hardening 12/12,
-   Alt-Svc discovery 17/17, interop controls 20/20); the current evidence ledger is
+   on the current executable freeze recorded in
+   `plans/httpx-parity-correction-status.md` (the
+   deterministic H3 suites re-pass on each qualified tree — see the
+   ledger for the current freeze and per-suite evidence); the current evidence ledger is
    `plans/http3-independent-interop-and-impairment-qualification-evidence.json`;
    the narrative record is `plans/http3-production-qualification-evidence.md`.
 2. No public-origin Alt-Svc spot-check ledger recorded.

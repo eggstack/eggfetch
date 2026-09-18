@@ -158,7 +158,7 @@ CI runs these checks to prevent documentation drift:
 | `cargo test --doc` | Rust doc tests pass |
 | `check_doc_examples.py` | Python code blocks in docs are syntactically valid |
 | `check_doc_links.py` | Internal markdown links resolve |
-| `check_api_surface.py` | Public Python exports match documented API |
+| `check_native_python_api.py` | Public Python exports match the native API manifest |
 
 If a public API item is added or removed, update the corresponding docs and
 the CI checks will catch stale references.

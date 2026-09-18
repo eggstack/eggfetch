@@ -125,7 +125,8 @@ Direct dispatch is not blocked on feasibility — core `Client` is
   internally, joined in the `headers` object, individually via `getAll`),
   `text` / `bytes` / `json` accessors, `ok` flag.
 - Rust-side compilation and unit surface covered by Tier 1
-  (`cargo test -p eggfetch-node`); the JS surface (`test.js`) runs in
+  (`cargo test -p eggfetch-node`); the JS surface
+  (`crates/eggfetch-node/test.js`, run from that directory) runs in
   Tier 1 only when `node` and a built `./eggfetch.node` artifact are
   present, and records an explicit skip otherwise.
 

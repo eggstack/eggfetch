@@ -21,7 +21,7 @@ When verification is disabled, the client skips certificate chain validation, ho
 For corporate proxies or private certificate authorities, provide a custom CA bundle instead of disabling verification:
 
 - **Python**: `Client(verify="/path/to/ca-bundle.crt")`
-- **CLI**: `--ca-bundle /path/to/ca-bundle.crt`
+- **CLI**: `--cacert /path/to/ca-bundle.crt`
 - **Rust replacement**: `TlsConfig::builder().ca_certificate_path(path)?`
 - **Rust additional**: `TlsConfig::builder().additional_ca_certificate_path(path)?`
 
