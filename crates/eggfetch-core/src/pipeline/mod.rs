@@ -13,7 +13,7 @@
 mod finalize;
 #[cfg(feature = "http3")]
 mod h3_dispatch;
-#[cfg(any(feature = "native-http1", feature = "native-http2"))]
+#[cfg(any(feature = "transport-http1", feature = "transport-http2"))]
 mod hyper_dispatch;
 #[cfg(all(feature = "high-level-url", not(feature = "redirects")))]
 mod lean;
@@ -55,7 +55,7 @@ pub(crate) use prepare::apply_content_length;
 
 use std::time::Duration;
 
-#[cfg(any(feature = "native-http1", feature = "native-http2"))]
+#[cfg(any(feature = "transport-http1", feature = "transport-http2"))]
 use bytes::Bytes;
 
 use crate::body::{NativeRequestBody, NativeResponseBody};
@@ -169,7 +169,7 @@ pub(super) async fn drain_response_body(response: &mut Response) {
 /// read-timeout and pool-lease attachment) applies to every route.
 #[allow(clippy::too_many_lines)]
 #[cfg(all(
-    any(feature = "native-http1", feature = "native-http2"),
+    any(feature = "transport-http1", feature = "transport-http2"),
     feature = "high-level-url"
 ))]
 pub(crate) async fn send_single_request(
@@ -205,24 +205,52 @@ pub(crate) async fn send_single_request(
     #[cfg(not(feature = "proxy"))]
     let _ = &proxied_target;
 
-    #[cfg(all(unix, any(feature = "native-http1", feature = "native-http2")))]
+    #[cfg(all(unix, feature = "advanced-routing"))]
     let has_uds = inner.uds_client.is_some();
+    #[cfg(all(unix, not(feature = "advanced-routing")))]
+    let has_uds = false;
     #[cfg(not(unix))]
     let has_uds = false;
     #[cfg(feature = "proxy")]
     let has_proxy = effective_proxy.is_some();
     #[cfg(not(feature = "proxy"))]
     let has_proxy = false;
-    #[cfg(feature = "proxy")]
+    // Advanced-route availability: in lean standard-route profiles the
+    // corresponding client state does not exist; advanced hints fail closed
+    // below instead of selecting an absent route.
+    #[cfg(all(feature = "proxy", feature = "advanced-routing"))]
     let has_direct_no_proxy = !has_proxy
         && (transport_hints.resolved_target.is_some() || inner.direct_client.is_some())
         && !has_uds;
-    #[cfg(not(feature = "proxy"))]
+    #[cfg(all(feature = "proxy", not(feature = "advanced-routing")))]
+    let has_direct_no_proxy = false;
+    #[cfg(all(not(feature = "proxy"), feature = "advanced-routing"))]
     let has_direct_no_proxy =
         !has_uds && (transport_hints.resolved_target.is_some() || inner.direct_client.is_some());
+    #[cfg(all(not(feature = "proxy"), not(feature = "advanced-routing")))]
+    let has_direct_no_proxy = false;
+    #[cfg(feature = "advanced-routing")]
     let has_sni = transport_hints.sni_hostname.is_some();
+    #[cfg(not(feature = "advanced-routing"))]
+    let has_sni = false;
+    #[cfg(feature = "advanced-routing")]
     let has_custom = inner.config.dialer.is_some();
-    #[cfg(feature = "proxy")]
+    #[cfg(not(feature = "advanced-routing"))]
+    let has_custom = false;
+    #[cfg(not(feature = "advanced-routing"))]
+    {
+        if transport_hints.resolved_target.is_some() {
+            return Err(Error::Unsupported(
+                "caller-supplied resolved destinations require the advanced-routing feature".into(),
+            ));
+        }
+        if transport_hints.sni_hostname.is_some() {
+            return Err(Error::Unsupported(
+                "SNI override requires the advanced-routing feature".into(),
+            ));
+        }
+    }
+    #[cfg(all(feature = "advanced-routing", feature = "proxy"))]
     if has_custom && has_proxy {
         return Err(Error::Unsupported(
             "custom dialing is incompatible with built-in proxy routing".into(),
@@ -256,6 +284,7 @@ pub(crate) async fn send_single_request(
     // `route::select_route` and covered by direct unit tests; H3 never bypasses
     // proxy rules because proxy routes are selected first.
     let response = match route {
+        #[cfg(feature = "advanced-routing")]
         route::TransportRoute::Uds => {
             hyper_dispatch::send_uds_route(
                 inner,
@@ -270,6 +299,7 @@ pub(crate) async fn send_single_request(
             )
             .await?
         }
+        #[cfg(feature = "advanced-routing")]
         route::TransportRoute::Custom => {
             hyper_dispatch::send_custom_route(
                 inner,
@@ -285,6 +315,7 @@ pub(crate) async fn send_single_request(
             )
             .await?
         }
+        #[cfg(feature = "advanced-routing")]
         route::TransportRoute::Direct => {
             hyper_dispatch::send_direct_route(
                 inner,
@@ -326,6 +357,7 @@ pub(crate) async fn send_single_request(
                 return Err(Error::Unsupported("proxy support is not enabled".into()));
             }
         }
+        #[cfg(feature = "advanced-routing")]
         route::TransportRoute::SniDirect => {
             hyper_dispatch::send_sni_route(
                 inner,
@@ -403,7 +435,7 @@ pub(crate) async fn send_single_request(
 
 /// Execute a caller-owned `http_body::Body` through eggfetch's transport
 /// engine without applying high-level request policy.
-#[cfg(any(feature = "native-http1", feature = "native-http2"))]
+#[cfg(any(feature = "transport-http1", feature = "transport-http2"))]
 #[allow(
     clippy::too_many_lines,
     reason = "native dispatch keeps route validation, pool admission, and the shared route matrix together"
@@ -459,6 +491,7 @@ where
         ));
     }
 
+    #[cfg(feature = "advanced-routing")]
     if inner.config.dialer.is_some() {
         if transport_hints.resolved_target.is_some() {
             return Err(Error::Unsupported(
@@ -482,6 +515,19 @@ where
         ) {
             return Err(Error::Unsupported(
                 "custom dialing is incompatible with HTTP/3".into(),
+            ));
+        }
+    }
+    #[cfg(not(feature = "advanced-routing"))]
+    {
+        if transport_hints.resolved_target.is_some() {
+            return Err(Error::Unsupported(
+                "caller-supplied resolved destinations require the advanced-routing feature".into(),
+            ));
+        }
+        if transport_hints.sni_hostname.is_some() {
+            return Err(Error::Unsupported(
+                "SNI override requires the advanced-routing feature".into(),
             ));
         }
     }
@@ -540,20 +586,25 @@ where
         .total
         .map(|total| total.saturating_sub(started.elapsed()));
     let trace = transport_hints.trace.as_deref();
-    #[cfg(unix)]
+    #[cfg(all(unix, feature = "advanced-routing"))]
     let has_uds = inner.uds_client.is_some();
-    #[cfg(not(unix))]
+    #[cfg(any(not(unix), not(feature = "advanced-routing")))]
     let has_uds = false;
-    let route = route::select_route(
-        has_uds,
+    #[cfg(feature = "advanced-routing")]
+    let (has_dialer, has_direct) = (
         inner.config.dialer.is_some(),
         transport_hints.resolved_target.is_some() || inner.direct_client.is_some(),
-        false,
-        transport_hints.sni_hostname.is_some(),
-        false,
     );
+    #[cfg(not(feature = "advanced-routing"))]
+    let (has_dialer, has_direct) = (false, false);
+    #[cfg(feature = "advanced-routing")]
+    let has_sni = transport_hints.sni_hostname.is_some();
+    #[cfg(not(feature = "advanced-routing"))]
+    let has_sni = false;
+    let route = route::select_route(has_uds, has_dialer, has_direct, false, has_sni, false);
 
     let raw_response = match route {
+        #[cfg(feature = "advanced-routing")]
         route::TransportRoute::Uds => {
             #[cfg(unix)]
             {
@@ -577,6 +628,7 @@ where
                 ));
             }
         }
+        #[cfg(feature = "advanced-routing")]
         route::TransportRoute::Custom => {
             let custom_client = if let Some(sni_hostname) = transport_hints.sni_hostname.as_deref()
             {
@@ -596,6 +648,7 @@ where
             )
             .await?
         }
+        #[cfg(feature = "advanced-routing")]
         route::TransportRoute::Direct => {
             let resolved_client;
             let direct_client = if let Some(target) = transport_hints.resolved_target.as_ref() {
@@ -621,6 +674,7 @@ where
             )
             .await?
         }
+        #[cfg(feature = "advanced-routing")]
         route::TransportRoute::SniDirect => {
             let sni_hostname = transport_hints.sni_hostname.as_deref().ok_or_else(|| {
                 Error::RequestBuild("SNI route selected without sni_hostname".into())
@@ -667,7 +721,7 @@ where
 }
 
 /// Report that no HTTP protocol feature was selected for native bodies.
-#[cfg(not(any(feature = "native-http1", feature = "native-http2")))]
+#[cfg(not(any(feature = "transport-http1", feature = "transport-http2")))]
 pub(crate) async fn send_native_http_body<B>(
     _inner: &ClientInner,
     _request: http::Request<B>,
@@ -680,7 +734,7 @@ pub(crate) async fn send_native_http_body<B>(
 
 /// Report that no HTTP protocol feature was selected.
 #[cfg(all(
-    not(any(feature = "native-http1", feature = "native-http2")),
+    not(any(feature = "transport-http1", feature = "transport-http2")),
     feature = "high-level-url"
 ))]
 pub(crate) async fn send_single_request(

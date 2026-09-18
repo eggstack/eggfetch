@@ -108,8 +108,10 @@ pub use service::NativeHttpService;
 pub use timeout::{Timeout, TimeoutBuilder, TimeoutPhase};
 #[cfg(feature = "tls-rustls")]
 pub use tls::{ClientIdentity, TlsConfig, TlsConfigBuilder, TlsVersion, TrustStore};
+#[cfg(feature = "advanced-routing")]
 pub use transport::dialer::{DialError, DialErrorKind, DialFuture, DialStream, DialTarget, Dialer};
-/// Socket option for direct TCP connections.
+/// Socket option for direct TCP connections (advanced-routing only).
+#[cfg(feature = "advanced-routing")]
 pub use transport::direct_connector::{SocketOption, SocketOptionKind};
 pub use transport::lifecycle::{
     PhysicalConnectionPolicy, TransportIoDirection, TransportIoTimeout,

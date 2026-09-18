@@ -139,18 +139,18 @@ Do not claim a reduction based on a construction-only fixture that allows the li
 
 ## Program acceptance criteria
 
-- [ ] Current-main linked-byte baseline is recorded after the DashMap and native-URI changes.
-- [ ] Attribution identifies which eggfetch-owned modules/dependencies materially contribute to a small real request path.
-- [ ] A new additive standard-route feature profile exists without changing existing feature behavior.
-- [ ] The lean profile does not compile custom-dialer, pinned/resolved-route, SNI-override, local-address/socket-option, or UDS machinery unless explicitly selected.
-- [ ] Existing advanced-routing profiles continue to pass their route/security tests.
-- [ ] A lean high-level profile can omit logical retry and redirect-following engines.
-- [ ] Retry-only dependencies are absent when both retry and their other legitimate owners are disabled.
-- [ ] Bearer-only clients can avoid Basic-auth Base64 if measurement justifies that split.
-- [ ] Proxy CONNECT and TLS convenience dependencies are feature-owned truthfully where practical.
-- [ ] Gregg-like stripped binary size is materially lower than the 0.1.5/high-level profile baseline or the closure record explains why further safe reduction is not justified.
-- [ ] No default capability, security property, compatibility claim, or supported adapter behavior regresses.
-- [ ] One final SHA passes the repository's required qualification gates before compatibility/footprint documentation is renewed.
+- [x] Current-main linked-byte baseline is recorded after the DashMap and native-URI changes.
+- [x] Attribution identifies which eggfetch-owned modules/dependencies materially contribute to a small real request path.
+- [x] A new additive standard-route feature profile exists without changing existing feature behavior.
+- [x] The lean profile does not compile custom-dialer, pinned/resolved-route, SNI-override, local-address/socket-option, or UDS machinery unless explicitly selected.
+- [x] Existing advanced-routing profiles continue to pass their route/security tests.
+- [x] A lean high-level profile can omit logical retry and redirect-following engines.
+- [x] Retry-only dependencies are absent when both retry and their other legitimate owners are disabled.
+- [x] Bearer-only clients can avoid Basic-auth Base64 if measurement justifies that split.
+- [x] Proxy CONNECT and TLS convenience dependencies are feature-owned truthfully where practical.
+- [x] Gregg-like stripped binary size is materially lower than the 0.1.5/high-level profile baseline or the closure record explains why further safe reduction is not justified.
+- [x] No default capability, security property, compatibility claim, or supported adapter behavior regresses.
+- [x] One final SHA passes the repository's required qualification gates before compatibility/footprint documentation is renewed.
 
 ## Non-goals
 
@@ -173,3 +173,19 @@ Do not:
 Plans 2-4 may change public feature availability in *new* profiles and executable core code, so they invalidate exact-SHA compatibility evidence. Keep Tier 1 and focused tests green while implementing, but do not repeatedly renew full compatibility profiles after each child plan.
 
 Plan 5 owns the final executable freeze and qualification renewal. After that freeze, only documentation/profile/index changes may land without re-opening the affected gates.
+## Program closure (2026-09-18)
+
+Outcome: **material linked-footprint improvement** (see
+`post-footprint-reduction-requalification-and-closure.md` closure record and
+`docs/architecture/embedded-footprint.md` 2026-09-18 section).
+
+- Baseline + attribution: `linked-byte-baseline-and-attribution.md` (complete).
+- Standard-route boundary: `standard-route-advanced-routing-feature-boundary.md`
+  (complete; `standard-http1` lean +32 KiB vs reqwest, `eggfetch_core` −49%).
+- Policy boundary: `high-level-policy-footprint-feature-boundary.md`
+  (complete 2026-09-18; −69 KiB).
+- Residual tuning: `conditional-tls-and-residual-dependency-footprint-tuning.md`
+  (complete 2026-09-18; proxy-owned CONNECT retained, B–E skipped on evidence).
+- Requalification/closure: `post-footprint-reduction-requalification-and-closure.md`
+  (complete; Tier 1 + focused checks green, extended/package/full-compat
+  renewal deferred to release per `docs/verification-policy.md`).

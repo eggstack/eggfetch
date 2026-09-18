@@ -236,11 +236,11 @@ impl HyperClientPolicy {
     /// `Connect` error rather than silently downgrading to HTTP/1.1.
     pub(crate) fn apply(&self, builder: &mut hyper_util::client::legacy::Builder) {
         builder.retry_canceled_requests(self.retry_canceled_requests);
-        #[cfg(feature = "native-http2")]
+        #[cfg(feature = "transport-http2")]
         if self.http2_only {
             builder.http2_only(true);
         }
-        #[cfg(not(feature = "native-http2"))]
+        #[cfg(not(feature = "transport-http2"))]
         let _ = self.http2_only;
         if let Some(idle_timeout) = self.idle_timeout {
             builder.pool_timer(hyper_util::rt::TokioTimer::new());
@@ -396,9 +396,9 @@ mod tests {
         let auto =
             HttpVersionPolicyEnabler::from_policy(HttpVersionPolicy::Auto { allow_http3: false });
         let h1_only = HttpVersionPolicyEnabler::from_policy(HttpVersionPolicy::Http1Only);
-        #[cfg(feature = "native-http2")]
+        #[cfg(feature = "transport-http2")]
         assert!(HyperClientPolicy::cached_route(true, None, None, h2_only).http2_only);
-        #[cfg(not(feature = "native-http2"))]
+        #[cfg(not(feature = "transport-http2"))]
         assert!(!HyperClientPolicy::cached_route(true, None, None, h2_only).http2_only);
         assert!(!HyperClientPolicy::cached_route(true, None, None, auto).http2_only);
         assert!(!HyperClientPolicy::cached_route(true, None, None, h1_only).http2_only);

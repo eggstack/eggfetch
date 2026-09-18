@@ -15,10 +15,16 @@ The following features are declared in `crates/eggfetch-core/Cargo.toml`:
 ```toml
 [features]
 default = ["http1", "tls-rustls", "tls-native-roots"]
+transport-http1 = ["hyper/http1", "hyper-util/http1", "hyper-rustls?/http1"]
+transport-http2 = ["dep:h2", "hyper/http2", "hyper-util/http2", "hyper-rustls?/http2"]
+standard-route = []
+advanced-routing = []
+native-http1 = ["transport-http1", "standard-route", "advanced-routing"]
+native-http2 = ["transport-http2", "standard-route", "advanced-routing"]
+standard-http1 = ["transport-http1", "standard-route", "high-level-url"]
+standard-http2 = ["transport-http2", "standard-route", "high-level-url"]
 http1 = ["native-http1", "high-level-url", "logical-retry", "redirects", "basic-auth"]
 http2 = ["native-http2", "high-level-url", "logical-retry", "redirects", "basic-auth"]
-native-http1 = ["hyper/http1", "hyper-util/http1", "hyper-rustls?/http1"]
-native-http2 = ["dep:h2", "hyper/http2", "hyper-util/http2", "hyper-rustls?/http2"]
 high-level-url = ["dep:url", "dep:percent-encoding"]
 logical-retry = ["dep:getrandom", "dep:httpdate"]
 redirects = []
@@ -40,13 +46,20 @@ test-util = ["tokio/test-util"]
 
 `http1`/`http2` are compatibility aliases: they preserve the existing
 high-level string/URL API plus logical retry, redirect following, and Basic
-auth. `native-http1`/`native-http2` are the low-level
-`http::Request`/`http::Uri` transport slices; selecting them without
-`high-level-url` omits the `url`/`idna`/ICU closure. `logical-retry`,
-`redirects`, and `basic-auth` are coarse capability features: the lean
-high-level profile selects `native-http1` + `high-level-url` without them
-for a single-attempt Bearer-only client. Native callers own any
-IDNA/punycode conversion before constructing `http::Uri`.
+auth. `transport-http1`/`transport-http2` are primitive Hyper protocol
+slices; `standard-route` is the ordinary DNS -> TCP/TLS path;
+`advanced-routing` owns custom Dialer, DirectConnector / local-address /
+socket options, resolved-target/pinned-address cache, SNI-override cache,
+and UDS. `native-http1`/`native-http2` preserve their historical behavior
+(transport + both route capabilities) for low-level `http::Request`/
+`http::Uri` embedding; selecting them without `high-level-url` omits the
+`url`/`idna`/ICU closure. `standard-http1`/`standard-http2` are lean
+high-level recipes (transport + standard route + URL API without advanced
+routing and without the policy bundle). `logical-retry`, `redirects`, and
+`basic-auth` are coarse capability features: the lean profile selects
+`standard-http1` without them for a single-attempt Bearer-only standard-route
+client. Native callers own any IDNA/punycode conversion before constructing
+`http::Uri`.
 
 ## Default Features
 
@@ -75,7 +88,7 @@ the profiles exclude `http2`, `http3`, `json`, all compression features,
 | H1 native-root HTTPS | `default-features = false, features = ["http1", "tls-rustls", "tls-native-roots"]` | H1, Rustls, native roots with WebPKI construction fallback; explicit form of the default trust profile |
 | H1 + native Rust JSON | `default-features = false, features = ["http1", "tls-rustls", "json"]` | Deterministic H1 HTTPS plus Serde request/response helpers; JSON is not in the default graph |
 | H1 updater transport | `default-features = false, features = ["http1", "tls-rustls", "tls-native-roots", "proxy"]` | H1, Rustls, native roots with WebPKI fallback, explicit proxy routing (incl. opt-in `ProxyEnvironment`); excludes http2/http3/compression/cookies/multipart/json/tracing |
-| H1 lean Bearer client | `default-features = false, features = ["native-http1", "high-level-url", "tls-rustls"]` | H1, Rustls, packaged WebPKI roots, high-level URL API with Bearer auth, timeouts, body limits, pooling, TLS, and typed failures; omits logical retry (`logical-retry`), redirect following (`redirects`), and Basic auth (`basic-auth`). 3xx returns without a second hop; each request dispatches once under the outer total deadline. |
+| H1 lean Bearer client | `default-features = false, features = ["standard-http1", "tls-rustls"]` | H1 standard-route, Rustls, packaged WebPKI roots, high-level URL API with Bearer auth, timeouts, body limits, pooling, TLS, and typed failures; omits advanced routing (`advanced-routing`: custom Dialer, resolved-target pinning, SNI override, local-address/socket options, UDS) and policy (`logical-retry`, `redirects`, `basic-auth`). 3xx returns without a second hop; each request dispatches once under the outer total deadline. |
 
 Add `http2` to an H1/TLS profile for HTTP/2 ALPN and multiplexing. The
 `http3` feature implies `http1` and `tls-rustls` but not `tls-native-roots`;
@@ -91,6 +104,10 @@ without `url`, `idna`, ICU, or `percent-encoding`. Example:
 `default-features = false, features = ["native-http1", "tls-rustls"]`.
 Built-in proxy, cookies, HTTP/3, and the string-URL `RequestBuilder` API
 require `high-level-url` and are unavailable in the minimal slice.
+For the leanest standard-route native transport without advanced routing,
+select `transport-http1` + `standard-route` (e.g.
+`default-features = false, features = ["transport-http1", "standard-route", "tls-rustls"]`);
+`native-http1` retains advanced routing for compatibility.
 
 ## Feature Reference
 
@@ -100,9 +117,9 @@ require `high-level-url` and are unavailable in the minimal slice.
 High-level HTTP/1.1 surface: `native-http1` transport plus `high-level-url`
 string/URL API plus `logical-retry`, `redirects`, and `basic-auth` policy
 capabilities. For the transport-only slice without `url`, select
-`native-http1` directly. For a Bearer-only single-attempt client without
-retry/redirect/Basic machinery, select `native-http1` + `high-level-url`
-without the policy features. `http1` alone (without TLS) is cleartext-only.
+`native-http1` directly. For a Bearer-only single-attempt standard-route
+client without advanced routing or retry/redirect/Basic machinery, select
+`standard-http1` + `tls-rustls`. `http1` alone (without TLS) is cleartext-only.
 
 ### http2
 
@@ -116,11 +133,49 @@ When enabled, the client can negotiate HTTP/2 via ALPN for HTTPS connections. Th
 
 **Status:** implemented.
 Low-level transport slices for `http::Request`/`http_body::Body` embedding
-(`Client::execute_http_body`, `NativeHttpService`). They own the Hyper
-H1/H2 protocol flags without the high-level URL layer. Select without
-`high-level-url` for minimal embedding builds without `url`/`idna`/ICU.
-Existing `http1`/`http2` names retain their high-level behavior; use the
-`native-*` names only when explicitly omitting the URL layer.
+(`Client::execute_http_body`, `NativeHttpService`). They preserve the
+historical behavior (primitive transport + standard route + advanced
+routing) without the high-level URL layer. Select without `high-level-url`
+for minimal embedding builds without `url`/`idna`/ICU. Existing
+`http1`/`http2` names retain their high-level behavior; use the `native-*`
+names only when explicitly omitting the URL layer but retaining advanced
+routing. For standard-route-only native transport without advanced routing,
+select `transport-http1`/`transport-http2` + `standard-route` directly.
+
+### transport-http1 / transport-http2
+
+**Status:** implemented.
+Primitive Hyper protocol slices owning only the `hyper`/`hyper-util`/
+`hyper-rustls` protocol flags. Every H1/H2 route builds on these. Combined
+with `standard-route` (and optionally `high-level-url` via `standard-http1`/
+`standard-http2`) for lean standard-route clients, or with `native-http1`/
+`native-http2` for full compatibility profiles.
+
+### standard-route / advanced-routing
+
+**Status:** implemented.
+Routing capability markers. `standard-route` is the ordinary DNS -> TCP/TLS
+Hyper path (typed DNS/refused/connect provenance, connect/total/read/write
+timeouts, pooling, TLS verification, body caps, cancellation).
+`advanced-routing` owns custom `Dialer`, DirectConnector / local-address /
+socket-option route, resolved-target/pinned-address cache, SNI-override
+cache, and UDS. `native-http1`/`native-http2` enable both; the lean profile
+enables only `standard-route`. Advanced builder methods (`dialer`,
+`local_address`, `socket_options`, `uds_path`, `resolved_addresses`) and the
+`Dialer`/`SocketOption` re-exports are absent without `advanced-routing`;
+pinned/SNI hints supplied via `TransportHints` fail closed with
+`Unsupported` in lean profiles.
+
+### standard-http1 / standard-http2
+
+**Status:** implemented.
+Lean high-level recipes: `transport-http1`/`transport-http2` + `standard-route`
++ `high-level-url`, without `advanced-routing` and without the
+`logical-retry`/`redirects`/`basic-auth` policy bundle. Select with
+`tls-rustls` for HTTPS. Each request dispatches once (`pipeline::lean::send_lean`)
+under the outer total deadline; 3xx returns without following and with empty
+history. Keeps Bearer auth, timeouts, body limits, pooling, TLS, and typed
+failures.
 
 ### high-level-url
 
@@ -320,4 +375,8 @@ Manual (not Tier 2 gates) compile checks for other combinations:
 cargo check -p eggfetch-core --no-default-features --features http1,tls-rustls,multipart,proxy
 cargo check -p eggfetch-core --no-default-features --features http1,tls-rustls,http3
 cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,http3
+cargo check -p eggfetch-core --no-default-features --features transport-http1,standard-route,high-level-url,tls-rustls
+cargo check -p eggfetch-core --no-default-features --features standard-http1,tls-rustls
+cargo test -p eggfetch-core --no-default-features --features standard-http1,tls-rustls --test lean_route_tests
+cargo test -p eggfetch-core --no-default-features --features standard-http1,tls-rustls --test lean_policy_tests
 ```

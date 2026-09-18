@@ -57,7 +57,7 @@ pub(super) fn build_http_request<B>(
 
 /// UDS route: configured Unix-domain-socket client.
 #[allow(clippy::too_many_arguments)]
-#[cfg(feature = "high-level-url")]
+#[cfg(all(feature = "high-level-url", feature = "advanced-routing"))]
 pub(super) async fn send_uds_route(
     inner: &ClientInner,
     method: &http::Method,
@@ -69,7 +69,7 @@ pub(super) async fn send_uds_route(
     transport_hints: &TransportHints,
     remaining_total: Option<Duration>,
 ) -> Result<Response> {
-    #[cfg(all(unix, any(feature = "native-http1", feature = "native-http2")))]
+    #[cfg(all(unix, feature = "advanced-routing"))]
     {
         let uds_client = inner
             .uds_client
@@ -96,7 +96,7 @@ pub(super) async fn send_uds_route(
 /// Custom-dialer route: caller-supplied raw-stream client, with per-request
 /// SNI override support.
 #[allow(clippy::too_many_arguments)]
-#[cfg(feature = "high-level-url")]
+#[cfg(all(feature = "high-level-url", feature = "advanced-routing"))]
 pub(super) async fn send_custom_route(
     inner: &ClientInner,
     method: &http::Method,
@@ -132,7 +132,7 @@ pub(super) async fn send_custom_route(
 /// Specialized-direct route: static resolved destination or configured
 /// direct connector (socket options / local address).
 #[allow(clippy::too_many_arguments)]
-#[cfg(feature = "high-level-url")]
+#[cfg(all(feature = "high-level-url", feature = "advanced-routing"))]
 pub(super) async fn send_direct_route(
     inner: &ClientInner,
     method: &http::Method,
@@ -179,7 +179,7 @@ pub(super) async fn send_direct_route(
 
 /// SNI-direct route: cached override client separating DNS/TCP from TLS.
 #[allow(clippy::too_many_arguments)]
-#[cfg(feature = "high-level-url")]
+#[cfg(all(feature = "high-level-url", feature = "advanced-routing"))]
 pub(super) async fn send_sni_route(
     inner: &ClientInner,
     method: &http::Method,

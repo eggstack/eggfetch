@@ -782,6 +782,12 @@ impl RequestBuilder {
     /// redirects, cookies, and authentication. The set must be non-empty and
     /// each address must use the URL's effective HTTP/HTTPS port. Static
     /// routing is direct-only; proxy and HTTP/3 combinations fail closed.
+    ///
+    /// Only available with the `advanced-routing` feature (enabled by the
+    /// `native-http1`/`native-http2` compatibility slices). The lean
+    /// standard-route profile omits pinned routing and fails closed if a
+    /// resolved destination is supplied via transport hints.
+    #[cfg(feature = "advanced-routing")]
     #[must_use]
     pub fn resolved_addresses<I>(mut self, addresses: I) -> Self
     where

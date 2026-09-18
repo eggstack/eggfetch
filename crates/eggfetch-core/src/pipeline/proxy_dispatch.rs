@@ -57,7 +57,7 @@ pub(super) async fn send_proxy_route(
             None => None,
         }
     };
-    #[cfg(any(feature = "native-http1", feature = "native-http2"))]
+    #[cfg(any(feature = "transport-http1", feature = "transport-http2"))]
     let forward_client = if url.scheme() == "http" && !proxy_config.is_socks() {
         Some(
             inner
@@ -67,7 +67,7 @@ pub(super) async fn send_proxy_route(
     } else {
         None
     };
-    #[cfg(any(feature = "native-http1", feature = "native-http2"))]
+    #[cfg(any(feature = "transport-http1", feature = "transport-http2"))]
     let connect_client = if url.scheme() == "https"
         && !proxy_config.is_socks()
         && transport_hints
@@ -111,9 +111,9 @@ pub(super) async fn send_proxy_route(
         proxy_tls_config: proxy_config.proxy_tls_config(),
         proxied_target,
         socks_client,
-        #[cfg(any(feature = "native-http1", feature = "native-http2"))]
+        #[cfg(any(feature = "transport-http1", feature = "transport-http2"))]
         forward_client,
-        #[cfg(any(feature = "native-http1", feature = "native-http2"))]
+        #[cfg(any(feature = "transport-http1", feature = "transport-http2"))]
         connect_client,
         failure_context,
         transport_metrics: Some(inner.transport_metrics.clone()),

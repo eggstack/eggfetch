@@ -18,6 +18,100 @@ JSON fixture uses `eggfetch-core/json`; static resolved-destination routing is
 an independent native transport capability and is not part of the size
 workload.
 
+## Linked footprint reduction program: lean standard-route measurement (2026-09-18)
+
+Parent program: `plans/linked-binary-footprint-reduction-program.md`.
+Executable freeze: policy boundary `263e7749` plus the standard-route
+boundary in this tree (see `plans/standard-route-advanced-routing-feature-boundary.md`;
+final SHA recorded at closure commit). Fixture: `qualification/embedded/eggfetch-min`
+source (streaming HTTPS GET, same source for all eggfetch profiles below) plus
+temporary downstream-style copies with lean feature sets (same source, same
+release shape `lto="thin"`, `codegen-units=1`, `panic="unwind"`, `strip=false`;
+`stripped` is an explicit `strip` copy).
+
+| Item | Value |
+|---|---|
+| rustc | `1.98.1 (48a229cea 2026-09-01)` |
+| cargo | `1.98.1 (797e8a9bc 2026-08-05)` |
+| target | `x86_64-unknown-linux-gnu` |
+| linker | `cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0` |
+| reqwest | `0.12.28` (resolved via crates.io at run time) |
+| build isolation | isolated `CARGO_TARGET_DIR` per profile (clean) |
+
+| Profile | Features | Unstripped | Stripped |
+|---|---|---:|---:|
+| reqwest-min (aligned baseline) | `default-features=false`, `stream,rustls-tls` | 7,873,176 | 3,079,840 |
+| eggfetch full compatibility | `default-features=false`, `http1,tls-rustls` | 8,683,256 | 3,669,840 |
+| eggfetch policy-lean (advanced retained) | `native-http1,high-level-url,tls-rustls` (no `logical-retry`/`redirects`/`basic-auth`) | 8,609,648 | 3,600,816 |
+| eggfetch lean standard Bearer client | `standard-http1,tls-rustls` (no `advanced-routing`, no policy bundle) | 7,967,632 | 3,111,904 |
+
+Deltas (stripped):
+
+- Full compatibility vs reqwest: +590,000 (+19.2%). Unchanged direction from
+  the historical record below: the full client retains retry/redirect/Basic
+  plus advanced routing (Dialer, resolved-target/SNI caches, direct/UDS).
+- Policy-lean vs full: −69,024 (−1.9%). Matches the policy-boundary closure
+  (`eggfetch_core` .text 262.0 KiB → 236.9 KiB; `httpdate`/`base64` absent
+  from the lean link; `getrandom` 748 B remains via ring/Rustls).
+- Lean standard vs full: −557,936 (−15.2%). `eggfetch_core` .text 262.0 KiB
+  → 133.9 KiB (−128.1 KiB eggfetch-owned, −49%). `hyper` 124.5 KiB → 78.6 KiB,
+  `hyper-util` 132.7 KiB → 68.3 KiB (advanced connector monomorphizations gone).
+- Lean standard vs reqwest: +32,064 (+1.0%). The Gregg-like gap is
+  essentially closed for standard DNS/TCP/TLS Bearer clients under this
+  toolchain/target/profile.
+- Unique packages (`cargo tree --prefix none | sort -u | wc -l`): full 110 →
+  lean standard 105 (−5). Tree lines 193 → 187 (−6). Lean drops core's direct
+  `base64`/`httpdate`/`getrandom` edges (transitive `getrandom` via ring and
+  `base64ct` via `pem-rfc7468` remain where TLS needs them); dependency-count
+  reduction is modest — the win is linked bytes, not package count.
+
+Attribution (unstripped companions, `cargo bloat --crates` / `-n 30`):
+
+- Full top eggfetch symbol: `pipeline::send_single_request::{closure#0}`
+  55.8 KiB, plus `pipeline::redirect::send_with_redirects` 19.0 KiB and four
+  `hyper_util::Client<...>::send_request` monomorphizations ~18 KiB each for
+  standard, Dialer, Direct, and UDS connectors, plus
+  `DirectConnector::call` 14.2 KiB and `ClientBuilder::build` 13.1 KiB.
+- Lean standard top eggfetch symbol: `pipeline::lean::send_lean::{closure#0}`
+  26.1 KiB. Exactly one `hyper_util::Client<...>::send_request` closure
+  remains (standard route, 21.7 KiB); no Dialer/UDS/Direct variants.
+  `ClientBuilder::build` 7.8 KiB. Zero `send_with_retry`/
+  `send_with_redirects`/`RetryPolicy`/`redirect_method` and zero
+  `uds`/`dialer`/`direct`/`sni`/`resolved` route symbols (remaining "retry"
+  hits are rustls `HelloRetryRequest` only).
+- `nm --size-sort` confirms the above; `cargo tree` confirms the lean
+  resolved set loses `eggfetch-http-connect` (proxy-owned since the residual
+  tuning plan) and core's direct `base64`/`httpdate`/`getrandom` edges.
+
+What the lean profile omits (opt-in only; full/default/Python/CLI/HTTPX
+behavior unchanged):
+
+- Advanced routing (`advanced-routing`): custom `Dialer`, caller-supplied
+  resolved addresses, SNI override, local-address/socket-option route, UDS,
+  and their caches/dispatch arms. Pinned/SNI hints fail closed with
+  `Unsupported` in lean; builder methods and `Dialer`/`SocketOption`
+  re-exports are absent without the feature.
+- Policy (`logical-retry`, `redirects`, `basic-auth`): logical retry loop,
+  redirect following/history, Basic auth. Lean dispatches once and returns
+  3xx without following.
+
+Gregg-like behavior proof (lean `standard-http1,tls-rustls`):
+`crates/eggfetch-core/tests/lean_route_tests.rs` (9 tests) plus
+`lean_policy_tests.rs` (6 tests), each passing under both `--all-features`
+and `--no-default-features --features standard-http1,tls-rustls`: HTTP/HTTPS
+loopback, Bearer + redaction, DNS/refused typed failures, total timeout,
+body cap, keep-alive reuse, cancellation, 3xx passthrough with empty history,
+single-attempt 503, and lean rejection of advanced hints.
+
+Classification update: the full compatibility profile is still **not a
+footprint win** versus aligned reqwest (same direction as below). The new
+lean standard-route Bearer profile **is a material linked-footprint
+improvement**, closing the measured stripped delta to ~+32 KiB (+1%) on this
+host/target/profile without changing default capabilities, TLS verification,
+roots, typed failures, pooling, timeouts, or body limits. Do not generalize
+beyond the measured toolchain/target/profile; cross-host deltas are not exact
+regressions.
+
 ## Latest native Tower service measurement (2026-09-15)
 
 ```sh

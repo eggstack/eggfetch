@@ -36,12 +36,12 @@ cargo test --workspace --exclude eggfetch-python --all-features -- --test-thread
 - All HTTP logic belongs in `eggfetch-core`, except the shared CONNECT wire bytes owned by `eggfetch-http-connect` (target formatting, request serialization, bounded response-head parsing; no sockets, TLS, retry, or policy; enabled by the `proxy` feature, absent from non-proxy profiles). CLI, Python, FFI, and Node are adapters.
 - No parallel synchronous networking path. Python sync blocks on async Rust engine.
 - The opt-in `json` feature owns the direct `serde`/`serde_json` dependencies and provides replayable `RequestBuilder::json()` plus single-consume `Response::json()` helpers. JSON parsing is explicit and does not validate media type; body setters are last-call-wins. Per-request decoded-body limits override client limits across retries/redirects. Keep the default feature graph unchanged.
-- `RequestBuilder::resolved_addresses()` is a native direct-routing escape hatch: it uses exactly the supplied socket addresses, preserves logical Host/TLS identity, and fails closed for proxy, UDS, H3, or cross-origin redirect combinations. It is not an SSRF policy or a Python compatibility extension.
+- `RequestBuilder::resolved_addresses()` is an advanced-routing (`advanced-routing`, via `native-http1`/`native-http2`) direct-routing escape hatch: it uses exactly the supplied socket addresses, preserves logical Host/TLS identity, and fails closed for proxy, UDS, H3, or cross-origin redirect combinations. It is absent from lean `standard-http1`/`standard-http2` profiles (pinned hints fail closed). It is not an SSRF policy or a Python compatibility extension.
 - Native proxy route controls remain separate from direct static routing: `Proxy::resolved_addresses()` pins the physical proxy peer without changing logical proxy URI/TLS identity, while `RequestBuilder::proxy_target_addresses()` pins the ultimate HTTPS CONNECT or local-resolution SOCKS5 destination. Preserve both immutable snapshots through retries/same-origin redirects, reject cross-origin reuse and unsupported SOCKS5H/plain-forward combinations before I/O, include snapshots in reusable SOCKS route keys, and never add an Egress dependency or facade exposure for symmetry. See `docs/architecture/core-tls-proxy-protocols.md`.
 - Cached forward-proxy and compatible single-target CONNECT clients/connectors contain only connection-scoped policy. Do not pass or retain a logical request's total/deadline state or add it to route keys; the current shrinking request budget is enforced by the outer proxy dispatch timeout. The cached CONNECT connector retains only the keyed SNI hint — never wire target overrides, trace observers, read/write budgets, retry/redirect state, bodies, or failure contexts. Preserve this ownership when changing pooling or stale-connection recovery.
 - `TlsConfig` route identity is an opaque per-build token, never the root-store pointer. `Clone` shares it, `TlsConfigBuilder::build()` mints fresh, and `danger_accept_invalid_certs` mints new; proxy and CONNECT route keys carry the token so strict/weak clones never alias. Never render it in diagnostics or replace it with a structural digest. See `docs/architecture/core-tls-proxy-protocols.md`.
 - Any new reusable route/client cache must answer the checklist in `transport::hyper_client` docs (connection identity, excluded request state, bound, secret handling, pool ownership, reconnect deadlines, isolation regression) and add key equality/isolation tests; false misses are acceptable, false hits are defects.
-- `ClientBuilder::dialer()` is a native-only client-scoped raw-stream seam: eggfetch owns HTTP, destination TLS, logical Host/SNI identity, pooling, redirects, and retries. A request `target` override changes only the wire path/query. Custom dialing fails closed with proxy, UDS, resolved-target, local/socket routing, and H3; `DialError` source chains are preserved without delegating source `Debug` output into eggfetch diagnostics.
+- `ClientBuilder::dialer()` is an advanced-routing-only client-scoped raw-stream seam (absent from lean standard-route profiles): eggfetch owns HTTP, destination TLS, logical Host/SNI identity, pooling, redirects, and retries. A request `target` override changes only the wire path/query. Custom dialing fails closed with proxy, UDS, resolved-target, local/socket routing, and H3; `DialError` source chains are preserved without delegating source `Debug` output into eggfetch diagnostics.
 - `Client::execute_http_body()` is the additive native frame-preserving seam: it accepts a caller-owned `http_body::Body<Data = Bytes>`, returns an `http::Response<NativeResponseBody>`, and shares the existing Hyper routes/pool/TLS. It derives scheme/host/effective-port directly from `http::Uri` via `http_origin::HttpOrigin` and never reparses through `url::Url`; callers own IDNA/punycode conversion before constructing the URI. It intentionally omits high-level redirects/retries/cookies/auth/decompression and rejects the custom proxy/H3 routes before dispatch; a 101 upgrade is rejected after its status is received because upgrades cannot be identified before I/O. Native response read timeouts start on the first body poll and reset after each frame, matching the high-level streaming contract.
 - `Client::native_service()` is the additive `tower_service::Service<http::Request<B>>` wrapper around `execute_http_body()`. Keep it cloneable, always-ready, and free of transport/policy duplication: origin-aware pool and transport backpressure occur in `call()`'s future, and arbitrary request extensions are not a guaranteed Hyper passthrough. Do not add the full Tower framework or Tonic to core; the external-style `qualification/native-tower-service/` fixture is manual and outside routine CI, pinned to Tonic 0.14.6 with `codegen` only (no Tonic `transport`/`Channel`, server, or TLS features).
 - `Client::send_detailed()` and `RequestBuilder::send_detailed()` are additive native-only error entry points. Preserve the exact underlying `Error` and `Error::kind()` values; `RequestFailure` may add only evidence-backed `NetworkFailureKind` detail. Classify standard HTTP/HTTPS DNS through the crate-private resolver marker, refusal from typed `io::ErrorKind`, direct DNS/refusal from private connector provenance, and routes without structured evidence as generic/`None`. Never search display/debug text, change `Error`, or let transient retry/H3-fallback failures survive into the terminal result. The lean profile (no `logical-retry`/`redirects`) keeps this contract via `pipeline::lean::send_lean`; do not make detailed failure reporting depend on the policy features.
@@ -82,16 +82,21 @@ approval (see `docs/verification-policy.md`). The `native-http1`/
 `native-http2` slices without `high-level-url` are likewise manual
 compile checks (`cargo check -p eggfetch-core --no-default-features
 --features native-http1,tls-rustls`), not Tier 2 gates. The lean
-high-level profile (`native-http1,high-level-url,tls-rustls` without
-`logical-retry`/`redirects`/`basic-auth`) is also manual: check it plus
-`cargo test -p eggfetch-core --no-default-features --features
-native-http1,high-level-url,tls-rustls --test lean_policy_tests`; do not
-promote it to a Tier 1/2 gate without approval.
+standard-route profile (`standard-http1,tls-rustls`, without
+`advanced-routing` or `logical-retry`/`redirects`/`basic-auth`) is also
+manual: check it plus `cargo test -p eggfetch-core --no-default-features
+--features standard-http1,tls-rustls --test lean_route_tests` (and
+`--test lean_policy_tests`); do not promote it to a Tier 1/2 gate without
+approval. The policy-only lean (`native-http1,high-level-url,tls-rustls`
+without the three policy features, retaining advanced routing) remains a
+valid manual recipe where pinned/SNI/dialer routes are still needed.
 
 Embedded footprint qualification (`qualification/embedded/` +
 `scripts/qualify-embedded-footprint.sh` →
 `docs/architecture/embedded-footprint.md`) is manual/bounded, never a CI
-gate. The current record is not a footprint win; never claim slimming. The
+gate. The full compatibility profile is not a footprint win; the lean
+`standard-http1` profile is a measured linked-byte improvement on its
+target/toolchain — never claim slimming beyond `embedded-footprint.md`. The
 native JSON helpers are opt-in and must remain absent from minimal profiles.
 
 ## HTTP/3 Constraints

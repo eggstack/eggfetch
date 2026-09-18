@@ -137,7 +137,12 @@ only when the native json feature is selected. The minimal native transport
 slice (`native-http1` + `tls-rustls` without `high-level-url`) additionally
 excludes `url`, `idna`, ICU, and `percent-encoding`; the native
 `http::Request` path derives scheme/host/effective-port from `http::Uri`
-(`http_origin::HttpOrigin`) without reparsing through `url::Url`.
+(`http_origin::HttpOrigin`) without reparsing through `url::Url`. The
+leanest native slice (`transport-http1` + `standard-route` + `tls-rustls`,
+without `advanced-routing`) additionally omits the advanced route
+constructors/caches/dispatch arms at the code level; dependency closure is
+otherwise the same as the minimal slice (no new dependency is added for
+footprint reduction).
 The exact supported core recipes and their excluded capabilities are listed in
 [feature-flags.md](feature-flags.md#supported-core-profiles).
 

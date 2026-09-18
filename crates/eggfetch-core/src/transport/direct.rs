@@ -1,6 +1,6 @@
 //! Direct (non-proxy) hyper client send path.
 
-#[cfg(feature = "native-http2")]
+#[cfg(feature = "transport-http2")]
 use std::error::Error as StdError;
 use std::sync::Arc;
 
@@ -353,7 +353,7 @@ pub(crate) fn upgrade_with_connector_metadata(
         }
         Err(upgraded) => {
             // UDS connector: report UDS transport without IP addresses.
-            #[cfg(unix)]
+            #[cfg(all(unix, feature = "advanced-routing"))]
             let upgraded = match upgraded
                 .downcast::<crate::transport::lifecycle::LifecycleConnection<
                     hyper_util::rt::TokioIo<crate::transport::uds::UdsStream>,
@@ -389,7 +389,7 @@ pub(crate) fn upgrade_with_connector_metadata(
                 }
                 Err(upgraded) => upgraded,
             };
-            #[cfg(unix)]
+            #[cfg(all(unix, feature = "advanced-routing"))]
             match upgraded.downcast::<hyper_util::rt::TokioIo<crate::transport::uds::UdsStream>>() {
                 Ok(parts) => {
                     let uds = parts.io.into_inner();
@@ -419,6 +419,11 @@ pub(crate) fn upgrade_with_connector_metadata(
             }
             #[cfg(not(unix))]
             {
+                opaque_upgraded(upgraded)
+            }
+            #[cfg(all(unix, not(feature = "advanced-routing")))]
+            {
+                let _ = &upgraded;
                 opaque_upgraded(upgraded)
             }
         }
@@ -569,7 +574,7 @@ pub(crate) fn map_send_error_with_context(
         }
         if let Some(hyper_err) = e.downcast_ref::<hyper::Error>() {
             // Try to extract h2-specific error information.
-            #[cfg(feature = "native-http2")]
+            #[cfg(feature = "transport-http2")]
             if let Some(h2_err) = classify_h2_hyper_error(hyper_err) {
                 return h2_err;
             }
@@ -623,7 +628,7 @@ fn map_send_error_for_proxy(
 /// Prefer the typed `h2::Error` exposed through Hyper's source chain. The
 /// message fallback is retained for Hyper errors that do not expose that
 /// cause, but it only recognizes the existing protocol markers.
-#[cfg(feature = "native-http2")]
+#[cfg(feature = "transport-http2")]
 fn classify_h2_hyper_error(err: &hyper::Error) -> Option<Error> {
     let msg = err.to_string();
     let mut source = StdError::source(err);
@@ -658,7 +663,7 @@ fn classify_h2_hyper_error(err: &hyper::Error) -> Option<Error> {
     classify_h2_message(&msg)
 }
 
-#[cfg(feature = "native-http2")]
+#[cfg(feature = "transport-http2")]
 fn classify_h2_message(msg: &str) -> Option<Error> {
     let lower = msg.to_ascii_lowercase();
 
@@ -685,7 +690,7 @@ fn classify_h2_message(msg: &str) -> Option<Error> {
     None
 }
 
-#[cfg(all(test, feature = "native-http2"))]
+#[cfg(all(test, feature = "transport-http2"))]
 mod tests {
     use super::classify_h2_message;
 

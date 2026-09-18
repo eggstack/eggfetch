@@ -17,7 +17,7 @@ use super::proxy::{
 use eggfetch_http_connect::{ConnectRequest, ConnectResponseLimits, ConnectTarget};
 
 /// Internal identity for one reusable CONNECT tunnel client.
-#[cfg(any(feature = "native-http1", feature = "native-http2"))]
+#[cfg(any(feature = "transport-http1", feature = "transport-http2"))]
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub(crate) struct ConnectRouteKey {
     proxy_identity: Vec<u8>,
@@ -30,7 +30,7 @@ pub(crate) struct ConnectRouteKey {
     proxy_tls_timeout: Option<std::time::Duration>,
 }
 
-#[cfg(any(feature = "native-http1", feature = "native-http2"))]
+#[cfg(any(feature = "transport-http1", feature = "transport-http2"))]
 impl ConnectRouteKey {
     #[allow(
         clippy::too_many_arguments,
@@ -66,12 +66,12 @@ impl ConnectRouteKey {
 }
 
 /// Origin-ready TLS stream returned by the Hyper CONNECT connector.
-#[cfg(any(feature = "native-http1", feature = "native-http2"))]
+#[cfg(any(feature = "transport-http1", feature = "transport-http2"))]
 pub(crate) struct ConnectProxyStream {
     inner: tokio_rustls::client::TlsStream<ProxyTunnel<super::proxy::ProxyIo>>,
 }
 
-#[cfg(any(feature = "native-http1", feature = "native-http2"))]
+#[cfg(any(feature = "transport-http1", feature = "transport-http2"))]
 impl tokio::io::AsyncRead for ConnectProxyStream {
     fn poll_read(
         mut self: std::pin::Pin<&mut Self>,
@@ -82,7 +82,7 @@ impl tokio::io::AsyncRead for ConnectProxyStream {
     }
 }
 
-#[cfg(any(feature = "native-http1", feature = "native-http2"))]
+#[cfg(any(feature = "transport-http1", feature = "transport-http2"))]
 impl tokio::io::AsyncWrite for ConnectProxyStream {
     fn poll_write(
         mut self: std::pin::Pin<&mut Self>,
@@ -107,7 +107,7 @@ impl tokio::io::AsyncWrite for ConnectProxyStream {
     }
 }
 
-#[cfg(any(feature = "native-http1", feature = "native-http2"))]
+#[cfg(any(feature = "transport-http1", feature = "transport-http2"))]
 impl hyper_util::client::legacy::connect::Connection for ConnectProxyStream {
     fn connected(&self) -> hyper_util::client::legacy::connect::Connected {
         let connected = hyper_util::client::legacy::connect::Connected::new();
@@ -134,7 +134,7 @@ impl hyper_util::client::legacy::connect::Connection for ConnectProxyStream {
 /// contexts: the SNI hostname is part of the route key and therefore safe to
 /// retain, while wire target overrides and trace observers belong to the
 /// current request and are supplied separately at dispatch time.
-#[cfg(any(feature = "native-http1", feature = "native-http2"))]
+#[cfg(any(feature = "transport-http1", feature = "transport-http2"))]
 #[derive(Clone)]
 pub(crate) struct ConnectProxyConnector {
     dest_url: url::Url,
@@ -149,7 +149,7 @@ pub(crate) struct ConnectProxyConnector {
     metrics: std::sync::Arc<crate::transport::metrics::TransportMetrics>,
 }
 
-#[cfg(any(feature = "native-http1", feature = "native-http2"))]
+#[cfg(any(feature = "transport-http1", feature = "transport-http2"))]
 impl ConnectProxyConnector {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
@@ -182,7 +182,7 @@ impl ConnectProxyConnector {
     }
 }
 
-#[cfg(any(feature = "native-http1", feature = "native-http2"))]
+#[cfg(any(feature = "transport-http1", feature = "transport-http2"))]
 impl tower_service::Service<http::Uri> for ConnectProxyConnector {
     type Response = hyper_util::rt::TokioIo<ConnectProxyStream>;
     type Error = Box<dyn std::error::Error + Send + Sync>;
@@ -234,9 +234,9 @@ impl tower_service::Service<http::Uri> for ConnectProxyConnector {
                 proxy_tls_config: proxy.proxy_tls_config(),
                 proxied_target: None,
                 socks_client: None,
-                #[cfg(any(feature = "native-http1", feature = "native-http2"))]
+                #[cfg(any(feature = "transport-http1", feature = "transport-http2"))]
                 forward_client: None,
-                #[cfg(any(feature = "native-http1", feature = "native-http2"))]
+                #[cfg(any(feature = "transport-http1", feature = "transport-http2"))]
                 connect_client: None,
                 failure_context: None,
                 transport_metrics: Some(metrics),
@@ -265,7 +265,7 @@ pub(crate) async fn send_https_connect_request(
     transport_hints: &crate::transport_hints::TransportHints,
     ctx: &ProxyRequestContext<'_>,
 ) -> Result<Response> {
-    #[cfg(any(feature = "native-http1", feature = "native-http2"))]
+    #[cfg(any(feature = "transport-http1", feature = "transport-http2"))]
     if let Some(client) = ctx.connect_client.as_ref() {
         return send_https_connect_request_hyper(
             dest_url,
@@ -326,7 +326,7 @@ pub(crate) async fn send_https_connect_request(
 
 /// Send an origin-form request over a CONNECT tunnel whose transport and
 /// lifecycle are owned by Hyper's reusable client.
-#[cfg(any(feature = "native-http1", feature = "native-http2"))]
+#[cfg(any(feature = "transport-http1", feature = "transport-http2"))]
 #[allow(clippy::too_many_arguments)]
 async fn send_https_connect_request_hyper(
     dest_url: &url::Url,
@@ -1002,7 +1002,7 @@ mod tests {
         );
     }
 
-    #[cfg(any(feature = "native-http1", feature = "native-http2"))]
+    #[cfg(any(feature = "transport-http1", feature = "transport-http2"))]
     #[allow(
         clippy::too_many_lines,
         reason = "route-key matrix enumerates every connection dimension"

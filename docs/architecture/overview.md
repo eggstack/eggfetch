@@ -44,7 +44,7 @@ This document is the bird's-eye view: what each discrete module, tool, and capab
 
 1. **Single networking implementation** — all HTTP logic lives in `eggfetch-core` plus the small `eggfetch-http-connect` CONNECT wire primitive it owns. CLI, Python, FFI, and Node never touch the network directly.
 2. **Async-first** — the Rust engine is async-only (tokio). Synchronous APIs are adapter-layer concerns that block on the async engine (Python sync releases the GIL; Node prototype uses `spawn_blocking` over FFI).
-3. **Feature-gated modularity** — default is HTTP/1.1 + Rustls TLS with the high-level URL API plus logical retry, redirect following, and Basic auth. HTTP/2, HTTP/3, cookies, compression, multipart, and proxy are opt-in via Cargo features; `native-http1`/`native-http2` without `high-level-url` select the low-level `http::Request` transport without `url`/`idna`/ICU. The lean Bearer-only profile selects `native-http1` + `high-level-url` without `logical-retry`/`redirects`/`basic-auth` for single-attempt 3xx-passthrough clients.
+3. **Feature-gated modularity** — default is HTTP/1.1 + Rustls TLS with the high-level URL API plus logical retry, redirect following, and Basic auth. HTTP/2, HTTP/3, cookies, compression, multipart, and proxy are opt-in via Cargo features; `native-http1`/`native-http2` without `high-level-url` select the low-level `http::Request` transport without `url`/`idna`/ICU (retaining advanced routing). The lean Bearer-only profile selects `standard-http1` + `tls-rustls` (transport + standard route + URL API without `advanced-routing` or the `logical-retry`/`redirects`/`basic-auth` policy bundle) for single-attempt 3xx-passthrough standard-route clients.
 4. **Security by default** — `unsafe_code = "forbid"` workspace-wide (only `eggfetch-ffi` and `eggfetch-node` override to `"allow"` for FFI/N-API), credential redaction, CR/LF injection prevention, fail-closed TLS translation.
 5. **Typed reconstruction, no silent drops** — request rebuilds for retry/redirect go through exhaustive helpers (`RequestParts::retry_request`, `into_request`, `advance_redirect_hop`); a new field must fail to compile, never be silently dropped.
 
@@ -281,7 +281,9 @@ Tiny downstream-style fixtures (`eggfetch-min/-json/-default`,
 `reqwest-min/-json/-default`) plus a manual runner that gathers `cargo
 tree` evidence and stripped release sizes. Opt-in, never a CI gate. The
 current evidence record is [embedded-footprint.md](embedded-footprint.md):
-not a footprint win — never claim slimming.
+full compatibility profiles are not a footprint win, while the lean
+`standard-http1` profile is a measured improvement on its target — never
+claim slimming beyond that record.
 
 ### Native HTTP body and TLS qualification (`qualification/native-http-body-tls/`)
 
@@ -343,7 +345,7 @@ rustls with custom CA bundles, mTLS client certs, version policy, verification t
 
 ### Auth, redirect, retry
 
-Basic (requires `basic-auth`)/Bearer with redaction and CR/LF rejection; precedence request > disabled > client > none; URL-embedded credentials rejected. Redirects (requires `redirects`): 303→GET rewrites, cross-origin stripping, buffered-body replay (one-shot streams rejected before next hop). Retry (requires `logical-retry`): policy-driven exponential backoff+jitter, `Retry-After`, per-method/status policies (POST/PATCH off by default), replay checks. The lean profile (`native-http1` + `high-level-url` without the three policy features) keeps Bearer auth, timeouts, body limits, pooling, TLS, and typed failures while dispatching once and returning 3xx without following.
+Basic (requires `basic-auth`)/Bearer with redaction and CR/LF rejection; precedence request > disabled > client > none; URL-embedded credentials rejected. Redirects (requires `redirects`): 303→GET rewrites, cross-origin stripping, buffered-body replay (one-shot streams rejected before next hop). Retry (requires `logical-retry`): policy-driven exponential backoff+jitter, `Retry-After`, per-method/status policies (POST/PATCH off by default), replay checks. Advanced routing (requires `advanced-routing`): custom Dialer, resolved-target pinning, SNI override, local-address/socket options, UDS. The lean profile (`standard-http1` + `tls-rustls`, without advanced routing or the three policy features) keeps Bearer auth, timeouts, body limits, pooling, TLS, and typed failures while dispatching once over the standard route and returning 3xx without following.
 
 **Deep dive:** [core-auth-redirect-retry.md](core-auth-redirect-retry.md)
 
@@ -460,6 +462,11 @@ selects one declarative route (precedence unchanged, directly unit-tested):
    (§ "Production Graduation Decision") and `tests/h3_interop_qualification.rs`.
 8. **Standard Hyper direct** — default TCP path (also safe `Auto` fallback
    for pre-commit replayable H3 failures, same deadlines/TLS).
+
+The lean `standard-http1`/`standard-http2` profiles compile only Proxy/SOCKS
+(where the `proxy` feature re-enables advanced routing via `http1`), H3
+(where selected), and Standard; UDS/Custom/Direct/SNI arms and their
+clients/caches are absent and pinned/SNI hints fail closed.
 
 H3 never bypasses proxy rules because proxy routes are selected first. Static
 destinations are deliberately not an SSRF policy: callers must validate their

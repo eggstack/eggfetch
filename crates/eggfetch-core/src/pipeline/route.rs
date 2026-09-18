@@ -13,19 +13,24 @@
 /// never bypasses proxy rules because proxy routes are selected first.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum TransportRoute {
-    /// Configured Unix-domain-socket client.
+    /// Configured Unix-domain-socket client (advanced-routing only).
+    #[cfg(feature = "advanced-routing")]
     Uds,
-    /// Caller-supplied raw-stream dialer.
+    /// Caller-supplied raw-stream dialer (advanced-routing only).
+    #[cfg(feature = "advanced-routing")]
     Custom,
-    /// Specialized direct connector (socket options / local address).
+    /// Specialized direct connector (socket options / local address) or
+    /// static resolved destination (advanced-routing only).
+    #[cfg(feature = "advanced-routing")]
     Direct,
     /// Effective proxy or SOCKS path.
     Proxy,
-    /// Cached SNI-override direct client.
+    /// Cached SNI-override direct client (advanced-routing only).
+    #[cfg(feature = "advanced-routing")]
     SniDirect,
     /// HTTP/3 over QUIC.
     H3,
-    /// Standard Hyper direct path.
+    /// Standard Hyper direct path (ordinary DNS -> TCP/TLS).
     Standard,
 }
 
@@ -45,27 +50,45 @@ pub(super) fn select_route(
     has_sni: bool,
     use_h3: bool,
 ) -> TransportRoute {
+    #[cfg(feature = "advanced-routing")]
     if has_uds {
-        TransportRoute::Uds
-    } else if has_custom {
-        TransportRoute::Custom
-    } else if has_direct_no_proxy {
-        TransportRoute::Direct
-    } else if has_proxy {
-        TransportRoute::Proxy
-    } else if has_sni {
-        TransportRoute::SniDirect
-    } else if use_h3 {
-        TransportRoute::H3
-    } else {
-        TransportRoute::Standard
+        return TransportRoute::Uds;
     }
+    #[cfg(feature = "advanced-routing")]
+    if has_custom {
+        return TransportRoute::Custom;
+    }
+    #[cfg(feature = "advanced-routing")]
+    if has_direct_no_proxy {
+        return TransportRoute::Direct;
+    }
+    if has_proxy {
+        return TransportRoute::Proxy;
+    }
+    #[cfg(feature = "advanced-routing")]
+    if has_sni {
+        return TransportRoute::SniDirect;
+    }
+    // In lean standard-route profiles the advanced flags above are always
+    // `false` (callers do not read absent client state) and the corresponding
+    // variants do not exist; an advanced hint that somehow reaches this point
+    // is rejected before selection so it can never silently take the standard
+    // path.
+    #[cfg(not(feature = "advanced-routing"))]
+    {
+        let _ = (has_uds, has_custom, has_direct_no_proxy, has_sni);
+    }
+    if use_h3 {
+        return TransportRoute::H3;
+    }
+    TransportRoute::Standard
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    #[cfg(feature = "advanced-routing")]
     #[test]
     fn select_route_precedence_matches_pipeline_order() {
         // UDS wins over everything.
@@ -119,5 +142,28 @@ mod tests {
         // it as `direct.is_some() && !has_proxy`, so a proxy-present call
         // always passes `false` here and selects Proxy (H3 never bypasses
         // proxy rules).
+    }
+
+    #[cfg(not(feature = "advanced-routing"))]
+    #[test]
+    fn select_route_lean_standard_only() {
+        // Lean standard-route profile has no UDS/Custom/Direct/SNI variants.
+        // Advanced flags are ignored; proxy/H3/standard precedence remains.
+        assert_eq!(
+            select_route(true, true, true, true, true, true),
+            TransportRoute::Proxy
+        );
+        assert_eq!(
+            select_route(false, false, false, true, false, true),
+            TransportRoute::Proxy
+        );
+        assert_eq!(
+            select_route(false, false, false, false, false, true),
+            TransportRoute::H3
+        );
+        assert_eq!(
+            select_route(false, false, false, false, false, false),
+            TransportRoute::Standard
+        );
     }
 }

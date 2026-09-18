@@ -15,7 +15,7 @@ use crate::timeout::TimeoutPhase;
 /// contain credential material and header values, but is never rendered in
 /// diagnostics or metrics. The proxy configuration itself is retained by the
 /// connector, so the key also includes the connection-affecting TLS identity.
-#[cfg(any(feature = "native-http1", feature = "native-http2"))]
+#[cfg(any(feature = "transport-http1", feature = "transport-http2"))]
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub(crate) struct ForwardRouteKey {
     identity: Vec<u8>,
@@ -24,7 +24,7 @@ pub(crate) struct ForwardRouteKey {
     proxy_tls_timeout: Option<std::time::Duration>,
 }
 
-#[cfg(any(feature = "native-http1", feature = "native-http2"))]
+#[cfg(any(feature = "transport-http1", feature = "transport-http2"))]
 impl ForwardRouteKey {
     pub(crate) fn new(
         proxy: &ProxyConfig,
@@ -41,7 +41,7 @@ impl ForwardRouteKey {
     }
 }
 
-#[cfg(any(feature = "native-http1", feature = "native-http2"))]
+#[cfg(any(feature = "transport-http1", feature = "transport-http2"))]
 fn origin_origin(url: &url::Url) -> String {
     format!(
         "{}://{}:{}",
@@ -113,10 +113,10 @@ pub(crate) struct ProxyRequestContext<'a> {
     pub(crate) socks_client: Option<crate::transport::TimeoutSocksClient>,
     /// Hyper client for ordinary HTTP forwarding. `None` retains the
     /// handshake-specific implementation for routes that cannot use it.
-    #[cfg(any(feature = "native-http1", feature = "native-http2"))]
+    #[cfg(any(feature = "transport-http1", feature = "transport-http2"))]
     pub(crate) forward_client: Option<crate::transport::TimeoutForwardClient>,
     /// Hyper client for a compatible HTTPS CONNECT route.
-    #[cfg(any(feature = "native-http1", feature = "native-http2"))]
+    #[cfg(any(feature = "transport-http1", feature = "transport-http2"))]
     pub(crate) connect_client: Option<crate::transport::TimeoutConnectClient>,
     pub(crate) failure_context: Option<&'a crate::error::RequestFailureContext>,
     /// Shared transport observability counters. `None` disables metering.
@@ -137,19 +137,19 @@ pub(crate) enum ProxyIo {
 /// proxy. The buffered reader is retained because a proxy TLS handshake or
 /// prior parser may have read ahead; forward requests begin with an empty
 /// buffer, while the type remains reusable for the common connector seam.
-#[cfg(any(feature = "native-http1", feature = "native-http2"))]
+#[cfg(any(feature = "transport-http1", feature = "transport-http2"))]
 pub(crate) struct ForwardProxyConnection {
     inner: tokio::io::BufReader<ProxyIo>,
 }
 
-#[cfg(any(feature = "native-http1", feature = "native-http2"))]
+#[cfg(any(feature = "transport-http1", feature = "transport-http2"))]
 impl ForwardProxyConnection {
     fn new(inner: tokio::io::BufReader<ProxyIo>) -> Self {
         Self { inner }
     }
 }
 
-#[cfg(any(feature = "native-http1", feature = "native-http2"))]
+#[cfg(any(feature = "transport-http1", feature = "transport-http2"))]
 impl tokio::io::AsyncRead for ForwardProxyConnection {
     fn poll_read(
         mut self: std::pin::Pin<&mut Self>,
@@ -160,7 +160,7 @@ impl tokio::io::AsyncRead for ForwardProxyConnection {
     }
 }
 
-#[cfg(any(feature = "native-http1", feature = "native-http2"))]
+#[cfg(any(feature = "transport-http1", feature = "transport-http2"))]
 impl tokio::io::AsyncWrite for ForwardProxyConnection {
     fn poll_write(
         mut self: std::pin::Pin<&mut Self>,
@@ -185,7 +185,7 @@ impl tokio::io::AsyncWrite for ForwardProxyConnection {
     }
 }
 
-#[cfg(any(feature = "native-http1", feature = "native-http2"))]
+#[cfg(any(feature = "transport-http1", feature = "transport-http2"))]
 impl hyper_util::client::legacy::connect::Connection for ForwardProxyConnection {
     fn connected(&self) -> hyper_util::client::legacy::connect::Connected {
         hyper_util::client::legacy::connect::Connected::new().proxy(true)
@@ -193,7 +193,7 @@ impl hyper_util::client::legacy::connect::Connection for ForwardProxyConnection 
 }
 
 /// Connector used by Hyper's reusable HTTP forward-proxy client.
-#[cfg(any(feature = "native-http1", feature = "native-http2"))]
+#[cfg(any(feature = "transport-http1", feature = "transport-http2"))]
 #[derive(Clone)]
 pub(crate) struct ForwardProxyConnector {
     proxy: ProxyConfig,
@@ -203,7 +203,7 @@ pub(crate) struct ForwardProxyConnector {
     metrics: std::sync::Arc<crate::transport::metrics::TransportMetrics>,
 }
 
-#[cfg(any(feature = "native-http1", feature = "native-http2"))]
+#[cfg(any(feature = "transport-http1", feature = "transport-http2"))]
 impl ForwardProxyConnector {
     pub(crate) fn new(
         proxy: ProxyConfig,
@@ -222,7 +222,7 @@ impl ForwardProxyConnector {
     }
 }
 
-#[cfg(any(feature = "native-http1", feature = "native-http2"))]
+#[cfg(any(feature = "transport-http1", feature = "transport-http2"))]
 impl tower_service::Service<http::Uri> for ForwardProxyConnector {
     type Response = hyper_util::rt::TokioIo<ForwardProxyConnection>;
     type Error = Box<dyn std::error::Error + Send + Sync>;
@@ -589,7 +589,7 @@ async fn send_http_proxy_request(
         }
     }
 
-    #[cfg(any(feature = "native-http1", feature = "native-http2"))]
+    #[cfg(any(feature = "transport-http1", feature = "transport-http2"))]
     if let Some(forward_client) = ctx.forward_client.as_ref() {
         return send_http_proxy_request_hyper(
             dest_url,
@@ -689,7 +689,7 @@ async fn send_http_proxy_request(
 /// pool. The connector has already selected the proxy transport and marks it
 /// with `Connected::proxy(true)`, so Hyper emits absolute-form targets and
 /// owns all successful request/response framing.
-#[cfg(any(feature = "native-http1", feature = "native-http2"))]
+#[cfg(any(feature = "transport-http1", feature = "transport-http2"))]
 #[allow(clippy::too_many_arguments)]
 async fn send_http_proxy_request_hyper(
     dest_url: &url::Url,
@@ -1602,7 +1602,7 @@ mod tests {
         assert_eq!(fallback.alpn_protocols, vec![b"http/1.1".to_vec()]);
     }
 
-    #[cfg(any(feature = "native-http1", feature = "native-http2"))]
+    #[cfg(any(feature = "transport-http1", feature = "transport-http2"))]
     #[test]
     fn forward_route_key_isolates_tls_policy_and_reuses_compatible() {
         use super::ForwardRouteKey;
@@ -1649,7 +1649,7 @@ mod tests {
         assert!(key_a == key_b);
     }
 
-    #[cfg(any(feature = "native-http1", feature = "native-http2"))]
+    #[cfg(any(feature = "transport-http1", feature = "transport-http2"))]
     #[test]
     fn forward_route_key_fragments_on_connection_policy() {
         use super::ForwardRouteKey;

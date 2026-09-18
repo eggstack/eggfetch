@@ -17,16 +17,33 @@ workspace = true
 
 [features]
 default = ["http1", "tls-rustls", "tls-native-roots"]
+# Primitive Hyper protocol slices. Every H1/H2 route (standard and advanced)
+# builds on these; they own only the `hyper`/`hyper-util`/`hyper-rustls`
+# protocol flags.
+transport-http1 = ["hyper/http1", "hyper-util/http1", "hyper-rustls?/http1"]
+transport-http2 = ["dep:h2", "hyper/http2", "hyper-util/http2", "hyper-rustls?/http2"]
+# Routing capability markers. `standard-route` is the ordinary DNS -> TCP/TLS
+# Hyper path. `advanced-routing` owns custom Dialer, DirectConnector /
+# local-address / socket options, resolved-target/pinned-address cache,
+# SNI-override cache, and UDS.
+standard-route = []
+advanced-routing = []
+# Compatibility/low-level slices preserve their historical behavior
+# (transport + both route capabilities).
+native-http1 = ["transport-http1", "standard-route", "advanced-routing"]
+native-http2 = ["transport-http2", "standard-route", "advanced-routing"]
+# Lean high-level recipes: standard route + URL API without advanced routing
+# and without the `logical-retry`/`redirects`/`basic-auth` policy bundle.
+# Select with `tls-rustls` for HTTPS; each request dispatches once and 3xx
+# returns without a second hop.
+standard-http1 = ["transport-http1", "standard-route", "high-level-url"]
+standard-http2 = ["transport-http2", "standard-route", "high-level-url"]
 # Compatibility/high-level aliases: existing `http1`/`http2` names retain
-# their current user-visible behavior (transport + high-level URL API +
-# logical retry + redirect following + Basic auth).
+# their current user-visible behavior (transport + standard + advanced
+# routing + high-level URL API + logical retry + redirect following +
+# Basic auth).
 http1 = ["native-http1", "high-level-url", "logical-retry", "redirects", "basic-auth"]
 http2 = ["native-http2", "high-level-url", "logical-retry", "redirects", "basic-auth"]
-# Low-level slices for `http::Request`/`http::Uri` consumers. Selecting
-# `native-http1` without `high-level-url` omits the string/URL request API
-# and its `url`/`idna`/ICU closure.
-native-http1 = ["hyper/http1", "hyper-util/http1", "hyper-rustls?/http1"]
-native-http2 = ["dep:h2", "hyper/http2", "hyper-util/http2", "hyper-rustls?/http2"]
 # High-level string/URL request semantics (backed by `url`; native callers
 # own any IDNA/punycode conversion before constructing `http::Uri`).
 high-level-url = ["dep:url", "dep:percent-encoding"]

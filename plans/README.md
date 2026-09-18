@@ -2,7 +2,7 @@
 
 This directory contains active implementation plans, live qualification/status records, and historical implementation records. Completed plans are non-normative unless another current document explicitly says otherwise. Verification and release policy remain governed by `docs/verification-policy.md` and `docs/releases/process.md`.
 
-## Active program — linked binary footprint reduction (2026-09-17)
+## Completed — linked binary footprint reduction (2026-09-17 → 2026-09-18)
 
 Handoff program: `linked-binary-footprint-reduction-program.md`
 
@@ -10,11 +10,16 @@ Planning baseline: `6093a66959165f132f02102ffb727ac3e710917c`
 (eggfetch-core 0.1.6 after the completed native pool-map and native URI
 dependency-separation work).
 
-Status: planned. The program targets the remaining linked-binary overhead paid
-by small Rust consumers without removing or weakening any existing default or
-compatibility capability. Gregg's measured reqwest -> eggfetch regression is
-motivating evidence only; all changes must remain general-purpose eggfetch
-feature/ownership improvements.
+Status: implementation complete (material linked-footprint improvement).
+The lean `standard-http1` + `tls-rustls` profile closes the measured
+stripped delta vs aligned reqwest to +32 KiB (+1.0%) on
+x86_64/thin-LTO (full compat +590 KiB); `eggfetch_core` .text −49%.
+Existing default/`http1`/`http2`/`native-http1`/`native-http2`/Python/CLI/FFI/
+Node/HTTPX/proxy/retry/redirect/auth/TLS/H2/H3/cookies/compression/multipart
+behavior unchanged. See the program file and child-plan closure records;
+`docs/architecture/embedded-footprint.md` is the single authority for bytes.
+Tier 1 green locally + CI; extended/package/security/exact-SHA compat renewal
+remain release-time gates per `docs/verification-policy.md`.
 
 Execution order:
 

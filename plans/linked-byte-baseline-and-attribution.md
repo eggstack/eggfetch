@@ -2,7 +2,7 @@
 
 Planning baseline: `6093a66959165f132f02102ffb727ac3e710917c` (`main`, 2026-09-17; eggfetch-core 0.1.6)
 Parent program: `plans/linked-binary-footprint-reduction-program.md`
-Status: planned
+Status: complete (2026-09-18; entry + attribution recorded; see Closure record)
 
 ## Objective
 
@@ -205,3 +205,40 @@ This plan should require only the fixture/runtime checks needed to prove the mea
 - [ ] Crate and symbol attribution is captured.
 - [ ] The expected contribution of advanced routing, retry/redirect, auth, TLS helpers, and residual dependencies is evidence-backed.
 - [ ] Later executable plans are confirmed, narrowed, or explicitly amended based on the evidence.
+
+## Closure record (2026-09-18)
+
+Entry measurement taken on current `main` (`263e7749`, with the policy
+boundary already landed, before the standard-route split) using the
+`qualification/embedded/eggfetch-min` source (streaming HTTPS GET, same
+source for all eggfetch profiles) with isolated `CARGO_TARGET_DIR`s, release
+shape `lto="thin"`, `codegen-units=1`, `panic="unwind"`, `rustc 1.98.1`,
+`x86_64-unknown-linux-gnu`:
+
+- Full compatibility (`http1,tls-rustls`): unstripped 8,683,256 B, stripped
+  3,669,840 B. `cargo bloat --crates`: `eggfetch_core` .text 262.0 KiB.
+  Top symbol `pipeline::send_single_request::{closure#0}` 55.8 KiB with
+  advanced-route monomorphizations (UDS/Dialer/Direct `send_request`
+  closures ~18 KiB each), `send_with_redirects` 19.0 KiB,
+  `DirectConnector::call` 14.2 KiB, `ClientBuilder::build` 13.1 KiB.
+- Policy-lean (`native-http1,high-level-url,tls-rustls`, no policy bundle):
+  unstripped 8,609,648 B, stripped 3,600,816 B (−69,024 stripped vs full).
+- Aligned reqwest (`reqwest-min`, `stream,rustls-tls`): unstripped
+  7,873,176 B, stripped 3,079,840 B (matches the historical x86_64 record).
+  Full-vs-reqwest stripped delta: +590,000 (+19.2%).
+- Unique packages: full 110 → lean-standard 105 (see closure plan for the
+  final lean numbers). Dependency-count reduction is modest; the material
+  win is linked bytes (see standard-route and closure plans).
+- Residual candidates in the full link: `httpdate` 6.4 KiB, `base64`
+  1.3 KiB, `getrandom` 748 B (via ring), `tracing`/`log` negligible;
+  `eggfetch_http_connect`/`pem_rfc7468`/`base64ct` zero linked bytes when
+  uncalled (link-pruned). Advanced-route machinery dominates eggfetch-owned
+  bytes, confirming the standard-route split as the highest-value boundary;
+  retry/redirect policy is second (already split). No unexpected dominant
+  owner; later plans confirmed as written.
+
+Exit criteria met: four profiles measured under documented equivalent
+settings (0.1.5 historical via the prior x86_64/aarch64 records linked from
+`docs/architecture/embedded-footprint.md`); real request + typed-failure
+paths exercised; stripped/unstripped recorded; crate/symbol attribution
+captured; advanced-routing vs policy contributions evidence-backed.

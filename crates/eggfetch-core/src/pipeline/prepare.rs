@@ -316,7 +316,7 @@ pub(super) async fn prepare_single_request(
         max_decompression_ratio: request_max_decompression_ratio,
     } = request.into_parts();
 
-    #[cfg(any(feature = "native-http1", feature = "native-http2"))]
+    #[cfg(any(feature = "transport-http1", feature = "transport-http2"))]
     if inner.lifecycle.invalid {
         return Err(Error::RequestBuild(
             "physical connection policy requires max_live > 0 and admission_timeout only with max_live"
@@ -412,13 +412,19 @@ pub(super) async fn prepare_single_request(
     }
 
     if transport_hints.resolved_target.is_some() {
+        #[cfg(not(feature = "advanced-routing"))]
+        {
+            return Err(Error::Unsupported(
+                "caller-supplied resolved destinations require the advanced-routing feature".into(),
+            ));
+        }
         #[cfg(feature = "proxy")]
         if effective_proxy.is_some() {
             return Err(Error::Unsupported(
                 "caller-supplied resolved destinations require direct routing; disable the proxy explicitly".into(),
             ));
         }
-        #[cfg(all(unix, any(feature = "native-http1", feature = "native-http2")))]
+        #[cfg(all(unix, feature = "advanced-routing"))]
         if inner.uds_client.is_some() {
             return Err(Error::Unsupported(
                 "caller-supplied resolved destinations are incompatible with Unix-domain routing"
@@ -427,13 +433,20 @@ pub(super) async fn prepare_single_request(
         }
     }
 
+    #[cfg(not(feature = "advanced-routing"))]
+    if transport_hints.sni_hostname.is_some() {
+        return Err(Error::Unsupported(
+            "SNI override requires the advanced-routing feature".into(),
+        ));
+    }
+
+    #[cfg(feature = "advanced-routing")]
     if inner.config.dialer.is_some() {
         if transport_hints.resolved_target.is_some() {
             return Err(Error::Unsupported(
                 "custom dialing is incompatible with caller-supplied resolved destinations".into(),
             ));
         }
-        #[cfg(any(feature = "native-http1", feature = "native-http2"))]
         if inner.direct_connector_config.is_some() {
             return Err(Error::Unsupported(
                 "custom dialing is incompatible with local-address or socket-option routing".into(),
