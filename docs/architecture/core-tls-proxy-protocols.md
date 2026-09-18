@@ -26,7 +26,9 @@ provider. With no explicit provider, eggfetch retains its existing
 process-default/ring fallback behavior. Provider-specific properties such as
 FIPS or post-quantum support depend on the caller's exact provider build.
 The same completed configuration is used by direct, resolved-target,
-custom-dialer, UDS, tunneled-origin, and standard Hyper TLS routes. The H3
+custom-dialer, UDS, tunneled-origin, and standard Hyper TLS routes (the
+direct/resolved/dialer/UDS connectors require `advanced-routing` and are
+absent from lean `standard-http1`/`standard-http2` profiles). The H3
 adapter converts that completed Rustls client configuration into Quinn's
 QUIC adapter; an incompatible provider/Quinn feature combination fails during
 configuration rather than silently falling back to ring.
@@ -320,7 +322,8 @@ where it is not shared behavior.
 
 ### Caller-owned raw-stream dialing
 
-The native `Dialer` extension is below destination HTTP/TLS and outside the
+The native `Dialer` extension (requires `advanced-routing`; absent from lean
+standard-route profiles) is below destination HTTP/TLS and outside the
 built-in proxy model. The dialer receives the logical URL host and effective
 port and returns a Tokio-compatible raw stream. For HTTPS, eggfetch then runs
 its configured rustls client over that stream, so logical `Host`, SNI, and
@@ -508,7 +511,8 @@ HTTP/2 multiplexes streams on a single connection, but eggfetch's pool permits s
 
 ### Caller-supplied resolved destinations
 
-`RequestBuilder::resolved_addresses()` is a native direct-routing primitive for
+`RequestBuilder::resolved_addresses()` (requires `advanced-routing`; absent
+from lean profiles) is a native direct-routing primitive for
 callers that already resolved or selected the physical endpoints. The direct
 connector iterates exactly those `SocketAddr` values under the request's
 connect budget and does not invoke `lookup_host()`. The logical URL remains

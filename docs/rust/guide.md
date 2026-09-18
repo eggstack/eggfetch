@@ -15,8 +15,14 @@ Enable optional features as needed:
 
 | Feature | Description |
 |---|---|
-| `http1` | HTTP/1.1 support (default) |
-| `http2` | HTTP/2 support via ALPN |
+| `http1` | HTTP/1.1 support (default; `native-http1` + `high-level-url` + `logical-retry` + `redirects` + `basic-auth`) |
+| `http2` | HTTP/2 support via ALPN (same policy bundle over `native-http2`) |
+| `native-http1` / `native-http2` | Low-level `http::Request` transport slices (`transport-http*` + `standard-route` + `advanced-routing`); select without `high-level-url` to omit `url`/`idna`/ICU |
+| `transport-http1` / `transport-http2` | Primitive Hyper protocol slices; combine with `standard-route` for the leanest native transport |
+| `standard-route` / `advanced-routing` | Routing capability markers: ordinary DNS → TCP/TLS path vs custom Dialer, resolved-target/SNI, socket options, UDS |
+| `standard-http1` / `standard-http2` | Lean high-level recipes (transport + standard route + URL API, without `advanced-routing` or the policy bundle) |
+| `high-level-url` | String/URL request API (`url`, `percent-encoding`) |
+| `logical-retry` / `redirects` / `basic-auth` | Retry orchestration / redirect following / Basic auth (all in `http1`/`http2`; all omitted by lean `standard-http1`) |
 | `http3` | HTTP/3 over QUIC (experimental) |
 | `tls-rustls` | TLS via rustls (default) |
 | `tls-native-roots` | Prefer the operating system trust store; implies `tls-rustls` (default) |
@@ -38,7 +44,8 @@ eggfetch-core = { version = "0.1", features = ["http1", "http2", "tls-rustls", "
 serde = { version = "1", features = ["derive"] }
 ```
 
-For a minimal embedded HTTPS client (deterministic WebPKI roots):
+For a minimal embedded HTTPS client (deterministic WebPKI roots, retaining
+advanced routing and the retry/redirect/Basic policy bundle):
 
 ```toml
 eggfetch-core = { version = "0.1", default-features = false, features = ["http1", "tls-rustls"] }
@@ -63,6 +70,10 @@ The profile recipes and their excluded capabilities are listed in
 
 ## Caller-owned transport and embedded guardrails
 
+Custom dialing, `RequestBuilder::resolved_addresses()`, `TransportHints::{sni_hostname, resolved_target}`,
+`ClientBuilder::{local_address, socket_options, uds_path}`, and the `Dialer`/`SocketOption` re-exports
+require `advanced-routing` (present in `native-http1`/`native-http2`/`http1`/`http2`/default; absent from
+lean `standard-http1`/`standard-http2` profiles, where pinned/SNI hints fail closed with `Unsupported`).
 Native consumers that already own routing can supply a raw Tokio stream while
 keeping HTTP and destination TLS in eggfetch:
 

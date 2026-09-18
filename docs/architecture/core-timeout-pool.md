@@ -80,7 +80,9 @@ The lifecycle wrapper is installed after `ConnectTimeout`, so admission wait
 does not consume the connect budget and DNS/TCP/custom dialing/destination
 TLS remain connect-phase work. It is shared by standard, direct,
 resolved-target, SNI, custom-dialer, UDS, SOCKS, HTTP forward-proxy, and
-compatible HTTPS CONNECT Hyper clients. HTTP/3 uses QUIC and remains outside
+compatible HTTPS CONNECT Hyper clients (the direct/resolved/SNI/dialer/UDS
+members require `advanced-routing` and are absent from lean
+`standard-http1`/`standard-http2` profiles). HTTP/3 uses QUIC and remains outside
 this Hyper-specific policy. Proxy connector setup still reports proxy-connect
 and proxy-TLS phases; a reused proxy connection does not rerun those phases.
 
@@ -124,9 +126,10 @@ This distinction is intentional: use `PoolConfig` for logical work and
 ### Hyper Idle-Pool Policy
 
 The physical idle policy is resolved once from `PoolConfig` and applied
-uniformly to every persistent H1/H2 Hyper client family (standard, direct,
-UDS, custom dialer, resolved-target, SNI, custom-SNI, SOCKS, HTTP
-forward-proxy, and HTTPS CONNECT):
+uniformly to every persistent H1/H2 Hyper client family present in the build
+(standard, direct, UDS, custom dialer, resolved-target, SNI, custom-SNI, SOCKS, HTTP
+forward-proxy, and HTTPS CONNECT; the direct/UDS/dialer/resolved/SNI members
+require `advanced-routing` and are absent from lean profiles):
 
 - `idle_timeout` (`Limits::keepalive_expiry`) — how long an idle connection
   is retained. When set, the shared Hyper builder policy also installs a

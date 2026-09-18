@@ -114,11 +114,11 @@ Body sources are mutually exclusive: `body()`, `bytes()`, `stream()`, `json()`, 
 `RequestBuilder::transport_hints()` sets typed wire-level overrides via `TransportHints`:
 
 - `target: Option<Bytes>` — overrides the wire request target (e.g. `OPTIONS *`, absolute-form) without changing the logical URL used for routing, cookies, auth, and proxy selection.
-- `sni_hostname: Option<String>` — overrides TLS SNI while preserving TCP destination.
+- `sni_hostname: Option<String>` — overrides TLS SNI while preserving TCP destination. Requires `advanced-routing`; lean `standard-http1`/`standard-http2` profiles fail closed with `Unsupported`.
 - `resolved_target: Option<ResolvedTarget>` — pins direct TCP to caller-supplied
   addresses without a second DNS lookup while preserving logical URL/Host/SNI
   identity. Same-origin redirects retain it; cross-origin redirects and
-  incompatible proxy/UDS/H3 routes fail closed.
+  incompatible proxy/UDS/H3 routes fail closed. Requires `advanced-routing`; lean profiles fail closed with `Unsupported`.
 - `RequestBuilder::proxy_target_addresses()` — separately pins the physical
   ultimate destination for supported proxied routes. It is not a new public
   `TransportHints` field: retry and same-origin redirect reconstruction carry
@@ -135,7 +135,8 @@ the first-hop behavior cannot diverge between the two entry paths.
 
 ### Static resolved-destination routing
 
-`RequestBuilder::resolved_addresses()` separates logical identity from the
+`RequestBuilder::resolved_addresses()` (requires `advanced-routing`; absent
+from lean `standard-http1`/`standard-http2` profiles) separates logical identity from the
 physical endpoint:
 
 ```text
@@ -373,7 +374,8 @@ including 101 upgrade handling (UDS kind without IPs).
 
 ### Caller-owned raw streams
 
-`ClientBuilder::dialer()` accepts the small public `Dialer` contract rather
+`ClientBuilder::dialer()` (requires `advanced-routing`; absent from lean
+standard-route profiles) accepts the small public `Dialer` contract rather
 than Hyper's `Service`/`Connection` traits. Eggfetch adapts the returned Tokio
 stream into Hyper, then performs destination TLS itself for HTTPS, preserving
 the logical URL host for `Host`, SNI, and certificate verification. Dialer

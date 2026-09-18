@@ -34,8 +34,14 @@ eggfetch-core = { version = "0.1", features = ["http1", "tls-rustls", "tls-nativ
 
 | Feature | Description |
 | --- | --- |
-| `http1` | HTTP/1.1 support (default) |
-| `http2` | HTTP/2 ALPN negotiation and multiplexing |
+| `http1` | HTTP/1.1 support (default; `native-http1` + `high-level-url` + `logical-retry` + `redirects` + `basic-auth`) |
+| `http2` | HTTP/2 ALPN negotiation and multiplexing (same policy bundle over `native-http2`) |
+| `native-http1` / `native-http2` | Low-level transport slices (transport + standard route + `advanced-routing`); omit `high-level-url` for minimal embedding |
+| `transport-http1` / `transport-http2` | Primitive Hyper protocol slices; combine with `standard-route` for the leanest native transport |
+| `standard-route` / `advanced-routing` | Ordinary DNS → TCP/TLS path vs custom Dialer, resolved-target/SNI, socket options, UDS |
+| `standard-http1` / `standard-http2` | Lean high-level recipes without `advanced-routing` or the retry/redirect/Basic bundle |
+| `high-level-url` | String/URL request API |
+| `logical-retry` / `redirects` / `basic-auth` | Retry / redirect following / Basic auth (in `http1`/`http2`; omitted by lean `standard-http1`) |
 | `http3` | HTTP/3 QUIC transport (experimental) |
 | `tls-rustls` | TLS via rustls (default) |
 | `tls-native-roots` | Prefer the operating system trust store; implies `tls-rustls` (default) |

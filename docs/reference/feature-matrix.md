@@ -13,6 +13,15 @@ Node.js (eggfetch-node, experimental).
 | `http3` | No | Yes | No |
 | `tls-rustls` | Yes | Yes | Yes |
 | `tls-native-roots` | Yes | Yes | Yes |
+| `native-http1` / `native-http2` | Via `http1`/`http2` | Via `http1`/`http2` | Via `http1` |
+| `transport-http1` / `transport-http2` | Via `http1`/`http2` | Via `http1`/`http2` | Via `http1` |
+| `standard-route` | Via `http1` | Yes | Yes |
+| `advanced-routing` | Via `http1` | Yes | Yes |
+| `standard-http1` / `standard-http2` | No (lean opt-in) | N/A | N/A |
+| `high-level-url` | Yes (via `http1`) | Yes | Yes |
+| `logical-retry` | Yes (via `http1`) | Yes | Yes |
+| `redirects` | Yes (via `http1`) | Yes | Yes |
+| `basic-auth` | Yes (via `http1`) | Yes | Yes |
 | `cookies` | No | Yes | Yes |
 | `proxy` | No | Yes | Yes |
 | `multipart` | No | Yes | Yes |
@@ -35,13 +44,17 @@ Node.js (eggfetch-node, experimental).
 | `Response` (buffered + streaming) | Yes |
 | `Timeout` / `TimeoutBuilder` | Yes |
 | `TlsConfig` / `TlsConfigBuilder` | Yes |
-| `RetryPolicy` / `RetryPolicyBuilder` | Yes |
+| `RetryPolicy` / `RetryPolicyBuilder` | Yes (requires `logical-retry`; absent from lean `standard-http1`/`standard-http2` profiles) |
 | `Proxy` / `NoProxy` | Yes (feature-gated) |
 | `Multipart` / `Part` / `Boundary` | Yes (feature-gated) |
 | `CookieJar` | Yes (feature-gated) |
-| `BasicAuth` / `BearerAuth` | Yes |
+| `BasicAuth` | Yes (requires `basic-auth`; lean profiles are Bearer-only) |
+| `BearerAuth` | Yes (available in all profiles, including lean) |
 | `HttpVersionPolicy` | Yes |
-| `RedirectPolicy` | Yes |
+| `RedirectPolicy` | Yes (requires `redirects`; lean profiles return 3xx without following) |
+| `Dialer` / `DialTarget` / `SocketOption` | Yes (require `advanced-routing`; absent from lean profiles) |
+| `ClientBuilder::dialer` / `local_address` / `socket_options` / `uds_path` | Yes (require `advanced-routing`; absent from lean profiles) |
+| `RequestBuilder::resolved_addresses` / `TransportHints::{sni_hostname, resolved_target}` | Yes (require `advanced-routing`; fail closed with `Unsupported` in lean profiles) |
 | `PoolConfig` / `PoolMetrics` | Yes |
 | `ContentCoding` (Accept-Encoding) | Yes |
 | Streaming body (`BoxBytesStream`) | Yes |
