@@ -774,21 +774,28 @@ mod native {
         tokio::spawn(async move {
             for _ in 0..2 {
                 if let Ok((mut socket, _)) = listener.accept().await {
-                    let mut buf = [0u8; 1024];
-                    let _ = socket.read(&mut buf).await;
-                    if tokio::io::AsyncWriteExt::write_all(
-                        &mut socket,
-                        b"HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\nab",
-                    )
-                    .await
-                    .is_err()
-                    {
-                        return;
-                    }
-                    let _ = socket.flush().await;
-                    // First connection stalls; second serves promptly.
-                    tokio::time::sleep(Duration::from_millis(800)).await;
-                    let _ = socket.write_all(b"cd").await;
+                    // Handle each connection concurrently so the second
+                    // same-origin request is served promptly while the first
+                    // timed-out body value is still alive.
+                    tokio::spawn(async move {
+                        let mut buf = [0u8; 1024];
+                        let _ = socket.read(&mut buf).await;
+                        if tokio::io::AsyncWriteExt::write_all(
+                            &mut socket,
+                            b"HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\nab",
+                        )
+                        .await
+                        .is_err()
+                        {
+                            return;
+                        }
+                        let _ = socket.flush().await;
+                        // Stall past the first body's total deadline; the
+                        // second connection serves the same shape promptly
+                        // enough for the generous outer admission timeout.
+                        tokio::time::sleep(Duration::from_millis(800)).await;
+                        let _ = socket.write_all(b"cd").await;
+                    });
                 }
             }
         });
@@ -828,9 +835,9 @@ mod native {
             }
         }
         assert!(saw_total, "first native body must hit Total");
-        drop(body);
-        // Lease released: the second same-origin request owns the only
-        // logical permit and must reach response headers successfully.
+
+        // Keep `body` alive here: timeout terminalization itself must have
+        // released the logical permit, not ordinary `Drop`.
         let request2 = http::Request::get(&slow_url)
             .body(http_body_util::Empty::<Bytes>::new())
             .unwrap();
@@ -839,8 +846,11 @@ mod native {
             client.execute_http_body_default(request2),
         )
         .await
-        .expect("second request admitted after total timeout")
+        .expect("second request admitted after native Total")
         .expect("second request should reach response headers");
         assert_eq!(response.status(), http::StatusCode::OK);
+
+        // Only now may the first timed-out body be dropped.
+        drop(body);
     }
 }
