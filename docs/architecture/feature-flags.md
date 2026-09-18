@@ -30,7 +30,7 @@ compression-zstd = ["dep:async-compression", "async-compression/zstd", "dep:toki
 compression-deflate = ["dep:async-compression", "async-compression/deflate", "dep:tokio-util", "tokio/io-util", "dep:flate2"]
 cookies = ["dep:cookie", "high-level-url"]
 multipart = []
-proxy = ["http1", "tls-rustls", "tokio/io-util", "high-level-url"]
+proxy = ["http1", "tls-rustls", "tokio/io-util", "high-level-url", "dep:eggfetch-http-connect"]
 tracing = ["dep:tracing"]
 test-util = ["tokio/test-util"]
 ```
@@ -224,7 +224,8 @@ proxy authentication, per-request and per-client proxy configuration via
 bypass behavior. The Python crate exposes `Client(proxy=...)`,
 `AsyncClient(proxy=...)`, and per-request `proxy=` kwarg. The feature flag is
 required for proxy functionality; it pulls in tunnel and proxy-protocol
-dependencies.
+dependencies, including the shared `eggfetch-http-connect` CONNECT wire
+crate, which is absent from non-proxy profiles.
 
 ### tracing
 

@@ -116,7 +116,7 @@ This `overview.md` is the entry point. For a focused review of any component, fo
 
 ### eggfetch-http-connect (the shared CONNECT wire primitive)
 
-Small publishable crate with no sockets, TLS, retry, or client policy. It owns CONNECT authority formatting (`ConnectTarget`), byte-oriented request serialization (`encode_connect_request`, `basic_auth_value`), caller-provided response limits (`ConnectResponseLimits`), and bounded response-head parsing (`read_connect_response_head`) over a caller-owned `BufReader`. `eggfetch-core` wraps it with proxy dialing/TLS, phase timeouts, exact status policy, rejection bodies, origin TLS, and pooling. See `crates/eggfetch-http-connect/src/lib.rs`.
+Small publishable crate with no sockets, TLS, retry, or client policy. It owns CONNECT authority formatting (`ConnectTarget`), byte-oriented request serialization (`encode_connect_request`, `basic_auth_value`), caller-provided response limits (`ConnectResponseLimits`), and bounded response-head parsing (`read_connect_response_head`) over a caller-owned `BufReader`. It is owned by the `proxy` feature (absent from non-proxy profiles); `eggfetch-core` wraps it with proxy dialing/TLS, phase timeouts, exact status policy, rejection bodies, origin TLS, and pooling. See `crates/eggfetch-http-connect/src/lib.rs`.
 
 ### eggfetch-core (the engine)
 

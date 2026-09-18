@@ -33,7 +33,7 @@ cargo test --workspace --exclude eggfetch-python --all-features -- --test-thread
 ## Key Constraints
 
 - `unsafe_code = "forbid"` workspace-wide, except `eggfetch-ffi` and `eggfetch-node` (sole exceptions for their FFI/N-API boundaries). Never add `unsafe` elsewhere. If you think you need it, stop and ask.
-- All HTTP logic belongs in `eggfetch-core`, except the shared CONNECT wire bytes owned by `eggfetch-http-connect` (target formatting, request serialization, bounded response-head parsing; no sockets, TLS, retry, or policy). CLI, Python, FFI, and Node are adapters.
+- All HTTP logic belongs in `eggfetch-core`, except the shared CONNECT wire bytes owned by `eggfetch-http-connect` (target formatting, request serialization, bounded response-head parsing; no sockets, TLS, retry, or policy; enabled by the `proxy` feature, absent from non-proxy profiles). CLI, Python, FFI, and Node are adapters.
 - No parallel synchronous networking path. Python sync blocks on async Rust engine.
 - The opt-in `json` feature owns the direct `serde`/`serde_json` dependencies and provides replayable `RequestBuilder::json()` plus single-consume `Response::json()` helpers. JSON parsing is explicit and does not validate media type; body setters are last-call-wins. Per-request decoded-body limits override client limits across retries/redirects. Keep the default feature graph unchanged.
 - `RequestBuilder::resolved_addresses()` is a native direct-routing escape hatch: it uses exactly the supplied socket addresses, preserves logical Host/TLS identity, and fails closed for proxy, UDS, H3, or cross-origin redirect combinations. It is not an SSRF policy or a Python compatibility extension.

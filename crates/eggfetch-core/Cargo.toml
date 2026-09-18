@@ -47,14 +47,14 @@ compression-brotli = ["dep:async-compression", "async-compression/brotli", "dep:
 compression-zstd = ["dep:async-compression", "async-compression/zstd", "dep:tokio-util", "tokio/io-util", "dep:zstd"]
 compression-deflate = ["dep:async-compression", "async-compression/deflate", "dep:tokio-util", "tokio/io-util", "dep:flate2"]
 cookies = ["dep:cookie", "high-level-url"]
-proxy = ["http1", "tls-rustls", "tokio/io-util", "high-level-url"]
+proxy = ["http1", "tls-rustls", "tokio/io-util", "high-level-url", "dep:eggfetch-http-connect"]
 tracing = ["dep:tracing"]
 multipart = []
 test-util = ["tokio/test-util"]
 
 [dependencies]
 bytes = "1"
-eggfetch-http-connect = { version = "0.1.6", path = "../eggfetch-http-connect" }
+eggfetch-http-connect = { version = "0.1.6", path = "../eggfetch-http-connect", optional = true }
 futures-core = "0.3"
 futures-util = { version = "0.3", default-features = false, features = ["alloc"] }
 http = "1"

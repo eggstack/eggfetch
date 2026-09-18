@@ -2,7 +2,7 @@
 
 Planning baseline: current tree after `high-level-policy-footprint-feature-boundary.md`
 Parent program: `plans/linked-binary-footprint-reduction-program.md`
-Status: planned, conditional on measurement
+Status: complete (2026-09-18; executable change: Candidate A only, B–E skipped on evidence)
 
 ## Objective
 
@@ -176,10 +176,90 @@ Do not renew final exact-SHA compatibility profiles here.
 
 ## Exit criteria
 
-- [ ] Post-policy-split measurement is recorded before changes.
-- [ ] `eggfetch-http-connect` is proxy-owned if it remained incorrectly unconditional.
-- [ ] TLS PEM/logging boundaries are split only if linked-byte evidence justifies them.
-- [ ] Metrics are gated only if material and cleanly separable.
-- [ ] Existing/default profiles retain all capabilities and security semantics.
-- [ ] Every retained residual change has measured benefit or independent ownership value.
-- [ ] Tier 1 and affected feature/TLS/proxy checks pass.
+- [x] Post-policy-split measurement is recorded before changes.
+- [x] `eggfetch-http-connect` is proxy-owned if it remained incorrectly unconditional.
+- [x] TLS PEM/logging boundaries are split only if linked-byte evidence justifies them.
+- [x] Metrics are gated only if material and cleanly separable.
+- [x] Existing/default profiles retain all capabilities and security semantics.
+- [x] Every retained residual change has measured benefit or independent ownership value.
+- [x] Tier 1 and affected feature/TLS/proxy checks pass.
+
+## Closure record (2026-09-18)
+
+Parent plans 2 (`standard-route-advanced-routing-feature-boundary.md`) and 3
+(`high-level-policy-footprint-feature-boundary.md`) remain `planned`: they had
+not landed when this plan executed, so there is no "after standard-route
+separation" or "after retry/redirect separation" delta to record. The entry
+measurement below is the current-`main` lean-profile baseline, taken with the
+existing `qualification/embedded/eggfetch-min` fixture (`http1,tls-rustls`;
+real streaming-GET request path, not construction-only).
+
+### Entry measurement (before changes)
+
+- Fixture: `qualification/embedded/eggfetch-min` release profile
+  (`lto="thin"`, `codegen-units=1`, `panic="unwind"`), target
+  `x86_64-unknown-linux-gnu`, `rustc 1.98.1 (48a229cea 2026-09-01)`.
+- Unstripped: 8,682,080 B; stripped (`strip` copy): 3,668,792 B.
+- Lean resolved set (`http1,tls-rustls`): 152 `cargo tree` lines; the
+  `+proxy` tree was byte-identical (zero package delta), proving
+  `eggfetch-http-connect` was incorrectly resolved under the disabled proxy
+  capability.
+- `cargo bloat --crates` (unstripped companion): `eggfetch_core` .text
+  261.6 KiB; top eggfetch-owned symbol
+  `pipeline::send_single_request::{closure#0}` 55.8 KiB with further
+  advanced-route monomorphizations (UDS/Dialer/Direct connectors ~12–18 KiB
+  each) — all plans-2/3 territory, out of scope here.
+- Residual candidates in the lean link: `httpdate` 6.4 KiB, `base64`
+  1.3 KiB, `getrandom` 748 B, `tracing` 430 B, `log` 140 B.
+  `nm --size-sort` shows zero symbols from `eggfetch_http_connect`,
+  `pem_rfc7468`, or `base64ct`: all three are fully link-pruned when their
+  APIs go uncalled, so no TLS-PEM/logging split can buy lean-profile bytes.
+
+### Change retained: Candidate A (proxy-owned `eggfetch-http-connect`)
+
+- `crates/eggfetch-core/Cargo.toml`: dependency is now `optional = true`;
+  `proxy = [..., "dep:eggfetch-http-connect"]`. No source cfg was needed:
+  the sole consumer (`transport::connect`, plus its unit tests) was already
+  `#[cfg(feature = "proxy")]`, so no CONNECT serialization was duplicated
+  and the separate-crate/release-order contract is unchanged
+  (`validate_publishable_internal_dependencies.py` still sees the edge via
+  `cargo metadata`; leaf-first publish order retained).
+- After-measurement (same toolchain/profile/fixture): unstripped 8,682,168 B
+  (+88 B build noise), stripped 3,668,856 B (+64 B noise), identical `.text`
+  attribution. Linked-byte delta is effectively zero, as predicted: the
+  crate was already link-pruned.
+- Dependency delta: lean resolved set loses exactly `eggfetch-http-connect`
+  (verified by tree diff; `thiserror`/`base64` remain via core's direct
+  ownership), and the lean vs `+proxy` trees now differ by that package.
+  Retained per the stop rule: negligible bytes, but an independent
+  dependency-ownership fix (proxy feature now truthfully owns its wire
+  crate). Compile footprint improves accordingly (proxy-gated crate no
+  longer builds for non-proxy profiles).
+- Proxy CONNECT/auth/bounded-head tests preserved: full `proxy` feature
+  test slice re-run (see Tier 1 + `http1,tls-rustls,proxy` feature tests);
+  `cargo check` passes for lean, `+proxy`, default, and `--all-features`.
+
+### Candidates skipped on evidence (stop rule)
+
+- **B (TLS PEM boundary):** skipped. `pem-rfc7468` links zero bytes into
+  the lean profile; a `tls-rustls-transport`/`tls-pem` split would add
+  public feature complexity with no measured lean-profile benefit.
+  `tls-rustls` retains all custom-CA/additional-CA/mTLS/PEM APIs.
+- **C (Rustls logging):** skipped. `hyper-rustls/logging` closure in the
+  lean link is ~140 B (`log`) — negligible; no diagnostics change.
+- **D (metrics boundary):** skipped. No attribution evidence that
+  transport metrics/lifecycle observability is a material linked
+  contributor; higher complexity than A–C, so skipped per the plan's
+  explicit bias.
+- **E (small deps):** left alone. `tower-service`, `futures-core`/
+  `futures-util`, `pin-project-lite`, `http-body-util`, `thiserror` are
+  foundational (Service impls, Body, error taxonomy); `base64`/`httpdate`/
+  `getrandom` ownership belongs to the still-planned retry/auth policy
+  boundaries, not to this plan.
+
+### Security posture
+
+No change to roots, verification, SNI, TLS versions, crypto provider, proxy
+auth validation/redaction, PEM parsing (no new code), or typed failures.
+The `proxy` feature still implies `http1` + `tls-rustls`; existing/default
+profiles resolve and behave exactly as before.

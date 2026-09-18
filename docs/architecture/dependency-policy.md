@@ -11,7 +11,8 @@ owning feature is selected.
 - **eggfetch-http-connect** -- shared CONNECT wire primitive (authority
   formatting, request serialization, bounded response-head parsing). The
   only internal HTTP-logic exception to core ownership; it carries no
-  sockets, TLS, retry, or policy and is published before `eggfetch-core`.
+  sockets, TLS, retry, or policy, is published before `eggfetch-core`, and
+  is owned by the `proxy` feature (absent from non-proxy profiles).
 - **bytes** -- efficient byte buffer types for request and response bodies.
 - **futures-core** -- `Stream` trait definition.
 - **futures-util** -- `StreamExt` for stream combinators.
@@ -73,7 +74,7 @@ Rustls; a dependency can still be shared by other optional routes.
 
 | Dependency | Core use sites | Cleartext H1 | Rustls TLS | Optional-only owner | Gating decision |
 | --- | --- | ---: | ---: | --- | --- |
-| `eggfetch-http-connect` | CONNECT wire bytes (`transport/connect`) | yes | shared | no | internal leaf, unconditional to avoid a second CONNECT impl |
+| `eggfetch-http-connect` | CONNECT wire bytes (`transport/connect`, itself `#[cfg(feature = "proxy")]`) | no | no | `proxy` | optional; owned by `proxy` to avoid a second CONNECT impl |
 | `bytes` | bodies, headers, request/response types | yes | shared | no | foundational |
 | `futures-core`, `futures-util` | streams, bodies, pipeline, retry | yes | shared | no | foundational |
 | `http`, `http-body`, `http-body-util` | HTTP types and Hyper body adaptation | yes | shared | no | foundational |
@@ -121,10 +122,11 @@ retry, or routing dependencies by design.
 Downstream size/dependency evidence for the minimal profiles lives in
 [embedded-footprint.md](embedded-footprint.md) (manual qualification in
 `qualification/embedded/`). Minimal trees verifiably exclude
-cookies/proxy/compression/multipart/H2/H3 and JSON; serde/serde_json enter
+cookies/proxy/compression/multipart/H2/H3, JSON, and the proxy-owned
+`eggfetch-http-connect` wire crate; serde/serde_json enter
 only when the native json feature is selected. The minimal native transport
 slice (`native-http1` + `tls-rustls` without `high-level-url`) additionally
-excludes `url`, `idna`, ICU, `percent-encoding`, and `dashmap`; the native
+excludes `url`, `idna`, ICU, and `percent-encoding`; the native
 `http::Request` path derives scheme/host/effective-port from `http::Uri`
 (`http_origin::HttpOrigin`) without reparsing through `url::Url`.
 The exact supported core recipes and their excluded capabilities are listed in
