@@ -2,7 +2,7 @@
 
 This directory contains active implementation plans, live qualification/status records, and historical implementation records. Completed plans are non-normative unless another current document explicitly says otherwise. Verification and release policy remain governed by `docs/verification-policy.md` and `docs/releases/process.md`.
 
-## Active corrective — total deadline across response body lifecycle (2026-09-18)
+## Completed corrective — total deadline across response body lifecycle (2026-09-18)
 
 Parent plan: `total-deadline-response-body-lifecycle-corrective.md`
 
@@ -21,36 +21,32 @@ Behavioral implementation:
 Public-API compatibility correction:
 `2c68b44176b3a189e1f1fdc6586d8678a0945284`.
 
-Status: executable implementation is substantially complete; closure remains
-active. The total deadline now survives response headers and applies through
-body EOF/trailers for high-level and native frame-preserving responses.
-`ResponseBody`'s published exhaustive variant shape has been restored, timeout
-metadata now lives behind private response-lease lifecycle state, the duplicate
-standalone read-timeout implementation has been removed, and stronger redirect
-and logical-retry remaining-budget proofs are present. Routine push CI run 610
-passed on `2c68b441`.
+Final executable/test freeze:
+`82f3f38631b44a9a5c5ec5b40790e5015aeb40f8`.
 
-One final proof correction remains before freezing the executable/test tree:
-the native pool-lease regression currently drops the timed-out
-`NativeResponseBody` before issuing the second same-origin request. The final
-closure plan requires the timed-out body to remain alive while the second
-request reaches successful response headers, proving that timeout
-terminalization itself releases the logical permit rather than relying on
-Drop.
+Status: implementation and release qualification complete; coordinated patch
+publication pending. The total deadline now spans response-body EOF/trailers
+for high-level and native frame-preserving responses. Read remains
+first-poll/per-chunk inactivity; Total never resets and wins ties.
+`ResponseBody`'s published exhaustive variant shape is restored (no public
+timeout fields, no `#[non_exhaustive]`), timeout metadata lives behind the
+private `PoolGuard` response lifecycle, `BodyTimeoutStream` is the single
+high-level owner, and redirect/retry remaining-budget plus the strengthened
+native lease-release proof (timed-out body kept alive while the second request
+reaches 200 OK) are green. Historical baseline-red (`60a6e2b3` returned
+`Ok(b"")` past total) and three-state public-shape evidence (`60a6e2b3`
+green / `dd52f8c4` E0027 red / freeze green) are recorded. Tier 1, extended
+(incl. Rust 1.89.0 MSRV), package, security, both API oracles (71 / 79, zero
+unexplained/stale/resolved-active), and three consecutive 1,871-test
+compatibility passes renewed Stage C on the freeze for HTTPX 0.28.1 and HTTPX2
+2.12.0. HTTP/3 and Node remain experimental.
 
-After that narrow test correction, the final closure plan owns the exact-SHA
-freeze, historical baseline-red and three-state public-shape evidence, Tier 1,
-extended/package/security/MSRV release gates, HTTPX 0.28.1 and HTTPX2 2.12.0
-exact-SHA renewal, parent/child closure records, remote CI confirmation, and
-normal coordinated patch publication.
-
-No new bounded-body API is needed. `max_decoded_body_size` remains the
+No new bounded-body API was added. `max_decoded_body_size` remains the
 authoritative stream-level bound for identity and decoded compressed bodies
 when `Content-Length` is absent or false.
 
-The line must remain active until the corrected patch is publicly available
-from crates.io. Missing qualification or publication evidence must not be
-converted into closure.
+Downstream handoff remains explicitly pending coordinated crates.io
+publication. Missing publication evidence must not be converted into closure.
 
 ## Completed — linked binary footprint reduction (2026-09-17 → 2026-09-18)
 

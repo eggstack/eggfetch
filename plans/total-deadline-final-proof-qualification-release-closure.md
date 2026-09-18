@@ -505,3 +505,77 @@ Downstream handoff:
 ## Exit criterion
 
 The timeout corrective line is closed only when the native lease proof is categorical, one final executable SHA has passed all release and compatibility qualification, closure records are complete, and the corrected coordinated patch is publicly available for downstream consumers.
+
+## Closure record (executed 2026-09-18)
+
+```text
+Planning baseline: 2c68b44176b3a189e1f1fdc6586d8678a0945284
+Final executable/test freeze SHA: 82f3f38631b44a9a5c5ec5b40790e5015aeb40f8
+Documentation-only descendant SHA: (closure commit; see plans/README.md)
+Coordinated published version: (see Part K release record below)
+
+Native lease proof correction: native_total_timeout_releases_pool_lease keeps
+  the timed-out NativeResponseBody alive while the second same-origin request
+  is admitted; per-connection server tasks serve the second headers promptly.
+Timed-out body retained during second request: yes
+Second request status: 200 OK within 3 s outer timeout; drop(body) only after.
+
+Public API shape evidence:
+60a6e2b3: green — __closure_shape_probe (exact ResponseBody destructuring
+  without `..`) passed 1/1.
+dd52f8c4: red — same probe failed with E0027 on Streaming/EncodedStreaming
+  (missing read_timeout/total_deadline), exit 101.
+final freeze: green — response_body_public_shape 1/1.
+
+Behavioral baseline-red:
+60a6e2b3: red — __closure_baseline_red_probe (headers before 300 ms total,
+  2000 ms body stall) returned Ok(b"") after ~2 s instead of Total.
+final freeze: green — same probe reports TimeoutPhase::Total in ~0.33 s.
+
+Immediate headers/body total: total_body_deadline_tests 23/23 green.
+Post-first-chunk stall: green (no-read stall reports Total).
+Continuous trickle aggregate total: green.
+Delayed first poll: green (already-expired Total wins without inner poll).
+Read-vs-total precedence: green (read-shorter→Read, total-shorter→Total).
+Raw compressed: green (all-features).
+Decoded compressed: green (buffered + streaming).
+Trailers: green (trailer_tests 7/7; delayed trailers past total → Total, None).
+High-level lease release: green (total_timeout_releases_pool_lease).
+Native lease release: green (strengthened proof above).
+Redirect discrimination: green (1500 ms total / 1000 ms first hop /
+  900 ms discrimination window; fresh-total restart would exceed window).
+Retry discrimination: green (retry_integration).
+Lean standard route: green (standard-http1,tls-rustls lean_route_tests).
+Proxy focused: green (proxy_tests 54/54).
+H3 deterministic: green (h3_hardening 12/12, h3_alt_svc_discovery 17/17).
+Native HTTP-body/TLS fixture: green
+  (cargo run --manifest-path qualification/native-http-body-tls/Cargo.toml).
+
+Tier 1: passed (./scripts/check.sh, all routine checks; Node JS surface skip
+  only — native artifact not built).
+Extended: passed (./scripts/check.sh extended incl. Rust 1.89.0 MSRV checks;
+  Node JS + downstream manifest skips only).
+Package: passed (./scripts/check.sh package incl. wheel smoke/typing).
+Security: passed (./scripts/check_security.sh; cargo-deny 0.19.0,
+  cargo-audit 0.22.2; advisories/bans/licenses/sources ok).
+MSRV: passed (rustup run 1.89.0 cargo check variants incl. --all-features
+  and --workspace --all-targets --all-features).
+HTTPX 0.28.1: oracle 71 allowed / 0 stale / 0 unexplained / 0 resolved-active;
+  3× consecutive full compat runs 1871 passed each, no file changes between runs.
+HTTPX2 2.12.0: oracle 79 allowed / 0 stale / 0 unexplained / 0 resolved-active;
+  same 3× runs (joint corpus); facades coexist without cross-mutation; no
+  native Timeout.total synthesized in compat.
+Remote CI: (recorded after push; see plans/README.md and status ledger.)
+
+Dependency delta: none (no new dependency).
+Feature delta: none (no feature-graph change).
+Public API delta: none vs 0.1.6 — ResponseBody Streaming/EncodedStreaming shapes
+  restored; no new fields/variants/`#[non_exhaustive]`.
+Known limitations: HTTP/3 remains experimental; Node binding remains experimental
+  prototype; compat counts are evidence (1871), not contract.
+
+Release: (coordinated patch record appended after crates.io publication.)
+crates.io verification: (cargo search / visibility per crate.)
+Downstream handoff: (named published eggfetch-core version + Total-through-EOF
+  semantics + max_decoded_body_size bound + ResponseBody compat + no HTTPX total.)
+```

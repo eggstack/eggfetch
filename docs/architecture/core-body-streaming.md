@@ -105,6 +105,7 @@ behavior therefore remain unchanged; parse errors do not expose the payload.
 Streaming responses carry an internal `Arc<PoolGuard>` (the `PoolGuardArc`). This holds the pool permits acquired for the request plus the private
 response read/total lifecycle policy installed at finalization. Permits are released when:
 - The response body is fully consumed.
+- The body stream reaches a terminal timeout/error/EOF, without waiting for drop.
 - The response body is dropped.
 
 Buffered and already-consumed responses do not carry a lease. Manually

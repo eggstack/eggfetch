@@ -208,6 +208,7 @@ When a request acquires a pool slot, it receives a `PoolGuard` (wrapped in `Arc`
 response-lifecycle policy (read timeout + absolute `ResponseDeadline`) kept
 conceptually separate from semaphore logic. This ensures:
 - Streaming responses hold their slot until fully consumed.
+- A terminal body timeout/error/EOF releases the slot without waiting for the caller to drop the body value.
 - Dropped responses release their slot immediately.
 - Buffered responses release their slot after the body is collected.
 - `ResponseBody` public variant shapes stay frozen; timeout state is never a public field.

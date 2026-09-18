@@ -4,6 +4,42 @@ This record is the exact-SHA-bound status for the HTTPX 0.28.1 compatibility
 facade. Historical phase and corrective-pass records remain in the git history
 and referenced plans; counts below are only from the runs named here.
 
+## Recorded state — Stage C renewed after total-deadline corrective closure (2026-09-18)
+
+Recorded designation: **Stage C qualified** for both documented facades, bound
+to executable SHA `82f3f38631b44a9a5c5ec5b40790e5015aeb40f8`. The preceding
+`1f52d846c186b061481ebb14a7be414f5c78ec7e` binding is historical because the
+total-deadline response-body lifecycle corrective (`dd52f8c4`), its public-API
+shape restoration (`2c68b441`), and the strengthened native Total lease-release
+proof changed executable/test qualification inputs after that freeze.
+
+Qualification evidence on the corrected executable tree:
+
+- Focused total-deadline matrix passed on the freeze: `response_body_public_shape`
+  1/1, `total_body_deadline_tests` 23/23 (incl. strengthened
+  `native_total_timeout_releases_pool_lease` proving timeout terminalization
+  releases the permit while the timed-out body remains alive), `retry_integration`,
+  `native_http_body_tests`, `native_tower_service_tests`, `trailer_tests`,
+  `pool_tests`, lean `standard-http1` route tests, `proxy_tests`, deterministic
+  H3 suites (`h3_hardening`, `h3_alt_svc_discovery`), and the external
+  `qualification/native-http-body-tls` fixture.
+- Tier 1, extended, and package validation passed. Extended included the
+  required Rust 1.89.0 MSRV check; package validation included crate, wheel,
+  package-content, and installed-wheel typing checks. The only extended skips
+  are the existing missing Node JS artifact and downstream artifact manifest.
+- The 0.28.1 API oracle reported 71 allowed matches and the HTTPX2 2.12.0
+  oracle reported 79; both had zero unexplained, stale, or resolved-active
+  differences. No HTTPX facade gains native `Timeout.total` semantics.
+- Three consecutive full pinned compatibility runs each passed 1,871 tests
+  with no failures. No executable files or dependencies changed between runs.
+- Live security preflight passed with cargo-deny and cargo-audit; advisories,
+  bans, licenses, and sources ok.
+- HTTP/3 remains experimental and the Node binding remains an experimental
+  prototype; neither status changed in this corrective.
+
+The closing plan is
+`plans/total-deadline-final-proof-qualification-release-closure.md`.
+
 ## Recorded state — Stage C renewed after current-head requalification corrective closure (2026-09-16)
 
 Recorded designation: **Stage C qualified** for both documented facades, bound

@@ -553,3 +553,61 @@ Missing evidence remains missing. Do not convert an unrun gate, unavailable fixt
 ## Exit criterion
 
 The total-deadline corrective is genuinely closed when eggfetch preserves its published Rust response-body source shape, retains the corrected request-lifecycle total deadline through all returned body modes, has discriminating redirect/retry/lease proofs, is requalified on one exact executable SHA, and the corrected coordinated patch is available from crates.io for downstream consumers.
+
+## Closure record (2026-09-18; closed by `total-deadline-final-proof-qualification-release-closure.md`)
+
+```text
+Parent planning baseline: 60a6e2b384519507e04cf296ffd484388e872e47
+Follow-up planning baseline: dd52f8c4a8d54fbaa403a7995a41bf60b235f7ac
+
+Public API regression:
+60a6 exact-shape compile: green (probe 1/1).
+dd52 exact-shape red: E0027 on Streaming/EncodedStreaming, exit 101.
+final exact-shape compile: green (response_body_public_shape 1/1).
+
+Behavioral baseline-red reproduction: __closure_baseline_red_probe red on
+  60a6e2b3 (Ok(b"") after ~2 s), green on final freeze (Total, ~0.33 s).
+Implementation commit(s): 2c68b441 (shape restoration) + 82f3f38 (lease proof).
+Final executable freeze SHA: 82f3f38631b44a9a5c5ec5b40790e5015aeb40f8
+Coordinated published version: (see final closure plan Part K.)
+
+Immediate headers/body total: green.
+Post-first-chunk stall: green.
+Continuous progress aggregate total: green.
+Delayed first poll: green.
+Read wins: green.
+Total wins: green.
+Raw/decoded compressed: green.
+Trailers: green.
+High-level lease release: green.
+Lean standard-route: green.
+
+Redirect discrimination proof: green.
+Retry remaining-budget proof: green.
+
+Native frame total/read: green.
+Native delayed-first-poll: green.
+Native lease release + second-request success: green — timed-out body kept alive,
+  second request 200 OK within 3 s, drop only after.
+NativeHttpService: green.
+
+Decoded-body-limit regression: green (no duplicate API).
+ResponseBody public-shape integration test: green.
+Duplicate read-timeout disposition: ReadTimeoutStream removed; BodyTimeoutStream
+  is the single high-level owner.
+
+Proxy focused: green (54/54).
+H3 deterministic: green.
+Native HTTP body/TLS fixture: green.
+
+Tier 1: passed. Extended: passed (incl. MSRV 1.89.0).
+Package: passed. Security: passed. MSRV: passed.
+HTTPX 0.28.1: 71/0/0/0; 3× 1871 passed.
+HTTPX2 2.12.0: 79/0/0/0; same 3× runs.
+Remote CI: (recorded after push.)
+
+Dependency/feature/public-API delta: none vs 0.1.6.
+Known limitations: H3 experimental; Node experimental prototype.
+Downstream handoff: (named published version in final plan.)
+Documentation-only descendant SHA: (closure commit; see plans/README.md.)
+```

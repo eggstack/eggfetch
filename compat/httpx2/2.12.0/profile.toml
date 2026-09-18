@@ -72,11 +72,19 @@ created = "2026-09-10"
 # Rust 1.89.0 MSRV), package, live security preflight, both API oracles, and
 # three consecutive full compatibility passes on the final executable freeze
 # below. The immediately preceding `bfda3889...` binding is historical only.
+# The `1f52d846...` evidence is retained as historical only: the total-deadline
+# response-body lifecycle corrective (`dd52f8c4`), its public-API shape
+# restoration (`2c68b441`), and the strengthened native Total lease-release
+# proof changed executable/test inputs, invalidating the prior binding per the
+# exact-SHA rule. This profile was renewed after the focused total-deadline
+# matrix, Tier 1, extended (incl. Rust 1.89.0 MSRV), package, live security
+# preflight, both API oracles, and three consecutive full compatibility passes
+# on the final executable freeze below.
 stage = "stage-c-qualified"
 status = "qualified"
-qualification-sha = "1f52d846c186b061481ebb14a7be414f5c78ec7e"
-qualification-date = "2026-09-16"
-previous-qualification-sha = "bfda3889cbeff5f6fbd98bf3eee12f77fab301c4"
+qualification-sha = "82f3f38631b44a9a5c5ec5b40790e5015aeb40f8"
+qualification-date = "2026-09-18"
+previous-qualification-sha = "1f52d846c186b061481ebb14a7be414f5c78ec7e"
 historical-current-qualification-sha = "312cd4402ea2b4b27bf54cf7dc36924a1d449adc"
 reference = "httpx2==2.12.0"
 

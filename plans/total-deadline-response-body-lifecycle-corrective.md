@@ -599,3 +599,51 @@ Do not mark a gate passed by inference from older qualification evidence. If ext
 ## Exit criterion
 
 The defect is closed when eggfetch's documented native `Timeout.total` once again means one request-lifecycle wall-clock deadline from logical request start through response-body completion, across the high-level and frame-preserving native surfaces, without weakening read-timeout semantics, pooling, redirects/retries, proxy deadline ownership, compatibility behavior, or the recently established lean feature boundaries.
+
+## Closure record (2026-09-18; final closure pass `total-deadline-final-proof-qualification-release-closure.md`)
+
+```text
+Planning baseline: 60a6e2b384519507e04cf296ffd484388e872e47
+Baseline-red regression: __closure_baseline_red_probe — headers before 300 ms
+  total with 2000 ms body stall returned Ok(b"") after ~2 s on 60a6e2b3
+  (expected TimeoutPhase::Total); green on final freeze (~0.33 s).
+Implementation commit(s): dd52f8c4 (behavioral total-through-body) →
+  2c68b441 (public-shape restoration behind private PoolGuard lifecycle) →
+  82f3f38 (strengthened native lease proof; final executable/test freeze).
+Executable freeze SHA: 82f3f38631b44a9a5c5ec5b40790e5015aeb40f8
+Published coordinated version: (see final closure plan Part K.)
+
+High-level immediate-headers/body-total proof: green.
+Post-first-chunk stall proof: green.
+Continuous-progress aggregate-total proof: green.
+Delayed-first-poll proof: green.
+Read-wins proof: green.
+Total-wins proof: green.
+bytes()/stream/raw/decoded proof: green (one BodyTimeoutStream boundary).
+Trailer deadline proof: green (Total, trailers None).
+Pool-lease release proof: green (terminal Total releases before drop).
+Redirect remaining-budget proof: green (discrimination window).
+Retry remaining-budget proof: green (retry_integration).
+NativeResponseBody proof: green (total/read precedence + delayed first poll).
+NativeHttpService proof: green (delegation; native_tower_service_tests).
+
+Decoded-body-limit regression: green (no new limit API).
+Lean standard-http1: green.
+Default/full core: green.
+Proxy focused: green (54/54).
+H3 deterministic: green (hardening + Alt-Svc discovery).
+Native HTTP body/TLS fixture: green.
+
+Tier 1: passed. Extended: passed (incl. Rust 1.89.0 MSRV).
+Package: passed. Security: passed (deny 0.19.0 / audit 0.22.2).
+HTTPX 0.28.1: 71 allowed / 0 stale / 0 unexplained; 3× 1871 passed.
+HTTPX2 2.12.0: 79 allowed / 0 stale / 0 unexplained; same 3× runs.
+MSRV: passed (1.89.0 checks).
+
+Dependency/feature/public-API delta: none vs 0.1.6.
+Known limitations: H3 experimental; Node experimental prototype.
+Downstream handoff note: Total now spans body EOF/trailers; use
+  max_decoded_body_size for unknown/false-length metadata bounds;
+  ResponseBody shape compatible with 0.1.6; no HTTPX total semantic.
+Documentation-only descendant SHA: (closure commit; see plans/README.md.)
+```
