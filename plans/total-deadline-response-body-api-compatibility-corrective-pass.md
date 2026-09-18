@@ -569,7 +569,8 @@ Behavioral baseline-red reproduction: __closure_baseline_red_probe red on
   60a6e2b3 (Ok(b"") after ~2 s), green on final freeze (Total, ~0.33 s).
 Implementation commit(s): 2c68b441 (shape restoration) + 82f3f38 (lease proof).
 Final executable freeze SHA: 82f3f38631b44a9a5c5ec5b40790e5015aeb40f8
-Coordinated published version: (see final closure plan Part K.)
+Coordinated published version: 0.1.7 (release commit 43c3b31, tag v0.1.7;
+  all six crates visible on crates.io; PyPI dispatch manual, not run here).
 
 Immediate headers/body total: green.
 Post-first-chunk stall: green.
@@ -604,10 +605,11 @@ Tier 1: passed. Extended: passed (incl. MSRV 1.89.0).
 Package: passed. Security: passed. MSRV: passed.
 HTTPX 0.28.1: 71/0/0/0; 3× 1871 passed.
 HTTPX2 2.12.0: 79/0/0/0; same 3× runs.
-Remote CI: (recorded after push.)
+Remote CI: 35377996077 (842a3c35) success; 35385440508 (43c3b31) success.
 
 Dependency/feature/public-API delta: none vs 0.1.6.
 Known limitations: H3 experimental; Node experimental prototype.
-Downstream handoff: (named published version in final plan.)
-Documentation-only descendant SHA: (closure commit; see plans/README.md.)
+Downstream handoff: eggfetch-core 0.1.7 from crates.io (Total through EOF,
+  ResponseBody 0.1.6-compatible, no HTTPX total).
+Documentation-only descendant SHA: 842a3c35 (plus release commit 43c3b31).
 ```

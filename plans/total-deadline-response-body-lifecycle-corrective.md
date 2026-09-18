@@ -611,7 +611,8 @@ Implementation commit(s): dd52f8c4 (behavioral total-through-body) →
   2c68b441 (public-shape restoration behind private PoolGuard lifecycle) →
   82f3f38 (strengthened native lease proof; final executable/test freeze).
 Executable freeze SHA: 82f3f38631b44a9a5c5ec5b40790e5015aeb40f8
-Published coordinated version: (see final closure plan Part K.)
+Published coordinated version: 0.1.7 (release commit 43c3b31, tag v0.1.7;
+  all six crates visible on crates.io; PyPI dispatch manual, not run here).
 
 High-level immediate-headers/body-total proof: green.
 Post-first-chunk stall proof: green.
@@ -645,5 +646,7 @@ Known limitations: H3 experimental; Node experimental prototype.
 Downstream handoff note: Total now spans body EOF/trailers; use
   max_decoded_body_size for unknown/false-length metadata bounds;
   ResponseBody shape compatible with 0.1.6; no HTTPX total semantic.
-Documentation-only descendant SHA: (closure commit; see plans/README.md.)
+  Consume eggfetch-core 0.1.7 from crates.io.
+Documentation-only descendant SHA: 842a3c35 (plus release commit 43c3b31).
+Remote CI: 35377996077 (842a3c35) success; 35385440508 (43c3b31) success.
 ```

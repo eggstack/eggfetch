@@ -511,8 +511,8 @@ The timeout corrective line is closed only when the native lease proof is catego
 ```text
 Planning baseline: 2c68b44176b3a189e1f1fdc6586d8678a0945284
 Final executable/test freeze SHA: 82f3f38631b44a9a5c5ec5b40790e5015aeb40f8
-Documentation-only descendant SHA: (closure commit; see plans/README.md)
-Coordinated published version: (see Part K release record below)
+Documentation-only descendant SHA: 842a3c35 (profiles/ledger/plan-index/docs)
+Coordinated published version: 0.1.7 (release commit 43c3b31, tag v0.1.7)
 
 Native lease proof correction: native_total_timeout_releases_pool_lease keeps
   the timed-out NativeResponseBody alive while the second same-origin request
@@ -565,7 +565,8 @@ HTTPX 0.28.1: oracle 71 allowed / 0 stale / 0 unexplained / 0 resolved-active;
 HTTPX2 2.12.0: oracle 79 allowed / 0 stale / 0 unexplained / 0 resolved-active;
   same 3× runs (joint corpus); facades coexist without cross-mutation; no
   native Timeout.total synthesized in compat.
-Remote CI: (recorded after push; see plans/README.md and status ledger.)
+Remote CI: CI run 35377996077 on docs closure head 842a3c35: success.
+  CI run 35385440508 on release commit 43c3b31 (v0.1.7): success.
 
 Dependency delta: none (no new dependency).
 Feature delta: none (no feature-graph change).
@@ -574,8 +575,15 @@ Public API delta: none vs 0.1.6 — ResponseBody Streaming/EncodedStreaming shap
 Known limitations: HTTP/3 remains experimental; Node binding remains experimental
   prototype; compat counts are evidence (1871), not contract.
 
-Release: (coordinated patch record appended after crates.io publication.)
-crates.io verification: (cargo search / visibility per crate.)
-Downstream handoff: (named published eggfetch-core version + Total-through-EOF
-  semantics + max_decoded_body_size bound + ResponseBody compat + no HTTPX total.)
+Release: coordinated 0.1.7 published to crates.io in dependency order —
+  eggfetch-http-connect, eggfetch-core, eggfetch-cli, eggfetch-ffi,
+  eggfetch-python, eggfetch-node — each verified visible via cargo search.
+  Tag v0.1.7 (annotated; GPG signing unavailable in this environment) pushed.
+  PyPI wheels remain a manual dispatch of pypi.yml on tag v0.1.7 (not run here).
+crates.io verification: cargo search reports 0.1.7 for all six crates.
+Downstream handoff: eggfetch-core 0.1.7 — Timeout.total spans response-body
+  EOF/trailers; max_decoded_body_size remains the hard bound for
+  unknown/false Content-Length metadata bodies; public ResponseBody field shape
+  compatible with 0.1.6; no new HTTPX total semantic; no new
+  dependency/MSRV/feature requirements beyond the release notes.
 ```

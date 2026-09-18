@@ -24,8 +24,8 @@ Public-API compatibility correction:
 Final executable/test freeze:
 `82f3f38631b44a9a5c5ec5b40790e5015aeb40f8`.
 
-Status: implementation and release qualification complete; coordinated patch
-publication pending. The total deadline now spans response-body EOF/trailers
+Status: implementation, release qualification, and coordinated crates.io
+publication complete. The total deadline now spans response-body EOF/trailers
 for high-level and native frame-preserving responses. Read remains
 first-poll/per-chunk inactivity; Total never resets and wins ties.
 `ResponseBody`'s published exhaustive variant shape is restored (no public
@@ -45,8 +45,17 @@ No new bounded-body API was added. `max_decoded_body_size` remains the
 authoritative stream-level bound for identity and decoded compressed bodies
 when `Content-Length` is absent or false.
 
-Downstream handoff remains explicitly pending coordinated crates.io
-publication. Missing publication evidence must not be converted into closure.
+Coordinated version 0.1.7 (release commit `43c3b31`, tag `v0.1.7`) is published
+to crates.io for all six crates (http-connect, core, cli, ffi, python, node —
+each verified via `cargo search`); PyPI wheel publication remains a manual
+`pypi.yml` dispatch on the tag and was not run in this pass. Remote CI is green
+on both the docs closure head (`842a3c35`, run 35377996077) and the release
+commit (`43c3b31`, run 35385440508). Downstream consumers should use
+`eggfetch-core 0.1.7`: `Timeout.total` spans response-body EOF/trailers,
+`max_decoded_body_size` remains the hard bound for unknown/false
+`Content-Length` metadata bodies, the public `ResponseBody` field shape is
+compatible with 0.1.6, there is no new HTTPX total semantic, and there are no
+new dependency/MSRV/feature requirements beyond the release notes.
 
 ## Completed — linked binary footprint reduction (2026-09-17 → 2026-09-18)
 

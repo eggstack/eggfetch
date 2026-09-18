@@ -40,6 +40,11 @@ Qualification evidence on the corrected executable tree:
 The closing plan is
 `plans/total-deadline-final-proof-qualification-release-closure.md`.
 
+Release: coordinated 0.1.7 (commit `43c3b31`, tag `v0.1.7`) publishes this
+freeze to crates.io for all six crates. Remote CI is green on the docs closure
+head (`842a3c35`, run 35377996077) and the release commit (`43c3b31`, run
+35385440508).
+
 ## Recorded state — Stage C renewed after current-head requalification corrective closure (2026-09-16)
 
 Recorded designation: **Stage C qualified** for both documented facades, bound
