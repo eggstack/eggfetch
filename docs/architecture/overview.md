@@ -125,12 +125,12 @@ All HTTP behavior lives here (top-level modules plus `transport/`, `stream/`, an
 | Module | Public? | Purpose |
 |--------|---------|---------|
 | `client` | Yes | `Client`, `ClientBuilder` — entry point for all requests. Holds hyper clients (standard, direct, UDS, SOCKS, H3), pool, config. Builder pattern with comprehensive configuration. |
-| `request` | Yes (requires `high-level-url`) | `Request`, `RequestBuilder`, `ProxyOverride` — fluent string-URL construction (`header()`, `query()`, `body()`, `json()`, `timeout()`, `auth()`, `decompress()`, `proxy()`, `retry()`, `resolved_addresses()` — the last requires `advanced-routing` and is absent from lean profiles). `send()` delegates to client. Protocol-neutral `ResolvedTarget`/`TransportHints`/`NativeRequestOptions` live in `transport_hints` so the native slice compiles without `url`; hints survive retry reconstruction, while same-origin redirects retain only a resolved destination and cross-origin redirects fail closed. |
-| `response` | Yes | `Response`, `HistoryEntry` — status, version, headers, URL, body, redirect history, trailers (`trailers()` after EOF). Consumption: `bytes()`, `text()`, `bytes_stream()`, `raw_bytes_stream()`, `text_lines()`. |
-| `body` | Yes | `RequestBody`, `ResponseBody`, `BoxBytesStream`, `SharedTrailers` — single-consumption body model. Request: `Empty \| Bytes \| Stream`. Response: `Buffered \| Streaming \| EncodedStreaming \| Consumed`. Streaming bodies carry pool permits via `PoolGuardArc` (RAII); trailers populate without buffering via shared store. |
+| `request` | Yes (requires `high-level-url`) | `Request`, `RequestBuilder`, `ProxyOverride` — fluent string-URL construction (`header()`, `query()`, `body()`, `json()`, `timeout()`, `auth()`, `decompress()`, `proxy()`, `retry()`, `resolved_addresses()` — the last requires `advanced-routing` and is absent from lean profiles). `send()` delegates to client. Protocol-neutral `ResolvedTarget`/`TransportHints`/`NativeRequestOptions` live in `transport_hints` so the native slice compiles without `url`; hints survive retry reconstruction, while same-origin redirects retain only a resolved destination and cross-origin redirects fail closed. See also the `transport_hints` row below. |
+| `response` | Yes (requires `high-level-url`) | `Response`, `HistoryEntry` — status, version, headers, URL, body, redirect history, trailers (`trailers()` after EOF). Consumption: `bytes()`, `text()`, `bytes_stream()`, `raw_bytes_stream()`, `text_lines()`. |
+| `body` | Yes | `RequestBody`, `ResponseBody`, `NativeResponseBody`, `BoxBytesStream`, `SharedTrailers` — single-consumption body model. Request: `Empty \| Bytes \| Stream`. Response: `Buffered \| Streaming \| EncodedStreaming \| Consumed`. Streaming bodies carry pool permits via `PoolGuardArc` (RAII); trailers populate without buffering via shared store. |
 | `service` | Yes | `NativeHttpService` — always-ready `tower_service::Service` adapter over native frame execution. |
 | `headers` | Yes | `Headers` — case-insensitive header map wrapper around `http::HeaderMap`. |
-| `error` | Yes | `Error` enum and `Result<T>` alias. Comprehensive taxonomy (`InvalidUrl` … `Http2*`, `H3*`, `ResolvedTargetRedirect`, JSON errors, `TraceCallbackAborted`) with `kind()` returning static strings for programmatic matching. |
+| `error` | Yes | `Error` enum, `RequestFailure` opt-in detail wrapper, `NetworkFailureKind` classifier, and `Result<T>` alias. Comprehensive taxonomy (`InvalidUrl` … `Http2*`, `H3*`, `ResolvedTargetRedirect`, JSON errors, `TraceCallbackAborted`) with `kind()` returning static strings for programmatic matching. |
 | `auth` | Yes | `AuthScheme`, `BasicAuth` (requires `basic-auth`), `BearerAuth` — CR/LF injection prevention, redacted `Debug`/`Display`. Precedence: request > disabled > client > none. Bearer needs no Base64 and stays available in the lean profile. |
 | `compression` | Yes | `ContentCoding`, `DecompressionLimit` — streaming decompression (gzip, brotli, zstd, deflate). Zip-bomb protection via max decoded size and ratio. |
 | `cookie` | Yes | `CookieJar`, `Cookie`, `SameSite` — RFC 6265 jar with domain/path matching, cross-origin stripping, thread-safe storage. (cfg `cookies`) |
@@ -138,8 +138,8 @@ All HTTP behavior lives here (top-level modules plus `transport/`, `stream/`, an
 | `limits` | Yes | `Limits` — logical in-flight limits (`max_in_flight_requests*`, aliases `max_connections*`) + physical idle caps. |
 | `multipart` | Yes | `Multipart`, `Boundary`, `Part`, `PartBody`, `MultipartEncoder` — streaming multipart/form-data with known-length optimization. (cfg `multipart`) |
 | `network_stream` | Yes | `NetworkStream`, `UpgradedStream`, `UpgradedStreamVariant` (`Tcp`/`Tls`/`Adapter`), `ConnectionMetadata`, `TlsInfo`, `ExtraInfo` — writable IO for 101 only; direct upgrades carry real addrs/TLS, UDS reports `Unix` without IPs, opaque stays unavailable. |
-| `pool` | Yes | `Pool`, `PoolConfig`, `PoolGuard`, `OriginKey`, `PoolMetrics` — semaphore-based concurrency limiter keyed by `(scheme, host, port)` + optional proxy route. Native origins come from `http_origin::HttpOrigin` (`http::Uri`); the high-level `OriginKey::from_url` adapter reduces to the same components. |
-| `transport/metrics` | Yes | `TransportMetrics`, `TransportSnapshot` — connector/DNS/TLS, UDS/proxy, physical admission waits/timeouts/live/high-water, established I/O inactivity timeouts, H3 creation/eviction, Alt-Svc learned/expired/cleared/rejected, H3 attempted/suppressed/fallback/drain/close/reconnect, 101 upgrades. Separate from `PoolMetrics`; physical Hyper reuse is not represented as a logical permit metric. |
+| `pool` | Yes | `Pool`, `PoolConfig`, `PoolGuard`, `PoolMetrics` — semaphore-based concurrency limiter keyed by crate-internal `OriginKey` (`(scheme, host, port)` + optional proxy route). Native origins come from crate-internal `http_origin::HttpOrigin` (`http::Uri`); the high-level `OriginKey::from_url` adapter reduces to the same components. |
+| `transport/metrics` | Yes | `TransportMetrics`, `TransportSnapshot` (+ `H3CloseKind`, `H3CloseSummary`, `H3ConnectionDiagnostic`, `H3RouteKind` under `http3`) — connector/DNS/TLS, UDS/proxy, physical admission waits/timeouts/live/high-water, established I/O inactivity timeouts, H3 creation/eviction, Alt-Svc learned/expired/cleared/rejected, H3 attempted/suppressed/fallback/drain/close/reconnect, 101 upgrades. Separate from `PoolMetrics`; physical Hyper reuse is not represented as a logical permit metric. |
 | `proxy` | Yes | `Proxy`, `ProxyConfig`, `ProxyAuth`, `NoProxy`, `NoProxyRule`, `ProxyDecision` — HTTP forwarding, HTTPS CONNECT tunneling, SOCKS5. Per-request override model. (cfg `proxy`) |
 | `redact` | Yes | `redact_headers()`, `SENSITIVE_HEADERS` plus `redact_url()`/`redact_url_string()` (require `high-level-url`) — centralized secret redaction for all `Debug`/`Display`/error output. |
 | `redirect` | Yes (requires `redirects`) | `RedirectPolicy`, `redirect_method()`, `build_redirect_request()` — method rewrites (303→GET), cross-origin header stripping, body replayability checks. Absent in the lean profile, which returns 3xx without following. |
@@ -147,8 +147,9 @@ All HTTP behavior lives here (top-level modules plus `transport/`, `stream/`, an
 | `timeout` | Yes | `Timeout`, `TimeoutBuilder`, `TimeoutPhase` — 7 phases (Pool, Connect, ProxyConnect, ProxyTls, Write, Read, Total). Request-level overrides merge with client-level per-field. |
 | `tls` | Yes | `TlsConfig`, `TlsConfigBuilder`, `TlsVersion`, `TrustStore`, `ClientIdentity` — replacement or additional CA roots, mTLS certs, verification toggle, version bounds. |
 | `trace` | Yes | `TraceObserver`, `TraceEvent` — synchronous lifecycle callbacks; coroutine callbacks rejected at adapters. |
+| `transport_hints` | Yes | `ResolvedTarget`, `TransportHints`, `NativeRequestOptions` — protocol-neutral wire overrides (SNI hostname, pinned resolved destination, trace) usable without `high-level-url`. |
 | `pipeline/` | No | Lifecycle orchestration split by responsibility (`mod` entry points): `retry` (retry loop/backoff/discard drain, requires `logical-retry`) → `redirect` (redirect loop, shared hop builder, requires `redirects`) → `lean` (single-hop dispatch when `redirects` is absent) → `prepare` (`PreparedRequest` normalization, pool acquisition) → `route` (`TransportRoute::select_route`) → `hyper_dispatch` / `proxy_dispatch` / `h3_dispatch` → `finalize` (common post-transport policy). Shared discard drain lives in `mod` (requires `logical-retry` or `redirects`). |
-| `transport` | Mixed | `mod` (Hyper client aliases), `dialer` (public caller-owned raw-stream seam plus private Hyper adapter), `lifecycle` (physical admission and established-I/O guards), `direct`, `direct_connector` (socket options + local bind), `proxy`, `socks` (per-route persistent pools), `uds`, `http3` (QUIC/draining, explicit `H3DispatchError`), `alt_svc` (authenticated cache + suppressor), `connect`, `connect_timeout`, `metrics`. `direct` owns the shared Hyper response lifecycle (`finish_hyper_response`, `wrap_incoming`, `await_upgrade`). |
+| `transport` | Mixed | `mod` (Hyper client aliases), `dialer` (public caller-owned raw-stream seam plus private Hyper adapter), `lifecycle` (physical admission and established-I/O guards), `direct`, `direct_connector` (socket options + local bind), `proxy`, `socks` (per-route persistent pools), `uds`, `http3` (QUIC/draining, explicit `H3DispatchError`), `alt_svc` (authenticated cache + suppressor), `connect`, `connect_timeout`, `metrics`, plus crate-internal `hyper_client` (centralized Hyper construction) and `standard_resolver` (typed DNS evidence for failure classification). `direct` owns the shared Hyper response lifecycle (`finish_hyper_response`, `wrap_incoming`, `await_upgrade`). |
 | `stream` | No | Per-chunk read/write timeout wrappers (`read_timeout`, `write_timeout`). |
 | `h2_headers` | No | HTTP/2 forbidden-header stripping. |
 | `response_decode` | No | Content-Encoding parsing and decompression dispatch. |
@@ -164,9 +165,9 @@ Single source file (`main.rs`). Thin binary over `eggfetch-core` (enables `cooki
 - **Output formatting**: human, headers-only, JSON, NDJSON modes; streaming to stdout or file (`-o`)
 - **Download mode**: filename derivation from URL/headers (`--download`)
 - **Binary encoding**: `--base64` for binary bodies
-- **Exit codes**: 8 codes (0=success, 2=usage, 3=connect/TLS, 4=timeout, 5=protocol, 6=status, 7=I/O, 130=interrupted)
+- **Exit codes**: 8 codes (0=success, 2=usage, 3=connect/TLS, 4=timeout, 5=protocol, 6=status, 7=I/O, 130=interrupted via SIGINT handler) — 7 named constants plus the SIGINT path
 - **Streaming**: body streams to stdout incrementally via `bytes_stream()`
-- **Shell completions**: `--generate-completion` for bash/zsh/fish/powershell
+- **Shell completions**: `--generate-completion` for bash/zsh/fish/powershell/elvish
 
 **Deep dive:** [cli.md](cli.md)
 
@@ -214,9 +215,9 @@ Sole `unsafe_code = "allow"` crate alongside Node (required for FFI):
 | `ffi_response` | Response data extraction for FFI |
 | `error` | Error inspection |
 | `builder` | Builder configuration helpers |
-| `runtime` | Global tokio runtime management (`OnceLock<Runtime>`) |
+| `runtime` | Global tokio runtime management (`OnceLock<Runtime>`, crate-internal) |
 | `streaming` | Streaming body support |
-| `lib` | C API entry points, string/memory management |
+| `lib.rs` (crate root, not a submodule) | C API entry points, string/memory management (`ffi_guard!`), module declarations |
 
 Thread safety: `ClientHandle` is `Send + Sync` (shared). `RequestHandle`, `ResponseHandle`, `StreamingResponseHandle`, `ErrorHandle` are single-thread, single-use. Core defaults are `http1`, `tls-rustls`, and `tls-native-roots`; adapter crates add `cookies`, `proxy`, `compression-gzip`, and their other required capabilities. `http2`/`http3`/`multipart`/more codecs remain opt-in at the core layer.
 
@@ -230,7 +231,7 @@ Explicitly experimental prototype that wraps the blocking `eggfetch-ffi` surface
 |--------|---------|
 | `client` | `EggfetchClient` — wraps FFI client (raw-pointer handle) |
 | `response` | Buffered response wrapper |
-| `lib` | N-API module registration |
+| `lib.rs` (crate root, not a submodule) | N-API module registration |
 
 **Deep dive:** [ffi-and-node.md](ffi-and-node.md)
 
@@ -249,7 +250,7 @@ Tools are the scripts, suites, and workflows that validate, qualify, and documen
 Single source of validation truth (CI repeats it on ubuntu-latest; see `docs/verification-policy.md`):
 
 - **Tier 1** (`./scripts/check.sh`, required before every commit): `cargo fmt --check`, `check_lint_suppressions.sh`, adapter feature ownership (`check_adapter_features.py`), release version/ref validation (`test_validate_release_versions.py`), `cargo clippy --workspace --all-targets --all-features -- -D warnings`, `cargo test --workspace --exclude eggfetch-python --all-features -- --test-threads=1` (single-threaded: RSS tests are concurrency-sensitive), `maturin develop`, native API manifest (`check_native_python_api.py`), Python typing surface + fixtures (`check_python_typing_surface.py`, `check_python_typing.py`), `pytest crates/eggfetch-python/tests/ -q --ignore=…/compat`, compat smoke kernel (`test_imports.py`, `test_client.py`, `test_exceptions.py`, `test_corrective_kernel.py`), and the Node prototype check. Refuses to run outside an active venv with Python 3.10+ and the pinned tooling in `scripts/ci-requirements.txt`.
-- **Tier 2** (`extended`, before release): full compat (`EGGFETCH_COMPAT_REQUIRED=1 pytest …/compat/ --strict-markers`), API oracle, feature matrix, MSRV, docs, FFI, soak.
+- **Tier 2** (`extended`, before release): full compat (`EGGFETCH_COMPAT_REQUIRED=1 pytest …/compat/ --strict-markers`), API oracle, feature matrix, feature tests, MSRV, docs, FFI, resource monitor, lifecycle, soak, downstream, merge-lossless, benchmarks.
 - **Tier 3** (`package`, before publish): crate packaging + wheel build/smoke/content validation and installed-wheel typing smoke.
 - Helpers in the same directory: `check_doc_examples.py`, `check_doc_links.py`, `check_native_python_api.py`, `check_python_typing_surface.py`, `check_python_typing.py`, `check_wheel_typing.py`, `check_lint_suppressions.sh` (rejects `allow(warnings)`, `clippy::all/pedantic/nursery/restriction`; specific lints need justifying comments), `validate_*` (package content, internal deps, release versions, wheel coverage), `wheel_smoke.py`, `stage_c_categories.py`.
 
@@ -278,7 +279,8 @@ Machine-readable corpus (`corpus.json`), server manifests (`servers.example.json
 ### Embedded footprint qualification (`qualification/embedded/` + `scripts/qualify-embedded-footprint.sh`)
 
 Tiny downstream-style fixtures (`eggfetch-min/-json/-default`,
-`reqwest-min/-json/-default`) plus a manual runner that gathers `cargo
+`reqwest-min/-json/-default`, plus the control-using
+`qualification/embedded-custom-dialer/`) plus a manual runner that gathers `cargo
 tree` evidence and stripped release sizes. Opt-in, never a CI gate. The
 current evidence record is [embedded-footprint.md](embedded-footprint.md):
 full compatibility profiles are not a footprint win, while the lean
@@ -444,23 +446,18 @@ selects one declarative route (precedence unchanged, directly unit-tested):
 2. **Custom dialer** — when `ClientBuilder::dialer()` is configured; the
    caller-owned stream is used for the logical destination and incompatible
    route controls reject before I/O
-3. **Static direct** — when `RequestBuilder::resolved_addresses()` supplied
-   caller-owned destinations; addresses are used exactly and no DNS lookup is
-   performed. Logical URL, Host, TLS certificate identity, and SNI remain
-   authoritative. Proxy, UDS, and H3 combinations reject before I/O.
-4. **Specialized direct** — when a direct connector (socket options / local
-   address) is configured and no proxy applies
-5. **Proxy / SOCKS** — effective proxy or SOCKS path (SOCKS uses a
+3. **Direct (single `TransportRoute::Direct` variant)** — two sub-conditions feed the same route when no proxy applies: (a) **static resolved destination**, when `RequestBuilder::resolved_addresses()` supplies caller-owned destinations used exactly with no DNS lookup (logical URL, Host, TLS certificate identity, and SNI remain authoritative; proxy, UDS, and H3 combinations reject before I/O); (b) **specialized direct**, when a direct connector (socket options / local address) is configured
+4. **Proxy / SOCKS** — effective proxy or SOCKS path (SOCKS uses a
    per-route persistent Hyper pool)
-6. **SNI override direct** — cached SNI-specific client when
+5. **SNI override direct** — cached SNI-specific client when
    `TransportHints::sni_hostname` is set
-7. **HTTP/3 (QUIC, experimental)** — `Http3Only` always; `Auto { allow_http3: true }` only
+6. **HTTP/3 (QUIC, experimental)** — `Http3Only` always; `Auto { allow_http3: true }` only
    when a fresh Alt-Svc alternative is cached and not suppressed (otherwise
    standard); `Auto { allow_http3: false }` never. Requires the `http3`
-   feature. Graduation is **retained experimental** this milestone; blockers
+   feature (which implies `tls-rustls`). Graduation is **retained experimental** this milestone; blockers
    and evidence live in [core-tls-proxy-protocols.md](core-tls-proxy-protocols.md)
    (§ "Production Graduation Decision") and `tests/h3_interop_qualification.rs`.
-8. **Standard Hyper direct** — default TCP path (also safe `Auto` fallback
+7. **Standard Hyper direct** — default TCP path (also safe `Auto` fallback
    for pre-commit replayable H3 failures, same deadlines/TLS).
 
 The lean `standard-http1`/`standard-http2` profiles compile only Proxy/SOCKS
