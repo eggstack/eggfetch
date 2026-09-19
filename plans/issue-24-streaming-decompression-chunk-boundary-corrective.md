@@ -327,6 +327,114 @@ Documentation-only descendant SHA:
 
 Missing evidence remains missing. Do not convert an unrun qualification gate, unpublished release, or downstream workaround still awaiting adoption into a pass.
 
+## Closure record (2026-09-19)
+
+```text
+Planning baseline: 9ecdd04cf76ee128116534e5c65b76f34ed9fa99
+Issue: #24
+
+Baseline fragmented gzip: RED — `gzip_fragmented_three_chunks_matches_plaintext`
+  FAILED on baseline tree with `Decompression("CRC computed does not match")`;
+  1-byte, empty-chunk, awkward-header, and generous-limit gzip cases also FAILED.
+Baseline fragmented Brotli: RED — `brotli_fragmented_three_chunks_matches_plaintext`
+  FAILED on baseline tree; 1-byte and empty-chunk Brotli cases also FAILED.
+Baseline one-item control: GREEN — `gzip_one_item_streaming_control_decodes` ok,
+  `brotli_one_item_streaming_control_decodes` ok on baseline.
+Baseline buffered controls: GREEN — `gzip_buffered_control_decodes` ok,
+  `brotli_buffered_control_decodes` ok on baseline.
+Baseline command: `cargo test -p eggfetch-core --all-features
+  --test streaming_decompression_tests -- --test-threads=1`
+  → 8 passed; 12 failed (all 12 failures are fragmented/high-level decode;
+  raw, metadata, malformed, unsupported, and one-item/buffered controls passed).
+
+Implementation commit(s): 37ab02b3873a4f0ce7018bd716e326bcf0595230
+  (fix + `streaming_decompression_tests.rs` + compression docs)
+Final executable freeze SHA: 37ab02b3873a4f0ce7018bd716e326bcf0595230
+Published coordinated version: PENDING — release commit 0ddcecc5e59e82c0cbf2d3d0647fd58b3d534dff
+  bumps all six crates + PyPI to 0.1.9 with CHANGELOG; `cargo publish`
+  to crates.io, `v0.1.9` tag, and PyPI `pypi.yml` dispatch have NOT been run
+  in this pass and require maintainer action from a trusted environment.
+
+Adapter disposition: private eggfetch `StreamReader` removed from
+  `crates/eggfetch-core/src/compression.rs`; per-codec mapping via
+  `stream.map(|r| r.map_err(|e| std::io::Error::other(e.to_string())))`
+  into `tokio_util::io::StreamReader`, wrapped in existing `tokio::io::BufReader`.
+tokio-util version: 0.7.18 (already locked; no manifest/lockfile behavior change
+  beyond version-bump release commit).
+BufReader retained: yes.
+Dependency/feature/MSRV delta: none (no Cargo feature, dependency, or
+  rust-version change; MSRV stays 1.89).
+
+gzip fragmented: PASS — 3-way split, 1-byte fragments, awkward header/trailer
+  splits all equal plaintext after fix (20/20 streaming tests green).
+Brotli fragmented: PASS — same matrix green.
+deflate fragmented: PASS.
+zstd fragmented: PASS.
+empty-chunk case: PASS — gzip + Brotli interleaved empty `Bytes` skipped.
+malformed/error-kind cases: PASS — fragmented garbage stays
+  `error.kind() == "decompression"`; unsupported stays
+  `unsupported_content_encoding`.
+decoded-size/ratio cases: PASS — fragmented size trips `decoded_body_too_large`,
+  ratio trips `decompression_ratio_exceeded`, generous limits decode exactly.
+
+high-level Content-Length gzip: PASS.
+high-level chunked gzip: PASS (7-byte transfer chunks + flush/sleep; identical bytes).
+high-level Content-Length Brotli: PASS.
+high-level chunked Brotli: PASS.
+raw/decompress(false) chunked: PASS — exact encoded bytes (also GREEN on baseline,
+  proving transport intact).
+
+ResponseBody public-shape: PASS (`response_body_public_shape` 1/1).
+wire metadata: PASS — decoded strips visible `Content-Encoding`/`Content-Length`,
+  `wire_content_encoding() == "gzip"`, `wire_content_length()` equals wire len.
+raw-vs-decoded one-shot: PASS via existing `EncodedStreaming` selection + raw test.
+read/total timeout: PASS — `total_body_deadline_tests` 23/23, `timeout_tests`,
+  lifecycle compat (`test_native_timeout_classification`, proxy/TLS, shutdown) green.
+pool lease: PASS — `pool_tests`, `pool_permit_released_after_decoded_body_limit_error`,
+  strengthened native lease proof in extended run.
+native body/service: PASS — `native_http_body_tests`, `native_tower_service_tests`.
+lean standard-http1: PASS — `lean_route_tests` 10/10 on
+  `--no-default-features --features standard-http1,tls-rustls`.
+
+Tier 1: PASS locally (`./scripts/check.sh`, EXIT 0) and remote CI green on fix
+  commit (run 35429786728, 7m11s) and release commit (run 35432939352, 7m54s).
+Extended: PASS (`./scripts/check.sh extended`, EXIT 0) with 2 expected skips
+  (Node JS artifact absent; downstream artifact manifest absent). Includes
+  Rust 1.89.0 MSRV matrix, docs, FFI, resource monitor, lifecycle, soak,
+  merge-lossless, benchmarks. Full compat in extended run: 1871 passed.
+Package: PASS on freeze and on 0.1.9 release commit
+  (`./scripts/check.sh package`, EXIT 0; crate dry-run, wheel build/smoke,
+  content + typing smoke green; wheel `eggfetch-0.1.9-cp312-...whl` validated).
+Security: PASS (`./scripts/check_security.sh`, EXIT 0; advisories/bans/licenses/
+  sources ok; 1251 advisories loaded, 273 crates scanned, no vulnerabilities).
+MSRV: PASS — exact 1.89.0 toolchain matrix in extended run.
+HTTPX 0.28.1: three consecutive `EGGFETCH_COMPAT_REQUIRED=1 pytest
+  crates/eggfetch-python/tests/compat/ -q --strict-markers` runs on the freeze:
+  1871 passed (extended), 1871 passed (/tmp/opencode/compat2.txt),
+  1871 passed (/tmp/opencode/compat3.txt). API oracle: 71 allowed, zero
+  unexplained/stale/resolved-active (compare script EXIT 0).
+HTTPX2 2.12.0: same three runs cover the httpx2 facade (shared suite);
+  API oracle: 79 allowed, zero unexplained/stale/resolved-active.
+Remote CI: GREEN — fix commit 37ab02b run 35429786728; release commit 0ddcecc
+  run 35432939352.
+
+eggsearch workaround status: RETAINED — downstream keeps its temporary
+  HTML-engine `.decompress(false)` workaround until it adopts a published
+  fixed `eggfetch-core` version under its own plan/test pass. No eggsearch
+  source change in this corrective.
+Downstream handoff: NOT COMPLETE — requires published 0.1.9 on crates.io
+  (in order http-connect → core → cli → ffi → python → node, verify with
+  `cargo search` between publishes), `v0.1.9` tag, and PyPI rehearsal/publication
+  dispatch. Do not tell downstream to remove its workaround based on a git commit.
+Known limitations: decoded `bytes_stream()` chunk sizes remain unstable by design
+  (tests compare ordered bytes, never chunk counts); H3 stays experimental;
+  Node stays experimental prototype; downstream/publish automation unchanged.
+Documentation-only descendant SHA: none yet — ledger/profile
+  (`plans/httpx-parity-correction-status.md`, `compat/*/profile.toml`,
+  `docs/reference/compatibility*.md`, `docs/residual-differences.md`) renewal
+  to 37ab02b... is left for the publication pass to keep this freeze binding clean.
+```
+
 ## Exit criterion
 
 Issue #24 is ready to close when fragmented streaming compressed input is byte-correct for all compiled codecs, the high-level HTTP/1.1 chunked gzip/Brotli reproducer passes, raw mode remains exact, no public/downstream API or timeout/error contract regresses, repository qualification is renewed on one exact executable SHA, and the corrected core is available in a coordinated published patch.
