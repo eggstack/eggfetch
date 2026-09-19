@@ -86,7 +86,17 @@ pub(super) async fn send_uds_route(
     }
     #[cfg(not(unix))]
     {
-        let _ = (method, uri, headers, body, version, url, transport_hints);
+        let _ = (
+            inner,
+            method,
+            uri,
+            headers,
+            body,
+            version,
+            url,
+            transport_hints,
+            remaining_total,
+        );
         Err(Error::Unsupported(
             "Unix domain sockets are not supported on this platform".into(),
         ))
