@@ -146,6 +146,15 @@ httpx2 close-on-failure contract.
 ### Decompression Modes
 
 - **Streaming**: `decompress_stream()` wraps the response body stream with an async decoder.
+  The private stream-to-reader adapter is `tokio_util::io::StreamReader`
+  (already-locked `tokio-util 0.7.18`) wrapped in the existing
+  `tokio::io::BufReader` for this corrective pass; it advances consumed bytes,
+  polls only after the current item is exhausted, and skips empty source
+  `Bytes` without synthesizing EOF. Hyper removes HTTP/1.1 chunk framing
+  before `wrap_incoming()`, so no `Transfer-Encoding` special case exists —
+  chunked transfer merely makes multi-item delivery deterministic. Decoded
+  `bytes_stream()` chunk sizes are not a stable framing contract; compare
+  ordered bytes, error kinds, timeouts, and metadata instead.
 - **Buffered**: `decompress_buffered()` decodes a collected `Bytes` buffer synchronously via `flate2` (gzip/deflate), the `brotli` crate (brotli), or the `zstd` crate (zstd).
 
 Automatic decompression removes `Content-Encoding` and `Content-Length` from

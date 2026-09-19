@@ -622,9 +622,12 @@ fn make_decoder(stream: BoxBytesStream, encoding: ContentCoding) -> Result<BoxBy
                 use async_compression::tokio::bufread::GzipDecoder;
                 use futures_util::StreamExt;
                 use tokio::io::BufReader;
-                use tokio_util::io::ReaderStream;
+                use tokio_util::io::{ReaderStream, StreamReader};
 
-                let reader = StreamReader::new(stream);
+                // Map locally to keep the conversion private; the decoder
+                // boundary keeps its explicit `Error::Decompression` text.
+                let mapped = stream.map(|r| r.map_err(|e| std::io::Error::other(e.to_string())));
+                let reader = StreamReader::new(mapped);
                 let decoder = GzipDecoder::new(BufReader::new(reader));
                 let stream = ReaderStream::new(decoder);
                 Ok(Box::pin(stream.map(|r| {
@@ -642,9 +645,10 @@ fn make_decoder(stream: BoxBytesStream, encoding: ContentCoding) -> Result<BoxBy
                 use async_compression::tokio::bufread::DeflateDecoder;
                 use futures_util::StreamExt;
                 use tokio::io::BufReader;
-                use tokio_util::io::ReaderStream;
+                use tokio_util::io::{ReaderStream, StreamReader};
 
-                let reader = StreamReader::new(stream);
+                let mapped = stream.map(|r| r.map_err(|e| std::io::Error::other(e.to_string())));
+                let reader = StreamReader::new(mapped);
                 let decoder = DeflateDecoder::new(BufReader::new(reader));
                 let stream = ReaderStream::new(decoder);
                 Ok(Box::pin(stream.map(|r| {
@@ -662,9 +666,10 @@ fn make_decoder(stream: BoxBytesStream, encoding: ContentCoding) -> Result<BoxBy
                 use async_compression::tokio::bufread::BrotliDecoder;
                 use futures_util::StreamExt;
                 use tokio::io::BufReader;
-                use tokio_util::io::ReaderStream;
+                use tokio_util::io::{ReaderStream, StreamReader};
 
-                let reader = StreamReader::new(stream);
+                let mapped = stream.map(|r| r.map_err(|e| std::io::Error::other(e.to_string())));
+                let reader = StreamReader::new(mapped);
                 let decoder = BrotliDecoder::new(BufReader::new(reader));
                 let stream = ReaderStream::new(decoder);
                 Ok(Box::pin(stream.map(|r| {
@@ -682,9 +687,10 @@ fn make_decoder(stream: BoxBytesStream, encoding: ContentCoding) -> Result<BoxBy
                 use async_compression::tokio::bufread::ZstdDecoder;
                 use futures_util::StreamExt;
                 use tokio::io::BufReader;
-                use tokio_util::io::ReaderStream;
+                use tokio_util::io::{ReaderStream, StreamReader};
 
-                let reader = StreamReader::new(stream);
+                let mapped = stream.map(|r| r.map_err(|e| std::io::Error::other(e.to_string())));
+                let reader = StreamReader::new(mapped);
                 let decoder = ZstdDecoder::new(BufReader::new(reader));
                 let stream = ReaderStream::new(decoder);
                 Ok(Box::pin(stream.map(|r| {
@@ -695,67 +701,6 @@ fn make_decoder(stream: BoxBytesStream, encoding: ContentCoding) -> Result<BoxBy
             {
                 Err(Error::UnsupportedContentEncoding("zstd".to_string()))
             }
-        }
-    }
-}
-
-/// A helper type that adapts a `BoxBytesStream` (yielding `Result<Bytes>`)
-/// into an `AsyncRead` for use with `async-compression` decoders.
-#[allow(dead_code)]
-struct StreamReader {
-    stream: BoxBytesStream,
-    buffer: bytes::BytesMut,
-    offset: usize,
-}
-
-#[allow(dead_code)]
-impl StreamReader {
-    fn new(stream: BoxBytesStream) -> Self {
-        Self {
-            stream,
-            buffer: bytes::BytesMut::new(),
-            offset: 0,
-        }
-    }
-}
-
-impl tokio::io::AsyncRead for StreamReader {
-    fn poll_read(
-        mut self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-        buf: &mut tokio::io::ReadBuf<'_>,
-    ) -> std::task::Poll<std::io::Result<()>> {
-        use futures_core::Stream;
-        use std::pin::Pin;
-
-        // If we have buffered data, return it first.
-        if self.offset < self.buffer.len() {
-            let remaining = &self.buffer[self.offset..];
-            let to_copy = remaining.len().min(buf.remaining());
-            buf.put_slice(&remaining[..to_copy]);
-            self.offset += to_copy;
-            if self.offset >= self.buffer.len() {
-                self.buffer.clear();
-                self.offset = 0;
-            }
-            return std::task::Poll::Ready(Ok(()));
-        }
-
-        // Try to get the next chunk from the stream.
-        match Pin::new(&mut self.stream).poll_next(cx) {
-            std::task::Poll::Ready(Some(Ok(chunk))) => {
-                self.buffer.extend_from_slice(&chunk);
-                self.offset = 0;
-                let to_copy = self.buffer.len().min(buf.remaining());
-                buf.put_slice(&self.buffer[..to_copy]);
-                self.offset = to_copy;
-                std::task::Poll::Ready(Ok(()))
-            }
-            std::task::Poll::Ready(Some(Err(e))) => {
-                std::task::Poll::Ready(Err(std::io::Error::other(e.to_string())))
-            }
-            std::task::Poll::Ready(None) => std::task::Poll::Ready(Ok(())),
-            std::task::Poll::Pending => std::task::Poll::Pending,
         }
     }
 }
