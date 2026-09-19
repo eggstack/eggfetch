@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.1.8] - 2026-09-19
+
+### Fixed
+
+- Windows PyPI wheel builds: the non-Unix fallback in
+  `send_uds_route` (`crates/eggfetch-core/src/pipeline/hyper_dispatch.rs`)
+  now marks `inner` and `remaining_total` as intentionally unused. Both
+  are only read by the Unix branch, so under `RUSTFLAGS=-D warnings`
+  all six Windows wheels failed with `unused-variables` while
+  Linux/macOS builds stayed green. No behavior change on any platform.
+  0.1.8 supersedes 0.1.7 for PyPI (0.1.7 was never uploaded there).
+
 ## [0.1.6] - 2026-09-17
 
 ### Added
