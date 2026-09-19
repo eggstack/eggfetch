@@ -3,6 +3,13 @@
 This directory contains active implementation plans, live qualification/status records, and historical implementation records. Completed plans are non-normative unless another current document explicitly says otherwise. Verification and release policy remain governed by `docs/verification-policy.md` and `docs/releases/process.md`.
 
 
+## Active corrective — issue #24 streaming decompression chunk-boundary corruption (2026-09-19)
+
+Plan: `issue-24-streaming-decompression-chunk-boundary-corrective.md`
+
+Status: ready for implementation on baseline `9ecdd04cf76ee128116534e5c65b76f34ed9fa99` (0.1.8). Issue #24 is traced to the private stream-to-`AsyncRead` adapter in `compression.rs`: fully consumed compressed chunks can be retained and re-emitted when the next stream item arrives, and empty source chunks can be exposed as zero-byte reads before true EOF. The corrective replaces only that private adapter with the already-locked `tokio_util::io::StreamReader`, retains the existing outer `BufReader` to minimize behavioral drift, and adds fragmented-codec plus high-level HTTP/1.1 chunked regressions. No dependency upgrade, public API/feature/MSRV change, eager buffering, or Transfer-Encoding special case is planned. Existing exact-SHA compatibility qualification must be renewed before a coordinated patch release; downstream eggsearch keeps its temporary `.decompress(false)` workaround until that published release is adopted separately.
+
+
 ## Active — Python 3.15 PyPI wheel production (2026-09-18)
 
 Plan: `python-3.15-pypi-wheel-production.md`
