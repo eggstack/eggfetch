@@ -1,13 +1,12 @@
 # HTTPX 0.28.1 Compatibility Profile (Stage C qualified)
 
 This directory contains the machine-readable compatibility profile for
-HTTPX 0.28.1. The current Stage C claim is bound to frozen executable SHA
-`1f52d846c186b061481ebb14a7be414f5c78ec7e` (2026-09-16). The prior
-`bfda3889cbeff5f6fbd98bf3eee12f77fab301c4` binding is historical after the
-post-freeze reusable route-cache invariant hardening pass (expanded
-SOCKS/forward/CONNECT route-key matrices, route/client ownership
-documentation, forward-proxy trace-observer non-retention regression;
-test/source-comment inputs only, no production behavior change).
+HTTPX 0.28.1. The current Stage C claim is bound to the frozen executable
+SHA recorded in `profile.toml` (`qualification-sha`) and the live ledger
+`plans/httpx-parity-correction-status.md`; those two records are
+authoritative. Historical bindings are preserved in the profile comments
+and the ledger and must not be reused after qualification-sensitive
+changes.
 
 ## Files
 

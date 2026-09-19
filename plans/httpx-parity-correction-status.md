@@ -4,6 +4,48 @@ This record is the exact-SHA-bound status for the HTTPX 0.28.1 compatibility
 facade. Historical phase and corrective-pass records remain in the git history
 and referenced plans; counts below are only from the runs named here.
 
+## Recorded state — Stage C renewed after issue #24 streaming-decompression corrective (2026-09-19)
+
+Recorded designation: **Stage C qualified** for both documented facades, bound
+to executable SHA `37ab02b3873a4f0ce7018bd716e326bcf0595230`. The preceding
+`82f3f38631b44a9a5c5ec5b40790e5015aeb40f8` binding is historical because the
+issue #24 private streaming-decompression chunk-boundary correction replaced
+the crate-private `BoxBytesStream` -> `AsyncRead` adapter with the
+already-locked `tokio_util::io::StreamReader` (0.7.18), retaining the existing
+`tokio::io::BufReader`. No HTTPX facade/API semantic delta was introduced.
+
+Qualification evidence on the corrected executable tree:
+
+- Focused streaming-decompression matrix passed on the freeze: 20/20
+  streaming tests green (fragmented gzip, Brotli, deflate and zstd;
+  empty-source-chunk behavior; awkward gzip framing; decoded-size and
+  decompression-ratio limits; malformed/unsupported error-kind
+  compatibility; high-level `Content-Length` vs HTTP/1.1 chunked
+  gzip/Brotli parity with identical plaintext; raw chunked encoded bytes
+  exact; public `ResponseBody` exhaustive-shape compatibility; timeout/pool/
+  native/lean-route regressions green).
+- Tier 1, extended, and package validation passed. Extended included the
+  required Rust 1.89.0 MSRV check; package validation included crate, wheel,
+  package-content, and installed-wheel typing checks. The only extended skips
+  are the existing missing Node JS artifact and downstream artifact manifest.
+- The 0.28.1 API oracle reported 71 allowed matches and the HTTPX2 2.12.0
+  oracle reported 79; both had zero unexplained, stale, or resolved-active
+  differences. No HTTPX facade gains native `Timeout.total` semantics;
+  HTTPX/HTTPX2 decompression behavior remains compatible.
+- Three consecutive full pinned compatibility runs each passed 1,871 tests
+  with no failures. No executable files or dependencies changed between runs.
+- Live security preflight passed with cargo-deny and cargo-audit; advisories,
+  bans, licenses, and sources ok.
+- HTTP/3 remains experimental and the Node binding remains an experimental
+  prototype; neither status changed in this corrective.
+
+The closing plan is
+`plans/issue-24-streaming-decompression-chunk-boundary-corrective.md`.
+Release: coordinated 0.1.9 (commit `0ddcecc5e59e82c0cbf2d3d0647fd58b3d534dff`,
+a release-metadata-only descendant of the freeze) publishes this correction
+to crates.io for all six crates; PyPI/tag/publication state is recorded in
+`plans/issue-24-release-qualification-and-closure.md`.
+
 ## Recorded state — Stage C renewed after total-deadline corrective closure (2026-09-18)
 
 Recorded designation: **Stage C qualified** for both documented facades, bound

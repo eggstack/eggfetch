@@ -6,11 +6,11 @@ This directory is the independent, versioned compatibility profile for
 the independently pinned HTTPX 0.28.1 contract and must not be rewritten
 to HTTPX2 semantics.
 
-Status: **Stage C qualified** on frozen executable SHA
-`1f52d846c186b061481ebb14a7be414f5c78ec7e` (2026-09-16). The prior
-`bfda3889cbeff5f6fbd98bf3eee12f77fab301c4` binding is historical after the
-post-freeze reusable route-cache invariant hardening pass (test/source-comment
-inputs only, no production behavior change). See `profile.toml` and
+Status: **Stage C qualified** on the frozen executable SHA recorded in
+`profile.toml` (`qualification-sha`) and the live ledger
+`plans/httpx-parity-correction-status.md`; those two records are
+authoritative. Historical bindings are preserved in the profile comments
+and the ledger. See `profile.toml` and
 `plans/httpx-parity-correction-status.md`. Implementation lives in
 `eggfetch.compat.httpx2` (see
 `crates/eggfetch-python/python/eggfetch/compat/httpx2/`).
