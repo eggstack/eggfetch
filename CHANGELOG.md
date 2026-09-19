@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.1.9] - 2026-09-19
+
+### Fixed
+
+- Streaming decompression chunk-boundary corruption (issue #24):
+  replaced the private `BoxBytesStream` → `AsyncRead` adapter in
+  `crates/eggfetch-core/src/compression.rs` with the already-locked
+  `tokio_util::io::StreamReader` (0.7.18), retaining the existing
+  `tokio::io::BufReader`. Fully consumed compressed chunks are no longer
+  retained and re-emitted when the next source item arrives, and empty
+  source `Bytes` items no longer surface as zero-byte reads before true
+  EOF. Hyper already removes HTTP/1.1 chunk framing before decoding, so
+  chunked transfer merely exposed the adapter defect; identical bytes via
+  `Content-Length` and `Transfer-Encoding: chunked` now decode identically
+  for gzip/Brotli (plus deflate/zstd fragmentation, empty-chunk, awkward
+  header/trailer splits, and size/ratio limit enforcement on fragmented
+  input). No public Rust/Python/CLI/FFI/Node/HTTPX API, feature graph,
+  timeout, raw-body, negotiation, or dependency/MSRV change; decoded chunk
+  sizes remain an unstable framing detail.
+
 ## [0.1.8] - 2026-09-19
 
 ### Fixed

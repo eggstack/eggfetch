@@ -93,7 +93,7 @@ def server():
 class TestPackageImports:
     def test_import_version(self):
         assert isinstance(eggfetch.__version__, str)
-        assert eggfetch.__version__ == "0.1.8"
+        assert eggfetch.__version__ == "0.1.9"
 
     def test_native_ssl_interop_does_not_import_compat_facade(self):
         before = {name for name in sys.modules if name.startswith("eggfetch.compat")}
