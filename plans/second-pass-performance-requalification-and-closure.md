@@ -175,3 +175,34 @@ frame/proxy/native controls passed without a new unexplained difference.
 timeouts, framing/trailers, and public exports remain unchanged. The live
 Stage C profiles, ledger, and canonical compatibility pages now point to this
 final executable SHA; subsequent changes are documentation-only closure.
+
+## Execution record — closure corrective executable freeze 2026-09-20
+
+Final executable SHA: `bc4800ee9428f0fd11d7d0b914c489b444fe93fc`. Planning
+baseline: `b6bcc33aa1ad04dfa22af219b82601d3c1377743`; pre-change benchmark
+baseline after the requested rebase: `96d5681d6ac7e31f17b200f7feda8849de5f29b5`.
+This corrective supersedes the prior executable freeze
+`1153d40c9a8a3bb380e63add1dee7601469d91f3`, which remains historical.
+
+The corrective restored the prior `str::lines()` behavior for a standalone
+final carriage return while retaining CRLF trimming, moved the private native
+URI resolver's owned `http::Uri` instead of cloning it, and added focused
+cookie mutation benchmarks/tests. The retained cookie expiry watermark is
+supported by the focused prebuilt-jar control: the old watermark-free path
+measured approximately 185 ns, 3.43 us, and 40.7 us for 10, 1,000, and
+10,000-cookie replacement mutations, while the candidate measured
+approximately 220 ns, 227 ns, and 208 ns. The small-jar setup cost is accepted
+because the large-jar scan is removed; equal-minimum replacement and minimum
+deletion recomputation remain covered. A decoded-body capacity hint was
+rejected because safe length provenance was not available at the collection
+boundary.
+
+Focused URI, cookie, and Python response tests passed; the native Python
+manifest remained at 66 exports and the typing surface at 66 runtime exports,
+32 exception bases, and 24 reviewed member contracts. Tier 1, extended
+(including exact Rust 1.89.0 MSRV), package, and live security preflight all
+passed. The full pinned HTTPX 0.28.1/HTTPX2 2.12.0 compatibility suites,
+API oracles, FFI, feature, lifecycle/resource, soak, docs, and native/proxy
+controls passed without new unexplained differences. Node JavaScript remains
+truthfully skipped because its native artifact is absent, and downstream
+qualification remains skipped because its artifact manifest is absent.

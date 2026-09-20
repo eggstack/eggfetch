@@ -137,5 +137,6 @@ request, native/proxy, Python adapter, and cookie changes are recorded in the
 child plans. The body-capacity candidate was rejected on decoded-length
 provenance grounds. Final executable-SHA qualification and remote CI status
 are recorded by `second-pass-performance-requalification-and-closure.md`
-after the clean commit `1153d40c9a8a3bb380e63add1dee7601469d91f3` and its
-documentation-only qualification renewal are pushed.
+after the clean corrective commit `bc4800ee9428f0fd11d7d0b914c489b444fe93fc`
+and its documentation-only qualification renewal are pushed. The preceding
+`1153d40c9a8a3bb380e63add1dee7601469d91f3` freeze remains historical.

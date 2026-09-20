@@ -4,6 +4,34 @@ This record is the exact-SHA-bound status for the HTTPX 0.28.1 compatibility
 facade. Historical phase and corrective-pass records remain in the git history
 and referenced plans; counts below are only from the runs named here.
 
+## Recorded state — Stage C renewed after closure corrective pass (2026-09-20)
+
+Recorded designation: **Stage C qualified** for both documented facades, bound
+to executable SHA `bc4800ee9428f0fd11d7d0b914c489b444fe93fc`. The preceding
+`1153d40c9a8a3bb380e63add1dee7601469d91f3` binding remains historical because
+this corrective changed executable Python response semantics, native URI
+ownership, cookie benchmark/test inputs, and the qualification evidence.
+
+Qualification evidence on the corrective executable freeze:
+
+- Tier 1, extended, package, live security preflight, and exact Rust 1.89.0
+  MSRV checks passed. The optional skips remain the absent Node native artifact
+  and absent downstream qualification manifest.
+- The native Python manifest remained at 66 exports and the typing surface
+  remained at 66 runtime exports, 32 exception bases, and 24 reviewed member
+  contracts. Full pinned HTTPX 0.28.1/HTTPX2 2.12.0 compatibility suites and
+  API oracles passed without new unexplained differences.
+- Focused line-semantics, native URI, cookie mutation, native/proxy, FFI,
+  feature, lifecycle/resource, soak, docs, and package controls passed. The
+  cookie watermark was retained only after focused prebuilt-jar evidence; the
+  decoded-body capacity candidate was rejected for lack of safe decoded-length
+  provenance. No compatibility waiver, dependency, feature-default, or public
+  API change was introduced.
+
+The corrective closure plan is
+`plans/second-pass-performance-closure-corrective-pass.md`; the preceding
+`1153d40c...` record remains valid historical evidence.
+
 ## Recorded state — Stage C renewed after second-pass ownership qualification (2026-09-20)
 
 Recorded designation: **Stage C qualified** for both documented facades, bound

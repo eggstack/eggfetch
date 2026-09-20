@@ -7,18 +7,14 @@ Plan: `second-pass-performance-closure-corrective-pass.md`
 
 Planning baseline: `8201f35e4746cfaca23ae7f975b701a8488bb88b`.
 
-Status: planned for handoff. Post-closure review found one small buffered-Python
-behavior regression plus two closure/evidence defects in the completed
-second-pass performance campaign: lazy `iter_lines()` strips a standalone
-final carriage return unlike the prior `str::lines()` implementation; the
-native URI resolver still clones an owned `http::Uri` despite the ownership
-plan being marked complete; and the cookie mutation optimization was retained
-after its own record reported no material benchmark change despite an
-evidence-gated retain rule. The corrective restores exact line semantics,
-finishes native URI move ownership, and requires focused single-cookie mutation
-evidence before either retaining or reverting the second-pass cookie mutation
-logic. Any executable correction must renew the final freeze and exact-SHA
-compatibility records before the parent program is considered closed again.
+Status: complete on executable freeze
+`bc4800ee9428f0fd11d7d0b914c489b444fe93fc`; Tier 1, extended, package,
+security, and exact Rust 1.89.0 MSRV gates are green locally. The corrective
+restored exact lazy `iter_lines()` CR semantics, moved the native URI by
+ownership, and retained the cookie watermark only after focused mutation
+evidence; the decoded-body capacity candidate was rejected because safe
+decoded-length provenance was unavailable. Remote CI is the final post-push
+verification reported in the handoff.
 
 ## Active program — second-pass performance ownership optimization (2026-09-20)
 
@@ -27,7 +23,7 @@ Handoff program: `second-pass-performance-ownership-optimization-program.md`
 Planning baseline: `b6bcc33aa1ad04dfa22af219b82601d3c1377743`.
 
 Status: complete on executable freeze
-`1153d40c9a8a3bb380e63add1dee7601469d91f3`; package/security gates and local
+`bc4800ee9428f0fd11d7d0b914c489b444fe93fc`; package/security gates and local
 qualification are green, with remote CI closure recorded after push. This is a
 narrow follow-up to the
 completed first performance campaign, not a reopening of its already-qualified

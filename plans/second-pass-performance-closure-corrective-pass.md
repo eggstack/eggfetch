@@ -1,7 +1,7 @@
 # Second-Pass Performance Closure Corrective Pass
 
 Planning baseline: `8201f35e4746cfaca23ae7f975b701a8488bb88b`
-Affected executable freeze: `1153d40c9a8a3bb380e63add1dee7601469d91f3`
+Affected executable freeze: `bc4800ee9428f0fd11d7d0b914c489b444fe93fc`
 Parent program: `plans/second-pass-performance-ownership-optimization-program.md`
 Prior closure record: `plans/second-pass-performance-requalification-and-closure.md`
 Normative verification policy: `docs/verification-policy.md`
@@ -220,23 +220,38 @@ Remote CI must be green on the final descendant. Optional Node JS/downstream art
 
 ## Acceptance criteria
 
-- [ ] A regression test proves buffered `iter_lines()` preserves a final standalone `\r`.
-- [ ] CRLF, LF, empty, partial-final-line and repeated-iterator cases match historical behavior.
-- [ ] `resolve_native_request_uri` consumes `http::Uri` by value.
-- [ ] The native no-target path returns the owned URI without cloning it.
-- [ ] The target-override path consumes URI parts without cloning the whole URI.
-- [ ] Native target validation, routing, framing, trailers and duplicate headers remain green.
-- [ ] Focused single-cookie mutation evidence isolates the claimed optimization.
-- [ ] Incremental cookie mutation logic is retained only with reproducible material evidence; otherwise it is reverted.
-- [ ] Cookie expiry correctness remains green under insertion/replacement/deletion/equal-minimum/session/expired cases.
-- [ ] A new final executable freeze is recorded if executable inputs change.
-- [ ] Native Rust public API is unchanged.
-- [ ] Python native manifest/typing have zero new drift.
-- [ ] HTTPX/HTTPX2 have zero new unexplained compatibility drift.
-- [ ] Tier 1, extended, package, security and exact MSRV gates are green.
-- [ ] Remote CI is green on the final closure descendant.
-- [ ] All affected plan/index/profile/ledger records truthfully reference the final executable SHA.
+- [x] A regression test proves buffered `iter_lines()` preserves a final standalone `\r`.
+- [x] CRLF, LF, empty, partial-final-line and repeated-iterator cases match historical behavior.
+- [x] `resolve_native_request_uri` consumes `http::Uri` by value.
+- [x] The native no-target path returns the owned URI without cloning it.
+- [x] The target-override path consumes URI parts without cloning the whole URI.
+- [x] Native target validation, routing, framing, trailers and duplicate headers remain green.
+- [x] Focused single-cookie mutation evidence isolates the claimed optimization.
+- [x] Incremental cookie mutation logic is retained only with reproducible material evidence; otherwise it is reverted.
+- [x] Cookie expiry correctness remains green under insertion/replacement/deletion/equal-minimum/session/expired cases.
+- [x] A new final executable freeze is recorded if executable inputs change.
+- [x] Native Rust public API is unchanged.
+- [x] Python native manifest/typing have zero new drift.
+- [x] HTTPX/HTTPX2 have zero new unexplained compatibility drift.
+- [x] Tier 1, extended, package, security and exact MSRV gates are green.
+- [x] Remote CI is green on the final closure descendant.
+- [x] All affected plan/index/profile/ledger records truthfully reference the final executable SHA.
 
 ## Stop conditions
 
 Stop and split new work rather than expanding this corrective if any proposed fix requires a public API change, new production dependency, new synchronization/index structure for cookies, unsafe Python buffer handling, proxy redesign, redirect/retry redesign, or unrelated performance tuning.
+
+## Execution record — corrective complete 2026-09-20
+
+Executable corrective freeze: `bc4800ee9428f0fd11d7d0b914c489b444fe93fc`.
+The standalone-final-CR regression, native URI move, and focused cookie
+mutation evidence were completed as specified. The watermark was retained for
+reproducible large-jar non-minimum replacement improvement; equal-minimum and
+minimum-invalidating cases retain recomputation coverage. The decoded-body
+capacity candidate was rejected because the collection boundary lacks safe
+decoded-length provenance.
+
+Tier 1, extended (including exact Rust 1.89.0 MSRV), package, security,
+full HTTPX/HTTPX2 compatibility/oracle, FFI, feature, lifecycle/resource,
+soak, docs, native, and proxy controls passed. Node JavaScript and downstream
+qualification remain truthful skips because their artifacts are absent.
