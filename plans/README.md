@@ -1,6 +1,25 @@
 # eggfetch Plan Index
 
 
+## Active corrective — second-pass performance closure truth/semantics (2026-09-20)
+
+Plan: `second-pass-performance-closure-corrective-pass.md`
+
+Planning baseline: `8201f35e4746cfaca23ae7f975b701a8488bb88b`.
+
+Status: planned for handoff. Post-closure review found one small buffered-Python
+behavior regression plus two closure/evidence defects in the completed
+second-pass performance campaign: lazy `iter_lines()` strips a standalone
+final carriage return unlike the prior `str::lines()` implementation; the
+native URI resolver still clones an owned `http::Uri` despite the ownership
+plan being marked complete; and the cookie mutation optimization was retained
+after its own record reported no material benchmark change despite an
+evidence-gated retain rule. The corrective restores exact line semantics,
+finishes native URI move ownership, and requires focused single-cookie mutation
+evidence before either retaining or reverting the second-pass cookie mutation
+logic. Any executable correction must renew the final freeze and exact-SHA
+compatibility records before the parent program is considered closed again.
+
 ## Active program — second-pass performance ownership optimization (2026-09-20)
 
 Handoff program: `second-pass-performance-ownership-optimization-program.md`
