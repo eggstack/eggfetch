@@ -697,15 +697,23 @@ pub fn should_retry(
 /// gracefully (e.g. to a deterministic delay) instead of panicking.
 #[allow(clippy::cast_precision_loss)]
 fn get_random_f64() -> Option<f64> {
-    static STATE: OnceLock<Option<AtomicU64>> = OnceLock::new();
+    // Only successful seeds are cached: a transient `getrandom` failure is
+    // retried on the next call instead of pinning the process to
+    // deterministic backoff for its whole lifetime.
+    static STATE: OnceLock<AtomicU64> = OnceLock::new();
 
-    let state = STATE.get_or_init(|| {
+    let state = if let Some(state) = STATE.get() {
+        state
+    } else {
         let mut buf = [0u8; 8];
-        getrandom::getrandom(&mut buf)
-            .ok()
-            .map(|()| AtomicU64::new(u64::from_le_bytes(buf).max(1)))
-    });
-    let state = state.as_ref()?;
+        let seed = u64::from_le_bytes({
+            getrandom::getrandom(&mut buf).ok()?;
+            buf
+        })
+        .max(1);
+        let _ = STATE.set(AtomicU64::new(seed));
+        STATE.get()?
+    };
     let val = state
         .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |mut value| {
             value ^= value << 13;
