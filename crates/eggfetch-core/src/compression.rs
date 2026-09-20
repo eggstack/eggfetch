@@ -120,7 +120,8 @@ const MAX_NESTING_DEPTH: usize = 4;
 pub enum ContentCoding {
     /// gzip (RFC 1952)
     Gzip,
-    /// deflate (RFC 1951, typically zlib-wrapped)
+    /// deflate (RFC 9110 §8.4.1.2: the zlib wrapper, RFC 1950; raw
+    /// deflate streams, RFC 1951, are accepted as a lenient fallback)
     Deflate,
     /// brotli (RFC 7932)
     Brotli,
@@ -578,8 +579,17 @@ fn sync_decode_flate2(
             sync_read_limited(decoder, output_limit, ratio_is_tighter)
         }
         ContentCoding::Deflate => {
-            let decoder = flate2::read::DeflateDecoder::new(&data[..]);
-            sync_read_limited(decoder, output_limit, ratio_is_tighter)
+            // HTTP `deflate` (RFC 9110 §8.4.1.2) is the zlib wrapper
+            // (RFC 1950), but some servers send raw deflate (RFC 1951).
+            // Try the wrapper first, then fall back to the raw stream so
+            // lenient receivers decode both framings.
+            let zlib = flate2::read::ZlibDecoder::new(&data[..]);
+            if let ok @ Ok(_) = sync_read_limited(zlib, output_limit, ratio_is_tighter) {
+                ok
+            } else {
+                let raw = flate2::read::DeflateDecoder::new(&data[..]);
+                sync_read_limited(raw, output_limit, ratio_is_tighter)
+            }
         }
         _ => Err(Error::UnsupportedContentEncoding(
             encoding.as_str().to_owned(),
@@ -606,6 +616,80 @@ fn sync_decode_zstd(
     let decoder = zstd::stream::read::Decoder::new(&data[..])
         .map_err(|e| Error::Decompression(e.to_string()))?;
     sync_read_limited(decoder, output_limit, ratio_is_tighter)
+}
+
+/// Returns `true` when `prefix` looks like an RFC 1950 zlib wrapper
+/// header: compression method 8 (deflate) with a valid FCHECK checksum.
+/// A raw deflate stream can pass this check by coincidence, so the check
+/// only selects the first decoder tried on the streaming path (the
+/// buffered path tries the wrapper and falls back to raw on failure).
+#[cfg(feature = "compression-deflate")]
+fn is_zlib_header(prefix: &[u8]) -> bool {
+    let [cmf, flg, ..] = prefix else {
+        return false;
+    };
+    let cmf = u16::from(*cmf);
+    let flg = u16::from(*flg);
+    cmf & 0x0F == 8 && (cmf * 256 + flg) % 31 == 0
+}
+
+/// Build the streaming `deflate` decoder with lazy framing selection.
+///
+/// HTTP `deflate` (RFC 9110 §8.4.1.2) is the zlib wrapper (RFC 1950), but
+/// some servers send raw deflate (RFC 1951). The first two bytes are
+/// sniffed once they arrive ([`is_zlib_header`]) and the decoder is
+/// selected then, so streaming never buffers the whole body for a decode
+/// retry. Split out of [`make_decoder`] to keep that function small.
+#[cfg(feature = "compression-deflate")]
+fn make_deflate_decoder(stream: BoxBytesStream) -> BoxBytesStream {
+    use async_compression::tokio::bufread::{DeflateDecoder, ZlibDecoder};
+    use futures_util::StreamExt;
+    use tokio::io::{AsyncBufReadExt, AsyncRead, BufReader};
+    use tokio_util::io::{ReaderStream, StreamReader};
+
+    enum DeflateState<R> {
+        Sniffing(R),
+        Decoding(ReaderStream<std::pin::Pin<Box<dyn AsyncRead + Send>>>),
+        Done,
+    }
+
+    let mapped = stream.map(|r| r.map_err(|e| std::io::Error::other(e.to_string())));
+    let reader = StreamReader::new(mapped);
+    let sniffed = futures_util::stream::unfold(
+        DeflateState::Sniffing(BufReader::new(reader)),
+        |mut state| async move {
+            loop {
+                match state {
+                    DeflateState::Sniffing(mut reader) => {
+                        let is_zlib = match reader.fill_buf().await {
+                            Ok(buf) => {
+                                if buf.is_empty() {
+                                    return None;
+                                }
+                                is_zlib_header(buf)
+                            }
+                            Err(e) => return Some((Err(e), DeflateState::Done)),
+                        };
+                        let decoder: std::pin::Pin<Box<dyn AsyncRead + Send>> = if is_zlib {
+                            Box::pin(ZlibDecoder::new(reader))
+                        } else {
+                            Box::pin(DeflateDecoder::new(reader))
+                        };
+                        state = DeflateState::Decoding(ReaderStream::new(decoder));
+                    }
+                    DeflateState::Decoding(mut inner) => {
+                        return inner
+                            .next()
+                            .await
+                            .map(|item| (item, DeflateState::Decoding(inner)));
+                    }
+                    DeflateState::Done => return None,
+                }
+            }
+        },
+    );
+    let stream = sniffed.map(|r| r.map_err(|e| Error::Decompression(e.to_string())));
+    Box::pin(stream)
 }
 
 /// Create a decoder for a single content coding.
@@ -642,18 +726,7 @@ fn make_decoder(stream: BoxBytesStream, encoding: ContentCoding) -> Result<BoxBy
         ContentCoding::Deflate => {
             #[cfg(feature = "compression-deflate")]
             {
-                use async_compression::tokio::bufread::DeflateDecoder;
-                use futures_util::StreamExt;
-                use tokio::io::BufReader;
-                use tokio_util::io::{ReaderStream, StreamReader};
-
-                let mapped = stream.map(|r| r.map_err(|e| std::io::Error::other(e.to_string())));
-                let reader = StreamReader::new(mapped);
-                let decoder = DeflateDecoder::new(BufReader::new(reader));
-                let stream = ReaderStream::new(decoder);
-                Ok(Box::pin(stream.map(|r| {
-                    r.map_err(|e| Error::Decompression(e.to_string()))
-                })))
+                Ok(make_deflate_decoder(stream))
             }
             #[cfg(not(feature = "compression-deflate"))]
             {
@@ -1109,6 +1182,36 @@ mod tests {
         };
         let err = decompress_buffered(&data, "gzip", limit).unwrap_err();
         assert_eq!(err.kind(), "decoded_body_too_large");
+    }
+
+    #[cfg(feature = "compression-deflate")]
+    #[test]
+    fn deflate_buffered_decodes_zlib_wrapper_and_raw() {
+        use std::io::Write;
+        let plain = b"hello deflate world, hello again";
+
+        let mut zlib = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::default());
+        zlib.write_all(plain).unwrap();
+        let zlib = zlib.finish().unwrap();
+        assert!(is_zlib_header(&zlib));
+        let result = decompress_buffered(&zlib, "deflate", DecompressionLimit::new()).unwrap();
+        assert_eq!(&result[..], &plain[..]);
+
+        let mut raw =
+            flate2::write::DeflateEncoder::new(Vec::new(), flate2::Compression::default());
+        raw.write_all(plain).unwrap();
+        let raw = raw.finish().unwrap();
+        let result = decompress_buffered(&raw, "deflate", DecompressionLimit::new()).unwrap();
+        assert_eq!(&result[..], &plain[..]);
+    }
+
+    #[cfg(feature = "compression-deflate")]
+    #[test]
+    fn zlib_header_sniff_classifies_framing() {
+        assert!(!is_zlib_header(&[]));
+        assert!(!is_zlib_header(&[0x78]));
+        assert!(!is_zlib_header(&[0x1f, 0x8b])); // gzip magic
+        assert!(is_zlib_header(&[0x78, 0x9c, 0x03])); // default zlib header
     }
 
     #[cfg(any(feature = "compression-gzip", feature = "compression-deflate"))]

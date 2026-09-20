@@ -52,6 +52,14 @@ fn deflate_compress(data: &[u8]) -> Vec<u8> {
     encoder.finish().unwrap()
 }
 
+#[cfg(feature = "compression-deflate")]
+fn zlib_compress(data: &[u8]) -> Vec<u8> {
+    use std::io::Write;
+    let mut encoder = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::default());
+    encoder.write_all(data).unwrap();
+    encoder.finish().unwrap()
+}
+
 #[cfg(feature = "compression-brotli")]
 fn brotli_compress(data: &[u8]) -> Vec<u8> {
     let params = brotli::enc::BrotliEncoderParams::default();
@@ -200,6 +208,24 @@ async fn deflate_fragmented_matches_plaintext() {
     let fragmented = decode_streaming(&compressed, chunks, "deflate")
         .await
         .expect("fragmented deflate must decode");
+    assert_eq!(fragmented, plain);
+}
+
+#[cfg(feature = "compression-deflate")]
+#[tokio::test]
+async fn deflate_zlib_wrapper_matches_plaintext() {
+    // HTTP `deflate` is the zlib wrapper (RFC 1950); the decoder must
+    // accept it on both buffered and fragmented streaming paths.
+    let plain = plaintext();
+    let compressed = zlib_compress(&plain);
+    let via_buffered =
+        decompress_buffered(&compressed, "deflate", DecompressionLimit::new()).unwrap();
+    assert_eq!(&via_buffered[..], &plain[..]);
+    let n = compressed.len();
+    let chunks = split_items(&compressed, &[n / 3, n / 3]);
+    let fragmented = decode_streaming(&compressed, chunks, "deflate")
+        .await
+        .expect("fragmented zlib-wrapped deflate must decode");
     assert_eq!(fragmented, plain);
 }
 
