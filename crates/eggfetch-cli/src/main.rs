@@ -784,6 +784,12 @@ async fn run(cli: Cli) -> Result<()> {
         client_builder = client_builder.cookie_jar(jar);
     }
 
+    // `--proxy-auth`/`--no-proxy` without `--proxy` would be silently
+    // ignored, sending the request direct when the user expected a proxy.
+    if cli.proxy.is_none() && (cli.proxy_auth.is_some() || cli.no_proxy.is_some()) {
+        anyhow::bail!("--proxy-auth and --no-proxy require --proxy");
+    }
+
     if let Some(ref proxy_url) = cli.proxy {
         let mut proxy = Proxy::all(proxy_url)?;
         if let Some(ref proxy_auth_str) = cli.proxy_auth {
@@ -1095,10 +1101,7 @@ async fn run(cli: Cli) -> Result<()> {
                             entry.url().path(),
                             version_string(entry.version()),
                         );
-                        eprint!(
-                            "{}",
-                            format_headers(entry.headers(), cli.verbose, cli.verbose)
-                        );
+                        eprint!("{}", format_headers(entry.headers(), cli.verbose, true));
                     }
                     eprintln!();
                 }
@@ -1109,10 +1112,7 @@ async fn run(cli: Cli) -> Result<()> {
                     status.as_u16(),
                     status.canonical_reason().unwrap_or("")
                 );
-                eprint!(
-                    "{}",
-                    format_headers(response.headers(), cli.verbose, cli.verbose)
-                );
+                eprint!("{}", format_headers(response.headers(), cli.verbose, true));
                 eprintln!("\n--- Response time: {:.3}s ---\n", elapsed.as_secs_f64());
             }
 
@@ -1130,10 +1130,16 @@ async fn run(cli: Cli) -> Result<()> {
                 } else {
                     print!("{header_str}");
                 }
+                if cli.check_status && !is_success {
+                    return Err(StatusError(status.as_u16()).into());
+                }
                 return Ok(());
             }
 
             if cli.no_body {
+                if cli.check_status && !is_success {
+                    return Err(StatusError(status.as_u16()).into());
+                }
                 return Ok(());
             }
 
@@ -1147,6 +1153,12 @@ async fn run(cli: Cli) -> Result<()> {
             } else if cli.download {
                 let filename = derive_filename(&response).unwrap_or_else(|| "download".to_owned());
                 let path = std::path::Path::new(&filename);
+                if cli.no_clobber && path.exists() {
+                    anyhow::bail!(
+                        "output file already exists: {} (remove --no-clobber to allow overwrite)",
+                        path.display()
+                    );
+                }
                 if path.exists() {
                     let stem = path.file_stem().unwrap_or_default();
                     let ext = path
@@ -1155,22 +1167,30 @@ async fn run(cli: Cli) -> Result<()> {
                         .unwrap_or_default();
                     // A u64 range iterator terminates instead of wrapping,
                     // so a pathological filesystem cannot loop forever.
-                    let mut new_path: Option<PathBuf> = None;
+                    // Each candidate is created with O_CREAT|O_EXCL so
+                    // concurrent downloads cannot truncate each other's files.
+                    let mut created: Option<(PathBuf, tokio::fs::File)> = None;
                     for counter in 1u64.. {
                         let candidate = format!("{} ({}){}", stem.to_string_lossy(), counter, ext);
-                        let candidate_path = std::path::Path::new(&candidate);
-                        if !candidate_path.exists() {
-                            new_path = Some(PathBuf::from(candidate));
-                            break;
+                        match tokio::fs::OpenOptions::new()
+                            .write(true)
+                            .create_new(true)
+                            .open(&candidate)
+                            .await
+                        {
+                            Ok(f) => {
+                                created = Some((PathBuf::from(candidate), f));
+                                break;
+                            }
+                            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+                            Err(e) => {
+                                anyhow::bail!("failed to create: {candidate} ({e})");
+                            }
                         }
                     }
-                    match new_path {
-                        Some(new_path) => {
-                            output_path = Some(new_path.clone());
-                            let f =
-                                tokio::fs::File::create(&new_path).await.with_context(|| {
-                                    format!("failed to create: {}", new_path.display())
-                                })?;
+                    match created {
+                        Some((new_path, f)) => {
+                            output_path = Some(new_path);
                             output_file = Some(f);
                         }
                         None => anyhow::bail!(
@@ -1178,7 +1198,10 @@ async fn run(cli: Cli) -> Result<()> {
                         ),
                     }
                 } else {
-                    let f = tokio::fs::File::create(path)
+                    let f = tokio::fs::OpenOptions::new()
+                        .write(true)
+                        .create_new(true)
+                        .open(path)
                         .await
                         .with_context(|| format!("failed to create: {}", path.display()))?;
                     output_file = Some(f);

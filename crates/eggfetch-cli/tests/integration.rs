@@ -247,6 +247,13 @@ fn handle_client(
                 &body_bytes,
             );
         }
+        "/secret-headers" => {
+            // Echo-style secrets in *response* headers: exercises CLI
+            // redaction on the --include display path.
+            response_headers.push(("authorization", "Bearer secret-token-abc123"));
+            response_headers.push(("x-public", "visible"));
+            send_response(&mut reader.get_mut(), 200, "OK", &response_headers, b"ok");
+        }
         "/post-echo" | "/post-body" => {
             let captured = captured.lock().unwrap();
             if let Some(last) = captured.last() {
@@ -832,6 +839,77 @@ fn test_check_status_500() {
     let url = format!("{}/status/500", server.url());
     let (_stdout, _stderr, code) = run_cli(&[&url, "--check-status"]);
     assert_eq!(code, Some(6));
+}
+
+#[test]
+fn test_include_redacts_secrets() {
+    let server = TestServer::start();
+    let url = format!("{}/secret-headers", server.url());
+    let (_stdout, stderr, code) = run_cli(&[&url, "--include"]);
+    assert_eq!(code, Some(0));
+    assert!(
+        stderr.contains("authorization: Bearer <redacted>"),
+        "secrets must be redacted, got: {stderr}"
+    );
+    assert!(!stderr.contains("secret-token-abc123"));
+    assert!(stderr.contains("x-public: visible"));
+}
+
+#[test]
+fn test_check_status_headers_only_500() {
+    let server = TestServer::start();
+    let url = format!("{}/status/500", server.url());
+    let (_stdout, _stderr, code) = run_cli(&[&url, "--headers-only", "--check-status"]);
+    assert_eq!(code, Some(6));
+}
+
+#[test]
+fn test_check_status_no_body_500() {
+    let server = TestServer::start();
+    let url = format!("{}/status/500", server.url());
+    let (_stdout, _stderr, code) = run_cli(&[&url, "--no-body", "--check-status"]);
+    assert_eq!(code, Some(6));
+}
+
+#[test]
+fn test_check_status_headers_only_200() {
+    let server = TestServer::start();
+    let url = format!("{}/get", server.url());
+    let (_stdout, _stderr, code) = run_cli(&[&url, "--headers-only", "--check-status"]);
+    assert_eq!(code, Some(0));
+}
+
+#[test]
+fn test_download_no_clobber() {
+    let server = TestServer::start();
+    let url = format!("{}/json", server.url());
+    let dir = tempfile::tempdir().unwrap();
+    let original_dir = std::env::current_dir().unwrap();
+    std::env::set_current_dir(dir.path()).unwrap();
+    std::fs::write("json", "existing").unwrap();
+    let (_stdout, stderr, code) = run_cli(&[&url, "--download", "--no-clobber"]);
+    std::env::set_current_dir(&original_dir).unwrap();
+    assert_eq!(code, Some(2), "stderr: {stderr}");
+    let content = std::fs::read_to_string(dir.path().join("json")).unwrap();
+    assert_eq!(content, "existing");
+}
+
+#[test]
+fn test_proxy_auth_without_proxy() {
+    let server = TestServer::start();
+    let url = format!("{}/get", server.url());
+    let (_stdout, stderr, code) = run_cli(&[&url, "--proxy-auth", "user:pass"]);
+    assert_eq!(code, Some(2));
+    assert!(stderr.contains("--proxy"), "stderr: {stderr}");
+}
+
+#[test]
+fn test_no_proxy_without_proxy() {
+    let server = TestServer::start();
+    let url = format!("{}/get", server.url());
+    let (_stdout, stderr, code) = run_cli(&[&url, "--no-proxy", "example.com"]);
+    assert_eq!(code, Some(2));
+    assert!(stderr.contains("--proxy"), "stderr: {stderr}");
 }
 
 #[test]
