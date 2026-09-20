@@ -81,6 +81,11 @@ pub(crate) type SharedStreamInner =
 /// This is the core of the HTTPX `network_stream` compatibility layer.
 /// The sync wrapper carries an explicit runtime handle so it can drive
 /// Tokio futures without relying on an ambient runtime.
+///
+/// Clones share a single `UpgradedStream` behind one mutex. Sync
+/// read/write hold the lock across the blocking IO, so concurrent clones
+/// serialize and a slow peer stalls all clones. For independent
+/// concurrent IO, do not clone — open separate streams.
 #[pyclass(name = "NetworkStream", from_py_object)]
 pub struct PyNetworkStream {
     /// Inner upgraded stream, wrapped in `Arc<Mutex<>>` so multiple

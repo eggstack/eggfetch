@@ -151,6 +151,38 @@ def test_extensions_unknown_keys_accepted():
         pass
 
 
+def test_extensions_typo_key_is_ignored_but_preserved():
+    """A typo'd extension key (e.g. ``sni_hostnam``) is silently ignored.
+
+    Only ``target``/``sni_hostname``/``trace`` reach ``TransportHints``;
+    unknown keys never raise (HTTPX passthrough) but have no wire effect.
+    This test pins that contract so the pitfall stays documented.
+    """
+    import eggfetch
+
+    port = _pick_free_port()
+    server = _start_server(_OkHandlerQuiet, port=port)
+    try:
+        events: list = []
+
+        def trace(name, info):
+            events.append(name)
+
+        client = eggfetch.Client()
+        response = client.request(
+            "GET",
+            f"http://127.0.0.1:{port}/",
+            extensions={"sni_hostnam": "example.com", "trace": trace},
+        )
+        assert response.status_code == 200
+        # Dispatch proceeded normally: the trace observer fired, so the
+        # unknown key neither raised nor altered dispatch.
+        assert "send_request_headers.started" in events
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
 def test_trace_none_treated_as_no_observer():
     import eggfetch
     client = eggfetch.Client()

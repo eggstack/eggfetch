@@ -63,6 +63,12 @@ pub enum TrustStore {
     /// Use native system roots with packaged `WebPKI` roots as a construction
     /// fallback when `tls-native-roots` is enabled. Without that feature, the
     /// default builder uses packaged `WebPKI` roots directly.
+    ///
+    /// When native loading fails, construction succeeds on `WebPKI` roots.
+    /// Per-path causes are emitted only via `tracing::warn` with feature
+    /// `tracing`; without it the substitution is silent. Callers who must
+    /// detect the fallback should build with [`TrustStore::NativeOnly`],
+    /// which fails closed, or enable `tracing`.
     #[default]
     NativeWithWebPkiFallback,
     /// Use only native system roots. Fails at construction if the
