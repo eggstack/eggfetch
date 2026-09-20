@@ -120,6 +120,33 @@ Do not modify the repository's single routine workflow merely to run expensive p
 
 If benchmark commands are documented in docs/architecture/benchmarks.md, keep performance qualification clearly separate from deterministic pass/fail validation.
 
+## Baseline evidence — 2026-09-20
+
+This is the pre-executable-change baseline for the campaign.
+
+- SHA: `abf15eb97b10298fb200c2c2f4a1dceffddeb23b`
+- Host: Linux 6.8.0-139-generic, x86_64, Intel Core i9-9900K @ 3.60 GHz
+- Rust: `rustc 1.98.1`, `cargo 1.98.1`; active stable toolchain from `rust-toolchain.toml`
+- Python: CPython 3.12.3 in `.venv`
+- Profile/features: Criterion bench profile; `eggfetch-bench` defaults plus core `http1,http2,tls-rustls,json,proxy`
+- Benchmark commands: `cargo bench -p eggfetch-bench --bench microbench`; `cargo bench -p eggfetch-bench --bench e2e`; `python scripts/performance_benchmark.py --repeats 5`
+- Measurement host: local native hardware, not VM or CI
+
+The added Rust cases cover 8/50/200-header ownership and 10/1,000-cookie
+lookups; the Python harness covers 1 MiB, 64 KiB upstream frames, 1 KiB
+requested chunks, line iteration, and buffered no-text/first-text controls.
+Correctness is asserted byte-for-byte in the Python cases. Existing Rust
+request/response, cookie, streaming, and ABI tests remain the behavioral
+controls for the microbenchmarks.
+
+Initial local samples (Criterion short qualification run, 10 samples,
+0.2-second measurement windows) were: response-header clone 8/50/200:
+214 ns / 1.14 us / 4.48 us median; cookie lookup with 10/1,000 entries:
+2.13 us / 268.5 us median. The Python five-repeat medians were 11.31 ms for
+sync 1 KiB iteration, 140.23 ms for async iteration, 2.71 ms for line
+iteration, 2.64 ms for buffered construction without text, and 2.62 ms for
+first text access. These values are host-specific evidence, not thresholds.
+
 ## Baseline scenarios to record
 
 At minimum capture pre-change values for:

@@ -85,6 +85,20 @@ fn bench_header_operations(c: &mut Criterion) {
         });
     });
 
+    for count in [8_usize, 50, 200] {
+        group.bench_function(format!("response_header_clone/{count}"), |b| {
+            let mut headers = http::HeaderMap::new();
+            for index in 0..count {
+                headers.insert(
+                    http::header::HeaderName::from_bytes(format!("x-bench-{index}").as_bytes())
+                        .unwrap(),
+                    HeaderValue::from_static("value"),
+                );
+            }
+            b.iter(|| black_box(headers.clone()));
+        });
+    }
+
     group.finish();
 }
 
@@ -121,6 +135,18 @@ fn bench_cookie_matching(c: &mut Criterion) {
                 black_box(jar.cookies_for_url(&url));
             });
         });
+
+        for count in [10_usize, 1_000] {
+            group.bench_function(format!("lookup_no_expiry/{count}"), |b| {
+                let url = url::Url::parse("http://example.com/path").unwrap();
+                let jar = CookieJar::new();
+                for index in 0..count {
+                    jar.set_default_cookie(format!("cookie_{index}"), "value".to_owned())
+                        .unwrap();
+                }
+                b.iter(|| black_box(jar.cookies_for_url(&url)));
+            });
+        }
 
         group.bench_function("parse_set_cookie", |b| {
             let url = url::Url::parse("http://example.com/path").unwrap();

@@ -81,3 +81,19 @@ remains visible.
 ## Relation to Performance Budgets
 
 Separate from these Rust benchmarks, the HTTPX compatibility qualification enforces latency/throughput ceilings defined in `compat/httpx/0.28.1/performance-budgets.toml`. See [testing-fuzzing.md](testing-fuzzing.md).
+
+## API-safe performance campaign
+
+The qualification-only Python harness is `scripts/performance_benchmark.py`.
+It uses a deterministic loopback server and checks streamed bytes while
+measuring small-chunk sync/async streaming, line iteration, and buffered
+responses with and without a text read:
+
+```sh
+source .venv/bin/activate
+python scripts/performance_benchmark.py --repeats 5
+```
+
+The harness is deliberately outside routine CI. Compare runs only when the
+commit, toolchains, target, feature set, server fixture, and repeat settings
+are identical. Timing is evidence, not a hard CI threshold.
