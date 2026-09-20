@@ -564,7 +564,7 @@ where
     // method, URI, version, and HeaderMap move into the selected transport
     // route together with the body.
     let (request_parts, request_body) = request.into_parts();
-    let uri = prepare::resolve_native_request_uri(&request_parts.uri, &transport_hints)?;
+    let uri = prepare::resolve_native_request_uri(request_parts.uri, &transport_hints)?;
     let method = request_parts.method;
     let version = request_parts.version;
     let headers = Headers::from(request_parts.headers);

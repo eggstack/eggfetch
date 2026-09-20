@@ -82,6 +82,23 @@ class _Handler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
 
+        elif path.startswith("/line-case/"):
+            bodies = {
+                "/line-case/crlf": b"foo\r\nbar",
+                "/line-case/trailing-cr": b"foo\r",
+                "/line-case/trailing-lf": b"foo\n",
+                "/line-case/empty-crlf": b"\r\n",
+                "/line-case/standalone-cr": b"\r",
+                "/line-case/empty": b"",
+                "/line-case/multiple": b"one\r\ntwo\r\nfinal\r",
+            }
+            body = bodies.get(path, b"")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
         elif path == "/multi-header":
             body = b"ok"
             self.send_response(200)
@@ -443,6 +460,29 @@ class TestIterators:
     def test_buffered_lines_match_str_lines_for_crlf_and_partial_line(self, server):
         response = eggfetch.get(f"{server}/crlf")
         assert list(response.iter_lines()) == ["first", "second", "final"]
+
+    @pytest.mark.parametrize(
+        ("case", "expected"),
+        [
+            ("crlf", ["foo", "bar"]),
+            ("trailing-cr", ["foo\r"]),
+            ("trailing-lf", ["foo"]),
+            ("empty-crlf", [""]),
+            ("standalone-cr", ["\r"]),
+            ("empty", []),
+            ("multiple", ["one", "two", "final\r"]),
+        ],
+    )
+    def test_buffered_lines_match_historical_line_matrix(self, server, case, expected):
+        response = eggfetch.get(f"{server}/line-case/{case}")
+        assert list(response.iter_lines()) == expected
+
+    def test_buffered_line_iterators_are_independent(self, server):
+        response = eggfetch.get(f"{server}/line-case/multiple")
+        first = response.iter_lines()
+        second = response.iter_lines()
+        assert next(first) == next(second) == "one"
+        assert list(first) == list(second) == ["two", "final\r"]
 
 
 # ---------------------------------------------------------------------------

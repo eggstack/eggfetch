@@ -115,3 +115,17 @@ collection boundary cannot prove a decoded length, and wire `Content-Length`
 is not a valid capacity hint for compressed responses. `ResponseBody` remains
 unchanged, so no speculative reservation, limit bypass, or duplicate buffering
 loop was introduced. Tier 1 and extended validation passed.
+
+### Corrective addendum — focused mutation evidence
+
+The original mixed `mutate_large_jar` control was insufficient to justify the
+retained watermark and its recorded "no material change" result conflicted
+with the acceptance rule. The benchmark now isolates repeated single-cookie
+insertions/replacements at 10/1,000/10,000 entries and includes earlier,
+unique-minimum, equal-minimum, and session cases. A pre-watermark worktree
+comparison of the hot non-minimum replacement control measured approximately
+185 ns/3.43 us/40.7 us versus 220 ns/227 ns/208 ns with the watermark. The
+small-jar cost is a known tradeoff; the large-jar O(n) scan removal is
+reproducible and material, so the watermark is retained. Minimum-invalidating
+operations still recompute, equal-minimum and expired-insertion correctness
+tests remain green, and the body-capacity candidate remains rejected.

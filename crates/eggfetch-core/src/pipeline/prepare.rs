@@ -241,7 +241,7 @@ pub(super) fn resolve_request_uri(
 /// TLS. Host-header policy is unchanged. Shares [`validate_target`] with
 /// the high-level helper so security checks cannot diverge.
 pub(super) fn resolve_native_request_uri(
-    uri: &http::Uri,
+    uri: http::Uri,
     transport_hints: &crate::transport_hints::TransportHints,
 ) -> Result<http::Uri> {
     if let Some(ref target) = transport_hints.target {
@@ -258,12 +258,12 @@ pub(super) fn resolve_native_request_uri(
             .cloned()
             .or_else(|| target_str.parse().ok())
             .ok_or_else(|| Error::InvalidUrl("failed to convert target to URI".into()))?;
-        let mut parts = uri.clone().into_parts();
+        let mut parts = uri.into_parts();
         parts.path_and_query = Some(path_and_query);
         http::Uri::from_parts(parts)
             .map_err(|e| Error::InvalidUrl(format!("failed to convert target to URI: {e}")))
     } else {
-        Ok(uri.clone())
+        Ok(uri)
     }
 }
 
@@ -606,7 +606,7 @@ mod tests {
             target: Some(bytes::Bytes::from("/wire-path?q=1")),
             ..Default::default()
         };
-        let resolved = resolve_native_request_uri(&uri, &hints).expect("target resolves");
+        let resolved = resolve_native_request_uri(uri.clone(), &hints).expect("target resolves");
         assert_eq!(
             resolved
                 .path_and_query()
@@ -616,7 +616,35 @@ mod tests {
         assert_eq!(resolved.host(), Some("example.com"));
         // No override returns the original URI unchanged.
         let plain = crate::transport_hints::TransportHints::default();
-        assert_eq!(resolve_native_request_uri(&uri, &plain).unwrap(), uri);
+        assert_eq!(
+            resolve_native_request_uri(uri.clone(), &plain).unwrap(),
+            uri
+        );
+    }
+
+    #[test]
+    fn native_target_override_preserves_star_and_error_classification() {
+        let uri: http::Uri = "https://example.com/original".parse().expect("valid URI");
+        let star = crate::transport_hints::TransportHints {
+            target: Some(bytes::Bytes::from_static(b"*")),
+            ..Default::default()
+        };
+        let resolved = resolve_native_request_uri(uri.clone(), &star).expect("star resolves");
+        assert_eq!(
+            resolved
+                .path_and_query()
+                .map(http::uri::PathAndQuery::as_str),
+            Some("*")
+        );
+
+        let invalid_utf8 = crate::transport_hints::TransportHints {
+            target: Some(bytes::Bytes::from_static(b"/\xff")),
+            ..Default::default()
+        };
+        assert!(matches!(
+            resolve_native_request_uri(uri, &invalid_utf8),
+            Err(Error::InvalidUrl(message)) if message.contains("not valid UTF-8")
+        ));
     }
 
     #[test]

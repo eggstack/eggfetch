@@ -253,6 +253,161 @@ fn bench_cookie_matching(c: &mut Criterion) {
             });
         }
 
+        // Isolate the single-cookie mutation paths that the incremental
+        // expiry watermark is intended to optimize. Parsing and seed-jar
+        // construction are batch setup; the measured operation is one
+        // CookieJar mutation. Run the same cases on the pre-watermark
+        // revision when evaluating the retain/revert gate.
+        for count in [10_usize, 1_000, 10_000] {
+            let url = url::Url::parse("http://example.com/path").unwrap();
+            let cookie = |name: &str, max_age: Option<u64>| {
+                let suffix = max_age
+                    .map(|age| format!("; Max-Age={age}"))
+                    .unwrap_or_default();
+                parse_set_cookie_headers(&url, &[format!("{name}=value; Path=/{suffix}")])
+                    .into_iter()
+                    .next()
+                    .unwrap()
+            };
+            let seed = |minimum: bool| {
+                let jar = CookieJar::new();
+                for index in 0..count {
+                    jar.set(cookie(&format!("cookie_{index}"), Some(3_600)))
+                        .unwrap();
+                }
+                if minimum {
+                    jar.set(cookie("minimum", Some(1))).unwrap();
+                }
+                jar
+            };
+
+            group.bench_function(format!("mutate_single/{count}/insert_later"), |b| {
+                b.iter_batched(
+                    || seed(false),
+                    |jar| {
+                        jar.set(cookie("new-later", Some(7_200))).unwrap();
+                        black_box(jar.len());
+                    },
+                    BatchSize::SmallInput,
+                );
+            });
+
+            group.bench_function(format!("mutate_single/{count}/replace_non_minimum"), |b| {
+                b.iter_batched(
+                    || seed(false),
+                    |jar| {
+                        jar.set(cookie("cookie_0", Some(7_200))).unwrap();
+                        black_box(jar.len());
+                    },
+                    BatchSize::SmallInput,
+                );
+            });
+
+            group.bench_function(format!("mutate_single/{count}/insert_earlier"), |b| {
+                b.iter_batched(
+                    || seed(false),
+                    |jar| {
+                        jar.set(cookie("new-earlier", Some(1))).unwrap();
+                        black_box(jar.len());
+                    },
+                    BatchSize::SmallInput,
+                );
+            });
+
+            group.bench_function(
+                format!("mutate_single/{count}/replace_unique_minimum"),
+                |b| {
+                    b.iter_batched(
+                        || seed(true),
+                        |jar| {
+                            jar.set(cookie("minimum", Some(7_200))).unwrap();
+                            black_box(jar.len());
+                        },
+                        BatchSize::SmallInput,
+                    );
+                },
+            );
+
+            group.bench_function(
+                format!("mutate_single/{count}/delete_unique_minimum"),
+                |b| {
+                    b.iter_batched(
+                        || seed(true),
+                        |jar| {
+                            jar.delete("minimum", "example.com", "/");
+                            black_box(jar.len());
+                        },
+                        BatchSize::SmallInput,
+                    );
+                },
+            );
+
+            group.bench_function(
+                format!("mutate_single/{count}/replace_equal_minimum"),
+                |b| {
+                    b.iter_batched(
+                        || {
+                            let jar = CookieJar::new();
+                            for index in 0..count {
+                                jar.set(cookie(&format!("cookie_{index}"), Some(3_600)))
+                                    .unwrap();
+                            }
+                            let equal_headers = [
+                                "equal_a=value; Path=/; Expires=Wed, 01 Jan 2030 00:00:00 GMT",
+                                "equal_b=value; Path=/; Expires=Wed, 01 Jan 2030 00:00:00 GMT",
+                            ]
+                            .into_iter()
+                            .map(str::to_owned)
+                            .collect::<Vec<_>>();
+                            for equal in parse_set_cookie_headers(&url, &equal_headers) {
+                                jar.set(equal).unwrap();
+                            }
+                            jar
+                        },
+                        |jar| {
+                            jar.set(cookie("equal_a", Some(7_200))).unwrap();
+                            black_box(jar.len());
+                        },
+                        BatchSize::SmallInput,
+                    );
+                },
+            );
+
+            group.bench_function(format!("mutate_single/{count}/insert_session"), |b| {
+                b.iter_batched(
+                    || seed(false),
+                    |jar| {
+                        jar.set(cookie("session", None)).unwrap();
+                        black_box(jar.len());
+                    },
+                    BatchSize::SmallInput,
+                );
+            });
+        }
+
+        // Repeated replacement on a prebuilt jar removes seed construction
+        // from the timing and exposes the O(1) versus full-map-scan delta.
+        for count in [10_usize, 1_000, 10_000] {
+            let url = url::Url::parse("http://example.com/path").unwrap();
+            let cookie = |name: &str| {
+                parse_set_cookie_headers(&url, &[format!("{name}=value; Path=/; Max-Age=7200")])
+                    .into_iter()
+                    .next()
+                    .unwrap()
+            };
+            let jar = CookieJar::new();
+            for index in 0..count {
+                jar.set(cookie(&format!("cookie_{index}"))).unwrap();
+            }
+            let replacement = cookie("cookie_0");
+            group.bench_function(format!("mutate_hot/{count}/replace_non_minimum"), |b| {
+                b.iter(|| {
+                    jar.set(replacement.clone()).unwrap();
+                    black_box(jar.len());
+                });
+            });
+        }
+
         group.bench_function("parse_set_cookie", |b| {
             let url = url::Url::parse("http://example.com/path").unwrap();
             let header_values = vec!["session=abc123; Path=/; HttpOnly".to_owned()];

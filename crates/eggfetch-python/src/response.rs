@@ -472,11 +472,11 @@ impl PyResponseLinesIterator {
             return None;
         }
         let start = self.byte_cursor;
-        let (mut end, next_cursor) = match text[start..].find('\n') {
-            Some(offset) => (start + offset, start + offset + 1),
-            None => (text.len(), text.len()),
+        let (mut end, next_cursor, terminated_by_lf) = match text[start..].find('\n') {
+            Some(offset) => (start + offset, start + offset + 1, true),
+            None => (text.len(), text.len(), false),
         };
-        if end > start && text.as_bytes()[end - 1] == b'\r' {
+        if terminated_by_lf && end > start && text.as_bytes()[end - 1] == b'\r' {
             end -= 1;
         }
         self.byte_cursor = next_cursor;

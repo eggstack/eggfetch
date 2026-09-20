@@ -167,3 +167,13 @@ the exact Python `bytes` type assertion passed. Native API/typing checks,
 HTTPX 0.28.1/2.12.0 compatibility, and Tier 1/extended suites passed with no
 new export, exception, or return-type drift. No unsafe code or dependency was
 added.
+
+### Corrective addendum — standalone trailing carriage return
+
+The closure review found that the lazy lines iterator stripped a trailing
+standalone `\r` even though the historical line splitter strips carriage
+return only when it is immediately followed by `\n`. The iterator now strips
+only the CR half of an actual CRLF delimiter. Focused buffered-response
+coverage covers CRLF, LF, empty/partial bodies, standalone `\r`, a final
+partial line, and independent repeated iterators; no eager list materializing
+was reintroduced.

@@ -115,3 +115,12 @@ headers in the initial control run. The full workspace, proxy/native tests,
 feature matrix, lifecycle/resource, and compatibility checks passed in the
 canonical Tier 1/extended runs. No public API, dependency, or unsafe code was
 added.
+
+### Corrective addendum — native URI ownership
+
+The prior record overstated the native URI optimization: the private resolver
+still accepted `&http::Uri` and cloned it. It now consumes `http::Uri` by
+value, returns it directly on the no-target path, and consumes its parts only
+after target validation for an override. Native target, `*`, invalid UTF-8,
+duplicate-header, frame/trailer, resolved-target, and routing checks remain
+covered without changing the public request API.

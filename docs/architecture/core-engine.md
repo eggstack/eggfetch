@@ -388,9 +388,12 @@ where branch selection or typed fallback still needs shared inspection.
 
 The native `http::Request<B>` path performs its URI, proxy, routing, and TLS
 validation first, then calls `into_parts()` so the caller's method, version,
-HeaderMap, URI, and frame-preserving body are not cloned. SOCKS request
-construction follows the same owned-header boundary; SOCKS responses use
-`into_parts()` so response headers and the incoming body move together.
+HeaderMap, URI, and frame-preserving body are not cloned. The private native
+wire-target resolver consumes that owned URI by value, returning it directly
+when no target override is present and consuming only its parts for an
+override. SOCKS request construction follows the same owned-header boundary;
+SOCKS responses use `into_parts()` so response headers and the incoming body
+move together.
 
 ### Caller-owned raw streams
 

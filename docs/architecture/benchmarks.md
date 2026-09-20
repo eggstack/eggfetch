@@ -106,8 +106,11 @@ construction versus first-yield and full consumption, and async `aread()` at
 1 KiB/1 MiB/4 MiB. Each case asserts complete output and exact multi-value
 header mapping; RSS is reported as a process peak where the platform exposes
 `resource.getrusage`. The Criterion `request_ownership` group provides the
-Rust-side borrowed-rebuild versus owned-header and native controls, while
-`cookie_matching/mutate_large_jar` covers 10/1,000/10,000-cookie mutation.
+Rust-side borrowed-rebuild versus owned-header and native controls. Cookie
+mutation evidence uses `cookie_matching/mutate_single` for insert, replace,
+delete, equal-expiry, and session-cookie cases at 10/1,000/10,000 entries,
+plus the prebuilt-jar `cookie_matching/mutate_hot` control and the historical
+`mutate_large_jar` comparison.
 Run these manually with short sampling when iterating:
 
 ```sh
@@ -144,7 +147,13 @@ ms, 6.38 ms/23.51 ms, and 5.58 ms/50.40 ms, with peak RSS of approximately
 54.1/55.7/69.9 MiB. Header conversion controls at 8/50/80 headers remained
 within approximately 0.70–0.90 ms on the loopback fixture, and `aread()` at
 1 KiB/1 MiB/4 MiB was approximately 1.35/2.88/7.38 ms. These are guardrails
-and allocation proxies, not network-latency budgets. The cookie mutation
-controls at 10/1,000/10,000 entries were approximately 2.11 us/200 us/2.15
-ms with no material delta. The decoded-body capacity candidate remains
-rejected because encoded `Content-Length` is not decoded-length provenance.
+and allocation proxies, not network-latency budgets. The original mixed cookie
+control was insufficient to justify the optimization: it measured setup and
+mutation together and showed no material delta. The corrective focused
+prebuilt-jar `mutate_hot/replace_non_minimum` control measured approximately
+185 ns/3.43 us/40.7 us before the expiry watermark and 220 ns/227 ns/208 ns
+after it for 10/1,000/10,000 entries. The retained watermark therefore accepts
+small-jar overhead in exchange for the material large-jar reduction, while
+minimum-expiry removal remains a full recompute. The decoded-body capacity
+candidate remains rejected because encoded `Content-Length` is not
+decoded-length provenance.

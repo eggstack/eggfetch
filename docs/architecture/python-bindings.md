@@ -116,7 +116,9 @@ Core response construction extracts status, wire metadata, charset, and
 `PyHeaders`; it does not clone the complete map. Buffered `iter_bytes()`,
 `iter_text()`, and `iter_lines()` keep a reference to the response plus a
 private cursor and create one Python value per `__next__`. Text chunks count
-Unicode scalars and lines retain `str.lines()` CRLF/trailing-line semantics.
+Unicode scalars and lines retain `str.lines()` CRLF/trailing-line semantics,
+including preserving a final standalone carriage return rather than treating
+it as a CRLF delimiter.
 Async `StreamingResponse.aread()` keeps the collected Rust `Bytes` for the
 response cache and creates the final Python `bytes` in the GIL bridge without
 an intermediate full-body `Vec`.
