@@ -25,7 +25,7 @@ workspace tests single-threaded, the Python build/tests, the compat smoke
 kernel, and the Node prototype check. Focused equivalents (same flags):
 
 ```sh
-cargo fmt --all
+cargo fmt --all -- --check
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo test --workspace --exclude eggfetch-python --all-features -- --test-threads=1
 ```

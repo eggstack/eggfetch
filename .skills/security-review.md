@@ -70,7 +70,7 @@ Source of truth: `SECURITY.md` § "Vulnerability Response SLA".
 ## Incident Contact
 
 - Security reports: dbowman91@proton.me
-- Response time: Acknowledgment within 48 hours
+- Response time: Acknowledgment within the per-severity initial-response SLA in `SECURITY.md` (Critical 24h / High 48h / Medium 1wk / Low 2wks)
 
 ## Architecture References
 

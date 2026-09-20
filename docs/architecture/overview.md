@@ -500,7 +500,10 @@ Dependency policy (audits, bans, licenses): [dependency-policy.md](dependency-po
 
 ## Current Status
 
-All milestones A–Z are complete. Test counts change with every commit; the
+Milestone scope (A–Z) is complete; the workspace is in corrective/maintenance
+mode with pending maintainer actions tracked in `plans/README.md` (issue #24
+publication pending; Python 3.15 wheel rehearsal pending). Test counts change
+with every commit; the
 evidence bound to the qualified executable SHA is recorded in
 `plans/httpx-parity-correction-status.md`. MSRV is Rust 1.89
 (`workspace.package.rust-version`; `rust-toolchain.toml` pins stable for

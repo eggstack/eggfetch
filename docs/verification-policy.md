@@ -57,12 +57,16 @@ Runs on every push and pull request via CI. Also run locally before committing. 
 
 1. Rust formatting check
 2. Lint suppression policy check
-3. Rust clippy
-4. Rust workspace tests (excluding PyO3 crate)
-5. Python extension build
-6. Ordinary Python behavior tests
-7. Compact HTTPX compatibility smoke kernel
-8. Node binding prototype check: `cargo test -p eggfetch-node` always;
+3. Adapter feature ownership check (`check_adapter_features.py`)
+4. Release version/ref validation (`test_validate_release_versions.py`)
+5. Rust clippy
+6. Rust workspace tests (excluding PyO3 crate)
+7. Python extension build
+8. Native Python API manifest (`check_native_python_api.py`)
+9. Python typing surface + fixture checks (`check_python_typing_surface.py`, `check_python_typing.py`)
+10. Ordinary Python behavior tests
+11. Compact HTTPX compatibility smoke kernel
+12. Node binding prototype check: `cargo test -p eggfetch-node` always;
    the JS surface (`node test.js`) runs only when `node` and a built
    `eggfetch.node` artifact are present, otherwise an explicit skip is
    recorded (the prototype has no npm publication pipeline, so CI
@@ -78,8 +82,11 @@ Runs Tier 1 first, then additional checks. The exact Rust 1.89.0 toolchain is a
 required prerequisite for the MSRV gate; if it is unavailable, validation
 fails with an installation command rather than recording a skip. All executed
 checks are fail-closed. Includes
-full HTTPX compatibility, feature combinations, docs, MSRV, resource
-monitoring, FFI, soak tests, downstream compatibility, lossless merge tests,
+full HTTPX compatibility, API manifest oracle (both facades),
+feature combinations, docs, MSRV, resource
+monitoring, FFI, lifecycle (timeout/proxy-TLS/shutdown), soak tests,
+downstream compatibility (skipped without a prebuilt artifact manifest),
+lossless merge tests,
 and benchmarks.
 
 ### Tier 3: Package Validation

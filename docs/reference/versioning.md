@@ -7,8 +7,8 @@ change, and what stability expectations users can rely on.
 ## Coordinated versioning
 
 All publishable crates in the workspace share a single version number. When
-eggfetch-core is at `0.3.0`, the CONNECT wire primitive, CLI, Python
-bindings, FFI bindings, and Node bindings are also at `0.3.0`. This
+eggfetch-core is at `0.1.9`, the CONNECT wire primitive, CLI, Python
+bindings, FFI bindings, and Node bindings are also at `0.1.9`. This
 eliminates version-matrix confusion for consumers who depend on multiple
 crates from the project.
 
@@ -125,7 +125,9 @@ release.
 
 The `main` branch contains **development documentation**. It reflects the
 current state of the codebase and may describe features that are unreleased
-or subject to change. Published development docs should carry a banner:
+or subject to change. (There is currently no published docs site, so no
+version banner or selector exists yet; if one is added, development docs
+should carry a banner such as:)
 
 > This documents the **main** development branch. Released versions may
 > differ. See the version selector or release tags for stable documentation.

@@ -1,5 +1,8 @@
 # FFI Architecture
 
+> User-facing overview. The canonical internal reference is
+> [`docs/architecture/ffi-and-node.md`](../architecture/ffi-and-node.md).
+
 ## Crate Layout
 
 ```
@@ -13,8 +16,9 @@ crates/
 
 ## Unsafe Boundary
 
-`eggfetch-ffi` is the only crate in the workspace where `unsafe` code is
-permitted. All `unsafe` is confined to:
+`eggfetch-ffi` and `eggfetch-node` are the only crates in the workspace where
+`unsafe` code is permitted (workspace `unsafe_code = "forbid"` with narrow
+crate-level `allow` for their C/N-API boundaries). All `unsafe` is confined to:
 
 1. `extern "C"` function definitions (required by the ABI)
 2. Pointer dereferencing (with null checks)
@@ -26,13 +30,13 @@ safe API.
 ## Runtime Strategy
 
 A global `OnceLock<Runtime>` provides a shared multi-thread tokio runtime. The
-`blocking_send` helper detects the caller's context:
+`blocking_send` helper (`crates/eggfetch-ffi/src/runtime.rs`) detects the caller's context:
 
-- **Non-tokio thread**: calls `ffi_runtime().block_on()` directly
 - **Multi-thread tokio thread** (e.g. napi-rs): uses `tokio::task::block_in_place`
   on the ambient handle
-- **Current-thread tokio runtime**: spawns the future on the global FFI runtime
-  and blocks the caller on a channel, preventing nested `block_on` panics
+- **Anything else** (non-tokio thread, or current-thread runtime where
+  `block_in_place` would panic): spawns the future on the global FFI runtime
+  via `try_ffi_runtime()` and blocks the caller on a channel
 
 ## Response Lifecycle
 

@@ -33,7 +33,7 @@ import eggfetch
 with eggfetch.Client() as client:
     r = client.post(
         "https://httpbin.org/post",
-        json={"name": "eggfetch", "version": "0.1.0"},
+        json={"name": "eggfetch", "version": "0.1.9"},
     )
     print(r.json())
 ```

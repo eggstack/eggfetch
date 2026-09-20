@@ -1,7 +1,7 @@
 # Agent Guide
 
 eggfetch is a Rust-native async HTTP client (tokio + hyper). All networking lives in `eggfetch-core` plus the small `eggfetch-http-connect` CONNECT wire primitive it owns; CLI, Python, FFI, and Node are thin adapters.
-Start at `docs/architecture/overview.md` (§ Deep-Dive Index). Normative CI/release rules: `docs/verification-policy.md`. Conventions: `CONTRIBUTING.md`. Task workflows: `.skills/` (`rust-development`, `python-bindings`, `cli-development`, `ffi-development`, `fuzz-testing`, `security-review`, `release-process`, `documentation`).
+Start at `docs/architecture/overview.md` (§ Deep-Dive Index). Normative CI/release rules: `docs/verification-policy.md`. Conventions: `CONTRIBUTING.md`. Active corrective/qualification: `plans/README.md`. Task workflows: `.skills/` (`rust-development`, `python-bindings`, `cli-development`, `ffi-development`, `fuzz-testing`, `security-review`, `release-process`, `documentation`).
 
 ## Commands
 
@@ -25,6 +25,19 @@ Start at `docs/architecture/overview.md` (§ Deep-Dive Index). Normative CI/rele
   - `cargo fmt --all -- --check`
 - Never parallelize Rust workspace tests (`--test-threads=1`): RSS-stabilization tests go flaky under concurrency. Workspace tests exclude `eggfetch-python` (PyO3 builds separately via `maturin develop`).
 - Tier 2 requires the exact Rust 1.89.0 toolchain (`rustup toolchain install 1.89.0 --profile minimal`); it fails, never skips. Full compat also needs pinned deps (`pip install -r compat/httpx/0.28.1/requirements.txt` + `compat/httpx2/2.12.0/requirements.txt`). `qualification/` fixtures and H3 (experimental) are manual, never Tier 1 gates. Tier 1 Node JS surface (`node test.js`) is an explicit SKIP when `node` or `crates/eggfetch-node/eggfetch.node` is absent, not a failure.
+
+## Architecture index (`docs/architecture/`; entry point `overview.md` § Deep-Dive Index)
+
+- `core-engine.md` — Client/Request/Response, pipeline lifecycle, error taxonomy
+- `core-body-streaming.md` — bodies, streaming, trailers, 101 upgrades
+- `core-timeout-pool.md` — phase timeouts, pool, observability/metrics
+- `core-auth-redirect-retry.md` — auth, redirect, retry policies
+- `core-tls-proxy-protocols.md` — TLS, proxy/SOCKS/UDS, H1/H2/H3 + graduation gate
+- `core-cookies-multipart-compression.md` — cookies, multipart, compression
+- `python-bindings.md` — sync/async adapters, HTTPX/HTTPX2 facades, SSE/WS
+- `cli.md` · `ffi-and-node.md` · `testing-fuzzing.md` · `benchmarks.md` · `embedded-footprint.md` · `build-ci.md`
+- Cross-cutting: `feature-flags.md` · `dependency-policy.md` · `threat-model.md` · `security-reviews.md` · `security-findings.md` · `incident-runbook.md` · `release-security-checklist.md`
+- Live state (not in architecture/): qualification ledger `plans/httpx-parity-correction-status.md`, active work `plans/README.md`, normative tiers `docs/verification-policy.md`, intentional deltas `docs/residual-differences.md`
 
 ## Boundaries and lint
 

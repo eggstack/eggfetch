@@ -20,6 +20,9 @@ docs/
 └── security/           Security guidelines and troubleshooting
 ```
 
+Top-level normative records: `verification-policy.md` (CI/verification/release
+policy) and `residual-differences.md` (known intentional compatibility deltas).
+
 ## For users
 
 - **New to eggfetch?** Start with `getting-started/quickstart.md`

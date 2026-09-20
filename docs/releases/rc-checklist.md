@@ -1,6 +1,6 @@
 # Release Checklist (Manual)
 
-Optional maintainer checklist for release preparation. This is not a required gate — it is a convenience reference.
+Optional maintainer checklist for release preparation. This is not a required gate — it is a convenience reference. The normative procedure is `process.md`.
 
 ## Pre-Publication
 

@@ -3,10 +3,10 @@
 Use this skill when working on the eggfetch-python crate (PyO3/maturin bindings).
 
 The supported native import surface is `eggfetch.__all__` in
-`python/eggfetch/__init__.py`. The `_native` extension is private and must not
+`crates/eggfetch-python/python/eggfetch/__init__.py`. The `_native` extension is private and must not
 define a second `__all__` contract. Keep the public exception hierarchy,
 `NetworkStream`/`AsyncNetworkStream` upgrade wrappers, signatures, and runtime
-version synchronized with `tests/native_api_manifest.json`; run
+version synchronized with `crates/eggfetch-python/tests/native_api_manifest.json`; run
 `scripts/check_native_python_api.py` after binding changes.
 
 ## Workflow
@@ -58,7 +58,7 @@ entry points and do not promise typed private implementation modules.
   `AsyncClient` additionally accepts lazy async iterables of `bytes | str`.
   Sync APIs reject async-only iterables before dispatch.
 - Shared client and request argument normalization lives in
-  `src/request_preparation.rs`; keep runtime ownership and dispatch-specific
+  `crates/eggfetch-python/src/request_preparation.rs`; keep runtime ownership and dispatch-specific
   lifecycle behavior in the sync and async adapters.
 - `prepare_client_config()` and `apply_client_config()` are the shared
   constructor path; do not reintroduce sync/async copies of TLS, proxy,

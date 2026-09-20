@@ -28,12 +28,11 @@ pub(crate) fn try_ffi_runtime() -> eggfetch_core::Result<&'static Runtime> {
 ///
 /// If we are already inside a multi-thread tokio runtime (e.g. from
 /// napi-rs), we use `block_in_place` to safely block the current worker
-/// thread while driving the future on the runtime. Inside a
-/// current-thread runtime `block_in_place` would panic, so the future is
-/// instead spawned on the global FFI runtime and awaited through a
-/// channel; the calling thread blocks on the channel while the global
-/// runtime's workers make progress. Outside any runtime we call
-/// `block_on` directly on the global FFI runtime.
+/// thread while driving the future on the runtime. In every other context
+/// (no runtime, or a current-thread runtime where `block_in_place` would
+/// panic) the future is spawned on the global FFI runtime and awaited
+/// through a channel; the calling thread blocks on the channel while the
+/// global runtime's workers make progress.
 pub(crate) fn blocking_send<
     F: std::future::Future<Output = T> + Send + 'static,
     T: Send + 'static,
@@ -55,9 +54,9 @@ pub(crate) fn blocking_send<
         }
         _ => {
             // Not inside a multi-thread tokio runtime — either no runtime
-            // at all (safe to block_on directly) or a current-thread
-            // runtime (drive the future on the dedicated FFI runtime so
-            // the caller's single worker stays responsive).
+            // at all or a current-thread runtime (drive the future on the
+            // dedicated FFI runtime so the caller's single worker stays
+            // responsive).
             let rt = try_ffi_runtime()?;
             let (tx, rx) = std::sync::mpsc::channel();
             rt.spawn(async move {

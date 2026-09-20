@@ -38,11 +38,12 @@ FFI manages a global tokio runtime (`OnceLock<Runtime>`, multi-thread flavor,
 never shut down). The `blocking_send` helper picks a strategy from the ambient
 context (`crates/eggfetch-ffi/src/runtime.rs`):
 
-- Outside any runtime: calls `ffi_runtime().block_on()` directly.
 - Inside a multi-thread runtime (e.g. napi-rs): `tokio::task::block_in_place`
   on the ambient handle.
-- Inside a current-thread runtime: spawns the future on the global FFI runtime
-  and blocks the caller on a channel (avoids `block_in_place` panics).
+- Otherwise (no runtime, or a current-thread runtime where `block_in_place`
+  would panic): spawns the future on the global FFI runtime via
+  `try_ffi_runtime()` and blocks the caller on a channel (preserving panic
+  payloads through `catch_unwind`).
 
 ## Architecture References
 

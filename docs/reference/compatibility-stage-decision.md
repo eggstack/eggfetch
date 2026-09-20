@@ -14,7 +14,12 @@ either compatibility claim. See
 `compat/httpx/0.28.1/profile.toml`, `compat/httpx2/2.12.0/profile.toml`, and
 `plans/httpx-parity-correction-status.md`.
 
-**Historical corrective closure — Verification, Substitution, and Lifecycle Pass**
+**Historical corrective closure — Verification, Substitution, and Lifecycle Pass (superseded)**
+
+> The sections below record the 2026-07-24 Stage C *candidate* evaluation and
+> its remaining blockers. They are historical: all listed blockers were closed
+> by the corrective passes now bound to the current Stage C qualification
+> above. Do not treat the blocker list as current work.
 
 > **Correction Notice**: This document previously claimed "Stage C released" based on
 > incomplete evidence. The corrective pass

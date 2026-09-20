@@ -111,12 +111,14 @@ See `docs/architecture/dependency-policy.md` for the full dependency policy.
 
 Do not add a feature flag just to silence a clippy lint or to opt into behavior that should be unconditional. Feature flags exist to let users pay only for what they use. Do not enable optional behavior in `default` without discussion.
 
-Current `eggfetch-core` feature declarations (see `crates/eggfetch-core/Cargo.toml` for the exact dependency mapping):
+Current `eggfetch-core` features are declared in `crates/eggfetch-core/Cargo.toml`
+and documented in `docs/architecture/feature-flags.md` (the canonical profile
+matrix: transport slices, `standard-route`/`advanced-routing`, `native-http*`,
+lean `standard-http*`, `high-level-url`, `logical-retry`, `redirects`,
+`basic-auth`). Do not duplicate the flag list here; link to that matrix.
 
 ```toml
 default = ["http1", "tls-rustls", "tls-native-roots"]
-# http1/http2/http3, tls-rustls, json, compression-gzip/brotli/zstd/deflate,
-# tls-native-roots, cookies, proxy, multipart, tracing (optional), test-util (internal)
 ```
 
 `cookies`, `proxy`, and `multipart` are opt-in in core. CLI enables cookies/multipart/proxy; Python enables http2/http3/cookies/multipart/proxy plus all compressions. `http3` is experimental. `json` enables the optional native `RequestBuilder::json()` and `Response::json()` helpers; `tracing` is an optional structured-logging gate; `test-util` enables `tokio/test-util` for deterministic time testing.
@@ -136,7 +138,10 @@ If you find yourself writing HTTP logic outside of eggfetch-core, stop and refac
 
 ## Working Context
 
-All milestones (A through Z) are complete. The workspace is in production-maintenance mode. Before starting work, read `plans/ROADMAP.md` for the full project history and any planned future work. Make the workspace build green before adding new functionality. Run `./scripts/check.sh` before committing. See `docs/architecture/overview.md` for the crate layout and architecture deep-dive index.
+Milestone scope (A through Z) is complete; the workspace is in
+corrective/maintenance mode. Before starting work, read `plans/README.md` for
+active corrective/qualification items and `plans/ROADMAP.md` for the full
+project history. Make the workspace build green before adding new functionality. Run `./scripts/check.sh` before committing. See `docs/architecture/overview.md` for the crate layout and architecture deep-dive index.
 
 ## CI
 

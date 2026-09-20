@@ -1,5 +1,8 @@
 # Architecture
 
+> User-facing crate overview. The canonical internal reference is
+> [`docs/architecture/overview.md`](../architecture/overview.md) (§ Deep-Dive Index).
+
 eggfetch is a seven-crate Rust workspace. Understanding the boundaries between crates explains why the library behaves the way it does.
 
 ## The Crates
