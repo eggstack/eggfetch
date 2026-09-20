@@ -273,7 +273,7 @@ profiles. It is superseded for standard-route Bearer clients by the
 The historical aarch64 record below showed eggfetch materially larger than the
 equivalently scoped reqwest configuration by +327,728 stripped bytes in every
 Rustls-aligned profile. The latest x86_64 record shows the same direction with
-host-specific deltas of +546,344 to +564,112 bytes. Do not describe migration
+host-specific deltas of +556,760 to +574,592 bytes. Do not describe migration
 as slimming beyond the lean record above.
 
 The difference is inherent to the current engine rather than an

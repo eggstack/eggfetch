@@ -1,6 +1,6 @@
 # Benchmarks Deep Dive
 
-This document covers `eggfetch-bench` — the Criterion benchmark harnesses and the resource-regression monitor. The crate is not published and depends only on `eggfetch-core`.
+This document covers `eggfetch-bench` — the Criterion benchmark harnesses and the resource-regression monitor. The crate is not published and depends on `eggfetch-core` plus harness-only helpers (`bytes`, `futures-util`, `http`, `tokio`, `url`; dev-dependencies `criterion`, `flate2`).
 
 See also: [overview.md](overview.md), [testing-fuzzing.md](testing-fuzzing.md) (property/fuzz testing, performance budgets).
 
@@ -20,7 +20,7 @@ All three benchmark suites use Criterion (`harness = false`) and are enabled by 
 
 ## BenchServer
 
-`src/lib.rs` provides a minimal **blocking** HTTP server used by the e2e suite (and the resource monitor) so benchmarks never touch the network externally:
+`src/lib.rs` provides a minimal **blocking** HTTP server used by the e2e and resources suites (`resource_monitor` carries its own `ResourceServer`) so benchmarks never touch the network externally:
 
 - Binds `127.0.0.1:0` (random free port); each connection handles exactly one request (`Connection: close`).
 - `BenchServerConfig` controls: response body size, pre-response delay, chunked transfer encoding (chunk size + inter-chunk delay), and whether the request body is read-and-discarded before responding.
@@ -32,7 +32,7 @@ A blocking server keeps the measured client the only async actor in the process 
 
 ### `microbench` — core internals
 
-In-process costs without network I/O: URL parsing and request building, header map operations against raw `http::HeaderMap`, auth scheme construction (`BasicAuth`/`BearerAuth`) and application, retry-policy construction and retry decisions, cookie matching, multipart encoding, and decompression.
+In-process costs without network I/O: URL parsing and request building, header map operations against raw `http::HeaderMap`, auth scheme construction (`BasicAuth`/`BearerAuth` `::new` only), retry-policy construction and retry decisions, cookie matching, multipart encoding, and decompression.
 
 ### `e2e` — full client against BenchServer
 
@@ -46,12 +46,12 @@ Whole-request-path measurements over loopback TCP with `HttpVersionPolicy::Http1
 | body sizes | Response-size scaling |
 | streaming body | Incremental consumption via `bytes_stream()` |
 | `upload_256k` | Request-body upload path |
-| HTTP/2 handshake | H2 connection establishment cost |
+| `Auto` vs `Http1Only` | H1-fallback overhead (`BenchServer` is H1-only; no H2 negotiation measured) |
 | proxy vs direct | Proxy overhead comparison |
 
 ### `resources` — allocation/throughput shape
 
-Buffered vs streaming 1 MiB reads, long-lived client over 100 requests, pool saturation with 20 concurrent requests, parsing a 50-header response, and redirect-chain overhead. These complement `resource_monitor` by measuring throughput/memory *shape* while the monitor measures absolute peak RSS.
+Buffered vs streaming 1 MiB reads, long-lived client over 100 requests, pool saturation with 20 concurrent requests, parsing a 50-header response, and a no-redirect baseline request (`simple_request_no_redirect`; no redirect chain emitted). These complement `resource_monitor` by measuring throughput/memory *shape* while the monitor measures absolute peak RSS.
 
 ### Running
 

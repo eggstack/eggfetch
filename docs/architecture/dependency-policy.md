@@ -163,15 +163,21 @@ These dependencies stay optional. They do not enter `default` features without d
 
 Note: `eggfetch-python` enables the full core profile (`cookies`,
 `multipart`, `proxy`, all four compression codecs, `http2`, `http3`), so
-everything listed above except `clap`/`tracing` enters the Python wheel's
-dependency tree. The CLI enables only `cookies`, `multipart`, `proxy`.
+everything listed above except `clap`/`tracing`/`serde`/`serde_json` enters
+the Python wheel's dependency tree (`serde`/`serde_json` enter only with the
+core `json` feature, which the Python crate does not enable). The CLI enables
+only `cookies`, `multipart`, `proxy`. FFI defaults add `compression-gzip` to
+that set plus TLS roots (`eggfetch-ffi/Cargo.toml`); bench enables `http2`/
+`json` on top; Node enables only `http1` + Rustls + native roots via FFI.
 
 ## Python Compatibility Optional Dependencies (httpx2 SSE/WS)
 
 The `httpx2` 2.12.0 streaming surface reuses the single Rust engine and
 adds only narrow Python framing dependencies (plan
-`httpx2-2.12-sse-and-websocket-parity.md` §§5/8; pinned in
-`compat/httpx2/2.12.0/requirements.txt`):
+`httpx2-2.12-sse-and-websocket-parity.md` §§5/8; `httpx2==2.12.0`/
+`httpcore2==2.12.0` pinned in `compat/httpx2/2.12.0/requirements.txt`;
+`wsproto>=1.2`/`truststore>=0.10` floor-only; `anyio` imported by the WS
+session but arriving transitively, unpinned):
 
 - **wsproto** — WebSocket framing/state over the existing 101
   `network_stream`. Selected because it materially reduces framing

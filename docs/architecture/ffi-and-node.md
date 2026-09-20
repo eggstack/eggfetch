@@ -8,7 +8,7 @@ See also: [overview.md](overview.md).
 
 ### Architecture
 
-- `unsafe_code = "allow"` — sole exception for FFI boundary.
+- `unsafe_code = "allow"` — one of two workspace exceptions (with `eggfetch-node`) for the FFI boundary.
 - Depends only on `eggfetch-core`'s public API. Zero networking logic.
 - Produces `cdylib`, `staticlib`, and `rlib` targets.
 - Forwards the core feature families explicitly. Its default profile preserves
@@ -20,7 +20,7 @@ See also: [overview.md](overview.md).
 
 | Handle | Thread Safety | Lifetime |
 |--------|--------------|----------|
-| `ClientBuilderHandle` | Single-thread, single-use | Consumed by `build()` or freed |
+| `ClientBuilderHandle` | Single-thread, single-use | Retained by `build()`; free exactly once regardless of outcome |
 | `ClientHandle` | `Send + Sync` (wraps `Client`, which is itself thread-safe) | Process-long, freed explicitly |
 | `RequestHandle` | Single-thread, single-use | Consumed by `send()` or freed |
 | `ResponseHandle` | Single-thread, single-use | Freed after body is read |
@@ -103,13 +103,13 @@ Direct dispatch is not blocked on feasibility — core `Client` is
 - Prototype using napi-rs to wrap eggfetch-ffi; its Cargo manifest explicitly
   selects the required H1/Rustls/native-root profile instead of relying on FFI
   dependency defaults.
-- `unsafe_code = "allow"` — sole exception for N-API.
+- `unsafe_code = "allow"` — one of two workspace exceptions (with `eggfetch-ffi`) for N-API.
 - Modules: `client.rs`, `response.rs`, `lib.rs`.
 - Ordinary requests execute the **blocking C ABI**
   (`eggfetch_client_send`) inside `spawn_blocking`; Node adds no HTTP
   behavior of its own and all I/O still originates in `eggfetch-core`
   via the FFI runtime bridge.
-- The client handle is a raw FFI pointer stored as `usize`. In-flight
+- The client handle is a raw FFI pointer stored as `SendClientPtr(*mut ClientHandle)` (provenance-preserving; not `usize`). In-flight
   safety currently relies on napi-derive's internal strong-reference
   codegen for async class methods (see the lifetime-safety comment on
   `EggfetchClient`), not on Rust ownership — this is acceptable for a

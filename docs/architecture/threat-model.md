@@ -35,7 +35,7 @@ eggfetch operates across several trust boundaries. Each boundary requires distin
 
 The user provides URLs, headers, credentials, TLS configuration, and body content. eggfetch must:
 
-- Not leak credentials in debug output, error messages, logs, or repr diagnostics.
+- Not leak credentials in debug output, logs, or repr diagnostics (general downstream-library error strings are not yet systematically audited — see `security-findings.md` F-004).
 - Not send credentials to unintended destinations (cross-origin redirect stripping).
 - Not silently disable TLS verification without explicit opt-in.
 - Reject malformed input (URLs, headers, multipart boundaries) that could cause injection.
@@ -203,11 +203,11 @@ The following properties are enforced by the current implementation:
 
 ### 1. No Credential Leakage in Diagnostic Output
 
-All credential-carrying types (`BasicAuth`, `BearerAuth`, `ProxyAuth`) implement custom `Debug` and `Display` traits that redact sensitive values. `Response` debug output replaces `Authorization`, `Proxy-Authorization`, `Cookie`, and `Set-Cookie` header values with `<redacted>`. URL debug output strips userinfo, query strings, and fragments. This applies to Rust debug output, Python repr, CLI verbose output, and error messages.
+All credential-carrying types (`BasicAuth`, `BearerAuth`, `ProxyAuth`) implement custom `Debug` and `Display` traits that redact sensitive values. `Response` debug output replaces `Authorization`, `Proxy-Authorization`, `Cookie`, and `Set-Cookie` header values with `<redacted>`. URL debug output strips userinfo, query strings, and fragments. This applies to Rust debug output, Python repr, CLI verbose output, and proxy/auth constructor errors. General `Error` display strings from underlying libraries are not yet systematically audited (see `security-findings.md` F-004, Deferred); `redact_url_string()` passes through unparseable input and is a no-op without `high-level-url`.
 
 ### 2. Cross-Origin Redirect Strips Sensitive Headers
 
-On cross-origin redirects (scheme, host, or port mismatch), the redirect engine always strips `Authorization` and `Proxy-Authorization`, and additionally strips `Cookie` while resetting `Host` to the new destination. (`Set-Cookie` is a response header and never appears on redirect requests.) Client-level auth is not reapplied on cross-origin hops. Same-origin redirects strip `Authorization`/`Proxy-Authorization` from the cloned set and then re-apply configured client-level auth. Port changes are treated as cross-origin.
+On cross-origin redirects (scheme, host, or port mismatch), the redirect engine always strips `Authorization` and `Proxy-Authorization`, and additionally strips `Cookie` and removes `Host` (the transport derives it from the new URL). (`Set-Cookie` is a response header and never appears on redirect requests.) Client-level auth is not reapplied on cross-origin hops. Same-origin redirects strip `Authorization`/`Proxy-Authorization` from the cloned set and then re-apply configured client-level auth. Port changes are treated as cross-origin.
 
 ### 3. Proxy Auth Never Forwarded to Destination
 
@@ -231,7 +231,7 @@ Random boundaries use 50 alphanumeric characters generated via `getrandom` (CSPR
 
 ### 8. Retry Does Not Replay Unsafe Methods
 
-The retry subsystem only retries idempotent methods by default (GET, HEAD, OPTIONS, PUT, DELETE). Non-idempotent methods (POST, PATCH) are not retried unless the caller explicitly opts in. Body replayability is checked: streaming bodies cannot be replayed and are not retried. The retry budget (max retries, backoff) is enforced and the deadline is not extended across retries.
+The retry subsystem only retries idempotent methods by default (GET, HEAD, OPTIONS; PUT/DELETE/POST/PATCH require explicit opt-in — see `retry.rs::DEFAULT_RETRYABLE_METHODS`). Non-idempotent methods (POST, PATCH) are not retried unless the caller explicitly opts in. Body replayability is checked: streaming bodies cannot be replayed and are not retried. The retry budget (max retries, backoff) is enforced and the deadline is not extended across retries.
 
 ### 9. FFI Handles Are Null-Safe and Opaque
 

@@ -9,7 +9,7 @@ See also: [overview.md](overview.md).
 - [ ] All CI checks pass (test suite, clippy, fmt)
 - [ ] `cargo clippy --workspace --all-targets --all-features -- -D warnings` produces zero warnings
 - [ ] `cargo fmt --all` produces no changes (all code is formatted)
-- [ ] `cargo test --workspace --all-features` passes with no failures
+- [ ] `cargo test --workspace --exclude eggfetch-python --all-features -- --test-threads=1` passes with no failures
 
 ## Dependency Audit
 
@@ -21,9 +21,9 @@ See also: [overview.md](overview.md).
 
 ## Fuzz and Property Testing
 
-- [ ] No high-severity findings from fuzz targets (review `fuzz/artifacts/` for new crash inputs)
+- [ ] No high-severity findings from fuzz targets (review `fuzz/regressions/` for new crash inputs; no `fuzz/artifacts/` dir exists — fuzzing is manual)
 - [ ] Any required fuzz campaign is bounded and run manually; routine CI does not imply continuous fuzzing
-- [ ] Property tests pass: `cargo test -p eggfetch-core --all-features`
+- [ ] Property tests pass: `cargo test -p eggfetch-core --all-features -- --test-threads=1`
 - [ ] New fuzz targets added for any new parsing or state-machine code
 
 ## Secret Redaction
@@ -77,7 +77,7 @@ See also: [overview.md](overview.md).
 ## Retry and Resilience
 
 - [ ] Retry amplification tests pass (deadline not extended across retries)
-- [ ] Idempotent-only default retry policy tests pass (GET, HEAD, OPTIONS, PUT, DELETE)
+- [ ] Idempotent-only default retry policy tests pass (GET, HEAD, OPTIONS)
 - [ ] Body replayability checks pass (streaming bodies not retried)
 - [ ] Retry budget enforcement tests pass (max retries, backoff)
 

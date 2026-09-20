@@ -14,12 +14,13 @@ eggfetch implements phase-aware timeouts that map to specific segments of the re
 |-------|----------------|
 | `Pool` | Waiting for a logical request slot from the concurrency pool |
 | `Connect` | TCP connection establishment + TLS handshake (including DNS); for proxy routes, also proxy TCP/TLS setup and origin TLS after CONNECT |
-| Physical admission | Optional wait for a live Hyper-connection permit; distinct from logical pool acquisition |
-| `ProxyConnect` | Internal classification for proxy TCP setup |
-| `ProxyTls` | Internal classification for TLS to an HTTPS proxy endpoint |
-| `Write` | Sending request headers and body |
-| `Read` | Waiting between response body chunks; proxy protocol reads also cover response headers |
+| `ProxyConnect` | Error-taxonomy classification for proxy TCP setup; budget aliases `Timeout.connect` (no separate field) |
+| `ProxyTls` | Error-taxonomy classification for TLS to an HTTPS proxy endpoint; budget aliases `Timeout.connect` (no separate field) |
+| `Write` | Sending streamed request-body chunks only (buffered bodies complete synchronously) |
+| `Read` | Inactivity between response body chunks from first body poll; proxy CONNECT-head reads also use the read budget; ordinary response headers are `Total`-bounded |
 | `Total` | Wall-clock cap across the entire request lifecycle |
+
+Physical admission (optional wait for a live Hyper-connection permit) is not a `TimeoutPhase`; it reports `Error::Pool`, not `Error::Timeout`, and is distinct from logical pool acquisition.
 
 ### Configuration
 
@@ -34,9 +35,9 @@ Request-level overrides are per-field: only fields present in the request-level 
 
 | Phase | Enforcement |
 |-------|-------------|
-| Pool | `tokio::time::timeout` around pool acquisition |
+| Pool | `tokio::time::timeout` around pool acquisition using `min(pool, total)`; reports `Total` when the total budget is the smaller bound |
 | Total | `tokio::time::timeout` around the transport future up to response headers, plus a crate-private absolute response-body deadline (`ResponseDeadline`) through body EOF/trailers |
-| Read | Per-chunk wrapper stream (`BodyTimeoutStream`) — starts on first body poll, deadline resets on each body chunk/frame; direct Hyper/UDS/H3 header acquisition remains owned by the transport future |
+| Read | Per-chunk wrapper (`BodyTimeoutStream` for `ResponseBody` streaming; `NativeResponseBody` implements the same contract for `execute_http_body`) — starts on first body poll, deadline resets on each body chunk/frame; direct Hyper/UDS/H3 header acquisition remains owned by the transport future |
 | Write | Per-chunk wrapper stream (`WriteTimeoutStream`) — deadline resets on each chunk delivery; H3 propagates `Write` without masking or evicting |
 | Connect | Enforced by the direct connector, by proxy TCP/TLS/origin-TLS setup, and by the H3 connector (DNS + QUIC + h3 init as one budget shared across address fallback with fair per-address shares) |
 
@@ -217,7 +218,7 @@ conceptually separate from semaphore logic. This ensures:
 
 `PoolMetrics` (logical) exposes:
 - `acquisition_waits` — number of times a request waited for a slot.
-- `acquisition_cancellations` — number of times a pool acquisition was cancelled.
+- `acquisition_cancellations` — number of closed-semaphore / poisoned-table acquisition failures (pool/total expiry via the outer timeout is not counted).
 
 `TransportMetrics` (`Client::transport_metrics()`, atomic, low-overhead) counts connector/protocol events where observable: direct/DNS/TLS attempts, UDS/proxy attempts, physical admission waits/timeouts/live/high-water values, established read/write inactivity timeouts, H3 creations/evictions, Alt-Svc learned/expired/cleared/rejected, H3 attempted/suppressed/fallback/drain/close/reconnect, and 101 upgrades. Names state whether they count connector events or protocol connections; logical requests stay in `PoolMetrics`.
 

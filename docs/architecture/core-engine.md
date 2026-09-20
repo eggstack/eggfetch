@@ -20,7 +20,7 @@ Focused subset for the engine lifecycle (client → request → pipeline → res
 | `error` | Yes | `Error` enum, `RequestFailure` opt-in detail wrapper, `NetworkFailureKind` classifier, `Result<T>` alias |
 | `pipeline/` | Crate-internal | Request lifecycle orchestration split by responsibility: `retry` (requires `logical-retry`), `redirect` (requires `redirects`), `lean` (requires `high-level-url` without `redirects`), `prepare`, `route`, `hyper_dispatch`, `proxy_dispatch`, `h3_dispatch`, `finalize`, plus short `mod` entry points |
 | `transport` | Yes | Direct, caller-owned raw-stream dialer, direct-with-socket-options, UDS, proxy, HTTP/3 transport dispatch |
-| `stream` | Crate-internal | Response-body timeout (`BodyTimeoutStream`: read inactivity + absolute total) plus a separate per-chunk write timeout (`WriteTimeoutStream` in `stream::write_timeout`) |
+| `stream` | Crate-internal | Response-body timeout (`BodyTimeoutStream`: read inactivity + absolute total) plus a separate per-chunk write timeout (crate-private `write_timeout_stream` in `stream::write_timeout`) |
 
 ## Client
 
@@ -215,7 +215,7 @@ Key methods:
 - `raw_bytes_stream()` → streaming body without decompression
 - `network_stream()` / `network_stream_mut()` / `take_network_stream()` / `into_network_stream()` → 101 upgrade IO accessors (`None` for ordinary/CONNECT responses)
 - `text_lines()` → line-by-line text iterator
-- `trailers()` → `Option<HeaderMap>` after body EOF (H1 chunked, H2 trailing HEADERS, H3 trailing headers; `None` until arrival, on no-trailers, or on pre-trailer errors; H1 duplicates collapse upstream)
+- `trailers()` → `Option<HeaderMap>` after body EOF (H1 chunked, H2 trailing HEADERS, H3 trailing headers; `None` until arrival, on no-trailers, or on pre-trailer errors; duplicate fields preserved as received)
 - `history()` → `&[HistoryEntry]` (redirect chain)
 
 `RequestBuilder::max_decoded_body_size()` and
@@ -226,11 +226,11 @@ use the same prepared limits.
 
 ### HistoryEntry
 
-Metadata-only redirect record: status code, URL, headers (redacted for cross-origin). Does not carry body data.
+Metadata-only redirect record: status, version, URL, headers, reason phrase. Headers/URL are stored verbatim (only `Debug` redacts sensitive values, for all entries). Does not carry body data.
 
 ## Pipeline Lifecycle
 
-The `pipeline/` directory orchestrates the full request lifecycle. Entry point: `send_with_retry()` (`pipeline::retry`).
+The `pipeline/` directory orchestrates the full request lifecycle. Entry points are feature-dependent (`Client::send`): with `logical-retry`, `send_with_retry()` (`pipeline::retry`); with `redirects` only, `send_with_redirects()` (`pipeline::redirect`); otherwise `send_lean()` (`pipeline::lean`). Each retry attempt wraps a redirect-or-lean inner dispatch.
 
 ```
 send_with_retry()           ← retry loop (pipeline::retry)
@@ -244,8 +244,8 @@ Preparation (`pipeline::prepare` → `PreparedRequest`) centralizes
 request policy so transports own only connection/protocol work:
 
 1. Header merge (client defaults + request overrides) and timeout merging
-   (per-field) happen in `pipeline::redirect::send_with_redirects()`; the hop itself is built
-   by the shared `HopBuildParams` builder (cookies, auth, hints).
+    (per-field) happen in `pipeline::redirect::send_with_redirects()` when `redirects` is enabled, and are duplicated in `pipeline::lean::send_lean()` otherwise (the redirect module is bypassed entirely there); the hop itself is built
+    by the shared `HopBuildParams` builder (cookies, auth, hints).
 2. Preparation normalizes accept-encoding, Content-Length, user-agent, and
    H2-forbidden headers, validates request size, resolves the wire URI
    (`target` override), wraps stream bodies with the write timeout,

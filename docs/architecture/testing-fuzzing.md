@@ -8,7 +8,8 @@ See also: [overview.md](overview.md).
 
 Unit tests are colocated in `#[cfg(test)] mod tests` blocks within each
 source file; integration tests live in `crates/eggfetch-core/tests/`
-(loopback fixtures only, no public internet).
+(loopback fixtures, except five gracefully-skipping `https://httpbin.org`
+tests in `tests/integration.rs`).
 
 ### Test Counts
 
@@ -31,8 +32,10 @@ cargo test -p eggfetch-core --all-features -- --test-threads=1
 maturin develop -m crates/eggfetch-python/Cargo.toml
 python -m pytest crates/eggfetch-python/tests/ -q --ignore=crates/eggfetch-python/tests/compat
 
-# HTTPX compatibility tests (requires httpx==0.28.1)
+# HTTPX compatibility tests (requires httpx==0.28.1 and httpx2==2.12.0
+# plus requests/pytest_timeout from both requirements files)
 pip install -r compat/httpx/0.28.1/requirements.txt
+pip install -r compat/httpx2/2.12.0/requirements.txt
 EGGFETCH_COMPAT_REQUIRED=1 python -m pytest crates/eggfetch-python/tests/compat/ -v --strict-markers
 ```
 
@@ -57,8 +60,8 @@ full HTTPX and HTTPX2 suites in Tier 2.
 
 Tier 2 (`tier2_feature_tests` in `scripts/check.sh`) runs each of these
 independently to ensure every feature compiles and tests in isolation.
-This list must match the script — the `http3` and `multipart` combos below
-are manual checks, not Tier 2 gates:
+This list must match the script — the `http3` combo below
+is a manual check, not a Tier 2 gate:
 
 ```sh
 cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,compression-gzip
@@ -81,13 +84,13 @@ cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,ht
   multi-address fallback (unreachable + live), connect-phase timeout via a
   UDP blackhole, prompt cancellation, and write-timeout propagation without
   eviction.
-- `tests/h3_hardening.rs` (12 tests): connect/total precedence, stalled-body
+- `tests/h3_hardening.rs` (12 tests as of the current qualification SHA; recount on change): connect/total precedence, stalled-body
   read timeout, shared concurrent init, per-host pool gating, failure
   non-poisoning, distinct-origin stabilization, fail/reconnect cycles,
   partial-body drop reuse, client-drop release, and prompt cancellation
   with continued usability.
 - `tests/h3_alt_svc_discovery.rs`: Alt-Svc discovery/suppression/fallback/draining.
-- `tests/h3_interop_qualification.rs` (20 deterministic loopback controls;
+- `tests/h3_interop_qualification.rs` (20 deterministic loopback controls as of the current qualification SHA; recount on change;
   external cases are opt-in through `scripts/h3_qualification.py`): mandatory Quinn self-interop,
   GET/HEAD, buffered POST upload, 1 MiB streaming download, 20-way
   multiplexed concurrency, H3 trailers after EOF, UDP-blackhole budget,
@@ -142,7 +145,7 @@ than enumerating every file. Tier 1 runs only the smoke kernel
 
 Run with `EGGFETCH_COMPAT_REQUIRED=1` for fail-closed behavior. Tier 2 (`tier2_full_compat`) enforces this.
 
-Compatibility profiles and allowed differences live in `compat/httpx/0.28.1/`. The corrective kernel also covers buffered/one-shot redirect replay, disabled and structured timeout conversion, request-local cookies, single query serialization, incremental response decoding, raw stream lifecycle (consumed state, byte accounting, chunk-size adaptation, exactly-once close), and fail-closed lint tooling.
+Compatibility profiles and allowed differences live in `compat/httpx/0.28.1/` and `compat/httpx2/2.12.0/`. The corrective kernel also covers buffered/one-shot redirect replay, disabled and structured timeout conversion, request-local cookies, single query serialization, incremental response decoding, raw stream lifecycle (consumed state, byte accounting, chunk-size adaptation, exactly-once close), and fail-closed lint tooling.
 
 Direct differential tests against the pinned HTTPX reference remain Tier 2; Tier 1 does not install the reference package.
 
@@ -152,7 +155,7 @@ Phase 5 validates eggfetch against real-world downstream consumers to ensure com
 
 ### Downstream Consumer Portfolio
 
-The `compat/downstream/` directory contains a 12-package consumer portfolio — real Python packages that depend on HTTPX or requests — tested against eggfetch to detect regressions:
+The `compat/downstream/` directory contains a 12-package consumer portfolio (as of the current qualification SHA; recount on change) — real Python packages that depend on HTTPX or requests — tested against eggfetch to detect regressions:
 
 ```sh
 python scripts/run_downstream_compat.py \
@@ -170,11 +173,11 @@ signatures remain informational by design.
 
 ### Expanded Behavior Corpus
 
-The behavior corpus grew from 24 to 29 cases in Phase 5. Parametrized tests with stable IDs verify edge cases across the HTTPX-compatible surface.
+The behavior corpus grew from 24 to 29 cases in Phase 5 (counts as of the qualification SHA; recount on change). Parametrized tests with stable IDs verify edge cases across the HTTPX-compatible surface.
 
 ### Upstream HTTPX Test Inventory
 
-36 derived test cases were extracted from the upstream HTTPX test suite and adapted for eggfetch. See:
+36 derived test cases (as of the qualification SHA) were extracted from the upstream HTTPX test suite and adapted for eggfetch. See:
 
 - `compat/httpx/0.28.1/upstream-test-inventory.md` — catalog of upstream tests
 - `compat/httpx/0.28.1/upstream-derived-cases.toml` — machine-readable mapping

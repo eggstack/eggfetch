@@ -13,7 +13,7 @@ PGP encryption is preferred but not required. Please include:
 - The affected component (e.g. core crate, Python bindings, CLI).
 - Any suggested remediation, if available.
 
-You will receive an acknowledgement within **48 hours** of your report. If you do not receive an acknowledgement within that window, follow up on a non-security GitHub issue referencing your original report.
+You will receive an acknowledgement within the initial-response SLA below (Critical 24 hours; High 48 hours; Medium 1 week; Low 2 weeks). If you do not receive an acknowledgement within that window, follow up on a non-security GitHub issue referencing your original report.
 
 Please do not disclose the vulnerability publicly until a fix has been released and you have been notified.
 
@@ -93,12 +93,14 @@ The project **prefers Rustls** over native TLS (OpenSSL, Secure Transport, SChan
 
 ## Secret Redaction
 
-All `Debug`, `Display`, error, and log output from eggfetch redacts sensitive credentials. This includes:
+`Debug`, `Display`, and log output from eggfetch's own credential-carrying types redacts sensitive credentials. This includes:
 
 - HTTP `Authorization` headers (Basic, Bearer, and other schemes).
-- HTTP `Cookie` headers.
+- HTTP `Cookie` and `Set-Cookie` headers.
 - Proxy authentication credentials.
-- URLs with embedded userinfo.
+- URLs with embedded userinfo (query strings and fragments are stripped from URL debug output).
+
+General `Error` display strings from underlying libraries are not yet systematically audited (see `docs/architecture/security-findings.md` F-004, Deferred).
 
 Credential redaction is enforced by regression tests in the core crate. Any new code path that formats or logs request/response data must include redaction and a corresponding test case.
 
@@ -121,7 +123,7 @@ The following security measures are active in the eggfetch repository:
 - **Live dependency preflight**: `./scripts/check_security.sh` before release
   publication; routine CI remains free of live advisory database fetches.
 - **CI security checks**: lint, typecheck, and test suite run on pushes and pull requests.
-- **Threat model**: documented in `docs/architecture/threat-model.md`, covers the five trust boundaries (local app, eggfetch core, remote server, network, dependency ecosystem).
+- **Threat model**: documented in `docs/architecture/threat-model.md`, covers the six trust boundaries (User, Network, Proxy, TLS Layer, FFI Boundary, Python Runtime).
 - **Security reviews**: TLS configuration, redirect/auth/cookie handling, proxy tunneling, body streaming, retry policy, Python bindings, and CLI are reviewed for misuse and injection vectors.
 - **Credential redaction**: regression-tested across Debug, Display, error, and log output.
 - **Unsafe boundaries**: core and ordinary workspace code forbid unsafe Rust;

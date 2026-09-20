@@ -53,7 +53,7 @@ client (plus a serde round-trip for JSON fixtures) without I/O for smoke.
 ## Commands
 
 ```sh
-# Full qualification (trees + 10 isolated release builds + sizes):
+# Full qualification (trees + 11 isolated release builds + sizes):
 scripts/qualify-embedded-footprint.sh --output-dir /tmp/eggfetch-embedded-footprint
 
 # Tree evidence only (fast, no builds):

@@ -13,8 +13,7 @@ every existing API and behavior. The lean high-level profile selects
 `standard-http1` + `tls-rustls` without them (transport + standard route +
 URL API, without `advanced-routing` or the policy bundle): Bearer-only
 auth, single-attempt dispatch under the outer total deadline, 3xx returned
-without following and with empty history, and no core `base64`/`httpdate`
-edge (core's direct `getrandom` edge is jointly owned with `multipart`).
+without following and with empty history, and no core `base64` edge from `basic-auth` (the `proxy` feature also pulls `base64` when enabled; core's direct `getrandom` edge is jointly owned with `multipart`).
 The policy-only `native-http1` + `high-level-url` + `tls-rustls` recipe
 without the three policy features remains a valid manual profile where
 advanced routing (Dialer, pinned/SNI, UDS) is still needed.
@@ -39,7 +38,7 @@ Lean coverage lives in `crates/eggfetch-core/tests/lean_policy_tests.rs`
 
 ### Security Properties
 
-- **Secret redaction**: `AuthScheme`, `BasicAuth`, `BearerAuth` implement custom `Debug`/`Display` that redact sensitive values. `Cookie` redacts its value, `CookieJar` reports entry counts only, `Request` renders a redacted URL with length-only body summary, and `ClientConfig` uses a manual redacting `Debug`. Credentials are never printed in logs or error messages.
+- **Secret redaction**: `BasicAuth`/`BearerAuth` implement redacting `Debug`/`Display`; `AuthScheme` implements redacting `Debug` only. `Cookie` redacts its value, `CookieJar` reports entry counts only, `Request` renders a redacted URL with length-only body summary, and `ClientConfig` uses a manual redacting `Debug`. Auth secrets are never printed in logs or auth-type formatting output; general downstream-library error strings are not yet systematically audited (see `security-findings.md` F-004).
 - **Input validation**: Usernames must not contain `:`. CR/LF is rejected. Violations return `Error::InvalidAuthHeader`.
 - **URL credentials rejected**: `https://user:pass@host/` returns an error. Use `BasicAuth` explicitly.
 
@@ -52,6 +51,7 @@ Lean coverage lives in `crates/eggfetch-core/tests/lean_policy_tests.rs`
 ### Precedence Resolution
 
 `resolve_request_auth()` applies in order:
+0. If an explicit `Authorization` header coexists with any configured auth, fail with `Error::ConflictingAuth`; a raw header alone with no configured auth passes through untouched.
 1. If request-level explicit auth is set, use it.
 2. If request-level auth is disabled (`without_auth()`), no auth.
 3. If client-level auth is set, use it.
@@ -105,8 +105,8 @@ method rewrites, loop bounds, and scheme allow-listing are unchanged.
 On redirect (single `pipeline::redirect::advance_redirect_hop()` transformation + shared
 `HopBuildParams` hop builder, owned by `pipeline::redirect`):
 - **Same-origin**: `Authorization`/`Proxy-Authorization` are stripped from the cloned set, then configured client-level auth is re-applied; `Cookie`/`Host` survive.
-- **Cross-origin**: `Authorization`, `Cookie`, and `Proxy-Authorization` are stripped, plus `Host` is reset to the new destination; client-level auth is not reapplied.
-- `Host` header is updated to the new destination.
+- **Cross-origin**: `Authorization`, `Cookie`, and `Proxy-Authorization` are stripped, plus `Host` is removed (the transport derives it from the new URL); client-level auth is not reapplied.
+- `Host` header is removed on cross-origin hops; the transport derives it from the new destination.
 - `Content-Length`, `Content-Type`, and `Transfer-Encoding` are stripped when the body is dropped.
 - Destination-specific wire hints (`target`, `sni_hostname`, `trace`) attach only on the first hop and are cleared thereafter. Native physical-route snapshots are separate: direct `resolved_target` and private `proxied_target` are retained only for same-origin redirects; cross-origin redirects return `Error::ResolvedTargetRedirect` before dispatch. A proxied target snapshot is valid only with a compatible effective proxy route; unsupported proxy combinations fail before I/O. Per-request decompression and proxy overrides persist across all hops. The redirects-disabled fast path uses the same first-hop builder, so it cannot diverge except for loop behavior.
 
@@ -118,11 +118,11 @@ On redirect (single `pipeline::redirect::advance_redirect_hop()` transformation 
 
 ### History
 
-Redirect hops are recorded in `Response::history()` as `HistoryEntry` records containing status code, URL, and headers (redacted for cross-origin). History entries do not carry body data.
+Redirect hops are recorded in `Response::history()` as `HistoryEntry` records containing status, version, URL, headers, and reason phrase. Entries store headers/URL verbatim; only `Debug` redacts sensitive values, for all entries. History entries do not carry body data.
 
 ### Total Timeout
 
-The total timeout applies across the entire redirect chain, not per-hop. Each hop receives only the remaining wall-clock budget (`RequestParts::shrink_total_deadline`). A chain of 5 redirects sharing a 10-second total timeout must complete within 10 seconds.
+The total timeout applies across the entire redirect chain, not per-hop. Each hop receives only the remaining wall-clock budget (the retry loop uses `RequestParts::shrink_total_deadline`; the redirect loop inlines the same remaining-budget computation). A chain of 5 redirects sharing a 10-second total timeout must complete within 10 seconds.
 
 ## Retry
 
@@ -189,13 +189,14 @@ hints, proxy/decompression overrides, auth-disable state, redirect and
 retry policy) and applies the shrunk total budget. Before retrying,
 replayability is verified through one explicit operation:
 - `Bytes`/`Empty` bodies are replayed by cloning (`try_clone_for_retry`).
-- `Stream` bodies are non-replayable → `Error::BodyNotReplayableForRetry` (never panics, never silently drops fields).
+- `Stream` bodies are non-replayable, so the request is single-attempt (no retry); calling `retry_request` on a stream directly returns `Error::BodyNotReplayableForRetry` (never panics, never silently drops fields).
 
 ### Backoff
 
 Exponential backoff with jitter:
 - `initial_delay × factor^(attempt − 2)`, capped at `max_delay` (factor configurable via `backoff_factor()`, default `2.0`; no delay before attempt 1).
-- Jitter randomizes the delay to avoid thundering herd.
+- Full jitter: the capped delay is randomized uniformly over `[0, capped)`, with a 1 ms floor when the cap is positive, to avoid thundering herd.
+- 429 without `Retry-After` uses `min(1.5 × jittered delay, max_delay)`.
 - `Retry-After` header (both integer seconds and HTTP-date) is respected when enabled via `respect_retry_after(true)` (off by default).
 
 ### Context

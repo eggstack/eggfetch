@@ -42,11 +42,11 @@ The URL is the only positional argument. The method is set with `-X`/`--method` 
 | `--connect-timeout`/`--read-timeout`/`--total-timeout SECS` | Per-phase `RequestBuilder::timeout()` overrides |
 | `--retry N` | `ClientBuilder::retry()` |
 | `--retry-delay SECS` | Retry backoff delay |
-| `--max-body-size N` | Per-request decoded-body limit |
-| `--max-decompression-ratio N` | Per-request decompression ratio limit |
-| `--no-body` | Send no body |
+| `--max-body-size N` | `ClientBuilder::max_decoded_body_size` (client-level) |
+| `--max-decompression-ratio N` | `ClientBuilder::max_decompression_ratio` (client-level) |
+| `--no-body` | Suppress response-body output |
 | `--http1`/`--http2`/`--http3` | `ClientBuilder::http_version_policy()` |
-| `--no-compress` | `ClientBuilder::automatic_decompression(false)` |
+| `--no-compress` | `RequestBuilder::decompress(false)` (per-request; no client-level call) |
 | `--check-status` | Exit 6 on HTTP error status |
 | `--base64` | Include `body_base64` in JSON output |
 | `-v`/`--verbose` | Verbose request/response info to stderr |
@@ -54,8 +54,8 @@ The URL is the only positional argument. The method is set with `-X`/`--method` 
 
 `--auth`/`--bearer`, `--follow`/`--no-follow`, `--json-output`/`--ndjson`,
 and `--http1`/`--http2`/`--http3` are mutually exclusive (rejected with exit
-2). mTLS requires both `--cert` and `--key` together. `--cookie-jar` reads
-`NAME=VALUE` lines (simple/Netscape jar format).
+ 2). mTLS requires both `--cert` and `--key` together. `--cookie-jar` reads
+ `NAME=VALUE` lines only; the Netscape jar format is not parsed.
 
 ### Environment Variables
 
@@ -108,7 +108,7 @@ downgrading.
   "url": "...",
   "status": 200,
   "version": "HTTP/1.1",
-  "headers": {...},
+  "headers": [[name, value], ...],
   "elapsed_ms": 123,
   "history": [...],
   "body_length": 456,
@@ -121,7 +121,7 @@ downgrading.
 
 ## Streaming
 
-The CLI streams the response body via `Response::bytes_stream()` and writes chunks incrementally using `tokio::io::AsyncWriteExt`. No full-body buffering occurs.
+The CLI streams the human/file response body via `Response::bytes_stream()` and writes chunks incrementally using `tokio::io::AsyncWriteExt`. No full-body buffering occurs on that path. JSON/NDJSON modes instead buffer via `Response::bytes().await` before emitting.
 
 ## Exit Codes
 

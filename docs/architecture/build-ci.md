@@ -88,7 +88,7 @@ Tiny downstream fixtures under `qualification/embedded/` plus
 `scripts/qualify-embedded-footprint.sh` record dependency trees and
 stripped release sizes against an equivalently scoped reqwest
 configuration. No size gate, dashboard, or scheduled workflow. The
-current evidence is `embedded-footprint.md` (full compat not a footprint win;
+current evidence is `docs/architecture/embedded-footprint.md` (full compat not a footprint win;
 lean `standard-http1` measured improvement).
 
 ### Native HTTP Body and TLS Qualification (manual, not CI)
@@ -157,7 +157,7 @@ Run manually via `workflow_dispatch` from `.github/workflows/pypi.yml`. The pipe
 - Pedantic clippy workspace-wide.
 - `unsafe_code = "forbid"` (except FFI/Node).
 - `missing_docs = "warn"` (workspace lints in `Cargo.toml`), `missing-docs-in-crate-items = true` (`.clippy.toml`).
-- Never use `#![allow(warnings)]`, `#![allow(clippy::all)]`, `#![allow(clippy::pedantic)]`, `#![allow(clippy::nursery)]`, or `#![allow(clippy::restriction)]`.
+- Never use `allow(warnings)`, `allow(clippy::all)`, `allow(clippy::pedantic)` (except `crates/eggfetch-ffi/` and `crates/eggfetch-node/`), `allow(clippy::nursery)`, or `allow(clippy::restriction)`; blanket `deny(warnings|clippy::all|pedantic|nursery|restriction)` is likewise forbidden.
 - CI rejects blanket suppressions via `scripts/check_lint_suppressions.sh`.
 - Use specific lint names. Justify suppressions with a comment.
 

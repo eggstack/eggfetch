@@ -331,8 +331,10 @@ certificate verification remain authoritative. The dialer does not implement
 or expose Hyper connector traits.
 
 A custom dialer cannot be combined with built-in HTTP/SOCKS proxying, UDS,
-resolved-address routing, local-address/socket-option routing, or HTTP/3.
-These combinations fail before I/O. A dial failure is preserved as a custom
+resolved-address routing, local-address/socket-option routing, or `Http3Only`.
+Those combinations fail before I/O. Under `Auto { allow_http3: true }`, H3
+discovery is additionally suppressed for dialer routes (no H3 attempt, no
+error). A dial failure is preserved as a custom
 transport error and never falls back to ordinary direct DNS/TCP.
 
 ### Hyper connection lifecycle controls
@@ -426,15 +428,17 @@ Behind the `http2` Cargo feature. When not enabled, `Http2Only` and `Auto` silen
 - `Http2Only` — only HTTP/2 (fails if server does not negotiate). Enforced at both the ALPN layer (only `h2` is advertised) and at the hyper-util legacy client layer (`http2_only(true)`).
 - `Auto` (default) — both `h2` and `http/1.1` advertised.
 
+HTTP forward-proxy legs are H1-only: `Http2Only` through a forward proxy is rejected before I/O, and the forward route never sets `http2_only`.
+
 ### ALPN
 
 ALPN protocols are set on the rustls configuration based on the version policy. The connector builder handles `enable_http1()` / `enable_http2()`:
 
 - `enable_http2()` alone → `alpn_protocols = vec![b"h2"]` (h2-only).
 - `enable_http1().enable_http2()` → `alpn_protocols = vec![b"h2", b"http/1.1"]` (auto).
-- `enable_http1()` alone → ALPN stays empty (h1-only).
+- `enable_http1()` alone → ALPN is `[http/1.1]` (h1-only).
 
-The standard hyper-rustls path passes an empty ALPN list to `hyper_rustls::HttpsConnectorBuilder` so the builder can populate it from the `enable_http1`/`enable_http2` calls. Direct and UDS connectors perform their own TLS handshake; the ALPN they advertise is determined by the `TlsConfig` and is shared across the three paths.
+The standard hyper-rustls path clears the inherited ALPN list so `hyper_rustls::HttpsConnectorBuilder` re-advertises it from the `enable_http1`/`enable_http2` calls. Direct, SNI, resolved-target, UDS, custom-dialer, SOCKS, and CONNECT-TLS paths perform their own TLS handshake; the ALPN they advertise is set by `configure_tls_alpn()` from the client `HttpVersionPolicy` at construction, overriding the `TlsConfig` default. HTTP forward-proxy legs stay `http/1.1`-only.
 
 ### Shared Hyper response lifecycle
 
@@ -488,7 +492,7 @@ Without this signal, an H2-only legacy client would not see the ALPN result and 
 
 ### Forbidden Header Stripping
 
-Per RFC 9113 §8.2.2, the pipeline strips before sending: `Connection`, `Keep-Alive`, `Proxy-Connection`, `Transfer-Encoding`, `Upgrade`, and `TE` (except `trailers`).
+Per RFC 9113 §8.2.2, the pipeline strips when the request is known to use HTTP/2 (explicit `Version::HTTP_2` or H2-only policy): `Connection`, `Keep-Alive`, `Proxy-Connection`, `Transfer-Encoding`, `Upgrade`, and `TE` (except `trailers`). For `Auto`, ALPN decides per connection and Hyper enforces H2 header validity if `h2` negotiates.
 
 ### Error Taxonomy
 
@@ -748,7 +752,7 @@ Pinned for this milestone (exact versions from `Cargo.lock` at review time):
 - `h3 0.0.8` with `i-implement-a-third-party-backend-and-opt-into-breaking-changes`
   (exposes `ConnectionState::is_closing()` / `is_h3_no_error()`; re-audit on bump)
 - `h3-quinn 0.0.10` bridge
-- QUIC/TLS companions: `rustls 0.23.41`, `ring 0.17.14`,
+- QUIC/TLS companions: `rustls 0.23.45`, `ring 0.17.14`,
   `tokio-rustls 0.26.4`, `tokio 1.52.3`, `http 1.4.2`
   (`hyper 1.10.1` remains the H1/H2 engine; H3 bypasses hyper)
 

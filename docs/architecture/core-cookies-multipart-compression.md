@@ -36,7 +36,7 @@ Cookies set without a `Domain` attribute are host-only — not sent to subdomain
 
 ### Client Integration
 
-Each `Client` owns a `CookieJar`. On each request, matching cookies are computed and added to the `Cookie` header. `Set-Cookie` responses are ingested before redirect hops.
+Each `Client` owns a `CookieJar`. Per hop, `cookies_for_url()` injects matching cookies unless an explicit `cookie` header exists; cross-origin redirect hops strip `cookie` and stop jar injection; `Set-Cookie` is ingested after every hop (including the non-redirect fast path).
 
 ### Python API
 
@@ -75,7 +75,7 @@ The encoder preserves backpressure: a slow part body stream naturally backpressu
 
 ### Known-Length Calculation
 
-`Multipart::content_length()` uses checked arithmetic to sum all parts. Returns `Some(u64)` only when every part has a known length; returns `None` for streaming parts.
+`Multipart::content_length()` uses checked arithmetic to sum all parts. Returns `Some(u64)` only when every part has a known length; returns `None` iff any part has unknown length (e.g. `Stream { length: None }`) or arithmetic overflows. A `Stream` part with known `length` contributes to the total.
 
 ### Replayability
 
@@ -125,7 +125,7 @@ Feature-gated behind `compression-gzip`, `compression-brotli`, `compression-zstd
 
 ### Accept-Encoding Negotiation
 
-`accept_encoding_value()` generates the `Accept-Encoding` header based on enabled features. `ContentCoding` enum identifies the response encoding.
+`accept_encoding_value()` generates the `Accept-Encoding` header based on enabled features. An existing caller-supplied `Accept-Encoding` header is preserved, and no header is generated when per-request decompression is disabled. `ContentCoding` enum identifies the response encoding (`x-gzip` is accepted as an alias for gzip; `identity` is a recognized no-op that preserves visible headers).
 
 ### Resource Limits
 
@@ -146,19 +146,19 @@ httpx2 close-on-failure contract.
 ### Decompression Modes
 
 - **Streaming**: `decompress_stream()` wraps the response body stream with an async decoder.
-  The private stream-to-reader adapter is `tokio_util::io::StreamReader`
-  (already-locked `tokio-util 0.7.18`) wrapped in the existing
-  `tokio::io::BufReader` for this corrective pass; it advances consumed bytes,
-  polls only after the current item is exhausted, and skips empty source
-  `Bytes` without synthesizing EOF. Hyper removes HTTP/1.1 chunk framing
+  The streaming path is `tokio_util::io::StreamReader` + `tokio::io::BufReader` +
+  the `async-compression` decoder + `ReaderStream` (`compression.rs::make_decoder`);
+  there is no custom empty-chunk/EOF adapter. Hyper removes HTTP/1.1 chunk framing
   before `wrap_incoming()`, so no `Transfer-Encoding` special case exists —
   chunked transfer merely makes multi-item delivery deterministic. Decoded
   `bytes_stream()` chunk sizes are not a stable framing contract; compare
   ordered bytes, error kinds, timeouts, and metadata instead.
 - **Buffered**: `decompress_buffered()` decodes a collected `Bytes` buffer synchronously via `flate2` (gzip/deflate), the `brotli` crate (brotli), or the `zstd` crate (zstd).
 
-Automatic decompression removes `Content-Encoding` and `Content-Length` from
-the visible core response headers. The response retains only the original
+Automatic decompression strips `Content-Encoding` and `Content-Length` from
+the visible core response headers, but only when a recognized non-`identity`
+coding was present (`decoder_applied`); `identity`-only responses keep their
+visible headers. The response retains only the original
 wire values of those two headers as narrow read-only metadata for adapters
 that need HTTPX-compatible visibility; the values are never inferred from
 decoded body length. The compatibility facade overlays that metadata while
@@ -175,9 +175,9 @@ Entry point: `apply_decompression(response, content_encoding, limit)`:
    - `Streaming` + encoding → `ResponseBody::EncodedStreaming`. When the streaming body carries a pool lease, it is moved directly to the encoded wrapper so lease ownership — including the private read/total policy behind it — never routes through a timeout destructure/rebuild round-trip.
    - `Buffered` + non-empty bytes → decoded synchronously via `decompress_buffered()`.
    - Empty buffered bodies and already-encoded bodies pass through unchanged.
-3. **Strip visible headers**: `Content-Encoding` and `Content-Length` are removed from the header map; their original wire values remain available via `Response::wire_content_encoding()` / `wire_content_length()` (see above).
+3. **Strip visible headers**: when a recognized non-`identity` coding was present (`decoder_applied`), `Content-Encoding` and `Content-Length` are removed from the header map; their original wire values remain available via `Response::wire_content_encoding()` / `wire_content_length()` (see above).
 
-The empty-body special case matters: a zero-length body with a `Content-Encoding` header is left untouched rather than fed through a decoder, matching how encoders emit empty payloads.
+The empty-body special case matters: a zero-length buffered body with a `Content-Encoding` header skips decoding but still validates the encoding and strips `Content-Encoding`/`Content-Length` when the coding is recognized and non-`identity`.
 
 ### Python API
 

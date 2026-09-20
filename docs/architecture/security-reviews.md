@@ -48,7 +48,7 @@ See also: [overview.md](overview.md).
 
 ### Findings
 
-No critical or high-severity findings. The trust store fallback is well-scoped and does not introduce silent trust escalation. Verification bypass requires explicit API opt-in. Private key material is correctly excluded from diagnostic output.
+No open critical or high-severity findings (past High F-006, fixed 2026-08-18 — see `security-findings.md`). The trust store fallback is well-scoped and does not introduce silent trust escalation. Verification bypass requires explicit API opt-in. Private key material is correctly excluded from diagnostic output.
 
 ---
 
@@ -151,7 +151,7 @@ No critical or high-severity findings. Cross-origin credential stripping is comp
 
 ### Findings
 
-No critical or high-severity findings. Proxy credentials are correctly isolated from destination requests. CONNECT tunnels are properly opaque. Response parsing is bounded. Native route pinning preserves logical identities, fails closed on unsupported combinations, and does not introduce a DNS fallback path.
+No open critical or high-severity findings (past High F-007, fixed 2026-08-18 — see `security-findings.md`). Proxy credentials are correctly isolated from destination requests. CONNECT tunnels are properly opaque. Response parsing is bounded. Native route pinning preserves logical identities, fails closed on unsupported combinations, and does not introduce a DNS fallback path.
 
 ---
 

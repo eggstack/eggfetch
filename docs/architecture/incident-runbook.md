@@ -28,7 +28,7 @@ Classify the vulnerability using the following severity levels:
 | **Critical** | Remote code execution, credential exfiltration, TLS bypass affecting all users, arbitrary memory read/write | Fix within 7 days |
 | **High** | Credential leakage to third parties, SSRF to internal networks, decompression bomb with no workaround, proxy credential forwarding | Fix within 14 days |
 | **Medium** | Information disclosure in debug output (non-credential), redirect to unintended origins without credential stripping, bypass of single security control | Fix within 30 days |
-| **Low** | Theoretical issues with no known exploit, minor information leakage, denial of service with easy workaround | Fix within 60 days |
+| **Low** | Theoretical issues with no known exploit, minor information leakage, denial of service with easy workaround | Fix within 90 days |
 
 When in doubt, classify one level higher than the initial assessment.
 
@@ -154,7 +154,7 @@ When in doubt, classify one level higher than the initial assessment.
 1. Create a private branch for the fix.
 2. Write a minimal fix that addresses the vulnerability without introducing regressions.
 3. Add test coverage for the specific vulnerability.
-4. Run the full test suite: `cargo test --workspace --all-features`.
+4. Run the full test suite: `cargo test --workspace --exclude eggfetch-python --all-features -- --test-threads=1`.
 5. Run the release security checklist items relevant to the fix.
 
 ### Phase 4: Test Fix
