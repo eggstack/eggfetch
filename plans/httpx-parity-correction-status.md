@@ -4,6 +4,37 @@ This record is the exact-SHA-bound status for the HTTPX 0.28.1 compatibility
 facade. Historical phase and corrective-pass records remain in the git history
 and referenced plans; counts below are only from the runs named here.
 
+## Recorded state — Stage C renewed after API-safe performance optimization (2026-09-20)
+
+Recorded designation: **Stage C qualified** for both documented facades, bound
+to executable SHA `18a1a4328110df014843a94e155fe678a08b1cb4`. The immediately
+preceding `37ab02b3873a4f0ce7018bd716e326bcf0595230` binding is retained below
+as historical issue #24 evidence. The performance campaign changed executable
+and test inputs after that freeze, so the exact-SHA evidence required renewal
+even though the public API and compatibility behavior remained unchanged.
+
+Qualification evidence on the performance executable freeze:
+
+- Tier 1, extended, package, security, and exact Rust 1.89.0 MSRV checks
+  passed. The recorded extended/package skips remain the absent Node native
+  artifact and absent downstream qualification manifest.
+- The native Python manifest remained at 66 exports. The HTTPX 0.28.1 API
+  oracle reported 71 allowed matches and the HTTPX2 2.12.0 oracle reported
+  79; both had zero unexplained, stale, or resolved-active drift.
+- Full pinned HTTPX 0.28.1 and HTTPX2 2.12.0 compatibility suites, lifecycle,
+  soak, merge-lossless, FFI, and public-surface controls passed with no new
+  exception. Node Rust tests passed; its JS surface was truthfully skipped
+  because `crates/eggfetch-node/eggfetch.node` was absent. Downstream was
+  truthfully skipped because its qualification artifact manifest was absent.
+- No Cargo, dependency, or feature-default change occurred, and no new
+  allowed difference was introduced. The private optimization work covered
+  ownership, bounded sync-stream backpressure, cookie read-path contention,
+  and lazy buffered-response text only. HTTP/3 and Node remain experimental.
+
+The parent performance closure is
+`plans/post-performance-requalification-and-closure.md`; the evidence-record
+corrective is `plans/performance-exact-sha-evidence-corrective-pass.md`.
+
 ## Recorded state — Stage C renewed after issue #24 streaming-decompression corrective (2026-09-19)
 
 Recorded designation: **Stage C qualified** for both documented facades, bound

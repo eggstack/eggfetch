@@ -360,4 +360,24 @@ Unexpected and scope-expanding:
 
 This plan is complete only when the live profile files, parity ledger, performance closure, and plan index all agree that `18a1a4328110df014843a94e155fe678a08b1cb4` is the qualified performance executable freeze and the final pushed descendant contains evidence/documentation changes only.
 
+## Corrective closure record
+
+The evidence-only correction updated both Stage C profiles, the live parity
+ledger, the three canonical compatibility records, the performance closure,
+and this plan index. The `18a1a432..HEAD` audit remains limited to
+documentation, profile metadata, parity/status records, and plan/index files;
+no executable, test, dependency, build, workflow, compatibility-runner, or
+validation-script path changed. Local profile parsing, exact-SHA agreement,
+and the repository Tier 1 gate passed on the final corrective working tree.
+The implementation-time pre-corrective head was
+`20493f10f41277add3cc9bd12d6898a49bf75c6e`; its complete freeze-to-head
+path was documentation/evidence-only. Direct API-oracle comparisons on the
+unchanged executable tree passed with 71 HTTPX matches and 79 HTTPX2 matches,
+with no unexplained, stale, or resolved-active drift.
+
+The final pushed routine-CI result is recorded in the closure/index records
+after the corrective commit is pushed. HTTP/3 and Node remain experimental;
+the absent Node artifact and downstream qualification manifest remain truthful
+skips.
+
 If later executable work lands before this corrective is implemented, do not mechanically reuse this plan's SHA assumptions. Re-evaluate the qualification candidate first.

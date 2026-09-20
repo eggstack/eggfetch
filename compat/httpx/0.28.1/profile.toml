@@ -90,11 +90,19 @@ rebaseline-sha = "f9eb1a455907d43210886b7b047d18bde8716652"
 # both API oracles (71/79, zero unexplained/stale/resolved-active), and
 # three consecutive 1,871-test full compatibility passes on the final
 # executable freeze below.
+# The performance optimization campaign then changed private ownership,
+# streaming backpressure, cookie-read, and buffered-response memory paths
+# after the issue #24 freeze. The campaign was requalified on the API-safe
+# executable freeze below: public/API compatibility remained unchanged, no
+# Cargo/dependency/feature-default change occurred, and the private changes
+# did not add a compatibility exception. The issue #24 SHA remains valid
+# historical evidence. HTTP/3 and Node remain experimental and are not
+# promoted by this renewal.
 stage = "stage-c-qualified"
 status = "qualified"
-qualification-sha = "37ab02b3873a4f0ce7018bd716e326bcf0595230"
-qualification-date = "2026-09-19"
-previous-qualification-sha = "82f3f38631b44a9a5c5ec5b40790e5015aeb40f8"
+qualification-sha = "18a1a4328110df014843a94e155fe678a08b1cb4"
+qualification-date = "2026-09-20"
+previous-qualification-sha = "37ab02b3873a4f0ce7018bd716e326bcf0595230"
 historical-current-qualification-sha = "312cd4402ea2b4b27bf54cf7dc36924a1d449adc"
 historical-qualification-sha = "cc90f5ed561bbe10d4c26accc54ed3b916518f98, d034a1005857a7f403222dda4bda5f2f204a44fe, d24101be6ed7be64463813750da5b4043d9905ec, 5c7899fefb6df087dfa1b3578fbef9ba64f87742, 9ffa6cd85848fd16a424b65f73254351911777c4, c44d4f25ffebc1a792335163ae4bc106076b3963"
 reference = "httpx==0.28.1"

@@ -231,6 +231,19 @@ unchanged because no benchmark evidence justified added complexity; no Cargo
 or dependency changes were needed.
 Docs-only closure SHA: `5c09b46` (the documentation/status commit).
 
+## Evidence-record corrective addendum (2026-09-20)
+
+The original closure commit incorrectly stated that the live compatibility
+profiles and parity ledger had been renewed to the performance freeze before
+those records were actually updated. The executable freeze remains
+`18a1a4328110df014843a94e155fe678a08b1cb4`; this corrective only synchronizes
+the profiles, ledger, and canonical compatibility records and does not change
+the executable evidence. The documentation-only descendant at
+`280d36e6976c3d842908be412c177bcedbc85030` passed current-head push CI in
+workflow `CI`, run 634. The exact-SHA completion criterion is satisfied only
+after the profile and ledger changes from
+`plans/performance-exact-sha-evidence-corrective-pass.md` land.
+
 ## Completion criteria
 
 - [x] All intended executable optimization work is frozen at one SHA.

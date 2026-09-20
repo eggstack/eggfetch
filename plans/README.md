@@ -3,19 +3,29 @@
 This directory contains active implementation plans, live qualification/status records, and historical implementation records. Completed plans are non-normative unless another current document explicitly says otherwise. Verification and release policy remain governed by `docs/verification-policy.md` and `docs/releases/process.md`.
 
 
-## Active corrective — performance exact-SHA evidence record (2026-09-20)
+## Completed corrective — performance exact-SHA evidence record (2026-09-20)
 
 Plan: `performance-exact-sha-evidence-corrective-pass.md`
 
-Status: ready for handoff. The performance implementation and local qualification are complete on executable freeze `18a1a4328110df014843a94e155fe678a08b1cb4`, and current-head push CI is green. The remaining defect is evidence bookkeeping: both live HTTPX compatibility profiles and the parity ledger still bind Stage C to the prior issue #24 freeze `37ab02b...`, while the performance closure claims renewal to `18a1a432`. This corrective is documentation/profile/ledger only: renew both profiles and the live ledger to the already-qualified performance freeze, preserve `37ab02b...` as historical evidence, correct the stale remote-CI/index wording, and prove the freeze-to-final-head descendant contains no executable/test/build/validation changes.
+Status: complete as an evidence/documentation-only corrective. The profiles,
+live parity ledger, and canonical compatibility records now bind Stage C to
+the already-qualified performance executable freeze `18a1a4328110df014843a94e155fe678a08b1cb4`; the issue #24 freeze `37ab02b...` remains historical. The final descendant contains only profile, ledger, plan, and compatibility documentation changes. Final pushed CI verification is recorded after the closure commit.
 
-## Active program — performance optimization without API regression (2026-09-20)
+## Completed program — performance optimization without API regression (2026-09-20)
 
 Handoff program: performance-optimization-no-api-regression-program.md
 
 Planning baseline: `abf15eb97b10298fb200c2c2f4a1dceffddeb23b`.
 
-Status: implementation and local requalification complete on executable freeze `18a1a432`. The campaign is explicitly API-preserving and evidence-driven: baseline first, then core ownership/allocation fast paths, Python streaming backpressure/copy reduction, cookie/buffered-response memory work, and one final exact-SHA requalification/closure pass. Tier 1, extended, package, and security checks are green; remote CI remains pending push.
+Status: complete after the evidence-record corrective pass. The campaign is
+bound to executable freeze `18a1a4328110df014843a94e155fe678a08b1cb4`; its
+later descendants are documentation/evidence-only. The campaign is explicitly
+API-preserving and evidence-driven: baseline first, then core ownership/
+allocation fast paths, Python streaming backpressure/copy reduction,
+cookie/buffered-response memory work, and final exact-SHA requalification.
+Tier 1, extended, package, security, and current-head push CI are green; the
+final profile/ledger correction is recorded in
+`performance-exact-sha-evidence-corrective-pass.md`.
 
 Execution order:
 
