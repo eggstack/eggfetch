@@ -181,3 +181,17 @@ The HTTPX/HTTPX2 API manifests must not change.
 - [ ] Python native and compatibility streaming tests are green.
 - [ ] Benchmark evidence is recorded.
 - [ ] No Python-visible API/behavior regression.
+
+## Implementation record
+
+The sync iterator bridge now uses a bounded runtime-neutral queue: Tokio
+producers await async capacity while synchronous consumers wait on a
+condition variable with the GIL released. Queue closure wakes both sides and
+iterator drop propagates cancellation. Byte and raw channels retain Bytes,
+split remainders with Bytes ownership, and only copy when creating Python
+bytes objects. UTF-8 fallback state uses a split-capable BytesMut buffer and
+line extraction retains only the incomplete tail after one boundary scan.
+
+The native streaming test slice passed (68 streaming tests plus the response
+compatibility tests); full runtime progress and slow-consumer measurements
+remain final-closure evidence.

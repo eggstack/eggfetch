@@ -20,12 +20,13 @@
 )]
 
 /// Type alias for the async byte channel used by async iterators.
-type AsyncByteRx = Arc<tokio::sync::Mutex<tokio::sync::mpsc::Receiver<Result<Vec<u8>, PyErr>>>>;
+type AsyncByteRx = Arc<tokio::sync::Mutex<tokio::sync::mpsc::Receiver<Result<Bytes, PyErr>>>>;
 /// Type alias for the async text channel used by async iterators.
 type AsyncTextRx = Arc<tokio::sync::Mutex<tokio::sync::mpsc::Receiver<Result<String, PyErr>>>>;
 
+use std::collections::VecDeque;
 use std::sync::atomic::{AtomicU8, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Condvar, Mutex};
 
 use bytes::{Bytes, BytesMut};
 use futures_util::StreamExt;
@@ -65,6 +66,85 @@ impl Drop for RuntimeLease {
 enum StreamMode {
     Decoded,
     Raw,
+}
+
+struct SyncQueueState<T> {
+    queue: VecDeque<T>,
+    closed: bool,
+}
+
+/// Runtime-neutral bounded bridge for synchronous Python iterators.
+///
+/// Producers wait asynchronously for space; synchronous consumers wait on a
+/// condition variable after releasing the GIL. This keeps backpressure
+/// bounded without blocking a Tokio worker.
+struct SyncBridge<T> {
+    state: Mutex<SyncQueueState<T>>,
+    available: Condvar,
+    space: tokio::sync::Notify,
+    capacity: usize,
+}
+
+impl<T> SyncBridge<T> {
+    fn new(capacity: usize) -> Arc<Self> {
+        Arc::new(Self {
+            state: Mutex::new(SyncQueueState {
+                queue: VecDeque::with_capacity(capacity),
+                closed: false,
+            }),
+            available: Condvar::new(),
+            space: tokio::sync::Notify::new(),
+            capacity,
+        })
+    }
+
+    async fn send(&self, item: T) -> bool {
+        let mut item = Some(item);
+        loop {
+            let notified = self.space.notified();
+            let sent = {
+                let mut state = self.state.lock().expect("sync stream bridge poisoned");
+                if state.closed {
+                    return false;
+                }
+                if state.queue.len() < self.capacity {
+                    state.queue.push_back(item.take().expect("item present"));
+                    true
+                } else {
+                    false
+                }
+            };
+            if sent {
+                self.available.notify_one();
+                return true;
+            }
+            notified.await;
+        }
+    }
+
+    fn recv_blocking(&self) -> Option<T> {
+        let mut state = self.state.lock().expect("sync stream bridge poisoned");
+        loop {
+            if let Some(item) = state.queue.pop_front() {
+                self.space.notify_one();
+                return Some(item);
+            }
+            if state.closed {
+                return None;
+            }
+            state = self
+                .available
+                .wait(state)
+                .expect("sync stream bridge poisoned");
+        }
+    }
+
+    fn close(&self) {
+        let mut state = self.state.lock().expect("sync stream bridge poisoned");
+        state.closed = true;
+        self.available.notify_all();
+        self.space.notify_waiters();
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -451,7 +531,7 @@ fn decode_bytes(encoding_name: Option<&str>, bytes: &[u8]) -> String {
 /// boundaries are not replaced or lost.
 struct IncrementalDecoder {
     decoder: Option<encoding_rs::Decoder>,
-    utf8_pending: Vec<u8>,
+    utf8_pending: BytesMut,
 }
 
 impl IncrementalDecoder {
@@ -460,7 +540,7 @@ impl IncrementalDecoder {
             decoder: encoding_name
                 .and_then(|name| encoding_rs::Encoding::for_label(name.as_bytes()))
                 .map(encoding_rs::Encoding::new_decoder),
-            utf8_pending: Vec::new(),
+            utf8_pending: BytesMut::new(),
         }
     }
 
@@ -489,7 +569,7 @@ impl IncrementalDecoder {
                 let valid_up_to = error.valid_up_to();
                 let output =
                     String::from_utf8_lossy(&self.utf8_pending[..valid_up_to]).into_owned();
-                self.utf8_pending.drain(..valid_up_to);
+                let _ = self.utf8_pending.split_to(valid_up_to);
                 output
             }
             Err(_) => {
@@ -506,16 +586,18 @@ impl IncrementalDecoder {
 }
 
 fn complete_lines(buffer: &mut String) -> Vec<String> {
-    let mut lines = Vec::new();
-    while let Some(pos) = buffer.find('\n') {
-        let mut line = buffer.drain(..=pos).collect::<String>();
-        line.pop();
-        if line.ends_with('\r') {
-            line.pop();
-        }
-        lines.push(line);
-    }
-    lines
+    let Some(last_pos) = buffer.rfind('\n') else {
+        return Vec::new();
+    };
+    let tail = buffer.split_off(last_pos + 1);
+    let complete = std::mem::replace(buffer, tail);
+    complete
+        .split_inclusive('\n')
+        .map(|line| {
+            let line = line.strip_suffix('\n').unwrap_or(line);
+            line.strip_suffix('\r').unwrap_or(line).to_owned()
+        })
+        .collect()
 }
 
 fn final_line(buffer: &mut String) -> Option<String> {
@@ -852,11 +934,11 @@ pub(crate) fn safe_url_for_display(url: &str) -> String {
 
 #[pyclass(name = "StreamingBytesIterator")]
 pub(crate) struct PyBytesChunkIterator {
-    rx: std::sync::Mutex<std::sync::mpsc::Receiver<Result<Bytes, PyErr>>>,
+    rx: Arc<SyncBridge<Result<Bytes, PyErr>>>,
     cancel: Option<tokio::sync::watch::Sender<bool>>,
     producer: Option<tokio::task::JoinHandle<()>>,
     chunk_size: usize,
-    pending: std::sync::Mutex<Vec<u8>>,
+    pending: Mutex<Option<Bytes>>,
     _keep_alive: Py<PyStreamingResponse>,
 }
 
@@ -875,7 +957,13 @@ impl PyBytesChunkIterator {
         };
         let (cancel, mut cancellation) = tokio::sync::watch::channel(false);
 
-        let (tx, rx) = std::sync::mpsc::sync_channel(16);
+        if chunk_size == 0 {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "chunk_size must be greater than zero",
+            ));
+        }
+        let bridge = SyncBridge::new(16);
+        let producer_bridge = Arc::clone(&bridge);
 
         let producer = runtime_handle.spawn(async move {
             let mut stream = stream;
@@ -892,7 +980,7 @@ impl PyBytesChunkIterator {
                                 Ok(bytes) => Ok(bytes),
                                 Err(e) => Err(crate::errors::map_err(e)),
                             };
-                            if tx.send(result).is_err() {
+                            if !producer_bridge.send(result).await {
                                 break;
                             }
                         }
@@ -900,16 +988,17 @@ impl PyBytesChunkIterator {
                     }
                 }
             }
+            producer_bridge.close();
         });
 
         Py::new(
             py,
             Self {
-                rx: std::sync::Mutex::new(rx),
+                rx: bridge,
                 cancel: Some(cancel),
                 producer: Some(producer),
                 chunk_size,
-                pending: std::sync::Mutex::new(Vec::new()),
+                pending: Mutex::new(None),
                 _keep_alive: resp,
             },
         )
@@ -919,7 +1008,10 @@ impl PyBytesChunkIterator {
 
 impl Drop for PyBytesChunkIterator {
     fn drop(&mut self) {
-        self.cancel.take();
+        if let Some(cancel) = self.cancel.take() {
+            let _ = cancel.send(true);
+        }
+        self.rx.close();
         if let Some(producer) = self.producer.take() {
             producer.abort();
         }
@@ -938,35 +1030,30 @@ impl PyBytesChunkIterator {
                 .pending
                 .lock()
                 .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
-            if !pending.is_empty() {
-                let take = pending.len().min(self.chunk_size);
-                let chunk: Vec<u8> = pending.drain(..take).collect();
+            if let Some(bytes) = pending.as_mut() {
+                let take = bytes.len().min(self.chunk_size);
+                let chunk = bytes.split_to(take);
+                if bytes.is_empty() {
+                    *pending = None;
+                }
                 return Ok(Some(PyBytes::new(py, &chunk).into()));
             }
         }
-        let result = py.detach(|| {
-            let rx = self
-                .rx
-                .lock()
-                .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
-            rx.recv()
-                .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
-        });
+        let result = py.detach(|| Ok::<_, PyErr>(self.rx.recv_blocking()));
         match result {
-            Ok(Ok(bytes)) => {
+            Ok(Some(Ok(mut bytes))) => {
                 if bytes.len() > self.chunk_size {
-                    let chunk: Vec<u8> = bytes[..self.chunk_size].to_vec();
-                    let rest: Vec<u8> = bytes[self.chunk_size..].to_vec();
+                    let chunk = bytes.split_to(self.chunk_size);
                     let mut pending = self.pending.lock().map_err(|e| {
                         PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string())
                     })?;
-                    pending.extend(rest);
+                    *pending = Some(bytes);
                     return Ok(Some(PyBytes::new(py, &chunk).into()));
                 }
                 Ok(Some(PyBytes::new(py, &bytes).into()))
             }
-            Ok(Err(err)) => Err(err),
-            Err(_) => Ok(None),
+            Ok(Some(Err(err))) => Err(err),
+            Ok(None) | Err(_) => Ok(None),
         }
     }
 }
@@ -977,7 +1064,7 @@ impl PyBytesChunkIterator {
 
 #[pyclass(name = "StreamingTextIterator")]
 pub(crate) struct PyTextChunkIterator {
-    rx: std::sync::Mutex<std::sync::mpsc::Receiver<Result<String, PyErr>>>,
+    rx: Arc<SyncBridge<Result<String, PyErr>>>,
     cancel: Option<tokio::sync::watch::Sender<bool>>,
     producer: Option<tokio::task::JoinHandle<()>>,
     _keep_alive: Py<PyStreamingResponse>,
@@ -1001,7 +1088,8 @@ impl PyTextChunkIterator {
         };
         let (cancel, mut cancellation) = tokio::sync::watch::channel(false);
 
-        let (tx, rx) = std::sync::mpsc::sync_channel(16);
+        let bridge = SyncBridge::new(16);
+        let producer_bridge = Arc::clone(&bridge);
 
         let producer = runtime_handle.spawn(async move {
             let mut stream = stream;
@@ -1016,12 +1104,12 @@ impl PyTextChunkIterator {
                     chunk = stream.next() => match chunk {
                         Some(Ok(chunk)) => {
                             let text = decoder.decode(&chunk, false);
-                            if tx.send(Ok(text)).is_err() {
+                            if !producer_bridge.send(Ok(text)).await {
                                 break;
                             }
                         }
                         Some(Err(e)) => {
-                            let _ = tx.send(Err(crate::errors::map_err(e)));
+                            let _ = producer_bridge.send(Err(crate::errors::map_err(e))).await;
                             break;
                         }
                         None => break,
@@ -1030,14 +1118,15 @@ impl PyTextChunkIterator {
             }
             let tail = decoder.finish();
             if !tail.is_empty() {
-                let _ = tx.send(Ok(tail));
+                let _ = producer_bridge.send(Ok(tail)).await;
             }
+            producer_bridge.close();
         });
 
         Py::new(
             py,
             Self {
-                rx: std::sync::Mutex::new(rx),
+                rx: bridge,
                 cancel: Some(cancel),
                 producer: Some(producer),
                 _keep_alive: resp,
@@ -1049,7 +1138,10 @@ impl PyTextChunkIterator {
 
 impl Drop for PyTextChunkIterator {
     fn drop(&mut self) {
-        self.cancel.take();
+        if let Some(cancel) = self.cancel.take() {
+            let _ = cancel.send(true);
+        }
+        self.rx.close();
         if let Some(producer) = self.producer.take() {
             producer.abort();
         }
@@ -1063,18 +1155,11 @@ impl PyTextChunkIterator {
     }
 
     fn __next__(&self, py: Python<'_>) -> PyResult<Option<Py<PyAny>>> {
-        let result = py.detach(|| {
-            let rx = self
-                .rx
-                .lock()
-                .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
-            rx.recv()
-                .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
-        });
+        let result = py.detach(|| Ok::<_, PyErr>(self.rx.recv_blocking()));
         match result {
-            Ok(Ok(text)) => Ok(Some(PyString::new(py, &text).into())),
-            Ok(Err(err)) => Err(err),
-            Err(_) => Ok(None),
+            Ok(Some(Ok(text))) => Ok(Some(PyString::new(py, &text).into())),
+            Ok(Some(Err(err))) => Err(err),
+            Ok(None) | Err(_) => Ok(None),
         }
     }
 }
@@ -1085,7 +1170,7 @@ impl PyTextChunkIterator {
 
 #[pyclass(name = "StreamingLinesIterator")]
 pub(crate) struct PyLinesChunkIterator {
-    rx: std::sync::Mutex<std::sync::mpsc::Receiver<Result<String, PyErr>>>,
+    rx: Arc<SyncBridge<Result<String, PyErr>>>,
     cancel: Option<tokio::sync::watch::Sender<bool>>,
     producer: Option<tokio::task::JoinHandle<()>>,
     _keep_alive: Py<PyStreamingResponse>,
@@ -1109,7 +1194,8 @@ impl PyLinesChunkIterator {
         };
         let (cancel, mut cancellation) = tokio::sync::watch::channel(false);
 
-        let (tx, rx) = std::sync::mpsc::sync_channel(16);
+        let bridge = SyncBridge::new(16);
+        let producer_bridge = Arc::clone(&bridge);
 
         let producer = runtime_handle.spawn(async move {
             let mut stream = stream;
@@ -1120,6 +1206,7 @@ impl PyLinesChunkIterator {
                 tokio::select! {
                     changed = cancellation.changed() => {
                         if changed.is_err() || *cancellation.borrow() {
+                            producer_bridge.close();
                             return;
                         }
                     }
@@ -1127,13 +1214,14 @@ impl PyLinesChunkIterator {
                         Some(Ok(chunk)) => {
                             line_buffer.push_str(&decoder.decode(&chunk, false));
                             for line in complete_lines(&mut line_buffer) {
-                                if tx.send(Ok(line)).is_err() {
+                                if !producer_bridge.send(Ok(line)).await {
+                                    producer_bridge.close();
                                     return;
                                 }
                             }
                         }
                         Some(Err(e)) => {
-                            let _ = tx.send(Err(crate::errors::map_err(e)));
+                            let _ = producer_bridge.send(Err(crate::errors::map_err(e))).await;
                             break;
                         }
                         None => break,
@@ -1143,19 +1231,21 @@ impl PyLinesChunkIterator {
 
             line_buffer.push_str(&decoder.finish());
             for line in complete_lines(&mut line_buffer) {
-                if tx.send(Ok(line)).is_err() {
+                if !producer_bridge.send(Ok(line)).await {
+                    producer_bridge.close();
                     return;
                 }
             }
             if let Some(line) = final_line(&mut line_buffer) {
-                let _ = tx.send(Ok(line));
+                let _ = producer_bridge.send(Ok(line)).await;
             }
+            producer_bridge.close();
         });
 
         Py::new(
             py,
             Self {
-                rx: std::sync::Mutex::new(rx),
+                rx: bridge,
                 cancel: Some(cancel),
                 producer: Some(producer),
                 _keep_alive: resp,
@@ -1167,7 +1257,10 @@ impl PyLinesChunkIterator {
 
 impl Drop for PyLinesChunkIterator {
     fn drop(&mut self) {
-        self.cancel.take();
+        if let Some(cancel) = self.cancel.take() {
+            let _ = cancel.send(true);
+        }
+        self.rx.close();
         if let Some(producer) = self.producer.take() {
             producer.abort();
         }
@@ -1181,18 +1274,11 @@ impl PyLinesChunkIterator {
     }
 
     fn __next__(&self, py: Python<'_>) -> PyResult<Option<Py<PyAny>>> {
-        let result = py.detach(|| {
-            let rx = self
-                .rx
-                .lock()
-                .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
-            rx.recv()
-                .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
-        });
+        let result = py.detach(|| Ok::<_, PyErr>(self.rx.recv_blocking()));
         match result {
-            Ok(Ok(text)) => Ok(Some(PyString::new(py, &text).into())),
-            Ok(Err(err)) => Err(err),
-            Err(_) => Ok(None),
+            Ok(Some(Ok(text))) => Ok(Some(PyString::new(py, &text).into())),
+            Ok(Some(Err(err))) => Err(err),
+            Ok(None) | Err(_) => Ok(None),
         }
     }
 }
@@ -1206,7 +1292,7 @@ pub(crate) struct PyAsyncBytesIterator {
     rx: AsyncByteRx,
     producer: Option<tokio::task::JoinHandle<()>>,
     chunk_size: usize,
-    pending: Arc<std::sync::Mutex<Vec<u8>>>,
+    pending: Arc<Mutex<Option<Bytes>>>,
     _keep_alive: Py<PyStreamingResponse>,
 }
 
@@ -1240,7 +1326,7 @@ impl PyAsyncBytesIterator {
                     chunk = stream.next() => match chunk {
                         Some(chunk_result) => {
                             let result = match chunk_result {
-                                Ok(bytes) => Ok(bytes.to_vec()),
+                                Ok(bytes) => Ok(bytes),
                                 Err(e) => Err(crate::errors::map_err(e)),
                             };
                             if tx.send(result).await.is_err() {
@@ -1259,7 +1345,7 @@ impl PyAsyncBytesIterator {
                 rx: Arc::new(tokio::sync::Mutex::new(rx)),
                 producer: Some(producer),
                 chunk_size,
-                pending: Arc::new(std::sync::Mutex::new(Vec::new())),
+                pending: Arc::new(Mutex::new(None)),
                 _keep_alive: resp,
             },
         )
@@ -1290,25 +1376,27 @@ impl PyAsyncBytesIterator {
                 let mut pending_guard = pending.lock().map_err(|e| {
                     PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string())
                 })?;
-                if !pending_guard.is_empty() {
-                    let take = pending_guard.len().min(chunk_size);
-                    let chunk: Vec<u8> = pending_guard.drain(..take).collect();
-                    return Ok(chunk);
+                if let Some(bytes) = pending_guard.as_mut() {
+                    let take = bytes.len().min(chunk_size);
+                    let chunk = bytes.split_to(take);
+                    if bytes.is_empty() {
+                        *pending_guard = None;
+                    }
+                    return Ok(chunk.to_vec());
                 }
             }
             let mut rx_guard = rx.lock().await;
             match rx_guard.recv().await {
-                Some(Ok(bytes)) => {
+                Some(Ok(mut bytes)) => {
                     if bytes.len() > chunk_size {
-                        let chunk: Vec<u8> = bytes[..chunk_size].to_vec();
-                        let rest: Vec<u8> = bytes[chunk_size..].to_vec();
+                        let chunk = bytes.split_to(chunk_size);
                         let mut pending_guard = pending.lock().map_err(|e| {
                             PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string())
                         })?;
-                        pending_guard.extend(rest);
-                        Ok(chunk)
+                        *pending_guard = Some(bytes);
+                        Ok(chunk.to_vec())
                     } else {
-                        Ok(bytes)
+                        Ok(bytes.to_vec())
                     }
                 }
                 Some(Err(err)) => Err(err),
@@ -1532,11 +1620,11 @@ impl PyAsyncLinesIterator {
 
 #[pyclass(name = "StreamingRawBytesIterator")]
 pub(crate) struct PyRawBytesChunkIterator {
-    rx: std::sync::Mutex<std::sync::mpsc::Receiver<Result<Vec<u8>, PyErr>>>,
+    rx: Arc<SyncBridge<Result<Bytes, PyErr>>>,
     cancel: Option<tokio::sync::watch::Sender<bool>>,
     producer: Option<tokio::task::JoinHandle<()>>,
     chunk_size: Option<usize>,
-    pending: std::sync::Mutex<Vec<u8>>,
+    pending: Mutex<Option<Bytes>>,
     _keep_alive: Py<PyStreamingResponse>,
 }
 
@@ -1555,7 +1643,8 @@ impl PyRawBytesChunkIterator {
         let runtime_handle = resp.borrow(py).runtime_handle.clone();
         let (cancel, mut cancellation) = tokio::sync::watch::channel(false);
 
-        let (tx, rx) = std::sync::mpsc::sync_channel(16);
+        let bridge = SyncBridge::new(16);
+        let producer_bridge = Arc::clone(&bridge);
 
         let producer = runtime_handle.spawn(async move {
             let mut stream = stream;
@@ -1569,10 +1658,10 @@ impl PyRawBytesChunkIterator {
                     chunk = stream.next() => match chunk {
                         Some(chunk_result) => {
                             let result = match chunk_result {
-                                Ok(bytes) => Ok(bytes.to_vec()),
+                                Ok(bytes) => Ok(bytes),
                                 Err(e) => Err(crate::errors::map_err(e)),
                             };
-                            if tx.send(result).is_err() {
+                            if !producer_bridge.send(result).await {
                                 break;
                             }
                         }
@@ -1580,16 +1669,17 @@ impl PyRawBytesChunkIterator {
                     }
                 }
             }
+            producer_bridge.close();
         });
 
         Py::new(
             py,
             Self {
-                rx: std::sync::Mutex::new(rx),
+                rx: bridge,
                 cancel: Some(cancel),
                 producer: Some(producer),
                 chunk_size,
-                pending: std::sync::Mutex::new(Vec::new()),
+                pending: Mutex::new(None),
                 _keep_alive: resp,
             },
         )
@@ -1599,7 +1689,10 @@ impl PyRawBytesChunkIterator {
 
 impl Drop for PyRawBytesChunkIterator {
     fn drop(&mut self) {
-        self.cancel.take();
+        if let Some(cancel) = self.cancel.take() {
+            let _ = cancel.send(true);
+        }
+        self.rx.close();
         if let Some(producer) = self.producer.take() {
             producer.abort();
         }
@@ -1618,42 +1711,36 @@ impl PyRawBytesChunkIterator {
                 .pending
                 .lock()
                 .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
-            if !pending.is_empty() {
-                let Some(chunk_size) = self.chunk_size else {
-                    let chunk: Vec<u8> = pending.drain(..).collect();
-                    return Ok(Some(PyBytes::new(py, &chunk).into()));
+            if let Some(bytes) = pending.as_mut() {
+                let chunk = if let Some(chunk_size) = self.chunk_size {
+                    bytes.split_to(bytes.len().min(chunk_size))
+                } else {
+                    std::mem::take(bytes)
                 };
-                let take = pending.len().min(chunk_size);
-                let chunk: Vec<u8> = pending.drain(..take).collect();
+                if bytes.is_empty() {
+                    *pending = None;
+                }
                 return Ok(Some(PyBytes::new(py, &chunk).into()));
             }
         }
-        let result = py.detach(|| {
-            let rx = self
-                .rx
-                .lock()
-                .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
-            rx.recv()
-                .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
-        });
+        let result = py.detach(|| Ok::<_, PyErr>(self.rx.recv_blocking()));
         match result {
-            Ok(Ok(bytes)) => {
+            Ok(Some(Ok(mut bytes))) => {
                 let Some(chunk_size) = self.chunk_size else {
                     return Ok(Some(PyBytes::new(py, &bytes).into()));
                 };
                 if bytes.len() > chunk_size {
-                    let chunk: Vec<u8> = bytes[..chunk_size].to_vec();
-                    let rest: Vec<u8> = bytes[chunk_size..].to_vec();
+                    let chunk = bytes.split_to(chunk_size);
                     let mut pending = self.pending.lock().map_err(|e| {
                         PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string())
                     })?;
-                    pending.extend(rest);
+                    *pending = Some(bytes);
                     return Ok(Some(PyBytes::new(py, &chunk).into()));
                 }
                 Ok(Some(PyBytes::new(py, &bytes).into()))
             }
-            Ok(Err(err)) => Err(err),
-            Err(_) => Ok(None),
+            Ok(Some(Err(err))) => Err(err),
+            Ok(None) | Err(_) => Ok(None),
         }
     }
 }
@@ -1667,7 +1754,7 @@ pub(crate) struct PyAsyncRawBytesIterator {
     rx: AsyncByteRx,
     producer: Option<tokio::task::JoinHandle<()>>,
     chunk_size: Option<usize>,
-    pending: Arc<std::sync::Mutex<Vec<u8>>>,
+    pending: Arc<Mutex<Option<Bytes>>>,
     _keep_alive: Py<PyStreamingResponse>,
 }
 
@@ -1701,7 +1788,7 @@ impl PyAsyncRawBytesIterator {
                     chunk = stream.next() => match chunk {
                         Some(chunk_result) => {
                             let result = match chunk_result {
-                                Ok(bytes) => Ok(bytes.to_vec()),
+                                Ok(bytes) => Ok(bytes),
                                 Err(e) => Err(crate::errors::map_err(e)),
                             };
                             if tx.send(result).await.is_err() {
@@ -1720,7 +1807,7 @@ impl PyAsyncRawBytesIterator {
                 rx: Arc::new(tokio::sync::Mutex::new(rx)),
                 producer: Some(producer),
                 chunk_size,
-                pending: Arc::new(std::sync::Mutex::new(Vec::new())),
+                pending: Arc::new(Mutex::new(None)),
                 _keep_alive: resp,
             },
         )
@@ -1751,31 +1838,32 @@ impl PyAsyncRawBytesIterator {
                 let mut pending_guard = pending.lock().map_err(|e| {
                     PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string())
                 })?;
-                if !pending_guard.is_empty() {
+                if let Some(bytes) = pending_guard.as_mut() {
                     let Some(chunk_size) = chunk_size else {
-                        return Ok(pending_guard.drain(..).collect::<Vec<u8>>());
+                        return Ok(std::mem::take(bytes).to_vec());
                     };
-                    let take = pending_guard.len().min(chunk_size);
-                    let chunk: Vec<u8> = pending_guard.drain(..take).collect();
-                    return Ok(chunk);
+                    let chunk = bytes.split_to(bytes.len().min(chunk_size));
+                    if bytes.is_empty() {
+                        *pending_guard = None;
+                    }
+                    return Ok(chunk.to_vec());
                 }
             }
             let mut rx_guard = rx.lock().await;
             match rx_guard.recv().await {
-                Some(Ok(bytes)) => {
+                Some(Ok(mut bytes)) => {
                     let Some(chunk_size) = chunk_size else {
-                        return Ok(bytes);
+                        return Ok(bytes.to_vec());
                     };
                     if bytes.len() > chunk_size {
-                        let chunk: Vec<u8> = bytes[..chunk_size].to_vec();
-                        let rest: Vec<u8> = bytes[chunk_size..].to_vec();
+                        let chunk = bytes.split_to(chunk_size);
                         let mut pending_guard = pending.lock().map_err(|e| {
                             PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string())
                         })?;
-                        pending_guard.extend(rest);
-                        Ok(chunk)
+                        *pending_guard = Some(bytes);
+                        Ok(chunk.to_vec())
                     } else {
-                        Ok(bytes)
+                        Ok(bytes.to_vec())
                     }
                 }
                 Some(Err(err)) => Err(err),
