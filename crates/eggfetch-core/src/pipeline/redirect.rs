@@ -210,6 +210,14 @@ fn advance_redirect_hop(
 
     let mut temp_request = Request::new(cur_method.clone(), cur_url.clone());
     *temp_request.headers_mut() = cur_headers.clone();
+    // A manually-set `Authorization` header survives same-origin hops.
+    // Reaching this point with one set means no `AuthScheme` is configured
+    // (that combination fails with `ConflictingAuth` on the first hop), so
+    // the engine's unconditional strip would otherwise drop credentials
+    // that HTTPX-compatible callers expect to be forwarded same-origin.
+    // Snapshot before the strip; re-attach below when the hop stays
+    // same-origin. Cross-origin hops drop it unconditionally.
+    let manual_authorization = cur_headers.get("authorization").cloned();
     let temp_body = if drop_body {
         RequestBody::Empty
     } else {
@@ -236,7 +244,7 @@ fn advance_redirect_hop(
     let crate::request::RequestParts {
         method: _,
         url: new_url,
-        headers: new_headers,
+        headers: mut new_headers,
         body: new_body,
         version: new_version,
         timeout: _,
@@ -253,6 +261,15 @@ fn advance_redirect_hop(
         proxied_target: _,
         failure_context: _,
     } = redirect_req.into_parts();
+
+    if let Some(value) = manual_authorization {
+        if cur_url.origin() == new_url.origin() {
+            let value_str = value
+                .to_str()
+                .map_err(|e| Error::InvalidHeaderValue(e.to_string()))?;
+            new_headers.insert("authorization", value_str)?;
+        }
+    }
 
     Ok(RedirectHop {
         method: new_method,

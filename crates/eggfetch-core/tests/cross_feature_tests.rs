@@ -1465,6 +1465,43 @@ async fn client_auth_survives_same_origin_redirect() {
     redirect_server.shutdown();
 }
 
+/// A manually-set `Authorization` header (no configured `AuthScheme`)
+/// must survive a same-origin redirect. The engine strips unconditionally;
+/// the pipeline re-attaches the snapshot when the hop stays same-origin.
+/// Cross-origin hops still drop it (covered by header-stripping tests).
+#[tokio::test]
+async fn manual_authorization_survives_same_origin_redirect() {
+    let redirect_server = RedirectServer::start(None).await;
+
+    let client = Client::builder()
+        .follow_redirects(true)
+        .timeout(Timeout {
+            total: Some(Duration::from_secs(5)),
+            ..Default::default()
+        })
+        .build();
+
+    let dest = format!("{}/redirect-echo-headers", redirect_server.url());
+    let mut resp = client
+        .get(&dest)
+        .unwrap()
+        .header("authorization", "Bearer manual-secret")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status().as_u16(), 200);
+    let body = resp.text().await.unwrap();
+    assert!(
+        body.to_lowercase()
+            .contains("authorization: bearer manual-secret"),
+        "manual auth must be forwarded on same-origin redirect hop, body={body}"
+    );
+    assert_eq!(resp.history().len(), 1);
+    assert_eq!(resp.history()[0].status().as_u16(), 302);
+
+    redirect_server.shutdown();
+}
+
 #[tokio::test]
 #[cfg(feature = "cookies")]
 async fn cookies_set_on_proxy_redirect_hop() {

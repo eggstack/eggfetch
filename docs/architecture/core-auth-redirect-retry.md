@@ -64,7 +64,9 @@ from the cloned header set, and additionally strips `Cookie` and `Host` on
 cross-origin redirects. Client-level auth is NOT reapplied on cross-origin
 redirect hops. Same-origin redirects reapply client-level auth after the
 strip, so effective credentials survive while server-mutated header values
-do not.
+do not. A manually-set `Authorization` header (no configured auth — that
+combination fails with `ConflictingAuth` on the first hop) is re-attached
+by the pipeline on same-origin hops and dropped on cross-origin hops.
 
 ## Redirect Following
 
@@ -104,7 +106,7 @@ method rewrites, loop bounds, and scheme allow-listing are unchanged.
 
 On redirect (single `pipeline::redirect::advance_redirect_hop()` transformation + shared
 `HopBuildParams` hop builder, owned by `pipeline::redirect`):
-- **Same-origin**: `Authorization`/`Proxy-Authorization` are stripped from the cloned set, then configured client-level auth is re-applied; `Cookie`/`Host` survive.
+- **Same-origin**: `Authorization`/`Proxy-Authorization` are stripped from the cloned set, then configured client-level auth is re-applied (or a manually-set `Authorization` header is re-attached when no auth is configured); `Cookie`/`Host` survive.
 - **Cross-origin**: `Authorization`, `Cookie`, and `Proxy-Authorization` are stripped, plus `Host` is removed (the transport derives it from the new URL); client-level auth is not reapplied.
 - `Host` header is removed on cross-origin hops; the transport derives it from the new destination.
 - `Content-Length`, `Content-Type`, and `Transfer-Encoding` are stripped when the body is dropped.
