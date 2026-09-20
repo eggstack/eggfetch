@@ -2,6 +2,8 @@
 
 This document records security review findings for each major subsystem of eggfetch. Each section summarizes the review scope, key findings, and current posture.
 
+See also: [overview.md](overview.md).
+
 ## TLS Review
 
 **Scope**: TLS configuration, certificate verification, trust store resolution, client certificates, SNI/ALPN behavior, and version policy.

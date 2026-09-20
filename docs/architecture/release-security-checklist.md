@@ -2,6 +2,8 @@
 
 This checklist must be completed before any release of eggfetch. Each item has a clear pass/fail criterion. A release must not proceed until all items pass.
 
+See also: [overview.md](overview.md).
+
 ## CI and Tooling
 
 - [ ] All CI checks pass (test suite, clippy, fmt)

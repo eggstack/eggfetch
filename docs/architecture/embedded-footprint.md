@@ -4,6 +4,8 @@ Latest manual qualification for representative embedded Rust consumers.
 This document records one measured profile with exact toolchain/SHA
 metadata. Do not duplicate these byte counts elsewhere; link here.
 
+See also: [overview.md](overview.md).
+
 Parent program: `plans/embedded-rust-client-footprint-and-routing-program.md`.
 Fixture profiles and runner: `qualification/embedded/README.md`,
 `scripts/qualify-embedded-footprint.sh` (manual, never a CI gate).

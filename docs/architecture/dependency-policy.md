@@ -2,6 +2,8 @@
 
 eggfetch follows a conservative dependency policy. Every dependency must have an explicit reason. The project trades breadth of features for correctness, auditability, and a small transitive tree.
 
+See also: [overview.md](overview.md).
+
 ## Current Posture
 
 eggfetch-core has the following direct dependencies. The `optional` marker

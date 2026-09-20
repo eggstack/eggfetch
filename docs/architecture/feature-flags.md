@@ -8,6 +8,8 @@ is a supported API/build profile with no HTTP protocol implementation
 selected; requests return a clear unsupported-feature error until `http1` or
 `http2` is enabled.
 
+See also: [overview.md](overview.md).
+
 ## Current Features
 
 The following features are declared in `crates/eggfetch-core/Cargo.toml`:

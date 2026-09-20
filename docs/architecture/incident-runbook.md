@@ -2,6 +2,8 @@
 
 This document defines the process for handling security vulnerabilities in eggfetch, from initial report through public disclosure.
 
+See also: [overview.md](overview.md).
+
 ## Vulnerability Response Process
 
 ### 1. Report Received

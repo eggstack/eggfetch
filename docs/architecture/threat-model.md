@@ -2,6 +2,8 @@
 
 This document defines the threat model for eggfetch, covering assets, trust boundaries, attacker capabilities, non-goals, and the security properties the system is designed to uphold.
 
+See also: [overview.md](overview.md).
+
 ## Assets
 
 The following data and resources are within scope of the threat model:

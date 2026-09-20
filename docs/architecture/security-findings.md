@@ -3,6 +3,8 @@
 This document tracks security findings from reviews, audits, fuzzing, and
 external reports. Each finding has a severity, status, and resolution.
 
+See also: [overview.md](overview.md).
+
 ## Severity Levels
 
 | Level | Description |
