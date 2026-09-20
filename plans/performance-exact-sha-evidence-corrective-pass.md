@@ -16,7 +16,7 @@ Correct the evidence records for the completed performance optimization campaign
 
 The performance implementation and local qualification are already complete on executable freeze `18a1a4328110df014843a94e155fe678a08b1cb4`. The final performance closure records Tier 1, extended, package, security, exact Rust 1.89.0 MSRV, native Python API/typing, both API oracles, full compatibility, FFI, lifecycle/soak, benchmark, and public-surface checks as passing on that freeze.
 
-The remaining defect is documentary/evidentiary: the live compatibility profiles and parity ledger still identify the prior issue #24 freeze `37ab02b3873a4f0ce7016979b450b6789f406`/canonical full SHA `37ab02b3873a4f0ce7018bd716e326bcf0595230` as the active exact-SHA Stage C binding, while the performance closure claims those records were renewed to `18a1a432`. The claim and the live records therefore disagree.
+The remaining defect is documentary/evidentiary: the live compatibility profiles and parity ledger still identify the prior issue #24 freeze `37ab02b3873a4f0ce7018bd716e326bcf0595230` as the active exact-SHA Stage C binding, while the performance closure claims those records were renewed to `18a1a432`. The claim and the live records therefore disagree.
 
 This corrective must make the repository truthful again by renewing the live evidence records to the already-qualified performance freeze, preserving the issue #24 evidence as historical, and correcting stale closure/index wording. It is not a new performance, compatibility, architecture, or release campaign.
 
