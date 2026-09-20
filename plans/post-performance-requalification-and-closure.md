@@ -1,6 +1,6 @@
 # Post-Performance Requalification and Closure
 
-Planning baseline: 283d52cbf438abf5051527b1c764237d701d6fb3 (main, 2026-09-20; eggfetch 0.1.9)
+Planning baseline: `abf15eb97b10298fb200c2c2f4a1dceffddeb23b` (main, 2026-09-20; eggfetch 0.1.9)
 Parent program: plans/performance-optimization-no-api-regression-program.md
 Predecessor executable plans:
 - plans/performance-benchmark-baseline-and-guardrails.md
@@ -168,51 +168,85 @@ Do not publish a release merely because this performance campaign closes unless 
 
 ## Required closure record
 
-Fill in:
-
-Planning baseline SHA:
-Final executable SHA:
-Rust toolchain:
-Python:
-Platform/CPU:
-Tier 1:
-Extended:
-Package:
-Security:
-MSRV:
-Rust public API diff:
-Native Python manifest:
-HTTPX API oracle:
-HTTPX2 API oracle:
-Full compat run(s):
-FFI:
-Node:
-Downstream:
-Benchmark summary:
-Largest CPU/latency improvement:
-Largest memory/allocation improvement:
-Slow-consumer runtime-progress result:
-Cookie contention result:
-Known performance regressions:
-Rejected/no-benefit candidates:
-Docs-only closure SHA:
+Planning baseline SHA: `abf15eb97b10298fb200c2c2f4a1dceffddeb23b`
+Final executable SHA: `18a1a432` (`18a1a432` is the executable freeze; the
+following documentation commits do not change production behavior).
+Rust toolchain: `rustc 1.98.1`, `cargo 1.98.1`; exact MSRV `1.89.0` passed.
+Python: CPython 3.12.3 in `.venv`.
+Platform/CPU: Linux 6.8.0-139-generic x86_64, Intel Core i9-9900K @ 3.60 GHz.
+Tier 1: PASS — 798 core tests, 568 native Python tests, 134 compatibility
+smoke tests, FFI/CONNECT/doctests/API/typing checks; Node JS surface skipped
+because `crates/eggfetch-node/eggfetch.node` is absent.
+Extended: PASS — full compatibility, API oracles, feature matrix, MSRV,
+documentation/link, resource, lifecycle, soak, merge-lossless, and benchmark
+checks; Node artifact and downstream artifact manifest skipped per policy.
+Package: PASS — crate dry-run/package validation, CPython 3.12 wheel smoke,
+content, and typing checks.
+Security: PASS — `cargo-deny` 0.19.0 and `cargo-audit` 0.22.2; existing
+duplicate `getrandom` entries were reported, with advisories/bans/licenses/
+sources clean.
+MSRV: PASS — Rust 1.89.0 no-default, HTTP/TLS, all-feature, workspace, and
+documentation checks.
+Rust public API diff: no Cargo or Cargo.lock changes; no public Rust item,
+feature/default, `ResponseBody` variant, error, timeout, or CLI contract
+changes. Compatibility fixtures and public-shape tests passed.
+Native Python manifest: PASS, 66 exports unchanged; typing surface/fixtures
+also passed.
+HTTPX API oracle: PASS, 71 allowed matches with zero unexplained/stale/
+resolved-active drift.
+HTTPX2 API oracle: PASS, 79 allowed matches with zero unexplained/stale/
+resolved-active drift.
+Full compat run(s): Tier 2 completed the pinned HTTPX 0.28.1 and HTTPX2 2.12.0
+qualification suites plus lifecycle/soak controls; no new exception.
+FFI: PASS — 34 FFI tests and package/API ownership checks.
+Node: Rust tests passed; JS surface skipped because the native artifact is not
+present.
+Downstream: skipped because the qualification artifact manifest is not
+present; no downstream result is claimed.
+Benchmark summary: on the recorded baseline host, matching short Criterion
+runs moved response-header clone medians from 214 ns/1.14 us/4.48 us (8/50/
+200 headers) to 178.63 ns/1.0469 us/4.1715 us. Cookie lookup moved from 2.13
+us/268.5 us (10/1000 cookies) to 937.91 ns/105.58 us. The Python harness
+(`--repeats 5`) moved sync 1 KiB streaming from 11.31 ms to 2.232 ms, async
+from 140.23 ms to 101.16 ms, lines from 2.71 ms to 2.453 ms, buffered without
+text from 2.64 ms to 0.987 ms, and first text from 2.62 ms to 2.170 ms.
+These are local timing evidence, not universal budgets.
+Largest CPU/latency improvement: cookie matching and sync small-chunk
+streaming, from the measurements above.
+Largest memory/allocation improvement: lazy buffered response text and
+`Bytes`-owned streaming remainders; RSS resource monitoring stayed within the
+existing 64 MiB delta/100 MiB absolute caps.
+Slow-consumer runtime-progress result: the bounded `SyncBridge` awaits
+capacity on the producer side and passes all streaming/lifecycle/soak tests;
+no separate timing budget was introduced into routine CI.
+Cookie contention result: expiry watermark skips the write-locked stale scan
+before the due time; cookie ordering/expiry/deduplication tests and the
+small/large lookup controls passed.
+Known performance regressions: none reproducible. The extended 100-sample
+decompression comparison briefly reported +3.3%; an isolated matching
+10-sample rerun reported -9.7%, so it was classified as measurement noise in
+an unchanged control path.
+Rejected/no-benefit candidates: connector/TLS residual construction was left
+unchanged because no benchmark evidence justified added complexity; no Cargo
+or dependency changes were needed.
+Docs-only closure SHA: recorded by the final documentation commit below.
 
 ## Completion criteria
 
-- [ ] All intended executable optimization work is frozen at one SHA.
-- [ ] Comparable before/after evidence is recorded.
-- [ ] No representative material regression is left unexplained.
-- [ ] Native Rust public API remains source compatible with the baseline.
-- [ ] ResponseBody public shape is unchanged.
-- [ ] Python native manifest/typing/API oracles have zero new drift.
-- [ ] HTTPX/HTTPX2 full compatibility is green with no new exception.
-- [ ] Streaming backpressure/cancellation/timeout tests are green.
-- [ ] Cookie and lazy-text behavioral tests are green.
-- [ ] FFI ABI/ownership tests are green.
-- [ ] Feature matrix, Tier 1, extended, package, security, and MSRV are green.
-- [ ] Downstream qualification is green when required/available.
-- [ ] Exact-SHA qualification records point to the final executable freeze.
-- [ ] plans/README.md marks this program complete only after evidence is recorded.
+- [x] All intended executable optimization work is frozen at one SHA.
+- [x] Comparable before/after evidence is recorded.
+- [x] No representative material regression is left unexplained.
+- [x] Native Rust public API remains source compatible with the baseline.
+- [x] ResponseBody public shape is unchanged.
+- [x] Python native manifest/typing/API oracles have zero new drift.
+- [x] HTTPX/HTTPX2 full compatibility is green with no new exception.
+- [x] Streaming backpressure/cancellation/timeout tests are green.
+- [x] Cookie and lazy-text behavioral tests are green.
+- [x] FFI ABI/ownership tests are green.
+- [x] Feature matrix, Tier 1, extended, package, security, and MSRV are green.
+- [x] Downstream qualification was checked and truthfully skipped because its artifact was unavailable.
+- [x] Exact-SHA qualification records point to the final executable freeze.
+- [x] plans/README.md marks this program complete after evidence is recorded.
 
 ## Stop conditions
 

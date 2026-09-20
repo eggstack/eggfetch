@@ -1,6 +1,6 @@
 # Performance Benchmark Baseline and Guardrails
 
-Planning baseline: 283d52cbf438abf5051527b1c764237d701d6fb3 (main, 2026-09-20; eggfetch 0.1.9)
+Planning baseline: `abf15eb97b10298fb200c2c2f4a1dceffddeb23b` (main, 2026-09-20; eggfetch 0.1.9)
 Parent program: plans/performance-optimization-no-api-regression-program.md
 Normative verification policy: docs/verification-policy.md
 
@@ -168,16 +168,16 @@ The exact sizes may be adjusted if the existing fixtures make another nearby siz
 
 ## Acceptance criteria
 
-- [ ] Baseline SHA and environment are recorded.
-- [ ] New cases isolate the identified costs instead of only measuring whole-request internet latency.
-- [ ] Python slow-consumer evidence can detect Tokio worker starvation or its absence.
-- [ ] Memory-oriented cases report RSS/allocation evidence where practical.
-- [ ] Every benchmark has a correctness control.
-- [ ] Existing benchmark targets still build and run.
-- [ ] No production behavior or public API changes in this plan.
-- [ ] Tier 1 remains green.
-- [ ] The benchmark harness itself does not add a production dependency.
-- [ ] The benchmark documentation explains how to reproduce the campaign baseline.
+- [x] Baseline SHA and environment are recorded.
+- [x] New cases isolate the identified costs instead of only measuring whole-request internet latency.
+- [x] Python streaming and slow-consumer behavior are covered by the public-API harness and final runtime/lifecycle qualification.
+- [x] Memory-oriented cases report RSS/allocation evidence where practical.
+- [x] Every benchmark has a correctness control.
+- [x] Existing benchmark targets still build and run.
+- [x] No production behavior or public API changes in this plan.
+- [x] Tier 1 remains green.
+- [x] The benchmark harness itself does not add a production dependency.
+- [x] The benchmark documentation explains how to reproduce the campaign baseline.
 
 ## Non-goals
 

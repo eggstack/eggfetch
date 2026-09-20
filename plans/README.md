@@ -7,9 +7,9 @@ This directory contains active implementation plans, live qualification/status r
 
 Handoff program: performance-optimization-no-api-regression-program.md
 
-Planning baseline: 283d52cbf438abf5051527b1c764237d701d6fb3.
+Planning baseline: `abf15eb97b10298fb200c2c2f4a1dceffddeb23b`.
 
-Status: planned / ready for implementation. The current source audit found a bounded set of performance opportunities after the earlier connection-reuse, Hyper idle-policy, pool-map, and footprint work. The campaign is explicitly API-preserving and evidence-driven: baseline first, then core ownership/allocation fast paths, Python streaming backpressure/copy reduction, cookie/buffered-response memory work, and one final exact-SHA requalification/closure pass.
+Status: implementation and local requalification complete on executable freeze `18a1a432`. The campaign is explicitly API-preserving and evidence-driven: baseline first, then core ownership/allocation fast paths, Python streaming backpressure/copy reduction, cookie/buffered-response memory work, and one final exact-SHA requalification/closure pass. Tier 1, extended, package, and security checks are green; remote CI remains pending push.
 
 Execution order:
 

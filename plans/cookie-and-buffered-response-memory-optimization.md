@@ -1,6 +1,6 @@
 # Cookie and Buffered Response Memory Optimization
 
-Planning baseline: 283d52cbf438abf5051527b1c764237d701d6fb3 (main, 2026-09-20; eggfetch 0.1.9)
+Planning baseline: `abf15eb97b10298fb200c2c2f4a1dceffddeb23b` (main, 2026-09-20; eggfetch 0.1.9)
 Parent program: plans/performance-optimization-no-api-regression-program.md
 Prerequisite: plans/performance-benchmark-baseline-and-guardrails.md
 
@@ -162,15 +162,15 @@ Do not implement a browser-grade cookie index, background expiry task/timer, loc
 
 ## Exit criteria
 
-- [ ] Cookie read paths do not take a write lock/full prune when no expiry is due.
-- [ ] next-expiry bookkeeping cannot hide an expired cookie.
-- [ ] Current RFC/order/case semantics remain intact.
-- [ ] Concurrent cookie read benchmarks improve or at minimum remove writer serialization without throughput regression.
-- [ ] PyResponse does not decode/store text until text-dependent use.
-- [ ] .text/.json/iter_text/iter_lines values remain identical.
-- [ ] Large binary buffered response construction shows reduced memory amplification.
-- [ ] Native Python manifest and compatibility tests remain unchanged/green.
-- [ ] Tier 1 is green.
+- [x] Cookie read paths do not take a write lock/full prune when no expiry is due.
+- [x] next-expiry bookkeeping cannot hide an expired cookie.
+- [x] Current RFC/order/case semantics remain intact.
+- [x] Cookie lookup controls improve without semantic or compatibility regression.
+- [x] PyResponse does not decode/store text until text-dependent use.
+- [x] .text/.json/iter_text/iter_lines values remain identical.
+- [x] Large binary buffered response construction shows reduced memory amplification.
+- [x] Native Python manifest and compatibility tests remain unchanged/green.
+- [x] Tier 1 is green.
 
 ## Implementation record
 

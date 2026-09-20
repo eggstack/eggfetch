@@ -13,6 +13,7 @@ eggfetch is a Rust-native async HTTP client engine (tokio + hyper) with Python b
 
 - **HTTP/1.1, HTTP/2, HTTP/3** — ALPN negotiation; HTTP/3 over QUIC is experimental ([guide](docs/rust/guide.md))
 - **Streaming** — response bodies stream without eager buffering (`bytes_stream()`, `text_lines()`), with trailers after EOF ([guide](docs/rust/guide.md))
+- **Performance qualification** — API-safe Rust/Python hot-path benchmarks and reproduction commands are documented in [architecture/benchmarks](docs/architecture/benchmarks.md)
 - **Pooling and timeouts** — per-origin connection pools, phase-aware timeouts (pool/connect/write/read/total), and transport metrics ([pool/timeouts](docs/architecture/core-timeout-pool.md))
 - **TLS** — rustls with per-client crypto providers, custom or additive CA roots, mTLS client certs, version policy, and verification toggle ([TLS](docs/concepts/tls.md))
 - **Proxy** — HTTP forwarding, HTTPS CONNECT, proxy auth, per-request override, `NO_PROXY`, SOCKS5, and UDS routes ([proxy](docs/concepts/proxy.md)). CONNECT wire bytes live in the small `eggfetch-http-connect` crate (no sockets/TLS/retry) consumed by `eggfetch-core` via the `proxy` feature.
@@ -116,6 +117,11 @@ from eggfetch.compat.httpx2 import Client as H2Client  # httpx2 2.12.0 surface
 See [`docs/python/guide.md`](docs/python/guide.md) for the full Python API reference.
 
 The native package supports Python 3.10–3.15 (3.15 wheels pending the build-only rehearsal tracked in `plans/README.md`) and ships `py.typed` stubs for its public API. `Client` and the top-level sync helpers accept lazy sync `content=` iterables (async-only iterables are rejected before dispatch); `AsyncClient` additionally accepts lazy async iterables, pulled only as the transport asks for them. `eggfetch._native` is a private implementation module — import from `eggfetch`.
+
+Buffered Python responses retain the raw body and decode `.text` lazily; sync
+streaming uses bounded async-aware backpressure so a slow consumer does not
+block the client runtime. These are private implementation details and do not
+change the public API or chunking contracts.
 
 ## Usage -- Rust
 

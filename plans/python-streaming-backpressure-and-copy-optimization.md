@@ -1,6 +1,6 @@
 # Python Streaming Backpressure and Copy Optimization
 
-Planning baseline: 283d52cbf438abf5051527b1c764237d701d6fb3 (main, 2026-09-20; eggfetch 0.1.9)
+Planning baseline: `abf15eb97b10298fb200c2c2f4a1dceffddeb23b` (main, 2026-09-20; eggfetch 0.1.9)
 Parent program: plans/performance-optimization-no-api-regression-program.md
 Prerequisite: plans/performance-benchmark-baseline-and-guardrails.md
 
@@ -170,17 +170,17 @@ The HTTPX/HTTPX2 API manifests must not change.
 
 ## Exit criteria
 
-- [ ] No synchronous bounded channel send executes on a Tokio async worker.
-- [ ] Backpressure remains bounded and lossless.
-- [ ] Byte/raw queues retain Bytes until Python object creation.
-- [ ] Oversized frames are split without copying the remainder.
-- [ ] Pending byte and line algorithms do not repeatedly front-drain large buffers.
-- [ ] Sync/async/raw/decoded variants share canonical private chunking logic where practical.
-- [ ] Slow consumers cannot starve unrelated runtime work.
-- [ ] Cancellation and runtime/client shutdown remain prompt and correct.
-- [ ] Python native and compatibility streaming tests are green.
-- [ ] Benchmark evidence is recorded.
-- [ ] No Python-visible API/behavior regression.
+- [x] No synchronous bounded channel send executes on a Tokio async worker.
+- [x] Backpressure remains bounded and lossless.
+- [x] Byte/raw queues retain Bytes until Python object creation.
+- [x] Oversized frames are split without copying the remainder.
+- [x] Pending byte and line algorithms do not repeatedly front-drain large buffers.
+- [x] Sync/async/raw/decoded variants share canonical private chunking logic where practical.
+- [x] Slow consumers cannot starve unrelated runtime work; lifecycle/soak qualification passed.
+- [x] Cancellation and runtime/client shutdown remain prompt and correct.
+- [x] Python native and compatibility streaming tests are green.
+- [x] Benchmark evidence is recorded.
+- [x] No Python-visible API/behavior regression.
 
 ## Implementation record
 

@@ -1,6 +1,6 @@
 # Performance Optimization Without API Regression Program
 
-Planning baseline: 283d52cbf438abf5051527b1c764237d701d6fb3 (main, 2026-09-20; eggfetch 0.1.9)
+Planning baseline: `abf15eb97b10298fb200c2c2f4a1dceffddeb23b` (main, 2026-09-20; eggfetch 0.1.9)
 Audit date: 2026-09-20
 Normative verification policy: docs/verification-policy.md
 Primary compatibility contracts: native Rust public API, Python native manifest, HTTPX 0.28.1, HTTPX2 2.12.0, C ABI, existing CLI behavior
@@ -122,6 +122,16 @@ Performance claims must be made only from comparable measurements:
 - record allocation/RSS evidence when the optimization primarily targets copying/memory rather than latency;
 - do not use loopback microbench results to claim internet latency improvements;
 - do not accept an optimization that wins only by changing backpressure, buffering, timeout, pooling, decoding, or error semantics.
+
+## Status
+
+Implementation is complete on executable freeze `18a1a432`: baseline/guardrail
+measurements, core ownership reductions, async-safe Python streaming
+backpressure, cookie expiry watermarking, and lazy buffered-response text are
+implemented without public API or compatibility-surface changes. Final
+qualification is recorded in
+`post-performance-requalification-and-closure.md`; documentation changes are
+kept separate from the executable freeze.
 
 No permanent hard performance threshold is required in routine CI. Benchmarks are qualification evidence, not a flaky pass/fail gate.
 

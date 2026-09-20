@@ -103,6 +103,14 @@ The response also retains a runtime lease, so an open stream remains readable
 after its `Client` is closed; the runtime shuts down once the last lease is
 released.
 
+Sync streaming producers use a bounded runtime-neutral bridge: producer-side
+backpressure awaits capacity without blocking a Tokio worker, while the sync
+iterator waits with the GIL detached. Rust-side byte payloads remain `Bytes`
+through queueing and chunk splitting; conversion to Python-owned bytes happens
+only at the iterator boundary. Buffered `PyResponse` objects retain raw
+content and initialize their private decoded-text cache only when `.text`,
+`.json()`, or text iteration first needs it.
+
 ### Top-Level Helpers
 
 `eggfetch.get(...)`, `eggfetch.post(...)`, etc. create a short-lived runtime and client per call. The `Client` class owns a persistent runtime for connection reuse.

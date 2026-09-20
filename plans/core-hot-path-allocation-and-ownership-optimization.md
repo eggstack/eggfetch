@@ -1,6 +1,6 @@
 # Core Hot-Path Allocation and Ownership Optimization
 
-Planning baseline: 283d52cbf438abf5051527b1c764237d701d6fb3 (main, 2026-09-20; eggfetch 0.1.9)
+Planning baseline: `abf15eb97b10298fb200c2c2f4a1dceffddeb23b` (main, 2026-09-20; eggfetch 0.1.9)
 Parent program: plans/performance-optimization-no-api-regression-program.md
 Prerequisite: plans/performance-benchmark-baseline-and-guardrails.md
 
@@ -185,17 +185,17 @@ No public API manifest, feature/default definition, error type, timeout classifi
 
 ## Exit criteria
 
-- [ ] OriginKey is not built for default/global-only admission unless genuinely required.
-- [ ] Default no-timeout/no-permit response bodies do not allocate an inert lease Arc.
-- [ ] Configured pool permits/timeouts still live exactly through response EOF/error/drop.
-- [ ] Hyper response headers are moved rather than cloned where safe.
-- [ ] No-trace dispatch does not stringify URI for tracing.
-- [ ] Request-size validation avoids a temporary String with differential proof.
-- [ ] Resolved-address and multipart ownership copies are removed where safe.
-- [ ] FFI buffered responses avoid the intermediate core Bytes-to-Vec copy.
-- [ ] Connector/TLS residual work is either evidence-backed or explicitly rejected.
-- [ ] Tier 1 and focused feature/FFI tests are green.
-- [ ] No public API or semantic regression.
+- [x] OriginKey is not built for default/global-only admission unless genuinely required.
+- [x] Default no-timeout/no-permit response bodies do not allocate an inert lease Arc.
+- [x] Configured pool permits/timeouts still live exactly through response EOF/error/drop.
+- [x] Hyper response headers are moved rather than cloned where safe.
+- [x] No-trace dispatch does not stringify URI for tracing.
+- [x] Request-size validation avoids a temporary String with differential proof.
+- [x] Resolved-address and multipart ownership copies are removed where safe.
+- [x] FFI buffered responses avoid the intermediate core Bytes-to-Vec copy.
+- [x] Connector/TLS residual work is explicitly rejected without evidence.
+- [x] Tier 1 and focused feature/FFI tests are green.
+- [x] No public API or semantic regression.
 
 ## Implementation record
 

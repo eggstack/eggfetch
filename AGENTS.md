@@ -42,6 +42,7 @@ Start at `docs/architecture/overview.md` (§ Deep-Dive Index). Normative CI/rele
 ## Boundaries and lint
 
 - `eggfetch-core`: no PyO3, no clap, no CLI parsing. `eggfetch-cli`/`eggfetch-python`: no direct hyper/tokio TCP — all I/O through core. No parallel sync networking path; Python sync blocks on the async engine with GIL released. If you write HTTP logic outside core, refactor.
+- Performance campaign internals are API-neutral: Python sync streaming uses a bounded async-aware bridge, buffered response text is lazy/private, and the qualification harness in `scripts/performance_benchmark.py` is non-CI timing evidence. Preserve chunking, cancellation, backpressure, decoding, and public surface contracts when touching these paths.
 - `eggfetch-http-connect` is the only exception to core-owned HTTP logic: generic CONNECT wire bytes only (target formatting, request serialization, bounded response-head parsing). No sockets, TLS, retry, or client policy; owned by the `proxy` feature, absent from non-proxy profiles.
 - `unsafe_code = "forbid"` workspace-wide; only `eggfetch-ffi` and `eggfetch-node` override to `"allow"`. Never add new `unsafe` without explicit discussion.
 - Pedantic clippy (`-D warnings`); `missing_docs = "warn"` (public items need doc comments). `scripts/check_lint_suppressions.sh` rejects blanket `allow`/`deny(warnings, clippy::all/pedantic/nursery/restriction)` (except FFI/Node `pedantic`). Use specific lint names with a justifying comment.

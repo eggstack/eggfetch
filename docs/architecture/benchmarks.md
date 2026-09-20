@@ -97,3 +97,15 @@ python scripts/performance_benchmark.py --repeats 5
 The harness is deliberately outside routine CI. Compare runs only when the
 commit, toolchains, target, feature set, server fixture, and repeat settings
 are identical. Timing is evidence, not a hard CI threshold.
+
+The 2026-09-20 campaign baseline was recorded on the local Linux/x86_64
+Intel Core i9-9900K host at `abf15eb97b10298fb200c2c2f4a1dceffddeb23b` and
+requalified at executable freeze `18a1a432`. Matching short Criterion runs
+reported response-header clone medians of 214 ns/1.14 us/4.48 us before and
+178.63 ns/1.0469 us/4.1715 us after for 8/50/200 headers. Cookie lookup
+medians for 10/1,000 cookies were 2.13 us/268.5 us before and 937.91
+ns/105.58 us after. The Python harness medians moved from 11.31 ms to 2.232
+ms for sync 1 KiB streaming, 140.23 ms to 101.16 ms for async streaming,
+2.71 ms to 2.453 ms for lines, 2.64 ms to 0.987 ms for buffered no-text, and
+2.62 ms to 2.170 ms for first text. These measurements are host-specific
+qualification evidence, not universal performance budgets.
