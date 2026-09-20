@@ -1,8 +1,8 @@
 //! Ordinary Hyper dispatch: direct, custom-dialer, UDS, and SNI routes.
 //!
 //! Owns direct/custom/UDS/SNI ordinary H1/H2 request building and send
-//! calls. Hyper request scaffolding is built once via `build_hyper_request`
-//! so branches do not rebuild it. No branch duplicates common response
+//! calls. Prepared request metadata is moved into the Hyper request at the
+//! final dispatch boundary. No branch duplicates common response
 //! finalization; the caller applies the shared post-transport policy.
 
 use std::time::Duration;
@@ -17,7 +17,7 @@ use crate::headers::Headers;
 use crate::response::Response;
 use crate::transport_hints::TransportHints;
 
-/// Build a Hyper request from prepared parts.
+/// Build a Hyper request from prepared parts by moving owned metadata.
 ///
 /// Shared by the UDS, custom-dialer, specialized-direct, SNI-direct, and
 /// standard Hyper paths so `http::Request` scaffolding is not rebuilt in each
@@ -27,37 +27,18 @@ use crate::transport_hints::TransportHints;
 ///
 /// Returns [`Error::RequestBuild`] if the Hyper request cannot be built.
 pub(super) fn build_hyper_request(
-    method: &http::Method,
+    method: http::Method,
     uri: http::Uri,
     version: http::Version,
-    headers: &Headers,
+    headers: Headers,
     body: RequestBody,
 ) -> Result<http::Request<crate::transport::HyperRequestBody>> {
-    build_http_request(method, uri, version, headers, body.into_http_body())
-}
-
-pub(super) fn build_http_request<B>(
-    method: &http::Method,
-    uri: http::Uri,
-    version: http::Version,
-    headers: &Headers,
-    body: B,
-) -> Result<http::Request<B>> {
-    let mut builder = http::Request::builder()
-        .method(method)
-        .uri(uri)
-        .version(version);
-    for (name, value) in headers.iter() {
-        builder = builder.header(name, value);
-    }
-    builder
-        .body(body)
-        .map_err(|e| Error::RequestBuild(e.to_string()))
+    build_http_request_owned(method, uri, version, headers, body.into_http_body())
 }
 
 /// Build a request by moving an already-owned header map into the request.
 pub(super) fn build_http_request_owned<B>(
-    method: &http::Method,
+    method: http::Method,
     uri: http::Uri,
     version: http::Version,
     headers: Headers,
@@ -78,9 +59,9 @@ pub(super) fn build_http_request_owned<B>(
 #[cfg(all(feature = "high-level-url", feature = "advanced-routing"))]
 pub(super) async fn send_uds_route(
     inner: &ClientInner,
-    method: &http::Method,
+    method: http::Method,
     uri: http::Uri,
-    headers: &Headers,
+    headers: Headers,
     body: RequestBody,
     version: http::Version,
     url: url::Url,
@@ -127,9 +108,9 @@ pub(super) async fn send_uds_route(
 #[cfg(all(feature = "high-level-url", feature = "advanced-routing"))]
 pub(super) async fn send_custom_route(
     inner: &ClientInner,
-    method: &http::Method,
+    method: http::Method,
     uri: http::Uri,
-    headers: &Headers,
+    headers: Headers,
     body: RequestBody,
     version: http::Version,
     url: url::Url,
@@ -163,9 +144,9 @@ pub(super) async fn send_custom_route(
 #[cfg(all(feature = "high-level-url", feature = "advanced-routing"))]
 pub(super) async fn send_direct_route(
     inner: &ClientInner,
-    method: &http::Method,
+    method: http::Method,
     uri: http::Uri,
-    headers: &Headers,
+    headers: Headers,
     body: RequestBody,
     version: http::Version,
     url: url::Url,
@@ -210,9 +191,9 @@ pub(super) async fn send_direct_route(
 #[cfg(all(feature = "high-level-url", feature = "advanced-routing"))]
 pub(super) async fn send_sni_route(
     inner: &ClientInner,
-    method: &http::Method,
+    method: http::Method,
     uri: http::Uri,
-    headers: &Headers,
+    headers: Headers,
     body: RequestBody,
     version: http::Version,
     url: url::Url,
@@ -248,9 +229,9 @@ pub(super) async fn send_sni_route(
 #[cfg(feature = "high-level-url")]
 pub(super) async fn send_hyper_request(
     inner: &ClientInner,
-    method: &http::Method,
+    method: http::Method,
     url: url::Url,
-    headers: &Headers,
+    headers: Headers,
     body: RequestBody,
     version: http::Version,
     remaining_total: Option<Duration>,
@@ -268,7 +249,7 @@ pub(super) async fn send_hyper_request(
     let send_future = crate::transport::direct::send_request(
         hyper_client,
         hyper_request,
-        url.clone(),
+        url,
         transport_hints.trace.as_deref(),
         failure_context,
     );
@@ -286,10 +267,10 @@ mod tests {
         headers.insert("x-custom", "keep").unwrap();
         let uri: http::Uri = "https://example.com/path".parse().unwrap();
         let req = build_hyper_request(
-            &http::Method::GET,
+            http::Method::GET,
             uri.clone(),
             http::Version::HTTP_11,
-            &headers,
+            headers,
             RequestBody::Empty,
         )
         .expect("hyper request builds");

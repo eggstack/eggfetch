@@ -62,7 +62,7 @@ native `eggfetch` types.
 | `lib.rs` | Module registration + top-level functions (`get`, `post`, etc.) |
 | `client.rs` | `Client` — sync adapter with persistent runtime |
 | `async_client.rs` | `AsyncClient` — async adapter targeting asyncio |
-| `response.rs` | `PyResponse` — buffered response surface |
+| `response.rs` | `PyResponse` — buffered response surface and private lazy buffered iterators |
 | `headers.rs` | `PyHeaders` — header wrapper |
 | `errors.rs` | Exception hierarchy |
 | `auth.rs` | `BasicAuth`, `BearerAuth`, `NoAuth` |
@@ -110,6 +110,16 @@ through queueing and chunk splitting; conversion to Python-owned bytes happens
 only at the iterator boundary. Buffered `PyResponse` objects retain raw
 content and initialize their private decoded-text cache only when `.text`,
 `.json()`, or text iteration first needs it.
+
+Core response construction extracts status, wire metadata, charset, and
+`Set-Cookie` values before moving the ordinary core `HeaderMap` into
+`PyHeaders`; it does not clone the complete map. Buffered `iter_bytes()`,
+`iter_text()`, and `iter_lines()` keep a reference to the response plus a
+private cursor and create one Python value per `__next__`. Text chunks count
+Unicode scalars and lines retain `str.lines()` CRLF/trailing-line semantics.
+Async `StreamingResponse.aread()` keeps the collected Rust `Bytes` for the
+response cache and creates the final Python `bytes` in the GIL bridge without
+an intermediate full-body `Vec`.
 
 ### Top-Level Helpers
 

@@ -30,7 +30,9 @@ use errors::map_err;
 use headers::PyHeaders;
 use limits::PyLimits;
 use multipart::PyFile;
-use response::PyResponse;
+use response::{
+    PyResponse, PyResponseBytesIterator, PyResponseLinesIterator, PyResponseTextIterator,
+};
 use retry::PyRetry;
 use streaming::{
     PyAsyncBytesIterator, PyAsyncLinesIterator, PyAsyncRawBytesIterator, PyAsyncTextIterator,
@@ -577,6 +579,9 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyCookies>()?;
     m.add_class::<PyHeaders>()?;
     m.add_class::<PyResponse>()?;
+    m.add_class::<PyResponseBytesIterator>()?;
+    m.add_class::<PyResponseTextIterator>()?;
+    m.add_class::<PyResponseLinesIterator>()?;
     m.add_class::<PyStreamingResponse>()?;
     m.add_class::<PyBytesChunkIterator>()?;
     m.add_class::<PyTextChunkIterator>()?;

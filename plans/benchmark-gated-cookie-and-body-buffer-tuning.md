@@ -98,3 +98,20 @@ Body collection:
 - [ ] No new dependency/background task/index structure.
 - [ ] Rejected/no-benefit candidates are explicitly recorded.
 - [ ] Tier 1 is green if executable code changes.
+
+## Execution record — 2026-09-20
+
+The cookie candidate was implemented as a small private expiry-watermark
+optimization. Insert, replacement, and deletion update the watermark
+incrementally; bulk update/expiry paths recompute once. Focused tests cover
+equal minima, expired insertions, visibility, and mutation correctness. The
+ten-sample mutation controls at 10/1,000/10,000 cookies measured
+approximately 2.11 us, 200 us, and 2.15 ms with no material benchmark delta;
+the change was retained because it removes repeated full-jar pruning work
+without changing lookup or synchronization semantics.
+
+The decoded-body capacity candidate was explicitly rejected. The safe
+collection boundary cannot prove a decoded length, and wire `Content-Length`
+is not a valid capacity hint for compressed responses. `ResponseBody` remains
+unchanged, so no speculative reservation, limit bypass, or duplicate buffering
+loop was introduced. Tier 1 and extended validation passed.

@@ -59,7 +59,6 @@ pub(super) fn finalize_response(
     inner: &ClientInner,
     mut response: Response,
     route: TransportRoute,
-    url: &url::Url,
     via_proxy: bool,
     decompression_enabled: bool,
     max_decoded_body_size: Option<usize>,
@@ -81,7 +80,7 @@ pub(super) fn finalize_response(
         if learnable {
             super::h3_dispatch::learn_altsvc_from_response(
                 inner,
-                url,
+                response.url(),
                 response.headers(),
                 via_proxy,
                 true,
@@ -89,7 +88,7 @@ pub(super) fn finalize_response(
         }
     }
     #[cfg(not(feature = "http3"))]
-    let _ = (route, url, via_proxy);
+    let _ = (route, via_proxy);
 
     // Record successfully captured 101 upgrades as protocol connections.
     // Ordinary pooled responses remain uncounted here; logical requests are

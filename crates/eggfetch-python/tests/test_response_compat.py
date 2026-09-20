@@ -66,6 +66,22 @@ class _Handler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
 
+        elif path == "/utf8":
+            body = "a€bé".encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        elif path == "/crlf":
+            body = b"first\r\nsecond\r\nfinal"
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
         elif path == "/multi-header":
             body = b"ok"
             self.send_response(200)
@@ -411,6 +427,22 @@ class TestIterators:
         it = r.iter_bytes()
         # Should be an iterator (has __iter__)
         assert hasattr(it, "__iter__")
+
+    def test_buffered_iterators_are_independent_and_lazy_shaped(self, server):
+        response = eggfetch.get(f"{server}/utf8")
+        first = response.iter_bytes(chunk_size=2)
+        second = response.iter_bytes(chunk_size=2)
+        assert next(first) == next(second) == b"a\xe2"
+        assert b"".join(first) == b"\x82\xacb\xc3\xa9"
+        assert b"".join(second) == b"\x82\xacb\xc3\xa9"
+
+        text = eggfetch.get(f"{server}/utf8")
+        assert list(text.iter_text(chunk_size=2)) == ["a€", "bé"]
+        assert list(text.iter_text(chunk_size=1)) == ["a", "€", "b", "é"]
+
+    def test_buffered_lines_match_str_lines_for_crlf_and_partial_line(self, server):
+        response = eggfetch.get(f"{server}/crlf")
+        assert list(response.iter_lines()) == ["first", "second", "final"]
 
 
 # ---------------------------------------------------------------------------

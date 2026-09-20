@@ -106,3 +106,22 @@ If the owned-header change somehow performs worse reproducibly for ordinary requ
 ## Stop conditions
 
 Stop and split a corrective plan if eliminating a clone requires changing a public type, changing history/response URL semantics, storing borrowed request state across await, or weakening route/fallback behavior.
+
+## Execution record — 2026-09-20
+
+Implemented the ordinary H1/H2 ownership fast path. Prepared `Method`,
+`Headers`, and the logical `Url` now move through the private standard-route
+helpers; finalization reads the response URL instead of requiring a second
+owned URL clone. Duplicate request-header coverage was added and confirms
+that repeated values survive unchanged. H3 fallback retains its explicit
+clones because that path needs the original request for an alternate
+transport.
+
+The request-ownership Criterion control measured owned-header versus
+rebuild controls at approximately 360 vs 889 ns, 1.00 vs 3.81 us, and 3.23
+vs 13.92 us for 8/50/200 headers. The optimized warm request controls were
+approximately 339/879/2,818 ns versus 833/3,853/14,044 ns for the rebuild
+path. These are private construction controls; routing, retry, redirect,
+trace, timeout, protocol, and response-shape behavior remains covered by the
+Tier 1 and extended suites. No public API, dependency, or unsafe code was
+added.

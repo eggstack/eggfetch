@@ -102,6 +102,88 @@ fn bench_header_operations(c: &mut Criterion) {
     group.finish();
 }
 
+fn bench_request_ownership(c: &mut Criterion) {
+    let mut group = c.benchmark_group("request_ownership");
+    for count in [8_usize, 50, 200] {
+        let mut headers = Headers::new();
+        for index in 0..count {
+            headers
+                .append(&format!("x-bench-{index}"), "value")
+                .unwrap();
+        }
+        headers.append("x-duplicate", "first").unwrap();
+        headers.append("x-duplicate", "second").unwrap();
+
+        group.bench_function(format!("high_level_rebuild/{count}"), |b| {
+            b.iter(|| {
+                let mut builder = http::Request::builder()
+                    .method(http::Method::GET)
+                    .uri("http://example.com/")
+                    .version(http::Version::HTTP_11);
+                for (name, value) in headers.iter() {
+                    builder = builder.header(name, value);
+                }
+                black_box(builder.body(()).unwrap());
+            });
+        });
+
+        group.bench_function(format!("high_level_owned/{count}"), |b| {
+            b.iter_batched(
+                || headers.clone(),
+                |headers| {
+                    let request = http::Request::builder()
+                        .method(http::Method::GET)
+                        .uri("http://example.com/")
+                        .version(http::Version::HTTP_11)
+                        .body(())
+                        .unwrap();
+                    let mut request = request;
+                    *request.headers_mut() = headers.into_inner();
+                    assert_eq!(request.headers().get_all("x-duplicate").iter().count(), 2);
+                    black_box(request);
+                },
+                BatchSize::SmallInput,
+            );
+        });
+
+        group.bench_function(format!("native_rebuild/{count}"), |b| {
+            b.iter(|| {
+                let request = http::Request::builder()
+                    .method(http::Method::POST)
+                    .uri("http://example.com/upload")
+                    .version(http::Version::HTTP_11)
+                    .body(bytes::Bytes::from_static(b"body"))
+                    .unwrap();
+                let mut request = request;
+                for (name, value) in headers.iter() {
+                    request.headers_mut().append(name, value.clone());
+                }
+                black_box(request);
+            });
+        });
+
+        group.bench_function(format!("native_owned/{count}"), |b| {
+            b.iter_batched(
+                || headers.clone(),
+                |headers| {
+                    let request = http::Request::builder()
+                        .method(http::Method::POST)
+                        .uri("http://example.com/upload")
+                        .version(http::Version::HTTP_11)
+                        .body(bytes::Bytes::from_static(b"body"))
+                        .unwrap();
+                    let mut request = request;
+                    *request.headers_mut() = headers.into_inner();
+                    assert_eq!(request.headers().get_all("x-duplicate").iter().count(), 2);
+                    black_box(request);
+                },
+                BatchSize::SmallInput,
+            );
+        });
+    }
+    group.finish();
+}
+
 fn bench_cookie_matching(c: &mut Criterion) {
     #[cfg(feature = "cookies")]
     {
@@ -145,6 +227,29 @@ fn bench_cookie_matching(c: &mut Criterion) {
                         .unwrap();
                 }
                 b.iter(|| black_box(jar.cookies_for_url(&url)));
+            });
+        }
+
+        for count in [10_usize, 1_000, 10_000] {
+            group.bench_function(format!("mutate_large_jar/{count}"), |b| {
+                let url = url::Url::parse("http://example.com/path").unwrap();
+                b.iter_batched(
+                    || {
+                        let jar = CookieJar::new();
+                        for index in 0..count {
+                            jar.set_default_cookie(format!("cookie_{index}"), "value".to_owned())
+                                .unwrap();
+                        }
+                        jar
+                    },
+                    |jar| {
+                        jar.set_default_cookie("replacement".to_owned(), "value".to_owned())
+                            .unwrap();
+                        jar.delete("replacement", "", "/");
+                        black_box(jar.cookies_for_url(&url));
+                    },
+                    BatchSize::SmallInput,
+                );
             });
         }
 
@@ -433,6 +538,7 @@ criterion_group!(
     benches,
     bench_url_construction,
     bench_header_operations,
+    bench_request_ownership,
     bench_cookie_matching,
     bench_auth_application,
     bench_multipart_encoding,

@@ -288,12 +288,12 @@ pub(crate) async fn send_single_request(
         route::TransportRoute::Uds => {
             hyper_dispatch::send_uds_route(
                 inner,
-                &method,
+                method,
                 uri,
-                &headers,
+                headers,
                 body,
                 version,
-                url.clone(),
+                url,
                 &transport_hints,
                 remaining_total,
             )
@@ -303,12 +303,12 @@ pub(crate) async fn send_single_request(
         route::TransportRoute::Custom => {
             hyper_dispatch::send_custom_route(
                 inner,
-                &method,
+                method,
                 uri,
-                &headers,
+                headers,
                 body,
                 version,
-                url.clone(),
+                url,
                 &transport_hints,
                 failure_context.as_deref(),
                 remaining_total,
@@ -319,12 +319,12 @@ pub(crate) async fn send_single_request(
         route::TransportRoute::Direct => {
             hyper_dispatch::send_direct_route(
                 inner,
-                &method,
+                method,
                 uri,
-                &headers,
+                headers,
                 body,
                 version,
-                url.clone(),
+                url,
                 &transport_hints,
                 failure_context.as_deref(),
                 remaining_total,
@@ -338,7 +338,7 @@ pub(crate) async fn send_single_request(
                     inner,
                     &method,
                     &url,
-                    &headers,
+                    headers,
                     body,
                     version,
                     effective_proxy.as_ref(),
@@ -361,12 +361,12 @@ pub(crate) async fn send_single_request(
         route::TransportRoute::SniDirect => {
             hyper_dispatch::send_sni_route(
                 inner,
-                &method,
+                method,
                 uri,
-                &headers,
+                headers,
                 body,
                 version,
-                url.clone(),
+                url,
                 &transport_hints,
                 failure_context.as_deref(),
                 remaining_total,
@@ -401,9 +401,9 @@ pub(crate) async fn send_single_request(
         route::TransportRoute::Standard => {
             hyper_dispatch::send_hyper_request(
                 inner,
-                &method,
-                url.clone(),
-                &headers,
+                method,
+                url,
+                headers,
                 body,
                 version,
                 remaining_total,
@@ -433,7 +433,6 @@ pub(crate) async fn send_single_request(
         inner,
         response,
         route,
-        &url,
         via_proxy,
         decompression_enabled,
         max_decoded_body_size,
@@ -560,11 +559,16 @@ where
         }
     }
 
-    let uri = prepare::resolve_native_request_uri(request.uri(), &transport_hints)?;
-    let method = request.method().clone();
-    let version = request.version();
-    let headers = Headers::from(request.headers().clone());
-    let body = BodyExt::map_err(request.into_body(), |error| {
+    // Every validation above only borrowed request metadata. Once those
+    // checks have completed, decompose the caller-owned request so the
+    // method, URI, version, and HeaderMap move into the selected transport
+    // route together with the body.
+    let (request_parts, request_body) = request.into_parts();
+    let uri = prepare::resolve_native_request_uri(&request_parts.uri, &transport_hints)?;
+    let method = request_parts.method;
+    let version = request_parts.version;
+    let headers = Headers::from(request_parts.headers);
+    let body = BodyExt::map_err(request_body, |error| {
         Box::new(error) as Box<dyn std::error::Error + Send + Sync>
     })
     .boxed_unsync();
@@ -633,7 +637,7 @@ where
                     .as_ref()
                     .ok_or_else(|| Error::Unsupported("UDS client not available".into()))?;
                 let hyper_request =
-                    hyper_dispatch::build_http_request_owned(&method, uri, version, headers, body)?;
+                    hyper_dispatch::build_http_request_owned(method, uri, version, headers, body)?;
                 send_with_total_timeout(
                     crate::transport::direct::send_raw_request(uds_client, hyper_request, trace),
                     remaining_total,
@@ -661,7 +665,7 @@ where
                     .clone()
             };
             let hyper_request =
-                hyper_dispatch::build_http_request_owned(&method, uri, version, headers, body)?;
+                hyper_dispatch::build_http_request_owned(method, uri, version, headers, body)?;
             send_with_total_timeout(
                 crate::transport::direct::send_raw_request(&custom_client, hyper_request, trace),
                 remaining_total,
@@ -687,7 +691,7 @@ where
                     .ok_or_else(|| Error::Unsupported("direct client not available".into()))?
             };
             let hyper_request =
-                hyper_dispatch::build_http_request_owned(&method, uri, version, headers, body)?;
+                hyper_dispatch::build_http_request_owned(method, uri, version, headers, body)?;
             send_with_total_timeout(
                 crate::transport::direct::send_raw_request(direct_client, hyper_request, trace),
                 remaining_total,
@@ -701,7 +705,7 @@ where
             })?;
             let sni_client = inner.sni_client(sni_hostname).await?;
             let hyper_request =
-                hyper_dispatch::build_http_request_owned(&method, uri, version, headers, body)?;
+                hyper_dispatch::build_http_request_owned(method, uri, version, headers, body)?;
             send_with_total_timeout(
                 crate::transport::direct::send_raw_request(&sni_client, hyper_request, trace),
                 remaining_total,
@@ -713,7 +717,7 @@ where
                 Error::Unsupported("HTTP client not available for this protocol".into())
             })?;
             let hyper_request =
-                hyper_dispatch::build_http_request_owned(&method, uri, version, headers, body)?;
+                hyper_dispatch::build_http_request_owned(method, uri, version, headers, body)?;
             send_with_total_timeout(
                 crate::transport::direct::send_raw_request(hyper_client, hyper_request, trace),
                 remaining_total,

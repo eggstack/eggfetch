@@ -329,9 +329,9 @@ pub(super) async fn send_h3_route(
                 };
                 send_hyper_request(
                     inner,
-                    method,
+                    method.clone(),
                     url.clone(),
-                    headers,
+                    headers.clone(),
                     fb_body,
                     version,
                     remaining_total,

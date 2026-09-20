@@ -144,3 +144,26 @@ Required evidence:
 - [ ] No unsafe code or new production dependency.
 - [ ] Python performance/RSS evidence is recorded.
 - [ ] Tier 1 is green.
+
+## Execution record — 2026-09-20
+
+Buffered and streaming response conversion now transfers the ordinary core
+HeaderMap after metadata extraction; history entries retain the intentional
+clone needed for independent response objects. Buffered `iter_bytes`,
+`iter_text`, and `iter_lines` are private lazy iterators: construction and
+first yield do not prebuild the remaining Python values, repeated iterators
+remain independent, and UTF-8/CRLF/empty-body behavior is covered by focused
+tests. Async `aread()` now passes the collected bytes directly to PyO3 rather
+than first copying them into a second full-size Rust `Vec`.
+
+The renewed loopback controls measured buffered byte/text/line construction
+plus first-use at approximately 12.0 us, 6.38 ms, and 5.58 ms, with full
+consumption at approximately 0.41, 23.51, and 50.40 ms and peak RSS of about
+54.1, 55.7, and 69.9 MiB. Full line traversal retains the expected per-item
+Python-call cost of a lazy iterator; the previous eager-list path was not
+reintroduced because it retained the entire Python object list and violated
+the bounded-memory objective. Async 1 KiB/1 MiB/4 MiB `aread()` controls and
+the exact Python `bytes` type assertion passed. Native API/typing checks,
+HTTPX 0.28.1/2.12.0 compatibility, and Tier 1/extended suites passed with no
+new export, exception, or return-type drift. No unsafe code or dependency was
+added.

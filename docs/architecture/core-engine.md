@@ -377,6 +377,21 @@ trace helpers, `wrap_incoming` with `SharedTrailers`, and
 `await_upgrade` with connector metadata); UDS reuses the same helpers
 including 101 upgrade handling (UDS kind without IPs).
 
+### Request ownership at the transport boundary
+
+Preparation owns the final high-level `Method`, logical `Url`, `Headers`, and
+body. The ordinary H1/H2 route arms move those values into one Hyper request
+after all size, target, default-header, and H2 policy checks have completed;
+the returned `Response` remains the owner of the logical URL used by common
+finalization and Alt-Svc learning. Proxy and H3 dispatch retain borrowing only
+where branch selection or typed fallback still needs shared inspection.
+
+The native `http::Request<B>` path performs its URI, proxy, routing, and TLS
+validation first, then calls `into_parts()` so the caller's method, version,
+HeaderMap, URI, and frame-preserving body are not cloned. SOCKS request
+construction follows the same owned-header boundary; SOCKS responses use
+`into_parts()` so response headers and the incoming body move together.
+
 ### Caller-owned raw streams
 
 `ClientBuilder::dialer()` (requires `advanced-routing`; absent from lean

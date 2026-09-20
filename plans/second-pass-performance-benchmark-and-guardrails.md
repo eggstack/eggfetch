@@ -132,3 +132,50 @@ Use the current repository tools rather than creating a new permanent evidence f
 - [ ] Every benchmark has a paired correctness assertion.
 - [ ] No production behavior or public API changes in this plan.
 - [ ] Tier 1 remains green.
+
+## Execution record — baseline captured 2026-09-20
+
+Baseline SHA: `96d5681d6ac7e31f17b200f7feda8849de5f29b5` after the requested
+`git pull --rebase`. Environment: Linux x86_64, CPython 3.12.3 in `.venv`,
+rustc/cargo 1.98.1, default optimized Criterion profile. Commands were
+`python scripts/performance_benchmark.py --repeats 3`, the native API and
+typing-surface checks, and the existing 8/50/200 response-header clone
+Criterion control. The API/typing checks passed (66/66 exports and the
+reviewed 66-export/32-base/24-member typing surface). Existing clone medians
+were approximately 180 ns, 1.05 us, and 4.13 us for 8/50/200 headers.
+
+The new controls were then added without production changes. A short local
+run of `request_ownership` recorded borrowed-rebuild versus owned-header
+medians of approximately 889 ns vs 360 ns, 3.81 us vs 1.00 us, and 13.92 us
+vs 3.23 us at 8/50/200 headers; native rebuild versus owned controls were
+approximately 625 ns vs 363 ns, 2.53 us vs 1.03 us, and 9.44 us vs 3.27 us.
+These are construction-only evidence, not end-to-end latency claims. The
+extended Python cases now include buffered/streaming header mapping, lazy
+iterator phase timings and process peak RSS, plus 1 KiB/1 MiB/4 MiB `aread()`
+correctness controls. The exact before/after results are renewed in the final
+closure record after executable work is frozen.
+
+## Execution record — controls renewed 2026-09-20
+
+The production changes were measured with the same loopback fixture and
+optimized Python/Rust environment. The renewed harness passed all correctness
+assertions, including duplicate headers, UTF-8 chunk boundaries, CRLF lines,
+independent iterators, exact async `bytes` results, and 1 KiB/1 MiB/4 MiB
+`aread()` bodies. The three-repeat medians were approximately 1.72 ms for
+sync byte iteration, 2.62 ms for sync line iteration, 1.11 ms for buffered
+response construction without text access, 2.59 ms for the first buffered
+text access, and 118.8 ms for the async streaming control. Buffered byte/text/
+line first-yield plus full-consumption phases were approximately 12.0 us /
+0.41 ms, 6.38 ms / 23.51 ms, and 5.58 ms / 50.40 ms respectively; peak RSS
+was approximately 54.1, 55.7, and 69.9 MiB for those cases. Header mapping
+controls at 8/50/80 headers remained in the approximately 0.70–0.90 ms
+loopback range, and async `aread()` remained approximately 1.35/2.88/7.38 ms
+at 1 KiB/1 MiB/4 MiB. These loopback values are guardrails and allocation
+proxies, not claims about network latency.
+
+The cookie mutation controls were also run at 10/1,000/10,000 cookies with
+the required ten-sample minimum; the medians were approximately 2.11 us,
+200 us, and 2.15 ms, with no material change. A decoded-body capacity hint was
+not implemented: the safe response boundary does not expose decoded length,
+and using wire `Content-Length` would be incorrect for compression. This is a
+deliberate rejected candidate, not an omitted measurement.

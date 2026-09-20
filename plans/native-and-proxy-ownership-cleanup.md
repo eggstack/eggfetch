@@ -99,3 +99,19 @@ Required result:
 - [ ] No public API/dependency/feature changes.
 - [ ] Focused tests and benchmark evidence are recorded.
 - [ ] Tier 1 is green.
+
+## Execution record — 2026-09-20
+
+Native dispatch now validates the request before decomposing it and moves the
+owned method/version/headers/body into the private Hyper request. The SOCKS
+request path consumes owned headers, and the SOCKS response path uses
+`Response::into_parts()` so response headers and body move together. Manual
+proxy framing, typed CONNECT/SOCKS fallback, route identity, and deadline
+ownership were left unchanged.
+
+The native request controls measured owned versus rebuild medians of
+approximately 363 vs 625 ns, 1.03 vs 2.53 us, and 3.27 vs 9.44 us at 8/50/200
+headers in the initial control run. The full workspace, proxy/native tests,
+feature matrix, lifecycle/resource, and compatibility checks passed in the
+canonical Tier 1/extended runs. No public API, dependency, or unsafe code was
+added.

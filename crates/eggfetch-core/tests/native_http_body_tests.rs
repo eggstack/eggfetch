@@ -107,6 +107,8 @@ async fn native_body_preserves_data_and_trailer_frames() {
     ]));
     let request = http::Request::post(&url)
         .header("trailer", "x-request-trailer")
+        .header("x-duplicate", "first")
+        .header("x-duplicate", "second")
         .body(body)
         .unwrap();
     let client = Client::builder().build();
@@ -138,6 +140,12 @@ async fn native_body_preserves_data_and_trailer_frames() {
     assert!(request
         .windows(17)
         .any(|window| window == b"x-request-trailer"));
+    assert!(request
+        .windows(18)
+        .any(|window| window == b"x-duplicate: first"));
+    assert!(request
+        .windows(19)
+        .any(|window| window == b"x-duplicate: second"));
 }
 
 #[tokio::test]

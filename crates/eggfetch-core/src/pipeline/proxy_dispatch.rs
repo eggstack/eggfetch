@@ -28,7 +28,7 @@ pub(super) async fn send_proxy_route(
     inner: &ClientInner,
     method: &http::Method,
     url: &url::Url,
-    headers: &Headers,
+    headers: Headers,
     body: RequestBody,
     version: http::Version,
     effective_proxy: Option<&ProxyConfig>,

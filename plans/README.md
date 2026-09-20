@@ -7,7 +7,8 @@ Handoff program: `second-pass-performance-ownership-optimization-program.md`
 
 Planning baseline: `b6bcc33aa1ad04dfa22af219b82601d3c1377743`.
 
-Status: planned and ready for implementation. This is a narrow follow-up to the
+Status: implementation and local qualification complete; pending clean-commit
+package/security gates and remote CI closure. This is a narrow follow-up to the
 completed first performance campaign, not a reopening of its already-qualified
 streaming/cookie/pool work. The new audit found remaining ownership boundaries
 where an owned HeaderMap/Url/body is borrowed and then cloned or rebuilt one

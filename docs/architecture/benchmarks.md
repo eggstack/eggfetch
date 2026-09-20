@@ -98,6 +98,30 @@ The harness is deliberately outside routine CI. Compare runs only when the
 commit, toolchains, target, feature set, server fixture, and repeat settings
 are identical. Timing is evidence, not a hard CI threshold.
 
+The second-pass ownership campaign extends the same harness with paired
+controls for 8/50/200-header request construction, native request ownership,
+8/50/80-header buffered and streaming response conversion (80 is the largest
+fixture admitted by the HTTP/1 parser), lazy buffered byte/text/line iterator
+construction versus first-yield and full consumption, and async `aread()` at
+1 KiB/1 MiB/4 MiB. Each case asserts complete output and exact multi-value
+header mapping; RSS is reported as a process peak where the platform exposes
+`resource.getrusage`. The Criterion `request_ownership` group provides the
+Rust-side borrowed-rebuild versus owned-header and native controls, while
+`cookie_matching/mutate_large_jar` covers 10/1,000/10,000-cookie mutation.
+Run these manually with short sampling when iterating:
+
+```sh
+cargo bench -p eggfetch-bench --bench microbench -- request_ownership --noplot
+source .venv/bin/activate
+python scripts/performance_benchmark.py --repeats 5
+```
+
+The response-body collection capacity candidate is intentionally not wired to
+encoded `Content-Length`: `ResponseBody` has no safe decoded-size provenance
+for compressed or unknown-length streams, and its public variant shapes are
+frozen. It remains a rejected/no-change candidate unless a future private,
+conservative source of decoded capacity is established.
+
 The 2026-09-20 campaign baseline was recorded on the local Linux/x86_64
 Intel Core i9-9900K host at `abf15eb97b10298fb200c2c2f4a1dceffddeb23b` and
 requalified at executable freeze `18a1a432`. Matching short Criterion runs
@@ -109,3 +133,18 @@ ms for sync 1 KiB streaming, 140.23 ms to 101.16 ms for async streaming,
 2.71 ms to 2.453 ms for lines, 2.64 ms to 0.987 ms for buffered no-text, and
 2.62 ms to 2.170 ms for first text. These measurements are host-specific
 qualification evidence, not universal performance budgets.
+
+The second-pass ownership qualification was renewed after the requested
+rebase on 2026-09-20. On the same Linux/x86_64 optimized environment, the
+new loopback medians were approximately 1.72 ms for sync byte iteration, 2.62
+ms for sync lines, 1.11 ms for buffered no-text construction, 2.59 ms for
+first buffered text, and 118.8 ms for async streaming. Buffered byte/text/
+line first-use plus full-consumption phases were approximately 12.0 us/0.41
+ms, 6.38 ms/23.51 ms, and 5.58 ms/50.40 ms, with peak RSS of approximately
+54.1/55.7/69.9 MiB. Header conversion controls at 8/50/80 headers remained
+within approximately 0.70–0.90 ms on the loopback fixture, and `aread()` at
+1 KiB/1 MiB/4 MiB was approximately 1.35/2.88/7.38 ms. These are guardrails
+and allocation proxies, not network-latency budgets. The cookie mutation
+controls at 10/1,000/10,000 entries were approximately 2.11 us/200 us/2.15
+ms with no material delta. The decoded-body capacity candidate remains
+rejected because encoded `Content-Length` is not decoded-length provenance.

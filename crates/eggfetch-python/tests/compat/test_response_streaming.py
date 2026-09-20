@@ -220,6 +220,7 @@ class TestClientStreamAsync:
         async with AsyncClient() as client:
             async with client.stream("GET", f"{server}/hello") as resp:
                 data = await resp.aread()
+                assert type(data) is bytes
                 assert data == b"hello world"
 
     @pytest.mark.asyncio

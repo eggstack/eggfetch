@@ -204,6 +204,37 @@ impl JarInner {
             .filter_map(|cookie| cookie.expires)
             .min();
     }
+
+    fn persistent_expiry(cookie: &Cookie) -> Option<SystemTime> {
+        cookie.persistent.then_some(cookie.expires).flatten()
+    }
+
+    fn insert_cookie(&mut self, key: CookieKey, cookie: Cookie) {
+        let old_expiry = self.cookies.get(&key).and_then(Self::persistent_expiry);
+        let new_expiry = Self::persistent_expiry(&cookie);
+        self.cookies.insert(key, cookie);
+
+        match (self.next_expiry, old_expiry, new_expiry) {
+            (None, _, Some(expiry)) => self.next_expiry = Some(expiry),
+            (Some(current), _, Some(expiry)) if expiry < current => {
+                self.next_expiry = Some(expiry);
+            }
+            (Some(current), Some(old), new)
+                if old == current && new.is_none_or(|e| e > current) =>
+            {
+                self.recompute_next_expiry();
+            }
+            _ => {}
+        }
+    }
+
+    fn remove_cookie(&mut self, key: &CookieKey) {
+        let removed_expiry = self.cookies.get(key).and_then(Self::persistent_expiry);
+        self.cookies.remove(key);
+        if removed_expiry == self.next_expiry {
+            self.recompute_next_expiry();
+        }
+    }
 }
 
 impl std::fmt::Debug for JarInner {
@@ -452,8 +483,7 @@ impl CookieJar {
                         .inner
                         .write()
                         .unwrap_or_else(std::sync::PoisonError::into_inner);
-                    jar.cookies.remove(&key);
-                    jar.recompute_next_expiry();
+                    jar.remove_cookie(&key);
                     return Ok(());
                 }
             }
@@ -463,8 +493,7 @@ impl CookieJar {
             .inner
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        jar.cookies.insert(key, cookie);
-        jar.recompute_next_expiry();
+        jar.insert_cookie(key, cookie);
         Ok(())
     }
 
@@ -518,8 +547,7 @@ impl CookieJar {
             .inner
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        jar.cookies.insert(key, cookie);
-        jar.recompute_next_expiry();
+        jar.insert_cookie(key, cookie);
         Ok(())
     }
 
@@ -534,8 +562,7 @@ impl CookieJar {
             .inner
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        jar.cookies.remove(&key);
-        jar.recompute_next_expiry();
+        jar.remove_cookie(&key);
     }
 
     /// Remove all cookies from the jar.
@@ -868,6 +895,7 @@ pub fn parse_set_cookie_headers(response_url: &Url, set_cookie_headers: &[String
 mod tests {
     use super::*;
     use proptest::prelude::*;
+    use std::time::Duration;
 
     fn make_url(s: &str) -> Url {
         Url::parse(s).unwrap()
@@ -1864,5 +1892,98 @@ mod tests {
         assert!(!is_valid_cookie_value("a\rb"));
         assert!(!is_valid_cookie_value("caf\u{e9}"));
         assert!(!is_valid_cookie_value("\"quoted\""));
+    }
+
+    fn watermark_cookie(name: &str, expires: Option<SystemTime>) -> Cookie {
+        Cookie {
+            name: name.to_owned(),
+            value: "value".to_owned(),
+            domain: "example.com".to_owned(),
+            host_only: true,
+            path: "/".to_owned(),
+            secure: false,
+            http_only: false,
+            same_site: None,
+            expires,
+            persistent: expires.is_some(),
+            creation_index: 1,
+        }
+    }
+
+    #[test]
+    fn expiry_watermark_tracks_mutation_without_changing_cookie_visibility() {
+        let jar = CookieJar::new();
+        let now = SystemTime::now();
+        let earliest = now + Duration::from_secs(10);
+        let later = now + Duration::from_secs(20);
+
+        jar.set(watermark_cookie("later", Some(later))).unwrap();
+        jar.set(watermark_cookie("earliest", Some(earliest)))
+            .unwrap();
+        assert_eq!(
+            jar.inner
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .next_expiry,
+            Some(earliest)
+        );
+
+        jar.set(watermark_cookie("earliest", Some(later))).unwrap();
+        assert_eq!(
+            jar.inner
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .next_expiry,
+            Some(later)
+        );
+
+        jar.set(watermark_cookie("session", None)).unwrap();
+        assert_eq!(
+            jar.inner
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .next_expiry,
+            Some(later)
+        );
+        jar.delete("later", "example.com", "/");
+        assert_eq!(
+            jar.inner
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .next_expiry,
+            Some(later)
+        );
+        jar.delete("earliest", "example.com", "/");
+        assert_eq!(
+            jar.inner
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .next_expiry,
+            None
+        );
+    }
+
+    #[test]
+    fn expiry_watermark_preserves_equal_minimums_and_rejects_expired_insertions() {
+        let jar = CookieJar::new();
+        let expiry = SystemTime::now() + Duration::from_secs(10);
+        jar.set(watermark_cookie("first", Some(expiry))).unwrap();
+        jar.set(watermark_cookie("second", Some(expiry))).unwrap();
+        jar.delete("first", "example.com", "/");
+        assert_eq!(
+            jar.inner
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .next_expiry,
+            Some(expiry)
+        );
+
+        let expired = SystemTime::now() - Duration::from_secs(1);
+        jar.set(watermark_cookie("expired", Some(expired))).unwrap();
+        assert_eq!(jar.len(), 1);
+        assert_eq!(
+            jar.cookies_for_url(&make_url("http://example.com/")),
+            Some("second=value".to_owned())
+        );
     }
 }

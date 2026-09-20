@@ -321,7 +321,7 @@ impl tokio::io::AsyncWrite for ProxyIo {
 pub(crate) async fn send_proxy_request(
     dest_url: &url::Url,
     method: &http::Method,
-    headers: &Headers,
+    headers: Headers,
     body: RequestBody,
     version: http::Version,
     proxy_config: &ProxyConfig,
@@ -346,7 +346,7 @@ pub(crate) async fn send_proxy_request(
             send_http_proxy_request(
                 dest_url,
                 method,
-                headers,
+                &headers,
                 body,
                 version,
                 proxy_config,
@@ -359,7 +359,7 @@ pub(crate) async fn send_proxy_request(
             super::connect::send_https_connect_request(
                 dest_url,
                 method,
-                headers,
+                &headers,
                 body,
                 version,
                 proxy_config,
@@ -1098,7 +1098,7 @@ fn map_socks_send_error(err: hyper_util::client::legacy::Error) -> Error {
 async fn send_socks_request(
     dest_url: &url::Url,
     method: &http::Method,
-    headers: &Headers,
+    headers: Headers,
     body: RequestBody,
     version: http::Version,
     transport_hints: &crate::transport_hints::TransportHints,
@@ -1120,16 +1120,15 @@ async fn send_socks_request(
             .parse()
             .map_err(|e| Error::InvalidUrl(format!("failed to convert url to URI: {e}")))?
     };
-    let mut request = http::Request::builder()
+    let request = http::Request::builder()
         .method(method)
         .uri(uri)
         .version(version);
-    for (name, value) in headers.iter() {
-        request = request.header(name, value);
-    }
     let request = request
         .body(body.into_http_body())
         .map_err(|e| Error::RequestBuild(e.to_string()))?;
+    let mut request = request;
+    *request.headers_mut() = headers.into_inner();
     let response = match ctx.remaining_total {
         Some(duration) => tokio::time::timeout(duration, client.request(request))
             .await
@@ -1143,15 +1142,13 @@ async fn send_socks_request(
             .await
             .map_err(map_socks_send_error)?,
     };
-    let status = response.status();
-    let response_version = response.version();
-    let response_headers = response.headers().clone();
+    let (response_parts, incoming) = response.into_parts();
     let trailers = crate::body::SharedTrailers::new();
-    let stream = super::direct::wrap_incoming(response.into_body(), trailers.clone());
+    let stream = super::direct::wrap_incoming(incoming, trailers.clone());
     let mut core_response = Response::new(
-        status,
-        response_version,
-        response_headers,
+        response_parts.status,
+        response_parts.version,
+        response_parts.headers,
         dest_url.clone(),
         ResponseBody::streaming(stream),
     );

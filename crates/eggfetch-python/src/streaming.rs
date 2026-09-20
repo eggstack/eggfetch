@@ -215,7 +215,6 @@ impl PyStreamingResponse {
         is_async: bool,
     ) -> PyResult<Bound<'_, Self>> {
         let status = response.status().as_u16();
-        let headers = PyHeaders::from_header_map(response.headers().clone());
         let response_url = response.url().to_string();
         let encoding = extract_charset(response.headers());
         let wire_content_encoding = response.wire_content_encoding().map(ToOwned::to_owned);
@@ -254,6 +253,10 @@ impl PyStreamingResponse {
             jar.update_from_response(response.url(), &set_cookie_headers);
         }
         let cookies = PyCookies::from_jar(jar);
+        // The body-state wrapper retains the core response, but it never
+        // needs the ordinary response HeaderMap after construction. Move it
+        // into PyHeaders after all wire metadata/cookie work is complete.
+        let headers = PyHeaders::from_header_map(std::mem::take(response.headers_mut()));
 
         let (stream_cancel, _) = tokio::sync::watch::channel(false);
 
@@ -824,7 +827,7 @@ impl PyStreamingResponse {
                 }
             }
             let bytes = buf.freeze();
-            Python::attach(|py| {
+            let result = Python::attach(|py| {
                 let borrowed = slf.borrow(py);
                 let _ = borrowed.body_state.compare_exchange(
                     STATE_CONSUMED,
@@ -835,9 +838,9 @@ impl PyStreamingResponse {
                 if let Ok(mut cache) = borrowed.cached_content.lock() {
                     *cache = Some(bytes.clone());
                 }
-                Ok::<_, PyErr>(())
+                Ok::<_, PyErr>(PyBytes::new(py, &bytes).unbind().into_any())
             })?;
-            Ok::<_, PyErr>(bytes.to_vec())
+            Ok::<_, PyErr>(result)
         })
     }
 

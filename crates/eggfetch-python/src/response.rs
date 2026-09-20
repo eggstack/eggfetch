@@ -1,10 +1,10 @@
 //! Python response wrapper with buffered data.
 
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 
 use bytes::Bytes;
 use pyo3::prelude::*;
-use pyo3::types::{PyBytes, PyDict, PyList, PyModule, PyString};
+use pyo3::types::{PyBytes, PyDict, PyModule, PyString};
 
 use crate::cookies::PyCookies;
 use crate::errors::HTTPStatusError;
@@ -91,7 +91,7 @@ pub struct PyResponse {
     /// Raw response body bytes.
     content: Bytes,
     /// Lazily decoded text of the response body.
-    text: OnceLock<String>,
+    text: OnceLock<Arc<str>>,
     /// HTTP reason phrase (e.g. "OK", "Not Found").
     #[pyo3(get)]
     reason_phrase: String,
@@ -168,7 +168,6 @@ impl PyResponse {
         is_async: bool,
     ) -> PyResult<Self> {
         let status = response.status().as_u16();
-        let headers = PyHeaders::from_header_map(response.headers().clone());
         let wire_content_encoding = response.wire_content_encoding().map(ToOwned::to_owned);
         let wire_content_length = response.wire_content_length().map(ToOwned::to_owned);
         // Prefer the wire reason phrase as captured from the server.
@@ -181,6 +180,13 @@ impl PyResponse {
             .unwrap_or_default();
         let http_version = version_to_string(response.version());
         let encoding = extract_charset(response.headers());
+        let response_url = response.url().to_string();
+        let set_cookie_headers: Vec<String> = response
+            .headers()
+            .get_all("set-cookie")
+            .iter()
+            .filter_map(|v| v.to_str().ok().map(ToString::to_string))
+            .collect();
 
         // Convert redirect history (metadata-only snapshots, no body).
         let core_history = std::mem::take(response.history_mut());
@@ -207,17 +213,14 @@ impl PyResponse {
 
         // Parse Set-Cookie headers into a Cookies mapping.
         let jar = eggfetch_core::cookie::CookieJar::new();
-        let response_url = response.url().to_string();
-        let set_cookie_headers: Vec<String> = response
-            .headers()
-            .get_all("set-cookie")
-            .iter()
-            .filter_map(|v| v.to_str().ok().map(ToString::to_string))
-            .collect();
         if !set_cookie_headers.is_empty() {
             jar.update_from_response(response.url(), &set_cookie_headers);
         }
         let cookies = PyCookies::from_jar(jar);
+        // All metadata and cookie work that needs the core HeaderMap is
+        // complete. Transfer the map into the Python wrapper instead of
+        // cloning every header/value pair.
+        let headers = PyHeaders::from_header_map(std::mem::take(response.headers_mut()));
 
         // Extract network stream from core response if present.
         // For buffered responses, the connection has been returned to the
@@ -333,7 +336,151 @@ impl PyResponse {
 
     fn decoded_text(&self) -> &str {
         self.text
-            .get_or_init(|| decode_with_encoding(&self.content, self.encoding.as_deref()))
+            .get_or_init(|| {
+                Arc::<str>::from(decode_with_encoding(
+                    &self.content,
+                    self.encoding.as_deref(),
+                ))
+            })
+            .as_ref()
+    }
+
+    fn decoded_text_arc(&self) -> Arc<str> {
+        Arc::clone(self.text.get_or_init(|| {
+            Arc::<str>::from(decode_with_encoding(
+                &self.content,
+                self.encoding.as_deref(),
+            ))
+        }))
+    }
+}
+
+/// Private iterator for buffered response bytes. It keeps the response alive
+/// and creates only the next Python bytes object on each call.
+#[pyclass(name = "_ResponseBytesIterator")]
+pub(crate) struct PyResponseBytesIterator {
+    response: Option<Py<PyResponse>>,
+    content: Option<Bytes>,
+    chunk_size: usize,
+    cursor: usize,
+}
+
+#[pymethods]
+impl PyResponseBytesIterator {
+    fn __iter__(slf: Py<Self>) -> Py<Self> {
+        slf
+    }
+
+    fn __next__(&mut self, py: Python<'_>) -> Option<Py<PyAny>> {
+        if self.content.is_none() {
+            let content = self
+                .response
+                .as_ref()
+                .map(|response| response.bind(py).borrow().content.clone())?;
+            self.content = Some(content);
+            self.response = None;
+        }
+        let content = self.content.as_ref()?;
+        if self.cursor >= content.len() {
+            return None;
+        }
+        let end = self
+            .cursor
+            .saturating_add(self.chunk_size)
+            .min(content.len());
+        let chunk = PyBytes::new(py, &content[self.cursor..end]).into();
+        self.cursor = end;
+        Some(chunk)
+    }
+}
+
+/// Private iterator for buffered response text. The cursor always remains
+/// on a UTF-8 scalar boundary, while `chunk_size` counts Unicode scalars.
+#[pyclass(name = "_ResponseTextIterator")]
+pub(crate) struct PyResponseTextIterator {
+    response: Option<Py<PyResponse>>,
+    text: Option<Arc<str>>,
+    chunk_size: usize,
+    byte_cursor: usize,
+}
+
+#[pymethods]
+impl PyResponseTextIterator {
+    fn __iter__(slf: Py<Self>) -> Py<Self> {
+        slf
+    }
+
+    fn __next__(&mut self, py: Python<'_>) -> Option<Py<PyAny>> {
+        if self.text.is_none() {
+            let text = self
+                .response
+                .as_ref()
+                .map(|response| response.bind(py).borrow().decoded_text_arc())?;
+            self.text = Some(text);
+            self.response = None;
+        }
+        let text = self.text.as_ref()?;
+        if self.byte_cursor >= text.len() {
+            return None;
+        }
+        let start = self.byte_cursor;
+        let mut chars = text[start..].char_indices();
+        let mut count = 0;
+        let end = loop {
+            match chars.next() {
+                Some((offset, character)) => {
+                    count += 1;
+                    if count == self.chunk_size {
+                        break start + offset + character.len_utf8();
+                    }
+                }
+                None => break text.len(),
+            }
+        };
+        let value = PyString::new(py, &text[start..end]).into();
+        self.byte_cursor = end;
+        Some(value)
+    }
+}
+
+/// Private iterator for buffered response lines with `str::lines()`
+/// semantics, including CRLF stripping and no synthetic trailing line.
+#[pyclass(name = "_ResponseLinesIterator")]
+pub(crate) struct PyResponseLinesIterator {
+    response: Option<Py<PyResponse>>,
+    text: Option<Arc<str>>,
+    byte_cursor: usize,
+}
+
+#[pymethods]
+impl PyResponseLinesIterator {
+    fn __iter__(slf: Py<Self>) -> Py<Self> {
+        slf
+    }
+
+    fn __next__(&mut self, py: Python<'_>) -> Option<Py<PyAny>> {
+        if self.text.is_none() {
+            let text = self
+                .response
+                .as_ref()
+                .map(|response| response.bind(py).borrow().decoded_text_arc())?;
+            self.text = Some(text);
+            self.response = None;
+        }
+        let text = self.text.as_ref()?;
+        if self.byte_cursor >= text.len() {
+            return None;
+        }
+        let start = self.byte_cursor;
+        let (mut end, next_cursor) = match text[start..].find('\n') {
+            Some(offset) => (start + offset, start + offset + 1),
+            None => (text.len(), text.len()),
+        };
+        if end > start && text.as_bytes()[end - 1] == b'\r' {
+            end -= 1;
+        }
+        self.byte_cursor = next_cursor;
+        Some(PyString::new(py, &text[start..end]).into())
     }
 }
 
@@ -434,69 +581,63 @@ impl PyResponse {
 
     /// Iterate over response body in byte chunks.
     #[pyo3(signature = (chunk_size=8192))]
-    fn iter_bytes(&self, py: Python<'_>, chunk_size: usize) -> PyResult<Py<PyAny>> {
+    fn iter_bytes(
+        slf: Py<Self>,
+        py: Python<'_>,
+        chunk_size: usize,
+    ) -> PyResult<Bound<'_, PyResponseBytesIterator>> {
         if chunk_size == 0 {
             return Err(pyo3::exceptions::PyValueError::new_err(
                 "chunk_size must be greater than zero",
             ));
         }
-        let chunks: Vec<Py<PyAny>> = self
-            .content
-            .chunks(chunk_size)
-            .map(|c| Ok(PyBytes::new(py, c).into()))
-            .collect::<PyResult<Vec<_>>>()?;
-        let list = PyList::new(py, chunks)?;
-        py.import("builtins")?
-            .getattr("iter")?
-            .call1((list,))
-            .map(Into::into)
+        Py::new(
+            py,
+            PyResponseBytesIterator {
+                response: Some(slf),
+                content: None,
+                chunk_size,
+                cursor: 0,
+            },
+        )
+        .map(|iterator| iterator.into_bound(py))
     }
 
     /// Iterate over response body in text chunks.
     #[pyo3(signature = (chunk_size=8192))]
-    fn iter_text(&self, py: Python<'_>, chunk_size: usize) -> PyResult<Py<PyAny>> {
+    fn iter_text(
+        slf: Py<Self>,
+        py: Python<'_>,
+        chunk_size: usize,
+    ) -> PyResult<Bound<'_, PyResponseTextIterator>> {
         if chunk_size == 0 {
             return Err(pyo3::exceptions::PyValueError::new_err(
                 "chunk_size must be greater than zero",
             ));
         }
-        // Slice by char count without materializing `Vec<char>`: iterate
-        // char boundaries and cut every `chunk_size` chars, preserving UTF-8.
-        let mut chunks: Vec<Py<PyAny>> = Vec::new();
-        let mut byte_start = 0;
-        let mut count = 0;
-        let text = self.decoded_text();
-        for (byte_idx, c) in text.char_indices() {
-            count += 1;
-            if count == chunk_size {
-                let byte_end = byte_idx + c.len_utf8();
-                chunks.push(PyString::new(py, &text[byte_start..byte_end]).into());
-                byte_start = byte_end;
-                count = 0;
-            }
-        }
-        if byte_start < text.len() {
-            chunks.push(PyString::new(py, &text[byte_start..]).into());
-        }
-        let list = PyList::new(py, chunks)?;
-        py.import("builtins")?
-            .getattr("iter")?
-            .call1((list,))
-            .map(Into::into)
+        Py::new(
+            py,
+            PyResponseTextIterator {
+                response: Some(slf),
+                text: None,
+                chunk_size,
+                byte_cursor: 0,
+            },
+        )
+        .map(|iterator| iterator.into_bound(py))
     }
 
     /// Iterate over response body lines.
-    fn iter_lines(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        let lines: Vec<Py<PyAny>> = self
-            .decoded_text()
-            .lines()
-            .map(|l| Ok(PyString::new(py, l).into()))
-            .collect::<PyResult<Vec<_>>>()?;
-        let list = PyList::new(py, lines)?;
-        py.import("builtins")?
-            .getattr("iter")?
-            .call1((list,))
-            .map(Into::into)
+    fn iter_lines(slf: Py<Self>, py: Python<'_>) -> PyResult<Bound<'_, PyResponseLinesIterator>> {
+        Py::new(
+            py,
+            PyResponseLinesIterator {
+                response: Some(slf),
+                text: None,
+                byte_cursor: 0,
+            },
+        )
+        .map(|iterator| iterator.into_bound(py))
     }
 
     /// Close the response (no-op for buffered responses).
