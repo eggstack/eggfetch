@@ -229,7 +229,7 @@ an unchanged control path.
 Rejected/no-benefit candidates: connector/TLS residual construction was left
 unchanged because no benchmark evidence justified added complexity; no Cargo
 or dependency changes were needed.
-Docs-only closure SHA: recorded by the final documentation commit below.
+Docs-only closure SHA: `5c09b46` (the documentation/status commit).
 
 ## Completion criteria
 
