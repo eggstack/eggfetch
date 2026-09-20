@@ -1,5 +1,46 @@
 # eggfetch Plan Index
 
+
+## Active program — second-pass performance ownership optimization (2026-09-20)
+
+Handoff program: `second-pass-performance-ownership-optimization-program.md`
+
+Planning baseline: `b6bcc33aa1ad04dfa22af219b82601d3c1377743`.
+
+Status: planned and ready for implementation. This is a narrow follow-up to the
+completed first performance campaign, not a reopening of its already-qualified
+streaming/cookie/pool work. The new audit found remaining ownership boundaries
+where an owned HeaderMap/Url/body is borrowed and then cloned or rebuilt one
+layer later, plus buffered Python iterator eagerness and one avoidable async
+`aread()` full-body copy. Public Rust/Python/C/CLI and HTTPX/HTTPX2 semantics
+remain frozen.
+
+Execution order:
+
+1. `second-pass-performance-benchmark-and-guardrails.md` — freeze measurements
+   for request-header ownership, native requests, Python header conversion,
+   buffered iterator first-yield/RSS, async aread, and optional cookie/body
+   tuning before executable work.
+2. `high-level-h1-h2-request-ownership-fast-path.md` — move prepared headers
+   directly into ordinary H1/H2 requests and remove redundant standard-route
+   Url clones without changing route/redirect/retry/trace semantics.
+3. `native-and-proxy-ownership-cleanup.md` — decompose owned native requests
+   without HeaderMap cloning and apply the same move-based cleanup to eligible
+   SOCKS/proxy Hyper paths while preserving typed fallback and timeout policy.
+4. `python-buffered-response-and-adapter-ownership-optimization.md` — transfer
+   core response headers into Python wrappers, make buffered iterators lazy,
+   and remove the async aread intermediate Vec when PyO3 permits it safely.
+5. `benchmark-gated-cookie-and-body-buffer-tuning.md` — optional-by-evidence
+   large-jar mutation and safe decoded-body capacity tuning; close unchanged if
+   measurements do not justify added complexity.
+6. `second-pass-performance-requalification-and-closure.md` — freeze one final
+   executable SHA, rerun comparable evidence, prove zero API/compat drift, run
+   canonical repository gates, and renew exact-SHA qualification if required.
+
+No new production dependency, custom pool, unbounded queue, unsafe Python
+buffer sharing, public ResponseBody shape change, routine CI timing gate,
+HTTP/3 graduation, or Node maturation belongs in this program.
+
 This directory contains active implementation plans, live qualification/status records, and historical implementation records. Completed plans are non-normative unless another current document explicitly says otherwise. Verification and release policy remain governed by `docs/verification-policy.md` and `docs/releases/process.md`.
 
 
