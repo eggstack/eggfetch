@@ -90,8 +90,8 @@ pub struct PyResponse {
     url: String,
     /// Raw response body bytes.
     content: Bytes,
-    /// Decoded text of the response body.
-    text: String,
+    /// Lazily decoded text of the response body.
+    text: OnceLock<String>,
     /// HTTP reason phrase (e.g. "OK", "Not Found").
     #[pyo3(get)]
     reason_phrase: String,
@@ -205,8 +205,6 @@ impl PyResponse {
             })
             .collect();
 
-        let text = decode_with_encoding(&content, encoding.as_deref());
-
         // Parse Set-Cookie headers into a Cookies mapping.
         let jar = eggfetch_core::cookie::CookieJar::new();
         let response_url = response.url().to_string();
@@ -279,7 +277,7 @@ impl PyResponse {
             headers,
             url: response_url,
             content,
-            text,
+            text: OnceLock::new(),
             reason_phrase,
             http_version,
             encoding,
@@ -303,13 +301,12 @@ impl PyResponse {
         http_version: String,
         encoding: Option<String>,
     ) -> Self {
-        let text = decode_with_encoding(&content, encoding.as_deref());
         Self {
             status_code: status,
             headers,
             url,
             content,
-            text,
+            text: OnceLock::new(),
             reason_phrase,
             http_version,
             encoding,
@@ -332,6 +329,11 @@ impl PyResponse {
             self.reason_phrase,
             safe_url_for_display(&self.url)
         )
+    }
+
+    fn decoded_text(&self) -> &str {
+        self.text
+            .get_or_init(|| decode_with_encoding(&self.content, self.encoding.as_deref()))
     }
 }
 
@@ -415,14 +417,14 @@ impl PyResponse {
     /// Returns the decoded text of the response body.
     #[getter]
     fn text(&self) -> &str {
-        &self.text
+        self.decoded_text()
     }
 
     /// Parse the response body as JSON.
     #[pyo3(signature = (**kwargs))]
     fn json(&self, py: Python<'_>, kwargs: Option<&Bound<'_, PyDict>>) -> PyResult<Py<PyAny>> {
         let json_module = py.import("json")?;
-        let text_obj = PyString::new(py, &self.text);
+        let text_obj = PyString::new(py, self.decoded_text());
         let loads = json_module.getattr("loads")?;
         match kwargs {
             Some(kw) => loads.call((text_obj,), Some(kw)).map(Into::into),
@@ -463,17 +465,18 @@ impl PyResponse {
         let mut chunks: Vec<Py<PyAny>> = Vec::new();
         let mut byte_start = 0;
         let mut count = 0;
-        for (byte_idx, c) in self.text.char_indices() {
+        let text = self.decoded_text();
+        for (byte_idx, c) in text.char_indices() {
             count += 1;
             if count == chunk_size {
                 let byte_end = byte_idx + c.len_utf8();
-                chunks.push(PyString::new(py, &self.text[byte_start..byte_end]).into());
+                chunks.push(PyString::new(py, &text[byte_start..byte_end]).into());
                 byte_start = byte_end;
                 count = 0;
             }
         }
-        if byte_start < self.text.len() {
-            chunks.push(PyString::new(py, &self.text[byte_start..]).into());
+        if byte_start < text.len() {
+            chunks.push(PyString::new(py, &text[byte_start..]).into());
         }
         let list = PyList::new(py, chunks)?;
         py.import("builtins")?
@@ -485,7 +488,7 @@ impl PyResponse {
     /// Iterate over response body lines.
     fn iter_lines(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         let lines: Vec<Py<PyAny>> = self
-            .text
+            .decoded_text()
             .lines()
             .map(|l| Ok(PyString::new(py, l).into()))
             .collect::<PyResult<Vec<_>>>()?;

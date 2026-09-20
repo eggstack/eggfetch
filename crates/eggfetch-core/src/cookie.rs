@@ -7,7 +7,7 @@
 //! The [`CookieJar`] is the central type: it stores cookies and answers
 //! queries about which cookies should be sent for a given URL.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, RwLock};
 use std::time::SystemTime;
@@ -192,6 +192,18 @@ impl CookieKey {
 /// secret cookie values (see [`Cookie`]).
 struct JarInner {
     cookies: HashMap<CookieKey, Cookie>,
+    next_expiry: Option<SystemTime>,
+}
+
+impl JarInner {
+    fn recompute_next_expiry(&mut self) {
+        self.next_expiry = self
+            .cookies
+            .values()
+            .filter(|cookie| cookie.persistent)
+            .filter_map(|cookie| cookie.expires)
+            .min();
+    }
 }
 
 impl std::fmt::Debug for JarInner {
@@ -239,6 +251,7 @@ impl CookieJar {
         Self {
             inner: Arc::new(RwLock::new(JarInner {
                 cookies: HashMap::new(),
+                next_expiry: None,
             })),
         }
     }
@@ -291,6 +304,7 @@ impl CookieJar {
             let key = CookieKey::new(&cookie.name, &cookie.domain, &cookie.path);
             jar.cookies.insert(key, cookie);
         }
+        jar.recompute_next_expiry();
     }
 
     /// Get matching cookies for a request URL, serialized as a `Cookie` header.
@@ -302,7 +316,7 @@ impl CookieJar {
     /// cannot leave it inconsistent.
     #[must_use]
     pub fn cookies_for_url(&self, url: &Url) -> Option<String> {
-        self.expire_stale();
+        self.expire_if_due();
 
         let jar = self
             .inner
@@ -335,18 +349,23 @@ impl CookieJar {
 
         // Deduplicate by case-sensitive name and path. The same cookie name
         // may legitimately be sent for multiple matching paths.
-        let mut seen = std::collections::HashSet::new();
-        let mut result = Vec::new();
+        let mut seen: HashSet<(&str, &str)> = HashSet::new();
+        let mut result = String::new();
         for c in &matches {
-            if seen.insert((c.name.clone(), c.path.clone())) {
-                result.push(format!("{}={}", c.name, c.value));
+            if seen.insert((&c.name, &c.path)) {
+                if !result.is_empty() {
+                    result.push_str("; ");
+                }
+                result.push_str(&c.name);
+                result.push('=');
+                result.push_str(&c.value);
             }
         }
 
         if result.is_empty() {
             None
         } else {
-            Some(result.join("; "))
+            Some(result)
         }
     }
 
@@ -357,7 +376,7 @@ impl CookieJar {
     /// cannot leave it inconsistent.
     #[must_use]
     pub fn all_cookies(&self) -> Vec<Cookie> {
-        self.expire_stale();
+        self.expire_if_due();
         let jar = self
             .inner
             .read()
@@ -376,7 +395,7 @@ impl CookieJar {
     /// cannot leave it inconsistent.
     #[must_use]
     pub fn get(&self, name: &str, domain: Option<&str>, path: Option<&str>) -> Option<Cookie> {
-        self.expire_stale();
+        self.expire_if_due();
         let jar = self
             .inner
             .read()
@@ -429,21 +448,23 @@ impl CookieJar {
                     // Drop any existing entry instead of inserting an
                     // expired replacement.
                     let key = CookieKey::new(&cookie.name, &cookie.domain, &cookie.path);
-                    self.inner
+                    let mut jar = self
+                        .inner
                         .write()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner)
-                        .cookies
-                        .remove(&key);
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    jar.cookies.remove(&key);
+                    jar.recompute_next_expiry();
                     return Ok(());
                 }
             }
         }
         let key = CookieKey::new(&cookie.name, &cookie.domain, &cookie.path);
-        self.inner
+        let mut jar = self
+            .inner
             .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .cookies
-            .insert(key, cookie);
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        jar.cookies.insert(key, cookie);
+        jar.recompute_next_expiry();
         Ok(())
     }
 
@@ -493,11 +514,12 @@ impl CookieJar {
             creation_index: CREATION_COUNTER.fetch_add(1, Ordering::Relaxed),
         };
         let key = CookieKey::new(&cookie.name, &cookie.domain, &cookie.path);
-        self.inner
+        let mut jar = self
+            .inner
             .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .cookies
-            .insert(key, cookie);
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        jar.cookies.insert(key, cookie);
+        jar.recompute_next_expiry();
         Ok(())
     }
 
@@ -508,11 +530,12 @@ impl CookieJar {
     /// cannot leave it inconsistent.
     pub fn delete(&self, name: &str, domain: &str, path: &str) {
         let key = CookieKey::new(name, domain, path);
-        self.inner
+        let mut jar = self
+            .inner
             .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .cookies
-            .remove(&key);
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        jar.cookies.remove(&key);
+        jar.recompute_next_expiry();
     }
 
     /// Remove all cookies from the jar.
@@ -521,11 +544,12 @@ impl CookieJar {
     /// plain map with no cross-entry invariants, so a panicked writer
     /// cannot leave it inconsistent.
     pub fn clear(&self) {
-        self.inner
+        let mut jar = self
+            .inner
             .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .cookies
-            .clear();
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        jar.cookies.clear();
+        jar.next_expiry = None;
     }
 
     /// Returns the number of cookies in the jar.
@@ -570,6 +594,30 @@ impl CookieJar {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         jar.cookies
             .retain(|_, c| !c.persistent || c.expires.is_none_or(|exp| now < exp));
+        jar.recompute_next_expiry();
+    }
+
+    fn expire_if_due(&self) {
+        let now = SystemTime::now();
+        let due = self
+            .inner
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .next_expiry
+            .is_some_and(|expiry| now >= expiry);
+        if !due {
+            return;
+        }
+
+        let mut jar = self
+            .inner
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if jar.next_expiry.is_some_and(|expiry| now >= expiry) {
+            jar.cookies
+                .retain(|_, c| !c.persistent || c.expires.is_none_or(|exp| now < exp));
+            jar.recompute_next_expiry();
+        }
     }
 }
 

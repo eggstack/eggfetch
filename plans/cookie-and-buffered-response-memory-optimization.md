@@ -171,3 +171,17 @@ Do not implement a browser-grade cookie index, background expiry task/timer, loc
 - [ ] Large binary buffered response construction shows reduced memory amplification.
 - [ ] Native Python manifest and compatibility tests remain unchanged/green.
 - [ ] Tier 1 is green.
+
+## Implementation record
+
+CookieJar now maintains a conservative earliest-expiry watermark. Read paths
+take the normal read lock unless the watermark is due; due reads release that
+lock, re-check under the write lock, prune, and recompute the watermark.
+Mutations recompute it, and cookie serialization uses borrowed deduplication
+keys plus one output String.
+
+Buffered Python responses retain raw Bytes and use a private OnceLock cache for
+decoded text. Text, JSON, text iteration, cloning, and history continue to
+use the same decoding function and values; construction no longer decodes
+binary bodies eagerly. Cookie tests and the native Python streaming/response
+compatibility slice passed after this change.
