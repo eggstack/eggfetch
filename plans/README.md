@@ -9,7 +9,7 @@ Plan: `performance-exact-sha-evidence-corrective-pass.md`
 
 Status: complete as an evidence/documentation-only corrective. The profiles,
 live parity ledger, and canonical compatibility records now bind Stage C to
-the already-qualified performance executable freeze `18a1a4328110df014843a94e155fe678a08b1cb4`; the issue #24 freeze `37ab02b...` remains historical. The final descendant contains only profile, ledger, plan, and compatibility documentation changes. Final pushed CI verification is recorded after the closure commit.
+the already-qualified performance executable freeze `18a1a4328110df014843a94e155fe678a08b1cb4`; the issue #24 freeze `37ab02b...` remains historical. The final descendant contains only profile, ledger, plan, and compatibility documentation changes. Corrective commit `ff42daf7bb4a991400c4a57172562bc32f1891c1` passed routine GitHub CI run `35522097630`.
 
 ## Completed program — performance optimization without API regression (2026-09-20)
 
@@ -26,6 +26,8 @@ cookie/buffered-response memory work, and final exact-SHA requalification.
 Tier 1, extended, package, security, and current-head push CI are green; the
 final profile/ledger correction is recorded in
 `performance-exact-sha-evidence-corrective-pass.md`.
+Corrective commit `ff42daf7bb4a991400c4a57172562bc32f1891c1` passed routine
+GitHub CI run `35522097630`.
 
 Execution order:
 

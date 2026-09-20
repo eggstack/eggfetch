@@ -244,6 +244,10 @@ workflow `CI`, run 634. The exact-SHA completion criterion is satisfied only
 after the profile and ledger changes from
 `plans/performance-exact-sha-evidence-corrective-pass.md` land.
 
+The corrective commit `ff42daf7bb4a991400c4a57172562bc32f1891c1` was pushed
+to `main` and passed routine GitHub CI in run `35522097630` (single `ci` job,
+success). The follow-up closure update is documentation-only.
+
 ## Completion criteria
 
 - [x] All intended executable optimization work is frozen at one SHA.

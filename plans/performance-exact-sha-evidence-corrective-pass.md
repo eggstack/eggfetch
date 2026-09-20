@@ -94,9 +94,9 @@ If current `main` has gained a disallowed change after this plan was written, do
 
 Acceptance:
 
-- [ ] Final closure records the exact current-head SHA.
-- [ ] `18a1a432..current-head` is confirmed documentation/evidence-only.
-- [ ] No executable/test/build/validation change is silently excluded.
+- [x] Final closure records the exact current-head SHA.
+- [x] `18a1a432..current-head` is confirmed documentation/evidence-only.
+- [x] No executable/test/build/validation change is silently excluded.
 
 ## 2. Reconcile the already-recorded qualification evidence
 
@@ -122,10 +122,10 @@ Do not manufacture evidence that is not present. If an implementation reviewer c
 
 Acceptance:
 
-- [ ] Every renewed profile/ledger claim is traceable to the performance closure evidence or a newly recorded exact-freeze rerun.
-- [ ] No historical three-run requirement is treated as normative unless the current verification policy has changed to require it.
-- [ ] Any newly rerun command is recorded with exact SHA and result.
-- [ ] Optional Node/downstream skips remain skips, not passes.
+- [x] Every renewed profile/ledger claim is traceable to the performance closure evidence or a newly recorded exact-freeze rerun.
+- [x] No historical three-run requirement is treated as normative unless the current verification policy has changed to require it.
+- [x] Any newly rerun command is recorded with exact SHA and result.
+- [x] Optional Node/downstream skips remain skips, not passes.
 
 ## 3. Renew the HTTPX 0.28.1 compatibility profile
 
@@ -155,9 +155,9 @@ Do not alter reference version, compatibility categories, allowed differences, f
 
 Acceptance:
 
-- [ ] HTTPX profile binds exactly to `18a1a432...`.
-- [ ] Prior issue #24 SHA is retained as historical predecessor.
-- [ ] No compatibility rule/exception changes.
+- [x] HTTPX profile binds exactly to `18a1a432...`.
+- [x] Prior issue #24 SHA is retained as historical predecessor.
+- [x] No compatibility rule/exception changes.
 
 ## 4. Renew the HTTPX2 2.12.0 compatibility profile
 
@@ -179,9 +179,9 @@ Preserve:
 
 Acceptance:
 
-- [ ] HTTPX2 profile binds exactly to `18a1a432...`.
-- [ ] Both profile files point to the same executable freeze and date.
-- [ ] No HTTPX2 contract expansion or exception change.
+- [x] HTTPX2 profile binds exactly to `18a1a432...`.
+- [x] Both profile files point to the same executable freeze and date.
+- [x] No HTTPX2 contract expansion or exception change.
 
 ## 5. Add a new active parity-ledger entry
 
@@ -210,9 +210,9 @@ Do not delete the issue #24 entry. It becomes the next historical record in the 
 
 Acceptance:
 
-- [ ] First/current ledger entry is the performance freeze.
-- [ ] Issue #24 entry remains intact below it as historical evidence.
-- [ ] Ledger, both profiles, and performance closure all identify the same executable freeze.
+- [x] First/current ledger entry is the performance freeze.
+- [x] Issue #24 entry remains intact below it as historical evidence.
+- [x] Ledger, both profiles, and performance closure all identify the same executable freeze.
 
 ## 6. Correct the performance closure record
 
@@ -236,9 +236,9 @@ The addendum should make the historical inconsistency visible rather than silent
 
 Acceptance:
 
-- [ ] Closure truthfully documents the evidence-record defect and correction.
-- [ ] Benchmark/results data remain unchanged.
-- [ ] No claim implies current documentation SHA is the executable qualification freeze.
+- [x] Closure truthfully documents the evidence-record defect and correction.
+- [x] Benchmark/results data remain unchanged.
+- [x] No claim implies current documentation SHA is the executable qualification freeze.
 
 ## 7. Correct the plan index/current CI status
 
@@ -260,9 +260,9 @@ Add or retain a short active-corrective entry while implementation is in progres
 
 Acceptance:
 
-- [ ] No stale “remote CI pending” wording remains.
-- [ ] Index points readers to this corrective.
-- [ ] Executable versus documentation/evidence SHAs are not conflated.
+- [x] No stale “remote CI pending” wording remains.
+- [x] Index points readers to this corrective.
+- [x] Executable versus documentation/evidence SHAs are not conflated.
 
 ## 8. Validate the evidence-only patch
 
@@ -289,11 +289,11 @@ If `./scripts/check.sh` or the profile/oracle checks expose a real mismatch, inv
 
 Acceptance:
 
-- [ ] Evidence-only diff classification is clean.
-- [ ] Tier 1 passes on the final evidence descendant.
-- [ ] Both profile files parse and their qualification SHAs agree.
-- [ ] API-oracle/profile consistency checks remain green.
-- [ ] No executable requalification is falsely claimed from a docs-only command.
+- [x] Evidence-only diff classification is clean.
+- [x] Tier 1 passes on the final evidence descendant.
+- [x] Both profile files parse and their qualification SHAs agree.
+- [x] API-oracle/profile consistency checks remain green.
+- [x] No executable requalification is falsely claimed from a docs-only command.
 
 ## 9. Record final pushed CI and descendant integrity
 
@@ -310,9 +310,9 @@ If any executable/test/build/validation file changes during corrective implement
 
 Acceptance:
 
-- [ ] Final pushed routine CI is green.
-- [ ] Final `18a1a432..closure-head` classification remains documentation/evidence-only.
-- [ ] No executable SHA newer than `18a1a432` is mislabeled as the performance freeze.
+- [x] Final pushed routine CI is green.
+- [x] Final `18a1a432..closure-head` classification remains documentation/evidence-only.
+- [x] No executable SHA newer than `18a1a432` is mislabeled as the performance freeze.
 
 ## Expected files changed by implementation
 
@@ -340,21 +340,21 @@ Unexpected and scope-expanding:
 
 ## Final acceptance criteria
 
-- [ ] `18a1a4328110df014843a94e155fe678a08b1cb4` remains the performance executable freeze.
-- [ ] Freeze-to-final-head delta is evidence/documentation only.
-- [ ] HTTPX 0.28.1 profile binds to `18a1a432...`.
-- [ ] HTTPX2 2.12.0 profile binds to `18a1a432...`.
-- [ ] Both profiles identify `37ab02b...` as the prior historical qualification.
-- [ ] Live parity ledger's newest recorded state binds to `18a1a432...`.
-- [ ] No new compatibility exception or allowed difference is introduced.
-- [ ] Performance closure contains a transparent corrective addendum.
-- [ ] Plan index no longer says remote CI is pending.
-- [ ] Current remote CI success is recorded accurately.
-- [ ] Node/downstream skips remain truthfully represented.
-- [ ] HTTP/3 and Node remain experimental.
-- [ ] Tier 1/profile consistency validation is green on the final evidence descendant.
-- [ ] Final pushed CI is green.
-- [ ] No executable, test, dependency, build, or validation change is made to “fix” an evidence-record mismatch.
+- [x] `18a1a4328110df014843a94e155fe678a08b1cb4` remains the performance executable freeze.
+- [x] Freeze-to-final-head delta is evidence/documentation only.
+- [x] HTTPX 0.28.1 profile binds to `18a1a432...`.
+- [x] HTTPX2 2.12.0 profile binds to `18a1a432...`.
+- [x] Both profiles identify `37ab02b...` as the prior historical qualification.
+- [x] Live parity ledger's newest recorded state binds to `18a1a432...`.
+- [x] No new compatibility exception or allowed difference is introduced.
+- [x] Performance closure contains a transparent corrective addendum.
+- [x] Plan index no longer says remote CI is pending.
+- [x] Current remote CI success is recorded accurately.
+- [x] Node/downstream skips remain truthfully represented.
+- [x] HTTP/3 and Node remain experimental.
+- [x] Tier 1/profile consistency validation is green on the final evidence descendant.
+- [x] Final pushed CI is green.
+- [x] No executable, test, dependency, build, or validation change is made to “fix” an evidence-record mismatch.
 
 ## Closure rule
 
@@ -375,8 +375,9 @@ path was documentation/evidence-only. Direct API-oracle comparisons on the
 unchanged executable tree passed with 71 HTTPX matches and 79 HTTPX2 matches,
 with no unexplained, stale, or resolved-active drift.
 
-The final pushed routine-CI result is recorded in the closure/index records
-after the corrective commit is pushed. HTTP/3 and Node remain experimental;
+The pushed corrective commit `ff42daf7bb4a991400c4a57172562bc32f1891c1`
+passed routine GitHub CI run `35522097630`; the follow-up closure update is
+documentation-only. HTTP/3 and Node remain experimental;
 the absent Node artifact and downstream qualification manifest remain truthful
 skips.
 
