@@ -3,6 +3,25 @@
 This directory contains active implementation plans, live qualification/status records, and historical implementation records. Completed plans are non-normative unless another current document explicitly says otherwise. Verification and release policy remain governed by `docs/verification-policy.md` and `docs/releases/process.md`.
 
 
+## Active program — performance optimization without API regression (2026-09-20)
+
+Handoff program: performance-optimization-no-api-regression-program.md
+
+Planning baseline: 283d52cbf438abf5051527b1c764237d701d6fb3.
+
+Status: planned / ready for implementation. The current source audit found a bounded set of performance opportunities after the earlier connection-reuse, Hyper idle-policy, pool-map, and footprint work. The campaign is explicitly API-preserving and evidence-driven: baseline first, then core ownership/allocation fast paths, Python streaming backpressure/copy reduction, cookie/buffered-response memory work, and one final exact-SHA requalification/closure pass.
+
+Execution order:
+
+1. performance-benchmark-baseline-and-guardrails.md — freeze reproducible Rust/Python/adapter measurements and public/API baselines before executable optimization.
+2. core-hot-path-allocation-and-ownership-optimization.md — remove unnecessary default pool key/lease work, header/URI copies, address/multipart/FFI copies, and make connector/TLS residual work measurement-gated.
+3. python-streaming-backpressure-and-copy-optimization.md — prevent bounded sync streaming backpressure from blocking Tokio workers and replace repeated Vec/remainder/front-drain copies with Bytes/cursor ownership.
+4. cookie-and-buffered-response-memory-optimization.md — replace unconditional cookie read-path write pruning with a safe expiry watermark and lazily materialize buffered Python response text.
+5. post-performance-requalification-and-closure.md — freeze one final executable SHA, rerun comparable benchmarks, prove Rust/Python/C/CLI API stability, and run the repository's Tier 1/extended/package/security/MSRV/exact-SHA compatibility gates.
+
+Recent streaming-decompression corrective internals are out of scope unless new independent evidence requires a separate corrective. No new public API, custom connection pool, unbounded streaming queue, routine CI timing gate, HTTP/3 graduation, or Node maturation belongs in this program.
+
+
 ## Active corrective — issue #24 streaming decompression chunk-boundary corruption (2026-09-19)
 
 Parent corrective: `issue-24-streaming-decompression-chunk-boundary-corrective.md`
