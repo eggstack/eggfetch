@@ -177,14 +177,20 @@ pub(crate) async fn socks5_handshake(
     // address with a fresh proxy connection; the first successful CONNECT
     // wins. A failed CONNECT may leave the proxy connection unusable, so
     // retries use a new connection rather than reusing the failed stream.
+    // Destination-specific rejections (0x03/0x04/0x05) advance to the next
+    // address; proxy-leg failures (TCP, method, auth, malformed) stop the
+    // sequence immediately, matching the pinned-target path.
     if !remote_dns && dest_host.parse::<std::net::IpAddr>().is_err() {
         if let Ok(addrs) = resolve_dest_ips(dest_host, deadline).await {
             if addrs.len() > 1 {
                 let mut last_err: Option<Error> = None;
-                for ip in addrs {
+                for (index, ip) in addrs.iter().copied().enumerate() {
                     match handshake_with_ip(proxy_config, ip, dest_port, deadline).await {
                         Ok(stream) => return Ok(stream),
-                        Err(e) => last_err = Some(e),
+                        Err(TargetAttemptError::Retryable(error)) if index + 1 < addrs.len() => {
+                            last_err = Some(error);
+                        }
+                        Err(error) => return Err(error.into_error()),
                     }
                 }
                 return Err(last_err.unwrap_or_else(|| {
@@ -297,11 +303,14 @@ async fn handshake_with_ip(
     dest_ip: std::net::IpAddr,
     dest_port: u16,
     deadline: Option<std::time::Instant>,
-) -> Result<tokio::net::TcpStream> {
-    let mut stream = establish_socks_proxy_connection(proxy_config, deadline).await?;
-    send_connect_ip(&mut stream, dest_ip, dest_port, deadline)
+) -> std::result::Result<tokio::net::TcpStream, TargetAttemptError> {
+    // Proxy-leg failures (TCP, method negotiation, auth) are not
+    // destination-specific: retrying them against the next resolved IP
+    // only repeats the same failing handshake, so they are terminal.
+    let mut stream = establish_socks_proxy_connection(proxy_config, deadline)
         .await
-        .map_err(TargetAttemptError::into_error)?;
+        .map_err(TargetAttemptError::terminal)?;
+    send_connect_ip(&mut stream, dest_ip, dest_port, deadline).await?;
     Ok(stream)
 }
 

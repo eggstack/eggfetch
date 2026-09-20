@@ -1133,6 +1133,33 @@ async fn pinned_socks5_target_stops_on_proxy_policy_rejection() {
 }
 
 #[tokio::test]
+async fn unpinned_socks5_stops_on_malformed_reply() {
+    let socks = Socks5Server::start(Socks5Config {
+        malformed: true,
+        ..Default::default()
+    })
+    .await;
+    let client = Client::builder()
+        .proxy(Proxy::all(&socks.url()).unwrap())
+        .build();
+
+    // `localhost` is not an IP literal, so with `socks5://` (local DNS) the
+    // multi-address path applies when it resolves to several addresses. A
+    // malformed proxy reply is terminal and must stop the sequence after the
+    // first handshake instead of retrying per resolved address.
+    let error = client
+        .get("http://localhost:9/")
+        .unwrap()
+        .send()
+        .await
+        .unwrap_err();
+    assert_eq!(error.kind(), "malformed_proxy_response");
+    assert_eq!(socks.connect_count(), 1);
+
+    socks.shutdown();
+}
+
+#[tokio::test]
 async fn unsupported_pinned_proxy_target_routes_fail_before_proxy_io() {
     let proxy_server = HttpProxyServer::start(HttpProxyConfig::default()).await;
     let client = Client::builder()
