@@ -177,7 +177,9 @@ struct CookieKey {
 impl CookieKey {
     fn new(name: &str, domain: &str, path: &str) -> Self {
         Self {
-            name: name.to_lowercase(),
+            // RFC 6265 cookie names are case-sensitive; only the domain
+            // is ASCII case-insensitive (§5.1.3, §5.2.3).
+            name: name.to_owned(),
             domain: domain.to_lowercase(),
             path: path.to_owned(),
         }
@@ -321,25 +323,22 @@ impl CookieJar {
             return None;
         }
 
-        // For same-name cookies, prefer longer paths, then earlier creation_index.
+        // RFC 6265 §5.4: cookies with longer paths are listed before
+        // cookies with shorter paths; among equal-length paths, earlier
+        // creation comes first. No name key: ordering is global.
         matches.sort_by(|a, b| {
-            if a.name == b.name {
-                let path_cmp = b.path.len().cmp(&a.path.len());
-                if path_cmp != std::cmp::Ordering::Equal {
-                    return path_cmp;
-                }
-                a.creation_index.cmp(&b.creation_index)
-            } else {
-                a.name.cmp(&b.name)
-            }
+            b.path
+                .len()
+                .cmp(&a.path.len())
+                .then_with(|| a.creation_index.cmp(&b.creation_index))
         });
 
-        // Deduplicate by case-insensitive name and path. The same cookie name
+        // Deduplicate by case-sensitive name and path. The same cookie name
         // may legitimately be sent for multiple matching paths.
         let mut seen = std::collections::HashSet::new();
         let mut result = Vec::new();
         for c in &matches {
-            if seen.insert((c.name.to_ascii_lowercase(), c.path.clone())) {
+            if seen.insert((c.name.clone(), c.path.clone())) {
                 result.push(format!("{}={}", c.name, c.value));
             }
         }
@@ -388,12 +387,8 @@ impl CookieJar {
             return jar.cookies.get(&key).cloned();
         }
 
-        // Without domain+path, find all cookies with this name.
-        let matching: Vec<&Cookie> = jar
-            .cookies
-            .values()
-            .filter(|c| c.name.eq_ignore_ascii_case(name))
-            .collect();
+        // Without domain+path, find all cookies with this (case-sensitive) name.
+        let matching: Vec<&Cookie> = jar.cookies.values().filter(|c| c.name == name).collect();
 
         (matching.len() == 1).then(|| matching[0].clone())
     }
@@ -1148,8 +1143,70 @@ mod tests {
         .expect("valid test cookie");
 
         let header = jar.cookies_for_url(&url).unwrap();
-        // Sorted by name since paths are equal length.
+        // Equal path lengths fall back to creation order (RFC 6265 §5.4).
         assert_eq!(header, "a=1; b=2");
+    }
+
+    #[test]
+    fn cookie_names_are_case_sensitive() {
+        let jar = CookieJar::new();
+        // RFC 6265: cookie names are case-sensitive (only domains fold).
+        jar.set_default_cookie("Session".to_owned(), "upper".to_owned())
+            .expect("valid test cookie");
+        jar.set_default_cookie("session".to_owned(), "lower".to_owned())
+            .expect("valid test cookie");
+
+        assert_eq!(jar.all_cookies().len(), 2);
+        // Name-only lookup is case-sensitive too: each spelling is
+        // unambiguous on its own.
+        let upper = jar.get("Session", None, None).expect("Session stored");
+        let lower = jar.get("session", None, None).expect("session stored");
+        assert_eq!(upper.value, "upper");
+        assert_eq!(lower.value, "lower");
+
+        let url = make_url("http://example.com/");
+        let header = jar.cookies_for_url(&url).unwrap();
+        assert!(header.contains("Session=upper"), "header: {header}");
+        assert!(header.contains("session=lower"), "header: {header}");
+    }
+
+    #[test]
+    fn longer_path_wins_across_names() {
+        let jar = CookieJar::new();
+        // RFC 6265 §5.4 ordering is global: longer path first regardless
+        // of name, then earlier creation.
+        jar.set(Cookie {
+            name: "a".to_owned(),
+            value: "1".to_owned(),
+            domain: "example.com".to_owned(),
+            host_only: true,
+            path: "/".to_owned(),
+            secure: false,
+            http_only: false,
+            same_site: None,
+            expires: None,
+            persistent: false,
+            creation_index: 1,
+        })
+        .expect("valid test cookie");
+        jar.set(Cookie {
+            name: "b".to_owned(),
+            value: "2".to_owned(),
+            domain: "example.com".to_owned(),
+            host_only: true,
+            path: "/a/b".to_owned(),
+            secure: false,
+            http_only: false,
+            same_site: None,
+            expires: None,
+            persistent: false,
+            creation_index: 2,
+        })
+        .expect("valid test cookie");
+
+        let url = make_url("http://example.com/a/b/c");
+        let header = jar.cookies_for_url(&url).unwrap();
+        assert_eq!(header, "b=2; a=1");
     }
 
     #[test]
