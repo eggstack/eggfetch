@@ -93,9 +93,9 @@ created = "2026-09-10"
 # promoted by this renewal.
 stage = "stage-c-qualified"
 status = "qualified"
-qualification-sha = "18a1a4328110df014843a94e155fe678a08b1cb4"
+qualification-sha = "1153d40c9a8a3bb380e63add1dee7601469d91f3"
 qualification-date = "2026-09-20"
-previous-qualification-sha = "37ab02b3873a4f0ce7018bd716e326bcf0595230"
+previous-qualification-sha = "18a1a4328110df014843a94e155fe678a08b1cb4"
 historical-current-qualification-sha = "312cd4402ea2b4b27bf54cf7dc36924a1d449adc"
 reference = "httpx2==2.12.0"
 

@@ -93,15 +93,15 @@ If the owned-header change somehow performs worse reproducibly for ordinary requ
 
 ## Acceptance criteria
 
-- [ ] Prepared Headers move into ordinary H1/H2 outgoing requests without whole-map reinsertion.
-- [ ] Standard route performs no redundant Url clone solely for finalization.
-- [ ] Standard helper performs no second Url clone solely for response construction.
-- [ ] Duplicate/multi-value headers are unchanged.
-- [ ] Request-size, H2 header, Host/target, trace, timeout, retry and redirect tests remain green.
-- [ ] Public Rust API and ResponseBody shape are unchanged.
-- [ ] No new dependency or unsafe code.
-- [ ] Focused benchmark evidence is recorded.
-- [ ] Tier 1 is green.
+- [x] Prepared Headers move into ordinary H1/H2 outgoing requests without whole-map reinsertion.
+- [x] Standard route performs no redundant Url clone solely for finalization.
+- [x] Standard helper performs no second Url clone solely for response construction.
+- [x] Duplicate/multi-value headers are unchanged.
+- [x] Request-size, H2 header, Host/target, trace, timeout, retry and redirect tests remain green.
+- [x] Public Rust API and ResponseBody shape are unchanged.
+- [x] No new dependency or unsafe code.
+- [x] Focused benchmark evidence is recorded.
+- [x] Tier 1 is green.
 
 ## Stop conditions
 

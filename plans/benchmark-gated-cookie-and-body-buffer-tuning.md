@@ -89,15 +89,15 @@ Body collection:
 
 ## Acceptance criteria
 
-- [ ] Plan 1 evidence is reviewed before executable changes.
-- [ ] Cookie mutation optimization is implemented only if evidence is material.
-- [ ] Earliest-expiry correctness is fully tested if mutation logic changes.
-- [ ] Body capacity hint is implemented only with safe decoded-length provenance and a conservative cap.
-- [ ] ResponseBody public variants remain unchanged.
-- [ ] No timeout/decompression/decoded-size/lease semantic change.
-- [ ] No new dependency/background task/index structure.
-- [ ] Rejected/no-benefit candidates are explicitly recorded.
-- [ ] Tier 1 is green if executable code changes.
+- [x] Plan 1 evidence is reviewed before executable changes.
+- [x] Cookie mutation optimization is implemented only if evidence is material.
+- [x] Earliest-expiry correctness is fully tested if mutation logic changes.
+- [x] Body capacity hint is explicitly rejected because decoded-length provenance is unavailable.
+- [x] ResponseBody public variants remain unchanged.
+- [x] No timeout/decompression/decoded-size/lease semantic change.
+- [x] No new dependency/background task/index structure.
+- [x] Rejected/no-benefit candidates are explicitly recorded.
+- [x] Tier 1 is green if executable code changes.
 
 ## Execution record — 2026-09-20
 

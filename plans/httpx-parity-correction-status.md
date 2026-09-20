@@ -4,6 +4,35 @@ This record is the exact-SHA-bound status for the HTTPX 0.28.1 compatibility
 facade. Historical phase and corrective-pass records remain in the git history
 and referenced plans; counts below are only from the runs named here.
 
+## Recorded state — Stage C renewed after second-pass ownership qualification (2026-09-20)
+
+Recorded designation: **Stage C qualified** for both documented facades, bound
+to executable SHA `1153d40c9a8a3bb380e63add1dee7601469d91f3`. The preceding
+`18a1a4328110df014843a94e155fe678a08b1cb4` binding is retained below as
+historical evidence. The second-pass campaign changed private request/native/
+proxy ownership, cookie expiry bookkeeping, and Python buffered-response
+adaptation after that freeze, so the exact-SHA evidence was renewed.
+
+Qualification evidence on the second-pass executable freeze:
+
+- Tier 1, extended, package, live security preflight, and exact Rust 1.89.0
+  MSRV checks passed. The optional skips remain the absent Node native artifact
+  and absent downstream qualification manifest.
+- The native Python manifest remained at 66 exports and the typing surface
+  remained at 66 runtime exports, 32 exception bases, and 24 reviewed member
+  contracts. Both HTTPX API oracles and the full pinned HTTPX 0.28.1/HTTPX2
+  2.12.0 compatibility suite passed with no new unexplained difference.
+- Native frame/trailer, proxy/SOCKS fallback, FFI, feature, lifecycle/resource,
+  soak, docs, and package controls passed. Buffered iterator semantics,
+  header transfer, cookie visibility, and exact async `bytes` behavior have
+  focused coverage. No compatibility waiver, dependency, feature-default, or
+  public API change was introduced.
+
+The final closure plan is
+`plans/second-pass-performance-requalification-and-closure.md`; the prior
+`18a1a432...` record remains valid historical evidence for the preceding
+performance campaign.
+
 ## Recorded state — Stage C renewed after API-safe performance optimization (2026-09-20)
 
 Recorded designation: **Stage C qualified** for both documented facades, bound

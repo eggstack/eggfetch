@@ -89,16 +89,16 @@ Required result:
 
 ## Acceptance criteria
 
-- [ ] Native request HeaderMap is moved, not cloned, after validation.
-- [ ] Native no-target URI can move through private plumbing without changing validation.
-- [ ] Native frame/trailer/upgrade/timeout behavior remains unchanged.
-- [ ] Eligible SOCKS request construction consumes owned Headers rather than rebuilding the HeaderMap.
-- [ ] SOCKS response headers move via `into_parts()` rather than whole-map clone.
-- [ ] Manual proxy framing and typed fallback semantics are unchanged.
-- [ ] Proxy route-cache identity and current-request deadline invariants remain unchanged.
-- [ ] No public API/dependency/feature changes.
-- [ ] Focused tests and benchmark evidence are recorded.
-- [ ] Tier 1 is green.
+- [x] Native request HeaderMap is moved, not cloned, after validation.
+- [x] Native no-target URI can move through private plumbing without changing validation.
+- [x] Native frame/trailer/upgrade/timeout behavior remains unchanged.
+- [x] Eligible SOCKS request construction consumes owned Headers rather than rebuilding the HeaderMap.
+- [x] SOCKS response headers move via `into_parts()` rather than whole-map clone.
+- [x] Manual proxy framing and typed fallback semantics are unchanged.
+- [x] Proxy route-cache identity and current-request deadline invariants remain unchanged.
+- [x] No public API/dependency/feature changes.
+- [x] Focused tests and benchmark evidence are recorded.
+- [x] Tier 1 is green.
 
 ## Execution record — 2026-09-20
 

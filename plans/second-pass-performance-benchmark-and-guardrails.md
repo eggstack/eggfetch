@@ -121,17 +121,17 @@ Use the current repository tools rather than creating a new permanent evidence f
 
 ## Acceptance criteria
 
-- [ ] Exact baseline SHA/environment/commands are recorded before implementation.
-- [ ] Request-header ownership is measured at small/medium/large header counts.
-- [ ] Native request ownership has a benchmark/control.
-- [ ] Python header conversion is measured for buffered and streaming constructors.
-- [ ] Buffered iterator construction/first-yield/full-consumption are measured separately.
-- [ ] Python iterator cases include RSS/peak-memory evidence where practical.
-- [ ] Async `aread()` large-body copy behavior is measured.
-- [ ] Cookie mutation/body-capacity candidates have evidence before Plan 5 changes executable code.
-- [ ] Every benchmark has a paired correctness assertion.
-- [ ] No production behavior or public API changes in this plan.
-- [ ] Tier 1 remains green.
+- [x] Exact baseline SHA/environment/commands are recorded before implementation.
+- [x] Request-header ownership is measured at small/medium/large header counts.
+- [x] Native request ownership has a benchmark/control.
+- [x] Python header conversion is measured for buffered and streaming constructors.
+- [x] Buffered iterator construction/first-yield/full-consumption are measured separately.
+- [x] Python iterator cases include RSS/peak-memory evidence where practical.
+- [x] Async `aread()` large-body copy behavior is measured.
+- [x] Cookie mutation/body-capacity candidates have evidence before Plan 5 changes executable code.
+- [x] Every benchmark has a paired correctness assertion.
+- [x] No production behavior or public API changes in this plan.
+- [x] Tier 1 remains green.
 
 ## Execution record — baseline captured 2026-09-20
 

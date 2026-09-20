@@ -134,16 +134,16 @@ Required evidence:
 
 ## Acceptance criteria
 
-- [ ] Buffered core HeaderMap transfers into PyHeaders after metadata extraction.
-- [ ] Streaming core HeaderMap transfers into PyHeaders after metadata extraction.
-- [ ] `iter_bytes`, `iter_text`, and `iter_lines` no longer prebuild all Python objects/lists.
-- [ ] Iterator values and exceptions match existing tests plus new multibyte/CRLF/empty/large controls.
-- [ ] Async `aread()` intermediate Vec is removed safely or explicitly rejected with evidence.
-- [ ] No native Python API manifest or typing drift.
-- [ ] HTTPX 0.28.1 and HTTPX2 2.12.0 compatibility gain no new exception.
-- [ ] No unsafe code or new production dependency.
-- [ ] Python performance/RSS evidence is recorded.
-- [ ] Tier 1 is green.
+- [x] Buffered core HeaderMap transfers into PyHeaders after metadata extraction.
+- [x] Streaming core HeaderMap transfers into PyHeaders after metadata extraction.
+- [x] `iter_bytes`, `iter_text`, and `iter_lines` no longer prebuild all Python objects/lists.
+- [x] Iterator values and exceptions match existing tests plus new multibyte/CRLF/empty/large controls.
+- [x] Async `aread()` intermediate Vec is removed safely or explicitly rejected with evidence.
+- [x] No native Python API manifest or typing drift.
+- [x] HTTPX 0.28.1 and HTTPX2 2.12.0 compatibility gain no new exception.
+- [x] No unsafe code or new production dependency.
+- [x] Python performance/RSS evidence is recorded.
+- [x] Tier 1 is green.
 
 ## Execution record — 2026-09-20
 

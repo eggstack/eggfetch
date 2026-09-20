@@ -128,20 +128,50 @@ Do not publish a release merely because this campaign closes unless separately r
 
 ## Completion criteria
 
-- [ ] One final executable SHA is identified.
-- [ ] Comparable before/after performance evidence is recorded.
-- [ ] No representative material regression remains unexplained.
-- [ ] Native Rust public API is source-compatible with the planning baseline.
-- [ ] ResponseBody public shape is unchanged.
-- [ ] Python native manifest and typing have zero new drift.
-- [ ] HTTPX/HTTPX2 API oracles and full compatibility have zero new unexplained differences.
-- [ ] Buffered iterator/aread/header-transfer behavior is fully green.
-- [ ] Native/proxy ownership changes retain framing/routing/fallback/timeout semantics.
-- [ ] FFI, features, docs, lifecycle/resource/soak and applicable downstream controls are green or truthfully skipped per policy.
-- [ ] Tier 1, extended, package, security, and exact MSRV gates are green.
-- [ ] Exact-SHA qualification records point to the final executable freeze when renewal is required.
-- [ ] plans/README.md marks the program complete only after evidence is recorded.
+- [x] One final executable SHA is identified.
+- [x] Comparable before/after performance evidence is recorded.
+- [x] No representative material regression remains unexplained.
+- [x] Native Rust public API is source-compatible with the planning baseline.
+- [x] ResponseBody public shape is unchanged.
+- [x] Python native manifest and typing have zero new drift.
+- [x] HTTPX/HTTPX2 API oracles and full compatibility have zero new unexplained differences.
+- [x] Buffered iterator/aread/header-transfer behavior is fully green.
+- [x] Native/proxy ownership changes retain framing/routing/fallback/timeout semantics.
+- [x] FFI, features, docs, lifecycle/resource/soak and applicable downstream controls are green or truthfully skipped per policy.
+- [x] Tier 1, extended, package, security, and exact MSRV gates are green.
+- [x] Exact-SHA qualification records point to the final executable freeze when renewal is required.
+- [x] plans/README.md marks the program complete only after evidence is recorded.
 
 ## Stop conditions
 
 Do not close if an optimization changes a public API, changes Python return types or iterator semantics, weakens timeout/resource/security behavior, introduces a new compatibility waiver, changes proxy fallback/routing identity, alters native body framing, or has only non-reproducible performance evidence while increasing complexity.
+
+## Execution record — final executable freeze 2026-09-20
+
+Final executable SHA: `1153d40c9a8a3bb380e63add1dee7601469d91f3`. Planning
+baseline: `b6bcc33aa1ad04dfa22af219b82601d3c1377743`; pre-change benchmark
+baseline after the requested rebase: `96d5681d6ac7e31f17b200f7feda8849de5f29b5`.
+Environment: Linux x86_64, CPython 3.12.3 in `.venv`, rustc/cargo 1.98.1
+for the primary run, with the exact Rust 1.89.0 MSRV checks included by the
+extended gate. The qualification harness used the optimized Criterion
+profile and `python scripts/performance_benchmark.py --repeats 3`; comparable
+controls and outcomes are recorded in the benchmark and child-plan records.
+
+The final candidate passed `./scripts/check.sh`, `./scripts/check.sh
+extended`, `./scripts/check.sh package`, and `./scripts/check_security.sh`.
+The clean package gate passed crate dry-runs, internal dependency validation,
+the release wheel build/content/smoke checks, and installed-wheel typing
+smoke. Security passed cargo-deny advisories/bans/licenses/sources and the
+RustSec cargo-audit scan; cargo-deny retained only the existing duplicate
+`getrandom` lockfile warning. Node JavaScript was skipped because the native
+artifact is absent, and downstream qualification was skipped because its
+artifact manifest is absent, both as required by current policy.
+
+Native API/typing checks stayed at 66 exports, 32 exception bases, and 24
+reviewed member contracts. The full pinned HTTPX 0.28.1/HTTPX2 2.12.0 suite,
+API oracles, FFI, feature matrix, lifecycle/resource, soak, docs, and
+frame/proxy/native controls passed without a new unexplained difference.
+`ResponseBody` public variants, Python return types, proxy fallback/routing,
+timeouts, framing/trailers, and public exports remain unchanged. The live
+Stage C profiles, ledger, and canonical compatibility pages now point to this
+final executable SHA; subsequent changes are documentation-only closure.
