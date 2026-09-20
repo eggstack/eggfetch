@@ -452,6 +452,15 @@ impl PoolGuard {
         self.response_lifecycle.total_deadline
     }
 
+    /// Returns whether this guard carries state that must outlive dispatch.
+    #[must_use]
+    pub(crate) fn has_response_state(&self) -> bool {
+        self.global_permit.is_some()
+            || self.origin_permit.is_some()
+            || self.response_lifecycle.read_timeout.is_some()
+            || self.response_lifecycle.total_deadline.is_some()
+    }
+
     /// Returns the origin this guard was acquired for, if any.
     #[must_use]
     #[allow(dead_code)] // Exposed for future diagnostics and metrics.
@@ -677,6 +686,15 @@ impl Pool {
         self.inner.config.effective_max_idle_per_host()
     }
 
+    /// Returns whether an origin key can affect logical admission.
+    #[must_use]
+    pub(crate) fn needs_origin_key(&self) -> bool {
+        self.inner
+            .config
+            .effective_max_in_flight_per_origin()
+            .is_some()
+    }
+
     /// Acquire a pool slot for the given origin.
     ///
     /// If a global and per-origin limit are configured, the global permit is
@@ -771,7 +789,7 @@ impl Pool {
 
         Ok(PoolGuard::new(
             self.inner.clone(),
-            origin.cloned(),
+            origin_permit.is_some().then(|| origin.cloned()).flatten(),
             global_permit,
             origin_permit,
         ))
@@ -905,6 +923,22 @@ mod tests {
         let pool = Pool::new(PoolConfig::default());
         let guard = pool.acquire(None).await.unwrap();
         assert!(guard.origin().is_none());
+        assert!(!guard.has_response_state());
+    }
+
+    #[tokio::test]
+    async fn response_state_tracks_permit_and_timeout_ownership() {
+        let global_pool = Pool::new(PoolConfig {
+            max_connections: Some(1),
+            ..Default::default()
+        });
+        let guard = global_pool.acquire(None).await.unwrap();
+        assert!(guard.has_response_state());
+
+        let pool = Pool::new(PoolConfig::default());
+        let mut guard = pool.acquire(None).await.unwrap();
+        guard.set_response_timeouts(Some(std::time::Duration::from_secs(1)), None);
+        assert!(guard.has_response_state());
     }
 
     #[tokio::test]

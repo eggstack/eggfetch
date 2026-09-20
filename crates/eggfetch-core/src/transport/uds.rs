@@ -235,11 +235,7 @@ pub(crate) async fn send_request(
     url: url::Url,
     trace: Option<&dyn crate::trace::TraceObserver>,
 ) -> Result<Response> {
-    crate::transport::direct::emit_send_start(
-        trace,
-        request.method().as_str(),
-        &request.uri().to_string(),
-    )?;
+    crate::transport::direct::emit_send_start(trace, request.method().as_str(), request.uri())?;
 
     let result = client
         .request(request)

@@ -196,6 +196,49 @@ impl Headers {
         }
         Ok(())
     }
+
+    /// Validate a request target without allocating its display string.
+    pub(crate) fn validate_request_size_uri(
+        &self,
+        method: &http::Method,
+        request_target: &http::Uri,
+    ) -> Result<()> {
+        struct CountWriter(usize);
+        impl fmt::Write for CountWriter {
+            fn write_str(&mut self, value: &str) -> fmt::Result {
+                self.0 = self.0.checked_add(value.len()).ok_or(fmt::Error)?;
+                Ok(())
+            }
+        }
+
+        let mut writer = CountWriter(0);
+        fmt::write(&mut writer, format_args!("{request_target}"))
+            .map_err(|_| Error::RequestBuild("request target serialization overflowed".into()))?;
+        self.validate_request_size_len(method, writer.0)
+    }
+
+    fn validate_request_size_len(&self, method: &http::Method, target_len: usize) -> Result<()> {
+        let request_line_size = method
+            .as_str()
+            .len()
+            .checked_add(1)
+            .and_then(|size| size.checked_add(target_len))
+            .and_then(|size| size.checked_add(1 + "HTTP/1.1".len() + 2));
+        let size = request_line_size.and_then(|size| {
+            self.inner.iter().try_fold(size, |size, (name, value)| {
+                size.checked_add(name.as_str().len() + value.as_bytes().len() + 4)
+            })
+        });
+        if size.is_none_or(|size| {
+            size.checked_add(2)
+                .is_none_or(|size| size > MAX_REQUEST_HEADER_BYTES)
+        }) {
+            return Err(Error::RequestBuild(format!(
+                "request headers exceed maximum size of {MAX_REQUEST_HEADER_BYTES} bytes"
+            )));
+        }
+        Ok(())
+    }
 }
 
 impl From<HeaderMap> for Headers {
@@ -332,6 +375,23 @@ mod tests {
         hm.insert("X-Test", HeaderValue::from_static("hello"));
         let h = Headers::from(hm);
         assert_eq!(h.get("x-test").unwrap().to_str().unwrap(), "hello");
+    }
+
+    #[test]
+    fn uri_size_validation_matches_display_length() {
+        let headers = Headers::new();
+        for target in [
+            "http://example.com/path?q=1",
+            "/origin-form?q=1",
+            "*",
+            "https://example.com:8443/absolute",
+        ] {
+            let uri: http::Uri = target.parse().unwrap();
+            assert_eq!(uri.to_string().len(), target.len());
+            headers
+                .validate_request_size_uri(&http::Method::GET, &uri)
+                .unwrap();
+        }
     }
 
     #[test]

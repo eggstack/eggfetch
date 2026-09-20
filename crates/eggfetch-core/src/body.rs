@@ -468,7 +468,7 @@ impl NativeResponseBody {
     /// Construct a native body around an eggfetch-owned response body.
     pub(crate) fn new<B>(
         body: B,
-        lease: PoolGuardArc,
+        lease: Option<PoolGuardArc>,
         read_timeout: Option<Duration>,
         total_deadline: Option<ResponseDeadline>,
     ) -> Self
@@ -477,7 +477,7 @@ impl NativeResponseBody {
     {
         Self {
             inner: Box::pin(body),
-            lease: Some(lease),
+            lease,
             read_timeout,
             total_deadline,
             read_sleep: None,
@@ -651,7 +651,7 @@ impl NativeResponseBody {
     /// stable eggfetch error type.
     pub(crate) fn from_incoming(
         incoming: hyper::body::Incoming,
-        lease: PoolGuardArc,
+        lease: Option<PoolGuardArc>,
         read_timeout: Option<Duration>,
         total_deadline: Option<ResponseDeadline>,
     ) -> Self {

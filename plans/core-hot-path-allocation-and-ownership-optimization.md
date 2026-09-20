@@ -196,3 +196,20 @@ No public API manifest, feature/default definition, error type, timeout classifi
 - [ ] Connector/TLS residual work is either evidence-backed or explicitly rejected.
 - [ ] Tier 1 and focused feature/FFI tests are green.
 - [ ] No public API or semantic regression.
+
+## Implementation record
+
+Implemented on the campaign branch:
+
+- per-origin keys are constructed only when per-origin logical admission is configured;
+- default/global-only guards retain no copied origin and default response finalization skips
+  the inert lease allocation;
+- Hyper response headers are moved out of response parts, trace URI formatting is lazy,
+  and request-size validation counts Uri display output without allocating a String;
+- resolved address snapshots, multipart headers, native owned header maps, and FFI buffered
+  bodies use the existing Arc/Bytes ownership where safe;
+- native response bodies also omit an inert lease while preserving timeout/permit lifetimes.
+
+Focused pool/header/cookie/FFI tests passed after these changes. Connector/TLS residual
+optimization was measured as out of scope for this implementation slice; no new route
+cache or TLS state was added.

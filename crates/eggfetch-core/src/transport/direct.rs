@@ -25,13 +25,13 @@ use crate::transport::HyperRequestBody;
 pub(crate) fn emit_send_start(
     trace: Option<&dyn TraceObserver>,
     method: &str,
-    target: &str,
+    target: &http::Uri,
 ) -> Result<()> {
     if let Some(observer) = trace {
         if observer.on_event(&TraceEvent::SendRequestHeaders {
             phase: TracePhase::Started,
             method: method.to_owned(),
-            target: target.to_owned(),
+            target: target.to_string(),
         }) == OnEventAction::Abort
         {
             return Err(Error::TraceCallbackAborted);
@@ -81,8 +81,6 @@ async fn finish_hyper_response(
     trace: Option<&dyn TraceObserver>,
 ) -> Response {
     let status = hyper_response.status().as_u16();
-    let resp_version = hyper_response.version();
-    let resp_headers = hyper_response.headers().clone();
 
     emit_receive_complete(trace, status);
 
@@ -92,6 +90,9 @@ async fn finish_hyper_response(
     // consume the Incoming body.
     let on_upgrade = hyper::upgrade::on(&mut hyper_response);
     let upgrading = is_upgrade_status(status);
+    let (parts, incoming) = hyper_response.into_parts();
+    let resp_version = parts.version;
+    let resp_headers = parts.headers;
 
     let mut response = if upgrading {
         // For upgrade responses, do NOT consume the body via into_body().
@@ -106,7 +107,7 @@ async fn finish_hyper_response(
         )
     } else {
         let trailers = SharedTrailers::new();
-        let stream: BoxBytesStream = wrap_incoming(hyper_response.into_body(), trailers.clone());
+        let stream: BoxBytesStream = wrap_incoming(incoming, trailers.clone());
         let body = ResponseBody::streaming(stream);
         let mut response = Response::new(
             http::StatusCode::from_u16(status).unwrap_or(http::StatusCode::OK),
@@ -151,7 +152,7 @@ pub(crate) async fn send_request<C>(
 where
     C: hyper_util::client::legacy::connect::Connect + Clone + Send + Sync + 'static,
 {
-    emit_send_start(trace, request.method().as_str(), &request.uri().to_string())?;
+    emit_send_start(trace, request.method().as_str(), request.uri())?;
 
     let result = hyper_client
         .request(request)
@@ -181,7 +182,7 @@ pub(crate) async fn send_proxy_request<C>(
 where
     C: hyper_util::client::legacy::connect::Connect + Clone + Send + Sync + 'static,
 {
-    emit_send_start(trace, request.method().as_str(), &request.uri().to_string())?;
+    emit_send_start(trace, request.method().as_str(), request.uri())?;
     let result = hyper_client
         .request(request)
         .await
@@ -207,7 +208,7 @@ pub(crate) async fn send_raw_request<C>(
 where
     C: hyper_util::client::legacy::connect::Connect + Clone + Send + Sync + 'static,
 {
-    emit_send_start(trace, request.method().as_str(), &request.uri().to_string())?;
+    emit_send_start(trace, request.method().as_str(), request.uri())?;
     match hyper_client.request(request).await {
         Ok(response) => {
             emit_receive_complete(trace, response.status().as_u16());
@@ -240,7 +241,7 @@ pub(crate) async fn send_direct_request<C>(
 where
     C: hyper_util::client::legacy::connect::Connect + Clone + Send + Sync + 'static,
 {
-    emit_send_start(trace, request.method().as_str(), &request.uri().to_string())?;
+    emit_send_start(trace, request.method().as_str(), request.uri())?;
 
     let result = hyper_client
         .request(request)

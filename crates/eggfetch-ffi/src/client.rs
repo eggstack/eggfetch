@@ -329,7 +329,7 @@ pub unsafe extern "C" fn eggfetch_client_send(
                         status,
                         url,
                         headers,
-                        body: body.to_vec(),
+                        body,
                     }))
                 }
                 Err(ref e) => {

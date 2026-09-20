@@ -468,7 +468,7 @@ impl DirectConnector {
             config: self.config.clone(),
             tls: self.tls.clone(),
             sni_hostname: self.sni_hostname.clone(),
-            resolved_addresses: Some(target.addresses().to_vec().into()),
+            resolved_addresses: Some(target.addresses_shared()),
             metrics: self.metrics.clone(),
         }
     }

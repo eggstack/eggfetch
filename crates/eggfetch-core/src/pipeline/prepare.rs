@@ -468,23 +468,31 @@ pub(super) async fn prepare_single_request(
         }
     }
 
-    #[cfg(feature = "proxy")]
-    let origin = match effective_proxy {
-        Some(ref proxy_config) => {
-            let is_tunnel = url.scheme() == "https";
-            OriginKey::from_url_with_proxy_scheme(
-                url.scheme(),
-                &url,
-                proxy_config.host(),
-                Some(proxy_config.port()?),
-                Some(proxy_config.scheme()),
-                is_tunnel,
-            )
+    let origin = if inner.pool.needs_origin_key() {
+        #[cfg(feature = "proxy")]
+        {
+            match effective_proxy {
+                Some(ref proxy_config) => {
+                    let is_tunnel = url.scheme() == "https";
+                    OriginKey::from_url_with_proxy_scheme(
+                        url.scheme(),
+                        &url,
+                        proxy_config.host(),
+                        Some(proxy_config.port()?),
+                        Some(proxy_config.scheme()),
+                        is_tunnel,
+                    )
+                }
+                None => OriginKey::from_url(url.scheme(), &url),
+            }
         }
-        None => OriginKey::from_url(url.scheme(), &url),
+        #[cfg(not(feature = "proxy"))]
+        {
+            OriginKey::from_url(url.scheme(), &url)
+        }
+    } else {
+        None
     };
-    #[cfg(not(feature = "proxy"))]
-    let origin = OriginKey::from_url(url.scheme(), &url);
 
     let started = std::time::Instant::now();
     let pool_deadline = match (timeout.pool, timeout.total) {
@@ -540,7 +548,7 @@ pub(super) async fn prepare_single_request(
         crate::h2_headers::strip_h2_forbidden_headers(&mut headers);
     }
     let request_uri = resolve_request_uri(&url, &transport_hints)?;
-    headers.validate_request_size(&method, request_uri.to_string().as_bytes())?;
+    headers.validate_request_size_uri(&method, &request_uri)?;
 
     let remaining_total = timeout
         .total

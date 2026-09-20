@@ -27,7 +27,7 @@ pub struct ResponseHandle {
     pub(crate) status: u16,
     pub(crate) url: String,
     pub(crate) headers: Vec<(String, String)>,
-    pub(crate) body: Vec<u8>,
+    pub(crate) body: bytes::Bytes,
 }
 
 /// Opaque handle to an error.

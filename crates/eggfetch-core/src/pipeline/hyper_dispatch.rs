@@ -55,6 +55,24 @@ pub(super) fn build_http_request<B>(
         .map_err(|e| Error::RequestBuild(e.to_string()))
 }
 
+/// Build a request by moving an already-owned header map into the request.
+pub(super) fn build_http_request_owned<B>(
+    method: &http::Method,
+    uri: http::Uri,
+    version: http::Version,
+    headers: Headers,
+    body: B,
+) -> Result<http::Request<B>> {
+    let mut request = http::Request::builder()
+        .method(method)
+        .uri(uri)
+        .version(version)
+        .body(body)
+        .map_err(|e| Error::RequestBuild(e.to_string()))?;
+    *request.headers_mut() = headers.into_inner();
+    Ok(request)
+}
+
 /// UDS route: configured Unix-domain-socket client.
 #[allow(clippy::too_many_arguments)]
 #[cfg(all(feature = "high-level-url", feature = "advanced-routing"))]

@@ -570,7 +570,10 @@ where
     .boxed_unsync();
     let body = NativeRequestBody::new(Box::pin(body), timeout.write).boxed_unsync();
 
-    let origin_key = OriginKey::from_origin(&http_origin);
+    let origin_key = inner
+        .pool
+        .needs_origin_key()
+        .then(|| OriginKey::from_origin(&http_origin));
     let started = std::time::Instant::now();
     let pool_deadline = match (timeout.pool, timeout.total) {
         (Some(pool), Some(total)) if total < pool => Some((total, TimeoutPhase::Total)),
@@ -580,7 +583,7 @@ where
     };
     let guard = match pool_deadline {
         Some((duration, phase)) => {
-            match tokio::time::timeout(duration, inner.pool.acquire(Some(&origin_key))).await {
+            match tokio::time::timeout(duration, inner.pool.acquire(origin_key.as_ref())).await {
                 Ok(guard) => guard?,
                 Err(_) => {
                     return Err(Error::Timeout {
@@ -590,7 +593,7 @@ where
                 }
             }
         }
-        None => inner.pool.acquire(Some(&origin_key)).await?,
+        None => inner.pool.acquire(origin_key.as_ref()).await?,
     };
 
     let remaining_total = timeout
@@ -630,7 +633,7 @@ where
                     .as_ref()
                     .ok_or_else(|| Error::Unsupported("UDS client not available".into()))?;
                 let hyper_request =
-                    hyper_dispatch::build_http_request(&method, uri, version, &headers, body)?;
+                    hyper_dispatch::build_http_request_owned(&method, uri, version, headers, body)?;
                 send_with_total_timeout(
                     crate::transport::direct::send_raw_request(uds_client, hyper_request, trace),
                     remaining_total,
@@ -658,7 +661,7 @@ where
                     .clone()
             };
             let hyper_request =
-                hyper_dispatch::build_http_request(&method, uri, version, &headers, body)?;
+                hyper_dispatch::build_http_request_owned(&method, uri, version, headers, body)?;
             send_with_total_timeout(
                 crate::transport::direct::send_raw_request(&custom_client, hyper_request, trace),
                 remaining_total,
@@ -684,7 +687,7 @@ where
                     .ok_or_else(|| Error::Unsupported("direct client not available".into()))?
             };
             let hyper_request =
-                hyper_dispatch::build_http_request(&method, uri, version, &headers, body)?;
+                hyper_dispatch::build_http_request_owned(&method, uri, version, headers, body)?;
             send_with_total_timeout(
                 crate::transport::direct::send_raw_request(direct_client, hyper_request, trace),
                 remaining_total,
@@ -698,7 +701,7 @@ where
             })?;
             let sni_client = inner.sni_client(sni_hostname).await?;
             let hyper_request =
-                hyper_dispatch::build_http_request(&method, uri, version, &headers, body)?;
+                hyper_dispatch::build_http_request_owned(&method, uri, version, headers, body)?;
             send_with_total_timeout(
                 crate::transport::direct::send_raw_request(&sni_client, hyper_request, trace),
                 remaining_total,
@@ -710,7 +713,7 @@ where
                 Error::Unsupported("HTTP client not available for this protocol".into())
             })?;
             let hyper_request =
-                hyper_dispatch::build_http_request(&method, uri, version, &headers, body)?;
+                hyper_dispatch::build_http_request_owned(&method, uri, version, headers, body)?;
             send_with_total_timeout(
                 crate::transport::direct::send_raw_request(hyper_client, hyper_request, trace),
                 remaining_total,
@@ -732,12 +735,11 @@ where
     }
 
     let (parts, incoming) = raw_response.into_parts();
-    let native_body = NativeResponseBody::from_incoming(
-        incoming,
-        std::sync::Arc::new(guard),
-        timeout.read,
-        total_deadline,
-    );
+    let lease = guard
+        .has_response_state()
+        .then(|| std::sync::Arc::new(guard));
+    let native_body =
+        NativeResponseBody::from_incoming(incoming, lease, timeout.read, total_deadline);
     Ok(http::Response::from_parts(parts, native_body))
 }
 

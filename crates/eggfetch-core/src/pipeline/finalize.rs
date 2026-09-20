@@ -39,6 +39,10 @@ pub(super) fn apply_timeouts_and_lease(
     // is placed behind the lease `Arc`; consumption reads it back when the
     // final raw/decoded stream is selected.
     guard.set_response_timeouts(read_timeout, total_deadline);
+    if !guard.has_response_state() {
+        drop(guard);
+        return;
+    }
     let body = std::mem::replace(&mut response.body, ResponseBody::buffered(Bytes::new()));
     let new_body = body.attach_lease(Arc::new(guard));
     response.set_body(new_body);

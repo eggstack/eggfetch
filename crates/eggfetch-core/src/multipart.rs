@@ -787,7 +787,7 @@ impl Stream for MultipartEncoder {
             match this.state {
                 State::PartHeader => {
                     if this.header_pos < this.header.len() {
-                        let remaining = Bytes::copy_from_slice(&this.header[this.header_pos..]);
+                        let remaining = this.header.slice(this.header_pos..);
                         this.header_pos = this.header.len();
                         return Poll::Ready(Some(Ok(remaining)));
                     }
