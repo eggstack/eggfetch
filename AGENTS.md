@@ -1,13 +1,13 @@
 # Agent Guide
 
 eggfetch is a Rust-native async HTTP client (tokio + hyper). All networking lives in `eggfetch-core` plus the small `eggfetch-http-connect` CONNECT wire primitive it owns; CLI, Python, FFI, and Node are thin adapters.
-Start at `docs/architecture/overview.md` (§ Deep-Dive Index). Normative CI/release rules: `docs/verification-policy.md`. Task workflows: `.skills/` (`rust-development`, `python-bindings`, `cli-development`, `ffi-development`, `fuzz-testing`, `security-review`, `release-process`, `documentation`).
+Start at `docs/architecture/overview.md` (§ Deep-Dive Index). Normative CI/release rules: `docs/verification-policy.md`. Conventions: `CONTRIBUTING.md`. Task workflows: `.skills/` (`rust-development`, `python-bindings`, `cli-development`, `ffi-development`, `fuzz-testing`, `security-review`, `release-process`, `documentation`).
 
 ## Commands
 
 ```sh
 ./scripts/check.sh          # Tier 1: required before every commit (CI repeats it on ubuntu-latest)
-./scripts/check.sh extended # Tier 2: before release (full compat, API oracle, feature matrix, MSRV, docs, FFI, soak)
+./scripts/check.sh extended # Tier 2: before release (full compat, API oracle, feature matrix, MSRV, docs, FFI, lifecycle/soak/downstream, bench)
 ./scripts/check.sh package  # Tier 3: before publish (crate packaging + wheel build/smoke)
 ./scripts/check_security.sh # Live RustSec/license/source preflight before publication
 ```
@@ -23,7 +23,7 @@ Start at `docs/architecture/overview.md` (§ Deep-Dive Index). Normative CI/rele
   - `EGGFETCH_COMPAT_REQUIRED=1 python -m pytest crates/eggfetch-python/tests/compat/ -v --strict-markers`
   - `cargo clippy --workspace --all-targets --all-features -- -D warnings`
   - `cargo fmt --all -- --check`
-- Never parallelize Rust workspace tests (`--test-threads=1`): RSS-stabilization tests go flaky under concurrency.
+- Never parallelize Rust workspace tests (`--test-threads=1`): RSS-stabilization tests go flaky under concurrency. Workspace tests exclude `eggfetch-python` (PyO3 builds separately via `maturin develop`).
 - Tier 2 requires the exact Rust 1.89.0 toolchain (`rustup toolchain install 1.89.0 --profile minimal`); it fails, never skips. Full compat also needs pinned deps (`pip install -r compat/httpx/0.28.1/requirements.txt` + `compat/httpx2/2.12.0/requirements.txt`). `qualification/` fixtures and H3 (experimental) are manual, never Tier 1 gates. Tier 1 Node JS surface (`node test.js`) is an explicit SKIP when `node` or `crates/eggfetch-node/eggfetch.node` is absent, not a failure.
 
 ## Boundaries and lint
@@ -56,4 +56,4 @@ Start at `docs/architecture/overview.md` (§ Deep-Dive Index). Normative CI/rele
 ## Working style
 
 - Make the workspace green before adding functionality; run Tier 1 before committing. One logical change per commit; never commit without an explicit user request.
-- Never add CI jobs, matrices, evidence schemas, or publish automation without an explicit request. CI is one job (`ci.yml`) repeating `check.sh`; releases are manual (order: http-connect → core → cli → ffi → python → node, then tag; PyPI via manually dispatched `pypi.yml`, Trusted Publishing). See `docs/verification-policy.md`.
+- Never add CI jobs, matrices, evidence schemas, or publish automation without an explicit request. CI is one job (`ci.yml`) repeating `check.sh`; releases are manual (order: http-connect → core → cli → ffi → python → node, then tag; `eggfetch-bench` and `fuzz/` are never published; PyPI via manually dispatched `pypi.yml`, Trusted Publishing). See `docs/verification-policy.md`.
