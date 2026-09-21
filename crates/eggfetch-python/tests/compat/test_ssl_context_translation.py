@@ -211,6 +211,86 @@ class TestPrivateSSLContextExport:
         assert "private_key" not in repr(payload)
         assert "pem" not in repr(payload).lower()
 
+    def test_export_check_hostname_false(self):
+        from eggfetch._ssl_context import _export_ssl_context_state
+
+        ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        payload = _export_ssl_context_state(ctx)
+        assert payload["check_hostname"] is False
+        assert payload["verify_mode"] == ssl.CERT_NONE
+        assert payload["helper_metadata"] is None
+
+    def test_export_custom_ca_der(self):
+        from eggfetch._ssl_context import _export_ssl_context_state
+
+        payload = _export_ssl_context_state(ssl.create_default_context())
+        assert isinstance(payload["ca_certs_der"], list)
+        assert len(payload["ca_certs_der"]) > 0
+        assert all(isinstance(entry, bytes) for entry in payload["ca_certs_der"])
+
+    def test_export_tls12_tls13_bounds(self):
+        from eggfetch._ssl_context import _export_ssl_context_state
+
+        ctx = ssl.create_default_context()
+        ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+        ctx.maximum_version = ssl.TLSVersion.TLSv1_3
+        payload = _export_ssl_context_state(ctx)
+        assert payload["min_version"] == int(ssl.TLSVersion.TLSv1_2)
+        assert payload["max_version"] == int(ssl.TLSVersion.TLSv1_3)
+        # Representable bounds must still construct before any dispatch.
+        from eggfetch import Client as NativeClient
+
+        client = NativeClient(verify=ctx)
+        client.close()
+
+    def test_export_helper_mtls_provenance(self):
+        from eggfetch._ssl_context import (
+            _eggfetch_ssl_registry,
+            _export_ssl_context_state,
+        )
+
+        ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        _eggfetch_ssl_registry.register(
+            ctx, cert_path="/tmp/client.pem", key_path="/tmp/client.key",
+            verify=True, trust_env=True,
+        )
+        payload = _export_ssl_context_state(ctx)
+        assert payload["helper_metadata"] is not None
+        assert payload["helper_metadata"]["cert_path"] == "/tmp/client.pem"
+        assert payload["helper_metadata"]["key_path"] == "/tmp/client.key"
+        assert "private_key" not in repr(payload).lower()
+
+    def test_export_mutation_invalidation(self):
+        from eggfetch._ssl_context import (
+            _eggfetch_ssl_registry,
+            _export_ssl_context_state,
+        )
+
+        ctx = create_ssl_context(verify=False)
+        assert _eggfetch_ssl_registry.is_eggfetch_context(ctx)
+        # Live mutation must drop stale helper provenance.
+        ctx.verify_mode = ssl.CERT_REQUIRED
+        ctx.check_hostname = True
+        payload = _export_ssl_context_state(ctx)
+        assert payload["helper_metadata"] is None
+
+    def _assert_native_rejects_before_dispatch(
+        self, monkeypatch, ctx, payload, match
+    ):
+        import eggfetch._ssl_context as bridge
+
+        monkeypatch.setattr(
+            bridge, "_export_ssl_context_state", lambda _ctx: payload
+        )
+        with pytest.raises((TypeError, ValueError), match=match):
+            from eggfetch import Client as NativeClient
+
+            NativeClient(verify=ctx)
+
     @pytest.mark.parametrize(
         ("field", "value"),
         [
@@ -231,6 +311,239 @@ class TestPrivateSSLContextExport:
             from eggfetch import Client as NativeClient
 
             NativeClient(verify=ctx)
+
+    def test_malformed_payload_not_mapping_fails_before_dispatch(
+        self, monkeypatch
+    ):
+        ctx = ssl.create_default_context()
+        self._assert_native_rejects_before_dispatch(
+            monkeypatch, ctx, ["not-a-mapping"], "SSLContext export"
+        )
+
+    @pytest.mark.parametrize("field", ["schema_version", "classification"])
+    def test_malformed_missing_header_field_fails_before_dispatch(
+        self, monkeypatch, field
+    ):
+        import eggfetch._ssl_context as bridge
+
+        ctx = ssl.create_default_context()
+        payload = bridge._export_ssl_context_state(ctx)
+        del payload[field]
+        self._assert_native_rejects_before_dispatch(
+            monkeypatch, ctx, payload, "SSLContext export"
+        )
+
+    def test_malformed_unknown_schema_version_fails_before_dispatch(
+        self, monkeypatch
+    ):
+        import eggfetch._ssl_context as bridge
+
+        ctx = ssl.create_default_context()
+        payload = bridge._export_ssl_context_state(ctx)
+        payload["schema_version"] = 99
+        self._assert_native_rejects_before_dispatch(
+            monkeypatch, ctx, payload, "SSLContext export"
+        )
+
+    def test_malformed_invalid_classification_fails_before_dispatch(
+        self, monkeypatch
+    ):
+        import eggfetch._ssl_context as bridge
+
+        ctx = ssl.create_default_context()
+        payload = bridge._export_ssl_context_state(ctx)
+        payload["classification"] = "future-classification"
+        self._assert_native_rejects_before_dispatch(
+            monkeypatch, ctx, payload, "SSLContext export"
+        )
+
+    @pytest.mark.parametrize(
+        "field", ["verify_mode", "check_hostname", "ca_certs_der"]
+    )
+    def test_malformed_missing_core_field_fails_before_dispatch(
+        self, monkeypatch, field
+    ):
+        import eggfetch._ssl_context as bridge
+
+        ctx = ssl.create_default_context()
+        payload = bridge._export_ssl_context_state(ctx)
+        del payload[field]
+        self._assert_native_rejects_before_dispatch(
+            monkeypatch, ctx, payload, "SSLContext export"
+        )
+
+    @pytest.mark.parametrize(
+        ("field", "value"),
+        [
+            ("verify_mode", "required"),
+            ("verify_mode", None),
+            ("check_hostname", "yes"),
+            ("check_hostname", 1),
+            ("ca_certs_der", "not-a-list"),
+            ("ca_certs_der", ["not-der"]),
+            ("ca_certs_der", [None]),
+            ("ca_certs_der", [{"der": b"bytes"}]),
+        ],
+    )
+    def test_malformed_wrong_type_core_field_fails_before_dispatch(
+        self, monkeypatch, field, value
+    ):
+        import eggfetch._ssl_context as bridge
+
+        ctx = ssl.create_default_context()
+        payload = bridge._export_ssl_context_state(ctx)
+        payload[field] = value
+        self._assert_native_rejects_before_dispatch(
+            monkeypatch, ctx, payload, "SSLContext export"
+        )
+
+    @pytest.mark.parametrize("field", ["min_version", "max_version"])
+    def test_malformed_missing_version_field_fails_before_dispatch(
+        self, monkeypatch, field
+    ):
+        import eggfetch._ssl_context as bridge
+
+        ctx = ssl.create_default_context()
+        payload = bridge._export_ssl_context_state(ctx)
+        del payload[field]
+        self._assert_native_rejects_before_dispatch(
+            monkeypatch, ctx, payload, "SSLContext export"
+        )
+
+    @pytest.mark.parametrize(
+        ("field", "value"),
+        [
+            ("min_version", "TLSv1.2"),
+            ("min_version", [771]),
+            ("max_version", "TLSv1.3"),
+            ("max_version", {"version": 772}),
+        ],
+    )
+    def test_malformed_wrong_type_version_field_fails_before_dispatch(
+        self, monkeypatch, field, value
+    ):
+        import eggfetch._ssl_context as bridge
+
+        ctx = ssl.create_default_context()
+        payload = bridge._export_ssl_context_state(ctx)
+        payload[field] = value
+        self._assert_native_rejects_before_dispatch(
+            monkeypatch, ctx, payload, "SSLContext export"
+        )
+
+    @pytest.mark.parametrize("value", [770, 769, 999])
+    def test_malformed_unsupported_min_version_fails_before_dispatch(
+        self, monkeypatch, value
+    ):
+        import eggfetch._ssl_context as bridge
+
+        ctx = ssl.create_default_context()
+        payload = bridge._export_ssl_context_state(ctx)
+        payload["min_version"] = value
+        self._assert_native_rejects_before_dispatch(
+            monkeypatch, ctx, payload, "unsupported TLS"
+        )
+
+    @pytest.mark.parametrize("value", [773, 999, 10000])
+    def test_malformed_unsupported_max_version_fails_before_dispatch(
+        self, monkeypatch, value
+    ):
+        import eggfetch._ssl_context as bridge
+
+        ctx = ssl.create_default_context()
+        payload = bridge._export_ssl_context_state(ctx)
+        payload["max_version"] = value
+        self._assert_native_rejects_before_dispatch(
+            monkeypatch, ctx, payload, "unsupported TLS"
+        )
+
+    def test_malformed_missing_helper_metadata_fails_before_dispatch(
+        self, monkeypatch
+    ):
+        import eggfetch._ssl_context as bridge
+
+        ctx = ssl.create_default_context()
+        payload = bridge._export_ssl_context_state(ctx)
+        del payload["helper_metadata"]
+        self._assert_native_rejects_before_dispatch(
+            monkeypatch, ctx, payload, "SSLContext export"
+        )
+
+    @pytest.mark.parametrize(
+        "value", ["metadata", ["metadata"], 123, True]
+    )
+    def test_malformed_non_mapping_helper_metadata_fails_before_dispatch(
+        self, monkeypatch, value
+    ):
+        import eggfetch._ssl_context as bridge
+
+        ctx = ssl.create_default_context()
+        payload = bridge._export_ssl_context_state(ctx)
+        payload["helper_metadata"] = value
+        self._assert_native_rejects_before_dispatch(
+            monkeypatch, ctx, payload, "SSLContext export"
+        )
+
+    def _helper_payload(self):
+        import eggfetch._ssl_context as bridge
+
+        ctx = create_ssl_context(verify=False)
+        payload = bridge._export_ssl_context_state(ctx)
+        assert isinstance(payload["helper_metadata"], dict)
+        return ctx, payload
+
+    @pytest.mark.parametrize("bad_verify", [123, None, ["no-verify"], {"verify": False}])
+    def test_malformed_helper_verify_fails_before_dispatch(
+        self, monkeypatch, bad_verify
+    ):
+        ctx, payload = self._helper_payload()
+        payload["helper_metadata"] = dict(payload["helper_metadata"])
+        payload["helper_metadata"]["verify"] = bad_verify
+        self._assert_native_rejects_before_dispatch(
+            monkeypatch, ctx, payload, "SSLContext export"
+        )
+
+    def test_malformed_helper_missing_verify_fails_before_dispatch(
+        self, monkeypatch
+    ):
+        ctx, payload = self._helper_payload()
+        payload["helper_metadata"] = dict(payload["helper_metadata"])
+        del payload["helper_metadata"]["verify"]
+        self._assert_native_rejects_before_dispatch(
+            monkeypatch, ctx, payload, "SSLContext export"
+        )
+
+    @pytest.mark.parametrize("bad_path", [123, ["path"], {"path": "x"}])
+    def test_malformed_helper_cert_path_fails_before_dispatch(
+        self, monkeypatch, bad_path
+    ):
+        ctx, payload = self._helper_payload()
+        payload["helper_metadata"] = dict(payload["helper_metadata"])
+        payload["helper_metadata"]["cert_path"] = bad_path
+        self._assert_native_rejects_before_dispatch(
+            monkeypatch, ctx, payload, "SSLContext export"
+        )
+
+    @pytest.mark.parametrize("bad_path", [123, ["path"], {"path": "x"}])
+    def test_malformed_helper_key_path_fails_before_dispatch(
+        self, monkeypatch, bad_path
+    ):
+        ctx, payload = self._helper_payload()
+        payload["helper_metadata"] = dict(payload["helper_metadata"])
+        payload["helper_metadata"]["key_path"] = bad_path
+        self._assert_native_rejects_before_dispatch(
+            monkeypatch, ctx, payload, "SSLContext export"
+        )
+
+    def test_malformed_helper_missing_cert_path_fails_before_dispatch(
+        self, monkeypatch
+    ):
+        ctx, payload = self._helper_payload()
+        payload["helper_metadata"] = dict(payload["helper_metadata"])
+        del payload["helper_metadata"]["cert_path"]
+        self._assert_native_rejects_before_dispatch(
+            monkeypatch, ctx, payload, "SSLContext export"
+        )
 
 
 # ── Classification ───────────────────────────────────────────────────

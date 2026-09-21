@@ -76,7 +76,15 @@ def _check_relational_runtime_contracts(eggfetch: object) -> list[str]:
 
 
 def _run_relational_self_tests() -> None:
-    """Exercise the mutation-sensitive pure comparison helpers."""
+    """Exercise the relational runtime guardrails with fake surfaces.
+
+    Each promised drift class must produce the reviewed checker error
+    category, not merely a raw signature inequality.  The baseline fake
+    surface passes; every mutation below must fail with its documented
+    message.
+    """
+    import types
+
     def reviewed(*, value=None):
         return value
 
@@ -87,6 +95,121 @@ def _run_relational_self_tests() -> None:
     assert _without_extensions(
         [("method", "POSITIONAL_OR_KEYWORD", False), ("extensions", "KEYWORD_ONLY", True)]
     ) == [("method", "POSITIONAL_OR_KEYWORD", False)]
+
+    def _make_func(signature: str, name: str):
+        namespace: dict[str, object] = {}
+        exec(f"def {name}{signature}:\n    pass", namespace)
+        func = namespace[name]
+        assert callable(func)
+        return func
+
+    _BODY_SIG = "(self, url, *, content=None, data=None, json=None, files=None, timeout=None, extensions=None)"
+    _NOBODY_SIG = "(self, url, *, timeout=None, extensions=None)"
+    _REQ_SIG = "(self, method, url, *, content=None, data=None, json=None, files=None, timeout=None, extensions=None)"
+    _STREAM_SIG = "(self, method, url, *, content=None, timeout=None, extensions=None)"
+    _CTOR_SIG = "(self, *, a=None, b=None)"
+    _TOP_REQ_SIG = "(method, url, *, content=None, data=None, json=None, files=None, timeout=None, limits=None)"
+    _TOP_BODY_SIG = "(url, *, content=None, data=None, json=None, files=None, timeout=None, limits=None)"
+    _TOP_NOBODY_SIG = "(url, *, timeout=None, limits=None)"
+
+    def _baseline_fake() -> object:
+        namespace: dict[str, object] = {}
+        exec(f"def __init__{_CTOR_SIG}:\n    pass", namespace)
+        baseline_init = namespace["__init__"]
+        client_dict: dict[str, object] = {"__init__": baseline_init}
+        async_dict: dict[str, object] = {"__init__": baseline_init}
+        for method_name, signature in (
+            ("request", _REQ_SIG),
+            ("stream", _STREAM_SIG),
+        ):
+            client_dict[method_name] = _make_func(signature, method_name)
+            async_dict[method_name] = _make_func(signature, method_name)
+        for method_name in ("post", "put", "patch"):
+            client_dict[method_name] = _make_func(_BODY_SIG, method_name)
+            async_dict[method_name] = _make_func(_BODY_SIG, method_name)
+        for method_name in ("get", "delete", "head", "options"):
+            client_dict[method_name] = _make_func(_NOBODY_SIG, method_name)
+            async_dict[method_name] = _make_func(_NOBODY_SIG, method_name)
+        fake_client = type("FakeClient", (), client_dict)  # type: ignore[arg-type]
+        fake_async = type("FakeAsyncClient", (), async_dict)  # type: ignore[arg-type]
+        top_level: dict[str, object] = {
+            "request": _make_func(_TOP_REQ_SIG, "request"),
+            "get": _make_func(_TOP_NOBODY_SIG, "get"),
+            "post": _make_func(_TOP_BODY_SIG, "post"),
+            "put": _make_func(_TOP_BODY_SIG, "put"),
+            "patch": _make_func(_TOP_BODY_SIG, "patch"),
+            "delete": _make_func(_TOP_NOBODY_SIG, "delete"),
+            "head": _make_func(_TOP_NOBODY_SIG, "head"),
+            "options": _make_func(_TOP_NOBODY_SIG, "options"),
+        }
+        return types.SimpleNamespace(
+            Client=fake_client, AsyncClient=fake_async, **top_level
+        )
+
+    def _assert_error(fake: object, needle: str) -> None:
+        errors = _check_relational_runtime_contracts(fake)
+        assert any(needle in error for error in errors), (
+            f"expected {needle!r} in {errors!r}"
+        )
+
+    # Baseline passes.
+    assert _check_relational_runtime_contracts(_baseline_fake()) == []
+
+    # 1. Client constructor gains/drops/reorders a keyword while AsyncClient does not.
+    fake = _baseline_fake()
+    fake.Client.__init__ = _make_func("(self, *, a=None, b=None, extra=None)", "__init__")  # type: ignore[attr-defined]
+    _assert_error(fake, "Client and AsyncClient constructor parameters diverge")
+    fake = _baseline_fake()
+    fake.Client.__init__ = _make_func("(self, *, a=None)", "__init__")  # type: ignore[attr-defined]
+    _assert_error(fake, "Client and AsyncClient constructor parameters diverge")
+    fake = _baseline_fake()
+    fake.Client.__init__ = _make_func("(self, *, b=None, a=None)", "__init__")  # type: ignore[attr-defined]
+    _assert_error(fake, "Client and AsyncClient constructor parameters diverge")
+
+    # 2. One sync/async mirror method changes a parameter name/order/default.
+    fake = _baseline_fake()
+    fake.Client.get = _make_func("(self, url, *, timeout=None, extensions=None, renamed=None)", "get")  # type: ignore[attr-defined]
+    _assert_error(fake, "Client/AsyncClient.get parameter contract diverges")
+    fake = _baseline_fake()
+    fake.Client.post = _make_func(  # type: ignore[attr-defined]
+        "(self, url, *, data=None, content=None, json=None, files=None, timeout=None, extensions=None)",
+        "post",
+    )
+    _assert_error(fake, "Client/AsyncClient.post parameter contract diverges")
+    fake = _baseline_fake()
+    fake.Client.delete = _make_func("(self, url, *, timeout, extensions=None)", "delete")  # type: ignore[attr-defined]
+    _assert_error(fake, "Client/AsyncClient.delete parameter contract diverges")
+
+    # 3. One top-level helper gains a client-only keyword or loses the required limits relationship.
+    fake = _baseline_fake()
+    fake.get = _make_func("(url, *, timeout=None, extensions=None, limits=None)", "get")  # type: ignore[attr-defined]
+    _assert_error(fake, "top-level get is not the reviewed Client mirror")
+    fake = _baseline_fake()
+    fake.post = _make_func(  # type: ignore[attr-defined]
+        "(url, *, content=None, data=None, json=None, files=None, timeout=None)",
+        "post",
+    )
+    _assert_error(fake, "top-level post is not the reviewed Client mirror")
+
+    # 4. A bodyless convenience helper gains content/data/json/files.
+    for extra in ("content", "data", "json", "files"):
+        fake = _baseline_fake()
+        fake.get = _make_func(  # type: ignore[attr-defined]
+            f"(url, *, {extra}=None, timeout=None, limits=None)",
+            "get",
+        )
+        _assert_error(fake, "top-level get unexpectedly accepts body keywords")
+
+    # 5. A body-capable helper loses one of those keywords.
+    for missing in ("content", "data", "json", "files"):
+        remaining = [name for name in ("content", "data", "json", "files") if name != missing]
+        params = ", ".join(f"{name}=None" for name in remaining)
+        fake = _baseline_fake()
+        fake.post = _make_func(  # type: ignore[attr-defined]
+            f"(url, *, {params}, timeout=None, limits=None)",
+            "post",
+        )
+        _assert_error(fake, "top-level post lost a body-capable keyword")
 
 
 def main(argv: list[str] | None = None) -> int:

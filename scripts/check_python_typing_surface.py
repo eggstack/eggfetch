@@ -234,13 +234,216 @@ def _check_relational_stub_contracts(declarations: dict[str, ast.AST], errors: l
 
 
 def _run_relational_self_tests() -> None:
-    """Prove the mutation-sensitive shape helpers detect representative drift."""
+    """Prove the relational stub guardrails detect representative drift.
+
+    The baseline stub passes; every mutation below must fail with its
+    reviewed error category.  Temporary fixture text/AST is used so
+    production stubs are never edited in place.
+    """
+    import contextlib
+    import io
+    import tempfile
+
     assert _signature_shape_from_text("(*, value=None)") != _signature_shape_from_text(
         "(*, other=None)"
     )
     assert _drop_parameter(
         [("keyword-only", "value", True), ("keyword-only", "extensions", True)], "extensions"
     ) == [("keyword-only", "value", True)]
+
+    _BASE_STUB = """\
+from typing import Any
+from collections.abc import Mapping
+
+class Client:
+    def __init__(self, *, a: int | None = ...) -> None: ...
+    def request(self, method: str, url: str, *, content: str | None = ..., data: Any = ..., json: Any = ..., files: Any = ..., extensions: Mapping[str, Any] | None = ...) -> Any: ...
+    def stream(self, method: str, url: str, *, content: str | None = ..., extensions: Mapping[str, Any] | None = ...) -> Any: ...
+    def get(self, url: str, *, extensions: Mapping[str, Any] | None = ...) -> Any: ...
+    def post(self, url: str, *, content: str | None = ..., data: Any = ..., json: Any = ..., files: Any = ..., extensions: Mapping[str, Any] | None = ...) -> Any: ...
+    def put(self, url: str, *, content: str | None = ..., data: Any = ..., json: Any = ..., files: Any = ..., extensions: Mapping[str, Any] | None = ...) -> Any: ...
+    def patch(self, url: str, *, content: str | None = ..., data: Any = ..., json: Any = ..., files: Any = ..., extensions: Mapping[str, Any] | None = ...) -> Any: ...
+    def delete(self, url: str, *, extensions: Mapping[str, Any] | None = ...) -> Any: ...
+    def head(self, url: str, *, extensions: Mapping[str, Any] | None = ...) -> Any: ...
+    def options(self, url: str, *, extensions: Mapping[str, Any] | None = ...) -> Any: ...
+
+class AsyncClient:
+    def __init__(self, *, a: int | None = ...) -> None: ...
+    async def request(self, method: str, url: str, *, content: str | AsyncBody | None = ..., data: Any = ..., json: Any = ..., files: Any = ..., extensions: Mapping[str, Any] | None = ...) -> Any: ...
+    async def stream(self, method: str, url: str, *, content: str | AsyncBody | None = ..., extensions: Mapping[str, Any] | None = ...) -> Any: ...
+    async def get(self, url: str, *, extensions: Mapping[str, Any] | None = ...) -> Any: ...
+    async def post(self, url: str, *, content: str | AsyncBody | None = ..., data: Any = ..., json: Any = ..., files: Any = ..., extensions: Mapping[str, Any] | None = ...) -> Any: ...
+    async def put(self, url: str, *, content: str | AsyncBody | None = ..., data: Any = ..., json: Any = ..., files: Any = ..., extensions: Mapping[str, Any] | None = ...) -> Any: ...
+    async def patch(self, url: str, *, content: str | AsyncBody | None = ..., data: Any = ..., json: Any = ..., files: Any = ..., extensions: Mapping[str, Any] | None = ...) -> Any: ...
+    async def delete(self, url: str, *, extensions: Mapping[str, Any] | None = ...) -> Any: ...
+    async def head(self, url: str, *, extensions: Mapping[str, Any] | None = ...) -> Any: ...
+    async def options(self, url: str, *, extensions: Mapping[str, Any] | None = ...) -> Any: ...
+
+def request(method: str, url: str, *, content: str | None = ..., data: Any = ..., json: Any = ..., files: Any = ..., limits: Any | None = ...) -> Any: ...
+def get(url: str, *, limits: Any | None = ...) -> Any: ...
+def post(url: str, *, content: str | None = ..., data: Any = ..., json: Any = ..., files: Any = ..., limits: Any | None = ...) -> Any: ...
+def put(url: str, *, content: str | None = ..., data: Any = ..., json: Any = ..., files: Any = ..., limits: Any | None = ...) -> Any: ...
+def patch(url: str, *, content: str | None = ..., data: Any = ..., json: Any = ..., files: Any = ..., limits: Any | None = ...) -> Any: ...
+def delete(url: str, *, limits: Any | None = ...) -> Any: ...
+def head(url: str, *, limits: Any | None = ...) -> Any: ...
+def options(url: str, *, limits: Any | None = ...) -> Any: ...
+"""
+
+    def _relational_errors(stub_text: str) -> list[str]:
+        declarations = _public_declarations(ast.parse(stub_text))
+        errors: list[str] = []
+        _check_relational_stub_contracts(declarations, errors)
+        return errors
+
+    def _assert_relational(stub_text: str, needle: str) -> None:
+        errors = _relational_errors(stub_text)
+        assert any(needle in error for error in errors), (
+            f"expected {needle!r} in {errors!r}"
+        )
+
+    # Baseline passes.
+    assert _relational_errors(_BASE_STUB) == []
+
+    # 1. Client/AsyncClient constructor typing drift.
+    _assert_relational(
+        _BASE_STUB.replace(
+            "class AsyncClient:\n    def __init__(self, *, a: int | None = ...) -> None: ...",
+            "class AsyncClient:\n    def __init__(self, *, a: int | None = ..., b: int | None = ...) -> None: ...",
+        ),
+        "Client and AsyncClient constructor typing shapes diverge",
+    )
+
+    # 2. Sync method accidentally declared async, async mirror declared synchronously.
+    _assert_relational(
+        _BASE_STUB.replace(
+            "    def get(self, url: str, *, extensions:",
+            "    async def get(self, url: str, *, extensions:",
+            1,
+        ),
+        "sync/async method kind drift: get",
+    )
+    _sync_part, _async_part = _BASE_STUB.split("class AsyncClient:")
+    _assert_relational(
+        _sync_part + "class AsyncClient:" + _async_part.replace(
+            "    async def get", "    def get", 1
+        ),
+        "sync/async method kind drift: get",
+    )
+
+    # 3. Async body-capable method loses AsyncBody.
+    _assert_relational(
+        _sync_part
+        + "class AsyncClient:"
+        + _async_part.replace(
+            "    async def post(self, url: str, *, content: str | AsyncBody | None",
+            "    async def post(self, url: str, *, content: str | None",
+            1,
+        ),
+        "async post lost AsyncBody typing",
+    )
+
+    # 4. Sync method gains AsyncBody.
+    _assert_relational(
+        _sync_part.replace(
+            "    def post(self, url: str, *, content: str | None",
+            "    def post(self, url: str, *, content: str | AsyncBody | None",
+            1,
+        )
+        + "class AsyncClient:"
+        + _async_part,
+        "sync post unexpectedly accepts AsyncBody",
+    )
+
+    # 5. Top-level helper gains extensions or otherwise ceases to match.
+    _assert_relational(
+        _BASE_STUB.replace(
+            "def get(url: str, *, limits:",
+            "def get(url: str, *, extensions: Mapping[str, Any] | None = ..., limits:",
+            1,
+        ),
+        "top-level helper typing shape diverges: get",
+    )
+    _assert_relational(
+        _BASE_STUB.replace(
+            "def post(url: str, *, content: str | None = ..., data: Any = ..., json: Any = ..., files: Any = ..., limits: Any | None = ...",
+            "def post(url: str, *, content: str | None = ..., data: Any = ..., json: Any = ..., files: Any = ...",
+            1,
+        ),
+        "top-level helper typing shape diverges: post",
+    )
+    # Top-level body-capable loses a body keyword; bodyless gains one.
+    _assert_relational(
+        _BASE_STUB.replace(
+            "def post(url: str, *, content: str | None = ..., data: Any = ..., json: Any = ..., files: Any = ..., limits:",
+            "def post(url: str, *, content: str | None = ..., data: Any = ..., json: Any = ..., limits:",
+            1,
+        ),
+        "top-level post lost body-capable typing",
+    )
+    _assert_relational(
+        _BASE_STUB.replace(
+            "def get(url: str, *, limits:",
+            "def get(url: str, *, content: str | None = ..., limits:",
+            1,
+        ),
+        "top-level get unexpectedly has body-capable typing",
+    )
+
+    def _run_temp_package(
+        native_body: str, init_body: str, manifest_dict: dict
+    ) -> tuple[int, str]:
+        with tempfile.TemporaryDirectory() as tmp:
+            package = Path(tmp) / "eggfetch"
+            package.mkdir()
+            (package / "py.typed").touch()
+            (package / "_native.pyi").write_text(native_body)
+            (package / "__init__.pyi").write_text(init_body)
+            manifest_path = Path(tmp) / "manifest.json"
+            manifest_path.write_text(json.dumps(manifest_dict))
+            buffer = io.StringIO()
+            with contextlib.redirect_stdout(buffer):
+                return_code = main(
+                    ["--package", str(package), "--manifest", str(manifest_path)]
+                )
+            return return_code, buffer.getvalue()
+
+    _THING_MANIFEST = {
+        "exports": ["Thing"],
+        "symbol_kinds": {"class": ["Thing"], "exception": []},
+        "exception_bases": {},
+        "signatures": {},
+        "members": {
+            "Thing": {
+                "properties": {"value": "bool"},
+                "methods": {"ping": {"kind": "sync", "signature": "(self, /)"}},
+            }
+        },
+        "semantic_contracts": {"Thing.value": "bool"},
+    }
+    _THING_NATIVE = "class Thing:\n    value: bool\n    def ping(self) -> None: ...\n"
+    _THING_INIT = "from ._native import Thing\n\n__all__ = [\"Thing\"]\n"
+
+    # 6. Root runtime/stub export mismatch through the existing fixture mechanism.
+    _mismatch_manifest = dict(_THING_MANIFEST)
+    _mismatch_manifest["exports"] = ["Thing", "Missing"]
+    return_code, output = _run_temp_package(
+        _THING_NATIVE, _THING_INIT, _mismatch_manifest
+    )
+    assert return_code != 0, output
+    assert (
+        "runtime exports absent from _native.pyi" in output
+        or "__init__.pyi __all__ differs" in output
+    ), output
+
+    # 7. Semantic return annotation drift for a reviewed member (same code path
+    # that guards async methods and start_tls in the production manifest).
+    return_code, output = _run_temp_package(
+        "class Thing:\n    value: str\n    def ping(self) -> None: ...\n",
+        _THING_INIT,
+        _THING_MANIFEST,
+    )
+    assert return_code != 0, output
+    assert "semantic return/property drift: Thing.value" in output, output
 
 
 def main(argv: list[str] | None = None) -> int:
