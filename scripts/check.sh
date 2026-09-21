@@ -119,12 +119,16 @@ tier1_rust_tests() {
 
 tier1_rust_api_contracts() {
     info "Stable Rust public contract fixtures"
-    cargo test -p eggfetch-core --test public_api_contracts -- --test-threads=1
-    cargo test -p eggfetch-core --test public_api_contracts --no-default-features --features http1,tls-rustls -- --test-threads=1
-    cargo test -p eggfetch-core --test public_api_contracts --no-default-features --features http2,tls-rustls -- --test-threads=1
-    cargo test -p eggfetch-core --test public_api_contracts --no-default-features --features standard-http1,tls-rustls -- --test-threads=1
-    cargo test -p eggfetch-core --test public_api_contracts --no-default-features --features native-http1,tls-rustls -- --test-threads=1
-    cargo test -p eggfetch-core --test public_api_contracts --all-features -- --test-threads=1
+    # Lean profiles retain private helpers for other supported profiles. The
+    # CI-wide -D warnings flag turns those profile-specific dead-code warnings
+    # into errors; clippy and the all-features workspace checks own warning
+    # enforcement, while this matrix owns stable public compile coverage.
+    RUSTFLAGS= cargo test -p eggfetch-core --test public_api_contracts -- --test-threads=1
+    RUSTFLAGS= cargo test -p eggfetch-core --test public_api_contracts --no-default-features --features http1,tls-rustls -- --test-threads=1
+    RUSTFLAGS= cargo test -p eggfetch-core --test public_api_contracts --no-default-features --features http2,tls-rustls -- --test-threads=1
+    RUSTFLAGS= cargo test -p eggfetch-core --test public_api_contracts --no-default-features --features standard-http1,tls-rustls -- --test-threads=1
+    RUSTFLAGS= cargo test -p eggfetch-core --test public_api_contracts --no-default-features --features native-http1,tls-rustls -- --test-threads=1
+    RUSTFLAGS= cargo test -p eggfetch-core --test public_api_contracts --all-features -- --test-threads=1
 }
 
 tier1_python_build() {
