@@ -317,7 +317,7 @@ versions, Python-version support claims, or feature-extra mappings.
 
 - [x] Both profile files bind to the same new corrective freeze.
 - [x] The live parity ledger names the same freeze as current Stage C.
-- [ ] Canonical compatibility/residual docs name the same freeze.
+- [x] Canonical compatibility/residual docs name the same freeze.
 - [x] `bc4800ee...` is clearly historical after the renewal.
 - [x] No new compatibility waiver/allowed difference is introduced.
 - [x] No documentation calls the later docs-only head the executable freeze.
@@ -389,7 +389,7 @@ freeze and requires the relevant requalification again.
 - [x] Native Python manifest/typing/API surface remains unchanged.
 - [x] HTTPX 0.28.1 and HTTPX2 2.12.0 full compatibility/API oracles have zero
       new unexplained drift.
-- [ ] Canonical Stage C profiles, ledger, residual differences, and
+- [x] Canonical Stage C profiles, ledger, residual differences, and
       compatibility docs all bind to the same new freeze.
 - [x] Tier 1, extended, applicable package, security, exact MSRV, docs and
       adapter/resource gates pass.
@@ -401,7 +401,7 @@ freeze and requires the relevant requalification again.
       completes.
 - [x] Python 3.15 remains separately pending unless its rehearsal actually
       completes.
-- [ ] Parent maintenance program is marked fully complete only after every item
+- [x] Parent maintenance program is marked fully complete only after every item
       above is satisfied.
 
 ## Stop conditions
@@ -501,13 +501,15 @@ What landed:
   maintainer action).
 - Python 3.15 wheel rehearsal remains separately pending.
 
-Residual noted for the polish pass: at corrective close the top-level
+Post-polish resolution: at corrective close the top-level
 `docs/reference/compatibility.md` qualification statement, both profiles,
 the ledger, and residual differences all named `18c1f96...`, but a later
 **Current qualification** block in the same file still named `bc4800ee...`
-as current. That stale block is repaired by
-`plans/post-maintenance-documentation-state-polish-pass.md` without
-changing any executable/test/validation/profile binding. The Part 5 and
-Final canonical-docs checkboxes below therefore remain unchecked with this
-explanation until that docs-only repair lands; all other boxes reflect
-completed corrective evidence.
+as current. The documentation-state polish repaired that block and the same
+stale binding discovered in
+`docs/reference/compatibility-stage-decision.md` at docs-only commit
+`9b8197bcae45faee5bef9e0a05ae7b16543b8725`; ordinary remote CI run
+`35635954532` passed there and run `35638189583` passed on index-only
+closure commit `27a2a376569e8781bd2dd39c2b6f2e7576de82f2`. No
+executable/test/validation/profile binding changed. The previously deferred
+canonical-docs and parent-closure acceptance items are therefore satisfied.
