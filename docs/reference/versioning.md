@@ -161,6 +161,8 @@ CI runs these checks to prevent documentation drift:
 | `check_doc_examples.py` | Python code blocks in docs are syntactically valid |
 | `check_doc_links.py` | Internal markdown links resolve |
 | `check_native_python_api.py` | Public Python exports match the native API manifest |
+| `public_api_contracts.rs` | Stable compile contracts for supported Rust feature profiles |
+| `check_rust_public_api.py` | Exact `eggfetch-core` profile snapshots plus the pinned semver cross-check (extended validation) |
 
 If a public API item is added or removed, update the corresponding docs and
 the CI checks will catch stale references.

@@ -1,7 +1,7 @@
 //! TLS configuration helpers for Python bindings.
 
 use pyo3::prelude::*;
-use pyo3::types::{PyBytes, PyList, PyTuple};
+use pyo3::types::{PyBytes, PyDict, PyList, PyTuple};
 
 use crate::errors::map_err;
 
@@ -49,17 +49,29 @@ fn apply_verify(
 
 /// Apply an ssl.SSLContext verify value to the TLS config builder.
 fn apply_ssl_context(
-    mut builder: eggfetch_core::TlsConfigBuilder,
+    builder: eggfetch_core::TlsConfigBuilder,
     v: &Bound<'_, PyAny>,
 ) -> PyResult<eggfetch_core::TlsConfigBuilder> {
     let snapshot_mod = v.py().import("eggfetch._ssl_context")?;
-    let snapshot = snapshot_mod
-        .getattr("snapshot_context")?
-        .call((v.as_unbound(),), None)?;
-    let classification = snapshot_mod
-        .getattr("_classify_context")?
-        .call((v.as_unbound(), &snapshot), None)?;
-    let class_str: String = classification.extract()?;
+    let export = snapshot_mod
+        .getattr("_export_ssl_context_state")?
+        .call1((v.as_unbound(),))?;
+    let payload = export.cast::<PyDict>().map_err(|_| {
+        PyErr::new::<pyo3::exceptions::PyTypeError, _>(
+            "invalid SSLContext export: expected a mapping",
+        )
+    })?;
+    let schema_version: i32 = required_export_item(payload, "schema_version")?
+        .extract()
+        .map_err(|_| export_type_error("schema_version"))?;
+    if schema_version != 1 {
+        return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+            "unsupported SSLContext export schema version: {schema_version}"
+        )));
+    }
+    let class_str: String = required_export_item(payload, "classification")?
+        .extract()
+        .map_err(|_| export_type_error("classification"))?;
 
     if class_str == "unrepresentable" {
         return Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
@@ -69,51 +81,65 @@ fn apply_ssl_context(
         ));
     }
 
-    let registry = snapshot_mod.getattr("_eggfetch_ssl_registry")?;
-    let is_eggfetch: bool = registry
-        .getattr("is_eggfetch_context")?
-        .call((v.as_unbound(),), None)?
-        .extract()?;
-
-    if is_eggfetch {
-        builder = apply_eggfetch_registry_metadata(builder, &registry, v)?;
-    } else {
-        builder = apply_snapshot_to_builder(builder, &snapshot)?;
+    if class_str != "exactly_representable" && class_str != "representable_with_known_defaults" {
+        return Err(export_type_error("classification"));
     }
 
-    Ok(builder)
+    let metadata = required_export_item(payload, "helper_metadata")?;
+    if metadata.is_none() {
+        apply_export_to_builder(builder, payload)
+    } else {
+        apply_helper_metadata(
+            builder,
+            metadata
+                .cast::<PyDict>()
+                .map_err(|_| export_type_error("helper_metadata"))?,
+        )
+    }
 }
 
-/// Apply metadata from the eggfetch SSL registry to the builder.
-fn apply_eggfetch_registry_metadata(
+fn export_type_error(field: &str) -> PyErr {
+    PyErr::new::<pyo3::exceptions::PyTypeError, _>(format!(
+        "invalid SSLContext export field: {field}"
+    ))
+}
+
+fn required_export_item<'py>(
+    payload: &Bound<'py, PyDict>,
+    field: &str,
+) -> PyResult<Bound<'py, PyAny>> {
+    payload
+        .get_item(field)?
+        .ok_or_else(|| export_type_error(field))
+}
+
+fn apply_helper_metadata(
     mut builder: eggfetch_core::TlsConfigBuilder,
-    registry: &Bound<'_, PyAny>,
-    ctx: &Bound<'_, PyAny>,
+    metadata: &Bound<'_, PyDict>,
 ) -> PyResult<eggfetch_core::TlsConfigBuilder> {
-    let meta_any = registry.getattr("get")?.call((ctx.as_unbound(),), None)?;
-
-    if !meta_any.is_none() {
-        let meta = meta_any.cast::<pyo3::types::PyDict>()?;
-
-        if let Some(verify_val) = meta.get_item("verify")? {
-            if let Ok(b) = verify_val.extract::<bool>() {
-                if !b {
-                    builder = builder.danger_accept_invalid_certs(true);
-                }
-            } else if let Ok(path) = verify_val.extract::<String>() {
-                builder = builder.ca_certificate_path(&path).map_err(map_err)?;
-            }
+    let verify = required_export_item(metadata, "verify")?;
+    if let Ok(value) = verify.extract::<bool>() {
+        if !value {
+            builder = builder.danger_accept_invalid_certs(true);
         }
-        if let Some(cert_path_val) = meta.get_item("cert_path")? {
-            let cp: String = cert_path_val.extract()?;
-            let kp: String = meta
-                .get_item("key_path")?
-                .and_then(|v| v.extract::<String>().ok())
-                .unwrap_or_else(|| cp.clone());
-            builder = builder.client_cert_path(&cp, &kp).map_err(map_err)?;
-        }
+    } else if let Ok(path) = verify.extract::<String>() {
+        builder = builder.ca_certificate_path(&path).map_err(map_err)?;
+    } else {
+        return Err(export_type_error("helper_metadata.verify"));
     }
 
+    let cert_path: Option<String> = required_export_item(metadata, "cert_path")?
+        .extract()
+        .map_err(|_| export_type_error("helper_metadata.cert_path"))?;
+    let key_path: Option<String> = required_export_item(metadata, "key_path")?
+        .extract()
+        .map_err(|_| export_type_error("helper_metadata.key_path"))?;
+    if let Some(cert_path) = cert_path {
+        let key_path = key_path.unwrap_or_else(|| cert_path.clone());
+        builder = builder
+            .client_cert_path(&cert_path, &key_path)
+            .map_err(map_err)?;
+    }
     Ok(builder)
 }
 
@@ -125,13 +151,19 @@ const DEFAULT_MIN_SENTINEL: i32 = -2;
 const DEFAULT_MAX_SENTINEL: i32 = -1;
 
 /// Apply snapshot values to the TLS config builder.
-fn apply_snapshot_to_builder(
+fn apply_export_to_builder(
     mut builder: eggfetch_core::TlsConfigBuilder,
-    snapshot: &Bound<'_, PyAny>,
+    payload: &Bound<'_, PyDict>,
 ) -> PyResult<eggfetch_core::TlsConfigBuilder> {
-    let verify_mode: i32 = snapshot.getattr("verify_mode")?.extract()?;
-    let check_hostname: bool = snapshot.getattr("check_hostname")?.extract()?;
-    let ca_der: Vec<Vec<u8>> = snapshot.getattr("ca_certs_der")?.extract()?;
+    let verify_mode: i32 = required_export_item(payload, "verify_mode")?
+        .extract()
+        .map_err(|_| export_type_error("verify_mode"))?;
+    let check_hostname: bool = required_export_item(payload, "check_hostname")?
+        .extract()
+        .map_err(|_| export_type_error("check_hostname"))?;
+    let ca_der: Vec<Vec<u8>> = required_export_item(payload, "ca_certs_der")?
+        .extract()
+        .map_err(|_| export_type_error("ca_certs_der"))?;
 
     if verify_mode == 0 {
         // ssl.CERT_NONE
@@ -145,8 +177,12 @@ fn apply_snapshot_to_builder(
     }
 
     // Apply TLS version bounds from the snapshot.
-    let min_version: Option<i32> = snapshot.getattr("min_version")?.extract()?;
-    let max_version: Option<i32> = snapshot.getattr("max_version")?.extract()?;
+    let min_version: Option<i32> = required_export_item(payload, "min_version")?
+        .extract()
+        .map_err(|_| export_type_error("min_version"))?;
+    let max_version: Option<i32> = required_export_item(payload, "max_version")?
+        .extract()
+        .map_err(|_| export_type_error("max_version"))?;
 
     if let Some(v) = min_version {
         if v > 0 && v != DEFAULT_MIN_SENTINEL {

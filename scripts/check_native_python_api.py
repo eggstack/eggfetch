@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.metadata
 import inspect
 import json
+import argparse
 from pathlib import Path
 
 
@@ -12,13 +13,95 @@ ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "crates/eggfetch-python/tests/native_api_manifest.json"
 
 
-def main() -> int:
+def _parameter_contract(value: object) -> list[tuple[str, str, bool]]:
+    """Return the reviewed name/order/default contract for a callable."""
+    result: list[tuple[str, str, bool]] = []
+    for parameter in inspect.signature(value).parameters.values():
+        if parameter.name == "self":
+            continue
+        result.append(
+            (
+                parameter.name,
+                parameter.kind.name,
+                parameter.default is not inspect.Parameter.empty,
+            )
+        )
+    return result
+
+
+def _without_extensions(contract: list[tuple[str, str, bool]]) -> list[tuple[str, str, bool]]:
+    return [item for item in contract if item[0] != "extensions"]
+
+
+def _check_relational_runtime_contracts(eggfetch: object) -> list[str]:
+    """Check relationships that individual manifest rows cannot express."""
+    errors: list[str] = []
+    client = getattr(eggfetch, "Client")
+    async_client = getattr(eggfetch, "AsyncClient")
+
+    # Client and AsyncClient intentionally share one constructor contract.
+    if _parameter_contract(client) != _parameter_contract(async_client):
+        errors.append("Client and AsyncClient constructor parameters diverge")
+
+    mirror_methods = ("request", "stream", "get", "post", "put", "patch", "delete", "head", "options")
+    for method_name in mirror_methods:
+        client_method = getattr(client, method_name)
+        async_method = getattr(async_client, method_name)
+        if _parameter_contract(client_method) != _parameter_contract(async_method):
+            errors.append(f"Client/AsyncClient.{method_name} parameter contract diverges")
+
+    # Top-level helpers intentionally omit the reusable-client-only
+    # ``extensions`` hook.  All remaining names/order/defaults must match the
+    # corresponding Client convenience method.
+    for method_name in ("request", "get", "post", "put", "patch", "delete", "head", "options"):
+        top_level = getattr(eggfetch, method_name)
+        expected = [
+            *(_without_extensions(_parameter_contract(getattr(client, method_name)))),
+            ("limits", "KEYWORD_ONLY", True),
+        ]
+        if _parameter_contract(top_level) != expected:
+            errors.append(f"top-level {method_name} is not the reviewed Client mirror")
+
+    body_methods = ("request", "post", "put", "patch")
+    body_names = {"content", "data", "json", "files"}
+    for method_name in body_methods:
+        names = {item[0] for item in _parameter_contract(getattr(eggfetch, method_name))}
+        if not body_names.issubset(names):
+            errors.append(f"top-level {method_name} lost a body-capable keyword")
+    for method_name in ("get", "delete", "head", "options"):
+        names = {item[0] for item in _parameter_contract(getattr(eggfetch, method_name))}
+        if names & body_names:
+            errors.append(f"top-level {method_name} unexpectedly accepts body keywords")
+    return errors
+
+
+def _run_relational_self_tests() -> None:
+    """Exercise the mutation-sensitive pure comparison helpers."""
+    def reviewed(*, value=None):
+        return value
+
+    def mutated(*, other=None):
+        return other
+
+    assert _parameter_contract(reviewed) != _parameter_contract(mutated)
+    assert _without_extensions(
+        [("method", "POSITIONAL_OR_KEYWORD", False), ("extensions", "KEYWORD_ONLY", True)]
+    ) == [("method", "POSITIONAL_OR_KEYWORD", False)]
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--self-test", action="store_true")
+    args = parser.parse_args(argv)
+    if args.self_test:
+        _run_relational_self_tests()
     import eggfetch
     from eggfetch import _native
 
     manifest = json.loads(MANIFEST.read_text())
     expected = manifest["exports"]
     errors: list[str] = []
+    errors.extend(_check_relational_runtime_contracts(eggfetch))
     if list(eggfetch.__all__) != expected:
         errors.append("eggfetch.__all__ differs from the reviewed native manifest")
     if hasattr(_native, "__all__"):

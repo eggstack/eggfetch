@@ -233,6 +233,9 @@ class Classification:
     UNREPRESENTABLE = "unrepresentable"
 
 
+_SSL_CONTEXT_EXPORT_SCHEMA_VERSION = 1
+
+
 def _classify_context(
     ctx: ssl.SSLContext,
     snapshot: _SSLContextSnapshot | None = None,
@@ -453,6 +456,40 @@ class _EggfetchSSLRegistry:
 
 
 _eggfetch_ssl_registry = _EggfetchSSLRegistry()
+
+
+def _export_ssl_context_state(ctx: ssl.SSLContext) -> dict[str, Any]:
+    """Export the bounded private Python-to-Rust SSLContext contract.
+
+    This is the only helper Rust may call for normalized SSLContext state.
+    The mapping is versioned so a Python binding update cannot silently make
+    an older Rust decoder accept a changed shape.  It contains no live
+    context, private key material, PEM data, or unbounded diagnostics.
+    """
+    if not isinstance(ctx, ssl.SSLContext):
+        raise TypeError("expected an ssl.SSLContext")
+
+    snapshot = snapshot_context(ctx)
+    classification = _classify_context(ctx, snapshot)
+    helper_metadata: dict[str, Any] | None = None
+    meta = _eggfetch_ssl_registry.get(ctx)
+    if meta is not None and not meta.get("passthrough"):
+        helper_metadata = {
+            "verify": meta["verify"],
+            "cert_path": meta["cert_path"],
+            "key_path": meta["key_path"],
+        }
+
+    return {
+        "schema_version": _SSL_CONTEXT_EXPORT_SCHEMA_VERSION,
+        "classification": classification,
+        "verify_mode": snapshot.verify_mode,
+        "check_hostname": snapshot.check_hostname,
+        "ca_certs_der": list(snapshot.ca_certs_der),
+        "min_version": snapshot.min_version,
+        "max_version": snapshot.max_version,
+        "helper_metadata": helper_metadata,
+    }
 
 
 # ── Convenience: build eggfetch verify/cert kwargs from context ───────

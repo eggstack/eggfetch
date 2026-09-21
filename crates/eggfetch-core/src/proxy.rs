@@ -38,6 +38,9 @@ use std::sync::Arc;
 
 use crate::error::{Error, Result};
 
+mod environment;
+mod no_proxy;
+
 /// A single `NO_PROXY` bypass rule.
 ///
 /// Parsed from individual entries in a comma-separated `NO_PROXY` string.
@@ -183,7 +186,7 @@ impl NoProxy {
         }
 
         if exact_localhost {
-            if let Some(rule) = Self::parse_httpx_ip_entry(entry)? {
+            if let Some(rule) = no_proxy::parse_httpx_ip_entry(entry)? {
                 return Ok(rule);
             }
         }
@@ -274,53 +277,6 @@ impl NoProxy {
         // matches the bare domain and subdomains at a label boundary. Keep
         // localhost and IP literals on their exact-host paths above.
         Ok(NoProxyRule::Host(entry.to_owned()))
-    }
-
-    fn parse_httpx_ip_entry(entry: &str) -> Result<Option<NoProxyRule>> {
-        fn invalid_ipv6_entry(entry: &str) -> Error {
-            const MAX_ENTRY_CHARS: usize = 256;
-            let mut chars = entry.chars();
-            let mut display: String = chars.by_ref().take(MAX_ENTRY_CHARS).collect();
-            if chars.next().is_some() {
-                display.push_str("...");
-            }
-            Error::InvalidProxyUrl(format!("invalid IPv6 NO_PROXY entry: {display}"))
-        }
-
-        // HTTPX checks IPv4/IPv6 hostnames before URL-pattern construction.
-        // IPv4 CIDR-looking values become exact host patterns, while IPv6
-        // prefix-looking values are bracketed and rejected by its URL parser.
-        if let Some((address, _prefix)) = entry.split_once('/') {
-            if address.parse::<std::net::Ipv4Addr>().is_ok() {
-                return Ok(Some(NoProxyRule::HostExact(address.to_ascii_lowercase())));
-            }
-            if address.parse::<std::net::Ipv6Addr>().is_ok() {
-                return Err(invalid_ipv6_entry(entry));
-            }
-        }
-
-        // Bracketed IPv6 is not recognized by HTTPX as an IPv6 hostname. Its
-        // fallback URL-pattern form is invalid, so do not broaden the
-        // compatibility syntax with native IPv6 support.
-        if entry.starts_with('[') {
-            return Err(invalid_ipv6_entry(entry));
-        }
-
-        if let Ok(address) = entry.parse::<std::net::Ipv4Addr>() {
-            return Ok(Some(NoProxyRule::HostExact(address.to_string())));
-        }
-        if let Ok(address) = entry.parse::<std::net::Ipv6Addr>() {
-            return Ok(Some(NoProxyRule::Host(address.to_string())));
-        }
-
-        // Values with multiple colons that are not valid IPv6 literals are
-        // also rejected by HTTPX's fallback URL-pattern parser. Ordinary
-        // host:port entries have only one colon and remain supported.
-        if entry.matches(':').count() > 1 {
-            return Err(invalid_ipv6_entry(entry));
-        }
-
-        Ok(None)
     }
 
     /// Returns `true` if the given URL should bypass the proxy (go direct).
@@ -1298,15 +1254,6 @@ impl ProxyEnvironment {
     ///
     /// Values without a scheme (e.g. `proxy:8080`) are treated as `http`
     /// proxies, mirroring the Python facade's `normalize_environment_proxy_url`.
-    fn normalize_proxy_url(raw: &str) -> String {
-        let trimmed = raw.trim();
-        if trimmed.contains("://") {
-            trimmed.to_owned()
-        } else {
-            format!("http://{trimmed}")
-        }
-    }
-
     /// Resolve the explicit proxy route for `url`.
     ///
     /// Returns `Ok(None)` for direct transport: no proxy configured for the
@@ -1349,7 +1296,7 @@ impl ProxyEnvironment {
             _ => false,
         };
 
-        let normalized = Self::normalize_proxy_url(raw);
+        let normalized = environment::normalize_proxy_url(raw);
         let mut proxy = match (rule, from_all) {
             (_, true) | (ProxyRule::All, false) => Proxy::all_compat(&normalized)?,
             (ProxyRule::Http, false) => Proxy::http_compat(&normalized)?,
@@ -1378,7 +1325,7 @@ impl ProxyEnvironment {
         let mut proxies = Vec::new();
 
         if let Some(ref raw) = self.http_proxy {
-            let normalized = Self::normalize_proxy_url(raw);
+            let normalized = environment::normalize_proxy_url(raw);
             let mut proxy = Proxy::http_compat(&normalized)?;
             if let Some(ref rules) = no_proxy {
                 proxy = proxy.no_proxy(rules.clone());
@@ -1386,7 +1333,7 @@ impl ProxyEnvironment {
             proxies.push(proxy);
         }
         if let Some(ref raw) = self.https_proxy {
-            let normalized = Self::normalize_proxy_url(raw);
+            let normalized = environment::normalize_proxy_url(raw);
             let mut proxy = Proxy::https_compat(&normalized)?;
             if let Some(ref rules) = no_proxy {
                 proxy = proxy.no_proxy(rules.clone());
@@ -1394,7 +1341,7 @@ impl ProxyEnvironment {
             proxies.push(proxy);
         }
         if let Some(ref raw) = self.all_proxy {
-            let normalized = Self::normalize_proxy_url(raw);
+            let normalized = environment::normalize_proxy_url(raw);
             let mut proxy = Proxy::all_compat(&normalized)?;
             if let Some(ref rules) = no_proxy {
                 proxy = proxy.no_proxy(rules.clone());
@@ -1932,6 +1879,27 @@ mod tests {
     }
 
     #[test]
+    fn proxy_auth_shared_subset_matches_connect_wire_helper() {
+        for (username, password) in [("user", "pass"), ("", ""), ("u", "p:ass"), ("é", "päss")] {
+            let proxy = ProxyAuth::basic(username, password).unwrap();
+            let wire = eggfetch_http_connect::basic_auth_value(username, password).unwrap();
+            assert_eq!(proxy.header_value(), wire);
+        }
+    }
+
+    #[test]
+    fn proxy_auth_control_domain_remains_intentionally_narrower() {
+        // ProxyAuth predates the wire helper and its accepted domain is part
+        // of the existing core contract.  Keep the difference explicit:
+        // the wire owner rejects all controls, while ProxyAuth only rejects
+        // CR/LF/NUL before its value reaches the CONNECT serializer.
+        assert!(ProxyAuth::basic("u\t", "p").is_ok());
+        assert!(eggfetch_http_connect::basic_auth_value("u\t", "p").is_err());
+        assert!(ProxyAuth::basic("u\u{7f}", "p").is_ok());
+        assert!(eggfetch_http_connect::basic_auth_value("u\u{7f}", "p").is_err());
+    }
+
+    #[test]
     fn proxy_display_redacts_url() {
         let proxy = Proxy::all("http://proxy.example:8080").unwrap();
         let display = format!("{proxy}");
@@ -2460,11 +2428,6 @@ mod tests {
 pub fn parse_proxy_response_bytes(
     data: &[u8],
 ) -> crate::error::Result<(u16, Vec<(String, String)>)> {
-    const MAX_STATUS_LINE_LEN: usize = 4096;
-    const MAX_HEADER_COUNT: usize = 100;
-    const MAX_HEADER_LINE_LEN: usize = 8192;
-    const MAX_TOTAL_HEADER_BYTES: usize = 65536;
-
     fn read_line(data: &[u8], max_len: usize) -> crate::error::Result<(&[u8], &[u8])> {
         let newline = data.iter().position(|&byte| byte == b'\n').ok_or_else(|| {
             Error::MalformedProxyResponse("proxy closed connection before end of line".into())
@@ -2482,7 +2445,12 @@ pub fn parse_proxy_response_bytes(
         Ok((line, remaining))
     }
 
-    let (status_line, mut remaining) = read_line(data, MAX_STATUS_LINE_LEN)?;
+    // This adapter intentionally retains its core error taxonomy and UTF-8
+    // result shape for fuzz/tests, but its bounds are owned by the shared
+    // wire crate so they cannot silently drift from production CONNECT.
+    let limits = eggfetch_http_connect::ConnectResponseLimits::default();
+
+    let (status_line, mut remaining) = read_line(data, limits.max_status_line)?;
     let status_line = std::str::from_utf8(status_line).map_err(|_| {
         Error::MalformedProxyResponse("proxy response contains invalid UTF-8".into())
     })?;
@@ -2503,20 +2471,22 @@ pub fn parse_proxy_response_bytes(
     let mut headers = Vec::new();
     let mut total_header_bytes = 0usize;
     loop {
-        let (line, rest) = read_line(remaining, MAX_HEADER_LINE_LEN)?;
+        let (line, rest) = read_line(remaining, limits.max_header_line)?;
         remaining = rest;
         if line.is_empty() {
             break;
         }
         total_header_bytes += line.len();
-        if total_header_bytes > MAX_TOTAL_HEADER_BYTES {
+        if total_header_bytes > limits.max_headers_bytes {
             return Err(Error::MalformedProxyResponse(format!(
-                "proxy response headers exceeded maximum total size of {MAX_TOTAL_HEADER_BYTES} bytes"
+                "proxy response headers exceeded maximum total size of {} bytes",
+                limits.max_headers_bytes
             )));
         }
-        if headers.len() >= MAX_HEADER_COUNT {
+        if headers.len() >= limits.max_header_count {
             return Err(Error::MalformedProxyResponse(format!(
-                "proxy response exceeded maximum header count of {MAX_HEADER_COUNT}"
+                "proxy response exceeded maximum header count of {}",
+                limits.max_header_count
             )));
         }
         let line = std::str::from_utf8(line).map_err(|_| {

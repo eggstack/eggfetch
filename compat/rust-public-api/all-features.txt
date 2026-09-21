@@ -1,0 +1,2274 @@
+pub mod eggfetch_core
+pub use eggfetch_core::Method
+pub mod eggfetch_core::auth
+pub enum eggfetch_core::auth::AuthScheme
+pub eggfetch_core::auth::AuthScheme::Basic(eggfetch_core::auth::BasicAuth)
+pub eggfetch_core::auth::AuthScheme::Bearer(eggfetch_core::auth::BearerAuth)
+impl eggfetch_core::auth::AuthScheme
+pub fn eggfetch_core::auth::AuthScheme::basic(impl core::convert::Into<alloc::string::String>, impl core::convert::Into<alloc::string::String>) -> eggfetch_core::error::Result<Self>
+pub fn eggfetch_core::auth::AuthScheme::bearer(impl core::convert::Into<alloc::string::String>) -> eggfetch_core::error::Result<Self>
+impl core::fmt::Debug for eggfetch_core::auth::AuthScheme
+pub fn eggfetch_core::auth::AuthScheme::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct eggfetch_core::auth::BasicAuth
+impl eggfetch_core::auth::BasicAuth
+pub fn eggfetch_core::auth::BasicAuth::new(impl core::convert::Into<alloc::string::String>, impl core::convert::Into<alloc::string::String>) -> eggfetch_core::error::Result<Self>
+pub fn eggfetch_core::auth::BasicAuth::username(&self) -> &str
+impl core::fmt::Debug for eggfetch_core::auth::BasicAuth
+pub fn eggfetch_core::auth::BasicAuth::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for eggfetch_core::auth::BasicAuth
+pub fn eggfetch_core::auth::BasicAuth::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct eggfetch_core::auth::BearerAuth
+impl eggfetch_core::auth::BearerAuth
+pub fn eggfetch_core::auth::BearerAuth::new(impl core::convert::Into<alloc::string::String>) -> eggfetch_core::error::Result<Self>
+impl core::fmt::Debug for eggfetch_core::auth::BearerAuth
+pub fn eggfetch_core::auth::BearerAuth::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for eggfetch_core::auth::BearerAuth
+pub fn eggfetch_core::auth::BearerAuth::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub mod eggfetch_core::body
+pub enum eggfetch_core::body::ReplayClass
+pub eggfetch_core::body::ReplayClass::Consumed
+pub eggfetch_core::body::ReplayClass::Immutable
+pub eggfetch_core::body::ReplayClass::OneShot
+pub eggfetch_core::body::ReplayClass::Seekable
+pub enum eggfetch_core::body::RequestBody
+pub eggfetch_core::body::RequestBody::Bytes(bytes::bytes::Bytes)
+pub eggfetch_core::body::RequestBody::Empty
+pub eggfetch_core::body::RequestBody::Stream
+pub eggfetch_core::body::RequestBody::Stream::length: core::option::Option<usize>
+pub eggfetch_core::body::RequestBody::Stream::stream: eggfetch_core::body::BoxBytesStream
+impl eggfetch_core::body::RequestBody
+pub fn eggfetch_core::body::RequestBody::from_stream<S>(S, core::option::Option<usize>) -> Self where S: futures_core::stream::Stream<Item = eggfetch_core::error::Result<bytes::bytes::Bytes>> + core::marker::Send + 'static
+pub fn eggfetch_core::body::RequestBody::has_known_length(&self) -> bool
+pub async fn eggfetch_core::body::RequestBody::into_bytes(self) -> eggfetch_core::error::Result<bytes::bytes::Bytes>
+pub fn eggfetch_core::body::RequestBody::is_empty(&self) -> bool
+pub fn eggfetch_core::body::RequestBody::is_replayable(&self) -> bool
+pub fn eggfetch_core::body::RequestBody::len(&self) -> usize
+pub fn eggfetch_core::body::RequestBody::replay_class(&self) -> eggfetch_core::body::ReplayClass
+pub fn eggfetch_core::body::RequestBody::try_clone_for_redirect(&self) -> eggfetch_core::error::Result<Self>
+impl core::convert::From<&[u8]> for eggfetch_core::body::RequestBody
+pub fn eggfetch_core::body::RequestBody::from(&[u8]) -> Self
+impl core::convert::From<&str> for eggfetch_core::body::RequestBody
+pub fn eggfetch_core::body::RequestBody::from(&str) -> Self
+impl core::convert::From<alloc::string::String> for eggfetch_core::body::RequestBody
+pub fn eggfetch_core::body::RequestBody::from(alloc::string::String) -> Self
+impl core::convert::From<alloc::vec::Vec<u8>> for eggfetch_core::body::RequestBody
+pub fn eggfetch_core::body::RequestBody::from(alloc::vec::Vec<u8>) -> Self
+impl core::convert::From<bytes::bytes::Bytes> for eggfetch_core::body::RequestBody
+pub fn eggfetch_core::body::RequestBody::from(bytes::bytes::Bytes) -> Self
+impl core::fmt::Debug for eggfetch_core::body::RequestBody
+pub fn eggfetch_core::body::RequestBody::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub enum eggfetch_core::body::ResponseBody
+pub eggfetch_core::body::ResponseBody::Buffered
+pub eggfetch_core::body::ResponseBody::Buffered::bytes: bytes::bytes::Bytes
+pub eggfetch_core::body::ResponseBody::Consumed
+pub eggfetch_core::body::ResponseBody::EncodedStreaming
+pub eggfetch_core::body::ResponseBody::EncodedStreaming::content_encoding: alloc::string::String
+pub eggfetch_core::body::ResponseBody::EncodedStreaming::lease: core::option::Option<alloc::sync::Arc<eggfetch_core::pool::PoolGuard>>
+pub eggfetch_core::body::ResponseBody::EncodedStreaming::limit: eggfetch_core::compression::DecompressionLimit
+pub eggfetch_core::body::ResponseBody::EncodedStreaming::stream: eggfetch_core::body::BoxBytesStream
+pub eggfetch_core::body::ResponseBody::Streaming
+pub eggfetch_core::body::ResponseBody::Streaming::lease: core::option::Option<alloc::sync::Arc<eggfetch_core::pool::PoolGuard>>
+pub eggfetch_core::body::ResponseBody::Streaming::stream: eggfetch_core::body::BoxBytesStream
+impl eggfetch_core::body::ResponseBody
+pub fn eggfetch_core::body::ResponseBody::buffered(bytes::bytes::Bytes) -> Self
+pub async fn eggfetch_core::body::ResponseBody::bytes(&mut self) -> eggfetch_core::error::Result<bytes::bytes::Bytes>
+pub fn eggfetch_core::body::ResponseBody::bytes_stream(&mut self) -> eggfetch_core::error::Result<eggfetch_core::body::BoxBytesStream>
+pub fn eggfetch_core::body::ResponseBody::is_buffered(&self) -> bool
+pub fn eggfetch_core::body::ResponseBody::is_empty(&self) -> bool
+pub fn eggfetch_core::body::ResponseBody::len(&self) -> core::option::Option<usize>
+pub fn eggfetch_core::body::ResponseBody::raw_bytes_stream(&mut self) -> eggfetch_core::error::Result<eggfetch_core::body::BoxBytesStream>
+pub fn eggfetch_core::body::ResponseBody::streaming(eggfetch_core::body::BoxBytesStream) -> Self
+pub async fn eggfetch_core::body::ResponseBody::text(&mut self) -> eggfetch_core::error::Result<alloc::string::String>
+impl core::fmt::Debug for eggfetch_core::body::ResponseBody
+pub fn eggfetch_core::body::ResponseBody::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct eggfetch_core::body::NativeResponseBody
+impl core::fmt::Debug for eggfetch_core::body::NativeResponseBody
+pub fn eggfetch_core::body::NativeResponseBody::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl http_body::Body for eggfetch_core::body::NativeResponseBody
+pub type eggfetch_core::body::NativeResponseBody::Data = bytes::bytes::Bytes
+pub type eggfetch_core::body::NativeResponseBody::Error = eggfetch_core::error::Error
+pub fn eggfetch_core::body::NativeResponseBody::is_end_stream(&self) -> bool
+pub fn eggfetch_core::body::NativeResponseBody::poll_frame(core::pin::Pin<&mut Self>, &mut core::task::wake::Context<'_>) -> core::task::poll::Poll<core::option::Option<eggfetch_core::error::Result<http_body::frame::Frame<Self::Data>>>>
+pub fn eggfetch_core::body::NativeResponseBody::size_hint(&self) -> http_body::size_hint::SizeHint
+impl<'__pin> core::marker::Unpin for eggfetch_core::body::NativeResponseBody where pin_project_lite::__private::PinnedFieldsOf<__Origin<'__pin>>: core::marker::Unpin
+pub struct eggfetch_core::body::SharedTrailers
+impl eggfetch_core::body::SharedTrailers
+pub fn eggfetch_core::body::SharedTrailers::get(&self) -> core::option::Option<http::header::map::HeaderMap>
+pub fn eggfetch_core::body::SharedTrailers::new() -> Self
+pub type eggfetch_core::body::BoxBytesStream = core::pin::Pin<alloc::boxed::Box<(dyn futures_core::stream::Stream<Item = eggfetch_core::error::Result<bytes::bytes::Bytes>> + core::marker::Send)>>
+pub mod eggfetch_core::client
+pub struct eggfetch_core::client::Client
+impl eggfetch_core::client::Client
+pub fn eggfetch_core::client::Client::builder() -> eggfetch_core::client::ClientBuilder
+pub fn eggfetch_core::client::Client::cookies(&self) -> &eggfetch_core::cookie::CookieJar
+pub fn eggfetch_core::client::Client::delete(&self, &str) -> eggfetch_core::error::Result<eggfetch_core::request::RequestBuilder>
+pub async fn eggfetch_core::client::Client::execute_http_body<B>(&self, http::request::Request<B>, eggfetch_core::transport_hints::NativeRequestOptions) -> eggfetch_core::error::Result<http::response::Response<eggfetch_core::body::NativeResponseBody>> where B: http_body::Body<Data = bytes::bytes::Bytes> + core::marker::Send + 'static, <B as http_body::Body>::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub async fn eggfetch_core::client::Client::execute_http_body_default<B>(&self, http::request::Request<B>) -> eggfetch_core::error::Result<http::response::Response<eggfetch_core::body::NativeResponseBody>> where B: http_body::Body<Data = bytes::bytes::Bytes> + core::marker::Send + 'static, <B as http_body::Body>::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub fn eggfetch_core::client::Client::get(&self, &str) -> eggfetch_core::error::Result<eggfetch_core::request::RequestBuilder>
+pub fn eggfetch_core::client::Client::head(&self, &str) -> eggfetch_core::error::Result<eggfetch_core::request::RequestBuilder>
+pub fn eggfetch_core::client::Client::new() -> Self
+pub fn eggfetch_core::client::Client::options(&self, &str) -> eggfetch_core::error::Result<eggfetch_core::request::RequestBuilder>
+pub fn eggfetch_core::client::Client::patch(&self, &str) -> eggfetch_core::error::Result<eggfetch_core::request::RequestBuilder>
+pub fn eggfetch_core::client::Client::pool_metrics(&self) -> &eggfetch_core::pool::PoolMetrics
+pub fn eggfetch_core::client::Client::post(&self, &str) -> eggfetch_core::error::Result<eggfetch_core::request::RequestBuilder>
+pub fn eggfetch_core::client::Client::put(&self, &str) -> eggfetch_core::error::Result<eggfetch_core::request::RequestBuilder>
+pub fn eggfetch_core::client::Client::request(&self, http::method::Method, &str) -> eggfetch_core::error::Result<eggfetch_core::request::RequestBuilder>
+pub async fn eggfetch_core::client::Client::send_detailed(&self, eggfetch_core::request::Request) -> core::result::Result<eggfetch_core::response::Response, eggfetch_core::error::RequestFailure>
+pub fn eggfetch_core::client::Client::transport_metrics(&self) -> &eggfetch_core::transport::metrics::TransportMetrics
+impl eggfetch_core::client::Client
+pub fn eggfetch_core::client::Client::native_service(&self) -> eggfetch_core::service::NativeHttpService
+impl core::default::Default for eggfetch_core::client::Client
+pub fn eggfetch_core::client::Client::default() -> Self
+impl core::fmt::Debug for eggfetch_core::client::Client
+pub fn eggfetch_core::client::Client::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct eggfetch_core::client::ClientBuilder
+impl eggfetch_core::client::ClientBuilder
+pub fn eggfetch_core::client::ClientBuilder::auth(self, impl core::convert::Into<eggfetch_core::auth::AuthScheme>) -> Self
+pub fn eggfetch_core::client::ClientBuilder::automatic_decompression(self, bool) -> Self
+pub fn eggfetch_core::client::ClientBuilder::build(self) -> eggfetch_core::client::Client
+pub fn eggfetch_core::client::ClientBuilder::cookie_jar(self, eggfetch_core::cookie::CookieJar) -> Self
+pub fn eggfetch_core::client::ClientBuilder::danger_accept_invalid_certs(self, bool) -> Self
+pub fn eggfetch_core::client::ClientBuilder::default_header(self, &str, &str) -> eggfetch_core::error::Result<Self>
+pub fn eggfetch_core::client::ClientBuilder::default_headers(self, eggfetch_core::headers::Headers) -> Self
+pub fn eggfetch_core::client::ClientBuilder::dialer<D>(self, D) -> Self where D: eggfetch_core::transport::dialer::Dialer
+pub fn eggfetch_core::client::ClientBuilder::environment_proxy(self, eggfetch_core::proxy::Proxy) -> Self
+pub fn eggfetch_core::client::ClientBuilder::follow_redirects(self, bool) -> Self
+pub fn eggfetch_core::client::ClientBuilder::http_version_policy(self, eggfetch_core::http_version::HttpVersionPolicy) -> Self
+pub fn eggfetch_core::client::ClientBuilder::idle_timeout(self, core::time::Duration) -> Self
+pub fn eggfetch_core::client::ClientBuilder::limits(self, eggfetch_core::limits::Limits) -> Self
+pub fn eggfetch_core::client::ClientBuilder::local_address(self, core::net::socket_addr::SocketAddr) -> Self
+pub fn eggfetch_core::client::ClientBuilder::max_connections(self, usize) -> Self
+pub fn eggfetch_core::client::ClientBuilder::max_connections_per_host(self, usize) -> Self
+pub fn eggfetch_core::client::ClientBuilder::max_decoded_body_size(self, usize) -> Self
+pub fn eggfetch_core::client::ClientBuilder::max_decompression_ratio(self, f64) -> Self
+pub fn eggfetch_core::client::ClientBuilder::max_idle_connections(self, usize) -> Self
+pub fn eggfetch_core::client::ClientBuilder::max_idle_connections_per_host(self, usize) -> Self
+pub fn eggfetch_core::client::ClientBuilder::max_in_flight_requests(self, usize) -> Self
+pub fn eggfetch_core::client::ClientBuilder::max_in_flight_requests_per_origin(self, usize) -> Self
+pub fn eggfetch_core::client::ClientBuilder::max_redirects(self, usize) -> Self
+pub fn eggfetch_core::client::ClientBuilder::merge_timeout(self, eggfetch_core::timeout::Timeout) -> Self
+pub fn eggfetch_core::client::ClientBuilder::new() -> Self
+pub fn eggfetch_core::client::ClientBuilder::no_proxy(self, eggfetch_core::proxy::NoProxy) -> Self
+pub fn eggfetch_core::client::ClientBuilder::physical_connection_policy(self, eggfetch_core::transport::lifecycle::PhysicalConnectionPolicy) -> Self
+pub fn eggfetch_core::client::ClientBuilder::proxy(self, eggfetch_core::proxy::Proxy) -> Self
+pub fn eggfetch_core::client::ClientBuilder::proxy_environment(self, &eggfetch_core::proxy::ProxyEnvironment) -> eggfetch_core::error::Result<Self>
+pub fn eggfetch_core::client::ClientBuilder::redirect_downgrade_policy(self, eggfetch_core::redirect::RedirectDowngradePolicy) -> Self
+pub fn eggfetch_core::client::ClientBuilder::redirect_policy(self, eggfetch_core::redirect::RedirectPolicy) -> Self
+pub fn eggfetch_core::client::ClientBuilder::retry(self, eggfetch_core::retry::RetryPolicy) -> Self
+pub fn eggfetch_core::client::ClientBuilder::retry_canceled_requests(self, bool) -> Self
+pub fn eggfetch_core::client::ClientBuilder::socket_options(self, alloc::vec::Vec<eggfetch_core::transport::direct_connector::SocketOption>) -> Self
+pub fn eggfetch_core::client::ClientBuilder::timeout(self, eggfetch_core::timeout::Timeout) -> Self
+pub fn eggfetch_core::client::ClientBuilder::tls_config(self, eggfetch_core::tls::TlsConfig) -> Self
+pub fn eggfetch_core::client::ClientBuilder::transport_io_timeout(self, eggfetch_core::transport::lifecycle::TransportIoTimeout) -> Self
+pub fn eggfetch_core::client::ClientBuilder::uds_path(self, alloc::string::String) -> Self
+pub fn eggfetch_core::client::ClientBuilder::user_agent(self, &str) -> Self
+impl core::default::Default for eggfetch_core::client::ClientBuilder
+pub fn eggfetch_core::client::ClientBuilder::default() -> Self
+pub mod eggfetch_core::compression
+pub enum eggfetch_core::compression::ContentCoding
+pub eggfetch_core::compression::ContentCoding::Brotli
+pub eggfetch_core::compression::ContentCoding::Deflate
+pub eggfetch_core::compression::ContentCoding::Gzip
+pub eggfetch_core::compression::ContentCoding::Zstd
+impl eggfetch_core::compression::ContentCoding
+pub fn eggfetch_core::compression::ContentCoding::as_str(self) -> &'static str
+pub struct eggfetch_core::compression::DecompressionLimit
+impl eggfetch_core::compression::DecompressionLimit
+pub fn eggfetch_core::compression::DecompressionLimit::is_unlimited(&self) -> bool
+pub fn eggfetch_core::compression::DecompressionLimit::max_decoded_body_size(&self) -> core::option::Option<usize>
+pub fn eggfetch_core::compression::DecompressionLimit::max_decompression_ratio(&self) -> core::option::Option<f64>
+pub const fn eggfetch_core::compression::DecompressionLimit::new() -> Self
+pub fn eggfetch_core::compression::DecompressionLimit::try_new(core::option::Option<usize>, core::option::Option<f64>) -> eggfetch_core::error::Result<Self>
+pub fn eggfetch_core::compression::DecompressionLimit::validate(&self) -> eggfetch_core::error::Result<()>
+pub fn eggfetch_core::compression::accept_encoding_value() -> core::option::Option<&'static str>
+pub fn eggfetch_core::compression::decompress_buffered(&[u8], &str, eggfetch_core::compression::DecompressionLimit) -> eggfetch_core::error::Result<bytes::bytes::Bytes>
+pub fn eggfetch_core::compression::decompress_stream(eggfetch_core::body::BoxBytesStream, core::option::Option<&str>, bool, eggfetch_core::compression::DecompressionLimit) -> eggfetch_core::error::Result<eggfetch_core::body::BoxBytesStream>
+pub fn eggfetch_core::compression::validate_content_encodings(&str) -> eggfetch_core::error::Result<()>
+pub mod eggfetch_core::cookie
+pub enum eggfetch_core::cookie::SameSite
+pub eggfetch_core::cookie::SameSite::Lax
+pub eggfetch_core::cookie::SameSite::None
+pub eggfetch_core::cookie::SameSite::Strict
+impl core::convert::From<cookie::same_site::SameSite> for eggfetch_core::cookie::SameSite
+pub fn eggfetch_core::cookie::SameSite::from(cookie::same_site::SameSite) -> Self
+pub struct eggfetch_core::cookie::Cookie
+impl eggfetch_core::cookie::Cookie
+pub fn eggfetch_core::cookie::Cookie::creation_index(&self) -> u64
+pub fn eggfetch_core::cookie::Cookie::domain(&self) -> &str
+pub fn eggfetch_core::cookie::Cookie::expires(&self) -> core::option::Option<std::time::SystemTime>
+pub fn eggfetch_core::cookie::Cookie::is_host_only(&self) -> bool
+pub fn eggfetch_core::cookie::Cookie::is_http_only(&self) -> bool
+pub fn eggfetch_core::cookie::Cookie::is_persistent(&self) -> bool
+pub fn eggfetch_core::cookie::Cookie::is_secure(&self) -> bool
+pub fn eggfetch_core::cookie::Cookie::name(&self) -> &str
+pub fn eggfetch_core::cookie::Cookie::name_value_pair(&self) -> alloc::string::String
+pub fn eggfetch_core::cookie::Cookie::path(&self) -> &str
+pub fn eggfetch_core::cookie::Cookie::same_site(&self) -> core::option::Option<eggfetch_core::cookie::SameSite>
+pub fn eggfetch_core::cookie::Cookie::value(&self) -> &str
+impl core::fmt::Debug for eggfetch_core::cookie::Cookie
+pub fn eggfetch_core::cookie::Cookie::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct eggfetch_core::cookie::CookieJar
+impl eggfetch_core::cookie::CookieJar
+pub fn eggfetch_core::cookie::CookieJar::all_cookies(&self) -> alloc::vec::Vec<eggfetch_core::cookie::Cookie>
+pub fn eggfetch_core::cookie::CookieJar::clear(&self)
+pub fn eggfetch_core::cookie::CookieJar::cookies_for_url(&self, &url::Url) -> core::option::Option<alloc::string::String>
+pub fn eggfetch_core::cookie::CookieJar::delete(&self, &str, &str, &str)
+pub fn eggfetch_core::cookie::CookieJar::expire_stale(&self)
+pub fn eggfetch_core::cookie::CookieJar::get(&self, &str, core::option::Option<&str>, core::option::Option<&str>) -> core::option::Option<eggfetch_core::cookie::Cookie>
+pub fn eggfetch_core::cookie::CookieJar::is_empty(&self) -> bool
+pub fn eggfetch_core::cookie::CookieJar::len(&self) -> usize
+pub fn eggfetch_core::cookie::CookieJar::new() -> Self
+pub fn eggfetch_core::cookie::CookieJar::set(&self, eggfetch_core::cookie::Cookie) -> core::result::Result<(), eggfetch_core::error::Error>
+pub fn eggfetch_core::cookie::CookieJar::set_default_cookie(&self, alloc::string::String, alloc::string::String) -> core::result::Result<(), eggfetch_core::error::Error>
+pub fn eggfetch_core::cookie::CookieJar::update_from_response(&self, &url::Url, &[alloc::string::String])
+pub fn eggfetch_core::cookie::CookieJar::with_initial_cookie(eggfetch_core::cookie::Cookie) -> Self
+impl core::default::Default for eggfetch_core::cookie::CookieJar
+pub fn eggfetch_core::cookie::CookieJar::default() -> Self
+impl core::fmt::Debug for eggfetch_core::cookie::CookieJar
+pub fn eggfetch_core::cookie::CookieJar::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn eggfetch_core::cookie::parse_set_cookie_headers(&url::Url, &[alloc::string::String]) -> alloc::vec::Vec<eggfetch_core::cookie::Cookie>
+pub mod eggfetch_core::error
+pub enum eggfetch_core::error::Error
+pub eggfetch_core::error::Error::Body(alloc::string::String)
+pub eggfetch_core::error::Error::BodyNotReplayableForRedirect
+pub eggfetch_core::error::Error::BodyNotReplayableForRetry
+pub eggfetch_core::error::Error::CaBundle(alloc::string::String)
+pub eggfetch_core::error::Error::CertificateVerification(alloc::string::String)
+pub eggfetch_core::error::Error::ClientCert(alloc::string::String)
+pub eggfetch_core::error::Error::ConflictingAuth(alloc::string::String)
+pub eggfetch_core::error::Error::Connect(alloc::string::String)
+pub eggfetch_core::error::Error::CustomTransport(alloc::sync::Arc<eggfetch_core::transport::dialer::DialError>)
+pub eggfetch_core::error::Error::DecodedBodyTooLarge
+pub eggfetch_core::error::Error::Decompression(alloc::string::String)
+pub eggfetch_core::error::Error::DecompressionRatioExceeded
+pub eggfetch_core::error::Error::H3Connect(alloc::string::String)
+pub eggfetch_core::error::Error::H3ConnectionClosed(alloc::string::String)
+pub eggfetch_core::error::Error::H3Protocol(alloc::string::String)
+pub eggfetch_core::error::Error::H3Stream(alloc::string::String)
+pub eggfetch_core::error::Error::HostnameVerification(alloc::string::String)
+pub eggfetch_core::error::Error::Http2FlowControl(alloc::string::String)
+pub eggfetch_core::error::Error::Http2GoAway
+pub eggfetch_core::error::Error::Http2GoAway::debug_data: alloc::string::String
+pub eggfetch_core::error::Error::Http2GoAway::last_stream_id: u32
+pub eggfetch_core::error::Error::Http2Protocol(alloc::string::String)
+pub eggfetch_core::error::Error::Http2StreamReset
+pub eggfetch_core::error::Error::Http2StreamReset::reason: alloc::string::String
+pub eggfetch_core::error::Error::Hyper(alloc::sync::Arc<hyper::error::Error>)
+pub eggfetch_core::error::Error::HyperClient(alloc::sync::Arc<hyper_util::client::legacy::client::Error>)
+pub eggfetch_core::error::Error::InvalidAuthHeader(alloc::string::String)
+pub eggfetch_core::error::Error::InvalidHeaderName(alloc::string::String)
+pub eggfetch_core::error::Error::InvalidHeaderValue(alloc::string::String)
+pub eggfetch_core::error::Error::InvalidMethod(alloc::string::String)
+pub eggfetch_core::error::Error::InvalidProxyUrl(alloc::string::String)
+pub eggfetch_core::error::Error::InvalidRedirectLocation(alloc::string::String)
+pub eggfetch_core::error::Error::InvalidResolvedTarget(alloc::string::String)
+pub eggfetch_core::error::Error::InvalidUrl(alloc::string::String)
+pub eggfetch_core::error::Error::Io(alloc::sync::Arc<std::io::error::Error>)
+pub eggfetch_core::error::Error::JsonDeserialize(alloc::string::String)
+pub eggfetch_core::error::Error::JsonSerialize(alloc::string::String)
+pub eggfetch_core::error::Error::MalformedProxyResponse(alloc::string::String)
+pub eggfetch_core::error::Error::Pool(alloc::string::String)
+pub eggfetch_core::error::Error::PrivateKey(alloc::string::String)
+pub eggfetch_core::error::Error::Protocol(alloc::string::String)
+pub eggfetch_core::error::Error::ProxyAuthRequired
+pub eggfetch_core::error::Error::ProxyConnect(alloc::string::String)
+pub eggfetch_core::error::Error::ProxyConnectRejected
+pub eggfetch_core::error::Error::ProxyConnectRejected::body: alloc::string::String
+pub eggfetch_core::error::Error::ProxyConnectRejected::status: u16
+pub eggfetch_core::error::Error::RequestBuild(alloc::string::String)
+pub eggfetch_core::error::Error::ResolvedTargetRedirect
+pub eggfetch_core::error::Error::RetryBudgetExhausted
+pub eggfetch_core::error::Error::RetryBudgetExhausted::attempts: usize
+pub eggfetch_core::error::Error::RetryNotConfigured
+pub eggfetch_core::error::Error::Timeout
+pub eggfetch_core::error::Error::Timeout::elapsed: core::time::Duration
+pub eggfetch_core::error::Error::Timeout::phase: eggfetch_core::timeout::TimeoutPhase
+pub eggfetch_core::error::Error::Tls(alloc::string::String)
+pub eggfetch_core::error::Error::TlsConfig(alloc::string::String)
+pub eggfetch_core::error::Error::TooManyRedirects
+pub eggfetch_core::error::Error::TooManyRedirects::followed: usize
+pub eggfetch_core::error::Error::TooManyRedirects::max: usize
+pub eggfetch_core::error::Error::TraceCallbackAborted
+pub eggfetch_core::error::Error::TransportIoTimeout
+pub eggfetch_core::error::Error::TransportIoTimeout::direction: eggfetch_core::transport::lifecycle::TransportIoDirection
+pub eggfetch_core::error::Error::TransportIoTimeout::elapsed: core::time::Duration
+pub eggfetch_core::error::Error::Unsupported(alloc::string::String)
+pub eggfetch_core::error::Error::UnsupportedContentEncoding(alloc::string::String)
+impl eggfetch_core::error::Error
+pub fn eggfetch_core::error::Error::custom_transport_error(&self) -> core::option::Option<&eggfetch_core::transport::dialer::DialError>
+pub fn eggfetch_core::error::Error::is_physical_connection_admission_timeout(&self) -> bool
+pub fn eggfetch_core::error::Error::is_transport_io_timeout(&self) -> bool
+pub fn eggfetch_core::error::Error::kind(&self) -> &'static str
+#[non_exhaustive] pub enum eggfetch_core::error::NetworkFailureKind
+pub eggfetch_core::error::NetworkFailureKind::Connect
+pub eggfetch_core::error::NetworkFailureKind::ConnectionRefused
+pub eggfetch_core::error::NetworkFailureKind::Dns
+pub struct eggfetch_core::error::RequestFailure
+impl eggfetch_core::error::RequestFailure
+pub fn eggfetch_core::error::RequestFailure::error(&self) -> &eggfetch_core::error::Error
+pub fn eggfetch_core::error::RequestFailure::into_error(self) -> eggfetch_core::error::Error
+pub fn eggfetch_core::error::RequestFailure::is_timeout(&self) -> bool
+pub fn eggfetch_core::error::RequestFailure::network_failure_kind(&self) -> core::option::Option<eggfetch_core::error::NetworkFailureKind>
+pub fn eggfetch_core::error::RequestFailure::timeout_phase(&self) -> core::option::Option<eggfetch_core::timeout::TimeoutPhase>
+impl core::error::Error for eggfetch_core::error::RequestFailure
+pub fn eggfetch_core::error::RequestFailure::source(&self) -> core::option::Option<&(dyn core::error::Error + 'static)>
+impl core::fmt::Debug for eggfetch_core::error::RequestFailure
+pub fn eggfetch_core::error::RequestFailure::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for eggfetch_core::error::RequestFailure
+pub fn eggfetch_core::error::RequestFailure::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub type eggfetch_core::error::Result<T> = core::result::Result<T, eggfetch_core::error::Error>
+pub mod eggfetch_core::headers
+pub struct eggfetch_core::headers::Headers
+impl eggfetch_core::headers::Headers
+pub fn eggfetch_core::headers::Headers::append(&mut self, &str, &str) -> eggfetch_core::error::Result<()>
+pub fn eggfetch_core::headers::Headers::contains(&self, &str) -> bool
+pub fn eggfetch_core::headers::Headers::extend(&mut self, &Self)
+pub fn eggfetch_core::headers::Headers::extend_replacing(&mut self, &Self)
+pub fn eggfetch_core::headers::Headers::get(&self, &str) -> core::option::Option<&http::header::value::HeaderValue>
+pub fn eggfetch_core::headers::Headers::get_all(&self, &str) -> alloc::vec::Vec<&http::header::value::HeaderValue>
+pub fn eggfetch_core::headers::Headers::get_str(&self, &str) -> core::option::Option<core::result::Result<&str, http::header::value::ToStrError>>
+pub fn eggfetch_core::headers::Headers::insert(&mut self, &str, &str) -> eggfetch_core::error::Result<()>
+pub fn eggfetch_core::headers::Headers::into_inner(self) -> http::header::map::HeaderMap
+pub fn eggfetch_core::headers::Headers::is_empty(&self) -> bool
+pub fn eggfetch_core::headers::Headers::iter(&self) -> impl core::iter::traits::iterator::Iterator<Item = (&http::header::name::HeaderName, &http::header::value::HeaderValue)>
+pub fn eggfetch_core::headers::Headers::keys(&self) -> impl core::iter::traits::iterator::Iterator<Item = &http::header::name::HeaderName>
+pub fn eggfetch_core::headers::Headers::len(&self) -> usize
+pub fn eggfetch_core::headers::Headers::new() -> Self
+pub fn eggfetch_core::headers::Headers::remove(&mut self, &str) -> core::option::Option<http::header::value::HeaderValue>
+impl core::convert::From<http::header::map::HeaderMap> for eggfetch_core::headers::Headers
+pub fn eggfetch_core::headers::Headers::from(http::header::map::HeaderMap) -> Self
+impl core::fmt::Debug for eggfetch_core::headers::Headers
+pub fn eggfetch_core::headers::Headers::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub mod eggfetch_core::http_version
+pub enum eggfetch_core::http_version::HttpVersionPolicy
+pub eggfetch_core::http_version::HttpVersionPolicy::Auto
+pub eggfetch_core::http_version::HttpVersionPolicy::Auto::allow_http3: bool
+pub eggfetch_core::http_version::HttpVersionPolicy::Http1Only
+pub eggfetch_core::http_version::HttpVersionPolicy::Http2Only
+pub eggfetch_core::http_version::HttpVersionPolicy::Http3Only
+impl core::default::Default for eggfetch_core::http_version::HttpVersionPolicy
+pub fn eggfetch_core::http_version::HttpVersionPolicy::default() -> Self
+pub mod eggfetch_core::limits
+pub struct eggfetch_core::limits::Limits
+pub eggfetch_core::limits::Limits::keepalive_expiry: core::option::Option<core::time::Duration>
+pub eggfetch_core::limits::Limits::max_connections: core::option::Option<usize>
+pub eggfetch_core::limits::Limits::max_connections_per_host: core::option::Option<usize>
+pub eggfetch_core::limits::Limits::max_idle_connections: core::option::Option<usize>
+pub eggfetch_core::limits::Limits::max_idle_connections_per_host: core::option::Option<usize>
+pub eggfetch_core::limits::Limits::max_in_flight_requests: core::option::Option<usize>
+pub eggfetch_core::limits::Limits::max_in_flight_requests_per_origin: core::option::Option<usize>
+impl eggfetch_core::limits::Limits
+pub fn eggfetch_core::limits::Limits::compat() -> Self
+pub fn eggfetch_core::limits::Limits::native() -> Self
+impl eggfetch_core::limits::Limits
+pub fn eggfetch_core::limits::Limits::effective_max_in_flight(&self) -> core::option::Option<usize>
+pub fn eggfetch_core::limits::Limits::effective_max_in_flight_per_origin(&self) -> core::option::Option<usize>
+impl core::convert::From<eggfetch_core::limits::Limits> for eggfetch_core::pool::PoolConfig
+pub fn eggfetch_core::pool::PoolConfig::from(eggfetch_core::limits::Limits) -> Self
+pub mod eggfetch_core::multipart
+pub enum eggfetch_core::multipart::PartBody
+pub eggfetch_core::multipart::PartBody::Bytes(bytes::bytes::Bytes)
+pub eggfetch_core::multipart::PartBody::Stream
+pub eggfetch_core::multipart::PartBody::Stream::length: core::option::Option<u64>
+pub eggfetch_core::multipart::PartBody::Stream::stream: eggfetch_core::body::BoxBytesStream
+impl eggfetch_core::multipart::PartBody
+pub fn eggfetch_core::multipart::PartBody::is_empty(&self) -> bool
+pub fn eggfetch_core::multipart::PartBody::is_stream(&self) -> bool
+pub fn eggfetch_core::multipart::PartBody::len(&self) -> core::option::Option<u64>
+impl core::default::Default for eggfetch_core::multipart::PartBody
+pub fn eggfetch_core::multipart::PartBody::default() -> Self
+impl core::fmt::Debug for eggfetch_core::multipart::PartBody
+pub fn eggfetch_core::multipart::PartBody::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct eggfetch_core::multipart::Boundary(_)
+impl eggfetch_core::multipart::Boundary
+pub fn eggfetch_core::multipart::Boundary::as_str(&self) -> &str
+pub fn eggfetch_core::multipart::Boundary::random() -> Self
+pub fn eggfetch_core::multipart::Boundary::try_new(&str) -> eggfetch_core::error::Result<Self>
+impl core::fmt::Display for eggfetch_core::multipart::Boundary
+pub fn eggfetch_core::multipart::Boundary::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct eggfetch_core::multipart::Multipart
+impl eggfetch_core::multipart::Multipart
+pub fn eggfetch_core::multipart::Multipart::boundary(&self) -> &eggfetch_core::multipart::Boundary
+pub fn eggfetch_core::multipart::Multipart::bytes(self, &str, &str, &str, bytes::bytes::Bytes) -> eggfetch_core::error::Result<Self>
+pub fn eggfetch_core::multipart::Multipart::content_length(&self) -> core::option::Option<u64>
+pub fn eggfetch_core::multipart::Multipart::encoder(self) -> eggfetch_core::multipart::MultipartEncoder
+pub fn eggfetch_core::multipart::Multipart::into_body(self) -> eggfetch_core::body::RequestBody
+pub fn eggfetch_core::multipart::Multipart::is_replayable(&self) -> bool
+pub fn eggfetch_core::multipart::Multipart::new() -> Self
+pub fn eggfetch_core::multipart::Multipart::part(self, eggfetch_core::multipart::Part) -> eggfetch_core::error::Result<Self>
+pub fn eggfetch_core::multipart::Multipart::parts(&self) -> &[eggfetch_core::multipart::Part]
+pub fn eggfetch_core::multipart::Multipart::stream(self, &str, &str, &str, eggfetch_core::body::BoxBytesStream, core::option::Option<u64>) -> eggfetch_core::error::Result<Self>
+pub fn eggfetch_core::multipart::Multipart::text(self, &str, &str) -> eggfetch_core::error::Result<Self>
+pub fn eggfetch_core::multipart::Multipart::with_boundary(eggfetch_core::multipart::Boundary) -> Self
+impl core::default::Default for eggfetch_core::multipart::Multipart
+pub fn eggfetch_core::multipart::Multipart::default() -> Self
+impl core::fmt::Debug for eggfetch_core::multipart::Multipart
+pub fn eggfetch_core::multipart::Multipart::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct eggfetch_core::multipart::MultipartEncoder
+impl core::fmt::Debug for eggfetch_core::multipart::MultipartEncoder
+pub fn eggfetch_core::multipart::MultipartEncoder::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl futures_core::stream::Stream for eggfetch_core::multipart::MultipartEncoder
+pub type eggfetch_core::multipart::MultipartEncoder::Item = core::result::Result<bytes::bytes::Bytes, eggfetch_core::error::Error>
+pub fn eggfetch_core::multipart::MultipartEncoder::poll_next(core::pin::Pin<&mut Self>, &mut core::task::wake::Context<'_>) -> core::task::poll::Poll<core::option::Option<Self::Item>>
+pub struct eggfetch_core::multipart::Part
+impl eggfetch_core::multipart::Part
+pub fn eggfetch_core::multipart::Part::body(&self) -> &eggfetch_core::multipart::PartBody
+pub fn eggfetch_core::multipart::Part::content_type(self, http::header::value::HeaderValue) -> Self
+pub fn eggfetch_core::multipart::Part::content_type_opt(&self) -> core::option::Option<&http::header::value::HeaderValue>
+pub fn eggfetch_core::multipart::Part::filename(self, impl core::convert::Into<alloc::string::String>) -> Self
+pub fn eggfetch_core::multipart::Part::filename_opt(&self) -> core::option::Option<&str>
+pub fn eggfetch_core::multipart::Part::header(self, impl core::convert::TryInto<http::header::name::HeaderName>, impl core::convert::TryInto<http::header::value::HeaderValue>) -> Self
+pub fn eggfetch_core::multipart::Part::into_body(self) -> eggfetch_core::multipart::PartBody
+pub fn eggfetch_core::multipart::Part::name(&self) -> &str
+pub fn eggfetch_core::multipart::Part::new(impl core::convert::Into<alloc::string::String>, eggfetch_core::multipart::PartBody) -> Self
+pub fn eggfetch_core::multipart::Part::try_header(self, impl core::convert::TryInto<http::header::name::HeaderName>, impl core::convert::TryInto<http::header::value::HeaderValue>) -> eggfetch_core::error::Result<Self>
+impl core::fmt::Debug for eggfetch_core::multipart::Part
+pub fn eggfetch_core::multipart::Part::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub mod eggfetch_core::network_stream
+pub enum eggfetch_core::network_stream::NetworkStream
+pub eggfetch_core::network_stream::NetworkStream::Metadata(alloc::sync::Arc<eggfetch_core::network_stream::ConnectionMetadata>)
+pub eggfetch_core::network_stream::NetworkStream::Upgraded(eggfetch_core::network_stream::UpgradedStream)
+impl eggfetch_core::network_stream::NetworkStream
+pub fn eggfetch_core::network_stream::NetworkStream::as_upgraded(&self) -> core::option::Option<&eggfetch_core::network_stream::UpgradedStream>
+pub fn eggfetch_core::network_stream::NetworkStream::as_upgraded_mut(&mut self) -> core::option::Option<&mut eggfetch_core::network_stream::UpgradedStream>
+pub fn eggfetch_core::network_stream::NetworkStream::into_upgraded(self) -> core::option::Option<eggfetch_core::network_stream::UpgradedStream>
+pub fn eggfetch_core::network_stream::NetworkStream::is_upgraded(&self) -> bool
+pub fn eggfetch_core::network_stream::NetworkStream::metadata(&self) -> &alloc::sync::Arc<eggfetch_core::network_stream::ConnectionMetadata>
+pub enum eggfetch_core::network_stream::TransportKind
+pub eggfetch_core::network_stream::TransportKind::Quic
+pub eggfetch_core::network_stream::TransportKind::Tcp
+pub eggfetch_core::network_stream::TransportKind::Tls
+pub eggfetch_core::network_stream::TransportKind::TlsUnix
+pub eggfetch_core::network_stream::TransportKind::Unix
+pub enum eggfetch_core::network_stream::UpgradedStreamVariant
+pub eggfetch_core::network_stream::UpgradedStreamVariant::Adapter
+pub eggfetch_core::network_stream::UpgradedStreamVariant::Tcp
+pub eggfetch_core::network_stream::UpgradedStreamVariant::Tls
+pub struct eggfetch_core::network_stream::ConnectionMetadata
+pub eggfetch_core::network_stream::ConnectionMetadata::local_addr: core::option::Option<core::net::socket_addr::SocketAddr>
+pub eggfetch_core::network_stream::ConnectionMetadata::peer_addr: core::option::Option<core::net::socket_addr::SocketAddr>
+pub eggfetch_core::network_stream::ConnectionMetadata::tls_info: core::option::Option<eggfetch_core::network_stream::TlsInfo>
+pub eggfetch_core::network_stream::ConnectionMetadata::transport_kind: eggfetch_core::network_stream::TransportKind
+impl core::default::Default for eggfetch_core::network_stream::ConnectionMetadata
+pub fn eggfetch_core::network_stream::ConnectionMetadata::default() -> Self
+pub struct eggfetch_core::network_stream::ExtraInfo
+pub eggfetch_core::network_stream::ExtraInfo::client_addr: core::option::Option<core::net::socket_addr::SocketAddr>
+pub eggfetch_core::network_stream::ExtraInfo::server_addr: core::option::Option<core::net::socket_addr::SocketAddr>
+pub eggfetch_core::network_stream::ExtraInfo::tls_info: core::option::Option<eggfetch_core::network_stream::TlsInfo>
+impl eggfetch_core::network_stream::ExtraInfo
+pub fn eggfetch_core::network_stream::ExtraInfo::from_metadata(&eggfetch_core::network_stream::ConnectionMetadata) -> Self
+pub struct eggfetch_core::network_stream::TlsInfo
+pub eggfetch_core::network_stream::TlsInfo::alpn_protocol: core::option::Option<alloc::string::String>
+pub eggfetch_core::network_stream::TlsInfo::cipher_suite: core::option::Option<alloc::string::String>
+pub eggfetch_core::network_stream::TlsInfo::server_name: core::option::Option<alloc::string::String>
+pub eggfetch_core::network_stream::TlsInfo::tls_version: core::option::Option<alloc::string::String>
+pub struct eggfetch_core::network_stream::UpgradedStream
+impl eggfetch_core::network_stream::UpgradedStream
+pub async fn eggfetch_core::network_stream::UpgradedStream::close(&mut self) -> eggfetch_core::error::Result<()>
+pub async fn eggfetch_core::network_stream::UpgradedStream::flush(&mut self) -> eggfetch_core::error::Result<()>
+pub fn eggfetch_core::network_stream::UpgradedStream::from_tcp(tokio::net::tcp::stream::TcpStream, bytes::bytes::Bytes) -> Self
+pub fn eggfetch_core::network_stream::UpgradedStream::from_tls(tokio_rustls::client::TlsStream<tokio::net::tcp::stream::TcpStream>, bytes::bytes::Bytes, eggfetch_core::network_stream::TlsInfo) -> Self
+pub fn eggfetch_core::network_stream::UpgradedStream::leading_data(&self) -> &bytes::bytes::Bytes
+pub fn eggfetch_core::network_stream::UpgradedStream::metadata(&self) -> &alloc::sync::Arc<eggfetch_core::network_stream::ConnectionMetadata>
+pub async fn eggfetch_core::network_stream::UpgradedStream::read(&mut self, usize) -> eggfetch_core::error::Result<bytes::bytes::Bytes>
+pub async fn eggfetch_core::network_stream::UpgradedStream::start_tls(self, &tokio_rustls::client::TlsConnector, &str) -> eggfetch_core::error::Result<Self>
+pub fn eggfetch_core::network_stream::UpgradedStream::take_leading_data(&mut self) -> bytes::bytes::Bytes
+pub fn eggfetch_core::network_stream::UpgradedStream::variant(&self) -> eggfetch_core::network_stream::UpgradedStreamVariant
+pub async fn eggfetch_core::network_stream::UpgradedStream::write_all(&mut self, &[u8]) -> eggfetch_core::error::Result<()>
+impl tokio::io::async_read::AsyncRead for eggfetch_core::network_stream::UpgradedStream
+pub fn eggfetch_core::network_stream::UpgradedStream::poll_read(core::pin::Pin<&mut Self>, &mut core::task::wake::Context<'_>, &mut tokio::io::read_buf::ReadBuf<'_>) -> core::task::poll::Poll<std::io::error::Result<()>>
+impl tokio::io::async_write::AsyncWrite for eggfetch_core::network_stream::UpgradedStream
+pub fn eggfetch_core::network_stream::UpgradedStream::poll_flush(core::pin::Pin<&mut Self>, &mut core::task::wake::Context<'_>) -> core::task::poll::Poll<std::io::error::Result<()>>
+pub fn eggfetch_core::network_stream::UpgradedStream::poll_shutdown(core::pin::Pin<&mut Self>, &mut core::task::wake::Context<'_>) -> core::task::poll::Poll<std::io::error::Result<()>>
+pub fn eggfetch_core::network_stream::UpgradedStream::poll_write(core::pin::Pin<&mut Self>, &mut core::task::wake::Context<'_>, &[u8]) -> core::task::poll::Poll<std::io::error::Result<usize>>
+pub mod eggfetch_core::pool
+pub struct eggfetch_core::pool::Pool
+impl eggfetch_core::pool::Pool
+pub fn eggfetch_core::pool::Pool::metrics(&self) -> &eggfetch_core::pool::PoolMetrics
+pub fn eggfetch_core::pool::Pool::new(eggfetch_core::pool::PoolConfig) -> Self
+pub struct eggfetch_core::pool::PoolConfig
+pub eggfetch_core::pool::PoolConfig::idle_timeout: core::option::Option<core::time::Duration>
+pub eggfetch_core::pool::PoolConfig::max_connections: core::option::Option<usize>
+pub eggfetch_core::pool::PoolConfig::max_connections_per_host: core::option::Option<usize>
+pub eggfetch_core::pool::PoolConfig::max_idle_connections: core::option::Option<usize>
+pub eggfetch_core::pool::PoolConfig::max_idle_connections_per_host: core::option::Option<usize>
+pub eggfetch_core::pool::PoolConfig::max_in_flight_requests: core::option::Option<usize>
+pub eggfetch_core::pool::PoolConfig::max_in_flight_requests_per_origin: core::option::Option<usize>
+impl core::convert::From<eggfetch_core::limits::Limits> for eggfetch_core::pool::PoolConfig
+pub fn eggfetch_core::pool::PoolConfig::from(eggfetch_core::limits::Limits) -> Self
+pub struct eggfetch_core::pool::PoolGuard
+impl eggfetch_core::pool::PoolGuard
+pub fn eggfetch_core::pool::PoolGuard::host(&self) -> core::option::Option<&str>
+pub fn eggfetch_core::pool::PoolGuard::metrics(&self) -> &eggfetch_core::pool::PoolMetrics
+impl core::ops::drop::Drop for eggfetch_core::pool::PoolGuard
+pub fn eggfetch_core::pool::PoolGuard::drop(&mut self)
+pub struct eggfetch_core::pool::PoolMetrics
+pub eggfetch_core::pool::PoolMetrics::acquisition_cancellations: core::sync::atomic::AtomicUsize
+pub eggfetch_core::pool::PoolMetrics::acquisition_waits: core::sync::atomic::AtomicUsize
+pub mod eggfetch_core::proxy
+pub enum eggfetch_core::proxy::NoProxyRule
+pub eggfetch_core::proxy::NoProxyRule::DomainSuffix(alloc::string::String)
+pub eggfetch_core::proxy::NoProxyRule::Host(alloc::string::String)
+pub eggfetch_core::proxy::NoProxyRule::HostExact(alloc::string::String)
+pub eggfetch_core::proxy::NoProxyRule::HostPort(alloc::string::String, u16)
+pub eggfetch_core::proxy::NoProxyRule::HostPortExact(alloc::string::String, u16)
+pub eggfetch_core::proxy::NoProxyRule::HostPortHttpx(alloc::string::String, u16)
+pub eggfetch_core::proxy::NoProxyRule::IpNetwork(core::net::ip_addr::IpAddr, u8)
+pub eggfetch_core::proxy::NoProxyRule::Localhost
+pub eggfetch_core::proxy::NoProxyRule::LocalhostExact
+pub eggfetch_core::proxy::NoProxyRule::SchemeHostPort
+pub eggfetch_core::proxy::NoProxyRule::SchemeHostPort::host: alloc::string::String
+pub eggfetch_core::proxy::NoProxyRule::SchemeHostPort::port: core::option::Option<u16>
+pub eggfetch_core::proxy::NoProxyRule::SchemeHostPort::scheme: alloc::string::String
+pub eggfetch_core::proxy::NoProxyRule::Wildcard
+pub enum eggfetch_core::proxy::ProxyAuth
+pub eggfetch_core::proxy::ProxyAuth::Basic
+pub eggfetch_core::proxy::ProxyAuth::Basic::password: alloc::string::String
+pub eggfetch_core::proxy::ProxyAuth::Basic::username: alloc::string::String
+impl eggfetch_core::proxy::ProxyAuth
+pub fn eggfetch_core::proxy::ProxyAuth::basic(impl core::convert::Into<alloc::string::String>, impl core::convert::Into<alloc::string::String>) -> eggfetch_core::error::Result<Self>
+impl core::fmt::Debug for eggfetch_core::proxy::ProxyAuth
+pub fn eggfetch_core::proxy::ProxyAuth::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for eggfetch_core::proxy::ProxyAuth
+pub fn eggfetch_core::proxy::ProxyAuth::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub enum eggfetch_core::proxy::ProxyDecision
+pub eggfetch_core::proxy::ProxyDecision::Direct
+pub eggfetch_core::proxy::ProxyDecision::Proxy(eggfetch_core::proxy::ProxyConfig)
+pub enum eggfetch_core::proxy::ProxyRule
+pub eggfetch_core::proxy::ProxyRule::All
+pub eggfetch_core::proxy::ProxyRule::Http
+pub eggfetch_core::proxy::ProxyRule::Https
+pub struct eggfetch_core::proxy::NoProxy
+impl eggfetch_core::proxy::NoProxy
+pub fn eggfetch_core::proxy::NoProxy::parse(&str) -> eggfetch_core::error::Result<Self>
+pub fn eggfetch_core::proxy::NoProxy::parse_httpx(&str) -> eggfetch_core::error::Result<Self>
+pub fn eggfetch_core::proxy::NoProxy::should_bypass(&self, &url::Url) -> bool
+pub struct eggfetch_core::proxy::Proxy
+impl eggfetch_core::proxy::Proxy
+pub fn eggfetch_core::proxy::Proxy::all(&str) -> eggfetch_core::error::Result<Self>
+pub fn eggfetch_core::proxy::Proxy::all_compat(&str) -> eggfetch_core::error::Result<Self>
+pub fn eggfetch_core::proxy::Proxy::auth(self, eggfetch_core::proxy::ProxyAuth) -> Self
+pub fn eggfetch_core::proxy::Proxy::http(&str) -> eggfetch_core::error::Result<Self>
+pub fn eggfetch_core::proxy::Proxy::http_compat(&str) -> eggfetch_core::error::Result<Self>
+pub fn eggfetch_core::proxy::Proxy::https(&str) -> eggfetch_core::error::Result<Self>
+pub fn eggfetch_core::proxy::Proxy::https_compat(&str) -> eggfetch_core::error::Result<Self>
+pub fn eggfetch_core::proxy::Proxy::no_proxy(self, eggfetch_core::proxy::NoProxy) -> Self
+pub fn eggfetch_core::proxy::Proxy::no_proxy_rules(&self) -> core::option::Option<&eggfetch_core::proxy::NoProxy>
+pub fn eggfetch_core::proxy::Proxy::proxy_headers(self, eggfetch_core::headers::Headers) -> Self
+pub fn eggfetch_core::proxy::Proxy::proxy_headers_ref(&self) -> &eggfetch_core::headers::Headers
+pub fn eggfetch_core::proxy::Proxy::resolved_addresses<I>(self, I) -> eggfetch_core::error::Result<Self> where I: core::iter::traits::collect::IntoIterator<Item = core::net::socket_addr::SocketAddr>
+pub fn eggfetch_core::proxy::Proxy::rule(&self) -> eggfetch_core::proxy::ProxyRule
+pub fn eggfetch_core::proxy::Proxy::should_use_for_scheme(&self, &str) -> bool
+pub fn eggfetch_core::proxy::Proxy::uri(&self) -> &url::Url
+pub fn eggfetch_core::proxy::Proxy::with_proxy_tls_config(self, eggfetch_core::tls::TlsConfig) -> Self
+impl core::fmt::Debug for eggfetch_core::proxy::Proxy
+pub fn eggfetch_core::proxy::Proxy::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for eggfetch_core::proxy::Proxy
+pub fn eggfetch_core::proxy::Proxy::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct eggfetch_core::proxy::ProxyConfig
+impl eggfetch_core::proxy::ProxyConfig
+pub fn eggfetch_core::proxy::ProxyConfig::auth(&self) -> core::option::Option<&eggfetch_core::proxy::ProxyAuth>
+pub fn eggfetch_core::proxy::ProxyConfig::host(&self) -> core::option::Option<&str>
+pub fn eggfetch_core::proxy::ProxyConfig::is_socks(&self) -> bool
+pub fn eggfetch_core::proxy::ProxyConfig::port(&self) -> eggfetch_core::error::Result<u16>
+pub fn eggfetch_core::proxy::ProxyConfig::proxy_headers(&self) -> &eggfetch_core::headers::Headers
+pub fn eggfetch_core::proxy::ProxyConfig::proxy_tls_config(&self) -> core::option::Option<&eggfetch_core::tls::TlsConfig>
+pub fn eggfetch_core::proxy::ProxyConfig::resolved_addresses(&self) -> core::option::Option<&[core::net::socket_addr::SocketAddr]>
+pub fn eggfetch_core::proxy::ProxyConfig::scheme(&self) -> &str
+pub fn eggfetch_core::proxy::ProxyConfig::socks_remote_dns(&self) -> bool
+pub fn eggfetch_core::proxy::ProxyConfig::uri(&self) -> &url::Url
+impl core::fmt::Debug for eggfetch_core::proxy::ProxyConfig
+pub fn eggfetch_core::proxy::ProxyConfig::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct eggfetch_core::proxy::ProxyEnvironment
+impl eggfetch_core::proxy::ProxyEnvironment
+pub fn eggfetch_core::proxy::ProxyEnvironment::client_proxies(&self) -> eggfetch_core::error::Result<alloc::vec::Vec<eggfetch_core::proxy::Proxy>>
+pub fn eggfetch_core::proxy::ProxyEnvironment::from_env() -> Self
+pub fn eggfetch_core::proxy::ProxyEnvironment::from_map<I, K, V>(I) -> Self where I: core::iter::traits::collect::IntoIterator<Item = (K, V)>, K: core::convert::AsRef<str>, V: core::convert::AsRef<str>
+pub fn eggfetch_core::proxy::ProxyEnvironment::is_empty(&self) -> bool
+pub fn eggfetch_core::proxy::ProxyEnvironment::new() -> Self
+pub fn eggfetch_core::proxy::ProxyEnvironment::resolve(&self, &url::Url) -> eggfetch_core::error::Result<core::option::Option<eggfetch_core::proxy::Proxy>>
+impl core::fmt::Debug for eggfetch_core::proxy::ProxyEnvironment
+pub fn eggfetch_core::proxy::ProxyEnvironment::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub mod eggfetch_core::redact
+pub const eggfetch_core::redact::SENSITIVE_HEADERS: &[&str]
+pub fn eggfetch_core::redact::is_sensitive_header(&str) -> bool
+pub fn eggfetch_core::redact::redact_headers(&http::header::map::HeaderMap) -> http::header::map::HeaderMap
+pub fn eggfetch_core::redact::redact_url(&url::Url) -> alloc::string::String
+pub fn eggfetch_core::redact::redact_url_string(&str) -> alloc::string::String
+pub mod eggfetch_core::redirect
+pub enum eggfetch_core::redirect::RedirectDowngradePolicy
+pub eggfetch_core::redirect::RedirectDowngradePolicy::Allow
+pub eggfetch_core::redirect::RedirectDowngradePolicy::Deny
+pub struct eggfetch_core::redirect::RedirectPolicy
+pub eggfetch_core::redirect::RedirectPolicy::downgrade: eggfetch_core::redirect::RedirectDowngradePolicy
+pub eggfetch_core::redirect::RedirectPolicy::follow: bool
+pub eggfetch_core::redirect::RedirectPolicy::max_redirects: usize
+impl eggfetch_core::redirect::RedirectPolicy
+pub fn eggfetch_core::redirect::RedirectPolicy::check_downgrade(&self, &url::Url, &url::Url) -> eggfetch_core::error::Result<()>
+pub fn eggfetch_core::redirect::RedirectPolicy::new(bool, usize) -> Self
+pub fn eggfetch_core::redirect::RedirectPolicy::strict(usize) -> Self
+pub fn eggfetch_core::redirect::RedirectPolicy::with_downgrade(self, eggfetch_core::redirect::RedirectDowngradePolicy) -> Self
+impl core::default::Default for eggfetch_core::redirect::RedirectPolicy
+pub fn eggfetch_core::redirect::RedirectPolicy::default() -> Self
+pub fn eggfetch_core::redirect::build_redirect_request(&eggfetch_core::request::Request, http::status::StatusCode, &str) -> eggfetch_core::error::Result<eggfetch_core::request::Request>
+pub fn eggfetch_core::redirect::build_redirect_request_with_redirect_policy(&eggfetch_core::request::Request, http::status::StatusCode, &str, &eggfetch_core::redirect::RedirectPolicy) -> eggfetch_core::error::Result<eggfetch_core::request::Request>
+pub fn eggfetch_core::redirect::check_https_downgrade(&url::Url, &url::Url, eggfetch_core::redirect::RedirectDowngradePolicy) -> eggfetch_core::error::Result<()>
+pub fn eggfetch_core::redirect::drops_body_on_redirect(http::status::StatusCode, &http::method::Method) -> bool
+pub fn eggfetch_core::redirect::is_https_downgrade(&url::Url, &url::Url) -> bool
+pub fn eggfetch_core::redirect::is_redirect_status(http::status::StatusCode) -> bool
+pub fn eggfetch_core::redirect::redirect_method(http::status::StatusCode, &http::method::Method) -> http::method::Method
+pub mod eggfetch_core::request
+pub enum eggfetch_core::request::ProxyOverride
+pub eggfetch_core::request::ProxyOverride::Direct
+pub eggfetch_core::request::ProxyOverride::Inherit
+pub eggfetch_core::request::ProxyOverride::Override(eggfetch_core::proxy::ProxyConfig)
+pub struct eggfetch_core::request::NativeRequestOptions
+pub eggfetch_core::request::NativeRequestOptions::timeout: core::option::Option<eggfetch_core::timeout::Timeout>
+pub eggfetch_core::request::NativeRequestOptions::transport_hints: eggfetch_core::transport_hints::TransportHints
+impl eggfetch_core::transport_hints::NativeRequestOptions
+pub fn eggfetch_core::transport_hints::NativeRequestOptions::timeout(self, eggfetch_core::timeout::Timeout) -> Self
+pub fn eggfetch_core::transport_hints::NativeRequestOptions::transport_hints(self, eggfetch_core::transport_hints::TransportHints) -> Self
+impl core::fmt::Debug for eggfetch_core::transport_hints::NativeRequestOptions
+pub fn eggfetch_core::transport_hints::NativeRequestOptions::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct eggfetch_core::request::Request
+impl eggfetch_core::request::Request
+pub fn eggfetch_core::request::Request::auth(&self) -> core::option::Option<&eggfetch_core::auth::AuthScheme>
+pub fn eggfetch_core::request::Request::body(&self) -> &eggfetch_core::body::RequestBody
+pub fn eggfetch_core::request::Request::decompress(&self) -> core::option::Option<bool>
+pub fn eggfetch_core::request::Request::headers(&self) -> &eggfetch_core::headers::Headers
+pub fn eggfetch_core::request::Request::headers_mut(&mut self) -> &mut eggfetch_core::headers::Headers
+pub fn eggfetch_core::request::Request::is_auth_disabled(&self) -> bool
+pub fn eggfetch_core::request::Request::max_decoded_body_size(&self) -> core::option::Option<usize>
+pub fn eggfetch_core::request::Request::max_decompression_ratio(&self) -> core::option::Option<f64>
+pub fn eggfetch_core::request::Request::method(&self) -> &http::method::Method
+pub fn eggfetch_core::request::Request::proxied_target(&self) -> core::option::Option<&eggfetch_core::transport_hints::ResolvedTarget>
+pub fn eggfetch_core::request::Request::proxy_override(&self) -> &eggfetch_core::request::ProxyOverride
+pub fn eggfetch_core::request::Request::redirect(&self) -> core::option::Option<&eggfetch_core::redirect::RedirectPolicy>
+pub fn eggfetch_core::request::Request::retry(&self) -> core::option::Option<&eggfetch_core::retry::RetryPolicy>
+pub fn eggfetch_core::request::Request::set_auth(&mut self, core::option::Option<eggfetch_core::auth::AuthScheme>)
+pub fn eggfetch_core::request::Request::set_auth_disabled(&mut self, bool)
+pub fn eggfetch_core::request::Request::set_body(&mut self, eggfetch_core::body::RequestBody)
+pub fn eggfetch_core::request::Request::set_decompress(&mut self, core::option::Option<bool>)
+pub fn eggfetch_core::request::Request::set_max_decoded_body_size(&mut self, core::option::Option<usize>)
+pub fn eggfetch_core::request::Request::set_max_decompression_ratio(&mut self, core::option::Option<f64>)
+pub fn eggfetch_core::request::Request::set_proxied_target(&mut self, core::option::Option<eggfetch_core::transport_hints::ResolvedTarget>)
+pub fn eggfetch_core::request::Request::set_proxy_override(&mut self, eggfetch_core::request::ProxyOverride)
+pub fn eggfetch_core::request::Request::set_redirect(&mut self, core::option::Option<eggfetch_core::redirect::RedirectPolicy>)
+pub fn eggfetch_core::request::Request::set_retry(&mut self, core::option::Option<eggfetch_core::retry::RetryPolicy>)
+pub fn eggfetch_core::request::Request::set_timeout(&mut self, core::option::Option<eggfetch_core::timeout::Timeout>)
+pub fn eggfetch_core::request::Request::set_transport_hints(&mut self, eggfetch_core::transport_hints::TransportHints)
+pub fn eggfetch_core::request::Request::set_version(&mut self, http::version::Version)
+pub fn eggfetch_core::request::Request::timeout(&self) -> core::option::Option<&eggfetch_core::timeout::Timeout>
+pub fn eggfetch_core::request::Request::transport_hints(&self) -> &eggfetch_core::transport_hints::TransportHints
+pub fn eggfetch_core::request::Request::url(&self) -> &url::Url
+pub fn eggfetch_core::request::Request::version(&self) -> http::version::Version
+impl core::fmt::Debug for eggfetch_core::request::Request
+pub fn eggfetch_core::request::Request::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct eggfetch_core::request::RequestBuilder
+impl eggfetch_core::request::RequestBuilder
+pub fn eggfetch_core::request::RequestBuilder::auth(self, impl core::convert::Into<eggfetch_core::auth::AuthScheme>) -> Self
+pub fn eggfetch_core::request::RequestBuilder::body(self, impl core::convert::Into<eggfetch_core::body::RequestBody>) -> Self
+pub fn eggfetch_core::request::RequestBuilder::build(self) -> eggfetch_core::error::Result<eggfetch_core::request::Request>
+pub fn eggfetch_core::request::RequestBuilder::bytes(self, impl core::convert::Into<bytes::bytes::Bytes>) -> Self
+pub fn eggfetch_core::request::RequestBuilder::decompress(self, bool) -> Self
+pub fn eggfetch_core::request::RequestBuilder::header(self, &str, &str) -> Self
+pub fn eggfetch_core::request::RequestBuilder::headers(self, eggfetch_core::headers::Headers) -> Self
+pub fn eggfetch_core::request::RequestBuilder::json<T: serde_core::ser::Serialize>(self, &T) -> eggfetch_core::error::Result<Self>
+pub fn eggfetch_core::request::RequestBuilder::max_decoded_body_size(self, usize) -> Self
+pub fn eggfetch_core::request::RequestBuilder::max_decompression_ratio(self, f64) -> Self
+pub fn eggfetch_core::request::RequestBuilder::proxy(self, &eggfetch_core::proxy::Proxy) -> Self
+pub fn eggfetch_core::request::RequestBuilder::proxy_target_addresses<I>(self, I) -> Self where I: core::iter::traits::collect::IntoIterator<Item = core::net::socket_addr::SocketAddr>
+pub fn eggfetch_core::request::RequestBuilder::query(self, &str, &str) -> Self
+pub fn eggfetch_core::request::RequestBuilder::redirect_policy(self, eggfetch_core::redirect::RedirectPolicy) -> Self
+pub fn eggfetch_core::request::RequestBuilder::resolved_addresses<I>(self, I) -> Self where I: core::iter::traits::collect::IntoIterator<Item = core::net::socket_addr::SocketAddr>
+pub fn eggfetch_core::request::RequestBuilder::retry(self, eggfetch_core::retry::RetryPolicy) -> Self
+pub async fn eggfetch_core::request::RequestBuilder::send(self) -> eggfetch_core::error::Result<eggfetch_core::response::Response>
+pub async fn eggfetch_core::request::RequestBuilder::send_detailed(self) -> core::result::Result<eggfetch_core::response::Response, eggfetch_core::error::RequestFailure>
+pub fn eggfetch_core::request::RequestBuilder::timeout(self, eggfetch_core::timeout::Timeout) -> Self
+pub fn eggfetch_core::request::RequestBuilder::transport_hints(self, eggfetch_core::transport_hints::TransportHints) -> Self
+pub fn eggfetch_core::request::RequestBuilder::without_auth(self) -> Self
+pub fn eggfetch_core::request::RequestBuilder::without_proxy(self) -> Self
+pub fn eggfetch_core::request::RequestBuilder::without_retry(self) -> Self
+pub struct eggfetch_core::request::ResolvedTarget
+impl eggfetch_core::transport_hints::ResolvedTarget
+pub fn eggfetch_core::transport_hints::ResolvedTarget::addresses(&self) -> &[core::net::socket_addr::SocketAddr]
+pub fn eggfetch_core::transport_hints::ResolvedTarget::new<I>(I) -> eggfetch_core::error::Result<Self> where I: core::iter::traits::collect::IntoIterator<Item = core::net::socket_addr::SocketAddr>
+impl core::fmt::Debug for eggfetch_core::transport_hints::ResolvedTarget
+pub fn eggfetch_core::transport_hints::ResolvedTarget::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct eggfetch_core::request::TransportHints
+pub eggfetch_core::request::TransportHints::resolved_target: core::option::Option<eggfetch_core::transport_hints::ResolvedTarget>
+pub eggfetch_core::request::TransportHints::sni_hostname: core::option::Option<alloc::string::String>
+pub eggfetch_core::request::TransportHints::target: core::option::Option<bytes::bytes::Bytes>
+pub eggfetch_core::request::TransportHints::trace: core::option::Option<alloc::sync::Arc<dyn eggfetch_core::trace::TraceObserver>>
+impl core::fmt::Debug for eggfetch_core::transport_hints::TransportHints
+pub fn eggfetch_core::transport_hints::TransportHints::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub mod eggfetch_core::response
+pub struct eggfetch_core::response::HistoryEntry
+impl eggfetch_core::response::HistoryEntry
+pub fn eggfetch_core::response::HistoryEntry::headers(&self) -> &http::header::map::HeaderMap
+pub fn eggfetch_core::response::HistoryEntry::reason_phrase(&self) -> &str
+pub fn eggfetch_core::response::HistoryEntry::status(&self) -> http::status::StatusCode
+pub fn eggfetch_core::response::HistoryEntry::url(&self) -> &url::Url
+pub fn eggfetch_core::response::HistoryEntry::version(&self) -> http::version::Version
+impl core::fmt::Debug for eggfetch_core::response::HistoryEntry
+pub fn eggfetch_core::response::HistoryEntry::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct eggfetch_core::response::Response
+impl eggfetch_core::response::Response
+pub fn eggfetch_core::response::Response::body(&self) -> &eggfetch_core::body::ResponseBody
+pub fn eggfetch_core::response::Response::body_mut(&mut self) -> &mut eggfetch_core::body::ResponseBody
+pub async fn eggfetch_core::response::Response::bytes(&mut self) -> eggfetch_core::error::Result<bytes::bytes::Bytes>
+pub fn eggfetch_core::response::Response::bytes_stream(&mut self) -> eggfetch_core::error::Result<eggfetch_core::body::BoxBytesStream>
+pub fn eggfetch_core::response::Response::content_length(&self) -> core::option::Option<u64>
+pub fn eggfetch_core::response::Response::headers(&self) -> &http::header::map::HeaderMap
+pub fn eggfetch_core::response::Response::headers_mut(&mut self) -> &mut http::header::map::HeaderMap
+pub fn eggfetch_core::response::Response::history(&self) -> &[eggfetch_core::response::HistoryEntry]
+pub fn eggfetch_core::response::Response::history_mut(&mut self) -> &mut alloc::vec::Vec<eggfetch_core::response::HistoryEntry>
+pub fn eggfetch_core::response::Response::into_network_stream(self) -> core::option::Option<eggfetch_core::network_stream::NetworkStream>
+pub fn eggfetch_core::response::Response::is_success(&self) -> bool
+pub async fn eggfetch_core::response::Response::json<T: serde_core::de::DeserializeOwned>(&mut self) -> eggfetch_core::error::Result<T>
+pub fn eggfetch_core::response::Response::network_stream(&self) -> core::option::Option<&eggfetch_core::network_stream::NetworkStream>
+pub fn eggfetch_core::response::Response::network_stream_mut(&mut self) -> core::option::Option<&mut eggfetch_core::network_stream::NetworkStream>
+pub fn eggfetch_core::response::Response::raw_bytes_stream(&mut self) -> eggfetch_core::error::Result<eggfetch_core::body::BoxBytesStream>
+pub fn eggfetch_core::response::Response::status(&self) -> http::status::StatusCode
+pub fn eggfetch_core::response::Response::take_network_stream(&mut self) -> core::option::Option<eggfetch_core::network_stream::NetworkStream>
+pub async fn eggfetch_core::response::Response::text(&mut self) -> eggfetch_core::error::Result<alloc::string::String>
+pub fn eggfetch_core::response::Response::text_lines(&mut self) -> eggfetch_core::error::Result<impl futures_core::stream::Stream<Item = eggfetch_core::error::Result<alloc::string::String>>>
+pub fn eggfetch_core::response::Response::trailers(&self) -> core::option::Option<http::header::map::HeaderMap>
+pub fn eggfetch_core::response::Response::url(&self) -> &url::Url
+pub fn eggfetch_core::response::Response::version(&self) -> http::version::Version
+pub fn eggfetch_core::response::Response::wire_content_encoding(&self) -> core::option::Option<&str>
+pub fn eggfetch_core::response::Response::wire_content_length(&self) -> core::option::Option<&str>
+pub fn eggfetch_core::response::Response::wire_reason_phrase(&self) -> core::option::Option<&str>
+impl core::fmt::Debug for eggfetch_core::response::Response
+pub fn eggfetch_core::response::Response::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub mod eggfetch_core::retry
+pub enum eggfetch_core::retry::ReplayCheck
+pub eggfetch_core::retry::ReplayCheck::NotReplayable
+pub eggfetch_core::retry::ReplayCheck::Replayable
+pub enum eggfetch_core::retry::RetryCause
+pub eggfetch_core::retry::RetryCause::Status(u16)
+pub eggfetch_core::retry::RetryCause::Timeout(alloc::string::String)
+pub eggfetch_core::retry::RetryCause::TransportError(alloc::string::String)
+impl core::fmt::Display for eggfetch_core::retry::RetryCause
+pub fn eggfetch_core::retry::RetryCause::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct eggfetch_core::retry::BackoffPolicy
+impl eggfetch_core::retry::BackoffPolicy
+pub fn eggfetch_core::retry::BackoffPolicy::delay(&self, usize) -> core::option::Option<core::time::Duration>
+pub fn eggfetch_core::retry::BackoffPolicy::factor(&self) -> f64
+pub fn eggfetch_core::retry::BackoffPolicy::initial_delay(&self) -> core::time::Duration
+pub fn eggfetch_core::retry::BackoffPolicy::max_delay(&self) -> core::time::Duration
+impl core::default::Default for eggfetch_core::retry::BackoffPolicy
+pub fn eggfetch_core::retry::BackoffPolicy::default() -> Self
+pub struct eggfetch_core::retry::BackoffPolicyBuilder
+pub struct eggfetch_core::retry::MethodPolicy
+impl eggfetch_core::retry::MethodPolicy
+pub fn eggfetch_core::retry::MethodPolicy::add_method(&mut self, http::method::Method)
+pub fn eggfetch_core::retry::MethodPolicy::is_retryable(&self, &http::method::Method) -> bool
+pub fn eggfetch_core::retry::MethodPolicy::methods(&self) -> &[http::method::Method]
+pub fn eggfetch_core::retry::MethodPolicy::new(alloc::vec::Vec<http::method::Method>) -> Self
+impl core::default::Default for eggfetch_core::retry::MethodPolicy
+pub fn eggfetch_core::retry::MethodPolicy::default() -> Self
+pub struct eggfetch_core::retry::RetryContext
+pub eggfetch_core::retry::RetryContext::attempt: usize
+pub eggfetch_core::retry::RetryContext::body_replayable: bool
+pub eggfetch_core::retry::RetryContext::cause: eggfetch_core::retry::RetryCause
+pub eggfetch_core::retry::RetryContext::method: http::method::Method
+pub eggfetch_core::retry::RetryContext::remaining_total: core::option::Option<core::time::Duration>
+pub struct eggfetch_core::retry::RetryPolicy
+impl eggfetch_core::retry::RetryPolicy
+pub fn eggfetch_core::retry::RetryPolicy::backoff(&self) -> &eggfetch_core::retry::BackoffPolicy
+pub fn eggfetch_core::retry::RetryPolicy::backoff_delay(&self, usize) -> core::option::Option<core::time::Duration>
+pub fn eggfetch_core::retry::RetryPolicy::builder() -> eggfetch_core::retry::RetryPolicyBuilder
+pub fn eggfetch_core::retry::RetryPolicy::check_body_replayable(&eggfetch_core::body::RequestBody) -> eggfetch_core::retry::ReplayCheck
+pub fn eggfetch_core::retry::RetryPolicy::is_enabled(&self) -> bool
+pub fn eggfetch_core::retry::RetryPolicy::is_error_retryable(&eggfetch_core::error::Error) -> bool
+pub fn eggfetch_core::retry::RetryPolicy::is_method_retryable(&self, &http::method::Method) -> bool
+pub fn eggfetch_core::retry::RetryPolicy::is_status_retryable(&self, u16) -> bool
+pub fn eggfetch_core::retry::RetryPolicy::max_attempts(&self) -> usize
+pub fn eggfetch_core::retry::RetryPolicy::max_elapsed(&self) -> core::option::Option<core::time::Duration>
+pub fn eggfetch_core::retry::RetryPolicy::method_policy(&self) -> &eggfetch_core::retry::MethodPolicy
+pub fn eggfetch_core::retry::RetryPolicy::respect_retry_after(&self) -> bool
+pub fn eggfetch_core::retry::RetryPolicy::retry_after_delay(&self, &str) -> core::option::Option<core::time::Duration>
+pub fn eggfetch_core::retry::RetryPolicy::status_policy(&self) -> &eggfetch_core::retry::StatusPolicy
+impl core::default::Default for eggfetch_core::retry::RetryPolicy
+pub fn eggfetch_core::retry::RetryPolicy::default() -> Self
+pub struct eggfetch_core::retry::RetryPolicyBuilder
+impl eggfetch_core::retry::RetryPolicyBuilder
+pub fn eggfetch_core::retry::RetryPolicyBuilder::allow_delete_retry(self) -> Self
+pub fn eggfetch_core::retry::RetryPolicyBuilder::allow_patch_retry(self) -> Self
+pub fn eggfetch_core::retry::RetryPolicyBuilder::allow_post_retry(self) -> Self
+pub fn eggfetch_core::retry::RetryPolicyBuilder::allow_put_retry(self) -> Self
+pub fn eggfetch_core::retry::RetryPolicyBuilder::backoff_factor(self, f64) -> Self
+pub fn eggfetch_core::retry::RetryPolicyBuilder::build(self) -> eggfetch_core::retry::RetryPolicy
+pub fn eggfetch_core::retry::RetryPolicyBuilder::initial_delay(self, core::time::Duration) -> Self
+pub fn eggfetch_core::retry::RetryPolicyBuilder::max_attempts(self, usize) -> Self
+pub fn eggfetch_core::retry::RetryPolicyBuilder::max_delay(self, core::time::Duration) -> Self
+pub fn eggfetch_core::retry::RetryPolicyBuilder::max_elapsed(self, core::time::Duration) -> Self
+pub fn eggfetch_core::retry::RetryPolicyBuilder::new() -> Self
+pub fn eggfetch_core::retry::RetryPolicyBuilder::respect_retry_after(self, bool) -> Self
+pub fn eggfetch_core::retry::RetryPolicyBuilder::retry_method(self, http::method::Method) -> Self
+pub fn eggfetch_core::retry::RetryPolicyBuilder::retry_status(self, u16) -> Self
+pub fn eggfetch_core::retry::RetryPolicyBuilder::retry_statuses(self, impl core::iter::traits::collect::IntoIterator<Item = u16>) -> Self
+impl core::default::Default for eggfetch_core::retry::RetryPolicyBuilder
+pub fn eggfetch_core::retry::RetryPolicyBuilder::default() -> Self
+pub struct eggfetch_core::retry::StatusPolicy
+impl eggfetch_core::retry::StatusPolicy
+pub fn eggfetch_core::retry::StatusPolicy::add_status(&mut self, u16)
+pub fn eggfetch_core::retry::StatusPolicy::default_empty() -> Self
+pub fn eggfetch_core::retry::StatusPolicy::is_retryable(&self, u16) -> bool
+pub fn eggfetch_core::retry::StatusPolicy::new(impl core::iter::traits::collect::IntoIterator<Item = u16>) -> Self
+pub fn eggfetch_core::retry::StatusPolicy::statuses(&self) -> &[u16]
+impl core::default::Default for eggfetch_core::retry::StatusPolicy
+pub fn eggfetch_core::retry::StatusPolicy::default() -> Self
+pub fn eggfetch_core::retry::should_retry(&eggfetch_core::retry::RetryPolicy, &http::method::Method, &eggfetch_core::body::RequestBody, core::option::Option<&eggfetch_core::error::Error>, core::option::Option<u16>) -> core::option::Option<eggfetch_core::retry::RetryCause>
+pub mod eggfetch_core::service
+pub struct eggfetch_core::service::NativeHttpService
+impl eggfetch_core::service::NativeHttpService
+pub fn eggfetch_core::service::NativeHttpService::new(eggfetch_core::client::Client) -> Self
+pub fn eggfetch_core::service::NativeHttpService::with_options(self, eggfetch_core::transport_hints::NativeRequestOptions) -> Self
+impl<B> tower_service::Service<http::request::Request<B>> for eggfetch_core::service::NativeHttpService where B: http_body::Body<Data = bytes::bytes::Bytes> + core::marker::Send + 'static, <B as http_body::Body>::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub type eggfetch_core::service::NativeHttpService::Error = eggfetch_core::error::Error
+pub type eggfetch_core::service::NativeHttpService::Future = core::pin::Pin<alloc::boxed::Box<(dyn core::future::future::Future<Output = core::result::Result<<eggfetch_core::service::NativeHttpService as tower_service::Service<http::request::Request<B>>>::Response, <eggfetch_core::service::NativeHttpService as tower_service::Service<http::request::Request<B>>>::Error>> + core::marker::Send)>>
+pub type eggfetch_core::service::NativeHttpService::Response = http::response::Response<eggfetch_core::body::NativeResponseBody>
+pub fn eggfetch_core::service::NativeHttpService::call(&mut self, http::request::Request<B>) -> Self::Future
+pub fn eggfetch_core::service::NativeHttpService::poll_ready(&mut self, &mut core::task::wake::Context<'_>) -> core::task::poll::Poll<core::result::Result<(), Self::Error>>
+pub mod eggfetch_core::timeout
+pub enum eggfetch_core::timeout::TimeoutPhase
+pub eggfetch_core::timeout::TimeoutPhase::Connect
+pub eggfetch_core::timeout::TimeoutPhase::Pool
+pub eggfetch_core::timeout::TimeoutPhase::ProxyConnect
+pub eggfetch_core::timeout::TimeoutPhase::ProxyTls
+pub eggfetch_core::timeout::TimeoutPhase::Read
+pub eggfetch_core::timeout::TimeoutPhase::Total
+pub eggfetch_core::timeout::TimeoutPhase::Write
+impl core::fmt::Display for eggfetch_core::timeout::TimeoutPhase
+pub fn eggfetch_core::timeout::TimeoutPhase::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct eggfetch_core::timeout::Timeout
+pub eggfetch_core::timeout::Timeout::connect: core::option::Option<core::time::Duration>
+pub eggfetch_core::timeout::Timeout::pool: core::option::Option<core::time::Duration>
+pub eggfetch_core::timeout::Timeout::read: core::option::Option<core::time::Duration>
+pub eggfetch_core::timeout::Timeout::total: core::option::Option<core::time::Duration>
+pub eggfetch_core::timeout::Timeout::write: core::option::Option<core::time::Duration>
+impl eggfetch_core::timeout::Timeout
+pub fn eggfetch_core::timeout::Timeout::builder() -> eggfetch_core::timeout::TimeoutBuilder
+pub fn eggfetch_core::timeout::Timeout::compat() -> Self
+pub fn eggfetch_core::timeout::Timeout::disabled() -> Self
+pub fn eggfetch_core::timeout::Timeout::from_secs(u64) -> Self
+pub fn eggfetch_core::timeout::Timeout::has_any(&self) -> bool
+pub fn eggfetch_core::timeout::Timeout::native() -> Self
+pub struct eggfetch_core::timeout::TimeoutBuilder
+impl eggfetch_core::timeout::TimeoutBuilder
+pub fn eggfetch_core::timeout::TimeoutBuilder::build(self) -> eggfetch_core::timeout::Timeout
+pub fn eggfetch_core::timeout::TimeoutBuilder::connect(self, core::time::Duration) -> Self
+pub fn eggfetch_core::timeout::TimeoutBuilder::pool(self, core::time::Duration) -> Self
+pub fn eggfetch_core::timeout::TimeoutBuilder::read(self, core::time::Duration) -> Self
+pub fn eggfetch_core::timeout::TimeoutBuilder::total(self, core::time::Duration) -> Self
+pub fn eggfetch_core::timeout::TimeoutBuilder::write(self, core::time::Duration) -> Self
+pub mod eggfetch_core::tls
+pub enum eggfetch_core::tls::ClientIdentity
+pub eggfetch_core::tls::ClientIdentity::Pem
+pub eggfetch_core::tls::ClientIdentity::Pem::cert_chain: alloc::vec::Vec<rustls_pki_types::CertificateDer<'static>>
+pub eggfetch_core::tls::ClientIdentity::Pem::key_label: alloc::string::String
+pub eggfetch_core::tls::ClientIdentity::Pem::private_key_der: alloc::vec::Vec<u8>
+impl core::fmt::Debug for eggfetch_core::tls::ClientIdentity
+pub fn eggfetch_core::tls::ClientIdentity::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub enum eggfetch_core::tls::TlsVersion
+pub eggfetch_core::tls::TlsVersion::Tls12
+pub eggfetch_core::tls::TlsVersion::Tls13
+pub enum eggfetch_core::tls::TrustStore
+pub eggfetch_core::tls::TrustStore::Custom(alloc::vec::Vec<rustls_pki_types::CertificateDer<'static>>)
+pub eggfetch_core::tls::TrustStore::NativeOnly
+pub eggfetch_core::tls::TrustStore::NativeWithWebPkiFallback
+pub eggfetch_core::tls::TrustStore::WebPkiOnly
+pub struct eggfetch_core::tls::TlsConfig
+impl eggfetch_core::tls::TlsConfig
+pub fn eggfetch_core::tls::TlsConfig::build_rustls_config(&self) -> eggfetch_core::error::Result<rustls::client::client_conn::ClientConfig>
+pub fn eggfetch_core::tls::TlsConfig::builder() -> eggfetch_core::tls::TlsConfigBuilder
+pub fn eggfetch_core::tls::TlsConfig::builder_with_defaults() -> eggfetch_core::tls::TlsConfigBuilder
+pub fn eggfetch_core::tls::TlsConfig::danger_accept_invalid_certs(self, bool) -> Self
+pub fn eggfetch_core::tls::TlsConfig::has_explicit_crypto_provider(&self) -> bool
+pub fn eggfetch_core::tls::TlsConfig::sni_enabled(&self) -> bool
+pub fn eggfetch_core::tls::TlsConfig::tls_connector(&self) -> eggfetch_core::error::Result<tokio_rustls::client::TlsConnector>
+pub fn eggfetch_core::tls::TlsConfig::verify_certificate(&self) -> bool
+pub fn eggfetch_core::tls::TlsConfig::verify_hostname(&self) -> bool
+impl core::default::Default for eggfetch_core::tls::TlsConfig
+pub fn eggfetch_core::tls::TlsConfig::default() -> Self
+impl core::fmt::Debug for eggfetch_core::tls::TlsConfig
+pub fn eggfetch_core::tls::TlsConfig::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct eggfetch_core::tls::TlsConfigBuilder
+impl eggfetch_core::tls::TlsConfigBuilder
+pub fn eggfetch_core::tls::TlsConfigBuilder::add_ca_certificate_path(self, impl core::convert::AsRef<std::path::Path>) -> eggfetch_core::error::Result<Self>
+pub fn eggfetch_core::tls::TlsConfigBuilder::additional_ca_certificate_der(self, alloc::vec::Vec<alloc::vec::Vec<u8>>) -> eggfetch_core::error::Result<Self>
+pub fn eggfetch_core::tls::TlsConfigBuilder::additional_ca_certificate_path(self, impl core::convert::AsRef<std::path::Path>) -> eggfetch_core::error::Result<Self>
+pub fn eggfetch_core::tls::TlsConfigBuilder::additional_ca_certificate_pem(self, &[u8]) -> eggfetch_core::error::Result<Self>
+pub fn eggfetch_core::tls::TlsConfigBuilder::build(self) -> eggfetch_core::tls::TlsConfig
+pub fn eggfetch_core::tls::TlsConfigBuilder::ca_certificate_der(self, alloc::vec::Vec<alloc::vec::Vec<u8>>) -> eggfetch_core::error::Result<Self>
+pub fn eggfetch_core::tls::TlsConfigBuilder::ca_certificate_path(self, impl core::convert::AsRef<std::path::Path>) -> eggfetch_core::error::Result<Self>
+pub fn eggfetch_core::tls::TlsConfigBuilder::ca_certificate_pem(self, &[u8]) -> eggfetch_core::error::Result<Self>
+pub fn eggfetch_core::tls::TlsConfigBuilder::client_cert_path(self, impl core::convert::AsRef<std::path::Path>, impl core::convert::AsRef<std::path::Path>) -> eggfetch_core::error::Result<Self>
+pub fn eggfetch_core::tls::TlsConfigBuilder::client_identity(self, eggfetch_core::tls::ClientIdentity) -> Self
+pub fn eggfetch_core::tls::TlsConfigBuilder::crypto_provider(self, alloc::sync::Arc<rustls::crypto::CryptoProvider>) -> Self
+pub fn eggfetch_core::tls::TlsConfigBuilder::danger_accept_invalid_certs(self, bool) -> Self
+pub fn eggfetch_core::tls::TlsConfigBuilder::max_tls_version(self, eggfetch_core::tls::TlsVersion) -> Self
+pub fn eggfetch_core::tls::TlsConfigBuilder::min_tls_version(self, eggfetch_core::tls::TlsVersion) -> Self
+pub fn eggfetch_core::tls::TlsConfigBuilder::new() -> Self
+pub fn eggfetch_core::tls::TlsConfigBuilder::sni(self, bool) -> Self
+pub fn eggfetch_core::tls::TlsConfigBuilder::trust_store(self, eggfetch_core::tls::TrustStore) -> Self
+pub fn eggfetch_core::tls::TlsConfigBuilder::verify_hostname(self, bool) -> Self
+impl core::default::Default for eggfetch_core::tls::TlsConfigBuilder
+pub fn eggfetch_core::tls::TlsConfigBuilder::default() -> Self
+pub mod eggfetch_core::trace
+pub enum eggfetch_core::trace::EventValue
+pub eggfetch_core::trace::EventValue::String(alloc::string::String)
+pub eggfetch_core::trace::EventValue::U16(u16)
+pub eggfetch_core::trace::EventValue::U64(u64)
+pub enum eggfetch_core::trace::OnEventAction
+pub eggfetch_core::trace::OnEventAction::Abort
+pub eggfetch_core::trace::OnEventAction::Continue
+pub enum eggfetch_core::trace::TraceEvent
+pub eggfetch_core::trace::TraceEvent::Close
+pub eggfetch_core::trace::TraceEvent::Close::phase: eggfetch_core::trace::TracePhase
+pub eggfetch_core::trace::TraceEvent::ConnectTcp
+pub eggfetch_core::trace::TraceEvent::ConnectTcp::host: alloc::string::String
+pub eggfetch_core::trace::TraceEvent::ConnectTcp::phase: eggfetch_core::trace::TracePhase
+pub eggfetch_core::trace::TraceEvent::ConnectTcp::port: u16
+pub eggfetch_core::trace::TraceEvent::ConnectUnixSocket
+pub eggfetch_core::trace::TraceEvent::ConnectUnixSocket::path: alloc::string::String
+pub eggfetch_core::trace::TraceEvent::ConnectUnixSocket::phase: eggfetch_core::trace::TracePhase
+pub eggfetch_core::trace::TraceEvent::ReceiveResponseBody
+pub eggfetch_core::trace::TraceEvent::ReceiveResponseBody::phase: eggfetch_core::trace::TracePhase
+pub eggfetch_core::trace::TraceEvent::ReceiveResponseHeaders
+pub eggfetch_core::trace::TraceEvent::ReceiveResponseHeaders::phase: eggfetch_core::trace::TracePhase
+pub eggfetch_core::trace::TraceEvent::ReceiveResponseHeaders::status: u16
+pub eggfetch_core::trace::TraceEvent::ResponseClosed
+pub eggfetch_core::trace::TraceEvent::ResponseClosed::phase: eggfetch_core::trace::TracePhase
+pub eggfetch_core::trace::TraceEvent::Retry
+pub eggfetch_core::trace::TraceEvent::Retry::delay_ms: u64
+pub eggfetch_core::trace::TraceEvent::Retry::phase: eggfetch_core::trace::TracePhase
+pub eggfetch_core::trace::TraceEvent::SendRequestBody
+pub eggfetch_core::trace::TraceEvent::SendRequestBody::phase: eggfetch_core::trace::TracePhase
+pub eggfetch_core::trace::TraceEvent::SendRequestHeaders
+pub eggfetch_core::trace::TraceEvent::SendRequestHeaders::method: alloc::string::String
+pub eggfetch_core::trace::TraceEvent::SendRequestHeaders::phase: eggfetch_core::trace::TracePhase
+pub eggfetch_core::trace::TraceEvent::SendRequestHeaders::target: alloc::string::String
+pub eggfetch_core::trace::TraceEvent::StartTls
+pub eggfetch_core::trace::TraceEvent::StartTls::phase: eggfetch_core::trace::TracePhase
+pub eggfetch_core::trace::TraceEvent::StartTls::server_hostname: alloc::string::String
+pub enum eggfetch_core::trace::TracePhase
+pub eggfetch_core::trace::TracePhase::Complete
+pub eggfetch_core::trace::TracePhase::Failed
+pub eggfetch_core::trace::TracePhase::Started
+impl core::fmt::Display for eggfetch_core::trace::TracePhase
+pub fn eggfetch_core::trace::TracePhase::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct eggfetch_core::trace::CollectingTraceObserver
+impl eggfetch_core::trace::CollectingTraceObserver
+pub fn eggfetch_core::trace::CollectingTraceObserver::drain(&self) -> alloc::vec::Vec<eggfetch_core::trace::TraceEvent>
+pub fn eggfetch_core::trace::CollectingTraceObserver::is_empty(&self) -> bool
+pub fn eggfetch_core::trace::CollectingTraceObserver::len(&self) -> usize
+pub fn eggfetch_core::trace::CollectingTraceObserver::new() -> Self
+impl core::default::Default for eggfetch_core::trace::CollectingTraceObserver
+pub fn eggfetch_core::trace::CollectingTraceObserver::default() -> Self
+impl eggfetch_core::trace::TraceObserver for eggfetch_core::trace::CollectingTraceObserver
+pub fn eggfetch_core::trace::CollectingTraceObserver::on_event(&self, &eggfetch_core::trace::TraceEvent) -> eggfetch_core::trace::OnEventAction
+pub struct eggfetch_core::trace::NoopTraceObserver
+impl eggfetch_core::trace::TraceObserver for eggfetch_core::trace::NoopTraceObserver
+pub fn eggfetch_core::trace::NoopTraceObserver::on_event(&self, &eggfetch_core::trace::TraceEvent) -> eggfetch_core::trace::OnEventAction
+pub trait eggfetch_core::trace::TraceObserver: core::marker::Send + core::marker::Sync + core::fmt::Debug
+pub fn eggfetch_core::trace::TraceObserver::on_event(&self, &eggfetch_core::trace::TraceEvent) -> eggfetch_core::trace::OnEventAction
+impl eggfetch_core::trace::TraceObserver for eggfetch_core::trace::CollectingTraceObserver
+pub fn eggfetch_core::trace::CollectingTraceObserver::on_event(&self, &eggfetch_core::trace::TraceEvent) -> eggfetch_core::trace::OnEventAction
+impl eggfetch_core::trace::TraceObserver for eggfetch_core::trace::NoopTraceObserver
+pub fn eggfetch_core::trace::NoopTraceObserver::on_event(&self, &eggfetch_core::trace::TraceEvent) -> eggfetch_core::trace::OnEventAction
+pub fn eggfetch_core::trace::event_to_httpcore_name(&eggfetch_core::trace::TraceEvent) -> (&'static str, alloc::string::String)
+pub fn eggfetch_core::trace::event_to_info(&eggfetch_core::trace::TraceEvent) -> std::collections::hash::map::HashMap<alloc::string::String, eggfetch_core::trace::EventValue>
+pub mod eggfetch_core::transport
+pub mod eggfetch_core::transport::alt_svc
+pub enum eggfetch_core::transport::alt_svc::AltSvcLearnOutcome
+pub eggfetch_core::transport::alt_svc::AltSvcLearnOutcome::Absent
+pub eggfetch_core::transport::alt_svc::AltSvcLearnOutcome::Cleared
+pub eggfetch_core::transport::alt_svc::AltSvcLearnOutcome::Learned
+pub eggfetch_core::transport::alt_svc::AltSvcLearnOutcome::Rejected
+pub enum eggfetch_core::transport::alt_svc::H3FailureClass
+pub eggfetch_core::transport::alt_svc::H3FailureClass::Closed
+pub eggfetch_core::transport::alt_svc::H3FailureClass::Connectivity
+pub eggfetch_core::transport::alt_svc::H3FailureClass::Other
+pub eggfetch_core::transport::alt_svc::H3FailureClass::Protocol
+impl eggfetch_core::transport::alt_svc::H3FailureClass
+pub fn eggfetch_core::transport::alt_svc::H3FailureClass::from_error(&eggfetch_core::error::Error) -> Self
+pub struct eggfetch_core::transport::alt_svc::AltSvcCache
+impl eggfetch_core::transport::alt_svc::AltSvcCache
+pub fn eggfetch_core::transport::alt_svc::AltSvcCache::clear(&self, &eggfetch_core::transport::alt_svc::AltSvcOrigin) -> bool
+pub fn eggfetch_core::transport::alt_svc::AltSvcCache::contains_origin(&self, &eggfetch_core::transport::alt_svc::AltSvcOrigin) -> bool
+pub fn eggfetch_core::transport::alt_svc::AltSvcCache::get_fresh(&self, &eggfetch_core::transport::alt_svc::AltSvcOrigin, std::time::Instant) -> core::option::Option<eggfetch_core::transport::alt_svc::AltSvcEntry>
+pub fn eggfetch_core::transport::alt_svc::AltSvcCache::get_fresh_counted(&self, &eggfetch_core::transport::alt_svc::AltSvcOrigin, std::time::Instant) -> (core::option::Option<eggfetch_core::transport::alt_svc::AltSvcEntry>, bool)
+pub fn eggfetch_core::transport::alt_svc::AltSvcCache::insert_for_test(&self, eggfetch_core::transport::alt_svc::AltSvcOrigin, eggfetch_core::transport::alt_svc::AltSvcEntry)
+pub fn eggfetch_core::transport::alt_svc::AltSvcCache::is_empty(&self) -> bool
+pub fn eggfetch_core::transport::alt_svc::AltSvcCache::learn(&self, &eggfetch_core::transport::alt_svc::AltSvcOrigin, &[alloc::string::String], std::time::Instant) -> eggfetch_core::transport::alt_svc::AltSvcLearnOutcome
+pub fn eggfetch_core::transport::alt_svc::AltSvcCache::learn_counted(&self, &eggfetch_core::transport::alt_svc::AltSvcOrigin, &[alloc::string::String], std::time::Instant) -> (eggfetch_core::transport::alt_svc::AltSvcLearnOutcome, bool)
+pub fn eggfetch_core::transport::alt_svc::AltSvcCache::len(&self) -> usize
+pub fn eggfetch_core::transport::alt_svc::AltSvcCache::new() -> Self
+impl core::default::Default for eggfetch_core::transport::alt_svc::AltSvcCache
+pub fn eggfetch_core::transport::alt_svc::AltSvcCache::default() -> Self
+impl core::fmt::Debug for eggfetch_core::transport::alt_svc::AltSvcCache
+pub fn eggfetch_core::transport::alt_svc::AltSvcCache::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct eggfetch_core::transport::alt_svc::AltSvcEntry
+pub eggfetch_core::transport::alt_svc::AltSvcEntry::alt_host: alloc::string::String
+pub eggfetch_core::transport::alt_svc::AltSvcEntry::alt_port: u16
+pub eggfetch_core::transport::alt_svc::AltSvcEntry::expires_at: std::time::Instant
+pub eggfetch_core::transport::alt_svc::AltSvcEntry::generation: u64
+impl eggfetch_core::transport::alt_svc::AltSvcEntry
+pub fn eggfetch_core::transport::alt_svc::AltSvcEntry::is_expired(&self, std::time::Instant) -> bool
+pub struct eggfetch_core::transport::alt_svc::AltSvcLearnContext
+pub eggfetch_core::transport::alt_svc::AltSvcLearnContext::is_https: bool
+pub eggfetch_core::transport::alt_svc::AltSvcLearnContext::origin_matches_hop: bool
+pub eggfetch_core::transport::alt_svc::AltSvcLearnContext::tls_authenticated: bool
+pub eggfetch_core::transport::alt_svc::AltSvcLearnContext::via_proxy: bool
+impl eggfetch_core::transport::alt_svc::AltSvcLearnContext
+pub fn eggfetch_core::transport::alt_svc::AltSvcLearnContext::trustworthy(self) -> bool
+pub struct eggfetch_core::transport::alt_svc::AltSvcOrigin
+impl eggfetch_core::transport::alt_svc::AltSvcOrigin
+pub fn eggfetch_core::transport::alt_svc::AltSvcOrigin::cache_key(&self) -> alloc::string::String
+pub fn eggfetch_core::transport::alt_svc::AltSvcOrigin::from_url(&url::Url) -> core::option::Option<Self>
+pub fn eggfetch_core::transport::alt_svc::AltSvcOrigin::host(&self) -> &str
+pub fn eggfetch_core::transport::alt_svc::AltSvcOrigin::new(&str, &str, u16) -> core::option::Option<Self>
+pub fn eggfetch_core::transport::alt_svc::AltSvcOrigin::port(&self) -> u16
+pub fn eggfetch_core::transport::alt_svc::AltSvcOrigin::scheme(&self) -> &str
+pub struct eggfetch_core::transport::alt_svc::AltSvcState
+impl eggfetch_core::transport::alt_svc::AltSvcState
+pub fn eggfetch_core::transport::alt_svc::AltSvcState::cache(&self) -> &eggfetch_core::transport::alt_svc::AltSvcCache
+pub fn eggfetch_core::transport::alt_svc::AltSvcState::new() -> Self
+pub fn eggfetch_core::transport::alt_svc::AltSvcState::suppressor(&self) -> &eggfetch_core::transport::alt_svc::BrokenRouteSuppressor
+pub struct eggfetch_core::transport::alt_svc::BrokenRouteSuppressor
+impl eggfetch_core::transport::alt_svc::BrokenRouteSuppressor
+pub fn eggfetch_core::transport::alt_svc::BrokenRouteSuppressor::is_empty(&self) -> bool
+pub fn eggfetch_core::transport::alt_svc::BrokenRouteSuppressor::is_suppressed(&self, &eggfetch_core::transport::alt_svc::AltSvcOrigin, u64, std::time::Instant) -> bool
+pub fn eggfetch_core::transport::alt_svc::BrokenRouteSuppressor::len(&self) -> usize
+pub fn eggfetch_core::transport::alt_svc::BrokenRouteSuppressor::new() -> Self
+pub fn eggfetch_core::transport::alt_svc::BrokenRouteSuppressor::note_new_advertisement(&self, &eggfetch_core::transport::alt_svc::AltSvcOrigin, u64)
+pub fn eggfetch_core::transport::alt_svc::BrokenRouteSuppressor::record_failure(&self, &eggfetch_core::transport::alt_svc::AltSvcOrigin, u64, std::time::Instant, eggfetch_core::transport::alt_svc::H3FailureClass)
+pub fn eggfetch_core::transport::alt_svc::BrokenRouteSuppressor::record_success(&self, &eggfetch_core::transport::alt_svc::AltSvcOrigin)
+impl core::default::Default for eggfetch_core::transport::alt_svc::BrokenRouteSuppressor
+pub fn eggfetch_core::transport::alt_svc::BrokenRouteSuppressor::default() -> Self
+impl core::fmt::Debug for eggfetch_core::transport::alt_svc::BrokenRouteSuppressor
+pub fn eggfetch_core::transport::alt_svc::BrokenRouteSuppressor::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub const eggfetch_core::transport::alt_svc::ALTSVC_CACHE_MAX_ENTRIES: usize
+pub const eggfetch_core::transport::alt_svc::ALTSVC_DEFAULT_MA_SECS: u64
+pub const eggfetch_core::transport::alt_svc::ALTSVC_MAX_ALTERNATIVES: usize
+pub const eggfetch_core::transport::alt_svc::ALTSVC_MAX_HEADER_BYTES: usize
+pub const eggfetch_core::transport::alt_svc::SUPPRESSION_BASE: core::time::Duration
+pub const eggfetch_core::transport::alt_svc::SUPPRESSION_MAX: core::time::Duration
+pub const eggfetch_core::transport::alt_svc::SUPPRESSION_MAX_ENTRIES: usize
+pub mod eggfetch_core::transport::dialer
+pub enum eggfetch_core::transport::dialer::DialErrorKind
+pub eggfetch_core::transport::dialer::DialErrorKind::Authentication
+pub eggfetch_core::transport::dialer::DialErrorKind::Connection
+pub eggfetch_core::transport::dialer::DialErrorKind::Other
+pub eggfetch_core::transport::dialer::DialErrorKind::Rejected
+pub eggfetch_core::transport::dialer::DialErrorKind::Timeout
+impl core::fmt::Display for eggfetch_core::transport::dialer::DialErrorKind
+pub fn eggfetch_core::transport::dialer::DialErrorKind::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct eggfetch_core::transport::dialer::DialError
+impl eggfetch_core::transport::dialer::DialError
+pub const fn eggfetch_core::transport::dialer::DialError::kind(&self) -> eggfetch_core::transport::dialer::DialErrorKind
+pub fn eggfetch_core::transport::dialer::DialError::message(&self) -> &str
+pub fn eggfetch_core::transport::dialer::DialError::new(eggfetch_core::transport::dialer::DialErrorKind, impl core::convert::Into<alloc::string::String>) -> Self
+pub fn eggfetch_core::transport::dialer::DialError::with_source<E>(eggfetch_core::transport::dialer::DialErrorKind, impl core::convert::Into<alloc::string::String>, E) -> Self where E: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+impl core::clone::Clone for eggfetch_core::transport::dialer::DialError
+pub fn eggfetch_core::transport::dialer::DialError::clone(&self) -> Self
+impl core::error::Error for eggfetch_core::transport::dialer::DialError
+pub fn eggfetch_core::transport::dialer::DialError::source(&self) -> core::option::Option<&(dyn core::error::Error + 'static)>
+impl core::fmt::Debug for eggfetch_core::transport::dialer::DialError
+pub fn eggfetch_core::transport::dialer::DialError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for eggfetch_core::transport::dialer::DialError
+pub fn eggfetch_core::transport::dialer::DialError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct eggfetch_core::transport::dialer::DialTarget
+impl eggfetch_core::transport::dialer::DialTarget
+pub fn eggfetch_core::transport::dialer::DialTarget::host(&self) -> &str
+pub fn eggfetch_core::transport::dialer::DialTarget::new(impl core::convert::Into<alloc::string::String>, u16) -> Self
+pub const fn eggfetch_core::transport::dialer::DialTarget::port(&self) -> u16
+impl core::fmt::Debug for eggfetch_core::transport::dialer::DialTarget
+pub fn eggfetch_core::transport::dialer::DialTarget::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub trait eggfetch_core::transport::dialer::DialStreamTrait: tokio::io::async_read::AsyncRead + tokio::io::async_write::AsyncWrite + core::marker::Send + core::marker::Unpin
+impl<T> eggfetch_core::transport::dialer::DialStreamTrait for T where T: tokio::io::async_read::AsyncRead + tokio::io::async_write::AsyncWrite + core::marker::Send + core::marker::Unpin
+pub trait eggfetch_core::transport::dialer::Dialer: core::marker::Send + core::marker::Sync + 'static
+pub fn eggfetch_core::transport::dialer::Dialer::dial(&self, eggfetch_core::transport::dialer::DialTarget) -> eggfetch_core::transport::dialer::DialFuture<'_>
+impl<T> eggfetch_core::transport::dialer::Dialer for alloc::sync::Arc<T> where T: eggfetch_core::transport::dialer::Dialer + ?core::marker::Sized
+pub fn alloc::sync::Arc<T>::dial(&self, eggfetch_core::transport::dialer::DialTarget) -> eggfetch_core::transport::dialer::DialFuture<'_>
+pub type eggfetch_core::transport::dialer::DialFuture<'a> = core::pin::Pin<alloc::boxed::Box<(dyn core::future::future::Future<Output = core::result::Result<eggfetch_core::transport::dialer::DialStream, eggfetch_core::transport::dialer::DialError>> + core::marker::Send + 'a)>>
+pub type eggfetch_core::transport::dialer::DialStream = alloc::boxed::Box<dyn eggfetch_core::transport::dialer::DialStreamTrait>
+pub mod eggfetch_core::transport::direct_connector
+pub enum eggfetch_core::transport::direct_connector::SocketOptionKind
+pub eggfetch_core::transport::direct_connector::SocketOptionKind::KeepAlive
+pub eggfetch_core::transport::direct_connector::SocketOptionKind::ReceiveBuffer
+pub eggfetch_core::transport::direct_connector::SocketOptionKind::SendBuffer
+pub eggfetch_core::transport::direct_connector::SocketOptionKind::TcpNoDelay
+pub struct eggfetch_core::transport::direct_connector::DirectConnectorConfig
+pub struct eggfetch_core::transport::direct_connector::SocketOption
+pub eggfetch_core::transport::direct_connector::SocketOption::kind: core::option::Option<eggfetch_core::transport::direct_connector::SocketOptionKind>
+pub eggfetch_core::transport::direct_connector::SocketOption::level: i32
+pub eggfetch_core::transport::direct_connector::SocketOption::option: i32
+pub eggfetch_core::transport::direct_connector::SocketOption::value: alloc::vec::Vec<u8>
+pub mod eggfetch_core::transport::lifecycle
+pub enum eggfetch_core::transport::lifecycle::TransportIoDirection
+pub eggfetch_core::transport::lifecycle::TransportIoDirection::Read
+pub eggfetch_core::transport::lifecycle::TransportIoDirection::Write
+pub struct eggfetch_core::transport::lifecycle::PhysicalConnectionPolicy
+pub eggfetch_core::transport::lifecycle::PhysicalConnectionPolicy::admission_timeout: core::option::Option<core::time::Duration>
+pub eggfetch_core::transport::lifecycle::PhysicalConnectionPolicy::max_live: core::option::Option<usize>
+pub struct eggfetch_core::transport::lifecycle::TransportIoTimeout
+pub eggfetch_core::transport::lifecycle::TransportIoTimeout::read: core::option::Option<core::time::Duration>
+pub eggfetch_core::transport::lifecycle::TransportIoTimeout::write: core::option::Option<core::time::Duration>
+pub mod eggfetch_core::transport::metrics
+pub enum eggfetch_core::transport::metrics::H3CloseKind
+pub eggfetch_core::transport::metrics::H3CloseKind::ApplicationClosed
+pub eggfetch_core::transport::metrics::H3CloseKind::CidsExhausted
+pub eggfetch_core::transport::metrics::H3CloseKind::ConnectionClosed
+pub eggfetch_core::transport::metrics::H3CloseKind::LocallyClosed
+pub eggfetch_core::transport::metrics::H3CloseKind::Reset
+pub eggfetch_core::transport::metrics::H3CloseKind::TimedOut
+pub eggfetch_core::transport::metrics::H3CloseKind::TransportError
+pub eggfetch_core::transport::metrics::H3CloseKind::VersionMismatch
+pub enum eggfetch_core::transport::metrics::H3RouteKind
+pub eggfetch_core::transport::metrics::H3RouteKind::AltSvc
+pub eggfetch_core::transport::metrics::H3RouteKind::Explicit
+pub struct eggfetch_core::transport::metrics::H3CloseSummary
+pub eggfetch_core::transport::metrics::H3CloseSummary::code: core::option::Option<u64>
+pub eggfetch_core::transport::metrics::H3CloseSummary::graceful: bool
+pub eggfetch_core::transport::metrics::H3CloseSummary::kind: eggfetch_core::transport::metrics::H3CloseKind
+pub struct eggfetch_core::transport::metrics::H3ConnectionDiagnostic
+pub eggfetch_core::transport::metrics::H3ConnectionDiagnostic::alt_svc_generation: core::option::Option<u64>
+pub eggfetch_core::transport::metrics::H3ConnectionDiagnostic::close: core::option::Option<eggfetch_core::transport::metrics::H3CloseSummary>
+pub eggfetch_core::transport::metrics::H3ConnectionDiagnostic::local_ip: core::option::Option<core::net::ip_addr::IpAddr>
+pub eggfetch_core::transport::metrics::H3ConnectionDiagnostic::lost_bytes: u64
+pub eggfetch_core::transport::metrics::H3ConnectionDiagnostic::lost_packets: u64
+pub eggfetch_core::transport::metrics::H3ConnectionDiagnostic::open_streams: core::option::Option<usize>
+pub eggfetch_core::transport::metrics::H3ConnectionDiagnostic::received_bytes: u64
+pub eggfetch_core::transport::metrics::H3ConnectionDiagnostic::received_datagrams: u64
+pub eggfetch_core::transport::metrics::H3ConnectionDiagnostic::remote_address: core::net::socket_addr::SocketAddr
+pub eggfetch_core::transport::metrics::H3ConnectionDiagnostic::route: eggfetch_core::transport::metrics::H3RouteKind
+pub eggfetch_core::transport::metrics::H3ConnectionDiagnostic::rtt: core::time::Duration
+pub eggfetch_core::transport::metrics::H3ConnectionDiagnostic::sent_bytes: u64
+pub eggfetch_core::transport::metrics::H3ConnectionDiagnostic::sent_packets: u64
+pub eggfetch_core::transport::metrics::H3ConnectionDiagnostic::stable_id: usize
+pub struct eggfetch_core::transport::metrics::TransportMetrics
+pub eggfetch_core::transport::metrics::TransportMetrics::altsvc_cleared: core::sync::atomic::AtomicUsize
+pub eggfetch_core::transport::metrics::TransportMetrics::altsvc_expired: core::sync::atomic::AtomicUsize
+pub eggfetch_core::transport::metrics::TransportMetrics::altsvc_learned: core::sync::atomic::AtomicUsize
+pub eggfetch_core::transport::metrics::TransportMetrics::altsvc_rejected: core::sync::atomic::AtomicUsize
+pub eggfetch_core::transport::metrics::TransportMetrics::direct_connector_attempts: core::sync::atomic::AtomicUsize
+pub eggfetch_core::transport::metrics::TransportMetrics::direct_connector_failures: core::sync::atomic::AtomicUsize
+pub eggfetch_core::transport::metrics::TransportMetrics::direct_connector_successes: core::sync::atomic::AtomicUsize
+pub eggfetch_core::transport::metrics::TransportMetrics::direct_dns_attempts: core::sync::atomic::AtomicUsize
+pub eggfetch_core::transport::metrics::TransportMetrics::direct_dns_failures: core::sync::atomic::AtomicUsize
+pub eggfetch_core::transport::metrics::TransportMetrics::direct_tls_attempts: core::sync::atomic::AtomicUsize
+pub eggfetch_core::transport::metrics::TransportMetrics::direct_tls_failures: core::sync::atomic::AtomicUsize
+pub eggfetch_core::transport::metrics::TransportMetrics::h3_cache_evictions: core::sync::atomic::AtomicUsize
+pub eggfetch_core::transport::metrics::TransportMetrics::h3_closed: core::sync::atomic::AtomicUsize
+pub eggfetch_core::transport::metrics::TransportMetrics::h3_connections_created: core::sync::atomic::AtomicUsize
+pub eggfetch_core::transport::metrics::TransportMetrics::h3_drain_observed: core::sync::atomic::AtomicUsize
+pub eggfetch_core::transport::metrics::TransportMetrics::h3_fallback_selected: core::sync::atomic::AtomicUsize
+pub eggfetch_core::transport::metrics::TransportMetrics::h3_reconnected: core::sync::atomic::AtomicUsize
+pub eggfetch_core::transport::metrics::TransportMetrics::h3_route_attempted: core::sync::atomic::AtomicUsize
+pub eggfetch_core::transport::metrics::TransportMetrics::h3_route_suppressed: core::sync::atomic::AtomicUsize
+pub eggfetch_core::transport::metrics::TransportMetrics::physical_admission_timeouts: core::sync::atomic::AtomicUsize
+pub eggfetch_core::transport::metrics::TransportMetrics::physical_admission_waits: core::sync::atomic::AtomicUsize
+pub eggfetch_core::transport::metrics::TransportMetrics::physical_connections_high_water: core::sync::atomic::AtomicUsize
+pub eggfetch_core::transport::metrics::TransportMetrics::physical_connections_live: core::sync::atomic::AtomicUsize
+pub eggfetch_core::transport::metrics::TransportMetrics::proxy_connector_attempts: core::sync::atomic::AtomicUsize
+pub eggfetch_core::transport::metrics::TransportMetrics::proxy_connector_failures: core::sync::atomic::AtomicUsize
+pub eggfetch_core::transport::metrics::TransportMetrics::proxy_tls_attempts: core::sync::atomic::AtomicUsize
+pub eggfetch_core::transport::metrics::TransportMetrics::proxy_tls_failures: core::sync::atomic::AtomicUsize
+pub eggfetch_core::transport::metrics::TransportMetrics::transport_read_inactivity_timeouts: core::sync::atomic::AtomicUsize
+pub eggfetch_core::transport::metrics::TransportMetrics::transport_write_inactivity_timeouts: core::sync::atomic::AtomicUsize
+pub eggfetch_core::transport::metrics::TransportMetrics::uds_connector_attempts: core::sync::atomic::AtomicUsize
+pub eggfetch_core::transport::metrics::TransportMetrics::uds_connector_failures: core::sync::atomic::AtomicUsize
+pub eggfetch_core::transport::metrics::TransportMetrics::upgraded_connections_created: core::sync::atomic::AtomicUsize
+impl eggfetch_core::transport::metrics::TransportMetrics
+pub fn eggfetch_core::transport::metrics::TransportMetrics::h3_diagnostics(&self) -> alloc::vec::Vec<eggfetch_core::transport::metrics::H3ConnectionDiagnostic>
+pub fn eggfetch_core::transport::metrics::TransportMetrics::new() -> Self
+pub fn eggfetch_core::transport::metrics::TransportMetrics::record_altsvc_cleared(&self)
+pub fn eggfetch_core::transport::metrics::TransportMetrics::record_altsvc_expired(&self)
+pub fn eggfetch_core::transport::metrics::TransportMetrics::record_altsvc_learned(&self)
+pub fn eggfetch_core::transport::metrics::TransportMetrics::record_altsvc_rejected(&self)
+pub fn eggfetch_core::transport::metrics::TransportMetrics::record_direct_attempt(&self)
+pub fn eggfetch_core::transport::metrics::TransportMetrics::record_direct_dns_attempt(&self)
+pub fn eggfetch_core::transport::metrics::TransportMetrics::record_direct_dns_failure(&self)
+pub fn eggfetch_core::transport::metrics::TransportMetrics::record_direct_failure(&self)
+pub fn eggfetch_core::transport::metrics::TransportMetrics::record_direct_success(&self)
+pub fn eggfetch_core::transport::metrics::TransportMetrics::record_direct_tls_attempt(&self)
+pub fn eggfetch_core::transport::metrics::TransportMetrics::record_direct_tls_failure(&self)
+pub fn eggfetch_core::transport::metrics::TransportMetrics::record_h3_attempted(&self)
+pub fn eggfetch_core::transport::metrics::TransportMetrics::record_h3_closed(&self)
+pub fn eggfetch_core::transport::metrics::TransportMetrics::record_h3_created(&self)
+pub fn eggfetch_core::transport::metrics::TransportMetrics::record_h3_drain(&self)
+pub fn eggfetch_core::transport::metrics::TransportMetrics::record_h3_eviction(&self)
+pub fn eggfetch_core::transport::metrics::TransportMetrics::record_h3_fallback(&self)
+pub fn eggfetch_core::transport::metrics::TransportMetrics::record_h3_reconnected(&self)
+pub fn eggfetch_core::transport::metrics::TransportMetrics::record_h3_suppressed(&self)
+pub fn eggfetch_core::transport::metrics::TransportMetrics::record_proxy_attempt(&self)
+pub fn eggfetch_core::transport::metrics::TransportMetrics::record_proxy_failure(&self)
+pub fn eggfetch_core::transport::metrics::TransportMetrics::record_proxy_tls_attempt(&self)
+pub fn eggfetch_core::transport::metrics::TransportMetrics::record_proxy_tls_failure(&self)
+pub fn eggfetch_core::transport::metrics::TransportMetrics::record_uds_attempt(&self)
+pub fn eggfetch_core::transport::metrics::TransportMetrics::record_uds_failure(&self)
+pub fn eggfetch_core::transport::metrics::TransportMetrics::record_upgraded(&self)
+pub fn eggfetch_core::transport::metrics::TransportMetrics::snapshot(&self) -> eggfetch_core::transport::metrics::TransportSnapshot
+pub struct eggfetch_core::transport::metrics::TransportSnapshot
+pub eggfetch_core::transport::metrics::TransportSnapshot::altsvc_cleared: usize
+pub eggfetch_core::transport::metrics::TransportSnapshot::altsvc_expired: usize
+pub eggfetch_core::transport::metrics::TransportSnapshot::altsvc_learned: usize
+pub eggfetch_core::transport::metrics::TransportSnapshot::altsvc_rejected: usize
+pub eggfetch_core::transport::metrics::TransportSnapshot::direct_connector_attempts: usize
+pub eggfetch_core::transport::metrics::TransportSnapshot::direct_connector_failures: usize
+pub eggfetch_core::transport::metrics::TransportSnapshot::direct_connector_successes: usize
+pub eggfetch_core::transport::metrics::TransportSnapshot::direct_dns_attempts: usize
+pub eggfetch_core::transport::metrics::TransportSnapshot::direct_dns_failures: usize
+pub eggfetch_core::transport::metrics::TransportSnapshot::direct_tls_attempts: usize
+pub eggfetch_core::transport::metrics::TransportSnapshot::direct_tls_failures: usize
+pub eggfetch_core::transport::metrics::TransportSnapshot::h3_cache_evictions: usize
+pub eggfetch_core::transport::metrics::TransportSnapshot::h3_closed: usize
+pub eggfetch_core::transport::metrics::TransportSnapshot::h3_connections_created: usize
+pub eggfetch_core::transport::metrics::TransportSnapshot::h3_drain_observed: usize
+pub eggfetch_core::transport::metrics::TransportSnapshot::h3_fallback_selected: usize
+pub eggfetch_core::transport::metrics::TransportSnapshot::h3_reconnected: usize
+pub eggfetch_core::transport::metrics::TransportSnapshot::h3_route_attempted: usize
+pub eggfetch_core::transport::metrics::TransportSnapshot::h3_route_suppressed: usize
+pub eggfetch_core::transport::metrics::TransportSnapshot::physical_admission_timeouts: usize
+pub eggfetch_core::transport::metrics::TransportSnapshot::physical_admission_waits: usize
+pub eggfetch_core::transport::metrics::TransportSnapshot::physical_connections_high_water: usize
+pub eggfetch_core::transport::metrics::TransportSnapshot::physical_connections_live: usize
+pub eggfetch_core::transport::metrics::TransportSnapshot::proxy_connector_attempts: usize
+pub eggfetch_core::transport::metrics::TransportSnapshot::proxy_connector_failures: usize
+pub eggfetch_core::transport::metrics::TransportSnapshot::proxy_tls_attempts: usize
+pub eggfetch_core::transport::metrics::TransportSnapshot::proxy_tls_failures: usize
+pub eggfetch_core::transport::metrics::TransportSnapshot::transport_read_inactivity_timeouts: usize
+pub eggfetch_core::transport::metrics::TransportSnapshot::transport_write_inactivity_timeouts: usize
+pub eggfetch_core::transport::metrics::TransportSnapshot::uds_connector_attempts: usize
+pub eggfetch_core::transport::metrics::TransportSnapshot::uds_connector_failures: usize
+pub eggfetch_core::transport::metrics::TransportSnapshot::upgraded_connections_created: usize
+pub mod eggfetch_core::transport_hints
+pub struct eggfetch_core::transport_hints::NativeRequestOptions
+pub eggfetch_core::transport_hints::NativeRequestOptions::timeout: core::option::Option<eggfetch_core::timeout::Timeout>
+pub eggfetch_core::transport_hints::NativeRequestOptions::transport_hints: eggfetch_core::transport_hints::TransportHints
+impl eggfetch_core::transport_hints::NativeRequestOptions
+pub fn eggfetch_core::transport_hints::NativeRequestOptions::timeout(self, eggfetch_core::timeout::Timeout) -> Self
+pub fn eggfetch_core::transport_hints::NativeRequestOptions::transport_hints(self, eggfetch_core::transport_hints::TransportHints) -> Self
+impl core::fmt::Debug for eggfetch_core::transport_hints::NativeRequestOptions
+pub fn eggfetch_core::transport_hints::NativeRequestOptions::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct eggfetch_core::transport_hints::ResolvedTarget
+impl eggfetch_core::transport_hints::ResolvedTarget
+pub fn eggfetch_core::transport_hints::ResolvedTarget::addresses(&self) -> &[core::net::socket_addr::SocketAddr]
+pub fn eggfetch_core::transport_hints::ResolvedTarget::new<I>(I) -> eggfetch_core::error::Result<Self> where I: core::iter::traits::collect::IntoIterator<Item = core::net::socket_addr::SocketAddr>
+impl core::fmt::Debug for eggfetch_core::transport_hints::ResolvedTarget
+pub fn eggfetch_core::transport_hints::ResolvedTarget::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct eggfetch_core::transport_hints::TransportHints
+pub eggfetch_core::transport_hints::TransportHints::resolved_target: core::option::Option<eggfetch_core::transport_hints::ResolvedTarget>
+pub eggfetch_core::transport_hints::TransportHints::sni_hostname: core::option::Option<alloc::string::String>
+pub eggfetch_core::transport_hints::TransportHints::target: core::option::Option<bytes::bytes::Bytes>
+pub eggfetch_core::transport_hints::TransportHints::trace: core::option::Option<alloc::sync::Arc<dyn eggfetch_core::trace::TraceObserver>>
+impl core::fmt::Debug for eggfetch_core::transport_hints::TransportHints
+pub fn eggfetch_core::transport_hints::TransportHints::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub enum eggfetch_core::AuthScheme
+pub eggfetch_core::AuthScheme::Basic(eggfetch_core::auth::BasicAuth)
+pub eggfetch_core::AuthScheme::Bearer(eggfetch_core::auth::BearerAuth)
+impl eggfetch_core::auth::AuthScheme
+pub fn eggfetch_core::auth::AuthScheme::basic(impl core::convert::Into<alloc::string::String>, impl core::convert::Into<alloc::string::String>) -> eggfetch_core::error::Result<Self>
+pub fn eggfetch_core::auth::AuthScheme::bearer(impl core::convert::Into<alloc::string::String>) -> eggfetch_core::error::Result<Self>
+impl core::fmt::Debug for eggfetch_core::auth::AuthScheme
+pub fn eggfetch_core::auth::AuthScheme::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub enum eggfetch_core::ClientIdentity
+pub eggfetch_core::ClientIdentity::Pem
+pub eggfetch_core::ClientIdentity::Pem::cert_chain: alloc::vec::Vec<rustls_pki_types::CertificateDer<'static>>
+pub eggfetch_core::ClientIdentity::Pem::key_label: alloc::string::String
+pub eggfetch_core::ClientIdentity::Pem::private_key_der: alloc::vec::Vec<u8>
+impl core::fmt::Debug for eggfetch_core::tls::ClientIdentity
+pub fn eggfetch_core::tls::ClientIdentity::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub enum eggfetch_core::ContentCoding
+pub eggfetch_core::ContentCoding::Brotli
+pub eggfetch_core::ContentCoding::Deflate
+pub eggfetch_core::ContentCoding::Gzip
+pub eggfetch_core::ContentCoding::Zstd
+impl eggfetch_core::compression::ContentCoding
+pub fn eggfetch_core::compression::ContentCoding::as_str(self) -> &'static str
+pub enum eggfetch_core::DialErrorKind
+pub eggfetch_core::DialErrorKind::Authentication
+pub eggfetch_core::DialErrorKind::Connection
+pub eggfetch_core::DialErrorKind::Other
+pub eggfetch_core::DialErrorKind::Rejected
+pub eggfetch_core::DialErrorKind::Timeout
+impl core::fmt::Display for eggfetch_core::transport::dialer::DialErrorKind
+pub fn eggfetch_core::transport::dialer::DialErrorKind::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub enum eggfetch_core::Error
+pub eggfetch_core::Error::Body(alloc::string::String)
+pub eggfetch_core::Error::BodyNotReplayableForRedirect
+pub eggfetch_core::Error::BodyNotReplayableForRetry
+pub eggfetch_core::Error::CaBundle(alloc::string::String)
+pub eggfetch_core::Error::CertificateVerification(alloc::string::String)
+pub eggfetch_core::Error::ClientCert(alloc::string::String)
+pub eggfetch_core::Error::ConflictingAuth(alloc::string::String)
+pub eggfetch_core::Error::Connect(alloc::string::String)
+pub eggfetch_core::Error::CustomTransport(alloc::sync::Arc<eggfetch_core::transport::dialer::DialError>)
+pub eggfetch_core::Error::DecodedBodyTooLarge
+pub eggfetch_core::Error::Decompression(alloc::string::String)
+pub eggfetch_core::Error::DecompressionRatioExceeded
+pub eggfetch_core::Error::H3Connect(alloc::string::String)
+pub eggfetch_core::Error::H3ConnectionClosed(alloc::string::String)
+pub eggfetch_core::Error::H3Protocol(alloc::string::String)
+pub eggfetch_core::Error::H3Stream(alloc::string::String)
+pub eggfetch_core::Error::HostnameVerification(alloc::string::String)
+pub eggfetch_core::Error::Http2FlowControl(alloc::string::String)
+pub eggfetch_core::Error::Http2GoAway
+pub eggfetch_core::Error::Http2GoAway::debug_data: alloc::string::String
+pub eggfetch_core::Error::Http2GoAway::last_stream_id: u32
+pub eggfetch_core::Error::Http2Protocol(alloc::string::String)
+pub eggfetch_core::Error::Http2StreamReset
+pub eggfetch_core::Error::Http2StreamReset::reason: alloc::string::String
+pub eggfetch_core::Error::Hyper(alloc::sync::Arc<hyper::error::Error>)
+pub eggfetch_core::Error::HyperClient(alloc::sync::Arc<hyper_util::client::legacy::client::Error>)
+pub eggfetch_core::Error::InvalidAuthHeader(alloc::string::String)
+pub eggfetch_core::Error::InvalidHeaderName(alloc::string::String)
+pub eggfetch_core::Error::InvalidHeaderValue(alloc::string::String)
+pub eggfetch_core::Error::InvalidMethod(alloc::string::String)
+pub eggfetch_core::Error::InvalidProxyUrl(alloc::string::String)
+pub eggfetch_core::Error::InvalidRedirectLocation(alloc::string::String)
+pub eggfetch_core::Error::InvalidResolvedTarget(alloc::string::String)
+pub eggfetch_core::Error::InvalidUrl(alloc::string::String)
+pub eggfetch_core::Error::Io(alloc::sync::Arc<std::io::error::Error>)
+pub eggfetch_core::Error::JsonDeserialize(alloc::string::String)
+pub eggfetch_core::Error::JsonSerialize(alloc::string::String)
+pub eggfetch_core::Error::MalformedProxyResponse(alloc::string::String)
+pub eggfetch_core::Error::Pool(alloc::string::String)
+pub eggfetch_core::Error::PrivateKey(alloc::string::String)
+pub eggfetch_core::Error::Protocol(alloc::string::String)
+pub eggfetch_core::Error::ProxyAuthRequired
+pub eggfetch_core::Error::ProxyConnect(alloc::string::String)
+pub eggfetch_core::Error::ProxyConnectRejected
+pub eggfetch_core::Error::ProxyConnectRejected::body: alloc::string::String
+pub eggfetch_core::Error::ProxyConnectRejected::status: u16
+pub eggfetch_core::Error::RequestBuild(alloc::string::String)
+pub eggfetch_core::Error::ResolvedTargetRedirect
+pub eggfetch_core::Error::RetryBudgetExhausted
+pub eggfetch_core::Error::RetryBudgetExhausted::attempts: usize
+pub eggfetch_core::Error::RetryNotConfigured
+pub eggfetch_core::Error::Timeout
+pub eggfetch_core::Error::Timeout::elapsed: core::time::Duration
+pub eggfetch_core::Error::Timeout::phase: eggfetch_core::timeout::TimeoutPhase
+pub eggfetch_core::Error::Tls(alloc::string::String)
+pub eggfetch_core::Error::TlsConfig(alloc::string::String)
+pub eggfetch_core::Error::TooManyRedirects
+pub eggfetch_core::Error::TooManyRedirects::followed: usize
+pub eggfetch_core::Error::TooManyRedirects::max: usize
+pub eggfetch_core::Error::TraceCallbackAborted
+pub eggfetch_core::Error::TransportIoTimeout
+pub eggfetch_core::Error::TransportIoTimeout::direction: eggfetch_core::transport::lifecycle::TransportIoDirection
+pub eggfetch_core::Error::TransportIoTimeout::elapsed: core::time::Duration
+pub eggfetch_core::Error::Unsupported(alloc::string::String)
+pub eggfetch_core::Error::UnsupportedContentEncoding(alloc::string::String)
+impl eggfetch_core::error::Error
+pub fn eggfetch_core::error::Error::custom_transport_error(&self) -> core::option::Option<&eggfetch_core::transport::dialer::DialError>
+pub fn eggfetch_core::error::Error::is_physical_connection_admission_timeout(&self) -> bool
+pub fn eggfetch_core::error::Error::is_transport_io_timeout(&self) -> bool
+pub fn eggfetch_core::error::Error::kind(&self) -> &'static str
+pub enum eggfetch_core::H3CloseKind
+pub eggfetch_core::H3CloseKind::ApplicationClosed
+pub eggfetch_core::H3CloseKind::CidsExhausted
+pub eggfetch_core::H3CloseKind::ConnectionClosed
+pub eggfetch_core::H3CloseKind::LocallyClosed
+pub eggfetch_core::H3CloseKind::Reset
+pub eggfetch_core::H3CloseKind::TimedOut
+pub eggfetch_core::H3CloseKind::TransportError
+pub eggfetch_core::H3CloseKind::VersionMismatch
+pub enum eggfetch_core::H3RouteKind
+pub eggfetch_core::H3RouteKind::AltSvc
+pub eggfetch_core::H3RouteKind::Explicit
+pub enum eggfetch_core::HttpVersionPolicy
+pub eggfetch_core::HttpVersionPolicy::Auto
+pub eggfetch_core::HttpVersionPolicy::Auto::allow_http3: bool
+pub eggfetch_core::HttpVersionPolicy::Http1Only
+pub eggfetch_core::HttpVersionPolicy::Http2Only
+pub eggfetch_core::HttpVersionPolicy::Http3Only
+impl core::default::Default for eggfetch_core::http_version::HttpVersionPolicy
+pub fn eggfetch_core::http_version::HttpVersionPolicy::default() -> Self
+#[non_exhaustive] pub enum eggfetch_core::NetworkFailureKind
+pub eggfetch_core::NetworkFailureKind::Connect
+pub eggfetch_core::NetworkFailureKind::ConnectionRefused
+pub eggfetch_core::NetworkFailureKind::Dns
+pub enum eggfetch_core::NetworkStream
+pub eggfetch_core::NetworkStream::Metadata(alloc::sync::Arc<eggfetch_core::network_stream::ConnectionMetadata>)
+pub eggfetch_core::NetworkStream::Upgraded(eggfetch_core::network_stream::UpgradedStream)
+impl eggfetch_core::network_stream::NetworkStream
+pub fn eggfetch_core::network_stream::NetworkStream::as_upgraded(&self) -> core::option::Option<&eggfetch_core::network_stream::UpgradedStream>
+pub fn eggfetch_core::network_stream::NetworkStream::as_upgraded_mut(&mut self) -> core::option::Option<&mut eggfetch_core::network_stream::UpgradedStream>
+pub fn eggfetch_core::network_stream::NetworkStream::into_upgraded(self) -> core::option::Option<eggfetch_core::network_stream::UpgradedStream>
+pub fn eggfetch_core::network_stream::NetworkStream::is_upgraded(&self) -> bool
+pub fn eggfetch_core::network_stream::NetworkStream::metadata(&self) -> &alloc::sync::Arc<eggfetch_core::network_stream::ConnectionMetadata>
+pub enum eggfetch_core::NoProxyRule
+pub eggfetch_core::NoProxyRule::DomainSuffix(alloc::string::String)
+pub eggfetch_core::NoProxyRule::Host(alloc::string::String)
+pub eggfetch_core::NoProxyRule::HostExact(alloc::string::String)
+pub eggfetch_core::NoProxyRule::HostPort(alloc::string::String, u16)
+pub eggfetch_core::NoProxyRule::HostPortExact(alloc::string::String, u16)
+pub eggfetch_core::NoProxyRule::HostPortHttpx(alloc::string::String, u16)
+pub eggfetch_core::NoProxyRule::IpNetwork(core::net::ip_addr::IpAddr, u8)
+pub eggfetch_core::NoProxyRule::Localhost
+pub eggfetch_core::NoProxyRule::LocalhostExact
+pub eggfetch_core::NoProxyRule::SchemeHostPort
+pub eggfetch_core::NoProxyRule::SchemeHostPort::host: alloc::string::String
+pub eggfetch_core::NoProxyRule::SchemeHostPort::port: core::option::Option<u16>
+pub eggfetch_core::NoProxyRule::SchemeHostPort::scheme: alloc::string::String
+pub eggfetch_core::NoProxyRule::Wildcard
+pub enum eggfetch_core::PartBody
+pub eggfetch_core::PartBody::Bytes(bytes::bytes::Bytes)
+pub eggfetch_core::PartBody::Stream
+pub eggfetch_core::PartBody::Stream::length: core::option::Option<u64>
+pub eggfetch_core::PartBody::Stream::stream: eggfetch_core::body::BoxBytesStream
+impl eggfetch_core::multipart::PartBody
+pub fn eggfetch_core::multipart::PartBody::is_empty(&self) -> bool
+pub fn eggfetch_core::multipart::PartBody::is_stream(&self) -> bool
+pub fn eggfetch_core::multipart::PartBody::len(&self) -> core::option::Option<u64>
+impl core::default::Default for eggfetch_core::multipart::PartBody
+pub fn eggfetch_core::multipart::PartBody::default() -> Self
+impl core::fmt::Debug for eggfetch_core::multipart::PartBody
+pub fn eggfetch_core::multipart::PartBody::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub enum eggfetch_core::ProxyAuth
+pub eggfetch_core::ProxyAuth::Basic
+pub eggfetch_core::ProxyAuth::Basic::password: alloc::string::String
+pub eggfetch_core::ProxyAuth::Basic::username: alloc::string::String
+impl eggfetch_core::proxy::ProxyAuth
+pub fn eggfetch_core::proxy::ProxyAuth::basic(impl core::convert::Into<alloc::string::String>, impl core::convert::Into<alloc::string::String>) -> eggfetch_core::error::Result<Self>
+impl core::fmt::Debug for eggfetch_core::proxy::ProxyAuth
+pub fn eggfetch_core::proxy::ProxyAuth::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for eggfetch_core::proxy::ProxyAuth
+pub fn eggfetch_core::proxy::ProxyAuth::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub enum eggfetch_core::ProxyDecision
+pub eggfetch_core::ProxyDecision::Direct
+pub eggfetch_core::ProxyDecision::Proxy(eggfetch_core::proxy::ProxyConfig)
+pub enum eggfetch_core::ProxyOverride
+pub eggfetch_core::ProxyOverride::Direct
+pub eggfetch_core::ProxyOverride::Inherit
+pub eggfetch_core::ProxyOverride::Override(eggfetch_core::proxy::ProxyConfig)
+pub enum eggfetch_core::ProxyRule
+pub eggfetch_core::ProxyRule::All
+pub eggfetch_core::ProxyRule::Http
+pub eggfetch_core::ProxyRule::Https
+pub enum eggfetch_core::RedirectDowngradePolicy
+pub eggfetch_core::RedirectDowngradePolicy::Allow
+pub eggfetch_core::RedirectDowngradePolicy::Deny
+pub enum eggfetch_core::ReplayCheck
+pub eggfetch_core::ReplayCheck::NotReplayable
+pub eggfetch_core::ReplayCheck::Replayable
+pub enum eggfetch_core::RequestBody
+pub eggfetch_core::RequestBody::Bytes(bytes::bytes::Bytes)
+pub eggfetch_core::RequestBody::Empty
+pub eggfetch_core::RequestBody::Stream
+pub eggfetch_core::RequestBody::Stream::length: core::option::Option<usize>
+pub eggfetch_core::RequestBody::Stream::stream: eggfetch_core::body::BoxBytesStream
+impl eggfetch_core::body::RequestBody
+pub fn eggfetch_core::body::RequestBody::from_stream<S>(S, core::option::Option<usize>) -> Self where S: futures_core::stream::Stream<Item = eggfetch_core::error::Result<bytes::bytes::Bytes>> + core::marker::Send + 'static
+pub fn eggfetch_core::body::RequestBody::has_known_length(&self) -> bool
+pub async fn eggfetch_core::body::RequestBody::into_bytes(self) -> eggfetch_core::error::Result<bytes::bytes::Bytes>
+pub fn eggfetch_core::body::RequestBody::is_empty(&self) -> bool
+pub fn eggfetch_core::body::RequestBody::is_replayable(&self) -> bool
+pub fn eggfetch_core::body::RequestBody::len(&self) -> usize
+pub fn eggfetch_core::body::RequestBody::replay_class(&self) -> eggfetch_core::body::ReplayClass
+pub fn eggfetch_core::body::RequestBody::try_clone_for_redirect(&self) -> eggfetch_core::error::Result<Self>
+impl core::convert::From<&[u8]> for eggfetch_core::body::RequestBody
+pub fn eggfetch_core::body::RequestBody::from(&[u8]) -> Self
+impl core::convert::From<&str> for eggfetch_core::body::RequestBody
+pub fn eggfetch_core::body::RequestBody::from(&str) -> Self
+impl core::convert::From<alloc::string::String> for eggfetch_core::body::RequestBody
+pub fn eggfetch_core::body::RequestBody::from(alloc::string::String) -> Self
+impl core::convert::From<alloc::vec::Vec<u8>> for eggfetch_core::body::RequestBody
+pub fn eggfetch_core::body::RequestBody::from(alloc::vec::Vec<u8>) -> Self
+impl core::convert::From<bytes::bytes::Bytes> for eggfetch_core::body::RequestBody
+pub fn eggfetch_core::body::RequestBody::from(bytes::bytes::Bytes) -> Self
+impl core::fmt::Debug for eggfetch_core::body::RequestBody
+pub fn eggfetch_core::body::RequestBody::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub enum eggfetch_core::ResponseBody
+pub eggfetch_core::ResponseBody::Buffered
+pub eggfetch_core::ResponseBody::Buffered::bytes: bytes::bytes::Bytes
+pub eggfetch_core::ResponseBody::Consumed
+pub eggfetch_core::ResponseBody::EncodedStreaming
+pub eggfetch_core::ResponseBody::EncodedStreaming::content_encoding: alloc::string::String
+pub eggfetch_core::ResponseBody::EncodedStreaming::lease: core::option::Option<alloc::sync::Arc<eggfetch_core::pool::PoolGuard>>
+pub eggfetch_core::ResponseBody::EncodedStreaming::limit: eggfetch_core::compression::DecompressionLimit
+pub eggfetch_core::ResponseBody::EncodedStreaming::stream: eggfetch_core::body::BoxBytesStream
+pub eggfetch_core::ResponseBody::Streaming
+pub eggfetch_core::ResponseBody::Streaming::lease: core::option::Option<alloc::sync::Arc<eggfetch_core::pool::PoolGuard>>
+pub eggfetch_core::ResponseBody::Streaming::stream: eggfetch_core::body::BoxBytesStream
+impl eggfetch_core::body::ResponseBody
+pub fn eggfetch_core::body::ResponseBody::buffered(bytes::bytes::Bytes) -> Self
+pub async fn eggfetch_core::body::ResponseBody::bytes(&mut self) -> eggfetch_core::error::Result<bytes::bytes::Bytes>
+pub fn eggfetch_core::body::ResponseBody::bytes_stream(&mut self) -> eggfetch_core::error::Result<eggfetch_core::body::BoxBytesStream>
+pub fn eggfetch_core::body::ResponseBody::is_buffered(&self) -> bool
+pub fn eggfetch_core::body::ResponseBody::is_empty(&self) -> bool
+pub fn eggfetch_core::body::ResponseBody::len(&self) -> core::option::Option<usize>
+pub fn eggfetch_core::body::ResponseBody::raw_bytes_stream(&mut self) -> eggfetch_core::error::Result<eggfetch_core::body::BoxBytesStream>
+pub fn eggfetch_core::body::ResponseBody::streaming(eggfetch_core::body::BoxBytesStream) -> Self
+pub async fn eggfetch_core::body::ResponseBody::text(&mut self) -> eggfetch_core::error::Result<alloc::string::String>
+impl core::fmt::Debug for eggfetch_core::body::ResponseBody
+pub fn eggfetch_core::body::ResponseBody::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub enum eggfetch_core::RetryCause
+pub eggfetch_core::RetryCause::Status(u16)
+pub eggfetch_core::RetryCause::Timeout(alloc::string::String)
+pub eggfetch_core::RetryCause::TransportError(alloc::string::String)
+impl core::fmt::Display for eggfetch_core::retry::RetryCause
+pub fn eggfetch_core::retry::RetryCause::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub enum eggfetch_core::SocketOptionKind
+pub eggfetch_core::SocketOptionKind::KeepAlive
+pub eggfetch_core::SocketOptionKind::ReceiveBuffer
+pub eggfetch_core::SocketOptionKind::SendBuffer
+pub eggfetch_core::SocketOptionKind::TcpNoDelay
+pub enum eggfetch_core::TimeoutPhase
+pub eggfetch_core::TimeoutPhase::Connect
+pub eggfetch_core::TimeoutPhase::Pool
+pub eggfetch_core::TimeoutPhase::ProxyConnect
+pub eggfetch_core::TimeoutPhase::ProxyTls
+pub eggfetch_core::TimeoutPhase::Read
+pub eggfetch_core::TimeoutPhase::Total
+pub eggfetch_core::TimeoutPhase::Write
+impl core::fmt::Display for eggfetch_core::timeout::TimeoutPhase
+pub fn eggfetch_core::timeout::TimeoutPhase::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub enum eggfetch_core::TlsVersion
+pub eggfetch_core::TlsVersion::Tls12
+pub eggfetch_core::TlsVersion::Tls13
+pub enum eggfetch_core::TransportIoDirection
+pub eggfetch_core::TransportIoDirection::Read
+pub eggfetch_core::TransportIoDirection::Write
+pub enum eggfetch_core::TransportKind
+pub eggfetch_core::TransportKind::Quic
+pub eggfetch_core::TransportKind::Tcp
+pub eggfetch_core::TransportKind::Tls
+pub eggfetch_core::TransportKind::TlsUnix
+pub eggfetch_core::TransportKind::Unix
+pub enum eggfetch_core::TrustStore
+pub eggfetch_core::TrustStore::Custom(alloc::vec::Vec<rustls_pki_types::CertificateDer<'static>>)
+pub eggfetch_core::TrustStore::NativeOnly
+pub eggfetch_core::TrustStore::NativeWithWebPkiFallback
+pub eggfetch_core::TrustStore::WebPkiOnly
+pub enum eggfetch_core::UpgradedStreamVariant
+pub eggfetch_core::UpgradedStreamVariant::Adapter
+pub eggfetch_core::UpgradedStreamVariant::Tcp
+pub eggfetch_core::UpgradedStreamVariant::Tls
+pub struct eggfetch_core::BackoffPolicy
+impl eggfetch_core::retry::BackoffPolicy
+pub fn eggfetch_core::retry::BackoffPolicy::delay(&self, usize) -> core::option::Option<core::time::Duration>
+pub fn eggfetch_core::retry::BackoffPolicy::factor(&self) -> f64
+pub fn eggfetch_core::retry::BackoffPolicy::initial_delay(&self) -> core::time::Duration
+pub fn eggfetch_core::retry::BackoffPolicy::max_delay(&self) -> core::time::Duration
+impl core::default::Default for eggfetch_core::retry::BackoffPolicy
+pub fn eggfetch_core::retry::BackoffPolicy::default() -> Self
+pub struct eggfetch_core::BasicAuth
+impl eggfetch_core::auth::BasicAuth
+pub fn eggfetch_core::auth::BasicAuth::new(impl core::convert::Into<alloc::string::String>, impl core::convert::Into<alloc::string::String>) -> eggfetch_core::error::Result<Self>
+pub fn eggfetch_core::auth::BasicAuth::username(&self) -> &str
+impl core::fmt::Debug for eggfetch_core::auth::BasicAuth
+pub fn eggfetch_core::auth::BasicAuth::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for eggfetch_core::auth::BasicAuth
+pub fn eggfetch_core::auth::BasicAuth::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct eggfetch_core::BearerAuth
+impl eggfetch_core::auth::BearerAuth
+pub fn eggfetch_core::auth::BearerAuth::new(impl core::convert::Into<alloc::string::String>) -> eggfetch_core::error::Result<Self>
+impl core::fmt::Debug for eggfetch_core::auth::BearerAuth
+pub fn eggfetch_core::auth::BearerAuth::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for eggfetch_core::auth::BearerAuth
+pub fn eggfetch_core::auth::BearerAuth::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct eggfetch_core::Boundary(_)
+impl eggfetch_core::multipart::Boundary
+pub fn eggfetch_core::multipart::Boundary::as_str(&self) -> &str
+pub fn eggfetch_core::multipart::Boundary::random() -> Self
+pub fn eggfetch_core::multipart::Boundary::try_new(&str) -> eggfetch_core::error::Result<Self>
+impl core::fmt::Display for eggfetch_core::multipart::Boundary
+pub fn eggfetch_core::multipart::Boundary::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct eggfetch_core::Client
+impl eggfetch_core::client::Client
+pub fn eggfetch_core::client::Client::builder() -> eggfetch_core::client::ClientBuilder
+pub fn eggfetch_core::client::Client::cookies(&self) -> &eggfetch_core::cookie::CookieJar
+pub fn eggfetch_core::client::Client::delete(&self, &str) -> eggfetch_core::error::Result<eggfetch_core::request::RequestBuilder>
+pub async fn eggfetch_core::client::Client::execute_http_body<B>(&self, http::request::Request<B>, eggfetch_core::transport_hints::NativeRequestOptions) -> eggfetch_core::error::Result<http::response::Response<eggfetch_core::body::NativeResponseBody>> where B: http_body::Body<Data = bytes::bytes::Bytes> + core::marker::Send + 'static, <B as http_body::Body>::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub async fn eggfetch_core::client::Client::execute_http_body_default<B>(&self, http::request::Request<B>) -> eggfetch_core::error::Result<http::response::Response<eggfetch_core::body::NativeResponseBody>> where B: http_body::Body<Data = bytes::bytes::Bytes> + core::marker::Send + 'static, <B as http_body::Body>::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub fn eggfetch_core::client::Client::get(&self, &str) -> eggfetch_core::error::Result<eggfetch_core::request::RequestBuilder>
+pub fn eggfetch_core::client::Client::head(&self, &str) -> eggfetch_core::error::Result<eggfetch_core::request::RequestBuilder>
+pub fn eggfetch_core::client::Client::new() -> Self
+pub fn eggfetch_core::client::Client::options(&self, &str) -> eggfetch_core::error::Result<eggfetch_core::request::RequestBuilder>
+pub fn eggfetch_core::client::Client::patch(&self, &str) -> eggfetch_core::error::Result<eggfetch_core::request::RequestBuilder>
+pub fn eggfetch_core::client::Client::pool_metrics(&self) -> &eggfetch_core::pool::PoolMetrics
+pub fn eggfetch_core::client::Client::post(&self, &str) -> eggfetch_core::error::Result<eggfetch_core::request::RequestBuilder>
+pub fn eggfetch_core::client::Client::put(&self, &str) -> eggfetch_core::error::Result<eggfetch_core::request::RequestBuilder>
+pub fn eggfetch_core::client::Client::request(&self, http::method::Method, &str) -> eggfetch_core::error::Result<eggfetch_core::request::RequestBuilder>
+pub async fn eggfetch_core::client::Client::send_detailed(&self, eggfetch_core::request::Request) -> core::result::Result<eggfetch_core::response::Response, eggfetch_core::error::RequestFailure>
+pub fn eggfetch_core::client::Client::transport_metrics(&self) -> &eggfetch_core::transport::metrics::TransportMetrics
+impl eggfetch_core::client::Client
+pub fn eggfetch_core::client::Client::native_service(&self) -> eggfetch_core::service::NativeHttpService
+impl core::default::Default for eggfetch_core::client::Client
+pub fn eggfetch_core::client::Client::default() -> Self
+impl core::fmt::Debug for eggfetch_core::client::Client
+pub fn eggfetch_core::client::Client::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct eggfetch_core::ClientBuilder
+impl eggfetch_core::client::ClientBuilder
+pub fn eggfetch_core::client::ClientBuilder::auth(self, impl core::convert::Into<eggfetch_core::auth::AuthScheme>) -> Self
+pub fn eggfetch_core::client::ClientBuilder::automatic_decompression(self, bool) -> Self
+pub fn eggfetch_core::client::ClientBuilder::build(self) -> eggfetch_core::client::Client
+pub fn eggfetch_core::client::ClientBuilder::cookie_jar(self, eggfetch_core::cookie::CookieJar) -> Self
+pub fn eggfetch_core::client::ClientBuilder::danger_accept_invalid_certs(self, bool) -> Self
+pub fn eggfetch_core::client::ClientBuilder::default_header(self, &str, &str) -> eggfetch_core::error::Result<Self>
+pub fn eggfetch_core::client::ClientBuilder::default_headers(self, eggfetch_core::headers::Headers) -> Self
+pub fn eggfetch_core::client::ClientBuilder::dialer<D>(self, D) -> Self where D: eggfetch_core::transport::dialer::Dialer
+pub fn eggfetch_core::client::ClientBuilder::environment_proxy(self, eggfetch_core::proxy::Proxy) -> Self
+pub fn eggfetch_core::client::ClientBuilder::follow_redirects(self, bool) -> Self
+pub fn eggfetch_core::client::ClientBuilder::http_version_policy(self, eggfetch_core::http_version::HttpVersionPolicy) -> Self
+pub fn eggfetch_core::client::ClientBuilder::idle_timeout(self, core::time::Duration) -> Self
+pub fn eggfetch_core::client::ClientBuilder::limits(self, eggfetch_core::limits::Limits) -> Self
+pub fn eggfetch_core::client::ClientBuilder::local_address(self, core::net::socket_addr::SocketAddr) -> Self
+pub fn eggfetch_core::client::ClientBuilder::max_connections(self, usize) -> Self
+pub fn eggfetch_core::client::ClientBuilder::max_connections_per_host(self, usize) -> Self
+pub fn eggfetch_core::client::ClientBuilder::max_decoded_body_size(self, usize) -> Self
+pub fn eggfetch_core::client::ClientBuilder::max_decompression_ratio(self, f64) -> Self
+pub fn eggfetch_core::client::ClientBuilder::max_idle_connections(self, usize) -> Self
+pub fn eggfetch_core::client::ClientBuilder::max_idle_connections_per_host(self, usize) -> Self
+pub fn eggfetch_core::client::ClientBuilder::max_in_flight_requests(self, usize) -> Self
+pub fn eggfetch_core::client::ClientBuilder::max_in_flight_requests_per_origin(self, usize) -> Self
+pub fn eggfetch_core::client::ClientBuilder::max_redirects(self, usize) -> Self
+pub fn eggfetch_core::client::ClientBuilder::merge_timeout(self, eggfetch_core::timeout::Timeout) -> Self
+pub fn eggfetch_core::client::ClientBuilder::new() -> Self
+pub fn eggfetch_core::client::ClientBuilder::no_proxy(self, eggfetch_core::proxy::NoProxy) -> Self
+pub fn eggfetch_core::client::ClientBuilder::physical_connection_policy(self, eggfetch_core::transport::lifecycle::PhysicalConnectionPolicy) -> Self
+pub fn eggfetch_core::client::ClientBuilder::proxy(self, eggfetch_core::proxy::Proxy) -> Self
+pub fn eggfetch_core::client::ClientBuilder::proxy_environment(self, &eggfetch_core::proxy::ProxyEnvironment) -> eggfetch_core::error::Result<Self>
+pub fn eggfetch_core::client::ClientBuilder::redirect_downgrade_policy(self, eggfetch_core::redirect::RedirectDowngradePolicy) -> Self
+pub fn eggfetch_core::client::ClientBuilder::redirect_policy(self, eggfetch_core::redirect::RedirectPolicy) -> Self
+pub fn eggfetch_core::client::ClientBuilder::retry(self, eggfetch_core::retry::RetryPolicy) -> Self
+pub fn eggfetch_core::client::ClientBuilder::retry_canceled_requests(self, bool) -> Self
+pub fn eggfetch_core::client::ClientBuilder::socket_options(self, alloc::vec::Vec<eggfetch_core::transport::direct_connector::SocketOption>) -> Self
+pub fn eggfetch_core::client::ClientBuilder::timeout(self, eggfetch_core::timeout::Timeout) -> Self
+pub fn eggfetch_core::client::ClientBuilder::tls_config(self, eggfetch_core::tls::TlsConfig) -> Self
+pub fn eggfetch_core::client::ClientBuilder::transport_io_timeout(self, eggfetch_core::transport::lifecycle::TransportIoTimeout) -> Self
+pub fn eggfetch_core::client::ClientBuilder::uds_path(self, alloc::string::String) -> Self
+pub fn eggfetch_core::client::ClientBuilder::user_agent(self, &str) -> Self
+impl core::default::Default for eggfetch_core::client::ClientBuilder
+pub fn eggfetch_core::client::ClientBuilder::default() -> Self
+pub struct eggfetch_core::ConnectionMetadata
+pub eggfetch_core::ConnectionMetadata::local_addr: core::option::Option<core::net::socket_addr::SocketAddr>
+pub eggfetch_core::ConnectionMetadata::peer_addr: core::option::Option<core::net::socket_addr::SocketAddr>
+pub eggfetch_core::ConnectionMetadata::tls_info: core::option::Option<eggfetch_core::network_stream::TlsInfo>
+pub eggfetch_core::ConnectionMetadata::transport_kind: eggfetch_core::network_stream::TransportKind
+impl core::default::Default for eggfetch_core::network_stream::ConnectionMetadata
+pub fn eggfetch_core::network_stream::ConnectionMetadata::default() -> Self
+pub struct eggfetch_core::DialError
+impl eggfetch_core::transport::dialer::DialError
+pub const fn eggfetch_core::transport::dialer::DialError::kind(&self) -> eggfetch_core::transport::dialer::DialErrorKind
+pub fn eggfetch_core::transport::dialer::DialError::message(&self) -> &str
+pub fn eggfetch_core::transport::dialer::DialError::new(eggfetch_core::transport::dialer::DialErrorKind, impl core::convert::Into<alloc::string::String>) -> Self
+pub fn eggfetch_core::transport::dialer::DialError::with_source<E>(eggfetch_core::transport::dialer::DialErrorKind, impl core::convert::Into<alloc::string::String>, E) -> Self where E: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+impl core::clone::Clone for eggfetch_core::transport::dialer::DialError
+pub fn eggfetch_core::transport::dialer::DialError::clone(&self) -> Self
+impl core::error::Error for eggfetch_core::transport::dialer::DialError
+pub fn eggfetch_core::transport::dialer::DialError::source(&self) -> core::option::Option<&(dyn core::error::Error + 'static)>
+impl core::fmt::Debug for eggfetch_core::transport::dialer::DialError
+pub fn eggfetch_core::transport::dialer::DialError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for eggfetch_core::transport::dialer::DialError
+pub fn eggfetch_core::transport::dialer::DialError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct eggfetch_core::DialTarget
+impl eggfetch_core::transport::dialer::DialTarget
+pub fn eggfetch_core::transport::dialer::DialTarget::host(&self) -> &str
+pub fn eggfetch_core::transport::dialer::DialTarget::new(impl core::convert::Into<alloc::string::String>, u16) -> Self
+pub const fn eggfetch_core::transport::dialer::DialTarget::port(&self) -> u16
+impl core::fmt::Debug for eggfetch_core::transport::dialer::DialTarget
+pub fn eggfetch_core::transport::dialer::DialTarget::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct eggfetch_core::ExtraInfo
+pub eggfetch_core::ExtraInfo::client_addr: core::option::Option<core::net::socket_addr::SocketAddr>
+pub eggfetch_core::ExtraInfo::server_addr: core::option::Option<core::net::socket_addr::SocketAddr>
+pub eggfetch_core::ExtraInfo::tls_info: core::option::Option<eggfetch_core::network_stream::TlsInfo>
+impl eggfetch_core::network_stream::ExtraInfo
+pub fn eggfetch_core::network_stream::ExtraInfo::from_metadata(&eggfetch_core::network_stream::ConnectionMetadata) -> Self
+pub struct eggfetch_core::H3CloseSummary
+pub eggfetch_core::H3CloseSummary::code: core::option::Option<u64>
+pub eggfetch_core::H3CloseSummary::graceful: bool
+pub eggfetch_core::H3CloseSummary::kind: eggfetch_core::transport::metrics::H3CloseKind
+pub struct eggfetch_core::H3ConnectionDiagnostic
+pub eggfetch_core::H3ConnectionDiagnostic::alt_svc_generation: core::option::Option<u64>
+pub eggfetch_core::H3ConnectionDiagnostic::close: core::option::Option<eggfetch_core::transport::metrics::H3CloseSummary>
+pub eggfetch_core::H3ConnectionDiagnostic::local_ip: core::option::Option<core::net::ip_addr::IpAddr>
+pub eggfetch_core::H3ConnectionDiagnostic::lost_bytes: u64
+pub eggfetch_core::H3ConnectionDiagnostic::lost_packets: u64
+pub eggfetch_core::H3ConnectionDiagnostic::open_streams: core::option::Option<usize>
+pub eggfetch_core::H3ConnectionDiagnostic::received_bytes: u64
+pub eggfetch_core::H3ConnectionDiagnostic::received_datagrams: u64
+pub eggfetch_core::H3ConnectionDiagnostic::remote_address: core::net::socket_addr::SocketAddr
+pub eggfetch_core::H3ConnectionDiagnostic::route: eggfetch_core::transport::metrics::H3RouteKind
+pub eggfetch_core::H3ConnectionDiagnostic::rtt: core::time::Duration
+pub eggfetch_core::H3ConnectionDiagnostic::sent_bytes: u64
+pub eggfetch_core::H3ConnectionDiagnostic::sent_packets: u64
+pub eggfetch_core::H3ConnectionDiagnostic::stable_id: usize
+pub struct eggfetch_core::Headers
+impl eggfetch_core::headers::Headers
+pub fn eggfetch_core::headers::Headers::append(&mut self, &str, &str) -> eggfetch_core::error::Result<()>
+pub fn eggfetch_core::headers::Headers::contains(&self, &str) -> bool
+pub fn eggfetch_core::headers::Headers::extend(&mut self, &Self)
+pub fn eggfetch_core::headers::Headers::extend_replacing(&mut self, &Self)
+pub fn eggfetch_core::headers::Headers::get(&self, &str) -> core::option::Option<&http::header::value::HeaderValue>
+pub fn eggfetch_core::headers::Headers::get_all(&self, &str) -> alloc::vec::Vec<&http::header::value::HeaderValue>
+pub fn eggfetch_core::headers::Headers::get_str(&self, &str) -> core::option::Option<core::result::Result<&str, http::header::value::ToStrError>>
+pub fn eggfetch_core::headers::Headers::insert(&mut self, &str, &str) -> eggfetch_core::error::Result<()>
+pub fn eggfetch_core::headers::Headers::into_inner(self) -> http::header::map::HeaderMap
+pub fn eggfetch_core::headers::Headers::is_empty(&self) -> bool
+pub fn eggfetch_core::headers::Headers::iter(&self) -> impl core::iter::traits::iterator::Iterator<Item = (&http::header::name::HeaderName, &http::header::value::HeaderValue)>
+pub fn eggfetch_core::headers::Headers::keys(&self) -> impl core::iter::traits::iterator::Iterator<Item = &http::header::name::HeaderName>
+pub fn eggfetch_core::headers::Headers::len(&self) -> usize
+pub fn eggfetch_core::headers::Headers::new() -> Self
+pub fn eggfetch_core::headers::Headers::remove(&mut self, &str) -> core::option::Option<http::header::value::HeaderValue>
+impl core::convert::From<http::header::map::HeaderMap> for eggfetch_core::headers::Headers
+pub fn eggfetch_core::headers::Headers::from(http::header::map::HeaderMap) -> Self
+impl core::fmt::Debug for eggfetch_core::headers::Headers
+pub fn eggfetch_core::headers::Headers::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct eggfetch_core::HistoryEntry
+impl eggfetch_core::response::HistoryEntry
+pub fn eggfetch_core::response::HistoryEntry::headers(&self) -> &http::header::map::HeaderMap
+pub fn eggfetch_core::response::HistoryEntry::reason_phrase(&self) -> &str
+pub fn eggfetch_core::response::HistoryEntry::status(&self) -> http::status::StatusCode
+pub fn eggfetch_core::response::HistoryEntry::url(&self) -> &url::Url
+pub fn eggfetch_core::response::HistoryEntry::version(&self) -> http::version::Version
+impl core::fmt::Debug for eggfetch_core::response::HistoryEntry
+pub fn eggfetch_core::response::HistoryEntry::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct eggfetch_core::Limits
+pub eggfetch_core::Limits::keepalive_expiry: core::option::Option<core::time::Duration>
+pub eggfetch_core::Limits::max_connections: core::option::Option<usize>
+pub eggfetch_core::Limits::max_connections_per_host: core::option::Option<usize>
+pub eggfetch_core::Limits::max_idle_connections: core::option::Option<usize>
+pub eggfetch_core::Limits::max_idle_connections_per_host: core::option::Option<usize>
+pub eggfetch_core::Limits::max_in_flight_requests: core::option::Option<usize>
+pub eggfetch_core::Limits::max_in_flight_requests_per_origin: core::option::Option<usize>
+impl eggfetch_core::limits::Limits
+pub fn eggfetch_core::limits::Limits::compat() -> Self
+pub fn eggfetch_core::limits::Limits::native() -> Self
+impl eggfetch_core::limits::Limits
+pub fn eggfetch_core::limits::Limits::effective_max_in_flight(&self) -> core::option::Option<usize>
+pub fn eggfetch_core::limits::Limits::effective_max_in_flight_per_origin(&self) -> core::option::Option<usize>
+impl core::convert::From<eggfetch_core::limits::Limits> for eggfetch_core::pool::PoolConfig
+pub fn eggfetch_core::pool::PoolConfig::from(eggfetch_core::limits::Limits) -> Self
+pub struct eggfetch_core::MethodPolicy
+impl eggfetch_core::retry::MethodPolicy
+pub fn eggfetch_core::retry::MethodPolicy::add_method(&mut self, http::method::Method)
+pub fn eggfetch_core::retry::MethodPolicy::is_retryable(&self, &http::method::Method) -> bool
+pub fn eggfetch_core::retry::MethodPolicy::methods(&self) -> &[http::method::Method]
+pub fn eggfetch_core::retry::MethodPolicy::new(alloc::vec::Vec<http::method::Method>) -> Self
+impl core::default::Default for eggfetch_core::retry::MethodPolicy
+pub fn eggfetch_core::retry::MethodPolicy::default() -> Self
+pub struct eggfetch_core::Multipart
+impl eggfetch_core::multipart::Multipart
+pub fn eggfetch_core::multipart::Multipart::boundary(&self) -> &eggfetch_core::multipart::Boundary
+pub fn eggfetch_core::multipart::Multipart::bytes(self, &str, &str, &str, bytes::bytes::Bytes) -> eggfetch_core::error::Result<Self>
+pub fn eggfetch_core::multipart::Multipart::content_length(&self) -> core::option::Option<u64>
+pub fn eggfetch_core::multipart::Multipart::encoder(self) -> eggfetch_core::multipart::MultipartEncoder
+pub fn eggfetch_core::multipart::Multipart::into_body(self) -> eggfetch_core::body::RequestBody
+pub fn eggfetch_core::multipart::Multipart::is_replayable(&self) -> bool
+pub fn eggfetch_core::multipart::Multipart::new() -> Self
+pub fn eggfetch_core::multipart::Multipart::part(self, eggfetch_core::multipart::Part) -> eggfetch_core::error::Result<Self>
+pub fn eggfetch_core::multipart::Multipart::parts(&self) -> &[eggfetch_core::multipart::Part]
+pub fn eggfetch_core::multipart::Multipart::stream(self, &str, &str, &str, eggfetch_core::body::BoxBytesStream, core::option::Option<u64>) -> eggfetch_core::error::Result<Self>
+pub fn eggfetch_core::multipart::Multipart::text(self, &str, &str) -> eggfetch_core::error::Result<Self>
+pub fn eggfetch_core::multipart::Multipart::with_boundary(eggfetch_core::multipart::Boundary) -> Self
+impl core::default::Default for eggfetch_core::multipart::Multipart
+pub fn eggfetch_core::multipart::Multipart::default() -> Self
+impl core::fmt::Debug for eggfetch_core::multipart::Multipart
+pub fn eggfetch_core::multipart::Multipart::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct eggfetch_core::MultipartEncoder
+impl core::fmt::Debug for eggfetch_core::multipart::MultipartEncoder
+pub fn eggfetch_core::multipart::MultipartEncoder::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl futures_core::stream::Stream for eggfetch_core::multipart::MultipartEncoder
+pub type eggfetch_core::multipart::MultipartEncoder::Item = core::result::Result<bytes::bytes::Bytes, eggfetch_core::error::Error>
+pub fn eggfetch_core::multipart::MultipartEncoder::poll_next(core::pin::Pin<&mut Self>, &mut core::task::wake::Context<'_>) -> core::task::poll::Poll<core::option::Option<Self::Item>>
+pub struct eggfetch_core::NativeHttpService
+impl eggfetch_core::service::NativeHttpService
+pub fn eggfetch_core::service::NativeHttpService::new(eggfetch_core::client::Client) -> Self
+pub fn eggfetch_core::service::NativeHttpService::with_options(self, eggfetch_core::transport_hints::NativeRequestOptions) -> Self
+impl<B> tower_service::Service<http::request::Request<B>> for eggfetch_core::service::NativeHttpService where B: http_body::Body<Data = bytes::bytes::Bytes> + core::marker::Send + 'static, <B as http_body::Body>::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub type eggfetch_core::service::NativeHttpService::Error = eggfetch_core::error::Error
+pub type eggfetch_core::service::NativeHttpService::Future = core::pin::Pin<alloc::boxed::Box<(dyn core::future::future::Future<Output = core::result::Result<<eggfetch_core::service::NativeHttpService as tower_service::Service<http::request::Request<B>>>::Response, <eggfetch_core::service::NativeHttpService as tower_service::Service<http::request::Request<B>>>::Error>> + core::marker::Send)>>
+pub type eggfetch_core::service::NativeHttpService::Response = http::response::Response<eggfetch_core::body::NativeResponseBody>
+pub fn eggfetch_core::service::NativeHttpService::call(&mut self, http::request::Request<B>) -> Self::Future
+pub fn eggfetch_core::service::NativeHttpService::poll_ready(&mut self, &mut core::task::wake::Context<'_>) -> core::task::poll::Poll<core::result::Result<(), Self::Error>>
+pub struct eggfetch_core::NativeRequestOptions
+pub eggfetch_core::NativeRequestOptions::timeout: core::option::Option<eggfetch_core::timeout::Timeout>
+pub eggfetch_core::NativeRequestOptions::transport_hints: eggfetch_core::transport_hints::TransportHints
+impl eggfetch_core::transport_hints::NativeRequestOptions
+pub fn eggfetch_core::transport_hints::NativeRequestOptions::timeout(self, eggfetch_core::timeout::Timeout) -> Self
+pub fn eggfetch_core::transport_hints::NativeRequestOptions::transport_hints(self, eggfetch_core::transport_hints::TransportHints) -> Self
+impl core::fmt::Debug for eggfetch_core::transport_hints::NativeRequestOptions
+pub fn eggfetch_core::transport_hints::NativeRequestOptions::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct eggfetch_core::NativeResponseBody
+impl core::fmt::Debug for eggfetch_core::body::NativeResponseBody
+pub fn eggfetch_core::body::NativeResponseBody::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl http_body::Body for eggfetch_core::body::NativeResponseBody
+pub type eggfetch_core::body::NativeResponseBody::Data = bytes::bytes::Bytes
+pub type eggfetch_core::body::NativeResponseBody::Error = eggfetch_core::error::Error
+pub fn eggfetch_core::body::NativeResponseBody::is_end_stream(&self) -> bool
+pub fn eggfetch_core::body::NativeResponseBody::poll_frame(core::pin::Pin<&mut Self>, &mut core::task::wake::Context<'_>) -> core::task::poll::Poll<core::option::Option<eggfetch_core::error::Result<http_body::frame::Frame<Self::Data>>>>
+pub fn eggfetch_core::body::NativeResponseBody::size_hint(&self) -> http_body::size_hint::SizeHint
+impl<'__pin> core::marker::Unpin for eggfetch_core::body::NativeResponseBody where pin_project_lite::__private::PinnedFieldsOf<__Origin<'__pin>>: core::marker::Unpin
+pub struct eggfetch_core::NoProxy
+impl eggfetch_core::proxy::NoProxy
+pub fn eggfetch_core::proxy::NoProxy::parse(&str) -> eggfetch_core::error::Result<Self>
+pub fn eggfetch_core::proxy::NoProxy::parse_httpx(&str) -> eggfetch_core::error::Result<Self>
+pub fn eggfetch_core::proxy::NoProxy::should_bypass(&self, &url::Url) -> bool
+pub struct eggfetch_core::Part
+impl eggfetch_core::multipart::Part
+pub fn eggfetch_core::multipart::Part::body(&self) -> &eggfetch_core::multipart::PartBody
+pub fn eggfetch_core::multipart::Part::content_type(self, http::header::value::HeaderValue) -> Self
+pub fn eggfetch_core::multipart::Part::content_type_opt(&self) -> core::option::Option<&http::header::value::HeaderValue>
+pub fn eggfetch_core::multipart::Part::filename(self, impl core::convert::Into<alloc::string::String>) -> Self
+pub fn eggfetch_core::multipart::Part::filename_opt(&self) -> core::option::Option<&str>
+pub fn eggfetch_core::multipart::Part::header(self, impl core::convert::TryInto<http::header::name::HeaderName>, impl core::convert::TryInto<http::header::value::HeaderValue>) -> Self
+pub fn eggfetch_core::multipart::Part::into_body(self) -> eggfetch_core::multipart::PartBody
+pub fn eggfetch_core::multipart::Part::name(&self) -> &str
+pub fn eggfetch_core::multipart::Part::new(impl core::convert::Into<alloc::string::String>, eggfetch_core::multipart::PartBody) -> Self
+pub fn eggfetch_core::multipart::Part::try_header(self, impl core::convert::TryInto<http::header::name::HeaderName>, impl core::convert::TryInto<http::header::value::HeaderValue>) -> eggfetch_core::error::Result<Self>
+impl core::fmt::Debug for eggfetch_core::multipart::Part
+pub fn eggfetch_core::multipart::Part::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct eggfetch_core::PhysicalConnectionPolicy
+pub eggfetch_core::PhysicalConnectionPolicy::admission_timeout: core::option::Option<core::time::Duration>
+pub eggfetch_core::PhysicalConnectionPolicy::max_live: core::option::Option<usize>
+pub struct eggfetch_core::Pool
+impl eggfetch_core::pool::Pool
+pub fn eggfetch_core::pool::Pool::metrics(&self) -> &eggfetch_core::pool::PoolMetrics
+pub fn eggfetch_core::pool::Pool::new(eggfetch_core::pool::PoolConfig) -> Self
+pub struct eggfetch_core::PoolConfig
+pub eggfetch_core::PoolConfig::idle_timeout: core::option::Option<core::time::Duration>
+pub eggfetch_core::PoolConfig::max_connections: core::option::Option<usize>
+pub eggfetch_core::PoolConfig::max_connections_per_host: core::option::Option<usize>
+pub eggfetch_core::PoolConfig::max_idle_connections: core::option::Option<usize>
+pub eggfetch_core::PoolConfig::max_idle_connections_per_host: core::option::Option<usize>
+pub eggfetch_core::PoolConfig::max_in_flight_requests: core::option::Option<usize>
+pub eggfetch_core::PoolConfig::max_in_flight_requests_per_origin: core::option::Option<usize>
+impl core::convert::From<eggfetch_core::limits::Limits> for eggfetch_core::pool::PoolConfig
+pub fn eggfetch_core::pool::PoolConfig::from(eggfetch_core::limits::Limits) -> Self
+pub struct eggfetch_core::Proxy
+impl eggfetch_core::proxy::Proxy
+pub fn eggfetch_core::proxy::Proxy::all(&str) -> eggfetch_core::error::Result<Self>
+pub fn eggfetch_core::proxy::Proxy::all_compat(&str) -> eggfetch_core::error::Result<Self>
+pub fn eggfetch_core::proxy::Proxy::auth(self, eggfetch_core::proxy::ProxyAuth) -> Self
+pub fn eggfetch_core::proxy::Proxy::http(&str) -> eggfetch_core::error::Result<Self>
+pub fn eggfetch_core::proxy::Proxy::http_compat(&str) -> eggfetch_core::error::Result<Self>
+pub fn eggfetch_core::proxy::Proxy::https(&str) -> eggfetch_core::error::Result<Self>
+pub fn eggfetch_core::proxy::Proxy::https_compat(&str) -> eggfetch_core::error::Result<Self>
+pub fn eggfetch_core::proxy::Proxy::no_proxy(self, eggfetch_core::proxy::NoProxy) -> Self
+pub fn eggfetch_core::proxy::Proxy::no_proxy_rules(&self) -> core::option::Option<&eggfetch_core::proxy::NoProxy>
+pub fn eggfetch_core::proxy::Proxy::proxy_headers(self, eggfetch_core::headers::Headers) -> Self
+pub fn eggfetch_core::proxy::Proxy::proxy_headers_ref(&self) -> &eggfetch_core::headers::Headers
+pub fn eggfetch_core::proxy::Proxy::resolved_addresses<I>(self, I) -> eggfetch_core::error::Result<Self> where I: core::iter::traits::collect::IntoIterator<Item = core::net::socket_addr::SocketAddr>
+pub fn eggfetch_core::proxy::Proxy::rule(&self) -> eggfetch_core::proxy::ProxyRule
+pub fn eggfetch_core::proxy::Proxy::should_use_for_scheme(&self, &str) -> bool
+pub fn eggfetch_core::proxy::Proxy::uri(&self) -> &url::Url
+pub fn eggfetch_core::proxy::Proxy::with_proxy_tls_config(self, eggfetch_core::tls::TlsConfig) -> Self
+impl core::fmt::Debug for eggfetch_core::proxy::Proxy
+pub fn eggfetch_core::proxy::Proxy::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for eggfetch_core::proxy::Proxy
+pub fn eggfetch_core::proxy::Proxy::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct eggfetch_core::ProxyConfig
+impl eggfetch_core::proxy::ProxyConfig
+pub fn eggfetch_core::proxy::ProxyConfig::auth(&self) -> core::option::Option<&eggfetch_core::proxy::ProxyAuth>
+pub fn eggfetch_core::proxy::ProxyConfig::host(&self) -> core::option::Option<&str>
+pub fn eggfetch_core::proxy::ProxyConfig::is_socks(&self) -> bool
+pub fn eggfetch_core::proxy::ProxyConfig::port(&self) -> eggfetch_core::error::Result<u16>
+pub fn eggfetch_core::proxy::ProxyConfig::proxy_headers(&self) -> &eggfetch_core::headers::Headers
+pub fn eggfetch_core::proxy::ProxyConfig::proxy_tls_config(&self) -> core::option::Option<&eggfetch_core::tls::TlsConfig>
+pub fn eggfetch_core::proxy::ProxyConfig::resolved_addresses(&self) -> core::option::Option<&[core::net::socket_addr::SocketAddr]>
+pub fn eggfetch_core::proxy::ProxyConfig::scheme(&self) -> &str
+pub fn eggfetch_core::proxy::ProxyConfig::socks_remote_dns(&self) -> bool
+pub fn eggfetch_core::proxy::ProxyConfig::uri(&self) -> &url::Url
+impl core::fmt::Debug for eggfetch_core::proxy::ProxyConfig
+pub fn eggfetch_core::proxy::ProxyConfig::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct eggfetch_core::ProxyEnvironment
+impl eggfetch_core::proxy::ProxyEnvironment
+pub fn eggfetch_core::proxy::ProxyEnvironment::client_proxies(&self) -> eggfetch_core::error::Result<alloc::vec::Vec<eggfetch_core::proxy::Proxy>>
+pub fn eggfetch_core::proxy::ProxyEnvironment::from_env() -> Self
+pub fn eggfetch_core::proxy::ProxyEnvironment::from_map<I, K, V>(I) -> Self where I: core::iter::traits::collect::IntoIterator<Item = (K, V)>, K: core::convert::AsRef<str>, V: core::convert::AsRef<str>
+pub fn eggfetch_core::proxy::ProxyEnvironment::is_empty(&self) -> bool
+pub fn eggfetch_core::proxy::ProxyEnvironment::new() -> Self
+pub fn eggfetch_core::proxy::ProxyEnvironment::resolve(&self, &url::Url) -> eggfetch_core::error::Result<core::option::Option<eggfetch_core::proxy::Proxy>>
+impl core::fmt::Debug for eggfetch_core::proxy::ProxyEnvironment
+pub fn eggfetch_core::proxy::ProxyEnvironment::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct eggfetch_core::RedirectPolicy
+pub eggfetch_core::RedirectPolicy::downgrade: eggfetch_core::redirect::RedirectDowngradePolicy
+pub eggfetch_core::RedirectPolicy::follow: bool
+pub eggfetch_core::RedirectPolicy::max_redirects: usize
+impl eggfetch_core::redirect::RedirectPolicy
+pub fn eggfetch_core::redirect::RedirectPolicy::check_downgrade(&self, &url::Url, &url::Url) -> eggfetch_core::error::Result<()>
+pub fn eggfetch_core::redirect::RedirectPolicy::new(bool, usize) -> Self
+pub fn eggfetch_core::redirect::RedirectPolicy::strict(usize) -> Self
+pub fn eggfetch_core::redirect::RedirectPolicy::with_downgrade(self, eggfetch_core::redirect::RedirectDowngradePolicy) -> Self
+impl core::default::Default for eggfetch_core::redirect::RedirectPolicy
+pub fn eggfetch_core::redirect::RedirectPolicy::default() -> Self
+pub struct eggfetch_core::Request
+impl eggfetch_core::request::Request
+pub fn eggfetch_core::request::Request::auth(&self) -> core::option::Option<&eggfetch_core::auth::AuthScheme>
+pub fn eggfetch_core::request::Request::body(&self) -> &eggfetch_core::body::RequestBody
+pub fn eggfetch_core::request::Request::decompress(&self) -> core::option::Option<bool>
+pub fn eggfetch_core::request::Request::headers(&self) -> &eggfetch_core::headers::Headers
+pub fn eggfetch_core::request::Request::headers_mut(&mut self) -> &mut eggfetch_core::headers::Headers
+pub fn eggfetch_core::request::Request::is_auth_disabled(&self) -> bool
+pub fn eggfetch_core::request::Request::max_decoded_body_size(&self) -> core::option::Option<usize>
+pub fn eggfetch_core::request::Request::max_decompression_ratio(&self) -> core::option::Option<f64>
+pub fn eggfetch_core::request::Request::method(&self) -> &http::method::Method
+pub fn eggfetch_core::request::Request::proxied_target(&self) -> core::option::Option<&eggfetch_core::transport_hints::ResolvedTarget>
+pub fn eggfetch_core::request::Request::proxy_override(&self) -> &eggfetch_core::request::ProxyOverride
+pub fn eggfetch_core::request::Request::redirect(&self) -> core::option::Option<&eggfetch_core::redirect::RedirectPolicy>
+pub fn eggfetch_core::request::Request::retry(&self) -> core::option::Option<&eggfetch_core::retry::RetryPolicy>
+pub fn eggfetch_core::request::Request::set_auth(&mut self, core::option::Option<eggfetch_core::auth::AuthScheme>)
+pub fn eggfetch_core::request::Request::set_auth_disabled(&mut self, bool)
+pub fn eggfetch_core::request::Request::set_body(&mut self, eggfetch_core::body::RequestBody)
+pub fn eggfetch_core::request::Request::set_decompress(&mut self, core::option::Option<bool>)
+pub fn eggfetch_core::request::Request::set_max_decoded_body_size(&mut self, core::option::Option<usize>)
+pub fn eggfetch_core::request::Request::set_max_decompression_ratio(&mut self, core::option::Option<f64>)
+pub fn eggfetch_core::request::Request::set_proxied_target(&mut self, core::option::Option<eggfetch_core::transport_hints::ResolvedTarget>)
+pub fn eggfetch_core::request::Request::set_proxy_override(&mut self, eggfetch_core::request::ProxyOverride)
+pub fn eggfetch_core::request::Request::set_redirect(&mut self, core::option::Option<eggfetch_core::redirect::RedirectPolicy>)
+pub fn eggfetch_core::request::Request::set_retry(&mut self, core::option::Option<eggfetch_core::retry::RetryPolicy>)
+pub fn eggfetch_core::request::Request::set_timeout(&mut self, core::option::Option<eggfetch_core::timeout::Timeout>)
+pub fn eggfetch_core::request::Request::set_transport_hints(&mut self, eggfetch_core::transport_hints::TransportHints)
+pub fn eggfetch_core::request::Request::set_version(&mut self, http::version::Version)
+pub fn eggfetch_core::request::Request::timeout(&self) -> core::option::Option<&eggfetch_core::timeout::Timeout>
+pub fn eggfetch_core::request::Request::transport_hints(&self) -> &eggfetch_core::transport_hints::TransportHints
+pub fn eggfetch_core::request::Request::url(&self) -> &url::Url
+pub fn eggfetch_core::request::Request::version(&self) -> http::version::Version
+impl core::fmt::Debug for eggfetch_core::request::Request
+pub fn eggfetch_core::request::Request::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct eggfetch_core::RequestBuilder
+impl eggfetch_core::request::RequestBuilder
+pub fn eggfetch_core::request::RequestBuilder::auth(self, impl core::convert::Into<eggfetch_core::auth::AuthScheme>) -> Self
+pub fn eggfetch_core::request::RequestBuilder::body(self, impl core::convert::Into<eggfetch_core::body::RequestBody>) -> Self
+pub fn eggfetch_core::request::RequestBuilder::build(self) -> eggfetch_core::error::Result<eggfetch_core::request::Request>
+pub fn eggfetch_core::request::RequestBuilder::bytes(self, impl core::convert::Into<bytes::bytes::Bytes>) -> Self
+pub fn eggfetch_core::request::RequestBuilder::decompress(self, bool) -> Self
+pub fn eggfetch_core::request::RequestBuilder::header(self, &str, &str) -> Self
+pub fn eggfetch_core::request::RequestBuilder::headers(self, eggfetch_core::headers::Headers) -> Self
+pub fn eggfetch_core::request::RequestBuilder::json<T: serde_core::ser::Serialize>(self, &T) -> eggfetch_core::error::Result<Self>
+pub fn eggfetch_core::request::RequestBuilder::max_decoded_body_size(self, usize) -> Self
+pub fn eggfetch_core::request::RequestBuilder::max_decompression_ratio(self, f64) -> Self
+pub fn eggfetch_core::request::RequestBuilder::proxy(self, &eggfetch_core::proxy::Proxy) -> Self
+pub fn eggfetch_core::request::RequestBuilder::proxy_target_addresses<I>(self, I) -> Self where I: core::iter::traits::collect::IntoIterator<Item = core::net::socket_addr::SocketAddr>
+pub fn eggfetch_core::request::RequestBuilder::query(self, &str, &str) -> Self
+pub fn eggfetch_core::request::RequestBuilder::redirect_policy(self, eggfetch_core::redirect::RedirectPolicy) -> Self
+pub fn eggfetch_core::request::RequestBuilder::resolved_addresses<I>(self, I) -> Self where I: core::iter::traits::collect::IntoIterator<Item = core::net::socket_addr::SocketAddr>
+pub fn eggfetch_core::request::RequestBuilder::retry(self, eggfetch_core::retry::RetryPolicy) -> Self
+pub async fn eggfetch_core::request::RequestBuilder::send(self) -> eggfetch_core::error::Result<eggfetch_core::response::Response>
+pub async fn eggfetch_core::request::RequestBuilder::send_detailed(self) -> core::result::Result<eggfetch_core::response::Response, eggfetch_core::error::RequestFailure>
+pub fn eggfetch_core::request::RequestBuilder::timeout(self, eggfetch_core::timeout::Timeout) -> Self
+pub fn eggfetch_core::request::RequestBuilder::transport_hints(self, eggfetch_core::transport_hints::TransportHints) -> Self
+pub fn eggfetch_core::request::RequestBuilder::without_auth(self) -> Self
+pub fn eggfetch_core::request::RequestBuilder::without_proxy(self) -> Self
+pub fn eggfetch_core::request::RequestBuilder::without_retry(self) -> Self
+pub struct eggfetch_core::RequestFailure
+impl eggfetch_core::error::RequestFailure
+pub fn eggfetch_core::error::RequestFailure::error(&self) -> &eggfetch_core::error::Error
+pub fn eggfetch_core::error::RequestFailure::into_error(self) -> eggfetch_core::error::Error
+pub fn eggfetch_core::error::RequestFailure::is_timeout(&self) -> bool
+pub fn eggfetch_core::error::RequestFailure::network_failure_kind(&self) -> core::option::Option<eggfetch_core::error::NetworkFailureKind>
+pub fn eggfetch_core::error::RequestFailure::timeout_phase(&self) -> core::option::Option<eggfetch_core::timeout::TimeoutPhase>
+impl core::error::Error for eggfetch_core::error::RequestFailure
+pub fn eggfetch_core::error::RequestFailure::source(&self) -> core::option::Option<&(dyn core::error::Error + 'static)>
+impl core::fmt::Debug for eggfetch_core::error::RequestFailure
+pub fn eggfetch_core::error::RequestFailure::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for eggfetch_core::error::RequestFailure
+pub fn eggfetch_core::error::RequestFailure::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct eggfetch_core::ResolvedTarget
+impl eggfetch_core::transport_hints::ResolvedTarget
+pub fn eggfetch_core::transport_hints::ResolvedTarget::addresses(&self) -> &[core::net::socket_addr::SocketAddr]
+pub fn eggfetch_core::transport_hints::ResolvedTarget::new<I>(I) -> eggfetch_core::error::Result<Self> where I: core::iter::traits::collect::IntoIterator<Item = core::net::socket_addr::SocketAddr>
+impl core::fmt::Debug for eggfetch_core::transport_hints::ResolvedTarget
+pub fn eggfetch_core::transport_hints::ResolvedTarget::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct eggfetch_core::Response
+impl eggfetch_core::response::Response
+pub fn eggfetch_core::response::Response::body(&self) -> &eggfetch_core::body::ResponseBody
+pub fn eggfetch_core::response::Response::body_mut(&mut self) -> &mut eggfetch_core::body::ResponseBody
+pub async fn eggfetch_core::response::Response::bytes(&mut self) -> eggfetch_core::error::Result<bytes::bytes::Bytes>
+pub fn eggfetch_core::response::Response::bytes_stream(&mut self) -> eggfetch_core::error::Result<eggfetch_core::body::BoxBytesStream>
+pub fn eggfetch_core::response::Response::content_length(&self) -> core::option::Option<u64>
+pub fn eggfetch_core::response::Response::headers(&self) -> &http::header::map::HeaderMap
+pub fn eggfetch_core::response::Response::headers_mut(&mut self) -> &mut http::header::map::HeaderMap
+pub fn eggfetch_core::response::Response::history(&self) -> &[eggfetch_core::response::HistoryEntry]
+pub fn eggfetch_core::response::Response::history_mut(&mut self) -> &mut alloc::vec::Vec<eggfetch_core::response::HistoryEntry>
+pub fn eggfetch_core::response::Response::into_network_stream(self) -> core::option::Option<eggfetch_core::network_stream::NetworkStream>
+pub fn eggfetch_core::response::Response::is_success(&self) -> bool
+pub async fn eggfetch_core::response::Response::json<T: serde_core::de::DeserializeOwned>(&mut self) -> eggfetch_core::error::Result<T>
+pub fn eggfetch_core::response::Response::network_stream(&self) -> core::option::Option<&eggfetch_core::network_stream::NetworkStream>
+pub fn eggfetch_core::response::Response::network_stream_mut(&mut self) -> core::option::Option<&mut eggfetch_core::network_stream::NetworkStream>
+pub fn eggfetch_core::response::Response::raw_bytes_stream(&mut self) -> eggfetch_core::error::Result<eggfetch_core::body::BoxBytesStream>
+pub fn eggfetch_core::response::Response::status(&self) -> http::status::StatusCode
+pub fn eggfetch_core::response::Response::take_network_stream(&mut self) -> core::option::Option<eggfetch_core::network_stream::NetworkStream>
+pub async fn eggfetch_core::response::Response::text(&mut self) -> eggfetch_core::error::Result<alloc::string::String>
+pub fn eggfetch_core::response::Response::text_lines(&mut self) -> eggfetch_core::error::Result<impl futures_core::stream::Stream<Item = eggfetch_core::error::Result<alloc::string::String>>>
+pub fn eggfetch_core::response::Response::trailers(&self) -> core::option::Option<http::header::map::HeaderMap>
+pub fn eggfetch_core::response::Response::url(&self) -> &url::Url
+pub fn eggfetch_core::response::Response::version(&self) -> http::version::Version
+pub fn eggfetch_core::response::Response::wire_content_encoding(&self) -> core::option::Option<&str>
+pub fn eggfetch_core::response::Response::wire_content_length(&self) -> core::option::Option<&str>
+pub fn eggfetch_core::response::Response::wire_reason_phrase(&self) -> core::option::Option<&str>
+impl core::fmt::Debug for eggfetch_core::response::Response
+pub fn eggfetch_core::response::Response::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct eggfetch_core::RetryContext
+pub eggfetch_core::RetryContext::attempt: usize
+pub eggfetch_core::RetryContext::body_replayable: bool
+pub eggfetch_core::RetryContext::cause: eggfetch_core::retry::RetryCause
+pub eggfetch_core::RetryContext::method: http::method::Method
+pub eggfetch_core::RetryContext::remaining_total: core::option::Option<core::time::Duration>
+pub struct eggfetch_core::RetryPolicy
+impl eggfetch_core::retry::RetryPolicy
+pub fn eggfetch_core::retry::RetryPolicy::backoff(&self) -> &eggfetch_core::retry::BackoffPolicy
+pub fn eggfetch_core::retry::RetryPolicy::backoff_delay(&self, usize) -> core::option::Option<core::time::Duration>
+pub fn eggfetch_core::retry::RetryPolicy::builder() -> eggfetch_core::retry::RetryPolicyBuilder
+pub fn eggfetch_core::retry::RetryPolicy::check_body_replayable(&eggfetch_core::body::RequestBody) -> eggfetch_core::retry::ReplayCheck
+pub fn eggfetch_core::retry::RetryPolicy::is_enabled(&self) -> bool
+pub fn eggfetch_core::retry::RetryPolicy::is_error_retryable(&eggfetch_core::error::Error) -> bool
+pub fn eggfetch_core::retry::RetryPolicy::is_method_retryable(&self, &http::method::Method) -> bool
+pub fn eggfetch_core::retry::RetryPolicy::is_status_retryable(&self, u16) -> bool
+pub fn eggfetch_core::retry::RetryPolicy::max_attempts(&self) -> usize
+pub fn eggfetch_core::retry::RetryPolicy::max_elapsed(&self) -> core::option::Option<core::time::Duration>
+pub fn eggfetch_core::retry::RetryPolicy::method_policy(&self) -> &eggfetch_core::retry::MethodPolicy
+pub fn eggfetch_core::retry::RetryPolicy::respect_retry_after(&self) -> bool
+pub fn eggfetch_core::retry::RetryPolicy::retry_after_delay(&self, &str) -> core::option::Option<core::time::Duration>
+pub fn eggfetch_core::retry::RetryPolicy::status_policy(&self) -> &eggfetch_core::retry::StatusPolicy
+impl core::default::Default for eggfetch_core::retry::RetryPolicy
+pub fn eggfetch_core::retry::RetryPolicy::default() -> Self
+pub struct eggfetch_core::RetryPolicyBuilder
+impl eggfetch_core::retry::RetryPolicyBuilder
+pub fn eggfetch_core::retry::RetryPolicyBuilder::allow_delete_retry(self) -> Self
+pub fn eggfetch_core::retry::RetryPolicyBuilder::allow_patch_retry(self) -> Self
+pub fn eggfetch_core::retry::RetryPolicyBuilder::allow_post_retry(self) -> Self
+pub fn eggfetch_core::retry::RetryPolicyBuilder::allow_put_retry(self) -> Self
+pub fn eggfetch_core::retry::RetryPolicyBuilder::backoff_factor(self, f64) -> Self
+pub fn eggfetch_core::retry::RetryPolicyBuilder::build(self) -> eggfetch_core::retry::RetryPolicy
+pub fn eggfetch_core::retry::RetryPolicyBuilder::initial_delay(self, core::time::Duration) -> Self
+pub fn eggfetch_core::retry::RetryPolicyBuilder::max_attempts(self, usize) -> Self
+pub fn eggfetch_core::retry::RetryPolicyBuilder::max_delay(self, core::time::Duration) -> Self
+pub fn eggfetch_core::retry::RetryPolicyBuilder::max_elapsed(self, core::time::Duration) -> Self
+pub fn eggfetch_core::retry::RetryPolicyBuilder::new() -> Self
+pub fn eggfetch_core::retry::RetryPolicyBuilder::respect_retry_after(self, bool) -> Self
+pub fn eggfetch_core::retry::RetryPolicyBuilder::retry_method(self, http::method::Method) -> Self
+pub fn eggfetch_core::retry::RetryPolicyBuilder::retry_status(self, u16) -> Self
+pub fn eggfetch_core::retry::RetryPolicyBuilder::retry_statuses(self, impl core::iter::traits::collect::IntoIterator<Item = u16>) -> Self
+impl core::default::Default for eggfetch_core::retry::RetryPolicyBuilder
+pub fn eggfetch_core::retry::RetryPolicyBuilder::default() -> Self
+pub struct eggfetch_core::SharedTrailers
+impl eggfetch_core::body::SharedTrailers
+pub fn eggfetch_core::body::SharedTrailers::get(&self) -> core::option::Option<http::header::map::HeaderMap>
+pub fn eggfetch_core::body::SharedTrailers::new() -> Self
+pub struct eggfetch_core::SocketOption
+pub eggfetch_core::SocketOption::kind: core::option::Option<eggfetch_core::transport::direct_connector::SocketOptionKind>
+pub eggfetch_core::SocketOption::level: i32
+pub eggfetch_core::SocketOption::option: i32
+pub eggfetch_core::SocketOption::value: alloc::vec::Vec<u8>
+pub struct eggfetch_core::StatusPolicy
+impl eggfetch_core::retry::StatusPolicy
+pub fn eggfetch_core::retry::StatusPolicy::add_status(&mut self, u16)
+pub fn eggfetch_core::retry::StatusPolicy::default_empty() -> Self
+pub fn eggfetch_core::retry::StatusPolicy::is_retryable(&self, u16) -> bool
+pub fn eggfetch_core::retry::StatusPolicy::new(impl core::iter::traits::collect::IntoIterator<Item = u16>) -> Self
+pub fn eggfetch_core::retry::StatusPolicy::statuses(&self) -> &[u16]
+impl core::default::Default for eggfetch_core::retry::StatusPolicy
+pub fn eggfetch_core::retry::StatusPolicy::default() -> Self
+pub struct eggfetch_core::Timeout
+pub eggfetch_core::Timeout::connect: core::option::Option<core::time::Duration>
+pub eggfetch_core::Timeout::pool: core::option::Option<core::time::Duration>
+pub eggfetch_core::Timeout::read: core::option::Option<core::time::Duration>
+pub eggfetch_core::Timeout::total: core::option::Option<core::time::Duration>
+pub eggfetch_core::Timeout::write: core::option::Option<core::time::Duration>
+impl eggfetch_core::timeout::Timeout
+pub fn eggfetch_core::timeout::Timeout::builder() -> eggfetch_core::timeout::TimeoutBuilder
+pub fn eggfetch_core::timeout::Timeout::compat() -> Self
+pub fn eggfetch_core::timeout::Timeout::disabled() -> Self
+pub fn eggfetch_core::timeout::Timeout::from_secs(u64) -> Self
+pub fn eggfetch_core::timeout::Timeout::has_any(&self) -> bool
+pub fn eggfetch_core::timeout::Timeout::native() -> Self
+pub struct eggfetch_core::TimeoutBuilder
+impl eggfetch_core::timeout::TimeoutBuilder
+pub fn eggfetch_core::timeout::TimeoutBuilder::build(self) -> eggfetch_core::timeout::Timeout
+pub fn eggfetch_core::timeout::TimeoutBuilder::connect(self, core::time::Duration) -> Self
+pub fn eggfetch_core::timeout::TimeoutBuilder::pool(self, core::time::Duration) -> Self
+pub fn eggfetch_core::timeout::TimeoutBuilder::read(self, core::time::Duration) -> Self
+pub fn eggfetch_core::timeout::TimeoutBuilder::total(self, core::time::Duration) -> Self
+pub fn eggfetch_core::timeout::TimeoutBuilder::write(self, core::time::Duration) -> Self
+pub struct eggfetch_core::TlsConfig
+impl eggfetch_core::tls::TlsConfig
+pub fn eggfetch_core::tls::TlsConfig::build_rustls_config(&self) -> eggfetch_core::error::Result<rustls::client::client_conn::ClientConfig>
+pub fn eggfetch_core::tls::TlsConfig::builder() -> eggfetch_core::tls::TlsConfigBuilder
+pub fn eggfetch_core::tls::TlsConfig::builder_with_defaults() -> eggfetch_core::tls::TlsConfigBuilder
+pub fn eggfetch_core::tls::TlsConfig::danger_accept_invalid_certs(self, bool) -> Self
+pub fn eggfetch_core::tls::TlsConfig::has_explicit_crypto_provider(&self) -> bool
+pub fn eggfetch_core::tls::TlsConfig::sni_enabled(&self) -> bool
+pub fn eggfetch_core::tls::TlsConfig::tls_connector(&self) -> eggfetch_core::error::Result<tokio_rustls::client::TlsConnector>
+pub fn eggfetch_core::tls::TlsConfig::verify_certificate(&self) -> bool
+pub fn eggfetch_core::tls::TlsConfig::verify_hostname(&self) -> bool
+impl core::default::Default for eggfetch_core::tls::TlsConfig
+pub fn eggfetch_core::tls::TlsConfig::default() -> Self
+impl core::fmt::Debug for eggfetch_core::tls::TlsConfig
+pub fn eggfetch_core::tls::TlsConfig::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct eggfetch_core::TlsConfigBuilder
+impl eggfetch_core::tls::TlsConfigBuilder
+pub fn eggfetch_core::tls::TlsConfigBuilder::add_ca_certificate_path(self, impl core::convert::AsRef<std::path::Path>) -> eggfetch_core::error::Result<Self>
+pub fn eggfetch_core::tls::TlsConfigBuilder::additional_ca_certificate_der(self, alloc::vec::Vec<alloc::vec::Vec<u8>>) -> eggfetch_core::error::Result<Self>
+pub fn eggfetch_core::tls::TlsConfigBuilder::additional_ca_certificate_path(self, impl core::convert::AsRef<std::path::Path>) -> eggfetch_core::error::Result<Self>
+pub fn eggfetch_core::tls::TlsConfigBuilder::additional_ca_certificate_pem(self, &[u8]) -> eggfetch_core::error::Result<Self>
+pub fn eggfetch_core::tls::TlsConfigBuilder::build(self) -> eggfetch_core::tls::TlsConfig
+pub fn eggfetch_core::tls::TlsConfigBuilder::ca_certificate_der(self, alloc::vec::Vec<alloc::vec::Vec<u8>>) -> eggfetch_core::error::Result<Self>
+pub fn eggfetch_core::tls::TlsConfigBuilder::ca_certificate_path(self, impl core::convert::AsRef<std::path::Path>) -> eggfetch_core::error::Result<Self>
+pub fn eggfetch_core::tls::TlsConfigBuilder::ca_certificate_pem(self, &[u8]) -> eggfetch_core::error::Result<Self>
+pub fn eggfetch_core::tls::TlsConfigBuilder::client_cert_path(self, impl core::convert::AsRef<std::path::Path>, impl core::convert::AsRef<std::path::Path>) -> eggfetch_core::error::Result<Self>
+pub fn eggfetch_core::tls::TlsConfigBuilder::client_identity(self, eggfetch_core::tls::ClientIdentity) -> Self
+pub fn eggfetch_core::tls::TlsConfigBuilder::crypto_provider(self, alloc::sync::Arc<rustls::crypto::CryptoProvider>) -> Self
+pub fn eggfetch_core::tls::TlsConfigBuilder::danger_accept_invalid_certs(self, bool) -> Self
+pub fn eggfetch_core::tls::TlsConfigBuilder::max_tls_version(self, eggfetch_core::tls::TlsVersion) -> Self
+pub fn eggfetch_core::tls::TlsConfigBuilder::min_tls_version(self, eggfetch_core::tls::TlsVersion) -> Self
+pub fn eggfetch_core::tls::TlsConfigBuilder::new() -> Self
+pub fn eggfetch_core::tls::TlsConfigBuilder::sni(self, bool) -> Self
+pub fn eggfetch_core::tls::TlsConfigBuilder::trust_store(self, eggfetch_core::tls::TrustStore) -> Self
+pub fn eggfetch_core::tls::TlsConfigBuilder::verify_hostname(self, bool) -> Self
+impl core::default::Default for eggfetch_core::tls::TlsConfigBuilder
+pub fn eggfetch_core::tls::TlsConfigBuilder::default() -> Self
+pub struct eggfetch_core::TlsInfo
+pub eggfetch_core::TlsInfo::alpn_protocol: core::option::Option<alloc::string::String>
+pub eggfetch_core::TlsInfo::cipher_suite: core::option::Option<alloc::string::String>
+pub eggfetch_core::TlsInfo::server_name: core::option::Option<alloc::string::String>
+pub eggfetch_core::TlsInfo::tls_version: core::option::Option<alloc::string::String>
+pub struct eggfetch_core::TransportHints
+pub eggfetch_core::TransportHints::resolved_target: core::option::Option<eggfetch_core::transport_hints::ResolvedTarget>
+pub eggfetch_core::TransportHints::sni_hostname: core::option::Option<alloc::string::String>
+pub eggfetch_core::TransportHints::target: core::option::Option<bytes::bytes::Bytes>
+pub eggfetch_core::TransportHints::trace: core::option::Option<alloc::sync::Arc<dyn eggfetch_core::trace::TraceObserver>>
+impl core::fmt::Debug for eggfetch_core::transport_hints::TransportHints
+pub fn eggfetch_core::transport_hints::TransportHints::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct eggfetch_core::TransportIoTimeout
+pub eggfetch_core::TransportIoTimeout::read: core::option::Option<core::time::Duration>
+pub eggfetch_core::TransportIoTimeout::write: core::option::Option<core::time::Duration>
+pub struct eggfetch_core::TransportMetrics
+pub eggfetch_core::TransportMetrics::altsvc_cleared: core::sync::atomic::AtomicUsize
+pub eggfetch_core::TransportMetrics::altsvc_expired: core::sync::atomic::AtomicUsize
+pub eggfetch_core::TransportMetrics::altsvc_learned: core::sync::atomic::AtomicUsize
+pub eggfetch_core::TransportMetrics::altsvc_rejected: core::sync::atomic::AtomicUsize
+pub eggfetch_core::TransportMetrics::direct_connector_attempts: core::sync::atomic::AtomicUsize
+pub eggfetch_core::TransportMetrics::direct_connector_failures: core::sync::atomic::AtomicUsize
+pub eggfetch_core::TransportMetrics::direct_connector_successes: core::sync::atomic::AtomicUsize
+pub eggfetch_core::TransportMetrics::direct_dns_attempts: core::sync::atomic::AtomicUsize
+pub eggfetch_core::TransportMetrics::direct_dns_failures: core::sync::atomic::AtomicUsize
+pub eggfetch_core::TransportMetrics::direct_tls_attempts: core::sync::atomic::AtomicUsize
+pub eggfetch_core::TransportMetrics::direct_tls_failures: core::sync::atomic::AtomicUsize
+pub eggfetch_core::TransportMetrics::h3_cache_evictions: core::sync::atomic::AtomicUsize
+pub eggfetch_core::TransportMetrics::h3_closed: core::sync::atomic::AtomicUsize
+pub eggfetch_core::TransportMetrics::h3_connections_created: core::sync::atomic::AtomicUsize
+pub eggfetch_core::TransportMetrics::h3_drain_observed: core::sync::atomic::AtomicUsize
+pub eggfetch_core::TransportMetrics::h3_fallback_selected: core::sync::atomic::AtomicUsize
+pub eggfetch_core::TransportMetrics::h3_reconnected: core::sync::atomic::AtomicUsize
+pub eggfetch_core::TransportMetrics::h3_route_attempted: core::sync::atomic::AtomicUsize
+pub eggfetch_core::TransportMetrics::h3_route_suppressed: core::sync::atomic::AtomicUsize
+pub eggfetch_core::TransportMetrics::physical_admission_timeouts: core::sync::atomic::AtomicUsize
+pub eggfetch_core::TransportMetrics::physical_admission_waits: core::sync::atomic::AtomicUsize
+pub eggfetch_core::TransportMetrics::physical_connections_high_water: core::sync::atomic::AtomicUsize
+pub eggfetch_core::TransportMetrics::physical_connections_live: core::sync::atomic::AtomicUsize
+pub eggfetch_core::TransportMetrics::proxy_connector_attempts: core::sync::atomic::AtomicUsize
+pub eggfetch_core::TransportMetrics::proxy_connector_failures: core::sync::atomic::AtomicUsize
+pub eggfetch_core::TransportMetrics::proxy_tls_attempts: core::sync::atomic::AtomicUsize
+pub eggfetch_core::TransportMetrics::proxy_tls_failures: core::sync::atomic::AtomicUsize
+pub eggfetch_core::TransportMetrics::transport_read_inactivity_timeouts: core::sync::atomic::AtomicUsize
+pub eggfetch_core::TransportMetrics::transport_write_inactivity_timeouts: core::sync::atomic::AtomicUsize
+pub eggfetch_core::TransportMetrics::uds_connector_attempts: core::sync::atomic::AtomicUsize
+pub eggfetch_core::TransportMetrics::uds_connector_failures: core::sync::atomic::AtomicUsize
+pub eggfetch_core::TransportMetrics::upgraded_connections_created: core::sync::atomic::AtomicUsize
+impl eggfetch_core::transport::metrics::TransportMetrics
+pub fn eggfetch_core::transport::metrics::TransportMetrics::h3_diagnostics(&self) -> alloc::vec::Vec<eggfetch_core::transport::metrics::H3ConnectionDiagnostic>
+pub fn eggfetch_core::transport::metrics::TransportMetrics::new() -> Self
+pub fn eggfetch_core::transport::metrics::TransportMetrics::record_altsvc_cleared(&self)
+pub fn eggfetch_core::transport::metrics::TransportMetrics::record_altsvc_expired(&self)
+pub fn eggfetch_core::transport::metrics::TransportMetrics::record_altsvc_learned(&self)
+pub fn eggfetch_core::transport::metrics::TransportMetrics::record_altsvc_rejected(&self)
+pub fn eggfetch_core::transport::metrics::TransportMetrics::record_direct_attempt(&self)
+pub fn eggfetch_core::transport::metrics::TransportMetrics::record_direct_dns_attempt(&self)
+pub fn eggfetch_core::transport::metrics::TransportMetrics::record_direct_dns_failure(&self)
+pub fn eggfetch_core::transport::metrics::TransportMetrics::record_direct_failure(&self)
+pub fn eggfetch_core::transport::metrics::TransportMetrics::record_direct_success(&self)
+pub fn eggfetch_core::transport::metrics::TransportMetrics::record_direct_tls_attempt(&self)
+pub fn eggfetch_core::transport::metrics::TransportMetrics::record_direct_tls_failure(&self)
+pub fn eggfetch_core::transport::metrics::TransportMetrics::record_h3_attempted(&self)
+pub fn eggfetch_core::transport::metrics::TransportMetrics::record_h3_closed(&self)
+pub fn eggfetch_core::transport::metrics::TransportMetrics::record_h3_created(&self)
+pub fn eggfetch_core::transport::metrics::TransportMetrics::record_h3_drain(&self)
+pub fn eggfetch_core::transport::metrics::TransportMetrics::record_h3_eviction(&self)
+pub fn eggfetch_core::transport::metrics::TransportMetrics::record_h3_fallback(&self)
+pub fn eggfetch_core::transport::metrics::TransportMetrics::record_h3_reconnected(&self)
+pub fn eggfetch_core::transport::metrics::TransportMetrics::record_h3_suppressed(&self)
+pub fn eggfetch_core::transport::metrics::TransportMetrics::record_proxy_attempt(&self)
+pub fn eggfetch_core::transport::metrics::TransportMetrics::record_proxy_failure(&self)
+pub fn eggfetch_core::transport::metrics::TransportMetrics::record_proxy_tls_attempt(&self)
+pub fn eggfetch_core::transport::metrics::TransportMetrics::record_proxy_tls_failure(&self)
+pub fn eggfetch_core::transport::metrics::TransportMetrics::record_uds_attempt(&self)
+pub fn eggfetch_core::transport::metrics::TransportMetrics::record_uds_failure(&self)
+pub fn eggfetch_core::transport::metrics::TransportMetrics::record_upgraded(&self)
+pub fn eggfetch_core::transport::metrics::TransportMetrics::snapshot(&self) -> eggfetch_core::transport::metrics::TransportSnapshot
+pub struct eggfetch_core::TransportSnapshot
+pub eggfetch_core::TransportSnapshot::altsvc_cleared: usize
+pub eggfetch_core::TransportSnapshot::altsvc_expired: usize
+pub eggfetch_core::TransportSnapshot::altsvc_learned: usize
+pub eggfetch_core::TransportSnapshot::altsvc_rejected: usize
+pub eggfetch_core::TransportSnapshot::direct_connector_attempts: usize
+pub eggfetch_core::TransportSnapshot::direct_connector_failures: usize
+pub eggfetch_core::TransportSnapshot::direct_connector_successes: usize
+pub eggfetch_core::TransportSnapshot::direct_dns_attempts: usize
+pub eggfetch_core::TransportSnapshot::direct_dns_failures: usize
+pub eggfetch_core::TransportSnapshot::direct_tls_attempts: usize
+pub eggfetch_core::TransportSnapshot::direct_tls_failures: usize
+pub eggfetch_core::TransportSnapshot::h3_cache_evictions: usize
+pub eggfetch_core::TransportSnapshot::h3_closed: usize
+pub eggfetch_core::TransportSnapshot::h3_connections_created: usize
+pub eggfetch_core::TransportSnapshot::h3_drain_observed: usize
+pub eggfetch_core::TransportSnapshot::h3_fallback_selected: usize
+pub eggfetch_core::TransportSnapshot::h3_reconnected: usize
+pub eggfetch_core::TransportSnapshot::h3_route_attempted: usize
+pub eggfetch_core::TransportSnapshot::h3_route_suppressed: usize
+pub eggfetch_core::TransportSnapshot::physical_admission_timeouts: usize
+pub eggfetch_core::TransportSnapshot::physical_admission_waits: usize
+pub eggfetch_core::TransportSnapshot::physical_connections_high_water: usize
+pub eggfetch_core::TransportSnapshot::physical_connections_live: usize
+pub eggfetch_core::TransportSnapshot::proxy_connector_attempts: usize
+pub eggfetch_core::TransportSnapshot::proxy_connector_failures: usize
+pub eggfetch_core::TransportSnapshot::proxy_tls_attempts: usize
+pub eggfetch_core::TransportSnapshot::proxy_tls_failures: usize
+pub eggfetch_core::TransportSnapshot::transport_read_inactivity_timeouts: usize
+pub eggfetch_core::TransportSnapshot::transport_write_inactivity_timeouts: usize
+pub eggfetch_core::TransportSnapshot::uds_connector_attempts: usize
+pub eggfetch_core::TransportSnapshot::uds_connector_failures: usize
+pub eggfetch_core::TransportSnapshot::upgraded_connections_created: usize
+pub struct eggfetch_core::UpgradedStream
+impl eggfetch_core::network_stream::UpgradedStream
+pub async fn eggfetch_core::network_stream::UpgradedStream::close(&mut self) -> eggfetch_core::error::Result<()>
+pub async fn eggfetch_core::network_stream::UpgradedStream::flush(&mut self) -> eggfetch_core::error::Result<()>
+pub fn eggfetch_core::network_stream::UpgradedStream::from_tcp(tokio::net::tcp::stream::TcpStream, bytes::bytes::Bytes) -> Self
+pub fn eggfetch_core::network_stream::UpgradedStream::from_tls(tokio_rustls::client::TlsStream<tokio::net::tcp::stream::TcpStream>, bytes::bytes::Bytes, eggfetch_core::network_stream::TlsInfo) -> Self
+pub fn eggfetch_core::network_stream::UpgradedStream::leading_data(&self) -> &bytes::bytes::Bytes
+pub fn eggfetch_core::network_stream::UpgradedStream::metadata(&self) -> &alloc::sync::Arc<eggfetch_core::network_stream::ConnectionMetadata>
+pub async fn eggfetch_core::network_stream::UpgradedStream::read(&mut self, usize) -> eggfetch_core::error::Result<bytes::bytes::Bytes>
+pub async fn eggfetch_core::network_stream::UpgradedStream::start_tls(self, &tokio_rustls::client::TlsConnector, &str) -> eggfetch_core::error::Result<Self>
+pub fn eggfetch_core::network_stream::UpgradedStream::take_leading_data(&mut self) -> bytes::bytes::Bytes
+pub fn eggfetch_core::network_stream::UpgradedStream::variant(&self) -> eggfetch_core::network_stream::UpgradedStreamVariant
+pub async fn eggfetch_core::network_stream::UpgradedStream::write_all(&mut self, &[u8]) -> eggfetch_core::error::Result<()>
+impl tokio::io::async_read::AsyncRead for eggfetch_core::network_stream::UpgradedStream
+pub fn eggfetch_core::network_stream::UpgradedStream::poll_read(core::pin::Pin<&mut Self>, &mut core::task::wake::Context<'_>, &mut tokio::io::read_buf::ReadBuf<'_>) -> core::task::poll::Poll<std::io::error::Result<()>>
+impl tokio::io::async_write::AsyncWrite for eggfetch_core::network_stream::UpgradedStream
+pub fn eggfetch_core::network_stream::UpgradedStream::poll_flush(core::pin::Pin<&mut Self>, &mut core::task::wake::Context<'_>) -> core::task::poll::Poll<std::io::error::Result<()>>
+pub fn eggfetch_core::network_stream::UpgradedStream::poll_shutdown(core::pin::Pin<&mut Self>, &mut core::task::wake::Context<'_>) -> core::task::poll::Poll<std::io::error::Result<()>>
+pub fn eggfetch_core::network_stream::UpgradedStream::poll_write(core::pin::Pin<&mut Self>, &mut core::task::wake::Context<'_>, &[u8]) -> core::task::poll::Poll<std::io::error::Result<usize>>
+pub const eggfetch_core::SENSITIVE_HEADERS: &[&str]
+pub trait eggfetch_core::Dialer: core::marker::Send + core::marker::Sync + 'static
+pub fn eggfetch_core::Dialer::dial(&self, eggfetch_core::transport::dialer::DialTarget) -> eggfetch_core::transport::dialer::DialFuture<'_>
+impl<T> eggfetch_core::transport::dialer::Dialer for alloc::sync::Arc<T> where T: eggfetch_core::transport::dialer::Dialer + ?core::marker::Sized
+pub fn alloc::sync::Arc<T>::dial(&self, eggfetch_core::transport::dialer::DialTarget) -> eggfetch_core::transport::dialer::DialFuture<'_>
+pub fn eggfetch_core::accept_encoding_value() -> core::option::Option<&'static str>
+pub fn eggfetch_core::build_redirect_request_with_redirect_policy(&eggfetch_core::request::Request, http::status::StatusCode, &str, &eggfetch_core::redirect::RedirectPolicy) -> eggfetch_core::error::Result<eggfetch_core::request::Request>
+pub fn eggfetch_core::check_https_downgrade(&url::Url, &url::Url, eggfetch_core::redirect::RedirectDowngradePolicy) -> eggfetch_core::error::Result<()>
+pub fn eggfetch_core::is_https_downgrade(&url::Url, &url::Url) -> bool
+pub fn eggfetch_core::is_sensitive_header(&str) -> bool
+pub fn eggfetch_core::redact_headers(&http::header::map::HeaderMap) -> http::header::map::HeaderMap
+pub fn eggfetch_core::redact_url(&url::Url) -> alloc::string::String
+pub fn eggfetch_core::redact_url_string(&str) -> alloc::string::String
+pub type eggfetch_core::BoxBytesStream = core::pin::Pin<alloc::boxed::Box<(dyn futures_core::stream::Stream<Item = eggfetch_core::error::Result<bytes::bytes::Bytes>> + core::marker::Send)>>
+pub type eggfetch_core::DialFuture<'a> = core::pin::Pin<alloc::boxed::Box<(dyn core::future::future::Future<Output = core::result::Result<eggfetch_core::transport::dialer::DialStream, eggfetch_core::transport::dialer::DialError>> + core::marker::Send + 'a)>>
+pub type eggfetch_core::DialStream = alloc::boxed::Box<dyn eggfetch_core::transport::dialer::DialStreamTrait>
+pub type eggfetch_core::Result<T> = core::result::Result<T, eggfetch_core::error::Error>

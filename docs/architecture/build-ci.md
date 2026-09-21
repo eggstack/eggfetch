@@ -57,6 +57,7 @@ See [verification-policy.md](../verification-policy.md) for the normative policy
 | Release version/ref validation | `python scripts/test_validate_release_versions.py` |
 | Rust clippy | `cargo clippy --workspace --all-targets --all-features -- -D warnings` |
 | Rust tests | `cargo test --workspace --exclude eggfetch-python --all-features -- --test-threads=1` (single-threaded: RSS tests) |
+| Rust API contracts | `cargo test -p eggfetch-core --test public_api_contracts` across the six supported profiles |
 | Python build | `maturin develop -m crates/eggfetch-python/Cargo.toml` (active venv required; rebuild after every binding Rust change) |
 | Native Python API | `python scripts/check_native_python_api.py` (root exports, symbol kinds, exception MRO, important signatures, and version) |
 | Python typing surface | `python scripts/check_python_typing_surface.py` (stub syntax, manifest exports, exception bases, member/signature drift, async shape, and reviewed semantic contracts) |
@@ -67,7 +68,17 @@ See [verification-policy.md](../verification-policy.md) for the normative policy
 
 ### Extended Validation (Tier 2)
 
-Run `./scripts/check.sh extended` for: full HTTPX compatibility, API manifest comparison, feature matrix, feature-gated tests, MSRV, docs, FFI, resource monitoring, lifecycle, soak, downstream, merge, and benchmarks. Tier 2 runs all of Tier 1 first, then the additional checks. All executed checks are fail-closed. Permitted explicit skips are: downstream when the artifact manifest is absent, and the Node JS surface when `node` or the built `eggfetch.node` artifact is missing (Tier 1 records the same Node skip). The exact Rust 1.89.0 MSRV toolchain is required; its absence or any Cargo/compiler failure fails validation.
+Run `./scripts/check.sh extended` for: full HTTPX compatibility, the pinned
+Rust public API snapshot/semver oracle, API manifest comparison, feature
+matrix, feature-gated tests, MSRV, docs, FFI, resource monitoring, lifecycle,
+soak, downstream, merge, and benchmarks. Install `cargo-public-api 0.52.0`
+and use the pinned nightly named in `compat/rust-public-api/README.md` before
+running the oracle. Tier 2 runs all of Tier 1 first, then the additional
+checks. All executed checks are fail-closed. Permitted explicit skips are:
+downstream when the artifact manifest is absent, and the Node JS surface when
+`node` or the built `eggfetch.node` artifact is missing (Tier 1 records the
+same Node skip). The exact Rust 1.89.0 MSRV toolchain is required; its absence
+or any Cargo/compiler failure fails validation.
 
 ### HTTP/3 Qualification (manual, not CI)
 

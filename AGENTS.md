@@ -13,6 +13,10 @@ Start at `docs/architecture/overview.md` (§ Deep-Dive Index). Normative CI/rele
 ```
 
 - `check.sh` refuses to run outside an active venv with Python 3.10+ and pinned tooling in `scripts/ci-requirements.txt`. Setup: `python3 -m venv .venv && source .venv/bin/activate && python -m pip install -r scripts/ci-requirements.txt`.
+- The extended Rust public-surface oracle requires `cargo-public-api 0.52.0`,
+  `cargo-semver-checks 0.49.0`, and the pinned nightly documented in
+  `compat/rust-public-api/README.md`; it compares six supported core profiles
+  to planning baseline `03ecba973010e2858bf16a2b5f84d51ce70adae4`.
 - After changing `crates/eggfetch-python` Rust code, rebuild before testing: `maturin develop -m crates/eggfetch-python/Cargo.toml`. Stale `.so` causes confusing failures.
 - Focused equivalents (same flags `check.sh` uses):
   - `cargo test --workspace --exclude eggfetch-python --all-features -- --test-threads=1`
@@ -53,6 +57,10 @@ Start at `docs/architecture/overview.md` (§ Deep-Dive Index). Normative CI/rele
   - CLI enables cookies/multipart/proxy (no compression, no http2/http3); Python enables http2/http3/cookies/multipart/proxy + all compressions.
 - Core request rebuilds go through exhaustive typed helpers (`RequestParts::retry_request` needs `logical-retry`, `advance_redirect_hop` needs `redirects`) — a new field must fail to compile, never silently drop. Pipeline is `prepare.rs` → `route.rs` (`select_route()`: UDS → dialer → static/direct → proxy/SOCKS → SNI → H3 → standard) → `finalize.rs` (one post-transport policy for all routes), entered via `retry.rs` when `logical-retry` is present, `redirect.rs` when only `redirects` is present, or `lean.rs` single-hop when both are absent. Ordinary Hyper route arms are the final owners of prepared metadata; proxy/H3 branches may retain borrowed inspection where fallback requires it.
 - Hyper client construction is centralized in `transport/hyper_client.rs`; keep route connectors/keys explicit, forward stays H1-only. UDS/Custom/Direct/SNI arms and their clients/caches, plus `dialer`/`local_address`/`socket_options`/`uds_path`/`resolved_addresses` builder methods and `Dialer`/`SocketOption` re-exports, require `advanced-routing` and are absent from lean profiles (pinned/SNI hints fail closed there).
+- `client.rs` retains the public `Client`/`ClientBuilder` declarations; private
+  defaults/configuration are in `client/config.rs`. Proxy environment URL
+  normalization and HTTPX-specific IP-shaped `NO_PROXY` parsing are private
+  helpers under `proxy/`; native and HTTPX `NO_PROXY` semantics remain distinct.
 - All origin TLS routes build through `TlsConfig`/`TrustStore`. `additional_ca_*` augments the base store; `ca_certificate_*` stays replacement-style. Native-root construction failure may fall back to WebPKI roots, but cert/hostname verification failure must never retry with another store. `crypto_provider()` is per-config, never process-global.
 - Proxy fallback is typed only: CONNECT advances on 502/504 rejection, local SOCKS5 on destination-specific 0x03/0x04/0x05; auth/policy/protocol/malformed failures stop. Never store a request's shrinking total deadline in cached route connectors; enforce transport via the outer dispatch timeout and retain the absolute deadline behind the private `PoolGuard` response lifecycle through EOF/trailers (read starts on first poll/resets per chunk; total never resets, Total wins ties).
 - `ResponseBody` public variant shapes are frozen — never add public timeout fields/variants or `#[non_exhaustive]`; `BodyTimeoutStream` stays the single high-level timeout owner.
@@ -66,6 +74,9 @@ Start at `docs/architecture/overview.md` (§ Deep-Dive Index). Normative CI/rele
 - Timeouts: map only `connect`/`read`/`write`/`pool`; never synthesize native `total`. Compat `NO_PROXY` parser differs from native `NoProxy::parse()` — do not unify. `ssl.SSLContext` translation is fail-closed (fingerprint mutation reclassifies, subclasses/unrepresentable state → `TypeError`); proxy TLS comes only from `Proxy(ssl_context=...)`.
 - Redact `authorization`, `proxy-authorization`, `cookie`, `set-cookie` in all Debug/Display/`__repr__`/errors. `Http2Only` is enforced at three layers (ALPN, `http2_only(true)`, `negotiated_h2()`); never fork a second engine. Do not paper over `docs/residual-differences.md`.
 - Only 101 responses own `response.extensions["network_stream"]`; CONNECT tunnels stay body-iterator only. SSE is Python framing over streams; WebSocket uses wsproto over the 101 stream — never raw sockets from Python.
+- Python SSLContext translation has one Rust-facing private exporter,
+  `_export_ssl_context_state`, with a versioned bounded mapping; Rust must not
+  import `snapshot_context`, `_classify_context`, or registry internals.
 - Python `aread()` must construct the final Python `bytes` object from the collected `Bytes` inside the GIL bridge; do not reintroduce a full-body Rust `Vec` copy. Private buffered iterators must keep independent cursors and preserve scalar-count text chunking, `str.lines()` behavior—including a final standalone `\r`—and empty-body semantics. Cookie expiry-watermark mutation shortcuts are evidence-gated: retain them only when isolated large-jar non-minimum mutation measurements materially beat full recomputation without changing minimum-invalidating or lookup behavior.
 
 ## Working style

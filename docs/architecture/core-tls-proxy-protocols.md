@@ -320,6 +320,14 @@ The shared crate never dials, does TLS, retries, decides success, or owns
 deadlines. Ordinary forward-proxy body parsing stays in `eggfetch-core`
 where it is not shared behavior.
 
+The retained doc-hidden `parse_proxy_response_bytes` adapter is test/fuzz
+compatibility code, not a second production wire owner. Its response-head
+bounds derive from `ConnectResponseLimits::default`, and differential fixtures
+compare its common UTF-8 subset with the async wire parser. Proxy auth keeps
+its historical core validation domain; the common accepted subset is checked
+against `basic_auth_value`, while the broader wire helper controls CONNECT
+serialization.
+
 ### Caller-owned raw-stream dialing
 
 The native `Dialer` extension (requires `advanced-routing`; absent from lean

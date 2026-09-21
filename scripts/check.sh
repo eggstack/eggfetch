@@ -117,6 +117,16 @@ tier1_rust_tests() {
     cargo test --workspace --exclude eggfetch-python --all-features -- --test-threads=1
 }
 
+tier1_rust_api_contracts() {
+    info "Stable Rust public contract fixtures"
+    cargo test -p eggfetch-core --test public_api_contracts -- --test-threads=1
+    cargo test -p eggfetch-core --test public_api_contracts --no-default-features --features http1,tls-rustls -- --test-threads=1
+    cargo test -p eggfetch-core --test public_api_contracts --no-default-features --features http2,tls-rustls -- --test-threads=1
+    cargo test -p eggfetch-core --test public_api_contracts --no-default-features --features standard-http1,tls-rustls -- --test-threads=1
+    cargo test -p eggfetch-core --test public_api_contracts --no-default-features --features native-http1,tls-rustls -- --test-threads=1
+    cargo test -p eggfetch-core --test public_api_contracts --all-features -- --test-threads=1
+}
+
 tier1_python_build() {
     info "Building Python extension"
     maturin develop -m "$REPO_ROOT/crates/eggfetch-python/Cargo.toml"
@@ -124,12 +134,12 @@ tier1_python_build() {
 
 tier1_native_api() {
     info "Native Python API manifest"
-    "$PYTHON_BIN" "$SCRIPT_DIR/check_native_python_api.py"
+    "$PYTHON_BIN" "$SCRIPT_DIR/check_native_python_api.py" --self-test
 }
 
 tier1_python_typing_surface() {
     info "Python typing surface"
-    "$PYTHON_BIN" "$SCRIPT_DIR/check_python_typing_surface.py"
+    "$PYTHON_BIN" "$SCRIPT_DIR/check_python_typing_surface.py" --self-test
 }
 
 tier1_python_typing() {
@@ -183,6 +193,7 @@ run_tier1() {
     tier1_release_validation
     tier1_clippy
     tier1_rust_tests
+    tier1_rust_api_contracts
     tier1_python_build
     tier1_native_api
     tier1_python_typing_surface
@@ -259,6 +270,13 @@ tier2_feature_matrix() {
     cargo check -p eggfetch-core --no-default-features --features http1,tls-rustls
     cargo check -p eggfetch-core --no-default-features --features http1,tls-rustls,tls-native-roots
     cargo check -p eggfetch-core --all-features
+}
+
+tier2_rust_public_api() {
+    info "Rust public API oracle"
+    require_command cargo-public-api
+    require_command cargo-semver-checks
+    "$PYTHON_BIN" "$SCRIPT_DIR/check_rust_public_api.py"
 }
 
 tier2_feature_tests() {
@@ -355,6 +373,7 @@ run_tier2() {
     run_tier1
     tier2_full_compat
     tier2_api_manifest
+    tier2_rust_public_api
     tier2_feature_matrix
     tier2_feature_tests
     tier2_msrv

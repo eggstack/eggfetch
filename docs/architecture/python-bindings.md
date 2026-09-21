@@ -41,6 +41,14 @@ and stale `start_tls() -> None` cases. Built-wheel validation repeats both the
 surface and consumer checks from the installed artifact. Private
 underscore-prefixed implementation modules are not part of the typing promise.
 
+The checker also enforces relational contracts: `Client` and `AsyncClient`
+constructors and request/verb methods keep their reviewed parameter inventory,
+top-level helpers retain the deliberate `limits` versus client-only
+`extensions` distinction, and body-capable versus body-less convenience
+helpers cannot drift independently. The concrete PyO3 declarations remain
+explicit and readable; the guardrails are checker metadata, not generated
+public code.
+
 The native stream contract types sync `NetworkStream.start_tls()` as returning
 a new `NetworkStream`, and async `AsyncNetworkStream.start_tls()` as an
 awaitable resolving to a new `AsyncNetworkStream`. Both expose
@@ -385,6 +393,14 @@ cert path or `verify` kwarg; helper contexts are.  This prevents a
 caller-supplied mTLS context from being silently downgraded to no
 client auth, and prevents a caller-supplied `verify=False` from
 inheriting the helper's default trust.
+
+Rust consumes this state through exactly one private helper,
+`eggfetch._ssl_context._export_ssl_context_state`. Its bounded mapping carries
+schema version 1, classification, observable verification/version/CA state,
+and validated helper provenance. Unknown versions, missing or wrongly typed
+fields, and unrepresentable classifications fail before I/O. The mapping is
+internal architecture only and is not included in `eggfetch.__all__` or the
+typing surface.
 
 ### Bridge Pattern (Native ↔ Compat Conversion)
 

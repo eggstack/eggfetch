@@ -37,6 +37,13 @@ Builder-configurable options: headers, timeout, pool, redirects, auth, cookies, 
 
 `Client` is `Clone` (cheap — internals are `Arc`-wrapped).
 
+The public `client.rs` module keeps the `Client` and `ClientBuilder`
+declarations and canonical methods auditable. Their private
+configuration/defaults live in `client/config.rs`; route/cache and
+Hyper-construction ownership remains in the existing transport modules. The
+private split does not add a public configuration type or change
+feature-gated fields.
+
 ### Native request-failure detail
 
 `Client::send_detailed()` and `RequestBuilder::send_detailed()` are additive

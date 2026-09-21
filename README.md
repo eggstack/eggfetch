@@ -125,6 +125,11 @@ uses bounded async-aware backpressure so a slow consumer does not block the
 client runtime. These are private implementation details and do not change
 the public API or chunking contracts.
 
+Maintainers can run `./scripts/check.sh` for routine local CI-equivalent
+validation. The stable Rust profile contracts run in Tier 1; the exact Rust
+surface snapshots and semver cross-check are an extended gate documented in
+[`compat/rust-public-api/README.md`](compat/rust-public-api/README.md).
+
 ## Usage -- Rust
 
 ```rust

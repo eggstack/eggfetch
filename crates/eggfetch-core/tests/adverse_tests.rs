@@ -995,6 +995,92 @@ async fn parse_proxy_response_bytes_is_safe_inside_tokio_runtime() {
     assert_eq!(result.unwrap().0, 200);
 }
 
+#[cfg(feature = "proxy")]
+#[tokio::test]
+async fn connect_wire_and_hidden_adapter_share_common_fixtures() {
+    use eggfetch_http_connect::{read_connect_response_head, ConnectResponseLimits};
+    use tokio::io::BufReader;
+
+    let fixtures = [
+        b"HTTP/1.1 200\r\n\r\n".as_slice(),
+        b"HTTP/1.1 200 Connection established\r\nX-Mixed:  value\r\nvia: proxy\r\n\r\n".as_slice(),
+        b"HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic\r\n\r\n"
+            .as_slice(),
+    ];
+    for fixture in fixtures {
+        let (client, mut server) = tokio::io::duplex(65_536);
+        server.write_all(fixture).await.unwrap();
+        drop(server);
+        let mut reader = BufReader::new(client);
+        let wire = read_connect_response_head(&mut reader, &ConnectResponseLimits::default())
+            .await
+            .unwrap();
+        let hidden = eggfetch_core::proxy::parse_proxy_response_bytes(fixture).unwrap();
+        assert_eq!(wire.status, hidden.0);
+        let wire_headers: Vec<_> = wire
+            .headers
+            .iter()
+            .map(|(name, value)| (name.clone(), String::from_utf8(value.clone()).unwrap()))
+            .collect();
+        assert_eq!(wire_headers, hidden.1);
+    }
+}
+
+#[cfg(feature = "proxy")]
+#[tokio::test]
+async fn connect_wire_fixture_preserves_read_ahead_bytes() {
+    use eggfetch_http_connect::{read_connect_response_head, ConnectResponseLimits};
+    use tokio::io::{AsyncReadExt, BufReader};
+
+    let fixture = b"HTTP/1.1 200 Connection established\r\n\r\nTUNNEL-DATA";
+    let (client, mut server) = tokio::io::duplex(65_536);
+    server.write_all(fixture).await.unwrap();
+    drop(server);
+    let mut reader = BufReader::new(client);
+    read_connect_response_head(&mut reader, &ConnectResponseLimits::default())
+        .await
+        .unwrap();
+    let mut remaining = Vec::new();
+    reader.read_to_end(&mut remaining).await.unwrap();
+    assert_eq!(remaining, b"TUNNEL-DATA");
+    assert!(eggfetch_core::proxy::parse_proxy_response_bytes(fixture).is_ok());
+}
+
+#[cfg(feature = "proxy")]
+#[tokio::test]
+async fn connect_wire_and_hidden_adapter_reject_common_malformed_fixtures() {
+    use eggfetch_http_connect::{read_connect_response_head, ConnectResponseLimits};
+    use tokio::io::BufReader;
+
+    let fixtures = [
+        b"HTTP/1.1 200".as_slice(),
+        b"not a status\r\n\r\n".as_slice(),
+        b"HTTP/1.1 200\r\nNoColon\r\n\r\n".as_slice(),
+    ];
+    for fixture in fixtures {
+        let (client, mut server) = tokio::io::duplex(65_536);
+        server.write_all(fixture).await.unwrap();
+        drop(server);
+        let mut reader = BufReader::new(client);
+        assert!(
+            read_connect_response_head(&mut reader, &ConnectResponseLimits::default())
+                .await
+                .is_err()
+        );
+        assert!(eggfetch_core::proxy::parse_proxy_response_bytes(fixture).is_err());
+    }
+}
+
+#[cfg(feature = "proxy")]
+#[test]
+fn hidden_connect_adapter_uses_wire_default_bounds() {
+    let limits = eggfetch_http_connect::ConnectResponseLimits::default();
+    assert_eq!(limits.max_status_line, 4096);
+    assert_eq!(limits.max_header_line, 8192);
+    assert_eq!(limits.max_headers_bytes, 65_536);
+    assert_eq!(limits.max_header_count, 100);
+}
+
 // ---------------------------------------------------------------------------
 // Python streaming drop/shutdown paths — exercised via core Rust API
 // ---------------------------------------------------------------------------

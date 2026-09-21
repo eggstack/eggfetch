@@ -182,6 +182,57 @@ class TestSSLContextSnapshot:
         assert "SSLContext" in r
 
 
+class TestPrivateSSLContextExport:
+    """Exercise the single versioned Python-to-Rust private contract."""
+
+    def test_export_has_bounded_versioned_shape(self):
+        from eggfetch._ssl_context import _export_ssl_context_state
+
+        payload = _export_ssl_context_state(ssl.create_default_context())
+        assert set(payload) == {
+            "schema_version",
+            "classification",
+            "verify_mode",
+            "check_hostname",
+            "ca_certs_der",
+            "min_version",
+            "max_version",
+            "helper_metadata",
+        }
+        assert payload["schema_version"] == 1
+        assert isinstance(payload["ca_certs_der"], list)
+        assert payload["helper_metadata"] is None
+
+    def test_export_preserves_helper_provenance_without_secrets(self):
+        from eggfetch._ssl_context import _export_ssl_context_state
+
+        payload = _export_ssl_context_state(create_ssl_context(verify=False))
+        assert payload["helper_metadata"]["verify"] is False
+        assert "private_key" not in repr(payload)
+        assert "pem" not in repr(payload).lower()
+
+    @pytest.mark.parametrize(
+        ("field", "value"),
+        [
+            ("schema_version", 99),
+            ("classification", "future-classification"),
+            ("verify_mode", "required"),
+            ("ca_certs_der", ["not-der"]),
+        ],
+    )
+    def test_malformed_export_fails_before_dispatch(self, monkeypatch, field, value):
+        import eggfetch._ssl_context as bridge
+
+        ctx = ssl.create_default_context()
+        payload = bridge._export_ssl_context_state(ctx)
+        payload[field] = value
+        monkeypatch.setattr(bridge, "_export_ssl_context_state", lambda _ctx: payload)
+        with pytest.raises((TypeError, ValueError), match="SSLContext export"):
+            from eggfetch import Client as NativeClient
+
+            NativeClient(verify=ctx)
+
+
 # ── Classification ───────────────────────────────────────────────────
 
 
