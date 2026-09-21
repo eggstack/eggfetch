@@ -1,21 +1,25 @@
 # eggfetch Plan Index
 
 
-## Active polish — post-maintenance documentation state (2026-09-21)
+## Completed polish — post-maintenance documentation state (2026-09-21)
 
 Plan: `post-maintenance-documentation-state-polish-pass.md`
 
 Planning baseline: `e7371e3722dbbe61aa9004ef3c16f6b9fd866816`.
 
-Status: in progress. Implementation and qualification remain closed on corrective
-freeze `18c1f96c1cbf9d71aa480030b0f365c85267620b`; this pass does not reopen
-executable qualification. It removes the remaining documentation-state
-contradictions: the stale `bc4800ee...` "Current qualification" block in
-`docs/reference/compatibility.md`, the missing execution/closure record in
-the completed closure-evidence corrective plan, and the parent addendum's
-now-satisfied conditional CI wording. The pass must remain docs/state-only,
-preserve both live profile bindings at `18c1f96...`, and close only after a
-final docs-only descendant audit plus ordinary remote CI.
+Status: complete. Implementation and qualification remain closed on corrective
+freeze `18c1f96c1cbf9d71aa480030b0f365c85267620b`; this pass did not reopen
+executable qualification. It repaired the stale `bc4800ee...` "Current
+qualification" block in `docs/reference/compatibility.md` (plus the same
+stale binding in `docs/reference/compatibility-stage-decision.md` found in
+the consistency sweep), appended the execution/closure record to the
+completed closure-evidence corrective plan, and finalized the parent
+addendum's now-satisfied conditional CI wording. The pass remained
+docs/state-only with both live profile bindings preserved at `18c1f96...`.
+Final docs-only head `9b8197bcae45faee5bef9e0a05ae7b16543b8725` passed
+ordinary remote CI (run `35635954532`). Issue #24 publication and the
+separate Python 3.15 wheel rehearsal remain the only independent pending
+items relevant to these records.
 
 
 ## Completed corrective — post-maintenance closure evidence (2026-09-21)
