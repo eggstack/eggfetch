@@ -1,6 +1,47 @@
 # eggfetch Plan Index
 
 
+## Active program — API-preserving private architecture containment (2026-09-21)
+
+Handoff program: `api-preserving-private-architecture-containment-program.md`
+
+Planning baseline: `c53eebc47569279b61c0611d4523c5132bdbcaeb`.
+
+Objective: complete a second private-architecture containment pass without
+changing any existing Rust/Python/C/CLI API, feature/default exposure,
+accepted/rejected input, protocol behavior, compatibility claim, or supported
+capability. The audit found sound engine/adapter ownership; the remaining work
+is concentrated private decomposition plus prevention of further growth in
+historical low-level Rust public surfaces. HTTP/3 remains experimental and
+Node remains an experimental prototype.
+
+Execution order:
+
+1. `core-client-proxy-private-decomposition-second-pass.md` — finish moving
+   private route/cache/connector and proxy parsing/environment/identity/test
+   mechanics behind private modules while keeping all public Client/Builder/
+   proxy declarations at their existing canonical paths.
+2. `python-streaming-and-cli-private-decomposition.md` — decompose Python
+   streaming state/bridge/decoder/iterator internals and CLI parsing/output/
+   file/error responsibilities without changing PyO3 signatures, PEP 561
+   typing, streaming lifecycle/backpressure, CLI syntax/defaults/output, or
+   exit codes.
+3. `rust-surface-containment-and-experimental-adapter-hygiene.md` — inventory
+   and guard already-public low-level Rust surfaces such as Alt-Svc/metrics,
+   prove feature-profile containment, verify C ABI stability, and reconcile
+   Node prototype metadata without adding Node/H3 capability.
+4. `post-private-architecture-api-requalification-and-closure.md` — freeze one
+   exact executable SHA, run Tier 1/extended/package/security/exact MSRV and
+   Rust/Python/C/CLI/HTTPX/HTTPX2 API/behavior gates, and reconcile closure
+   records only after zero drift is proven.
+
+No public visibility cleanup, feature-graph simplification, new transport,
+Node maturation, H3 graduation, Python trailer exposure, Trio/AnyIO, new CLI
+feature, new FFI symbol, or compatibility waiver belongs in this program.
+Issue #24 publication/tag/PyPI work and the Python 3.15 18-wheel rehearsal
+remain independent maintainer/release actions.
+
+
 ## Completed polish — post-maintenance documentation state (2026-09-21)
 
 Plan: `post-maintenance-documentation-state-polish-pass.md`
