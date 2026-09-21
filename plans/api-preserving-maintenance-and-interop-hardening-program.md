@@ -156,3 +156,12 @@ across Tier 1/extended/package/security/MSRV/oracle/compat gates, and renewed
 all canonical Stage C records to that freeze. No production API/capability
 change occurred. This program closes fully only after the corrective's remote
 CI descendant is green.
+
+Closure finalization (2026-09-21): remote CI run `35624022656` passed on
+evidence descendant `1f8daae4599361d6fb2acd2d8fbca6e38b4fc4fe`, and remote CI
+run `35625522745` passed on index-only closure head
+`e7371e3722dbbe61aa9004ef3c16f6b9fd866816`. The final live Stage C binding
+remains `18c1f96c1cbf9d71aa480030b0f365c85267620b`; the closure-evidence
+corrective is complete and this parent maintenance program is fully closed.
+Issue #24 publication and the separate Python 3.15 wheel rehearsal remain
+outside this program and still pending independently.

@@ -7,7 +7,7 @@ Plan: `post-maintenance-documentation-state-polish-pass.md`
 
 Planning baseline: `e7371e3722dbbe61aa9004ef3c16f6b9fd866816`.
 
-Status: planned. Implementation and qualification remain closed on corrective
+Status: in progress. Implementation and qualification remain closed on corrective
 freeze `18c1f96c1cbf9d71aa480030b0f365c85267620b`; this pass does not reopen
 executable qualification. It removes the remaining documentation-state
 contradictions: the stale `bc4800ee...` "Current qualification" block in

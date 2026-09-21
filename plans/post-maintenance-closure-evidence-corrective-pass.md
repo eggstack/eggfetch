@@ -160,13 +160,13 @@ Prefer temporary fixture text/AST over editing production stubs in place.
 
 ### Acceptance
 
-- [ ] Runtime relational self-tests fail when each promised relationship is
+- [x] Runtime relational self-tests fail when each promised relationship is
       intentionally mutated.
-- [ ] Typing relational self-tests fail for sync/async kind, body annotation,
+- [x] Typing relational self-tests fail for sync/async kind, body annotation,
       top-level-shape, export, and semantic-return drift.
-- [ ] Existing production `native_api_manifest.json` remains the only
+- [x] Existing production `native_api_manifest.json` remains the only
       reviewed manifest.
-- [ ] No public Python signature/stub/export changes are needed.
+- [x] No public Python signature/stub/export changes are needed.
 
 ## Part 2 — complete malformed SSLContext private-contract evidence
 
@@ -213,11 +213,11 @@ Also retain positive controls for:
 
 ### Acceptance
 
-- [ ] Every required/malformed field has direct negative evidence.
-- [ ] Unknown schema versions fail closed.
-- [ ] No malformed payload reaches transport dispatch.
-- [ ] Existing accepted/rejected SSLContext semantics remain unchanged.
-- [ ] No private key material or secret-bearing payload is introduced.
+- [x] Every required/malformed field has direct negative evidence.
+- [x] Unknown schema versions fail closed.
+- [x] No malformed payload reaches transport dispatch.
+- [x] Existing accepted/rejected SSLContext semantics remain unchanged.
+- [x] No private key material or secret-bearing payload is introduced.
 
 ## Part 3 — freeze a new corrective candidate
 
@@ -236,9 +236,9 @@ Do not bind Stage C to the documentation head.
 
 ### Acceptance
 
-- [ ] One exact corrective freeze is named.
-- [ ] No test/build/validation change exists after that freeze.
-- [ ] `df2549f7...` remains historical evidence for the original maintenance
+- [x] One exact corrective freeze is named.
+- [x] No test/build/validation change exists after that freeze.
+- [x] `df2549f7...` remains historical evidence for the original maintenance
       implementation, not the live Stage C binding.
 
 ## Part 4 — requalify the new freeze
@@ -271,14 +271,14 @@ verification policy now requires it.
 
 ### Acceptance
 
-- [ ] Exact Rust six-profile API snapshots remain byte-identical to planning
+- [x] Exact Rust six-profile API snapshots remain byte-identical to planning
       baseline `03ecba973010e2858bf16a2b5f84d51ce70adae4`.
-- [ ] Semver check passes with no breaking result.
-- [ ] Native Python public surface has zero drift.
-- [ ] HTTPX/HTTPX2 have zero new unexplained API or behavioral differences.
-- [ ] SSLContext accepted/rejected behavior is unchanged.
-- [ ] Tier 1, extended, applicable package, security, MSRV and docs gates pass.
-- [ ] Optional artifacts are truthfully skipped when absent.
+- [x] Semver check passes with no breaking result.
+- [x] Native Python public surface has zero drift.
+- [x] HTTPX/HTTPX2 have zero new unexplained API or behavioral differences.
+- [x] SSLContext accepted/rejected behavior is unchanged.
+- [x] Tier 1, extended, applicable package, security, MSRV and docs gates pass.
+- [x] Optional artifacts are truthfully skipped when absent.
 
 ## Part 5 — renew the canonical Stage C exact-SHA records
 
@@ -315,12 +315,12 @@ versions, Python-version support claims, or feature-extra mappings.
 
 ### Acceptance
 
-- [ ] Both profile files bind to the same new corrective freeze.
-- [ ] The live parity ledger names the same freeze as current Stage C.
+- [x] Both profile files bind to the same new corrective freeze.
+- [x] The live parity ledger names the same freeze as current Stage C.
 - [ ] Canonical compatibility/residual docs name the same freeze.
-- [ ] `bc4800ee...` is clearly historical after the renewal.
-- [ ] No new compatibility waiver/allowed difference is introduced.
-- [ ] No documentation calls the later docs-only head the executable freeze.
+- [x] `bc4800ee...` is clearly historical after the renewal.
+- [x] No new compatibility waiver/allowed difference is introduced.
+- [x] No documentation calls the later docs-only head the executable freeze.
 
 ## Part 6 — repair closure records and plan-index truth
 
@@ -354,11 +354,11 @@ Do not rewrite historical execution details solely for cosmetic consistency.
 
 ### Acceptance
 
-- [ ] Plan headings agree with their recorded status.
-- [ ] The maintenance parent does not claim final closure before this
+- [x] Plan headings agree with their recorded status.
+- [x] The maintenance parent does not claim final closure before this
       corrective passes.
-- [ ] Issue #24 and Python 3.15 remain truthful independent pending work.
-- [ ] Historical freeze versus live freeze terminology is unambiguous.
+- [x] Issue #24 and Python 3.15 remain truthful independent pending work.
+- [x] Historical freeze versus live freeze terminology is unambiguous.
 
 ## Part 7 — remote CI and descendant audit
 
@@ -379,27 +379,27 @@ freeze and requires the relevant requalification again.
 
 ## Final acceptance criteria
 
-- [ ] Python relational negative evidence covers the promised drift classes.
-- [ ] SSLContext malformed-contract evidence covers every required field and
+- [x] Python relational negative evidence covers the promised drift classes.
+- [x] SSLContext malformed-contract evidence covers every required field and
       fails before dispatch.
-- [ ] One new exact corrective freeze is recorded.
-- [ ] Six-profile Rust public API oracle remains identical to
+- [x] One new exact corrective freeze is recorded.
+- [x] Six-profile Rust public API oracle remains identical to
       `03ecba973010e2858bf16a2b5f84d51ce70adae4`.
-- [ ] Rust semver check passes.
-- [ ] Native Python manifest/typing/API surface remains unchanged.
-- [ ] HTTPX 0.28.1 and HTTPX2 2.12.0 full compatibility/API oracles have zero
+- [x] Rust semver check passes.
+- [x] Native Python manifest/typing/API surface remains unchanged.
+- [x] HTTPX 0.28.1 and HTTPX2 2.12.0 full compatibility/API oracles have zero
       new unexplained drift.
 - [ ] Canonical Stage C profiles, ledger, residual differences, and
       compatibility docs all bind to the same new freeze.
-- [ ] Tier 1, extended, applicable package, security, exact MSRV, docs and
+- [x] Tier 1, extended, applicable package, security, exact MSRV, docs and
       adapter/resource gates pass.
-- [ ] No compatibility waiver, feature/default, public API, or supported
+- [x] No compatibility waiver, feature/default, public API, or supported
       behavior changes.
-- [ ] Remote CI is green on the final documentation/evidence descendant.
-- [ ] Stale performance Active headings are corrected.
-- [ ] Issue #24 remains fixed-but-unpublished unless publication actually
+- [x] Remote CI is green on the final documentation/evidence descendant.
+- [x] Stale performance Active headings are corrected.
+- [x] Issue #24 remains fixed-but-unpublished unless publication actually
       completes.
-- [ ] Python 3.15 remains separately pending unless its rehearsal actually
+- [x] Python 3.15 remains separately pending unless its rehearsal actually
       completes.
 - [ ] Parent maintenance program is marked fully complete only after every item
       above is satisfied.
@@ -421,3 +421,93 @@ Stop and split new work rather than expanding this corrective if:
 
 This corrective succeeds by making the already-implemented maintenance work
 fully evidenced and the repository's live exact-SHA state truthful.
+
+## Execution/closure record — corrective complete (2026-09-21)
+
+Planning baseline: `5ced637af7479b95b6454697e638c7a3759d8670` (`main`,
+2026-09-21).
+Original maintenance implementation freeze:
+`df2549f7c64ebfccde61ed36fef785d39e83b38d` (historical implementation
+evidence only; never the live Stage C binding after this corrective).
+Final corrective test/tooling freeze:
+`18c1f96c1cbf9d71aa480030b0f365c85267620b` (commit "tests: complete
+relational and SSLContext malformed-contract negative evidence"; touches
+only `scripts/check_native_python_api.py`,
+`scripts/check_python_typing_surface.py`, and
+`crates/eggfetch-python/tests/compat/test_ssl_context_translation.py`).
+Evidence/profile/docs descendant:
+`1f8daae4599361d6fb2acd2d8fbca6e38b4fc4fe` (profiles, ledger, plans, and
+compatibility/residual documentation renewal only; no test/validation/
+executable change after the freeze).
+Final index-only closure descendant at polish-pass start:
+`e7371e3722dbbe61aa9004ef3c16f6b9fd866816` (plan-index only).
+
+What landed:
+
+- Relational Python negative evidence: runtime
+  `_check_relational_runtime_contracts()` and typing
+  `_check_relational_stub_contracts()` self-tests now prove constructor,
+  mirror-method, top-level, body-keyword, sync/async-kind, AsyncBody,
+  limits/extensions, export, and semantic-return drift detection. The
+  reviewed `native_api_manifest.json` remains the only manifest; no public
+  Python signature/stub/export changed.
+- Malformed SSLContext private-contract evidence: all required malformed
+  fields (non-mapping payload, missing/unknown `schema_version`,
+  missing/invalid `classification`, missing/wrong-type `verify_mode`,
+  `check_hostname`, `ca_certs_der` and individual CA entries,
+  `min_version`/`max_version` and unsupported numeric bounds,
+  missing/non-mapping `helper_metadata` and malformed `verify`/`cert_path`/
+  `key_path`) fail closed before network dispatch. Unknown schema versions
+  fail closed. Positive controls (default, verify=False helper,
+  check_hostname=False, custom CA, TLS 1.2/1.3 bounds, helper mTLS
+  provenance, mutation invalidation, proxy/destination TLS paths) remain
+  green. Accepted/rejected semantics unchanged; no secret-bearing payload
+  introduced.
+- Six-profile Rust exact public API oracle: byte-identical to planning
+  baseline `03ecba973010e2858bf16a2b5f84d51ce70adae4` (pinned
+  `cargo-public-api 0.52.0` / `nightly-2026-05-07`).
+- Rust semver check: passes with no breaking result (pinned
+  `cargo-semver-checks 0.49.0`).
+- Tier 1 (`./scripts/check.sh`), extended (`./scripts/check.sh extended`),
+  applicable package (`./scripts/check.sh package`),
+  `./scripts/check_security.sh`, exact Rust 1.89.0 MSRV, native
+  Python API/typing checks including the new negative self-tests, focused
+  SSLContext suite, full pinned HTTPX 0.28.1 and HTTPX2 2.12.0
+  compatibility suites, both compatibility API oracles (71/79, zero
+  unexplained), and FFI/feature-matrix/docs/lifecycle/soak controls are
+  green as recorded in `plans/httpx-parity-correction-status.md` and
+  `plans/README.md`.
+- Policy-defined skips only: absent Node native artifact
+  (`crates/eggfetch-node/eggfetch.node`) and absent downstream
+  qualification manifest; recorded as skips, never as passes.
+- Remote CI run `35624022656` is green on final documentation/evidence
+  descendant `1f8daae4599361d6fb2acd2d8fbca6e38b4fc4fe`.
+- Remote CI run `35625522745` is green on index-only closure head
+  `e7371e3722dbbe61aa9004ef3c16f6b9fd866816`.
+- Canonical Stage C renewal to `18c1f96...` on 2026-09-21: both
+  `compat/httpx/0.28.1/profile.toml` and
+  `compat/httpx2/2.12.0/profile.toml` record `stage = "stage-c-qualified"`,
+  `status = "qualified"`,
+  `qualification-sha = "18c1f96c1cbf9d71aa480030b0f365c85267620b"`,
+  `previous-qualification-sha = "bc4800ee9428f0fd11d7d0b914c489b444fe93fc"`;
+  the live ledger `plans/httpx-parity-correction-status.md` and
+  `docs/residual-differences.md` name the same freeze. `1f8daae...` and
+  `e7371e3...` are documentation/index descendants only, never the
+  executable qualification freeze.
+- No public API/capability/feature/default/compatibility-waiver change
+  occurred. HTTP/3 remains experimental; Node remains experimental.
+  No H3 graduation or Node maturation.
+- Issue #24 remains fixed-but-unpublished (publication pending
+  maintainer action).
+- Python 3.15 wheel rehearsal remains separately pending.
+
+Residual noted for the polish pass: at corrective close the top-level
+`docs/reference/compatibility.md` qualification statement, both profiles,
+the ledger, and residual differences all named `18c1f96...`, but a later
+**Current qualification** block in the same file still named `bc4800ee...`
+as current. That stale block is repaired by
+`plans/post-maintenance-documentation-state-polish-pass.md` without
+changing any executable/test/validation/profile binding. The Part 5 and
+Final canonical-docs checkboxes below therefore remain unchecked with this
+explanation until that docs-only repair lands; all other boxes reflect
+completed corrective evidence.
