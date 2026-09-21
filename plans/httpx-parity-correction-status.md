@@ -4,6 +4,39 @@ This record is the exact-SHA-bound status for the HTTPX 0.28.1 compatibility
 facade. Historical phase and corrective-pass records remain in the git history
 and referenced plans; counts below are only from the runs named here.
 
+## Recorded state — Stage C renewed after maintenance closure-evidence corrective (2026-09-21)
+
+Recorded designation: **Stage C qualified** for both documented facades, bound
+to executable SHA `18c1f96c1cbf9d71aa480030b0f365c85267620b`. The preceding
+`bc4800ee9428f0fd11d7d0b914c489b444fe93fc` binding remains historical because
+the API-preserving maintenance campaign plus this corrective changed private
+implementation/test/validation inputs without public compatibility drift. The
+intermediate `df2549f7c64ebfccde61ed36fef785d39e83b38d` maintenance freeze
+remains historical implementation evidence, not a live Stage C binding.
+
+Qualification evidence on the corrective executable freeze:
+
+- Tier 1, extended, package, live security preflight, and exact Rust 1.89.0
+  MSRV checks passed. The optional skips remain the absent Node native artifact
+  and absent downstream qualification manifest.
+- The native Python manifest remained at 66 exports and the typing surface
+  remained at 66 runtime exports, 32 exception bases, and 24 reviewed member
+  contracts. Full pinned HTTPX 0.28.1/HTTPX2 2.12.0 compatibility suites and
+  API oracles (71/79, zero unexplained) passed without new differences.
+- Six-profile Rust public API oracle remained byte-identical to planning
+  baseline `03ecba973010e2858bf16a2b5f84d51ce70adae4`; semver check passed.
+- Python relational guardrails now prove constructor, mirror-method,
+  top-level, body-keyword, sync/async-kind, AsyncBody, limits/extensions,
+  export, and semantic-return drift detection. The private SSLContext export
+  matrix now proves all required malformed fields fail before dispatch.
+  Destination/proxy TLS, helper mTLS provenance, and mutation-invalidation
+  positives remain green. No compatibility waiver, dependency,
+  feature-default, or public API change was introduced.
+
+The corrective plan is
+`plans/post-maintenance-closure-evidence-corrective-pass.md`; the preceding
+`bc4800ee...` record remains valid historical evidence.
+
 ## Recorded state — Stage C renewed after closure corrective pass (2026-09-20)
 
 Recorded designation: **Stage C qualified** for both documented facades, bound

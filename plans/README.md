@@ -7,17 +7,16 @@ Plan: `post-maintenance-closure-evidence-corrective-pass.md`
 
 Planning baseline: `5ced637af7479b95b6454697e638c7a3759d8670`.
 
-Status: planned. The maintenance implementation itself is healthy, but formal
-closure is not yet complete: the live HTTPX/HTTPX2 Stage C profiles and
-canonical compatibility documentation still point to the pre-maintenance
-`bc4800ee...` freeze, while the maintenance campaign changed
-test/validation/executable inputs and qualified `df2549f7...`. The corrective
-first completes the promised Python relational and SSLContext malformed-schema
-negative evidence, then freezes/requalifies that corrected test/tooling state,
-renews all canonical exact-SHA records, fixes stale completed-as-Active plan
-headings, and closes only after remote CI. No public API/capability change,
-compatibility waiver, H3 graduation, Node maturation, issue #24 publication,
-or Python 3.15 release qualification belongs in this pass.
+Status: implementation complete locally on corrective freeze
+`18c1f96c1cbf9d71aa480030b0f365c85267620b`; Tier 1, extended, package,
+security, exact Rust 1.89.0 MSRV, six-profile Rust oracle, and full pinned
+HTTPX/HTTPX2 gates are green locally with policy-defined Node/downstream
+skips. Canonical Stage C profiles, ledger, and compatibility docs are rebound
+locally to the new freeze. Remote CI is the remaining closure gate; this entry
+becomes Completed only after the final documentation/evidence descendant is
+green remotely. No public API/capability change, compatibility waiver, H3
+graduation, Node maturation, issue #24 publication, or Python 3.15 release
+qualification belongs in this pass.
 
 
 ## Program implementation complete — API-preserving maintenance and interop hardening (closure corrective active) (2026-09-21)
@@ -65,7 +64,7 @@ H3 graduation, Trio/AnyIO, Python trailer exposure, new auth scheme, or
 compatibility waiver belongs in this program.
 
 
-## Active corrective — second-pass performance closure truth/semantics (2026-09-20)
+## Completed corrective — second-pass performance closure truth/semantics (2026-09-20)
 
 Plan: `second-pass-performance-closure-corrective-pass.md`
 
@@ -80,7 +79,7 @@ evidence; the decoded-body capacity candidate was rejected because safe
 decoded-length provenance was unavailable. Remote CI is the final post-push
 verification reported in the handoff.
 
-## Active program — second-pass performance ownership optimization (2026-09-20)
+## Completed program — second-pass performance ownership optimization (2026-09-20)
 
 Handoff program: `second-pass-performance-ownership-optimization-program.md`
 

@@ -293,3 +293,19 @@ Policy-approved skips are the absent Node native artifact and absent downstream
 qualification artifact. Issue #24 remains fixed-but-unpublished, and Python
 3.15 remains under its separate pending rehearsal plan. Remote CI run
 `35606617959` passed for head `9f16730cece5a1dbf6c936079852de165ed21add`.
+
+## Corrective addendum — closure-evidence pass (2026-09-21)
+
+The original maintenance implementation landed on
+`df2549f7c64ebfccde61ed36fef785d39e83b38d`. This closure record incorrectly
+marked canonical exact-SHA renewal complete while live profiles/docs still
+pointed to `bc4800ee9428f0fd11d7d0b914c489b444fe93fc`.
+
+The corrective `post-maintenance-closure-evidence-corrective-pass.md` added
+the missing Python relational and SSLContext malformed-contract negative
+evidence, created a new final test/tooling freeze
+`18c1f96c1cbf9d71aa480030b0f365c85267620b`, requalified it (Tier 1, extended,
+package, security, exact MSRV 1.89.0, six-profile oracle, full compat), and
+renewed all canonical Stage C records to that freeze. No production
+API/capability change occurred; `df2549f7...` remains historical
+implementation evidence and `bc4800ee...` is historical after renewal.

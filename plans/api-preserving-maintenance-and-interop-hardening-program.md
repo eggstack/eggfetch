@@ -141,3 +141,18 @@ Do not redesign Client/Request/Response, remove compatibility aliases, change fe
 Stop and split a separate corrective if any proposed internal change requires a public Rust/Python/C/CLI API change, changes a documented accepted/rejected input, changes transport selection, weakens security/fail-closed behavior, needs a new compatibility waiver, or requires a new feature/default to preserve compilation.
 
 The correct result for a subtask may be "retain the duplication and add conformance coverage" when deduplication would change behavior or public exposure.
+
+## Corrective addendum — closure-evidence pass (2026-09-21)
+
+Original maintenance implementation landed on
+`df2549f7c64ebfccde61ed36fef785d39e83b38d`. The first closure record
+incorrectly marked canonical exact-SHA renewal complete while live
+profiles/docs still pointed to `bc4800ee9428f0fd11d7d0b914c489b444fe93fc`.
+
+Corrective `post-maintenance-closure-evidence-corrective-pass.md` completed
+the promised Python relational and SSLContext malformed-schema negative
+evidence, froze `18c1f96c1cbf9d71aa480030b0f365c85267620b`, requalified it
+across Tier 1/extended/package/security/MSRV/oracle/compat gates, and renewed
+all canonical Stage C records to that freeze. No production API/capability
+change occurred. This program closes fully only after the corrective's remote
+CI descendant is green.

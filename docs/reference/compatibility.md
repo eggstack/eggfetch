@@ -5,12 +5,14 @@ claims refer specifically to the pinned 0.28.1 asyncio-supported facade
 (`eggfetch.compat.httpx`), not all HTTPX transports or concurrency backends.
 HTTPX2 claims refer specifically to the sibling 2.12.0 facade
 (`eggfetch.compat.httpx2`, Stage C qualified on frozen executable SHA
-`bc4800ee9428f0fd11d7d0b914c489b444fe93fc` (2026-09-20, second-pass
-closure corrective requalification after the ownership/performance pass),
+`18c1f96c1cbf9d71aa480030b0f365c85267620b` (2026-09-21, maintenance
+closure-evidence corrective requalification after the API-preserving
+maintenance campaign),
 profiles in
 `compat/httpx/0.28.1/profile.toml` and `compat/httpx2/2.12.0/profile.toml`;
 the live ledger is `plans/httpx-parity-correction-status.md`). The prior
-`1153d40c9a8a3bb380e63add1dee7601469d91f3` binding is historical;
+`bc4800ee9428f0fd11d7d0b914c489b444fe93fc` binding is historical (with
+`df2549f7...` retained as intermediate maintenance evidence);
 the two contracts are independent and never collapsed into one "HTTPX parity"
 claim. HTTPX 1.0 pre-releases are preview-only (`compat/httpx/1.0-preview/`)
 with no parity claim.

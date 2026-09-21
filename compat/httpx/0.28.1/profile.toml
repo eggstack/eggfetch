@@ -104,11 +104,20 @@ rebaseline-sha = "f9eb1a455907d43210886b7b047d18bde8716652"
 # provenance. This profile was renewed after Tier 1, extended, package,
 # security, and exact Rust 1.89.0 MSRV gates on the executable freeze below.
 # The immediately preceding `1153d40c...` binding is historical only.
+# The API-preserving maintenance campaign plus the closure-evidence corrective
+# then strengthened Python relational guardrails and the private SSLContext
+# malformed-contract matrix without public compatibility drift. The
+# intermediate `df2549f7...` maintenance freeze remains historical
+# implementation evidence; the live predecessor here is `bc4800ee...`. This
+# profile was renewed after Tier 1, extended, package, security, exact Rust
+# 1.89.0 MSRV, six-profile Rust oracle, and full pinned HTTPX/HTTPX2 gates on
+# the corrective freeze below. The immediately preceding `bc4800ee...`
+# binding is historical only.
 stage = "stage-c-qualified"
 status = "qualified"
-qualification-sha = "bc4800ee9428f0fd11d7d0b914c489b444fe93fc"
-qualification-date = "2026-09-20"
-previous-qualification-sha = "1153d40c9a8a3bb380e63add1dee7601469d91f3"
+qualification-sha = "18c1f96c1cbf9d71aa480030b0f365c85267620b"
+qualification-date = "2026-09-21"
+previous-qualification-sha = "bc4800ee9428f0fd11d7d0b914c489b444fe93fc"
 historical-current-qualification-sha = "312cd4402ea2b4b27bf54cf7dc36924a1d449adc"
 historical-qualification-sha = "cc90f5ed561bbe10d4c26accc54ed3b916518f98, d034a1005857a7f403222dda4bda5f2f204a44fe, d24101be6ed7be64463813750da5b4043d9905ec, 5c7899fefb6df087dfa1b3578fbef9ba64f87742, 9ffa6cd85848fd16a424b65f73254351911777c4, c44d4f25ffebc1a792335163ae4bc106076b3963"
 reference = "httpx==0.28.1"
