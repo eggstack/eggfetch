@@ -17,7 +17,7 @@ This program must not become a vehicle for API cleanup by removal, signature red
 ## Closure status — local qualification complete (2026-09-21)
 
 The ordered child plans are implemented and locally qualified on executable
-freeze `ba4b7d575f3dedaa26781d01b495e4e6c13e5dd2`. No public Rust/Python/C/CLI
+freeze `df2549f7c64ebfccde61ed36fef785d39e83b38d`. No public Rust/Python/C/CLI
 surface, feature/default exposure, supported behavior, or maturity label
 changed. The post-maintenance closure plan owns the final evidence; remote CI
 verification is recorded after push. Issue #24 publication and the separate

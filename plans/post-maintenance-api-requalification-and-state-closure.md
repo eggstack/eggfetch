@@ -281,7 +281,7 @@ If a public change becomes necessary, stop this campaign and open a separate ver
 ## Execution record — local closure (2026-09-21)
 
 The final executable/test/tooling freeze is
-`ba4b7d575f3dedaa26781d01b495e4e6c13e5dd2`, based on planning baseline
+`df2549f7c64ebfccde61ed36fef785d39e83b38d`, based on planning baseline
 `03ecba973010e2858bf16a2b5f84d51ce70adae4`. Qualification used Rust 1.98.1,
 exact MSRV Rust 1.89.0, Python 3.12.3, Linux x86_64, and the pinned Rust API
 toolchain/tooling recorded in the child plan.

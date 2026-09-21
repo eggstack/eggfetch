@@ -204,7 +204,7 @@ A smaller coherent extraction is preferable to a complete decomposition that mak
 
 ## Execution record — complete (2026-09-21)
 
-Implemented on executable freeze `ba4b7d575f3dedaa26781d01b495e4e6c13e5dd2`.
+Implemented on executable freeze `df2549f7c64ebfccde61ed36fef785d39e83b38d`.
 Private client configuration and proxy environment/NO_PROXY helpers now have
 focused internal module boundaries. Public paths, cfg exposure, cache and
 transport ownership, and native-versus-HTTPX NO_PROXY behavior remain

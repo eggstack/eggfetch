@@ -186,7 +186,7 @@ Conformance coverage is a successful outcome when safe code sharing is not possi
 
 ## Execution record — complete (2026-09-21)
 
-Implemented on executable freeze `ba4b7d575f3dedaa26781d01b495e4e6c13e5dd2`.
+Implemented on executable freeze `df2549f7c64ebfccde61ed36fef785d39e83b38d`.
 The hidden core parser derives bounds from
 `ConnectResponseLimits::default()`, common parser fixtures and read-ahead
 behavior are covered, and shared auth inputs are checked against the wire

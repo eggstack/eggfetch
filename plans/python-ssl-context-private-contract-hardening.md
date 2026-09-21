@@ -181,7 +181,7 @@ If consolidating the bridge requires broadening accepted SSLContext state, using
 
 ## Execution record — complete (2026-09-21)
 
-Implemented on executable freeze `ba4b7d575f3dedaa26781d01b495e4e6c13e5dd2`.
+Implemented on executable freeze `df2549f7c64ebfccde61ed36fef785d39e83b38d`.
 Rust now consumes only the bounded schema-versioned `_export_ssl_context_state`
 contract, with explicit type/schema validation and fail-closed rejection before
 dispatch. Helper provenance, mutation detection, CA bounds, TLS version limits,

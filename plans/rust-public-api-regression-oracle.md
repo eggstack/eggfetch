@@ -172,7 +172,7 @@ If exact API tooling requires an unbounded nightly dependency or produces unstab
 
 ## Execution record — complete (2026-09-21)
 
-Implemented on executable freeze `ba4b7d575f3dedaa26781d01b495e4e6c13e5dd2`.
+Implemented on executable freeze `df2549f7c64ebfccde61ed36fef785d39e83b38d`.
 The six profile snapshots and stable compile-contract fixture compare cleanly
 with planning baseline `03ecba973010e2858bf16a2b5f84d51ce70adae4`. The pinned
 `cargo-public-api 0.52.0` / `nightly-2026-05-07` oracle and complementary
