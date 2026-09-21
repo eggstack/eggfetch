@@ -8,8 +8,9 @@ Handoff program: `api-preserving-maintenance-and-interop-hardening-program.md`
 Planning baseline: `03ecba973010e2858bf16a2b5f84d51ce70adae4`.
 
 Status: executable freeze `df2549f7c64ebfccde61ed36fef785d39e83b38d` is
-complete locally. Tier 1, extended, package, security, exact Rust public API,
-semver, and MSRV gates are green; remote CI verification follows the push.
+complete. Tier 1, extended, package, security, exact Rust public API, semver,
+and MSRV gates are green locally; remote CI run `35606617959` passed on head
+`9f16730cece5a1dbf6c936079852de165ed21add`.
 Issue #24 publication remains pending, and the separate Python 3.15 wheel
 rehearsal remains open.
 

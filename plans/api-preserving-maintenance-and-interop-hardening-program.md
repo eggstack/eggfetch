@@ -20,7 +20,7 @@ The ordered child plans are implemented and locally qualified on executable
 freeze `df2549f7c64ebfccde61ed36fef785d39e83b38d`. No public Rust/Python/C/CLI
 surface, feature/default exposure, supported behavior, or maturity label
 changed. The post-maintenance closure plan owns the final evidence; remote CI
-verification is recorded after push. Issue #24 publication and the separate
+run `35606617959` passed on the documented head. Issue #24 publication and the separate
 Python 3.15 wheel rehearsal remain outside this program's closure.
 
 ## Confirmed findings at the planning baseline

@@ -291,5 +291,5 @@ Local evidence is complete: Tier 1; extended compatibility (including HTTPX
 lifecycle/soak; package; security; and wheel smoke/typing checks all pass.
 Policy-approved skips are the absent Node native artifact and absent downstream
 qualification artifact. Issue #24 remains fixed-but-unpublished, and Python
-3.15 remains under its separate pending rehearsal plan. Remote CI is pending
-the authorized push.
+3.15 remains under its separate pending rehearsal plan. Remote CI run
+`35606617959` passed for head `9f16730cece5a1dbf6c936079852de165ed21add`.
