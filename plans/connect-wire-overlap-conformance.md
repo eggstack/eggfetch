@@ -183,3 +183,12 @@ Do not pursue deduplication if it requires:
 - adding synchronous runtime blocking solely to call the async production parser.
 
 Conformance coverage is a successful outcome when safe code sharing is not possible under the API freeze.
+
+## Execution record — complete (2026-09-21)
+
+Implemented on executable freeze `ba4b7d575f3dedaa26781d01b495e4e6c13e5dd2`.
+The hidden core parser derives bounds from
+`ConnectResponseLimits::default()`, common parser fixtures and read-ahead
+behavior are covered, and shared auth inputs are checked against the wire
+helper. ProxyAuth retains its intentionally broader control-character domain;
+production CONNECT ownership remains in `eggfetch-http-connect`.

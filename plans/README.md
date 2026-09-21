@@ -1,11 +1,17 @@
 # eggfetch Plan Index
 
 
-## Active program — API-preserving maintenance and interop hardening (2026-09-21)
+## Completed program — API-preserving maintenance and interop hardening (2026-09-21)
 
 Handoff program: `api-preserving-maintenance-and-interop-hardening-program.md`
 
 Planning baseline: `03ecba973010e2858bf16a2b5f84d51ce70adae4`.
+
+Status: executable freeze `ba4b7d575f3dedaa26781d01b495e4e6c13e5dd2` is
+complete locally. Tier 1, extended, package, security, exact Rust public API,
+semver, and MSRV gates are green; remote CI verification follows the push.
+Issue #24 publication remains pending, and the separate Python 3.15 wheel
+rehearsal remains open.
 
 Objective: reduce maintenance/API-drift risk without changing any existing
 Rust/Python/C/CLI public surface, feature/default exposure, protocol behavior,

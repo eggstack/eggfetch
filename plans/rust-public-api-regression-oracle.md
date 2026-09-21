@@ -169,3 +169,11 @@ Do not update a snapshot to bless an accidental API difference.
 If an internal refactor genuinely requires changing a public item, stop this maintenance program and open a separately approved API-change plan.
 
 If exact API tooling requires an unbounded nightly dependency or produces unstable output that cannot be pinned reproducibly, keep the fast compile-contract layer, record the tooling blocker, and do not substitute an ad-hoc parser without a separate decision.
+
+## Execution record — complete (2026-09-21)
+
+Implemented on executable freeze `ba4b7d575f3dedaa26781d01b495e4e6c13e5dd2`.
+The six profile snapshots and stable compile-contract fixture compare cleanly
+with planning baseline `03ecba973010e2858bf16a2b5f84d51ce70adae4`. The pinned
+`cargo-public-api 0.52.0` / `nightly-2026-05-07` oracle and complementary
+`cargo-semver-checks 0.49.0` check pass (`223/223` semver checks).

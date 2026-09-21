@@ -201,3 +201,11 @@ After both client and proxy decomposition, run ./scripts/check.sh extended befor
 Do not continue a file split if it requires public re-export churn, cfg duplication that can drift, cyclic module layering, a new abstraction trait with no behavioral value, or duplicated transport/client-construction policy.
 
 A smaller coherent extraction is preferable to a complete decomposition that makes ownership harder to audit.
+
+## Execution record — complete (2026-09-21)
+
+Implemented on executable freeze `ba4b7d575f3dedaa26781d01b495e4e6c13e5dd2`.
+Private client configuration and proxy environment/NO_PROXY helpers now have
+focused internal module boundaries. Public paths, cfg exposure, cache and
+transport ownership, and native-versus-HTTPX NO_PROXY behavior remain
+unchanged; the exact Rust oracle and extended feature/compatibility gates pass.

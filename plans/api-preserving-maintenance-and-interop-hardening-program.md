@@ -14,6 +14,15 @@ The repository is no longer in a feature-acquisition phase for this line of work
 
 This program must not become a vehicle for API cleanup by removal, signature redesign, behavior broadening, or capability expansion. Internal refactoring is acceptable only when public and compatibility oracles prove zero drift.
 
+## Closure status — local qualification complete (2026-09-21)
+
+The ordered child plans are implemented and locally qualified on executable
+freeze `ba4b7d575f3dedaa26781d01b495e4e6c13e5dd2`. No public Rust/Python/C/CLI
+surface, feature/default exposure, supported behavior, or maturity label
+changed. The post-maintenance closure plan owns the final evidence; remote CI
+verification is recorded after push. Issue #24 publication and the separate
+Python 3.15 wheel rehearsal remain outside this program's closure.
+
 ## Confirmed findings at the planning baseline
 
 ### 1. Core ownership is healthy

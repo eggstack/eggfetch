@@ -146,3 +146,12 @@ If executable binding code changes, also run the relevant HTTPX/HTTPX2 compact c
 If a proposed deduplication changes inspect.signature, argument extraction order, default semantics, exception timing/type, sync/async body acceptance, return types, or root exports, retain the explicit declarations and rely on stronger relational checks instead.
 
 Do not modify HTTPX/HTTPX2 facade contracts as part of this plan except to prove they remain unaffected.
+
+## Execution record — complete (2026-09-21)
+
+Implemented on executable freeze `ba4b7d575f3dedaa26781d01b495e4e6c13e5dd2`.
+The existing native manifest and typing checkers now enforce the reviewed
+sync/async/top-level relationships with explicit intentional deltas and
+mutation self-tests. Concrete PyO3 declarations were retained. Native API,
+typing, 578 routine Python tests, and the extended compatibility qualification
+passed without public-surface drift.

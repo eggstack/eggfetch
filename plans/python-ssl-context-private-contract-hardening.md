@@ -178,3 +178,12 @@ If any compatibility-facade SSL helper code changes, run the complete pinned fac
 ## Stop conditions
 
 If consolidating the bridge requires broadening accepted SSLContext state, using OpenSSL private pointers, extracting private key material, weakening mutation detection, silently ignoring unknown schema fields/versions, or changing public verify/cert behavior, stop and retain the current implementation until a separately reviewed security/API change is approved.
+
+## Execution record — complete (2026-09-21)
+
+Implemented on executable freeze `ba4b7d575f3dedaa26781d01b495e4e6c13e5dd2`.
+Rust now consumes only the bounded schema-versioned `_export_ssl_context_state`
+contract, with explicit type/schema validation and fail-closed rejection before
+dispatch. Helper provenance, mutation detection, CA bounds, TLS version limits,
+destination/proxy trust behavior, and redaction tests passed in the full
+qualification.

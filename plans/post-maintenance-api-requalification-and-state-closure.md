@@ -277,3 +277,19 @@ Do not close the campaign if:
 - repository status text claims publication/qualification that has not occurred.
 
 If a public change becomes necessary, stop this campaign and open a separate versioned API-change program rather than silently absorbing it into maintenance.
+
+## Execution record — local closure (2026-09-21)
+
+The final executable/test/tooling freeze is
+`ba4b7d575f3dedaa26781d01b495e4e6c13e5dd2`, based on planning baseline
+`03ecba973010e2858bf16a2b5f84d51ce70adae4`. Qualification used Rust 1.98.1,
+exact MSRV Rust 1.89.0, Python 3.12.3, Linux x86_64, and the pinned Rust API
+toolchain/tooling recorded in the child plan.
+
+Local evidence is complete: Tier 1; extended compatibility (including HTTPX
+0.28.1 and HTTPX2 2.12.0); exact Rust API/semver; feature matrix; docs; FFI;
+lifecycle/soak; package; security; and wheel smoke/typing checks all pass.
+Policy-approved skips are the absent Node native artifact and absent downstream
+qualification artifact. Issue #24 remains fixed-but-unpublished, and Python
+3.15 remains under its separate pending rehearsal plan. Remote CI is pending
+the authorized push.
