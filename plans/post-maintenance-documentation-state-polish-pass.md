@@ -133,11 +133,11 @@ claims merely to rewrite the SHA block.
 
 ### Acceptance
 
-- [ ] No block in `docs/reference/compatibility.md` calls `bc4800ee...`
+- [x] No block in `docs/reference/compatibility.md` calls `bc4800ee...`
       the current qualification.
-- [ ] Every current-qualification statement in the file names `18c1f96...`.
-- [ ] Historical references to `bc4800ee...` remain clearly historical.
-- [ ] No compatibility contract text changes beyond closure-state truth.
+- [x] Every current-qualification statement in the file names `18c1f96...`.
+- [x] Historical references to `bc4800ee...` remain clearly historical.
+- [x] No compatibility contract text changes beyond closure-state truth.
 
 ## Part 2 — close the corrective plan record itself
 
@@ -181,11 +181,11 @@ green; any unsupported box must remain unchecked with a short explanation.
 
 ### Acceptance
 
-- [ ] The corrective plan contains a final execution/closure record.
-- [ ] Its checkbox state agrees with the execution record.
-- [ ] The record distinguishes test/tooling freeze from later docs-only heads.
-- [ ] Remote CI closure is explicitly recorded.
-- [ ] No statement implies `1f8daae...` or `e7371e3...` is the executable
+- [x] The corrective plan contains a final execution/closure record.
+- [x] Its checkbox state agrees with the execution record.
+- [x] The record distinguishes test/tooling freeze from later docs-only heads.
+- [x] Remote CI closure is explicitly recorded.
+- [x] No statement implies `1f8daae...` or `e7371e3...` is the executable
       qualification freeze.
 
 ## Part 3 — finalize the parent-program wording
@@ -212,10 +212,10 @@ and subsequent correction.
 
 ### Acceptance
 
-- [ ] The addendum no longer leaves closure conditional on a future CI event.
-- [ ] The parent explicitly records the completed corrective and live freeze.
-- [ ] Historical `df2549f7...` implementation evidence remains intact.
-- [ ] No unrelated historical plan text is rewritten.
+- [x] The addendum no longer leaves closure conditional on a future CI event.
+- [x] The parent explicitly records the completed corrective and live freeze.
+- [x] Historical `df2549f7...` implementation evidence remains intact.
+- [x] No unrelated historical plan text is rewritten.
 
 ## Part 4 — run a narrow closure-state consistency sweep
 
@@ -249,10 +249,10 @@ Do not mass-rewrite historical evidence.
 
 ### Acceptance
 
-- [ ] All live/current Stage C references agree on `18c1f96...`.
-- [ ] Older SHAs appear only in historical/intermediate context.
-- [ ] No current wording contradicts the machine-readable profiles.
-- [ ] Issue #24 and Python 3.15 state remain truthful.
+- [x] All live/current Stage C references agree on `18c1f96...`.
+- [x] Older SHAs appear only in historical/intermediate context.
+- [x] No current wording contradicts the machine-readable profiles.
+- [x] Issue #24 and Python 3.15 state remain truthful.
 
 ## Part 5 — plan index registration and closure
 
@@ -296,28 +296,28 @@ a new executable qualification freeze.
 
 ## Final acceptance criteria
 
-- [ ] The stale `docs/reference/compatibility.md` Current qualification block
+- [x] The stale `docs/reference/compatibility.md` Current qualification block
       names `18c1f96...`, not `bc4800ee...`.
-- [ ] The closure-evidence corrective plan has an execution/closure record.
-- [ ] The closure-evidence corrective plan's checkboxes accurately reflect
+- [x] The closure-evidence corrective plan has an execution/closure record.
+- [x] The closure-evidence corrective plan's checkboxes accurately reflect
       completed evidence.
-- [ ] The parent maintenance addendum records that remote CI succeeded and the
+- [x] The parent maintenance addendum records that remote CI succeeded and the
       program is fully closed.
-- [ ] Both compatibility profiles remain bound to `18c1f96...`.
-- [ ] The parity ledger and residual-difference doc remain bound to
+- [x] Both compatibility profiles remain bound to `18c1f96...`.
+- [x] The parity ledger and residual-difference doc remain bound to
       `18c1f96...`.
-- [ ] Documentation descendants are clearly separated from the qualified
+- [x] Documentation descendants are clearly separated from the qualified
       freeze.
-- [ ] No executable/test/validation/build/workflow/manifest change is part of
+- [x] No executable/test/validation/build/workflow/manifest change is part of
       this polish.
-- [ ] No compatibility waiver, API change, feature/default change, H3
+- [x] No compatibility waiver, API change, feature/default change, H3
       graduation, or Node maturation occurs.
-- [ ] Issue #24 remains fixed-but-unpublished unless publication independently
+- [x] Issue #24 remains fixed-but-unpublished unless publication independently
       completes.
-- [ ] Python 3.15 remains pending unless its separate rehearsal independently
+- [x] Python 3.15 remains pending unless its separate rehearsal independently
       completes.
-- [ ] Final ordinary remote CI is green.
-- [ ] `plans/README.md` marks this polish pass complete only after that CI
+- [x] Final ordinary remote CI is green.
+- [x] `plans/README.md` marks this polish pass complete only after that CI
       result.
 
 ## Stop conditions
@@ -338,3 +338,54 @@ Stop this documentation-state pass and open separate work if:
 The successful result is a repository whose current documentation and plan
 state tell exactly the same story as its already-qualified machine-readable
 evidence, with no new qualification campaign.
+
+
+## Execution/closure record — polish complete (2026-09-21)
+
+Planning baseline:
+`e7371e3722dbbe61aa9004ef3c16f6b9fd866816`.
+
+Qualified executable/test/tooling freeze remains:
+`18c1f96c1cbf9d71aa480030b0f365c85267620b`.
+
+Documentation-state implementation commit:
+`9b8197bcae45faee5bef9e0a05ae7b16543b8725`.
+
+Plan-index closure commit:
+`27a2a376569e8781bd2dd39c2b6f2e7576de82f2`.
+
+What landed:
+
+- `docs/reference/compatibility.md` now names `18c1f96...` in its
+  **Current qualification** block; the former `bc4800ee...` binding is
+  historical only.
+- The consistency sweep found and corrected the same stale live binding in
+  `docs/reference/compatibility-stage-decision.md`.
+- `plans/post-maintenance-closure-evidence-corrective-pass.md` received its
+  execution/closure record and evidence-backed checkbox reconciliation.
+- `plans/api-preserving-maintenance-and-interop-hardening-program.md` now
+  records that the remote-CI condition was satisfied and that the parent
+  maintenance program is fully closed.
+- Both machine-readable compatibility profiles remained unchanged at
+  `qualification-sha = "18c1f96c1cbf9d71aa480030b0f365c85267620b"`.
+- The live parity ledger and `docs/residual-differences.md` remained bound
+  to the same freeze.
+- Diff review from `18c1f96...` through the completed polish/index closure
+  contains only compatibility-profile metadata and documentation/plan/ledger
+  files; no executable source, test, validation script, workflow, manifest,
+  or build input changed after the qualified freeze.
+- No API, capability, feature/default, compatibility-waiver, HTTP/3 maturity,
+  or Node maturity change occurred.
+- Issue #24 remains fixed/qualified but publication-pending.
+- The Python 3.15 18-wheel rehearsal remains separately pending.
+
+Remote CI:
+
+- run `35635954532` passed on documentation-state implementation commit
+  `9b8197bcae45faee5bef9e0a05ae7b16543b8725`;
+- run `35638189583` passed on plan-index closure commit
+  `27a2a376569e8781bd2dd39c2b6f2e7576de82f2`.
+
+This polish is complete. Later edits that only reconcile this plan's own
+historical checkbox/closure record are documentation-only descendants and do
+not create a new executable qualification freeze.
