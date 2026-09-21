@@ -1,37 +1,37 @@
 # eggfetch Plan Index
 
 
-## Active corrective — post-maintenance closure evidence (2026-09-21)
+## Completed corrective — post-maintenance closure evidence (2026-09-21)
 
 Plan: `post-maintenance-closure-evidence-corrective-pass.md`
 
 Planning baseline: `5ced637af7479b95b6454697e638c7a3759d8670`.
 
-Status: implementation complete locally on corrective freeze
+Status: complete. Corrective freeze
 `18c1f96c1cbf9d71aa480030b0f365c85267620b`; Tier 1, extended, package,
 security, exact Rust 1.89.0 MSRV, six-profile Rust oracle, and full pinned
 HTTPX/HTTPX2 gates are green locally with policy-defined Node/downstream
 skips. Canonical Stage C profiles, ledger, and compatibility docs are rebound
-locally to the new freeze. Remote CI is the remaining closure gate; this entry
-becomes Completed only after the final documentation/evidence descendant is
-green remotely. No public API/capability change, compatibility waiver, H3
+to the new freeze. Remote CI run `35624022656` is green on final
+documentation/evidence descendant `1f8daae4599361d6fb2acd2d8fbca6e38b4fc4fe`,
+which contains only profile/ledger/plan/compatibility documentation changes
+after the freeze. No public API/capability change, compatibility waiver, H3
 graduation, Node maturation, issue #24 publication, or Python 3.15 release
-qualification belongs in this pass.
+qualification occurred in this pass.
 
 
-## Program implementation complete — API-preserving maintenance and interop hardening (closure corrective active) (2026-09-21)
+## Program complete — API-preserving maintenance and interop hardening (2026-09-21)
 
 Handoff program: `api-preserving-maintenance-and-interop-hardening-program.md`
 
 Planning baseline: `03ecba973010e2858bf16a2b5f84d51ce70adae4`.
 
-Status: implementation is complete on `df2549f7c64ebfccde61ed36fef785d39e83b38d`
-and its local qualification/remote CI evidence is green, but final exact-SHA
-closure is provisionally superseded by
-`post-maintenance-closure-evidence-corrective-pass.md`. The live Stage C
-profiles/docs still name the prior `bc4800ee...` freeze and the corrective
-will also complete the promised negative guardrail evidence before selecting a
-new final test/tooling freeze. Issue #24 publication remains pending, and the
+Status: fully closed after the closure-evidence corrective. Implementation
+landed on `df2549f7c64ebfccde61ed36fef785d39e83b38d`; the corrective completed
+the promised relational/SSLContext negative evidence, froze
+`18c1f96c1cbf9d71aa480030b0f365c85267620b`, requalified it, and renewed all
+canonical Stage C records to that freeze with green remote CI
+(`35624022656` on `1f8daae4`). Issue #24 publication remains pending, and the
 separate Python 3.15 wheel rehearsal remains open.
 
 Objective: reduce maintenance/API-drift risk without changing any existing
