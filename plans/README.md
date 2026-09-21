@@ -1,18 +1,39 @@
 # eggfetch Plan Index
 
 
-## Completed program — API-preserving maintenance and interop hardening (2026-09-21)
+## Active corrective — post-maintenance closure evidence (2026-09-21)
+
+Plan: `post-maintenance-closure-evidence-corrective-pass.md`
+
+Planning baseline: `5ced637af7479b95b6454697e638c7a3759d8670`.
+
+Status: planned. The maintenance implementation itself is healthy, but formal
+closure is not yet complete: the live HTTPX/HTTPX2 Stage C profiles and
+canonical compatibility documentation still point to the pre-maintenance
+`bc4800ee...` freeze, while the maintenance campaign changed
+test/validation/executable inputs and qualified `df2549f7...`. The corrective
+first completes the promised Python relational and SSLContext malformed-schema
+negative evidence, then freezes/requalifies that corrected test/tooling state,
+renews all canonical exact-SHA records, fixes stale completed-as-Active plan
+headings, and closes only after remote CI. No public API/capability change,
+compatibility waiver, H3 graduation, Node maturation, issue #24 publication,
+or Python 3.15 release qualification belongs in this pass.
+
+
+## Program implementation complete — API-preserving maintenance and interop hardening (closure corrective active) (2026-09-21)
 
 Handoff program: `api-preserving-maintenance-and-interop-hardening-program.md`
 
 Planning baseline: `03ecba973010e2858bf16a2b5f84d51ce70adae4`.
 
-Status: executable freeze `df2549f7c64ebfccde61ed36fef785d39e83b38d` is
-complete. Tier 1, extended, package, security, exact Rust public API, semver,
-and MSRV gates are green locally; remote CI run `35606617959` passed on head
-`9f16730cece5a1dbf6c936079852de165ed21add`.
-Issue #24 publication remains pending, and the separate Python 3.15 wheel
-rehearsal remains open.
+Status: implementation is complete on `df2549f7c64ebfccde61ed36fef785d39e83b38d`
+and its local qualification/remote CI evidence is green, but final exact-SHA
+closure is provisionally superseded by
+`post-maintenance-closure-evidence-corrective-pass.md`. The live Stage C
+profiles/docs still name the prior `bc4800ee...` freeze and the corrective
+will also complete the promised negative guardrail evidence before selecting a
+new final test/tooling freeze. Issue #24 publication remains pending, and the
+separate Python 3.15 wheel rehearsal remains open.
 
 Objective: reduce maintenance/API-drift risk without changing any existing
 Rust/Python/C/CLI public surface, feature/default exposure, protocol behavior,
