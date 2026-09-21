@@ -1,6 +1,42 @@
 # eggfetch Plan Index
 
 
+## Active program — API-preserving maintenance and interop hardening (2026-09-21)
+
+Handoff program: `api-preserving-maintenance-and-interop-hardening-program.md`
+
+Planning baseline: `03ecba973010e2858bf16a2b5f84d51ce70adae4`.
+
+Objective: reduce maintenance/API-drift risk without changing any existing
+Rust/Python/C/CLI public surface, feature/default exposure, protocol behavior,
+compatibility claim, or supported capability. HTTP/3 remains experimental and
+Node remains an experimental prototype.
+
+Execution order:
+
+1. `rust-public-api-regression-oracle.md` — add profile-aware Rust compile
+   contracts plus a pinned exact public-surface oracle and semver cross-check.
+2. `python-native-surface-relational-guardrails.md` — extend the existing
+   native API/typing manifest checks with explicit Client/AsyncClient/top-level
+   mirror invariants; keep concrete PyO3 signatures readable.
+3. `python-ssl-context-private-contract-hardening.md` — replace scattered
+   Python-private SSLContext imports with one versioned, bounded, fail-closed
+   Python-to-Rust internal contract while preserving all TLS semantics.
+4. `core-private-module-decomposition.md` — split private client config/cache/
+   connector and proxy parsing/environment responsibilities without moving
+   public types or canonical paths.
+5. `connect-wire-overlap-conformance.md` — make retained CONNECT test/fuzz/auth
+   overlap demonstrably conformant to the shared eggfetch-http-connect wire
+   owner; retain duplication when safe deduplication would alter behavior/API.
+6. `post-maintenance-api-requalification-and-state-closure.md` — freeze one
+   executable SHA, prove zero Rust/Python/HTTPX/HTTPX2/C/CLI drift, run canonical
+   repository gates, and reconcile stale plan/issue state truthfully.
+
+No new public helper, new transport engine, new CI job/matrix, Node maturation,
+H3 graduation, Trio/AnyIO, Python trailer exposure, new auth scheme, or
+compatibility waiver belongs in this program.
+
+
 ## Active corrective — second-pass performance closure truth/semantics (2026-09-20)
 
 Plan: `second-pass-performance-closure-corrective-pass.md`
