@@ -1,6 +1,23 @@
 # eggfetch Plan Index
 
 
+## Active polish — post-maintenance documentation state (2026-09-21)
+
+Plan: `post-maintenance-documentation-state-polish-pass.md`
+
+Planning baseline: `e7371e3722dbbe61aa9004ef3c16f6b9fd866816`.
+
+Status: planned. Implementation and qualification remain closed on corrective
+freeze `18c1f96c1cbf9d71aa480030b0f365c85267620b`; this pass does not reopen
+executable qualification. It removes the remaining documentation-state
+contradictions: the stale `bc4800ee...` "Current qualification" block in
+`docs/reference/compatibility.md`, the missing execution/closure record in
+the completed closure-evidence corrective plan, and the parent addendum's
+now-satisfied conditional CI wording. The pass must remain docs/state-only,
+preserve both live profile bindings at `18c1f96...`, and close only after a
+final docs-only descendant audit plus ordinary remote CI.
+
+
 ## Completed corrective — post-maintenance closure evidence (2026-09-21)
 
 Plan: `post-maintenance-closure-evidence-corrective-pass.md`
