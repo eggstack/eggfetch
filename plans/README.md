@@ -1,7 +1,7 @@
 # eggfetch Plan Index
 
 
-## Active corrective — private architecture qualification state (2026-09-22)
+## Completed corrective — private architecture qualification state (2026-09-22)
 
 Plan: `private-architecture-qualification-state-corrective-pass.md`
 
@@ -19,11 +19,18 @@ those live records to the qualified private-architecture freeze, preserve the
 old binding as historical, reconcile the completed plan checklists to their
 recorded evidence, and prove the final descendant is profile/docs/plan-only.
 
-This corrective must not touch executable source, tests, validation scripts,
-workflows, API snapshots, allowed-difference manifests, package manifests, or
-compatibility behavior. If any such change is required, stop and create a new
-executable freeze/requalification plan instead. Issue #24 publication and the
-Python 3.15 wheel rehearsal remain independent pending work.
+Status: complete. The preserved executable freeze remains
+`d4979f1dac53f30f07900f54b01a88de06956c1c`. The final
+profile/compatibility-state descendant is `5d46a29146e8042b4ee3b8d7086a42e5ee582a91`,
+and ordinary remote CI run `35679134598` passed for that commit. This
+corrective changed only compatibility profiles, the live parity ledger,
+canonical compatibility documentation, and evidence-plan checklists; no
+executable/test/validation/workflow/package source changed. The closure-index
+commit is a documentation-only descendant of that tested state-repair commit.
+
+The parent architecture campaign remains closed on its executable freeze.
+Issue #24 publication/tag/PyPI work and the Python 3.15 wheel rehearsal remain
+independent pending maintainer/release actions.
 
 
 ## Completed program — API-preserving private architecture containment (2026-09-21)

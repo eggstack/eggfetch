@@ -241,31 +241,31 @@ documentation/profile descendant.
 
 ## Acceptance criteria
 
-- [ ] Both live compatibility profile TOMLs bind Stage C to
+- [x] Both live compatibility profile TOMLs bind Stage C to
       `d4979f1dac53f30f07900f54b01a88de06956c1c`.
-- [ ] Both profiles identify `18c1f96...` as the immediately previous
+- [x] Both profiles identify `18c1f96...` as the immediately previous
       qualification rather than current.
-- [ ] The live parity/status ledger has a new current record for
+- [x] The live parity/status ledger has a new current record for
       `d4979f1...` and preserves `18c1f96...` historically.
-- [ ] `docs/reference/compatibility.md` presents `d4979f1...` as current.
-- [ ] `docs/reference/compatibility-stage-decision.md` presents
+- [x] `docs/reference/compatibility.md` presents `d4979f1...` as current.
+- [x] `docs/reference/compatibility-stage-decision.md` presents
       `d4979f1...` as current.
-- [ ] `docs/residual-differences.md` presents `d4979f1...` as current.
-- [ ] A repository-wide current-state sweep finds no stale live
+- [x] `docs/residual-differences.md` presents `d4979f1...` as current.
+- [x] A repository-wide current-state sweep finds no stale live
       `18c1f96...` Stage C binding.
-- [ ] Historical qualification records retain their original SHAs/dates.
-- [ ] No API snapshot, allowed-difference set, residual classification, or
+- [x] Historical qualification records retain their original SHAs/dates.
+- [x] No API snapshot, allowed-difference set, residual classification, or
       compatibility behavior changes.
-- [ ] Completed child/final plan checklists are reconciled to evidence, with
+- [x] Completed child/final plan checklists are reconciled to evidence, with
       no unsupported box checked.
-- [ ] The final corrective diff is documentation/profile/plan/evidence only.
-- [ ] The executable freeze remains `d4979f1...`; no new executable freeze is
+- [x] The final corrective diff is documentation/profile/plan/evidence only.
+- [x] The executable freeze remains `d4979f1...`; no new executable freeze is
       created.
-- [ ] Tier 1/profile consistency checks pass.
-- [ ] Ordinary remote CI passes on the final descendant.
-- [ ] `plans/README.md` records the corrective as completed only after the
+- [x] Tier 1/profile consistency checks pass.
+- [x] Ordinary remote CI passes on the final descendant.
+- [x] `plans/README.md` records the corrective as completed only after the
       above evidence exists.
-- [ ] Issue #24 publication and Python 3.15 wheel rehearsal remain independent
+- [x] Issue #24 publication and Python 3.15 wheel rehearsal remain independent
       and truthfully pending.
 
 ## Non-goals
@@ -278,6 +278,18 @@ Do not:
 - change allowed differences or residual classifications;
 - change feature/default/dependency graphs;
 - rerun the architecture refactor;
+
+## Corrective closure record
+
+Status: complete. The preserved executable freeze is
+`d4979f1dac53f30f07900f54b01a88de06956c1c`; the profile/compatibility-state
+descendant `5d46a29146e8042b4ee3b8d7086a42e5ee582a91` passed ordinary remote CI
+run `35679134598`. A later closure-index commit records this result without
+changing the tested profile or canonical compatibility state. No executable,
+test, validation, workflow, package source, API snapshot, allowed-difference
+manifest, or compatibility fixture changed. Issue #24 publication/tag/PyPI
+work and the Python 3.15 wheel rehearsal remain independent pending
+maintainer/release actions.
 - add or remove public API;
 - mature Node;
 - graduate HTTP/3;
