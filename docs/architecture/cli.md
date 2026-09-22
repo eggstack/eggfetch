@@ -7,8 +7,14 @@ See also: [overview.md](overview.md).
 ## Architecture
 
 ```
-main.rs → clap arg parsing → ClientBuilder configuration → RequestBuilder → Response streaming → stdout/file
+args.rs → main.rs orchestration → ClientBuilder → RequestBuilder → Response streaming → stdout/file
+              ↘ input.rs / output.rs / files.rs / errors.rs
 ```
+
+The split is private and responsibility-oriented: `args.rs` owns the clap
+schema, `input.rs` owns request input parsing, `output.rs` owns human and
+machine formatting, `files.rs` owns filename/open policy, and `errors.rs`
+owns stable exit-code classification. None of these modules owns HTTP logic.
 
 The CLI creates an `eggfetch_core::Client` via `ClientBuilder`, configures it from command-line flags, constructs requests via `RequestBuilder`, and streams the response body to stdout or a file.
 

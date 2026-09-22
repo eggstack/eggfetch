@@ -12,6 +12,9 @@ policy, protocol, and malformed-response failures stop.
 1. Read `AGENTS.md` for crate boundaries, lint policy, and quick commands.
 2. Read `docs/architecture/dependency-policy.md` before adding any dependency.
 3. Read `CONTRIBUTING.md` for coding conventions.
+4. For client/proxy changes, read `docs/architecture/rust-surface-containment.md`;
+   keep route/cache/connector and proxy identity helpers private and preserve
+   the exact public API-oracle profiles.
 
 ## Pre-commit Checklist
 

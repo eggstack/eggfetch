@@ -80,7 +80,12 @@ native `eggfetch` types.
 | `timeout.rs` | Timeout configuration |
 | `tls.rs` | TLS configuration (`verify`, `cert` kwargs) |
 | `multipart.rs` | `File` wrapper for multipart uploads |
-| `streaming.rs` | `StreamingResponse` + sync/async bytes/text/lines/raw-bytes iterators |
+| `streaming.rs` | `StreamingResponse` public PyO3 wiring |
+| `streaming/state.rs` | Private response consumption state and runtime lease |
+| `streaming/sync_bridge.rs` | Private bounded sync backpressure bridge |
+| `streaming/decoding.rs` | Private incremental text and line decoding |
+| `streaming/sync_iterators.rs` | Private sync iterator implementations |
+| `streaming/async_iterators.rs` | Private async iterator implementations |
 | `conversion.rs` | Python↔Rust type conversion (shared by sync/async) |
 | `request_preparation.rs` | Shared client configuration and method/URL/header/body/auth/proxy/retry normalization |
 | `limits.rs` | `PyLimits` — pool concurrency limits |

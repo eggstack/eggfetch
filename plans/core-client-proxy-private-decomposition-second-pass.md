@@ -288,3 +288,22 @@ Stop a proposed move if it requires:
 
 A smaller decomposition is preferred over a mechanically larger but less
 coherent module graph.
+
+## Implementation record
+
+Completed in the current qualification candidate:
+
+- private route/cache ownership moved to `client/routes.rs`;
+- private connector preparation moved to `client/connectors.rs`;
+- proxy environment, NO_PROXY, and connection-identity mechanics are owned by
+  `proxy/environment.rs`, `proxy/no_proxy.rs`, and `proxy/identity.rs`;
+- `parse_proxy_response_bytes` remains in `proxy.rs` because it is an existing
+  public/test-facing contract used by integration and fuzz consumers, so moving
+  it would be public API drift.
+
+The public `Client`/`ClientBuilder` and proxy declarations remain at their
+canonical paths. Stable public contracts, the six-profile exact API oracle,
+proxy/adverse focused tests, Tier 1, and the extended qualification candidate
+reported zero semantic or surface drift. The final executable freeze SHA and
+remote CI result are recorded by the closure plan after the qualification
+commit.

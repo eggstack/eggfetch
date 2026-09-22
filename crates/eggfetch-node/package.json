@@ -1,6 +1,6 @@
 {
   "name": "eggfetch-node",
-  "version": "0.1.0",
+  "version": "0.1.9",
   "description": "Experimental Node.js prototype bindings for eggfetch (unsupported API surface)",
   "main": "index.js",
   "types": "index.d.ts",
@@ -20,5 +20,5 @@
   "engines": {
     "node": ">=16"
   },
-  "license": "MIT OR Apache-2.0"
+  "license": "MIT"
 }

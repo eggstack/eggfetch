@@ -267,3 +267,20 @@ Stop and split a separate corrective if decomposition requires:
 
 The preferred result is a smaller coherent refactor rather than maximum file
 fragmentation.
+
+## Implementation record
+
+Completed in the current qualification candidate:
+
+- Python streaming private state, bridge, decoding, sync-iterator, and
+  async-iterator responsibilities are split under
+  `crates/eggfetch-python/src/streaming/`, while PyO3 classes and wiring remain
+  in `streaming.rs`;
+- CLI private argument, error, input, output, and file responsibilities are
+  split into sibling modules while `main.rs` retains orchestration;
+- public Python names/signatures, iterator lifecycle/backpressure/text/raw
+  semantics, and CLI syntax/output/exit behavior remain unchanged.
+
+The native API/typing checks, focused streaming/lifecycle tests, CLI clippy and
+tests, Tier 1, and the extended qualification candidate passed. The final
+freeze SHA and remote CI result are recorded by the closure plan.

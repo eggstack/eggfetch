@@ -241,3 +241,19 @@ Stop and split a separate versioned API/product plan if the work would require:
 
 Containment means preserving today's surface while making further accidental
 growth harder.
+
+## Implementation record
+
+Completed in the current qualification candidate:
+
+- the audited low-level public surfaces are inventoried in
+  `docs/architecture/rust-surface-containment.md`;
+- the exact six-profile Rust API oracle and semver cross-check pass without
+  snapshot regeneration;
+- FFI and Node Rust tests pass;
+- Node package metadata now aligns with coordinated version `0.1.9` and the
+  repository MIT license while retaining experimental/no-npm/no-types status;
+- HTTP/3 remains experimental and no new low-level public helper was added.
+
+The final executable freeze SHA and remote CI result are recorded by the
+closure plan after the qualification commit.

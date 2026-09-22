@@ -58,9 +58,14 @@ Start at `docs/architecture/overview.md` (§ Deep-Dive Index). Normative CI/rele
 - Core request rebuilds go through exhaustive typed helpers (`RequestParts::retry_request` needs `logical-retry`, `advance_redirect_hop` needs `redirects`) — a new field must fail to compile, never silently drop. Pipeline is `prepare.rs` → `route.rs` (`select_route()`: UDS → dialer → static/direct → proxy/SOCKS → SNI → H3 → standard) → `finalize.rs` (one post-transport policy for all routes), entered via `retry.rs` when `logical-retry` is present, `redirect.rs` when only `redirects` is present, or `lean.rs` single-hop when both are absent. Ordinary Hyper route arms are the final owners of prepared metadata; proxy/H3 branches may retain borrowed inspection where fallback requires it.
 - Hyper client construction is centralized in `transport/hyper_client.rs`; keep route connectors/keys explicit, forward stays H1-only. UDS/Custom/Direct/SNI arms and their clients/caches, plus `dialer`/`local_address`/`socket_options`/`uds_path`/`resolved_addresses` builder methods and `Dialer`/`SocketOption` re-exports, require `advanced-routing` and are absent from lean profiles (pinned/SNI hints fail closed there).
 - `client.rs` retains the public `Client`/`ClientBuilder` declarations; private
-  defaults/configuration are in `client/config.rs`. Proxy environment URL
+  defaults/configuration are in `client/config.rs`, route/cache acquisition is
+  in `client/routes.rs`, and connector preparation is in `client/connectors.rs`.
+  Proxy environment URL
   normalization and HTTPX-specific IP-shaped `NO_PROXY` parsing are private
   helpers under `proxy/`; native and HTTPX `NO_PROXY` semantics remain distinct.
+- Rust low-level compatibility debt is inventoried in
+  `docs/architecture/rust-surface-containment.md`; do not add public helpers
+  beside existing Alt-Svc, lifecycle, metrics, dialer, or pool surfaces.
 - All origin TLS routes build through `TlsConfig`/`TrustStore`. `additional_ca_*` augments the base store; `ca_certificate_*` stays replacement-style. Native-root construction failure may fall back to WebPKI roots, but cert/hostname verification failure must never retry with another store. `crypto_provider()` is per-config, never process-global.
 - Proxy fallback is typed only: CONNECT advances on 502/504 rejection, local SOCKS5 on destination-specific 0x03/0x04/0x05; auth/policy/protocol/malformed failures stop. Never store a request's shrinking total deadline in cached route connectors; enforce transport via the outer dispatch timeout and retain the absolute deadline behind the private `PoolGuard` response lifecycle through EOF/trailers (read starts on first poll/resets per chunk; total never resets, Total wins ties).
 - `ResponseBody` public variant shapes are frozen — never add public timeout fields/variants or `#[non_exhaustive]`; `BodyTimeoutStream` stays the single high-level timeout owner.

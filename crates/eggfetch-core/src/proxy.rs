@@ -39,6 +39,7 @@ use std::sync::Arc;
 use crate::error::{Error, Result};
 
 mod environment;
+mod identity;
 mod no_proxy;
 
 /// A single `NO_PROXY` bypass rule.
@@ -146,137 +147,9 @@ impl NoProxy {
     }
 
     fn parse_with_localhost_mode(s: &str, exact_localhost: bool) -> Result<Self> {
-        let mut rules = Vec::new();
-        for entry in s.split(',') {
-            let entry = entry.trim();
-            if entry.is_empty() {
-                continue;
-            }
-            rules.push(Self::parse_entry(entry, exact_localhost)?);
-        }
-        Ok(Self { rules })
-    }
-
-    fn parse_entry(entry: &str, exact_localhost: bool) -> Result<NoProxyRule> {
-        if entry == "*" {
-            return Ok(NoProxyRule::Wildcard);
-        }
-        if entry.eq_ignore_ascii_case("localhost") {
-            return Ok(if exact_localhost {
-                NoProxyRule::LocalhostExact
-            } else {
-                NoProxyRule::Localhost
-            });
-        }
-
-        // HTTPX treats scheme-qualified NO_PROXY values as URL patterns,
-        // rather than native CIDR or host rules.
-        if exact_localhost && entry.contains("://") {
-            let pattern = url::Url::parse(entry).map_err(|_| {
-                Error::InvalidProxyUrl(format!("invalid URL in NO_PROXY entry: {entry}"))
-            })?;
-            let host = pattern.host_str().ok_or_else(|| {
-                Error::InvalidProxyUrl(format!("NO_PROXY URL has no host: {entry}"))
-            })?;
-            return Ok(NoProxyRule::SchemeHostPort {
-                scheme: pattern.scheme().to_ascii_lowercase(),
-                host: host.to_ascii_lowercase(),
-                port: pattern.port(),
-            });
-        }
-
-        if exact_localhost {
-            if let Some(rule) = no_proxy::parse_httpx_ip_entry(entry)? {
-                return Ok(rule);
-            }
-        }
-
-        if let Ok(address) = entry.parse::<std::net::Ipv6Addr>() {
-            return Ok(NoProxyRule::Host(address.to_string()));
-        }
-
-        if let Some((network, prefix)) = entry.split_once('/') {
-            let network = network.parse::<std::net::IpAddr>().map_err(|_| {
-                Error::InvalidProxyUrl(format!("invalid IP network in NO_PROXY entry: {entry}"))
-            })?;
-            let prefix = prefix.parse::<u8>().map_err(|_| {
-                Error::InvalidProxyUrl(format!("invalid CIDR prefix in NO_PROXY entry: {entry}"))
-            })?;
-            let max_prefix = match network {
-                std::net::IpAddr::V4(_) => 32,
-                std::net::IpAddr::V6(_) => 128,
-            };
-            if prefix > max_prefix {
-                return Err(Error::InvalidProxyUrl(format!(
-                    "CIDR prefix exceeds address width in NO_PROXY entry: {entry}"
-                )));
-            }
-            return Ok(NoProxyRule::IpNetwork(network, prefix));
-        }
-
-        // IPv6 literal: [::1] or [::1]:8080
-        if let Some(rest) = entry.strip_prefix('[') {
-            if let Some(close) = rest.find(']') {
-                let ipv6 = &rest[..close];
-                let remainder = &rest[close + 1..];
-                if remainder.is_empty() {
-                    // bare IPv6 literal — treat as host
-                    return Ok(if exact_localhost {
-                        NoProxyRule::HostExact(ipv6.to_ascii_lowercase())
-                    } else {
-                        NoProxyRule::Host(entry.to_owned())
-                    });
-                }
-                if let Some(port_str) = remainder.strip_prefix(':') {
-                    let port = port_str.parse::<u16>().map_err(|_| {
-                        Error::InvalidProxyUrl(format!("invalid port in NO_PROXY entry: {entry}"))
-                    })?;
-                    return Ok(if exact_localhost {
-                        NoProxyRule::HostPortExact(format!("[{ipv6}]"), port)
-                    } else {
-                        NoProxyRule::HostPort(format!("[{ipv6}]"), port)
-                    });
-                }
-            }
-        }
-
-        // host:port. HTTPX builds an `all://*host:port` URL pattern for a
-        // non-scheme-qualified entry, so the host keeps bare-domain and
-        // subdomain matching while the port remains an explicit match. In
-        // particular, an entry such as `example.com:80` does not match an
-        // HTTP URL whose normalized port is omitted.
-        if let Some(colon_pos) = entry.rfind(':') {
-            let host = &entry[..colon_pos];
-            let port_str = &entry[colon_pos + 1..];
-            if host.is_empty() || entry.matches(':').count() > 1 {
-                return Err(Error::InvalidProxyUrl(format!(
-                    "invalid NO_PROXY host/port entry: {entry}"
-                )));
-            }
-            let port = port_str.parse::<u16>().map_err(|_| {
-                Error::InvalidProxyUrl(format!("invalid port in NO_PROXY entry: {entry}"))
-            })?;
-            return Ok(if exact_localhost {
-                NoProxyRule::HostPortHttpx(host.to_owned(), port)
-            } else {
-                NoProxyRule::HostPort(host.to_owned(), port)
-            });
-        }
-
-        // Domain suffix: .example.com
-        if let Some(suffix) = entry.strip_prefix('.') {
-            if suffix.is_empty() {
-                return Err(Error::InvalidProxyUrl(
-                    "NO_PROXY entry cannot be just a dot".into(),
-                ));
-            }
-            return Ok(NoProxyRule::DomainSuffix(entry.to_owned()));
-        }
-
-        // HTTPX builds an `all://*host` pattern for ordinary domains, which
-        // matches the bare domain and subdomains at a label boundary. Keep
-        // localhost and IP literals on their exact-host paths above.
-        Ok(NoProxyRule::Host(entry.to_owned()))
+        Ok(Self {
+            rules: no_proxy::parse_rules(s, exact_localhost)?,
+        })
     }
 
     /// Returns `true` if the given URL should bypass the proxy (go direct).
@@ -298,161 +171,7 @@ impl NoProxy {
         host: &str,
         port: Option<u16>,
     ) -> bool {
-        for rule in &self.rules {
-            match rule {
-                NoProxyRule::Wildcard => return true,
-                NoProxyRule::Localhost => {
-                    let ip_host = host
-                        .strip_prefix('[')
-                        .and_then(|value| value.strip_suffix(']'))
-                        .unwrap_or(host);
-                    if host.eq_ignore_ascii_case("localhost")
-                        || ip_host.parse::<std::net::IpAddr>().is_ok_and(|ip| {
-                            ip == std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST)
-                                || ip == std::net::IpAddr::V6(std::net::Ipv6Addr::LOCALHOST)
-                        })
-                    {
-                        return true;
-                    }
-                }
-                NoProxyRule::LocalhostExact => {
-                    if host.eq_ignore_ascii_case("localhost") {
-                        return true;
-                    }
-                }
-                NoProxyRule::Host(h) => {
-                    if Self::matches_host_rule(host, h) {
-                        return true;
-                    }
-                }
-                NoProxyRule::HostExact(h) => {
-                    if Self::matches_exact_host(host, h) {
-                        return true;
-                    }
-                }
-                NoProxyRule::DomainSuffix(suffix) => {
-                    if Self::matches_domain_suffix(host, suffix) {
-                        return true;
-                    }
-                }
-                NoProxyRule::HostPort(h, p) => {
-                    let port_matches = match port {
-                        Some(pu) => pu == *p,
-                        None => Self::default_port_for_scheme(scheme) == *p,
-                    };
-                    let host_matches = if h.starts_with('.') {
-                        Self::matches_domain_suffix(host, h)
-                    } else {
-                        Self::matches_host_rule(host, h)
-                    };
-                    if port_matches && host_matches {
-                        return true;
-                    }
-                }
-                NoProxyRule::HostPortExact(h, p) => {
-                    let port_matches = match port {
-                        Some(pu) => pu == *p,
-                        None => Self::default_port_for_scheme(scheme) == *p,
-                    };
-                    if port_matches && Self::matches_exact_host(host, h) {
-                        return true;
-                    }
-                }
-                NoProxyRule::HostPortHttpx(h, p) => {
-                    if port == Some(*p) && Self::matches_host_rule(host, h) {
-                        return true;
-                    }
-                }
-                NoProxyRule::IpNetwork(network, prefix) => {
-                    if host
-                        .trim_start_matches('[')
-                        .trim_end_matches(']')
-                        .parse::<std::net::IpAddr>()
-                        .is_ok_and(|candidate| Self::ip_in_network(candidate, *network, *prefix))
-                    {
-                        return true;
-                    }
-                }
-                NoProxyRule::SchemeHostPort {
-                    scheme: rule_scheme,
-                    host: rule_host,
-                    port: rule_port,
-                } => {
-                    if scheme.eq_ignore_ascii_case(rule_scheme)
-                        && host.eq_ignore_ascii_case(rule_host)
-                        && rule_port.is_none_or(|rule_port| {
-                            port == Some(rule_port)
-                                || (port.is_none()
-                                    && Self::default_port_for_scheme(scheme) == rule_port)
-                        })
-                    {
-                        return true;
-                    }
-                }
-            }
-        }
-        false
-    }
-
-    fn matches_domain_suffix(host: &str, suffix: &str) -> bool {
-        let host_lower = host.to_ascii_lowercase();
-        let suffix_lower = suffix.trim_start_matches('.').to_ascii_lowercase();
-        host_lower.len() > suffix_lower.len()
-            && host_lower.as_bytes()[host_lower.len() - suffix_lower.len() - 1] == b'.'
-            && host_lower.ends_with(&suffix_lower)
-    }
-
-    fn matches_host_rule(host: &str, rule: &str) -> bool {
-        let host_lower = host
-            .trim_start_matches('[')
-            .trim_end_matches(']')
-            .to_ascii_lowercase();
-        let rule_lower = rule
-            .trim_start_matches('.')
-            .trim_start_matches('[')
-            .trim_end_matches(']')
-            .to_ascii_lowercase();
-        host_lower == rule_lower
-            || (host_lower.len() > rule_lower.len()
-                && host_lower.as_bytes()[host_lower.len() - rule_lower.len() - 1] == b'.'
-                && host_lower.ends_with(&rule_lower))
-    }
-
-    fn matches_exact_host(host: &str, rule: &str) -> bool {
-        host.trim_start_matches('[')
-            .trim_end_matches(']')
-            .eq_ignore_ascii_case(rule.trim_start_matches('[').trim_end_matches(']'))
-    }
-
-    fn ip_in_network(candidate: std::net::IpAddr, network: std::net::IpAddr, prefix: u8) -> bool {
-        match (candidate, network) {
-            (std::net::IpAddr::V4(candidate), std::net::IpAddr::V4(network)) => {
-                let mask = if prefix == 0 {
-                    0
-                } else {
-                    u32::MAX << (32 - u32::from(prefix))
-                };
-                u32::from(candidate) & mask == u32::from(network) & mask
-            }
-            (std::net::IpAddr::V6(candidate), std::net::IpAddr::V6(network)) => {
-                let candidate = u128::from(candidate);
-                let network = u128::from(network);
-                let mask = if prefix == 0 {
-                    0
-                } else {
-                    u128::MAX << (128 - u32::from(prefix))
-                };
-                candidate & mask == network & mask
-            }
-            _ => false,
-        }
-    }
-
-    fn default_port_for_scheme(scheme: &str) -> u16 {
-        match scheme {
-            "https" => 443,
-            _ => 80,
-        }
+        no_proxy::should_bypass_components(&self.rules, scheme, host, port)
     }
 }
 
@@ -630,52 +349,7 @@ impl ProxyConfig {
     /// identity and remain reusable.
     #[cfg(feature = "proxy")]
     pub(crate) fn connection_identity(&self) -> Vec<u8> {
-        let mut identity = Vec::new();
-        identity.extend_from_slice(self.uri.as_str().as_bytes());
-        identity.push(0);
-        if let Some(auth) = self.auth.as_ref() {
-            // Hash credential bytes instead of retaining them in the
-            // long-lived route key. The hash preserves cache separation
-            // without storing key material for the entry lifetime. This is
-            // a cache-separation heuristic, not a security boundary: two
-            // domain-separated `DefaultHasher` (SipHash, random per-process
-            // keys) outputs give a 128-bit separator, so an accidental
-            // alias between different credentials is negligible. Keys are
-            // little-endian by construction; the identity is in-process
-            // only, never persisted or compared across endian targets.
-            use std::hash::{Hash, Hasher};
-            let header = auth.header_value();
-            let mut first = std::collections::hash_map::DefaultHasher::new();
-            0u8.hash(&mut first);
-            header.hash(&mut first);
-            let mut second = std::collections::hash_map::DefaultHasher::new();
-            1u8.hash(&mut second);
-            header.hash(&mut second);
-            identity.extend_from_slice(&first.finish().to_le_bytes());
-            identity.extend_from_slice(&second.finish().to_le_bytes());
-        }
-        identity.push(0);
-        for (name, value) in self.proxy_headers.iter() {
-            identity.extend_from_slice(name.as_str().as_bytes());
-            identity.push(b':');
-            identity.extend_from_slice(value.as_bytes());
-            identity.push(0);
-        }
-        identity.extend_from_slice(
-            self.proxy_tls_config
-                .as_ref()
-                .map_or(0u64, crate::tls::TlsConfig::connection_identity)
-                .to_ne_bytes()
-                .as_slice(),
-        );
-        identity.push(0);
-        if let Some(addresses) = self.resolved_addresses.as_ref() {
-            for address in addresses.iter() {
-                identity.extend_from_slice(address.to_string().as_bytes());
-                identity.push(0);
-            }
-        }
-        identity
+        identity::connection_identity(self)
     }
 
     /// Returns the proxy URI.
@@ -1218,10 +892,10 @@ impl ProxyEnvironment {
         }
 
         Self {
-            http_proxy: lower_http.or(upper_http),
-            https_proxy: lower_https.or(upper_https),
-            all_proxy: lower_all.or(upper_all),
-            no_proxy: lower_no.or(upper_no),
+            http_proxy: environment::prefer_lowercase(lower_http, upper_http),
+            https_proxy: environment::prefer_lowercase(lower_https, upper_https),
+            all_proxy: environment::prefer_lowercase(lower_all, upper_all),
+            no_proxy: environment::prefer_lowercase(lower_no, upper_no),
         }
     }
 
@@ -1247,13 +921,8 @@ impl ProxyEnvironment {
 
     /// Parse the snapshot's `NO_PROXY` value with native semantics.
     fn no_proxy_rules(&self) -> Result<Option<NoProxy>> {
-        self.no_proxy.as_deref().map(NoProxy::parse).transpose()
+        environment::parse_no_proxy(self.no_proxy.as_deref())
     }
-
-    /// Normalize an environment proxy URL.
-    ///
-    /// Values without a scheme (e.g. `proxy:8080`) are treated as `http`
-    /// proxies, mirroring the Python facade's `normalize_environment_proxy_url`.
     /// Resolve the explicit proxy route for `url`.
     ///
     /// Returns `Ok(None)` for direct transport: no proxy configured for the
@@ -1277,23 +946,13 @@ impl ProxyEnvironment {
             }
         }
 
-        let (raw, rule) = match url.scheme() {
-            "https" => match self.https_proxy.as_deref().or(self.all_proxy.as_deref()) {
-                Some(raw) => (raw, ProxyRule::Https),
-                None => return Ok(None),
-            },
-            "http" => match self.http_proxy.as_deref().or(self.all_proxy.as_deref()) {
-                Some(raw) => (raw, ProxyRule::Http),
-                None => return Ok(None),
-            },
-            _ => return Ok(None),
-        };
-        // A fallback `ALL_PROXY` value routes both schemes; keep the
-        // per-URL rule specific except when the value came from ALL_PROXY.
-        let from_all = match url.scheme() {
-            "https" => self.https_proxy.is_none(),
-            "http" => self.http_proxy.is_none(),
-            _ => false,
+        let Some((raw, rule, from_all)) = environment::select_proxy(
+            url.scheme(),
+            self.http_proxy.as_deref(),
+            self.https_proxy.as_deref(),
+            self.all_proxy.as_deref(),
+        ) else {
+            return Ok(None);
         };
 
         let normalized = environment::normalize_proxy_url(raw);

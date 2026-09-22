@@ -26,6 +26,10 @@ eggfetch is a Rust-native async HTTP client engine (tokio + hyper) with Python b
 - **CLI** — streaming output, machine-readable formats, shell completions ([guide](docs/cli/guide.md))
 - **C ABI and Node.js prototype** — opaque-handle FFI plus an experimental N-API wrapper ([ffi-and-node](docs/architecture/ffi-and-node.md))
 
+The implementation ownership and frozen low-level Rust compatibility surfaces
+are tracked in the [architecture overview](docs/architecture/overview.md) and
+the [Rust surface-containment inventory](docs/architecture/rust-surface-containment.md).
+
 ## Installation
 
 **Python:**

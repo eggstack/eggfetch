@@ -158,7 +158,10 @@ All HTTP behavior lives here (top-level modules plus `transport/`, `stream/`, an
 
 ### eggfetch-cli (the CLI)
 
-Single source file (`main.rs`). Thin binary over `eggfetch-core` (enables `cookies`, `multipart`, `proxy`; no compression decoders, no `http2`/`http3` — it never sends `Accept-Encoding`):
+Thin binary over `eggfetch-core` (enables `cookies`, `multipart`, `proxy`; no
+compression decoders, no `http2`/`http3` — it never sends `Accept-Encoding`).
+`main.rs` owns high-level orchestration; private CLI concerns are split across
+`args.rs`, `input.rs`, `output.rs`, `files.rs`, and `errors.rs`:
 
 - **Argument parsing**: clap-based (`#[derive(Parser)]`), maps flags to `ClientBuilder`/`RequestBuilder` calls
 - **Body modes**: `--body`, `--body-file`, `--json`, `--form`, `--file @path`
@@ -189,7 +192,7 @@ Rust source modules via PyO3/maturin. Enables all core features including HTTP/2
 | `timeout.rs` | Timeout configuration. |
 | `tls.rs` | TLS configuration (`verify`, `cert` kwargs). |
 | `multipart.rs` | `File` wrapper for multipart uploads. |
-| `streaming.rs` | `StreamingResponse` — sync/async iterators for bytes, text, lines, raw bytes. |
+| `streaming.rs` | `StreamingResponse` public PyO3 wiring; private stream state/bridge/decoding and iterator implementations live under `streaming/`. |
 | `conversion.rs` | Python↔Rust type conversion (shared by sync/async). |
 | `request_preparation.rs` | Shared `prepare_client_config`/`apply_client_config` client setup (shared by sync/async). |
 | `extensions.rs` | Request-extension extraction (`target`, `sni_hostname`, `trace`) into core `TransportHints`; native resolved destinations remain Rust-only. |

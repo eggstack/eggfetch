@@ -12,6 +12,9 @@ version synchronized with `crates/eggfetch-python/tests/native_api_manifest.json
 ## Workflow
 
 1. Read `docs/architecture/python-bindings.md` for the module map and API surface.
+   Private streaming state/bridge/decoding/iterator ownership lives under
+   `crates/eggfetch-python/src/streaming/`; keep `streaming.rs` as the PyO3
+   class/wiring boundary.
 2. Read `docs/python/guide.md` for the user-facing API documentation.
 3. Read existing Python source in `crates/eggfetch-python/src/` for code conventions.
 

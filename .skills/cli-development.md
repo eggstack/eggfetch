@@ -30,3 +30,8 @@ Use this skill when working on the eggfetch-cli crate.
 
 - CLI architecture: `docs/architecture/cli.md`
 - CLI guide: `docs/cli/guide.md`
+
+Private CLI parsing, errors, input, output, and file handling are split into
+`args.rs`, `errors.rs`, `input.rs`, `output.rs`, and `files.rs`; keep
+`main.rs` as the orchestration boundary and preserve the documented CLI
+surface.
