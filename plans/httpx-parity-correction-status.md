@@ -4,6 +4,36 @@ This record is the exact-SHA-bound status for the HTTPX 0.28.1 compatibility
 facade. Historical phase and corrective-pass records remain in the git history
 and referenced plans; counts below are only from the runs named here.
 
+## Recorded state — Stage C renewed after private-architecture qualification-state corrective (2026-09-22)
+
+Recorded designation: **Stage C qualified** for both documented facades, bound
+to executable freeze `d4979f1dac53f30f07900f54b01a88de06956c1c`. The
+API-preserving private-architecture containment campaign changed executable
+Rust, Python, and CLI implementation ownership while preserving public APIs
+and behavior, so the exact-SHA qualification evidence was renewed on that
+freeze. This corrective only rebinds the live metadata and documentation; it
+does not claim a new executable qualification run. The immediately preceding
+live binding `18c1f96c1cbf9d71aa480030b0f365c85267620b` remains historical.
+
+The qualification evidence already recorded by the private-architecture
+closure run includes:
+
+- Tier 1, extended, package, security, and exact Rust 1.89.0/MSRV checks
+  passed;
+- the six-profile Rust public API oracle passed without snapshot regeneration;
+- native Python API and typing checks passed, and the native Python behavior
+  suite passed;
+- HTTPX 0.28.1 smoke/full compatibility passed, and the HTTPX2 2.12.0
+  qualification passed in the same closure run;
+- FFI and CLI validation passed; Node Rust validation passed with the
+  policy-defined Node JavaScript artifact skip because the artifact is absent;
+- no compatibility waiver or new residual difference was introduced.
+
+The executable freeze remains unchanged. The profiles and this ledger are
+documentation/evidence descendants of that freeze; no executable, test,
+validation, workflow, package, API snapshot, or compatibility fixture changed
+in this corrective.
+
 ## Recorded state — Stage C renewed after maintenance closure-evidence corrective (2026-09-21)
 
 Recorded designation: **Stage C qualified** for both documented facades, bound

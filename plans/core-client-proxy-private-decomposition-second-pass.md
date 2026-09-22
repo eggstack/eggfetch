@@ -256,22 +256,22 @@ retry and downstream behavior when touched.
 
 ## Acceptance criteria
 
-- [ ] Public `Client`/`ClientBuilder` declarations and all public methods
+- [x] Public `Client`/`ClientBuilder` declarations and all public methods
       remain at the same canonical paths and exact surface.
-- [ ] Public proxy declarations and methods remain at the same canonical paths
+- [x] Public proxy declarations and methods remain at the same canonical paths
       and exact surface.
-- [ ] Exact Rust public API oracle reports zero unexplained drift for every
+- [x] Exact Rust public API oracle reports zero unexplained drift for every
       supported profile.
-- [ ] No new public module/type/function/constant is introduced.
-- [ ] Substantial private route/cache/connector responsibility is removed from
+- [x] No new public module/type/function/constant is introduced.
+- [x] Substantial private route/cache/connector responsibility is removed from
       `client.rs` where dependency direction remains clear.
-- [ ] Substantial private NO_PROXY/environment/identity/test-support
+- [x] Substantial private NO_PROXY/environment/identity/test-support
       responsibility is removed from `proxy.rs` where semantics remain exact.
-- [ ] Cache identity, capacity and reuse/fragmentation tests remain green.
-- [ ] Native and HTTPX NO_PROXY differential behavior remains green.
-- [ ] CONNECT production ownership remains in `eggfetch-http-connect`.
-- [ ] No behavior change is accepted through a compatibility waiver.
-- [ ] Tier 1 and extended validation pass.
+- [x] Cache identity, capacity and reuse/fragmentation tests remain green.
+- [x] Native and HTTPX NO_PROXY differential behavior remains green.
+- [x] CONNECT production ownership remains in `eggfetch-http-connect`.
+- [x] No behavior change is accepted through a compatibility waiver.
+- [x] Tier 1 and extended validation pass.
 
 ## Stop conditions
 

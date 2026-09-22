@@ -235,22 +235,22 @@ binary package-content checks.
 
 ## Acceptance criteria
 
-- [ ] Native Python API manifest has zero difference.
-- [ ] Python PEP 561 typing-surface check has zero difference.
-- [ ] No public PyO3 signature or `eggfetch.__all__` entry changes.
-- [ ] No Python exception hierarchy or accepted/rejected input changes.
-- [ ] Streaming state/close/drop/cancellation semantics are unchanged.
-- [ ] Sync streaming remains bounded and does not introduce worker blocking or
+- [x] Native Python API manifest has zero difference.
+- [x] Python PEP 561 typing-surface check has zero difference.
+- [x] No public PyO3 signature or `eggfetch.__all__` entry changes.
+- [x] No Python exception hierarchy or accepted/rejected input changes.
+- [x] Streaming state/close/drop/cancellation semantics are unchanged.
+- [x] Sync streaming remains bounded and does not introduce worker blocking or
       extra full-body copies.
-- [ ] Text/line/raw iteration semantics remain unchanged across arbitrary
+- [x] Text/line/raw iteration semantics remain unchanged across arbitrary
       chunk boundaries.
-- [ ] CLI `--help`/argument syntax/defaults and all documented behaviors are
+- [x] CLI `--help`/argument syntax/defaults and all documented behaviors are
       unchanged.
-- [ ] CLI exit codes, redaction and machine-output schema remain unchanged.
-- [ ] Python and CLI source responsibilities are materially easier to audit
+- [x] CLI exit codes, redaction and machine-output schema remain unchanged.
+- [x] Python and CLI source responsibilities are materially easier to audit
       without introducing shared cross-adapter policy.
-- [ ] Tier 1 and extended validation pass.
-- [ ] No compatibility waiver is added.
+- [x] Tier 1 and extended validation pass.
+- [x] No compatibility waiver is added.
 
 ## Stop conditions
 

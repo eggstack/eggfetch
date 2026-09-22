@@ -5,14 +5,13 @@ claims refer specifically to the pinned 0.28.1 asyncio-supported facade
 (`eggfetch.compat.httpx`), not all HTTPX transports or concurrency backends.
 HTTPX2 claims refer specifically to the sibling 2.12.0 facade
 (`eggfetch.compat.httpx2`, Stage C qualified on frozen executable SHA
-`18c1f96c1cbf9d71aa480030b0f365c85267620b` (2026-09-21, maintenance
-closure-evidence corrective requalification after the API-preserving
-maintenance campaign),
+`d4979f1dac53f30f07900f54b01a88de06956c1c` (2026-09-22, private-architecture
+requalification after the API-preserving containment campaign),
 profiles in
 `compat/httpx/0.28.1/profile.toml` and `compat/httpx2/2.12.0/profile.toml`;
 the live ledger is `plans/httpx-parity-correction-status.md`). The prior
-`bc4800ee9428f0fd11d7d0b914c489b444fe93fc` binding is historical (with
-`df2549f7...` retained as intermediate maintenance evidence);
+`18c1f96c1cbf9d71aa480030b0f365c85267620b` binding is historical (with
+`bc4800ee...` and `df2549f7...` retained as prior maintenance evidence);
 the two contracts are independent and never collapsed into one "HTTPX parity"
 claim. HTTPX 1.0 pre-releases are preview-only (`compat/httpx/1.0-preview/`)
 with no parity claim.
@@ -131,12 +130,12 @@ eggfetch targets HTTPX 0.28.1 compatibility in phases. The current status:
   lifecycle hardening, observability cleanup. Historical evidence only.
 - **Current qualification**: HTTPX 0.28.1 and HTTPX2 2.12.0 are Stage C
   qualified on executable SHA
-  `18c1f96c1cbf9d71aa480030b0f365c85267620b` (2026-09-21, maintenance
-  closure-evidence corrective requalification after the API-preserving
-  maintenance campaign). The prior
-  `bc4800ee9428f0fd11d7d0b914c489b444fe93fc` binding is historical; the
-  intermediate `df2549f7...` maintenance freeze remains historical
-  implementation evidence, not a live Stage C binding.
+  `d4979f1dac53f30f07900f54b01a88de06956c1c` (2026-09-22,
+  private-architecture requalification after the API-preserving containment
+  campaign). The prior
+  `18c1f96c1cbf9d71aa480030b0f365c85267620b` binding is historical; earlier
+  maintenance freezes remain historical implementation evidence, not live
+  Stage C bindings.
   Full status is in
   `plans/httpx-parity-correction-status.md`.
 

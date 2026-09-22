@@ -113,11 +113,17 @@ rebaseline-sha = "f9eb1a455907d43210886b7b047d18bde8716652"
 # 1.89.0 MSRV, six-profile Rust oracle, and full pinned HTTPX/HTTPX2 gates on
 # the corrective freeze below. The immediately preceding `bc4800ee...`
 # binding is historical only.
+# The API-preserving private-architecture containment campaign then changed
+# executable Rust, Python, and CLI implementation ownership while preserving
+# behavior and public API. Exact-SHA qualification was therefore renewed on
+# the executable freeze below; this documentation/profile correction does not
+# create a new executable freeze. The immediately preceding live binding is
+# retained as `previous-qualification-sha`.
 stage = "stage-c-qualified"
 status = "qualified"
-qualification-sha = "18c1f96c1cbf9d71aa480030b0f365c85267620b"
-qualification-date = "2026-09-21"
-previous-qualification-sha = "bc4800ee9428f0fd11d7d0b914c489b444fe93fc"
+qualification-sha = "d4979f1dac53f30f07900f54b01a88de06956c1c"
+qualification-date = "2026-09-22"
+previous-qualification-sha = "18c1f96c1cbf9d71aa480030b0f365c85267620b"
 historical-current-qualification-sha = "312cd4402ea2b4b27bf54cf7dc36924a1d449adc"
 historical-qualification-sha = "cc90f5ed561bbe10d4c26accc54ed3b916518f98, d034a1005857a7f403222dda4bda5f2f204a44fe, d24101be6ed7be64463813750da5b4043d9905ec, 5c7899fefb6df087dfa1b3578fbef9ba64f87742, 9ffa6cd85848fd16a424b65f73254351911777c4, c44d4f25ffebc1a792335163ae4bc106076b3963"
 reference = "httpx==0.28.1"

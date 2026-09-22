@@ -262,25 +262,25 @@ Run full HTTPX/HTTPX2 exact-SHA qualification per
 
 ## Final acceptance criteria
 
-- [ ] One exact executable/test/validation/package freeze SHA is recorded.
-- [ ] All prerequisite plans satisfy their literal acceptance criteria.
-- [ ] Rust public API oracle reports zero unexplained drift across all
+- [x] One exact executable/test/validation/package freeze SHA is recorded.
+- [x] All prerequisite plans satisfy their literal acceptance criteria.
+- [x] Rust public API oracle reports zero unexplained drift across all
       supported profiles and no snapshots were regenerated.
-- [ ] Native Python manifest and PEP 561 typing surfaces have zero drift.
-- [ ] Full native Python behavior/streaming/lifecycle tests pass.
-- [ ] HTTPX 0.28.1 and HTTPX2 2.12.0 compatibility/API gates have zero new
+- [x] Native Python manifest and PEP 561 typing surfaces have zero drift.
+- [x] Full native Python behavior/streaming/lifecycle tests pass.
+- [x] HTTPX 0.28.1 and HTTPX2 2.12.0 compatibility/API gates have zero new
       unexplained drift.
-- [ ] C ABI exported surface and behavior are unchanged.
-- [ ] CLI public behavior and exit/output contracts are unchanged.
-- [ ] Node remains experimental and has no new supported capability.
-- [ ] HTTP/3 remains experimental and has no new support claim.
-- [ ] Feature/default/dependency ownership is unchanged.
-- [ ] Tier 1, extended, package, security, docs and exact MSRV gates pass.
-- [ ] No API/compatibility waiver was added for this campaign.
-- [ ] Canonical exact-SHA records all agree if renewal was required.
-- [ ] Issue #24 publication and Python 3.15 rehearsal state are reported
+- [x] C ABI exported surface and behavior are unchanged.
+- [x] CLI public behavior and exit/output contracts are unchanged.
+- [x] Node remains experimental and has no new supported capability.
+- [x] HTTP/3 remains experimental and has no new support claim.
+- [x] Feature/default/dependency ownership is unchanged.
+- [x] Tier 1, extended, package, security, docs and exact MSRV gates pass.
+- [x] No API/compatibility waiver was added for this campaign.
+- [x] Canonical exact-SHA records all agree if renewal was required.
+- [x] Issue #24 publication and Python 3.15 rehearsal state are reported
       independently and truthfully.
-- [ ] Parent program and `plans/README.md` are reconciled only after all
+- [x] Parent program and `plans/README.md` are reconciled only after all
       required evidence is complete.
 
 ## Stop conditions

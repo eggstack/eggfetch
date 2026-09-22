@@ -210,21 +210,21 @@ Run package validation if Node metadata or package-content validation changes.
 
 ## Acceptance criteria
 
-- [ ] Existing Rust public API snapshots have zero unexplained difference.
-- [ ] No audited low-level module gains a new public implementation helper.
-- [ ] Existing Alt-Svc/H3 public paths remain exactly available as before.
-- [ ] HTTP/3 remains explicitly experimental.
-- [ ] Existing mutable metric/counter surface is unchanged; no adjacent public
+- [x] Existing Rust public API snapshots have zero unexplained difference.
+- [x] No audited low-level module gains a new public implementation helper.
+- [x] Existing Alt-Svc/H3 public paths remain exactly available as before.
+- [x] HTTP/3 remains explicitly experimental.
+- [x] Existing mutable metric/counter surface is unchanged; no adjacent public
       counter/mutator is added.
-- [ ] Feature-profile public exposure remains unchanged.
-- [ ] C ABI exported surface and ownership semantics remain unchanged.
-- [ ] Node package metadata is internally consistent with the repository and
+- [x] Feature-profile public exposure remains unchanged.
+- [x] C ABI exported surface and ownership semantics remain unchanged.
+- [x] Node package metadata is internally consistent with the repository and
       coordinated versioning policy.
-- [ ] Node remains explicitly experimental and unsupported as a stable npm
+- [x] Node remains explicitly experimental and unsupported as a stable npm
       binding.
-- [ ] No generated TypeScript declarations or npm publish pipeline is added.
-- [ ] Tier 1 and extended validation pass.
-- [ ] No compatibility/API waiver is introduced.
+- [x] No generated TypeScript declarations or npm publish pipeline is added.
+- [x] Tier 1 and extended validation pass.
+- [x] No compatibility/API waiver is introduced.
 
 ## Stop conditions
 

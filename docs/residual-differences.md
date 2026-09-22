@@ -1,13 +1,13 @@
 # Residual Differences from HTTPX 0.28.1
 
 The HTTPX 0.28.1 and httpx2 2.12.0 facades are Stage C qualified on frozen
-executable SHA `18c1f96c1cbf9d71aa480030b0f365c85267620b` (2026-09-21,
-maintenance closure-evidence corrective requalification). The prior
-`bc4800ee9428f0fd11d7d0b914c489b444fe93fc` binding is historical; the
-intermediate `df2549f7...` maintenance freeze remains historical
-implementation evidence. The maintenance campaign plus this corrective
-changed private implementation/test/validation inputs without public
-compatibility drift.
+executable SHA `d4979f1dac53f30f07900f54b01a88de06956c1c` (2026-09-22,
+private-architecture requalification after the API-preserving containment
+campaign). The prior
+`18c1f96c1cbf9d71aa480030b0f365c85267620b` binding is historical; earlier
+maintenance freezes remain historical implementation evidence. The
+private-architecture campaign changed implementation ownership while
+preserving public compatibility and behavior.
 HTTP/3 remains separately experimental. These are the retained, tested
 bounded differences; the active ledger
 (`plans/httpx-parity-correction-status.md`) and parity registry are
