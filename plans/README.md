@@ -1,7 +1,7 @@
 # eggfetch Plan Index
 
 
-## Active program — API-preserving private architecture containment (2026-09-21)
+## Completed program — API-preserving private architecture containment (2026-09-21)
 
 Handoff program: `api-preserving-private-architecture-containment-program.md`
 
@@ -40,6 +40,14 @@ Node maturation, H3 graduation, Python trailer exposure, Trio/AnyIO, new CLI
 feature, new FFI symbol, or compatibility waiver belongs in this program.
 Issue #24 publication/tag/PyPI work and the Python 3.15 18-wheel rehearsal
 remain independent maintainer/release actions.
+
+Status: complete on executable freeze
+`d4979f1dac53f30f07900f54b01a88de06956c1c` (2026-09-22 UTC). Tier 1,
+extended, package, security, exact MSRV, six-profile Rust API, native Python,
+HTTPX/HTTPX2 compatibility, FFI, and CLI gates are green locally. The Node
+JavaScript artifact remains a documented skip because it is not built.
+Closure documentation is a descendant of the freeze and records the final
+evidence in `post-private-architecture-api-requalification-and-closure.md`.
 
 
 ## Completed polish — post-maintenance documentation state (2026-09-21)

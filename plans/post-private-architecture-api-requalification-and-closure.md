@@ -291,3 +291,52 @@ executable/test/validation/package/qualification input.
 Do not close if any public-surface difference, behavioral drift, compatibility
 waiver, feature-profile drift, new Node/H3 capability, or unresolved required
 gate remains.
+
+## Final closure record
+
+Status: complete on executable freeze `d4979f1dac53f30f07900f54b01a88de06956c1c`
+(2026-09-22 UTC). The freeze is the first commit containing the executable,
+test, package-metadata, architecture, skill, and qualification changes from
+the three prerequisite plans. The planning baseline is
+`c53eebc47569279b61c0611d4523c5132bdbcaeb`; this record is a documentation
+descendant and does not reopen the freeze.
+
+Freeze contents are classified as follows:
+
+- executable/private ownership: core client/proxy modules, Python streaming
+  modules, CLI modules, and unchanged adapter wiring;
+- package metadata: Node package version/license alignment (`0.1.9`, `MIT`);
+- validation evidence: no validation scripts, snapshots, compatibility
+  fixtures, or workflows were changed;
+- documentation/plans: architecture maps, README/AGENTS guidance, project
+  skills, and the prerequisite implementation records.
+
+Coordinated versions at the freeze are `eggfetch-core`, `eggfetch-http-connect`,
+`eggfetch-cli`, `eggfetch-ffi`, `eggfetch-node`, and `eggfetch-python` 0.1.9;
+`eggfetch-bench` remains 0.1.0.
+
+Qualification evidence:
+
+- Tier 1 `./scripts/check.sh`: passed;
+- extended `./scripts/check.sh extended`: passed on the final idle-host run;
+  the earlier contention-sensitive timeout failures were isolated and passed
+  on rerun without source changes;
+- package `./scripts/check.sh package`: passed through the repeated Tier 1,
+  API, Python, HTTPX, and Node/package stages; the Node JavaScript artifact
+  remained the policy-defined skip;
+- security `./scripts/check_security.sh`: passed; cargo-deny advisories,
+  bans, licenses, and sources plus cargo-audit passed. The existing duplicate
+  `getrandom` lock warning is informational and not a security failure;
+- exact Rust API oracle: six profiles passed, with 223 semver checks passing
+  and 30 policy-defined skips; no snapshots were regenerated;
+- native Python API/typing: 66 exports, 32 exception bases, and 24 reviewed
+  member contracts passed; native behavior passed 578 tests;
+- HTTPX 0.28.1 smoke passed 134 tests and the full pinned suite passed 1,928;
+- FFI tests passed 34; Node Rust tests passed with JavaScript surface skipped
+  because `crates/eggfetch-node/eggfetch.node` is absent;
+- the exact Rust 1.89.0/MSRV and feature-profile stages passed in the final
+  extended qualification.
+
+Issue #24 publication/tag/PyPI work and the Python 3.15 wheel rehearsal remain
+independent pending maintainer/release actions. HTTP/3 and Node remain
+experimental; no capability or compatibility waiver was added.

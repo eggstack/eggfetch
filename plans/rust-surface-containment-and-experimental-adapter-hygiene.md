@@ -129,10 +129,10 @@ decision.
 
 ## Part F — reconcile Node prototype metadata without maturing Node
 
-At baseline:
+At the planning baseline:
 
 - Rust crate `eggfetch-node` is version `0.1.9`;
-- `crates/eggfetch-node/package.json` reports `0.1.0`;
+- `crates/eggfetch-node/package.json` reported `0.1.0`;
 - workspace/repository license is MIT;
 - `package.json` reports `MIT OR Apache-2.0`;
 - `index.d.ts` intentionally exports nothing;
@@ -141,7 +141,7 @@ At baseline:
 Reconcile metadata so it truthfully represents the existing prototype without
 creating a release promise.
 
-Default target:
+The implemented target:
 
 - align package version with the coordinated workspace release version unless
   repository release policy explicitly defines Node as independently

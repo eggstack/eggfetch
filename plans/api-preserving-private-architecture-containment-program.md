@@ -223,6 +223,16 @@ issue #24/Python 3.15.
 Issue #24 publication and Python 3.15 wheel rehearsal remain independent
 maintainer/release work.
 
+## Closure record
+
+Status: complete on executable freeze
+`d4979f1dac53f30f07900f54b01a88de06956c1c` (2026-09-22 UTC). The ordered
+private client/proxy, Python streaming/CLI, and Rust surface-containment plans
+were implemented without public-surface or behavior drift. Final evidence and
+the distinction between the executable freeze and this documentation
+descendant are recorded in
+`plans/post-private-architecture-api-requalification-and-closure.md`.
+
 ## Stop conditions
 
 Stop and split a separate corrective if a proposed decomposition:
