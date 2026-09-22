@@ -42,7 +42,7 @@ pip install eggfetch
 
 ```toml
 [dependencies]
-eggfetch-core = "0.1"
+eggfetch-core = "0.2"
 ```
 
 The default features are the secure HTTP/1.1 client with Rustls and native roots. See the [feature profile matrix](docs/architecture/feature-flags.md#supported-core-profiles) for minimal, deterministic, and embedded recipes. Low-level embedding without the `url`/`idna`/ICU closure selects `native-http1` (or `native-http2`) without `high-level-url` and uses `Client::execute_http_body` with a caller-owned `http::Uri` (callers own IDNA/punycode conversion). The lean high-level recipe (`standard-http1` + `tls-rustls`, without `advanced-routing` or the `logical-retry`/`redirects`/`basic-auth` policy bundle) keeps the URL/request/response conveniences, Bearer auth, timeouts, body bounds, pooling, TLS, and typed failures while dispatching once over the standard route and returning 3xx without following.

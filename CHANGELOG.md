@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.2.0] - 2026-09-22
+
+### Fixed
+
+- Includes the fixes previously prepared as 0.1.8 and 0.1.9, which never
+  reached all registries together (crates.io stayed at 0.1.7 while PyPI
+  moved to 0.1.8; 0.1.9 was versioned in-tree but unpublished). 0.2.0
+  resynchronizes crates.io, PyPI, and GitHub releases on one version:
+  - Streaming decompression chunk-boundary corruption (issue #24):
+    compressed chunks are decoded identically via `Content-Length` and
+    `Transfer-Encoding: chunked` for gzip/Brotli/deflate/zstd (see the
+    0.1.9 entry below for detail).
+  - Windows PyPI wheel builds under `RUSTFLAGS=-D warnings` (see the
+    0.1.8 entry below for detail).
+
+### Changed
+
+- No intentional breaking changes: public Rust/Python/C/CLI/HTTPX APIs,
+  feature graph and defaults, MSRV (1.89), and dependency policy are
+  unchanged from 0.1.7. The minor bump resynchronizes the registries and
+  covers the API-preserving internal decomposition landed since 0.1.7.
+
 ## [0.1.9] - 2026-09-19
 
 ### Fixed
@@ -170,7 +192,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Multipart boundary validation
 - Proxy authentication boundary enforcement
 
-[Unreleased]: https://github.com/eggstack/eggfetch/compare/v0.1.7...HEAD
+[Unreleased]: https://github.com/eggstack/eggfetch/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/eggstack/eggfetch/releases/tag/v0.2.0
+[0.1.9]: https://github.com/eggstack/eggfetch/releases/tag/v0.1.9
+[0.1.8]: https://github.com/eggstack/eggfetch/releases/tag/v0.1.8
 [0.1.7]: https://github.com/eggstack/eggfetch/releases/tag/v0.1.7
 [0.1.6]: https://github.com/eggstack/eggfetch/releases/tag/v0.1.6
 [0.1.5]: https://github.com/eggstack/eggfetch/releases/tag/v0.1.5
