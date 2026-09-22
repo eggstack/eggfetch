@@ -1,5 +1,12 @@
 # eggfetch Plan Index
 
+> **Live status for agents:** the exact-SHA Stage C binding is
+> `plans/httpx-parity-correction-status.md` (+ `compat/*/profile.toml`).
+> Pending maintainer actions: issue #24 publication/tag/PyPI and the Python
+> 3.15 wheel rehearsal. Everything below is a historical record
+> (verification-policy principle 9) — do not treat completed checklists as
+> current gates. Validation tiers: `.skills/verification-qualification.md`.
+
 
 ## Completed corrective — private architecture qualification state (2026-09-22)
 

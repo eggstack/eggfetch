@@ -122,42 +122,21 @@ from eggfetch.compat.httpx2 import Client as H2Client  # sibling 2.12.0 surface
 ```
 
 **httpx2 delta surface** (in `eggfetch.compat.httpx2` only; never backported
-silently into 0.28.1): `FunctionAuth`, `Origin` + `URL.origin`, `QUERY`
-(`query` top-level + client helpers), `Headers` `|`/`|=` operators, SSE
-(`EventSource` framing over streamed responses), optional WebSocket
-(wsproto framing over the core 101 `network_stream`; handshake via the
-normal pipeline), `alias_httpx()` explicit opt-in, truststore default,
-RFC 9110 status renames with reference `DeprecationWarning`
-(`URL.raw` alone uses `HTTPXDeprecationWarning`).
-
-**httpx2 core facade parity** (`plans/httpx2-2.12-core-facade-parity.md`, done):
-shared helpers reused where semantics identical (`_asgi/_cookies/_mock/
-_request/_response/_stream/_transports/_wsgi` re-exported); profile-specific
-_auth/_urls/_client/_api/_headers/_config/_exceptions/_status_codes/
-_sse/websockets` stay behind explicit boundaries. Behavior deltas:
-IPv6 CIDR `NO_PROXY` fix (0.28.1 oddities preserved), decoder cap native 4
-vs reference 5 (intentionally stricter), multipart `try_header` validation
-before bytes, WSGI framing preservation. Streaming parity
-(`plans/httpx2-2.12-sse-and-websocket-parity.md`, done): SSE framing over
-streamed responses, optional WebSocket wsproto framing over the existing 101
-`network_stream`. Parity cases `H2X-API-001..005,
-H2X-AUTH-001, H2X-TLS-001, H2X-PROXY-001, H2X-COMP-001, H2X-MP-001,
-H2X-WSGI-001, H2X-META-001` (core) plus `H2X-SSE-001/002`, `H2X-WS-001..003`
-(streaming) in `compat/httpx2/2.12.0/parity-cases.toml`;
-tests `test_httpx2_api_parity.py` + `test_httpx2_behavior.py` (core),
-`test_httpx2_sse.py` + `test_httpx2_websocket.py` (streaming).
+silently into 0.28.1): `FunctionAuth`, `Origin` + `URL.origin`, `QUERY`,
+`Headers` `|`/`|=` operators, SSE (`EventSource` framing over streamed
+responses), optional WebSocket (wsproto framing over the core 101
+`network_stream`; handshake via the normal pipeline), `alias_httpx()`
+explicit opt-in, truststore default, RFC 9110 status renames with reference
+`DeprecationWarning` (`URL.raw` alone uses `HTTPXDeprecationWarning`).
+Full facade/phase history lives in `docs/architecture/python-bindings.md`;
+parity cases live in `compat/httpx2/2.12.0/parity-cases.toml` (see also
+`compat/httpx/0.28.1/parity-cases.toml`).
 
 **Implemented surface** (historical phase detail lives in `docs/architecture/python-bindings.md`):
-
-- Value objects: `URL`, `QueryParams`, `Headers`, `Cookies`, `Timeout`, `Limits`, `Proxy`; status helpers (`codes`)
-- Request/Response with full HTTPX-compatible metadata; `Client`/`AsyncClient` constructors, merge semantics, `build_request()`, `send()`; top-level helpers (`get`, `post`, `put`, `patch`, `delete`, `head`, `options`, `request`, `stream`)
-- Complete exception hierarchy matching the HTTPX MRO
-- Streaming both directions: `SyncByteStream`/`AsyncByteStream` base classes, request streaming bodies (iterables, file-like, custom streams), multipart passthrough to the native encoder, raw iterators with chunk-size control
-- Transport layer: `BaseTransport`, `AsyncBaseTransport`, `Transport`, `AsyncTransport`, `MockTransport`; named mounts via `Client.mount()`/`Client.unmount()`
-- Auth: `Auth`, `BasicAuth`, digest auth, netrc integration; request/event hooks on `Client` and `Request`
-- WSGI/ASGI local transports
-- SOCKS5 proxy support with persistent per-route pools and NO_PROXY bypass
-- Typed difference records in the API oracle, lossless merge tests, behavioral downstream fixtures, native lifecycle proof fixtures
+value/request/response objects, `Client`/`AsyncClient` with merge semantics,
+top-level helpers, HTTPX-matching exception MRO, bidirectional streaming,
+transport/mount/auth/hook/WSGI/ASGI/SOCKS layers, typed oracle difference
+records, lossless merge tests, and behavioral/downstream fixtures.
 
 **Qualification state (current):** both facades are Stage C qualified on the
 exact executable SHA recorded in the live ledger
@@ -170,8 +149,8 @@ experimental; that transport decision does not change the HTTPX parity claim.
 Key boundaries:
 
 - Timeout conversion forwards only HTTPX's `connect`, `read`, `write`, `pool`; native `total` is EggFetch-only. The compat `Timeout` constructor uses a private `UNSET` sentinel so omitted phase values inherit the scalar while explicit `None` disables only that phase; `Timeout()` follows HTTPX validation and requires a scalar or all four phases.
-- `Proxy(headers=...)` is forwarded on the proxy leg (resolved in Phase 05).
-- `Proxy(ssl_context=...)` is translated to native TlsConfig for the proxy endpoint TLS handshake (resolved in Phase 05).
+- `Proxy(headers=...)` is forwarded on the proxy leg only.
+- `Proxy(ssl_context=...)` is translated to native TlsConfig for the proxy endpoint TLS handshake.
 - Arbitrary Python ssl_context objects unrepresentable by rustls are rejected
   at construction time; helper-created and passthrough contexts are accepted
   only when their live state and mTLS provenance are representable.
@@ -216,38 +195,18 @@ Key boundaries:
 - Raw iteration marks streams consumed before first source read, counts source bytes before chunk adaptation, closes on normal exhaustion only.
 - `test_corrective_kernel.py` runs in Tier 1; full compat suite, API oracle, and downstream runner are Tier 2/manual gates. Executable changes require fresh exact-SHA qualification (see `compat/httpx/0.28.1/profile.toml`).
 
-**Testing the compat layer:**
+**Testing the compat layer** (full suite is a Tier 2 gate; the Tier 1 smoke
+kernel is `test_imports.py`, `test_client.py`, `test_exceptions.py`,
+`test_corrective_kernel.py` — see the verification skill):
 
 ```sh
 maturin develop -m crates/eggfetch-python/Cargo.toml
 EGGFETCH_COMPAT_REQUIRED=1 pytest crates/eggfetch-python/tests/compat/ -v --strict-markers
 ```
 
-Focused corrective closure tests:
-
-```sh
-EGGFETCH_COMPAT_REQUIRED=1 pytest \
-  crates/eggfetch-python/tests/compat/test_top_level_helpers_parity.py \
-  crates/eggfetch-python/tests/compat/test_client_stream_overrides.py \
-  crates/eggfetch-python/tests/compat/test_auth_input_normalization.py \
-  crates/eggfetch-python/tests/compat/test_client_mutability_and_state.py \
-  crates/eggfetch-python/tests/compat/test_protocol_and_unsupported_options.py \
-  crates/eggfetch-python/tests/compat/test_request_construction_parity.py \
-  crates/eggfetch-python/tests/compat/test_response_stream_state_parity.py \
-  crates/eggfetch-python/tests/compat/test_redirect_state_machine_parity.py \
-  crates/eggfetch-python/tests/compat/test_hook_cookie_auth_ordering.py \
-  crates/eggfetch-python/tests/compat/test_cookie_scope_parity.py \
-  -v --strict-markers
-```
-
-Pinned raw-stream differential and native-boundary checks:
-
-```sh
-EGGFETCH_COMPAT_REQUIRED=1 pytest \
-  crates/eggfetch-python/tests/compat/test_raw_stream_httpx_differential.py \
-  crates/eggfetch-python/tests/compat/test_raw_stream_lifecycle.py \
-  -q --strict-markers
-```
+Run focused parity files by name under `crates/eggfetch-python/tests/compat/`
+(e.g. `test_httpx2_api_parity.py`, `test_raw_stream_lifecycle.py`) rather than
+relying on a frozen list here; the directory listing is authoritative.
 
 Validate profiles and manifests:
 

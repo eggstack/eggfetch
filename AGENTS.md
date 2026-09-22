@@ -1,7 +1,7 @@
 # Agent Guide
 
 eggfetch is a Rust-native async HTTP client (tokio + hyper). All networking lives in `eggfetch-core` plus the small `eggfetch-http-connect` CONNECT wire primitive it owns; CLI, Python, FFI, and Node are thin adapters (Python sync blocks on the async engine with GIL released).
-Start at `docs/architecture/overview.md` (§ Deep-Dive Index). Normative CI/release rules: `docs/verification-policy.md`. Conventions: `CONTRIBUTING.md`. Active work: `plans/README.md`. Task workflows: `.skills/`.
+Start at `docs/architecture/overview.md` (§ Deep-Dive Index). Normative CI/release rules: `docs/verification-policy.md`. Conventions: `CONTRIBUTING.md`. Live qualification binding: `plans/httpx-parity-correction-status.md` (+ `compat/*/profile.toml`); pending maintainer actions at the top of `plans/README.md` (all older plan entries are historical). Task workflows: `.skills/` (validation tiers + exact-SHA rule: `.skills/verification-qualification.md`).
 
 ## Commands
 
@@ -11,6 +11,7 @@ Start at `docs/architecture/overview.md` (§ Deep-Dive Index). Normative CI/rele
 ./scripts/check.sh package  # Tier 3: before publish (crate packaging + wheel build/smoke)
 ./scripts/check_security.sh # Live RustSec/license/source preflight before publication
 ```
+Deep dive: `docs/architecture/build-ci.md`; normative policy: `docs/verification-policy.md`; exact-SHA rule: `.skills/verification-qualification.md`.
 
 - `check.sh` refuses to run outside an active venv with Python 3.10+ and pinned tooling in `scripts/ci-requirements.txt`. Setup: `python3 -m venv .venv && source .venv/bin/activate && python -m pip install -r scripts/ci-requirements.txt`.
 - After changing `crates/eggfetch-python` Rust code, rebuild before testing: `maturin develop -m crates/eggfetch-python/Cargo.toml`. Stale `.so` causes confusing failures.
@@ -22,7 +23,7 @@ Start at `docs/architecture/overview.md` (§ Deep-Dive Index). Normative CI/rele
   - `cargo clippy --workspace --all-targets --all-features -- -D warnings`
   - `cargo fmt --all -- --check`
 - Never parallelize Rust workspace tests (`--test-threads=1`): RSS-stabilization tests go flaky under concurrency. Workspace tests exclude `eggfetch-python` (PyO3 builds separately via `maturin develop`).
-- Tier 2 requires the exact Rust 1.89.0 toolchain (`rustup toolchain install 1.89.0 --profile minimal`); it fails, never skips. Full compat also needs pinned deps (`pip install -r compat/httpx/0.28.1/requirements.txt` + `compat/httpx2/2.12.0/requirements.txt`). The extended Rust public-surface oracle requires `cargo-public-api 0.52.0`, `cargo-semver-checks 0.49.0`, and pinned nightly `nightly-2026-05-07` (see `compat/rust-public-api/README.md`; six profiles vs oracle planning baseline `03ecba973010e2858bf16a2b5f84d51ce70adae4`, distinct from the live Stage C SHA in the ledger/profiles above).
+- Tier 2 requires the exact Rust 1.89.0 toolchain (`rustup toolchain install 1.89.0 --profile minimal`); it fails, never skips. Full compat also needs pinned deps (`pip install -r compat/httpx/0.28.1/requirements.txt` + `compat/httpx2/2.12.0/requirements.txt`). The extended Rust public-surface oracle requires `cargo-public-api 0.52.0`, `cargo-semver-checks 0.49.0`, and pinned nightly `nightly-2026-05-07` (see `compat/rust-public-api/README.md`; six profiles vs oracle planning baseline `03ecba973010e2858bf16a2b5f84d51ce70adae4`, distinct from the live Stage C SHA in the ledger and compat profiles).
 - `qualification/` fixtures and H3 (experimental) are manual, never Tier 1 gates. Tier 1 Node JS surface (`node test.js`) is an explicit SKIP when `node` or `crates/eggfetch-node/eggfetch.node` is absent, not a failure. `scripts/performance_benchmark.py` is non-CI timing evidence only.
 
 ## Boundaries and lint

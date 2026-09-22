@@ -223,6 +223,7 @@ See [`docs/reference/compatibility.md`](docs/reference/compatibility.md) for the
 | [migration/](docs/migration/) | Migration guides from requests and HTTPX |
 | [cookbook/](docs/cookbook/) | Practical runnable examples |
 | [reference/](docs/reference/) | Compatibility matrix, feature matrix, error reference |
+| [releases/](docs/releases/) | Release process and compatibility policy |
 | [security/](docs/security/) | Security guidelines and troubleshooting |
 | [architecture/](docs/architecture/) | Internal architecture documentation |
 | [ffi/](docs/ffi/) | C ABI and FFI binding guide |

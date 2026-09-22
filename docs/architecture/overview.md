@@ -325,7 +325,7 @@ smoke example for the core crate API.
 
 ### Skill workflows (`.skills/`)
 
-Task workflows that encode repo policy: `rust-development.md`, `python-bindings.md`, `cli-development.md`, `ffi-development.md`, `fuzz-testing.md`, `security-review.md`, `release-process.md`, `documentation.md`. Architecture entry point for agents is this overview.
+Task workflows that encode repo policy: `rust-development.md`, `python-bindings.md`, `cli-development.md`, `ffi-development.md`, `fuzz-testing.md`, `security-review.md`, `release-process.md`, `documentation.md`, plus `verification-qualification.md` (Tier 1/2/3 gates + exact-SHA qualification rule; language/crate skills defer to it for validation). Architecture entry point for agents is this overview.
 
 ## Capabilities
 

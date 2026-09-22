@@ -60,7 +60,9 @@ cargo test --workspace --exclude eggfetch-python --all-features -- --test-thread
 ## Feature Matrix Validation
 
 Tier 2 (`tier2_feature_matrix` + `tier2_feature_tests` in `scripts/check.sh`)
-is the authority. Before release it runs:
+is the authority; see the verification skill (`.skills/verification-qualification.md`)
+for Tier 1/2/3 commands, the exact-SHA rule, and the MSRV toolchain requirement.
+Before release it runs:
 
 ```sh
 cargo check -p eggfetch-core --no-default-features
