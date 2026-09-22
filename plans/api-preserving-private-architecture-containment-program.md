@@ -232,6 +232,7 @@ were implemented without public-surface or behavior drift. Final evidence and
 the distinction between the executable freeze and this documentation
 descendant are recorded in
 `plans/post-private-architecture-api-requalification-and-closure.md`.
+Remote CI run `35674749373` passed for documentation head `e70ae121`.
 
 ## Stop conditions
 

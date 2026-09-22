@@ -48,6 +48,7 @@ HTTPX/HTTPX2 compatibility, FFI, and CLI gates are green locally. The Node
 JavaScript artifact remains a documented skip because it is not built.
 Closure documentation is a descendant of the freeze and records the final
 evidence in `post-private-architecture-api-requalification-and-closure.md`.
+Remote CI run `35674749373` passed for documentation head `e70ae121`.
 
 
 ## Completed polish — post-maintenance documentation state (2026-09-21)

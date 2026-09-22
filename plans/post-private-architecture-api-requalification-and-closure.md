@@ -336,6 +336,10 @@ Qualification evidence:
   because `crates/eggfetch-node/eggfetch.node` is absent;
 - the exact Rust 1.89.0/MSRV and feature-profile stages passed in the final
   extended qualification.
+- remote CI run `35674749373` passed for documentation head
+  `e70ae121d314715c3ab4489a297b83b9300d8c2c` (9m12s); its single validation
+  job completed successfully. GitHub's Node.js 20 and Ubuntu 26 runner
+  migration notices are advisory annotations only.
 
 Issue #24 publication/tag/PyPI work and the Python 3.15 wheel rehearsal remain
 independent pending maintainer/release actions. HTTP/3 and Node remain
