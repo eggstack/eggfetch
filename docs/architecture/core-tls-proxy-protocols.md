@@ -427,13 +427,13 @@ output.
 
 ### Feature Gating
 
-Behind the `http2` Cargo feature. When not enabled, `Http2Only` and `Auto` silently downgrade to `Http1Only`.
+Behind the `transport-http2` Cargo feature (reachable via the `http2` alias or `native-http2`/`standard-http2`). When not enabled, `Http2Only` and `Auto` silently downgrade to `Http1Only`.
 
 ### Version Policy
 
 `HttpVersionPolicy` enum:
 - `Http1Only` — only HTTP/1.1.
-- `Http2Only` — only HTTP/2 (fails if server does not negotiate). Enforced at both the ALPN layer (only `h2` is advertised) and at the hyper-util legacy client layer (`http2_only(true)`).
+- `Http2Only` — only HTTP/2 (fails if server does not negotiate). Enforced at three layers: the ALPN layer (only `h2` is advertised), the hyper-util legacy client layer (`http2_only(true)`), and the connector `Connected::negotiated_h2()` signal.
 - `Auto` (default) — both `h2` and `http/1.1` advertised.
 
 HTTP forward-proxy legs are H1-only: `Http2Only` through a forward proxy is rejected before I/O, and the forward route never sets `http2_only`.
@@ -715,19 +715,19 @@ is retryable; `H3ConnectionClosed` / `H3Stream` / `H3Protocol` are not.
 
 ### Stress Evidence
 
-`tests/h3_hardening.rs` (loopback fixtures only): connect/total
+`crates/eggfetch-core/tests/h3_hardening.rs` (loopback fixtures only): connect/total
 precedence, stalled-body read timeout, shared concurrent init, per-host
 pool gating, failure non-poisoning, distinct-origin stabilization,
 fail/reconnect cycles, partial-body drop reuse, client-drop release, and
 prompt cancellation with continued usability.
 
-`tests/h3_alt_svc_discovery.rs` (loopback only): explicit strictness,
+`crates/eggfetch-core/tests/h3_alt_svc_discovery.rs` (loopback only): explicit strictness,
 Auto discovery (learn-then-H3), suppression with fast skip and new-generation
 recovery, safe fallback with monotonic deadlines, draining reconnect,
 exact observability, and adversarial cases (plaintext/injection/oversized/
 stale/cancellation/clear, SNI preservation, one-shot non-replay).
 
-`tests/h3_interop_qualification.rs` (20 deterministic loopback controls;
+`crates/eggfetch-core/tests/h3_interop_qualification.rs` (20 deterministic loopback controls;
 external cases are selected by the qualification runner): mandatory Quinn self-interop,
 GET/HEAD, buffered POST upload, 1 MiB streaming download, 20-way
 multiplexed concurrency, H3 trailers after EOF, UDP-blackhole

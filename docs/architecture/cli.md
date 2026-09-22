@@ -58,10 +58,12 @@ The URL is the only positional argument. The method is set with `-X`/`--method` 
 | `-v`/`--verbose` | Verbose request/response info to stderr |
 | `--generate-completion SHELL` | Print shell completions (bash/zsh/fish/powershell/elvish) and exit |
 
-`--auth`/`--bearer`, `--follow`/`--no-follow`, `--json-output`/`--ndjson`,
-and `--http1`/`--http2`/`--http3` are mutually exclusive (rejected with exit
- 2). mTLS requires both `--cert` and `--key` together. `--cookie-jar` reads
- `NAME=VALUE` lines only; the Netscape jar format is not parsed.
+`--auth`/`--bearer` and `--json-output`/`--ndjson` are mutually exclusive
+(rejected with exit 2). `--follow`/`--no-follow` is an override pair
+(`--no-follow` wins, no rejection). `--http1`/`--http2`/`--http3` are checked
+manually (more than one fails with exit 2 via the usage path). mTLS requires
+both `--cert` and `--key` together. `--proxy-auth`/`--no-proxy` require
+`--proxy`. `--cookie-jar` reads `NAME=VALUE` lines only; the Netscape jar format is not parsed.
 
 ### Environment Variables
 
@@ -113,7 +115,7 @@ downgrading.
 {
   "url": "...",
   "status": 200,
-  "version": "HTTP/1.1",
+  "version": "1.1",
   "headers": [[name, value], ...],
   "elapsed_ms": 123,
   "history": [...],
@@ -123,7 +125,7 @@ downgrading.
 }
 ```
 
-`errors` is always present; `body_base64` appears only with `--base64`.
+`version` uses `version_string()` (`"1.1"`/`"2"`/`"3"`). `errors` is always present; `body_base64` appears only with `--base64`.
 
 ## Streaming
 
@@ -134,13 +136,18 @@ The CLI streams the human/file response body via `Response::bytes_stream()` and 
 | Code | Meaning |
 |------|---------|
 | 0 | Success (HTTP errors included unless `--check-status`) |
-| 2 | CLI usage/configuration error |
+| 2 | CLI usage/configuration error (incl. cert/hostname-verification config errors) |
 | 3 | DNS/connect/TLS/pool/proxy transport error |
 | 4 | Timeout (any phase) |
 | 5 | Protocol/decompression/body limit error |
 | 6 | HTTP status failure (with `--check-status`) |
 | 7 | Hyper/network/file I/O error |
 | 130 | Interrupted (Ctrl-C) |
+
+## File Output
+
+- `-o`/`--output PATH`: write body to file, creating or overwriting (JSON/NDJSON modes also honor `--output`).
+- `-i`/`--include`: response headers to stderr before body.
 
 ## File Output
 

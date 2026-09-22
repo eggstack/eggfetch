@@ -114,7 +114,7 @@ let response = client
     .await?;
 ```
 
-Body sources are mutually exclusive: `body()`, `bytes()`, `stream()`, `json()`, `form()`, `multipart()`.
+Body sources are mutually exclusive: `body()`, `bytes()`, `json()` (plus `body(RequestBody::from_stream(...))` for streams and `Multipart::stream` for multipart streaming).
 
 ### Transport Hints
 
@@ -136,9 +136,11 @@ Transport hints survive retry reconstruction via the typed
 `RequestParts::retry_request()` transformation. Ordinary destination-specific
 hints (`target`, `sni_hostname`, and `trace`) are cleared on redirect hops;
 the native `resolved_target` snapshot is retained only for same-origin hops
-and causes a cross-origin redirect to fail closed. The redirects-disabled fast
-path and the redirect-enabled first hop share one `HopBuildParams` builder, so
-the first-hop behavior cannot diverge between the two entry paths.
+and causes a cross-origin redirect to fail closed. The redirects-enabled fast
+path and the redirect-enabled first hop share one crate-private `HopBuildParams`
+builder, so the first-hop behavior cannot diverge between those two entry paths;
+the feature-absent `lean` path (`pipeline::lean::send_lean`, no `redirects`)
+duplicates header/cookie/auth inline and can diverge if edited independently.
 
 ### Static resolved-destination routing
 
@@ -200,7 +202,7 @@ implement authorization, CIDR, or SSRF policy.
 `RequestBuilder::proxy()` accepts `ProxyOverride`:
 - `Inherit` — use client-level proxy (default)
 - `Direct` — bypass proxy for this request
-- `Override(Proxy)` — use a different proxy for this request
+- `Override(ProxyConfig)` — use a different proxy for this request
 
 ## Response
 

@@ -28,7 +28,7 @@ cargo test --workspace --exclude eggfetch-python --all-features -- --test-thread
 cargo test -p eggfetch-core --all-features -- --test-threads=1
 
 # Python tests (rebuild the extension first; requires an active venv with
-# Python 3.10+, maturin, pytest, pytest-asyncio)
+# Python 3.10+, maturin, pytest, pytest-asyncio, mypy per scripts/ci-requirements.txt)
 maturin develop -m crates/eggfetch-python/Cargo.toml
 python -m pytest crates/eggfetch-python/tests/ -q --ignore=crates/eggfetch-python/tests/compat
 
