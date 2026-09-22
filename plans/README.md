@@ -7,6 +7,30 @@
 > (verification-policy principle 9) — do not treat completed checklists as
 > current gates. Validation tiers: `.skills/verification-qualification.md`.
 
+## Active investigation — native concurrent-streaming tail (2026-09-22)
+
+Plan: `native-concurrent-streaming-tail-investigation.md`.
+
+Planning baseline: `8959ca890ee34f4cf456aed648315322f1e83ef7` (0.2.0 release state).
+
+Trigger: SynVoid's Phase 63 downstream requalification reproduced broad
+eggfetch parity but retained one bounded residual for synchronized 64 KiB
+native streaming bursts at concurrency >=4 (equal/near-equal p50, worse
+p95/p99 and approximately 8-19% lower median throughput in the observed
+sessions). Concurrency 1-2 and sequential phase-split streaming were near
+parity; H2 and ordinary small-request concurrency did not show the same
+persistent shape.
+
+Objective: reproduce or reject that shape in eggfetch's own manual benchmark
+environment, compare against an equivalent direct-Hyper control, isolate
+logical admission/native-body/Hyper/runtime effects, and optimize production
+code only if an eggfetch-owned avoidable cost is reproduced and profiled.
+
+This investigation does not reopen the 0.2.0 release, public compatibility
+qualification, HTTPX/HTTPX2 Stage C bindings, or HTTP/3 status. A no-change
+result is valid if the residual is shown to be Hyper/runtime/downstream-host
+behavior rather than an eggfetch-owned cost.
+
 
 ## Completed corrective — private architecture qualification state (2026-09-22)
 
