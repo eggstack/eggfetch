@@ -3,8 +3,9 @@
 > **Live status for agents:** the exact-SHA Stage C binding is
 > `plans/httpx-parity-correction-status.md` (+ `compat/*/profile.toml`).
 > Pending maintainer actions: issue #24 publication/tag/PyPI and the Python
-> 3.15 wheel rehearsal. Everything below is a historical record
-> (verification-policy principle 9) — do not treat completed checklists as
+> 3.15 wheel rehearsal. The explicitly marked active investigation below is
+> current handoff work; completed sections are historical records
+> (verification-policy principle 9) and their completed checklists are not
 > current gates. Validation tiers: `.skills/verification-qualification.md`.
 
 ## Active investigation — native concurrent-streaming tail (2026-09-22)
