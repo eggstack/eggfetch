@@ -1,6 +1,31 @@
 # eggfetch Plan Index
 
 
+## Active corrective — private architecture qualification state (2026-09-22)
+
+Plan: `private-architecture-qualification-state-corrective-pass.md`
+
+Planning baseline: `3addebd5680d460773a16215db90b71f7dfad5c0`.
+
+Preserved executable freeze:
+`d4979f1dac53f30f07900f54b01a88de06956c1c`.
+
+Objective: repair the exact-SHA qualification bookkeeping left after the
+completed API-preserving private-architecture containment program. The
+implementation and compatibility runs are already green on `d4979f1...`, but
+both live HTTPX/HTTPX2 Stage C profiles and canonical compatibility records
+still present the older maintenance freeze `18c1f96...` as current. Rebind
+those live records to the qualified private-architecture freeze, preserve the
+old binding as historical, reconcile the completed plan checklists to their
+recorded evidence, and prove the final descendant is profile/docs/plan-only.
+
+This corrective must not touch executable source, tests, validation scripts,
+workflows, API snapshots, allowed-difference manifests, package manifests, or
+compatibility behavior. If any such change is required, stop and create a new
+executable freeze/requalification plan instead. Issue #24 publication and the
+Python 3.15 wheel rehearsal remain independent pending work.
+
+
 ## Completed program — API-preserving private architecture containment (2026-09-21)
 
 Handoff program: `api-preserving-private-architecture-containment-program.md`
