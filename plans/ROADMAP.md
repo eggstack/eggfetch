@@ -10,6 +10,20 @@ The remaining roadmap is therefore not primarily about proving feasibility. It i
 
 ## Current product position (2026-09-16)
 
+### Active downstream-driven performance investigation (2026-09-22)
+
+`plans/native-concurrent-streaming-tail-investigation.md` is the current
+bounded performance handoff. SynVoid's eggfetch 0.2 adoption found broad
+parity after a reproducible true-streaming requalification, with one accepted
+tail residual under synchronized 64 KiB native streaming at concurrency >=4.
+The upstream plan must reproduce/localize that shape against eggfetch-owned
+and direct-Hyper controls before any optimization. It must not assume the
+logical semaphore pool is responsible: default `PoolConfig` has no logical
+in-flight limits. Public API, timeout/pool semantics, frame preservation, and
+compatibility claims remain frozen. This investigation is manual/performance
+work, not a routine CI gate and not a release blocker unless it uncovers a
+correctness defect.
+
 The embedded Rust client, extensible transport, and native HTTP body/TLS
 extensibility programs are complete on implementation freeze
 `fdfe060cd7035ddf936d6e0817cb2459f9d3fc0c`; the final qualification
