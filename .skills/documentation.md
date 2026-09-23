@@ -68,6 +68,12 @@ docs/
   `plans/httpx-parity-correction-status.md`; earlier freeze SHAs in plan
   history are not the current binding. Do not describe documented controls
   as independent-server or production evidence.
+- When closing a plan, reconcile its active index and roadmap entries, preserve
+  accepted raw evidence, and update benchmark architecture guidance to match
+  the fixture's tested protocol scope. The native streaming investigation's
+  terminal classification is “not reproduced consistently / residual
+  unlocalized”; do not attribute its remaining H1 delta specifically to
+  Hyper/runtime or an eggfetch adapter without isolating evidence.
 - Embedded footprint numbers live only in
   `docs/architecture/embedded-footprint.md` (manual qualification in
   `qualification/embedded/`); link there instead of copying byte counts

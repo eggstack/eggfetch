@@ -10,41 +10,45 @@ The remaining roadmap is therefore not primarily about proving feasibility. It i
 
 ## Current product position (2026-09-16)
 
-### Active benchmark/evidence corrective (2026-09-23)
+### Completed benchmark/evidence corrective (2026-09-23)
 
 `plans/native-streaming-classification-and-proxy-benchmark-corrective.md`
-is the current narrow maintenance handoff. It does not reopen eggfetch 0.2
-runtime qualification.
+closed the narrow maintenance handoff. It did not reopen eggfetch 0.2 runtime
+qualification.
 
-The corrective owns two items only:
+The corrective closed two items:
 
-- replace the completed streaming investigation's over-strong
+- replaced the completed streaming investigation's over-strong
   "underlying Hyper/runtime behavior" terminal label with the measured
   conclusion that the downstream tail did not reproduce consistently, runtime
   configuration materially changes the deltas, default logical admission is
   exonerated, and the remaining small H1 pre-header residual is unlocalized;
-- repair and test the existing `eggfetch-bench`
-  `proxy_overhead/proxied_get_1k` fixture. The current fixture parses the
-  inbound header block and then tries to read it again while forwarding plain
-  HTTP, which can produce an incomplete origin request and is the leading
-  explanation for the recorded `hyper::Error(IncompleteMessage)`.
+- repaired and tested the existing `eggfetch-bench`
+  `proxy_overhead/proxied_get_1k` fixture. The fixture parsed the inbound
+  header block and then tried to read it again while forwarding plain HTTP,
+  producing an incomplete origin request and matching the recorded
+  `hyper::Error(IncompleteMessage)`.
 
-This is benchmark/test/docs maintenance unless a corrected protocol-valid
-fixture plus a focused product test reproduces a real eggfetch proxy defect.
-No production optimization or release change belongs in this corrective.
+The correction remained benchmark/test/docs maintenance: the protocol-valid
+fixture plus focused product-path test found no eggfetch proxy defect. No
+production optimization or release change was made.
 
 ### Completed downstream-driven performance investigation (2026-09-23)
 
 `plans/native-concurrent-streaming-tail-investigation.md` completed with
 eggfetch-owned H1/H2, direct-Hyper, logical-pool, phase, runtime-worker, body
 size, slow-producer, and early-drop controls. The synchronized H1 tail shape
-was not stable across Tokio worker configurations: a small native
-pre-header cost was measurable, but the C4 throughput deficit moved from about
+was not stable across Tokio worker configurations: the result is **not
+reproduced consistently / residual unlocalized**. A small native pre-header
+cost was measurable, but the C4 throughput deficit moved from about
 9% on the default runtime to about 3% with four workers, and the largest C16
 deficit moved from about 13% to under 1%. Native p95/p99 were not consistently
 worse. Default pool
 admission was inert; the constrained positive control recorded waits. H2 tail
-growth also appeared in direct Hyper. No production optimization or release
+growth also appeared in direct Hyper and native lanes. The remaining H1
+difference includes eggfetch's private connector/lifecycle and native request
+and response adapters; without stronger isolation it cannot be assigned to
+Hyper/runtime or an adapter. No production optimization or release
 blocker resulted; the work is manual evidence, not a routine CI gate. Its raw
 JSONL evidence and runner were recorded in implementation commit
 `18a54d1ba63843ff50288606182a74f599063cb0`, with per-run connection counters

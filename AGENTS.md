@@ -42,6 +42,7 @@ Deep dive: `docs/architecture/build-ci.md`; normative policy: `docs/verification
 - TLS: `additional_ca_*` augments the base store, `ca_certificate_*` replaces it. Native-root construction failure may fall back to WebPKI roots; cert/hostname verification failure must never retry with another store. `crypto_provider()` is per-config, never process-global.
 - Proxy fallback is typed only: CONNECT advances on 502/504, local SOCKS5 on destination-specific 0x03/0x04/0x05; auth/policy/protocol/malformed failures stop. Never cache a request's shrinking total deadline in route connectors; total is enforced by the outer dispatch and spans the `PoolGuard` body lifecycle through EOF/trailers (read = first-poll/per-chunk inactivity, total never resets, Total wins ties).
 - `ResponseBody` public variant shapes are frozen — no new timeout fields/variants or `#[non_exhaustive]`; `BodyTimeoutStream` stays the single high-level timeout owner. Preserve chunking, cancellation, backpressure, decoding, and public surface when touching perf-sensitive paths.
+- `eggfetch-bench` fixtures are harness code, not production proxy behavior. Keep protocol fixtures deterministic, test them independently of Criterion, and report unsupported framing explicitly rather than relying on read timeouts. The e2e `BenchProxy` is HTTP forward-only; it rejects CONNECT and chunked request bodies.
 
 ## Python / HTTPX compat (easy to break)
 

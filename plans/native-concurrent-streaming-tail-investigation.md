@@ -481,10 +481,17 @@ boxing, admission, or transport change is justified without profile evidence.
 No production code, public API, compatibility behavior, timeout/pool semantics,
 or compatibility waiver changed.
 
-**Final classification: 4. underlying Hyper/runtime behavior** — the
-downstream H1 tail shape was not stable across runtime worker configurations,
-and the H2 long-tail observation also appeared in direct Hyper. No eggfetch
-workaround was added.
+**Final classification: not reproduced consistently / residual unlocalized.**
+SynVoid's synchronized H1 tail shape was not stable in the controlled runs,
+and runtime worker configuration materially changed the observed throughput
+deltas. Default logical pool admission was not the cause in the tested
+configuration. H2 long-tail observations appeared in direct Hyper and native
+lanes. A smaller H1 native pre-header delta remains measurable in some runs,
+but the comparison includes eggfetch's private connector/lifecycle and native
+request/response adapters; without profiling or stronger isolation it cannot
+be assigned specifically to Hyper/runtime or an eggfetch adapter. No
+production optimization is justified, and no compatibility or release blocker
+results. The host-bound measurements and raw JSONL evidence remain accepted.
 
 ### Verification
 

@@ -3,31 +3,31 @@
 > **Live status for agents:** the exact-SHA Stage C binding is
 > `plans/httpx-parity-correction-status.md` (+ `compat/*/profile.toml`).
 > Pending maintainer actions: issue #24 publication/tag/PyPI and the Python
-> 3.15 wheel rehearsal. The active benchmark/evidence corrective below is
-> maintenance-only and does not block those release actions unless it proves a
-> production proxy defect. Completed sections are historical records, not
+> 3.15 wheel rehearsal. The completed benchmark/evidence corrective below is
+> maintenance-only and does not change those release actions. Completed
+> sections are historical records, not
 > current gates (verification-policy principle 9). Validation tiers:
 > `.skills/verification-qualification.md`.
 
-## Active corrective — streaming classification and proxy benchmark fixture (2026-09-23)
+## Completed corrective — streaming classification and proxy benchmark fixture (2026-09-23)
 
 Plan: `native-streaming-classification-and-proxy-benchmark-corrective.md`.
 
 Planning baseline: `105fab505d622cb24f5bb0ad5cd2bdbeb9ce54c7`.
 
-Objective: tighten the completed native-streaming investigation's terminal
-classification from the too-strong "underlying Hyper/runtime behavior" label
-to the evidence-supported "not reproduced consistently / residual unlocalized"
-conclusion, and repair the existing `proxy_overhead/proxied_get_1k` e2e
-benchmark fixture.
+Status: complete. This maintenance-only corrective changed the completed
+native-streaming investigation's terminal classification from the too-strong
+"underlying Hyper/runtime behavior" label to the evidence-supported "not
+reproduced consistently / residual unlocalized" conclusion, and repaired the
+existing `proxy_overhead/proxied_get_1k` e2e benchmark fixture.
 
-The proxy fixture currently consumes the inbound header block before route
-selection and then attempts to read headers again in the HTTP-forwarding
-branch, which can leave the origin request incomplete and matches the recorded
-`hyper::Error(IncompleteMessage)` failure. The corrective must first make the
-fixture protocol-valid and add deterministic fixture tests. Core proxy code
-must not change unless the corrected fixture plus a focused non-Criterion test
-independently reproduce a product-owned defect.
+The proxy fixture consumed the inbound header block before route selection and
+then attempted to read headers again in the HTTP-forwarding branch, leaving
+the origin request incomplete and matching the recorded
+`hyper::Error(IncompleteMessage)` failure. The corrective fixes the fixture
+and adds deterministic loopback coverage. Core proxy code must not change
+unless a protocol-valid fixture plus a focused non-Criterion test independently
+reproduces a product-owned defect.
 
 This cleanup does not reopen the 0.2.0 release, HTTPX/HTTPX2 bindings, native
 streaming API, or completed downstream investigation.
@@ -49,9 +49,10 @@ sessions). Concurrency 1-2 and sequential phase-split streaming were near
 parity; H2 and ordinary small-request concurrency did not show the same
 persistent shape.
 
-Result: the native path has a small pre-header cost compared with direct
-Hyper, but the downstream synchronized tail shape did not reproduce
-consistently. Under the four-worker runtime, throughput was about 3–7% lower
+Result: **not reproduced consistently / residual unlocalized**. The native
+path has a small pre-header cost compared with direct Hyper, but the downstream
+synchronized tail shape did not reproduce consistently. Under the four-worker
+runtime, throughput was about 3–7% lower
 through concurrency 8 and under 1% lower at 16, while p95/p99 differences
 stayed small. Under Tokio's 16-worker default, the C4 native lane was about 9%
 slower, C8 was near parity, and C16 was about 13% slower while its p95/p99
@@ -63,8 +64,12 @@ waits, and no response lease absent permit or timeout state. Above/equal
 logical limits also had zero waits; the below-concurrency control queued and
 reduced throughput as intended. H2's occasional ~41 ms tail appeared in direct
 Hyper and native controls alike. No production change or compatibility waiver
-was made. The dispatch-to-headers phase contains the measurable native-path
-delta; request construction and response drain remained small. Linux perf
+was made. H2 long tails appeared in direct Hyper and native lanes. The
+remaining H1 difference includes eggfetch's private connector/lifecycle and
+native request/response adapters, so it cannot be assigned specifically to
+Hyper/runtime or an adapter without stronger isolating evidence. The
+dispatch-to-headers phase contains the measurable native-path delta; request
+construction and response drain remained small. Linux perf
 sampling was unavailable because `perf_event_paranoid=4`, so no internal
 candidate was optimized without a profile.
 

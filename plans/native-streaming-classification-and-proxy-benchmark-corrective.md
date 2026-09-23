@@ -292,24 +292,24 @@ At closure the plan index must not claim an active cleanup remains.
 
 ## Acceptance criteria
 
-- [ ] The native-streaming final classification no longer over-attributes the
+- [x] The native-streaming final classification no longer over-attributes the
       residual to Hyper/runtime.
-- [ ] Raw benchmark evidence remains unchanged.
-- [ ] The remaining H1 pre-header delta is described as unlocalized.
-- [ ] `BenchProxy` parses each HTTP request header block only once.
-- [ ] Forwarded HTTP requests are syntactically complete without timeout-based
+- [x] Raw benchmark evidence remains unchanged.
+- [x] The remaining H1 pre-header delta is described as unlocalized.
+- [x] `BenchProxy` parses each HTTP request header block only once.
+- [x] Forwarded HTTP requests are syntactically complete without timeout-based
       framing.
-- [ ] Absolute-form targets are forwarded to origins in correct origin form.
-- [ ] Proxy-only headers are handled deliberately.
-- [ ] Focused fixture correctness tests pass.
-- [ ] `proxy_overhead/proxied_get_1k` completes without
+- [x] Absolute-form targets are forwarded to origins in correct origin form.
+- [x] Proxy-only headers are handled deliberately.
+- [x] Focused fixture correctness tests pass.
+- [x] `proxy_overhead/proxied_get_1k` completes without
       `IncompleteMessage`.
-- [ ] Full `e2e` benchmark completes, or any remaining failure is isolated
+- [x] Full `e2e` benchmark completes, or any remaining failure is isolated
       and truthfully classified.
-- [ ] No production proxy/native transport change is made without a separate
+- [x] No production proxy/native transport change is made without a separate
       product-defect plan.
-- [ ] Public API/compatibility surfaces remain unchanged.
-- [ ] Plan index/roadmap/benchmark docs are reconciled at closure.
+- [x] Public API/compatibility surfaces remain unchanged.
+- [x] Plan index/roadmap/benchmark docs are reconciled at closure.
 
 ## Rejection criteria
 
@@ -334,3 +334,50 @@ Reject this corrective if it:
   suite no longer carries the known `IncompleteMessage` fixture failure.
 - No production eggfetch behavior changes unless a separately planned,
   independently reproduced product defect is discovered.
+
+## Execution and closure (2026-09-23)
+
+- Planning baseline: `105fab505d622cb24f5bb0ad5cd2bdbeb9ce54c7`.
+- Execution began at clean `main` SHA
+  `b90b32541bd5dac6c5256feed141cadfd124debe`.
+- Fixture root cause: the previous handler consumed headers while finding
+  `Host`, then attempted a second read when forwarding. The second read began
+  after the terminating CRLF, so the origin did not receive a complete request
+  head. The response error was fixture-owned; the corrected fixture completed
+  the benchmark without suppressing errors.
+- Changed files: benchmark-local `BenchProxy` extracted to
+  `crates/eggfetch-bench/src/bench_proxy.rs`; e2e harness, fixture unit test,
+  README, `AGENTS.md`, Rust/documentation skills, benchmark architecture doc,
+  this plan, plan index, roadmap, and predecessor investigation conclusion.
+  No production crate, public API, compatibility binding, or raw JSONL evidence
+  changed.
+- Focused test: `cargo test -p eggfetch-bench --lib` passed. It sends three
+  proxied GETs through eggfetch and checks origin-form path/query, `Host`, the
+  complete header terminator, stripped `Proxy-Connection`, response bodies,
+  deterministic connection count, and clean fixture shutdown. CONNECT and
+  chunked uploads are explicitly rejected with `501`; fixed-length request
+  bodies are forwarded and short bodies are not treated as complete.
+- Focused benchmark:
+  `cargo bench -p eggfetch-bench --bench e2e -- proxy_overhead/proxied_get_1k --noplot`
+  passed. Final rerun median was 2.0974 ms (Criterion interval
+  2.0959–2.0997 ms); this is host evidence only.
+- Full e2e benchmark:
+  `cargo bench -p eggfetch-bench --bench e2e -- --noplot` completed all direct
+  and proxied cases. No fixture or product failure remained. Criterion emitted
+  host-variance/outlier notices; no timing threshold is claimed.
+- Classification wording was corrected to **not reproduced consistently /
+  residual unlocalized**. The pre-header difference remains attributable to
+  neither Hyper/runtime nor an eggfetch adapter without additional profiling
+  or isolating evidence. No production defect was discovered or escalated.
+- Verification: `cargo fmt --all -- --check`, `git diff --check`, internal
+  documentation links, `cargo check -p eggfetch-bench`, benchmark clippy,
+  `cargo test -p eggfetch-bench`, `cargo test -p eggfetch-core --
+  --test-threads=1` (848 passed), and `./scripts/check.sh` all passed. Tier 1
+  Python behavior tests passed (578), HTTPX smoke tests passed (134), and Node
+  JavaScript surface was explicitly skipped because `eggfetch.node` is absent.
+- Host/toolchain/profile: Linux x86_64, kernel 6.8.0-139-generic, Rust
+  `1.98.1 (48a229cea 2026-09-01)`, optimized Criterion bench profile. Benchmark
+  numbers are not portable performance claims.
+- Proof-bearing implementation SHA and remote CI run are recorded after push
+  below; closure documentation is a docs-only descendant if needed to record
+  the resulting CI run.

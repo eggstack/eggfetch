@@ -15,6 +15,9 @@ policy, protocol, and malformed-response failures stop.
 4. For client/proxy changes, read `docs/architecture/rust-surface-containment.md`;
    keep route/cache/connector and proxy identity helpers private and preserve
    the exact public API-oracle profiles.
+5. For benchmark fixture changes, keep fixture code inside `eggfetch-bench`,
+   add non-Criterion loopback correctness tests, frame requests from parsed
+   protocol lengths rather than timeouts, and document unsupported cases.
 
 ## Pre-commit Checklist
 

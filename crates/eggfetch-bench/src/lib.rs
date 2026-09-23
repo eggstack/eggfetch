@@ -213,3 +213,6 @@ fn handle_connection(mut stream: TcpStream, config: &BenchServerConfig, body: &[
         let _ = stream.write_all(body);
     }
 }
+mod bench_proxy;
+
+pub use bench_proxy::BenchProxy;

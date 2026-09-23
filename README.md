@@ -13,7 +13,7 @@ eggfetch is a Rust-native async HTTP client engine (tokio + hyper) with Python b
 
 - **HTTP/1.1, HTTP/2, HTTP/3** — ALPN negotiation; HTTP/3 over QUIC is experimental ([guide](docs/rust/guide.md))
 - **Streaming** — response bodies stream without eager buffering (`bytes_stream()`, `text_lines()`), with trailers after EOF ([guide](docs/rust/guide.md))
-- **Performance qualification** — API-safe Rust/Python hot-path benchmarks and reproduction commands are documented in [architecture/benchmarks](docs/architecture/benchmarks.md)
+- **Performance qualification** — API-safe Rust/Python hot-path benchmarks, including the tested loopback HTTP forward-proxy fixture, and reproduction commands are documented in [architecture/benchmarks](docs/architecture/benchmarks.md)
 - **Pooling and timeouts** — per-origin connection pools, phase-aware timeouts (pool/connect/write/read/total), and transport metrics ([pool/timeouts](docs/architecture/core-timeout-pool.md))
 - **TLS** — rustls with per-client crypto providers, custom or additive CA roots, mTLS client certs, version policy, and verification toggle ([TLS](docs/concepts/tls.md))
 - **Proxy** — HTTP forwarding, HTTPS CONNECT, proxy auth, per-request override, `NO_PROXY`, SOCKS5, and UDS routes ([proxy](docs/concepts/proxy.md)). CONNECT wire bytes live in the small `eggfetch-http-connect` crate (no sockets/TLS/retry) consumed by `eggfetch-core` via the `proxy` feature.

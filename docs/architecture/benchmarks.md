@@ -48,7 +48,16 @@ Whole-request-path measurements over loopback TCP with `HttpVersionPolicy::Http1
 | streaming body | Incremental consumption via `bytes_stream()` |
 | `upload_256k` | Request-body upload path |
 | `Auto` vs `Http1Only` | H1-fallback overhead (`BenchServer` is H1-only; no H2 negotiation measured) |
-| proxy vs direct | Proxy overhead comparison |
+| proxy vs direct | Plain HTTP forward-proxy overhead using benchmark-local `BenchProxy`; CONNECT is not exercised |
+
+The fixture lives in `eggfetch-bench/src/bench_proxy.rs`. It parses each
+request head once, forwards absolute-form targets as origin-form path/query,
+strips proxy-only and hop-specific connection headers, and closes the upstream
+request explicitly. CONNECT and chunked request bodies receive deterministic
+`501 Not Implemented` responses; fixed-length bodies are forwarded. Focused
+loopback correctness tests run with `cargo test -p eggfetch-bench --lib` and
+verify repeated requests, complete origin headers, and response bodies. This
+test fixture does not implement or qualify production proxy behavior.
 
 ### `resources` — allocation/throughput shape
 
