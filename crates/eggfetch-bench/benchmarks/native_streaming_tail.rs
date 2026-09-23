@@ -105,6 +105,13 @@ struct ServerStats {
     requests: AtomicUsize,
 }
 
+impl ServerStats {
+    fn reset(&self) {
+        self.connections.store(0, Ordering::Relaxed);
+        self.requests.store(0, Ordering::Relaxed);
+    }
+}
+
 async fn start_server(h2: bool) -> (String, Arc<ServerStats>, tokio::task::JoinHandle<()>) {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
@@ -483,6 +490,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                     let _ = block(&clients, case, &uri, geometry, concurrency, 10, false, false).await;
                     let mut prior_waits = waits(&clients, case);
                     for repetition in 1..=reps {
+                        stats.reset();
                         let started = Instant::now();
                         let outcomes = block(&clients, case, &uri, geometry, concurrency, count, false, false).await;
                         let elapsed = started.elapsed();
@@ -507,6 +515,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                     let _ = block(&clients, case, &uri, geometry, concurrency, 10, true, false).await;
                     let mut prior_waits = waits(&clients, case);
                     for repetition in 1..=reps {
+                        stats.reset();
                         let started = Instant::now();
                         let outcomes = block(&clients, case, &uri, geometry, concurrency, h2_count, true, false).await;
                         let elapsed = started.elapsed();
@@ -529,6 +538,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 let clients = make_clients(concurrency, false);
                 let _ = block(&clients, case, &uri, geometry, concurrency, 2, false, true).await;
                 for repetition in 1..=reps {
+                    stats.reset();
                     let started = Instant::now();
                     let outcomes = block(&clients, case, &uri, geometry, concurrency, count, false, true).await;
                     let elapsed = started.elapsed();
