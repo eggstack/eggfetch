@@ -3,10 +3,34 @@
 > **Live status for agents:** the exact-SHA Stage C binding is
 > `plans/httpx-parity-correction-status.md` (+ `compat/*/profile.toml`).
 > Pending maintainer actions: issue #24 publication/tag/PyPI and the Python
-> 3.15 wheel rehearsal. The completed native streaming investigation below is
-> historical evidence; no active investigation currently blocks those release
-> actions. Completed sections are not current gates (verification-policy
-> principle 9). Validation tiers: `.skills/verification-qualification.md`.
+> 3.15 wheel rehearsal. The active benchmark/evidence corrective below is
+> maintenance-only and does not block those release actions unless it proves a
+> production proxy defect. Completed sections are historical records, not
+> current gates (verification-policy principle 9). Validation tiers:
+> `.skills/verification-qualification.md`.
+
+## Active corrective — streaming classification and proxy benchmark fixture (2026-09-23)
+
+Plan: `native-streaming-classification-and-proxy-benchmark-corrective.md`.
+
+Planning baseline: `105fab505d622cb24f5bb0ad5cd2bdbeb9ce54c7`.
+
+Objective: tighten the completed native-streaming investigation's terminal
+classification from the too-strong "underlying Hyper/runtime behavior" label
+to the evidence-supported "not reproduced consistently / residual unlocalized"
+conclusion, and repair the existing `proxy_overhead/proxied_get_1k` e2e
+benchmark fixture.
+
+The proxy fixture currently consumes the inbound header block before route
+selection and then attempts to read headers again in the HTTP-forwarding
+branch, which can leave the origin request incomplete and matches the recorded
+`hyper::Error(IncompleteMessage)` failure. The corrective must first make the
+fixture protocol-valid and add deterministic fixture tests. Core proxy code
+must not change unless the corrected fixture plus a focused non-Criterion test
+independently reproduce a product-owned defect.
+
+This cleanup does not reopen the 0.2.0 release, HTTPX/HTTPX2 bindings, native
+streaming API, or completed downstream investigation.
 
 ## Completed investigation — native concurrent-streaming tail (2026-09-23)
 
