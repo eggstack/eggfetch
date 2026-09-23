@@ -1,6 +1,6 @@
 # Native Streaming Classification and Proxy Benchmark Corrective
 
-Status: active corrective handoff (2026-09-23).
+Status: complete (2026-09-23).
 
 Planning baseline: `105fab505d622cb24f5bb0ad5cd2bdbeb9ce54c7`.
 
@@ -378,6 +378,7 @@ Reject this corrective if it:
 - Host/toolchain/profile: Linux x86_64, kernel 6.8.0-139-generic, Rust
   `1.98.1 (48a229cea 2026-09-01)`, optimized Criterion bench profile. Benchmark
   numbers are not portable performance claims.
-- Proof-bearing implementation SHA and remote CI run are recorded after push
-  below; closure documentation is a docs-only descendant if needed to record
-  the resulting CI run.
+- Proof-bearing implementation SHA:
+  `94f688a3a1ddf5c596fb0cbd367b7973b6ba97c0`. Remote CI run
+  [35867306147](https://github.com/eggstack/eggfetch/actions/runs/35867306147)
+  passed for this SHA. The closure-record commit is documentation-only.
