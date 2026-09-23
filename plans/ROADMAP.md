@@ -10,6 +10,29 @@ The remaining roadmap is therefore not primarily about proving feasibility. It i
 
 ## Current product position (2026-09-16)
 
+### Active benchmark/evidence corrective (2026-09-23)
+
+`plans/native-streaming-classification-and-proxy-benchmark-corrective.md`
+is the current narrow maintenance handoff. It does not reopen eggfetch 0.2
+runtime qualification.
+
+The corrective owns two items only:
+
+- replace the completed streaming investigation's over-strong
+  "underlying Hyper/runtime behavior" terminal label with the measured
+  conclusion that the downstream tail did not reproduce consistently, runtime
+  configuration materially changes the deltas, default logical admission is
+  exonerated, and the remaining small H1 pre-header residual is unlocalized;
+- repair and test the existing `eggfetch-bench`
+  `proxy_overhead/proxied_get_1k` fixture. The current fixture parses the
+  inbound header block and then tries to read it again while forwarding plain
+  HTTP, which can produce an incomplete origin request and is the leading
+  explanation for the recorded `hyper::Error(IncompleteMessage)`.
+
+This is benchmark/test/docs maintenance unless a corrected protocol-valid
+fixture plus a focused product test reproduces a real eggfetch proxy defect.
+No production optimization or release change belongs in this corrective.
+
 ### Completed downstream-driven performance investigation (2026-09-23)
 
 `plans/native-concurrent-streaming-tail-investigation.md` completed with
