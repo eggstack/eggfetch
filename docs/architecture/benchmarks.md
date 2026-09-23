@@ -91,7 +91,8 @@ control. `--workers 4` fixes the Tokio worker count; the default records the
 runtime's default worker count. `--scenario sizes` adds 1 KiB and 1 MiB bodies;
 `--scenario all --only-concurrency 4 --workers 4` also runs slow-producer and
 early-drop/recovery controls. `--scenario slow` runs just those lifecycle
-controls. This binary is manual evidence only and is not part of routine CI.
+controls. `--scenario h1` runs the 64 KiB H1 matrix without its H2 controls.
+This binary is manual evidence only and is not part of routine CI.
 
 Example optimized runs (write stdout to a `.jsonl` evidence file):
 

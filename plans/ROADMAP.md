@@ -10,19 +10,22 @@ The remaining roadmap is therefore not primarily about proving feasibility. It i
 
 ## Current product position (2026-09-16)
 
-### Active downstream-driven performance investigation (2026-09-22)
+### Completed downstream-driven performance investigation (2026-09-23)
 
-`plans/native-concurrent-streaming-tail-investigation.md` is the current
-bounded performance handoff. SynVoid's eggfetch 0.2 adoption found broad
-parity after a reproducible true-streaming requalification, with one accepted
-tail residual under synchronized 64 KiB native streaming at concurrency >=4.
-The upstream plan must reproduce/localize that shape against eggfetch-owned
-and direct-Hyper controls before any optimization. It must not assume the
-logical semaphore pool is responsible: default `PoolConfig` has no logical
-in-flight limits. Public API, timeout/pool semantics, frame preservation, and
-compatibility claims remain frozen. This investigation is manual/performance
-work, not a routine CI gate and not a release blocker unless it uncovers a
-correctness defect.
+`plans/native-concurrent-streaming-tail-investigation.md` completed with
+eggfetch-owned H1/H2, direct-Hyper, logical-pool, phase, runtime-worker, body
+size, slow-producer, and early-drop controls. The synchronized H1 tail shape
+was not stable across Tokio worker configurations: a small native
+pre-header cost was measurable, but the C4 throughput deficit moved from about
+9% on the default runtime to about 3% with four workers, and the largest C16
+deficit moved from about 13% to under 1%. Native p95/p99 were not consistently
+worse. Default pool
+admission was inert; the constrained positive control recorded waits. H2 tail
+growth also appeared in direct Hyper. No production optimization or release
+blocker resulted; the work is manual evidence, not a routine CI gate. Its raw
+JSONL evidence and runner were recorded in implementation commit
+`18a54d1ba63843ff50288606182a74f599063cb0`, with per-run connection counters
+and refreshed evidence finalized in `5be6a9ef57742245858f3fc0393e8cfaeca625de`.
 
 The embedded Rust client, extensible transport, and native HTTP body/TLS
 extensibility programs are complete on implementation freeze

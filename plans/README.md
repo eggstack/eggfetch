@@ -3,16 +3,19 @@
 > **Live status for agents:** the exact-SHA Stage C binding is
 > `plans/httpx-parity-correction-status.md` (+ `compat/*/profile.toml`).
 > Pending maintainer actions: issue #24 publication/tag/PyPI and the Python
-> 3.15 wheel rehearsal. The explicitly marked active investigation below is
-> current handoff work; completed sections are historical records
-> (verification-policy principle 9) and their completed checklists are not
-> current gates. Validation tiers: `.skills/verification-qualification.md`.
+> 3.15 wheel rehearsal. The completed native streaming investigation below is
+> historical evidence; no active investigation currently blocks those release
+> actions. Completed sections are not current gates (verification-policy
+> principle 9). Validation tiers: `.skills/verification-qualification.md`.
 
-## Active investigation — native concurrent-streaming tail (2026-09-22)
+## Completed investigation — native concurrent-streaming tail (2026-09-23)
 
 Plan: `native-concurrent-streaming-tail-investigation.md`.
 
 Planning baseline: `8959ca890ee34f4cf456aed648315322f1e83ef7` (0.2.0 release state).
+Execution baseline: `b3c009df90f9ab09e91e8fa7464653dceb300dd8`.
+Implementation/evidence commit: `18a54d1ba63843ff50288606182a74f599063cb0`.
+Final counter-corrected evidence commit: `5be6a9ef57742245858f3fc0393e8cfaeca625de`.
 
 Trigger: SynVoid's Phase 63 downstream requalification reproduced broad
 eggfetch parity but retained one bounded residual for synchronized 64 KiB
@@ -22,10 +25,29 @@ sessions). Concurrency 1-2 and sequential phase-split streaming were near
 parity; H2 and ordinary small-request concurrency did not show the same
 persistent shape.
 
-Objective: reproduce or reject that shape in eggfetch's own manual benchmark
-environment, compare against an equivalent direct-Hyper control, isolate
-logical admission/native-body/Hyper/runtime effects, and optimize production
-code only if an eggfetch-owned avoidable cost is reproduced and profiled.
+Result: the native path has a small pre-header cost compared with direct
+Hyper, but the downstream synchronized tail shape did not reproduce
+consistently. Under the four-worker runtime, throughput was about 3–7% lower
+through concurrency 8 and under 1% lower at 16, while p95/p99 differences
+stayed small. Under Tokio's 16-worker default, the C4 native lane was about 9%
+slower, C8 was near parity, and C16 was about 13% slower while its p95/p99
+were lower than direct Hyper. The effect moves with runtime configuration and
+does not support a stable H1 tail-specific optimization.
+
+Default native pooling was inert: no origin key/semaphore, no acquisition
+waits, and no response lease absent permit or timeout state. Above/equal
+logical limits also had zero waits; the below-concurrency control queued and
+reduced throughput as intended. H2's occasional ~41 ms tail appeared in direct
+Hyper and native controls alike. No production change or compatibility waiver
+was made. The dispatch-to-headers phase contains the measurable native-path
+delta; request construction and response drain remained small. Linux perf
+sampling was unavailable because `perf_event_paranoid=4`, so no internal
+candidate was optimized without a profile.
+
+No future plan names this investigation as a prerequisite. Issue #24 release
+publication/tag/PyPI, the Python 3.15 wheel rehearsal, HTTPX 1.0's stable
+trigger, and HTTP/3 independent interoperability evidence remain independent
+actions/blockers; none is unblocked by these results.
 
 This investigation does not reopen the 0.2.0 release, public compatibility
 qualification, HTTPX/HTTPX2 Stage C bindings, or HTTP/3 status. A no-change
