@@ -13,7 +13,8 @@ crates/eggfetch-bench/
     ├── microbench.rs             # [[bench]] core-internal microbenchmarks
     ├── e2e.rs                    # [[bench]] full-client end-to-end benchmarks
     ├── resources.rs              # [[bench]] resource-oriented benchmarks
-    └── resource_monitor.rs       # [[bin]]  RSS regression monitor
+    ├── resource_monitor.rs       # [[bin]] RSS regression monitor
+    └── native_streaming_tail.rs # [[bin]] manual direct-Hyper/native controls
 ```
 
 All three benchmark suites use Criterion (`harness = false`) and are enabled by the benchmark crate's feature set: `cookies`, `multipart`, and all four compression codecs; core is built with `http1`, `http2`, `tls-rustls`, `tls-native-roots` (via default), `json`, `proxy`. This is a benchmark profile, not the core crate's default feature set. It does not answer the downstream embedding question; see [embedded-footprint.md](embedded-footprint.md) for the separate manual size/dependency qualification.
@@ -77,6 +78,39 @@ The monitor uses a 64 MiB peak-minus-baseline delta cap and an independent
 runtime growth across the sequential workloads; it is not a product memory
 budget. The report records both values so a real absolute-growth regression
 remains visible.
+
+## Native streaming tail investigation
+
+`native_streaming_tail` is a manual, loopback-only runner for comparing
+`Client::execute_http_body` with a direct `hyper-util` client using the same
+Hyper versions and request-frame geometry. It emits line-delimited JSON with
+per-repetition throughput, total p50/p95/p99, construction/header/drain phase
+percentiles, failures, accepted connections/reuse, and logical pool waits.
+The default run covers H1 concurrency 1/2/4/8/16 plus an H2 prior-knowledge
+control. `--workers 4` fixes the Tokio worker count; the default records the
+runtime's default worker count. `--scenario sizes` adds 1 KiB and 1 MiB bodies;
+`--scenario all --only-concurrency 4 --workers 4` also runs slow-producer and
+early-drop/recovery controls. `--scenario slow` runs just those lifecycle
+controls. This binary is manual evidence only and is not part of routine CI.
+
+Example optimized runs (write stdout to a `.jsonl` evidence file):
+
+```sh
+cargo build --release -p eggfetch-bench --bin native_streaming_tail
+./target/release/native_streaming_tail --reps 5 --requests 2500 --max-concurrency 16 --scenario primary
+./target/release/native_streaming_tail --reps 5 --requests 2500 --max-concurrency 16 --workers 4 --scenario primary
+```
+
+`--h2-only --h2-requests 250` runs only the H2 control. `--only-case`
+(`direct_hyper`, `native_default`, `native_global_above`,
+`native_origin_above`, `native_origin_exact`, `native_constrained`, or
+`high_level_secondary`) and `--only-concurrency` support focused profiling.
+The direct Hyper client mirrors canceled-request retry and Hyper defaults; it
+does not use eggfetch's private connector lifecycle wrapper or native request,
+response, and pool adapters. Those are deliberate comparison dimensions, not
+claimed configuration identity. Full investigation evidence and measured
+configuration deltas are recorded in
+`../../plans/native-concurrent-streaming-tail-investigation.md`.
 
 ## Relation to Performance Budgets
 
