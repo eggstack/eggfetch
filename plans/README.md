@@ -1,12 +1,13 @@
 # eggfetch Planning System
 
-> **Current execution gate:** core-transport M006 Windows TLS response
-> completeness corrective is **closed** (fixture-teardown disposition;
-> see `plans/closure/core-transport-policy/006-windows-tls-response-completeness.md`).
+> **Current execution gate:** M006's fixture-teardown diagnosis remains the
+> technical baseline, but **M006C1 — Windows qualification and downstream
+> closure corrective is ready**. Native-Windows EggFetch evidence and the
+> corrected EggReplay M013F hosted-Windows 300 KiB rerun are still required.
 > Issue #24 publication/tag/PyPI and the Python 3.15 wheel rehearsal are
-> unblocked and ready against Stage C
-> `5247ff0e01e309d9b408b8b4b4c90151ee5ce9fa`. Maintainer publication /
-> rehearsal dispatch from that SHA.
+> blocked until M006C1 closes. Stage C remains
+> `5247ff0e01e309d9b408b8b4b4c90151ee5ce9fa` unless executable or
+> qualification inputs change.
 > **Live status for agents:** the exact-SHA Stage C binding is
 > `plans/httpx-parity-correction-status.md` (+ `compat/*/profile.toml`).
 > Completed sections and legacy plan files are historical records, not
