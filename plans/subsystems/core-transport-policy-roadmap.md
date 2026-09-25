@@ -1,6 +1,6 @@
 # Core Transport and Request Policy Roadmap
 
-Status: active — all milestones closed; M006 disposition recorded
+Status: active corrective — M006C1 Windows qualification/downstream closure
 
 Long-term references:
 
@@ -199,9 +199,28 @@ correctly surfaces a `body` error rather than a short success. No production
 change; a 19-test hermetic reproducer pins graceful/abrupt/keep-alive/
 truncated/close-delimited behavior plus raw tokio-rustls and minimal-Hyper
 isolation probes. Stage C rebound to
-`5247ff0e01e309d9b408b8b4b4c90151ee5ce9fa`. Downstream EggReplay must update
-its local origin helper to perform an async TLS shutdown + brief linger; the
-engine remains contract-conformant.
+`5247ff0e01e309d9b408b8b4b4c90151ee5ce9fa`.
+
+### M006C1 — Windows qualification and downstream closure corrective
+
+Class: invariant / qualification corrective. Status: ready.
+
+Implementation plan:
+
+- `plans/implementation/core-transport-policy/006c1-windows-qualification-and-downstream-closure.md`
+
+Objective: complete the two evidence conditions M006 advanced past: run the
+new response-completeness matrix on native Windows x86_64 and retain the
+corrected EggReplay M013F hosted-Windows 300 KiB direct/Eggress/MITM proof.
+
+M006C1 does not reopen the fixture-teardown diagnosis or authorize production
+transport changes. If either graceful Windows proof contradicts M006, the
+technical investigation reopens and release remains blocked.
+
+Exit conditions: direct EggFetch Windows matrix green, corrected EggReplay
+Windows M013F green at the original envelope, normal EggFetch Tier 1 green,
+and closure evidence recorded. Until then M001/M002 release work remains
+blocked.
 
 ## 8. Cross-cutting requirements
 
@@ -222,10 +241,10 @@ exhaustive by construction; review must reject inline hop construction.
 
 ## 11. Completion definition
 
-M001–M006 are closed. The live Stage C binding points at the post-corrective
-exact SHA `5247ff0e01e309d9b408b8b4b4c90151ee5ce9fa`. Future changes in this
-subsystem arrive as corrective passes (§7 of the planning process) and will
-requalify when executable inputs change.
+M001–M006 remain closed as implementation/history. M006C1 is the active
+qualification corrective and current release gate. The live Stage C binding
+continues to point at `5247ff0e01e309d9b408b8b4b4c90151ee5ce9fa` unless
+M006C1 changes executable or qualification inputs.
 
 ## 12. Milestone status
 
@@ -236,4 +255,5 @@ requalify when executable inputs change.
 | M003 route cache + Hyper | closed | legacy plans §7 | legacy closure records | — |
 | M004 profiles + decomposition | closed | legacy plans §7 | legacy closure records | — |
 | M005 embedded extensions | closed | legacy plans §7 | legacy closure records | — |
-| M006 Windows TLS response completeness | **closed** | `plans/implementation/core-transport-policy/006-windows-tls-response-completeness-corrective.md` | `plans/closure/core-transport-policy/006-windows-tls-response-completeness.md` | — (downstream EggReplay origin helper still needs TLS shutdown + linger) |
+| M006 Windows TLS response completeness | closed | `plans/implementation/core-transport-policy/006-windows-tls-response-completeness-corrective.md` | `plans/closure/core-transport-policy/006-windows-tls-response-completeness.md` | Historical diagnosis; release evidence completed by M006C1 |
+| M006C1 Windows qualification/downstream closure | **ready** | `plans/implementation/core-transport-policy/006c1-windows-qualification-and-downstream-closure.md` | `plans/closure/core-transport-policy/006c1-windows-qualification-and-downstream-closure.md` | Native-Windows EggFetch matrix + corrected EggReplay Windows M013F proof |
