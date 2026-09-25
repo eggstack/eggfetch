@@ -1,6 +1,6 @@
 # Release and Verification Roadmap
 
-Status: active — M001 and M002 ready for maintainer execution
+Status: active — M001/M002 blocked on core-transport M006 corrective
 
 Long-term references:
 
@@ -58,7 +58,9 @@ explicit approval + regression history), publish automation.
 Tier 1/2/3 + security preflight defined and green on the live freeze;
 six-profile oracle vs the oracle baseline; both API oracles zero
 unexplained; wheel matrix builds 3.10–3.15 pending rehearsal dispatch;
-issue #24 publication pending maintainer action.
+issue #24 publication and the Python 3.15 rehearsal are temporarily blocked by
+core-transport M006, a supported-Windows HTTPS response-completeness
+corrective.
 
 ## 5. Target architecture
 
@@ -69,9 +71,10 @@ automation growth.
 ## 6. Dependency graph
 
 ```text
-M001 release publication (operational: maintainer)
-M002 wheel rehearsal (operational: maintainer; independent of M001
-      except a published 3.15 claim needs both)
+core-transport M006 corrective + exact-SHA Stage C renewal
+    |
+    +--> M001 release publication (operational: maintainer)
+    `--> M002 wheel rehearsal (operational: maintainer; must use corrected SHA)
 M003 standing corrective intake (soft; ongoing)
 ```
 
@@ -79,7 +82,7 @@ M003 standing corrective intake (soft; ongoing)
 
 ### Milestone 1 — 0.2.x coordinated publication
 
-Class: infrastructure (operational). Status: ready.
+Class: infrastructure (operational). Status: blocked on core-transport M006.
 
 Implementation plan:
 
@@ -97,7 +100,7 @@ executable inputs changed (then requalify first).
 
 ### Milestone 2 — Python 3.15 wheel production rehearsal
 
-Class: capability (packaging). Status: ready.
+Class: capability (packaging). Status: blocked on core-transport M006.
 
 Implementation plan:
 
@@ -144,6 +147,6 @@ process, never "complete."
 
 | Milestone | Status | Implementation plan | Closure record | Blockers |
 |---|---|---|---|---|
-| M001 publication | ready | `plans/implementation/release-verification/001-release-publication.md` | — | Maintainer dispatch |
-| M002 wheel rehearsal | ready | `plans/implementation/release-verification/002-python-315-wheel-rehearsal.md` | — | Maintainer dispatch |
+| M001 publication | blocked | `plans/implementation/release-verification/001-release-publication.md` | — | Core-transport M006 closure + renewed Stage C binding |
+| M002 wheel rehearsal | blocked | `plans/implementation/release-verification/002-python-315-wheel-rehearsal.md` | — | Core-transport M006 closure; run from corrected implementation SHA |
 | M003 intake | proposed | — | — | — |
