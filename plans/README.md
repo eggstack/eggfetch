@@ -1,889 +1,142 @@
-# eggfetch Plan Index
+# eggfetch Planning System
 
+> **Pending maintainer actions:** issue #24 publication/tag/PyPI and the
+> Python 3.15 wheel rehearsal (see `plans/registry.md` — M001/M002 ready).
 > **Live status for agents:** the exact-SHA Stage C binding is
 > `plans/httpx-parity-correction-status.md` (+ `compat/*/profile.toml`).
-> Pending maintainer actions: issue #24 publication/tag/PyPI and the Python
-> 3.15 wheel rehearsal. The completed benchmark/evidence corrective below is
-> maintenance-only and does not change those release actions. Completed
-> sections are historical records, not
+> Completed sections and legacy plan files are historical records, not
 > current gates (verification-policy principle 9). Validation tiers:
 > `.skills/verification-qualification.md`.
 
-## Completed corrective — streaming classification and proxy benchmark fixture (2026-09-23)
+This directory separates durable architectural direction from temporary
+execution planning. Since the 2026-09-25 migration it follows the
+convention below (adapted from the codegg planning style): canonical
+long-term documents, ADRs, subsystem roadmaps, bounded milestone handoffs,
+closure records, a compact registry, and a frozen legacy archive.
+
+## Canonical long-term documents
+
+The following files define the intended product and architecture and MUST
+NOT be edited as part of ordinary implementation work:
+
+- `000-long-term-specification.md` — normative end-state specification and
+  invariants.
+- `001-terminology-and-domain-model.md` — normative language and identity
+  model (engine, profiles, routes, deadlines, facades, Stage C).
+- `002-long-term-roadmap.md` — dependency-ordered forward roadmap (Phases
+  0–4; milestones A–Z remain historical in `ROADMAP.md`).
+- `003-planning-process.md` — rules for deriving and managing interim plans.
+
+The first three documents are stable architectural references. Changes to
+them require an explicit long-term architecture decision, not an
+implementation convenience. Interim plans MUST reference them rather than
+copying or silently revising their requirements.
+
+## Planning hierarchy
+
+```text
+Long-term specification and terminology
+        |
+        v
+Architecture decision records
+        |
+        v
+Forward roadmap (002) + subsystem roadmaps
+        |
+        v
+Milestone implementation plans
+        |
+        v
+Implementation and verification
+        |
+        v
+Closure records and archive
+```
+
+## Directory roles
+
+- `adrs/` — durable architecture decisions. Accepted decisions are
+  superseded, not rewritten.
+- `subsystems/` — subsystem specifications and dependency-ordered roadmaps
+  translating the long-term documents into coherent workstreams.
+- `implementation/` — focused milestone plans handed to implementation
+  agents. Operational; may evolve as code changes.
+- `closure/` — verification, evidence, residual-risk, and completion records
+  for implemented milestones.
+- `archive/` — completed or superseded interim planning retained for
+  traceability (plus the grandfathered flat-file archive below).
+- `registry.md` — compact index of active roadmaps, implementation plans,
+  closure work, gates, and blockers.
+
+## Core rule
+
+Long-term documents state **what eggfetch is becoming and what must remain
+true**. Interim documents state **what an agent should implement next
+against a specific repository baseline**.
+
+Implementation agents MUST NOT add commit-specific steps, transient file
+lists, current test counts, or short-lived corrective work to the canonical
+long-term documents.
+
+## Planning lifecycle
+
+1. Identify the relevant long-term specification sections and invariants.
+2. Record any unresolved architectural decision in `adrs/`.
+3. Create or update a subsystem roadmap in `subsystems/`.
+4. Select one dependency-ready milestone.
+5. Write a bounded handoff plan under `implementation/`.
+6. Implement and verify the milestone (Tier 1 always; Tier 2/3 + renewed
+   exact-SHA qualification when executable inputs changed).
+7. Write a closure record under `closure/`.
+8. Update `registry.md` and the subsystem roadmap status.
+9. Move completed or superseded interim documents to `archive/` when they no
+   longer represent active work.
+
+No milestone is complete merely because code landed. Completion requires the
+closure evidence defined by its implementation plan and subsystem roadmap.
+
+## Required classification
+
+Every subsystem roadmap and implementation plan MUST distinguish:
+
+- **Invariant** — a property that must always remain true.
+- **Capability** — user- or operator-visible behavior.
+- **Infrastructure** — internal machinery required by capabilities.
+- **Polish** — ergonomics, diagnostics, performance tuning, cleanup, or
+  documentation.
+
+Infrastructure and polish MUST NOT be presented as completed user capability
+unless the user-visible acceptance criteria are actually satisfied.
+
+## Naming conventions
 
-Plan: `native-streaming-classification-and-proxy-benchmark-corrective.md`.
+- ADR: `adrs/ADR-NNNN-short-title.md`
+- Subsystem roadmap: `subsystems/<subsystem>-roadmap.md`
+- Milestone implementation plan: `implementation/<subsystem>/NNN-short-title.md`
+- Closure record: `closure/<subsystem>/NNN-status.md`
+- Archived document: retain its original relative structure beneath `archive/`
 
-Planning baseline: `105fab505d622cb24f5bb0ad5cd2bdbeb9ce54c7`.
+Use stable subsystem names (`core-transport-policy`, `python-httpx-compat`,
+`tls-proxy-protocols`, `release-verification`, `performance-footprint`). Do
+not encode dates in filenames unless the document is inherently time-bound.
 
-Status: complete. This maintenance-only corrective changed the completed
-native-streaming investigation's terminal classification from the too-strong
-"underlying Hyper/runtime behavior" label to the evidence-supported "not
-reproduced consistently / residual unlocalized" conclusion, and repaired the
-existing `proxy_overhead/proxied_get_1k` e2e benchmark fixture.
+## Starting a new workstream
 
-The proxy fixture consumed the inbound header block before route selection and
-then attempted to read headers again in the HTTP-forwarding branch, leaving
-the origin request incomplete and matching the recorded
-`hyper::Error(IncompleteMessage)` failure. The corrective fixes the fixture
-and adds deterministic loopback coverage. Core proxy code must not change
-unless a protocol-valid fixture plus a focused non-Criterion test independently
-reproduces a product-owned defect.
+Begin with `subsystems/README.md`, then use the templates and rules in:
 
-This cleanup does not reopen the 0.2.0 release, HTTPX/HTTPX2 bindings, native
-streaming API, or completed downstream investigation.
+- `adrs/README.md`
+- `implementation/README.md`
+- `closure/README.md`
 
-## Completed investigation — native concurrent-streaming tail (2026-09-23)
-
-Plan: `native-concurrent-streaming-tail-investigation.md`.
-
-Planning baseline: `8959ca890ee34f4cf456aed648315322f1e83ef7` (0.2.0 release state).
-Execution baseline: `b3c009df90f9ab09e91e8fa7464653dceb300dd8`.
-Implementation/evidence commit: `18a54d1ba63843ff50288606182a74f599063cb0`.
-Final counter-corrected evidence commit: `5be6a9ef57742245858f3fc0393e8cfaeca625de`.
-
-Trigger: SynVoid's Phase 63 downstream requalification reproduced broad
-eggfetch parity but retained one bounded residual for synchronized 64 KiB
-native streaming bursts at concurrency >=4 (equal/near-equal p50, worse
-p95/p99 and approximately 8-19% lower median throughput in the observed
-sessions). Concurrency 1-2 and sequential phase-split streaming were near
-parity; H2 and ordinary small-request concurrency did not show the same
-persistent shape.
-
-Result: **not reproduced consistently / residual unlocalized**. The native
-path has a small pre-header cost compared with direct Hyper, but the downstream
-synchronized tail shape did not reproduce consistently. Under the four-worker
-runtime, throughput was about 3–7% lower
-through concurrency 8 and under 1% lower at 16, while p95/p99 differences
-stayed small. Under Tokio's 16-worker default, the C4 native lane was about 9%
-slower, C8 was near parity, and C16 was about 13% slower while its p95/p99
-were lower than direct Hyper. The effect moves with runtime configuration and
-does not support a stable H1 tail-specific optimization.
-
-Default native pooling was inert: no origin key/semaphore, no acquisition
-waits, and no response lease absent permit or timeout state. Above/equal
-logical limits also had zero waits; the below-concurrency control queued and
-reduced throughput as intended. H2's occasional ~41 ms tail appeared in direct
-Hyper and native controls alike. No production change or compatibility waiver
-was made. H2 long tails appeared in direct Hyper and native lanes. The
-remaining H1 difference includes eggfetch's private connector/lifecycle and
-native request/response adapters, so it cannot be assigned specifically to
-Hyper/runtime or an adapter without stronger isolating evidence. The
-dispatch-to-headers phase contains the measurable native-path delta; request
-construction and response drain remained small. Linux perf
-sampling was unavailable because `perf_event_paranoid=4`, so no internal
-candidate was optimized without a profile.
-
-No future plan names this investigation as a prerequisite. Issue #24 release
-publication/tag/PyPI, the Python 3.15 wheel rehearsal, HTTPX 1.0's stable
-trigger, and HTTP/3 independent interoperability evidence remain independent
-actions/blockers; none is unblocked by these results.
-
-This investigation does not reopen the 0.2.0 release, public compatibility
-qualification, HTTPX/HTTPX2 Stage C bindings, or HTTP/3 status. A no-change
-result is valid if the residual is shown to be Hyper/runtime/downstream-host
-behavior rather than an eggfetch-owned cost.
-
-
-## Completed corrective — private architecture qualification state (2026-09-22)
-
-Plan: `private-architecture-qualification-state-corrective-pass.md`
-
-Planning baseline: `3addebd5680d460773a16215db90b71f7dfad5c0`.
-
-Preserved executable freeze:
-`d4979f1dac53f30f07900f54b01a88de06956c1c`.
-
-Objective: repair the exact-SHA qualification bookkeeping left after the
-completed API-preserving private-architecture containment program. The
-implementation and compatibility runs are already green on `d4979f1...`, but
-both live HTTPX/HTTPX2 Stage C profiles and canonical compatibility records
-still present the older maintenance freeze `18c1f96...` as current. Rebind
-those live records to the qualified private-architecture freeze, preserve the
-old binding as historical, reconcile the completed plan checklists to their
-recorded evidence, and prove the final descendant is profile/docs/plan-only.
-
-Status: complete. The preserved executable freeze remains
-`d4979f1dac53f30f07900f54b01a88de06956c1c`. The final
-profile/compatibility-state descendant is `5d46a29146e8042b4ee3b8d7086a42e5ee582a91`,
-and ordinary remote CI run `35679134598` passed for that commit. This
-corrective changed only compatibility profiles, the live parity ledger,
-canonical compatibility documentation, and evidence-plan checklists; no
-executable/test/validation/workflow/package source changed. The closure-index
-commit is a documentation-only descendant of that tested state-repair commit.
-
-The parent architecture campaign remains closed on its executable freeze.
-Issue #24 publication/tag/PyPI work and the Python 3.15 wheel rehearsal remain
-independent pending maintainer/release actions.
-
-
-## Completed program — API-preserving private architecture containment (2026-09-21)
-
-Handoff program: `api-preserving-private-architecture-containment-program.md`
-
-Planning baseline: `c53eebc47569279b61c0611d4523c5132bdbcaeb`.
-
-Objective: complete a second private-architecture containment pass without
-changing any existing Rust/Python/C/CLI API, feature/default exposure,
-accepted/rejected input, protocol behavior, compatibility claim, or supported
-capability. The audit found sound engine/adapter ownership; the remaining work
-is concentrated private decomposition plus prevention of further growth in
-historical low-level Rust public surfaces. HTTP/3 remains experimental and
-Node remains an experimental prototype.
-
-Execution order:
-
-1. `core-client-proxy-private-decomposition-second-pass.md` — finish moving
-   private route/cache/connector and proxy parsing/environment/identity/test
-   mechanics behind private modules while keeping all public Client/Builder/
-   proxy declarations at their existing canonical paths.
-2. `python-streaming-and-cli-private-decomposition.md` — decompose Python
-   streaming state/bridge/decoder/iterator internals and CLI parsing/output/
-   file/error responsibilities without changing PyO3 signatures, PEP 561
-   typing, streaming lifecycle/backpressure, CLI syntax/defaults/output, or
-   exit codes.
-3. `rust-surface-containment-and-experimental-adapter-hygiene.md` — inventory
-   and guard already-public low-level Rust surfaces such as Alt-Svc/metrics,
-   prove feature-profile containment, verify C ABI stability, and reconcile
-   Node prototype metadata without adding Node/H3 capability.
-4. `post-private-architecture-api-requalification-and-closure.md` — freeze one
-   exact executable SHA, run Tier 1/extended/package/security/exact MSRV and
-   Rust/Python/C/CLI/HTTPX/HTTPX2 API/behavior gates, and reconcile closure
-   records only after zero drift is proven.
-
-No public visibility cleanup, feature-graph simplification, new transport,
-Node maturation, H3 graduation, Python trailer exposure, Trio/AnyIO, new CLI
-feature, new FFI symbol, or compatibility waiver belongs in this program.
-Issue #24 publication/tag/PyPI work and the Python 3.15 18-wheel rehearsal
-remain independent maintainer/release actions.
-
-Status: complete on executable freeze
-`d4979f1dac53f30f07900f54b01a88de06956c1c` (2026-09-22 UTC). Tier 1,
-extended, package, security, exact MSRV, six-profile Rust API, native Python,
-HTTPX/HTTPX2 compatibility, FFI, and CLI gates are green locally. The Node
-JavaScript artifact remains a documented skip because it is not built.
-Closure documentation is a descendant of the freeze and records the final
-evidence in `post-private-architecture-api-requalification-and-closure.md`.
-Remote CI run `35674749373` passed for documentation head `e70ae121`.
-
-
-## Completed polish — post-maintenance documentation state (2026-09-21)
-
-Plan: `post-maintenance-documentation-state-polish-pass.md`
-
-Planning baseline: `e7371e3722dbbe61aa9004ef3c16f6b9fd866816`.
-
-Status: complete. Implementation and qualification remain closed on corrective
-freeze `18c1f96c1cbf9d71aa480030b0f365c85267620b`; this pass did not reopen
-executable qualification. It repaired the stale `bc4800ee...` "Current
-qualification" block in `docs/reference/compatibility.md` (plus the same
-stale binding in `docs/reference/compatibility-stage-decision.md` found in
-the consistency sweep), appended the execution/closure record to the
-completed closure-evidence corrective plan, and finalized the parent
-addendum's now-satisfied conditional CI wording. The pass remained
-docs/state-only with both live profile bindings preserved at `18c1f96...`.
-Final docs-only head `9b8197bcae45faee5bef9e0a05ae7b16543b8725` passed
-ordinary remote CI (run `35635954532`). Issue #24 publication and the
-separate Python 3.15 wheel rehearsal remain the only independent pending
-items relevant to these records.
-
-
-## Completed corrective — post-maintenance closure evidence (2026-09-21)
-
-Plan: `post-maintenance-closure-evidence-corrective-pass.md`
-
-Planning baseline: `5ced637af7479b95b6454697e638c7a3759d8670`.
-
-Status: complete. Corrective freeze
-`18c1f96c1cbf9d71aa480030b0f365c85267620b`; Tier 1, extended, package,
-security, exact Rust 1.89.0 MSRV, six-profile Rust oracle, and full pinned
-HTTPX/HTTPX2 gates are green locally with policy-defined Node/downstream
-skips. Canonical Stage C profiles, ledger, and compatibility docs are rebound
-to the new freeze. Remote CI run `35624022656` is green on final
-documentation/evidence descendant `1f8daae4599361d6fb2acd2d8fbca6e38b4fc4fe`,
-which contains only profile/ledger/plan/compatibility documentation changes
-after the freeze. No public API/capability change, compatibility waiver, H3
-graduation, Node maturation, issue #24 publication, or Python 3.15 release
-qualification occurred in this pass.
-
-
-## Program complete — API-preserving maintenance and interop hardening (2026-09-21)
-
-Handoff program: `api-preserving-maintenance-and-interop-hardening-program.md`
-
-Planning baseline: `03ecba973010e2858bf16a2b5f84d51ce70adae4`.
-
-Status: fully closed after the closure-evidence corrective. Implementation
-landed on `df2549f7c64ebfccde61ed36fef785d39e83b38d`; the corrective completed
-the promised relational/SSLContext negative evidence, froze
-`18c1f96c1cbf9d71aa480030b0f365c85267620b`, requalified it, and renewed all
-canonical Stage C records to that freeze with green remote CI
-(`35624022656` on `1f8daae4`). Issue #24 publication remains pending, and the
-separate Python 3.15 wheel rehearsal remains open.
-
-Objective: reduce maintenance/API-drift risk without changing any existing
-Rust/Python/C/CLI public surface, feature/default exposure, protocol behavior,
-compatibility claim, or supported capability. HTTP/3 remains experimental and
-Node remains an experimental prototype.
-
-Execution order:
-
-1. `rust-public-api-regression-oracle.md` — add profile-aware Rust compile
-   contracts plus a pinned exact public-surface oracle and semver cross-check.
-2. `python-native-surface-relational-guardrails.md` — extend the existing
-   native API/typing manifest checks with explicit Client/AsyncClient/top-level
-   mirror invariants; keep concrete PyO3 signatures readable.
-3. `python-ssl-context-private-contract-hardening.md` — replace scattered
-   Python-private SSLContext imports with one versioned, bounded, fail-closed
-   Python-to-Rust internal contract while preserving all TLS semantics.
-4. `core-private-module-decomposition.md` — split private client config/cache/
-   connector and proxy parsing/environment responsibilities without moving
-   public types or canonical paths.
-5. `connect-wire-overlap-conformance.md` — make retained CONNECT test/fuzz/auth
-   overlap demonstrably conformant to the shared eggfetch-http-connect wire
-   owner; retain duplication when safe deduplication would alter behavior/API.
-6. `post-maintenance-api-requalification-and-state-closure.md` — freeze one
-   executable SHA, prove zero Rust/Python/HTTPX/HTTPX2/C/CLI drift, run canonical
-   repository gates, and reconcile stale plan/issue state truthfully.
-
-No new public helper, new transport engine, new CI job/matrix, Node maturation,
-H3 graduation, Trio/AnyIO, Python trailer exposure, new auth scheme, or
-compatibility waiver belongs in this program.
-
-
-## Completed corrective — second-pass performance closure truth/semantics (2026-09-20)
-
-Plan: `second-pass-performance-closure-corrective-pass.md`
-
-Planning baseline: `8201f35e4746cfaca23ae7f975b701a8488bb88b`.
-
-Status: complete on executable freeze
-`bc4800ee9428f0fd11d7d0b914c489b444fe93fc`; Tier 1, extended, package,
-security, and exact Rust 1.89.0 MSRV gates are green locally. The corrective
-restored exact lazy `iter_lines()` CR semantics, moved the native URI by
-ownership, and retained the cookie watermark only after focused mutation
-evidence; the decoded-body capacity candidate was rejected because safe
-decoded-length provenance was unavailable. Remote CI is the final post-push
-verification reported in the handoff.
-
-## Completed program — second-pass performance ownership optimization (2026-09-20)
-
-Handoff program: `second-pass-performance-ownership-optimization-program.md`
-
-Planning baseline: `b6bcc33aa1ad04dfa22af219b82601d3c1377743`.
-
-Status: complete on executable freeze
-`bc4800ee9428f0fd11d7d0b914c489b444fe93fc`; package/security gates and local
-qualification are green, with remote CI closure recorded after push. This is a
-narrow follow-up to the
-completed first performance campaign, not a reopening of its already-qualified
-streaming/cookie/pool work. The new audit found remaining ownership boundaries
-where an owned HeaderMap/Url/body is borrowed and then cloned or rebuilt one
-layer later, plus buffered Python iterator eagerness and one avoidable async
-`aread()` full-body copy. Public Rust/Python/C/CLI and HTTPX/HTTPX2 semantics
-remain frozen.
-
-Execution order:
-
-1. `second-pass-performance-benchmark-and-guardrails.md` — freeze measurements
-   for request-header ownership, native requests, Python header conversion,
-   buffered iterator first-yield/RSS, async aread, and optional cookie/body
-   tuning before executable work.
-2. `high-level-h1-h2-request-ownership-fast-path.md` — move prepared headers
-   directly into ordinary H1/H2 requests and remove redundant standard-route
-   Url clones without changing route/redirect/retry/trace semantics.
-3. `native-and-proxy-ownership-cleanup.md` — decompose owned native requests
-   without HeaderMap cloning and apply the same move-based cleanup to eligible
-   SOCKS/proxy Hyper paths while preserving typed fallback and timeout policy.
-4. `python-buffered-response-and-adapter-ownership-optimization.md` — transfer
-   core response headers into Python wrappers, make buffered iterators lazy,
-   and remove the async aread intermediate Vec when PyO3 permits it safely.
-5. `benchmark-gated-cookie-and-body-buffer-tuning.md` — optional-by-evidence
-   large-jar mutation and safe decoded-body capacity tuning; close unchanged if
-   measurements do not justify added complexity.
-6. `second-pass-performance-requalification-and-closure.md` — freeze one final
-   executable SHA, rerun comparable evidence, prove zero API/compat drift, run
-   canonical repository gates, and renew exact-SHA qualification if required.
-
-No new production dependency, custom pool, unbounded queue, unsafe Python
-buffer sharing, public ResponseBody shape change, routine CI timing gate,
-HTTP/3 graduation, or Node maturation belongs in this program.
-
-This directory contains active implementation plans, live qualification/status records, and historical implementation records. Completed plans are non-normative unless another current document explicitly says otherwise. Verification and release policy remain governed by `docs/verification-policy.md` and `docs/releases/process.md`.
-
-
-## Completed corrective — performance exact-SHA evidence record (2026-09-20)
-
-Plan: `performance-exact-sha-evidence-corrective-pass.md`
-
-Status: complete as an evidence/documentation-only corrective. The profiles,
-live parity ledger, and canonical compatibility records now bind Stage C to
-the already-qualified performance executable freeze `18a1a4328110df014843a94e155fe678a08b1cb4`; the issue #24 freeze `37ab02b...` remains historical. The final descendant contains only profile, ledger, plan, and compatibility documentation changes. Corrective commit `ff42daf7bb4a991400c4a57172562bc32f1891c1` passed routine GitHub CI run `35522097630`.
-
-## Completed program — performance optimization without API regression (2026-09-20)
-
-Handoff program: performance-optimization-no-api-regression-program.md
-
-Planning baseline: `abf15eb97b10298fb200c2c2f4a1dceffddeb23b`.
-
-Status: complete after the evidence-record corrective pass. The campaign is
-bound to executable freeze `18a1a4328110df014843a94e155fe678a08b1cb4`; its
-later descendants are documentation/evidence-only. The campaign is explicitly
-API-preserving and evidence-driven: baseline first, then core ownership/
-allocation fast paths, Python streaming backpressure/copy reduction,
-cookie/buffered-response memory work, and final exact-SHA requalification.
-Tier 1, extended, package, security, and current-head push CI are green; the
-final profile/ledger correction is recorded in
-`performance-exact-sha-evidence-corrective-pass.md`.
-Corrective commit `ff42daf7bb4a991400c4a57172562bc32f1891c1` passed routine
-GitHub CI run `35522097630`.
-
-Execution order:
-
-1. performance-benchmark-baseline-and-guardrails.md — freeze reproducible Rust/Python/adapter measurements and public/API baselines before executable optimization.
-2. core-hot-path-allocation-and-ownership-optimization.md — remove unnecessary default pool key/lease work, header/URI copies, address/multipart/FFI copies, and make connector/TLS residual work measurement-gated.
-3. python-streaming-backpressure-and-copy-optimization.md — prevent bounded sync streaming backpressure from blocking Tokio workers and replace repeated Vec/remainder/front-drain copies with Bytes/cursor ownership.
-4. cookie-and-buffered-response-memory-optimization.md — replace unconditional cookie read-path write pruning with a safe expiry watermark and lazily materialize buffered Python response text.
-5. post-performance-requalification-and-closure.md — freeze one final executable SHA, rerun comparable benchmarks, prove Rust/Python/C/CLI API stability, and run the repository's Tier 1/extended/package/security/MSRV/exact-SHA compatibility gates.
-
-Recent streaming-decompression corrective internals are out of scope unless new independent evidence requires a separate corrective. No new public API, custom connection pool, unbounded streaming queue, routine CI timing gate, HTTP/3 graduation, or Node maturation belongs in this program.
-
-
-## Active corrective — issue #24 streaming decompression chunk-boundary corruption (2026-09-19)
-
-Parent corrective: `issue-24-streaming-decompression-chunk-boundary-corrective.md`
-
-Release/qualification closure: `issue-24-release-qualification-and-closure.md`
-
-Status: implementation + qualification complete on executable freeze `37ab02b3873a4f0ce7018bd716e326bcf0595230`; release commit `0ddcecc5e59e82c0cbf2d3d0647fd58b3d534dff` bumps coordinated versions to 0.1.9 with CHANGELOG and is CI-green. Baseline red (fragmented gzip/Brotli CRC/decoder failures; one-item/buffered/raw controls green) and post-fix green (20/20 streaming tests; Content-Length vs chunked identical; size/ratio/error/metadata/timeout/pool/native/lean guards green) are recorded in the plan closure. Tier 1, extended (incl. 1.89.0 MSRV), package, security, both API oracles (71/79, zero unexplained), and three consecutive 1,871-test compat passes are green on the freeze. Remote CI is green on both commits. Publication is PENDING: `cargo publish` in order, `v0.1.9` tag, and PyPI dispatch require maintainer action; downstream eggsearch retains its temporary `.decompress(false)` workaround until it adopts a published fix separately. Ledger/profile renewal to the issue #24 freeze (`37ab02b3873a4f0ce7018bd716e326bcf0595230`, 2026-09-19) is complete in `httpx-parity-correction-status.md`, both `profile.toml` files, and the three canonical qualification records.
-
-
-## Active — Python 3.15 PyPI wheel production (2026-09-18)
-
-Plan: `python-3.15-pypi-wheel-production.md`
-
-Status: implementation complete, pending build-only qualification. The
-matrix now builds CPython 3.10–3.15 on Linux x86_64, macOS arm64, and
-Windows x86_64 (18 wheels + 1 sdist = 19 distributions); the coverage
-validator, package classifier, and release documentation match. Tier 1
-and package validation are green locally. The required `publish=false`
-18-wheel rehearsal has not been dispatched yet — dispatch it from the
-implementation commit before claiming 3.15 support in a published
-release (see the plan's Closure record). Python 3.15 is still
-prerelease at implementation time, so the workflow must use bounded 3.15-only prerelease fallback that naturally
-selects stable 3.15.x after GA without changing the 3.10–3.14 behavior.
-
-## Completed corrective — total deadline across response body lifecycle (2026-09-18)
-
-Parent plan: `total-deadline-response-body-lifecycle-corrective.md`
-
-API-compatibility corrective:
-`total-deadline-response-body-api-compatibility-corrective-pass.md`
-
-Final closure plan:
-`total-deadline-final-proof-qualification-release-closure.md`
-
-Original planning baseline:
-`60a6e2b384519507e04cf296ffd484388e872e47`.
-
-Behavioral implementation:
-`dd52f8c4a8d54fbaa403a7995a41bf60b235f7ac`.
-
-Public-API compatibility correction:
-`2c68b44176b3a189e1f1fdc6586d8678a0945284`.
-
-Final executable/test freeze:
-`82f3f38631b44a9a5c5ec5b40790e5015aeb40f8`.
-
-Status: implementation, release qualification, and coordinated crates.io
-publication complete. The total deadline now spans response-body EOF/trailers
-for high-level and native frame-preserving responses. Read remains
-first-poll/per-chunk inactivity; Total never resets and wins ties.
-`ResponseBody`'s published exhaustive variant shape is restored (no public
-timeout fields, no `#[non_exhaustive]`), timeout metadata lives behind the
-private `PoolGuard` response lifecycle, `BodyTimeoutStream` is the single
-high-level owner, and redirect/retry remaining-budget plus the strengthened
-native lease-release proof (timed-out body kept alive while the second request
-reaches 200 OK) are green. Historical baseline-red (`60a6e2b3` returned
-`Ok(b"")` past total) and three-state public-shape evidence (`60a6e2b3`
-green / `dd52f8c4` E0027 red / freeze green) are recorded. Tier 1, extended
-(incl. Rust 1.89.0 MSRV), package, security, both API oracles (71 / 79, zero
-unexplained/stale/resolved-active), and three consecutive 1,871-test
-compatibility passes renewed Stage C on the freeze for HTTPX 0.28.1 and HTTPX2
-2.12.0. HTTP/3 and Node remain experimental.
-
-No new bounded-body API was added. `max_decoded_body_size` remains the
-authoritative stream-level bound for identity and decoded compressed bodies
-when `Content-Length` is absent or false.
-
-Coordinated version 0.1.7 (release commit `43c3b31`, tag `v0.1.7`) is published
-to crates.io for all six crates (http-connect, core, cli, ffi, python, node —
-each verified via `cargo search`); PyPI wheel publication remains a manual
-`pypi.yml` dispatch on the tag and was not run in this pass. Remote CI is green
-on both the docs closure head (`842a3c35`, run 35377996077) and the release
-commit (`43c3b31`, run 35385440508). Downstream consumers should use
-`eggfetch-core 0.1.7`: `Timeout.total` spans response-body EOF/trailers,
-`max_decoded_body_size` remains the hard bound for unknown/false
-`Content-Length` metadata bodies, the public `ResponseBody` field shape is
-compatible with 0.1.6, there is no new HTTPX total semantic, and there are no
-new dependency/MSRV/feature requirements beyond the release notes.
-
-## Completed — linked binary footprint reduction (2026-09-17 → 2026-09-18)
-
-Handoff program: `linked-binary-footprint-reduction-program.md`
-
-Planning baseline: `6093a66959165f132f02102ffb727ac3e710917c`
-(eggfetch-core 0.1.6 after the completed native pool-map and native URI
-dependency-separation work).
-
-Status: implementation complete (material linked-footprint improvement).
-The lean `standard-http1` + `tls-rustls` profile closes the measured
-stripped delta vs aligned reqwest to +32 KiB (+1.0%) on
-x86_64/thin-LTO (full compat +590 KiB); `eggfetch_core` .text −49%.
-Existing default/`http1`/`http2`/`native-http1`/`native-http2`/Python/CLI/FFI/
-Node/HTTPX/proxy/retry/redirect/auth/TLS/H2/H3/cookies/compression/multipart
-behavior unchanged. See the program file and child-plan closure records;
-`docs/architecture/embedded-footprint.md` is the single authority for bytes.
-Tier 1 green locally + CI; extended/package/security/exact-SHA compat renewal
-remain release-time gates per `docs/verification-policy.md`.
-
-Execution order:
-
-1. `linked-byte-baseline-and-attribution.md` — remeasure current main using a
-   real Gregg-like high-level request path and aligned reqwest/0.1.5/native
-   controls; collect stripped bytes plus crate/symbol attribution before
-   executable changes.
-2. `standard-route-advanced-routing-feature-boundary.md` — add an opt-in
-   standard DNS/TCP/TLS route profile that does not compile custom Dialer,
-   resolved-target/SNI override, socket-option/local-address, or UDS machinery,
-   while existing `native-http1`/`http1` aliases retain all current
-   capabilities.
-3. `high-level-policy-footprint-feature-boundary.md` — allow the lean
-   high-level profile to omit logical retry, redirect-following, and Basic-auth
-   Base64 while retaining URL/request/response ergonomics, Bearer auth,
-   timeouts, body limits, pooling, TLS, and typed failures.
-4. `conditional-tls-and-residual-dependency-footprint-tuning.md` — remeasure,
-   then make only evidence-justified residual splits such as proxy-owned
-   `eggfetch-http-connect`, TLS PEM/logging ownership, or metrics boundaries;
-   explicitly stop rather than proliferating micro-features for negligible
-   byte savings.
-5. `post-footprint-reduction-requalification-and-closure.md` — freeze one
-   final executable SHA, rerun the comparable footprint matrix, prove the
-   Gregg-like lean path and full-capability regressions, run Tier 1/extended/
-   package/security gates, renew exact-SHA HTTPX/HTTPX2 evidence, and update
-   feature/dependency/footprint documentation.
-
-The program is additive by design. Existing default, `http1`, `http2`,
-`native-http1`, `native-http2`, Python, CLI, FFI, Node prototype,
-HTTPX/HTTPX2, proxy, advanced routing, retry, redirect, Basic/Bearer auth, TLS,
-H2/H3, cookies, compression, multipart and other established capabilities
-remain available under their current compatibility/default profiles. No second
-client, pool, HTTP engine, TLS backend, or downstream-specific Gregg API is
-allowed. Binary size is measured under identical release settings; package
-count alone is not success evidence.
-
-## Completed — resolved-target route cache and connection reuse (2026-09-17)
-
-Plan: `resolved-target-route-cache-and-connection-reuse.md`
-
-Status: implementation complete. Same logical origin + same ordered physical
-snapshot + same SNI reuses one bounded (64-entry) Hyper client via the new
-crate-private `ResolvedRouteKey`; Hyper remains the only physical pool (H1
-keep-alive / H2 multiplexing). Routing semantics unchanged (no DNS fallback,
-same-origin retention, cross-origin fail-closed, proxy/UDS/H3 rejection). Key
-matrix, bound, H1/H2 reuse, isolation, redirect, eviction, construction-
-failure, and cancellation regressions are in `client.rs` unit tests and
-`tests/resolved_route_cache_tests.rs`; loopback churn drops from request-count
-to concurrency-level with no RPS regression. Tier 1 green locally; extended,
-package, and exact-SHA compatibility renewal remain maintainer-controlled
-release gates. Closure evidence is in the plan's implementation record.
-
-## Corrective closure — current-head requalification (2026-09-16)
-
-Plan: `post-core-integrity-current-head-requalification-corrective-closure.md`
-
-Status: complete. Executable freeze:
-`1f52d846c186b061481ebb14a7be414f5c78ec7e`; the final profile/ledger/plan-index
-closure is documentation-only. This is a qualification corrective only: the
-post-freeze reusable route-cache invariant hardening pass (expanded
-SOCKS/forward/CONNECT route-key matrices, route/client ownership
-documentation, forward-proxy trace-observer non-retention regression) changed
-test/source-comment inputs after the `bfda3889` freeze without changing
-production behavior, invalidating that binding per the exact-SHA rule. Focused
-invariant tests, Tier 1, extended (incl. Rust 1.89.0 MSRV), package, live
-security preflight, both API oracles, and three consecutive 1,870-test
-compatibility passes renewed Stage C on the new freeze for HTTPX 0.28.1 and
-HTTPX2 2.12.0. HTTP/3 and Node remain experimental. Closure evidence is in
-the plan and `httpx-parity-correction-status.md`.
-
-## Completed program — post-maintenance core integrity and verification (2026-09-16)
-
-Handoff program: `post-maintenance-core-integrity-and-verification-program.md`
-
-Status: complete. Executable freeze: `bfda3889cbeff5f6fbd98bf3eee12f77fab301c4`;
-the final profile/ledger/plan-index closure is documentation-only. All six
-executable child plans landed before the freeze: proxy TLS route-cache
-identity corrective (opaque per-build token), Hyper idle-pool policy
-corrective (pool timer + uniform per-route idle policy), reusable route-cache
-invariant hardening (key matrices, deadline ownership, checklist), Hyper
-client construction/cache consolidation (central policy/cache owners,
-hyper-util pool do-not-adopt recorded), pipeline decomposition
-(responsibility-owned `pipeline/` modules), and dependency/validation
-reproducibility hardening (cargo-deny all-features + Windows, pinned CI
-tooling). Tier 1, extended (incl. Rust 1.89.0 MSRV), package, live security
-preflight, both API oracles, and three consecutive 1,870-test compatibility
-passes renewed Stage C on the freeze for HTTPX 0.28.1 and HTTPX2 2.12.0.
-HTTP/3 and Node remain experimental. Closure evidence:
-`post-core-integrity-requalification-and-closure.md` and
-`httpx-parity-correction-status.md`. The `bfda3889` binding recorded here is
-historical: it was superseded by the corrective closure above after the
-post-freeze route-cache invariant hardening pass.
-
-## Corrective — proxy cached total-deadline ownership (2026-09-16)
-
-Plan: `proxy-cached-total-deadline-corrective-pass.md`
-
-Status: implementation and executable validation complete on freeze
-`de00479ef1161ec24c7f2c34a1cc95c7872e7643`; compatibility/profile and CI
-closure evidence is recorded in that plan and the live parity ledger. The
-correction removes request-total state from reusable Hyper forward/CONNECT
-connectors while retaining the outer per-dispatch total deadline.
-
-## Completed program — post-audit maintenance, security, and proxy modernization (2026-09-16)
-
-Handoff program: `post-audit-maintenance-security-and-proxy-modernization-program.md`
-
-Planning baseline: `025b1a5a6a94b017b3f3b183c3d562e7ee9bcca7`.
-
-Status: complete. Executable freeze:
-d87be1b780a41dc8ff5f3ba8a14f8d74de5814d0; the final plan/profile/index
-closure is documentation-only. This program follows the completed post-audit maturation, embedded-consumer,
-transport-extensibility, proxy-pinning, and Python interop lines. It does not
-reopen Node maturation or HTTP/3 graduation. The new source audit found a
-narrower set of ownership/maintenance defects: FFI feature leakage into core
-defaults, probable adapter dependency residue, duplicated Python
-request-to-core dispatch, stale security/release claims, and one-shot manual
-HTTP forward/CONNECT proxy paths that duplicate Hyper framing and cannot reuse
-connections.
-
-Execution order:
-
-1. `adapter-feature-and-dependency-boundary-correction.md` — make FFI/core
-   feature forwarding truthful, preserve explicit Node transport/TLS behavior,
-   audit Python TLS dependency ownership, and delete obsolete core placeholder
-   configuration.
-2. `python-request-dispatch-consolidation.md` — establish one runtime-neutral
-   mapping from normalized Python request state to the core request builder
-   while preserving sync/async/top-level runtime semantics.
-3. `security-policy-release-and-supply-chain-hardening.md` — remove stale
-   advisory ignores, add a fail-closed explicit/release security preflight,
-   reconcile security policy with the simplified CI model, and make PyPI
-   publication version-tag identity fail closed.
-4. `proxy-hyper-pooling-and-upstream-reuse.md` — qualify current hyper-util
-   proxy connector primitives, move successful forward/CONNECT HTTP framing
-   back under Hyper, and add safe connection/tunnel reuse without regressing
-   proxy TLS, pinning, timeout, auth, or error contracts.
-5. `post-maintenance-security-proxy-requalification-and-closure.md` — freeze
-   one final executable SHA, run feature/dependency/security/proxy proofs plus
-   Tier 1/extended/package gates, renew exact-SHA HTTPX 0.28.1 / HTTPX2 2.12.0
-   qualification, then perform documentation/index closure.
-
-The proxy plan did not introduce a parallel custom connection pool: Hyper owns
-eligible forward/CONNECT reuse and narrow handshake fallbacks preserve the
-remaining contracts. The proxy plan must not introduce a parallel custom connection pool before
-proving Hyper's existing pool insufficient. Upstream proxy helpers are reused
-only where they preserve eggfetch's richer route/security contracts. The
-security plan must preserve the single automatic push/PR workflow required by
-`docs/verification-policy.md`; live advisory currency belongs to the explicit
-security/release path rather than being mislabeled deterministic routine CI.
-
-## Completed corrective — Python PEP 561 method contract (2026-09-16)
-
-The completed Python interop/API-hygiene program remains the historical baseline on executable/package freeze `2281345f3eaf636c62ec21d2c963d6f90ea764a8`, but a follow-up audit found that the typing gate proved exports and exception bases without fully proving public class methods, properties, and semantic return annotations. The corrective line was intentionally narrow and did not reopen the Python runtime architecture. Its executable/package freeze is `c28bbcad6bf9c420721731e8b7a18c2ec1707dd1`.
-
-Execution order:
-
-1. `python-pep561-method-contract-corrective-pass.md` — completed the native
-   `_native.pyi` and runtime↔stub member/return drift correction.
-2. `post-python-typing-corrective-qualification-and-closure.md` — completed
-   source and installed-wheel proof, canonical repository gates, and exact-SHA
-   HTTPX 0.28.1 / HTTPX2 2.12.0 qualification renewal.
-
-Do not change runtime behavior merely to fit existing stubs. The stubs must describe the actual native API, and any runtime defect discovered during implementation must be called out explicitly before expanding scope.
-
-## Completed — Python interop/API hygiene closure (2026-09-15)
-
-The native API, neutral SSL boundary, async-body bridge, PyO3/Python matrix,
-and PEP 561 typing surface are qualified on executable candidate
-`2281345f3eaf636c62ec21d2c963d6f90ea764a8`. HTTPX 0.28.1 and HTTPX2 2.12.0
-profiles were renewed after Tier 1, Tier 2, package validation, API oracles,
-and three consecutive 1,870-test compatibility passes. See
-`post-python-interop-api-qualification-and-closure.md`.
-
-## Completed corrective closure — standard-route DNS provenance (2026-09-15)
-
-Plan: `standard-route-dns-provenance-correction.md`
-
-Status: complete. Executable freeze:
-`312cd4402ea2b4b27bf54cf7dc36924a1d449adc`. This is a narrow correction to the completed
-native request-failure introspection work. The standard Hyper HTTP/HTTPS route
-should preserve typed resolver-failure provenance through a crate-private
-resolver wrapper so `send_detailed()` can report `NetworkFailureKind::Dns`
-without error-string matching, a new public resolver API, or a transport
-rewrite. Hyper-util must continue to own standard TCP/address-selection
-behavior; `DirectConnector` must not become the default route merely to obtain
-diagnostics.
-
-The implementation should add no dependency or MSRV increase, preserve the
-existing public `Error`/`Error::kind()` and ordinary `send()` semantics, and
-re-run the repository's existing exact-SHA compatibility process because the
-work changes executable core connector/error plumbing. Gregg is motivating
-requirements evidence only; no downstream-specific type or adapter belongs in
-eggfetch.
-
-Tier 1, extended, clean package validation, dependency/feature checks, focused
-resolver/refusal/timeout tests, both API oracles, and three consecutive exact-
-SHA 1,870-test compatibility runs passed. The plan contains the implementation
-and closure evidence; the live profiles and ledger were renewed on the exact
-freeze SHA. The three documented optional local skips remain: unbuilt Node JS
-artifact, Rust 1.80/Cargo resolution incompatibility, and absent downstream
-artifact manifest.
-
-## Completed — native Tower service adapter (2026-09-15)
-
-Plan: `native-tower-service-adapter.md`
-
-Status: complete. Executable freeze:
-`490320f6e99fbb7916280d6bcdd21660bd74f858`. `eggfetch-core` now exports the
-cloneable `NativeHttpService` and `Client::native_service()` over the existing
-frame-preserving native execution path. The adapter is always ready to accept
-requests; origin-pool admission and transport backpressure remain in the
-delegated future. Full Tower/Tonic remain outside the core dependency graph.
-The standalone fixture now qualifies Tonic 0.14.6 generated-client bounds with
-`codegen` only; Tonic `transport`/`Channel` remains disabled.
-
-Tier 1, extended, package, focused feature/dependency checks, the external
-Tonic 0.14.6 fixture, and the exact-SHA compatibility validation passed. The bounded
-footprint measurement remains **not a footprint win** and no binary-size
-reduction is claimed. The plan contains the complete closure record; the Tonic
-0.14 corrective closure is recorded in
-`tonic-0.14-native-tower-qualification-corrective-pass.md`. This
-entry and the compatibility profiles are documentation-only descendants of
-the executable freeze.
-
-## Completed program — proxy route pinning and egress interoperability (2026-09-15)
-
-The proxy route-pinning program is complete on the executable freeze recorded
-in `proxy-route-pinning-and-egress-interoperability-program.md`. Native Rust
-callers can pin proxy peers with `Proxy::resolved_addresses()` and supported
-proxied ultimate destinations with
-`RequestBuilder::proxy_target_addresses()`. HTTPS CONNECT and local-resolution
-SOCKS5 preserve logical URL/Host/TLS identity and never fall back to DNS;
-SOCKS5H and plaintext HTTP forward-proxy target pins fail closed. No Egress
-dependency was added; external route policy remains above eggfetch and can
-use the generic `Dialer` seam.
-
-Executable freeze: `13c4ab4`; the final plan
-status/validation closure is a documentation-only descendant.
-
-## Completed — native request failure introspection (2026-09-14)
-
-Plan: `native-request-failure-introspection.md`
-
-Status: complete. The executable implementation is committed at
-`e10c4efdff6af9a73a89d015584df15fa6e2900c`; the plan contains the API,
-route-coverage, compatibility, and validation closure record. Tier 1,
-extended, package validation, and three consecutive exact-SHA 1,870-test
-compatibility runs passed. The compatibility profiles were renewed on this
-SHA; the closing documentation/profile commit is a docs-only descendant.
-
-Objective: add an opt-in, transport-generic native Rust request-failure surface that can preserve structured DNS/refusal/connect provenance before the existing public `Error::Connect(String)` collapse, without changing the existing public `Error` enum, `Error::kind()` tokens, ordinary `send()` APIs, Python/CLI/HTTPX behavior, or transport policy. The same plan clarifies that `max_decoded_body_size` already bounds unencoded/identity responses as well as decoded compressed bodies; it does not add another body-limit implementation.
-
-The motivating Gregg review is requirements evidence only. No Gregg, EggPool, monitoring, endpoint-status, provider, or other downstream-specific type or adapter belongs in eggfetch. This is a maintenance/ergonomics improvement for unrelated native embedders, not a binary-footprint claim.
-
-## Completed program — native HTTP body and TLS extensibility (2026-09-14)
-
-Handoff program: `native-http-body-and-tls-extensibility-program.md`
-
-Objective: extend `eggfetch-core` for transport-oriented native Rust consumers without changing existing high-level client semantics or adding downstream-specific adapters. Implementation completed in `fdfe060cd7035ddf936d6e0817cb2459f9d3fc0c`; final qualification-only provider/mTLS test hardening completed in `1ea63ba1a4ea81ab548c2a7c9af5563d975793cd`. The program adds a frame-preserving `http_body::Body` interoperability surface, explicit per-`TlsConfig` Rustls `CryptoProvider` selection with provider-neutral mTLS key loading, and explicit additional trust anchors layered on top of the existing base trust policy. Existing `RequestBody`, `ResponseBody`, `TrustStore`, Python/CLI, HTTPX/HTTPX2 and replacement custom-CA semantics remain compatible.
-
-Execution order:
-
-1. `native-http-body-interoperability.md` — add an additive native frame-preserving request/response body surface that reuses the existing transport/TLS/pool engine without exposing Hyper internals or changing public body enums.
-2. `tls-crypto-provider-extensibility.md` — allow caller-supplied Rustls `CryptoProvider` policy per `TlsConfig`, remove hard-coded ring key loading from mTLS, and retain current ring/default behavior for callers that do not opt in.
-3. `tls-additional-trust-anchors.md` — add a distinct native API for augmenting native/WebPKI/custom base trust with private roots while preserving all existing replacement-style CA APIs.
-4. `post-native-http-body-and-tls-extensibility-qualification-and-closure.md` — completed the integration/API-boundedness audit, external-style qualification, dependency/feature checks, exact-SHA HTTPX/HTTPX2 requalification, and documentation/plan closure. Tier 1, extended, package, and three consecutive 1,870-test compatibility runs passed on final qualification tree `1ea63ba1a4ea81ab548c2a7c9af5563d975793cd`. Known optional skips remain explicitly recorded in the program closure record.
-
-The motivating Synvoid evaluation is requirements evidence only. No Synvoid type, feature flag, routing/WAF/site/backend policy, provider-brand product mode, or downstream migration code belongs in eggfetch. The public additions must remain useful to unrelated gateways, service meshes, private-PKI clients, custom-network clients and other native Rust embedders.
-
-## Completed program — extensible embedded transport consumers (2026-09-14)
-
-Handoff program: `extensible-embedded-transport-consumer-program.md`
-
-Objective: let native Rust consumers reuse eggfetch as the single HTTP/TLS engine when they already own the underlying network route, without adding downstream-specific adapters or changing existing retry, pooling, timeout, Python/CLI, HTTPX, or HTTP/3 defaults. The implementation landed in `af03f006f377979550ee6cb96a30b28193c8708d`; qualification and documentation closure completed on executable freeze `43c68bd1bcff45301fc8b6b163b6b6e06d98a786`. This is an ownership/control program, not a binary-size claim; the latest embedded record remains **not a footprint win** against aligned reqwest profiles.
-
-Execution order:
-
-1. `custom-dialer-transport-extension.md` — add a general caller-supplied raw-stream dialer below eggfetch-owned HTTP/TLS, with fail-closed route-combination semantics and no protocol-specific coupling.
-2. `strict-underlying-transport-attempt-control.md` — expose Hyper's canceled-request retry policy separately from eggfetch `RetryPolicy` and apply it consistently to every Hyper client route.
-3. `physical-connection-admission-and-io-inactivity-guardrails.md` — add opt-in physical live-connection admission and established-transport read/write inactivity controls without changing logical `PoolConfig` or existing `Timeout` meanings.
-4. `post-extensible-transport-qualification-and-closure.md` — completed the synthetic external-style consumer, dependency/footprint impact, repository gates and exact-SHA compatibility, then performed documentation/plan closure.
-
-The public API must remain transport-generic. No Eggpool, Eggress, provider/account, SSH, pproxy, Trojan, Shadowsocks or other downstream protocol model becomes part of eggfetch. Downstream migration remains outside this repository.
-
-## Completed program — embedded Rust client footprint and routing (2026-09-12)
-
-Handoff program: `embedded-rust-client-footprint-and-routing-program.md`
-
-Objective: make `eggfetch-core` a cleaner embedded Rust HTTP engine with truthful feature/dependency ownership, first-class caller-supplied resolved-destination routing, native JSON ergonomics, and measured footprint evidence, without compromising default eggfetch capabilities, Python/CLI behavior, HTTPX compatibility, or existing transport/security goals.
-
-Execution order and outcomes:
-
-1. `core-feature-dependency-and-tls-boundary-hardening.md` — done; feature
-   ownership and TLS trust construction are explicit while secure defaults
-   remain unchanged.
-2. `static-resolution-and-pinned-destination-routing.md` — done; typed
-   request-scoped static routing preserves logical identity and fails closed
-   for incompatible redirects/routes.
-3. `native-rust-json-and-response-ergonomics.md` — done; native request and
-   response JSON helpers are owned by the opt-in `json` feature.
-4. `embedded-consumer-footprint-qualification.md` — done; bounded evidence
-   classifies the result as **not a footprint win** against aligned reqwest
-   Rustls profiles.
-5. `post-embedded-engine-compatibility-requalification-and-closure.md` —
-   done on frozen executable/test/fixture SHA
-   `22a6f5c0dc0207c1356b6143c0eda3d4075063b0`; Tier 1, extended, package,
-   API oracles, and three consecutive full compatibility runs passed.
-6. `post-embedded-engine-documentation-and-plan-hygiene.md` — done as the
-   documentation/profile/plan-index-only descendant of that SHA. The final
-   documentation commit `a7df01df31fd624e3b6fff1db48a0120fd8b9779` passed
-   routine remote CI in run `34741393283`.
-
-Plans 1–4 were executable/test/qualification work and invalidated the prior
-exact-SHA compatibility evidence. Plan 5 owned the single post-program freeze;
-Plan 6 remained documentation/profile/ledger-only. The final exact-SHA
-compatibility records are the two versioned profiles under `compat/`.
-
-This program does **not** migrate CodeGG or add a CodeGG-specific facade. The
-engine is ready for downstream migration evaluation on ownership/control/API
-grounds, but any downstream migration remains outside eggfetch scope.
-
-## Completed corrective closure — H3 post-freeze diagnostics requalification (2026-09-11)
-
-Handoff plan: `http3-post-freeze-diagnostics-requalification-corrective-closure.md`
-
-Trigger: executable/native HTTP/3 diagnostics landed in
-`6a0cfd87551b7c634593e7b39cd2fd35d128f727` after the prior qualification
-freeze `639bf186a71c054e11278d1b160ffe7a6f172c02`. The prior binding is now
-historical. The corrected executable tree was frozen at
-`78a77ea153aae239ce7b722aeb9909a87df3bbb5`.
-
-This was a narrow corrective closure, not another H3 feature or graduation
-program. It completed with the following sequence:
-
-1. audited the diagnostics delta for boundedness, truthfulness, privacy,
-   lifecycle safety, and feature gating;
-2. closed the directly-found counter-semantics defect and ran focused H3/
-   diagnostics regression gates;
-3. froze one clean executable SHA;
-4. ran Tier 1, extended, package validation, three consecutive full pinned
-   compatibility runs, both API oracles, required downstreams, and existing
-   remote CI;
-5. rebound both compatibility profiles and the live ledger to that exact SHA;
-6. performed a final descendant audit proving all post-freeze changes are
-  documentation/profile/ledger-only.
-
-The audit corrected the native diagnostics field to report received UDP
-datagrams rather than a path-packet counter, documented the bounded copied
-snapshot contract, and added explicit-route and sanitized-close regression
-coverage. HTTP/3 remains **experimental**; diagnostics do not satisfy the
-missing independent non-Quinn interoperability, independent GOAWAY/drain,
-public-origin, realistic impairment, or upstream-risk evidence required for
-production graduation. The exact evidence is in
-`plans/http3-post-freeze-diagnostics-requalification-corrective-closure.md`
-and the live HTTPX ledger.
-
-HTTP/3 remains **experimental** throughout this corrective pass. The new
-transport diagnostics improve observability but do not satisfy the missing
-independent non-Quinn interoperability, independent GOAWAY/drain, public-origin,
-realistic impairment, or upstream-risk evidence required for production
-graduation.
-
-## Completed qualification program — HTTP/3 production qualification (2026-09-11)
-
-Handoff program: `http3-production-qualification-program.md`
-
-Objective: close the blockers left by the prior HTTP/3 graduation attempt and make a new evidence-based decision on whether ordinary H3 operation can move from **experimental** to **supported**. This was a qualification/hardening program, not a feature-expansion program.
-
-Execution is complete with a truthful retained-**experimental** outcome. The
-child plans remain evidence records, but their unchecked external acceptance
-items are not silently treated as satisfied. A future promotion attempt must
-supply the missing evidence and perform a new executable freeze and
-compatibility requalification.
-
-Execution order:
-
-1. `http3-independent-interop-and-impairment-qualification.md` — build/reuse one implementation-neutral H3 corpus; qualify against at least two independent non-Quinn servers; record public-origin evidence; run realistic loss/latency/reordering/UDP-block/MTU/address-family impairment; prove replay-safe fallback and independent drain/reconnect behavior.
-2. `http3-upstream-risk-resource-and-observability-hardening.md` — audit the exact Quinn/h3/h3-quinn/rustls stack and current ordinary-client correctness issues; upgrade/work around only where justified; add targeted regressions; run lifecycle/resource soak; characterize cache pressure; improve real QUIC diagnostics without fabricated response metadata.
-3. `http3-production-graduation-and-compatibility-requalification.md` — audit child-plan closure, freeze one exact executable SHA, run full repository/compatibility qualification, make the literal H3 graduation decision, renew HTTPX 0.28.1 and HTTPX2 2.12.0 Stage C on the new executable tree, and perform the documentation/descendant truth pass.
-
-Plans 1 and 2 may overlap where implementation paths do not conflict, but both must close before plan 3 freezes the tree.
-
-Final decision: HTTP/3 remains **experimental**. Deterministic controls and
-repository gates are green, but independent non-Quinn interop, independent
-GOAWAY/drain, public-origin, realistic impairment, and upstream-risk closure
-evidence remain blockers. Missing evidence remains a blocker; it is never
-converted into a pass.
-
-The prior HTTPX 0.28.1 and HTTPX2 2.12.0 Stage C profiles were bound to
-executable SHA `65beb675a5380d3ff4291da6833b91ebf12c769a`; that binding is
-now historical because this program changed tests and qualification tooling.
-The profiles were renewed on frozen executable SHA
-`639bf186a71c054e11278d1b160ffe7a6f172c02` after three consecutive full
-compatibility passes and clean API oracles. That binding is now historical for
-current `main` because the later diagnostics commit changed executable code;
-the active corrective closure above owns requalification.
-
-Explicitly out of scope for this program: 0-RTT, WebTransport, H3 datagrams, MASQUE/CONNECT-UDP, connection migration, and automatic H3-by-default policy changes.
-
-The current machine-readable evidence ledger is
-`http3-independent-interop-and-impairment-qualification-evidence.json`.
-The corpus and impairment contracts are under `../qualification/http3/`;
-they are qualification inputs, not routine CI gates. The ledger retains the
-experimental label until external evidence satisfies the parent gate.
-
-## Completed program — HTTP/3 graduation and next HTTPX compatibility (2026-09-11)
-
-Handoff program: `http3-and-next-httpx-compatibility-program.md`
-(completed 2026-09-11 on frozen executable SHA
-`65beb675a5380d3ff4291da6833b91ebf12c769a`).
-
-HTTPX 0.28.1 and HTTPX2 2.12.0 had renewed Stage C results on that SHA
-(evidence: `httpx-parity-correction-status.md`), but those results are now
-historical because the active qualification program changed executable tests
-and validation tooling. They were superseded by the qualification on
-`639bf186a71c054e11278d1b160ffe7a6f172c02`, which is itself now historical
-for current `main` pending the active corrective closure. HTTP/3 retained
-experimental with blockers; HTTPX 1.0 remains preview-only. Child plans below
-are historical records:
-
-1. `http3-alt-svc-discovery-fallback-and-draining.md` — done.
-2. `http3-interoperability-and-production-graduation.md` — done
-   (experimental retained with blockers; valid outcome).
-3. `httpx2-2.12-profile-and-delta-baseline.md` — done.
-4. `httpx2-2.12-core-facade-parity.md` — done.
-5. `httpx2-2.12-sse-and-websocket-parity.md` — done.
-6. `httpx-1.0-preview-tracking.md` — done (preview-only).
-7. `post-next-scope-compatibility-requalification-and-closure.md` — done.
-8. `post-next-scope-documentation-and-plan-hygiene.md` — done.
+Register active work in `registry.md` before handing implementation plans to
+agents.
 
 ## Normative live compatibility records
 
 `httpx-parity-correction-status.md` remains the live exact-SHA status for
-both facades until the active corrective closure updates it. Profiles:
-`compat/httpx/0.28.1/profile.toml`, `compat/httpx2/2.12.0/profile.toml`.
-Preview: `compat/httpx/1.0-preview/` (unqualified by design; status in
-`preview-status.toml`, delta in `preview-delta-0.28.1-vs-1.0.dev6.json`,
-notes in `redesign-notes.md`).
+both facades. Profiles: `compat/httpx/0.28.1/profile.toml`,
+`compat/httpx2/2.12.0/profile.toml`. Preview: `compat/httpx/1.0-preview/`
+(unqualified by design; status in `preview-status.toml`).
 
 ### HTTPX 1.0 migration trigger
 
@@ -897,21 +150,15 @@ preview plan into a Stage C plan):
 3. a fresh delta inventory shows the target is stable enough to justify
    implementation, pinned to the exact RC/stable release.
 
-## Recently completed program — post-audit maturation (2026-09-09)
+## Legacy archive (pre-migration flat plans)
 
-`post-audit-architecture-and-surface-maturation-program.md` executed and closed:
-
-1. `core-request-and-transport-consolidation.md` — done (`0477d35`)
-2. `http3-lifecycle-and-policy-hardening.md` — done (`a505b6c`)
-3. `node-binding-maturation.md` — done, experimental outcome (`8139e10`)
-4. `native-protocol-observability-and-api-cleanup.md` — done (`363f2e3`)
-5. `post-maturation-httpx-requalification-and-closure.md` — done, Stage C renewed on `d034a1005857a7f403222dda4bda5f2f204a44fe`
-6. `post-maturation-documentation-and-plan-hygiene.md` — done, documentation-only
-
-The prior Corrective 08 and broad truth-refresh plans remain historical evidence for earlier executable states.
-
-## Historical plans
-
-Other plan files in this directory record prior milestones, corrective passes, validation work and release preparation. Consult them for design history and prior acceptance criteria, but they are not automatically current requirements.
+The ~250 flat `plans/*.md` files (milestones A–Z, parity phases, programs,
+correctives, closures) plus `ROADMAP.md` are frozen historical records kept
+at their original paths, because qualification evidence, compatibility docs,
+and profiles cite them by path. They remain valid evidence citations but
+MUST NOT be extended with new active scope — new work uses the taxonomy
+above. Each subsystem roadmap's milestone-status section links its
+controlling legacy plans. This index and `registry.md` are the authoritative
+navigation layers; legacy files stay in place.
 
 Plan files stay in place; this index is the authoritative navigation layer.

@@ -1,7 +1,7 @@
 # Agent Guide
 
 eggfetch is a Rust-native async HTTP client (tokio + hyper). All networking lives in `eggfetch-core` plus the small `eggfetch-http-connect` CONNECT wire primitive it owns; CLI, Python, FFI, and Node are thin adapters (Python sync blocks on the async engine with GIL released).
-Start at `docs/architecture/overview.md` (§ Deep-Dive Index). Normative CI/release rules: `docs/verification-policy.md`. Conventions: `CONTRIBUTING.md`. Live qualification binding: `plans/httpx-parity-correction-status.md` (+ `compat/*/profile.toml`); pending maintainer actions at the top of `plans/README.md` (all older plan entries are historical). Task workflows: `.skills/` (validation tiers + exact-SHA rule: `.skills/verification-qualification.md`).
+Start at `docs/architecture/overview.md` (§ Deep-Dive Index). Normative CI/release rules: `docs/verification-policy.md`. Conventions: `CONTRIBUTING.md`. Live qualification binding: `plans/httpx-parity-correction-status.md` (+ `compat/*/profile.toml`); active planning control surface: `plans/registry.md` (canonical direction: `plans/000`-`003`, ADRs, subsystem roadmaps); pending maintainer actions at the top of `plans/README.md` (all older plan entries are historical). Task workflows: `.skills/` (validation tiers + exact-SHA rule: `.skills/verification-qualification.md`).
 
 ## Commands
 

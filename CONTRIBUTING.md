@@ -139,9 +139,10 @@ If you find yourself writing HTTP logic outside of eggfetch-core, stop and refac
 ## Working Context
 
 Milestone scope (A through Z) is complete; the workspace is in
-corrective/maintenance mode. Before starting work, read `plans/README.md` for
-active corrective/qualification items and `plans/ROADMAP.md` for the full
-project history. Make the workspace build green before adding new functionality. Run `./scripts/check.sh` before committing. See `docs/architecture/overview.md` for the crate layout and architecture deep-dive index.
+corrective/maintenance mode. Before starting work, read `plans/registry.md`
+for active milestones and gates (system overview in `plans/README.md`,
+forward roadmap in `plans/002-long-term-roadmap.md`, history in
+`plans/ROADMAP.md`). Make the workspace build green before adding new functionality. Run `./scripts/check.sh` before committing. See `docs/architecture/overview.md` for the crate layout and architecture deep-dive index.
 
 ## CI
 
