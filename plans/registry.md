@@ -39,38 +39,38 @@ Validation tiers: `.skills/verification-qualification.md`. Normative policy:
 
 | Subsystem | Status | Roadmap | Current milestone | Dependencies or blockers |
 |---|---|---|---|---|
-| Core transport and request policy | active corrective | `plans/subsystems/core-transport-policy-roadmap.md` | M006 closed (Windows TLS fixture-teardown disposition) | Stage C rebound to `5247ff0e01e309d9b408b8b4b4c90151ee5ce9fa`; downstream EggReplay must call TLS shutdown in its local origin helper. |
+| Core transport and request policy | active corrective | `plans/subsystems/core-transport-policy-roadmap.md` | M006C1 Windows qualification/downstream closure | M006 diagnosis retained; native-Windows EggFetch proof + corrected EggReplay Windows proof still required. |
 | Python bindings and HTTPX compatibility | closed | `plans/subsystems/python-httpx-compat-roadmap.md` | M001-M003 closed on live Stage C binding | Facade work reopens only via gated roadmap Phase 4 trigger. |
 | TLS, proxy, and protocols | closed | `plans/subsystems/tls-proxy-protocols-roadmap.md` | All milestones closed; H3 experimental retained | H3 graduation blocked on named external evidence. |
-| Release and verification | ready (operational) | `plans/subsystems/release-verification-roadmap.md` | M001 publication + M002 wheel rehearsal ready | Maintainer may run against corrected Stage C SHA `5247ff0e01e309d9b408b8b4b4c90151ee5ce9fa`. |
+| Release and verification | blocked on M006C1 | `plans/subsystems/release-verification-roadmap.md` | M001 publication + M002 wheel rehearsal paused | Native-Windows EggFetch and corrected EggReplay M013F Windows evidence must close M006C1 first. |
 | Performance and footprint | closed | `plans/subsystems/performance-footprint-roadmap.md` | Campaigns closed; fixtures repaired | New optimization needs its own milestone plan. |
 
 ## Dependency-ready implementation plans
 
 | Subsystem | Milestone | Status | Implementation plan | Dependencies / handoff note |
 |---|---|---|---|---|
-| Core transport and request policy | M006 Windows TLS response completeness corrective | **closed** | `plans/implementation/core-transport-policy/006-windows-tls-response-completeness-corrective.md` | `plans/closure/core-transport-policy/006-windows-tls-response-completeness.md` records fixture-teardown verdict; Stage C rebound to `5247ff0e01e309d9b408b8b4b4c90151ee5ce9fa`. |
-| Release and verification | M001 0.2.x publication/tag/PyPI | ready (operational) | `plans/implementation/release-verification/001-release-publication.md` | Maintainer publication against corrected Stage C SHA. |
-| Release and verification | M002 Python 3.15 wheel rehearsal | ready (operational) | `plans/implementation/release-verification/002-python-315-wheel-rehearsal.md` | Maintainer dispatches the `publish=false` 18-wheel rehearsal from the corrected implementation SHA. |
+| Core transport and request policy | M006 Windows TLS response completeness corrective | closed | `plans/implementation/core-transport-policy/006-windows-tls-response-completeness-corrective.md` | Historical investigation/fixture-teardown disposition; closure evidence is supplemented by M006C1 before release. |
+| Core transport and request policy | M006C1 Windows qualification/downstream closure corrective | **ready** | `plans/implementation/core-transport-policy/006c1-windows-qualification-and-downstream-closure.md` | Native-Windows EggFetch matrix + corrected EggReplay hosted-Windows 300 KiB direct/Eggress/MITM proof. |
+| Release and verification | M001 0.2.x publication/tag/PyPI | blocked | `plans/implementation/release-verification/001-release-publication.md` | Blocked on M006C1 closure. |
+| Release and verification | M002 Python 3.15 wheel rehearsal | blocked | `plans/implementation/release-verification/002-python-315-wheel-rehearsal.md` | Blocked on M006C1 closure; rehearsal must use the still-authoritative Stage C SHA unless executable inputs change. |
 
 ## Current execution order and dependency gates
 
-**Corrective gate:** M006 is **closed** (Windows TLS response completeness
-fixture-teardown disposition, Stage C rebound to
-`5247ff0e01e309d9b408b8b4b4c90151ee5ce9fa`). No further follow-up is
-scheduled inside the core-transport workstream; the corrective is documented
-and the engine is back in service.
+**Corrective gate:** M006's fixture-teardown diagnosis remains the current
+technical verdict and Stage C remains bound to
+`5247ff0e01e309d9b408b8b4b4c90151ee5ce9fa`, but M006C1 is now the sole
+release-gating corrective. It must add direct native-Windows EggFetch evidence
+and a corrected EggReplay M013F hosted-Windows rerun at the original 300 KiB
+envelope.
 
-**Release publication gate:** M001 is ready against the corrected Stage C
-SHA. The maintainer may run the manual `cargo publish` sequence
-(http-connect → core → cli → ffi → python → node → tag → PyPI dispatch)
-from the documented SHA. Issue #24 publication continues to wait on
-maintainer action; do not publish any older qualified candidate.
+**Release publication gate:** M001 is blocked until M006C1 closes. Do not
+publish/tag/PyPI from the prior candidate while the mandatory Windows evidence
+is incomplete.
 
-**Wheel rehearsal gate:** M002 is ready against the corrected SHA. The
-`publish=false` 18-wheel rehearsal must still run from the
-post-corrective implementation commit; Python 3.15 support remains
-unclaimed until that rehearsal evidence lands.
+**Wheel rehearsal gate:** M002 is blocked until M006C1 closes. If M006C1 is
+evidence-only, the current Stage C SHA remains authoritative; if any executable
+or qualification input changes, apply normal exact-SHA invalidation/rebinding
+rules before rehearsal.
 
 **Gated futures:** HTTPX 1.0 (RC/stable + frozen API + fresh delta),
 H3 graduation (independent interop/drain/impairment/upstream evidence), Node
@@ -81,16 +81,17 @@ active work.
 
 | Subsystem | Milestone | Blocker |
 |---|---|---|
+| Release and verification | M001 publication/tag/PyPI | M006C1 native-Windows + corrected EggReplay Windows evidence. |
+| Release and verification | M002 wheel rehearsal | M006C1 closure. |
 | TLS, proxy, protocols | H3 graduation | Independent non-Quinn interop, GOAWAY/drain, public-origin, impairment, upstream-risk evidence. |
 | Python compat | HTTPX 1.0 program | Upstream RC/stable trigger has not fired. |
-| Downstream (informational) | EggReplay M013F repro artifact | EggReplay local origin helper must call async TLS shutdown + brief linger after `flush()`; engine is contract-conformant. |
+| Downstream dependency | EggReplay M013F repro artifact | EggReplay local origin helper must call async TLS shutdown + brief linger and rerun the original 300 KiB Windows direct/Eggress/MITM envelope. |
 
 ## Closure work and current control points
 
-M006 closed through
-`plans/closure/core-transport-policy/006-windows-tls-response-completeness.md`
-on 2026-09-25; Stage C rebound to
-`5247ff0e01e309d9b408b8b4b4c90151ee5ce9fa`. Legacy closure evidence lives in
-the grandfathered flat plan records (see `plans/README.md` § Legacy archive);
-each subsystem roadmap's milestone-status table links the controlling legacy
-plans.
+M006 remains closed as historical investigation evidence through
+`plans/closure/core-transport-policy/006-windows-tls-response-completeness.md`.
+M006C1 is open and will close through
+`plans/closure/core-transport-policy/006c1-windows-qualification-and-downstream-closure.md`.
+Stage C remains bound to `5247ff0e01e309d9b408b8b4b4c90151ee5ce9fa`
+unless M006C1 changes executable or qualification inputs.
