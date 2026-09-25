@@ -60,10 +60,12 @@ six-profile oracle vs the oracle baseline; both API oracles zero
 unexplained; wheel matrix builds 3.10–3.15 pending rehearsal dispatch.
 Core-transport M006 Windows TLS response completeness investigation is closed
 and Stage C is bound to
-`5247ff0e01e309d9b408b8b4b4c90151ee5ce9fa`, but M006C1 is now the active
-release-evidence corrective. Issue #24 publication and the Python 3.15 wheel
-rehearsal remain blocked until native-Windows EggFetch and corrected EggReplay
-Windows evidence close M006C1.
+`5247ff0e01e309d9b408b8b4b4c90151ee5ce9fa`; M006C1 is closing with the
+native-Windows EggFetch matrix green (run 36193582776, 19/19) and only the
+corrected EggReplay Windows proof outstanding.
+Issue #24 publication and the Python 3.15 wheel
+rehearsal remain blocked until the corrected EggReplay
+Windows evidence closes M006C1.
 
 ## 5. Target architecture
 

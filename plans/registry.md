@@ -39,10 +39,10 @@ Validation tiers: `.skills/verification-qualification.md`. Normative policy:
 
 | Subsystem | Status | Roadmap | Current milestone | Dependencies or blockers |
 |---|---|---|---|---|
-| Core transport and request policy | active corrective | `plans/subsystems/core-transport-policy-roadmap.md` | M006C1 Windows qualification/downstream closure | M006 diagnosis retained; native-Windows EggFetch proof + corrected EggReplay Windows proof still required. |
+| Core transport and request policy | closing | `plans/subsystems/core-transport-policy-roadmap.md` | M006C1 Windows qualification/downstream closure | Native-Windows EggFetch matrix green (run 36193582776, 19/19); corrected EggReplay M013F Windows proof still required. |
 | Python bindings and HTTPX compatibility | closed | `plans/subsystems/python-httpx-compat-roadmap.md` | M001-M003 closed on live Stage C binding | Facade work reopens only via gated roadmap Phase 4 trigger. |
 | TLS, proxy, and protocols | closed | `plans/subsystems/tls-proxy-protocols-roadmap.md` | All milestones closed; H3 experimental retained | H3 graduation blocked on named external evidence. |
-| Release and verification | blocked on M006C1 | `plans/subsystems/release-verification-roadmap.md` | M001 publication + M002 wheel rehearsal paused | Native-Windows EggFetch and corrected EggReplay M013F Windows evidence must close M006C1 first. |
+| Release and verification | blocked on M006C1 | `plans/subsystems/release-verification-roadmap.md` | M001 publication + M002 wheel rehearsal paused | Native-Windows EggFetch proof green; corrected EggReplay M013F Windows evidence must still close M006C1 first. |
 | Performance and footprint | closed | `plans/subsystems/performance-footprint-roadmap.md` | Campaigns closed; fixtures repaired | New optimization needs its own milestone plan. |
 
 ## Dependency-ready implementation plans
@@ -50,7 +50,7 @@ Validation tiers: `.skills/verification-qualification.md`. Normative policy:
 | Subsystem | Milestone | Status | Implementation plan | Dependencies / handoff note |
 |---|---|---|---|---|
 | Core transport and request policy | M006 Windows TLS response completeness corrective | closed | `plans/implementation/core-transport-policy/006-windows-tls-response-completeness-corrective.md` | Historical investigation/fixture-teardown disposition; closure evidence is supplemented by M006C1 before release. |
-| Core transport and request policy | M006C1 Windows qualification/downstream closure corrective | **ready** | `plans/implementation/core-transport-policy/006c1-windows-qualification-and-downstream-closure.md` | Native-Windows EggFetch matrix + corrected EggReplay hosted-Windows 300 KiB direct/Eggress/MITM proof. |
+| Core transport and request policy | M006C1 Windows qualification/downstream closure corrective | **closing** | `plans/implementation/core-transport-policy/006c1-windows-qualification-and-downstream-closure.md` | Windows EggFetch matrix green (run 36193582776, 19/19); corrected EggReplay hosted-Windows 300 KiB proof still required. |
 | Release and verification | M001 0.2.x publication/tag/PyPI | blocked | `plans/implementation/release-verification/001-release-publication.md` | Blocked on M006C1 closure. |
 | Release and verification | M002 Python 3.15 wheel rehearsal | blocked | `plans/implementation/release-verification/002-python-315-wheel-rehearsal.md` | Blocked on M006C1 closure; rehearsal must use the still-authoritative Stage C SHA unless executable inputs change. |
 
@@ -58,10 +58,12 @@ Validation tiers: `.skills/verification-qualification.md`. Normative policy:
 
 **Corrective gate:** M006's fixture-teardown diagnosis remains the current
 technical verdict and Stage C remains bound to
-`5247ff0e01e309d9b408b8b4b4c90151ee5ce9fa`, but M006C1 is now the sole
-release-gating corrective. It must add direct native-Windows EggFetch evidence
-and a corrected EggReplay M013F hosted-Windows rerun at the original 300 KiB
-envelope.
+`5247ff0e01e309d9b408b8b4b4c90151ee5ce9fa` (the manual-qualification head is a
+CI-surface-only descendant: manual workflow file only, no
+executable/test/validation-input change). The native-Windows EggFetch matrix
+is green (run 36193582776, 19/19); M006C1 still requires the corrected
+EggReplay M013F hosted-Windows rerun at the original 300 KiB envelope before
+it can close.
 
 **Release publication gate:** M001 is blocked until M006C1 closes. Do not
 publish/tag/PyPI from the prior candidate while the mandatory Windows evidence
@@ -91,7 +93,10 @@ active work.
 
 M006 remains closed as historical investigation evidence through
 `plans/closure/core-transport-policy/006-windows-tls-response-completeness.md`.
-M006C1 is open and will close through
-`plans/closure/core-transport-policy/006c1-windows-qualification-and-downstream-closure.md`.
+M006C1 is closing: the native-Windows EggFetch matrix is green
+(run 36193582776, 19/19) and M006C1 will close through
+`plans/closure/core-transport-policy/006c1-windows-qualification-and-downstream-closure.md`
+once the corrected EggReplay M013F Windows proof lands.
 Stage C remains bound to `5247ff0e01e309d9b408b8b4b4c90151ee5ce9fa`
-unless M006C1 changes executable or qualification inputs.
+(the manual-qualification head is a CI-surface-only descendant: manual
+workflow file only, no executable/test/validation-input change).

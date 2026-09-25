@@ -1,6 +1,6 @@
 # Core Transport Policy M006C1 — Windows qualification and downstream closure corrective
 
-Status: ready
+Status: closing (native-Windows EggFetch matrix green — run 36193582776, 19/19; corrected EggReplay M013F Windows proof pending)
 
 Repository baseline: `b001790b44ce1c455e3b2cc97d30e9e14217060c`
 

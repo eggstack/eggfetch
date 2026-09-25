@@ -1,6 +1,6 @@
 # Core Transport and Request Policy Roadmap
 
-Status: active corrective — M006C1 Windows qualification/downstream closure
+Status: closing — M006C1 Windows matrix green, downstream closure pending
 
 Long-term references:
 
@@ -203,7 +203,9 @@ isolation probes. Stage C rebound to
 
 ### M006C1 — Windows qualification and downstream closure corrective
 
-Class: invariant / qualification corrective. Status: ready.
+Class: invariant / qualification corrective. Status: closing (native-Windows
+EggFetch matrix green — run 36193582776, 19/19; corrected EggReplay M013F
+Windows proof still required).
 
 Implementation plan:
 
@@ -217,8 +219,9 @@ M006C1 does not reopen the fixture-teardown diagnosis or authorize production
 transport changes. If either graceful Windows proof contradicts M006, the
 technical investigation reopens and release remains blocked.
 
-Exit conditions: direct EggFetch Windows matrix green, corrected EggReplay
-Windows M013F green at the original envelope, normal EggFetch Tier 1 green,
+Exit conditions: direct EggFetch Windows matrix green (met — run 36193582776,
+19/19 on the manual-qualification head), corrected EggReplay
+Windows M013F green at the original envelope (pending), normal EggFetch Tier 1 green,
 and closure evidence recorded. Until then M001/M002 release work remains
 blocked.
 
@@ -241,8 +244,9 @@ exhaustive by construction; review must reject inline hop construction.
 
 ## 11. Completion definition
 
-M001–M006 remain closed as implementation/history. M006C1 is the active
-qualification corrective and current release gate. The live Stage C binding
+M001–M006 remain closed as implementation/history. M006C1 is the closing
+qualification corrective and current release gate: the Windows EggFetch half
+is green, the corrected EggReplay half is pending. The live Stage C binding
 continues to point at `5247ff0e01e309d9b408b8b4b4c90151ee5ce9fa` unless
 M006C1 changes executable or qualification inputs.
 
@@ -256,4 +260,4 @@ M006C1 changes executable or qualification inputs.
 | M004 profiles + decomposition | closed | legacy plans §7 | legacy closure records | — |
 | M005 embedded extensions | closed | legacy plans §7 | legacy closure records | — |
 | M006 Windows TLS response completeness | closed | `plans/implementation/core-transport-policy/006-windows-tls-response-completeness-corrective.md` | `plans/closure/core-transport-policy/006-windows-tls-response-completeness.md` | Historical diagnosis; release evidence completed by M006C1 |
-| M006C1 Windows qualification/downstream closure | **ready** | `plans/implementation/core-transport-policy/006c1-windows-qualification-and-downstream-closure.md` | `plans/closure/core-transport-policy/006c1-windows-qualification-and-downstream-closure.md` | Native-Windows EggFetch matrix + corrected EggReplay Windows M013F proof |
+| M006C1 Windows qualification/downstream closure | **closing** | `plans/implementation/core-transport-policy/006c1-windows-qualification-and-downstream-closure.md` | `plans/closure/core-transport-policy/006c1-windows-qualification-and-downstream-closure.md` | Windows EggFetch matrix green (run 36193582776, 19/19); corrected EggReplay Windows M013F proof pending |

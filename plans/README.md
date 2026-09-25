@@ -1,9 +1,9 @@
 # eggfetch Planning System
 
 > **Current execution gate:** M006's fixture-teardown diagnosis remains the
-> technical baseline, but **M006C1 — Windows qualification and downstream
-> closure corrective is ready**. Native-Windows EggFetch evidence and the
-> corrected EggReplay M013F hosted-Windows 300 KiB rerun are still required.
+> technical baseline, and **M006C1 is closing: the native-Windows EggFetch
+> matrix is green (run 36193582776, 19/19)**. The
+> corrected EggReplay M013F hosted-Windows 300 KiB rerun is still required.
 > Issue #24 publication/tag/PyPI and the Python 3.15 wheel rehearsal are
 > blocked until M006C1 closes. Stage C remains
 > `5247ff0e01e309d9b408b8b4b4c90151ee5ce9fa` unless executable or
