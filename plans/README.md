@@ -1,7 +1,9 @@
 # eggfetch Planning System
 
-> **Pending maintainer actions:** issue #24 publication/tag/PyPI and the
-> Python 3.15 wheel rehearsal (see `plans/registry.md` — M001/M002 ready).
+> **Current execution gate:** core-transport M006 Windows TLS response
+> completeness corrective is ready and release-blocking. Issue #24
+> publication/tag/PyPI and the Python 3.15 wheel rehearsal are paused until
+> M006 closes and Stage C is rebound (see `plans/registry.md`).
 > **Live status for agents:** the exact-SHA Stage C binding is
 > `plans/httpx-parity-correction-status.md` (+ `compat/*/profile.toml`).
 > Completed sections and legacy plan files are historical records, not
