@@ -127,7 +127,7 @@ See also: [overview.md](overview.md).
 
 ## Release Artifacts
 
-- [ ] crates.io packages published manually in dependency order (http-connect → core → cli → ffi → python → node); pre-release `package`-tier validation fully covers only `eggfetch-core` (`cargo publish --dry-run`), dependents get package-structure validation until their deps are on the index
+- [ ] crates.io packages published manually in dependency order (http-connect → core → cli → ffi → python → node); pre-release `package`-tier validation fully dry-runs only `eggfetch-http-connect` (`cargo publish --dry-run`), dependents get package-structure validation until their deps are on the index
 - [ ] Python wheels built and published (if applicable)
 - [ ] Version tag created and pushed
 - [ ] GitHub Release created with release notes from CHANGELOG (optional)

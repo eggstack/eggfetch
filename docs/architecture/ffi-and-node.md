@@ -33,6 +33,7 @@ All handles are opaque pointers (`*mut ClientHandle`, `*mut RequestHandle`, etc.
 
 | Module | Purpose |
 |--------|---------|
+| `lib.rs` | C API entry points, `ffi_guard!`, string/memory management, module declarations |
 | `handle.rs` | Opaque handle type definitions |
 | `client.rs` | Client creation and configuration |
 | `request.rs` | Request building |
@@ -102,7 +103,8 @@ Direct dispatch is not blocked on feasibility — core `Client` is
 
 - Prototype using napi-rs to wrap eggfetch-ffi; its Cargo manifest explicitly
   selects the required H1/Rustls/native-root profile instead of relying on FFI
-  dependency defaults.
+  dependency defaults (so unlike FFI defaults it carries no
+  cookies/proxy/gzip — consistent with the no-headers/TLS/proxy surface below).
 - `unsafe_code = "allow"` — one of two workspace exceptions (with `eggfetch-ffi`) for N-API.
 - Modules: `client.rs`, `response.rs`, `lib.rs`.
 - Ordinary requests execute the **blocking C ABI**

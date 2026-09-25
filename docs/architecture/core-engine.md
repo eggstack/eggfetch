@@ -18,9 +18,11 @@ Focused subset for the engine lifecycle (client → request → pipeline → res
 | `network_stream` | Yes | `NetworkStream`, `UpgradedStream`, `ConnectionMetadata` — upgrade IO + connection metadata |
 | `trace` | Yes | `TraceObserver`, `TraceEvent` — synchronous lifecycle event callbacks |
 | `error` | Yes | `Error` enum, `RequestFailure` opt-in detail wrapper, `NetworkFailureKind` classifier, `Result<T>` alias |
-| `pipeline/` | Crate-internal | Request lifecycle orchestration split by responsibility: `retry` (requires `logical-retry`), `redirect` (requires `redirects`), `lean` (requires `high-level-url` without `redirects`), `prepare`, `route`, `hyper_dispatch`, `proxy_dispatch`, `h3_dispatch`, `finalize`, plus short `mod` entry points |
+| `transport_hints` | Yes | `ResolvedTarget`, `TransportHints`, `NativeRequestOptions` — protocol-neutral wire overrides usable without `high-level-url` |
+| `service` | Yes | `NativeHttpService` — always-ready `tower_service::Service` adapter over native frame execution |
+| `pipeline/` | Crate-internal | Request lifecycle orchestration split by responsibility: `retry` (requires `high-level-url` + `logical-retry`), `redirect` (requires `high-level-url` + `redirects`), `lean` (requires `high-level-url` without `redirects`), `prepare`, `route`, `hyper_dispatch` (requires `transport-http1`/`transport-http2`), `proxy_dispatch` (requires `proxy`), `h3_dispatch` (requires `http3`), `finalize` (requires `high-level-url`), plus short `mod` entry points |
 | `transport` | Yes | Direct, caller-owned raw-stream dialer, direct-with-socket-options, UDS, proxy, HTTP/3 transport dispatch |
-| `stream` | Crate-internal | Response-body timeout (`BodyTimeoutStream`: read inactivity + absolute total) plus a separate per-chunk write timeout (crate-private `write_timeout_stream` in `stream::write_timeout`) |
+| `stream` | Crate-internal | Response-body timeout (crate-private `BodyTimeoutStream` via `body_timeout_stream`: read inactivity + absolute total) plus a separate per-chunk write timeout (crate-private `write_timeout_stream` in `stream::write_timeout`) |
 
 ## Client
 
@@ -199,10 +201,11 @@ implement authorization, CIDR, or SSRF policy.
 
 ### Proxy Override
 
-`RequestBuilder::proxy()` accepts `ProxyOverride`:
-- `Inherit` — use client-level proxy (default)
-- `Direct` — bypass proxy for this request
-- `Override(ProxyConfig)` — use a different proxy for this request
+`RequestBuilder::proxy(&Proxy)` / `without_proxy()` select the per-request
+route; the stored field type is `ProxyOverride` (`Inherit` — use client-level
+proxy by default; `Direct` — bypass proxy; `Override(ProxyConfig)` — use a
+different proxy). `proxy_target_addresses()` pins caller-owned CONNECT/SOCKS
+destinations used exactly with no DNS lookup.
 
 ## Response
 
@@ -239,7 +242,7 @@ Metadata-only redirect record: status, version, URL, headers, reason phrase. Hea
 
 ## Pipeline Lifecycle
 
-The `pipeline/` directory orchestrates the full request lifecycle. Entry points are feature-dependent (`Client::send`): with `logical-retry`, `send_with_retry()` (`pipeline::retry`); with `redirects` only, `send_with_redirects()` (`pipeline::redirect`); otherwise `send_lean()` (`pipeline::lean`). Each retry attempt wraps a redirect-or-lean inner dispatch.
+The `pipeline/` directory orchestrates the full request lifecycle. Entry points are feature-dependent (the public surface is `RequestBuilder::send`; `Client::send` / `send_single_request` are `pub(crate)`): with `logical-retry`, `send_with_retry()` (`pipeline::retry`); with `redirects` only, `send_with_redirects()` (`pipeline::redirect`); otherwise `send_lean()` (`pipeline::lean`). Each retry attempt wraps a redirect-or-lean inner dispatch.
 
 ```
 send_with_retry()           ← retry loop (pipeline::retry)
@@ -263,12 +266,12 @@ request policy so transports own only connection/protocol work:
    cloned.
 3. Dispatch selects one `TransportRoute` via `pipeline::route::select_route()` (UDS → custom
    dialer → static/specialized direct → proxy/SOCKS → SNI-direct → H3 →
-   standard Hyper). A configured custom dialer is never silently bypassed;
-   unsupported combinations with proxy, UDS, resolved targets, local socket
-   controls, or H3 fail during preparation before network I/O.
-   H3 is `Http3Only` direct or `Auto`-discovered (fresh Alt-Svc + not
-   suppressed; `pipeline::h3_dispatch`); safe `Auto` fallback to standard is pre-commit replayable
-   only. Hyper request scaffolding is built once via `pipeline::hyper_dispatch::build_hyper_request()`.
+    standard Hyper). A configured custom dialer is never silently bypassed;
+    unsupported combinations with proxy, UDS, resolved targets, local socket
+    controls, or H3 fail during preparation before network I/O.
+    H3 is `Http3Only` direct or `Auto`-discovered (fresh Alt-Svc + not
+    suppressed; `pipeline::h3_dispatch`); safe `Auto` fallback to standard is pre-commit replayable
+    only. Hyper request scaffolding is built once via `pipeline::hyper_dispatch::build_hyper_request()` (high-level path; the native `http_body` path uses `build_http_request_owned()` and `send_native_http_body()`, which bypasses prepare/redirect/retry/finalize by design).
 4. One common post-transport policy (`pipeline::finalize::finalize_response()`) applies to every route: Alt-Svc learning
    (learnable routes only), decompression wrapping, decoded-size limiting,
    then read/total-timeout + pool-lease attachment. The absolute total

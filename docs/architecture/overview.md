@@ -125,9 +125,9 @@ All HTTP behavior lives here (top-level modules plus `transport/`, `stream/`, an
 | Module | Public? | Purpose |
 |--------|---------|---------|
 | `client` | Yes | `Client`, `ClientBuilder` — entry point for all requests. Holds hyper client families (standard, direct/specialized, UDS, SOCKS, SNI-override, resolved-destination, forward/CONNECT, H3) plus pool and config. Builder pattern with comprehensive configuration. |
-| `request` | Yes (requires `high-level-url`) | `Request`, `RequestBuilder`, `ProxyOverride` — fluent string-URL construction (`header()`, `query()`, `body()`, `json()`, `timeout()`, `auth()`, `decompress()`, `proxy()`, `retry()`, `resolved_addresses()` — the last requires `advanced-routing` and is absent from lean profiles). `send()` delegates to client. Protocol-neutral `ResolvedTarget`/`TransportHints`/`NativeRequestOptions` live in `transport_hints` so the native slice compiles without `url`; hints survive retry reconstruction, while same-origin redirects retain only a resolved destination and cross-origin redirects fail closed. See also the `transport_hints` row below. |
+| `request` | Yes (requires `high-level-url`) | `Request`, `RequestBuilder`, `ProxyOverride` — fluent string-URL construction (`header()`, `query()`, `body()`, `json()`, `timeout()`, `auth()`, `decompress()`, `proxy(&Proxy)` / `without_proxy()` / `proxy_target_addresses()`, `retry()`, `resolved_addresses()` — the last requires `advanced-routing` and is absent from lean profiles). `send()` delegates to the crate-internal client dispatch. Protocol-neutral `ResolvedTarget`/`TransportHints`/`NativeRequestOptions` live in `transport_hints` so the native slice compiles without `url`; hints survive retry reconstruction, while same-origin redirects retain `resolved_target` + `proxied_target` and clear `target`/`sni_hostname`/`trace`, and cross-origin redirects fail closed. See also the `transport_hints` row below. |
 | `response` | Yes (requires `high-level-url`) | `Response`, `HistoryEntry` — status, version, headers, URL, body, redirect history, trailers (`trailers()` after EOF). Consumption: `bytes()`, `text()`, `bytes_stream()`, `raw_bytes_stream()`, `text_lines()`. |
-| `body` | Yes | `RequestBody`, `ResponseBody`, `NativeResponseBody`, `BoxBytesStream`, `SharedTrailers` — single-consumption body model. Request: `Empty \| Bytes \| Stream`. Response: `Buffered \| Streaming \| EncodedStreaming \| Consumed`. Streaming bodies hold an `Arc<PoolGuard>` lease (internal `PoolGuardArc` alias, crate-private) until EOF/drop; trailers populate without buffering via shared store. |
+| `body` | Yes | `RequestBody`, `ResponseBody`, `NativeResponseBody`, `BoxBytesStream`, `SharedTrailers` — single-consumption body model. Request: `Empty \| Bytes \| Stream`. Response: `Buffered \| Streaming \| EncodedStreaming \| Consumed`. Streaming bodies hold an `Arc<PoolGuard>` lease (internal crate-private `PoolGuardArc` alias) until terminal `Err`/EOF via the fused `LeasedResponseStream`; buffered bodies drop the lease at finalization, before the caller reads. Trailers populate without buffering via shared store. Per-chunk timeouts are enforced by the crate-private `BodyTimeoutStream` (via `body_timeout_stream`) / `WriteTimeoutStream` (via `write_timeout_stream`) wrappers. |
 | `service` | Yes | `NativeHttpService` — always-ready `tower_service::Service` adapter over native frame execution. |
 | `headers` | Yes | `Headers` — case-insensitive header map wrapper around `http::HeaderMap`. |
 | `error` | Yes | `Error` enum, `RequestFailure` opt-in detail wrapper, `NetworkFailureKind` classifier, and `Result<T>` alias. Comprehensive taxonomy (`InvalidUrl` … `Http2*`, `H3*`, `ResolvedTargetRedirect`, JSON errors, `TraceCallbackAborted`) with `kind()` returning static strings for programmatic matching. |
@@ -138,7 +138,7 @@ All HTTP behavior lives here (top-level modules plus `transport/`, `stream/`, an
 | `limits` | Yes | `Limits` — logical in-flight limits (`max_in_flight_requests*`, aliases `max_connections*`) + physical idle caps. |
 | `multipart` | Yes | `Multipart`, `Boundary`, `Part`, `PartBody`, `MultipartEncoder` — streaming multipart/form-data with known-length optimization. (cfg `multipart`) |
 | `network_stream` | Yes | `NetworkStream`, `UpgradedStream`, `UpgradedStreamVariant` (`Tcp`/`Tls`/`Adapter`), `ConnectionMetadata`, `TlsInfo`, `ExtraInfo` — writable IO for 101 only; direct upgrades carry real addrs/TLS, UDS reports `Unix` without IPs, opaque stays unavailable. |
-| `pool` | Yes | `Pool`, `PoolConfig`, `PoolGuard`, `PoolMetrics` — semaphore-based concurrency limiter keyed by crate-internal `OriginKey` (`(scheme, host, port)` + optional proxy route). Native origins come from crate-internal `http_origin::HttpOrigin` (`http::Uri`); the high-level `OriginKey::from_url` adapter reduces to the same components. |
+| `pool` | Yes | `Pool`, `PoolConfig`, `PoolGuard`, `PoolMetrics` — semaphore-based concurrency limiter keyed by crate-internal `OriginKey` (`(scheme, host, port)` + proxy route `(proxy scheme/host/port, is_tunnel)`; host lowercased, default ports normalized; `None` origin when only the global permit is taken). Native origins come from crate-internal `http_origin::HttpOrigin` (`http::Uri`); the high-level `OriginKey::from_url` adapter reduces to the same components. |
 | `transport/metrics` | Yes | `TransportMetrics`, `TransportSnapshot` (+ `H3CloseKind`, `H3CloseSummary`, `H3ConnectionDiagnostic`, `H3RouteKind` under `http3`) — connector/DNS/TLS, UDS/proxy, physical admission waits/timeouts/live/high-water, established I/O inactivity timeouts, H3 creation/eviction, Alt-Svc learned/expired/cleared/rejected, H3 attempted/suppressed/fallback/drain/close/reconnect, 101 upgrades. Separate from `PoolMetrics`; physical Hyper reuse is not represented as a logical permit metric. |
 | `proxy` | Yes | `Proxy`, `ProxyConfig`, `ProxyAuth`, `NoProxy`, `NoProxyRule`, `ProxyDecision` — HTTP forwarding, HTTPS CONNECT tunneling, SOCKS5. Per-request override model. (cfg `proxy`) |
 | `redact` | Yes | `redact_headers()`, `SENSITIVE_HEADERS` plus `redact_url()`/`redact_url_string()` (require `high-level-url`) — centralized secret redaction for all `Debug`/`Display`/error output. |
@@ -150,7 +150,7 @@ All HTTP behavior lives here (top-level modules plus `transport/`, `stream/`, an
 | `transport_hints` | Yes | `ResolvedTarget`, `TransportHints`, `NativeRequestOptions` — protocol-neutral wire overrides (SNI hostname, pinned resolved destination, trace) usable without `high-level-url`. |
 | `pipeline/` | No (crate-private `mod`) | Lifecycle orchestration split by responsibility (`mod` entry points): `retry` (retry loop/backoff/discard drain, requires `logical-retry`) → either `redirect` (redirect loop, shared hop builder, requires `redirects`) or `lean` (single-hop dispatch when `redirects` is absent) → `prepare` (`PreparedRequest` normalization, pool acquisition) → `route` (crate-private `select_route()`) → `hyper_dispatch` (requires `transport-http1`/`transport-http2`) / `proxy_dispatch` (requires `proxy`) / `h3_dispatch` (requires `http3`) → `finalize` (common post-transport policy, requires `high-level-url`). The redirects-enabled fast path and the redirect-enabled first hop share one crate-private `HopBuildParams` builder; the feature-absent `lean` path duplicates header/cookie/auth inline. Shared discard drain lives in `mod` (requires `logical-retry` or `redirects`). |
 | `transport` | Mixed | `mod` (Hyper client aliases), `dialer` (public caller-owned raw-stream seam plus private Hyper adapter), `lifecycle` (physical admission and established-I/O guards), `direct`, `direct_connector` (socket options + local bind), `proxy`, `socks` (per-route persistent pools), `uds`, `http3` (QUIC/draining, explicit `H3DispatchError`), `alt_svc` (authenticated cache + suppressor), `connect`, `connect_timeout`, `metrics`, plus crate-internal `hyper_client` (centralized Hyper construction) and `standard_resolver` (typed DNS evidence for failure classification). `direct` owns the shared Hyper response lifecycle (crate-private `finish_hyper_response`, `pub(crate)` `wrap_incoming`, `await_upgrade`). |
-| `stream` | No (crate-private `mod`) | Per-chunk timeout wrappers (`BodyTimeoutStream` via `body_timeout_stream` in `stream::body_timeout`, `WriteTimeoutStream` via `write_timeout_stream` in `stream::write_timeout`). |
+| `stream` | No (crate-private `mod`) | Per-chunk timeout wrappers (crate-private `BodyTimeoutStream` via `body_timeout_stream` in `stream::body_timeout`, `WriteTimeoutStream` via `write_timeout_stream` in `stream::write_timeout`). |
 | `h2_headers` | No | HTTP/2 forbidden-header stripping. |
 | `response_decode` | No | Content-Encoding parsing and decompression dispatch. |
 
@@ -168,7 +168,7 @@ compression decoders, no `http2`/`http3` — it never sends `Accept-Encoding`).
 - **Output formatting**: human, headers-only, JSON, NDJSON modes; streaming to stdout or file (`-o`)
 - **Download mode**: filename derivation from URL/headers (`--download`)
 - **Binary encoding**: `--base64` for binary bodies
-- **Exit codes**: 8 codes (0=success, 2=usage incl. cert/hostname-verification config errors, 3=connect/TLS/pool/proxy transport, 4=timeout, 5=protocol, 6=status, 7=I/O, 130=interrupted via SIGINT handler) — 7 named constants plus the SIGINT path. `--proxy-auth`/`--no-proxy` require `--proxy`; `--no-follow` overrides `--follow`.
+- **Exit codes**: 8 codes (0=success, 2=usage incl. cert/hostname-verification config errors, 3=connect/TLS/pool/proxy transport, 4=timeout, 5=protocol, 6=status, 7=I/O, 130=interrupted via SIGINT handler) — 7 named constants plus the SIGINT path. `--proxy-auth`/`--no-proxy` require `--proxy`; pass exactly one of `--follow`/`--no-follow` (explicit-both is rejected at parse time; `--no-follow` wins at runtime dispatch).
 - **Streaming**: body streams to stdout incrementally via `bytes_stream()`
 - **Shell completions**: `--generate-completion` for bash/zsh/fish/powershell/elvish
 
@@ -240,7 +240,7 @@ Explicitly experimental prototype that wraps the blocking `eggfetch-ffi` surface
 
 ### eggfetch-bench (benchmarks)
 
-Criterion-based harnesses (not published): shared `BenchServer` blocking test server in `src/lib.rs` plus three suites and one binary in `benchmarks/` — `microbench` (core-internal), `e2e` (full-client), `resources` (resource-oriented), and `resource_monitor` (RSS regression monitor binary). Core built with `http1`, `http2`, `tls-rustls`, `tls-native-roots` (via default), `json`, `proxy` + cookies/multipart/all compressions.
+Criterion-based harnesses (not published): shared `BenchServer` blocking test server in `src/lib.rs` plus benchmark-local `BenchProxy` forward fixture in `src/bench_proxy.rs`, three suites and two binaries in `benchmarks/` — `microbench` (core-internal), `e2e` (full-client), `resources` (resource-oriented), and `resource_monitor` (RSS regression monitor binary) + `native_streaming_tail` (manual direct-Hyper/native controls). Core built with `http1`, `http2`, `tls-rustls`, `tls-native-roots` (via default), `json`, `proxy` + cookies/multipart/all compressions.
 
 **Deep dive:** [benchmarks.md](benchmarks.md)
 
@@ -414,7 +414,7 @@ Normative verification tiers and complexity budget: `../verification-policy.md`.
 ## Request Lifecycle (Summary)
 
 ```
-Client::send()
+Client::send() [pub(crate); public surface is RequestBuilder::send()]
   → retry loop (`pipeline::retry::send_with_retry` via RequestParts::retry_request, total deadline shrinks)
     → either redirect loop (`pipeline::redirect::send_with_redirects` via shared HopBuildParams builder) or lean single-hop (`pipeline::lean::send_lean` when `redirects` is absent)
       → header merge (client defaults + request overrides)
@@ -432,7 +432,9 @@ Client::send()
 Without `logical-retry`, `Client::send` enters at the redirect loop (or
 at the lean single-hop `pipeline::lean::send_lean` when `redirects` is also
 absent, returning 3xx without following and with empty history). The
-remaining stages are identical in all profiles.
+remaining stages are identical in all profiles except that the lean path
+duplicates first-hop policy inline instead of calling the shared
+`HopBuildParams` builder.
 
 Compatible forward-proxy and single-target CONNECT clients are cached by
 connection-affecting route policy only. The request-local shrinking total
@@ -478,8 +480,8 @@ only), decompression, and lease handling as the standard path.
 
 ### Pool Permit Lifecycle
 
-- Streaming response bodies hold a `PoolGuard` (via `Arc`) until consumed or dropped
-- Buffered responses (`bytes()`, `text()`) release the permit immediately after reading
+- Streaming response bodies hold a `PoolGuard` (via `Arc`) until terminal `Err`/EOF through the fused lease stream (or drop)
+- Buffered responses release the permit at finalization, before the caller reads (they never hold a lease to EOF)
 - Pool permits are keyed by origin: `(scheme, host, port)` + optional proxy route
 
 ## Key External Dependencies

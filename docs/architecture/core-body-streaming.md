@@ -59,8 +59,9 @@ status; it cannot be rejected earlier without knowing the response status.
 Existing `RequestBody`, `ResponseBody`, `bytes_stream()`, and
 `Response::trailers()` semantics are unchanged.
 
-`Client::native_service()` is an ergonomic wrapper over this same native
-execution boundary. It implements the standard
+`Client::native_service()` is a factory returning the `NativeHttpService`
+ergonomic wrapper over this same native
+execution boundary. `NativeHttpService` implements the standard
 `tower_service::Service<http::Request<B>>` trait without buffering request
 bodies or flattening response frames. `poll_ready()` always returns ready;
 the request-scoped origin pool permit and transport backpressure are acquired
@@ -76,7 +77,7 @@ dependency.
 | Variant | Description |
 |---------|-------------|
 | `Buffered { bytes }` | Collected body — fully in memory |
-| `Streaming { stream, lease }` | Live chunk stream (`BoxBytesStream`) with optional pool permit (`Option<PoolGuardArc>`). Public shape is frozen: no timeout fields. |
+| `Streaming { stream, lease }` | Live chunk stream (`BoxBytesStream`) with optional pool permit (crate-private `PoolGuardArc` alias for `Arc<PoolGuard>`). Public shape is frozen: no timeout fields. |
 | `EncodedStreaming { stream, lease, content_encoding, limit }` | Encoded source for streaming compressed responses; first body-consuming operation selects decoded vs raw mode one-shot. Public shape is frozen. |
 | `Consumed` | Body already consumed — second access returns error |
 
@@ -102,7 +103,7 @@ behavior therefore remain unchanged; parse errors do not expose the payload.
 
 ### LeasedResponseStream
 
-Streaming responses carry an internal `Arc<PoolGuard>` (the `PoolGuardArc`). This holds the pool permits acquired for the request plus the private
+Streaming responses carry an internal `Arc<PoolGuard>` (the crate-private `PoolGuardArc` alias). This holds the pool permits acquired for the request plus the private
 response read/total lifecycle policy installed at finalization. Permits are released when:
 - The response body is fully consumed.
 - The body stream reaches a terminal timeout/error/EOF, without waiting for drop.
@@ -127,7 +128,7 @@ pub type BoxBytesStream = Pin<Box<dyn Stream<Item = Result<Bytes>> + Send>>;
 
 Used for both request and response streaming. The `stream` module provides two wrapper adapters:
 
-### BodyTimeoutStream
+### BodyTimeoutStream (crate-private, via `body_timeout_stream`)
 
 Wraps a `BoxBytesStream` and is the single authoritative high-level
 response timeout owner. The per-chunk read timeout yields

@@ -1,6 +1,6 @@
 # Benchmarks Deep Dive
 
-This document covers `eggfetch-bench` — the Criterion benchmark harnesses and the resource-regression monitor. The crate is not published and depends on `eggfetch-core` plus harness-only helpers (`bytes`, `futures-util`, `http`, `tokio`, `url`; dev-dependencies `criterion`, `flate2`).
+This document covers `eggfetch-bench` — the Criterion benchmark harnesses and the resource-regression monitor. The crate is not published and depends on `eggfetch-core` plus harness-only helpers (`bytes`, `futures-util`, `futures-core`, `http`, `http-body`, `http-body-util`, `hyper`, `hyper-util`, `tokio`, `url`; dev-dependencies `criterion`, `flate2`).
 
 See also: [overview.md](overview.md), [testing-fuzzing.md](testing-fuzzing.md) (property/fuzz testing, performance budgets).
 
@@ -9,6 +9,7 @@ See also: [overview.md](overview.md), [testing-fuzzing.md](testing-fuzzing.md) (
 ```
 crates/eggfetch-bench/
 ├── src/lib.rs                    # Shared BenchServer test server + helpers
+├── src/bench_proxy.rs            # Benchmark-local HTTP forward fixture (BenchProxy; rejects CONNECT/chunked)
 └── benchmarks/
     ├── microbench.rs             # [[bench]] core-internal microbenchmarks
     ├── e2e.rs                    # [[bench]] full-client end-to-end benchmarks

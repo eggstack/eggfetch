@@ -59,8 +59,10 @@ The URL is the only positional argument. The method is set with `-X`/`--method` 
 | `--generate-completion SHELL` | Print shell completions (bash/zsh/fish/powershell/elvish) and exit |
 
 `--auth`/`--bearer` and `--json-output`/`--ndjson` are mutually exclusive
-(rejected with exit 2). `--follow`/`--no-follow` is an override pair
-(`--no-follow` wins, no rejection). `--http1`/`--http2`/`--http3` are checked
+(rejected with exit 2). `--follow`/`--no-follow` is a runtime override pair
+(`--no-follow` wins at dispatch), but passing both explicitly is rejected at
+parse time by clap (`conflicts_with`, exit 2) — use exactly one flag.
+`--http1`/`--http2`/`--http3` are checked
 manually (more than one fails with exit 2 via the usage path). mTLS requires
 both `--cert` and `--key` together. `--proxy-auth`/`--no-proxy` require
 `--proxy`. `--cookie-jar` reads `NAME=VALUE` lines only; the Netscape jar format is not parsed.
@@ -148,9 +150,6 @@ The CLI streams the human/file response body via `Response::bytes_stream()` and 
 
 - `-o`/`--output PATH`: write body to file, creating or overwriting (JSON/NDJSON modes also honor `--output`).
 - `-i`/`--include`: response headers to stderr before body.
-
-## File Output
-
 - `--output PATH`: write body to file, creating or overwriting.
 - `--no-clobber`: prevent overwrite of existing files.
 - `--download`: derive filename from `Content-Disposition` header or URL path, with counter-based deduplication.

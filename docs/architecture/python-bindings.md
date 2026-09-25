@@ -330,6 +330,8 @@ The facade owns all HTTPX-shaped API surfaces (URL, Headers, QueryParams, except
 | `eggfetch/compat/httpx/_ssl_context.py` | Backward-compatible shim to the neutral SSL interop module |
 | `eggfetch/compat/httpx/_diagnostics.py` | `diagnostics_summary` — redacted client diagnostics |
 
+Plus transport/test doubles shipped with the facade (`_auth`, `_asgi`, `_mock`, `_stream`, `_transports`, `_wsgi`) — pure-Python HTTPX-shaped surfaces over the same native engine, no networking logic of their own.
+
 ### httpx2 Facade Module Structure
 
 `eggfetch/compat/httpx2/` subclasses/re-exports the 0.28.1 facade — no

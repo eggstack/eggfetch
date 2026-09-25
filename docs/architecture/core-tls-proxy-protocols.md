@@ -427,7 +427,7 @@ output.
 
 ### Feature Gating
 
-Behind the `transport-http2` Cargo feature (reachable via the `http2` alias or `native-http2`/`standard-http2`). When not enabled, `Http2Only` and `Auto` silently downgrade to `Http1Only`.
+Behind the `transport-http2` Cargo feature (reachable via the `http2` alias or `native-http2`/`standard-http2`). When not enabled, `Http2Only` and `Auto` silently downgrade to `Http1Only`. Likewise without the `http3` feature, `Http3Only` downgrades to `Http1Only`.
 
 ### Version Policy
 

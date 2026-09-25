@@ -85,7 +85,7 @@ fails with an installation command rather than recording a skip. All executed
 checks are fail-closed. Includes
 full HTTPX compatibility, Rust public API oracle and semver cross-check,
 API manifest oracle (both facades),
-feature combinations, docs, MSRV, resource
+feature combinations plus isolated feature-gated tests, docs, MSRV, resource
 monitoring, FFI, lifecycle (timeout/proxy-TLS/shutdown), soak tests,
 downstream compatibility (skipped without a prebuilt artifact manifest),
 lossless merge tests,

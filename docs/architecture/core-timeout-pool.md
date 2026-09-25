@@ -211,7 +211,7 @@ conceptually separate from semaphore logic. This ensures:
 - Streaming responses hold their slot until fully consumed.
 - A terminal body timeout/error/EOF releases the slot without waiting for the caller to drop the body value.
 - Dropped responses release their slot immediately.
-- Buffered responses release their slot after the body is collected.
+- Buffered responses never hold a slot to EOF: the lease is dropped at finalization, before the caller reads.
 - `ResponseBody` public variant shapes stay frozen; timeout state is never a public field.
 
 ### Pool Metrics vs Transport Metrics
