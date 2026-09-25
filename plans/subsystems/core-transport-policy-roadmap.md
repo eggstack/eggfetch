@@ -1,6 +1,6 @@
 # Core Transport and Request Policy Roadmap
 
-Status: closed; all milestones closed
+Status: active corrective — M006 Windows TLS response completeness
 
 Long-term references:
 
@@ -85,7 +85,9 @@ M001 pipeline decomposition + typed rebuilds (hard predecessor)
     `--> M005 embedded transport extensions (dialer/pinned/admission)
 ```
 
-M002–M005 are soft/parallel after M001; all are closed.
+M002–M005 are soft/parallel after M001 and remain closed. M006 is a bounded
+Phase-3 corrective discovered by downstream Windows qualification; it does not
+reopen M001–M005 architecture.
 
 ## 7. Milestones
 
@@ -165,6 +167,27 @@ Legacy: `plans/custom-dialer-transport-extension.md`,
 
 Exit conditions: external-style fixtures green; no downstream-specific types. Met.
 
+### Milestone 6 — Windows TLS response completeness corrective
+
+Class: invariant / corrective. Status: ready.
+
+Implementation plan:
+
+- `plans/implementation/core-transport-policy/006-windows-tls-response-completeness-corrective.md`
+
+Objective: reproduce and isolate a deterministic Windows HTTPS response-body
+truncation below EggReplay's interception layer, distinguish fixture/rustls/
+Hyper/EggFetch ownership, fix only the proven owner, and renew the exact-SHA
+qualification before release work resumes.
+
+This corrective preserves the frozen `ResponseBody` shape, single Hyper
+engine, timeout/pool ownership, and supported-platform truthfulness.
+
+Exit conditions: Windows reproducer resolved or explicitly blocked on proven
+external ownership; genuine premature EOF still errors; Linux/macOS controls
+green; Stage C rebound to the corrected exact SHA; downstream EggReplay
+Windows large-body reproduction green before publication resumes.
+
 ## 8. Cross-cutting requirements
 
 Timeout/pool ownership per ADR-0004; trust semantics per the TLS workstream;
@@ -184,9 +207,9 @@ exhaustive by construction; review must reject inline hop construction.
 
 ## 11. Completion definition
 
-Closed: all five milestones have accepted closure evidence and the live
-Stage C binding covers the resulting engine. Standing intake continues via
-corrective passes only.
+M001–M005 remain closed. M006 is open and release-blocking until its closure
+evidence proves the Windows response-completeness disposition and the live
+Stage C binding is renewed.
 
 ## 12. Milestone status
 
@@ -197,3 +220,4 @@ corrective passes only.
 | M003 route cache + Hyper | closed | legacy plans §7 | legacy closure records | — |
 | M004 profiles + decomposition | closed | legacy plans §7 | legacy closure records | — |
 | M005 embedded extensions | closed | legacy plans §7 | legacy closure records | — |
+| M006 Windows TLS response completeness | **ready** | `plans/implementation/core-transport-policy/006-windows-tls-response-completeness-corrective.md` | `plans/closure/core-transport-policy/006-windows-tls-response-completeness.md` | Native Windows root-cause/qualification evidence |
