@@ -1,6 +1,6 @@
 # Core Transport and Request Policy Roadmap
 
-Status: active corrective — M006 Windows TLS response completeness
+Status: active — all milestones closed; M006 disposition recorded
 
 Long-term references:
 
@@ -169,11 +169,15 @@ Exit conditions: external-style fixtures green; no downstream-specific types. Me
 
 ### Milestone 6 — Windows TLS response completeness corrective
 
-Class: invariant / corrective. Status: ready.
+Class: invariant / corrective. Status: closed.
 
 Implementation plan:
 
 - `plans/implementation/core-transport-policy/006-windows-tls-response-completeness-corrective.md`
+
+Closure record:
+
+- `plans/closure/core-transport-policy/006-windows-tls-response-completeness.md`
 
 Objective: reproduce and isolate a deterministic Windows HTTPS response-body
 truncation below EggReplay's interception layer, distinguish fixture/rustls/
@@ -187,6 +191,17 @@ Exit conditions: Windows reproducer resolved or explicitly blocked on proven
 external ownership; genuine premature EOF still errors; Linux/macOS controls
 green; Stage C rebound to the corrected exact SHA; downstream EggReplay
 Windows large-body reproduction green before publication resumes.
+
+Disposition: the deterministic Windows truncation is a
+fixture-teardown contract defect (origin `write_all` + drop without `close_notify`/
+linger lets the Windows transport discard the unsent tail); the receiver
+correctly surfaces a `body` error rather than a short success. No production
+change; a 19-test hermetic reproducer pins graceful/abrupt/keep-alive/
+truncated/close-delimited behavior plus raw tokio-rustls and minimal-Hyper
+isolation probes. Stage C rebound to
+`5247ff0e01e309d9b408b8b4b4c90151ee5ce9fa`. Downstream EggReplay must update
+its local origin helper to perform an async TLS shutdown + brief linger; the
+engine remains contract-conformant.
 
 ## 8. Cross-cutting requirements
 
@@ -207,9 +222,10 @@ exhaustive by construction; review must reject inline hop construction.
 
 ## 11. Completion definition
 
-M001–M005 remain closed. M006 is open and release-blocking until its closure
-evidence proves the Windows response-completeness disposition and the live
-Stage C binding is renewed.
+M001–M006 are closed. The live Stage C binding points at the post-corrective
+exact SHA `5247ff0e01e309d9b408b8b4b4c90151ee5ce9fa`. Future changes in this
+subsystem arrive as corrective passes (§7 of the planning process) and will
+requalify when executable inputs change.
 
 ## 12. Milestone status
 
@@ -220,4 +236,4 @@ Stage C binding is renewed.
 | M003 route cache + Hyper | closed | legacy plans §7 | legacy closure records | — |
 | M004 profiles + decomposition | closed | legacy plans §7 | legacy closure records | — |
 | M005 embedded extensions | closed | legacy plans §7 | legacy closure records | — |
-| M006 Windows TLS response completeness | **ready** | `plans/implementation/core-transport-policy/006-windows-tls-response-completeness-corrective.md` | `plans/closure/core-transport-policy/006-windows-tls-response-completeness.md` | Native Windows root-cause/qualification evidence |
+| M006 Windows TLS response completeness | **closed** | `plans/implementation/core-transport-policy/006-windows-tls-response-completeness-corrective.md` | `plans/closure/core-transport-policy/006-windows-tls-response-completeness.md` | — (downstream EggReplay origin helper still needs TLS shutdown + linger) |

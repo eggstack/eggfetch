@@ -4,6 +4,45 @@ This record is the exact-SHA-bound status for the HTTPX 0.28.1 compatibility
 facade. Historical phase and corrective-pass records remain in the git history
 and referenced plans; counts below are only from the runs named here.
 
+## Recorded state — Stage C renewed after Windows TLS response completeness corrective (2026-09-25)
+
+Recorded designation: **Stage C qualified** for both documented facades, bound
+to executable freeze `5247ff0e01e309d9b408b8b4b4c90151ee5ce9fa`. The preceding
+private-architecture `d4979f1dac53f30f07900f54b01a88de06956c1c` binding remains
+historical because the core-transport M006 Windows-TLS response-completeness
+corrective added a hermetic reproducer/isolation matrix in
+`crates/eggfetch-core/tests/tls_response_completeness.rs` plus a new "Origin
+TLS shutdown contract" subsection in `docs/architecture/core-tls-proxy-protocols.md`
+after it pinned the downstream defect to the fixture-teardown class from plan
+§6.4. No production transport change; no public API change; no dependency
+change; the freeze is documentation/test-only descendant of the prior binding.
+The expansion was treated as qualification-relevant because the executor tree
+changed, so this entry rebinds Stage C on a fresh Tier 1+Tier 2+Tier 3+security
+run.
+
+Qualification evidence on the corrective freeze:
+
+- Tier 1 (`./scripts/check.sh`), Tier 2 (`./scripts/check.sh extended`),
+  Tier 3 package (`./scripts/check.sh package`), and live security preflight
+  (`./scripts/check_security.sh`) all green on `5247ff0e01e309d9b408b8b4b4c90151ee5ce9fa`.
+- The new hermetic matrix (`tests/tls_response_completeness.rs`) ran 19/19
+  green under `--all-features --test-threads=1`; the existing
+  `tls_tunnel_complete_body_survives_abrupt_close` and
+  `tls_tunnel_truncated_body_still_errors` coverage remains in place.
+- Full pinned HTTPX 0.28.1 / HTTPX2 2.12.0 compatibility suites, dual-profile
+  Rust public API oracle (71/0.28.1, 79/httpx2), Rust 1.89.0 MSRV check, feature
+  matrix, FFI, soak, lifecycle, benchmark, and package validation remained
+  green. No API/semver oracle drift; no new difference.
+- No Cargo dependency or feature-default changed and no public API was added.
+
+The corrective plan is
+`plans/implementation/core-transport-policy/006-windows-tls-response-completeness-corrective.md`;
+the closure record is
+`plans/closure/core-transport-policy/006-windows-tls-response-completeness.md`.
+Downstream EggReplay M013F reproducer remains blocked on its local Rustls
+origin helper issuing an async TLS shutdown + brief linger; the engine
+correctly surfaces a `body` error in that case rather than a short success.
+
 ## Recorded state — Stage C renewed after private-architecture qualification-state corrective (2026-09-22)
 
 Recorded designation: **Stage C qualified** for both documented facades, bound

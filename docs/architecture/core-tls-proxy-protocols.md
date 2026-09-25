@@ -115,6 +115,26 @@ appears in `Debug`/diagnostics.
 
 `TlsVersion` configures minimum and maximum supported TLS versions (e.g., TLS 1.2, TLS 1.3). QUIC mandates TLS 1.3.
 
+### Origin TLS shutdown contract
+
+Test and local origins must flush the full response and perform an async TLS
+shutdown (rustls `close_notify`) before closing the TCP connection, with a
+short linger so the peer can drain. A `write_all` at the TLS layer followed
+by a bare stream drop does not prove delivery: unsent kernel/transport bytes
+can be discarded on close (deterministically observed as a short body near a
+128 KiB total-response boundary on Windows), and the client then — correctly —
+reports a body error rather than a short success.
+
+Receiver-side classification is unchanged: a complete `Content-Length` body
+remains consumable even when the peer later closes without `close_notify`
+(Hyper framing has already completed), a genuinely truncated declared body
+remains an error, and close-delimited bodies require a graceful close because
+an abrupt EOF is indistinguishable from truncation. The hermetic matrix in
+`crates/eggfetch-core/tests/tls_response_completeness.rs` (M006 corrective)
+pins graceful, abrupt-after-complete, keep-alive, truncated, and
+close-delimited behavior plus raw tokio-rustls and minimal-Hyper isolation
+probes.
+
 ## HTTP Proxy
 
 ### Configuration
