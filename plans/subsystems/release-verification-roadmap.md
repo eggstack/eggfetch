@@ -1,6 +1,6 @@
 # Release and Verification Roadmap
 
-Status: active — M001/M002 ready after M006C1 closure
+Status: active — M001/M002 blocked on M006C2 reconciliation
 
 Long-term references:
 
@@ -157,6 +157,6 @@ process, never "complete."
 
 | Milestone | Status | Implementation plan | Closure record | Blockers |
 |---|---|---|---|---|
-| M001 publication | ready | `plans/implementation/release-verification/001-release-publication.md` | — | M006C1 closed; maintainer-run publication gates apply |
-| M002 wheel rehearsal | ready | `plans/implementation/release-verification/002-python-315-wheel-rehearsal.md` | — | M006C1 closed; dispatch from authoritative Stage C SHA |
+| M001 publication | blocked | `plans/implementation/release-verification/001-release-publication.md` | — | M006C2 closure |
+| M002 wheel rehearsal | blocked | `plans/implementation/release-verification/002-python-315-wheel-rehearsal.md` | — | M006C2 closure; then dispatch from authoritative Stage C SHA |
 | M003 intake | proposed | — | — | — |
