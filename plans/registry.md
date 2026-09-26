@@ -16,9 +16,9 @@ ledger for SHAs):
 
 - `plans/httpx-parity-correction-status.md` (+ `compat/*/profile.toml`)
 
-Pending maintainer actions: issue #24 publication/tag/PyPI (M001) and the
-Python 3.15 wheel rehearsal (M002), both ready against the live Stage C
-freeze.
+Pending release train: M001A prepares a fresh coordinated 0.2.1 candidate;
+M002 rehearses the Python 3.10–3.15 wheel/sdist set from that exact candidate;
+M001B performs coordinated crates.io/tag/PyPI publication.
 
 Validation tiers: `.skills/verification-qualification.md`. Normative policy:
 `docs/verification-policy.md`.
@@ -43,24 +43,28 @@ Validation tiers: `.skills/verification-qualification.md`. Normative policy:
 | Core transport and request policy | closed | `plans/subsystems/core-transport-policy-roadmap.md` | M006/M006C1/M006C2 all closed; subsystem at steady state | New corrective requires a fresh milestone plan. |
 | Python bindings and HTTPX compatibility | closed | `plans/subsystems/python-httpx-compat-roadmap.md` | M001-M003 closed on live Stage C binding | Facade work reopens only via gated roadmap Phase 4 trigger. |
 | TLS, proxy, and protocols | closed | `plans/subsystems/tls-proxy-protocols-roadmap.md` | All milestones closed; H3 experimental retained | H3 graduation blocked on named external evidence. |
-| Release and verification | active | `plans/subsystems/release-verification-roadmap.md` | M001 publication + M002 wheel rehearsal ready | Maintainer dispatch from authoritative Stage C SHA. |
+| Release and verification | active | `plans/subsystems/release-verification-roadmap.md` | M001A 0.2.1 candidate preparation | M001A is the sole ready task; M002 then M001B follow in order. |
 | Performance and footprint | closed | `plans/subsystems/performance-footprint-roadmap.md` | Campaigns closed; fixtures repaired | New optimization needs its own milestone plan. |
 
 ## Dependency-ready implementation plans
 
 | Subsystem | Milestone | Status | Implementation plan | Dependencies / handoff note |
 |---|---|---|---|---|
-| Release and verification | M001 0.2.x publication/tag/PyPI | **ready** | `plans/implementation/release-verification/001-release-publication.md` | Maintainer dispatch from authoritative Stage C SHA; leaf order http-connect → core → cli → ffi → python → node, then tag, then `pypi.yml` with `publish=true`. |
-| Release and verification | M002 Python 3.15 wheel rehearsal | **ready** | `plans/implementation/release-verification/002-python-315-wheel-rehearsal.md` | Dispatch `pypi.yml` with `publish=false`; claim 3.15 only after 19-distribution assembly + smoke. |
+| Release and verification | M001 coordinated 0.2.x publication umbrella | ready (decomposed) | `plans/implementation/release-verification/001-release-publication.md` | Execute M001A → M002 → M001B; umbrella closes after publication. |
+| Release and verification | M001A 0.2.1 release-candidate preparation | **ready** | `plans/implementation/release-verification/001a-0-2-1-release-candidate-preparation.md` | Bump coordinated identity to 0.2.1, audit candidate delta, run Tier 1/2/3, freeze exact candidate SHA. |
+| Release and verification | M002 Python 3.15 wheel rehearsal | blocked | `plans/implementation/release-verification/002-python-315-wheel-rehearsal.md` | Blocked on M001A; `publish=false` from exact candidate, 18 wheels + 1 sdist. |
+| Release and verification | M001B 0.2.1 coordinated publication | blocked | `plans/implementation/release-verification/001b-0-2-1-coordinated-publication.md` | Blocked on M002; publish six crates, signed v0.2.1 tag, PyPI `publish=true`, external smoke. |
 
 ## Current execution order and dependency gates
 
-**Release publication gate:** M001 is ready; M002 is ready. Both run
-against the live Stage C freeze; no additional corrective work is pending.
+**Release execution gate:** M001A is the sole ready task. The existing
+`v0.2.0` tag/release is historical and must not be moved or reused. M001A
+prepares a fresh `0.2.1` candidate; M002 then proves the Python 3.15 matrix
+from that exact SHA; M001B finally publishes/tag/releases that same candidate.
 
-**Corrective gate:** none. The M006 Windows response-completeness work
-chain (M006/M006C1/M006C2) is closed. New correctives open through a
-fresh milestone plan and a fresh entry in this registry.
+**Corrective gate:** none. The M006 Windows response-completeness work chain
+(M006/M006C1/M006C2) is closed. New correctives open through a fresh milestone
+plan and a fresh entry in this registry.
 
 **Gated futures:** HTTPX 1.0 (RC/stable + frozen API + fresh delta),
 H3 graduation (independent interop/drain/impairment/upstream evidence), Node
