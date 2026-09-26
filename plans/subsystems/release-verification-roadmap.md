@@ -1,6 +1,6 @@
 # Release and Verification Roadmap
 
-Status: active — M001A/M002 closed; M004 tagged release finalization ready
+Status: closed — coordinated M001/M004 0.2.1 release completed
 
 Long-term references:
 
@@ -65,12 +65,11 @@ matrix passed 19/19 (run 36193582776), and the corrected EggReplay M013F
 Windows 300 KiB proof passed on commit `5efc6f9c892bb5b1c2e84330a0c40a38f1de0de7`
 (run 36211265347). Stage C remains bound to
 `5247ff0e01e309d9b408b8b4b4c90151ee5ce9fa`. The historical `v0.2.0` tag/release already exists at an older commit and
-remains immutable. The unexecuted M001B publication plan is superseded by
-M004 because a GitHub Release is now a required output and the candidate README
-still carries a now-stale "3.15 wheels pending rehearsal" statement. M004
-refreshes only release-facing docs, freezes a final docs-only candidate,
-renews the exact-SHA build-only rehearsal, then performs publication and
-closure.
+remains immutable. The unexecuted M001B publication plan was superseded by
+M004, which corrected release-facing documentation, renewed the exact-SHA
+build-only rehearsal, and completed publication and closure. Candidate
+`fe4d596ca8d91694fc887566acaa7875b918d25a` is published across all channels;
+M004 build-only run `36253723990` and publish run `36255517733` are green.
 
 ## 5. Target architecture
 
@@ -90,9 +89,9 @@ M001A 0.2.1 candidate preparation (closed)
 M002 Python 3.15 wheel rehearsal (closed)
     |
     v
-M004 tagged 0.2.1 release finalization (ready; supersedes unexecuted M001B)
+M004 tagged 0.2.1 release finalization (closed; superseded unexecuted M001B)
 
-M001 umbrella closes after M004.
+M001 umbrella closed after M004.
 M003 standing corrective intake remains soft/ongoing.
 ```
 
@@ -100,23 +99,23 @@ M003 standing corrective intake remains soft/ongoing.
 
 ### Milestone 1 — 0.2.x coordinated publication
 
-Class: infrastructure (operational). Status: ready (decomposed).
+Class: infrastructure (operational). Status: closed.
 
 Umbrella plan:
 
-- `plans/implementation/release-verification/001-release-publication.md`
+- `plans/archive/implementation/release-verification/001-release-publication.md`
 
 Execution history / sequence:
 
 1. `plans/implementation/release-verification/001a-0-2-1-release-candidate-preparation.md` — closed
 2. `plans/implementation/release-verification/002-python-315-wheel-rehearsal.md` — closed
 3. `plans/implementation/release-verification/001b-0-2-1-coordinated-publication.md` — superseded before execution
-4. `plans/implementation/release-verification/004-0-2-1-tagged-release-finalization.md` — ready
+4. `plans/archive/implementation/release-verification/004-0-2-1-tagged-release-finalization.md` — closed
 
 The existing `v0.2.0` tag points at an older release commit and is immutable
 history. The next coordinated identity is `0.2.1`; do not move/reuse v0.2.0.
 
-Exit conditions: a truthful docs-clean final 0.2.1 candidate is frozen and
+Exit conditions: satisfied. A truthful docs-clean final 0.2.1 candidate is frozen and
 rehearsed on its exact SHA, six crates are published in dependency order,
 signed `v0.2.1` targets that candidate, PyPI publishes 18 wheels + 1 sdist
 from that tag through OIDC, a non-draft/non-prerelease GitHub Release exists
@@ -130,33 +129,38 @@ Implementation plan:
 
 - `plans/implementation/release-verification/002-python-315-wheel-rehearsal.md`
 
-Legacy detail: `plans/python-3.15-pypi-wheel-production.md`
-(implementation complete, qualification pending).
+The earlier flat-file detail is absent from the migrated planning tree; the
+maintained plan is `plans/archive/implementation/release-verification/002-python-315-wheel-rehearsal.md` (closed).
 
 Objective: `publish=false` rehearsal from the exact M001A 0.2.1 candidate;
 prove 18 wheels + 1 sdist, including Linux/macOS/Windows Python 3.15 rows.
 Closed by run `36223505399` on
-`41757569123c0b8038550b956d8b244ab55094a6`; M004 renews the rehearsal only
-because the package README is refreshed on the final candidate.
+`41757569123c0b8038550b956d8b244ab55094a6`; M004 renewed the rehearsal on
+the final candidate in run `36253723990`.
 
 Exit conditions: 19 distributions assemble; Tier 1 + package green; bounded
 3.15-only prerelease fallback documented.
 
 ### Milestone 4 — 0.2.1 tagged release finalization
 
-Class: infrastructure / operational release. Status: ready.
+Class: infrastructure / operational release. Status: closed.
 
 Implementation plan:
 
-- `plans/implementation/release-verification/004-0-2-1-tagged-release-finalization.md`
+- `plans/archive/implementation/release-verification/004-0-2-1-tagged-release-finalization.md`
 
 Objective: reconcile stale release-facing documentation, freeze a docs-only
 final candidate, renew the exact-SHA wheel rehearsal, and complete coordinated
 crates.io, signed tag, PyPI, GitHub Release, external smoke, and planning
 closure. This supersedes the unexecuted M001B plan.
 
-Exit conditions: all acceptance criteria in M004 pass and the M001 umbrella
-closure is written.
+Closed on candidate `fe4d596ca8d91694fc887566acaa7875b918d25a`; build-only
+run `36253723990`; PyPI publish run `36255517733`. Closure records:
+`plans/closure/release-verification/004-0-2-1-tagged-release-finalization.md`
+and `plans/closure/release-verification/001-coordinated-0-2-1-publication.md`.
+
+Exit conditions: satisfied; all acceptance criteria passed and the M001
+umbrella closure is written.
 
 ### Milestone 3 — Standing corrective intake
 
@@ -188,16 +192,17 @@ the existing maintainer-run publication and wheel-rehearsal procedures.
 
 ## 11. Completion definition
 
-M001/M002 close with their evidence artifacts; M003 remains standing
-process, never "complete."
+M001/M004 are closed with their evidence artifacts; M003 remains standing
+process, never "complete." No future plan was unblocked by publication;
+HTTPX 1.0 and H3 retain their independent external gates.
 
 ## 12. Milestone status
 
 | Milestone | Status | Implementation plan | Closure record | Blockers |
 |---|---|---|---|---|
-| M001 umbrella | ready (finalization pending) | `plans/implementation/release-verification/001-release-publication.md` | `plans/closure/release-verification/001-coordinated-0-2-1-publication.md` | M004 |
+| M001 umbrella | closed | `plans/archive/implementation/release-verification/001-release-publication.md` | `plans/closure/release-verification/001-coordinated-0-2-1-publication.md` | — |
 | M001A 0.2.1 candidate prep | closed | `plans/implementation/release-verification/001a-0-2-1-release-candidate-preparation.md` | `plans/closure/release-verification/001a-0-2-1-release-candidate-preparation.md` | — |
 | M002 Python 3.15 rehearsal | closed | `plans/implementation/release-verification/002-python-315-wheel-rehearsal.md` | `plans/closure/release-verification/002-python-315-wheel-rehearsal.md` | — |
 | M001B 0.2.1 publication | superseded | `plans/implementation/release-verification/001b-0-2-1-coordinated-publication.md` | — | Replaced before execution by M004 |
-| M004 0.2.1 tagged release finalization | **ready** | `plans/implementation/release-verification/004-0-2-1-tagged-release-finalization.md` | `plans/closure/release-verification/004-0-2-1-tagged-release-finalization.md` | — |
+| M004 0.2.1 tagged release finalization | closed | `plans/archive/implementation/release-verification/004-0-2-1-tagged-release-finalization.md` | `plans/closure/release-verification/004-0-2-1-tagged-release-finalization.md` | — |
 | M003 intake | proposed | — | — | — |

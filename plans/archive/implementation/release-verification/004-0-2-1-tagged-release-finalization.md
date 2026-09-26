@@ -1,6 +1,6 @@
 # Release and Verification Milestone 004 — 0.2.1 Tagged Release Finalization
 
-Status: ready
+Status: archived (closed; see plans/closure/release-verification/004-0-2-1-tagged-release-finalization.md)
 
 Repository baseline: `57887520029344c228afe6b537da7e33c6321ef7` (`main`, after M002 closure)
 
@@ -493,29 +493,29 @@ old version numbers.
 
 ## 13. Acceptance criteria
 
-- [ ] release-facing doc truth pass is complete before final candidate freeze;
-- [ ] final candidate delta from the original M001A candidate is
+- [x] release-facing doc truth pass is complete before final candidate freeze;
+- [x] final candidate delta from the original M001A candidate is
       docs/planning/release-metadata only;
-- [ ] Tier 1, Tier 2, Tier 3, release validators, and `git diff --check`
+- [x] Tier 1, Tier 2, Tier 3, release validators, and `git diff --check`
       are green on the final candidate;
-- [ ] renewed `publish=false` run is green on exactly the final candidate;
-- [ ] renewed rehearsal builds 18/18 wheels + 1 sdist and publishes nothing;
-- [ ] live security preflight is green immediately before crates.io publish;
-- [ ] all six crates.io `0.2.1` packages publish in dependency order and
+- [x] renewed `publish=false` run is green on exactly the final candidate;
+- [x] renewed rehearsal builds 18/18 wheels + 1 sdist and publishes nothing;
+- [x] live security preflight is green immediately before crates.io publish;
+- [x] all six crates.io `0.2.1` packages publish in dependency order and
       resolve from the public registry;
-- [ ] signed `v0.2.1` exists and dereferences to the final candidate;
-- [ ] PyPI `publish=true` runs from that exact tag/SHA;
-- [ ] all 19 PyPI distributions validate and publish through OIDC;
-- [ ] clean crates.io and PyPI consumer smokes pass;
-- [ ] published GitHub Release `v0.2.1` exists and reuses the signed tag;
-- [ ] GitHub Release is non-draft/non-prerelease and release notes are
+- [x] signed `v0.2.1` exists and dereferences to the final candidate;
+- [x] PyPI `publish=true` runs from that exact tag/SHA;
+- [x] all 19 PyPI distributions validate and publish through OIDC;
+- [x] clean crates.io and PyPI consumer smokes pass;
+- [x] published GitHub Release `v0.2.1` exists and reuses the signed tag;
+- [x] GitHub Release is non-draft/non-prerelease and release notes are
       consistent with `CHANGELOG.md`;
-- [ ] final candidate SHA == renewed rehearsal head SHA == signed tag target
+- [x] final candidate SHA == renewed rehearsal head SHA == signed tag target
       == PyPI publish head SHA;
-- [ ] README/release-process docs no longer claim M002 is pending or GitHub
+- [x] README/release-process docs no longer claim M002 is pending or GitHub
       Release is optional;
-- [ ] M001 umbrella closure is written;
-- [ ] active registry/roadmap/README contain no stale M001A/M002 execution
+- [x] M001 umbrella closure is written;
+- [x] active registry/roadmap/README contain no stale M001A/M002 execution
       gate.
 
 ## 14. Stop conditions
@@ -558,6 +558,8 @@ Record at minimum:
 - partial failures/retries, if any;
 - Stage C disposition;
 - final M001 umbrella/registry/roadmap status.
+
+Closure record: `plans/closure/release-verification/004-0-2-1-tagged-release-finalization.md`.
 
 ## 16. Handoff notes
 

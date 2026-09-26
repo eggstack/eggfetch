@@ -1,6 +1,6 @@
 # eggfetch Planning System
 
-> **Current execution gate:** M001A and M002 are closed. **M004 — 0.2.1 tagged release finalization is the sole ready task.** M004 supersedes the unexecuted M001B plan: correct the stale release-facing README/process docs, freeze a docs-only final candidate, renew the build-only 18-wheel + 1-sdist rehearsal on that exact SHA, then publish crates.io, signed `v0.2.1`, PyPI, and the required GitHub Release before closure. Historical `v0.2.0` remains immutable. Stage C remains `5247ff0e01e309d9b408b8b4b4c90151ee5ce9fa` unless executable or qualification-input drift is discovered.
+> **Current execution gate:** The coordinated `0.2.1` release train (M001/M004) is closed across crates.io, signed tag, PyPI, and GitHub Release. No active release task remains. M001B was superseded before execution. Historical `v0.2.0` remains immutable. Stage C remains `5247ff0e01e309d9b408b8b4b4c90151ee5ce9fa` unless executable or qualification-input drift is discovered.
 > **Live status for agents:** the exact-SHA Stage C binding is `plans/httpx-parity-correction-status.md` (+ `compat/*/profile.toml`). Completed sections and legacy plan files are historical records, not current gates (verification-policy principle 9). Validation tiers: `.skills/verification-qualification.md`.
 
 This directory separates durable architectural direction from temporary

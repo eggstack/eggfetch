@@ -1,6 +1,6 @@
 # Release and Verification Milestone 001 — Coordinated 0.2.x Publication
 
-Status: ready (M001A/M002 closed; execute M004 finalization)
+Status: archived (closed) — see `plans/closure/release-verification/001-coordinated-0-2-1-publication.md`
 
 Repository planning baseline: `36ab862dabf8f30fdcf05900a68fdf9f93060879`
 
@@ -39,7 +39,7 @@ Execution has progressed as follows:
    PyPI through Trusted Publishing, create the required GitHub Release, and
    close the release.
 
-M004 is executable now.
+M004 completed; the coordinated 0.2.1 release train is closed.
 
 ## 2. Why decomposition is required
 
