@@ -1,6 +1,7 @@
 # Release and Verification Roadmap
 
-Status: active — M001/M002 blocked on M006C2 reconciliation
+Status: active — M001 publication and M002 wheel rehearsal ready
+post-M006C2
 
 Long-term references:
 
@@ -75,7 +76,7 @@ automation growth.
 ## 6. Dependency graph
 
 ```text
-core-transport M006C1 Windows qualification/downstream closure (closed)
+core-transport M006C2 post-closure reconciliation (closed)
     |
     +--> M001 release publication (ready)
     `--> M002 wheel rehearsal (ready)
@@ -86,7 +87,7 @@ M003 standing corrective intake (soft; ongoing)
 
 ### Milestone 1 — 0.2.x coordinated publication
 
-Class: infrastructure (operational). Status: ready; M006C1 is closed.
+Class: infrastructure (operational). Status: ready; M006C2 is closed.
 
 Implementation plan:
 
@@ -105,7 +106,7 @@ executable inputs changed (then requalify first).
 
 ### Milestone 2 — Python 3.15 wheel production rehearsal
 
-Class: capability (packaging). Status: ready; M006C1 is closed.
+Class: capability (packaging). Status: ready; M006C2 is closed.
 
 Implementation plan:
 
@@ -157,6 +158,6 @@ process, never "complete."
 
 | Milestone | Status | Implementation plan | Closure record | Blockers |
 |---|---|---|---|---|
-| M001 publication | blocked | `plans/implementation/release-verification/001-release-publication.md` | — | M006C2 closure |
-| M002 wheel rehearsal | blocked | `plans/implementation/release-verification/002-python-315-wheel-rehearsal.md` | — | M006C2 closure; then dispatch from authoritative Stage C SHA |
+| M001 publication | ready | `plans/implementation/release-verification/001-release-publication.md` | — | — |
+| M002 wheel rehearsal | ready | `plans/implementation/release-verification/002-python-315-wheel-rehearsal.md` | — | Dispatch from authoritative Stage C SHA |
 | M003 intake | proposed | — | — | — |

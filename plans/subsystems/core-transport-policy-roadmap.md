@@ -1,6 +1,7 @@
 # Core Transport and Request Policy Roadmap
 
-Status: active corrective — M006C2 post-closure reconciliation
+Status: closed — M006C2 post-closure reconciliation complete; subsystem
+returns to steady state
 
 Long-term references:
 
@@ -226,11 +227,15 @@ Tier 1 green, and closure evidence recorded. Met.
 
 ### M006C2 — Post-closure reconciliation and one-off workflow retirement
 
-Class: corrective / polish. Status: ready.
+Class: corrective / polish. Status: closed.
 
 Implementation plan:
 
 - `plans/implementation/core-transport-policy/006c2-post-closure-reconciliation-and-workflow-retirement.md`
+
+Closure record:
+
+- `plans/closure/core-transport-policy/006c2-post-closure-reconciliation.md`
 
 Objective: remove the one-off M006C1 Windows qualification workflow after its
 evidence is retained, restore the steady-state verification-policy complexity
@@ -238,7 +243,7 @@ budget, and reconcile active registry/roadmap/release status.
 
 Exit conditions: only `ci.yml` and `pypi.yml` remain under `.github/workflows/`,
 Tier 1 and hosted CI are green, Stage C remains unchanged unless scope expands,
-and M001/M002 return to ready.
+and M001/M002 return to ready. Met.
 
 ## 8. Cross-cutting requirements
 
@@ -259,10 +264,11 @@ exhaustive by construction; review must reject inline hop construction.
 
 ## 11. Completion definition
 
-M001–M006 and M006C1 remain closed. M006C2 is the active reconciliation
-corrective. Once it closes, the subsystem returns to closed and M001/M002
-become the next operational work. Stage C remains
-`5247ff0e01e309d9b408b8b4b4c90151ee5ce9fa` unless scope expands.
+M001–M006, M006C1, and M006C2 are all closed. The subsystem is back to
+steady state. M001 (publication/tag/PyPI) and M002 (Python 3.15 wheel
+rehearsal) become the next operational work in the release-verification
+workstream. Stage C remains `5247ff0e01e309d9b408b8b4b4c90151ee5ce9fa`
+unless scope expands.
 
 ## 12. Milestone status
 
@@ -275,4 +281,4 @@ become the next operational work. Stage C remains
 | M005 embedded extensions | closed | legacy plans §7 | legacy closure records | — |
 | M006 Windows TLS response completeness | closed | `plans/implementation/core-transport-policy/006-windows-tls-response-completeness-corrective.md` | `plans/closure/core-transport-policy/006-windows-tls-response-completeness.md` | Historical diagnosis; release evidence completed by M006C1 |
 | M006C1 Windows qualification/downstream closure | closed | `plans/implementation/core-transport-policy/006c1-windows-qualification-and-downstream-closure.md` | `plans/closure/core-transport-policy/006c1-windows-qualification-and-downstream-closure.md` | — |
-| M006C2 post-closure reconciliation/workflow retirement | **ready** | `plans/implementation/core-transport-policy/006c2-post-closure-reconciliation-and-workflow-retirement.md` | `plans/closure/core-transport-policy/006c2-post-closure-reconciliation.md` | Retire one-off Windows workflow; Tier 1 + hosted CI green |
+| M006C2 post-closure reconciliation/workflow retirement | closed | `plans/implementation/core-transport-policy/006c2-post-closure-reconciliation-and-workflow-retirement.md` | `plans/closure/core-transport-policy/006c2-post-closure-reconciliation.md` | — |

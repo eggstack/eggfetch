@@ -1,17 +1,16 @@
 # eggfetch Planning System
 
-> **Current execution gate:** M006 and M006C1 are technically/evidentially
-> closed. **M006C2 — post-closure reconciliation and one-off Windows workflow
-> retirement is ready.** It removes the temporary manual qualification workflow
-> and returns CI to the verification-policy steady-state budget. M001
-> publication/tag/PyPI and M002 Python 3.15 rehearsal are blocked until M006C2
-> closes. Stage C remains
-> `5247ff0e01e309d9b408b8b4b4c90151ee5ce9fa` unless scope expands.
-> **Live status for agents:** the exact-SHA Stage C binding is
-> `plans/httpx-parity-correction-status.md` (+ `compat/*/profile.toml`).
-> Completed sections and legacy plan files are historical records, not
-> current gates (verification-policy principle 9). Validation tiers:
-> `.skills/verification-qualification.md`.
+> **Current execution gate:** M006/M006C1/M006C2 are closed. The Windows
+> response-completeness work is fully reconciled, the one-off manual
+> qualification workflow has been retired, and CI is back at the
+> verification-policy steady-state budget. M001 publication/tag/PyPI and
+> M002 Python 3.15 wheel rehearsal are the next operational actions,
+> ready to dispatch from the live Stage C SHA
+> `5247ff0e01e309d9b408b8b4b4c90151ee5ce9fa`. **Live status for agents:**
+> the exact-SHA Stage C binding is `plans/httpx-parity-correction-status.md`
+> (+ `compat/*/profile.toml`). Completed sections and legacy plan files
+> are historical records, not current gates (verification-policy
+> principle 9). Validation tiers: `.skills/verification-qualification.md`.
 
 This directory separates durable architectural direction from temporary
 execution planning. Since the 2026-09-25 migration it follows the
