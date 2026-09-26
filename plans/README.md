@@ -1,13 +1,12 @@
 # eggfetch Planning System
 
-> **Current execution gate:** M006's fixture-teardown diagnosis remains the
-> technical baseline. **M006C1 is closed:** the native-Windows EggFetch
-> matrix passed 19/19 (run 36193582776), and the corrected EggReplay M013F
-> hosted-Windows 300 KiB rerun passed (run 36211265347). Issue #24
-> publication/tag/PyPI (M001) and the Python 3.15 wheel rehearsal (M002) are
-> ready to resume under their existing release procedures. Stage C remains
-> `5247ff0e01e309d9b408b8b4b4c90151ee5ce9fa` unless executable or
-> qualification inputs change.
+> **Current execution gate:** M006 and M006C1 are technically/evidentially
+> closed. **M006C2 — post-closure reconciliation and one-off Windows workflow
+> retirement is ready.** It removes the temporary manual qualification workflow
+> and returns CI to the verification-policy steady-state budget. M001
+> publication/tag/PyPI and M002 Python 3.15 rehearsal are blocked until M006C2
+> closes. Stage C remains
+> `5247ff0e01e309d9b408b8b4b4c90151ee5ce9fa` unless scope expands.
 > **Live status for agents:** the exact-SHA Stage C binding is
 > `plans/httpx-parity-correction-status.md` (+ `compat/*/profile.toml`).
 > Completed sections and legacy plan files are historical records, not
