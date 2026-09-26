@@ -1,6 +1,6 @@
 # Core Transport and Request Policy Roadmap
 
-Status: closing — M006C1 Windows matrix green, downstream closure pending
+Status: closed — M006C1 native-Windows and downstream EggReplay qualification complete
 
 Long-term references:
 
@@ -203,9 +203,9 @@ isolation probes. Stage C rebound to
 
 ### M006C1 — Windows qualification and downstream closure corrective
 
-Class: invariant / qualification corrective. Status: closing (native-Windows
+Class: invariant / qualification corrective. Status: closed (native-Windows
 EggFetch matrix green — run 36193582776, 19/19; corrected EggReplay M013F
-Windows proof still required).
+Windows proof green — run 36211265347).
 
 Implementation plan:
 
@@ -219,11 +219,11 @@ M006C1 does not reopen the fixture-teardown diagnosis or authorize production
 transport changes. If either graceful Windows proof contradicts M006, the
 technical investigation reopens and release remains blocked.
 
-Exit conditions: direct EggFetch Windows matrix green (met — run 36193582776,
-19/19 on the manual-qualification head), corrected EggReplay
-Windows M013F green at the original envelope (pending), normal EggFetch Tier 1 green,
-and closure evidence recorded. Until then M001/M002 release work remains
-blocked.
+Exit conditions: direct EggFetch Windows matrix green (run 36193582776,
+19/19 on the manual-qualification head), corrected EggReplay Windows M013F
+green at the original 300 KiB envelope (run 36211265347), normal EggFetch
+Tier 1 green, and closure evidence recorded. Met. M001/M002 release work is
+ready to resume.
 
 ## 8. Cross-cutting requirements
 
@@ -244,11 +244,10 @@ exhaustive by construction; review must reject inline hop construction.
 
 ## 11. Completion definition
 
-M001–M006 remain closed as implementation/history. M006C1 is the closing
-qualification corrective and current release gate: the Windows EggFetch half
-is green, the corrected EggReplay half is pending. The live Stage C binding
-continues to point at `5247ff0e01e309d9b408b8b4b4c90151ee5ce9fa` unless
-M006C1 changes executable or qualification inputs.
+M001–M006 and M006C1 are closed. M006C1's evidence-only closure reopens the
+M001/M002 release gates. The live Stage C binding continues to point at
+`5247ff0e01e309d9b408b8b4b4c90151ee5ce9fa`; no EggFetch executable or
+qualification input changed.
 
 ## 12. Milestone status
 
@@ -260,4 +259,4 @@ M006C1 changes executable or qualification inputs.
 | M004 profiles + decomposition | closed | legacy plans §7 | legacy closure records | — |
 | M005 embedded extensions | closed | legacy plans §7 | legacy closure records | — |
 | M006 Windows TLS response completeness | closed | `plans/implementation/core-transport-policy/006-windows-tls-response-completeness-corrective.md` | `plans/closure/core-transport-policy/006-windows-tls-response-completeness.md` | Historical diagnosis; release evidence completed by M006C1 |
-| M006C1 Windows qualification/downstream closure | **closing** | `plans/implementation/core-transport-policy/006c1-windows-qualification-and-downstream-closure.md` | `plans/closure/core-transport-policy/006c1-windows-qualification-and-downstream-closure.md` | Windows EggFetch matrix green (run 36193582776, 19/19); corrected EggReplay Windows M013F proof pending |
+| M006C1 Windows qualification/downstream closure | **closed** | `plans/implementation/core-transport-policy/006c1-windows-qualification-and-downstream-closure.md` | `plans/closure/core-transport-policy/006c1-windows-qualification-and-downstream-closure.md` | EggFetch Windows matrix and EggReplay hosted Windows 300 KiB proof green |

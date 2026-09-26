@@ -1,6 +1,6 @@
 # Core Transport Policy M006C1 — Windows qualification and downstream closure corrective
 
-Status: closing (native-Windows EggFetch matrix green — run 36193582776, 19/19; corrected EggReplay M013F Windows proof pending)
+Status: closed (native-Windows EggFetch matrix green — run 36193582776, 19/19; corrected EggReplay M013F Windows proof green — run 36211265347; complete EggReplay Actions run green)
 
 Repository baseline: `b001790b44ce1c455e3b2cc97d30e9e14217060c`
 
@@ -89,7 +89,7 @@ Do not re-open the root-cause investigation merely to collect evidence.
 
 ## 4. Release gate
 
-Until M006C1 closes:
+Before M006C1 closure:
 
 - release-verification M001 publication is **blocked**;
 - release-verification M002 Python 3.15 wheel rehearsal is **blocked**;
@@ -253,23 +253,23 @@ The existing binding remains authoritative.
 
 ## 12. Acceptance criteria
 
-- [ ] M006 hermetic matrix runs on native Windows x86_64.
-- [ ] all graceful fixed-length cases through 300 KiB pass on Windows.
-- [ ] raw tokio-rustls Windows probe passes with graceful shutdown.
-- [ ] minimal Hyper Windows probe passes with graceful shutdown.
-- [ ] EggFetch direct and custom-dialer Windows paths pass.
-- [ ] genuine truncated response still errors.
-- [ ] no silent short-body success occurs.
-- [ ] abrupt-close behavior is recorded and consistent with the documented
+- [x] M006 hermetic matrix runs on native Windows x86_64.
+- [x] all graceful fixed-length cases through 300 KiB pass on Windows.
+- [x] raw tokio-rustls Windows probe passes with graceful shutdown.
+- [x] minimal Hyper Windows probe passes with graceful shutdown.
+- [x] EggFetch direct and custom-dialer Windows paths pass.
+- [x] genuine truncated response still errors.
+- [x] no silent short-body success occurs.
+- [x] abrupt-close behavior is recorded and consistent with the documented
       fixture-teardown contract.
-- [ ] EggReplay local TLS origin performs graceful shutdown + bounded linger.
-- [ ] EggReplay proxy-less direct 300 KiB Windows test passes.
-- [ ] EggReplay Eggress-direct 300 KiB Windows test passes.
-- [ ] EggReplay MITM 300 KiB Windows test passes with full durable body.
-- [ ] EggReplay Windows Rust/interception qualification lanes are green.
-- [ ] exact EggReplay SHA/run/job evidence is retained.
-- [ ] normal EggFetch Tier 1 remains green.
-- [ ] release M001/M002 stay blocked until every item above is satisfied.
+- [x] EggReplay local TLS origin performs graceful shutdown + bounded linger.
+- [x] EggReplay proxy-less direct 300 KiB Windows test passes.
+- [x] EggReplay Eggress-direct 300 KiB Windows test passes.
+- [x] EggReplay MITM 300 KiB Windows test passes with full durable body.
+- [x] EggReplay Windows Rust/interception qualification lanes are green.
+- [x] exact EggReplay SHA/run/job evidence is retained.
+- [x] normal EggFetch Tier 1 remains green.
+- [x] release M001/M002 stayed blocked until all evidence passed and are now ready.
 
 ## 13. Stop conditions
 
