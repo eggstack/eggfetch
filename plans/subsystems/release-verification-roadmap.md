@@ -1,7 +1,6 @@
 # Release and Verification Roadmap
 
-Status: active — M001 publication and M002 wheel rehearsal ready
-post-M006C2
+Status: active — M001A ready; M002 and M001B dependency-blocked
 
 Long-term references:
 
@@ -63,9 +62,10 @@ Core-transport M006 and M006C1 are closed. The native-Windows EggFetch
 matrix passed 19/19 (run 36193582776), and the corrected EggReplay M013F
 Windows 300 KiB proof passed on commit `5efc6f9c892bb5b1c2e84330a0c40a38f1de0de7`
 (run 36211265347). Stage C remains bound to
-`5247ff0e01e309d9b408b8b4b4c90151ee5ce9fa`. Issue #24 publication (M001)
-and the Python 3.15 wheel rehearsal (M002) are ready to resume under their
-existing release procedures.
+`5247ff0e01e309d9b408b8b4b4c90151ee5ce9fa`. The historical `v0.2.0` tag/release already exists at an older commit, so
+release work is decomposed around a fresh coordinated `0.2.1` identity. M001A
+prepares the exact candidate; M002 rehearses the Python matrix from that SHA;
+M001B performs publication.
 
 ## 5. Target architecture
 
@@ -78,35 +78,46 @@ automation growth.
 ```text
 core-transport M006C2 post-closure reconciliation (closed)
     |
-    +--> M001 release publication (ready)
-    `--> M002 wheel rehearsal (ready)
-M003 standing corrective intake (soft; ongoing)
+    v
+M001A 0.2.1 candidate preparation (ready)
+    |
+    v
+M002 Python 3.15 wheel rehearsal (blocked on M001A)
+    |
+    v
+M001B coordinated 0.2.1 publication (blocked on M002)
+
+M001 umbrella closes after M001B.
+M003 standing corrective intake remains soft/ongoing.
 ```
 
 ## 7. Milestones
 
 ### Milestone 1 — 0.2.x coordinated publication
 
-Class: infrastructure (operational). Status: ready; M006C2 is closed.
+Class: infrastructure (operational). Status: ready (decomposed).
 
-Implementation plan:
+Umbrella plan:
 
 - `plans/implementation/release-verification/001-release-publication.md`
 
-Legacy context: `plans/issue-24-release-qualification-and-closure.md`
-(implementation + qualification complete; publication pending against
-`5247ff0e01e309d9b408b8b4b4c90151ee5ce9fa`),
-`docs/releases/process.md`.
+Child sequence:
 
-Objective: manual `cargo publish` in leaf order, tag, PyPI dispatch, with
-Tier 2 + Tier 3 + live preflight from a trusted local environment.
+1. `plans/implementation/release-verification/001a-0-2-1-release-candidate-preparation.md`
+2. `plans/implementation/release-verification/002-python-315-wheel-rehearsal.md`
+3. `plans/implementation/release-verification/001b-0-2-1-coordinated-publication.md`
 
-Exit conditions: published versions verified; binding untouched unless
-executable inputs changed (then requalify first).
+The existing `v0.2.0` tag points at an older release commit and is immutable
+history. The next coordinated identity is `0.2.1`; do not move/reuse v0.2.0.
+
+Exit conditions: one exact 0.2.1 candidate is prepared and qualified, M002
+rehearses that same SHA, six crates are published in dependency order, signed
+`v0.2.1` targets that candidate, PyPI publishes from that tag through OIDC,
+and external registry smoke passes.
 
 ### Milestone 2 — Python 3.15 wheel production rehearsal
 
-Class: capability (packaging). Status: ready; M006C2 is closed.
+Class: capability (packaging). Status: blocked on M001A.
 
 Implementation plan:
 
@@ -115,8 +126,9 @@ Implementation plan:
 Legacy detail: `plans/python-3.15-pypi-wheel-production.md`
 (implementation complete, qualification pending).
 
-Objective: `publish=false` 18-wheel rehearsal from the implementation
-commit; claim 3.15 support only after.
+Objective: `publish=false` rehearsal from the exact M001A 0.2.1 candidate;
+prove 18 wheels + 1 sdist, including Linux/macOS/Windows Python 3.15 rows,
+before M001B publication.
 
 Exit conditions: 19 distributions assemble; Tier 1 + package green; bounded
 3.15-only prerelease fallback documented.
@@ -158,6 +170,8 @@ process, never "complete."
 
 | Milestone | Status | Implementation plan | Closure record | Blockers |
 |---|---|---|---|---|
-| M001 publication | ready | `plans/implementation/release-verification/001-release-publication.md` | — | — |
-| M002 wheel rehearsal | ready | `plans/implementation/release-verification/002-python-315-wheel-rehearsal.md` | — | Dispatch from authoritative Stage C SHA |
+| M001 umbrella | ready (decomposed) | `plans/implementation/release-verification/001-release-publication.md` | `plans/closure/release-verification/001-coordinated-0-2-1-publication.md` | M001A → M002 → M001B |
+| M001A 0.2.1 candidate prep | **ready** | `plans/implementation/release-verification/001a-0-2-1-release-candidate-preparation.md` | `plans/closure/release-verification/001a-0-2-1-release-candidate-preparation.md` | — |
+| M002 Python 3.15 rehearsal | blocked | `plans/implementation/release-verification/002-python-315-wheel-rehearsal.md` | `plans/closure/release-verification/002-python-315-wheel-rehearsal.md` | M001A closure |
+| M001B 0.2.1 publication | blocked | `plans/implementation/release-verification/001b-0-2-1-coordinated-publication.md` | `plans/closure/release-verification/001b-0-2-1-coordinated-publication.md` | M002 closure |
 | M003 intake | proposed | — | — | — |
