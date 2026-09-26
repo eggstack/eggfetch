@@ -1,134 +1,194 @@
 # Release and Verification Milestone 002 — Python 3.15 Wheel Rehearsal
 
-Status: ready
+Status: blocked on M001A
 
-Repository baseline: implementation commit of
-`plans/python-3.15-pypi-wheel-production.md` (see that plan for the SHA)
+Repository planning baseline: `36ab862dabf8f30fdcf05900a68fdf9f93060879`
+
+Depends on:
+
+- M001A 0.2.1 release-candidate preparation
+
+Unblocks:
+
+- M001B coordinated 0.2.1 publication
 
 Source roadmap:
 
 - `plans/subsystems/release-verification-roadmap.md` §7 Milestone 2
 
-Long-term requirements:
-
-- `plans/000-long-term-specification.md` §7
-- `plans/001-terminology-and-domain-model.md` §11
-- `plans/002-long-term-roadmap.md` Phase 2
-
-Applicable ADRs:
+Applicable ADR:
 
 - `plans/adrs/ADR-0003-exact-sha-stage-c-binding.md`
 
-Primary class: infrastructure (packaging)
+Primary class: capability / packaging qualification
 
 ## 1. Objective
 
-Prove the CPython 3.10–3.15 wheel matrix (18 wheels + 1 sdist = 19
-distributions, Linux x86_64 / macOS arm64 / Windows x86_64) assembles via a
-build-only rehearsal before any 3.15 support is claimed.
+Prove the exact M001A `0.2.1` candidate builds, installs, and assembles the
+full CPython 3.10–3.15 distribution set without publishing anything.
 
-## 2. Why this milestone is ready
+Required release set:
 
-Matrix, coverage validator, classifier, and release documentation
-implementation complete per the legacy plan; Tier 1 and package validation
-green locally. Only the rehearsal dispatch is outstanding.
+- Linux manylinux2014 x86_64: CPython 3.10–3.15;
+- macOS arm64: CPython 3.10–3.15;
+- Windows x86_64: CPython 3.10–3.15;
+- 18 wheels total;
+- 1 sdist;
+- 19 distributions total.
 
-## 3. Current implementation evidence
+## 2. Current Python 3.15 baseline
 
-`plans/python-3.15-pypi-wheel-production.md`: full matrix definition,
-bounded 3.15-only prerelease fallback (selects stable 3.15.x after GA
-without changing 3.10–3.14 behavior), validator/classifier/docs alignment.
+As of this planning pass, Python 3.15.0rc2 is the final planned release
+candidate and 3.15.0 final is scheduled for 2026-10-01.
 
-## 4. Invariants that must not regress
+The checked-in workflow intentionally permits prerelease resolution only for
+the 3.15 rows. The repository already advertises the 3.15 classifier, so this
+milestone is a hard predecessor to M001B publication.
 
-- Rehearsal is `publish=false`; nothing uploads.
-- 3.10–3.14 behavior unchanged by the 3.15 fallback bound.
-- No executable change inside this milestone (packaging-only).
+## 3. Candidate identity
 
-## 5. Scope
+Use the exact release-candidate SHA recorded by M001A.
 
-### In scope
+Do not rehearse an arbitrary newer `main`.
 
-- Dispatch `pypi.yml` with `publish=false` from the implementation commit.
-- Verify 19-distribution assembly + wheel smoke.
-- Record run ID and artifacts in the closure record.
+Operationally, `workflow_dispatch` may be launched from `main` only while
+`main` still resolves to the candidate SHA. Immediately verify the resulting
+Actions run `head_sha` equals the M001A candidate. If it does not, cancel the
+run and do not treat it as evidence.
 
-### Explicitly out of scope
+No tag is required for `publish=false`.
 
-- Publishing (`publish=true` belongs to M001's dispatch).
-- Claiming 3.15 support before rehearsal evidence lands.
-- Matrix expansion beyond the documented platform set.
+## 4. Local pre-dispatch gates
 
-## 6. Required production changes
-
-None. Workflow dispatch + evidence recording only.
-
-## 7. Ordered work packages
-
-### Work package A — Rehearsal dispatch
-
-Intent: run the full build-only matrix from the exact implementation commit.
-
-Required changes: dispatch only.
-
-Acceptance evidence: workflow run ID; all 19 distributions assembled.
-
-### Work package B — Smoke and closure
-
-Intent: prove the artifacts install and import.
-
-Required changes: wheel smoke per `scripts/wheel_smoke.py` and package
-validators (Tier 3).
-
-Acceptance evidence: smoke outputs + closure record; 3.15 claim unblocked.
-
-## 8. Failure, cancellation, timeout, and pool semantics
-
-A red platform leg MUST be recorded per-leg with logs; do not re-scope the
-matrix to hide it. Re-dispatch (not config weakening) is the remedy.
-
-## 9. Compatibility and migration
-
-No runtime compatibility change. Python support stays 3.10–3.14 claimed
-until this milestone closes; 3.15 prerelease fallback bounded as designed.
-
-## 10. Required tests
-
-Package validators + wheel smoke (Tier 3). No new test code.
-
-## 11. Required verification commands
+From the exact candidate:
 
 ```bash
-./scripts/check.sh           # Tier 1, local
-./scripts/check.sh package   # Tier 3, local
-# then: pypi.yml workflow_dispatch with publish=false (maintainer)
+./scripts/check.sh
+./scripts/check.sh package
+git diff --check
 ```
 
-## 12. Documentation updates
+Verify again that:
 
-Record the rehearsal run ID in the closure record and (on success) lift the
-3.15 pending note in `plans/README.md` + `plans/registry.md`.
+- six Rust package versions are `0.2.1`;
+- Python package version is `0.2.1`;
+- release validators pass;
+- the worktree is clean.
 
-## 13. Acceptance criteria
+## 5. Required workflow dispatch
 
-- `publish=false` rehearsal green from the implementation commit; 19
-  distributions assembled and smoke-tested.
-- 3.15 support claimed only after this evidence exists.
+Dispatch:
 
-## 14. Stop conditions
+`.github/workflows/pypi.yml`
 
-- Rehearsal red → stop and report per-leg; open corrective work, do not
-  claim 3.15.
-- Any temptation to dispatch `publish=true` to "test publishing" → stop;
-  publication belongs to M001.
+with:
 
-## 15. Closure evidence required
+```text
+publish=false
+```
 
-Workflow run ID, per-platform build results, smoke outputs, Tier 1 + package
-results, and the follow-up 3.15-claim update (or its deferral with reason).
+Do not use `publish=true`.
 
-## 16. Handoff notes
+The workflow must execute its existing:
 
-Maintainer dispatch required. Python 3.15 was prerelease at implementation
-time; verify whether GA has since occurred and note which interpreter the
-fallback resolved.
+- release-version validation;
+- internal-dependency validation;
+- routine validation;
+- package validation;
+- 18 wheel jobs;
+- wheel install/smoke;
+- wheel metadata validation;
+- sdist build and isolated rebuild/install;
+- package-content validation;
+- assembled release-set validation;
+- matrix coverage validation;
+- `twine check`.
+
+## 6. Python 3.15-specific evidence
+
+For all three 3.15 rows, record the interpreter actually selected by
+`actions/setup-python`.
+
+At the current date the expected interpreter is a 3.15 prerelease, currently
+3.15.0rc2. Do not hard-code rc2 as a permanent acceptance requirement; the
+workflow is intentionally designed to resolve stable 3.15 automatically after
+GA.
+
+Required 3.15 evidence:
+
+- Linux x86_64 wheel green;
+- macOS arm64 wheel green;
+- Windows x86_64 wheel green;
+- each wheel installs into its matching interpreter;
+- `scripts/wheel_smoke.py` passes;
+- metadata reports package/version `eggfetch 0.2.1`;
+- native extension is present.
+
+## 7. Release-set evidence
+
+The `assemble` job must prove:
+
+- exactly 18 wheels;
+- exactly 1 sdist;
+- no duplicate filenames;
+- `scripts/validate_wheel_coverage.py` green;
+- `twine check` green;
+- `pypi-distributions` artifact uploaded.
+
+Retain the workflow run ID and relevant job/artifact metadata in the closure.
+
+## 8. Failure policy
+
+A failed row is a real release blocker.
+
+Do not:
+
+- drop the failed platform/version;
+- change `allow-prereleases` for 3.10–3.14;
+- bypass wheel smoke;
+- publish to discover whether the artifact works;
+- rerun until green without understanding deterministic failures.
+
+Transient hosted-runner failures may be re-dispatched, but both the failed
+and successful runs must be recorded if the first run exposed a real
+infrastructure condition.
+
+Any repository change needed to fix the rehearsal invalidates the M001A
+candidate. Return to M001A, create a new candidate, rerun its required gates,
+then rehearse again.
+
+## 9. Acceptance criteria
+
+- [ ] workflow `head_sha` equals the M001A candidate SHA;
+- [ ] `publish=false`;
+- [ ] validate-release green;
+- [ ] all 18 wheel jobs green;
+- [ ] all three Python 3.15 rows green;
+- [ ] sdist green and rebuilds outside the repo;
+- [ ] exactly 19 distributions assembled;
+- [ ] wheel coverage validator green;
+- [ ] `twine check` green;
+- [ ] no publish job executed;
+- [ ] exact run ID and candidate SHA recorded;
+- [ ] Python 3.15 release-backed support is now evidence-backed for the
+      candidate.
+
+## 10. Closure
+
+Create:
+
+`plans/closure/release-verification/002-python-315-wheel-rehearsal.md`
+
+Record:
+
+- candidate SHA;
+- run ID and conclusion;
+- 18 per-wheel results;
+- three 3.15 interpreter versions;
+- sdist result;
+- assemble counts;
+- smoke/coverage/twine results;
+- any retries and why;
+- confirmation that nothing was published.
+
+After closure, M001B becomes the sole ready release task.
