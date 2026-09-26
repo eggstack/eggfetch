@@ -15,7 +15,7 @@ Repository baseline reviewed: `57887520029344c228afe6b537da7e33c6321ef7`
 Implementation commits:
 
 - `fe4d596ca8d91694fc887566acaa7875b918d25a` — release documentation truth pass and frozen 0.2.1 candidate.
-- Closure commit: this record and the planning-control reconciliation; SHA recorded by Git history after commit.
+- `86d9570f65f540b819795dacff14ab69a4f56e4e` — closure records and planning-control reconciliation.
 
 ## 1. Executive finding
 
