@@ -1,6 +1,6 @@
 # Core Transport and Request Policy Roadmap
 
-Status: closed — M006C1 native-Windows and downstream EggReplay qualification complete
+Status: active corrective — M006C2 post-closure reconciliation
 
 Long-term references:
 
@@ -222,8 +222,23 @@ technical investigation reopens and release remains blocked.
 Exit conditions: direct EggFetch Windows matrix green (run 36193582776,
 19/19 on the manual-qualification head), corrected EggReplay Windows M013F
 green at the original 300 KiB envelope (run 36211265347), normal EggFetch
-Tier 1 green, and closure evidence recorded. Met. M001/M002 release work is
-ready to resume.
+Tier 1 green, and closure evidence recorded. Met.
+
+### M006C2 — Post-closure reconciliation and one-off workflow retirement
+
+Class: corrective / polish. Status: ready.
+
+Implementation plan:
+
+- `plans/implementation/core-transport-policy/006c2-post-closure-reconciliation-and-workflow-retirement.md`
+
+Objective: remove the one-off M006C1 Windows qualification workflow after its
+evidence is retained, restore the steady-state verification-policy complexity
+budget, and reconcile active registry/roadmap/release status.
+
+Exit conditions: only `ci.yml` and `pypi.yml` remain under `.github/workflows/`,
+Tier 1 and hosted CI are green, Stage C remains unchanged unless scope expands,
+and M001/M002 return to ready.
 
 ## 8. Cross-cutting requirements
 
@@ -244,10 +259,10 @@ exhaustive by construction; review must reject inline hop construction.
 
 ## 11. Completion definition
 
-M001–M006 and M006C1 are closed. M006C1's evidence-only closure reopens the
-M001/M002 release gates. The live Stage C binding continues to point at
-`5247ff0e01e309d9b408b8b4b4c90151ee5ce9fa`; no EggFetch executable or
-qualification input changed.
+M001–M006 and M006C1 remain closed. M006C2 is the active reconciliation
+corrective. Once it closes, the subsystem returns to closed and M001/M002
+become the next operational work. Stage C remains
+`5247ff0e01e309d9b408b8b4b4c90151ee5ce9fa` unless scope expands.
 
 ## 12. Milestone status
 
@@ -259,4 +274,5 @@ qualification input changed.
 | M004 profiles + decomposition | closed | legacy plans §7 | legacy closure records | — |
 | M005 embedded extensions | closed | legacy plans §7 | legacy closure records | — |
 | M006 Windows TLS response completeness | closed | `plans/implementation/core-transport-policy/006-windows-tls-response-completeness-corrective.md` | `plans/closure/core-transport-policy/006-windows-tls-response-completeness.md` | Historical diagnosis; release evidence completed by M006C1 |
-| M006C1 Windows qualification/downstream closure | **closed** | `plans/implementation/core-transport-policy/006c1-windows-qualification-and-downstream-closure.md` | `plans/closure/core-transport-policy/006c1-windows-qualification-and-downstream-closure.md` | EggFetch Windows matrix and EggReplay hosted Windows 300 KiB proof green |
+| M006C1 Windows qualification/downstream closure | closed | `plans/implementation/core-transport-policy/006c1-windows-qualification-and-downstream-closure.md` | `plans/closure/core-transport-policy/006c1-windows-qualification-and-downstream-closure.md` | — |
+| M006C2 post-closure reconciliation/workflow retirement | **ready** | `plans/implementation/core-transport-policy/006c2-post-closure-reconciliation-and-workflow-retirement.md` | `plans/closure/core-transport-policy/006c2-post-closure-reconciliation.md` | Retire one-off Windows workflow; Tier 1 + hosted CI green |
