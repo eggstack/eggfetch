@@ -42,7 +42,7 @@ fast check for the intended paths and feature boundaries.
 ## Adapter status boundaries
 
 The Node package is still an experimental, unsupported prototype. Its npm
-metadata is aligned with the coordinated `0.2.0` version and repository MIT
+metadata is aligned with the coordinated `0.2.1` version and repository MIT
 license, but its declaration-free `index.d.ts`, manual native-artifact
 loading, and lack of npm publication remain intentional. No Node capability
 or supported API is implied.

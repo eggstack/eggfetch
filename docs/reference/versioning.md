@@ -7,8 +7,8 @@ change, and what stability expectations users can rely on.
 ## Coordinated versioning
 
 All publishable crates in the workspace share a single version number. When
-eggfetch-core is at `0.2.0`, the CONNECT wire primitive, CLI, Python
-bindings, FFI bindings, and Node bindings are also at `0.2.0`. This
+eggfetch-core is at `0.2.1`, the CONNECT wire primitive, CLI, Python
+bindings, FFI bindings, and Node bindings are also at `0.2.1`. This
 eliminates version-matrix confusion for consumers who depend on multiple
 crates from the project.
 

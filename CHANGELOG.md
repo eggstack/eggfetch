@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.2.1] - 2026-09-26
+
+### Changed
+
+- No runtime or user-visible change: public Rust/Python/C/CLI/HTTPX APIs,
+  feature graph and defaults, MSRV (1.89), and dependency policy are
+  unchanged from 0.2.0. This patch resynchronizes the coordinated release
+  identity (`eggfetch-http-connect`, `eggfetch-core`, `eggfetch-cli`,
+  `eggfetch-ffi`, `eggfetch-python`, `eggfetch-node`, plus the PyPI
+  `eggfetch` distribution) on 0.2.1 because the historical `v0.2.0` tag
+  already exists and must not be moved.
+- Qualification/test hardening since `v0.2.0` (already bound in Stage C
+  `5247ff0e01e309d9b408b8b4b4c90151ee5ce9fa`): hermetic Windows-TLS
+  response-completeness matrix in
+  `crates/eggfetch-core/tests/tls_response_completeness.rs` plus the
+  "Origin TLS shutdown contract" subsection in
+  `docs/architecture/core-tls-proxy-protocols.md`. No production transport,
+  public API, or dependency change.
+- Benchmark/qualification harness only (`eggfetch-bench` is never
+  published): deterministic protocol fixtures, `BenchProxy` repair, and
+  `native_streaming_tail` coverage; corresponding `Cargo.lock` entries are
+  bench-dev-only.
+- Docs/planning only: architecture guide touch-ups, planning-system
+  migration, M006/M006C1/M006C2 closure records, and the M001A/M002/M001B
+  0.2.1 release-train decomposition. No CI workflow, packaging, or
+  compatibility-profile change.
+
 ## [0.2.0] - 2026-09-22
 
 ### Fixed
@@ -192,7 +219,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Multipart boundary validation
 - Proxy authentication boundary enforcement
 
-[Unreleased]: https://github.com/eggstack/eggfetch/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/eggstack/eggfetch/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/eggstack/eggfetch/releases/tag/v0.2.1
 [0.2.0]: https://github.com/eggstack/eggfetch/releases/tag/v0.2.0
 [0.1.9]: https://github.com/eggstack/eggfetch/releases/tag/v0.1.9
 [0.1.8]: https://github.com/eggstack/eggfetch/releases/tag/v0.1.8
