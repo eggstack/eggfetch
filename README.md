@@ -120,7 +120,7 @@ from eggfetch.compat.httpx2 import Client as H2Client  # httpx2 2.12.0 surface
 
 See [`docs/python/guide.md`](docs/python/guide.md) for the full Python API reference.
 
-The native package supports Python 3.10–3.15 (3.15 wheels pending the build-only rehearsal tracked in `plans/README.md`) and ships `py.typed` stubs for its public API. `Client` and the top-level sync helpers accept lazy sync `content=` iterables (async-only iterables are rejected before dispatch); `AsyncClient` additionally accepts lazy async iterables, pulled only as the transport asks for them. `eggfetch._native` is a private implementation module — import from `eggfetch`.
+The native package supports Python 3.10–3.15 and ships `py.typed` stubs for its public API. `Client` and the top-level sync helpers accept lazy sync `content=` iterables (async-only iterables are rejected before dispatch); `AsyncClient` additionally accepts lazy async iterables, pulled only as the transport asks for them. `eggfetch._native` is a private implementation module — import from `eggfetch`.
 
 Buffered Python responses retain the raw body and decode `.text` lazily; their
 `iter_bytes()`, `iter_text()`, and `iter_lines()` iterators yield one item at a

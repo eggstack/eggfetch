@@ -85,18 +85,18 @@ PyPI publication is performed via the manually dispatched `.github/workflows/pyp
 
 ### Dispatch Procedure
 
-1. Create and push a signed `v<VERSION>` tag after crates.io publication:
+1. Before tagging, build and inspect a `publish=false` rehearsal from the frozen final candidate SHA. Repeat this rehearsal if the candidate changes after an earlier build-only run.
+2. After crates.io publication, create and push a signed `v<VERSION>` tag on that exact candidate:
 
    ```sh
    git tag -s v<VERSION> -m "Release v<VERSION>"
    git push origin v<VERSION>
    ```
 
-2. Go to Actions → PyPI Wheels → Run workflow.
-3. Select the `v<VERSION>` tag from the branch/tag dropdown.
-4. **First run (rehearsal):** set `publish=false`. This builds all wheels and the sdist without uploading. Inspect the assembled artifacts.
-5. **Second run (publication):** select the same `v<VERSION>` tag, set `publish=true`. Approve the `pypi` environment deployment when prompted.
-6. Verify the PyPI release at `https://pypi.org/project/eggfetch/<VERSION>/`.
+3. Go to Actions → PyPI Wheels → Run workflow.
+4. Select the `v<VERSION>` tag from the branch/tag dropdown.
+5. Set `publish=true`. Approve the `pypi` environment deployment only after assembled-artifact validation.
+6. Verify the PyPI release at `https://pypi.org/project/eggfetch/<VERSION>/` and run representative installation/import smoke.
 
 ### Trusted Publishing Configuration
 
@@ -121,7 +121,7 @@ git tag -s v<VERSION> -m "Release v<VERSION>"
 git push origin v<VERSION>
 ```
 
-A GitHub Release is optional and manual. It must not be described as an automated or required output.
+A coordinated public release requires a manual GitHub Release after PyPI publication and initial registry smoke pass. Create it from the already-pushed signed tag; do not create or retarget a tag through the Release UI. Use notes derived from the matching `CHANGELOG.md` entry and link the crates.io and PyPI package pages. GitHub Actions does not create the Release.
 
 ## Full Release Sequence
 
@@ -131,11 +131,12 @@ A GitHub Release is optional and manual. It must not be described as an automate
 4. Manually publish crates.io packages in dependency order.
 5. Verify crates.io propagation between publishes.
 6. Create and push signed `v<VERSION>` tag.
-7. Dispatch PyPI Wheels from the tag with `publish=false` (optional rehearsal).
-8. Inspect assembled artifacts.
+7. Dispatch PyPI Wheels from the frozen candidate SHA with `publish=false`; inspect all 18 wheels and the sdist.
+8. Create and push the signed tag on that exact candidate after crates.io publication.
 9. Dispatch from the same tag with `publish=true`.
-10. Approve the `pypi` environment deployment.
+10. Approve the `pypi` environment deployment after assembled-set validation.
 11. Verify PyPI release and installation on representative platforms.
+12. Create a non-draft, non-prerelease GitHub Release from the existing signed tag, with changelog-derived notes and links to both package registries.
 
 A successful publication to one registry must not be deleted because another channel failed. Correct and issue a new version according to each registry's immutability rules.
 

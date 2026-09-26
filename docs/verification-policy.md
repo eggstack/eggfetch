@@ -147,4 +147,5 @@ A new automatic check is permitted only when all of the following are true:
 - crates.io publication is performed locally by a maintainer. GitHub Actions does not publish to crates.io.
 - PyPI publication is performed via the manually dispatched PyPI wheel workflow with Trusted Publishing (OIDC).
 - No automatic workflow publishes, tags, creates releases, or authorizes a candidate SHA.
+- A coordinated public release includes a manually created GitHub Release tied to the already-pushed signed tag, after PyPI publication and initial registry verification. This is a maintainer release step, not an automatic workflow or CI gate.
 - Packaging dry runs are local and distinct from publication.

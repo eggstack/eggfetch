@@ -26,5 +26,5 @@ Optional maintainer checklist for release preparation. This is not a required ga
 ## Post-Publication
 
 - [ ] Signed version tag created and pushed
-- [ ] GitHub Release created (optional)
+- [ ] Required coordinated GitHub Release created from the existing signed tag after PyPI verification
 - [ ] PyPI publication (optional, manual)

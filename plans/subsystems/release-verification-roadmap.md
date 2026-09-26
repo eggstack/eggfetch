@@ -124,7 +124,7 @@ for the same tag, and external registry/install smoke passes.
 
 ### Milestone 2 — Python 3.15 wheel production rehearsal
 
-Class: capability (packaging). Status: blocked on M001A.
+Class: capability (packaging). Status: closed.
 
 Implementation plan:
 
@@ -134,8 +134,10 @@ Legacy detail: `plans/python-3.15-pypi-wheel-production.md`
 (implementation complete, qualification pending).
 
 Objective: `publish=false` rehearsal from the exact M001A 0.2.1 candidate;
-prove 18 wheels + 1 sdist, including Linux/macOS/Windows Python 3.15 rows,
-before M001B publication.
+prove 18 wheels + 1 sdist, including Linux/macOS/Windows Python 3.15 rows.
+Closed by run `36223505399` on
+`41757569123c0b8038550b956d8b244ab55094a6`; M004 renews the rehearsal only
+because the package README is refreshed on the final candidate.
 
 Exit conditions: 19 distributions assemble; Tier 1 + package green; bounded
 3.15-only prerelease fallback documented.
