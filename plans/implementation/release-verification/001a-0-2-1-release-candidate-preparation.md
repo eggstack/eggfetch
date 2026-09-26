@@ -1,6 +1,6 @@
 # Release and Verification M001A — 0.2.1 Release-Candidate Preparation
 
-Status: ready
+Status: closed
 
 Repository baseline: `36ab862dabf8f30fdcf05900a68fdf9f93060879`
 

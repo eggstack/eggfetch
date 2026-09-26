@@ -1,8 +1,18 @@
 # Release and Verification M001B — 0.2.1 Coordinated Publication
 
-Status: blocked on M002
+Status: superseded before execution
 
 Repository planning baseline: `36ab862dabf8f30fdcf05900a68fdf9f93060879`
+
+Superseded by:
+
+- `plans/implementation/release-verification/004-0-2-1-tagged-release-finalization.md`
+
+Reason: M001A and M002 closed successfully, but the final publication pass now
+requires a published GitHub Release and a truthful pre-release README/PyPI
+long-description refresh. The replacement milestone preserves this plan's
+publication-order and recovery guidance while renewing the exact candidate
+and wheel rehearsal.
 
 Parent milestone:
 

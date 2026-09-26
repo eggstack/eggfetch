@@ -1,6 +1,6 @@
 # Release and Verification Milestone 001 — Coordinated 0.2.x Publication
 
-Status: ready (decomposed; execute M001A next)
+Status: ready (M001A/M002 closed; execute M004 finalization)
 
 Repository planning baseline: `36ab862dabf8f30fdcf05900a68fdf9f93060879`
 
@@ -26,17 +26,20 @@ Publish the next coordinated EggFetch release without reusing or moving an
 already-consumed release identity, and without weakening the repository's
 manual release/security policy.
 
-This milestone is now decomposed:
+Execution has progressed as follows:
 
-1. **M001A** — prepare and qualify a fresh coordinated `0.2.1` release
-   candidate from the current qualified tree;
-2. **M002** — run the build-only Python 3.15 wheel rehearsal from that exact
-   candidate;
-3. **M001B** — publish all coordinated crates, create the signed `v0.2.1`
-   tag, publish the already-rehearsed Python distribution through Trusted
-   Publishing, and close the release.
+1. **M001A** — closed on candidate
+   `41757569123c0b8038550b956d8b244ab55094a6`;
+2. **M002** — closed on that exact candidate with run `36223505399`
+   (`publish=false`, 18 wheels + 1 sdist);
+3. **M001B** — superseded before execution;
+4. **M004** — sole ready finalization task: correct stale release-facing
+   documentation, freeze a docs-only final candidate, renew the exact-SHA
+   wheel rehearsal, publish all six crates, create signed `v0.2.1`, publish
+   PyPI through Trusted Publishing, create the required GitHub Release, and
+   close the release.
 
-Only M001A is executable initially.
+M004 is executable now.
 
 ## 2. Why decomposition is required
 
@@ -61,16 +64,17 @@ close before publishing `0.2.1`.
 ## 3. Dependency graph
 
 ```text
-M001A 0.2.1 release-candidate preparation
+M001A 0.2.1 release-candidate preparation (closed)
     |
     v
-M002 Python 3.15 build-only wheel rehearsal
+M002 Python 3.15 build-only wheel rehearsal (closed)
     |
     v
-M001B coordinated crates.io/tag/PyPI publication
+M004 tagged release finalization (ready; supersedes unexecuted M001B)
 ```
 
-M001 closes only when M001A, M002, and M001B are closed.
+M001 closes only when M004 completes coordinated crates.io, signed tag, PyPI,
+GitHub Release, external smoke, and closure reconciliation.
 
 ## 4. Invariants
 
@@ -85,14 +89,17 @@ M001 closes only when M001A, M002, and M001B are closed.
 - crates.io publication remains maintainer-local and manual.
 - PyPI publication remains manual `workflow_dispatch` using Trusted
   Publishing/OIDC.
+- A coordinated public release includes a manual GitHub Release object tied
+  to the already-pushed signed tag; GitHub Actions does not create it.
 - `eggfetch-bench` and `fuzz/` are never published.
 - Python 3.15 support is not claimed as release-backed until M002 closes.
 
 ## 5. Child plans
 
-- `plans/implementation/release-verification/001a-0-2-1-release-candidate-preparation.md`
-- `plans/implementation/release-verification/002-python-315-wheel-rehearsal.md`
-- `plans/implementation/release-verification/001b-0-2-1-coordinated-publication.md`
+- `plans/implementation/release-verification/001a-0-2-1-release-candidate-preparation.md` — closed
+- `plans/implementation/release-verification/002-python-315-wheel-rehearsal.md` — closed
+- `plans/implementation/release-verification/001b-0-2-1-coordinated-publication.md` — superseded before execution
+- `plans/implementation/release-verification/004-0-2-1-tagged-release-finalization.md` — ready
 
 ## 6. Umbrella closure
 
@@ -100,7 +107,7 @@ Create:
 
 `plans/closure/release-verification/001-coordinated-0-2-1-publication.md`
 
-after M001B closes.
+after M004 closes.
 
 The umbrella closure must link the M001A candidate SHA, M002 rehearsal run,
 all crates.io package versions, signed tag target, PyPI publication run, and

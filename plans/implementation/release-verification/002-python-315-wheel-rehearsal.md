@@ -1,6 +1,6 @@
 # Release and Verification Milestone 002 — Python 3.15 Wheel Rehearsal
 
-Status: blocked on M001A
+Status: closed
 
 Repository planning baseline: `36ab862dabf8f30fdcf05900a68fdf9f93060879`
 

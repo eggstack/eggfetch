@@ -1,6 +1,6 @@
 # Release and Verification Roadmap
 
-Status: active — M001A ready; M002 and M001B dependency-blocked
+Status: active — M001A/M002 closed; M004 tagged release finalization ready
 
 Long-term references:
 
@@ -55,17 +55,22 @@ explicit approval + regression history), publish automation.
 
 ## 4. Current state
 
-Tier 1/2/3 + security preflight defined and green on the live freeze;
-six-profile oracle vs the oracle baseline; both API oracles zero
-unexplained; wheel matrix builds 3.10–3.15 pending rehearsal dispatch.
+Tier 1/2/3 + security preflight are defined on the live freeze; six-profile
+oracle vs the oracle baseline and both API oracles have zero unexplained
+delta. M001A closed on candidate `41757569123c0b8038550b956d8b244ab55094a6`.
+M002 run `36223505399` then proved all 18 Python 3.10–3.15 wheels plus one
+sdist with `publish=false` on that exact candidate.
 Core-transport M006 and M006C1 are closed. The native-Windows EggFetch
 matrix passed 19/19 (run 36193582776), and the corrected EggReplay M013F
 Windows 300 KiB proof passed on commit `5efc6f9c892bb5b1c2e84330a0c40a38f1de0de7`
 (run 36211265347). Stage C remains bound to
-`5247ff0e01e309d9b408b8b4b4c90151ee5ce9fa`. The historical `v0.2.0` tag/release already exists at an older commit, so
-release work is decomposed around a fresh coordinated `0.2.1` identity. M001A
-prepares the exact candidate; M002 rehearses the Python matrix from that SHA;
-M001B performs publication.
+`5247ff0e01e309d9b408b8b4b4c90151ee5ce9fa`. The historical `v0.2.0` tag/release already exists at an older commit and
+remains immutable. The unexecuted M001B publication plan is superseded by
+M004 because a GitHub Release is now a required output and the candidate README
+still carries a now-stale "3.15 wheels pending rehearsal" statement. M004
+refreshes only release-facing docs, freezes a final docs-only candidate,
+renews the exact-SHA build-only rehearsal, then performs publication and
+closure.
 
 ## 5. Target architecture
 
@@ -79,15 +84,15 @@ automation growth.
 core-transport M006C2 post-closure reconciliation (closed)
     |
     v
-M001A 0.2.1 candidate preparation (ready)
+M001A 0.2.1 candidate preparation (closed)
     |
     v
-M002 Python 3.15 wheel rehearsal (blocked on M001A)
+M002 Python 3.15 wheel rehearsal (closed)
     |
     v
-M001B coordinated 0.2.1 publication (blocked on M002)
+M004 tagged 0.2.1 release finalization (ready; supersedes unexecuted M001B)
 
-M001 umbrella closes after M001B.
+M001 umbrella closes after M004.
 M003 standing corrective intake remains soft/ongoing.
 ```
 
@@ -101,19 +106,21 @@ Umbrella plan:
 
 - `plans/implementation/release-verification/001-release-publication.md`
 
-Child sequence:
+Execution history / sequence:
 
-1. `plans/implementation/release-verification/001a-0-2-1-release-candidate-preparation.md`
-2. `plans/implementation/release-verification/002-python-315-wheel-rehearsal.md`
-3. `plans/implementation/release-verification/001b-0-2-1-coordinated-publication.md`
+1. `plans/implementation/release-verification/001a-0-2-1-release-candidate-preparation.md` — closed
+2. `plans/implementation/release-verification/002-python-315-wheel-rehearsal.md` — closed
+3. `plans/implementation/release-verification/001b-0-2-1-coordinated-publication.md` — superseded before execution
+4. `plans/implementation/release-verification/004-0-2-1-tagged-release-finalization.md` — ready
 
 The existing `v0.2.0` tag points at an older release commit and is immutable
 history. The next coordinated identity is `0.2.1`; do not move/reuse v0.2.0.
 
-Exit conditions: one exact 0.2.1 candidate is prepared and qualified, M002
-rehearses that same SHA, six crates are published in dependency order, signed
-`v0.2.1` targets that candidate, PyPI publishes from that tag through OIDC,
-and external registry smoke passes.
+Exit conditions: a truthful docs-clean final 0.2.1 candidate is frozen and
+rehearsed on its exact SHA, six crates are published in dependency order,
+signed `v0.2.1` targets that candidate, PyPI publishes 18 wheels + 1 sdist
+from that tag through OIDC, a non-draft/non-prerelease GitHub Release exists
+for the same tag, and external registry/install smoke passes.
 
 ### Milestone 2 — Python 3.15 wheel production rehearsal
 
@@ -132,6 +139,22 @@ before M001B publication.
 
 Exit conditions: 19 distributions assemble; Tier 1 + package green; bounded
 3.15-only prerelease fallback documented.
+
+### Milestone 4 — 0.2.1 tagged release finalization
+
+Class: infrastructure / operational release. Status: ready.
+
+Implementation plan:
+
+- `plans/implementation/release-verification/004-0-2-1-tagged-release-finalization.md`
+
+Objective: reconcile stale release-facing documentation, freeze a docs-only
+final candidate, renew the exact-SHA wheel rehearsal, and complete coordinated
+crates.io, signed tag, PyPI, GitHub Release, external smoke, and planning
+closure. This supersedes the unexecuted M001B plan.
+
+Exit conditions: all acceptance criteria in M004 pass and the M001 umbrella
+closure is written.
 
 ### Milestone 3 — Standing corrective intake
 
@@ -170,8 +193,9 @@ process, never "complete."
 
 | Milestone | Status | Implementation plan | Closure record | Blockers |
 |---|---|---|---|---|
-| M001 umbrella | ready (decomposed) | `plans/implementation/release-verification/001-release-publication.md` | `plans/closure/release-verification/001-coordinated-0-2-1-publication.md` | M001A → M002 → M001B |
-| M001A 0.2.1 candidate prep | **ready** | `plans/implementation/release-verification/001a-0-2-1-release-candidate-preparation.md` | `plans/closure/release-verification/001a-0-2-1-release-candidate-preparation.md` | — |
-| M002 Python 3.15 rehearsal | blocked | `plans/implementation/release-verification/002-python-315-wheel-rehearsal.md` | `plans/closure/release-verification/002-python-315-wheel-rehearsal.md` | M001A closure |
-| M001B 0.2.1 publication | blocked | `plans/implementation/release-verification/001b-0-2-1-coordinated-publication.md` | `plans/closure/release-verification/001b-0-2-1-coordinated-publication.md` | M002 closure |
+| M001 umbrella | ready (finalization pending) | `plans/implementation/release-verification/001-release-publication.md` | `plans/closure/release-verification/001-coordinated-0-2-1-publication.md` | M004 |
+| M001A 0.2.1 candidate prep | closed | `plans/implementation/release-verification/001a-0-2-1-release-candidate-preparation.md` | `plans/closure/release-verification/001a-0-2-1-release-candidate-preparation.md` | — |
+| M002 Python 3.15 rehearsal | closed | `plans/implementation/release-verification/002-python-315-wheel-rehearsal.md` | `plans/closure/release-verification/002-python-315-wheel-rehearsal.md` | — |
+| M001B 0.2.1 publication | superseded | `plans/implementation/release-verification/001b-0-2-1-coordinated-publication.md` | — | Replaced before execution by M004 |
+| M004 0.2.1 tagged release finalization | **ready** | `plans/implementation/release-verification/004-0-2-1-tagged-release-finalization.md` | `plans/closure/release-verification/004-0-2-1-tagged-release-finalization.md` | — |
 | M003 intake | proposed | — | — | — |

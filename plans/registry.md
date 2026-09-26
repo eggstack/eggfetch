@@ -16,9 +16,11 @@ ledger for SHAs):
 
 - `plans/httpx-parity-correction-status.md` (+ `compat/*/profile.toml`)
 
-Pending release train: M001A prepares a fresh coordinated 0.2.1 candidate;
-M002 rehearses the Python 3.10–3.15 wheel/sdist set from that exact candidate;
-M001B performs coordinated crates.io/tag/PyPI publication.
+Pending release train: M001A and M002 are closed. M004 is the sole ready
+release task: refresh release-facing documentation, freeze a docs-only final
+0.2.1 candidate, renew the build-only wheel rehearsal on that exact SHA, then
+publish crates.io, signed v0.2.1, PyPI, and the GitHub Release. The unexecuted
+M001B plan is superseded.
 
 Validation tiers: `.skills/verification-qualification.md`. Normative policy:
 `docs/verification-policy.md`.
@@ -43,24 +45,27 @@ Validation tiers: `.skills/verification-qualification.md`. Normative policy:
 | Core transport and request policy | closed | `plans/subsystems/core-transport-policy-roadmap.md` | M006/M006C1/M006C2 all closed; subsystem at steady state | New corrective requires a fresh milestone plan. |
 | Python bindings and HTTPX compatibility | closed | `plans/subsystems/python-httpx-compat-roadmap.md` | M001-M003 closed on live Stage C binding | Facade work reopens only via gated roadmap Phase 4 trigger. |
 | TLS, proxy, and protocols | closed | `plans/subsystems/tls-proxy-protocols-roadmap.md` | All milestones closed; H3 experimental retained | H3 graduation blocked on named external evidence. |
-| Release and verification | active | `plans/subsystems/release-verification-roadmap.md` | M001A 0.2.1 candidate preparation | M001A is the sole ready task; M002 then M001B follow in order. |
+| Release and verification | active | `plans/subsystems/release-verification-roadmap.md` | M004 0.2.1 tagged release finalization | M001A/M002 closed; M004 is the sole ready task and supersedes unexecuted M001B. |
 | Performance and footprint | closed | `plans/subsystems/performance-footprint-roadmap.md` | Campaigns closed; fixtures repaired | New optimization needs its own milestone plan. |
 
 ## Dependency-ready implementation plans
 
 | Subsystem | Milestone | Status | Implementation plan | Dependencies / handoff note |
 |---|---|---|---|---|
-| Release and verification | M001 coordinated 0.2.x publication umbrella | ready (decomposed) | `plans/implementation/release-verification/001-release-publication.md` | Execute M001A → M002 → M001B; umbrella closes after publication. |
-| Release and verification | M001A 0.2.1 release-candidate preparation | **ready** | `plans/implementation/release-verification/001a-0-2-1-release-candidate-preparation.md` | Bump coordinated identity to 0.2.1, audit candidate delta, run Tier 1/2/3, freeze exact candidate SHA. |
-| Release and verification | M002 Python 3.15 wheel rehearsal | blocked | `plans/implementation/release-verification/002-python-315-wheel-rehearsal.md` | Blocked on M001A; `publish=false` from exact candidate, 18 wheels + 1 sdist. |
-| Release and verification | M001B 0.2.1 coordinated publication | blocked | `plans/implementation/release-verification/001b-0-2-1-coordinated-publication.md` | Blocked on M002; publish six crates, signed v0.2.1 tag, PyPI `publish=true`, external smoke. |
+| Release and verification | M001 coordinated 0.2.x publication umbrella | ready (finalization pending) | `plans/implementation/release-verification/001-release-publication.md` | M001A/M002 are closed; umbrella closes after M004 publication/closure. |
+| Release and verification | M001A 0.2.1 release-candidate preparation | closed | `plans/implementation/release-verification/001a-0-2-1-release-candidate-preparation.md` | Closed on original candidate `41757569123c0b8038550b956d8b244ab55094a6`. |
+| Release and verification | M002 Python 3.15 wheel rehearsal | closed | `plans/implementation/release-verification/002-python-315-wheel-rehearsal.md` | Run `36223505399` green: 18 wheels + 1 sdist, `publish=false`. |
+| Release and verification | M001B 0.2.1 coordinated publication | superseded | `plans/implementation/release-verification/001b-0-2-1-coordinated-publication.md` | Superseded before execution by M004. |
+| Release and verification | M004 0.2.1 tagged release finalization | **ready** | `plans/implementation/release-verification/004-0-2-1-tagged-release-finalization.md` | Sole ready task: docs truth refresh → renewed exact-SHA rehearsal → crates.io → signed tag → PyPI → GitHub Release → closure. |
 
 ## Current execution order and dependency gates
 
-**Release execution gate:** M001A is the sole ready task. The existing
-`v0.2.0` tag/release is historical and must not be moved or reused. M001A
-prepares a fresh `0.2.1` candidate; M002 then proves the Python 3.15 matrix
-from that exact SHA; M001B finally publishes/tag/releases that same candidate.
+**Release execution gate:** M001A and M002 are closed. M004 is the sole
+ready task. It first corrects the stale release-facing README/process docs,
+freezes a docs-only final `0.2.1` candidate, and renews the build-only PyPI
+rehearsal because the README is PyPI package metadata. It then publishes the
+six crates, signed `v0.2.1` tag, PyPI release, and required GitHub Release.
+Historical `v0.2.0` remains immutable.
 
 **Corrective gate:** none. The M006 Windows response-completeness work chain
 (M006/M006C1/M006C2) is closed. New correctives open through a fresh milestone
@@ -80,7 +85,10 @@ active work.
 
 ## Closure work and current control points
 
-All M006-family work (M006, M006C1, M006C2) is closed historical evidence;
-see `plans/closure/core-transport-policy/`. Stage C remains bound to
-`5247ff0e01e309d9b408b8b4b4c90151ee5ce9fa` unless a future corrective
-changes executable or qualification inputs.
+M001A and M002 are closed historical release evidence. M002 run
+`36223505399` proved the original candidate's 18-wheel + 1-sdist matrix with
+`publish=false`; M004 renews that exact-SHA rehearsal only because the root
+README/PyPI long description must be corrected before publication. All
+M006-family work is also closed. Stage C remains bound to
+`5247ff0e01e309d9b408b8b4b4c90151ee5ce9fa` unless executable or
+qualification inputs change.
