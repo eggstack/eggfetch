@@ -1,16 +1,7 @@
 # eggfetch Planning System
 
-> **Current execution gate:** M006/M006C1/M006C2 are closed. The Windows
-> response-completeness work is fully reconciled, the one-off manual
-> qualification workflow has been retired, and CI is back at the
-> verification-policy steady-state budget. M001 publication/tag/PyPI and
-> M002 Python 3.15 wheel rehearsal are the next operational actions,
-> ready to dispatch from the live Stage C SHA
-> `5247ff0e01e309d9b408b8b4b4c90151ee5ce9fa`. **Live status for agents:**
-> the exact-SHA Stage C binding is `plans/httpx-parity-correction-status.md`
-> (+ `compat/*/profile.toml`). Completed sections and legacy plan files
-> are historical records, not current gates (verification-policy
-> principle 9). Validation tiers: `.skills/verification-qualification.md`.
+> **Current execution gate:** the M006 Windows response-completeness chain is fully closed. Release work is now decomposed because the historical `v0.2.0` tag already exists at an older commit and must not be moved. **M001A — 0.2.1 release-candidate preparation is the sole ready task.** After M001A closes, M002 runs the build-only Python 3.10–3.15 wheel/sdist rehearsal from that exact candidate SHA; M001B then publishes the same candidate to crates.io/PyPI and creates signed `v0.2.1`. Stage C remains `5247ff0e01e309d9b408b8b4b4c90151ee5ce9fa` unless candidate preparation discovers executable or qualification-input drift.
+> **Live status for agents:** the exact-SHA Stage C binding is `plans/httpx-parity-correction-status.md` (+ `compat/*/profile.toml`). Completed sections and legacy plan files are historical records, not current gates (verification-policy principle 9). Validation tiers: `.skills/verification-qualification.md`.
 
 This directory separates durable architectural direction from temporary
 execution planning. Since the 2026-09-25 migration it follows the
