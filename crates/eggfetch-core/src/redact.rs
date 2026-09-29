@@ -82,11 +82,11 @@ fn strip_userinfo_best_effort(input: &str) -> String {
     let (prefix, rest) = input.split_at(authority_start);
     let stripped = rest.rfind('@').map_or(rest, |i| &rest[i + 1..]);
     let end = stripped.find(['?', '#']).unwrap_or(stripped.len());
-    // If there was no `@`, preserve the input unchanged except for
-    // query/fragment truncation only when userinfo was present; otherwise a
-    // plain invalid string is returned as-is to avoid mangling diagnostics.
+    // Always truncate query/fragment on this path so unparseable-URL
+    // errors never leak `?token=` material; when no `@` was present the
+    // prefix is the full input head.
     if rest.rfind('@').is_none() {
-        return input.to_owned();
+        return format!("{prefix}{}", &stripped[..end]);
     }
     format!("{prefix}{}", &stripped[..end])
 }

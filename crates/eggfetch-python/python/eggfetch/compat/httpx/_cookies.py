@@ -228,8 +228,7 @@ class Cookies(typing.MutableMapping[str, str]):
 
     def __repr__(self) -> str:
         items = ", ".join(
-            f"<Cookie {c.name}={c.value} for {c.domain} />"
-            for c in self.jar
+            f"<Cookie {c.name} for {c.domain} />" for c in self.jar
         )
         return f"<Cookies[{items}]>" if items else "Cookies([])"
 

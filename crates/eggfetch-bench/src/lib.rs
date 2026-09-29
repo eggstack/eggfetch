@@ -117,7 +117,10 @@ impl BenchServer {
         self.requests_served.load(Ordering::Relaxed)
     }
 
-    /// Shut down the server. The server thread will exit when the process ends.
+    /// Shut down the server. Best-effort harness-only placeholder: the
+    /// listener thread exits when the process ends. Connections are
+    /// handled on one thread each, which is acceptable for bounded
+    /// benchmark loads but must not be copied into production code.
     #[allow(clippy::unused_self)]
     pub fn shutdown(&self) {}
 }

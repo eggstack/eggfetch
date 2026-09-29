@@ -76,6 +76,30 @@ class EndOfStream(Exception):
     pass
 
 
+def _is_stream_error(exc: BaseException) -> bool:
+    """Return True for transport-level stream failures.
+
+    Native ``network_stream.read/write`` raises ``eggfetch.NetworkError``
+    (via ``errors.rs:map_err``), never ``httpcore2`` errors; the ASGI
+    path raises ``httpcore2.ReadError/WriteError``. Both map to
+    ``WebSocketNetworkError``. Anything else (wsproto framing,
+    programming errors) must propagate unchanged.
+    """
+    try:
+        import httpcore2 as _hc
+
+        if isinstance(exc, (_hc.ReadError, _hc.WriteError)):
+            return True
+    except Exception:
+        pass
+    try:
+        import eggfetch as _ef
+
+        return isinstance(exc, _ef.EggfetchError)
+    except Exception:
+        return False
+
+
 class WebSocketSession:
     """
     Sync context manager representing an opened WebSocket session.
@@ -213,7 +237,9 @@ class WebSocketSession:
             data = self.connection.send(event)
             with self._write_lock:
                 self.stream.write(data)
-        except httpcore2.WriteError as e:
+        except Exception as e:
+            if not _is_stream_error(e):
+                raise
             self.close(CloseReason.INTERNAL_ERROR, "Stream write error")
             raise WebSocketNetworkError() from e
 
@@ -490,7 +516,9 @@ class WebSocketSession:
             try:
                 with self._write_lock:
                     self.stream.write(data)
-            except httpcore2.WriteError:
+            except Exception as e:
+                if not _is_stream_error(e):
+                    raise
                 pass
         self.stream.close()
 
@@ -552,11 +580,16 @@ class WebSocketSession:
                             self._events.put(full_message_event)
                         continue
                     self._events.put(event)
-        except (httpcore2.ReadError, httpcore2.WriteError, EndOfStream):
-            self.close(CloseReason.INTERNAL_ERROR, "Stream error")
-            self._events.put(WebSocketNetworkError())
         except ShouldClose:
             pass
+        except EndOfStream:
+            self.close(CloseReason.INTERNAL_ERROR, "Stream error")
+            self._events.put(WebSocketNetworkError())
+        except Exception as e:
+            if not _is_stream_error(e):
+                raise
+            self.close(CloseReason.INTERNAL_ERROR, "Stream error")
+            self._events.put(WebSocketNetworkError())
 
     def _background_keepalive_ping(self, interval_seconds: float, timeout_seconds: float | None = None) -> None:
         try:
@@ -751,7 +784,9 @@ class AsyncWebSocketSession(anyio.AsyncContextManagerMixin):
             data = self.connection.send(event)
             async with self._write_lock:
                 await self.stream.write(data)
-        except httpcore2.WriteError as e:
+        except Exception as e:
+            if not _is_stream_error(e):
+                raise
             await self.close(CloseReason.INTERNAL_ERROR, "Stream write error")
             raise WebSocketNetworkError() from e
 
@@ -1059,7 +1094,9 @@ class AsyncWebSocketSession(anyio.AsyncContextManagerMixin):
             try:
                 async with self._write_lock:
                     await self.stream.write(data)
-            except httpcore2.WriteError:
+            except Exception as e:
+                if not _is_stream_error(e):
+                    raise
                 pass
         await self.stream.aclose()
 
@@ -1123,7 +1160,12 @@ class AsyncWebSocketSession(anyio.AsyncContextManagerMixin):
                             await self._send_event.send(full_message_event)
                         continue
                     await self._send_event.send(event)
-        except (httpcore2.ReadError, httpcore2.WriteError, EndOfStream):
+        except EndOfStream:
+            await self.close(CloseReason.INTERNAL_ERROR, "Stream error")
+            await self._send_event.send(WebSocketNetworkError())
+        except Exception as e:
+            if not _is_stream_error(e):
+                raise
             await self.close(CloseReason.INTERNAL_ERROR, "Stream error")
             await self._send_event.send(WebSocketNetworkError())
 

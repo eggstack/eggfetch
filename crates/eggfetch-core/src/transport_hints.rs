@@ -115,8 +115,11 @@ pub struct TransportHints {
 
 impl std::fmt::Debug for TransportHints {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // `target` may carry absolute-form URIs with query material
+        // (e.g. forward-proxy `?api_key=`); log presence + length only.
+        let target = self.target.as_ref().map(bytes::Bytes::len);
         f.debug_struct("TransportHints")
-            .field("target", &self.target)
+            .field("target_len", &target)
             .field("sni_hostname", &self.sni_hostname)
             .field("resolved_target", &self.resolved_target)
             .field("trace", &self.trace.as_ref().map(|_| "..."))

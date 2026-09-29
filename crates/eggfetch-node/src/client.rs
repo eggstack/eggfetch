@@ -166,6 +166,10 @@ impl EggfetchClient {
 
     /// Send a request with a custom method.
     ///
+    /// The optional body is UTF-8 text only; arbitrary binary payloads
+    /// (interior NUL) are rejected with an error. Use a byte-oriented
+    /// API for binary uploads.
+    ///
     /// # Errors
     ///
     /// Returns an error if the request fails or the method/URL is invalid.
@@ -280,7 +284,7 @@ impl EggfetchClient {
                     ));
                 }
 
-                Ok(crate::EggfetchResponse::from_raw(resp))
+                crate::EggfetchResponse::from_raw(resp)
             })
             .await
             .map_err(|e| napi::Error::from_reason(format!("request worker failed: {e}")))?

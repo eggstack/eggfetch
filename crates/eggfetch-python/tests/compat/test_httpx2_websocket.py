@@ -15,9 +15,10 @@ import wsproto
 import wsproto.events
 
 import eggfetch.compat.httpx2 as httpx2
-from eggfetch.compat.httpx2.websockets._api import WebSocketSession
+from eggfetch.compat.httpx2.websockets._api import WebSocketSession, _is_stream_error
 from eggfetch.compat.httpx2.websockets._exceptions import (
     WebSocketDisconnect,
+    WebSocketNetworkError,
     WebSocketUpgradeError,
 )
 
@@ -207,3 +208,28 @@ def test_proxy_headers_never_reach_origin():
     c = httpx2.Client(transport=httpx2.MockTransport(handler))
     r = c.get("http://testserver/", headers={"X-Origin": "1"})
     assert r.status_code == 200
+
+
+def test_is_stream_error_classifies_native_and_httpcore2():
+    import httpcore2
+
+    import eggfetch
+
+    assert _is_stream_error(eggfetch.NetworkError("down"))
+    assert _is_stream_error(httpcore2.WriteError("down"))
+    assert _is_stream_error(httpcore2.ReadError("down"))
+    # Framing / programming errors must propagate, never translate.
+    assert not _is_stream_error(ValueError("bug"))
+    assert not _is_stream_error(wsproto.utilities.LocalProtocolError("x"))
+
+
+def test_send_translates_native_write_failure():
+    import eggfetch
+
+    class FailingStream(FakeStream):
+        def write(self, data):
+            raise eggfetch.NetworkError("connection reset")
+
+    session = _session(FailingStream())
+    with pytest.raises(WebSocketNetworkError):
+        session.send(wsproto.events.TextMessage("hi"))

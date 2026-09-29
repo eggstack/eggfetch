@@ -19,7 +19,7 @@ pub struct EggfetchResponse {
 
 impl EggfetchResponse {
     /// Create from a raw FFI response handle, consuming it immediately.
-    pub(crate) fn from_raw(resp: *mut eggfetch_ffi::ResponseHandle) -> Self {
+    pub(crate) fn from_raw(resp: *mut eggfetch_ffi::ResponseHandle) -> napi::Result<Self> {
         unsafe {
             let status = u32::from(eggfetch_ffi::eggfetch_response_status(resp));
             let url_ptr = eggfetch_ffi::eggfetch_response_url(resp);
@@ -63,32 +63,45 @@ impl EggfetchResponse {
                         eggfetch_ffi::eggfetch_string_free(value);
                     }
                     headers.push((n, v));
+                } else {
+                    // Interior-NUL or out-of-range header: fail loudly
+                    // instead of silently dropping the header.
+                    eggfetch_ffi::eggfetch_response_free(resp);
+                    return Err(napi::Error::from_reason(format!(
+                        "failed to read response header at index {i} (code {rc})"
+                    )));
                 }
             }
 
             let mut body_ptr = ptr::null_mut();
             let mut body_len = 0;
-            let body =
-                if eggfetch_ffi::eggfetch_response_body(resp, &raw mut body_ptr, &raw mut body_len)
-                    == 0
-                    && body_len > 0
-                    && !body_ptr.is_null()
-                {
+            let rc =
+                eggfetch_ffi::eggfetch_response_body(resp, &raw mut body_ptr, &raw mut body_len);
+            let body = if rc == 0 && (body_len == 0 || !body_ptr.is_null()) {
+                if body_len == 0 {
+                    Vec::new()
+                } else {
                     let body = std::slice::from_raw_parts(body_ptr, body_len).to_vec();
                     eggfetch_ffi::eggfetch_body_free(body_ptr, body_len);
                     body
-                } else {
-                    Vec::new()
-                };
+                }
+            } else {
+                // Allocation failure or backend error: propagate instead
+                // of returning an empty body indistinguishable from `""`.
+                eggfetch_ffi::eggfetch_response_free(resp);
+                return Err(napi::Error::from_reason(format!(
+                    "failed to read response body (code {rc})"
+                )));
+            };
 
             eggfetch_ffi::eggfetch_response_free(resp);
 
-            Self {
+            Ok(Self {
                 status,
                 url,
                 headers,
                 body,
-            }
+            })
         }
     }
 }

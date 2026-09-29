@@ -30,18 +30,19 @@ impl PyAsyncBytesIterator {
         py: Python<'py>,
         chunk_size: usize,
     ) -> PyResult<Bound<'py, Self>> {
-        let (stream, mut cancellation) = {
+        let (stream, mut cancellation, runtime_handle) = {
             let borrowed = resp.borrow(py);
             borrowed.ensure_streaming()?;
             Ok::<_, PyErr>((
                 borrowed.take_stream(StreamMode::Decoded)?,
                 borrowed.stream_cancel.subscribe(),
+                borrowed.runtime_handle.clone(),
             ))?
         };
 
         let (tx, rx) = tokio::sync::mpsc::channel(16);
 
-        let producer = pyo3_async_runtimes::tokio::get_runtime().spawn(async move {
+        let producer = runtime_handle.spawn(async move {
             let mut stream = stream;
             loop {
                 tokio::select! {
@@ -152,17 +153,22 @@ impl PyAsyncTextIterator {
         _chunk_size: usize,
         encoding_override: Option<String>,
     ) -> PyResult<Bound<'py, Self>> {
-        let (stream, enc_name, mut cancellation) = {
+        let (stream, enc_name, mut cancellation, runtime_handle) = {
             let borrowed = resp.borrow(py);
             borrowed.ensure_streaming()?;
             let stream = borrowed.take_stream(StreamMode::Decoded)?;
             let enc_name = encoding_override.or_else(|| borrowed.encoding_name.clone());
-            (stream, enc_name, borrowed.stream_cancel.subscribe())
+            (
+                stream,
+                enc_name,
+                borrowed.stream_cancel.subscribe(),
+                borrowed.runtime_handle.clone(),
+            )
         };
 
         let (tx, rx) = tokio::sync::mpsc::channel(16);
 
-        let producer = pyo3_async_runtimes::tokio::get_runtime().spawn(async move {
+        let producer = runtime_handle.spawn(async move {
             let mut stream = stream;
             let mut decoder = IncrementalDecoder::new(enc_name.as_deref());
             loop {
@@ -251,17 +257,22 @@ impl PyAsyncLinesIterator {
         _chunk_size: usize,
         encoding_override: Option<String>,
     ) -> PyResult<Bound<'py, Self>> {
-        let (stream, enc_name, mut cancellation) = {
+        let (stream, enc_name, mut cancellation, runtime_handle) = {
             let borrowed = resp.borrow(py);
             borrowed.ensure_streaming()?;
             let stream = borrowed.take_stream(StreamMode::Decoded)?;
             let enc_name = encoding_override.or_else(|| borrowed.encoding_name.clone());
-            (stream, enc_name, borrowed.stream_cancel.subscribe())
+            (
+                stream,
+                enc_name,
+                borrowed.stream_cancel.subscribe(),
+                borrowed.runtime_handle.clone(),
+            )
         };
 
         let (tx, rx) = tokio::sync::mpsc::channel(16);
 
-        let producer = pyo3_async_runtimes::tokio::get_runtime().spawn(async move {
+        let producer = runtime_handle.spawn(async move {
             let mut stream = stream;
             let mut decoder = IncrementalDecoder::new(enc_name.as_deref());
             let mut line_buffer = String::new();
@@ -361,18 +372,19 @@ impl PyAsyncRawBytesIterator {
         py: Python<'py>,
         chunk_size: Option<usize>,
     ) -> PyResult<Bound<'py, Self>> {
-        let (stream, mut cancellation) = {
+        let (stream, mut cancellation, runtime_handle) = {
             let borrowed = resp.borrow(py);
             borrowed.ensure_streaming()?;
             Ok::<_, PyErr>((
                 borrowed.take_stream(StreamMode::Raw)?,
                 borrowed.stream_cancel.subscribe(),
+                borrowed.runtime_handle.clone(),
             ))?
         };
 
         let (tx, rx) = tokio::sync::mpsc::channel(16);
 
-        let producer = pyo3_async_runtimes::tokio::get_runtime().spawn(async move {
+        let producer = runtime_handle.spawn(async move {
             let mut stream = stream;
             loop {
                 tokio::select! {

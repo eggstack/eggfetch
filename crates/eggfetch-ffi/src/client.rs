@@ -290,8 +290,11 @@ pub unsafe extern "C" fn eggfetch_client_send(
             }
 
             // Consume the request by taking ownership of the builder.
-            let request_box = Box::from_raw(request_ptr);
+            // Null the tracking pointer *before* `from_raw` so the
+            // panic fallback outside `catch_unwind` can never observe
+            // a stale non-null value and double-free.
             request_ptr = ptr::null_mut();
+            let request_box = Box::from_raw(request);
             let Some(rb) = request_box.0 else {
                 if !err_out.is_null() {
                     let err = eggfetch_core::Error::RequestBuild(

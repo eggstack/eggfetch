@@ -8,7 +8,7 @@ use std::time::Duration;
 use bytes::Bytes;
 use futures_core::Stream;
 use pin_project_lite::pin_project;
-use tokio::time::{Instant, Sleep};
+use tokio::time::Sleep;
 
 use crate::body::BoxBytesStream;
 use crate::error::{Error, Result};
@@ -70,7 +70,9 @@ where
         match me.inner.poll_next(cx) {
             Poll::Ready(Some(Ok(bytes))) => {
                 if let Some(deadline) = me.deadline.as_mut() {
-                    deadline.as_mut().reset(Instant::now() + *me.duration);
+                    // Saturate absurd durations instead of panicking on overflow.
+                    let next = crate::timeout::saturating_tokio_now_plus(*me.duration);
+                    deadline.as_mut().reset(next);
                 }
                 return Poll::Ready(Some(Ok(bytes)));
             }

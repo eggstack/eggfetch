@@ -124,30 +124,6 @@ pub struct PyResponse {
 }
 
 impl PyResponse {
-    /// Create a `PyResponse` from a core `Response`, buffering all data.
-    ///
-    /// Uses a short-lived tokio runtime to buffer the body. Not safe to
-    /// call from within an existing async context — use
-    /// [`from_core_response_with_body`] instead.
-    pub fn from_core_response(mut response: eggfetch_core::Response) -> PyResult<Self> {
-        if tokio::runtime::Handle::try_current().is_ok() {
-            return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
-                "cannot synchronously buffer a response inside a Tokio runtime; use the async API",
-            ));
-        }
-        let content = {
-            let rt = tokio::runtime::Runtime::new()
-                .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
-            rt.block_on(response.bytes())
-                .map_err(crate::errors::map_err)?
-        };
-        // The short-lived runtime is dropped here; a 101 upgrade
-        // extracted on this path has no handle to drive IO with and is
-        // rejected with a clear error inside
-        // `from_core_response_with_body`.
-        Self::from_core_response_with_body(&mut response, content, None, None, false)
-    }
-
     /// Create a `PyResponse` from a core `Response` with pre-buffered body
     /// bytes.
     ///

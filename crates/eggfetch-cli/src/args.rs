@@ -99,8 +99,8 @@ pub(crate) struct Cli {
     #[arg(long = "follow", default_value_t = true)]
     pub(crate) follow: bool,
 
-    /// Do not follow redirects (conflicts with `--follow`).
-    #[arg(long = "no-follow", conflicts_with = "follow")]
+    /// Do not follow redirects (overrides `--follow`).
+    #[arg(long = "no-follow", overrides_with = "follow")]
     pub(crate) no_follow: bool,
 
     /// Maximum number of redirects.

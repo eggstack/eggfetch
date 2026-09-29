@@ -378,18 +378,16 @@ impl http_body::Body for NativeRequestBody {
         if let Some(timeout) = *this.write_timeout {
             if !*this.started {
                 *this.started = true;
-                this.timer
-                    .as_mut()
-                    .reset(tokio::time::Instant::now() + timeout);
+                let next = crate::timeout::saturating_tokio_now_plus(timeout);
+                this.timer.as_mut().reset(next);
             }
         }
 
         match this.inner.as_mut().poll_frame(cx) {
             Poll::Ready(Some(Ok(frame))) => {
                 if let Some(timeout) = *this.write_timeout {
-                    this.timer
-                        .as_mut()
-                        .reset(tokio::time::Instant::now() + timeout);
+                    let next = crate::timeout::saturating_tokio_now_plus(timeout);
+                    this.timer.as_mut().reset(next);
                 }
                 Poll::Ready(Some(Ok(frame)))
             }
@@ -561,9 +559,8 @@ impl http_body::Body for NativeResponseBody {
                 if let (Some(read_sleep), Some(timeout)) =
                     (this.read_sleep.as_mut(), this.read_timeout.as_ref())
                 {
-                    read_sleep
-                        .as_mut()
-                        .reset(tokio::time::Instant::now() + *timeout);
+                    let next = crate::timeout::saturating_tokio_now_plus(*timeout);
+                    read_sleep.as_mut().reset(next);
                 }
                 Poll::Ready(Some(Ok(frame)))
             }

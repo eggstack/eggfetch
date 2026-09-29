@@ -134,12 +134,16 @@ const DRAIN_MAX_TIME: Duration = Duration::from_secs(30);
     feature = "high-level-url",
     any(feature = "logical-retry", feature = "redirects")
 ))]
-pub(super) async fn drain_response_body(response: &mut Response) {
+pub(super) async fn drain_response_body(response: &mut Response, read_timeout: Option<Duration>) {
     let Ok(stream) = response.raw_bytes_stream() else {
         return; // body already consumed; nothing to drain
     };
     let mut remaining = DRAIN_MAX_BYTES;
     let mut stream = std::pin::pin!(stream);
+    // Cap the best-effort drain by the read budget when one is set so a
+    // slow-drip body cannot stall retry/redirect for the full
+    // `DRAIN_MAX_TIME` when the caller only tolerates a shorter read.
+    let cap = read_timeout.map_or(DRAIN_MAX_TIME, |read| read.min(DRAIN_MAX_TIME));
     let drain = async {
         while let Some(chunk) = futures_util::StreamExt::next(&mut stream).await {
             match chunk {
@@ -153,7 +157,7 @@ pub(super) async fn drain_response_body(response: &mut Response) {
             }
         }
     };
-    let _ = tokio::time::timeout(DRAIN_MAX_TIME, drain).await;
+    let _ = tokio::time::timeout(cap, drain).await;
 }
 
 /// Send a single HTTP request and return the streaming response.
@@ -607,9 +611,12 @@ where
     // Absolute native total deadline starts with the request lifecycle
     // (pool admission), not the first frame poll, and never resets on DATA
     // or trailer frames.
-    let total_deadline = timeout
-        .total
-        .map(|total| crate::timeout::ResponseDeadline::new(started + total, total));
+    let total_deadline = timeout.total.map(|total| {
+        crate::timeout::ResponseDeadline::new(
+            crate::timeout::saturating_add_instant(started, total),
+            total,
+        )
+    });
     let trace = transport_hints.trace.as_deref();
     #[cfg(all(unix, feature = "advanced-routing"))]
     let has_uds = inner.uds_client.is_some();

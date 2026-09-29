@@ -86,6 +86,33 @@ pub(crate) fn format_headers_machine(headers: &http::HeaderMap) -> Vec<Value> {
         .collect()
 }
 
+pub(crate) fn safe_url_for_display(url: &str) -> String {
+    // Strip userinfo, query, and fragment so machine output never leaks
+    // credentials or token material embedded in URLs.
+    let authority_start = url.find("://").map_or(0, |i| i + 3);
+    let (prefix, rest) = url.split_at(authority_start);
+    // Drop `userinfo@` when present.
+    let after_userinfo = match rest.find('@') {
+        Some(at) => {
+            // Only treat `@` before the first `/` as userinfo.
+            let slash = rest.find('/').unwrap_or(rest.len());
+            if at < slash {
+                &rest[at + 1..]
+            } else {
+                rest
+            }
+        }
+        None => rest,
+    };
+    // Drop path query/fragment.
+    let host_end = after_userinfo
+        .find(['/', '?', '#'])
+        .unwrap_or(after_userinfo.len());
+    let (host_port, path) = after_userinfo.split_at(host_end);
+    let path_end = path.find(['?', '#']).unwrap_or(path.len());
+    format!("{prefix}{host_port}{}", &path[..path_end])
+}
+
 pub(crate) fn build_json_response(
     response: &eggfetch_core::Response,
     elapsed: Duration,
@@ -102,14 +129,14 @@ pub(crate) fn build_json_response(
         .map(|entry| {
             json!({
                 "status": entry.status().as_u16(),
-                "url": entry.url().to_string(),
+                "url": safe_url_for_display(entry.url().as_str()),
                 "version": version_string(entry.version()),
             })
         })
         .collect();
 
     let mut obj = json!({
-        "url": response.url().to_string(),
+        "url": safe_url_for_display(response.url().as_str()),
         "status": response.status().as_u16(),
         "version": version_string(response.version()),
         "headers": headers,

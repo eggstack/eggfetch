@@ -58,6 +58,18 @@ fn target_control_rejected() {
     assert!(ConnectTarget::new("example .com", 443).is_err());
 }
 
+#[test]
+fn target_request_delimiters_rejected() {
+    // A `host` value must never smuggle a path, query, fragment, or
+    // userinfo section into the CONNECT request line.
+    assert!(ConnectTarget::new("evil.com/path:443", 443).is_err());
+    assert!(ConnectTarget::new("evil.com/path", 443).is_err());
+    assert!(ConnectTarget::new("host?x=1", 443).is_err());
+    assert!(ConnectTarget::new("host#frag", 443).is_err());
+    assert!(ConnectTarget::new("user@host", 443).is_err());
+    assert!(ConnectTarget::new("[::1]/path", 443).is_err());
+}
+
 // ── Request ──────────────────────────────────────────────────────────────
 
 fn encode(

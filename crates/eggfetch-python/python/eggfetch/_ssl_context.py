@@ -295,13 +295,19 @@ def _classify_context(
     # ── Options flags ─────────────────────────────────────────────
     if hasattr(ctx, "options"):
         options = ctx.options
-        # Only reject options that actively change handshake or security
-        # semantics in ways rustls cannot represent.  Standard "no SSLv2",
-        # "no SSLv3", "no TLSv1.x" flags, session/renegotiation options,
-        # and performance hints are all safe to ignore.
+        # Reject options that change handshake or security semantics in
+        # ways rustls cannot represent. Version-disable flags
+        # (OP_NO_SSLv*/OP_NO_TLSv1*), OP_NO_COMPRESSION, bug-workaround
+        # toggles, and OP_CIPHER_SERVER_PREFERENCE (server-side only;
+        # present in CPython's default client options bitmask) are safe
+        # to ignore; everything security-semantic below fails closed.
         _BLOCKED_OPTIONS = 0
         for name in (
             "OP_PRIORITIZE_CHACHA",
+            "OP_ALLOW_UNSAFE_LEGACY_RENEGOTIATION",
+            "OP_LEGACY_SERVER_CONNECT",
+            "OP_NO_TICKET",
+            "OP_NO_RENEGOTIATION",
         ):
             val = getattr(ssl, name, 0)
             if val:
@@ -514,8 +520,13 @@ def context_to_eggfetch_kwargs(
       client certificates without extraction-safe provenance cause
       rejection.
     - External client certificates (mTLS) without helper path
-      provenance cannot be exported safely; translation fails
-      closed with ``TypeError`` before dispatch.
+      provenance cannot be exported safely and are NOT carried:
+      translation is verify-only (no ``cert`` key). A server that
+      requires mTLS will then fail the handshake for lack of client
+      identity; where the server makes client certs optional the
+      request proceeds without client identity. Callers needing
+      mTLS must use ``create_ssl_context(cert=...)`` or pass
+      ``cert=`` explicitly.
 
     Raises ``TypeError`` if the context cannot be represented.
     """

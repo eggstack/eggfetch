@@ -206,9 +206,12 @@ pub(crate) async fn send_with_retry(client: &Client, request: Request) -> Result
                     // being discarded and the request retried regardless.
                     if let Some(total) = saved_timeout.as_ref().and_then(|t| t.total) {
                         let dur = total.saturating_sub(start_time.elapsed());
-                        let _ = tokio::time::timeout(dur, drain_response_body(&mut resp)).await;
+                        let read = saved_timeout.as_ref().and_then(|t| t.read);
+                        let _ =
+                            tokio::time::timeout(dur, drain_response_body(&mut resp, read)).await;
                     } else {
-                        drain_response_body(&mut resp).await;
+                        let read = saved_timeout.as_ref().and_then(|t| t.read);
+                        drain_response_body(&mut resp, read).await;
                     }
 
                     if let Some(dur) =

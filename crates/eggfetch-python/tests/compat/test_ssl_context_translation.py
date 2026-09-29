@@ -586,6 +586,27 @@ class TestClassification:
             Classification.REPRESENTABLE_WITH_DEFAULTS,
         )
 
+    def test_security_semantic_options_rejected(self):
+        from eggfetch.compat.httpx._ssl_context import (
+            Classification,
+            _classify_context,
+        )
+
+        ctx = ssl.create_default_context()
+        ctx.options |= ssl.OP_NO_TICKET
+        assert _classify_context(ctx) == Classification.UNREPRESENTABLE
+
+    def test_default_options_accepted(self):
+        # CPython's default options bitmask (incl. server-side-only
+        # OP_CIPHER_SERVER_PREFERENCE) must not fail closed.
+        from eggfetch.compat.httpx._ssl_context import (
+            Classification,
+            _classify_context,
+        )
+
+        ctx = ssl.create_default_context()
+        assert _classify_context(ctx) == Classification.EXACTLY_REPRESENTABLE
+
 
 # ── Registry lifecycle ───────────────────────────────────────────────
 

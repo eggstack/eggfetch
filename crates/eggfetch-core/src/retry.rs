@@ -28,6 +28,26 @@ use crate::error::Error;
 /// Default retryable status codes: 408, 429, 502, 503, 504.
 const DEFAULT_RETRYABLE_STATUSES: &[u16] = &[408, 429, 502, 503, 504];
 
+/// Returns `true` when a hyper-util legacy client error wraps a canceled
+/// hyper connection (stale pooled connection closed before any byte was
+/// sent). `ErrorKind::Canceled` has no public accessor, so walk the
+/// source chain to the public `hyper::Error::is_canceled` instead.
+#[cfg(any(feature = "transport-http1", feature = "transport-http2"))]
+fn is_hyper_canceled(inner: &hyper_util::client::legacy::Error) -> bool {
+    use std::error::Error as _;
+    let mut source = inner.source();
+    while let Some(err) = source {
+        if err
+            .downcast_ref::<hyper::Error>()
+            .is_some_and(hyper::Error::is_canceled)
+        {
+            return true;
+        }
+        source = err.source();
+    }
+    false
+}
+
 /// Default retryable methods: GET, HEAD, OPTIONS.
 const DEFAULT_RETRYABLE_METHODS: &[Method] = &[Method::GET, Method::HEAD, Method::OPTIONS];
 
@@ -144,8 +164,16 @@ impl RetryPolicy {
     #[must_use]
     pub fn is_error_retryable(error: &Error) -> bool {
         #[cfg(any(feature = "transport-http1", feature = "transport-http2"))]
-        if matches!(error, Error::HyperClient(_)) {
-            return true;
+        if let Error::HyperClient(inner) = error {
+            // Only retry failures that can succeed on replay:
+            // connect-level errors (`is_connect`, including DNS/TCP and
+            // connector handshake failures) and stale-pooled-connection
+            // cancellations (`hyper::Error::is_canceled`, "connection
+            // closed" before any byte was sent). User/config errors
+            // (unsupported method/version/absolute-uri) and mid-request
+            // send failures are never retried, so cert/config problems
+            // cannot be masked by a retry loop.
+            return inner.is_connect() || is_hyper_canceled(inner.as_ref());
         }
         match error {
             Error::Connect(_)

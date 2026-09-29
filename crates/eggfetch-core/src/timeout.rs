@@ -367,10 +367,39 @@ impl ResponseDeadline {
             .deadline
             .checked_sub(self.total)
             .unwrap_or(self.deadline);
-        started.elapsed()
+        // `started` may be in the future when the deadline was saturated
+        // (e.g. `Duration::MAX` total); never panic on `duration_since`.
+        // Recompute as now - started saturating: Instant::elapsed() panics
+        // when `started` is in the future, so use the saturating form.
+        std::time::Instant::now().saturating_duration_since(started)
     }
 }
 
+/// Saturating `Instant + Duration`: on overflow (e.g. `Duration::MAX` as a
+/// total timeout) fall back to ~10 years out instead of panicking.
+#[must_use]
+pub(crate) fn saturating_add_instant(
+    base: std::time::Instant,
+    duration: Duration,
+) -> std::time::Instant {
+    base.checked_add(duration).unwrap_or_else(|| {
+        base.checked_add(Duration::from_secs(86400 * 365 * 10))
+            .unwrap_or(base)
+    })
+}
+
+/// Saturating `tokio::time::Instant::now() + duration`: on overflow (e.g.
+/// absurd per-chunk budgets) fall back to ~10 years out instead of
+/// panicking. The ultimate fallback is `now` (immediate expiry,
+/// fail-closed), which cannot overflow.
+#[must_use]
+pub(crate) fn saturating_tokio_now_plus(duration: Duration) -> tokio::time::Instant {
+    let now = tokio::time::Instant::now();
+    now.checked_add(duration).unwrap_or_else(|| {
+        now.checked_add(Duration::from_secs(86400 * 365 * 10))
+            .unwrap_or(now)
+    })
+}
 /// Builder for constructing a [`Timeout`] with individual phase durations.
 ///
 /// Created by [`Timeout::builder()`].
@@ -445,6 +474,25 @@ mod tests {
         assert!(t.write.is_none());
         assert!(t.read.is_none());
         assert!(t.total.is_none());
+    }
+
+    #[test]
+    fn saturating_add_instant_absorbs_duration_max() {
+        // `started + Duration::MAX` panics on overflow; the saturating
+        // helper must return a usable future deadline instead.
+        let started = std::time::Instant::now();
+        let deadline = saturating_add_instant(started, Duration::MAX);
+        assert!(deadline >= started);
+    }
+
+    #[test]
+    fn response_deadline_elapsed_never_panics_on_saturated_deadline() {
+        // A saturated far-future deadline (e.g. from `Duration::MAX`)
+        // must report zero elapsed rather than panicking in
+        // `duration_since`.
+        let saturated = saturating_add_instant(std::time::Instant::now(), Duration::MAX);
+        let deadline = ResponseDeadline::new(saturated, Duration::MAX);
+        assert_eq!(deadline.elapsed(), Duration::ZERO);
     }
 
     #[test]

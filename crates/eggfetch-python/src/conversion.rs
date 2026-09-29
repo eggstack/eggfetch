@@ -179,13 +179,13 @@ pub(crate) fn classify_python_body(content: &Bound<'_, PyAny>) -> PyResult<Pytho
             "content must be bytes, str, or an iterable of bytes",
         ));
     }
-    if content.hasattr("__iter__")? {
-        return Ok(PythonBodyKind::Sync(content.try_iter()?.unbind()));
-    }
     if content.hasattr("__aiter__")? {
         return Ok(PythonBodyKind::Async(
             content.call_method0("__aiter__")?.unbind(),
         ));
+    }
+    if content.hasattr("__iter__")? {
+        return Ok(PythonBodyKind::Sync(content.try_iter()?.unbind()));
     }
     Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
         "content must be bytes, str, or an iterable of bytes",
@@ -424,13 +424,16 @@ pub(crate) fn parse_socket_options(
         let level: i32 = tuple.get_item(0)?.extract()?;
         let option: i32 = tuple.get_item(1)?.extract()?;
         let value_obj = tuple.get_item(2)?;
-        // Python `int` values are encoded as native-endian `i32` bytes
-        // (matching `setsockopt`'s `int*` convention on little-endian
-        // hosts, which is all supported targets today). This is portable
-        // but surprising on big-endian: pass explicit bytes for exact
-        // wire control.
+        // Python `int` values are encoded as native-endian bytes
+        // (matching CPython's `socket.setsockopt` `int*` convention, and
+        // the compat layer's `sys.byteorder` encoding above). Negative
+        // values use the signed 32-bit range; non-negative values accept
+        // the full unsigned 32-bit range used for buffer sizes. Pass
+        // explicit bytes for exact wire control.
         let value = if let Ok(value) = value_obj.extract::<i32>() {
             value.to_ne_bytes().to_vec()
+        } else if let Ok(unsigned) = value_obj.extract::<u32>() {
+            unsigned.to_ne_bytes().to_vec()
         } else if let Ok(value) = value_obj.cast::<pyo3::types::PyByteArray>() {
             value.to_vec()
         } else {

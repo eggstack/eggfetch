@@ -141,6 +141,26 @@ class TestCookiesDunder:
         c = Cookies({"a": "1"})
         assert "Cookies" in repr(c)
 
+    def test_repr_redacts_cookie_values(self):
+        c = Cookies()
+        c.set("session", "supersecret", domain="example.com", path="/")
+        assert "supersecret" not in repr(c)
+        assert "session" in repr(c)
+
+    def test_merge_cookies_returns_copy(self):
+        """Client cookie merges must not alias the client's live jar."""
+        from eggfetch.compat.httpx import Client
+
+        client = Client()
+        try:
+            client.cookies.set("a", "1", domain="example.com", path="/")
+            merged = client._merge_cookies(None)
+            assert not merged is client._cookies
+            merged.set("b", "2", domain="example.com", path="/")
+            assert "b" not in client._cookies
+        finally:
+            client.close()
+
 
 class TestCookiesSetDefault:
     def test_setdefault_existing(self):

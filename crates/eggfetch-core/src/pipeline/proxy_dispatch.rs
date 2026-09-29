@@ -100,6 +100,9 @@ pub(super) async fn send_proxy_route(
         remaining_total,
         deadline,
         connect_timeout: hop_timeout.connect,
+        // `Timeout` carries no proxy-specific fields; proxy
+        // connect/TLS phases intentionally reuse the connect budget
+        // and surface `TimeoutPhase::ProxyConnect/ProxyTls` on expiry.
         proxy_connect_timeout: hop_timeout.connect,
         proxy_tls_timeout: hop_timeout.connect,
         write_timeout: hop_timeout.write,

@@ -508,9 +508,10 @@ pub(crate) async fn send_with_redirects(client: &Client, request: Request) -> Re
             // than failing a redirect that could otherwise continue. The
             // overall total deadline is still enforced around the dispatch.
             let dur = total.saturating_sub(start_time.elapsed());
-            let _ = tokio::time::timeout(dur, drain_response_body(&mut response)).await;
+            let _ =
+                tokio::time::timeout(dur, drain_response_body(&mut response, timeout.read)).await;
         } else {
-            drain_response_body(&mut response).await;
+            drain_response_body(&mut response, timeout.read).await;
         }
 
         redirect_count += 1;

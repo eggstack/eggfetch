@@ -23,7 +23,8 @@ impl ConnectTarget {
     ///
     /// Returns [`ConnectError::InvalidTarget`] when the host is empty,
     /// contains request-line control bytes (`CR`, `LF`, other C0 controls,
-    /// `DEL`, or space), or has malformed IPv6 brackets. Bracketed
+    /// `DEL`, or space), request-target delimiters (`/`, `?`, `#`, `@`),
+    /// or has malformed IPv6 brackets. Bracketed
     /// (`[::1]`) and unbracketed (`::1`) IPv6 literals are both accepted
     /// and normalize to the same bracketed authority. No path, query, or
     /// body semantics exist in this type.
@@ -105,6 +106,14 @@ fn validate_host_inner(host: &str) -> Result<(), ConnectError> {
         // blocks CR/LF injection and other control smuggling while
         // leaving ordinary domain/IPv4/IPv6 text untouched.
         if c == '\r' || c == '\n' || c.is_control() || c == ' ' || c == '\u{7f}' {
+            return Err(ConnectError::InvalidTarget);
+        }
+        // Reject request-target delimiters that would let a `host`
+        // value smuggle a path/query/fragment (`evil.com/path:443`),
+        // userinfo (`user@host`), or extra authority sections into the
+        // CONNECT request line. `:` is allowed here only for the
+        // IPv6-literal path, which is validated separately above.
+        if matches!(c, '/' | '?' | '#' | '@') {
             return Err(ConnectError::InvalidTarget);
         }
     }

@@ -132,7 +132,8 @@ where
                 if let (Some(read_deadline), Some(read)) =
                     (me.read_deadline.as_mut(), me.read.as_ref())
                 {
-                    read_deadline.as_mut().reset(Instant::now() + *read);
+                    let next = crate::timeout::saturating_tokio_now_plus(*read);
+                    read_deadline.as_mut().reset(next);
                 }
                 return Poll::Ready(Some(Ok(bytes)));
             }

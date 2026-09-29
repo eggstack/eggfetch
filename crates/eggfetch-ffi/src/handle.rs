@@ -116,6 +116,9 @@ pub unsafe extern "C" fn eggfetch_string_free(s: *mut c_char) {
 /// # Safety
 ///
 /// `ptr` must be null or point to a valid null-terminated C string.
+/// This performs an unbounded scan for the terminator (inherent C ABI:
+/// a non-terminated pointer reads out of bounds); callers must only
+/// pass pointers to genuine NUL-terminated strings.
 pub(crate) unsafe fn cstr_to_string(ptr: *const c_char) -> Option<String> {
     if ptr.is_null() {
         None

@@ -59,7 +59,13 @@ impl<T> SyncBridge<T> {
                     return false;
                 }
                 if state.queue.len() < self.capacity {
-                    state.queue.push_back(item.take().expect("item present"));
+                    let Some(value) = item.take() else {
+                        // Item already consumed by a prior loop turn;
+                        // treat as closed instead of panicking across
+                        // the PyO3 boundary.
+                        return false;
+                    };
+                    state.queue.push_back(value);
                     true
                 } else {
                     false

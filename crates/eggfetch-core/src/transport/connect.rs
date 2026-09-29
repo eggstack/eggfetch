@@ -703,7 +703,41 @@ fn proxy_rejection_body(headers: &[(String, Vec<u8>)], initial_buf: &[u8]) -> St
             }
         }
     }
+    // Proxy bodies may reflect `Proxy-Authorization` or other credential
+    // material; never echo credential-looking text into errors.
+    let lowered = sanitized.to_ascii_lowercase();
+    // Match credential keywords on token boundaries so ordinary words
+    // containing them as substrings (e.g. "deniedsecret") still pass
+    // through while reflected credential headers do not.
+    let looks_like_credential = [
+        "proxy-authorization",
+        "authorization",
+        "api_key",
+        "apikey",
+        "password",
+        "passwd",
+        "secret",
+        "bearer ",
+    ]
+    .iter()
+    .any(|needle| contains_token(&lowered, needle));
+    if looks_like_credential {
+        return "[redacted proxy error]".to_owned();
+    }
     sanitized
+}
+
+/// Case-sensitive token search: `needle` must occur at the start or
+/// after a non-alphanumeric byte. Callers lowercase both sides first.
+fn contains_token(haystack: &str, needle: &str) -> bool {
+    let hay = haystack.as_bytes();
+    let ndl = needle.as_bytes();
+    if ndl.is_empty() || hay.len() < ndl.len() {
+        return false;
+    }
+    hay.windows(ndl.len())
+        .enumerate()
+        .any(|(i, w)| w == ndl && (i == 0 || !hay[i - 1].is_ascii_alphanumeric()))
 }
 
 /// Streaming response body from a TLS connection through a proxy tunnel.
@@ -999,6 +1033,21 @@ mod tests {
         assert_eq!(
             proxy_rejection_body(&headers, b"ignored"),
             "deniedsecret: hunter2"
+        );
+    }
+
+    #[test]
+    fn proxy_rejection_body_redacts_reflected_credentials() {
+        // A proxy body reflecting credential headers must not be echoed
+        // into errors; ordinary words containing a keyword as a
+        // substring still pass through (covered above).
+        let headers = vec![(
+            "x-proxy-error".to_owned(),
+            b"proxy-authorization: Basic hunter2".to_vec(),
+        )];
+        assert_eq!(
+            proxy_rejection_body(&headers, b"ignored"),
+            "[redacted proxy error]"
         );
     }
 

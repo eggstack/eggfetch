@@ -11,7 +11,10 @@
 //! futures into Python coroutines; the IO is dispatched on the
 //! shared Tokio runtime that drives the client's async engine.
 
-use std::sync::{Arc, Mutex};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc, Mutex,
+};
 
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyDict};
@@ -102,18 +105,23 @@ pub struct PyNetworkStream {
     /// owning client is dropped. Only populated when the stream was
     /// constructed from a sync client that wants to outlive the client.
     runtime_lease: Option<RuntimeLease>,
+    /// Construction-time upgrade flag. `try_lock` on a contended
+    /// `tokio::sync::Mutex` (async side) can fail spuriously and report
+    /// a live 101 upgrade as `False`; this flag records upgrade state
+    /// at construction so `is_upgraded` never flaps under contention.
+    upgraded: Arc<AtomicBool>,
 }
 
 impl std::fmt::Debug for PyNetworkStream {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let is_upgraded = self.inner.lock().is_ok_and(|g| g.is_some());
+        let is_upgraded = self.upgraded.load(Ordering::Relaxed);
         f.debug_struct("PyNetworkStream")
             .field("is_upgraded", &is_upgraded)
             .field("metadata", &self.metadata)
             .field("variant", &self.variant)
             .field("runtime_handle", &"<elided>")
             .field("runtime_lease", &self.runtime_lease.is_some())
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 
@@ -128,6 +136,7 @@ impl Clone for PyNetworkStream {
             variant: self.variant,
             runtime_handle: self.runtime_handle.clone(),
             runtime_lease: self.runtime_lease.clone(),
+            upgraded: Arc::clone(&self.upgraded),
         }
     }
 }
@@ -149,6 +158,7 @@ impl PyNetworkStream {
             variant: None,
             runtime_handle,
             runtime_lease: None,
+            upgraded: Arc::new(AtomicBool::new(false)),
         })
     }
 
@@ -166,6 +176,7 @@ impl PyNetworkStream {
             variant: Some(variant),
             runtime_handle,
             runtime_lease: None,
+            upgraded: Arc::new(AtomicBool::new(true)),
         }
     }
 
@@ -184,6 +195,7 @@ impl PyNetworkStream {
             variant: Some(variant),
             runtime_handle,
             runtime_lease,
+            upgraded: Arc::new(AtomicBool::new(true)),
         }
     }
 
@@ -206,6 +218,7 @@ impl PyNetworkStream {
             variant: Some(variant),
             runtime_handle,
             runtime_lease,
+            upgraded: Arc::new(AtomicBool::new(true)),
         }
     }
 }
@@ -349,7 +362,7 @@ impl PyNetworkStream {
     /// Returns whether this is an upgraded stream with IO access.
     #[getter]
     pub fn is_upgraded(&self) -> bool {
-        self.inner.lock().is_ok_and(|g| g.is_some())
+        self.upgraded.load(Ordering::Relaxed)
     }
 
     /// Upgrade this stream to TLS.
@@ -459,7 +472,7 @@ impl PyNetworkStream {
     }
 
     fn __repr__(&self) -> String {
-        let is_upgraded = self.inner.lock().is_ok_and(|g| g.is_some());
+        let is_upgraded = self.upgraded.load(Ordering::Relaxed);
         if is_upgraded {
             "<NetworkStream (upgraded)>".to_string()
         } else {
@@ -595,17 +608,21 @@ pub struct PyAsyncNetworkStream {
     /// up the ambient runtime through `pyo3_async_runtimes`.
     #[allow(dead_code)]
     runtime_handle: tokio::runtime::Handle,
+    /// Construction-time upgrade flag (see `PyNetworkStream::upgraded`):
+    /// `try_lock` on a contended Tokio mutex reports a live upgrade as
+    /// `False`; this flag never flaps under contention.
+    upgraded: Arc<AtomicBool>,
 }
 
 impl std::fmt::Debug for PyAsyncNetworkStream {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let is_upgraded = self.inner.try_lock().is_ok_and(|g| g.is_some());
+        let is_upgraded = self.upgraded.load(Ordering::Relaxed);
         f.debug_struct("PyAsyncNetworkStream")
             .field("is_upgraded", &is_upgraded)
             .field("metadata", &self.metadata)
             .field("variant", &self.variant)
             .field("runtime_handle", &"<elided>")
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 
@@ -624,6 +641,7 @@ impl PyAsyncNetworkStream {
             metadata: Some(metadata),
             variant: None,
             runtime_handle,
+            upgraded: Arc::new(AtomicBool::new(false)),
         })
     }
 
@@ -637,6 +655,7 @@ impl PyAsyncNetworkStream {
             metadata: Some(metadata),
             variant: Some(variant),
             runtime_handle,
+            upgraded: Arc::new(AtomicBool::new(true)),
         }
     }
 }
@@ -759,7 +778,7 @@ impl PyAsyncNetworkStream {
     /// Returns whether this is an upgraded stream with IO access.
     #[getter]
     pub fn is_upgraded(&self) -> bool {
-        self.inner.try_lock().is_ok_and(|g| g.is_some())
+        self.upgraded.load(Ordering::Relaxed)
     }
 
     /// Upgrade this stream to TLS (async).
@@ -842,7 +861,7 @@ impl PyAsyncNetworkStream {
     }
 
     fn __repr__(&self) -> String {
-        let is_upgraded = self.inner.try_lock().is_ok_and(|g| g.is_some());
+        let is_upgraded = self.upgraded.load(Ordering::Relaxed);
         if is_upgraded {
             "<AsyncNetworkStream (upgraded)>".to_string()
         } else {

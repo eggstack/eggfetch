@@ -134,10 +134,14 @@ pub unsafe extern "C" fn eggfetch_response_body(
             return 0;
         }
         let Ok(layout) = std::alloc::Layout::array::<u8>(len) else {
+            *data_out = std::ptr::null_mut();
+            *len_out = 0;
             return -1;
         };
         let buf = std::alloc::alloc(layout);
         if buf.is_null() {
+            *data_out = std::ptr::null_mut();
+            *len_out = 0;
             return -1;
         }
         std::ptr::copy_nonoverlapping(handle.body.as_ptr(), buf, len);

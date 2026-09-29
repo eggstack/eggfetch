@@ -564,7 +564,9 @@ pub(super) async fn prepare_single_request(
     let remaining_total = timeout
         .total
         .map(|total| total.saturating_sub(started.elapsed()));
-    let deadline = timeout.total.map(|total| started + total);
+    let deadline = timeout
+        .total
+        .map(|total| crate::timeout::saturating_add_instant(started, total));
 
     let prepared = PreparedRequest {
         method,

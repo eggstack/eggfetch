@@ -1061,58 +1061,28 @@ mod tests {
 
     #[test]
     fn no_follow_overrides_follow() {
-        let cli = Cli {
-            method: None,
-            url: "http://example.com".to_owned(),
-            header: vec![],
-            query: vec![],
-            form: vec![],
-            file: vec![],
-            body: None,
-            body_file: None,
-            json: None,
-            output: None,
-            download: false,
-            no_clobber: false,
-            include: false,
-            headers_only: false,
-            no_body: false,
-            json_output: false,
-            ndjson: false,
-            base64: false,
-            timeout: None,
-            connect_timeout: None,
-            total_timeout: None,
-            read_timeout: None,
-            follow: true,
-            no_follow: true,
-            max_redirects: 20,
-            no_downgrade: false,
-            auth: None,
-            bearer: None,
-            cookie: vec![],
-            cookie_jar: None,
-            proxy: None,
-            proxy_auth: None,
-            no_proxy: None,
-            no_verify: false,
-            cacert: None,
-            cert: None,
-            key: None,
-            retry: None,
-            retry_delay: None,
-            http1: false,
-            http2: false,
-            http3: false,
-            no_compress: false,
-            max_body_size: None,
-            max_decompression_ratio: None,
-            check_status: false,
-            verbose: false,
-            generate_completion: None,
-        };
+        // Parser-level: `--no-follow` must be accepted (it previously
+        // conflicted with the `--follow` default and always errored).
+        let cli = Cli::try_parse_from(["eggfetch", "http://example.com", "--no-follow"]).unwrap();
+        assert!(cli.no_follow);
         let follow = cli.follow && !cli.no_follow;
         assert!(!follow, "--no-follow should override --follow");
+    }
+
+    #[test]
+    fn safe_url_for_display_strips_secrets() {
+        assert_eq!(
+            output::safe_url_for_display("https://user:pass@example.com/path?token=abc#frag"),
+            "https://example.com/path"
+        );
+        assert_eq!(
+            output::safe_url_for_display("https://example.com/search?q=secret"),
+            "https://example.com/search"
+        );
+        assert_eq!(
+            output::safe_url_for_display("https://example.com/plain"),
+            "https://example.com/plain"
+        );
     }
 
     #[test]

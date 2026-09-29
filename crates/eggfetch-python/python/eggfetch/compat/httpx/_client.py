@@ -1846,7 +1846,9 @@ class Client:
 
     def _merge_cookies(self, request_cookies):
         if request_cookies is None:
-            return self._cookies
+            # Always copy: returning the live jar aliases client state
+            # and lets per-request mutation leak across requests.
+            return Cookies(self._cookies)
         merged = Cookies(self._cookies)
         if isinstance(request_cookies, Cookies):
             merged.update(request_cookies)
@@ -2618,7 +2620,9 @@ class AsyncClient:
 
     def _merge_cookies(self, request_cookies):
         if request_cookies is None:
-            return self._cookies
+            # Always copy: returning the live jar aliases client state
+            # and lets per-request mutation leak across requests.
+            return Cookies(self._cookies)
         merged = Cookies(self._cookies)
         if isinstance(request_cookies, Cookies):
             merged.update(request_cookies)
