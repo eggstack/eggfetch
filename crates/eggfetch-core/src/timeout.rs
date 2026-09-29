@@ -285,6 +285,11 @@ impl Timeout {
     ///
     /// For each phase, if the request-level value is `Some`, it replaces
     /// the client-level value. If `None`, the client-level value is kept.
+    ///
+    /// Note: there is intentionally no way to *clear* a client-level timeout
+    /// for a single request (`None` means "inherit"). Callers needing no
+    /// timeout for one phase must set an explicit large value or use a
+    /// client without that phase configured.
     #[must_use]
     pub(crate) fn merge(self, override_timeout: Option<Self>) -> Self {
         match override_timeout {

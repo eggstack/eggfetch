@@ -53,23 +53,42 @@ pub fn redact_url(url: &Url) -> String {
 /// Redact credentials from a URL string for safe display in error messages.
 ///
 /// If the string parses as a valid URL, credentials are stripped. If parsing
-/// fails, the original string is returned unchanged.
+/// fails, a best-effort userinfo strip is applied (text before the last `@`
+/// after any `://` marker is dropped) so malformed URLs cannot leak
+/// `user:pass@` into logs.
 ///
-/// Requires the `high-level-url` feature; without it the input is returned
-/// unchanged because there is no URL parser in the minimal native slice.
+/// Requires the `high-level-url` feature for full parsing; without it only
+/// the best-effort strip is applied because there is no URL parser in the
+/// minimal native slice.
 #[must_use]
 pub fn redact_url_string(url_str: &str) -> String {
     #[cfg(feature = "high-level-url")]
     {
         match Url::parse(url_str) {
             Ok(url) => redact_url(&url),
-            Err(_) => url_str.to_owned(),
+            Err(_) => strip_userinfo_best_effort(url_str),
         }
     }
     #[cfg(not(feature = "high-level-url"))]
     {
-        url_str.to_owned()
+        strip_userinfo_best_effort(url_str)
     }
+}
+
+/// Best-effort userinfo strip for unparseable inputs: drop everything from
+/// the authority start through the last `@`, and truncate query/fragment.
+fn strip_userinfo_best_effort(input: &str) -> String {
+    let authority_start = input.find("://").map_or(0, |i| i + 3);
+    let (prefix, rest) = input.split_at(authority_start);
+    let stripped = rest.rfind('@').map_or(rest, |i| &rest[i + 1..]);
+    let end = stripped.find(['?', '#']).unwrap_or(stripped.len());
+    // If there was no `@`, preserve the input unchanged except for
+    // query/fragment truncation only when userinfo was present; otherwise a
+    // plain invalid string is returned as-is to avoid mangling diagnostics.
+    if rest.rfind('@').is_none() {
+        return input.to_owned();
+    }
+    format!("{prefix}{}", &stripped[..end])
 }
 
 #[cfg(test)]
@@ -199,9 +218,18 @@ mod tests {
 
     #[cfg(feature = "high-level-url")]
     #[test]
-    fn redact_url_string_invalid_returns_original() {
+    fn redact_url_string_invalid_without_userinfo_returns_original() {
         let input = "not a url at all";
         let redacted = redact_url_string(input);
         assert_eq!(redacted, input);
+    }
+
+    #[cfg(feature = "high-level-url")]
+    #[test]
+    fn redact_url_string_invalid_with_userinfo_strips() {
+        let redacted = redact_url_string("http://user:pass@host/path?q=1#frag");
+        assert!(!redacted.contains("user"));
+        assert!(!redacted.contains("pass"));
+        assert!(redacted.contains("host"));
     }
 }

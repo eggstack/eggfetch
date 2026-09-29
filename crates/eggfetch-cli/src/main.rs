@@ -67,7 +67,11 @@ async fn run(cli: Cli) -> Result<()> {
         .with_context(|| format!("invalid HTTP method: {method_str}"))?;
 
     let follow = cli.follow && !cli.no_follow;
-    let redirect_policy = RedirectPolicy::new(follow, cli.max_redirects);
+    let mut redirect_policy = RedirectPolicy::new(follow, cli.max_redirects);
+    if cli.no_downgrade {
+        redirect_policy =
+            redirect_policy.with_downgrade(eggfetch_core::RedirectDowngradePolicy::Deny);
+    }
 
     let mut client_builder = Client::builder().redirect_policy(redirect_policy);
 
@@ -739,6 +743,7 @@ mod tests {
             follow: true,
             no_follow: false,
             max_redirects: 20,
+            no_downgrade: false,
             auth: None,
             bearer: None,
             cookie: vec![],
@@ -793,6 +798,7 @@ mod tests {
             follow: true,
             no_follow: false,
             max_redirects: 20,
+            no_downgrade: false,
             auth: None,
             bearer: None,
             cookie: vec![],
@@ -847,6 +853,7 @@ mod tests {
             follow: true,
             no_follow: false,
             max_redirects: 20,
+            no_downgrade: false,
             auth: None,
             bearer: None,
             cookie: vec![],
@@ -1024,6 +1031,7 @@ mod tests {
             follow: true,
             no_follow: false,
             max_redirects: 20,
+            no_downgrade: false,
             auth: None,
             bearer: None,
             cookie: vec![],
@@ -1079,6 +1087,7 @@ mod tests {
             follow: true,
             no_follow: true,
             max_redirects: 20,
+            no_downgrade: false,
             auth: None,
             bearer: None,
             cookie: vec![],

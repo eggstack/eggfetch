@@ -377,10 +377,12 @@ fn strip_headers_for_redirect(
 
     // Strip remaining sensitive headers on cross-origin redirects.
     // `authorization` and `proxy-authorization` were already stripped above,
-    // so only the cross-origin-specific entries remain here.
+    // so only the cross-origin-specific entries remain here. `referer` and
+    // `origin` are credential-adjacent (they leak the source URL) and are
+    // stripped with the strict jar policy.
     let cross_origin = original_url.origin() != new_url.origin();
     if cross_origin {
-        for name in ["cookie", "host"] {
+        for name in ["cookie", "host", "referer", "origin"] {
             headers.remove(name);
         }
     }

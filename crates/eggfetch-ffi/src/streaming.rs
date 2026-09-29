@@ -371,10 +371,18 @@ pub unsafe extern "C" fn eggfetch_response_stream_next(
                 }
                 return ptr::null_mut();
             };
-            match guard.take() {
-                Some(rx) => rx,
-                None => return ptr::null_mut(),
-            }
+            let Some(rx) = guard.take() else {
+                // A concurrent `next` is parked with the receiver: record a
+                // distinct error so hosts can distinguish contention from
+                // clean EOF via `eggfetch_response_stream_error` instead of
+                // freeing the handle on a misread null.
+                drop(guard);
+                if let Ok(mut last) = state.last_error.lock() {
+                    *last = Some("concurrent stream read in progress".to_owned());
+                }
+                return ptr::null_mut();
+            };
+            rx
         };
 
         // Observe any cancellation that already happened before we start

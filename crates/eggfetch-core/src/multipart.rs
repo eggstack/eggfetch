@@ -59,6 +59,11 @@ impl Boundary {
             // Degraded mode: derive pseudo-random bytes from the current
             // time plus a process-wide counter. Uniqueness within this
             // process is preserved, which is what boundary safety needs.
+            // This path is guessable (not cryptographic); multipart
+            // construction prefers hard failure over abort, so the fallback
+            // is kept but signalled when tracing is available.
+            #[cfg(feature = "tracing")]
+            tracing::warn!("eggfetch: getrandom failed; using degraded multipart boundary");
             // Mask to the low 64 bits first so the `as u64` is an explicit
             // truncation of high bits, portable to wider-than-64-bit targets.
             let nanos = std::time::SystemTime::now()

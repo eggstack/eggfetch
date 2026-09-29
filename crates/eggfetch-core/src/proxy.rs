@@ -317,8 +317,12 @@ pub struct ProxyConfig {
 
 impl fmt::Debug for ProxyConfig {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Redact userinfo: `http::Uri` preserves `user:pass@host`.
+        let mut uri = self.uri.clone();
+        let _ = uri.set_username("");
+        let _ = uri.set_password(None);
         f.debug_struct("ProxyConfig")
-            .field("uri", &self.uri)
+            .field("uri", &uri)
             .field("auth", &self.auth)
             .field("proxy_headers", &self.proxy_headers)
             .field(

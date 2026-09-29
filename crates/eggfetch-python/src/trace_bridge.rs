@@ -111,23 +111,17 @@ impl fmt::Debug for PyTraceObserver {
 }
 
 impl PyTraceObserver {
-    /// Wrap a Python callable as a trace observer with its own error
-    /// slot.  The returned [`CallbackErrorSlot`] is the handle the
-    /// request future uses to surface callback errors.
-    ///
-    /// Async callables (detected via `inspect.iscoroutinefunction`)
-    /// cannot be driven from the synchronous core `TraceObserver`, so we
-    /// record a `NotAwaited` error eagerly. Both sync `Client` and
-    /// `AsyncClient` reject coroutine callbacks with `TypeError` before
-    /// dispatch.
+    /// Async callables (detected via `inspect.iscoroutinefunction`, plus
+    /// `__call__` for instances with `async def __call__`) cannot be driven
+    /// from the synchronous core `TraceObserver`, so we record a
+    /// `NotAwaited` error eagerly. Both sync `Client` and `AsyncClient`
+    /// reject coroutine callbacks with `TypeError` before dispatch.
     pub(crate) fn new(py: Python<'_>, callback: Bound<'_, PyAny>) -> (Self, CallbackErrorSlot) {
-        let is_async = py
-            .import("inspect")
-            .ok()
-            .and_then(|m| m.getattr("iscoroutinefunction").ok())
-            .and_then(|func| func.call1((callback.clone(),)).ok())
-            .and_then(|r| r.is_truthy().ok())
-            .unwrap_or(false);
+        // `inspect.iscoroutinefunction` misses class instances with
+        // `async def __call__` (and some partial chains), which would
+        // otherwise yield an unawaited coroutine that is silently dropped.
+        // Check the callback itself and its `__call__` attribute.
+        let is_async = is_coroutine_callable(py, &callback);
         let error_slot = CallbackErrorSlot::new();
         if is_async {
             error_slot.record(TraceBridgeError::NotAwaited);
@@ -165,7 +159,17 @@ impl TraceObserver for PyTraceObserver {
             let cb = self.callback.bind(py);
             let call_result = cb.call1((name.as_str(), info_dict.unbind()));
             match call_result {
-                Ok(_) => Ok(()),
+                Ok(value) => {
+                    // A sync-called async callable returns an awaitable that
+                    // can never be driven here; report it instead of dropping
+                    // a coroutine silently.
+                    if is_awaitable(py, &value) {
+                        let _ = value.call_method0("close");
+                        Err(TraceBridgeError::NotAwaited)
+                    } else {
+                        Ok(())
+                    }
+                }
                 Err(e) => Err(TraceBridgeError::Callback(e)),
             }
         });
@@ -242,6 +246,41 @@ pub(crate) fn bridge_error_to_pyerr(err: TraceBridgeError) -> PyErr {
 /// Drain a callback error slot into a Python exception, if any.
 pub(crate) fn take_callback_error(slot: &CallbackErrorSlot) -> Option<PyErr> {
     slot.take().map(bridge_error_to_pyerr)
+}
+
+fn is_coroutine_function(py: Python<'_>, obj: &Bound<'_, PyAny>) -> bool {
+    py.import("inspect")
+        .ok()
+        .and_then(|m| m.getattr("iscoroutinefunction").ok())
+        .and_then(|func| func.call1((obj.clone(),)).ok())
+        .and_then(|r| r.is_truthy().ok())
+        .unwrap_or(false)
+}
+
+fn is_coroutine_callable(py: Python<'_>, callback: &Bound<'_, PyAny>) -> bool {
+    if is_coroutine_function(py, callback) {
+        return true;
+    }
+    // Instances with `async def __call__` are not flagged by
+    // `iscoroutinefunction(callback)` on all versions; check `__call__`.
+    callback
+        .getattr("__call__")
+        .is_ok_and(|call| is_coroutine_function(py, &call))
+}
+
+fn is_awaitable(py: Python<'_>, value: &Bound<'_, PyAny>) -> bool {
+    // Prefer `inspect.isawaitable`; fall back to `__await__` presence if
+    // `inspect` is unavailable.
+    if let Ok(inspect) = py.import("inspect") {
+        if let Ok(func) = inspect.getattr("isawaitable") {
+            if let Ok(result) = func.call1((value.clone(),)) {
+                if let Ok(truthy) = result.is_truthy() {
+                    return truthy;
+                }
+            }
+        }
+    }
+    value.hasattr("__await__").unwrap_or(false)
 }
 
 // Rust-level unit tests for this module require linking the Python

@@ -264,6 +264,10 @@ fn validate_auth_bytes(bytes: &[u8], field_name: &str) -> Result<()> {
 /// If the request has an explicit `Authorization` header AND auth is
 /// configured, returns `Err` to avoid ambiguity (the user must choose
 /// one or the other).
+///
+/// Note: `proxy-authorization` conflicts are enforced separately at the
+/// proxy dispatch layer (`pipeline/proxy_dispatch.rs`), which sees the
+/// effective proxy config; this function only governs origin auth.
 pub(crate) fn resolve_request_auth(
     request_auth: Option<&AuthScheme>,
     request_auth_disabled: bool,

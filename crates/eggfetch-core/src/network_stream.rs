@@ -370,10 +370,16 @@ impl UpgradedStream {
     ///
     /// # Errors
     ///
-    /// This method currently always succeeds; errors are silently
-    /// discarded to maintain idempotent close semantics.
+    /// This method currently always succeeds; shutdown errors are
+    /// best-effort and counted via `tracing::debug` (when enabled) to
+    /// keep close idempotent without hiding them entirely.
     pub async fn close(&mut self) -> Result<()> {
-        let _ = tokio::io::AsyncWriteExt::shutdown(self).await;
+        if let Err(e) = tokio::io::AsyncWriteExt::shutdown(self).await {
+            #[cfg(feature = "tracing")]
+            tracing::debug!("eggfetch: network stream shutdown error: {e}");
+            #[cfg(not(feature = "tracing"))]
+            let _ = &e;
+        }
         Ok(())
     }
 

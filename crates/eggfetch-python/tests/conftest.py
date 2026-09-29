@@ -22,3 +22,17 @@ class _ThreadingHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
     daemon_threads = True
     allow_reuse_address = True
     request_queue_size = 32
+
+    def handle_error(self, request, client_address):
+        # Suppress cancelled-stream server noise: clients routinely close
+        # streaming responses early, so BrokenPipeError /
+        # ConnectionResetError from `wfile.write` are expected teardown,
+        # not test failures. All other errors keep the default traceback.
+        import sys
+
+        exc_type, exc_value, exc_tb = sys.exc_info()
+        if exc_type is not None and issubclass(
+            exc_type, (BrokenPipeError, ConnectionResetError)
+        ):
+            return
+        super().handle_error(request, client_address)

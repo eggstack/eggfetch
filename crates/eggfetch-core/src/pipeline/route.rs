@@ -76,6 +76,12 @@ pub(super) fn select_route(
     // path.
     #[cfg(not(feature = "advanced-routing"))]
     {
+        // Lean callers must fail closed before selection (see `pipeline/mod.rs`);
+        // an advanced hint here would otherwise silently take `Standard`.
+        debug_assert!(
+            !(has_uds || has_custom || has_direct_no_proxy || has_sni),
+            "advanced transport hint reached lean select_route"
+        );
         let _ = (has_uds, has_custom, has_direct_no_proxy, has_sni);
     }
     if use_h3 {

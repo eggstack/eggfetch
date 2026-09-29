@@ -29,8 +29,10 @@ async fn sleep_if_budget_allows(
 ) -> Result<()> {
     if let Some(max_elapsed) = policy.max_elapsed() {
         let elapsed = start_time.elapsed();
-        if elapsed + delay > max_elapsed {
-            return Err(Error::RetryBudgetExhausted { attempts: attempt });
+        // `Duration::add` panics on overflow; fail closed instead.
+        match elapsed.checked_add(delay) {
+            Some(t) if t <= max_elapsed => {}
+            _ => return Err(Error::RetryBudgetExhausted { attempts: attempt }),
         }
     }
     tokio::time::sleep(delay).await;
@@ -198,9 +200,16 @@ pub(crate) async fn send_with_retry(client: &Client, request: Request) -> Result
                         .get("retry-after")
                         .and_then(|v| v.to_str().ok())
                         .map(str::to_owned);
+                    // Bound the drain by the remaining total deadline so a
+                    // stalled body cannot block the retry loop past `total`.
                     // Drain errors are intentionally ignored: the body is
                     // being discarded and the request retried regardless.
-                    drain_response_body(&mut resp).await;
+                    if let Some(total) = saved_timeout.as_ref().and_then(|t| t.total) {
+                        let dur = total.saturating_sub(start_time.elapsed());
+                        let _ = tokio::time::timeout(dur, drain_response_body(&mut resp)).await;
+                    } else {
+                        drain_response_body(&mut resp).await;
+                    }
 
                     if let Some(dur) =
                         compute_retry_delay(&policy, &cause, attempt, retry_after.as_deref())
@@ -251,10 +260,18 @@ fn compute_retry_delay(
     let base = policy.backoff_delay(attempt)?;
     // 429 (Too Many Requests) without a server-directed Retry-After should
     // back off longer than other retryable statuses per conventional policy.
+    // Route through the validated cap: the float multiply can otherwise yield
+    // a non-finite/oversize value that panics in `from_secs_f64`.
     if matches!(cause, RetryCause::Status(429)) {
-        let max = policy.backoff().max_delay().as_secs_f64();
-        let increased = (base.as_secs_f64() * 1.5).min(max);
-        return Some(Duration::from_secs_f64(increased));
+        let max = policy.backoff().max_delay();
+        let increased = base.as_secs_f64() * 1.5;
+        if !increased.is_finite() || increased < 0.0 {
+            return Some(max);
+        }
+        let capped = increased.min(max.as_secs_f64());
+        // `capped` is finite and `<= max` here; `max` itself was validated
+        // at policy construction, so this conversion cannot panic.
+        return Some(Duration::from_secs_f64(capped.max(0.0)));
     }
     Some(base)
 }

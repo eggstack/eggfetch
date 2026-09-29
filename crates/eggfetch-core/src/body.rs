@@ -81,6 +81,12 @@ pub enum RequestBody {
     /// the user has not supplied a conflicting value. If `length` is
     /// `None`, no `Content-Length` is set; the transport selects a
     /// safe transfer mode (chunked for HTTP/1.1).
+    ///
+    /// Note: stream bodies are never replayable, even with
+    /// `length = Some(n)` — the bytes are consumed on first send and
+    /// retry/redirect degrades to a single attempt
+    /// (`BodyNotReplayableForRedirect` / no retry). Callers needing
+    /// retried uploads must buffer into `Bytes` first.
     Stream {
         /// The stream of body chunks.
         stream: BoxBytesStream,
@@ -709,7 +715,10 @@ impl SharedTrailers {
     /// before expecting trailers.
     #[must_use]
     pub fn get(&self) -> Option<http::HeaderMap> {
-        self.inner.lock().ok().and_then(|guard| guard.clone())
+        self.inner
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
     }
 }
 

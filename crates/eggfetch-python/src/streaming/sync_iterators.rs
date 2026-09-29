@@ -8,6 +8,7 @@ use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyString};
 
 use super::decoding::{complete_lines, final_line, IncrementalDecoder};
+use super::sync_bridge::MAX_BRIDGE_CHUNK_BYTES;
 use super::{PyStreamingResponse, StreamMode, SyncBridge};
 
 // ---------------------------------------------------------------------------
@@ -62,8 +63,27 @@ impl PyBytesChunkIterator {
                                 Ok(bytes) => Ok(bytes),
                                 Err(e) => Err(crate::errors::map_err(e)),
                             };
-                            if !producer_bridge.send(result).await {
-                                break;
+                            // Bound queued bytes: split oversized network
+                            // chunks so the 16-message bridge cannot pin
+                            // `16 x unbounded-chunk` memory.
+                            match result {
+                                Ok(mut bytes) => {
+                                    while bytes.len() > MAX_BRIDGE_CHUNK_BYTES {
+                                        let head = bytes.split_to(MAX_BRIDGE_CHUNK_BYTES);
+                                        if !producer_bridge.send(Ok(head)).await {
+                                            producer_bridge.close();
+                                            return;
+                                        }
+                                    }
+                                    if !producer_bridge.send(Ok(bytes)).await {
+                                        break;
+                                    }
+                                }
+                                Err(e) => {
+                                    if !producer_bridge.send(Err(e)).await {
+                                        break;
+                                    }
+                                }
                             }
                         }
                         None => break,
@@ -412,8 +432,27 @@ impl PyRawBytesChunkIterator {
                                 Ok(bytes) => Ok(bytes),
                                 Err(e) => Err(crate::errors::map_err(e)),
                             };
-                            if !producer_bridge.send(result).await {
-                                break;
+                            // Bound queued bytes: split oversized network
+                            // chunks so the 16-message bridge cannot pin
+                            // `16 x unbounded-chunk` memory.
+                            match result {
+                                Ok(mut bytes) => {
+                                    while bytes.len() > MAX_BRIDGE_CHUNK_BYTES {
+                                        let head = bytes.split_to(MAX_BRIDGE_CHUNK_BYTES);
+                                        if !producer_bridge.send(Ok(head)).await {
+                                            producer_bridge.close();
+                                            return;
+                                        }
+                                    }
+                                    if !producer_bridge.send(Ok(bytes)).await {
+                                        break;
+                                    }
+                                }
+                                Err(e) => {
+                                    if !producer_bridge.send(Err(e)).await {
+                                        break;
+                                    }
+                                }
                             }
                         }
                         None => break,

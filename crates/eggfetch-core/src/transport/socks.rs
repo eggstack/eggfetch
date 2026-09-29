@@ -45,9 +45,14 @@ impl SocksRouteKey {
         let auth = proxy.auth().map(|auth| match auth {
             ProxyAuth::Basic { username, password } => (username.clone(), password.clone()),
         });
+        // Fail closed on missing host: defaulting to `""` would alias
+        // distinct misconfigured proxies under one pool key.
+        let host = proxy
+            .host()
+            .ok_or_else(|| Error::Connect("SOCKS proxy URI has no host".into()))?;
         Ok(Self {
             scheme: proxy.scheme().to_owned(),
-            host: proxy.host().unwrap_or_default().to_owned(),
+            host: host.to_owned(),
             port: proxy.port()?,
             auth,
             proxy_addresses: proxy
@@ -153,7 +158,9 @@ pub(crate) async fn socks5_handshake(
     remaining_total: Option<std::time::Duration>,
     pinned_targets: Option<&[std::net::SocketAddr]>,
 ) -> Result<tokio::net::TcpStream> {
-    let deadline = remaining_total.map(|duration| std::time::Instant::now() + duration);
+    // `Instant::add` panics on overflow; saturate instead of crashing.
+    let deadline =
+        remaining_total.and_then(|duration| std::time::Instant::now().checked_add(duration));
 
     if let Some(targets) = pinned_targets {
         if targets.is_empty() {
@@ -715,9 +722,14 @@ async fn resolve_dest_ips(
         }
         None => lookup.await,
     };
+    // Preserve the DNS root cause instead of collapsing to an empty vec.
     let addrs: Vec<std::net::IpAddr> = result
         .map(|addrs| addrs.map(|a| a.ip()).collect())
-        .unwrap_or_default();
+        .map_err(|e| {
+            Error::Connect(format!(
+                "DNS resolution failed for SOCKS destination {host}: {e}"
+            ))
+        })?;
 
     if addrs.is_empty() {
         // Never redirect an unresolved destination to loopback.

@@ -579,8 +579,9 @@ where
         .needs_origin_key()
         .then(|| OriginKey::from_origin(&http_origin));
     let started = std::time::Instant::now();
+    // Total wins ties (matching the body-deadline boundary).
     let pool_deadline = match (timeout.pool, timeout.total) {
-        (Some(pool), Some(total)) if total < pool => Some((total, TimeoutPhase::Total)),
+        (Some(pool), Some(total)) if total <= pool => Some((total, TimeoutPhase::Total)),
         (Some(pool), _) => Some((pool, TimeoutPhase::Pool)),
         (None, Some(total)) => Some((total, TimeoutPhase::Total)),
         (None, None) => None,

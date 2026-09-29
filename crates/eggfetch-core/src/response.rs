@@ -208,13 +208,28 @@ impl Response {
         url: Url,
         body: ResponseBody,
     ) -> Self {
+        // Non-UTF8 wire values are dropped here (defensible: headers are
+        // opaque bytes); emit a trace event so corrupt-wire debugging has a
+        // signal instead of a silent absence.
         let wire_content_encoding = headers
             .get("content-encoding")
-            .and_then(|value| value.to_str().ok())
+            .and_then(|value| {
+                value.to_str().ok().or_else(|| {
+                    #[cfg(feature = "tracing")]
+                    tracing::debug!("eggfetch: dropped non-UTF8 content-encoding");
+                    None
+                })
+            })
             .map(ToOwned::to_owned);
         let wire_content_length = headers
             .get("content-length")
-            .and_then(|value| value.to_str().ok())
+            .and_then(|value| {
+                value.to_str().ok().or_else(|| {
+                    #[cfg(feature = "tracing")]
+                    tracing::debug!("eggfetch: dropped non-UTF8 content-length");
+                    None
+                })
+            })
             .map(ToOwned::to_owned);
         Self {
             status,

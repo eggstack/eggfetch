@@ -5,59 +5,59 @@ use std::ptr;
 
 use eggfetch_ffi::ErrorHandle;
 
-/// Pointer to the FFI client handle.
+/// Shared ownership for the FFI client handle.
 ///
-/// Stored as a raw pointer (not `usize`) so pointer provenance is preserved
-/// under Miri/provenance-strict tooling. The wrapper is `Send + Sync`
-/// because the underlying `ClientHandle` is `Send + Sync` per eggfetch-ffi
-/// documentation; lifetime safety for in-flight requests still relies on
-/// napi-rs holding a strong reference on `this` (see below).
-#[derive(Clone, Copy)]
-struct SendClientPtr(*mut eggfetch_ffi::ClientHandle);
+/// In-flight requests hold an `Arc` clone for the duration of the
+/// `spawn_blocking` future, so `Drop for EggfetchClient` cannot free the
+/// handle while a request is outstanding. This does not rely on napi-rs
+/// `this`-reference tracking (napi 2.x codegen); the `napi = "2"` pin in
+/// `crates/eggfetch-node/Cargo.toml` must be kept with this comment.
+struct ClientHandleInner {
+    ptr: std::sync::Mutex<*mut eggfetch_ffi::ClientHandle>,
+}
 
-impl SendClientPtr {
-    /// Consume the wrapper and return the raw handle.
-    ///
-    /// Taking `self` by value keeps closure-capture analysis on the `Send`
-    /// wrapper itself: a direct `.0` field access inside `spawn_blocking`
-    /// would capture only the bare `*mut` field (which is not `Send`).
-    fn into_inner(self) -> *mut eggfetch_ffi::ClientHandle {
-        self.0
+// SAFETY: the pointee is `Send + Sync` per eggfetch-ffi; the raw pointer is
+// only accessed under the mutex and is freed exactly once by
+// `Drop for ClientHandleInner`.
+unsafe impl Send for ClientHandleInner {}
+unsafe impl Sync for ClientHandleInner {}
+
+impl Drop for ClientHandleInner {
+    fn drop(&mut self) {
+        let ptr = self.ptr.lock().map_or(std::ptr::null_mut(), |mut guard| {
+            std::mem::replace(&mut *guard, std::ptr::null_mut())
+        });
+        if !ptr.is_null() {
+            unsafe {
+                eggfetch_ffi::eggfetch_client_free(ptr);
+            }
+        }
     }
 }
 
-// SAFETY: the pointed-to `ClientHandle` is documented as `Send + Sync`, so
-// moving the pointer across threads (for `spawn_blocking`) is sound. The
-// pointee is freed only by `Drop for EggfetchClient`, which napi-rs
-// finalization keeps alive until in-flight request futures resolve.
-unsafe impl Send for SendClientPtr {}
-unsafe impl Sync for SendClientPtr {}
-
 /// HTTP client wrapping eggfetch-ffi.
 ///
-/// The client pointer is stored as a [`SendClientPtr`] raw-pointer wrapper
-/// to satisfy napi's `Send` requirement for async futures while preserving
-/// pointer provenance (no `usize ↔ *mut` round-trip). The underlying
-/// `ClientHandle` is `Send + Sync` per eggfetch-ffi documentation.
+/// The underlying `ClientHandle` is shared via `Arc<ClientHandleInner>` so
+/// in-flight `spawn_blocking` requests extend its lifetime independently of
+/// napi-rs finalization order. The raw pointer preserves provenance (no
+/// `usize ↔ *mut` round-trip); the underlying `ClientHandle` is `Send + Sync`
+/// per eggfetch-ffi documentation.
 ///
 /// # Lifetime safety for in-flight requests
 ///
-/// Copying the raw pointer into a `'static` future is safe here because of
-/// how napi-rs (2.x) generates async class methods: before launching the
-/// future it creates a *strong* `napi_ref` (refcount 1) on `this`
-/// (`napi_create_reference`) and releases it only when the future resolves
-/// (see `napi-derive-backend` codegen, `NapiRefContainer`). A strong
-/// reference prevents garbage collection and finalization of the JS object,
-/// so `Drop for EggfetchClient` cannot free the FFI handle while any
-/// request future is outstanding. Do not replace this with a pattern that
-/// frees the handle independently of napi's reference tracking without
-/// adding an equivalent guard.
+/// Each request clones the `Arc` into its `'static` future before entering
+/// `spawn_blocking`. `Drop for ClientHandleInner` frees the FFI handle only
+/// when the last clone (client plus all in-flight requests) is dropped, so
+/// a JS garbage-collection of the client object cannot free the handle
+/// underneath a running request. Do not replace this with a pattern that
+/// frees the handle from `Drop for EggfetchClient` directly without holding
+/// the shared `Arc` alive in the future.
 ///
 /// This remains an experimental prototype (see `lib.rs`): requests execute
 /// through the synchronous C ABI inside `spawn_blocking`.
 #[napi]
 pub struct EggfetchClient {
-    inner: SendClientPtr,
+    inner: std::sync::Arc<ClientHandleInner>,
 }
 
 #[napi]
@@ -76,7 +76,9 @@ impl EggfetchClient {
             ));
         }
         Ok(Self {
-            inner: SendClientPtr(inner),
+            inner: std::sync::Arc::new(ClientHandleInner {
+                ptr: std::sync::Mutex::new(inner),
+            }),
         })
     }
 
@@ -185,15 +187,24 @@ impl EggfetchClient {
         url: &str,
         body: Option<&str>,
     ) -> impl std::future::Future<Output = napi::Result<crate::EggfetchResponse>> + Send {
-        let client_ptr = self.inner;
+        // Clone the shared handle so the FFI client outlives this future
+        // even if the JS object is collected first.
+        let shared = std::sync::Arc::clone(&self.inner);
         let method = method.to_owned();
         let url = url.to_owned();
         let body = body.map(String::from);
 
         async move {
-            let wrapper = client_ptr;
             napi::bindgen_prelude::spawn_blocking(move || {
-                let client = wrapper.into_inner();
+                let client = shared
+                    .ptr
+                    .lock()
+                    .map_or(std::ptr::null_mut(), |guard| *guard);
+                if client.is_null() {
+                    return Err(napi::Error::from_reason("client is closed"));
+                }
+                // Keep `shared` alive for the whole blocking section.
+                let _keep_alive = &shared;
                 let method_c = std::ffi::CString::new(method)
                     .map_err(|e| napi::Error::from_reason(format!("invalid method string: {e}")))?;
                 let url_c = std::ffi::CString::new(url)
@@ -273,16 +284,6 @@ impl EggfetchClient {
             })
             .await
             .map_err(|e| napi::Error::from_reason(format!("request worker failed: {e}")))?
-        }
-    }
-}
-
-impl Drop for EggfetchClient {
-    fn drop(&mut self) {
-        if !self.inner.0.is_null() {
-            unsafe {
-                eggfetch_ffi::eggfetch_client_free(self.inner.0);
-            }
         }
     }
 }

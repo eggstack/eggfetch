@@ -109,13 +109,16 @@ fn build_hop_request(client: &Client, params: HopBuildParams) -> Result<Request>
     hop.set_proxy_override(proxy_override);
     // Ordinary wire hints apply only on the first hop. A resolved destination
     // is different: it remains valid for a same-origin redirect and is
-    // retained only when the redirect loop explicitly permits it.
+    // retained only when the redirect loop explicitly permits it. The SNI
+    // override is retained together with the pin: keeping the IP while
+    // dropping SNI would silently change the TLS identity mid-redirect.
     if is_first_hop {
         hop.set_transport_hints(transport_hints);
         hop.set_proxied_target(proxied_target);
     } else if preserve_resolved_target {
         let resolved_hints = crate::transport_hints::TransportHints {
             resolved_target: transport_hints.resolved_target,
+            sni_hostname: transport_hints.sni_hostname,
             ..Default::default()
         };
         hop.set_transport_hints(resolved_hints);
@@ -264,10 +267,10 @@ fn advance_redirect_hop(
 
     if let Some(value) = manual_authorization {
         if cur_url.origin() == new_url.origin() {
-            let value_str = value
-                .to_str()
-                .map_err(|e| Error::InvalidHeaderValue(e.to_string()))?;
-            new_headers.insert("authorization", value_str)?;
+            // Preserve the raw bytes: a binary `HeaderValue` fails
+            // `to_str()`, and re-inserting via `&str` would be lossy.
+            let name = http::header::HeaderName::from_static("authorization");
+            new_headers.insert_raw(name, value);
         }
     }
 

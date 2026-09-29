@@ -161,9 +161,11 @@ pub(super) fn native_would_use_proxy(
 
 /// Validate a `target` extension value for request smuggling safety.
 ///
-/// Rejects C0 control characters and DEL bytes. The target must also be
-/// valid UTF-8 because it is converted to Hyper's text-based URI type before
-/// dispatch; callers should percent-encode non-ASCII octets when necessary.
+/// Rejects C0 control characters and DEL bytes, plus percent-encoded NUL
+/// (`%00`, any case), which passes the UTF-8 check but decodes to NUL on
+/// the wire. The target must also be valid UTF-8 because it is converted
+/// to Hyper's text-based URI type before dispatch; callers should
+/// percent-encode non-ASCII octets when necessary.
 pub(crate) fn validate_target(target: &[u8]) -> Result<()> {
     if target.is_empty() {
         return Err(Error::RequestBuild(
@@ -174,6 +176,13 @@ pub(crate) fn validate_target(target: &[u8]) -> Result<()> {
         return Err(Error::RequestBuild(
             "target extension contains forbidden characters (C0 controls/DEL; includes CR/LF/NUL)"
                 .into(),
+        ));
+    }
+    // Encoded NUL would survive the byte check above and the UTF-8 check
+    // at the call site; reject `%00` explicitly.
+    if target.windows(3).any(|w| w == b"%00") {
+        return Err(Error::RequestBuild(
+            "target extension must not contain encoded NUL (%00)".into(),
         ));
     }
     // Reject whitespace-only or leading/trailing whitespace targets that would
@@ -495,8 +504,10 @@ pub(super) async fn prepare_single_request(
     };
 
     let started = std::time::Instant::now();
+    // Total wins ties (matching the body-deadline boundary): with equal
+    // pool/total, report `Total` at acquire rather than `Pool`.
     let pool_deadline = match (timeout.pool, timeout.total) {
-        (Some(pool), Some(total)) if total < pool => Some((total, TimeoutPhase::Total)),
+        (Some(pool), Some(total)) if total <= pool => Some((total, TimeoutPhase::Total)),
         (Some(pool), _) => Some((pool, TimeoutPhase::Pool)),
         (None, Some(total)) => Some((total, TimeoutPhase::Total)),
         (None, None) => None,

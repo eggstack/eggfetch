@@ -48,10 +48,15 @@ impl RuntimeState {
         }
         // Re-check after acquiring the runtime lock to narrow the race where
         // another thread clones the Arc between the count check and the lock.
+        // The flag is re-checked under the lock so a concurrent `close()`
+        // cannot interleave a new shutdown decision mid-take.
         let mut guard = self
             .runtime
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if !self.shutdown_requested.load(Ordering::Acquire) {
+            return;
+        }
         if Arc::strong_count(self) != 1 {
             return;
         }
@@ -238,16 +243,16 @@ impl PyClient {
             })
         });
 
-        // Surface any trace-callback errors recorded during dispatch, BEFORE
-        // unwrapping the transport result so that callback errors are not
-        // shadowed by network failures.
+        // Unwrap the transport result first so a simultaneous network
+        // failure is not masked by a trace-callback error; callback errors
+        // are reported when the transport itself succeeded.
+        let (mut response, content) = result?;
         if let Some(slot) = trace_slot {
             if let Some(err) = take_callback_error(&slot) {
                 return Err(err);
             }
         }
 
-        let (mut response, content) = result?;
         let runtime_lease = crate::streaming::RuntimeLease::new(runtime_guard);
         let py_response = PyResponse::from_core_response_with_body(
             &mut response,
@@ -661,14 +666,15 @@ impl PyClient {
             })
         });
 
-        // Surface any trace-callback errors recorded during dispatch.
+        // Transport errors take precedence over trace-callback errors when
+        // both fail (see `request()` above).
+        let response = result?;
         if let Some(slot) = trace_slot {
             if let Some(err) = take_callback_error(&slot) {
                 return Err(err);
             }
         }
 
-        let response = result?;
         PyStreamingResponse::from_core_response(
             py,
             response,

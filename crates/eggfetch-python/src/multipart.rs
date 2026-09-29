@@ -297,10 +297,16 @@ fn add_path_file_part(
     py_file: &PyFile,
 ) -> PyResult<()> {
     let data = std::fs::read(&py_file.path).map_err(|e| {
-        PyErr::new::<pyo3::exceptions::PyFileExistsError, _>(format!(
-            "failed to read {}: {e}",
-            py_file.path.display()
-        ))
+        // Map OS error kinds to the matching Python exception instead of
+        // collapsing everything to `FileExistsError`.
+        use pyo3::exceptions::{PyFileNotFoundError, PyOSError, PyPermissionError};
+        use std::io::ErrorKind;
+        let msg = format!("failed to read {}: {e}", py_file.path.display());
+        match e.kind() {
+            ErrorKind::NotFound => PyErr::new::<PyFileNotFoundError, _>(msg),
+            ErrorKind::PermissionDenied => PyErr::new::<PyPermissionError, _>(msg),
+            _ => PyErr::new::<PyOSError, _>(msg),
+        }
     })?;
     *multipart = std::mem::replace(multipart, Multipart::new())
         .bytes(

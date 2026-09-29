@@ -210,7 +210,10 @@ impl OriginKey {
     pub(crate) fn from_components(scheme: &str, host: &str, port: u16) -> Self {
         Self {
             scheme: scheme.to_owned(),
-            host: host.to_owned(),
+            // Canonicalize once here so native (`from_components`/
+            // `from_origin`) and high-level (`from_url`) paths share pool
+            // slots and SNI for the same host regardless of case.
+            host: host.to_ascii_lowercase(),
             port,
             proxy_host: None,
             proxy_port: None,
@@ -607,10 +610,17 @@ impl PoolInner {
                 let guard = WaiterGuard::from_registered(Arc::clone(&entry));
                 return Ok((entry, guard));
             }
-            table.retain(|_, entry| {
-                entry.semaphore.available_permits() < max_per_origin
-                    || entry.waiters.load(Ordering::Acquire) > 0
-            });
+            // Amortize the O(#origins) idle sweep: high-cardinality distinct
+            // origins via the fast path never reach here, but repeated misses
+            // would otherwise sweep on every insert. Sweep only when the
+            // table has grown well beyond a single origin's connection
+            // budget.
+            if table.len() > max_per_origin.saturating_mul(16).max(64) {
+                table.retain(|_, entry| {
+                    entry.semaphore.available_permits() < max_per_origin
+                        || entry.waiters.load(Ordering::Acquire) > 0
+                });
+            }
             let entry = Arc::new(PerOriginSemaphore::new(max_per_origin));
             entry.waiters.fetch_add(1, Ordering::AcqRel);
             let guard = WaiterGuard::from_registered(Arc::clone(&entry));

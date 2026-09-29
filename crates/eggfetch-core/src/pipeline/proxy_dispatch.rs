@@ -42,10 +42,11 @@ pub(super) async fn send_proxy_route(
     let proxy_config = effective_proxy
         .as_ref()
         .ok_or_else(|| Error::Unsupported("proxy configuration not available".into()))?;
-    if !proxy_config.is_socks()
-        && headers.contains("proxy-authorization")
-        && proxy_config.auth().is_some()
-    {
+    // Fail closed when both a manual `proxy-authorization` header and
+    // configured proxy auth are present (applies to HTTP and SOCKS proxy
+    // paths: SOCKS auth is a handshake, so a manual header alongside it is
+    // always a misconfiguration, never a valid override).
+    if headers.contains("proxy-authorization") && proxy_config.auth().is_some() {
         return Err(Error::ConflictingAuth(
             "conflict: both request Proxy-Authorization header and proxy auth are configured; remove one".into(),
         ));

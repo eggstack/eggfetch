@@ -711,6 +711,11 @@ fn domain_matches(host: &str, domain: &str) -> bool {
     if host.eq_ignore_ascii_case(domain) {
         return true;
     }
+    // RFC 6265 §5.2.3: IP literals match only by exact equality; a suffix
+    // match like `sub.1.2.3.4` vs `1.2.3.4` must not match.
+    if is_ip_address(host) || is_ip_address(domain) {
+        return false;
+    }
     // RFC 6265 domain matching is ASCII case-insensitive; compare bytes
     // directly so the hot cookie-jar path performs no heap allocation.
     let host = host.as_bytes();
@@ -776,7 +781,11 @@ fn default_cookie_path(url_path: &str) -> String {
 ///
 /// Returns `None` if the header is invalid or should be rejected.
 fn parse_set_cookie(header_value: &str, response_url: &Url, response_host: &str) -> Option<Cookie> {
-    let parsed = cookie::Cookie::parse_encoded(header_value).ok()?;
+    let Ok(parsed) = cookie::Cookie::parse_encoded(header_value) else {
+        #[cfg(feature = "tracing")]
+        tracing::debug!("eggfetch: skipped malformed Set-Cookie");
+        return None;
+    };
 
     let name = parsed.name().to_owned();
     let value = parsed.value().to_owned();

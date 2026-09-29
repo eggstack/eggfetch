@@ -1276,18 +1276,37 @@ impl ClientBuilder {
         #[cfg(feature = "advanced-routing")]
         let custom_client = if let Some(dialer) = self.dialer.clone() {
             #[cfg(feature = "tls-rustls")]
-            let custom_config = self
+            let custom_config = match self
                 .tls_config
                 .clone()
                 .unwrap_or_default()
                 .build_rustls_config()
-                .ok();
+            {
+                Ok(config) => Some(config),
+                Err(e) => {
+                    #[cfg(feature = "tracing")]
+                    tracing::warn!("eggfetch: custom-route TLS config failed: {e}");
+                    #[cfg(not(feature = "tracing"))]
+                    let _ = &e;
+                    None
+                }
+            };
             #[cfg(not(feature = "tls-rustls"))]
             let custom_config = Some(());
 
             custom_config.and_then(|custom_config| {
-                let connector =
-                    build_custom_connector(custom_config, dialer, enabler, None).ok()?;
+                let connector = match build_custom_connector(custom_config, dialer, enabler, None) {
+                    Ok(connector) => connector,
+                    Err(e) => {
+                        // Surface the root cause: returning `None` here falls
+                        // back to the standard route with no diagnostic.
+                        #[cfg(feature = "tracing")]
+                        tracing::warn!("eggfetch: custom connector build failed: {e}");
+                        #[cfg(not(feature = "tracing"))]
+                        let _ = &e;
+                        return None;
+                    }
+                };
                 let connect_timeout = self.timeout.as_ref().and_then(|timeout| timeout.connect);
                 Some(build_hyper_client(
                     connector,

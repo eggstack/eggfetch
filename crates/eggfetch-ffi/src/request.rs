@@ -2,6 +2,10 @@
 
 use crate::handle::RequestHandle;
 
+/// Cap for a single FFI body buffer so a caller-supplied huge `len` cannot
+/// turn `from_raw_parts` into an out-of-bounds read.
+const MAX_FFI_BODY_LEN: usize = 256 * 1024 * 1024;
+
 /// Free a request handle.
 ///
 /// # Safety
@@ -77,10 +81,15 @@ pub unsafe extern "C" fn eggfetch_request_query(
 ///
 /// Returns 0 on success, -1 if handle or data are invalid.
 ///
+/// A null `data` pointer with `len == 0` is accepted as an empty body;
+/// a null pointer with nonzero length, or a length above the FFI cap
+/// (`256 MiB`), is rejected without dereferencing.
+///
 /// # Safety
 ///
 /// - `handle` must be a valid, non-freed request handle.
-/// - `data` must point to at least `len` bytes of valid memory.
+/// - `data` must point to at least `len` bytes of valid memory (unless
+///   `len == 0`, in which case it may be null).
 #[no_mangle]
 pub unsafe extern "C" fn eggfetch_request_body(
     handle: *mut RequestHandle,
@@ -91,6 +100,13 @@ pub unsafe extern "C" fn eggfetch_request_body(
         let Some(handle) = handle.as_mut() else {
             return -1;
         };
+        // Cap single FFI body buffers (see `MAX_FFI_BODY_LEN`).
+        if len > MAX_FFI_BODY_LEN {
+            return -1;
+        }
+        if len == 0 {
+            return update_request(handle, |rb| rb.bytes(bytes::Bytes::new()));
+        }
         if data.is_null() {
             return -1;
         }

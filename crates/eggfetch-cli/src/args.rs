@@ -107,6 +107,10 @@ pub(crate) struct Cli {
     #[arg(long = "max-redirects", default_value = "20")]
     pub(crate) max_redirects: usize,
 
+    /// Reject `https -> http` redirect downgrades instead of following them.
+    #[arg(long = "no-downgrade")]
+    pub(crate) no_downgrade: bool,
+
     /// Basic auth as USER:PASS (env: `EGGFETCH_AUTH`).
     #[arg(long = "auth", env = "EGGFETCH_AUTH", conflicts_with = "bearer")]
     pub(crate) auth: Option<String>,

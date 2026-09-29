@@ -200,6 +200,12 @@ pub fn accept_encoding_value() -> Option<&'static str> {
 /// `identity` tokens (RFC 9110 §8.4, meaning "no encoding") are no-ops
 /// and are skipped.
 ///
+/// Unknown tokens are silently dropped here: this function must only be
+/// called after [`validate_content_encodings`] has rejected unsupported
+/// codings (see `decompress_stream` / `finalize.rs`). Keep the two
+/// coupled — calling this alone on unvalidated input would silently
+/// ignore an encoding instead of erroring.
+///
 /// Returns `None` if the header is empty, contains only whitespace, or
 /// contains only no-op codings such as bare `identity`.
 pub(crate) fn parse_content_encodings(header: &str) -> Option<Vec<ContentCoding>> {
