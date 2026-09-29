@@ -57,6 +57,14 @@ use timeout::PyTimeout;
 ///     auth: Authentication credentials (optional).
 ///     `follow_redirects`: Whether to follow redirects (default False).
 ///     `max_redirects`: Maximum redirects to follow (default 20).
+///
+/// Note: one-shot helpers (`request`/`get`/`post`/...) accept no
+/// `extensions` argument (resolved-target pinning, SNI override, and
+/// trace observers are `Client`/`AsyncClient`-level only) and accept
+/// per-request `limits`, which `Client.request`/`stream` do not
+/// (client-level constructor only). This asymmetry is intentional:
+/// one-shots own their client, so per-request limits are free;
+/// persistent clients share a pool, so limits stay constructor-level.
 #[pyfunction]
 #[pyo3(signature = (method, url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None, retries=None, limits=None))]
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
@@ -103,7 +111,8 @@ fn request<'py>(
         false,
     )?;
 
-    let runtime = tokio::runtime::Runtime::new()
+    let runtime = py
+        .detach(tokio::runtime::Runtime::new)
         .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
 
     let tls_config = tls::build_tls_config(verify, cert, None)?;

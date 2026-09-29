@@ -146,9 +146,12 @@ impl PyClient {
             socket_options,
             uds,
         )?;
-        let runtime = Arc::new(RuntimeState::new(tokio::runtime::Runtime::new().map_err(
-            |e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()),
-        )?));
+        // `Runtime::new` spawns worker threads and may block: run it with
+        // the GIL released so other Python threads are not stalled.
+        let runtime = Arc::new(RuntimeState::new(
+            py.detach(tokio::runtime::Runtime::new)
+                .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?,
+        ));
         let verify_disabled = prepared.verify_disabled;
         let decompress = prepared.decompress;
         let redirect_policy = prepared.redirect_policy.clone();

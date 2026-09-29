@@ -112,10 +112,16 @@ async fn run(cli: Cli) -> Result<()> {
                 if let Err(e) =
                     jar.set_default_cookie(name.trim().to_owned(), value.trim().to_owned())
                 {
-                    eprintln!("Warning: skipping invalid cookie jar line: {line} ({e})");
+                    // Never echo the raw line: it carries the cookie value.
+                    // Log the (truncated) name and the reason only.
+                    let name: String = name.trim().chars().take(64).collect();
+                    eprintln!("Warning: skipping invalid cookie jar line for cookie '{name}': {e}");
                 }
             } else if !line.is_empty() {
-                eprintln!("Warning: skipping unrecognized cookie jar line: {line}");
+                eprintln!(
+                    "Warning: skipping unrecognized cookie jar line ({} bytes)",
+                    line.len()
+                );
             }
         }
         client_builder = client_builder.cookie_jar(jar);
@@ -345,7 +351,7 @@ async fn run(cli: Cli) -> Result<()> {
                 let body_len = body_result.as_ref().ok().map(bytes::Bytes::len);
                 let mut json_errors: Vec<String> = Vec::new();
                 if let Err(ref e) = body_result {
-                    json_errors.push(e.to_string());
+                    json_errors.push(crate::output::redact_credentials(&e.to_string()));
                 }
 
                 let body_b64 = if cli.base64 {
@@ -622,13 +628,19 @@ async fn main() -> ExitCode {
             }
             if let Some(eggfetch_err) = err.downcast_ref::<eggfetch_core::Error>() {
                 let code = map_error_to_exit_code(eggfetch_err);
-                eprintln!("Error: {eggfetch_err}");
+                eprintln!(
+                    "Error: {}",
+                    crate::output::redact_credentials(&eggfetch_err.to_string())
+                );
                 ExitCode::from(code)
             } else if err.downcast_ref::<std::io::Error>().is_some() {
                 eprintln!("I/O error: {err}");
                 ExitCode::from(EXIT_IO)
             } else {
-                eprintln!("Error: {err}");
+                eprintln!(
+                    "Error: {}",
+                    crate::output::redact_credentials(&err.to_string())
+                );
                 ExitCode::from(map_unknown_error_to_exit_code(&err))
             }
         }

@@ -246,7 +246,7 @@ pub fn map_err(err: eggfetch_core::Error) -> PyErr {
     use eggfetch_core::timeout::TimeoutPhase;
 
     match err {
-        eggfetch_core::Error::InvalidUrl(msg) => InvalidUrl::new_err(msg),
+        eggfetch_core::Error::InvalidUrl(msg) => InvalidUrl::new_err(redact_credentials(&msg)),
         eggfetch_core::Error::InvalidMethod(msg)
         | eggfetch_core::Error::InvalidHeaderName(msg)
         | eggfetch_core::Error::InvalidHeaderValue(msg)
@@ -262,17 +262,27 @@ pub fn map_err(err: eggfetch_core::Error) -> PyErr {
         | eggfetch_core::Error::TlsConfig(msg)
         | eggfetch_core::Error::CaBundle(msg)
         | eggfetch_core::Error::ClientCert(msg)
-        | eggfetch_core::Error::PrivateKey(msg) => RequestError::new_err(msg),
+        | eggfetch_core::Error::PrivateKey(msg) => RequestError::new_err(redact_credentials(&msg)),
         eggfetch_core::Error::Connect(msg)
         | eggfetch_core::Error::Tls(msg)
         | eggfetch_core::Error::CertificateVerification(msg)
-        | eggfetch_core::Error::HostnameVerification(msg) => NetworkError::new_err(msg),
-        eggfetch_core::Error::CustomTransport(error) => NetworkError::new_err(error.to_string()),
-        eggfetch_core::Error::Protocol(msg) => ProtocolError::new_err(msg),
-        eggfetch_core::Error::Body(msg) => BodyError::new_err(msg),
-        eggfetch_core::Error::Hyper(arc) => NetworkError::new_err(arc.to_string()),
-        eggfetch_core::Error::HyperClient(arc) => NetworkError::new_err(arc.to_string()),
-        eggfetch_core::Error::Io(arc) => NetworkError::new_err(arc.to_string()),
+        | eggfetch_core::Error::HostnameVerification(msg) => {
+            NetworkError::new_err(redact_credentials(&msg))
+        }
+        eggfetch_core::Error::CustomTransport(error) => {
+            NetworkError::new_err(redact_credentials(&error.to_string()))
+        }
+        eggfetch_core::Error::Protocol(msg) => ProtocolError::new_err(redact_credentials(&msg)),
+        eggfetch_core::Error::Body(msg) => BodyError::new_err(redact_credentials(&msg)),
+        eggfetch_core::Error::Hyper(arc) => {
+            NetworkError::new_err(redact_credentials(&arc.to_string()))
+        }
+        eggfetch_core::Error::HyperClient(arc) => {
+            NetworkError::new_err(redact_credentials(&arc.to_string()))
+        }
+        eggfetch_core::Error::Io(arc) => {
+            NetworkError::new_err(redact_credentials(&arc.to_string()))
+        }
         eggfetch_core::Error::BodyNotReplayableForRedirect => {
             RequestError::new_err("request body is not replayable for redirect".to_string())
         }

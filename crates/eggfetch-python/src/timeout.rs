@@ -51,13 +51,22 @@ impl PyTimeout {
     #[new]
     #[pyo3(signature = (seconds=None, *, pool=None, connect=None, write=None, read=None, total=None))]
     fn new(
-        seconds: Option<f64>,
-        pool: Option<f64>,
-        connect: Option<f64>,
-        write: Option<f64>,
-        read: Option<f64>,
-        total: Option<f64>,
+        seconds: Option<&Bound<'_, PyAny>>,
+        pool: Option<&Bound<'_, PyAny>>,
+        connect: Option<&Bound<'_, PyAny>>,
+        write: Option<&Bound<'_, PyAny>>,
+        read: Option<&Bound<'_, PyAny>>,
+        total: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<Self> {
+        // `extract::<f64>()` coerces `True` to `1.0`; reject `bool`
+        // explicitly so `Timeout(True)` raises instead of silently
+        // becoming a 1s deadline.
+        let seconds = crate::conversion::extract_optional_secs(seconds, "timeout")?;
+        let pool = crate::conversion::extract_optional_secs(pool, "pool")?;
+        let connect = crate::conversion::extract_optional_secs(connect, "connect")?;
+        let write = crate::conversion::extract_optional_secs(write, "write")?;
+        let read = crate::conversion::extract_optional_secs(read, "read")?;
+        let total = crate::conversion::extract_optional_secs(total, "total")?;
         // Validate all provided values are finite and non-negative.
         // Zero is valid (an immediately-expiring deadline), matching
         // `parse_timeout` and the HTTPX-compatible Timeout class.

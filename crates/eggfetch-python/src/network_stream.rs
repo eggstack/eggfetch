@@ -26,22 +26,28 @@ use crate::streaming::RuntimeLease;
 ///
 /// `Duration::from_secs_f64` panics on negative, NaN, infinite, or huge
 /// finite input; reject those at the boundary with `ValueError` instead.
-fn validated_timeout(timeout: Option<f64>) -> PyResult<Option<std::time::Duration>> {
-    match timeout {
-        Some(secs) => {
-            if !secs.is_finite() || secs < 0.0 {
-                Err(pyo3::exceptions::PyValueError::new_err(
-                    "timeout must be a finite, non-negative number",
-                ))
-            } else {
-                Ok(Some(std::time::Duration::try_from_secs_f64(secs).map_err(
-                    |_| {
-                        pyo3::exceptions::PyValueError::new_err("timeout is too large to represent")
-                    },
-                )?))
-            }
-        }
-        None => Ok(None),
+/// `bool` is rejected with `TypeError`: `extract::<f64>()` would coerce
+/// `True` to `1.0`, silently installing a 1s deadline.
+fn validated_timeout(timeout: Option<&Bound<'_, PyAny>>) -> PyResult<Option<std::time::Duration>> {
+    let Some(value) = timeout else {
+        return Ok(None);
+    };
+    if value.is_instance_of::<pyo3::types::PyBool>() {
+        return Err(pyo3::exceptions::PyTypeError::new_err(
+            "timeout must be a float (seconds), not bool",
+        ));
+    }
+    let secs: f64 = value
+        .extract()
+        .map_err(|_| pyo3::exceptions::PyTypeError::new_err("timeout must be a float (seconds)"))?;
+    if !secs.is_finite() || secs < 0.0 {
+        Err(pyo3::exceptions::PyValueError::new_err(
+            "timeout must be a finite, non-negative number",
+        ))
+    } else {
+        Ok(Some(std::time::Duration::try_from_secs_f64(secs).map_err(
+            |_| pyo3::exceptions::PyValueError::new_err("timeout is too large to represent"),
+        )?))
     }
 }
 
@@ -242,7 +248,7 @@ impl PyNetworkStream {
         &self,
         py: Python<'py>,
         max_bytes: usize,
-        timeout: Option<f64>,
+        timeout: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<Bound<'py, PyBytes>> {
         let dur = validated_timeout(timeout)?;
         let handle = self.runtime_handle.clone();
@@ -288,9 +294,12 @@ impl PyNetworkStream {
         &self,
         py: Python<'_>,
         data: &Bound<'_, PyBytes>,
-        timeout: Option<f64>,
+        timeout: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<()> {
         let dur = validated_timeout(timeout)?;
+        // This copy necessarily holds the GIL (it borrows the `PyBytes`);
+        // it happens before any blocking work, and the lock acquisition
+        // plus IO below run detached.
         let buf = data.as_bytes().to_vec();
         let handle = self.runtime_handle.clone();
 
@@ -404,7 +413,7 @@ impl PyNetworkStream {
         py: Python<'_>,
         ssl_context: Option<&Bound<'_, PyAny>>,
         server_hostname: &str,
-        timeout: Option<f64>,
+        timeout: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<PyNetworkStream> {
         // Reject variants that cannot be safely upgraded.
         match self.variant {
@@ -696,7 +705,7 @@ impl PyAsyncNetworkStream {
         &self,
         py: Python<'py>,
         max_bytes: usize,
-        timeout: Option<f64>,
+        timeout: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<Bound<'py, pyo3::PyAny>> {
         let inner = self.inner.clone();
         let dur = validated_timeout(timeout)?;
@@ -734,7 +743,7 @@ impl PyAsyncNetworkStream {
         &self,
         py: Python<'py>,
         data: &Bound<'_, PyBytes>,
-        timeout: Option<f64>,
+        timeout: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<Bound<'py, pyo3::PyAny>> {
         let buf = data.as_bytes().to_vec();
         let inner = self.inner.clone();
@@ -815,7 +824,7 @@ impl PyAsyncNetworkStream {
         py: Python<'py>,
         ssl_context: Option<&Bound<'_, PyAny>>,
         server_hostname: &str,
-        timeout: Option<f64>,
+        timeout: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<Bound<'py, pyo3::PyAny>> {
         // Reject variants that cannot be safely upgraded.
         match self.variant {

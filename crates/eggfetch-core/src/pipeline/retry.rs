@@ -288,10 +288,13 @@ fn compute_retry_delay(
         if !increased.is_finite() || increased < 0.0 {
             return Some(max);
         }
-        let capped = increased.min(max.as_secs_f64());
-        // `capped` is finite and `<= max` here; `max` itself was validated
-        // at policy construction, so this conversion cannot panic.
-        return Some(Duration::from_secs_f64(capped.max(0.0)));
+        let max_secs = max.as_secs_f64();
+        // `max` may be `Duration::MAX`, whose float form rounds up to 2^64
+        // (oversize for `from_secs_f64`); saturate instead of panicking.
+        // (`BackoffPolicyBuilder` accepts any `Duration`, so `max` was not
+        // necessarily validated at construction.)
+        let capped = increased.min(max_secs);
+        return Some(Duration::try_from_secs_f64(capped.max(0.0)).unwrap_or(max));
     }
     Some(base)
 }
@@ -560,5 +563,17 @@ mod tests {
 
         let saturated = RequestParts::shrink_total_deadline(&t, Duration::from_secs(20));
         assert_eq!(saturated.total, Some(Duration::ZERO));
+    }
+
+    #[test]
+    fn compute_retry_delay_429_with_max_duration_does_not_panic() {
+        use crate::retry::RetryPolicy;
+        let policy = RetryPolicy::builder()
+            .max_attempts(5)
+            .max_delay(Duration::MAX)
+            .initial_delay(Duration::from_millis(500))
+            .build();
+        let d = compute_retry_delay(&policy, &RetryCause::Status(429), 5, None).unwrap();
+        assert!(d <= Duration::MAX);
     }
 }

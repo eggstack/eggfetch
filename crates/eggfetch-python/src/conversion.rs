@@ -2,7 +2,9 @@
 
 use pyo3::exceptions::PyStopAsyncIteration;
 use pyo3::prelude::*;
-use pyo3::types::{PyByteArray, PyByteArrayMethods, PyBytes, PyIterator, PyMemoryView, PyTuple};
+use pyo3::types::{
+    PyBool, PyByteArray, PyByteArrayMethods, PyBytes, PyIterator, PyMemoryView, PyTuple,
+};
 
 use bytes::Bytes;
 
@@ -36,7 +38,9 @@ pub(crate) fn python_cookies_to_header(
 /// For Mapping objects (dict, etc.), calls `.items()`.
 /// For other iterables (list of tuples, etc.), iterates directly.
 fn iter_kv_pairs(obj: &Bound<'_, PyAny>, field: &str) -> PyResult<Vec<(String, String)>> {
-    let items = if obj.get_type().hasattr("__getitem__")? && obj.hasattr("items")? {
+    // Check the instance (not its type): a metaclass may define
+    // `__getitem__` without instances supporting subscription.
+    let items = if obj.hasattr("__getitem__")? && obj.hasattr("items")? {
         obj.call_method0("items")?
     } else {
         obj.clone()
@@ -44,7 +48,11 @@ fn iter_kv_pairs(obj: &Bound<'_, PyAny>, field: &str) -> PyResult<Vec<(String, S
     let mut pairs = Vec::new();
     for item in items.try_iter()? {
         let item = item?;
-        let tuple: Bound<'_, PyTuple> = item.cast_into::<PyTuple>()?;
+        let tuple: Bound<'_, PyTuple> = item.cast_into::<PyTuple>().map_err(|_| {
+            PyErr::new::<pyo3::exceptions::PyTypeError, _>(format!(
+                "{field} must be a mapping or sequence of 2-tuples"
+            ))
+        })?;
         if tuple.len() != 2 {
             return Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(format!(
                 "{field} must be a mapping or sequence of 2-tuples"
@@ -219,7 +227,7 @@ impl Drop for PythonBodyIterator {
 }
 
 /// Convert a Python buffer-like value to owned bytes.
-fn extract_bytes_like(obj: &Bound<'_, PyAny>) -> PyResult<Option<Vec<u8>>> {
+pub(crate) fn extract_bytes_like(obj: &Bound<'_, PyAny>) -> PyResult<Option<Vec<u8>>> {
     if let Ok(bytes) = obj.cast::<PyBytes>() {
         return Ok(Some(bytes.as_bytes().to_vec()));
     }
@@ -339,6 +347,32 @@ pub fn python_async_iterable_to_request_body(
     ))
 }
 
+/// Extract an optional float timeout in seconds, rejecting `bool`.
+///
+/// `extract::<f64>()` coerces `True` to `1.0`; a timeout must be an
+/// explicit number, so `True`/`False` raise `TypeError` instead of
+/// silently becoming a 1s/0s deadline (mirrors the strict `bool`
+/// rejection in `parse_socket_options`).
+pub(crate) fn extract_optional_secs(
+    value: Option<&Bound<'_, PyAny>>,
+    name: &str,
+) -> PyResult<Option<f64>> {
+    let Some(v) = value else {
+        return Ok(None);
+    };
+    if v.is_instance_of::<PyBool>() {
+        return Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(format!(
+            "{name} timeout must be a float (seconds), not bool"
+        )));
+    }
+    let secs: f64 = v.extract().map_err(|_| {
+        PyErr::new::<pyo3::exceptions::PyTypeError, _>(format!(
+            "{name} timeout must be a float (seconds)"
+        ))
+    })?;
+    Ok(Some(secs))
+}
+
 /// Convert a Python timeout value to an optional Rust `eggfetch_core::Timeout`.
 pub fn parse_timeout(
     py_timeout: Option<&Bound<'_, PyAny>>,
@@ -348,6 +382,10 @@ pub fn parse_timeout(
         Some(val) => {
             if val.is_none() {
                 Ok(None)
+            } else if val.is_instance_of::<PyBool>() {
+                Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
+                    "timeout must be a float (seconds) or Timeout object, not bool",
+                ))
             } else if let Ok(secs) = val.extract::<f64>() {
                 if !secs.is_finite() || secs < 0.0 {
                     return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(

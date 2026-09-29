@@ -7,9 +7,22 @@ use pyo3::types::{PyFloat, PyList, PyString};
 ///
 /// Wraps `eggfetch_core::cookie::Cookie` with read-only properties.
 #[pyclass(name = "Cookie", from_py_object)]
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct PyCookie {
     inner: eggfetch_core::cookie::Cookie,
+}
+
+// Manual `Debug` omits the cookie value (mirrors `__repr__`, which shows
+// name/domain/path only) so values never leak via Rust panic captures.
+impl std::fmt::Debug for PyCookie {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PyCookie")
+            .field("name", &self.inner.name())
+            .field("value", &"<redacted>")
+            .field("domain", &self.inner.domain())
+            .field("path", &self.inner.path())
+            .finish_non_exhaustive()
+    }
 }
 
 impl PyCookie {
@@ -129,9 +142,19 @@ impl PyCookie {
 /// When multiple cookies share a name (different domains/paths),
 /// name-only lookup is treated as ambiguous and returns no value.
 #[pyclass(name = "Cookies", from_py_object)]
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct PyCookies {
     jar: eggfetch_core::cookie::CookieJar,
+}
+
+// Manual `Debug` reports only the jar size (mirrors `__repr__`) so cookie
+// values never leak via Rust panic captures or logs.
+impl std::fmt::Debug for PyCookies {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PyCookies")
+            .field("len", &self.jar.len())
+            .finish()
+    }
 }
 
 impl PyCookies {

@@ -9,6 +9,7 @@ use bytes::Bytes;
 use pyo3::prelude::*;
 use pyo3::types::PyTuple;
 
+use crate::conversion::extract_bytes_like;
 use crate::conversion::python_headers_to_rust;
 use crate::errors::map_err;
 use eggfetch_core::multipart::{Multipart, Part, PartBody};
@@ -78,6 +79,15 @@ impl PyFile {
         let default_filename = pb
             .file_name()
             .map_or_else(|| "file".to_owned(), |n| n.to_string_lossy().into_owned());
+        // Fail early on CR/LF: core would reject these later as a generic
+        // `RequestError` without naming the field.
+        for (label, value) in [("filename", filename), ("content_type", content_type)] {
+            if value.is_some_and(|v| v.contains(['\r', '\n'])) {
+                return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                    "File {label} must not contain CR or LF"
+                )));
+            }
+        }
         Ok(Self {
             path: pb,
             filename: filename.unwrap_or(&default_filename).to_owned(),
@@ -142,13 +152,29 @@ pub fn build_multipart_body<'py>(
     Ok((body, ct))
 }
 
+/// Extract a multipart string field with field context, rejecting CR/LF.
+///
+/// Core rejects control bytes later as a generic `RequestError`; failing
+/// early here names the offending field.
+fn extract_text_field(obj: &Bound<'_, PyAny>, field: &str) -> PyResult<String> {
+    let s: String = obj.extract().map_err(|_| {
+        PyErr::new::<pyo3::exceptions::PyTypeError, _>(format!("{field} must be a string"))
+    })?;
+    if s.contains(['\r', '\n']) {
+        return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+            "{field} must not contain CR or LF"
+        )));
+    }
+    Ok(s)
+}
+
 /// Add form field parts from a dict or sequence of pairs.
 fn add_form_fields(
     multipart: &mut Multipart,
     _py: Python<'_>,
     data: &Bound<'_, PyAny>,
 ) -> PyResult<()> {
-    let items = if data.get_type().hasattr("__getitem__")? && data.hasattr("items")? {
+    let items = if data.hasattr("__getitem__")? && data.hasattr("items")? {
         data.call_method0("items")?
     } else {
         data.clone()
@@ -161,8 +187,8 @@ fn add_form_fields(
                 "expected a mapping or sequence of 2-tuples",
             ));
         }
-        let key: String = tuple.get_item(0)?.extract()?;
-        let value: String = tuple.get_item(1)?.extract()?;
+        let key = extract_text_field(&tuple.get_item(0)?, "multipart field name")?;
+        let value = extract_text_field(&tuple.get_item(1)?, "multipart field value")?;
         *multipart = std::mem::replace(multipart, Multipart::new())
             .text(&key, &value)
             .map_err(map_err)?;
@@ -187,7 +213,7 @@ fn add_file_parts(
     py: Python<'_>,
     files: &Bound<'_, PyAny>,
 ) -> PyResult<()> {
-    let pairs = if files.get_type().hasattr("__getitem__")? && files.hasattr("items")? {
+    let pairs = if files.hasattr("__getitem__")? && files.hasattr("items")? {
         let items = files.call_method0("items")?;
         let mut pairs = Vec::new();
         for item in items.try_iter()? {
@@ -232,7 +258,8 @@ fn add_single_file_part(
         return add_path_file_part(multipart, field_name, &py_file);
     }
 
-    if let Ok(b) = file_spec.extract::<Vec<u8>>() {
+    // Same buffer protocol as `content=` (`bytes`, `bytearray`, `memoryview`).
+    if let Some(b) = extract_bytes_like(file_spec)? {
         let filename = field_name.to_owned();
         *multipart = std::mem::replace(multipart, Multipart::new())
             .bytes(
@@ -282,10 +309,10 @@ fn add_tuple_file_part(
         ));
     }
 
-    let filename: String = tuple.get_item(0)?.extract()?;
+    let filename = extract_text_field(&tuple.get_item(0)?, "multipart filename")?;
     let data_bytes = extract_data_bytes(&tuple.get_item(1)?)?;
     let content_type: String = if len >= 3 {
-        tuple.get_item(2)?.extract()?
+        extract_text_field(&tuple.get_item(2)?, "multipart content_type")?
     } else {
         guess_content_type(&filename)
     };
@@ -346,15 +373,18 @@ fn add_path_file_part(
 }
 
 /// Extract bytes from a Python bytes-like or string object.
+///
+/// Accepts the same buffer protocol as `content=` (`bytes`, `bytearray`,
+/// `memoryview`) plus `str`.
 fn extract_data_bytes(obj: &Bound<'_, PyAny>) -> PyResult<Bytes> {
-    if let Ok(b) = obj.extract::<Vec<u8>>() {
+    if let Some(b) = extract_bytes_like(obj)? {
         return Ok(Bytes::from(b));
     }
     if let Ok(s) = obj.extract::<String>() {
         return Ok(Bytes::from(s.into_bytes()));
     }
     Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
-        "file data must be bytes or string",
+        "file data must be bytes, bytearray, memoryview, or string",
     ))
 }
 

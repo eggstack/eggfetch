@@ -113,6 +113,42 @@ pub(crate) fn safe_url_for_display(url: &str) -> String {
     format!("{prefix}{host_port}{}", &path[..path_end])
 }
 
+/// Redact `user:pass@` userinfo from error/display strings.
+///
+/// Core errors may echo the request URL; routing them through here before
+/// stdout/stderr/JSON output keeps credentials out of artifacts.
+pub(crate) fn redact_credentials(message: &str) -> String {
+    let mut result = message.to_owned();
+    let mut search_from = 0;
+    while let Some(scheme_pos) = result[search_from..].find("://") {
+        let userinfo_start = search_from + scheme_pos + 3;
+        let rest = &result[userinfo_start..];
+        let Some(at_pos) = rest.find('@') else {
+            break;
+        };
+        let terminator = [
+            rest.find('/'),
+            rest.find(' '),
+            rest.find('"'),
+            rest.find('\''),
+        ]
+        .into_iter()
+        .flatten()
+        .min()
+        .unwrap_or(rest.len());
+        if at_pos < terminator {
+            result.replace_range(userinfo_start..=userinfo_start + at_pos, "<redacted>@");
+            search_from = userinfo_start + "<redacted>@".len();
+        } else {
+            search_from = userinfo_start;
+        }
+        if search_from >= result.len() {
+            break;
+        }
+    }
+    result
+}
+
 pub(crate) fn build_json_response(
     response: &eggfetch_core::Response,
     elapsed: Duration,

@@ -441,14 +441,25 @@ impl BackoffPolicy {
         // Exponential backoff: initial_delay * factor^(attempt-2)
         let exp = (attempt - 2) as f64;
         let raw = self.initial_delay.as_secs_f64() * self.factor.powf(exp);
+        // `Duration::MAX.as_secs_f64()` rounds up to 2^64 (oversize for
+        // `from_secs_f64`), so treat a non-convertible max as unbounded
+        // here; the saturating conversion below clamps to `max_delay` anyway.
+        let max_float = self.max_delay.as_secs_f64();
+        let max_secs = if Duration::try_from_secs_f64(max_float).is_ok() {
+            max_float
+        } else {
+            f64::MAX
+        };
 
         // Guard against NaN, inf, negative, and values exceeding max_delay
         // before converting to Duration. `Duration::from_secs_f64` panics on
-        // non-finite, negative, or oversized floats.
-        let capped = if !raw.is_finite() || raw < 0.0 || raw > self.max_delay.as_secs_f64() {
+        // non-finite, negative, or oversized floats, and `max_delay` itself
+        // may be `Duration::MAX` whose `as_secs_f64()` rounds up to 2^64
+        // (oversize), so saturate instead of converting directly.
+        let capped = if !raw.is_finite() || raw < 0.0 || raw > max_secs {
             self.max_delay
         } else {
-            Duration::from_secs_f64(raw)
+            Duration::try_from_secs_f64(raw).unwrap_or(self.max_delay)
         };
 
         // Full jitter: uniform value in [0, capped) so retries in the
@@ -464,7 +475,9 @@ impl BackoffPolicy {
         let final_delay = if !jittered_secs.is_finite() || jittered_secs < 0.0 {
             capped
         } else {
-            Duration::from_secs_f64(jittered_secs)
+            // `capped` may be `Duration::MAX` (whose float form rounds to
+            // oversize 2^64); saturate instead of panicking.
+            Duration::try_from_secs_f64(jittered_secs).unwrap_or(capped)
         };
 
         // Avoid a zero-length retry loop when jitter rounds a positive
@@ -1286,6 +1299,21 @@ mod tests {
         };
         let d = backoff.delay(5).unwrap();
         assert!(d <= Duration::from_secs(30));
+    }
+
+    #[test]
+    fn backoff_delay_max_duration_does_not_panic() {
+        // `Duration::MAX.as_secs_f64()` rounds up to 2^64, which
+        // `Duration::from_secs_f64` rejects: the delay must saturate.
+        let backoff = BackoffPolicy {
+            factor: 2.0,
+            max_delay: Duration::MAX,
+            initial_delay: Duration::from_millis(500),
+        };
+        for attempt in [2, 5, 100] {
+            let d = backoff.delay(attempt).unwrap();
+            assert!(d <= Duration::MAX);
+        }
     }
 
     #[test]

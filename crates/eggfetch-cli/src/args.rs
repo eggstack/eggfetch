@@ -210,7 +210,13 @@ impl std::fmt::Debug for Cli {
             .field("header", &"<redacted-if-auth>")
             .field("auth", &self.auth.as_ref().map(|_| "<redacted>"))
             .field("bearer", &self.bearer.as_ref().map(|_| "<redacted>"))
-            .field("proxy", &self.proxy)
+            .field(
+                "proxy",
+                &self
+                    .proxy
+                    .as_ref()
+                    .map(|p| crate::output::safe_url_for_display(p)),
+            )
             .field(
                 "proxy_auth",
                 &self.proxy_auth.as_ref().map(|_| "<redacted>"),

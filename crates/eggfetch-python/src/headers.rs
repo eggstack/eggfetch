@@ -5,9 +5,34 @@ use pyo3::types::{PyList, PyString, PyTuple};
 
 /// A case-insensitive HTTP headers container exposed to Python.
 #[pyclass(name = "Headers", from_py_object)]
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct PyHeaders {
     inner: http::HeaderMap,
+}
+
+// Manual `Debug` that redacts credential-carrying headers: the derived
+// `HeaderMap` debug would dump `authorization`/`cookie` values in clear
+// (panic captures, logs), while `__repr__` redacts them.
+impl std::fmt::Debug for PyHeaders {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let pairs: Vec<(String, String)> = self
+            .inner
+            .iter()
+            .map(|(k, v)| {
+                let name = k.as_str();
+                let val = if matches!(
+                    name,
+                    "authorization" | "proxy-authorization" | "cookie" | "set-cookie"
+                ) {
+                    "<redacted>"
+                } else {
+                    v.to_str().unwrap_or("<binary>")
+                };
+                (name.to_owned(), val.to_owned())
+            })
+            .collect();
+        f.debug_struct("PyHeaders").field("inner", &pairs).finish()
+    }
 }
 
 impl PyHeaders {

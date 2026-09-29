@@ -225,8 +225,13 @@ def main(argv: list[str] | None = None) -> int:
     expected = manifest["exports"]
     errors: list[str] = []
     errors.extend(_check_relational_runtime_contracts(eggfetch))
-    if list(eggfetch.__all__) != expected:
+    # Set comparison: `__all__` order is presentation-only (import-star
+    # binding order has no semantic effect), so a reorder-only change
+    # must not fail Tier 1.
+    if set(eggfetch.__all__) != set(expected):
         errors.append("eggfetch.__all__ differs from the reviewed native manifest")
+    if len(eggfetch.__all__) != len(expected):
+        errors.append("eggfetch.__all__ has duplicate or missing entries vs the manifest")
     if hasattr(_native, "__all__"):
         errors.append("eggfetch._native must not define an independent __all__")
     for name in expected:

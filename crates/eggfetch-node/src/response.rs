@@ -106,6 +106,25 @@ impl EggfetchResponse {
     }
 }
 
+/// Strip `userinfo@` from a URL for display (mirrors the CLI/Python
+/// `safe_url_for_display` so credentials never leak through the getter).
+fn safe_url_for_display(url: &str) -> String {
+    let authority_start = url.find("://").map_or(0, |i| i + 3);
+    let (prefix, rest) = url.split_at(authority_start);
+    let after_userinfo = match rest.find('@') {
+        Some(at) => {
+            let slash = rest.find('/').unwrap_or(rest.len());
+            if at < slash {
+                &rest[at + 1..]
+            } else {
+                rest
+            }
+        }
+        None => rest,
+    };
+    format!("{prefix}{after_userinfo}")
+}
+
 #[napi]
 impl EggfetchResponse {
     /// HTTP status code.
@@ -117,7 +136,7 @@ impl EggfetchResponse {
     /// Response URL.
     #[napi(getter)]
     pub fn url(&self) -> String {
-        self.url.clone()
+        safe_url_for_display(&self.url)
     }
 
     /// Response body as text.
@@ -147,12 +166,13 @@ impl EggfetchResponse {
     ///
     /// When a header appears multiple times, the object joins the values
     /// with `", "` (standard HTTP combining). Use [`Self::get_all`] to
-    /// retrieve every value individually.
+    /// retrieve every value individually. Keys are lowercased so mixed-case
+    /// duplicates (e.g. `X-Foo` + `x-foo`) join instead of splitting.
     #[napi(getter)]
     pub fn headers(&self) -> HashMap<String, String> {
         let mut map: HashMap<String, String> = HashMap::with_capacity(self.headers.len());
         for (name, value) in &self.headers {
-            match map.entry(name.clone()) {
+            match map.entry(name.to_ascii_lowercase()) {
                 std::collections::hash_map::Entry::Occupied(mut existing) => {
                     let joined = existing.get_mut();
                     joined.push_str(", ");

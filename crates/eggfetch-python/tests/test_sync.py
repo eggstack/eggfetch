@@ -309,6 +309,15 @@ class TestTimeout:
         with pytest.raises(ValueError, match="non-negative"):
             eggfetch.get(f"{server}/hello", timeout=-5.0)
 
+    def test_bool_timeout_rejected(self, server):
+        """`True` must not silently coerce to a 1s deadline."""
+        with pytest.raises(TypeError, match="not bool"):
+            eggfetch.Timeout(True)
+        with pytest.raises(TypeError, match="not bool"):
+            eggfetch.Timeout(pool=True)
+        with pytest.raises(TypeError, match="not bool"):
+            eggfetch.get(f"{server}/hello", timeout=True)
+
 
 # ---------------------------------------------------------------------------
 # Socket options validation

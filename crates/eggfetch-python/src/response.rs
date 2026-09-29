@@ -77,7 +77,7 @@ fn decode_with_encoding(content: &[u8], encoding: Option<&str>) -> String {
 /// All data is buffered at creation time so Python code can access it
 /// synchronously.
 #[pyclass(name = "Response", from_py_object)]
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct PyResponse {
     /// HTTP status code.
     #[pyo3(get)]
@@ -121,6 +121,22 @@ pub struct PyResponse {
     /// upgraded-connection IO. Returns `None` for buffered responses
     /// where the connection has been returned to the pool.
     _network_stream: Option<EitherNetworkStream>,
+}
+
+// Manual `Debug` that redacts secrets: the derived form would dump the url
+// (userinfo), headers (auth/cookie), and cookies in clear via Rust
+// panic captures and logs. Values stay accessible through the Python
+// getters; only `Debug` output is redacted.
+impl std::fmt::Debug for PyResponse {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PyResponse")
+            .field("status_code", &self.status_code)
+            .field("headers", &self.headers)
+            .field("url", &safe_url_for_display(&self.url))
+            .field("content", &format!("<{} bytes>", self.content.len()))
+            .field("cookies", &self.cookies)
+            .finish_non_exhaustive()
+    }
 }
 
 impl PyResponse {

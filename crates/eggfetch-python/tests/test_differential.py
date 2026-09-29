@@ -614,6 +614,25 @@ class TestMultipart:
         # but the request should have been multipart
         assert resp.status_code == 200
 
+    def test_multipart_accepts_bytearray_and_memoryview(self, diff_server):
+        """Tuple file data accepts the same buffer protocol as `content=`."""
+        for data in (bytearray(b"ba-data"), memoryview(b"mv-data")):
+            resp = eggfetch.post(
+                f"{diff_server}/multipart-echo",
+                files={"file": ("name.bin", data)},
+            )
+            assert resp.status_code == 200
+            assert "file" in resp.json()["fields"]
+
+    def test_multipart_crlf_rejected_with_field_context(self, diff_server):
+        """CR/LF in multipart names fails early naming the field."""
+        with pytest.raises(ValueError, match="multipart field name"):
+            eggfetch.post(
+                f"{diff_server}/multipart-echo",
+                data={"a\r\nb": "v"},
+                files={"file": ("n.bin", b"x")},
+            )
+
 
 # ---------------------------------------------------------------------------
 # Decompression

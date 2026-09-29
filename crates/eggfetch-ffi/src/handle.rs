@@ -153,6 +153,44 @@ pub(crate) unsafe fn cstr_to_string(ptr: *const c_char) -> Option<String> {
 pub(crate) fn error_to_handle(e: &eggfetch_core::Error) -> Box<ErrorHandle> {
     Box::new(ErrorHandle {
         kind: e.kind().to_owned(),
-        message: e.to_string(),
+        // Redact `user:pass@` userinfo: core messages may echo the request
+        // URL, and the C string crosses the ABI verbatim otherwise.
+        message: redact_credentials(&e.to_string()),
     })
+}
+
+/// Redact `user:pass@` userinfo from error strings.
+///
+/// Replaces every `://<userinfo>@` with `://<redacted>@` (mirrors the
+/// Python binding's redaction so C callers get the same guarantee).
+fn redact_credentials(message: &str) -> String {
+    let mut result = message.to_owned();
+    let mut search_from = 0;
+    while let Some(scheme_pos) = result[search_from..].find("://") {
+        let userinfo_start = search_from + scheme_pos + 3;
+        let rest = &result[userinfo_start..];
+        let Some(at_pos) = rest.find('@') else {
+            break;
+        };
+        let terminator = [
+            rest.find('/'),
+            rest.find(' '),
+            rest.find('"'),
+            rest.find('\''),
+        ]
+        .into_iter()
+        .flatten()
+        .min()
+        .unwrap_or(rest.len());
+        if at_pos < terminator {
+            result.replace_range(userinfo_start..=userinfo_start + at_pos, "<redacted>@");
+            search_from = userinfo_start + "<redacted>@".len();
+        } else {
+            search_from = userinfo_start;
+        }
+        if search_from >= result.len() {
+            break;
+        }
+    }
+    result
 }
