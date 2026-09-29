@@ -30,6 +30,9 @@ impl ConnectTarget {
     /// body semantics exist in this type.
     pub fn new(host: impl Into<String>, port: u16) -> Result<Self, ConnectError> {
         let host = host.into();
+        if port == 0 {
+            return Err(ConnectError::InvalidTarget);
+        }
         validate_host(&host)?;
         Ok(Self { host, port })
     }
@@ -114,6 +117,16 @@ fn validate_host_inner(host: &str) -> Result<(), ConnectError> {
         // CONNECT request line. `:` is allowed here only for the
         // IPv6-literal path, which is validated separately above.
         if matches!(c, '/' | '?' | '#' | '@') {
+            return Err(ConnectError::InvalidTarget);
+        }
+    }
+    // A `:` in an unbracketed host is only valid as an IPv6 literal;
+    // otherwise `foo:bar` would render as `[foo:bar]:443` and smuggle an
+    // extra authority section. Require valid IPv6 shape here (allowing an
+    // optional `%zone` suffix).
+    if host.contains(':') {
+        let candidate = host.split_once('%').map_or(host, |(base, _)| base);
+        if candidate.parse::<std::net::Ipv6Addr>().is_err() {
             return Err(ConnectError::InvalidTarget);
         }
     }

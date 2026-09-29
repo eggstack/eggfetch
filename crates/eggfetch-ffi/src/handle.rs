@@ -1,6 +1,6 @@
 //! Opaque handle types for FFI.
 
-use std::ffi::{CStr, CString};
+use std::ffi::CString;
 use std::os::raw::c_char;
 
 use eggfetch_core::Client;
@@ -112,18 +112,36 @@ pub unsafe extern "C" fn eggfetch_string_free(s: *mut c_char) {
 ///
 /// Returns owned data because a raw pointer carries no lifetime to borrow
 /// against; every caller immediately consumes the value into owned state.
+/// Maximum C-string scan length (1 MiB) to bound `cstr_to_string`.
+///
+/// The C ABI requires scanning for NUL, but an unterminated pointer must not
+/// read unbounded memory: fail closed past this limit. `MAX_FFI_BODY_LEN`
+/// (256 MiB) covers only `request_body` byte buffers, not NUL-terminated strings.
+pub(crate) const MAX_CSTR_LEN: usize = 1024 * 1024;
 ///
 /// # Safety
 ///
 /// `ptr` must be null or point to a valid null-terminated C string.
-/// This performs an unbounded scan for the terminator (inherent C ABI:
-/// a non-terminated pointer reads out of bounds); callers must only
-/// pass pointers to genuine NUL-terminated strings.
+/// This performs a bounded scan for the terminator (up to `MAX_CSTR_LEN`);
+/// unterminated or over-long inputs return `None` instead of reading OOB.
 pub(crate) unsafe fn cstr_to_string(ptr: *const c_char) -> Option<String> {
     if ptr.is_null() {
         None
     } else {
-        String::from_utf8(CStr::from_ptr(ptr).to_bytes().to_vec()).ok()
+        // Bounded `strnlen`: stop at NUL or MAX_CSTR_LEN.
+        let mut len = 0usize;
+        while len < MAX_CSTR_LEN {
+            let byte = unsafe { *ptr.add(len) }.cast_unsigned();
+            if byte == 0 {
+                break;
+            }
+            len += 1;
+        }
+        if len >= MAX_CSTR_LEN {
+            return None;
+        }
+        let slice = unsafe { std::slice::from_raw_parts(ptr.cast::<u8>(), len) };
+        String::from_utf8(slice.to_vec()).ok()
     }
 }
 

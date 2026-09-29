@@ -158,9 +158,10 @@ pub(crate) async fn socks5_handshake(
     remaining_total: Option<std::time::Duration>,
     pinned_targets: Option<&[std::net::SocketAddr]>,
 ) -> Result<tokio::net::TcpStream> {
-    // `Instant::add` panics on overflow; saturate instead of crashing.
-    let deadline =
-        remaining_total.and_then(|duration| std::time::Instant::now().checked_add(duration));
+    // `Instant::add` panics on overflow; fail closed with an immediately-expired
+    // deadline instead of dropping the deadline (unbounded handshake).
+    let now = std::time::Instant::now();
+    let deadline = remaining_total.map(|duration| now.checked_add(duration).unwrap_or(now));
 
     if let Some(targets) = pinned_targets {
         if targets.is_empty() {
@@ -226,7 +227,10 @@ async fn establish_socks_proxy_connection(
     proxy_config: &ProxyConfig,
     deadline: Option<std::time::Instant>,
 ) -> Result<tokio::net::TcpStream> {
-    let proxy_host = proxy_config.host().unwrap_or("127.0.0.1");
+    let proxy_host = proxy_config
+        .host()
+        .ok_or_else(|| Error::ProxyConnect("SOCKS proxy URI has no host".into()))?
+        .to_owned();
     let proxy_port = proxy_config.port()?;
 
     // Phase 1: TCP connect to proxy.

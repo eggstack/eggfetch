@@ -4,7 +4,7 @@ use clap::Parser;
 use std::path::PathBuf;
 
 /// Eggfetch: a fast, modern HTTP client.
-#[derive(Parser, Debug)]
+#[derive(Parser)]
 #[command(name = "eggfetch", version, about, long_about = None)]
 #[allow(clippy::struct_excessive_bools)]
 pub(crate) struct Cli {
@@ -198,6 +198,25 @@ pub(crate) struct Cli {
     /// Generate shell completions and exit.
     #[arg(long = "generate-completion", value_enum)]
     pub(crate) generate_completion: Option<Shell>,
+}
+
+// Manual `Debug` that redacts secrets (`auth`, `bearer`, `proxy_auth` + env):
+// `#[derive(Debug)]` would leak credentials in `{:?}`/panic captures.
+impl std::fmt::Debug for Cli {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Cli")
+            .field("url", &crate::output::safe_url_for_display(&self.url))
+            .field("method", &self.method)
+            .field("header", &"<redacted-if-auth>")
+            .field("auth", &self.auth.as_ref().map(|_| "<redacted>"))
+            .field("bearer", &self.bearer.as_ref().map(|_| "<redacted>"))
+            .field("proxy", &self.proxy)
+            .field(
+                "proxy_auth",
+                &self.proxy_auth.as_ref().map(|_| "<redacted>"),
+            )
+            .finish_non_exhaustive()
+    }
 }
 
 #[derive(clap::ValueEnum, Clone, Debug)]

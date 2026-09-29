@@ -197,6 +197,48 @@ create_exception!(
     "An HTTP/3 protocol error occurred."
 );
 
+/// Redact `user:pass@` userinfo from error strings so proxy passwords never
+/// leak via `map_err` messages (Debug already redacts; error strings may echo).
+fn redact_credentials(message: &str) -> String {
+    let mut result = message.to_owned();
+    // Replace every `://<userinfo>@` with `://<redacted>@`.
+    let mut search_from = 0;
+    while let Some(scheme_pos) = result[search_from..].find("://") {
+        let userinfo_start = search_from + scheme_pos + 3;
+        let rest = &result[userinfo_start..];
+        let end_candidates = [
+            rest.find('@'),
+            rest.find('/'),
+            rest.find(' '),
+            rest.find('"'),
+        ];
+        let Some(at_pos) = end_candidates[0] else {
+            break;
+        };
+        // Only treat `@` before the next `/`/space/quote as userinfo.
+        let terminator = [
+            rest.find('/'),
+            rest.find(' '),
+            rest.find('"'),
+            rest.find('\''),
+        ]
+        .into_iter()
+        .flatten()
+        .min()
+        .unwrap_or(rest.len());
+        if at_pos < terminator {
+            result.replace_range(userinfo_start..=userinfo_start + at_pos, "<redacted>@");
+            search_from = userinfo_start + "<redacted>@".len();
+        } else {
+            search_from = userinfo_start;
+        }
+        if search_from >= result.len() {
+            break;
+        }
+    }
+    result
+}
+
 /// Map an eggfetch-core error to the appropriate Python exception.
 #[allow(clippy::needless_pass_by_value)]
 #[allow(clippy::too_many_lines)]
@@ -244,8 +286,10 @@ pub fn map_err(err: eggfetch_core::Error) -> PyErr {
         eggfetch_core::Error::TooManyRedirects { followed, max } => TooManyRedirects::new_err(
             format!("too many redirects: followed {followed}, max is {max}"),
         ),
-        eggfetch_core::Error::InvalidProxyUrl(msg) => ProxyError::new_err(msg),
-        eggfetch_core::Error::ProxyConnect(msg) => ProxyConnectError::new_err(msg),
+        eggfetch_core::Error::InvalidProxyUrl(msg) => ProxyError::new_err(redact_credentials(&msg)),
+        eggfetch_core::Error::ProxyConnect(msg) => {
+            ProxyConnectError::new_err(redact_credentials(&msg))
+        }
         eggfetch_core::Error::ProxyAuthRequired => {
             ProxyAuthError::new_err("proxy authentication required")
         }

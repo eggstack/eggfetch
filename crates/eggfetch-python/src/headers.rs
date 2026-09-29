@@ -64,15 +64,25 @@ impl PyHeaders {
         self.inner.len()
     }
 
-    /// Iterate over header names.
+    /// Iterate over header names (one entry per (name, value) pair, so
+    /// duplicate headers like `Set-Cookie` appear multiple times; matches
+    /// `__len__` and HTTPX per-pair semantics).
     fn __iter__(&self, py: Python<'_>) -> PyResult<Py<PyList>> {
-        let names: Vec<String> = self.inner.keys().map(|k| k.as_str().to_owned()).collect();
+        let names: Vec<String> = self
+            .inner
+            .iter()
+            .map(|(k, _)| k.as_str().to_owned())
+            .collect();
         Ok(PyList::new(py, names)?.into())
     }
 
-    /// Returns a list of header names.
+    /// Returns a list of header names (one entry per pair, duplicates included).
     fn keys(&self, py: Python<'_>) -> PyResult<Py<PyList>> {
-        let names: Vec<String> = self.inner.keys().map(|k| k.as_str().to_owned()).collect();
+        let names: Vec<String> = self
+            .inner
+            .iter()
+            .map(|(k, _)| k.as_str().to_owned())
+            .collect();
         Ok(PyList::new(py, names)?.into())
     }
 
@@ -121,7 +131,7 @@ impl PyHeaders {
         let pairs: Vec<String> = self
             .inner
             .iter()
-            .filter_map(|(k, v)| {
+            .map(|(k, v)| {
                 let name = k.as_str();
                 let val = if matches!(
                     name,
@@ -129,9 +139,9 @@ impl PyHeaders {
                 ) {
                     "<redacted>"
                 } else {
-                    v.to_str().ok()?
+                    v.to_str().unwrap_or("<binary>")
                 };
-                Some(format!("{name}: {val}"))
+                format!("{name}: {val}")
             })
             .collect();
         format!("Headers({{{}}})", pairs.join(", "))

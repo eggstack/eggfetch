@@ -64,7 +64,9 @@ def main() -> None:
             )
 
     node_ffi = dependency(node, "eggfetch-ffi")
-    assert node_ffi["uses_default_features"] is False
+    assert node_ffi["uses_default_features"] is False, (
+        "FAIL: eggfetch-node must not inherit eggfetch-ffi default features"
+    )
     assert set(node_ffi["features"]) == {
         "http1",
         "tls-rustls",

@@ -43,12 +43,38 @@ impl PyFile {
         filename: Option<&str>,
         content_type: Option<&str>,
     ) -> PyResult<Self> {
-        let path_str: String = path.extract().map_err(|_| {
-            PyErr::new::<pyo3::exceptions::PyTypeError, _>(
-                "path must be a string or path-like object",
-            )
-        })?;
-        let pb = PathBuf::from(&path_str);
+        // Accept str, PathBuf, and path-like objects via `os.fspath`
+        // (pathlib.Path). `extract::<String>` alone rejects Path.
+        let pb: PathBuf = if let Ok(pb) = path.extract::<PathBuf>() {
+            pb
+        } else if let Ok(path_str) = path.extract::<String>() {
+            PathBuf::from(&path_str)
+        } else {
+            let fspath = path
+                .py()
+                .import("os")
+                .map_err(|_| {
+                    PyErr::new::<pyo3::exceptions::PyTypeError, _>(
+                        "path must be a string or path-like object",
+                    )
+                })?
+                .getattr("fspath")
+                .map_err(|_| {
+                    PyErr::new::<pyo3::exceptions::PyTypeError, _>(
+                        "path must be a string or path-like object",
+                    )
+                })?;
+            let resolved = fspath.call1((path,)).map_err(|_| {
+                PyErr::new::<pyo3::exceptions::PyTypeError, _>(
+                    "path must be a string or path-like object",
+                )
+            })?;
+            resolved.extract::<PathBuf>().map_err(|_| {
+                PyErr::new::<pyo3::exceptions::PyTypeError, _>(
+                    "path must be a string or path-like object",
+                )
+            })?
+        };
         let default_filename = pb
             .file_name()
             .map_or_else(|| "file".to_owned(), |n| n.to_string_lossy().into_owned());

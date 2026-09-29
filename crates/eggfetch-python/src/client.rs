@@ -711,10 +711,9 @@ impl PyClient {
     /// Returns True if the client has been closed.
     #[getter]
     fn is_closed(&self) -> bool {
-        self.client
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .is_none()
+        // Fail closed on poison (matches AsyncClient): a poisoned mutex
+        // reports closed rather than masking the poison as open.
+        self.client.lock().map_or(true, |g| g.is_none())
     }
 
     /// The client's cookie jar.
@@ -742,12 +741,7 @@ impl PyClient {
     }
 
     fn __repr__(&self) -> String {
-        if self
-            .client
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .is_none()
-        {
+        if self.client.lock().map_or(true, |g| g.is_none()) {
             "Client(closed=true)".to_string()
         } else if self.verify_disabled {
             "Client(verify=False) [UNSAFE: TLS verification disabled]".to_string()

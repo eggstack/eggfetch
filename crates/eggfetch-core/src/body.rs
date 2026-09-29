@@ -149,7 +149,10 @@ impl RequestBody {
     /// Stream bodies may not have a known length until fully consumed.
     /// Returns `0` for unknown-length streams; callers that need to
     /// distinguish "empty" from "unknown length" must check
-    /// [`has_known_length`](Self::has_known_length) first.
+    /// [`has_known_length`](Self::has_known_length) first and must not use
+    /// `len() == 0` to decide emptiness (use [`is_empty`](Self::is_empty),
+    /// which returns `false` for streams). Internal Content-Length logic
+    /// matches on the `Stream { length }` variant directly, never on `len()`.
     #[must_use]
     pub fn len(&self) -> usize {
         match self {

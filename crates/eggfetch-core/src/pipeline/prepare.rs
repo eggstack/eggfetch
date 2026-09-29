@@ -564,6 +564,14 @@ pub(super) async fn prepare_single_request(
     let remaining_total = timeout
         .total
         .map(|total| total.saturating_sub(started.elapsed()));
+    // Skip dispatch with no remaining total budget instead of spending a pool
+    // slot and TCP connect only to fail on the deadline (matches retry loop).
+    if remaining_total.is_some_and(|remaining| remaining.is_zero()) {
+        return Err(Error::Timeout {
+            phase: crate::timeout::TimeoutPhase::Total,
+            elapsed: started.elapsed(),
+        });
+    }
     let deadline = timeout
         .total
         .map(|total| crate::timeout::saturating_add_instant(started, total));

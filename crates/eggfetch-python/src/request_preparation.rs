@@ -105,7 +105,9 @@ pub(crate) fn prepare_client_config(
 
     let cookie_jar = eggfetch_core::cookie::CookieJar::new();
     if let Some(cookies) = cookies {
-        if let Ok(dict) = cookies.cast::<pyo3::types::PyDict>() {
+        if cookies.is_none() {
+            // Explicit None: no cookies.
+        } else if let Ok(dict) = cookies.cast::<pyo3::types::PyDict>() {
             for (key, value) in dict.iter() {
                 let name: String = key.extract()?;
                 let value: String = value.extract()?;
@@ -115,6 +117,35 @@ pub(crate) fn prepare_client_config(
                         PyErr::new::<pyo3::exceptions::PyValueError, _>(error.to_string())
                     })?;
             }
+        } else if let Ok(seq) = cookies.try_iter() {
+            // Accept sequence-of-pairs like request-level `cookies=` (see
+            // `conversion::python_cookies_to_header`); anything else errors
+            // instead of silently dropping cookies.
+            for item in seq {
+                let item = item?;
+                let tuple: Bound<'_, pyo3::types::PyTuple> =
+                    item.cast_into::<pyo3::types::PyTuple>().map_err(|_| {
+                        PyErr::new::<pyo3::exceptions::PyTypeError, _>(
+                            "cookies must be a dict or sequence of (name, value) pairs",
+                        )
+                    })?;
+                if tuple.len() != 2 {
+                    return Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
+                        "cookies must be a dict or sequence of (name, value) pairs",
+                    ));
+                }
+                let name: String = tuple.get_item(0)?.extract()?;
+                let value: String = tuple.get_item(1)?.extract()?;
+                cookie_jar
+                    .set_default_cookie(name, value)
+                    .map_err(|error| {
+                        PyErr::new::<pyo3::exceptions::PyValueError, _>(error.to_string())
+                    })?;
+            }
+        } else {
+            return Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
+                "cookies must be a dict or sequence of (name, value) pairs",
+            ));
         }
     }
 

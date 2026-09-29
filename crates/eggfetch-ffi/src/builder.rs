@@ -272,6 +272,15 @@ pub unsafe extern "C" fn eggfetch_client_builder_default_header(
         let Some(value_str) = crate::handle::cstr_to_string(value) else {
             return -1;
         };
+        // Pre-validate without consuming the builder: `update_builder_result`
+        // destroys the builder on Err (ClientBuilder is not Clone), so one bad
+        // header must not take the builder. Reject invalid headers here.
+        if http::HeaderName::from_bytes(name_str.as_bytes()).is_err() {
+            return -1;
+        }
+        if http::HeaderValue::from_str(&value_str).is_err() {
+            return -1;
+        }
         update_builder_result(handle, |builder| {
             builder.default_header(&name_str, &value_str)
         })
@@ -540,6 +549,9 @@ where
             handle.0 = Some(builder);
             0
         }
+        // The consumed builder cannot be restored (ClientBuilder is not Clone);
+        // callers must pre-validate fallible inputs so this poison path is
+        // unreachable in practice (see default_header below).
         Err(_) => -1,
     }
 }

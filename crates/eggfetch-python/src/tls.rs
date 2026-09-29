@@ -10,7 +10,11 @@ fn apply_verify(
     mut builder: eggfetch_core::TlsConfigBuilder,
     v: &Bound<'_, PyAny>,
 ) -> PyResult<eggfetch_core::TlsConfigBuilder> {
-    if let Ok(b) = v.extract::<bool>() {
+    // Strict bool check: `extract::<bool>()` would coerce `0`/`1` (and other
+    // ints) to bool and silently disable TLS verification. Only a real `bool`
+    // takes the fast path; ints fall through to the TypeError below.
+    if v.is_instance_of::<pyo3::types::PyBool>() {
+        let b: bool = v.extract()?;
         if !b {
             builder = builder.danger_accept_invalid_certs(true);
         }

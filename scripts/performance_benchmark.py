@@ -12,6 +12,7 @@ import argparse
 import asyncio
 import json
 import statistics
+import sys
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from threading import Thread
@@ -86,8 +87,11 @@ def peak_rss_mib() -> float | None:
     if resource is None:
         return None
     usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-    # Linux reports KiB; macOS reports bytes.
-    return usage / (1024 if usage < 10_000_000 else 1024 * 1024)
+    # Linux reports KiB, macOS reports bytes: branch on platform, not on
+    # magnitude (the `usage < 10M` heuristic fails for large-Linux/small-macOS).
+    if sys.platform == "darwin":
+        return usage / (1024 * 1024)
+    return usage / 1024
 
 
 def measure_phases(fn, repeats: int) -> dict[str, object]:

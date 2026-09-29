@@ -39,7 +39,24 @@ _KNOWN_SENTINELS = {
 
 
 def _load_toml(path):
-    """Minimal TOML loader for allowed-differences.toml (no external deps)."""
+    """Load allowed-differences.toml without external deps.
+
+    Prefers stdlib `tomllib` (3.11+) for correct escaped-quote/IPv6/multiline
+    handling; falls back to a minimal parser that uses `ast.literal_eval`
+    (single/double quotes, escapes) instead of naive `strip('"')`/`strip("[]")`
+    which corrupts `"a\"b"` and `[::1]`.
+    """
+    import ast
+
+    try:
+        import tomllib
+
+        with open(path, "rb") as f:
+            data = tomllib.load(f)
+        entries = data.get("difference", [])
+        return entries if isinstance(entries, list) else []
+    except ImportError:
+        pass
     entries = []
     current = None
     with open(path) as f:
@@ -49,13 +66,20 @@ def _load_toml(path):
                 if current:
                     entries.append(current)
                 current = {}
-            elif current is not None and "=" in stripped:
+            elif current is not None and "=" in stripped and not stripped.startswith("#"):
                 key, _, val = stripped.partition("=")
                 key = key.strip()
-                val = val.strip().strip('"')
-                if key in ("tests",):
-                    val = [v.strip().strip('"') for v in val.strip("[]").split(",") if v.strip()]
-                current[key] = val
+                val = val.strip()
+                try:
+                    parsed = ast.literal_eval(val)
+                except (ValueError, SyntaxError):
+                    # Bare TOML strings without quotes: strip one layer of
+                    # matching quotes only (never `strip('"')` which eats escapes).
+                    if len(val) >= 2 and val[0] == val[-1] and val[0] in ("'", '"'):
+                        parsed = val[1:-1]
+                    else:
+                        parsed = val
+                current[key] = parsed
         if current:
             entries.append(current)
     return entries

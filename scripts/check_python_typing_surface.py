@@ -51,7 +51,16 @@ def _declared_all(tree: ast.Module) -> list[str] | None:
     for node in tree.body:
         if isinstance(node, ast.Assign):
             if any(isinstance(target, ast.Name) and target.id == "__all__" for target in node.targets):
-                value = ast.literal_eval(node.value)
+                try:
+                    value = ast.literal_eval(node.value)
+                except (ValueError, SyntaxError, MemoryError, RecursionError) as e:
+                    # Actionable instead of crashing on `__all__ = BASE + EXTRA`.
+                    print(
+                        f"FAIL: __init__.pyi __all__ must be a literal list of strings "
+                        f"(got non-literal expression: {e})",
+                        file=sys.stderr,
+                    )
+                    return None
                 if isinstance(value, list) and all(isinstance(item, str) for item in value):
                     return value
     return None

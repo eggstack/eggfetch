@@ -24,6 +24,12 @@ pub struct PyTimeout {
     pub inner: eggfetch_core::Timeout,
 }
 
+fn secs_to_duration(value: f64, name: &str) -> PyResult<Duration> {
+    Duration::try_from_secs_f64(value).map_err(|_| {
+        PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("{name} timeout is too large"))
+    })
+}
+
 #[pymethods]
 impl PyTimeout {
     /// Create a new Timeout.
@@ -36,6 +42,12 @@ impl PyTimeout {
     ///     write: Write phase timeout in seconds (optional).
     ///     read: Read phase timeout in seconds (optional).
     ///     total: Total timeout in seconds (optional).
+    ///
+    /// Note: an all-`None` `Timeout()` disables all timeouts (no deadline).
+    /// This is intentional for the native type (the only way to express
+    /// "disabled" via `_convert_timeout`), but the compat facade rejects an
+    /// empty `Timeout()` to preserve HTTPX's omitted-vs-explicit-`None`
+    /// distinction. Prefer explicit per-phase values unless disabling is intended.
     #[new]
     #[pyo3(signature = (seconds=None, *, pool=None, connect=None, write=None, read=None, total=None))]
     fn new(
@@ -72,14 +84,26 @@ impl PyTimeout {
                 ));
             }
             // Scalar mode: apply to pool, connect, write, read; respect any explicit per-phase
-            let duration = Duration::from_secs_f64(s);
+            let duration = secs_to_duration(s, "timeout")?;
             Ok(Self {
                 inner: eggfetch_core::Timeout {
-                    pool: pool.map(Duration::from_secs_f64).or(Some(duration)),
-                    connect: connect.map(Duration::from_secs_f64).or(Some(duration)),
-                    write: write.map(Duration::from_secs_f64).or(Some(duration)),
-                    read: read.map(Duration::from_secs_f64).or(Some(duration)),
-                    total: total.map(Duration::from_secs_f64),
+                    pool: pool
+                        .map(|v| secs_to_duration(v, "pool"))
+                        .transpose()?
+                        .or(Some(duration)),
+                    connect: connect
+                        .map(|v| secs_to_duration(v, "connect"))
+                        .transpose()?
+                        .or(Some(duration)),
+                    write: write
+                        .map(|v| secs_to_duration(v, "write"))
+                        .transpose()?
+                        .or(Some(duration)),
+                    read: read
+                        .map(|v| secs_to_duration(v, "read"))
+                        .transpose()?
+                        .or(Some(duration)),
+                    total: total.map(|v| secs_to_duration(v, "total")).transpose()?,
                 },
             })
         } else {
@@ -87,11 +111,13 @@ impl PyTimeout {
             // overrides; an explicit total alone is a valid outer deadline).
             Ok(Self {
                 inner: eggfetch_core::Timeout {
-                    pool: pool.map(Duration::from_secs_f64),
-                    connect: connect.map(Duration::from_secs_f64),
-                    write: write.map(Duration::from_secs_f64),
-                    read: read.map(Duration::from_secs_f64),
-                    total: total.map(Duration::from_secs_f64),
+                    pool: pool.map(|v| secs_to_duration(v, "pool")).transpose()?,
+                    connect: connect
+                        .map(|v| secs_to_duration(v, "connect"))
+                        .transpose()?,
+                    write: write.map(|v| secs_to_duration(v, "write")).transpose()?,
+                    read: read.map(|v| secs_to_duration(v, "read")).transpose()?,
+                    total: total.map(|v| secs_to_duration(v, "total")).transpose()?,
                 },
             })
         }

@@ -80,8 +80,12 @@ impl PyRetry {
         let mut builder = eggfetch_core::RetryPolicy::builder()
             .max_attempts(max_attempts)
             .backoff_factor(backoff_factor)
-            .max_delay(Duration::from_secs_f64(max_delay))
-            .initial_delay(Duration::from_secs_f64(initial_delay))
+            .max_delay(Duration::try_from_secs_f64(max_delay).map_err(|_| {
+                PyErr::new::<pyo3::exceptions::PyValueError, _>("max_delay is too large")
+            })?)
+            .initial_delay(Duration::try_from_secs_f64(initial_delay).map_err(|_| {
+                PyErr::new::<pyo3::exceptions::PyValueError, _>("initial_delay is too large")
+            })?)
             .respect_retry_after(respect_retry_after);
 
         if let Some(s) = &statuses {
@@ -102,7 +106,9 @@ impl PyRetry {
         }
 
         if let Some(elapsed) = max_elapsed {
-            builder = builder.max_elapsed(Duration::from_secs_f64(elapsed));
+            builder = builder.max_elapsed(Duration::try_from_secs_f64(elapsed).map_err(|_| {
+                PyErr::new::<pyo3::exceptions::PyValueError, _>("max_elapsed is too large")
+            })?);
         }
 
         let inner = builder.build();
@@ -218,7 +224,10 @@ pub(crate) fn parse_retry_option(
             if v.is_none() {
                 return Ok(None);
             }
-            if let Ok(flag) = v.extract::<bool>() {
+            // Strict bool: `extract::<bool>()` would coerce `1`/`0` to
+            // True/False; only a real `bool` selects the flag path.
+            if v.is_instance_of::<pyo3::types::PyBool>() {
+                let flag: bool = v.extract()?;
                 return if flag {
                     Ok(Some(PyRetry::default_policy()))
                 } else {

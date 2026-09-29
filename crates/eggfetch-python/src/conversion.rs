@@ -421,23 +421,51 @@ pub(crate) fn parse_socket_options(
                 "socket_options must be a list of (level, option, value) triples",
             ));
         }
-        let level: i32 = tuple.get_item(0)?.extract()?;
-        let option: i32 = tuple.get_item(1)?.extract()?;
+        let level_obj = tuple.get_item(0)?;
+        let option_obj = tuple.get_item(1)?;
+        // Strict int check: reject `True`/`False` (`True == 1` in Python) for
+        // level/option; they must be real ints.
+        if level_obj.is_instance_of::<pyo3::types::PyBool>()
+            || option_obj.is_instance_of::<pyo3::types::PyBool>()
+        {
+            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                "socket_options level and option must be ints, not bool",
+            ));
+        }
+        let level: i32 = level_obj.extract().map_err(|_| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                "socket_options level and option must be ints",
+            )
+        })?;
+        let option: i32 = option_obj.extract().map_err(|_| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                "socket_options level and option must be ints",
+            )
+        })?;
         let value_obj = tuple.get_item(2)?;
         // Python `int` values are encoded as native-endian bytes
         // (matching CPython's `socket.setsockopt` `int*` convention, and
         // the compat layer's `sys.byteorder` encoding above). Negative
         // values use the signed 32-bit range; non-negative values accept
         // the full unsigned 32-bit range used for buffer sizes. Pass
-        // explicit bytes for exact wire control.
-        let value = if let Ok(value) = value_obj.extract::<i32>() {
+        // explicit bytes for exact wire control. `bool` is rejected
+        // explicitly (`True == 1` would otherwise coerce).
+        let value = if value_obj.is_instance_of::<pyo3::types::PyBool>() {
+            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                "socket_options value must be int, bytes, or bytearray, not bool",
+            ));
+        } else if let Ok(value) = value_obj.extract::<i32>() {
             value.to_ne_bytes().to_vec()
         } else if let Ok(unsigned) = value_obj.extract::<u32>() {
             unsigned.to_ne_bytes().to_vec()
         } else if let Ok(value) = value_obj.cast::<pyo3::types::PyByteArray>() {
             value.to_vec()
         } else {
-            value_obj.extract::<Vec<u8>>()?
+            value_obj.extract::<Vec<u8>>().map_err(|_| {
+                PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                    "socket_options value must be int, bytes, or bytearray",
+                )
+            })?
         };
         let kind = if level == ipproto_tcp && option == tcp_nodelay {
             Some(eggfetch_core::SocketOptionKind::TcpNoDelay)

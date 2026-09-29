@@ -248,18 +248,44 @@ impl PyCookies {
         domain: Option<&str>,
         path: Option<&str>,
     ) -> PyResult<()> {
-        let url_str = format!(
-            "http://{}{}",
-            domain.unwrap_or("localhost"),
-            path.unwrap_or("/")
-        );
+        let path_str = path.unwrap_or("/");
+        // Fail closed on malformed path: without a leading `/`,
+        // `http://host` + `foo` would build `http://hostfoo`.
+        if !path_str.starts_with('/') {
+            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                "cookie path must start with '/'",
+            ));
+        }
+        // Strip an optional `:port` from domain for URL construction and the
+        // Domain attribute (ports never belong in the host); reject invalid ports.
+        let (domain_host, _port) = match domain {
+            Some(d) => {
+                if let Some((host, port_str)) = d.rsplit_once(':') {
+                    // Distinguish host:port from IPv6/bare-colon: require the
+                    // suffix to parse as a u16 port and host non-empty.
+                    if !host.is_empty() && port_str.parse::<u16>().is_ok() {
+                        (host, Some(port_str))
+                    } else if d.contains(':') {
+                        return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                            "invalid cookie domain",
+                        ));
+                    } else {
+                        (d, None)
+                    }
+                } else {
+                    (d, None)
+                }
+            }
+            None => ("localhost", None),
+        };
+        let url_str = format!("http://{domain_host}{path_str}");
         let url = url::Url::parse(&url_str)
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
         let temp_jar = eggfetch_core::cookie::CookieJar::new();
-        let set_cookie = if let Some(d) = domain {
-            format!("{name}={value}; Domain={d}; Path={}", path.unwrap_or("/"))
+        let set_cookie = if let Some(_d) = domain {
+            format!("{name}={value}; Domain={domain_host}; Path={path_str}")
         } else {
-            format!("{name}={value}; Path={}", path.unwrap_or("/"))
+            format!("{name}={value}; Path={path_str}")
         };
         temp_jar.update_from_response(&url, &[set_cookie]);
         if let Some(cookie) = temp_jar.all_cookies().into_iter().next() {

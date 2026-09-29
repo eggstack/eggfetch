@@ -608,6 +608,14 @@ where
     let remaining_total = timeout
         .total
         .map(|total| total.saturating_sub(started.elapsed()));
+    // Skip dispatch with no remaining total budget instead of spending a pool
+    // slot and TCP connect only to fail on the deadline.
+    if remaining_total.is_some_and(|remaining| remaining.is_zero()) {
+        return Err(Error::Timeout {
+            phase: crate::timeout::TimeoutPhase::Total,
+            elapsed: started.elapsed(),
+        });
+    }
     // Absolute native total deadline starts with the request lifecycle
     // (pool admission), not the first frame poll, and never resets on DATA
     // or trailer frames.

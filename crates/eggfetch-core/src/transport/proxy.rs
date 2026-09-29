@@ -43,12 +43,11 @@ impl ForwardRouteKey {
 
 #[cfg(any(feature = "transport-http1", feature = "transport-http2"))]
 fn origin_origin(url: &url::Url) -> String {
-    format!(
-        "{}://{}:{}",
-        url.scheme(),
-        url.host_str().unwrap_or_default(),
-        url.port_or_known_default().unwrap_or(0)
-    )
+    match (url.host_str(), url.port_or_known_default()) {
+        (Some(host), Some(port)) => format!("{}://{host}:{port}", url.scheme()),
+        // Fail closed: never pool distinct invalid origins under a shared ""/0 key.
+        _ => url.as_str().to_owned(),
+    }
 }
 
 /// Combine one phase timeout with the optional native request deadline.
@@ -69,10 +68,12 @@ pub(crate) fn effective_timeout(
     let now = std::time::Instant::now();
     let total = match deadline {
         Some(deadline) if deadline > now => Some(deadline.duration_since(now)),
-        Some(_) => {
+        Some(deadline) => {
+            // Report the actual overshoot instead of ZERO so Total timeouts
+            // carry a real elapsed like the pipeline/body boundaries.
             return Err(Error::Timeout {
                 phase: TimeoutPhase::Total,
-                elapsed: std::time::Duration::ZERO,
+                elapsed: now.saturating_duration_since(deadline),
             });
         }
         None => None,
@@ -250,6 +251,9 @@ impl tower_service::Service<http::Uri> for ForwardProxyConnector {
             // The cached connector owns only connection-scoped policy. The
             // current logical request's total budget is enforced around the
             // Hyper dispatch future, not captured by this reusable client.
+            // Phase granularity (ProxyConnect/ProxyTls/Write/Read) for this
+            // pooled path is therefore outer-total only; the legacy
+            // handshake path enforces per-phase timeouts via `effective_timeout`.
             let stream = connect_to_proxy(
                 &proxy,
                 proxy_connect_timeout,
@@ -390,7 +394,10 @@ pub(crate) async fn connect_to_proxy(
     if let Some(m) = metrics {
         m.record_proxy_attempt();
     }
-    let proxy_host = proxy_config.host().unwrap_or("127.0.0.1");
+    let proxy_host = proxy_config
+        .host()
+        .ok_or_else(|| Error::ProxyConnect("proxy URI has no host".into()))?
+        .to_owned();
     let proxy_port = proxy_config.port()?;
 
     let connect_future = async {
@@ -469,7 +476,7 @@ pub(crate) async fn connect_to_proxy(
         }
         let rustls_config = build_proxy_tls_config(proxy_tls_config)?;
         let connector = tokio_rustls::TlsConnector::from(std::sync::Arc::new(rustls_config));
-        let domain = proxy_server_name(proxy_host)?;
+        let domain = proxy_server_name(&proxy_host)?;
         let handshake = connector.connect(domain, stream);
         let tls_timeout = effective_timeout(deadline, proxy_tls_timeout)?;
         let tls_stream = match tls_timeout {
@@ -976,6 +983,21 @@ fn trim_ows(value: &[u8]) -> &[u8] {
     &value[start..end]
 }
 
+/// Bounded, sanitized preview for proxy wire bytes in errors.
+///
+/// The status/header lines are already length-bounded on read, but error
+/// strings must not echo arbitrary proxy bytes verbatim (matching the
+/// `http-connect` bounded/no-echo contract): truncate to 200 chars.
+fn truncate_preview(bytes: &[u8]) -> String {
+    const MAX_PREVIEW_CHARS: usize = 200;
+    let preview = String::from_utf8_lossy(bytes);
+    let mut truncated: String = preview.chars().take(MAX_PREVIEW_CHARS).collect();
+    if preview.chars().count() > MAX_PREVIEW_CHARS {
+        truncated.push('…');
+    }
+    truncated
+}
+
 /// Read an HTTP response from a proxy or destination.
 ///
 /// Returns `(status_code, headers, remaining_initial_bytes)`.
@@ -1006,7 +1028,7 @@ pub(crate) async fn read_proxy_response<S: tokio::io::AsyncRead + Unpin>(
         .ok_or_else(|| {
             Error::MalformedProxyResponse(format!(
                 "invalid status line: {}",
-                String::from_utf8_lossy(&status_line)
+                truncate_preview(&status_line)
             ))
         })?;
     // The third part (if present) is the reason phrase.
@@ -1023,7 +1045,11 @@ pub(crate) async fn read_proxy_response<S: tokio::io::AsyncRead + Unpin>(
             break;
         }
 
-        total_header_bytes += line.len();
+        total_header_bytes = total_header_bytes.checked_add(line.len()).ok_or_else(|| {
+            Error::MalformedProxyResponse(format!(
+                "proxy response headers exceeded maximum total size of {MAX_TOTAL_HEADER_BYTES} bytes"
+            ))
+        })?;
         if total_header_bytes > MAX_TOTAL_HEADER_BYTES {
             return Err(Error::MalformedProxyResponse(format!(
                 "proxy response headers exceeded maximum total size of {MAX_TOTAL_HEADER_BYTES} bytes"
@@ -1039,7 +1065,7 @@ pub(crate) async fn read_proxy_response<S: tokio::io::AsyncRead + Unpin>(
         let colon = line.iter().position(|byte| *byte == b':').ok_or_else(|| {
             Error::MalformedProxyResponse(format!(
                 "invalid header line: {}",
-                String::from_utf8_lossy(&line)
+                truncate_preview(&line)
             ))
         })?;
         let name = std::str::from_utf8(trim_ows(&line[..colon])).map_err(|_| {
@@ -1257,8 +1283,17 @@ pub(crate) fn response_content_length(headers: &[(String, Vec<u8>)]) -> Option<u
         {
             chunked = true;
         }
-        if name.eq_ignore_ascii_case("content-length") && content_length.is_none() {
-            content_length = std::str::from_utf8(value).ok()?.trim().parse().ok();
+        if name.eq_ignore_ascii_case("content-length") {
+            // Fail closed on duplicate/conflicting Content-Length (smuggling):
+            // identical repeats are tolerated, mismatches yield no trusted
+            // length (close-delimited) instead of trusting the first.
+            let parsed: Option<u64> = std::str::from_utf8(value).ok()?.trim().parse().ok();
+            match (content_length, parsed) {
+                (None, parsed) => content_length = parsed,
+                (Some(existing), Some(current)) if existing == current => {}
+                // Mismatch or unparseable duplicate: no trusted length.
+                _ => return None,
+            }
         }
     }
     if chunked {

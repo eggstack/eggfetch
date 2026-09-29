@@ -14,8 +14,10 @@ impl PyLimits {
     /// Args:
     ///     `max_connections`: Maximum concurrent connections (optional).
     ///     `max_keepalive_connections`: Maximum idle keep-alive connections (optional).
-    ///         Applied on a per-host basis; total idle connections grow with
-    ///         the number of distinct origins.
+    ///         Maps to both the total idle cap and the per-host idle cap
+    ///         (matching `eggfetch_core::Limits::compat`, where both are 20
+    ///         by default). Multi-origin idle totals are therefore bounded by
+    ///         this value, mirroring the pinned HTTPX 0.28.1 profile.
     ///     `keepalive_expiry`: Keep-alive timeout in seconds (optional).
     ///     `max_connections_per_host`: Maximum connections per host (optional).
     #[new]
@@ -33,7 +35,9 @@ impl PyLimits {
                         "keepalive_expiry must be a finite, non-negative number",
                     ));
                 }
-                Some(std::time::Duration::from_secs_f64(secs))
+                Some(std::time::Duration::try_from_secs_f64(secs).map_err(|_| {
+                    PyErr::new::<pyo3::exceptions::PyValueError, _>("keepalive_expiry is too large")
+                })?)
             }
             None => None,
         };

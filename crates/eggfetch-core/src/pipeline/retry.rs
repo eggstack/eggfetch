@@ -26,6 +26,7 @@ async fn sleep_if_budget_allows(
     delay: Duration,
     attempt: usize,
     start_time: std::time::Instant,
+    total: Option<Duration>,
 ) -> Result<()> {
     if let Some(max_elapsed) = policy.max_elapsed() {
         let elapsed = start_time.elapsed();
@@ -33,6 +34,20 @@ async fn sleep_if_budget_allows(
         match elapsed.checked_add(delay) {
             Some(t) if t <= max_elapsed => {}
             _ => return Err(Error::RetryBudgetExhausted { attempts: attempt }),
+        }
+    }
+    // Gate backoff sleep on the remaining native total so a long backoff
+    // cannot overshoot the outer deadline; the next-attempt check is too late.
+    if let Some(total) = total {
+        let elapsed = start_time.elapsed();
+        match elapsed.checked_add(delay) {
+            Some(t) if t <= total => {}
+            _ => {
+                return Err(Error::Timeout {
+                    phase: TimeoutPhase::Total,
+                    elapsed: start_time.elapsed(),
+                });
+            }
         }
     }
     tokio::time::sleep(delay).await;
@@ -217,7 +232,8 @@ pub(crate) async fn send_with_retry(client: &Client, request: Request) -> Result
                     if let Some(dur) =
                         compute_retry_delay(&policy, &cause, attempt, retry_after.as_deref())
                     {
-                        sleep_if_budget_allows(&policy, dur, attempt, start_time).await?;
+                        let total = saved_timeout.as_ref().and_then(|t| t.total);
+                        sleep_if_budget_allows(&policy, dur, attempt, start_time, total).await?;
                     }
                     continue;
                 }
@@ -234,7 +250,8 @@ pub(crate) async fn send_with_retry(client: &Client, request: Request) -> Result
                     // No response is available on the error path; only the
                     // configured backoff applies.
                     if let Some(dur) = compute_retry_delay(&policy, &cause, attempt, None) {
-                        sleep_if_budget_allows(&policy, dur, attempt, start_time).await?;
+                        let total = saved_timeout.as_ref().and_then(|t| t.total);
+                        sleep_if_budget_allows(&policy, dur, attempt, start_time, total).await?;
                     }
                     continue;
                 }

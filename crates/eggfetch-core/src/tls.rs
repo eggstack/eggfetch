@@ -364,6 +364,10 @@ impl TlsConfig {
 
     fn build_root_store_uncached(&self) -> Result<rustls::RootCertStore> {
         let mut roots = match &self.trust_store {
+            // Explicit opt-in fallback: `NativeWithWebPkiFallback` silently
+            // uses WebPKI roots when native loading fails or yields empty
+            // (silent without the `tracing` feature). Fail-closed callers
+            // must select `NativeOnly` instead.
             TrustStore::NativeWithWebPkiFallback => match Self::try_native_roots() {
                 Ok(store) if !store.is_empty() => Ok(store),
                 _ => Ok(Self::webpki_roots()),
@@ -615,9 +619,8 @@ impl TlsConfigBuilder {
     pub fn ca_certificate_path(mut self, path: impl AsRef<Path>) -> Result<Self> {
         let certs = load_pem_certs_from_path(path.as_ref())?;
         if certs.is_empty() {
-            if path.as_ref().is_dir() {
-                return Ok(self);
-            }
+            // Fail closed for the replace variant: a typo'd empty directory
+            // must not silently leave the previous trust store in place.
             return Err(Error::CaBundle(format!(
                 "no certificates found in {}",
                 path.as_ref().display()

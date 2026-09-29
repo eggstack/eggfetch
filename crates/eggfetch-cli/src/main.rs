@@ -389,7 +389,7 @@ async fn run(cli: Cli) -> Result<()> {
                         lines.push(json!({
                             "type": "redirect",
                             "status": entry.status().as_u16(),
-                            "url": entry.url().to_string(),
+                            "url": safe_url_for_display(entry.url().as_str()),
                             "version": version_string(entry.version()),
                         }));
                     }
@@ -1132,7 +1132,8 @@ pub(crate) use input::{
 };
 mod output;
 pub(crate) use output::{
-    base64_encode, build_json_response, format_headers, is_binary_content_type, version_string,
+    base64_encode, build_json_response, format_headers, is_binary_content_type,
+    safe_url_for_display, version_string,
 };
 mod files;
 pub(crate) use files::{create_output_file, derive_filename};

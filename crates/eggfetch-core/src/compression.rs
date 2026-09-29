@@ -894,7 +894,14 @@ impl LimitingStream {
                 return Err(LimitExceededKind::Ratio);
             }
             let compressed = self.compressed_counter.load(Ordering::Acquire);
-            if compressed > 0 {
+            if compressed == 0 {
+                // No compressed bytes observed yet: any decoded output
+                // already exceeds any finite ratio, so fail closed instead
+                // of emitting an unbounded zip-bomb prefix up to the chunk size.
+                if self.decoded_bytes > 0 {
+                    return Err(LimitExceededKind::Ratio);
+                }
+            } else {
                 let ratio = self.decoded_bytes as f64 / compressed as f64;
                 if ratio > max_ratio {
                     return Err(LimitExceededKind::Ratio);

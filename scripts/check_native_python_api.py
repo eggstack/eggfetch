@@ -306,7 +306,15 @@ def main(argv: list[str] | None = None) -> int:
         installed = importlib.metadata.version("eggfetch")
     except importlib.metadata.PackageNotFoundError:
         installed = None
-    if installed is not None and eggfetch.__version__ != installed:
+    if installed is None:
+        # Fail closed instead of silently skipping: an absent install
+        # metadata means the imported extension may be a stale `.so`
+        # (e.g. forgotten `maturin develop`), which would falsely pass.
+        errors.append(
+            "FAIL: eggfetch install metadata not found; reinstall with "
+            "`maturin develop -m crates/eggfetch-python/Cargo.toml` before checking"
+        )
+    elif eggfetch.__version__ != installed:
         errors.append(f"runtime version {eggfetch.__version__!r} != installed {installed!r}")
     if errors:
         for error in errors:

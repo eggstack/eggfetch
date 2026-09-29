@@ -48,12 +48,13 @@ impl ConnectRouteKey {
     ) -> Self {
         Self {
             proxy_identity: proxy.connection_identity(),
-            origin: format!(
-                "{}://{}:{}",
-                origin.scheme(),
-                origin.host_str().unwrap_or_default(),
-                origin.port_or_known_default().unwrap_or(443)
-            ),
+            origin: match (origin.host_str(), origin.port_or_known_default()) {
+                (Some(host), Some(port)) => {
+                    format!("{}://{host}:{port}", origin.scheme())
+                }
+                // Fail closed: never pool distinct invalid origins under a shared ""/0 key.
+                _ => origin.as_str().to_owned(),
+            },
             target,
             origin_tls_identity: origin_tls_config
                 .map_or(0, crate::tls::TlsConfig::connection_identity),
@@ -427,7 +428,14 @@ pub(crate) async fn establish_https_tunnel(
     let dest_host = dest_url
         .host_str()
         .ok_or_else(|| Error::InvalidUrl("destination URL has no host".into()))?;
-    let dest_port = dest_url.port_or_known_default().unwrap_or(443);
+    // Fail closed: non-http(s) schemes have no known default port; tunneling
+    // them to 443 would misroute. `prepare` rejects such schemes earlier.
+    let dest_port = dest_url.port_or_known_default().ok_or_else(|| {
+        Error::InvalidUrl(format!(
+            "destination scheme '{}' has no known default port for CONNECT",
+            dest_url.scheme()
+        ))
+    })?;
     let target = if let Some(address) = proxied_target {
         ConnectTarget::new(address.ip().to_string(), address.port())
     } else {

@@ -24,9 +24,12 @@ unsafe impl Sync for ClientHandleInner {}
 
 impl Drop for ClientHandleInner {
     fn drop(&mut self) {
-        let ptr = self.ptr.lock().map_or(std::ptr::null_mut(), |mut guard| {
-            std::mem::replace(&mut *guard, std::ptr::null_mut())
-        });
+        // Free even on poison (no leak); poison reports the inner ptr.
+        let mut guard = self
+            .ptr
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let ptr = std::mem::replace(&mut *guard, std::ptr::null_mut());
         if !ptr.is_null() {
             unsafe {
                 eggfetch_ffi::eggfetch_client_free(ptr);

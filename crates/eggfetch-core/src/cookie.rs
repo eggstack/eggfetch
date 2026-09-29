@@ -855,6 +855,7 @@ fn parse_set_cookie(header_value: &str, response_url: &Url, response_host: &str)
 /// Max-Age takes precedence over Expires.
 /// Max-Age <= 0 means the cookie should be deleted (returns expiry in the past).
 fn resolve_expiration(parsed: &cookie::Cookie<'_>) -> (bool, Option<SystemTime>) {
+    const MAX_AGE_CAP_SECS: u64 = 400 * 24 * 60 * 60;
     if let Some(max_age) = parsed.max_age() {
         let duration_secs = max_age.whole_seconds();
 
@@ -863,14 +864,14 @@ fn resolve_expiration(parsed: &cookie::Cookie<'_>) -> (bool, Option<SystemTime>)
             return (true, Some(SystemTime::UNIX_EPOCH));
         }
 
-        // Positive Max-Age: compute expiry from now.
-        // Safety: duration_secs is positive at this point (checked above).
+        // Positive Max-Age: compute expiry from now, capping at 400 days
+        // (RFC 6265bis / browser behavior). A huge Max-Age (e.g. u64 overflow)
+        // must not become an immortal 400-year cookie via the overflow fallback.
         #[allow(clippy::cast_sign_loss)]
         let secs = duration_secs as u64;
+        let capped = secs.min(MAX_AGE_CAP_SECS);
         let now = SystemTime::now();
-        let expiry = now.checked_add(std::time::Duration::from_secs(secs));
-        let expiry = expiry
-            .or_else(|| now.checked_add(std::time::Duration::from_secs(400 * 365 * 24 * 60 * 60)));
+        let expiry = now.checked_add(std::time::Duration::from_secs(capped));
         return (true, expiry);
     }
 

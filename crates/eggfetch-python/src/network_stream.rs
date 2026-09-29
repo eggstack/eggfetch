@@ -24,8 +24,8 @@ use crate::streaming::RuntimeLease;
 
 /// Validate an optional timeout in seconds and convert it to a [`Duration`].
 ///
-/// `Duration::from_secs_f64` panics on negative, NaN, or infinite input;
-/// reject those at the boundary with `ValueError` instead.
+/// `Duration::from_secs_f64` panics on negative, NaN, infinite, or huge
+/// finite input; reject those at the boundary with `ValueError` instead.
 fn validated_timeout(timeout: Option<f64>) -> PyResult<Option<std::time::Duration>> {
     match timeout {
         Some(secs) => {
@@ -34,7 +34,11 @@ fn validated_timeout(timeout: Option<f64>) -> PyResult<Option<std::time::Duratio
                     "timeout must be a finite, non-negative number",
                 ))
             } else {
-                Ok(Some(std::time::Duration::from_secs_f64(secs)))
+                Ok(Some(std::time::Duration::try_from_secs_f64(secs).map_err(
+                    |_| {
+                        pyo3::exceptions::PyValueError::new_err("timeout is too large to represent")
+                    },
+                )?))
             }
         }
         None => Ok(None),
@@ -321,14 +325,18 @@ impl PyNetworkStream {
 
     /// Close the stream (idempotent).
     fn close(&self, py: Python<'_>) {
-        let Ok(mut guard) = self.inner.lock() else {
-            return;
-        };
-        let Some(inner) = guard.as_mut() else {
-            return;
-        };
-        let handle = self.runtime_handle.clone();
-        let _ = py.detach(|| handle.block_on(inner.close()));
+        // Acquire the mutex with the GIL released so a contended clone
+        // cannot stall other Python threads (matches read/write).
+        py.detach(|| {
+            let Ok(mut guard) = self.inner.lock() else {
+                return;
+            };
+            let Some(inner) = guard.as_mut() else {
+                return;
+            };
+            let handle = self.runtime_handle.clone();
+            let _ = handle.block_on(inner.close());
+        });
     }
 
     /// Get extra information about the connection.
@@ -439,15 +447,28 @@ impl PyNetworkStream {
         // Build a TlsConnector from the translated config.
         let connector = tls_config.tls_connector().map_err(map_err)?;
 
-        // Take ownership of the inner stream irreversibly.
-        let mut guard = self.inner.lock().map_err(|e| {
-            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("lock poisoned: {e}"))
-        })?;
-        let inner = guard.take().ok_or_else(|| {
-            pyo3::exceptions::PyValueError::new_err(
-                "cannot start TLS on an already-closed, metadata-only, or handshake-consumed network stream (a prior start_tls consumed the stream, including failed handshakes)",
-            )
-        })?;
+        // Take ownership of the inner stream with the GIL released so a
+        // contended mutex cannot stall other Python threads (matches
+        // read/write). Irreversible: a prior start_tls consumes the stream,
+        // including failed handshakes.
+        let taken = py.detach(|| {
+            let mut guard = self
+                .inner
+                .lock()
+                .map_err(|e| format!("lock poisoned: {e}"))?;
+            Ok::<_, String>(guard.take())
+        });
+        let inner = match taken {
+            Err(poison) => {
+                return Err(pyo3::exceptions::PyRuntimeError::new_err(poison));
+            }
+            Ok(None) => {
+                return Err(pyo3::exceptions::PyValueError::new_err(
+                    "cannot start TLS on an already-closed, metadata-only, or handshake-consumed network stream (a prior start_tls consumed the stream, including failed handshakes)",
+                ));
+            }
+            Ok(Some(inner)) => inner,
+        };
 
         let server_name_owned = server_hostname.to_owned();
         let handle = self.runtime_handle.clone();
