@@ -140,6 +140,10 @@ eggfetch mitigates proxy attacks by:
 - Parsing proxy responses with bounded header/line limits.
 - Never forwarding `Proxy-Authorization` to the destination.
 - Treating CONNECT tunnel data as opaque after the handshake.
+- Advancing proxy fallback on typed signals only: CONNECT retries on
+  502/504, local SOCKS5 fallback on destination-specific 0x03/0x04/0x05;
+  auth, policy, protocol, and malformed failures stop without retry and
+  never fall back to DNS.
 - Allowing per-request proxy configuration to override client defaults.
 
 ### Crafted Multipart Boundaries
@@ -223,11 +227,11 @@ Both `max_decoded_body_size` and `max_decompression_ratio` are enforced during s
 
 ### 6. Multipart Boundaries Are Randomly Generated and Validated
 
-Random boundaries use 50 alphanumeric characters generated via `getrandom` (CSPRNG). Custom boundaries pass through `Boundary::try_new()` which rejects CR, LF, whitespace, and empty strings. Boundary validation prevents header injection via multipart framing.
+Random boundaries use 50 alphanumeric characters generated via `getrandom` (CSPRNG). Custom boundaries pass through `Boundary::try_new()` which rejects CR, LF, whitespace, and empty strings. Boundary validation prevents header injection via multipart framing. Auth header construction (`BasicAuth`, `BearerAuth`) likewise rejects CR/LF at construction, so credential values cannot inject headers.
 
 ### 7. Redirect Following Has Configurable Limits
 
-`max_redirects` caps the total number of redirect hops in a chain. The total timeout is a single deadline across the entire redirect chain, preventing infinite redirect loops from extending the deadline. Users can disable redirect following entirely via `follow_redirects(false)`.
+`max_redirects` caps the total number of redirect hops in a chain. The total timeout is a single deadline across the entire redirect chain, preventing infinite redirect loops from extending the deadline. Total is enforced by the outer dispatch and spans the `PoolGuard` body lifecycle through EOF/trailers (read covers first-poll/per-chunk inactivity; Total wins ties); route connectors never cache a request's shrinking total deadline. Users can disable redirect following entirely via `follow_redirects(false)`.
 
 ### 8. Retry Does Not Replay Unsafe Methods
 

@@ -24,7 +24,7 @@ The CLI creates an `eggfetch_core::Client` via `ClientBuilder`, configures it fr
 eggfetch URL [OPTIONS]
 ```
 
-The URL is the only positional argument. The method is set with `-X`/`--method` and defaults to GET (or POST when a body is provided).
+The URL is the only positional argument. The method is set with `-X`/`--method` and defaults to GET (or POST when any body source is present: `--body`/`--body-file`/`--json`/`--form`/`--file`, per `input::detect_method`).
 
 ### Mapping to Core API
 
@@ -42,10 +42,11 @@ The URL is the only positional argument. The method is set with `-X`/`--method` 
 | `--no-verify` | `ClientBuilder::tls_config()` (verification off) |
 | `--cacert PATH` | `ClientBuilder::tls_config()` |
 | `--cert`/`--key` | `ClientBuilder::tls_config()` |
-| `--follow`/`--no-follow` | `ClientBuilder::redirect_policy()` |
+| `--follow`/`--no-follow` | `RedirectPolicy::new(follow, max_redirects)` (`--no-follow` wins) |
 | `--max-redirects N` | `ClientBuilder::redirect_policy()` |
-| `--timeout SECS` | `RequestBuilder::timeout()` (per-request) |
-| `--connect-timeout`/`--read-timeout`/`--total-timeout SECS` | Per-phase `RequestBuilder::timeout()` overrides |
+| `--no-downgrade` | `RedirectPolicy::with_downgrade(Deny)` (reject `https → http` downgrades) |
+| `--timeout SECS` | `RequestBuilder::timeout()` base (`Timeout::from_secs`) |
+| `--connect-timeout`/`--read-timeout`/`--total-timeout SECS` | Per-phase `RequestBuilder::timeout()` merges (connect/read/total only; no write/pool flags) |
 | `--retry N` | `ClientBuilder::retry()` |
 | `--retry-delay SECS` | Retry backoff delay |
 | `--max-body-size N` | `ClientBuilder::max_decoded_body_size` (client-level) |
@@ -59,9 +60,11 @@ The URL is the only positional argument. The method is set with `-X`/`--method` 
 | `--generate-completion SHELL` | Print shell completions (bash/zsh/fish/powershell/elvish) and exit |
 
 `--auth`/`--bearer` and `--json-output`/`--ndjson` are mutually exclusive
-(rejected with exit 2). `--follow`/`--no-follow` is a runtime override pair
-(`--no-follow` wins at dispatch), but passing both explicitly is rejected at
-parse time by clap (`conflicts_with`, exit 2) — use exactly one flag.
+(rejected with exit 2). `--follow` (default on) / `--no-follow` is a runtime
+override pair via `overrides_with` (`--no-follow` wins at dispatch:
+`follow = cli.follow && !cli.no_follow`); passing both is accepted, not a
+parse error — unlike `--auth`/`--bearer` and `--json-output`/`--ndjson`,
+which use `conflicts_with`.
 `--http1`/`--http2`/`--http3` are checked
 manually (more than one fails with exit 2 via the usage path). mTLS requires
 both `--cert` and `--key` together. `--proxy-auth`/`--no-proxy` require
@@ -150,6 +153,5 @@ The CLI streams the human/file response body via `Response::bytes_stream()` and 
 
 - `-o`/`--output PATH`: write body to file, creating or overwriting (JSON/NDJSON modes also honor `--output`).
 - `-i`/`--include`: response headers to stderr before body.
-- `--output PATH`: write body to file, creating or overwriting.
-- `--no-clobber`: prevent overwrite of existing files.
+- `--no-clobber`: prevent overwrite of existing files (atomic `O_CREAT|O_EXCL`; `--download` falls back to counter-suffixed `name (N).ext` via exclusive create).
 - `--download`: derive filename from `Content-Disposition` header or URL path, with counter-based deduplication.

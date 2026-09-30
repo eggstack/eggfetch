@@ -49,6 +49,11 @@ See [verification-policy.md](../verification-policy.md) for the normative policy
 
 ### Routine Validation (Tier 1)
 
+`check.sh` refuses to run outside an active venv with Python 3.10+ and the
+pinned tooling in `scripts/ci-requirements.txt` (setup: `python3 -m venv .venv
+&& source .venv/bin/activate && python -m pip install -r
+scripts/ci-requirements.txt`).
+
 | Step | Command |
 |------|---------|
 | Rust formatting | `cargo fmt --all -- --check` |
@@ -57,10 +62,10 @@ See [verification-policy.md](../verification-policy.md) for the normative policy
 | Release version/ref validation | `python scripts/test_validate_release_versions.py` |
 | Rust clippy | `cargo clippy --workspace --all-targets --all-features -- -D warnings` |
 | Rust tests | `cargo test --workspace --exclude eggfetch-python --all-features -- --test-threads=1` (single-threaded: RSS tests) |
-| Rust API contracts | `cargo test -p eggfetch-core --test public_api_contracts` across the six supported profiles |
+| Rust API contracts | `RUSTFLAGS= cargo test -p eggfetch-core --test public_api_contracts -- --test-threads=1` across six profiles (default; `--no-default-features` with `http1`, `http2`, `standard-http1`, `native-http1` each + `tls-rustls`; `--all-features`). Bare `RUSTFLAGS=` overrides CI's `-D warnings`, which fails lean profiles on profile-specific dead code |
 | Python build | `maturin develop -m crates/eggfetch-python/Cargo.toml` (active venv required; rebuild after every binding Rust change) |
-| Native Python API | `python scripts/check_native_python_api.py` (root exports, symbol kinds, exception MRO, important signatures, and version) |
-| Python typing surface | `python scripts/check_python_typing_surface.py` (stub syntax, manifest exports, exception bases, member/signature drift, async shape, and reviewed semantic contracts) |
+| Native Python API | `python scripts/check_native_python_api.py --self-test` (root exports, symbol kinds, exception MRO, important signatures, and version) |
+| Python typing surface | `python scripts/check_python_typing_surface.py --self-test` (stub syntax, manifest exports, exception bases, member/signature drift, async shape, and reviewed semantic contracts) |
 | Python typing fixtures | `python scripts/check_python_typing.py` (native/facade consumers plus negative async-body, verify-input, and return-contract cases with mypy) |
 | Python tests | `python -m pytest crates/eggfetch-python/tests/ -q --ignore=.../compat` (includes native async-body and SSL interop coverage) |
 | HTTPX compat smoke | `python -m pytest .../test_imports.py .../test_client.py .../test_exceptions.py .../test_corrective_kernel.py -v` (Tier 2 runs the full suite with `EGGFETCH_COMPAT_REQUIRED=1 ... --strict-markers`) |
@@ -72,12 +77,14 @@ Run `./scripts/check.sh extended` for: full HTTPX compatibility, the pinned
 Rust public API snapshot/semver oracle, API manifest comparison, feature
 matrix, feature-gated tests, MSRV, docs, FFI, resource monitoring, lifecycle,
 soak, downstream, merge, and benchmarks. Install `cargo-public-api 0.52.0`
-and use the pinned nightly named in `compat/rust-public-api/README.md` before
+and `cargo-semver-checks 0.49.0` and use the pinned nightly named in
+`compat/rust-public-api/README.md` before
 running the oracle. Tier 2 runs all of Tier 1 first, then the additional
 checks. All executed checks are fail-closed. Permitted explicit skips are:
 downstream when the artifact manifest is absent, and the Node JS surface when
 `node` or the built `eggfetch.node` artifact is missing (Tier 1 records the
-same Node skip). The exact Rust 1.89.0 MSRV toolchain is required; its absence
+same Node skip). The API manifest oracle covers both facades (`httpx` 0.28.1
+and `httpx2` 2.12.0). The exact Rust 1.89.0 MSRV toolchain is required; its absence
 or any Cargo/compiler failure fails validation.
 
 ### HTTP/3 Qualification (manual, not CI)
@@ -175,9 +182,9 @@ Run manually via `workflow_dispatch` from `.github/workflows/pypi.yml`. The pipe
 ## MSRV
 
 **Rust 1.89** — checked in extended validation with the exact 1.89.0
-toolchain. The gate compiles core's minimal and all-feature profiles plus all
-workspace targets and features with `--locked`, so every publishable Rust
-crate is covered. Missing Rust 1.89.0 tooling is a validation failure; install
+toolchain (`rustup run 1.89.0 cargo check --locked` over five combos:
+core `--no-default-features` bare / `+http1` / `+http1,tls-rustls` /
+`--all-features`, plus `--workspace --all-targets --all-features`). Missing Rust 1.89.0 tooling is a validation failure; install
 it with `rustup toolchain install 1.89.0 --profile minimal`. Edition 2021 and
 the stable development toolchain remain unchanged.
 

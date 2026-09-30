@@ -168,7 +168,7 @@ compression decoders, no `http2`/`http3` — it never sends `Accept-Encoding`).
 - **Output formatting**: human, headers-only, JSON, NDJSON modes; streaming to stdout or file (`-o`)
 - **Download mode**: filename derivation from URL/headers (`--download`)
 - **Binary encoding**: `--base64` for binary bodies
-- **Exit codes**: 8 codes (0=success, 2=usage incl. cert/hostname-verification config errors, 3=connect/TLS/pool/proxy transport, 4=timeout, 5=protocol, 6=status, 7=I/O, 130=interrupted via SIGINT handler) — 7 named constants plus the SIGINT path. `--proxy-auth`/`--no-proxy` require `--proxy`; pass exactly one of `--follow`/`--no-follow` (explicit-both is rejected at parse time; `--no-follow` wins at runtime dispatch).
+- **Exit codes**: 8 codes (0=success, 2=usage incl. cert/hostname-verification config errors, 3=connect/TLS/pool/proxy transport, 4=timeout, 5=protocol, 6=status, 7=I/O, 130=interrupted via SIGINT handler) — 7 named constants plus the SIGINT path. `--proxy-auth`/`--no-proxy` require `--proxy`; `--follow`/`--no-follow` use `overrides_with` (both accepted, `--no-follow` wins).
 - **Streaming**: body streams to stdout incrementally via `bytes_stream()`
 - **Shell completions**: `--generate-completion` for bash/zsh/fish/powershell/elvish
 

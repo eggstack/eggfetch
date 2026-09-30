@@ -22,7 +22,7 @@ All three benchmark suites use Criterion (`harness = false`) and are enabled by 
 
 ## BenchServer
 
-`src/lib.rs` provides a minimal **blocking** HTTP server used by the e2e and resources suites (`resource_monitor` carries its own `ResourceServer`) so benchmarks never touch the network externally:
+`src/lib.rs` provides a minimal **blocking** HTTP server used by the e2e and resources suites (`resource_monitor` carries its own `ResourceServer`) so benchmarks never touch the network externally. All fixtures are deterministic loopback-only harnesses, not production behavior:
 
 - Binds `127.0.0.1:0` (random free port); each connection handles exactly one request (`Connection: close`).
 - `BenchServerConfig` controls: response body size, pre-response delay, chunked transfer encoding (chunk size + inter-chunk delay), and whether the request body is read-and-discarded before responding.
@@ -55,7 +55,8 @@ The fixture lives in `eggfetch-bench/src/bench_proxy.rs`. It parses each
 request head once, forwards absolute-form targets as origin-form path/query,
 strips proxy-only and hop-specific connection headers, and closes the upstream
 request explicitly. CONNECT and chunked request bodies receive deterministic
-`501 Not Implemented` responses; fixed-length bodies are forwarded. Focused
+`501 Not Implemented` responses — unsupported framing is reported explicitly
+rather than relying on read timeouts; fixed-length bodies are forwarded. Focused
 loopback correctness tests run with `cargo test -p eggfetch-bench --lib` and
 verify repeated requests, complete origin headers, and response bodies. This
 test fixture does not implement or qualify production proxy behavior.

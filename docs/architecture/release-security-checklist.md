@@ -127,7 +127,7 @@ See also: [overview.md](overview.md).
 
 ## Release Artifacts
 
-- [ ] crates.io packages published manually in dependency order (http-connect → core → cli → ffi → python → node); pre-release `package`-tier validation fully dry-runs only `eggfetch-http-connect` (`cargo publish --dry-run`), dependents get package-structure validation until their deps are on the index
-- [ ] Python wheels built and published (if applicable)
-- [ ] Version tag created and pushed
+- [ ] crates.io packages published manually in dependency order (http-connect → core → cli → ffi → python → node); pre-release `package`-tier validation fully dry-runs only `eggfetch-http-connect` (`cargo publish --dry-run`), dependents get package-structure validation until their deps are on the index. `eggfetch-bench` and `fuzz/` are never published (`publish = false`).
+- [ ] Python wheels published via the manually dispatched PyPI workflow only (`.github/workflows/pypi.yml`, `workflow_dispatch`; `publish=true` runs the live security preflight) — never from push/PR CI
+- [ ] Version tag created and pushed (signed `v<VERSION>` on the exact frozen candidate, after crates.io publication)
 - [ ] Required coordinated GitHub Release created from the signed tag with notes from CHANGELOG after PyPI verification

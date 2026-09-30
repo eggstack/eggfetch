@@ -67,7 +67,7 @@ native `eggfetch` types.
 
 | Module | Purpose |
 |--------|---------|
-| `lib.rs` | Module registration + top-level functions (`get`, `post`, etc.) |
+| `lib.rs` | Module registration + top-level functions (`get`, `post`, `put`, `patch`, `delete`, `head`, `options`, `request`) |
 | `client.rs` | `Client` — sync adapter with persistent runtime |
 | `async_client.rs` | `AsyncClient` — async adapter targeting asyncio |
 | `response.rs` | `PyResponse` — buffered response surface and private lazy buffered iterators |
@@ -89,7 +89,7 @@ native `eggfetch` types.
 | `conversion.rs` | Python↔Rust type conversion (shared by sync/async) |
 | `request_preparation.rs` | Shared client configuration and method/URL/header/body/auth/proxy/retry normalization |
 | `limits.rs` | `PyLimits` — pool concurrency limits |
-| `extensions.rs` | Request extension extraction (`target`, `sni_hostname`, `trace` only; core `resolved_target` has no Python `extensions=` path and unknown keys are ignored) |
+| `extensions.rs` | Request extension extraction (`target`, `sni_hostname`, `trace` only; core `resolved_target` has no Python `extensions=` path and is never resolved via DNS fallback, and unknown keys are ignored) |
 | `network_stream.rs` | `PyNetworkStream` / `PyAsyncNetworkStream` upgrade wrappers |
 | `trace_bridge.rs` | `PyTraceObserver` — sync trace-callback bridge |
 
@@ -272,12 +272,12 @@ Body kwargs (`content`, `data`, `json`) are mutually exclusive. `files` may comb
 Two versioned, independent facades share the single Rust engine:
 
 - `eggfetch.compat.httpx` — HTTPX 0.28.1, Stage C qualified on the exact
-  executable SHA recorded in `plans/httpx-parity-correction-status.md`; prior
+  executable SHA recorded in `plans/httpx-parity-correction-status.md`
+  (mirrored in `compat/httpx/0.28.1/profile.toml`); prior
   bindings are historical after qualification-sensitive changes.
 - `eggfetch.compat.httpx2` — httpx2 2.12.0 sibling (independently Stage C
-  qualified on the same frozen SHA; the prior `639bf186...` binding is
-  historical after the post-freeze HTTP/3 diagnostics audit;
-  profile in `compat/httpx2/2.12.0/profile.toml`). Core facade adds `FunctionAuth`,
+  qualified on the same ledger-bound SHA;
+  profile in `compat/httpx2/2.12.0/profile.toml`). The httpx2 facade adds `FunctionAuth`,
   `Origin` + `URL.origin`, `QUERY`, `Headers` merge operators, truststore
   OS-trust default, IPv6 CIDR `NO_PROXY` fix, decoder/multipart/WSGI
   hardening, and status aliases; SSE (`EventSource` over streamed
@@ -290,7 +290,7 @@ Two versioned, independent facades share the single Rust engine:
   no implementation promise until an RC/stable trigger.
 
 The 0.28.1 facade is Stage C qualified for the documented Python 3.10+
-asyncio-supported surface on the current SHA above. HTTP/3 remains separately
+asyncio-supported surface on the ledger-bound SHA above. HTTP/3 remains separately
 experimental; its retained label and blockers do not weaken or extend either
 compatibility profile.
 
@@ -485,8 +485,8 @@ The facade converts between HTTPX-compatible objects and native types at the bou
 - **Per-hop event hooks** (Track 4): Request and response hooks run around every dispatch hop. For auth challenges, hooks see each intermediate request/response, not just the final pair. Ordering: auth yields Request → request hook → transport → response hook → auth/redirect decision.
 - **Faithful mount matching** (Track 3): `_parse_mount_pattern()` returns a 5-tuple `(scheme, host, port, path, is_wildcard)`. Wildcard domain patterns (`all://*.example.com`) are supported. Priority follows HTTPX 0.28.1: exact host+port+path > wildcard > host+port > host+path > host > scheme > catch-all. Explicit `None` mounts bypass to default transport. Malformed patterns are rejected at construction.
 - **Extension preservation** (Track 5): Client and request extensions merge losslessly. Request extensions live on `response.request.extensions`, never on `response.extensions`. Response extensions from the transport handler are preserved without overwriting.
-- **Typed extensions plumbing** (corrective 02, refined 06): `request.extensions={"target": ..., "sni_hostname": ..., "trace": <callable>}` is extracted by `extract_native_extensions` into `TransportHints` before dispatch.  Python callables are wrapped by `PyTraceObserver` (a `TraceObserver` implementation in `crates/eggfetch-python/src/trace_bridge.rs`) so callables never enter `eggfetch-core`.  Both sync `Client` and `AsyncClient` detect coroutine callbacks via `inspect.iscoroutinefunction(callback)`; the observer records a `NotAwaited` error eagerly in its `CallbackErrorSlot` and short-circuits `on_event` with `Abort` so the transport stops issuing events and   never produces a discarded coroutine.  The slot is checked after dispatch on every path (success or failure) and the original callback error propagates as a `TypeError` for not-awaited coroutines or as the original exception for raised ones.  `resolved_target` is core-only and cannot be set from Python `extensions=` (same-origin redirects preserve it, cross-origin hops fail closed; proxy/UDS/H3 combinations are rejected); unknown extension keys are ignored at this layer. Once installed, hints ride the core retry pipeline at full fidelity; on redirect hops `target`/`sni_hostname`/`trace` attach to the first hop only and are cleared thereafter (only a same-origin `resolved_target` survives).  Corrective 06 unifies the extension parser across all four sync/async buffered/streaming paths so `AsyncClient.stream()` no longer uses a hand-rolled `target`/`sni_hostname` parser and `AsyncClient.request()` (buffered) forwards the full extension dict including `trace`.
-- **Wire metadata on response** (corrective 02): Native `Response.extensions` and `StreamingResponse.extensions` expose `{http_version, reason_phrase, network_stream}` snapshots that mirror the core `Response` wire state.  `Response.reason_phrase` prefers `wire_reason_phrase()` over the canonical lookup table so unusual status codes do not silently collapse to empty strings.
+- **Typed extensions plumbing** (corrective 02, refined 06): `request.extensions={"target": ..., "sni_hostname": ..., "trace": <callable>}` is extracted by `extract_native_extensions` into `TransportHints` before dispatch.  Python callables are wrapped by `PyTraceObserver` (a `TraceObserver` implementation in `crates/eggfetch-python/src/trace_bridge.rs`) so callables never enter `eggfetch-core`.  Both sync `Client` and `AsyncClient` detect coroutine callbacks via `inspect.iscoroutinefunction(callback)`; the observer records a `NotAwaited` error eagerly in its `CallbackErrorSlot` and short-circuits `on_event` with `Abort` so the transport stops issuing events and   never produces a discarded coroutine.  The slot is checked after dispatch on every path (success or failure) and the original callback error propagates as a `TypeError` for not-awaited coroutines or as the original exception for raised ones.  `resolved_target` is core-only and cannot be set from Python `extensions=` (same-origin redirects preserve it alongside `proxied_target`, cross-origin hops fail closed; proxy/UDS/H3 combinations are rejected); unknown extension keys are ignored at this layer. Once installed, hints ride the core retry pipeline at full fidelity; on redirect hops `target`/`sni_hostname`/`trace` attach to the first hop only and are cleared thereafter (only a same-origin `resolved_target` survives).  Corrective 06 unifies the extension parser across all four sync/async buffered/streaming paths so `AsyncClient.stream()` no longer uses a hand-rolled `target`/`sni_hostname` parser and `AsyncClient.request()` (buffered) forwards the full extension dict including `trace`.
+- **Wire metadata on response** (corrective 02): Native `Response.extensions` and `StreamingResponse.extensions` expose `{http_version, reason_phrase, network_stream}` snapshots that mirror the core `Response` wire state.  `Response.reason_phrase` prefers `wire_reason_phrase()` over the canonical lookup table so unusual status codes do not silently collapse to empty strings. HTTP/2 `stream_id` is intentionally absent (hyper-util does not expose it; see `docs/residual-differences.md`).
 - **101 Switching Protocols and `network_stream`** (corrective 03, refined 06): When the core captures a Hyper upgrade future, `Response.extensions["network_stream"]` exposes a live `PyNetworkStream` (sync, GIL-released) or `PyAsyncNetworkStream` (async, awaits on the asyncio loop) wrapper. Wrapper selection in Corrective 06 follows the **caller's API mode** (sync vs async), not the buffered-vs-streaming response path: sync `Client.stream()` 101 responses expose the sync wrapper, and async `AsyncClient.request()` buffered 101 responses expose the async wrapper. The two are stored behind an `EitherNetworkStream` enum so the Python-facing attribute delivers the correct wrapper type. Ordinary buffered responses set `extensions["network_stream"] = None` because the connection has been returned to the pool; internal HTTPS CONNECT tunnels are also classified as `None` because the canonical access path is the body iterator. `start_tls(ssl_context=..., server_hostname=..., timeout=...)` is rejected for Hyper-opaque `Adapter` variants and for streams that are already TLS-wrapped; only `Tcp`-variant streams use the Corrective 01 safe TLS translation (and Corrective 06 makes that translation genuinely fail-closed for unrepresentable SSLContext state). The sync wrapper carries an explicit `tokio::runtime::Handle` plus optional `RuntimeLease` so it can drive IO without relying on an ambient runtime; cloning a `PyNetworkStream` shares the same underlying `Arc<Mutex<>>`. Sync read/write hold the lock across the blocking IO, so concurrent clones serialize and a slow peer stalls all clones; for independent concurrent IO, do not clone — open separate streams. Leading data after 101 headers is preserved inside Hyper's rewind buffer and returned by the first reads from the upgraded stream.
 - **Transport ownership and close** (Track 6): Duplicate mounted transport instances close exactly once. Close errors propagate (last error raised). Client close is idempotent.
 - **Transport body preservation** (Track 2): Buffered custom transport responses retain their body under `stream=True`. Streaming responses remain lazy. `HTTPTransport`/`AsyncHTTPTransport` always return stream-backed responses.

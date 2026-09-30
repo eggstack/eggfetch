@@ -13,7 +13,7 @@ Focused subset for the engine lifecycle (client → request → pipeline → res
 | `client` | Yes | `Client`, `ClientBuilder` — entry point |
 | `request` | Yes | `Request`, `RequestBuilder` — fluent request construction |
 | `response` | Yes | `Response`, `HistoryEntry` — response + redirect history |
-| `body` | Yes | `RequestBody`, `ResponseBody`, `NativeResponseBody`, `BoxBytesStream`, `SharedTrailers` |
+| `body` | Yes | `RequestBody`, `ResponseBody`, `NativeResponseBody`, `BoxBytesStream`, `SharedTrailers` — details in [core-body-streaming.md](core-body-streaming.md) |
 | `headers` | Yes | `Headers` — case-insensitive header map wrapper |
 | `network_stream` | Yes | `NetworkStream`, `UpgradedStream`, `ConnectionMetadata` — upgrade IO + connection metadata |
 | `trace` | Yes | `TraceObserver`, `TraceEvent` — synchronous lifecycle event callbacks |
@@ -21,8 +21,8 @@ Focused subset for the engine lifecycle (client → request → pipeline → res
 | `transport_hints` | Yes | `ResolvedTarget`, `TransportHints`, `NativeRequestOptions` — protocol-neutral wire overrides usable without `high-level-url` |
 | `service` | Yes | `NativeHttpService` — always-ready `tower_service::Service` adapter over native frame execution |
 | `pipeline/` | Crate-internal | Request lifecycle orchestration split by responsibility: `retry` (requires `high-level-url` + `logical-retry`), `redirect` (requires `high-level-url` + `redirects`), `lean` (requires `high-level-url` without `redirects`), `prepare`, `route`, `hyper_dispatch` (requires `transport-http1`/`transport-http2`), `proxy_dispatch` (requires `proxy`), `h3_dispatch` (requires `http3`), `finalize` (requires `high-level-url`), plus short `mod` entry points |
-| `transport` | Yes | Direct, caller-owned raw-stream dialer, direct-with-socket-options, UDS, proxy, HTTP/3 transport dispatch |
-| `stream` | Crate-internal | Response-body timeout (crate-private `BodyTimeoutStream` via `body_timeout_stream`: read inactivity + absolute total) plus a separate per-chunk write timeout (crate-private `write_timeout_stream` in `stream::write_timeout`) |
+| `transport` | Mixed | Public seams (`alt_svc`, `dialer`, `direct_connector`, `lifecycle`, `metrics`) plus crate-internal dispatch (`direct`, `uds`, `proxy`, `socks`, `connect`, `http3`, `hyper_client`, `standard_resolver`, `connect_timeout`) |
+| `stream` | Crate-internal | Response-body timeout (crate-private `BodyTimeoutStream` via `body_timeout_stream` in `stream::body_timeout`: read inactivity + absolute total) plus a separate per-chunk write timeout (crate-private `WriteTimeoutStream` via `write_timeout_stream` in `stream::write_timeout`) |
 
 ## Client
 
@@ -209,7 +209,7 @@ destinations used exactly with no DNS lookup.
 
 ## Response
 
-`Response` wraps status, version, headers, URL, body, redirect history, wire metadata (original content-encoding/length, reason phrase), trailers, and the optional 101 `network_stream`.
+`Response` wraps status, version, headers, URL, body, redirect history, wire metadata (original content-encoding/length, reason phrase), trailers, and the optional 101 `network_stream`. Body consumption and pool-lease details live in [core-body-streaming.md](core-body-streaming.md).
 
 Key methods:
 - `status()` → `StatusCode`
@@ -325,8 +325,8 @@ module rather than repeating builder/lifecycle/cache plumbing per route:
   Tokio executor. Concrete monomorphized connector types are kept; no boxed
   dynamic connectors were introduced.
 - `BoundedClientCache` centralizes the bounded get-or-build-and-evict
-  protocol. Capacities are explicit and unchanged: 256 for SNI/custom-SNI,
-  64 each for SOCKS/forward/CONNECT. Eviction is arbitrary-entry (no LRU
+   protocol. Capacities are explicit and unchanged: 256 for SNI/custom-SNI,
+   64 each for resolved-target/SOCKS/forward/CONNECT. Eviction is arbitrary-entry (no LRU
   dependency). Construction under the cache lock is CPU/local configuration
   only — no network I/O — and failures return before insert so they never
   poison the cache. Route-specific connector construction stays in the route
@@ -515,3 +515,7 @@ method returning a static string for programmatic matching.
 - All `Debug`/`Display` implementations redact secrets via `redact` module.
 - CR/LF injection prevention in headers and auth values.
 - URL credentials (`user:pass@host`) are rejected.
+
+---
+
+See also: [overview.md](overview.md) for the high-level map.

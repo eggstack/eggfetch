@@ -1,5 +1,7 @@
 # Rust Surface Containment
 
+See also: [overview.md](overview.md) for the high-level map.
+
 This inventory records the Rust surfaces that the repository must preserve
 while keeping new implementation details private. It is a compatibility
 record, not a proposal to hide or redesign existing public items.
@@ -51,3 +53,7 @@ HTTP/3 remains experimental and subject to the separate graduation gate in
 `core-tls-proxy-protocols.md`. Passing the private-decomposition checks does
 not provide interoperability, impairment, lifecycle, or upstream-risk
 evidence for graduation.
+
+---
+
+See also: [overview.md](overview.md) for the high-level map.

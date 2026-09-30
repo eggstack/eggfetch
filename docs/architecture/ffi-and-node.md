@@ -8,7 +8,7 @@ See also: [overview.md](overview.md).
 
 ### Architecture
 
-- `unsafe_code = "allow"` — one of two workspace exceptions (with `eggfetch-node`) for the FFI boundary.
+- `unsafe_code = "allow"` — one of two workspace exceptions (with `eggfetch-node`) for the FFI boundary: crate-wide `#![allow(unsafe_code)]` plus the manifest `[lints.rust]` entry. Raw-pointer work (`Box::from_raw`, `CStr`/`slice::from_raw_parts`, `std::alloc`) stays behind per-function `# Safety` contracts and the `ffi_guard!` panic boundary (panics map to documented sentinels, never unwind across the C ABI).
 - Depends only on `eggfetch-core`'s public API. Zero networking logic.
 - Produces `cdylib`, `staticlib`, and `rlib` targets.
 - Forwards the core feature families explicitly. Its default profile preserves
@@ -20,7 +20,7 @@ See also: [overview.md](overview.md).
 
 | Handle | Thread Safety | Lifetime |
 |--------|--------------|----------|
-| `ClientBuilderHandle` | Single-thread, single-use | Retained by `build()`; free exactly once regardless of outcome |
+| `ClientBuilderHandle` | Single-thread, single-use | Not consumed by `build()`; free with `eggfetch_client_builder_free` exactly once regardless of outcome (second `build()` on the same shell returns null) |
 | `ClientHandle` | `Send + Sync` (wraps `Client`, which is itself thread-safe) | Process-long, freed explicitly |
 | `RequestHandle` | Single-thread, single-use | Consumed by `send()` or freed |
 | `ResponseHandle` | Single-thread, single-use | Freed after body is read |
@@ -111,21 +111,25 @@ Direct dispatch is not blocked on feasibility — core `Client` is
   (`eggfetch_client_send`) inside `spawn_blocking`; Node adds no HTTP
   behavior of its own and all I/O still originates in `eggfetch-core`
   via the FFI runtime bridge.
-- The client handle is a raw FFI pointer stored as `SendClientPtr(*mut ClientHandle)` (provenance-preserving; not `usize`). In-flight
-  safety currently relies on napi-derive's internal strong-reference
-  codegen for async class methods (see the lifetime-safety comment on
-  `EggfetchClient`), not on Rust ownership — this is acceptable for a
-  prototype and must be replaced by `Arc`-owned state before any
-  supported release.
+- The client handle is a raw FFI pointer held as `Arc<ClientHandleInner>`
+  (`Mutex<*mut ClientHandle>`, provenance-preserving; not `usize`). Each
+  in-flight `spawn_blocking` future clones the `Arc` before entering the
+  blocking section, so `Drop for ClientHandleInner` frees the FFI handle
+  only when the last clone (client plus all in-flight requests) is dropped
+  — a JS GC of the client object cannot free the handle underneath a
+  running request. This does not rely on napi-rs `this`-reference tracking
+  (the `napi = "2"` pin in `crates/eggfetch-node/Cargo.toml` must be kept
+  with the comment on `ClientHandleInner`).
 
 ### Narrow prototype guarantees
 
 - Async `Client` request methods for the common verbs plus arbitrary
   methods via `request(method, url, body)`.
 - UTF-8 string request bodies (`Option<String>`); empty body when `None`.
-- Buffered responses only: status, URL, headers (duplicates preserved
+- Buffered responses only: status, URL (getter strips `userinfo@`), headers (duplicates preserved
   internally, joined in the `headers` object, individually via `getAll`),
-  `text` / `bytes` / `json` accessors, `ok` flag.
+  `text` / `bytes` / `json` accessors, `ok` flag. Interior-NUL bodies/headers
+  and body-read failures are loud errors, not silent empty values.
 - Rust-side compilation and unit surface covered by Tier 1
   (`cargo test -p eggfetch-node`); the JS surface
   (`crates/eggfetch-node/test.js`, run from that directory) runs in

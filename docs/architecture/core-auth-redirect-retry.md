@@ -60,7 +60,8 @@ Lean coverage lives in `crates/eggfetch-core/tests/lean_policy_tests.rs`
 ### Cross-Origin Redirect Stripping
 
 The redirect engine always strips `Authorization` and `Proxy-Authorization`
-from the cloned header set, and additionally strips `Cookie` and `Host` on
+from the cloned header set, and additionally strips `Cookie`, `Host`,
+`Referer`, and `Origin` on
 cross-origin redirects. Client-level auth is NOT reapplied on cross-origin
 redirect hops. Same-origin redirects reapply client-level auth after the
 strip, so effective credentials survive while server-mutated header values
@@ -107,8 +108,8 @@ method rewrites, loop bounds, and scheme allow-listing are unchanged.
 On redirect (single `pipeline::redirect::advance_redirect_hop()` transformation + shared
 `HopBuildParams` hop builder, owned by `pipeline::redirect`):
 - **Same-origin**: `Authorization`/`Proxy-Authorization` are stripped from the cloned set, then configured client-level auth is re-applied (or a manually-set `Authorization` header is re-attached when no auth is configured); `Cookie`/`Host` survive.
-- **Cross-origin**: `Authorization`, `Cookie`, and `Proxy-Authorization` are stripped, plus `Host` is removed (the transport derives it from the new URL); client-level auth is not reapplied.
-- `Host` header is removed on cross-origin hops; the transport derives it from the new destination.
+- **Cross-origin**: `Authorization`, `Cookie`, and `Proxy-Authorization` are stripped, plus `Host`, `Referer`, and `Origin` are removed (the transport derives `Host` from the new URL); client-level auth is not reapplied.
+- `Host` header is removed on cross-origin hops; the transport derives it from the new destination. `Referer`/`Origin` are removed with the strict jar policy because they leak the source URL.
 - `Content-Length`, `Content-Type`, and `Transfer-Encoding` are stripped when the body is dropped.
 - Destination-specific wire hints (`target`, `sni_hostname`, `trace`) attach only on the first hop and are cleared thereafter. Native physical-route snapshots are separate: direct `resolved_target` and private `proxied_target` are retained only for same-origin redirects; cross-origin redirects return `Error::ResolvedTargetRedirect` before dispatch. A proxied target snapshot is valid only with a compatible effective proxy route; unsupported proxy combinations fail before I/O. Per-request decompression and proxy overrides persist across all hops. The redirects-disabled fast path uses the same first-hop builder, so it cannot diverge except for loop behavior.
 
