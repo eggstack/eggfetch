@@ -246,15 +246,16 @@ impl PyClient {
             })
         });
 
-        // Unwrap the transport result first so a simultaneous network
-        // failure is not masked by a trace-callback error; callback errors
-        // are reported when the transport itself succeeded.
-        let (mut response, content) = result?;
+        // Surface any trace-callback errors recorded during dispatch, BEFORE
+        // unwrapping the transport result so that callback errors are not
+        // shadowed by network failures.
         if let Some(slot) = trace_slot {
             if let Some(err) = take_callback_error(&slot) {
                 return Err(err);
             }
         }
+
+        let (mut response, content) = result?;
 
         let runtime_lease = crate::streaming::RuntimeLease::new(runtime_guard);
         let py_response = PyResponse::from_core_response_with_body(
@@ -669,14 +670,14 @@ impl PyClient {
             })
         });
 
-        // Transport errors take precedence over trace-callback errors when
-        // both fail (see `request()` above).
-        let response = result?;
+        // Surface any trace-callback errors recorded during dispatch.
         if let Some(slot) = trace_slot {
             if let Some(err) = take_callback_error(&slot) {
                 return Err(err);
             }
         }
+
+        let response = result?;
 
         PyStreamingResponse::from_core_response(
             py,

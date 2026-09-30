@@ -162,15 +162,16 @@ impl PyAsyncClient {
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let response_result = Box::pin(builder.send()).await;
 
-            // Unwrap the transport result first so a simultaneous network
-            // failure is not masked by a trace-callback error; callback errors
-            // are reported when the transport itself succeeded (matches sync).
-            let mut response = response_result.map_err(map_err)?;
+            // Surface any trace-callback errors recorded during dispatch.
+            // Check the slot regardless of whether the transport succeeded
+            // or failed so that callback exceptions are never swallowed.
             if let Some(slot) = trace_slot {
                 if let Some(err) = take_callback_error(&slot) {
                     return Err(err);
                 }
             }
+
+            let mut response = response_result.map_err(map_err)?;
 
             let content = response.bytes().await.map_err(map_err)?;
             // The async client backs the runtime through the ambient
