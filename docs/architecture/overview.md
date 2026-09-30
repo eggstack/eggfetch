@@ -46,7 +46,7 @@ This document is the bird's-eye view: what each discrete module, tool, and capab
 2. **Async-first** — the Rust engine is async-only (tokio). Synchronous APIs are adapter-layer concerns that block on the async engine (Python sync releases the GIL; Node prototype uses `spawn_blocking` over FFI).
 3. **Feature-gated modularity** — default is HTTP/1.1 + Rustls TLS with the high-level URL API plus logical retry, redirect following, and Basic auth. HTTP/2, HTTP/3, cookies, compression, multipart, and proxy are opt-in via Cargo features; `native-http1`/`native-http2` without `high-level-url` select the low-level `http::Request` transport without `url`/`idna`/ICU (retaining advanced routing). The lean Bearer-only profile selects `standard-http1` + `tls-rustls` (transport + standard route + URL API without `advanced-routing` or the `logical-retry`/`redirects`/`basic-auth` policy bundle) for single-attempt 3xx-passthrough standard-route clients.
 4. **Security by default** — `unsafe_code = "forbid"` workspace-wide (only `eggfetch-ffi` and `eggfetch-node` override to `"allow"` for FFI/N-API), credential redaction, CR/LF injection prevention, fail-closed TLS translation.
-5. **Typed reconstruction, no silent drops** — request rebuilds for retry/redirect go through exhaustive helpers (`RequestParts::retry_request`, `into_request`, `advance_redirect_hop`); a new field must fail to compile, never be silently dropped.
+5. **Typed reconstruction, no silent drops** — request rebuilds for retry/redirect go through exhaustive helpers (`RequestParts::retry_request`, `advance_redirect_hop`); a new field must fail to compile, never be silently dropped. (`into_request` is a test-only round-trip anchor, not a live dispatch path.)
 
 ## Workspace Layout
 

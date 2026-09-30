@@ -27,7 +27,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-eggfetch-core = { version = "0.1", features = ["http1", "tls-rustls", "tls-native-roots"] }
+eggfetch-core = { version = "0.2", features = ["http1", "tls-rustls", "tls-native-roots"] }
 ```
 
 ### Feature flags
@@ -61,14 +61,14 @@ default.
 For a deterministic embedded HTTPS client without system trust loading:
 
 ```toml
-eggfetch-core = { version = "0.1", default-features = false, features = ["http1", "tls-rustls"] }
+eggfetch-core = { version = "0.2", default-features = false, features = ["http1", "tls-rustls"] }
 ```
 
 For a lean Bearer-only standard-route client (no advanced routing or
 retry/redirect/Basic machinery):
 
 ```toml
-eggfetch-core = { version = "0.1", default-features = false, features = ["standard-http1", "tls-rustls"] }
+eggfetch-core = { version = "0.2", default-features = false, features = ["standard-http1", "tls-rustls"] }
 ```
 
 For cleartext-only: `features = ["http1"]` alone. Measured downstream

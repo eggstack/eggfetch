@@ -8,7 +8,7 @@ Add `eggfetch-core` to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-eggfetch-core = { version = "0.1" } # H1 + Rustls + native roots/WebPKI fallback
+eggfetch-core = { version = "0.2" } # H1 + Rustls + native roots/WebPKI fallback
 ```
 
 Enable optional features as needed:
@@ -39,7 +39,7 @@ For a typical H1/H2 client with cookies, proxying, multipart, all response
 compression codecs, and native JSON helpers:
 
 ```toml
-eggfetch-core = { version = "0.1", features = ["http1", "http2", "tls-rustls", "tls-native-roots", "cookies", "proxy", "multipart", "compression-gzip", "compression-brotli", "compression-zstd", "compression-deflate", "json"] }
+eggfetch-core = { version = "0.2", features = ["http1", "http2", "tls-rustls", "tls-native-roots", "cookies", "proxy", "multipart", "compression-gzip", "compression-brotli", "compression-zstd", "compression-deflate", "json"] }
 # Add this when deriving request/response types for the `json` helpers.
 serde = { version = "1", features = ["derive"] }
 ```
@@ -48,14 +48,14 @@ For a minimal embedded HTTPS client (deterministic WebPKI roots, retaining
 advanced routing and the retry/redirect/Basic policy bundle):
 
 ```toml
-eggfetch-core = { version = "0.1", default-features = false, features = ["http1", "tls-rustls"] }
+eggfetch-core = { version = "0.2", default-features = false, features = ["http1", "tls-rustls"] }
 ```
 
 For a lean Bearer-only standard-route client without advanced routing or
 retry/redirect/Basic machinery:
 
 ```toml
-eggfetch-core = { version = "0.1", default-features = false, features = ["standard-http1", "tls-rustls"] }
+eggfetch-core = { version = "0.2", default-features = false, features = ["standard-http1", "tls-rustls"] }
 ```
 
 `http1` alone is cleartext-only. The opt-in `json` feature adds native

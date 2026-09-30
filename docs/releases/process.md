@@ -127,16 +127,15 @@ A coordinated public release requires a manual GitHub Release after PyPI publica
 
 1. Bump all coordinated versions in Cargo.toml and pyproject.toml.
 2. Update CHANGELOG.md.
-3. Run `./scripts/check.sh` and `./scripts/check.sh package`.
+3. Run `./scripts/check.sh`, `./scripts/check.sh extended`, and `./scripts/check.sh package`, plus the live `./scripts/check_security.sh` preflight.
 4. Manually publish crates.io packages in dependency order.
 5. Verify crates.io propagation between publishes.
-6. Create and push signed `v<VERSION>` tag.
-7. Dispatch PyPI Wheels from the frozen candidate SHA with `publish=false`; inspect all 18 wheels and the sdist.
-8. Create and push the signed tag on that exact candidate after crates.io publication.
-9. Dispatch from the same tag with `publish=true`.
-10. Approve the `pypi` environment deployment after assembled-set validation.
-11. Verify PyPI release and installation on representative platforms.
-12. Create a non-draft, non-prerelease GitHub Release from the existing signed tag, with changelog-derived notes and links to both package registries.
+6. Dispatch PyPI Wheels from the frozen candidate SHA with `publish=false`; inspect all 18 wheels and the sdist.
+7. Create and push the signed tag on that exact candidate after crates.io publication.
+8. Dispatch from the same tag with `publish=true`.
+9. Approve the `pypi` environment deployment after assembled-set validation.
+10. Verify PyPI release and installation on representative platforms.
+11. Create a non-draft, non-prerelease GitHub Release from the existing signed tag, with changelog-derived notes and links to both package registries.
 
 A successful publication to one registry must not be deleted because another channel failed. Correct and issue a new version according to each registry's immutability rules.
 

@@ -84,7 +84,7 @@ the profiles exclude `http2`, `http3`, `json`, all compression features,
 
 | Profile | Cargo recipe | Includes |
 | --- | --- | --- |
-| Ordinary default | `eggfetch-core = { version = "0.1" }` | H1, Rustls, native roots preferred with WebPKI construction fallback |
+| Ordinary default | `eggfetch-core = { version = "0.2" }` | H1, Rustls, native roots preferred with WebPKI construction fallback |
 | H1 cleartext | `default-features = false, features = ["http1"]` | HTTP/1.1 only; HTTPS is unavailable |
 | H1 deterministic HTTPS | `default-features = false, features = ["http1", "tls-rustls"]` | H1, Rustls, packaged WebPKI roots; no system-store loading |
 | H1 native-root HTTPS | `default-features = false, features = ["http1", "tls-rustls", "tls-native-roots"]` | H1, Rustls, native roots with WebPKI construction fallback; explicit form of the default trust profile |

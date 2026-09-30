@@ -195,7 +195,11 @@ Follow redirects is on by default (up to 20). Disable or customize:
 eggfetch --follow https://example.com/redirect
 eggfetch --no-follow https://example.com/redirect
 eggfetch --max-redirects 5 https://example.com/redirect
+eggfetch --no-downgrade https://example.com/redirect
 ```
+
+`--no-downgrade` rejects `https -> http` redirect downgrades instead of
+following them.
 
 ## Authentication
 

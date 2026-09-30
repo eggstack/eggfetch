@@ -122,7 +122,7 @@ Cargo features:
 
 ```toml
 [dependencies]
-eggfetch-ffi = { version = "0.1", features = ["http2", "cookies", "proxy"] }
+eggfetch-ffi = { version = "0.2", features = ["http2", "cookies", "proxy"] }
 ```
 
 ## Node.js Binding

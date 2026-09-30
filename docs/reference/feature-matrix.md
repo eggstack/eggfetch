@@ -106,7 +106,7 @@ Node.js (eggfetch-node, experimental).
 | Proxy (`--proxy`) | Yes |
 | Proxy auth (`--proxy-auth`) | Yes |
 | NO_PROXY (`--no-proxy`) | Yes |
-| TLS verify/no-verify (`--verify`/`--no-verify`) | Yes |
+| TLS no-verify (`--no-verify`; verification is on by default, no `--verify` flag) | Yes |
 | Custom CA (`--cacert`) | Yes |
 | Client cert (`--cert`, `--key`) | Yes |
 | Timeouts (`--timeout`, `--total-timeout`, `--read-timeout`) | Yes |

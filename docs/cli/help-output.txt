@@ -1,4 +1,4 @@
-Command-line interface for eggfetch
+Command-line HTTP client powered by the eggfetch-core engine
 
 Usage: eggfetch [OPTIONS] <URL>
 
@@ -51,9 +51,11 @@ Options:
       --follow
           Follow redirects (default: on)
       --no-follow
-          Do not follow redirects
+          Do not follow redirects (overrides `--follow`)
       --max-redirects <MAX_REDIRECTS>
           Maximum number of redirects [default: 20]
+      --no-downgrade
+          Reject `https -> http` redirect downgrades instead of following them
       --auth <AUTH>
           Basic auth as USER:PASS (env: `EGGFETCH_AUTH`) [env: EGGFETCH_AUTH=]
       --bearer <BEARER>
