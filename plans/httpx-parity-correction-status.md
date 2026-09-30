@@ -4,6 +4,48 @@ This record is the exact-SHA-bound status for the HTTPX 0.28.1 compatibility
 facade. Historical phase and corrective-pass records remain in the git history
 and referenced plans; counts below are only from the runs named here.
 
+## Recorded state — Stage C renewed after bugs.md corrective + docs hygiene requalification (2026-09-30)
+
+Recorded designation: **Stage C qualified** for both documented facades, bound
+to executable freeze `bb6e07320f61736702e37f335fd1d48c7c3dfbaf`. The preceding
+`5247ff0e01e309d9b408b8b4b4c90151ee5ce9fa` binding is historical because
+executable inputs changed after it: the coordinated 0.2.1 release closure,
+four `bugs.md` fix commits across core/Python/FFI/Node/CLI/scripts, and the
+trace-callback precedence corrective below. The canonical qualification
+records (`docs/residual-differences.md`,
+`docs/reference/compatibility.md`,
+`docs/reference/compatibility-stage-decision.md`, both `compat/*/profile.toml`)
+had additionally lagged one renewal behind at `d4979f1d...`; they are renewed
+together here and the previous SHAs are demoted to historical.
+
+Qualification evidence on the corrective freeze:
+
+- Tier 1 (`./scripts/check.sh`), Tier 2 (`./scripts/check.sh extended`),
+  Tier 3 package (`./scripts/check.sh package`), and live security preflight
+  (`./scripts/check_security.sh`) all green on `bb6e07320f61736702e37f335fd1d48c7c3dfbaf`.
+  The only skips are the policy-defined optional ones: the Node JS surface
+  (native `eggfetch.node` artifact absent) and downstream fixtures (artifact
+  manifest absent).
+- Full pinned HTTPX 0.28.1 / HTTPX2 2.12.0 compatibility suites: **1934
+  passed, 0 failed** (`EGGFETCH_COMPAT_REQUIRED=1`, `--strict-markers`).
+- The requalification caught and fixed one real regression from the `bugs.md`
+  hardening pass: the trace-callback error slot was checked only after
+  unwrapping the transport result, so an async trace callback combined with a
+  transport failure surfaced `RuntimeError("trace callback aborted the
+  request")` instead of the pinned `TypeError`. Slot-first precedence was
+  restored in the sync request/stream and async request paths (the async
+  stream path was never inverted); `test_trace_detection.py` is 12/12 green.
+- Dual-profile Rust public API oracle and semver cross-check passed without
+  snapshot regeneration (planning baseline
+  `03ecba973010e2858bf16a2b5f84d51ce70adae4` unchanged); Rust 1.89.0 MSRV
+  matrix, feature matrix, FFI, lifecycle, soak, lossless-merge, benchmark,
+  and wheel build/smoke/typing gates all green. No new residual difference.
+- One timing-sensitive core test (`total_applies_to_bytes_stream_mode`,
+  250 ms total budget, 323 ms observed `send()` under full-suite load) failed
+  once inside the extended workspace run and passed 3/3 in isolation plus the
+  full-file re-run; recorded here as load flake, not a product defect. No
+  code was changed for it.
+
 ## Recorded state — Stage C renewed after Windows TLS response completeness corrective (2026-09-25)
 
 Recorded designation: **Stage C qualified** for both documented facades, bound

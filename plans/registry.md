@@ -86,5 +86,5 @@ M001A and M002 are closed historical release evidence. M002 run
 `publish=false`; M004 run `36253723990` renewed the rehearsal on the final
 candidate before publication. M004 publish run `36255517733` completed
 successfully. All M006-family work is also closed. Stage C remains bound to
-`5247ff0e01e309d9b408b8b4b4c90151ee5ce9fa` unless executable or
+`bb6e07320f61736702e37f335fd1d48c7c3dfbaf` unless executable or
 qualification inputs change.
