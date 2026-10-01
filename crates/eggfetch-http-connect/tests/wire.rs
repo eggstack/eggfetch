@@ -192,7 +192,7 @@ async fn response_ordinary_200() {
     .await
     .unwrap();
     assert_eq!(head.status, 200);
-    assert!(head.headers.is_empty());
+    assert_eq!(head.headers, []);
 }
 
 #[tokio::test]
