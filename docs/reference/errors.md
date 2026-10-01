@@ -46,6 +46,37 @@ target pins return `Unsupported`. Pinned routes never fall back to DNS, and
 the existing detailed-failure taxonomy does not infer proxy/origin failure
 stages from error display text.
 
+### Generic native transport-failure classification
+
+Native Rust callers that already own HTTP-level policy (`Client::execute_http_body()`,
+`NativeResponseBody` frame polling) can use `Error::transport_failure_kind()`,
+which returns `Option<TransportFailureKind>` (`Connect`, `Tls`, `Protocol`,
+`Cancelled`; `None` means the typed evidence does not prove a category).
+The `Error` enum itself is unchanged and remains exhaustively matchable;
+`TransportFailureKind` is non-exhaustive from birth.
+
+- `Connect` — typed evidence proves connection establishment failed and no
+  more specific category applies (explicit `Connect`/`H3Connect`, dialer
+  `Connection`, Hyper-util `is_connect`, or I/O refusal in the chain).
+- `Tls` — TLS configuration/handshake/verification or nested rustls
+  processing failed. Takes precedence over generic connect.
+- `Protocol` — typed HTTP framing/protocol failure (explicit protocol
+  variants, Hyper parse/incomplete-message evidence, or premature-body/
+  malformed-framing I/O observed at the `NativeResponseBody` polling
+  boundary). A bare I/O `UnexpectedEof` outside that boundary stays unknown.
+- `Cancelled` — typed evidence says the transport/request was cancelled
+  before normal completion (Hyper `is_canceled`).
+
+The classifier is diagnostic only and does not imply retryability:
+`RetryPolicy::is_error_retryable()` is unchanged and never consults it.
+Timeouts (`TimeoutPhase`), established-I/O inactivity (`TransportIoDirection`),
+physical admission (`is_physical_connection_admission_timeout()`),
+caller-dialer facts (`custom_transport_error()`/`DialErrorKind`), and the
+high-level `NetworkFailureKind` provenance surface all retain their existing
+authority. Classification never parses `Display`/`Debug` text and its output
+is enum-only, so no URLs, credentials, bodies, or nested error strings leak
+through it.
+
 | Variant | `kind()` | Description |
 |---------|----------|-------------|
 | `InvalidUrl` | `invalid_url` | URL could not be parsed |

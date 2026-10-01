@@ -41,6 +41,13 @@ public API oracle is the authoritative guard; no second source-level API
 manifest is maintained here. The representative compile contracts remain a
 fast check for the intended paths and feature boundaries.
 
+`TransportFailureKind` plus `Error::transport_failure_kind()` (ADR-0006) is
+the narrow accepted exception to the no-adjacent-helpers rule: one
+non-exhaustive enum and one method, contained in the existing error domain.
+The `Error` enum itself stays exhaustive with unchanged variants, `kind()`
+tokens, and `Display`. No further transport-adjacent public helpers are
+authorized by this exception.
+
 ## Adapter status boundaries
 
 The Node package is still an experimental, unsupported prototype. Its npm

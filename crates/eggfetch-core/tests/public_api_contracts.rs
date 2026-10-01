@@ -76,3 +76,15 @@ fn retry_contracts_compile() {
 fn redirect_contracts_compile() {
     let _ = eggfetch_core::RedirectPolicy::default();
 }
+
+#[test]
+fn transport_failure_kind_contract_compiles() {
+    let _: fn(&eggfetch_core::Error) -> Option<eggfetch_core::TransportFailureKind> =
+        eggfetch_core::Error::transport_failure_kind;
+    let _ = [
+        eggfetch_core::TransportFailureKind::Connect,
+        eggfetch_core::TransportFailureKind::Tls,
+        eggfetch_core::TransportFailureKind::Protocol,
+        eggfetch_core::TransportFailureKind::Cancelled,
+    ];
+}

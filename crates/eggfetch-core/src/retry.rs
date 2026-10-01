@@ -30,22 +30,13 @@ const DEFAULT_RETRYABLE_STATUSES: &[u16] = &[408, 429, 502, 503, 504];
 
 /// Returns `true` when a hyper-util legacy client error wraps a canceled
 /// hyper connection (stale pooled connection closed before any byte was
-/// sent). `ErrorKind::Canceled` has no public accessor, so walk the
-/// source chain to the public `hyper::Error::is_canceled` instead.
+/// sent). Delegates to the centralized bounded classifier evidence in
+/// `crate::error` so cancellation facts cannot diverge; retry policy
+/// semantics are unchanged (only this typed fact is consulted, never the
+/// broader `TransportFailureKind` category).
 #[cfg(any(feature = "transport-http1", feature = "transport-http2"))]
 fn is_hyper_canceled(inner: &hyper_util::client::legacy::Error) -> bool {
-    use std::error::Error as _;
-    let mut source = inner.source();
-    while let Some(err) = source {
-        if err
-            .downcast_ref::<hyper::Error>()
-            .is_some_and(hyper::Error::is_canceled)
-        {
-            return true;
-        }
-        source = err.source();
-    }
-    false
+    crate::error::hyper_legacy_is_canceled(inner)
 }
 
 /// Default retryable methods: GET, HEAD, OPTIONS.

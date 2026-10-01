@@ -17,7 +17,7 @@ Focused subset for the engine lifecycle (client → request → pipeline → res
 | `headers` | Yes | `Headers` — case-insensitive header map wrapper |
 | `network_stream` | Yes | `NetworkStream`, `UpgradedStream`, `ConnectionMetadata` — upgrade IO + connection metadata |
 | `trace` | Yes | `TraceObserver`, `TraceEvent` — synchronous lifecycle event callbacks |
-| `error` | Yes | `Error` enum, `RequestFailure` opt-in detail wrapper, `NetworkFailureKind` classifier, `Result<T>` alias |
+| `error` | Yes | `Error` enum, `TransportFailureKind` generic classifier, `RequestFailure` opt-in detail wrapper, `NetworkFailureKind` classifier, `Result<T>` alias |
 | `transport_hints` | Yes | `ResolvedTarget`, `TransportHints`, `NativeRequestOptions` — protocol-neutral wire overrides usable without `high-level-url` |
 | `service` | Yes | `NativeHttpService` — always-ready `tower_service::Service` adapter over native frame execution |
 | `pipeline/` | Crate-internal | Request lifecycle orchestration split by responsibility: `retry` (requires `high-level-url` + `logical-retry`), `redirect` (requires `high-level-url` + `redirects`), `lean` (requires `high-level-url` without `redirects`), `prepare`, `route`, `hyper_dispatch` (requires `transport-http1`/`transport-http2`), `proxy_dispatch` (requires `proxy`), `h3_dispatch` (requires `http3`), `finalize` (requires `high-level-url`), plus short `mod` entry points |
@@ -67,6 +67,25 @@ when every attempted address was refused, and generic connect for mixed or
 otherwise unproven failures. Proxy, UDS, HTTP/3, and caller-owned dialer
 routes remain generic/unknown where their current boundaries do not expose
 sufficient evidence.
+
+### Native transport-failure classification
+
+`Error::transport_failure_kind()` is a generic, evidence-backed classifier for
+native frame embedders (`Client::execute_http_body()`, `NativeResponseBody`
+polling). It returns `Connect`, `Tls`, `Protocol`, `Cancelled`, or `None`
+(unknown) without requiring Hyper/rustls downcasts or `Display` parsing, and
+the `Error` enum itself is unchanged. Precedence is explicit variants first,
+then bounded typed-cause inspection with TLS before generic connect,
+cancellation next, protocol next, and proven connection I/O last; `None`
+means the evidence does not prove a category. The walk descends through
+`source()` and `std::io::Error::get_ref()` edges (the latter is where nested
+rustls evidence survives hyper-rustls wrappers) and never exposes secrets:
+output is enum-only. Timeouts, physical admission, transport-I/O inactivity,
+dialer facts, and `NetworkFailureKind` keep their authority, and retry/proxy
+policy never consults the classifier. The retry crate's stale-connection
+cancellation check reuses the same bounded evidence; the proxy
+parse-detection walk stays separate because it maps to the proxy-specific
+`MalformedProxyResponse` rather than the generic category.
 
 ### Native frame execution
 

@@ -250,10 +250,16 @@ pub fn eggfetch_core::error::Error::custom_transport_error(&self) -> core::optio
 pub fn eggfetch_core::error::Error::is_physical_connection_admission_timeout(&self) -> bool
 pub fn eggfetch_core::error::Error::is_transport_io_timeout(&self) -> bool
 pub fn eggfetch_core::error::Error::kind(&self) -> &'static str
+pub fn eggfetch_core::error::Error::transport_failure_kind(&self) -> core::option::Option<eggfetch_core::error::TransportFailureKind>
 #[non_exhaustive] pub enum eggfetch_core::error::NetworkFailureKind
 pub eggfetch_core::error::NetworkFailureKind::Connect
 pub eggfetch_core::error::NetworkFailureKind::ConnectionRefused
 pub eggfetch_core::error::NetworkFailureKind::Dns
+#[non_exhaustive] pub enum eggfetch_core::error::TransportFailureKind
+pub eggfetch_core::error::TransportFailureKind::Cancelled
+pub eggfetch_core::error::TransportFailureKind::Connect
+pub eggfetch_core::error::TransportFailureKind::Protocol
+pub eggfetch_core::error::TransportFailureKind::Tls
 pub struct eggfetch_core::error::RequestFailure
 impl eggfetch_core::error::RequestFailure
 pub fn eggfetch_core::error::RequestFailure::error(&self) -> &eggfetch_core::error::Error
@@ -1134,6 +1140,7 @@ pub fn eggfetch_core::error::Error::custom_transport_error(&self) -> core::optio
 pub fn eggfetch_core::error::Error::is_physical_connection_admission_timeout(&self) -> bool
 pub fn eggfetch_core::error::Error::is_transport_io_timeout(&self) -> bool
 pub fn eggfetch_core::error::Error::kind(&self) -> &'static str
+pub fn eggfetch_core::error::Error::transport_failure_kind(&self) -> core::option::Option<eggfetch_core::error::TransportFailureKind>
 pub enum eggfetch_core::HttpVersionPolicy
 pub eggfetch_core::HttpVersionPolicy::Auto
 pub eggfetch_core::HttpVersionPolicy::Auto::allow_http3: bool
@@ -1239,6 +1246,11 @@ pub fn eggfetch_core::timeout::TimeoutPhase::fmt(&self, &mut core::fmt::Formatte
 pub enum eggfetch_core::TlsVersion
 pub eggfetch_core::TlsVersion::Tls12
 pub eggfetch_core::TlsVersion::Tls13
+#[non_exhaustive] pub enum eggfetch_core::TransportFailureKind
+pub eggfetch_core::TransportFailureKind::Cancelled
+pub eggfetch_core::TransportFailureKind::Connect
+pub eggfetch_core::TransportFailureKind::Protocol
+pub eggfetch_core::TransportFailureKind::Tls
 pub enum eggfetch_core::TransportIoDirection
 pub eggfetch_core::TransportIoDirection::Read
 pub eggfetch_core::TransportIoDirection::Write

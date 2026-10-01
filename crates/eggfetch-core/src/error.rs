@@ -8,6 +8,31 @@ use std::sync::Arc;
 /// Result alias using [`Error`].
 pub type Result<T> = std::result::Result<T, Error>;
 
+/// Generic transport-failure classification for native embedders.
+///
+/// This is a diagnostic-only fact surface. It does not imply retryability and
+/// does not replace [`Error::kind`], [`Error::is_physical_connection_admission_timeout`],
+/// [`Error::is_transport_io_timeout`], [`Error::custom_transport_error`], or
+/// [`RequestFailure::network_failure_kind`]. Unknown or ambiguous evidence
+/// maps to `None`; classification never parses `Display`/`Debug` text and
+/// never exposes URLs, credentials, bodies, or nested error strings.
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum TransportFailureKind {
+    /// Typed evidence proves connection establishment failed and no more
+    /// specific TLS/cancellation/protocol category applies.
+    Connect,
+    /// TLS configuration, handshake, verification, or nested rustls
+    /// processing failed.
+    Tls,
+    /// Typed HTTP framing/protocol failure, including Hyper
+    /// parse/incomplete-message termination where proven.
+    Protocol,
+    /// Typed evidence says the transport/request was cancelled before
+    /// normal completion.
+    Cancelled,
+}
+
 /// Evidence-backed detail for a request that failed while establishing a
 /// network connection.
 ///
@@ -505,6 +530,269 @@ impl Error {
     pub fn is_transport_io_timeout(&self) -> bool {
         matches!(self, Self::TransportIoTimeout { .. })
     }
+
+    /// Classify this error into a generic native transport-failure category.
+    ///
+    /// The classifier is diagnostic only and does not imply retryability.
+    /// `None` means the available typed evidence does not prove one of the
+    /// [`TransportFailureKind`] categories. Timeout, physical-admission,
+    /// and transport-I/O-inactivity facts remain authoritative through
+    /// their existing accessors and never map here.
+    #[must_use]
+    pub fn transport_failure_kind(&self) -> Option<TransportFailureKind> {
+        classify_transport_failure(self)
+    }
+}
+
+/// Bound for every transport-classifier source-chain walk.
+const TRANSPORT_FAILURE_WALK_BOUND: usize = 32;
+
+/// Direct-variant classification without source inspection.
+///
+/// Returns `Some` only for explicit Eggfetch variants with unambiguous
+/// category evidence. All other variants (including timeouts, admission,
+/// proxy, retry, H2 peer-action, and H3 lifecycle variants) return `None`.
+fn classify_explicit(error: &Error) -> Option<TransportFailureKind> {
+    match error {
+        Error::Tls(_)
+        | Error::TlsConfig(_)
+        | Error::CaBundle(_)
+        | Error::ClientCert(_)
+        | Error::PrivateKey(_)
+        | Error::CertificateVerification(_)
+        | Error::HostnameVerification(_) => Some(TransportFailureKind::Tls),
+        Error::Protocol(_)
+        | Error::Http2Protocol(_)
+        | Error::Http2FlowControl(_)
+        | Error::H3Protocol(_) => Some(TransportFailureKind::Protocol),
+        Error::Connect(_) | Error::H3Connect(_) => Some(TransportFailureKind::Connect),
+        Error::CustomTransport(error) => match error.kind() {
+            crate::transport::dialer::DialErrorKind::Connection => {
+                Some(TransportFailureKind::Connect)
+            }
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// Accumulated typed evidence for [`TransportFailureKind`].
+///
+/// The public precedence applies when converting into the final category:
+/// TLS before generic connect, cancellation next, protocol next, and proven
+/// connection I/O last. The four flags are independent by construction (one
+/// per category), which is clearer than a bitmask for this fixed set.
+// Clippy's struct-bool lint prefers a bitmask past three flags; the four
+// named fields are kept because each maps to exactly one public category.
+#[allow(clippy::struct_excessive_bools)]
+#[derive(Default)]
+struct TransportEvidence {
+    tls: bool,
+    cancelled: bool,
+    protocol: bool,
+    connect: bool,
+}
+
+impl TransportEvidence {
+    /// Record the typed evidence carried by one wrapped cause.
+    ///
+    /// `body_boundary` proves the failure surfaced while polling a Hyper
+    /// response body (the `Error::Hyper` variant is only constructed there),
+    /// so premature-termination/malformed-framing I/O inside it is proven
+    /// HTTP framing evidence, while the same I/O kinds elsewhere stay
+    /// unknown. No `Display`/`Debug` text is inspected.
+    fn inspect(&mut self, node: &(dyn std::error::Error + 'static), body_boundary: bool) {
+        use std::sync::Arc;
+        if let Some(inner) = node
+            .downcast_ref::<Error>()
+            .or_else(|| node.downcast_ref::<Arc<Error>>().map(Arc::as_ref))
+        {
+            match classify_explicit(inner) {
+                Some(TransportFailureKind::Tls) => self.tls = true,
+                Some(TransportFailureKind::Protocol) => self.protocol = true,
+                Some(TransportFailureKind::Connect) => self.connect = true,
+                // Explicit classification never returns Cancelled today;
+                // retain the arm so a future explicit cancellation fact
+                // cannot silently fall through.
+                Some(TransportFailureKind::Cancelled) => self.cancelled = true,
+                None => {}
+            }
+        }
+        let hyper_error = node
+            .downcast_ref::<hyper::Error>()
+            .or_else(|| node.downcast_ref::<Arc<hyper::Error>>().map(Arc::as_ref));
+        if let Some(hyper_error) = hyper_error {
+            if hyper_error.is_canceled() {
+                self.cancelled = true;
+            }
+            if hyper_error.is_parse() || hyper_error.is_incomplete_message() {
+                self.protocol = true;
+            }
+        }
+        #[cfg(feature = "tls-rustls")]
+        if node.downcast_ref::<rustls::Error>().is_some()
+            || node.downcast_ref::<Arc<rustls::Error>>().is_some()
+        {
+            self.tls = true;
+        }
+        // The legacy client `Error` type only exists when Hyper's HTTP/1 or
+        // HTTP/2 protocol support is compiled in (via `transport-http1/2`).
+        #[cfg(any(feature = "transport-http1", feature = "transport-http2"))]
+        {
+            let legacy = node
+                .downcast_ref::<hyper_util::client::legacy::Error>()
+                .or_else(|| {
+                    node.downcast_ref::<Arc<hyper_util::client::legacy::Error>>()
+                        .map(Arc::as_ref)
+                });
+            if legacy.is_some_and(hyper_util::client::legacy::Error::is_connect) {
+                self.connect = true;
+            }
+        }
+        let io_error = node
+            .downcast_ref::<std::io::Error>()
+            .or_else(|| node.downcast_ref::<Arc<std::io::Error>>().map(Arc::as_ref));
+        if let Some(io_error) = io_error {
+            // Only connection refusal is proven establishment failure
+            // anywhere.
+            if io_error.kind() == std::io::ErrorKind::ConnectionRefused {
+                self.connect = true;
+            } else if body_boundary
+                && matches!(
+                    io_error.kind(),
+                    std::io::ErrorKind::UnexpectedEof
+                        | std::io::ErrorKind::InvalidData
+                        | std::io::ErrorKind::InvalidInput
+                )
+            {
+                self.protocol = true;
+            }
+        }
+    }
+
+    /// Resolve the accumulated evidence into the final category.
+    fn category(self) -> Option<TransportFailureKind> {
+        if self.tls {
+            return Some(TransportFailureKind::Tls);
+        }
+        if self.cancelled {
+            return Some(TransportFailureKind::Cancelled);
+        }
+        if self.protocol {
+            return Some(TransportFailureKind::Protocol);
+        }
+        if self.connect {
+            return Some(TransportFailureKind::Connect);
+        }
+        None
+    }
+}
+
+/// Central private classifier authority for [`TransportFailureKind`].
+///
+/// Precedence is typed and explicit: explicit Eggfetch variants first, then
+/// bounded wrapped causes with TLS before generic connect, cancellation
+/// next, protocol next, and proven connection I/O last. Caller-owned dialer
+/// sources are never inspected beyond their
+/// [`crate::transport::dialer::DialErrorKind`]; unknown evidence stays
+/// unknown and no `Display`/`Debug` text is parsed.
+///
+/// Two transport-layer facts shape the walk. First, `std::io::Error` hides
+/// its custom payload from `source()` (it is exposed only through
+/// `get_ref()`), so the walk descends through `get_ref()` edges as well as
+/// `source()` edges; this is how nested `rustls::Error` evidence behind
+/// hyper-rustls `io::Error` wrappers is found without string matching.
+/// Second, the `Error::Hyper` variant is only constructed at the
+/// `IncomingErrorBody` polling boundary (after response headers), so I/O
+/// premature-termination/malformed-framing evidence inside it proves an HTTP
+/// body framing failure, while the same I/O kinds in a bare `Error::Io`
+/// stay unknown.
+fn classify_transport_failure(error: &Error) -> Option<TransportFailureKind> {
+    use std::error::Error as StdError;
+    // Caller-owned dialer failures preserve DialErrorKind authority. Only
+    // Connection maps broadly; richer custom_transport_error() is unchanged
+    // and nested caller sources are never inspected.
+    if let Error::CustomTransport(_) = error {
+        return classify_explicit(error);
+    }
+    if let Some(kind) = classify_explicit(error) {
+        return Some(kind);
+    }
+    // The body-boundary context: `Error::Hyper` proves the failure surfaced
+    // while polling a Hyper response body, so truncated/malformed framing I/O
+    // inside it is proven HTTP framing evidence.
+    let body_boundary = matches!(error, Error::Hyper(_));
+    let mut evidence = TransportEvidence::default();
+    // Bounded worklist DFS over `source()`/`get_ref()` edges. `Error` wraps
+    // transport errors in `Arc`, so each expected type is checked both
+    // directly and behind `Arc`.
+    let mut stack: Vec<&(dyn StdError + 'static)> = vec![error];
+    let mut visited: Vec<*const (dyn StdError + 'static)> = Vec::new();
+    let mut visits = 0usize;
+    // The top-level error itself was already checked explicitly; only wrapped
+    // typed causes are inspected below.
+    let mut skipped_top = false;
+    while let Some(node) = stack.pop() {
+        if visits >= TRANSPORT_FAILURE_WALK_BOUND {
+            break;
+        }
+        visits += 1;
+        let ptr = std::ptr::from_ref(node);
+        if visited.contains(&ptr) {
+            continue;
+        }
+        visited.push(ptr);
+        if skipped_top {
+            evidence.inspect(node, body_boundary);
+        } else {
+            skipped_top = true;
+        }
+        if let Some(source) = node.source() {
+            stack.push(source);
+        }
+        // `io::Error` custom payloads are invisible to `source()`; descend
+        // through `get_ref()` so nested typed evidence (e.g. `rustls::Error`
+        // behind hyper-rustls wrappers) is still found.
+        let payload: Option<&(dyn StdError + 'static)> = node
+            .downcast_ref::<std::io::Error>()
+            .and_then(|io_error| io_error.get_ref())
+            .map(|payload| payload as &(dyn StdError + 'static))
+            .or_else(|| {
+                node.downcast_ref::<std::sync::Arc<std::io::Error>>()
+                    .and_then(|io_error| io_error.get_ref())
+                    .map(|payload| payload as &(dyn StdError + 'static))
+            });
+        if let Some(payload) = payload {
+            stack.push(payload);
+        }
+    }
+    evidence.category()
+}
+
+/// Returns `true` when a hyper-util legacy client error wraps a canceled
+/// hyper connection, using the same centralized classifier evidence as the
+/// public [`Error::transport_failure_kind`].
+///
+/// This preserves the existing retry policy semantics exactly: only the
+/// typed cancellation fact is consulted, never the broader
+/// [`TransportFailureKind`] category.
+#[cfg(any(feature = "transport-http1", feature = "transport-http2"))]
+pub(crate) fn hyper_legacy_is_canceled(inner: &hyper_util::client::legacy::Error) -> bool {
+    use std::error::Error as _;
+    use std::sync::Arc;
+    let mut source = inner.source();
+    for _ in 0..TRANSPORT_FAILURE_WALK_BOUND {
+        let Some(err) = source else { break };
+        let canceled = err
+            .downcast_ref::<hyper::Error>()
+            .or_else(|| err.downcast_ref::<Arc<hyper::Error>>().map(Arc::as_ref))
+            .is_some_and(hyper::Error::is_canceled);
+        if canceled {
+            return true;
+        }
+        source = err.source();
+    }
+    false
 }
 
 #[cfg(test)]
@@ -626,5 +914,188 @@ mod tests {
             debug_data: " shutting down".into(),
         };
         assert!(!crate::retry::RetryPolicy::is_error_retryable(&err));
+    }
+
+    #[test]
+    fn transport_failure_explicit_tls_family() {
+        for error in [
+            Error::Tls("handshake failed".into()),
+            Error::TlsConfig("bad config".into()),
+            Error::CaBundle("bad bundle".into()),
+            Error::ClientCert("bad cert".into()),
+            Error::PrivateKey("bad key".into()),
+            Error::CertificateVerification("expired".into()),
+            Error::HostnameVerification("mismatch".into()),
+        ] {
+            assert_eq!(
+                error.transport_failure_kind(),
+                Some(TransportFailureKind::Tls),
+                "kind={}",
+                error.kind()
+            );
+        }
+    }
+
+    #[test]
+    fn transport_failure_explicit_protocol_family() {
+        for error in [
+            Error::Protocol("framing".into()),
+            Error::Http2Protocol("h2 framing".into()),
+            Error::Http2FlowControl("window exhausted".into()),
+            Error::H3Protocol("h3 framing".into()),
+        ] {
+            assert_eq!(
+                error.transport_failure_kind(),
+                Some(TransportFailureKind::Protocol),
+                "kind={}",
+                error.kind()
+            );
+        }
+    }
+
+    #[test]
+    fn transport_failure_explicit_connect_family() {
+        assert_eq!(
+            Error::Connect("refused".into()).transport_failure_kind(),
+            Some(TransportFailureKind::Connect)
+        );
+        assert_eq!(
+            Error::H3Connect("quic refused".into()).transport_failure_kind(),
+            Some(TransportFailureKind::Connect)
+        );
+        let connection = Error::CustomTransport(std::sync::Arc::new(
+            crate::transport::dialer::DialError::new(
+                crate::transport::dialer::DialErrorKind::Connection,
+                "route failed",
+            ),
+        ));
+        assert_eq!(
+            connection.transport_failure_kind(),
+            Some(TransportFailureKind::Connect)
+        );
+    }
+
+    #[test]
+    fn transport_failure_custom_transport_preserves_dial_kind() {
+        for kind in [
+            crate::transport::dialer::DialErrorKind::Timeout,
+            crate::transport::dialer::DialErrorKind::Authentication,
+            crate::transport::dialer::DialErrorKind::Rejected,
+            crate::transport::dialer::DialErrorKind::Other,
+        ] {
+            let error = Error::CustomTransport(std::sync::Arc::new(
+                crate::transport::dialer::DialError::new(kind, "route failed"),
+            ));
+            assert_eq!(error.transport_failure_kind(), None);
+            assert!(error.custom_transport_error().is_some());
+        }
+    }
+
+    #[test]
+    fn transport_failure_timeouts_admission_and_io_timeouts_stay_unknown() {
+        let timeout = Error::Timeout {
+            phase: TimeoutPhase::Connect,
+            elapsed: std::time::Duration::from_millis(5),
+        };
+        assert_eq!(timeout.transport_failure_kind(), None);
+        let io_timeout = Error::TransportIoTimeout {
+            direction: crate::transport::lifecycle::TransportIoDirection::Read,
+            elapsed: std::time::Duration::from_secs(1),
+        };
+        assert_eq!(io_timeout.transport_failure_kind(), None);
+        assert!(io_timeout.is_transport_io_timeout());
+        let admission =
+            Error::Pool(crate::transport::lifecycle::PHYSICAL_ADMISSION_TIMEOUT.to_owned());
+        assert!(admission.is_physical_connection_admission_timeout());
+        assert_eq!(admission.transport_failure_kind(), None);
+    }
+
+    #[test]
+    fn transport_failure_unknown_stays_unknown() {
+        for error in [
+            Error::InvalidUrl("bad".into()),
+            Error::Body("body".into()),
+            Error::Pool("busy".into()),
+            Error::ProxyConnect("proxy down".into()),
+            Error::Http2GoAway {
+                last_stream_id: 0,
+                debug_data: "shutdown".into(),
+            },
+            Error::Http2StreamReset {
+                reason: "CANCEL".into(),
+            },
+            Error::H3ConnectionClosed("closed".into()),
+            Error::H3Stream("reset".into()),
+            Error::TooManyRedirects {
+                followed: 5,
+                max: 5,
+            },
+        ] {
+            assert_eq!(
+                error.transport_failure_kind(),
+                None,
+                "kind={}",
+                error.kind()
+            );
+        }
+    }
+
+    #[test]
+    fn transport_failure_does_not_change_kind_or_display() {
+        let error = Error::Connect("refused".into());
+        assert_eq!(error.kind(), "connect");
+        assert_eq!(error.to_string(), "connect error: refused");
+        assert_eq!(
+            error.transport_failure_kind(),
+            Some(TransportFailureKind::Connect)
+        );
+        let tls = Error::Tls("boom".into());
+        assert_eq!(tls.kind(), "tls");
+        assert_eq!(tls.to_string(), "TLS error: boom");
+    }
+
+    #[test]
+    fn transport_failure_wrapped_io_refused_maps_connect_unexpected_eof_stays_unknown() {
+        let refused = Error::Io(std::sync::Arc::new(std::io::Error::new(
+            std::io::ErrorKind::ConnectionRefused,
+            "refused",
+        )));
+        assert_eq!(
+            refused.transport_failure_kind(),
+            Some(TransportFailureKind::Connect)
+        );
+        let eof = Error::Io(std::sync::Arc::new(std::io::Error::new(
+            std::io::ErrorKind::UnexpectedEof,
+            "eof",
+        )));
+        assert_eq!(eof.transport_failure_kind(), None);
+    }
+
+    #[test]
+    fn transport_failure_output_is_enum_only_and_redacted() {
+        use std::fmt::Write as _;
+        #[derive(Debug)]
+        struct SecretSource;
+        impl std::fmt::Display for SecretSource {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.write_str("authorization: Bearer hunter2 cookie=secret")
+            }
+        }
+        impl std::error::Error for SecretSource {}
+        let error = Error::CustomTransport(std::sync::Arc::new(
+            crate::transport::dialer::DialError::with_source(
+                crate::transport::dialer::DialErrorKind::Connection,
+                "safe route description",
+                SecretSource,
+            ),
+        ));
+        let kind = error.transport_failure_kind();
+        assert_eq!(kind, Some(TransportFailureKind::Connect));
+        let mut rendered = String::new();
+        write!(rendered, "{kind:?}").unwrap();
+        assert!(!rendered.contains("hunter2"));
+        assert!(!rendered.contains("authorization"));
+        let debug = format!("{error:?}");
+        assert!(!debug.contains("hunter2"));
     }
 }
