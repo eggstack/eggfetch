@@ -1,7 +1,6 @@
 # Core Transport and Request Policy Roadmap
 
-Status: closed — M006C2 post-closure reconciliation complete; subsystem
-returns to steady state
+Status: active — M007 native transport failure classification is ready
 
 Long-term references:
 
@@ -15,6 +14,7 @@ Related ADRs:
 - `plans/adrs/ADR-0002-pipeline-route-finalize.md`
 - `plans/adrs/ADR-0004-proxy-fallback-total-deadline.md`
 - `plans/adrs/ADR-0005-frozen-body-feature-containment.md`
+- `plans/adrs/ADR-0006-native-transport-failure-classification.md`
 
 ## 1. Purpose and ownership boundary
 
@@ -66,11 +66,19 @@ admission proven inert by measurement; lean profiles compile out
 policy/advanced-routing arms and fail closed. Evidence in the legacy plans
 below; live behavior qualified on the Stage C freeze (see ledger).
 
+Current native failure reporting is split: high-level detailed sends carry
+RequestFailure / NetworkFailureKind connection provenance, while
+execute_http_body() and NativeResponseBody return Error directly. Several
+generic transport facts remain recoverable only by inspecting nested
+Hyper/rustls sources. ADR-0006 accepts a contained Error-level classifier so
+native embedders can consume those facts without library-specific downcasts.
+
 ## 5. Target architecture
 
-The §2 invariants hold permanently. Future changes in this subsystem arrive
-as corrective passes (§7 of the planning process), each requalifying when
-executable inputs change.
+The §2 invariants hold permanently. M007 adds one evidence-backed,
+policy-neutral classifier in the existing error domain and leaves Error,
+NativeResponseBody, timeout ownership, route policy, and adapters unchanged.
+Future changes after M007 return to the normal corrective/ADR gates.
 
 ## 6. Dependency graph
 
@@ -88,7 +96,9 @@ M001 pipeline decomposition + typed rebuilds (hard predecessor)
 
 M002–M005 are soft/parallel after M001 and remain closed. M006 is a bounded
 Phase-3 corrective discovered by downstream Windows qualification; it does not
-reopen M001–M005 architecture.
+reopen M001–M005 architecture. M007 follows the closed embedded-transport
+surface and accepted ADR-0006; it is independent of publication but downstream
+exact-pin use requires a later published release.
 
 ## 7. Milestones
 
@@ -245,17 +255,52 @@ Exit conditions: only `ci.yml` and `pypi.yml` remain under `.github/workflows/`,
 Tier 1 and hosted CI are green, Stage C remains unchanged unless scope expands,
 and M001/M002 return to ready. Met.
 
+### Milestone 7 — Native transport failure classification
+
+Class: capability / invariant. Status: ready.
+
+Accepted ADR:
+
+- `plans/adrs/ADR-0006-native-transport-failure-classification.md`
+
+Implementation plan:
+
+- `plans/implementation/core-transport-policy/007-native-transport-failure-classification.md`
+
+Objective: extend the existing error domain with one non-exhaustive,
+evidence-backed transport-failure classifier so native frame embedders can
+distinguish connection, TLS, HTTP protocol/framing, and cancellation failures
+without Hyper/rustls downcasts or display parsing.
+
+Hard dependencies: M005 embedded transport extensions closed; ADR-0005
+containment remains in force; ADR-0006 accepted.
+
+Operational dependency: publication is outside M007. After implementation and
+exact-SHA qualification close, hand the candidate to release-verification M003
+standing intake.
+
+Exit conditions: Error and NativeResponseBody shapes unchanged; existing
+timeout/admission/DialErrorKind/NetworkFailureKind authorities preserved;
+dispatch and body classification proven by deterministic fixtures; no message
+parsing/dependency/feature growth; Tier 1/Tier 2 green with expected API delta
+and renewed exact-SHA binding.
+
 ## 8. Cross-cutting requirements
 
 Timeout/pool ownership per ADR-0004; trust semantics per the TLS workstream;
-no new public surface without ADR-0005 containment proof; docs updated with
-each change.
+no new public surface without ADR-0005 containment proof. M007 is the narrow
+accepted exception recorded by ADR-0006 and is contained to the existing error
+domain; it does not authorize adjacent transport helpers. Docs update with
+each executable change.
 
 ## 9. Verification strategy
 
 Route-selection unit tests; retry/redirect matrices; total-deadline
 lifecycle and lease proofs; feature-matrix builds; Tier 1 always; Tier 2 +
-exact-SHA requalification when executable inputs change.
+exact-SHA requalification when executable inputs change. M007 additionally
+requires typed-source unit tests plus deterministic native dispatch and
+NativeResponseBody protocol/TLS/cancellation fixtures under the native HTTP/1
+profile.
 
 ## 10. Risks and decision points
 
@@ -264,11 +309,11 @@ exhaustive by construction; review must reject inline hop construction.
 
 ## 11. Completion definition
 
-M001–M006, M006C1, and M006C2 are all closed. The subsystem is back to
-steady state. M001 (publication/tag/PyPI) and M002 (Python 3.15 wheel
-rehearsal) become the next operational work in the release-verification
-workstream. Stage C remains `5247ff0e01e309d9b408b8b4b4c90151ee5ce9fa`
-unless scope expands.
+M001–M006, M006C1, and M006C2 are closed. M007 is ready and reopens the
+subsystem only for the contained ADR-0006 error-classification capability.
+M007 closure requires Tier 2/public-API/exact-SHA evidence and then hands
+publication to release-verification. Live Stage C truth remains owned by the
+canonical qualification ledger rather than this roadmap.
 
 ## 12. Milestone status
 
@@ -282,3 +327,4 @@ unless scope expands.
 | M006 Windows TLS response completeness | closed | `plans/implementation/core-transport-policy/006-windows-tls-response-completeness-corrective.md` | `plans/closure/core-transport-policy/006-windows-tls-response-completeness.md` | Historical diagnosis; release evidence completed by M006C1 |
 | M006C1 Windows qualification/downstream closure | closed | `plans/implementation/core-transport-policy/006c1-windows-qualification-and-downstream-closure.md` | `plans/closure/core-transport-policy/006c1-windows-qualification-and-downstream-closure.md` | — |
 | M006C2 post-closure reconciliation/workflow retirement | closed | `plans/implementation/core-transport-policy/006c2-post-closure-reconciliation-and-workflow-retirement.md` | `plans/closure/core-transport-policy/006c2-post-closure-reconciliation.md` | — |
+| M007 native transport failure classification | ready | `plans/implementation/core-transport-policy/007-native-transport-failure-classification.md` | — | Publication deferred to release-verification after closure |
