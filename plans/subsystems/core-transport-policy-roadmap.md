@@ -1,6 +1,6 @@
 # Core Transport and Request Policy Roadmap
 
-Status: active — M007 native transport failure classification is closed
+Status: closed — M007 complete; subsystem returned to steady state
 
 Long-term references:
 
@@ -66,19 +66,19 @@ admission proven inert by measurement; lean profiles compile out
 policy/advanced-routing arms and fail closed. Evidence in the legacy plans
 below; live behavior qualified on the Stage C freeze (see ledger).
 
-Current native failure reporting is split: high-level detailed sends carry
-RequestFailure / NetworkFailureKind connection provenance, while
-execute_http_body() and NativeResponseBody return Error directly. Several
-generic transport facts remain recoverable only by inspecting nested
-Hyper/rustls sources. ADR-0006 accepts a contained Error-level classifier so
-native embedders can consume those facts without library-specific downcasts.
+M007 completed the native failure-classification seam accepted by ADR-0006.
+High-level detailed sends retain RequestFailure / NetworkFailureKind connection
+provenance, while execute_http_body() and NativeResponseBody continue returning
+Error and now expose the generic TransportFailureKind classifier without
+consumer Hyper/rustls downcasts. The subsystem is back at steady state;
+publication is owned by release-verification.
 
 ## 5. Target architecture
 
-The §2 invariants hold permanently. M007 adds one evidence-backed,
-policy-neutral classifier in the existing error domain and leaves Error,
-NativeResponseBody, timeout ownership, route policy, and adapters unchanged.
-Future changes after M007 return to the normal corrective/ADR gates.
+The §2 invariants hold permanently. M007's evidence-backed, policy-neutral
+classifier is closed and leaves Error, NativeResponseBody, timeout ownership,
+route policy, and adapters unchanged. Future core-transport changes require
+the normal corrective/ADR gates.
 
 ## 6. Dependency graph
 

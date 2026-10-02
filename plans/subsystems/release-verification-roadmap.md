@@ -1,6 +1,6 @@
 # Release and Verification Roadmap
 
-Status: closed — coordinated M001/M004 0.2.1 release completed
+Status: active — M005 0.2.2 M007 publication is ready
 
 Long-term references:
 
@@ -60,22 +60,22 @@ oracle vs the oracle baseline and both API oracles have zero unexplained
 delta. M001A closed on candidate `41757569123c0b8038550b956d8b244ab55094a6`.
 M002 run `36223505399` then proved all 18 Python 3.10–3.15 wheels plus one
 sdist with `publish=false` on that exact candidate.
-Core-transport M006 and M006C1 are closed. The native-Windows EggFetch
-matrix passed 19/19 (run 36193582776), and the corrected EggReplay M013F
-Windows 300 KiB proof passed on commit `5efc6f9c892bb5b1c2e84330a0c40a38f1de0de7`
-(run 36211265347). Stage C remains bound to
-`5247ff0e01e309d9b408b8b4b4c90151ee5ce9fa`. The historical `v0.2.0` tag/release already exists at an older commit and
-remains immutable. The unexecuted M001B publication plan was superseded by
-M004, which corrected release-facing documentation, renewed the exact-SHA
-build-only rehearsal, and completed publication and closure. Candidate
-`fe4d596ca8d91694fc887566acaa7875b918d25a` is published across all channels;
-M004 build-only run `36253723990` and publish run `36255517733` are green.
+The coordinated 0.2.1 release remains closed and immutable across crates.io,
+signed tag, PyPI, and GitHub Release. M004 build-only run `36253723990` and
+publish run `36255517733` are historical green evidence.
+
+Core-transport M007 is now closed. Its additive
+TransportFailureKind / Error::transport_failure_kind() API is qualified on
+freeze `3fc58fbd99ecb496749b833ee7b27436fe3b412d`, and the live Stage C ledger
+was renewed to that freeze. The API is not yet in a coordinated public release:
+the manifests/PyPI project remain 0.2.1 and the latest GitHub Release is
+v0.2.1. M005 is the ready publication handoff targeting 0.2.2.
 
 ## 5. Target architecture
 
-Publication and rehearsal complete with evidence; afterwards this workstream
-holds the gates steady and processes corrective requalifications. No standing
-automation growth.
+M005 publishes the already-qualified post-0.2.1 capability without adding
+runtime behavior. After M005 closure the workstream returns to steady-state
+release/corrective intake. No standing automation growth.
 
 ## 6. Dependency graph
 
@@ -93,6 +93,14 @@ M004 tagged 0.2.1 release finalization (closed; superseded unexecuted M001B)
 
 M001 umbrella closed after M004.
 M003 standing corrective intake remains soft/ongoing.
+
+core-transport M007 closure
+    |
+    v
+M005 0.2.2 M007 publication (ready)
+
+M005 consumes the closed M007 evidence and owns candidate versioning,
+requalification, rehearsal, publication, and release closure.
 ```
 
 ## 7. Milestones
@@ -170,6 +178,25 @@ Objective: route each future corrective through a bounded plan + closure +
 renewed binding where applicable. Repeated correctives in one subsystem
 force a roadmap revision.
 
+### Milestone 5 — 0.2.2 M007 publication and release polish
+
+Class: infrastructure / operational release with bounded polish. Status: ready.
+
+Implementation plan:
+
+- `plans/implementation/release-verification/005-0-2-2-m007-publication.md`
+
+Objective: publish the closed M007 native transport failure classifier as the
+coordinated 0.2.2 release, renew the exact-SHA candidate binding after
+version/package edits, rehearse the full PyPI matrix, publish all public
+channels, and reconcile release/planning documentation.
+
+Hard dependency: core-transport M007 closed.
+
+Exit conditions: six crates + PyPI at 0.2.2, signed v0.2.2 on the exact frozen
+candidate, 18-wheel + 1-sdist rehearsal and publication green, GitHub Release
+present, fresh Rust/Python install smoke green, and closure evidence recorded.
+
 ## 8. Cross-cutting requirements
 
 Security preflight live before publication; Trusted Publishing (OIDC) for
@@ -177,8 +204,11 @@ PyPI; clean worktree for packaging; no `--allow-dirty`.
 
 ## 9. Verification strategy
 
-Tier 2 + Tier 3 + `check_security.sh` for M001; Tier 1 + package + rehearsal
-artifacts for M002; per-corrective gates for M003.
+Tier 2 + Tier 3 + `check_security.sh` for publication milestones; Tier 1 +
+package + rehearsal artifacts for wheel qualification; per-corrective gates
+for M003. M005 additionally requires exact-SHA Stage C renewal after candidate
+version/package edits and a build-only 19-distribution rehearsal on that same
+candidate.
 
 ## 10. Risks and decision points
 
@@ -192,9 +222,9 @@ the existing maintainer-run publication and wheel-rehearsal procedures.
 
 ## 11. Completion definition
 
-M001/M004 are closed with their evidence artifacts; M003 remains standing
-process, never "complete." No future plan was unblocked by publication;
-HTTPX 1.0 and H3 retain their independent external gates.
+M001/M004 remain closed historical release evidence. M005 is ready and owns
+the next coordinated publication. M003 remains standing process, never
+"complete." HTTPX 1.0 and H3 retain their independent external gates.
 
 ## 12. Milestone status
 
@@ -206,3 +236,4 @@ HTTPX 1.0 and H3 retain their independent external gates.
 | M001B 0.2.1 publication | superseded | `plans/implementation/release-verification/001b-0-2-1-coordinated-publication.md` | — | Replaced before execution by M004 |
 | M004 0.2.1 tagged release finalization | closed | `plans/archive/implementation/release-verification/004-0-2-1-tagged-release-finalization.md` | `plans/closure/release-verification/004-0-2-1-tagged-release-finalization.md` | — |
 | M003 intake | proposed | — | — | — |
+| M005 0.2.2 M007 publication | ready | `plans/implementation/release-verification/005-0-2-2-m007-publication.md` | — | Core-transport M007 closed; final candidate must be requalified/rehearsed before publication |

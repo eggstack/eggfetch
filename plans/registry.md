@@ -17,8 +17,8 @@ ledger for SHAs):
 - `plans/httpx-parity-correction-status.md` (+ `compat/*/profile.toml`)
 
 Release train: M001/M004 is closed across crates.io, signed `v0.2.1`, PyPI,
-and the published GitHub Release. No active release task remains. M001B was
-superseded before execution.
+and the published GitHub Release. M005 is ready to publish the closed M007
+capability as coordinated 0.2.2. M001B remains superseded history.
 
 Validation tiers: `.skills/verification-qualification.md`. Normative policy:
 `docs/verification-policy.md`.
@@ -40,16 +40,17 @@ Validation tiers: `.skills/verification-qualification.md`. Normative policy:
 
 | Subsystem | Status | Roadmap | Current milestone | Dependencies or blockers |
 |---|---|---|---|---|
-| Core transport and request policy | active | `plans/subsystems/core-transport-policy-roadmap.md` | M007 native transport failure classification closed | ADR-0006 implemented and qualified; publication follows only through the release-verification M003 standing intake. |
+| Core transport and request policy | closed | `plans/subsystems/core-transport-policy-roadmap.md` | M007 closed; subsystem at steady state | ADR-0006 implemented and qualified; publication owned by release-verification M005. |
 | Python bindings and HTTPX compatibility | closed | `plans/subsystems/python-httpx-compat-roadmap.md` | M001-M003 closed on live Stage C binding | Facade work reopens only via gated roadmap Phase 4 trigger. |
 | TLS, proxy, and protocols | closed | `plans/subsystems/tls-proxy-protocols-roadmap.md` | All milestones closed; H3 experimental retained | H3 graduation blocked on named external evidence. |
-| Release and verification | closed | `plans/subsystems/release-verification-roadmap.md` | M001/M004 coordinated 0.2.1 publication closed | No active release task; M003 remains standing proposed intake. |
+| Release and verification | active | `plans/subsystems/release-verification-roadmap.md` | M005 0.2.2 M007 publication ready | Core-transport M007 closed; final candidate must be versioned, requalified, rehearsed, then published. |
 | Performance and footprint | closed | `plans/subsystems/performance-footprint-roadmap.md` | Campaigns closed; fixtures repaired | New optimization needs its own milestone plan. |
 
 ## Dependency-ready implementation plans
 
 | Subsystem | Milestone | Status | Implementation plan | Dependencies / handoff note |
 |---|---|---|---|---|
+| Release and verification | M005 0.2.2 M007 publication | ready | `plans/implementation/release-verification/005-0-2-2-m007-publication.md` | Core M007 closed. Target 0.2.2; requalify/rehearse exact candidate before any immutable publication. |
 | Core transport and request policy | M007 native transport failure classification | closed | `plans/implementation/core-transport-policy/007-native-transport-failure-classification.md` | `plans/closure/core-transport-policy/007-native-transport-failure-classification.md`. Publication/version selection is a later release-verification M003 intake; exact-pin downstream adoption remains blocked until then. |
 | Release and verification | M001 coordinated 0.2.x publication umbrella | closed | `plans/archive/implementation/release-verification/001-release-publication.md` | `plans/closure/release-verification/001-coordinated-0-2-1-publication.md` |
 | Release and verification | M001A 0.2.1 release-candidate preparation | closed | `plans/implementation/release-verification/001a-0-2-1-release-candidate-preparation.md` | Closed on original candidate `41757569123c0b8038550b956d8b244ab55094a6`. |
@@ -59,15 +60,16 @@ Validation tiers: `.skills/verification-qualification.md`. Normative policy:
 
 ## Current execution order and dependency gates
 
-**Release execution gate:** M001/M004 is closed. Six crates, signed
-`v0.2.1`, PyPI, and the required GitHub Release all publish from candidate
-`fe4d596ca8d91694fc887566acaa7875b918d25a`. Historical `v0.2.0` remains
-immutable; no active release task remains.
+**Release execution gate:** M005 is ready. Historical v0.2.0/v0.2.1 public
+identities remain immutable. M005 targets coordinated 0.2.2 for the closed
+M007 capability and must create a new exact candidate after version/package
+edits, renew Tier 2/Stage C, complete Tier 3/security, and pass the build-only
+19-distribution rehearsal before any publication.
 
-**Core transport gate:** M007 is closed under accepted ADR-0006. It changed
-the public Rust error-classification surface only within the contained
-Error-domain contract in its plan. Publication was not part of M007 and must
-return through the release-verification M003 standing intake.
+**Core transport gate:** M007 is closed under accepted ADR-0006 and the
+subsystem is back at steady state. Publication is now explicitly owned by
+release-verification M005; no further core-transport implementation is
+required for that handoff.
 
 **Gated futures:** HTTPX 1.0 (RC/stable + frozen API + fresh delta),
 H3 graduation (independent interop/drain/impairment/upstream evidence), Node
@@ -83,12 +85,11 @@ active work.
 
 ## Closure work and current control points
 
-Core transport M007 is closed. It was an additive native Rust
-error-classification change governed by ADR-0006; exact-pin downstream
-adoption remains operationally blocked until a later publication through the
-release-verification M003 standing intake. No dependency-ready implementation
-milestone remains; the gated futures (HTTPX 1.0, H3 graduation, Node
-maturation) are unregistered and unaffected by M007.
+Core transport M007 is closed and the subsystem status is reconciled to
+steady state. Release-verification M005 is dependency-ready and is the only
+active publication handoff: exact-pin downstream adoption remains blocked
+until coordinated 0.2.2 is publicly verified. The gated futures (HTTPX 1.0,
+H3 graduation, Node maturation) remain unregistered and unaffected.
 
 M001A and M002 are closed historical release evidence. M002 run
 `36223505399` proved the original candidate's 18-wheel + 1-sdist matrix with
