@@ -131,7 +131,10 @@ pub(crate) unsafe fn cstr_to_string(ptr: *const c_char) -> Option<String> {
         // Bounded `strnlen`: stop at NUL or MAX_CSTR_LEN.
         let mut len = 0usize;
         while len < MAX_CSTR_LEN {
-            let byte = unsafe { *ptr.add(len) }.cast_unsigned();
+            // `c_char` is `i8` on most targets but `u8` on aarch64 Linux, so
+            // compare the C character against 0 directly instead of going
+            // through a signed-only conversion.
+            let byte = unsafe { *ptr.add(len) };
             if byte == 0 {
                 break;
             }
@@ -193,4 +196,54 @@ fn redact_credentials(message: &str) -> String {
         }
     }
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{cstr_to_string, MAX_CSTR_LEN};
+
+    /// Build a genuine NUL-terminated C buffer, as the ABI requires.
+    fn c_buffer(contents: &[u8]) -> Vec<u8> {
+        let mut buf = contents.to_vec();
+        buf.push(0);
+        buf
+    }
+
+    /// Pin the bounded-scan contract on both `c_char` signedness variants:
+    /// `c_char` is `i8` on most targets but `u8` on aarch64 Linux, so the
+    /// scan must not rely on a signed-only integer conversion.
+    #[test]
+    fn cstr_scan_is_signedness_agnostic() {
+        let buf = c_buffer(b"https://example.com/path");
+        let ptr = buf.as_ptr().cast::<std::os::raw::c_char>();
+        // SAFETY: `ptr` points at `buf`, which is NUL-terminated.
+        let decoded = unsafe { cstr_to_string(ptr) };
+        assert_eq!(decoded.as_deref(), Some("https://example.com/path"));
+    }
+
+    /// A leading NUL yields the empty string rather than scanning past it.
+    #[test]
+    fn cstr_scan_stops_at_first_nul() {
+        let buf = c_buffer(b"");
+        let ptr = buf.as_ptr().cast::<std::os::raw::c_char>();
+        // SAFETY: `ptr` points at `buf`, which is NUL-terminated.
+        let decoded = unsafe { cstr_to_string(ptr) };
+        assert_eq!(decoded.as_deref(), Some(""));
+    }
+
+    #[test]
+    fn cstr_scan_rejects_overlong_input() {
+        let buf = c_buffer(&vec![b'a'; MAX_CSTR_LEN + 1]);
+        let ptr = buf.as_ptr().cast::<std::os::raw::c_char>();
+        // SAFETY: `ptr` points at `buf`, which is NUL-terminated.
+        let decoded = unsafe { cstr_to_string(ptr) };
+        assert!(decoded.is_none(), "over-long C strings must fail closed");
+    }
+
+    #[test]
+    fn cstr_scan_rejects_null_pointer() {
+        // SAFETY: a null pointer is an explicitly handled input.
+        let decoded = unsafe { cstr_to_string(std::ptr::null()) };
+        assert!(decoded.is_none());
+    }
 }
