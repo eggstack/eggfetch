@@ -192,7 +192,7 @@ fn handle_client(
         "/get" => {
             let body_text = format!("method={method}");
             send_response(
-                &mut reader.get_mut(),
+                reader.get_mut(),
                 200,
                 "OK",
                 &response_headers,
@@ -202,7 +202,7 @@ fn handle_client(
         "/echo" => {
             let body_text = format!("method={method}");
             send_response(
-                &mut reader.get_mut(),
+                reader.get_mut(),
                 200,
                 "OK",
                 &response_headers,
@@ -218,7 +218,7 @@ fn handle_client(
                 .collect::<Vec<_>>()
                 .join("\n");
             send_response(
-                &mut reader.get_mut(),
+                reader.get_mut(),
                 200,
                 "OK",
                 &response_headers,
@@ -229,7 +229,7 @@ fn handle_client(
             response_headers.push(("Content-Type", "application/json"));
             let body_text = r#"{"message":"hello","count":42}"#;
             send_response(
-                &mut reader.get_mut(),
+                reader.get_mut(),
                 200,
                 "OK",
                 &response_headers,
@@ -239,38 +239,26 @@ fn handle_client(
         "/binary" => {
             response_headers.push(("Content-Type", "application/octet-stream"));
             let body_bytes: Vec<u8> = (0..=255).cycle().take(512).collect();
-            send_response(
-                &mut reader.get_mut(),
-                200,
-                "OK",
-                &response_headers,
-                &body_bytes,
-            );
+            send_response(reader.get_mut(), 200, "OK", &response_headers, &body_bytes);
         }
         "/secret-headers" => {
             // Echo-style secrets in *response* headers: exercises CLI
             // redaction on the --include display path.
             response_headers.push(("authorization", "Bearer secret-token-abc123"));
             response_headers.push(("x-public", "visible"));
-            send_response(&mut reader.get_mut(), 200, "OK", &response_headers, b"ok");
+            send_response(reader.get_mut(), 200, "OK", &response_headers, b"ok");
         }
         "/post-echo" | "/post-body" => {
             let captured = captured.lock().unwrap();
             if let Some(last) = captured.last() {
-                send_response(
-                    &mut reader.get_mut(),
-                    200,
-                    "OK",
-                    &response_headers,
-                    &last.body,
-                );
+                send_response(reader.get_mut(), 200, "OK", &response_headers, &last.body);
             } else {
-                send_response(&mut reader.get_mut(), 200, "OK", &response_headers, b"");
+                send_response(reader.get_mut(), 200, "OK", &response_headers, b"");
             }
         }
         "/status/404" => {
             send_response(
-                &mut reader.get_mut(),
+                reader.get_mut(),
                 404,
                 "Not Found",
                 &response_headers,
@@ -279,7 +267,7 @@ fn handle_client(
         }
         "/status/500" => {
             send_response(
-                &mut reader.get_mut(),
+                reader.get_mut(),
                 500,
                 "Internal Server Error",
                 &response_headers,
@@ -302,7 +290,7 @@ fn handle_client(
                 });
             response_headers.push(("Location", &location));
             send_response(
-                &mut reader.get_mut(),
+                reader.get_mut(),
                 301,
                 "Moved Permanently",
                 &response_headers,
@@ -315,13 +303,13 @@ fn handle_client(
                 .map(|p| p[3..].to_owned())
                 .unwrap_or_else(|| "/get".to_owned());
             response_headers.push(("Location", &location));
-            send_response(&mut reader.get_mut(), 302, "Found", &response_headers, b"");
+            send_response(reader.get_mut(), 302, "Found", &response_headers, b"");
         }
         "/auth/basic" => {
             if let Some(auth) = headers.get("authorization") {
                 if auth.starts_with("Basic ") {
                     send_response(
-                        &mut reader.get_mut(),
+                        reader.get_mut(),
                         200,
                         "OK",
                         &response_headers,
@@ -329,7 +317,7 @@ fn handle_client(
                     );
                 } else {
                     send_response(
-                        &mut reader.get_mut(),
+                        reader.get_mut(),
                         401,
                         "Unauthorized",
                         &response_headers,
@@ -339,7 +327,7 @@ fn handle_client(
             } else {
                 response_headers.push(("WWW-Authenticate", "Basic realm=\"test\""));
                 send_response(
-                    &mut reader.get_mut(),
+                    reader.get_mut(),
                     401,
                     "Unauthorized",
                     &response_headers,
@@ -351,7 +339,7 @@ fn handle_client(
             if let Some(auth) = headers.get("authorization") {
                 if auth.starts_with("Bearer ") {
                     send_response(
-                        &mut reader.get_mut(),
+                        reader.get_mut(),
                         200,
                         "OK",
                         &response_headers,
@@ -359,7 +347,7 @@ fn handle_client(
                     );
                 } else {
                     send_response(
-                        &mut reader.get_mut(),
+                        reader.get_mut(),
                         401,
                         "Unauthorized",
                         &response_headers,
@@ -369,7 +357,7 @@ fn handle_client(
             } else {
                 response_headers.push(("WWW-Authenticate", "Bearer realm=\"test\""));
                 send_response(
-                    &mut reader.get_mut(),
+                    reader.get_mut(),
                     401,
                     "Unauthorized",
                     &response_headers,
@@ -385,7 +373,7 @@ fn handle_client(
             let cookie_header = format!("session={cookie_val}; Path=/");
             response_headers.push(("Set-Cookie", &cookie_header));
             send_response(
-                &mut reader.get_mut(),
+                reader.get_mut(),
                 200,
                 "OK",
                 &response_headers,
@@ -395,7 +383,7 @@ fn handle_client(
         "/cookie/check" => {
             if let Some(cookie) = headers.get("cookie") {
                 send_response(
-                    &mut reader.get_mut(),
+                    reader.get_mut(),
                     200,
                     "OK",
                     &response_headers,
@@ -403,7 +391,7 @@ fn handle_client(
                 );
             } else {
                 send_response(
-                    &mut reader.get_mut(),
+                    reader.get_mut(),
                     404,
                     "No Cookie",
                     &response_headers,
@@ -418,7 +406,7 @@ fn handle_client(
                 .unwrap_or(1024);
             let body: Vec<u8> = (b'A'..=b'Z').cycle().take(size).collect();
             response_headers.push(("Content-Type", "text/plain"));
-            send_response(&mut reader.get_mut(), 200, "OK", &response_headers, &body);
+            send_response(reader.get_mut(), 200, "OK", &response_headers, &body);
         }
         "/chunked" => {
             let stream_ref = reader.get_mut();
@@ -441,11 +429,11 @@ fn handle_client(
                 .and_then(|p| p[3..].parse().ok())
                 .unwrap_or(5000);
             thread::sleep(Duration::from_millis(delay));
-            send_response(&mut reader.get_mut(), 200, "OK", &response_headers, b"done");
+            send_response(reader.get_mut(), 200, "OK", &response_headers, b"done");
         }
         "/redirect-chain" => {
             response_headers.push(("Location", "/redirect-to?to=/get"));
-            send_response(&mut reader.get_mut(), 302, "Found", &response_headers, b"");
+            send_response(reader.get_mut(), 302, "Found", &response_headers, b"");
         }
         "/large-gzipped" => {
             let size: usize = query
@@ -458,17 +446,11 @@ fn handle_client(
             let compressed = encoder.finish().unwrap();
             response_headers.push(("Content-Encoding", "gzip"));
             response_headers.push(("Content-Type", "application/octet-stream"));
-            send_response(
-                &mut reader.get_mut(),
-                200,
-                "OK",
-                &response_headers,
-                &compressed,
-            );
+            send_response(reader.get_mut(), 200, "OK", &response_headers, &compressed);
         }
         _ => {
             send_response(
-                &mut reader.get_mut(),
+                reader.get_mut(),
                 404,
                 "Not Found",
                 &response_headers,
@@ -743,7 +725,7 @@ fn test_json_output_base64() {
     let parsed: serde_json::Value = serde_json::from_str(&stdout).expect("invalid JSON");
     assert!(parsed["body_base64"].is_string());
     let b64 = parsed["body_base64"].as_str().unwrap();
-    assert!(!b64.is_empty());
+    assert_ne!(b64, "");
 }
 
 #[test]
@@ -772,7 +754,7 @@ fn test_no_body() {
     let url = format!("{}/get", server.url());
     let (stdout, _stderr, code) = run_cli(&[&url, "--no-body"]);
     assert_eq!(code, Some(0));
-    assert!(stdout.is_empty());
+    assert_eq!(stdout, "");
 }
 
 #[test]
@@ -1206,7 +1188,7 @@ fn test_body_file_not_found() {
         code == Some(2) || code == Some(7),
         "expected usage or I/O error, got {code:?}"
     );
-    assert!(!stderr.is_empty());
+    assert_ne!(stderr, "");
 }
 
 #[test]

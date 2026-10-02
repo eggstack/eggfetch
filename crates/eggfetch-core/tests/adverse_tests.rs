@@ -962,7 +962,7 @@ fn parse_proxy_response_valid_200() {
     assert!(result.is_ok());
     let (status, headers) = result.unwrap();
     assert_eq!(status, 200);
-    assert!(headers.is_empty());
+    assert_eq!(headers, []);
 }
 
 #[cfg(feature = "proxy")]

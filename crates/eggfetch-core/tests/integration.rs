@@ -1503,7 +1503,7 @@ async fn redirect_history_is_metadata_only() {
     assert!(hist.url().host_str().is_some());
     // HistoryEntry is a metadata-only snapshot — no body() method exists,
     // which is the structural guarantee that no pool permit can leak.
-    assert!(!hist.reason_phrase().is_empty());
+    assert_ne!(hist.reason_phrase(), "");
 }
 
 // ---------------------------------------------------------------------------

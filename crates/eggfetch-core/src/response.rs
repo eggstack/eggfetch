@@ -210,7 +210,10 @@ impl Response {
     ) -> Self {
         // Non-UTF8 wire values are dropped here (defensible: headers are
         // opaque bytes); emit a trace event so corrupt-wire debugging has a
-        // signal instead of a silent absence.
+        // signal instead of a silent absence. Laziness is load-bearing: the
+        // trace event must fire only when the value is dropped, so eager
+        // evaluation is not equivalent here.
+        #[allow(clippy::unnecessary_lazy_evaluations)]
         let wire_content_encoding = headers
             .get("content-encoding")
             .and_then(|value| {
@@ -221,6 +224,9 @@ impl Response {
                 })
             })
             .map(ToOwned::to_owned);
+        // Laziness is load-bearing here as above: eager evaluation would
+        // emit the drop trace event even for valid values.
+        #[allow(clippy::unnecessary_lazy_evaluations)]
         let wire_content_length = headers
             .get("content-length")
             .and_then(|value| {

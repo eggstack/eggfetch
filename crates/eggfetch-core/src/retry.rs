@@ -746,6 +746,10 @@ fn get_random_f64() -> Option<f64> {
         let _ = STATE.set(AtomicU64::new(seed));
         STATE.get()?
     };
+    // `fetch_update` is deprecated in favor of `try_update` on recent
+    // toolchains, but `try_update` is still unstable on MSRV 1.89, so the
+    // rename cannot be adopted until MSRV moves forward.
+    #[allow(deprecated)]
     let val = state
         .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |mut value| {
             value ^= value << 13;

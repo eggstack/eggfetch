@@ -36,6 +36,22 @@ def _tool(name: str, default: str) -> list[str]:
     return value.split()
 
 
+def _toolchain_env() -> dict[str, str]:
+    """Pin both oracle halves to the documented nightly.
+
+    `cargo-semver-checks` only parses the rustdoc JSON versions emitted by
+    bounded toolchains; an ambient floating stable can emit a newer format and
+    fail the gate for a reason unrelated to the change under test.  The pin
+    must cover the semver half too, not just the snapshot half.
+    """
+    return {
+        **os.environ,
+        "RUSTUP_TOOLCHAIN": os.environ.get(
+            "RUST_API_RUSTUP_TOOLCHAIN", "nightly-2026-05-07"
+        ),
+    }
+
+
 def _run_public_api(tool: list[str], feature_args: tuple[str, ...]) -> str:
     command = [
         *tool,
@@ -52,12 +68,7 @@ def _run_public_api(tool: list[str], feature_args: tuple[str, ...]) -> str:
         check=False,
         capture_output=True,
         text=True,
-        env={
-            **os.environ,
-            "RUSTUP_TOOLCHAIN": os.environ.get(
-                "RUST_API_RUSTUP_TOOLCHAIN", "nightly-2026-05-07"
-            ),
-        },
+        env=_toolchain_env(),
     )
     if result.returncode:
         sys.stderr.write(result.stderr)
@@ -80,7 +91,9 @@ def _run_semver(tool: list[str], feature_args: tuple[str, ...]) -> None:
         "--only-explicit-features",
         *feature_args,
     ]
-    result = subprocess.run(command, cwd=ROOT, check=False, text=True)
+    result = subprocess.run(
+        command, cwd=ROOT, check=False, text=True, env=_toolchain_env()
+    )
     if result.returncode:
         raise SystemExit(f"semver check failed: {' '.join(command)}")
 

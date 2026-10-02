@@ -1458,13 +1458,13 @@ mod tests {
     #[test]
     fn parse_empty_pem_certificates() {
         let result = parse_pem_certificates(b"");
-        assert!(result.unwrap().is_empty());
+        assert_eq!(result.unwrap(), []);
     }
 
     #[test]
     fn parse_invalid_pem_certificates() {
         let result = parse_pem_certificates(b"not valid pem data");
-        assert!(result.unwrap().is_empty());
+        assert_eq!(result.unwrap(), []);
     }
 
     #[test]

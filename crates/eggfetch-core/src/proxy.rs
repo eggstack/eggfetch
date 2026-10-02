@@ -1676,13 +1676,13 @@ mod tests {
     #[test]
     fn noparse_empty_string() {
         let np = NoProxy::parse("").unwrap();
-        assert!(np.rules.is_empty());
+        assert_eq!(np.rules, []);
     }
 
     #[test]
     fn noparse_whitespace_only() {
         let np = NoProxy::parse(" , , ").unwrap();
-        assert!(np.rules.is_empty());
+        assert_eq!(np.rules, []);
     }
 
     #[test]
@@ -2069,7 +2069,7 @@ mod tests {
             .auth(ProxyAuth::basic("user", "secret-pass").unwrap());
         let config = proxy.config();
         let identity = config.connection_identity();
-        assert!(!identity.is_empty());
+        assert_ne!(identity, [] as [u8; 0]);
         let debug = format!("{config:?}");
         assert!(
             !debug.contains("secret-pass"),

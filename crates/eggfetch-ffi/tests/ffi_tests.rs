@@ -1045,7 +1045,7 @@ fn streaming_error_distinguishable_from_clean_eof() {
             .to_string_lossy()
             .into_owned();
         eggfetch_ffi::eggfetch_string_free(error_msg);
-        assert!(!msg_str.is_empty());
+        assert_ne!(msg_str, "");
 
         eggfetch_ffi::eggfetch_response_stream_free(resp);
         eggfetch_ffi::eggfetch_client_free(client);
