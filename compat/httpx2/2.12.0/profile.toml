@@ -119,11 +119,21 @@ created = "2026-09-10"
 # (incl. Rust 1.89.0 MSRV and API/semver oracles), security, and the full
 # pinned compatibility suites on the executable freeze below. The immediately
 # preceding `bb6e0732...` binding is historical only.
+# The coordinated 0.2.2 release candidate then carried the release
+# identity (six crate versions, pyproject, Cargo.lock, changelog,
+# release-facing docs) plus one genuine executable fix found by the
+# Tier 1 gate: the FFI bounded C-string scan used the signed-only
+# `cast_unsigned()`, so `eggfetch-ffi` did not compile where `c_char`
+# is `u8` (aarch64 Linux and other unsigned-`c_char` targets). The
+# profile was renewed after Tier 1, extended (incl. Rust 1.89.0 MSRV
+# and API/semver oracles), package, security, and the full pinned
+# compatibility suites on the executable freeze below. The immediately
+# preceding `3fc58fbd...` binding is historical only.
 stage = "stage-c-qualified"
 status = "qualified"
-qualification-sha = "3fc58fbd99ecb496749b833ee7b27436fe3b412d"
+qualification-sha = "015a56d7ec3edf186eec8ebccff01cbf5584274e"
 qualification-date = "2026-10-02"
-previous-qualification-sha = "bb6e07320f61736702e37f335fd1d48c7c3dfbaf"
+previous-qualification-sha = "3fc58fbd99ecb496749b833ee7b27436fe3b412d"
 historical-current-qualification-sha = "312cd4402ea2b4b27bf54cf7dc36924a1d449adc"
 reference = "httpx2==2.12.0"
 

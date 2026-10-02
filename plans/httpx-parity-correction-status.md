@@ -4,6 +4,67 @@ This record is the exact-SHA-bound status for the HTTPX 0.28.1 compatibility
 facade. Historical phase and corrective-pass records remain in the git history
 and referenced plans; counts below are only from the runs named here.
 
+## Recorded state — Stage C renewed for the coordinated 0.2.2 release candidate (2026-10-02)
+
+Recorded designation: **Stage C qualified** for both documented facades, bound
+to executable freeze `015a56d7ec3edf186eec8ebccff01cbf5584274e` — the exact
+candidate published as eggfetch 0.2.2. The preceding
+`3fc58fbd99ecb496749b833ee7b27436fe3b412d` binding is historical because
+executable inputs changed after it in two ways. First, release identity: all
+six publishable crate versions, `crates/eggfetch-python/pyproject.toml`,
+`Cargo.lock`, and the aligned Node package metadata moved to 0.2.2, which
+changes the packaged artifact every facade ships in. Second, and more
+substantively, the Tier 1 gate on that candidate failed to compile
+`eggfetch-ffi`: `cstr_to_string()` scanned with `(*ptr.add(len)).cast_unsigned()`
+and `cast_unsigned` exists only on signed integer types, while `c_char` is `u8`
+on `aarch64-unknown-linux-gnu`. The bounded-scan hardening that introduced
+that call landed after `v0.2.1`, and CI runs a single x86_64 job, so the
+unsigned-`c_char` targets were never built. The fix compares the C character
+against `0` directly, which is correct for both signedness variants and keeps
+the same fail-closed `MAX_CSTR_LEN` bound, plus four unit tests pinning the
+scan contract. No engine, adapter, policy, dependency, or facade behavior
+changed; the six-profile Rust API snapshots are unchanged by both edits
+(version strings do not appear in them).
+
+Qualification evidence on the 0.2.2 candidate:
+
+- Tier 1 (`./scripts/check.sh`), Tier 2 (`./scripts/check.sh extended`), and
+  Tier 3 (`./scripts/check.sh package`) green on
+  `015a56d7ec3edf186eec8ebccff01cbf5584274e`, as is routine CI run
+  [36969894716](https://github.com/eggstack/eggfetch/actions/runs/36969894716)
+  on the same SHA. The only skips are the policy-defined optional ones: the
+  Node JS surface (native `eggfetch.node` artifact absent) and downstream
+  fixtures (artifact manifest absent).
+- Full pinned HTTPX 0.28.1 / HTTPX2 2.12.0 compatibility suites: **1934
+  passed, 0 failed** (`EGGFETCH_COMPAT_REQUIRED=1`, `--strict-markers`).
+- Six-profile Rust public API oracle and semver cross-check passed unchanged
+  (`223 checks pass, 30 skip; no semver update required` against planning
+  baseline `03ecba973010e2858bf16a2b5f84d51ce70adae4`, run as
+  `eggfetch-core v0.1.9 -> v0.2.2`); Rust 1.89.0 MSRV matrix, feature matrix,
+  FFI, lifecycle, soak, lossless-merge, benchmark, and wheel build/smoke/
+  typing gates all green. No new residual difference.
+- Live security preflight (`./scripts/check_security.sh`, 2026-10-02 05:39 UTC):
+  `advisories ok, bans ok, licenses ok, sources ok`.
+- One observation recorded rather than suppressed: an earlier Tier 2 attempt on
+  this candidate failed `test_socks_https_uses_origin_tls_and_reuses_connection
+  [candidate]` with a `UnicodeDecodeError` raised inside the *test fixture's*
+  SOCKS relay helper (`record["origin_target"] = fields[1].decode("ascii")` in
+  `crates/eggfetch-python/tests/compat/test_socks_transport.py`) after the
+  relay captured TLS bytes instead of the `CONNECT` request line. The candidate
+  changes no proxy or SOCKS code. The module passed 6/6 in isolation and the
+  full 1934-test suite passed on rerun, so this is recorded as a low-severity
+  fixture-robustness finding under whole-suite load, not a product defect, and
+  no code was changed for it. Tracked for the standing corrective intake.
+- Release evidence for this candidate — wheel rehearsal, crates.io
+  publication, signed tag, PyPI publication, GitHub Release, and external
+  consumer smokes — is recorded in
+  `plans/closure/release-verification/005-0-2-2-m007-publication.md`.
+
+The canonical qualification records (`docs/residual-differences.md`,
+`docs/reference/compatibility.md`,
+`docs/reference/compatibility-stage-decision.md`, both `compat/*/profile.toml`)
+were renewed together with this binding.
+
 ## Recorded state — Stage C renewed after M007 native transport failure classification (2026-10-02)
 
 Recorded designation: **Stage C qualified** for both documented facades, bound

@@ -1,10 +1,11 @@
 # Residual Differences from HTTPX 0.28.1
 
 The HTTPX 0.28.1 and httpx2 2.12.0 facades are Stage C qualified on frozen
-executable SHA `3fc58fbd99ecb496749b833ee7b27436fe3b412d` (2026-10-02,
-requalification after the M007 native transport failure classification, which
-added the additive `TransportFailureKind` error-domain API with no public
-compatibility drift). The prior `bb6e07320f61736702e37f335fd1d48c7c3dfbaf`,
+executable SHA
+`015a56d7ec3edf186eec8ebccff01cbf5584274e` (2026-10-02,
+requalification for the coordinated 0.2.2 release candidate, which carried the release identity plus one genuine executable fix found by the Tier 1 gate: the FFI bounded C-string scan used the signed-only `cast_unsigned()`, so `eggfetch-ffi` did not compile where `c_char` is `u8` (aarch64 Linux and other unsigned-`c_char` targets)).
+The M007 binding `3fc58fbd99ecb496749b833ee7b27436fe3b412d`,
+`bb6e07320f61736702e37f335fd1d48c7c3dfbaf`,
 `5247ff0e01e309d9b408b8b4b4c90151ee5ce9fa`, and
 `d4979f1dac53f30f07900f54b01a88de06956c1c` bindings are historical; earlier
 maintenance freezes remain historical implementation evidence. The
