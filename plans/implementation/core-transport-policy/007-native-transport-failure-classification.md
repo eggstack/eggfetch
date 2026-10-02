@@ -1,6 +1,6 @@
 # Core Transport Policy M007 — Native Transport Failure Classification
 
-Status: ready
+Status: closed — see `plans/closure/core-transport-policy/007-native-transport-failure-classification.md`
 
 Repository baseline: 092dcc7a0cdc76451cbca833ef80175ecd7b82b9
 

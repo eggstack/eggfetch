@@ -1,6 +1,6 @@
 # Release and Verification Roadmap
 
-Status: active — M005 0.2.2 M007 publication is ready
+Status: closed — M005 0.2.2 publication complete; steady state
 
 Long-term references:
 
@@ -64,18 +64,22 @@ The coordinated 0.2.1 release remains closed and immutable across crates.io,
 signed tag, PyPI, and GitHub Release. M004 build-only run `36253723990` and
 publish run `36255517733` are historical green evidence.
 
-Core-transport M007 is now closed. Its additive
-TransportFailureKind / Error::transport_failure_kind() API is qualified on
-freeze `3fc58fbd99ecb496749b833ee7b27436fe3b412d`, and the live Stage C ledger
-was renewed to that freeze. The API is not yet in a coordinated public release:
-the manifests/PyPI project remain 0.2.1 and the latest GitHub Release is
-v0.2.1. M005 is the ready publication handoff targeting 0.2.2.
+Core-transport M007 is closed and its additive TransportFailureKind /
+Error::transport_failure_kind() API is now published: M005 released
+coordinated 0.2.2 from candidate
+`015a56d7ec3edf186eec8ebccff01cbf5584274e`, which is also the live Stage C
+binding. All six crates.io packages, the signed `v0.2.2` tag, the 19 PyPI
+files, and GitHub Release `401746856` are public and were verified from a
+fresh consumer. The release gate also found and fixed one real defect on that
+candidate (`eggfetch-ffi` did not compile where `c_char` is `u8`); details and
+the full evidence set are in
+`plans/closure/release-verification/005-0-2-2-m007-publication.md`.
 
 ## 5. Target architecture
 
-M005 publishes the already-qualified post-0.2.1 capability without adding
-runtime behavior. After M005 closure the workstream returns to steady-state
-release/corrective intake. No standing automation growth.
+M005 published the already-qualified post-0.2.1 capability without adding
+runtime feature work. The workstream is now back at steady-state
+release/corrective intake; no standing automation growth.
 
 ## 6. Dependency graph
 
@@ -97,10 +101,11 @@ M003 standing corrective intake remains soft/ongoing.
 core-transport M007 closure
     |
     v
-M005 0.2.2 M007 publication (ready)
+M005 0.2.2 M007 publication (closed)
 
-M005 consumes the closed M007 evidence and owns candidate versioning,
-requalification, rehearsal, publication, and release closure.
+M005 consumed the closed M007 evidence and owned candidate versioning,
+requalification, rehearsal, publication, and release closure. Future work
+enters through M003 as a bounded corrective or feature plan.
 ```
 
 ## 7. Milestones
@@ -180,7 +185,7 @@ force a roadmap revision.
 
 ### Milestone 5 — 0.2.2 M007 publication and release polish
 
-Class: infrastructure / operational release with bounded polish. Status: ready.
+Class: infrastructure / operational release with bounded polish. Status: closed.
 
 Implementation plan:
 
@@ -191,11 +196,18 @@ coordinated 0.2.2 release, renew the exact-SHA candidate binding after
 version/package edits, rehearse the full PyPI matrix, publish all public
 channels, and reconcile release/planning documentation.
 
-Hard dependency: core-transport M007 closed.
+Hard dependency: core-transport M007 closed (satisfied).
 
-Exit conditions: six crates + PyPI at 0.2.2, signed v0.2.2 on the exact frozen
-candidate, 18-wheel + 1-sdist rehearsal and publication green, GitHub Release
-present, fresh Rust/Python install smoke green, and closure evidence recorded.
+Closed on candidate `015a56d7ec3edf186eec8ebccff01cbf5584274e`; build-only
+rehearsal run `36991057953` (18 wheels + 1 sdist, `publish=false`); PyPI
+publish run `36994291293`. Closure record:
+`plans/closure/release-verification/005-0-2-2-m007-publication.md`.
+
+Exit conditions: satisfied. Six crates + PyPI at 0.2.2, signed v0.2.2 on the
+exact frozen candidate, 18-wheel + 1-sdist rehearsal and publication green,
+GitHub Release `401746856` present, fresh Rust/Python install smoke green,
+and closure evidence recorded. One low-severity compatibility-fixture finding
+was routed to M003; no high-severity finding remains open.
 
 ## 8. Cross-cutting requirements
 
@@ -222,9 +234,10 @@ the existing maintainer-run publication and wheel-rehearsal procedures.
 
 ## 11. Completion definition
 
-M001/M004 remain closed historical release evidence. M005 is ready and owns
-the next coordinated publication. M003 remains standing process, never
-"complete." HTTPX 1.0 and H3 retain their independent external gates.
+M001/M004 and M005 are all closed release evidence; 0.2.2 is the current
+public version. M003 remains standing process, never "complete," and now holds
+one low-severity fixture finding. HTTPX 1.0 and H3 retain their independent
+external gates.
 
 ## 12. Milestone status
 
@@ -236,4 +249,4 @@ the next coordinated publication. M003 remains standing process, never
 | M001B 0.2.1 publication | superseded | `plans/implementation/release-verification/001b-0-2-1-coordinated-publication.md` | — | Replaced before execution by M004 |
 | M004 0.2.1 tagged release finalization | closed | `plans/archive/implementation/release-verification/004-0-2-1-tagged-release-finalization.md` | `plans/closure/release-verification/004-0-2-1-tagged-release-finalization.md` | — |
 | M003 intake | proposed | — | — | — |
-| M005 0.2.2 M007 publication | ready | `plans/implementation/release-verification/005-0-2-2-m007-publication.md` | — | Core-transport M007 closed; final candidate must be requalified/rehearsed before publication |
+| M005 0.2.2 M007 publication | closed | `plans/implementation/release-verification/005-0-2-2-m007-publication.md` | `plans/closure/release-verification/005-0-2-2-m007-publication.md` | — |

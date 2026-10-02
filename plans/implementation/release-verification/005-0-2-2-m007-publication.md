@@ -1,6 +1,6 @@
 # Release and Verification Milestone 005 — 0.2.2 M007 Publication and Release Polish
 
-Status: ready
+Status: closed — see `plans/closure/release-verification/005-0-2-2-m007-publication.md`
 
 Repository baseline: `44c6477b6f23d407e9989c496e48915619e7d633` (`main`, M007 closure head)
 

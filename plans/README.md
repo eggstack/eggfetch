@@ -1,6 +1,6 @@
 # eggfetch Planning System
 
-> **Current execution gate:** Core-transport M007 is closed and qualified. Release-verification M005 is ready to publish that capability as coordinated 0.2.2: version/package edits must produce a new exact candidate, Tier 1/2/3 + security and Stage C renewal must pass on it, then the 18-wheel + 1-sdist build-only rehearsal must pass before crates.io/tag/PyPI/GitHub Release publication. Historical v0.2.0/v0.2.1 identities remain immutable.
+> **Current execution gate:** none active. Core-transport M007 is closed, qualified, and published; release-verification M005 is closed. Coordinated **0.2.2** is the current public version across all six crates, PyPI, the signed `v0.2.2` tag, and the GitHub Release. Exact-pin downstream consumers may begin their own adoption milestone against the published 0.2.2 classifier API. Historical v0.2.0/v0.2.1 identities remain immutable; the next candidate enters through M003 as a bounded corrective or feature plan.
 > **Live status for agents:** the exact-SHA Stage C binding is `plans/httpx-parity-correction-status.md` (+ `compat/*/profile.toml`). Completed sections and legacy plan files are historical records, not current gates (verification-policy principle 9). Validation tiers: `.skills/verification-qualification.md`.
 
 This directory separates durable architectural direction from temporary
