@@ -1,6 +1,6 @@
 {
   "name": "eggfetch-node",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Experimental Node.js prototype bindings for eggfetch (unsupported API surface)",
   "main": "index.js",
   "types": "index.d.ts",

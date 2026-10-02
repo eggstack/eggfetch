@@ -5,6 +5,78 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.2.2] - 2026-10-02
+
+### Added
+
+- `eggfetch-core`: native transport failure classification. `Error` gains one
+  additive method, `transport_failure_kind()`, returning
+  `Option<TransportFailureKind>` with the new `#[non_exhaustive]` enum
+  `TransportFailureKind::{Connect, Tls, Protocol, Cancelled}` (`None` when the
+  typed evidence does not prove a category). The classifier walks the
+  `source()`/`get_ref()` chain with TLS-before-connect precedence and treats a
+  premature-body/malformed-framing `io::Error` observed at the
+  `NativeResponseBody` polling boundary as `Protocol`. It is diagnostic only:
+  `Error` itself is unchanged (no new variants, no `#[non_exhaustive]`,
+  unchanged `kind()` tokens and `Display`), and
+  `RetryPolicy::is_error_retryable()` never consults it. This is a Rust-core
+  surface only — the Python, CLI, FFI, and Node adapters do not gain an
+  equivalent classifier API.
+
+### Fixed
+
+- Correctness and hardening fixes from the internal audit that landed after
+  0.2.1, all verified by the qualified Tier 1/Tier 2 gates on this candidate:
+  - Core: timeout arithmetic saturates instead of panicking on huge finite
+    values (`Duration::MAX`-scale totals, `started + total` overflow); CONNECT
+    target formatting rejects `/`, `?`, `#`, and `@` in the authority;
+    low-level transport retry is limited to connect-level failures plus
+    stale-pool cancellations, so mid-request and user errors no longer retry;
+    proxy configuration fails closed on a missing host rather than falling back
+    to localhost; an empty CA directory fails closed for the `ca_certificate`
+    (replace) variant; SOCKS deadline overflow is treated as an
+    already-expired `Total` timeout; `Content-Length` conflicts are rejected;
+    proxy byte budgets, cross-origin `Referer`/`Origin` stripping, proxy-auth
+    conflict handling, redirect `SNI`/pinning retention, and total-timeout
+    tie-breaking (`Total` wins) are enforced.
+  - Redaction: `proxy_rejection_body` redacts credential-looking text on token
+    boundaries, the redact helper always truncates at `?`/`#`,
+    `TransportHints` `Debug` logs target length only, and the HTTPX cookie
+    `__repr__` redacts values.
+  - Python: `ssl.SSLContext` translation rejects security-semantic
+    `OP_UNSAFE_LEGACY_RENEGOTIATION`, `OP_LEGACY_SERVER_CONNECT`,
+    `OP_NO_TICKET`, and `OP_NO_RENEGOTIATION`; websocket failures raised by
+    native eggfetch errors are translated to `WebSocketNetworkError`;
+    async streaming iterators spawn on the client runtime handle like sync
+    iterators; `__aiter__` is checked before `__iter__`; `is_upgraded` uses a
+    construction-time flag; `SSLContext` client certificates are documented as
+    verify-only.
+  - CLI: `--no-follow` now parses (`overrides_with` instead of
+    `conflicts_with`); JSON and NDJSON redirect URLs are routed through
+    `safe_url_for_display` so userinfo, query, and fragment are stripped.
+  - FFI: out-pointers are nulled on allocation failure, the tracking pointer
+    is cleared before `Box::from_raw` so a panic fallback cannot double-free,
+    the builder is restored on `Err`, and the bounded C-string scan no longer
+    uses the signed-only `cast_unsigned()` conversion — that made
+    `eggfetch-ffi` fail to compile on targets where `c_char` is `u8`
+    (aarch64 Linux and other unsigned-`c_char` targets).
+  - Node: header and body FFI failures propagate as `napi::Error` instead of a
+    silent skip or empty body.
+- Python: async trace callbacks that are not coroutine-callable are rejected
+  with `TypeError` before dispatch, restoring error-slot-first precedence over
+  the transport result.
+
+### Changed
+
+- No dependency, feature-flag, feature-default, or MSRV change. MSRV remains
+  Rust 1.89. The `Error` enum, existing error kinds, timeout/dialer/
+  `NetworkFailureKind` semantics, and the public Rust/C/Python/HTTPX/CLI APIs
+  are otherwise unchanged; the changes above are bug fixes plus one additive
+  Rust enum and method. Qualification/test hardening and documentation work
+  landed in the same window (pedantic-clippy drift fixes on stable 1.99, and a
+  fix to `scripts/check_rust_public_api.py` so both halves of the public API
+  oracle share one pinned toolchain); neither changes runtime behavior.
+
 ## [0.2.1] - 2026-09-26
 
 ### Changed
@@ -219,7 +291,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Multipart boundary validation
 - Proxy authentication boundary enforcement
 
-[Unreleased]: https://github.com/eggstack/eggfetch/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/eggstack/eggfetch/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/eggstack/eggfetch/releases/tag/v0.2.2
 [0.2.1]: https://github.com/eggstack/eggfetch/releases/tag/v0.2.1
 [0.2.0]: https://github.com/eggstack/eggfetch/releases/tag/v0.2.0
 [0.1.9]: https://github.com/eggstack/eggfetch/releases/tag/v0.1.9
